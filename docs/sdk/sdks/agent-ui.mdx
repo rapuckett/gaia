@@ -67,15 +67,19 @@ app = create_app(db_path="/path/to/my/chat.db")
 app = create_app(db_path=":memory:")
 ```
 
-Run with uvicorn:
+Run with uvicorn, using the settings GAIA's own runners use:
 
 ```python
 import uvicorn
-from gaia.ui.server import create_app
+from gaia.ui.server import create_app, uvicorn_options
 
 app = create_app()
-uvicorn.run(app, host="localhost", port=4200)
+uvicorn.run(app, **uvicorn_options("localhost", 4200))
 ```
+
+`uvicorn_options()` keeps uvicorn from trusting `X-Forwarded-*` headers. Without
+it, a request through the mobile access tunnel could set its own peer address
+and pass as the PC.
 
 Or from the command line:
 

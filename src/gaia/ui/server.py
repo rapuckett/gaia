@@ -202,10 +202,9 @@ class TunnelAuthMiddleware(BaseHTTPMiddleware):
         # ``X-Forwarded-For: 127.0.0.1`` to fake a localhost source.
         #
         # Note: ``request.client.host`` reflects the raw TCP peer because
-        # the standalone runner in ``main()`` passes
-        # ``forwarded_allow_ips=""`` to uvicorn, disabling the proxy-header
-        # rewrite that would otherwise let the ``X-Forwarded-For`` value
-        # take precedence.
+        # every runner takes its settings from ``uvicorn_options()``, which
+        # turns off the proxy-header rewrite that would otherwise let the
+        # ``X-Forwarded-For`` value take precedence.
         client_host = request.client.host if request.client else None
         has_forwarded_marker = any(
             h in request.headers
@@ -1216,6 +1215,24 @@ def create_app(db_path: str = None, webui_dist: str = None) -> FastAPI:
 # ── Standalone runner ───────────────────────────────────────────────────────
 
 
+def uvicorn_options(host: str, port: int, *, debug: bool = False) -> dict:
+    """The uvicorn settings every Agent UI runner uses.
+
+    Forwarded headers are never trusted: ngrok connects from loopback, so
+    uvicorn's default of honouring ``X-Forwarded-For`` from 127.0.0.1 would
+    let a tunnelled request set its own peer address and pass as the PC.
+    Access logs are on only with *debug*.
+    """
+    return {
+        "host": host,
+        "port": port,
+        "log_level": "debug" if debug else "info",
+        "access_log": debug,
+        "proxy_headers": False,
+        "forwarded_allow_ips": "",
+    }
+
+
 def main():
     """Run the Agent UI server."""
     import argparse
@@ -1241,7 +1258,6 @@ def main():
     )
     args = parser.parse_args()
 
-    log_level = "debug" if args.debug else "info"
     print(f"Starting GAIA Agent UI server on http://{args.host}:{args.port}")
     try:
         server_app = create_app(webui_dist=args.ui_dist)
@@ -1253,24 +1269,7 @@ def main():
         raise SystemExit(64) from exc
     if not lemonade_is_remote():
         start_model_server_owner()
-    uvicorn.run(
-        server_app,
-        host=args.host,
-        port=args.port,
-        log_level=log_level,
-        access_log=args.debug,  # Only show HTTP access logs in debug mode
-        # SECURITY: do NOT trust ``X-Forwarded-For`` / ``X-Forwarded-Proto``
-        # to rewrite ``request.client.host``. ngrok forwards from the
-        # local agent (127.0.0.1), so uvicorn's default of trusting
-        # forwarded headers from 127.0.0.1 would let a remote attacker
-        # send ``X-Forwarded-For: 127.0.0.1`` through the tunnel and
-        # impersonate the Electron app. The localhost-bypass check in
-        # ``TunnelAuthMiddleware`` separately requires the request to
-        # carry no ``X-Forwarded-*`` headers, giving us a spoof-resistant
-        # distinction between Electron-direct and ngrok-tunnelled traffic.
-        proxy_headers=False,
-        forwarded_allow_ips="",
-    )
+    uvicorn.run(server_app, **uvicorn_options(args.host, args.port, debug=args.debug))
 
 
 if __name__ == "__main__":
