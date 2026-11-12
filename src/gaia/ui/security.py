@@ -200,6 +200,18 @@ def via_tunnel(request: Request) -> bool:
     return any(h in request.headers for h in _FORWARDED_HEADERS)
 
 
+def reached_over_network(request: Request) -> bool:
+    """Whether the request reached this server on a network interface.
+
+    ``scope["server"]`` is the local address the connection arrived at, read
+    from the socket, so it is a non-loopback IP only when the server is bound
+    beyond loopback (``--host 0.0.0.0``) and the peer came over the network.
+    """
+    server = request.scope.get("server")
+    host = str(server[0]) if server else ""
+    return _is_ip_literal(host) and not _is_loopback_name(host)
+
+
 def is_local_pc(request: Request) -> bool:
     """Whether the request came from the PC running GAIA.
 

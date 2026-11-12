@@ -570,3 +570,51 @@ def test_tunnel_status_omits_token_for_non_pc(app):
 
     local = TestClient(app, client=_PC).get("/api/tunnel/status")
     assert local.json()["token"] == token
+
+
+# ── Tests: a server bound beyond loopback (``--host 0.0.0.0``) ──────────
+
+
+class TestNetworkBoundServer:
+    """Other computers reach a network-bound dev server only with the token."""
+
+    _LAN_SERVER = "http://192.168.1.10:4200"
+
+    def _lan_peer(self, app, peer=("192.168.1.20", 50000)):
+        return TestClient(app, base_url=self._LAN_SERVER, client=peer)
+
+    def test_lan_peer_refused_while_tunnel_is_off(self, app):
+        resp = self._lan_peer(app).get("/api/sessions")
+        assert resp.status_code == 401
+        assert "only through mobile access" in resp.json()["detail"]
+
+    def test_lan_peer_refused_on_mutating_routes_too(self, app):
+        resp = self._lan_peer(app).post(
+            "/api/sessions", json={}, headers={"X-Gaia-UI": "1"}
+        )
+        assert resp.status_code == 401
+
+    def test_a_made_up_token_does_not_help_while_tunnel_is_off(self, app):
+        resp = self._lan_peer(app).get(
+            "/api/sessions",
+            headers={"Authorization": f"Bearer {uuid.uuid4()}"},
+        )
+        assert resp.status_code == 401
+
+    def test_lan_peer_with_the_tunnel_token_is_served(self, app):
+        token = _activate_tunnel(app)
+        client = self._lan_peer(app)
+        assert client.get("/api/sessions").status_code == 401
+        resp = client.get("/api/sessions", headers={"Authorization": f"Bearer {token}"})
+        assert resp.status_code == 200
+
+    def test_the_pc_on_a_network_bound_server_needs_no_token(self, app):
+        local = TestClient(app, base_url="http://127.0.0.1:4200", client=_PC)
+        assert local.get("/api/sessions").status_code == 200
+
+    def test_health_stays_open_for_monitoring(self, app):
+        assert self._lan_peer(app).get("/api/health").status_code == 200
+
+    def test_loopback_server_keeps_todays_rules(self, app):
+        """No network bind, no tunnel: nothing changes for local tools."""
+        assert TestClient(app).get("/api/sessions").status_code == 200

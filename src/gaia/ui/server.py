@@ -84,7 +84,7 @@ from .routers import speech as speech_router_mod
 from .routers import spending as spending_router_mod
 from .routers import system as system_router_mod
 from .routers import tunnel as tunnel_router_mod
-from .security import UIRequestGuardMiddleware
+from .security import UIRequestGuardMiddleware, reached_over_network
 from .tunnel import TunnelManager
 from .utils import UploadStaticFiles
 from .utils import sanitize_static_path as _sanitize_static_path
@@ -169,6 +169,10 @@ class TunnelAuthMiddleware(BaseHTTPMiddleware):
     2. ``gaia_tunnel_token`` cookie (set by ``serve_spa`` when a mobile
        browser first opens the QR-code URL containing ``?token=<uuid>``)
 
+    A server bound beyond loopback applies the same rule to every request
+    that reached it over the network, whether or not the tunnel is up; with
+    the tunnel off no token is valid, so other computers are refused.
+
     Local requests (from the Electron desktop app) and the ``/api/health``
     monitoring endpoint are always allowed through.
     """
@@ -186,9 +190,9 @@ class TunnelAuthMiddleware(BaseHTTPMiddleware):
         if path in _AUTH_EXEMPT_PATHS:
             return await call_next(request)
 
-        # Check whether the tunnel is active
         tunnel: TunnelManager = getattr(request.app.state, "tunnel", None)
-        if tunnel is None or not tunnel.active:
+        tunnel_active = tunnel is not None and tunnel.active
+        if not tunnel_active and not reached_over_network(request):
             return await call_next(request)
 
         # ── Localhost bypass (Electron desktop app) ────────────────────
@@ -212,6 +216,22 @@ class TunnelAuthMiddleware(BaseHTTPMiddleware):
         )
         if client_host in _LOCAL_HOSTS and not has_forwarded_marker:
             return await call_next(request)
+
+        if not tunnel_active:
+            logger.warning(
+                "Network auth: rejecting %s %s from %s (mobile access is off)",
+                request.method,
+                path,
+                client_host,
+            )
+            return JSONResponse(
+                status_code=401,
+                content={
+                    "detail": "This GAIA server answers other computers only "
+                    "through mobile access. Start mobile access on the PC "
+                    "running GAIA and use its link, or open GAIA on the PC."
+                },
+            )
 
         # ── Remote request through tunnel -- require valid token ─────────
         # Extract token from Authorization header OR cookie.
