@@ -2551,7 +2551,8 @@ plan and make one set of choices.
 The routes that change setup (`npu/recheck`, `chat-model`, `vision-model`,
 `models/skip`, `models/download`, `models/remove`, `run` and `cancel`) answer the
 PC or a paired device the PC allowed, and refuse mobile access and other
-computers (**403**). `npu/memlock-fix` is PC-only.
+computers (**403**). `npu/memlock-fix` and the troubleshooting report are
+PC-only.
 
 <AccordionGroup>
   Error `detail` strings are fixed messages that say what failed and what to
@@ -2662,13 +2663,14 @@ computers (**403**). `npu/memlock-fix` is PC-only.
     run, the plan and every stage's full log) saved as `setup-report.json` in
     GAIA's home, bundled with GAIA's logs and a system snapshot by `gaia
     diagnostics`, with secret environment variables and secrets in the logs redacted. Returns `{"name", "path", "size_bytes"}`.
-    **500** naming the cause when the bundle can't be written.
+    **500** naming the cause when the bundle can't be written. PC-only, as the
+    logs are: **403** from mobile access, a paired device or another computer.
   </Accordion>
 
   <Accordion title="GET /api/setup/report/{name}">
     The report `POST /api/setup/report` wrote, as `application/gzip`. Only a
     `diagnostics-<YYYYMMDD>-<HHMMSS>.tgz` in GAIA's home is served; anything
-    else is **404**.
+    else is **404**. PC-only, like `POST`.
   </Accordion>
 
   <Accordion title="POST /api/setup/models/skip">
@@ -3282,7 +3284,7 @@ Every route is in one class, pinned by `tests/unit/chat/ui/test_route_access.py`
 
 | Class | Who | Routes |
 |---|---|---|
-| PC-only | `pc` | Tunnel start and stop, provider keys, the model-server target, logs, messaging, GPU memory apply and revert, the default full-access setting, connector configure and authorize, `POST /v1/connections/{provider}`, skill and agent installs, `POST /api/files/open`, `POST /api/setup/npu/memlock-fix` |
+| PC-only | `pc` | Tunnel start and stop, provider keys, the model-server target, logs, messaging, GPU memory apply and revert, the default full-access setting, connector configure and authorize, `POST /v1/connections/{provider}`, skill and agent installs, `POST /api/files/open`, `POST /api/setup/npu/memlock-fix`, the troubleshooting report |
 | Setup | `pc`, or an allowed device | Setup's changes (see [Setup](#setup)), `POST /api/system/download-model`, `PUT /api/system/model-server/backend` |
 | Not from a device | `pc`, `tunnel` | `GET /api/providers`, which can register a provider |
 | Everything else | `pc`, `tunnel`, an allowed device | Chats, documents, memory, goals, schedules and the rest |

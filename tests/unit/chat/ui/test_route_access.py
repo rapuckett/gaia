@@ -43,6 +43,7 @@ PC_ONLY = {
     "GET /api/logs",
     "GET /api/logs/{source}",
     "GET /api/messaging/discord",
+    "GET /api/setup/report/{name}",
     "POST /api/agents/install",
     "POST /api/connectors/{connector_id}/authorize",
     "POST /api/connectors/{connector_id}/authorize-device",
@@ -57,6 +58,7 @@ PC_ONLY = {
     "POST /api/messaging/discord/start",
     "POST /api/messaging/discord/stop",
     "POST /api/setup/npu/memlock-fix",
+    "POST /api/setup/report",
     "POST /api/skills/link/add",
     "POST /api/tunnel/start",
     "POST /api/tunnel/stop",
@@ -198,7 +200,6 @@ REMOTE = {
     "GET /api/setup/check",
     "GET /api/setup/needs/{job}",
     "GET /api/setup/plan",
-    "GET /api/setup/report/{name}",
     "GET /api/setup/status",
     "GET /api/skills",
     "GET /api/skills/featured",
@@ -278,7 +279,6 @@ REMOTE = {
     "POST /api/sessions/{session_id}/environment/folders",
     "POST /api/sessions/{session_id}/environment/folders/remove",
     "POST /api/sessions/{session_id}/read",
-    "POST /api/setup/report",
     "POST /api/skills/link/preview",
     "POST /api/speech",
     "POST /api/spending/allow-month",
@@ -541,3 +541,30 @@ def test_listener_request_that_skipped_device_auth_is_refused(app):
     client = TestClient(ListenerScopeMiddleware(app), client=PC)
     assert client.get("/api/sessions").status_code == 401
     assert client.get("/api/health").status_code == 401
+
+
+def test_troubleshooting_report_is_pc_only(app):
+    """The report bundles every log, so it is no side door around them."""
+    from gaia.home import gaia_home
+
+    name = "diagnostics-20261112-101010.tgz"
+    report = gaia_home() / name
+    report.parent.mkdir(parents=True, exist_ok=True)
+    report.write_bytes(b"logs that quote a conversation")
+    try:
+        tunnel = {"X-Forwarded-For": "203.0.113.7"}
+        for client, headers in (
+            (TestClient(app, client=PC), tunnel),
+            (TestClient(app, client=("192.168.1.20", 50000)), {}),
+            (TestClient(_on_listener(app, ALLOWED), client=PC), {}),
+        ):
+            got = client.get(f"/api/setup/report/{name}", headers=headers)
+            assert got.status_code == 403
+            assert b"conversation" not in got.content
+            assert client.post("/api/setup/report", headers=headers).status_code == 403
+
+        pc = TestClient(app, client=PC).get(f"/api/setup/report/{name}")
+        assert pc.status_code == 200
+        assert pc.content == b"logs that quote a conversation"
+    finally:
+        report.unlink()

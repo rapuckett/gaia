@@ -202,7 +202,11 @@ def setup_vision_model(body: VisionModelRequest) -> Dict[str, Any]:
         raise _plan_error(e, f"{body.model_id} can't read images.") from e
 
 
-@router.post("/api/setup/report", dependencies=[Depends(require_ui_header)])
+#: The report bundles every GAIA log, which only the PC may read.
+_AT_THIS_PC = [Depends(require_ui_header), Depends(require_local_pc)]
+
+
+@router.post("/api/setup/report", dependencies=_AT_THIS_PC)
 def setup_report() -> Dict[str, Any]:
     """Bundle setup's record, every GAIA log and a system snapshot for a bug report."""
     record = runner.report()
@@ -218,7 +222,7 @@ def setup_report() -> Dict[str, Any]:
     return {"name": path.name, "path": str(path), "size_bytes": path.stat().st_size}
 
 
-@router.get("/api/setup/report/{name}", dependencies=[Depends(require_ui_header)])
+@router.get("/api/setup/report/{name}", dependencies=_AT_THIS_PC)
 def setup_report_file(name: str) -> FileResponse:
     """A troubleshooting report written by ``POST /api/setup/report``."""
     from gaia.home import gaia_home
