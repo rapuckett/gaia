@@ -1390,6 +1390,13 @@ Deleting a chat deletes its copies.
 
 ### Files
 
+Away from the PC (mobile access, or a paired device), browse, search, preview and
+image reads name a chat with `session_id` and see only the folders and files
+that chat may touch, as its session panel lists them. GAIA's secret-file policy
+still applies inside them: keys, certificates, `.env` files and credential
+folders such as `~/.ssh` are refused (**403**), and so is anything outside the
+chat or a read that names no chat. The PC reads its home folder as before.
+
 <AccordionGroup>
   <Accordion title="POST /api/files/open">
     Open a file or folder in the system file explorer. On Windows this launches Explorer, on macOS it uses `open`, and on Linux it uses `xdg-open`. Symbolic links are rejected for security. PC-only: what it opens shows on the PC, so a request from mobile access, a paired device or another computer is a `403`.
@@ -1478,7 +1485,9 @@ Deleting a chat deletes its copies.
 
   <Accordion title="GET /api/files/browse">
     Browse filesystem contents. Returns entries under a directory with size,
-    mtime, and type metadata.
+    mtime, and type metadata. Away from the PC, `path` must be one of the
+    chat's folders or inside one; `quick_links` lists the chat's folders and
+    `parent_path` never leaves them.
   </Accordion>
 
   <Accordion title="GET /api/files/search">
@@ -1487,11 +1496,14 @@ Deleting a chat deletes its copies.
     `~/Desktop`, `~/OneDrive`, then the rest of the home directory. The walk is bounded: it
     stops at `max_results` matches, after 20,000 directory entries, or after
     about 10 seconds. `truncated: true` in the response means a bound cut the walk
-    short and more matches may exist.
+    short and more matches may exist. `folder` searches that one folder only.
+    Away from the PC, the walk covers the chat's folders alone and never
+    returns a file holding secrets.
   </Accordion>
 
   <Accordion title="GET /api/files/preview">
-    Return a preview (first N bytes / first N lines) of a text file.
+    Return a preview (first N bytes / first N lines) of a text file. `lines`
+    defaults to 50 and is at most 200, or 50 away from the PC.
   </Accordion>
 
   <Accordion title="GET /api/files/image">

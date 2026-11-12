@@ -30,7 +30,7 @@ def fake_home(tmp_path, monkeypatch):
 
 @pytest.fixture
 def client():
-    return TestClient(create_app(db_path=":memory:"))
+    return TestClient(create_app(db_path=":memory:"), client=("127.0.0.1", 50000))
 
 
 def _populate(directory: Path, count: int, prefix: str = "filler") -> None:

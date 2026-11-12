@@ -24,19 +24,13 @@ from fastapi.testclient import TestClient
 from starlette.routing import Mount
 
 from gaia.ui import security
-from gaia.ui.security import (
-    DEVICE_AUTH_SCOPE_KEY,
-    DEVICE_SCOPE_KEY,
-    DevicePrincipal,
-    ListenerScopeMiddleware,
-)
+from gaia.ui.security import DEVICE_SCOPE_KEY, ListenerScopeMiddleware
 from gaia.ui.server import create_app
 
-pytestmark = pytest.mark.allow_network  # TestClient only; nothing leaves the machine
+from .device_scope import ALLOWED, PC, PENDING
+from .device_scope import on_listener as _on_listener
 
-PC = ("127.0.0.1", 50000)
-ALLOWED = DevicePrincipal(device_id="d0a1", allowed=True)
-PENDING = DevicePrincipal(device_id="d0a2", allowed=False)
+pytestmark = pytest.mark.allow_network  # TestClient only; nothing leaves the machine
 
 PC_ONLY = {
     "DELETE /api/agents/{agent_id}",
@@ -380,19 +374,6 @@ def _access_class(key, route):
     if security.refuse_on_device_listener in guards:
         return "not_on_listener"
     return "remote"
-
-
-def _on_listener(app, device=None):
-    """The app as the device listener hands it a request device auth passed."""
-
-    async def authenticated(scope, receive, send):
-        if scope["type"] in ("http", "websocket"):
-            scope = {**scope, DEVICE_AUTH_SCOPE_KEY: True}
-            if device is not None:
-                scope[DEVICE_SCOPE_KEY] = device
-        await app(scope, receive, send)
-
-    return ListenerScopeMiddleware(authenticated)
 
 
 def _fill(path):
