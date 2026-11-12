@@ -256,7 +256,7 @@ class TestSetupConnect:
         db = mock.Mock()
         db.get_setting.return_value = None
         app.dependency_overrides[get_db] = lambda: db
-        return TestClient(app)
+        return TestClient(app, client=("127.0.0.1", 50000))
 
     def test_connect_uses_the_users_working_provider_and_writes_nothing(
         self, client, users_server, keyring
@@ -601,7 +601,7 @@ class TestSettingsSave:
         db = mock.Mock()
         db.get_setting.return_value = None
         app.dependency_overrides[get_db] = lambda: db
-        r = TestClient(app).put(
+        r = TestClient(app, client=("127.0.0.1", 50000)).put(
             "/api/system/model-server/backend", json={"backend": "vulkan"}
         )
         assert r.status_code == 200, r.text
@@ -745,7 +745,7 @@ class TestUseGaiasOwn:
         monkeypatch.setattr("gaia.daemon.client.ensure_lemonade", self.ensured)
         monkeypatch.setattr(router_mod, "_drop_cached_agents", mock.Mock())
         _save(lemonade_mode="external", lemonade_base_url=self.USER_URL)
-        return TestClient(app)
+        return TestClient(app, client=("127.0.0.1", 50000))
 
     def _switch(self, client):
         return client.post(

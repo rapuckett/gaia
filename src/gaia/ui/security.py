@@ -34,6 +34,7 @@ import ipaddress
 import json
 import logging
 import os
+from dataclasses import dataclass
 from typing import Optional
 from urllib.parse import urlsplit
 
@@ -194,10 +195,56 @@ def require_ui_header(request: Request) -> None:
 
 _FORWARDED_HEADERS = ("x-forwarded-for", "x-forwarded-host", "x-forwarded-proto")
 
+#: Scope key a listener other than the main one stamps on every request it
+#: serves. ASGI scope keys come from the server and middleware, never from a
+#: client, so a request cannot claim or shed it.
+LISTENER_SCOPE_KEY = "gaia.listener"
+#: ``scope[LISTENER_SCOPE_KEY]`` on the listener paired devices reach.
+LAN_LISTENER = "lan"
+#: Scope key device auth sets on the listener to a :class:`DevicePrincipal`.
+DEVICE_SCOPE_KEY = "gaia.device"
+#: Set by device auth once it has checked a listener request, so the main
+#: app's own auth can refuse one that skipped it.
+DEVICE_AUTH_SCOPE_KEY = "gaia.device_auth"
 
-def via_tunnel(request: Request) -> bool:
-    """The request came over mobile access: ngrok adds ``X-Forwarded-*``."""
+PRINCIPAL_PC = "pc"
+PRINCIPAL_TUNNEL = "tunnel"
+DEVICE_PRINCIPAL_PREFIX = "device:"
+
+
+@dataclass(frozen=True)
+class DevicePrincipal:
+    """The paired device whose token a listener request carried."""
+
+    device_id: str
+    allowed: bool
+
+
+class ListenerScopeMiddleware:
+    """Mark every request a second listener serves, websockets included.
+
+    Pure ASGI and outermost on that listener, so no route, middleware or
+    relay in front of it can make one of its requests look like the PC.
+    """
+
+    def __init__(self, app: ASGIApp, listener: str = LAN_LISTENER) -> None:
+        self.app = app
+        self.listener = listener
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] in ("http", "websocket"):
+            scope = {**scope, LISTENER_SCOPE_KEY: self.listener}
+        await self.app(scope, receive, send)
+
+
+def _has_forwarded_headers(request: Request) -> bool:
+    """ngrok adds ``X-Forwarded-*`` to every request it carries."""
     return any(h in request.headers for h in _FORWARDED_HEADERS)
+
+
+def on_device_listener(request: Request) -> bool:
+    """Whether the request reached a listener other than the main one."""
+    return request.scope.get(LISTENER_SCOPE_KEY) is not None
 
 
 def reached_over_network(request: Request) -> bool:
@@ -212,14 +259,40 @@ def reached_over_network(request: Request) -> bool:
     return _is_ip_literal(host) and not _is_loopback_name(host)
 
 
-def is_local_pc(request: Request) -> bool:
-    """Whether the request came from the PC running GAIA.
+def principal(request: Request) -> str:
+    """Who sent the request: ``pc``, ``device:<id>`` or ``tunnel``.
 
-    The tunnel connects from loopback, so the peer address alone can't tell a
-    paired phone from the desktop; the forwarded headers ngrok adds can.
+    Decided by the listener the request reached, never by its peer address
+    alone: ngrok's TLS passthrough, ``tailscale serve``, ``ssh -L`` and socat
+    all reach a listener from loopback without forwarded headers. Nothing on
+    the device listener is the PC. On the main listener only a loopback peer
+    with no ``X-Forwarded-*`` header is. Everyone else is ``tunnel``: mobile
+    access, another computer, or a device listener request with no device.
     """
+    if on_device_listener(request):
+        device = request.scope.get(DEVICE_SCOPE_KEY)
+        if isinstance(device, DevicePrincipal):
+            return DEVICE_PRINCIPAL_PREFIX + device.device_id
+        return PRINCIPAL_TUNNEL
     host = request.client.host if request.client else ""
-    return _is_loopback_name(host) and not via_tunnel(request)
+    if _is_loopback_name(host) and not _has_forwarded_headers(request):
+        return PRINCIPAL_PC
+    return PRINCIPAL_TUNNEL
+
+
+def is_local_pc(request: Request) -> bool:
+    """Whether the request came from the PC running GAIA."""
+    return principal(request) == PRINCIPAL_PC
+
+
+def allowed_device(request: Request) -> Optional[DevicePrincipal]:
+    """The allowed paired device a listener request came from, if any."""
+    device = (
+        request.scope.get(DEVICE_SCOPE_KEY) if on_device_listener(request) else None
+    )
+    if isinstance(device, DevicePrincipal) and device.allowed:
+        return device
+    return None
 
 
 def require_local_pc(request: Request) -> None:
@@ -227,8 +300,29 @@ def require_local_pc(request: Request) -> None:
     if not is_local_pc(request):
         raise HTTPException(
             status_code=403,
-            detail="Change this on the PC running GAIA. It can't be changed "
-            "over mobile access or from another computer.",
+            detail="Do this on the PC running GAIA. It isn't allowed over mobile "
+            "access, from a paired device or from another computer.",
+        )
+
+
+def require_pc_or_device(request: Request) -> None:
+    """First-run setup: the PC, or a paired device the PC allowed; never the tunnel."""
+    if not is_local_pc(request) and allowed_device(request) is None:
+        raise HTTPException(
+            status_code=403,
+            detail="Set GAIA up on the PC running GAIA or on a paired device the "
+            "PC allowed. It isn't allowed over mobile access or from another "
+            "computer.",
+        )
+
+
+def refuse_on_device_listener(request: Request) -> None:
+    """For a read with side effects on the PC that a paired device may not cause."""
+    if on_device_listener(request):
+        raise HTTPException(
+            status_code=403,
+            detail="Do this on the PC running GAIA. It isn't allowed from a "
+            "paired device.",
         )
 
 

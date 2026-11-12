@@ -186,7 +186,7 @@ def client(db):
     app = FastAPI()
     app.include_router(providers.router)
     app.state.db = db
-    return TestClient(app, headers={"X-Gaia-UI": "1"})
+    return TestClient(app, client=("127.0.0.1", 50000), headers={"X-Gaia-UI": "1"})
 
 
 def _config():

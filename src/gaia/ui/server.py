@@ -84,7 +84,13 @@ from .routers import speech as speech_router_mod
 from .routers import spending as spending_router_mod
 from .routers import system as system_router_mod
 from .routers import tunnel as tunnel_router_mod
-from .security import UIRequestGuardMiddleware, reached_over_network
+from .security import (
+    DEVICE_AUTH_SCOPE_KEY,
+    UIRequestGuardMiddleware,
+    is_local_pc,
+    on_device_listener,
+    reached_over_network,
+)
 from .tunnel import TunnelManager
 from .utils import UploadStaticFiles
 from .utils import sanitize_static_path as _sanitize_static_path
@@ -94,9 +100,6 @@ logger = logging.getLogger(__name__)
 
 # Default port for agent UI server
 DEFAULT_PORT = 4200
-
-# Localhost addresses that bypass tunnel authentication (Electron app)
-_LOCAL_HOSTS = {"127.0.0.1", "localhost", "::1"}
 
 # API paths that bypass tunnel authentication (monitoring / preflight)
 _AUTH_EXEMPT_PATHS = {"/api/health"}
@@ -173,8 +176,10 @@ class TunnelAuthMiddleware(BaseHTTPMiddleware):
     that reached it over the network, whether or not the tunnel is up; with
     the tunnel off no token is valid, so other computers are refused.
 
-    Local requests (from the Electron desktop app) and the ``/api/health``
-    monitoring endpoint are always allowed through.
+    Requests from the PC (the Electron desktop app) and the ``/api/health``
+    monitoring endpoint are always allowed through. The device listener's
+    requests are left to its own device auth: the tunnel token means nothing
+    there.
     """
 
     async def dispatch(self, request: Request, call_next):
@@ -186,6 +191,19 @@ class TunnelAuthMiddleware(BaseHTTPMiddleware):
         if not (path.startswith("/api/") or path.startswith("/v1/")):
             return await call_next(request)
 
+        if on_device_listener(request):
+            if request.scope.get(DEVICE_AUTH_SCOPE_KEY) is not True:
+                logger.error(
+                    "Device listener served %s %s without device auth; refused",
+                    request.method,
+                    path,
+                )
+                return JSONResponse(
+                    status_code=401,
+                    content={"detail": "This request skipped device auth."},
+                )
+            return await call_next(request)
+
         # Always allow exempt paths (health check, etc.)
         if path in _AUTH_EXEMPT_PATHS:
             return await call_next(request)
@@ -195,26 +213,11 @@ class TunnelAuthMiddleware(BaseHTTPMiddleware):
         if not tunnel_active and not reached_over_network(request):
             return await call_next(request)
 
-        # ── Localhost bypass (Electron desktop app) ────────────────────
-        # The bypass requires BOTH the raw TCP peer to be on localhost
-        # AND the request to lack any ``X-Forwarded-*`` headers. The
-        # second clause is what makes the bypass spoof-resistant: ngrok
-        # always *adds* ``X-Forwarded-For`` / ``X-Forwarded-Host`` /
-        # ``X-Forwarded-Proto`` to tunnelled requests, so if any of those
-        # are present the request came in over the wire and must
-        # authenticate — even if a remote attacker tried to set
-        # ``X-Forwarded-For: 127.0.0.1`` to fake a localhost source.
-        #
-        # Note: ``request.client.host`` reflects the raw TCP peer because
-        # every runner takes its settings from ``uvicorn_options()``, which
-        # turns off the proxy-header rewrite that would otherwise let the
-        # ``X-Forwarded-For`` value take precedence.
+        # The PC: a loopback peer with no ``X-Forwarded-*`` header, which
+        # ngrok always adds. The peer is the raw TCP one because every runner
+        # takes its settings from ``uvicorn_options()``.
         client_host = request.client.host if request.client else None
-        has_forwarded_marker = any(
-            h in request.headers
-            for h in ("x-forwarded-for", "x-forwarded-host", "x-forwarded-proto")
-        )
-        if client_host in _LOCAL_HOSTS and not has_forwarded_marker:
+        if is_local_pc(request):
             return await call_next(request)
 
         if not tunnel_active:

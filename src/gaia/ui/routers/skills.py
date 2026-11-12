@@ -15,8 +15,10 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+
+from ..security import require_local_pc
 
 logger = logging.getLogger(__name__)
 
@@ -105,7 +107,8 @@ def preview_skill_link(body: SkillLinkRequest) -> Dict[str, Any]:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
-@router.post("/api/skills/link/add")
+# Installs code that runs with the agent, so only the PC running GAIA may.
+@router.post("/api/skills/link/add", dependencies=[Depends(require_local_pc)])
 def add_skill_link(body: SkillLinkAddRequest) -> Dict[str, Any]:
     """Add the chosen skills behind a pasted link to ``~/.gaia/skills``.
 
