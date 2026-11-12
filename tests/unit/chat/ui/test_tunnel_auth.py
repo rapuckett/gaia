@@ -512,3 +512,61 @@ class TestPwaFilesOverTunnel:
         _activate_tunnel(app_with_pwa)
         resp = TestClient(app_with_pwa).get("/api/sessions", headers=self._REMOTE)
         assert resp.status_code == 401
+
+
+# ── Tests: only the PC controls the tunnel and sees its token ───────────
+
+
+_PC = ("127.0.0.1", 50000)
+_UI = {"X-Gaia-UI": "1"}
+
+
+@pytest.mark.parametrize("action", ["start", "stop"])
+@pytest.mark.parametrize(
+    "peer, headers",
+    [
+        (("testclient", 50000), {}),
+        (("192.168.1.20", 50000), {}),
+        (_PC, {"X-Forwarded-For": "203.0.113.7"}),
+    ],
+    ids=["unknown-peer", "lan-peer", "through-the-tunnel"],
+)
+def test_tunnel_start_stop_pc_only(app, monkeypatch, action, peer, headers):
+    calls = []
+
+    async def _fake(self):
+        calls.append(action)
+        return self.get_status()
+
+    monkeypatch.setattr(TunnelManager, action, _fake)
+    token = _activate_tunnel(app)
+    remote = TestClient(app, client=peer)
+    resp = remote.post(
+        f"/api/tunnel/{action}",
+        headers={**_UI, "Authorization": f"Bearer {token}", **headers},
+    )
+    assert resp.status_code == 403
+    assert "on the PC running GAIA" in resp.json()["detail"]
+    assert calls == []
+
+    local = TestClient(app, client=_PC)
+    assert local.post(f"/api/tunnel/{action}", headers=_UI).status_code == 200
+    assert calls == [action]
+
+
+def test_tunnel_status_omits_token_for_non_pc(app):
+    token = _activate_tunnel(app)
+    remote = TestClient(app).get(
+        "/api/tunnel/status", headers={"Authorization": f"Bearer {token}"}
+    )
+    assert remote.status_code == 200
+    assert remote.json()["token"] is None
+    assert token not in remote.text
+    tunnelled = TestClient(app, client=_PC).get(
+        "/api/tunnel/status",
+        headers={"Authorization": f"Bearer {token}", "X-Forwarded-For": "1.2.3.4"},
+    )
+    assert tunnelled.json()["token"] is None
+
+    local = TestClient(app, client=_PC).get("/api/tunnel/status")
+    assert local.json()["token"] == token

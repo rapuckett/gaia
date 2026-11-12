@@ -1697,17 +1697,19 @@ Used to reach the UI from a phone.
 
 <AccordionGroup>
   <Accordion title="POST /api/tunnel/start">
-    Start a tunnel. Returns the public URL.
+    Start a tunnel. Returns the public URL. Only the PC running GAIA may start
+    it: a request over mobile access or from another computer is a **403**.
   </Accordion>
 
   <Accordion title="POST /api/tunnel/stop">
-    Stop the active tunnel.
+    Stop the active tunnel. PC-only, like `start`.
   </Accordion>
 
   <Accordion title="GET /api/tunnel/status">
     Current tunnel status — active/inactive, public URL, provider, uptime, and
     `device`: `{"name": "iPhone", "lastSeen": "..."}` for the latest
-    authenticated request through the tunnel, or null. When ngrok is not
+    authenticated request through the tunnel, or null. `token` is the tunnel's
+    token for the PC only; every other caller gets null. When ngrok is not
     installed, `reason` is `"ngrok_not_installed"` and `installCommands` lists
     this OS's install commands (empty where none is known); `error` still
     carries the same instructions as text. Both `start` and `status` return

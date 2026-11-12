@@ -200,14 +200,19 @@ def via_tunnel(request: Request) -> bool:
     return any(h in request.headers for h in _FORWARDED_HEADERS)
 
 
-def require_local_pc(request: Request) -> None:
-    """Refuse a request that did not come from the PC running GAIA.
+def is_local_pc(request: Request) -> bool:
+    """Whether the request came from the PC running GAIA.
 
     The tunnel connects from loopback, so the peer address alone can't tell a
     paired phone from the desktop; the forwarded headers ngrok adds can.
     """
     host = request.client.host if request.client else ""
-    if not _is_loopback_name(host) or via_tunnel(request):
+    return _is_loopback_name(host) and not via_tunnel(request)
+
+
+def require_local_pc(request: Request) -> None:
+    """Refuse a request that did not come from the PC running GAIA."""
+    if not is_local_pc(request):
         raise HTTPException(
             status_code=403,
             detail="Change this on the PC running GAIA. It can't be changed "
