@@ -385,10 +385,8 @@ def test_write_and_open_spec_writes_file_and_returns_path(tmp_path, monkeypatch)
     assert opened == [dest.resolve().as_uri()]
 
 
-def test_write_and_open_spec_default_path_constant(monkeypatch):
+def test_default_spec_path_follows_gaia_home(monkeypatch, tmp_path):
     import gaia_agent_email.spec_html as spec_mod
 
-    # Default path lives under ~/.gaia/email/ and is exposed as a constant the
-    # CLI prints; assert the shape without writing to the real home dir.
-    assert spec_mod.DEFAULT_SPEC_PATH.name == "endpoint-spec.html"
-    assert spec_mod.DEFAULT_SPEC_PATH.parent.name == "email"
+    monkeypatch.setenv("GAIA_HOME", str(tmp_path))
+    assert spec_mod.default_spec_path() == tmp_path / "email" / "endpoint-spec.html"
