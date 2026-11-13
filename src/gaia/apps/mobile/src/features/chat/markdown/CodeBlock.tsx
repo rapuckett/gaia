@@ -44,8 +44,8 @@ export function CodeBlock({ lang, code, streaming }: { lang: string; code: strin
         <Surface tone="recessed" radius="md" border>
             <Stack dir="ltr">
                 <Row dir="ltr" gap="sm" justify="between">
-                    <Stack paddingX="md">
-                        <Text role="caption" tone="muted" mono>
+                    <Stack paddingX="md" flex={1}>
+                        <Text role="caption" tone="muted" mono numberOfLines={1}>
                             {lang || t('code.lang')}
                         </Text>
                     </Stack>
@@ -53,12 +53,14 @@ export function CodeBlock({ lang, code, streaming }: { lang: string; code: strin
                         onPress={copy}
                         accessibilityLabel={copied ? t('msg.copiedAria') : t('code.copyAria')}
                     >
-                        <Row gap="xs" dir="ltr">
-                            <Icon icon={copied ? Check : Copy} size="sm" tone="secondary" />
-                            <Text role="caption" tone="secondary">
-                                {copied ? t('code.copied') : t('code.copy')}
-                            </Text>
-                        </Row>
+                        <Stack paddingX="md">
+                            <Row gap="xs" dir="ltr">
+                                <Icon icon={copied ? Check : Copy} size="sm" tone="secondary" />
+                                <Text role="caption" tone="secondary">
+                                    {copied ? t('code.copied') : t('code.copy')}
+                                </Text>
+                            </Row>
+                        </Stack>
                     </Pressable>
                 </Row>
                 <HScroll dir="ltr">

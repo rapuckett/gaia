@@ -131,9 +131,10 @@ function inlineCode(value: string, ctx: InlineContext, key: string, page?: numbe
     const doc = docForToken(ctx.index, value);
     if (doc) return citation(doc, page, ctx, key);
     if (WIN_PATH_ONLY_RE.test(value.trim())) return pathText(value.trim(), key);
+    // No-break spaces keep a command on one line, so it never splits into reordered pieces.
     return (
         <Text key={key} code dir="ltr">
-            {isolate(value, 'ltr')}
+            {isolate(value.replace(/ /g, '\u00A0'), 'ltr')}
         </Text>
     );
 }
