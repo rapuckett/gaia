@@ -1716,6 +1716,16 @@ class TestMemorySettings:
 
 
 class TestMemorySettingsFile:
+    def test_settings_live_under_gaia_home(self, tmp_path, monkeypatch):
+        from gaia.agents.base import memory as memory_module
+
+        monkeypatch.setenv("GAIA_HOME", str(tmp_path))
+
+        memory_module._save_memory_settings({"system_context_enabled": True})
+
+        assert (tmp_path / "memory_settings.json").is_file()
+        assert memory_module._load_memory_settings() == {"system_context_enabled": True}
+
     def test_save_refuses_to_overwrite_malformed_settings(self, tmp_path, monkeypatch):
         """A parse failure must preserve unrelated settings instead of replacing the file."""
         from gaia.agents.base import memory as memory_module
@@ -1723,7 +1733,9 @@ class TestMemorySettingsFile:
         settings_path = tmp_path / "memory_settings.json"
         malformed = "{not valid json"
         settings_path.write_text(malformed, encoding="utf-8")
-        monkeypatch.setattr(memory_module, "_MEMORY_SETTINGS_PATH", settings_path)
+        monkeypatch.setattr(
+            memory_module, "_memory_settings_path", lambda: settings_path
+        )
 
         with pytest.raises(RuntimeError, match="Could not read memory settings"):
             memory_module._save_memory_settings({"system_context_enabled": False})
@@ -1735,7 +1747,9 @@ class TestMemorySettingsFile:
 
         settings_path = tmp_path / "memory_settings.json"
         settings_path.write_text("[1, 2]", encoding="utf-8")
-        monkeypatch.setattr(memory_module, "_MEMORY_SETTINGS_PATH", settings_path)
+        monkeypatch.setattr(
+            memory_module, "_memory_settings_path", lambda: settings_path
+        )
 
         with pytest.raises(RuntimeError, match="must be an object"):
             memory_module._save_memory_settings({"system_context_enabled": True})
@@ -1749,7 +1763,9 @@ class TestMemorySettingsFile:
         blocker = tmp_path / "not_a_dir"
         blocker.write_text("", encoding="utf-8")
         monkeypatch.setattr(
-            memory_module, "_MEMORY_SETTINGS_PATH", blocker / "memory_settings.json"
+            memory_module,
+            "_memory_settings_path",
+            lambda: blocker / "memory_settings.json",
         )
 
         with pytest.raises(RuntimeError, match="Could not"):
@@ -1759,7 +1775,9 @@ class TestMemorySettingsFile:
         from gaia.agents.base import memory as memory_module
 
         settings_path = tmp_path / "sub" / "memory_settings.json"
-        monkeypatch.setattr(memory_module, "_MEMORY_SETTINGS_PATH", settings_path)
+        monkeypatch.setattr(
+            memory_module, "_memory_settings_path", lambda: settings_path
+        )
 
         memory_module._save_memory_settings({"onboarding_completed_at": "t0"})
         memory_module._save_memory_settings({"system_context_enabled": True})
@@ -1797,7 +1815,9 @@ class TestMemorySettingsFile:
 
         settings_path = tmp_path / "memory_settings.json"
         settings_path.write_text('{"keep": 1}', encoding="utf-8")
-        monkeypatch.setattr(memory_module, "_MEMORY_SETTINGS_PATH", settings_path)
+        monkeypatch.setattr(
+            memory_module, "_memory_settings_path", lambda: settings_path
+        )
 
         resp = client.put(
             "/api/memory/settings", json={"system_discovery_consent": False}

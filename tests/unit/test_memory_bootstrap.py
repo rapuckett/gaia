@@ -659,7 +659,9 @@ def test_cli_marks_onboarding_completed_even_when_the_user_stores_nothing(
         lambda *a, **k: MemoryStore(db_path=tmp_path / "memory.db"),
     )
     monkeypatch.setattr(
-        memory_module, "_MEMORY_SETTINGS_PATH", tmp_path / "memory_settings.json"
+        memory_module,
+        "_memory_settings_path",
+        lambda: tmp_path / "memory_settings.json",
     )
     answers = iter(_ENGINEER_ANSWERS)
     # Answer every question, then decline every proposed entry.
@@ -688,7 +690,9 @@ def test_cli_does_not_mark_onboarding_completed_when_cancelled(monkeypatch, tmp_
         lambda *a, **k: MemoryStore(db_path=tmp_path / "memory.db"),
     )
     monkeypatch.setattr(
-        memory_module, "_MEMORY_SETTINGS_PATH", tmp_path / "memory_settings.json"
+        memory_module,
+        "_memory_settings_path",
+        lambda: tmp_path / "memory_settings.json",
     )
     monkeypatch.setattr("builtins.input", _raise(EOFError()))
 
@@ -709,7 +713,9 @@ def _first_boot_env(monkeypatch, tmp_path):
         lambda *a, **k: MemoryStore(db_path=tmp_path / "memory.db"),
     )
     monkeypatch.setattr(
-        memory_module, "_MEMORY_SETTINGS_PATH", tmp_path / "memory_settings.json"
+        memory_module,
+        "_memory_settings_path",
+        lambda: tmp_path / "memory_settings.json",
     )
 
 
