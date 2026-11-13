@@ -4,6 +4,8 @@
 /** Which chat events should alert the user, and how (#5226). Pure, so it tests without a DOM. */
 
 import type { AlertEvent, AlertSettings } from '../stores/notificationStore';
+import { getT } from '../i18n/useT';
+import type { MessageKey } from '../i18n/registry';
 import type { AwaitingUser, Session } from '../types';
 
 /** A chat's turn state as the alert logic sees it. */
@@ -43,21 +45,22 @@ export function chatAlertEvents(prev: ChatPhases, next: ChatPhases): ChatAlert[]
     return out;
 }
 
-const EVENT_TITLE: Record<AlertEvent, string> = {
-    needs_approval: 'GAIA needs your approval',
-    question: 'GAIA has a question',
-    finished: 'GAIA finished',
+const EVENT_TITLE: Record<AlertEvent, MessageKey> = {
+    needs_approval: 'chatAlert.needsApproval',
+    question: 'chatAlert.question',
+    finished: 'chatAlert.finished',
 };
 
 /** For `finished`, `session` must be fresh: its `last_run_status` is that turn's outcome. */
 export function alertText(event: AlertEvent, session: Session | undefined): { title: string; body: string } {
-    const chat = session?.title || 'A chat';
-    if (event !== 'finished') return { title: EVENT_TITLE[event], body: chat };
+    const t = getT();
+    const chat = session?.title || t('chatAlert.untitled');
+    if (event !== 'finished') return { title: t(EVENT_TITLE[event]), body: chat };
     switch (session?.last_run_status) {
-        case 'done': return { title: EVENT_TITLE.finished, body: chat };
-        case 'failed': return { title: 'GAIA hit a problem', body: chat };
-        case 'stopped': return { title: 'GAIA stopped', body: chat };
-        default: return { title: 'A chat stopped running', body: chat };
+        case 'done': return { title: t(EVENT_TITLE.finished), body: chat };
+        case 'failed': return { title: t('chatAlert.failed'), body: chat };
+        case 'stopped': return { title: t('chatAlert.stopped'), body: chat };
+        default: return { title: t('chatAlert.ended'), body: chat };
     }
 }
 

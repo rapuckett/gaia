@@ -6,12 +6,13 @@
 import { create } from 'zustand';
 import type { Schedule, ScheduleResult } from '../types';
 import * as api from '../services/api';
-import { getT } from '../i18n/useT';
+import { ref, type MessageRef } from '../i18n/registry';
+import { getT, tEn } from '../i18n/useT';
 import { log } from '../utils/logger';
 import { useNotificationStore } from './notificationStore';
 
 /** Extract a human-readable message from an API error. */
-function parseApiError(err: unknown, fallback: string): string {
+function parseApiError(err: unknown, fallback: MessageRef): string | MessageRef {
     if (!(err instanceof Error)) return fallback;
     const raw = err.message;
     // apiFetch throws "API 400: {\"detail\":\"...\"}" — extract the detail
@@ -35,7 +36,7 @@ function notifyNewFailures(seen: Record<string, number>, list: Schedule[]): void
             type: 'error',
             agentId: 'scheduler',
             agentName: 'GAIA',
-            title: `Scheduled task "${s.name}" failed`,
+            title: getT()('schedules.failed', { name: s.name }),
             message: s.last_error,
             timestamp: Date.now(),
             read: false,
@@ -78,8 +79,8 @@ interface ScheduleState {
     loading: boolean;
     /** Why the last load failed. Owned by loadSchedules; replaces the list. */
     error: string | null;
-    /** Why the last pause, resume, run now or delete failed. Shown above the list until dismissed, the next action succeeds, or the dialog closes. */
-    actionError: string | null;
+    /** Why the last pause, resume, run now or delete failed: the server's own words, or a message ref the dialog translates when it shows. Shown above the list until dismissed, the next action succeeds, or the dialog closes. */
+    actionError: string | MessageRef | null;
 
     /** Currently selected schedule (for viewing results). */
     selectedSchedule: string | null;
@@ -137,7 +138,7 @@ export const useScheduleStore = create<ScheduleState>((set, get) => ({
             });
         } catch (err) {
             log.api.error('Failed to load schedules', err);
-            set({ error: 'Failed to load schedules', loading: false });
+            set({ error: tEn('schedules.loadFailed'), loading: false });
         }
     },
 
@@ -161,7 +162,7 @@ export const useScheduleStore = create<ScheduleState>((set, get) => ({
             }));
         } catch (err) {
             log.api.error(`Failed to update schedule "${name}"`, err);
-            set({ actionError: parseApiError(err, 'Failed to update schedule') });
+            set({ actionError: parseApiError(err, ref('schedules.updateFailed')) });
         }
     },
 
@@ -174,7 +175,7 @@ export const useScheduleStore = create<ScheduleState>((set, get) => ({
             }));
         } catch (err) {
             log.api.error(`Failed to run schedule "${name}" now`, err);
-            set({ actionError: parseApiError(err, 'Could not run the schedule now') });
+            set({ actionError: parseApiError(err, ref('schedules.runNowFailed')) });
         }
     },
 
@@ -188,7 +189,7 @@ export const useScheduleStore = create<ScheduleState>((set, get) => ({
             }));
         } catch (err) {
             log.api.error(`Failed to delete schedule "${name}"`, err);
-            set({ actionError: parseApiError(err, 'Failed to delete schedule') });
+            set({ actionError: parseApiError(err, ref('schedules.deleteFailed')) });
         }
     },
 
