@@ -3,20 +3,26 @@
 
 import { create } from 'zustand';
 
+import { normalizeBaseUrl } from '@/api/http';
+
 export interface ConnectionConfig {
     baseUrl: string;
-    token: string | null;
+    /** For pairing, later; the MVP talks to a local GAIA without one. */
+    token?: string | null;
 }
 
 interface ConnectionState {
     connection: ConnectionConfig | null;
+    /** Throws GaiaConfigError for an address that isn't an http(s) URL; nothing is stored then. */
     setConnection(connection: ConnectionConfig): void;
     clearConnection(): void;
 }
 
-// In memory only: where the pairing is kept is still undecided.
+// The PC's address for development, inlined by Expo when Metro starts; GAIA's port changes at every launch.
+const SEED_URL = process.env.EXPO_PUBLIC_GAIA_URL || null;
+
 export const useConnectionStore = create<ConnectionState>((set) => ({
-    connection: null,
-    setConnection: (connection) => set({ connection }),
+    connection: SEED_URL ? { baseUrl: normalizeBaseUrl(SEED_URL) } : null,
+    setConnection: (connection) => set({ connection: { ...connection, baseUrl: normalizeBaseUrl(connection.baseUrl) } }),
     clearConnection: () => set({ connection: null }),
 }));
