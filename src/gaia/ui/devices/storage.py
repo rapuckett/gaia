@@ -195,7 +195,25 @@ def server_context(identity: ListenerIdentity) -> ssl.SSLContext:
     return context
 
 
-def forget_identity(folder: Path) -> None:
-    """Delete the key and certificate, so the next start makes new ones."""
-    for name in (KEY_NAME, CERTIFICATE_NAME):
-        (folder / name).unlink(missing_ok=True)
+def reset_folder(folder: Path) -> None:
+    """Delete the key, certificate and table, and make *folder* yours alone again.
+
+    The remedy for a folder someone else could reach: whatever they copied
+    stops being useful. A folder that isn't plain, or isn't this user's, is
+    refused, since deleting through it could reach somewhere else.
+    """
+    if os.path.lexists(folder):
+        info = os.lstat(folder)
+        if stat.S_ISLNK(info.st_mode) or not stat.S_ISDIR(info.st_mode):
+            raise _unsafe(folder, "it isn't a plain folder")
+        # getuid is POSIX-only; the os.name check keeps Windows off it.
+        if os.name != "nt" and info.st_uid != os.getuid():  # pylint: disable=no-member
+            raise _unsafe(folder, "it belongs to another user")
+        for name in (KEY_NAME, CERTIFICATE_NAME, TABLE_NAME):
+            for suffix in ("", "-journal", "-wal", "-shm"):
+                (folder / (name + suffix)).unlink(missing_ok=True)
+        if os.name == "nt":
+            lock_down_windows_acl(folder, inherit=True)
+        else:
+            os.chmod(folder, 0o700)
+    ensure_private_folder(folder)

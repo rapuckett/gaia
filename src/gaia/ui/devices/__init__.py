@@ -21,6 +21,11 @@ DEVICE_PORT_ENV = "GAIA_DEVICE_PORT"
 #: The listener binds IPv4 only: an IPv4-mapped peer would dodge the checks.
 DEVICE_LISTENER_HOST = "0.0.0.0"
 
+#: The one route the listener serves without a device token, and the one a
+#: pending device may still call: unpairing itself.
+PAIR_ROUTE = "/api/devices/pair"
+SELF_ROUTE = "/api/devices/me"
+
 #: Peers the listener answers, and the subset a pairing code offers.
 HOME_NETWORKS = ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "169.254.0.0/16")
 OFFERED_NETWORKS = ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16")

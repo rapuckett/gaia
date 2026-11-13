@@ -326,6 +326,17 @@ def refuse_on_device_listener(request: Request) -> None:
         )
 
 
+def audit_approval(request: Request, what: str) -> None:
+    """Record a decision that lets GAIA act, and who made it, in the audit log.
+
+    A paired device is named by its id; its token never reaches a log.
+    """
+    from gaia.security import audit_logger, ensure_audit_log_handler
+
+    ensure_audit_log_handler()
+    audit_logger.info("APPROVAL | %s | by %s", what, principal(request))
+
+
 def flagship_only(
     request: Request, agent_type: Optional[str], stored: Optional[str] = None
 ) -> Optional[str]:

@@ -11,6 +11,7 @@ unused. Revoking deletes the row, so the next request with its token fails.
 from __future__ import annotations
 
 import base64
+import contextlib
 import hashlib
 import hmac
 import os
@@ -22,6 +23,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Tuple
 
+from gaia.logger import get_logger
+
 from . import (
     DEVICE_IDLE_DAYS,
     DEVICE_TOKEN_BYTES,
@@ -30,6 +33,10 @@ from . import (
     PENDING_DEVICE_SECONDS,
 )
 from .storage import check_private, write_private
+
+logger = get_logger(__name__)
+
+_PC_ID = "pc_id"
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS paired_devices (
@@ -238,9 +245,31 @@ class DeviceStore:
     def pc_id(self) -> str:
         """This PC's id in pairing codes: made once, kept across resets."""
         with self._lock:
-            existing = self.setting("pc_id")
+            existing = self.setting(_PC_ID)
             if existing:
                 return existing
             pc_id = secrets.token_hex(16)
-            self.set_setting("pc_id", pc_id)
+            self.set_setting(_PC_ID, pc_id)
             return pc_id
+
+    def adopt_pc_id(self, pc_id: str) -> None:
+        """Keep an id this PC already gave devices, after a reset."""
+        self.set_setting(_PC_ID, pc_id)
+
+
+def read_pc_id(path: Path) -> Optional[str]:
+    """The pc_id an old table holds, read without the permission check.
+
+    For a reset about to delete the table: its id outlives it.
+    """
+    if not path.exists():
+        return None
+    try:
+        with contextlib.closing(sqlite3.connect(str(path))) as conn:
+            row = conn.execute(
+                "SELECT value FROM settings WHERE key = ?", (_PC_ID,)
+            ).fetchone()
+    except sqlite3.Error as e:
+        logger.warning("The old device table's pc_id can't be read (%s)", e)
+        return None
+    return row[0] if row else None

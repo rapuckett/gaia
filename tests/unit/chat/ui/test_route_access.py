@@ -3,8 +3,8 @@
 
 """Who may call each Agent UI route, decided by the listener a request reached.
 
-Every route is in exactly one class. A route added tomorrow fails
-``test_every_route_is_classified`` until someone decides who may call it:
+Every route is in exactly one class, and ``test_every_route_is_classified``
+fails for a route nobody has decided about:
 
 * ``pc``: the PC running GAIA only (``require_local_pc``).
 * ``pc_or_device``: first-run setup; the PC or an allowed paired device, never
@@ -17,20 +17,31 @@ Every route is in exactly one class. A route added tomorrow fails
 
 from __future__ import annotations
 
+import re
+import uuid
+
 import pytest
-from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket
 from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
+from starlette.exceptions import HTTPException
+from starlette.requests import Request
 from starlette.routing import Mount
 
 from gaia.ui import security
-from gaia.ui.security import DEVICE_SCOPE_KEY, ListenerScopeMiddleware
+from gaia.ui.devices.access import DeviceAccess
+from gaia.ui.devices.listener import DeviceGate
+from gaia.ui.security import (
+    DEVICE_SCOPE_KEY,
+    LAN_LISTENER,
+    LISTENER_SCOPE_KEY,
+    DevicePrincipal,
+    ListenerScopeMiddleware,
+)
 from gaia.ui.server import create_app
 
-from .device_scope import ALLOWED, PC, PENDING
-from .device_scope import on_listener as _on_listener
-
 pytestmark = pytest.mark.allow_network  # TestClient only; nothing leaves the machine
+
+PC = ("127.0.0.1", 50000)
 
 PC_ONLY = {
     "DELETE /api/agents/{agent_id}",
@@ -324,6 +335,21 @@ EXPECTED = {
     **{r: "remote" for r in REMOTE},
 }
 
+#: Who each class lets in.
+CALLERS = ("pc", "tunnel", "device", "pending", "no_token")
+LETS_IN = {
+    "pc": {"pc"},
+    "pc_or_device": {"pc", "device"},
+    "not_on_listener": {"pc", "tunnel"},
+    "remote": {"pc", "tunnel", "device"},
+    "web": {"pc", "tunnel"},
+}
+GUARDS = (
+    security.require_local_pc,
+    security.require_pc_or_device,
+    security.refuse_on_device_listener,
+)
+
 
 def _routes(app):
     """``{"METHOD /path": route}`` for every route, through lazy includes."""
@@ -357,14 +383,14 @@ def _routes(app):
 def _guards(route):
     original = getattr(route, "original_route", route)
     dependant = getattr(original, "dependant", None)
-    return {d.call for d in dependant.dependencies} if dependant else set()
+    calls = {d.call for d in dependant.dependencies} if dependant else set()
+    return [guard for guard in GUARDS if guard in calls]
 
 
 def _access_class(key, route):
     if key.startswith("MOUNT "):
         return "remote"
-    path = key.split(" ", 1)[1]
-    if not path.startswith(("/api/", "/v1/")):
+    if not key.split(" ", 1)[1].startswith(("/api/", "/v1/")):
         return "web"
     guards = _guards(route)
     if security.require_local_pc in guards:
@@ -376,19 +402,77 @@ def _access_class(key, route):
     return "remote"
 
 
-def _fill(path):
-    import re
+def _request_for(caller, device):
+    scope = {"type": "http", "method": "GET", "path": "/", "headers": [], "client": PC}
+    if caller == "tunnel":
+        scope["headers"] = [(b"x-forwarded-for", b"203.0.113.7")]
+    elif caller == "device":
+        scope.update({LISTENER_SCOPE_KEY: LAN_LISTENER, DEVICE_SCOPE_KEY: device})
+    return Request(scope)
 
-    return re.sub(r"\{[^}]+\}", "x", path)
+
+def _request_path(key):
+    method, path = key.split(" ", 1)
+    if method == "MOUNT":
+        return "GET", path + "/x"
+    return method, re.sub(r"\{[^}]+\}", "x", path)
 
 
 @pytest.fixture(scope="module")
-def app():
-    return create_app(db_path=":memory:")
+def setup(tmp_path_factory):
+    app = create_app(db_path=":memory:")
+    access = DeviceAccess(app, folder=tmp_path_factory.mktemp("devices") / "devices")
+    app.state.devices = access
+    invite, _ = access.pairing.open()
+    allowed = access.redeem(invite, "Phone", "ios", "192.168.1.20")
+    access.allow(allowed["device_id"])
+    invite, _ = access.pairing.open()
+    pending = access.redeem(invite, "Tablet", "ipados", "192.168.1.21")
+
+    class _Running:
+        def poll(self):
+            return None
+
+    tunnel = app.state.tunnel
+    tunnel._url, tunnel._token = "https://fake.ngrok-free.app", str(uuid.uuid4())
+    tunnel._process = _Running()
+    # From loopback, as a relay would come: on this listener it is still not the PC.
+    listener = ListenerScopeMiddleware(DeviceGate(app, access, allow_loopback=True))
+    clients = {
+        "pc": TestClient(app, client=PC),
+        "tunnel": TestClient(
+            app,
+            client=PC,
+            headers={
+                "X-Forwarded-For": "203.0.113.7",
+                "Authorization": f"Bearer {tunnel._token}",
+            },
+        ),
+        "device": TestClient(
+            listener,
+            client=PC,
+            headers={"Authorization": f"Bearer {allowed['token']}"},
+        ),
+        "pending": TestClient(
+            listener,
+            client=PC,
+            headers={"Authorization": f"Bearer {pending['token']}"},
+        ),
+        "no_token": TestClient(listener, client=PC),
+    }
+    return app, clients, DevicePrincipal(allowed["device_id"], True)
 
 
-def test_every_route_is_classified(app):
-    actual = {key: _access_class(key, route) for key, route in _routes(app).items()}
+def test_every_route_is_classified(setup):
+    """Each route's class, checked against every kind of caller.
+
+    A refused caller is sent the request, which must be refused (401, 403 or
+    404) before anything runs. A caller let in is checked against the route's
+    guards without sending it, since the route would do its work.
+    """
+    app, clients, device = setup
+    routes = _routes(app)
+    actual = {key: _access_class(key, route) for key, route in routes.items()}
     assert len(actual) > 200, "the route walk found too little to check"
     unclassified = sorted(set(actual) - set(EXPECTED))
     gone = sorted(set(EXPECTED) - set(actual))
@@ -401,150 +485,61 @@ def test_every_route_is_classified(app):
     assert not gone, f"these routes no longer exist: {gone}"
     assert not changed, f"these routes changed class: {changed}"
 
-
-def test_listener_scope_marks_every_request_remote():
-    """Loopback with no forwarded header is the PC only on the main listener."""
-    probe = FastAPI()
-
-    @probe.get("/api/who")
-    def who(request: Request):
-        return {"principal": security.principal(request)}
-
-    @probe.get("/api/pc-only", dependencies=[Depends(security.require_local_pc)])
-    def pc_only():
-        return {"ok": True}
-
-    @probe.websocket("/api/ws")
-    async def ws(websocket: WebSocket):
-        await websocket.accept()
-        await websocket.send_json({"principal": security.principal(websocket)})
-        await websocket.close()
-
-    main = TestClient(probe, client=PC)
-    assert main.get("/api/who").json() == {"principal": "pc"}
-
-    listener = TestClient(ListenerScopeMiddleware(probe), client=PC)
-    assert listener.get("/api/who").json() == {"principal": "tunnel"}
-    assert listener.get("/api/pc-only").status_code == 403
-    with listener.websocket_connect("/api/ws") as socket:
-        assert socket.receive_json() == {"principal": "tunnel"}
-
-    as_device = TestClient(_on_listener(probe, ALLOWED), client=PC)
-    assert as_device.get("/api/who").json() == {"principal": "device:d0a1"}
-    assert as_device.get("/api/pc-only").status_code == 403
+    wrong, sent, guarded = [], 0, 0
+    for key, route in sorted(routes.items()):
+        access_class = actual[key]
+        method, path = _request_path(key)
+        refusals = {404} if access_class == "web" else {401, 403}
+        for caller in CALLERS:
+            if caller in LETS_IN[access_class]:
+                request = _request_for(caller, device)
+                for guard in _guards(route):
+                    guarded += 1
+                    try:
+                        guard(request)
+                    except HTTPException as e:
+                        wrong.append(f"{key}: {caller} refused ({e.status_code})")
+                continue
+            sent += 1
+            status = clients[caller].request(method, path, json={}).status_code
+            if status not in refusals:
+                wrong.append(f"{key}: {caller} got {status}")
+    assert not wrong, "\n".join(wrong)
+    assert sent > 500 and guarded > 40, (sent, guarded)
 
 
-def test_every_pc_only_route_refused_on_listener(app):
-    client = TestClient(_on_listener(app, ALLOWED), client=PC)
-    for key, route in sorted(_routes(app).items()):
-        if _access_class(key, route) != "pc":
-            continue
-        method, path = key.split(" ", 1)
-        resp = client.request(method, _fill(path), json={})
-        assert resp.status_code == 403, f"{key} answered {resp.status_code}"
-        assert "on the PC running GAIA" in resp.text, key
-
-
-def test_provider_key_and_lemonade_target_refused_on_listener(app, monkeypatch):
+def test_provider_key_refused_away_from_the_pc(setup, monkeypatch):
+    """A key is checked field by field inside a route mobile access may call."""
     from gaia.ui.routers import providers
 
+    app, clients, _ = setup
     handed = []
     monkeypatch.setattr(providers, "_install", lambda *a, **k: handed.append(a))
-    client = TestClient(_on_listener(app, ALLOWED), client=PC)
-
-    key = client.post(
-        "/api/providers/fireworks/connect", json={"api_key": "fw-secret-key"}
-    )
-    assert key.status_code == 403
-    assert "fw-secret-key" not in key.text
+    for caller in ("tunnel", "device"):
+        resp = clients[caller].post(
+            "/api/providers/fireworks/connect", json={"api_key": "fw-secret-key"}
+        )
+        assert resp.status_code == 403, caller
+        assert "fw-secret-key" not in resp.text
     assert handed == []
 
-    target = client.post(
-        "/api/lemonade/target",
-        json={"mode": "external", "base_url": "http://192.168.1.50:13305"},
-    )
-    assert target.status_code == 403
 
-    listing = client.get("/api/providers")
-    assert listing.status_code == 403
-
-
-@pytest.mark.parametrize("route", sorted(PC_OR_DEVICE))
-def test_setup_routes_refused_over_the_tunnel_and_to_pending_devices(app, route):
-    method, path = route.split(" ", 1)
-    tunnel = TestClient(app, client=PC)
-    resp = tunnel.request(
-        method, _fill(path), json={}, headers={"X-Forwarded-For": "203.0.113.7"}
-    )
-    assert resp.status_code == 403, f"tunnel {route}: {resp.status_code}"
-
-    pending = TestClient(_on_listener(app, PENDING), client=PC)
-    resp = pending.request(method, _fill(path), json={})
-    assert resp.status_code == 403, f"pending device {route}: {resp.status_code}"
-
-    no_device = TestClient(_on_listener(app), client=PC)
-    assert no_device.request(method, _fill(path), json={}).status_code == 403
-
-
-def test_an_allowed_device_passes_the_setup_guard(app):
-    def request_for(scope_extra):
-        scope = {
-            "type": "http",
-            "method": "POST",
-            "path": "/api/setup/run",
-            "headers": [],
-            "client": PC,
-            **scope_extra,
-        }
-        return Request(scope)
-
-    listener = {security.LISTENER_SCOPE_KEY: security.LAN_LISTENER}
-    security.require_pc_or_device(request_for({}))
-    security.require_pc_or_device(request_for({**listener, DEVICE_SCOPE_KEY: ALLOWED}))
-    for refused in (
-        {**listener},
-        {**listener, DEVICE_SCOPE_KEY: PENDING},
-        {"headers": [(b"x-forwarded-for", b"203.0.113.7")]},
-        {"client": ("192.168.1.20", 50000)},
-    ):
-        with pytest.raises(HTTPException) as e:
-            security.require_pc_or_device(request_for(refused))
-        assert e.value.status_code == 403
-
-    # A route in the class answers an allowed device past the guard.
-    client = TestClient(_on_listener(app, ALLOWED), client=PC)
-    resp = client.post("/api/setup/models/skip", json={"model_id": "no-such-model"})
-    assert resp.status_code != 403, resp.text
-
-
-def test_listener_request_that_skipped_device_auth_is_refused(app):
-    """A listener stack built without device auth serves no API at all."""
-    client = TestClient(ListenerScopeMiddleware(app), client=PC)
-    assert client.get("/api/sessions").status_code == 401
-    assert client.get("/api/health").status_code == 401
-
-
-def test_troubleshooting_report_is_pc_only(app):
+def test_troubleshooting_report_is_pc_only(setup):
     """The report bundles every log, so it is no side door around them."""
     from gaia.home import gaia_home
 
+    app, clients, _ = setup
     name = "diagnostics-20261112-101010.tgz"
     report = gaia_home() / name
     report.parent.mkdir(parents=True, exist_ok=True)
     report.write_bytes(b"logs that quote a conversation")
     try:
-        tunnel = {"X-Forwarded-For": "203.0.113.7"}
-        for client, headers in (
-            (TestClient(app, client=PC), tunnel),
-            (TestClient(app, client=("192.168.1.20", 50000)), {}),
-            (TestClient(_on_listener(app, ALLOWED), client=PC), {}),
-        ):
-            got = client.get(f"/api/setup/report/{name}", headers=headers)
+        for caller in ("tunnel", "device"):
+            got = clients[caller].get(f"/api/setup/report/{name}")
             assert got.status_code == 403
             assert b"conversation" not in got.content
-            assert client.post("/api/setup/report", headers=headers).status_code == 403
-
-        pc = TestClient(app, client=PC).get(f"/api/setup/report/{name}")
+            assert clients[caller].post("/api/setup/report").status_code == 403
+        pc = clients["pc"].get(f"/api/setup/report/{name}")
         assert pc.status_code == 200
         assert pc.content == b"logs that quote a conversation"
     finally:
