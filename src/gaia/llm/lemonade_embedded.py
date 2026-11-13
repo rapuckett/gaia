@@ -721,8 +721,9 @@ def _answers(family: int, host: str, port: int) -> bool:
             return True
     except ConnectionRefusedError:
         return False
-    except TimeoutError:
-        return True  # a listener whose backlog is full
+    except (TimeoutError, ConnectionResetError):
+        # A listener whose backlog is full: Linux drops the SYN, macOS resets it.
+        return True
     except OSError as e:
         if family == socket.AF_INET6 and e.errno in _NO_FAMILY + (errno.ENETUNREACH,):
             return False
