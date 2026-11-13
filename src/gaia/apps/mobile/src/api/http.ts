@@ -1,7 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import type { Message, Session, StreamEvent, SystemStatus } from '@webui/types';
+import type { Message, Session, StartScreen, StreamEvent, SystemStatus } from '@webui/types';
 
 import type { FetchLike, FetchRequestInit, FetchResponseLike } from '@/platform/fetch.types';
 
@@ -270,6 +270,10 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         getSystemStatus(options) {
             return getJson<SystemStatus>(ENDPOINTS.systemStatus, options?.signal);
+        },
+
+        getStartScreen(options) {
+            return getJson<StartScreen>(ENDPOINTS.onboardingStart, options?.signal);
         },
     };
 }

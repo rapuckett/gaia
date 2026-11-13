@@ -92,6 +92,7 @@ describe('endpoints', () => {
         chatConfirmTool: ['POST'],
         chatUserInput: ['POST'],
         systemStatus: ['GET'],
+        onboardingStart: ['GET'],
     };
     const calls = Object.entries(ENDPOINTS).flatMap(([name, path]) =>
         methods[name as keyof typeof ENDPOINTS].map((method) => `${method} ${path}`),

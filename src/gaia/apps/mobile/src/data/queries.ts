@@ -3,6 +3,8 @@
 
 import { useQuery } from '@tanstack/react-query';
 
+import type { StartScreen } from '@webui/types';
+
 import type { GaiaClient, MessageList, Session, SessionList, SystemStatus } from '@/api/client.types';
 import { STATUS_POLL_MS } from '@/api/constants';
 import { GaiaConfigError } from '@/api/errors';
@@ -14,6 +16,7 @@ export const queryKeys = {
     session: (sessionId: string) => ['session', sessionId] as const,
     messages: (sessionId: string) => ['messages', sessionId] as const,
     systemStatus: ['systemStatus'] as const,
+    startScreen: ['startScreen'] as const,
 };
 
 export function requireClient(client: GaiaClient | null): GaiaClient {
@@ -76,5 +79,15 @@ export function useSystemStatus() {
         queryFn: ({ signal }) => requireClient(client).getSystemStatus({ signal }),
         refetchInterval: (query) =>
             isStarting(query.state.data) || isWarmingUp(query.state.data) ? STATUS_POLL_MS : false,
+    });
+}
+
+/** The new-chat screen's cards and working folder; refetch it to ask again while the assistant is down. */
+export function useStartScreen() {
+    const client = useGaiaClient();
+    return useQuery<StartScreen>({
+        queryKey: queryKeys.startScreen,
+        enabled: client !== null,
+        queryFn: ({ signal }) => requireClient(client).getStartScreen({ signal }),
     });
 }
