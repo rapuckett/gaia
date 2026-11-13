@@ -406,6 +406,7 @@ export const enMessages = {
     'size.characters.one': '{n} character',
     'size.characters.other': '{n} characters',
     'code.copyAria': 'Copy code',
+    'code.lang': 'code',
     'retry.button': 'Retry with another model',
     'retry.head': 'Retry with…',
     'retry.onThisPc': 'These run on this PC, not on {provider}. The model loads first, which can take a minute.',
