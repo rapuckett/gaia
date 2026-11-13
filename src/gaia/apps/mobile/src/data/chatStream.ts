@@ -225,7 +225,7 @@ export interface ChatStream {
     /** Asks GAIA to stop the running turn. */
     stop(): void;
     status: ChatStreamStatus;
-    /** The answer so far; it stays until the transcript holds the finished turn. */
+    /** The answer so far. A finished turn's stays until the transcript holds it; a failed one's stays beside `error`. */
     liveText: string;
     /** The agent's activity in order (status, thinking, tools, plans...). */
     events: readonly StreamEvent[];
