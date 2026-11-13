@@ -19,7 +19,7 @@ export function Floating({ children, offset = 'md' }: FloatingProps) {
     const { space } = useTheme();
     const gap = space[offset];
     return (
-        <View pointerEvents="box-none" style={{ position: 'absolute', end: gap, bottom: gap }}>
+        <View pointerEvents="box-none" style={{ position: 'absolute', insetInlineEnd: gap, bottom: gap }}>
             {children}
         </View>
     );
