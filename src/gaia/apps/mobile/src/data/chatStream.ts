@@ -247,7 +247,7 @@ export function useChatStream(sessionId: string): ChatStream {
     const turn = useChatStreamStore((state) => state.turns[sessionId] ?? IDLE_TURN);
 
     useEffect(() => {
-        if (!client) return undefined;
+        if (!client || !sessionId) return undefined;
         return subscribe({ client, queryClient }, sessionId);
     }, [client, queryClient, sessionId]);
 

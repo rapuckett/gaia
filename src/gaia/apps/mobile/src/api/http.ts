@@ -189,7 +189,8 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             }
         } finally {
             signal?.removeEventListener('abort', drop);
-            if (!ended) drop();
+            // Closes a connection left open; after a body read to its end this does nothing.
+            drop();
         }
     }
 
