@@ -353,7 +353,7 @@ def test_embedded_lemonade_backend_install_is_trimmed(monkeypatch, tmp_path):
 
 
 def test_daemon_spawn_drops_internal_credentials_but_keeps_the_deny_listed(
-    monkeypatch,
+    monkeypatch, tmp_path
 ):
     """The daemon mints its own credentials, so a sidecar's must not reach it —
     but it is GAIA, so ``GAIA_CHILD_ENV_DENY`` (meant for tool children) does
@@ -361,6 +361,8 @@ def test_daemon_spawn_drops_internal_credentials_but_keeps_the_deny_listed(
     from gaia.daemon import client
     from gaia.daemon.errors import DaemonStartError
 
+    # The real spawn opens daemon.log; keep it out of the session's daemon home.
+    monkeypatch.setenv("GAIA_DAEMON_HOME", str(tmp_path / "daemon-home"))
     monkeypatch.setenv("APP_SECRET", "kept-for-gaia")
     monkeypatch.setenv(gaia_env.CHILD_ENV_DENY_ENV_VAR, "APP_SECRET")
     monkeypatch.setenv(CUSTODY_URL_ENV_VAR, "http://127.0.0.1:1")

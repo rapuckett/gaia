@@ -427,9 +427,12 @@ class TestKokoroPlayer:
             assert handle.getframerate() == TTS_SAMPLE_RATE
             assert handle.getnframes() == 480
 
-    def test_playback_without_sounddevice_names_the_talk_extra(self):
+    def test_playback_without_sounddevice_names_the_talk_extra(self, monkeypatch):
+        from gaia.agents import install_hints
         from gaia.audio.kokoro_tts import KokoroTTS
 
+        # A wheel install; an editable checkout's hint names its own path instead.
+        monkeypatch.setattr(install_hints, "editable_gaia_root", lambda: None)
         with patch("gaia.audio.kokoro_tts.sd", None):
             tts = KokoroTTS(client=MagicMock())  # file output needs no device
             with pytest.raises(ImportError, match=r"amd-gaia\[talk\]"):
