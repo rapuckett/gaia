@@ -39,7 +39,7 @@ from gaia.logger import get_logger
 
 from ..database import ChatDatabase
 from ..dependencies import get_db
-from ..security import require_ui_header, via_tunnel
+from ..security import is_local_pc, refuse_on_device_listener, require_ui_header
 
 logger = get_logger(__name__)
 
@@ -932,7 +932,11 @@ def _known(provider: str) -> None:
 
 
 # Re-sends a stored key to Lemonade, so a cross-site GET must not reach it.
-@router.get("/api/providers", dependencies=[Depends(require_ui_header)])
+# Registers providers and hands keys to Lemonade, so a paired device may not.
+@router.get(
+    "/api/providers",
+    dependencies=[Depends(require_ui_header), Depends(refuse_on_device_listener)],
+)
 def list_providers(db: ChatDatabase = Depends(get_db)) -> Dict[str, Any]:
     """Every provider with its connection state, and the active model."""
     from gaia.connectors.credential_wait import (
@@ -1102,10 +1106,11 @@ def connect_provider(
             ),
         )
     key = (body.api_key or "").strip()
-    if key and via_tunnel(request):
+    if key and not is_local_pc(request):
         raise HTTPException(
             status_code=403,
-            detail="Enter provider keys on the PC running GAIA, not over mobile access.",
+            detail="Enter provider keys on the PC running GAIA, not over mobile "
+            "access or from a paired device.",
         )
     from gaia.connectors.store import retry_keyring
 

@@ -13,12 +13,12 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from gaia.logger import get_logger
 
-from ..security import require_ui_header, via_tunnel
+from ..security import require_local_pc, require_ui_header
 
 logger = get_logger(__name__)
 
@@ -79,19 +79,16 @@ class TargetRequest(BaseModel):
     api_key: Optional[str] = None
 
 
-@router.post("/api/lemonade/target", dependencies=[Depends(require_ui_header)])
-def set_target(body: TargetRequest, request: Request) -> Dict[str, Any]:
+@router.post(
+    "/api/lemonade/target",
+    dependencies=[Depends(require_ui_header), Depends(require_local_pc)],
+)
+def set_target(body: TargetRequest) -> Dict[str, Any]:
     """Switch servers. Nothing is saved unless the user's server checks out."""
     from gaia.config import GaiaConfigError
     from gaia.daemon.errors import DaemonError
     from gaia.llm import lemonade_choice as choice
 
-    if via_tunnel(request):
-        raise HTTPException(
-            status_code=403,
-            detail="Change the model server on the PC running GAIA, not over "
-            "mobile access.",
-        )
     try:
         previous_mode = choice.saved_mode()
         over_env = body.mode == choice.MODE_GAIA and choice.configured_source() == "env"
