@@ -44,6 +44,55 @@ export class GaiaNetworkError extends GaiaError {
 
 export class GaiaStreamError extends GaiaError {}
 
+export type StreamEndpoint = 'send' | 'attach';
+
+/** GAIA never started answering: no response within the limit. */
+export class GaiaStreamTimeoutError extends GaiaStreamError {
+    readonly endpoint: StreamEndpoint;
+    readonly timeoutMs: number;
+
+    constructor(endpoint: StreamEndpoint, timeoutMs: number) {
+        const seconds = Math.round(timeoutMs / 1000);
+        super(endpoint === 'send' ? 'mobileApp.error.sendTimeout' : 'mobileApp.error.attachTimeout', { seconds });
+        this.endpoint = endpoint;
+        this.timeoutMs = timeoutMs;
+    }
+}
+
+/** The stream went silent past its idle limit; the turn may still be running on the PC. */
+export class GaiaStreamStalledError extends GaiaStreamError {
+    readonly idleMs: number;
+
+    constructor(idleMs: number) {
+        super('mobileApp.error.streamStalled', { seconds: Math.round(idleMs / 1000) });
+        this.idleMs = idleMs;
+    }
+}
+
+/** The connection broke after the turn started; the turn may still be running on the PC. */
+export class GaiaStreamDroppedError extends GaiaStreamError {
+    constructor(cause: unknown) {
+        super('mobileApp.error.streamBroke', {}, { cause });
+    }
+}
+
+/** The turn itself failed: GAIA sent an `error` event, with its own words. */
+export class GaiaTurnError extends GaiaError {
+    readonly detail: string;
+
+    constructor(detail: string) {
+        super('mobileApp.error.turnFailed', { detail });
+        this.detail = detail;
+    }
+}
+
+/** A failure this layer has no name for; the original error is its cause. */
+export function asGaiaError(err: unknown): GaiaError {
+    if (err instanceof GaiaError) return err;
+    const reason = err instanceof Error ? err.message : String(err);
+    return new GaiaError('mobileApp.error.unexpected', { reason }, { cause: err });
+}
+
 // FastAPI's `detail` is a string, an object, or a list of validation errors.
 export function parseErrorDetail(errorText: string): string {
     try {

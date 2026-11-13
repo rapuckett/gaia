@@ -1764,11 +1764,22 @@ for (const locale of ['ar', 'en']) {
         expect(await audit(page)).toEqual([]);
     });
 
-    test(`Mobile access without ngrok (${locale})`, async ({ page }) => {
+    test(`Mobile access starts on Start; without ngrok it asks for setup (${locale})`, async ({ page }) => {
         const missing = { active: false, url: null, token: null, startedAt: null, publicIp: null, reason: 'ngrok_not_installed', installCommands: ['choco install ngrok'], error: 'ngrok is not installed. Install it from https://ngrok.com/download or run:\n    choco install ngrok' };
-        await open(page, '', locale, (p) => p.route('**/api/tunnel/start', (route) => route.fulfill({ json: missing })));
+        let started = 0;
+        await open(page, '', locale, (p) => p.route('**/api/tunnel/start', (route) => { started += 1; return route.fulfill({ json: missing }); }));
         await page.locator('.sb-icon-btn').filter({ has: page.locator('.lucide-smartphone') }).click();
         const dialog = page.locator('.mobile-modal');
+        // Opening starts nothing: one privacy line and a Start button, until it is pressed.
+        const start = dialog.getByRole('button', { name: /Start mobile access|ابدأ الوصول من الهاتف/ });
+        await expect(start).toBeVisible();
+        expect(started).toBe(0);
+        const startBox = await start.boundingBox();
+        const dialogBox = await dialog.boundingBox();
+        expect(startBox && dialogBox && startBox.x >= dialogBox.x && startBox.x + startBox.width <= dialogBox.x + dialogBox.width).toBe(true);
+        await shot(page, `mobile-access-start-${locale}`);
+        expect(await audit(page)).toEqual([]);
+        await start.click();
         await expect(dialog.locator('.tunnel-setup')).toBeVisible();
         // Desktop text names what is needed and where to get it, never a command to run (#7415).
         await expect(dialog).not.toContainText('choco');
@@ -4309,5 +4320,60 @@ for (const locale of ['ar', 'en']) {
         await shot(page, `skills-link-result-${locale}`);
         expect(await audit(page)).toEqual([]);
         if (locale === 'ar') expect(await untranslated(page, '.skill-link-result')).toEqual([]);
+    });
+}
+
+/** The send's stream dies after a policy block; the re-attach never answers, so the reconnecting line stays up. */
+function dropStreamAfterPolicyBlock(): void {
+    const realFetch = window.fetch.bind(window);
+    window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+        if (url.includes('/api/chat/attach')) return new Promise<Response>(() => undefined);
+        if (!url.includes('/api/chat/send')) return realFetch(input, init);
+        const block = {
+            type: 'policy_alert', tool: 'run_shell_command', decision: 'BLOCK', reason: 'Shell commands are blocked here.',
+            rule_ids: ['no-shell'], policy_version: 'v7', receipt_id: 'rcpt-7',
+        };
+        const body = new ReadableStream<Uint8Array>({
+            start(controller) {
+                controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(block)}\n\n`));
+                setTimeout(() => controller.error(new TypeError('network error')), 50);
+            },
+        });
+        return new Response(body, { status: 200, headers: { 'content-type': 'text/event-stream' } });
+    };
+}
+
+for (const locale of ['ar', 'en'] as const) {
+    test(`a dropped stream says it is reconnecting, and what waits behind it is worded in the interface language (${locale})`, async ({ page }) => {
+        const ar = locale === 'ar';
+        await page.addInitScript(dropStreamAfterPolicyBlock);
+        await open(page, `#${ANSWER_SESSION}`, locale);
+        // The chat header's own labels.
+        await expect(page.getByRole('button', { name: ar ? /تصفح الملفات على هذا الجهاز/ : 'Browse files on this PC' })).toBeVisible();
+        await expect(page.getByRole('button', { name: ar ? /تصدير المحادثة/ : 'Export chat' })).toBeVisible();
+        const box = page.getByRole('textbox').first();
+        await box.fill('Summarize the minutes');
+        await box.press('Enter');
+        await expect(page.locator('.thinking-indicator-text').last()).toContainText(ar ? 'إعادة الاتصال' : 'Reconnecting (attempt 1 of 3)');
+        const toast = page.locator('.policy-alert-toast');
+        await expect(toast).toContainText(ar ? 'مقيّدة بموجب السياسة' : 'is restricted by policy');
+        await expect(toast.getByRole('button')).toContainText(ar ? 'عرض الإيصال' : 'View receipt');
+        await box.fill('And the action items');
+        await box.press('Enter');
+        const waiting = page.locator('.queued-message');
+        await expect(waiting).toHaveCount(1);
+        await expect(waiting.locator('.queued-message-state')).toContainText(ar ? 'في قائمة الانتظار' : 'Queued. Sends when this reply ends.');
+        await expect(waiting.getByRole('button', { name: ar ? /إضافة إلى هذا الرد/ : 'Add to this reply' })).toBeVisible();
+        await expect(page.getByRole('list', { name: ar ? /رسائل بانتظار الإرسال/ : 'Messages waiting to send' })).toBeVisible();
+        await shot(page, `reconnecting-queued-${locale}`);
+        expect(await audit(page)).toEqual([]);
+        if (ar) {
+            expect(await untranslated(page, '.thinking-indicator')).toEqual([]);
+            expect(await untranslated(page, '.policy-alert-toast')).toEqual([]);
+            expect(await untranslated(page, '.queued-messages', '.queued-message-text')).toEqual([]);
+        }
+        await page.locator('.task-title').click();
+        await expect(page.getByRole('textbox', { name: ar ? /عنوان المحادثة/ : 'Chat title' })).toBeVisible();
     });
 }

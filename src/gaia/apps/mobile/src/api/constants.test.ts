@@ -4,11 +4,24 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
-import { ENDPOINTS, MESSAGE_PAGE_SIZE, SESSION_PAGE_SIZE, UI_HEADERS } from './constants';
+import {
+    AGENT_EVENT_TYPES,
+    ATTACH_HEADER_TIMEOUT_MS,
+    ENDPOINTS,
+    MESSAGE_PAGE_SIZE,
+    QUEUED_IDLE_MS,
+    RESOLVES_PROMPTS,
+    SEND_HEADER_TIMEOUT_MS,
+    SESSION_PAGE_SIZE,
+    STATUS_POLL_MS,
+    STREAM_IDLE_MS,
+    UI_HEADERS,
+} from './constants';
 
 const GAIA = resolve(__dirname, '../../../..');
 const UI_DIR = join(GAIA, 'ui');
-const WEBUI_API = join(GAIA, 'apps/webui/src/services/api.ts');
+const WEBUI_SRC = join(GAIA, 'apps/webui/src');
+const WEBUI_API = join(WEBUI_SRC, 'services/api.ts');
 
 function pythonFiles(dir: string): string[] {
     return readdirSync(dir, { withFileTypes: true, recursive: true })
@@ -20,6 +33,23 @@ function pyString(source: string, name: string): string {
     const match = new RegExp(`^${name}\\s*=\\s*"([^"]*)"`, 'm').exec(source);
     if (!match) throw new Error(`${name} not found in security.py; update api/constants.test.ts`);
     return match[1]!;
+}
+
+function webuiSource(file: string): string {
+    return readFileSync(join(WEBUI_SRC, file), 'utf-8');
+}
+
+// `export const NAME = 10 * 60_000;` -> 600000; anything but a product of literals fails the test.
+function tsNumber(file: string, name: string): number {
+    const match = new RegExp(`export const ${name} = ([^;]+);`).exec(webuiSource(file));
+    if (!match) throw new Error(`${name} not found in webui ${file}; update api/constants.test.ts`);
+    return match[1]!.split('*').reduce((product, factor) => product * Number(factor.trim().replace(/_/g, '')), 1);
+}
+
+function tsStringSet(file: string, name: string): string[] {
+    const match = new RegExp(`const ${name} = new Set\\(\\[([^\\]]*)\\]\\)`).exec(webuiSource(file));
+    if (!match) throw new Error(`${name} not found in webui ${file}; update api/constants.test.ts`);
+    return [...match[1]!.matchAll(/'([^']+)'/g)].map((m) => m[1]!).sort();
 }
 
 describe('request headers', () => {
@@ -47,20 +77,28 @@ describe('request headers', () => {
 
 describe('endpoints', () => {
     const decorators = pythonFiles(UI_DIR).flatMap((file) =>
-        [...readFileSync(file, 'utf-8').matchAll(/@(?:router|app)\.(get|post)\(\s*"([^"]+)"/g)].map(
+        [...readFileSync(file, 'utf-8').matchAll(/@(?:router|app)\.(get|post|put|patch|delete)\(\s*"([^"]+)"/g)].map(
             (m) => `${m[1]!.toUpperCase()} ${m[2]!}`,
         ),
     );
-    const methods: Record<keyof typeof ENDPOINTS, string> = {
-        health: 'GET',
-        sessions: 'GET',
-        sessionMessages: 'GET',
-        chatSend: 'POST',
+    const methods: Record<keyof typeof ENDPOINTS, string[]> = {
+        health: ['GET'],
+        sessions: ['GET', 'POST'],
+        session: ['GET'],
+        sessionMessages: ['GET'],
+        chatSend: ['POST'],
+        chatAttach: ['GET'],
+        chatCancel: ['POST'],
+        chatConfirmTool: ['POST'],
+        chatUserInput: ['POST'],
+        systemStatus: ['GET'],
     };
+    const calls = Object.entries(ENDPOINTS).flatMap(([name, path]) =>
+        methods[name as keyof typeof ENDPOINTS].map((method) => `${method} ${path}`),
+    );
 
-    it.each(Object.entries(ENDPOINTS))('%s (%s) has a route under src/gaia/ui', (name, path) => {
-        const method = methods[name as keyof typeof ENDPOINTS];
-        expect(decorators).toContain(`${method} ${path}`);
+    it.each(calls)('%s has a route under src/gaia/ui', (call) => {
+        expect(decorators).toContain(call);
     });
 });
 
@@ -73,5 +111,24 @@ describe('page sizes', () => {
 
     it('messages: within what the backend serves, and its default page', () => {
         expect(sessions).toContain(`    limit: int = ${MESSAGE_PAGE_SIZE},`);
+    });
+});
+
+describe("webui's stream rules", () => {
+    it.each([
+        ['services/api.ts', 'STREAM_IDLE_MS', STREAM_IDLE_MS],
+        ['services/api.ts', 'QUEUED_IDLE_MS', QUEUED_IDLE_MS],
+        ['services/api.ts', 'SEND_HEADER_TIMEOUT_MS', SEND_HEADER_TIMEOUT_MS],
+        ['services/api.ts', 'ATTACH_HEADER_TIMEOUT_MS', ATTACH_HEADER_TIMEOUT_MS],
+        ['services/statusPoll.ts', 'STATUS_POLL_MS', STATUS_POLL_MS],
+    ])('%s %s', (file, name, ours) => {
+        expect(ours).toBe(tsNumber(file, name));
+    });
+
+    it.each([
+        ['services/api.ts', 'AGENT_EVENT_TYPES', AGENT_EVENT_TYPES],
+        ['components/ChatView.tsx', 'RESOLVES_PROMPTS', RESOLVES_PROMPTS],
+    ])('%s %s', (file, name, ours) => {
+        expect([...ours].sort()).toEqual(tsStringSet(file, name));
     });
 });
