@@ -1,0 +1,44 @@
+import { createContext, useContext, type ReactNode } from 'react';
+import { useFonts } from 'expo-font';
+import { StatusBar } from 'expo-status-bar';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { KeyboardProvider } from 'react-native-keyboard-controller';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { fontFiles } from './theme/fonts';
+import { ThemeProvider, useTheme } from './theme/ThemeProvider';
+
+const Mounted = createContext(false);
+
+function Frame({ children }: { children: ReactNode }) {
+  const { scheme, colors } = useTheme();
+  const [loaded, error] = useFonts(fontFiles);
+  if (error) {
+    throw new Error(
+      `The UI fonts failed to load: ${error.message}. Check that @expo-google-fonts/inter, /jetbrains-mono and /fraunces are installed (npm ci in src/gaia/apps/mobile).`,
+    );
+  }
+  if (!loaded) return null;
+  return (
+    <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.bgPrimary }}>
+      <SafeAreaProvider>
+        <KeyboardProvider>
+          <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
+          {children}
+          {/* The sheet host mounts here (design/mobile-ui-lists). */}
+        </KeyboardProvider>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
+  );
+}
+
+export function UIProvider({ children }: { children: ReactNode }) {
+  const nested = useContext(Mounted);
+  if (nested) return <>{children}</>;
+  return (
+    <Mounted.Provider value>
+      <ThemeProvider>
+        <Frame>{children}</Frame>
+      </ThemeProvider>
+    </Mounted.Provider>
+  );
+}
