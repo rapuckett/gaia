@@ -20,6 +20,7 @@ export const ENDPOINTS = {
     chatUserInput: '/api/chat/user-input',
     systemStatus: '/api/system/status',
     documentFile: '/api/documents/{doc_id}/file',
+    onboardingStart: '/api/onboarding/start',
 } as const;
 
 export function sessionPath(sessionId: string): string {
