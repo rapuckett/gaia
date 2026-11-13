@@ -211,6 +211,13 @@ class GaiaConfig:
             form, and move to every tool at most once, so the first reply reads
             less and the prompt cache survives. Applies to new sessions.
             ``GAIA_DYNAMIC_TOOLS`` overrides it.
+        device_pairing: Show device pairing, still in development: a phone or
+            tablet pairs by QR code and reaches GAIA over pinned TLS on the
+            home network. Off by default and, like ``full_access``, honored
+            only from this file: no environment variable or ``.env`` turns it
+            on, because it lets the PC open a listener on the network. It
+            only shows the feature; the listener starts when the PC turns it
+            on.
     """
 
     profile: str = "chat"
@@ -236,6 +243,7 @@ class GaiaConfig:
     read_aloud_speed: int = 100
     read_aloud_auto: bool = False
     dynamic_tools: bool = True
+    device_pairing: bool = False
 
     #: Field values as last read from or written to the file (not a field).
     _loaded: ClassVar[Optional[dict]] = None
