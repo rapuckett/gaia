@@ -17,6 +17,8 @@ export interface ListRowProps {
     onLongPress?: () => void;
     selected?: boolean;
     titleLines?: number;
+    /** Semibold title, e.g. an unread chat. */
+    emphasized?: boolean;
     accessibilityLabel?: string;
     testID?: string;
 }
@@ -30,6 +32,7 @@ export function ListRow({
     onLongPress,
     selected,
     titleLines = 1,
+    emphasized,
     accessibilityLabel,
     testID,
 }: ListRowProps) {
@@ -49,7 +52,7 @@ export function ListRow({
             <Row gap="md">
                 {leading}
                 <View style={{ flex: 1, minWidth: 0 }}>
-                    <Text role="ui" weight={selected ? 'semibold' : 'medium'} numberOfLines={titleLines}>
+                    <Text role="ui" weight={selected || emphasized ? 'semibold' : 'medium'} numberOfLines={titleLines}>
                         {title}
                     </Text>
                     {subtitle ? (

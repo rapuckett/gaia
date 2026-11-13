@@ -10,6 +10,7 @@ import { Icon } from '../controls/Icon';
 import { Spinner } from '../controls/Spinner';
 import { CircleAlert } from '../icons';
 import { Stack } from '../layout/layout';
+import { useTheme } from '../theme/ThemeProvider';
 import { Text } from '../text/Text';
 
 export interface StateAction {
@@ -24,7 +25,8 @@ interface StateProps {
 }
 
 function Centered({ children }: { children: ReactNode }) {
-    return <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 }}>{children}</View>;
+    const { space } = useTheme();
+    return <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: space.xl }}>{children}</View>;
 }
 
 export function EmptyState({ title, message, action, icon }: StateProps & { title: string; icon?: LucideIcon }) {
