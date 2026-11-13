@@ -448,6 +448,7 @@ const messages: Messages = {
     'size.characters.one': '{n} حرف',
     'size.characters.other': '{n} حرفًا',
     'code.copyAria': 'نسخ الشيفرة',
+    'code.lang': 'شيفرة',
     'retry.button': 'إعادة المحاولة بنموذج آخر',
     'retry.head': 'إعادة المحاولة باستخدام…',
     'retry.onThisPc': 'تعمل هذه النماذج على هذا الجهاز، لا على {provider}. يُحمَّل النموذج أولًا، وقد يستغرق ذلك دقيقة.',

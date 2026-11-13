@@ -73,7 +73,8 @@ export function Card({ children, padding = 'lg', onPress, accessibilityLabel, te
     );
 }
 
-export function Divider({ inset = false }: { inset?: boolean }) {
+export function Divider({ inset = false, vertical = false }: { inset?: boolean; vertical?: boolean }) {
     const { colors, space } = useTheme();
+    if (vertical) return <View style={{ width: 3, alignSelf: 'stretch', borderRadius: 2, backgroundColor: colors.border }} />;
     return <View style={{ height: 1, backgroundColor: colors.borderLight, marginStart: inset ? space.lg : 0 }} />;
 }
