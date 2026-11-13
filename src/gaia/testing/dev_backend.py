@@ -145,11 +145,12 @@ def isolate_environment(home: Path, llm_url: str) -> None:
 
 
 def build_fake_llm(script: List[Dict[str, Any]], model: str):
-    from gaia.version import LEMONADE_VERSION
-
     """A FastAPI app speaking the slice of Lemonade's API a chat turn uses."""
     from fastapi import FastAPI
     from fastapi.responses import JSONResponse, StreamingResponse
+
+    from gaia.llm.lemonade_client import GPU_CTX_SIZE
+    from gaia.version import LEMONADE_VERSION
 
     app = FastAPI()
     lock = threading.Lock()
@@ -170,7 +171,7 @@ def build_fake_llm(script: List[Dict[str, Any]], model: str):
         "type": "llm",
         "model_name": model,
         "recipe": "llamacpp",
-        "recipe_options": {"ctx_size": 65536},
+        "recipe_options": {"ctx_size": GPU_CTX_SIZE},
     }
 
     @app.get("/api/v1/health")
@@ -378,7 +379,9 @@ def _wait_for(url: str, what: str, server: _Server, stop: threading.Event) -> No
         except (urllib.error.URLError, OSError):
             pass
         time.sleep(0.2)
-    raise DevBackendError(f"{what} did not answer at {url} within 60s.")
+    raise DevBackendError(
+        f"{what} did not answer at {url} within {READY_TIMEOUT_SECONDS:g}s."
+    )
 
 
 def run(
