@@ -117,6 +117,28 @@ def test_standalone_runner_starts_the_owner_only_for_a_local_server(
     assert owner.call_count == expected
 
 
+def test_both_runners_disable_proxy_headers(monkeypatch):
+    """Neither runner lets a forwarded header rewrite the peer address."""
+    import gaia.cli as gaia_cli
+
+    monkeypatch.setattr(sys, "argv", ["gaia-ui", "--host", "0.0.0.0"])
+    runs = []
+    with (
+        patch.dict(os.environ),
+        patch.object(gaia_cli, "_ensure_webui_built"),
+        patch("gaia.ui.server.create_app"),
+        patch("gaia.ui.server.start_model_server_owner"),
+        patch("uvicorn.run", side_effect=lambda app, **kw: runs.append(kw)),
+    ):
+        gaia_cli._launch_agent_ui(port=0, log=MagicMock())
+        server.main()
+    assert len(runs) == 2
+    for options in runs:
+        assert options["proxy_headers"] is False
+        assert options["forwarded_allow_ips"] == ""
+    assert [r["host"] for r in runs] == ["127.0.0.1", "0.0.0.0"]
+
+
 def test_scheduled_runs_use_the_flagship(monkeypatch):
     built = []
 

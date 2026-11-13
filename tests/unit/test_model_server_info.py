@@ -589,7 +589,7 @@ def ui(monkeypatch, config_file):
         monkeypatch.setattr(
             lemonade_client, "_read_embedded_lemonade_state", lambda: None
         )
-        return TestClient(create_app(db_path=":memory:"))
+        return TestClient(create_app(db_path=":memory:"), client=("127.0.0.1", 50000))
 
     return _make
 
@@ -707,7 +707,7 @@ def test_ui_load_model_sends_the_chosen_backend(monkeypatch, config_file):
         return client
 
     monkeypatch.setattr(lemonade_client, "LemonadeClient", recording)
-    client = TestClient(create_app(db_path=":memory:"))
+    client = TestClient(create_app(db_path=":memory:"), client=("127.0.0.1", 50000))
     # One event loop for the client's life, without app startup: a per-request
     # loop cancels the background load task when the request returns.
     with anyio.from_thread.start_blocking_portal() as client.portal:
