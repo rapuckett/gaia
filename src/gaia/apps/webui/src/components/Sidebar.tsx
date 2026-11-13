@@ -19,7 +19,8 @@ import {
 import { ordinal } from '../utils/chatAlerts';
 import { formatShortcut } from '../utils/platform';
 import { cleanupAbandonedDraft } from '../utils/sessionCleanup';
-import { MAX_SESSION_TITLE_CHARS } from '../utils/constants';
+import { APP_NAME, MAX_SESSION_TITLE_CHARS } from '../utils/constants';
+import { requestErrorParam } from '../utils/requestErrors';
 import { CLAIMS_ESCAPE } from '../hooks/useEscapeToClose';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import { Popover } from './Popover';
@@ -27,7 +28,7 @@ import gaiaRobot from '../assets/gaia-robot.png';
 import { useSidebarWidth } from './SidebarResizer';
 import type { Session } from '../types';
 import { pluralKey, ref, type MessageKey } from '../i18n/registry';
-import { useT } from '../i18n/useT';
+import { getT, useT } from '../i18n/useT';
 import type { SessionSearchResult } from '../types/api.gen';
 import { foldText, splitMatch, type MatchParts } from '../utils/chatSearch';
 import './Sidebar.css';
@@ -361,7 +362,7 @@ export function Sidebar({ onNewChat, onMobileAccess, tunnelActive }: SidebarProp
                 .catch((err) => {
                     if (ctrl.signal.aborted) return;
                     log.chat.error('Chat search failed', err);
-                    setSearchError(`Could not search inside chats: ${err instanceof Error ? err.message : err}`);
+                    setSearchError(getT()('sidebar.searchFailed', { error: requestErrorParam(err) }));
                     setHits({ query: q, results: [], truncated: false });
                 });
         }, SEARCH_DEBOUNCE_MS);
@@ -407,7 +408,7 @@ export function Sidebar({ onNewChat, onMobileAccess, tunnelActive }: SidebarProp
         // No rollback: flipping unread back would re-fire this effect in a tight loop.
         api.markSessionRead(id).catch((err) => {
             log.chat.error(`Could not mark chat ${id} read`, err);
-            setRowError(`Could not mark the chat read: ${err instanceof Error ? err.message : err}`);
+            setRowError(getT()('sidebar.markReadFailed', { error: requestErrorParam(err) }));
         });
     }, [updateSessionInList]);
 
@@ -440,7 +441,7 @@ export function Sidebar({ onNewChat, onMobileAccess, tunnelActive }: SidebarProp
         } catch (err) {
             log.chat.error(`Could not ${pinned ? 'pin' : 'unpin'} chat ${id}`, err);
             updateSessionInList(id, { pinned: !pinned });
-            setRowError(err instanceof Error ? err.message : `Could not ${pinned ? 'pin' : 'unpin'} the chat.`);
+            setRowError(err instanceof Error ? err.message : getT()(pinned ? 'sidebar.pinFailed' : 'sidebar.unpinFailed'));
         }
     }, [updateSessionInList]);
 
@@ -457,7 +458,7 @@ export function Sidebar({ onNewChat, onMobileAccess, tunnelActive }: SidebarProp
         } catch (err) {
             log.chat.error(`Could not rename chat ${id}`, err);
             if (previous !== undefined) updateSessionInList(id, { title: previous });
-            setRowError(err instanceof Error ? err.message : 'Could not rename the chat.');
+            setRowError(err instanceof Error ? err.message : getT()('sidebar.renameFailed'));
         }
     }, [updateSessionInList]);
 
@@ -507,7 +508,7 @@ export function Sidebar({ onNewChat, onMobileAccess, tunnelActive }: SidebarProp
             removeSession(id);
         } catch (err) {
             log.chat.error(`Delete failed for session ${id}`, err);
-            setDeleteError(err instanceof Error ? err.message : 'Could not delete the chat.');
+            setDeleteError(err instanceof Error ? err.message : getT()('sidebar.deleteFailed'));
         } finally {
             removePendingDelete(id);
         }
@@ -538,7 +539,7 @@ export function Sidebar({ onNewChat, onMobileAccess, tunnelActive }: SidebarProp
                 {/* The icon stays when collapsed: with no title bar it is the app's mark. */}
                 <div className="sb-brand">
                     <img src={gaiaRobot} alt="" width={22} height={22} />
-                    {!isCollapsed && <span>GAIA</span>}
+                    {!isCollapsed && <span>{APP_NAME}</span>}
                 </div>
                 <button
                     type="button"
