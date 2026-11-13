@@ -64,4 +64,19 @@ describe('Markdown', () => {
         expect(open).toHaveBeenLastCalledWith('http://pc.local:4200/api/documents/doc%201/file#page=12');
         expect(screen.getByRole('note')).toBeTruthy();
     });
+
+    it('formatting variant renders a link, an image, a heading and HTML as plain text', async () => {
+        const text = '# Urgent\n\nOpen [the form](https://example.com/login) ![pic](https://example.com/p.png) <b>raw</b>';
+        await render(
+            <ThemeProvider>
+                <Markdown text={text} variant="formatting" />
+            </ThemeProvider>,
+        );
+        const form = screen.getByText(/the form/);
+        expect(form.props.onPress).toBeUndefined();
+        expect(screen.queryByRole('link')).toBeNull();
+        expect(screen.queryByText(/pic|p\.png/)).toBeNull();
+        expect(screen.getByText('Urgent').props.accessibilityRole).not.toBe('header');
+        expect(screen.getByText(/<b>raw<\/b>/)).toBeTruthy();
+    });
 });
