@@ -9,6 +9,7 @@ import type {
     MessageList,
     Session,
     SessionList,
+    StartScreen,
     StreamEvent,
     SystemStatus,
     ToolConfirmRequest,
@@ -24,6 +25,7 @@ export interface FakeClientData {
     /** What attachToRun replays, by chat; a chat not listed has no turn running. */
     running?: Record<string, StreamEvent[]>;
     status?: SystemStatus;
+    start?: StartScreen;
 }
 
 export interface FakeGaiaClient extends GaiaClient {
@@ -108,6 +110,10 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         async getSystemStatus() {
             if (!data.status) throw new GaiaApiError(503, 'This fake client was given no system status.');
             return data.status;
+        },
+        async getStartScreen() {
+            if (!data.start) throw new GaiaApiError(503, 'This fake client was given no start screen.');
+            return data.start;
         },
     };
 }

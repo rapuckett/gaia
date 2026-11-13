@@ -9,7 +9,7 @@ import { Button } from '../controls/Button';
 import { Icon } from '../controls/Icon';
 import { Spinner } from '../controls/Spinner';
 import { CircleAlert } from '../icons';
-import { Stack } from '../layout/layout';
+import { Row, Stack } from '../layout/layout';
 import { useTheme } from '../theme/ThemeProvider';
 import { Text } from '../text/Text';
 
@@ -42,7 +42,11 @@ export function EmptyState({ title, message, action, icon }: StateProps & { titl
                         {message}
                     </Text>
                 ) : null}
-                {action ? <Button label={action.label} onPress={action.onPress} /> : null}
+                {action ? (
+                    <Row justify="center">
+                        <Button label={action.label} onPress={action.onPress} />
+                    </Row>
+                ) : null}
             </Stack>
         </Centered>
     );
@@ -62,8 +66,16 @@ export function ErrorState({ title, message, action, onRetry }: StateProps & { o
                         {message}
                     </Text>
                 ) : null}
-                {onRetry ? <Button label={t('msg.tryAgain')} onPress={onRetry} /> : null}
-                {action ? <Button variant="ghost" label={action.label} onPress={action.onPress} /> : null}
+                {onRetry ? (
+                    <Row justify="center">
+                        <Button label={t('msg.tryAgain')} onPress={onRetry} />
+                    </Row>
+                ) : null}
+                {action ? (
+                    <Row justify="center">
+                        <Button variant="ghost" label={action.label} onPress={action.onPress} />
+                    </Row>
+                ) : null}
             </Stack>
         </Centered>
     );
