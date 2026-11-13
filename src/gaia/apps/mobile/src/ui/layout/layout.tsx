@@ -18,6 +18,8 @@ interface BoxProps {
     align?: Align;
     justify?: Justify;
     flex?: number;
+    /** Layout direction of this box, for content whose language differs from the UI's. */
+    dir?: 'ltr' | 'rtl';
     testID?: string;
 }
 
@@ -39,6 +41,7 @@ function boxStyle(space: Record<Space, number>, p: BoxProps): Mut<ViewStyle> {
     if (p.align) style.alignItems = ALIGN[p.align];
     if (p.justify) style.justifyContent = JUSTIFY[p.justify];
     if (p.flex !== undefined) style.flex = p.flex;
+    if (p.dir) style.direction = p.dir;
     return style;
 }
 
