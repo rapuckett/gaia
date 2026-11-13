@@ -6,9 +6,9 @@ The Agent UI's flagship install drives these. They are the
 HTTP surface over :mod:`gaia.hub.catalog` (remote catalog + local merge) and
 :mod:`gaia.hub.installer` (download/verify/install lifecycle).
 
-Like the rest of the local-first UI backend, the mutating endpoints are guarded
-to localhost + the ``X-Gaia-UI`` header (a lightweight CSRF guard — custom
-headers force a CORS preflight that drive-by POSTs cannot satisfy).
+Like the rest of the local-first UI backend, the mutating endpoints answer only
+the PC running GAIA and need the ``X-Gaia-UI`` header (a lightweight CSRF guard —
+custom headers force a CORS preflight that drive-by POSTs cannot satisfy).
 """
 
 from __future__ import annotations
@@ -24,13 +24,12 @@ from gaia.hub import installer as installer_mod
 from gaia.logger import get_logger
 from gaia.utils.file_lock import FileLockError
 
+from ..security import require_local_pc
 from ..security import require_ui_header as _require_ui_header
 
 logger = get_logger(__name__)
 
 router = APIRouter(tags=["hub"])
-
-_LOCALHOST_HOSTS = {"127.0.0.1", "::1", "localhost", ""}
 
 
 def _registry(request: Request):
@@ -38,14 +37,6 @@ def _registry(request: Request):
     if registry is None:
         raise HTTPException(status_code=503, detail="Agent registry not initialized")
     return registry
-
-
-def _require_localhost(request: Request) -> None:
-    host = (request.client.host if request.client else "") or ""
-    if host not in _LOCALHOST_HOSTS:
-        raise HTTPException(
-            status_code=403, detail="endpoint only available on localhost"
-        )
 
 
 def _shutdown_email_sidecar(agent_id: str) -> None:
@@ -184,7 +175,7 @@ def _record_failure(agent_id: str, version: Optional[str], exc: Exception) -> No
 @router.post(
     "/api/agents/install",
     status_code=202,
-    dependencies=[Depends(_require_localhost), Depends(_require_ui_header)],
+    dependencies=[Depends(require_local_pc), Depends(_require_ui_header)],
 )
 def install_agent(request: Request, body: InstallRequest):
     """Start an install in the background; poll install-status for progress.
@@ -274,7 +265,7 @@ async def install_status(agent_id: str):
 
 @router.delete(
     "/api/agents/{agent_id}",
-    dependencies=[Depends(_require_localhost), Depends(_require_ui_header)],
+    dependencies=[Depends(require_local_pc), Depends(_require_ui_header)],
 )
 def uninstall_agent(agent_id: str, request: Request):
     """Uninstall a hub-installed agent. Refuses builtins (400)."""

@@ -1374,7 +1374,11 @@ async def model_server(db: ChatDatabase = Depends(get_db)):
         raise _config_http_error(exc) from exc
 
 
-@router.put("/api/system/model-server/backend", response_model=ModelServerInfo)
+@router.put(
+    "/api/system/model-server/backend",
+    response_model=ModelServerInfo,
+    dependencies=[Depends(security.require_pc_or_device)],
+)
 async def set_model_server_backend(
     body: ModelServerBackendRequest, db: ChatDatabase = Depends(get_db)
 ):
@@ -1614,7 +1618,11 @@ class DownloadModelRequest(BaseModel):
     load_after: bool = False
 
 
-@router.post("/api/system/download-model", status_code=202)
+@router.post(
+    "/api/system/download-model",
+    status_code=202,
+    dependencies=[Depends(security.require_pc_or_device)],
+)
 async def download_model_endpoint(body: DownloadModelRequest):
     """Trigger downloading a model via Lemonade server (non-blocking).
 

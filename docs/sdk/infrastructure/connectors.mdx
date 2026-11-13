@@ -147,7 +147,9 @@ mismatch as a reason to delete the prior connection.
 
 The same ingestion is exposed over REST by the Agent UI server (which binds
 `localhost` by default and gates remote/tunnel access behind a token).
-Mutating routes require the `X-Gaia-UI: 1` header.
+Mutating routes require the `X-Gaia-UI: 1` header. `POST` takes a refresh token,
+so only the PC running GAIA may call it: mobile access, a paired device or
+another computer gets a **403**.
 
 ```bash
 curl -X POST http://localhost:4200/v1/connections/google \

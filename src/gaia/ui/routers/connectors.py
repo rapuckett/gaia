@@ -97,6 +97,7 @@ from gaia.connectors.store import (
     retry_keyring,
 )
 
+from ..security import require_local_pc
 from ..security import require_ui_header as _require_ui_header
 
 logger = logging.getLogger(__name__)
@@ -827,7 +828,11 @@ async def get_connector(connector_id: str) -> Dict[str, Any]:
 # ─────────────────────────────────────────────────────────────────
 
 
-@router.post("/{connector_id}/configure", dependencies=[Depends(_require_ui_header)])
+# Stores credentials, so only the PC running GAIA may connect an account.
+@router.post(
+    "/{connector_id}/configure",
+    dependencies=[Depends(_require_ui_header), Depends(require_local_pc)],
+)
 async def configure_connector(
     request: Request, connector_id: str, body: ConfigureRequest
 ) -> Dict[str, Any]:
@@ -972,7 +977,10 @@ async def disable_connector(connector_id: str) -> Dict[str, Any]:
     return await _set_connector_enabled(connector_id, False)
 
 
-@router.post("/{connector_id}/authorize", dependencies=[Depends(_require_ui_header)])
+@router.post(
+    "/{connector_id}/authorize",
+    dependencies=[Depends(_require_ui_header), Depends(require_local_pc)],
+)
 async def authorize(
     request: Request, connector_id: str, body: AuthorizeRequest
 ) -> Dict[str, Any]:
@@ -1002,7 +1010,8 @@ _device_poll_tasks: set = set()
 
 
 @router.post(
-    "/{connector_id}/authorize-device", dependencies=[Depends(_require_ui_header)]
+    "/{connector_id}/authorize-device",
+    dependencies=[Depends(_require_ui_header), Depends(require_local_pc)],
 )
 async def authorize_device(
     request: Request, connector_id: str, body: AuthorizeRequest
@@ -1209,8 +1218,11 @@ async def delete_activation(connector_id: str, agent_id: str) -> Response:
 # ─────────────────────────────────────────────────────────────────
 
 
+# Takes a refresh token, so it is the PC running GAIA's to hand over.
 @forwarded_router.post(
-    "/{provider}", status_code=201, dependencies=[Depends(_require_ui_header)]
+    "/{provider}",
+    status_code=201,
+    dependencies=[Depends(_require_ui_header), Depends(require_local_pc)],
 )
 async def forward_connection(
     request: Request, provider: str, body: ForwardConnectionRequest

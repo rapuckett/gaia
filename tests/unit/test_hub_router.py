@@ -26,15 +26,12 @@ UI = {"X-Gaia-UI": "1"}
 def app():
     app = create_app(db_path=":memory:")
     app.state.agent_registry = MagicMock(spec=AgentRegistry)
-    # Bypass the localhost guard (TestClient host is "testclient").
-    app.dependency_overrides[hub_router._require_localhost] = lambda: None
-    yield app
-    app.dependency_overrides.clear()
+    return app
 
 
 @pytest.fixture
 def client(app):
-    return TestClient(app)
+    return TestClient(app, client=("127.0.0.1", 50000))
 
 
 @pytest.fixture
@@ -44,7 +41,7 @@ def client_no_ui_header(app):
     Used by the tests that assert the CSRF guard refuses an unheadered
     request -- they would otherwise pass for the wrong reason.
     """
-    client = TestClient(app)
+    client = TestClient(app, client=("127.0.0.1", 50000))
     client.headers.pop("x-gaia-ui", None)
     return client
 

@@ -659,6 +659,8 @@ def ui_api_client():
     Deliberately carries no ``X-Gaia-UI`` default: the connectors and
     agents suites use this client to assert that an unheadered mutating
     request is refused, so a per-call header is how a test here opts *in*.
+    It connects from loopback, as the desktop app does, so the PC-only
+    routes answer it.
     """
     try:
         from starlette.testclient import TestClient
@@ -668,6 +670,6 @@ def ui_api_client():
         pytest.skip(f"gaia.ui not importable (install with `[ui]` extras): {e}")
 
     app = create_app()
-    with TestClient(app) as client:
+    with TestClient(app, client=("127.0.0.1", 50000)) as client:
         client.headers.pop("x-gaia-ui", None)
         yield client
