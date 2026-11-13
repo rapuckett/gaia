@@ -2,13 +2,24 @@
 // SPDX-License-Identifier: MIT
 
 import { act, type ReactElement } from 'react';
-import { BackHandler, Platform, Text as RNText } from 'react-native';
+import { BackHandler, Text as RNText } from 'react-native';
 import { createRoot } from 'test-renderer';
 import { Sheet } from './Sheet';
 import { SheetHost } from './SheetHost';
 import { sheetStore } from './sheetStore';
 
-jest.mock('react-native-reanimated', () => require('react-native-reanimated/mock'));
+jest.mock('react-native-reanimated', () => {
+    const { View } = jest.requireActual('react-native');
+    return {
+        __esModule: true,
+        default: { View },
+        Easing: { bezier: () => undefined },
+        useAnimatedStyle: () => ({}),
+        useReducedMotion: () => true,
+        useSharedValue: (value: number) => ({ value }),
+        withTiming: (value: number) => value,
+    };
+});
 jest.mock('react-native-gesture-handler', () => ({
     GestureDetector: ({ children }: { children: ReactElement }) => children,
     usePanGesture: () => ({}),
@@ -25,9 +36,8 @@ jest.mock('../theme/ThemeProvider', () => {
     return { useTheme: () => theme };
 });
 jest.mock('../controls/IconButton', () => ({ IconButton: () => null }));
+jest.mock('../icons', () => ({ X: () => null }));
 jest.mock('../text/Text', () => ({ Text: ({ children }: { children: unknown }) => children }));
-
-const describeNative = Platform.OS === 'web' ? describe.skip : describe;
 
 function Screen({ a, b, onCloseA, onCloseB }: { a: boolean; b: boolean; onCloseA: () => void; onCloseB: () => void }) {
     return (
@@ -44,7 +54,7 @@ function Screen({ a, b, onCloseA, onCloseB }: { a: boolean; b: boolean; onCloseA
 
 const shown = (r: ReturnType<typeof createRoot>) => JSON.stringify(r.container.toJSON());
 
-describeNative('SheetHost', () => {
+describe('SheetHost', () => {
     beforeEach(() => {
         jest.useFakeTimers();
         sheetStore.reset();
