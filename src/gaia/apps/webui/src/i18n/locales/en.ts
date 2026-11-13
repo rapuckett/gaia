@@ -3314,6 +3314,20 @@ export const enMessages = {
     'errorBoundary.bodyWindow': 'GAIA hit an error. Reload to continue.',
     'errorBoundary.retry': 'Try again',
     'errorBoundary.reload': 'Reload',
+    // Mobile app
+    'mobileApp.notConnected': 'Not connected to a PC yet',
+    'mobileApp.error.badAddress': '"{address}" is not a valid GAIA address. Use the full address of your PC, for example http://192.168.1.20:4200.',
+    'mobileApp.error.badScheme': 'The GAIA address "{address}" must start with http:// or https://.',
+    'mobileApp.error.network': 'Could not reach GAIA at {url}: {reason}. Check that your PC is on and reachable from this phone.',
+    'mobileApp.error.auth': 'GAIA did not accept this phone\'s pairing: {detail}. Pair this phone with your PC again.',
+    'mobileApp.error.http': 'GAIA answered with an error ({status}): {detail}',
+    'mobileApp.error.notJson': 'GAIA answered {path} with something that is not JSON. Check that the address points at GAIA on your PC.',
+    'mobileApp.error.incompleteTranscript': 'GAIA returned an incomplete conversation. Reload it.',
+    'mobileApp.error.noBody': 'GAIA sent no reply body, so there is nothing to read.',
+    'mobileApp.error.streamClosed': 'GAIA closed the connection before the reply finished. Send the message again; if it keeps happening, check the GAIA log on your PC.',
+    'mobileApp.error.streamBroke': 'The connection to GAIA broke while the reply was arriving.',
+    'mobileApp.error.badEvent': 'GAIA sent a reply event this phone cannot read: {preview}',
+    'mobileApp.error.noConnection': 'No PC is connected. Pair this phone with your PC first.',
 } as const;
 
 export const en: Locale = {
