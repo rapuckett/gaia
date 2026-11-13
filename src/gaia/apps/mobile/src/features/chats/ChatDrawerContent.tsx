@@ -24,7 +24,7 @@ import {
     StatusDot,
     Text,
 } from '@/ui';
-import { EyeOff, X } from '@/ui/icons';
+import { EyeOff, Plus, X } from '@/ui/icons';
 
 import { useNow } from './useNow';
 import {
@@ -50,13 +50,15 @@ export interface ChatDrawerContentProps {
     /** Opens the chat; the drawer closes itself after the pick. */
     onSelect: (sessionId: string) => void;
     onClose: () => void;
+    /** Shows a New chat button in the header when given. */
+    onNewChat?: () => void;
     live?: LiveRuns;
     queues?: Readonly<Record<string, readonly QueuedMessage[]>>;
     /** The last failed row action, shown as an alert until the next one succeeds. */
     error?: ChatListError | null;
 }
 
-export function ChatDrawerContent({ activeId, onSelect, onClose, live, queues, error }: ChatDrawerContentProps) {
+export function ChatDrawerContent({ activeId, onSelect, onClose, onNewChat, live, queues, error }: ChatDrawerContentProps) {
     const t = useT();
     const sessions = useSessions();
     const now = useNow();
@@ -67,7 +69,7 @@ export function ChatDrawerContent({ activeId, onSelect, onClose, live, queues, e
     const state = chatListState(sessions, sections);
 
     return (
-        <Screen edges={['top', 'bottom', 'start']} header={<Header onClose={onClose} />}>
+        <Screen edges={['top', 'bottom', 'start']} header={<Header onClose={onClose} onNewChat={onNewChat} />}>
             {error ? (
                 <Notice tone="danger" message={rowErrorMessage(error.kind, error.error, t)} />
             ) : null}
@@ -87,13 +89,14 @@ export function ChatDrawerContent({ activeId, onSelect, onClose, live, queues, e
     );
 }
 
-function Header({ onClose }: { onClose: () => void }) {
+function Header({ onClose, onNewChat }: { onClose: () => void; onNewChat?: () => void }) {
     const t = useT();
     return (
         <Stack paddingX="lg" paddingY="sm">
             <Row gap="sm" accessibilityRole="header">
                 <Text role="title" weight="semibold">{APP_NAME}</Text>
                 <Spacer />
+                {onNewChat ? <IconButton icon={Plus} label={t('sidebar.newChat')} onPress={onNewChat} /> : null}
                 <IconButton icon={X} label={t('sidebar.collapse')} onPress={onClose} />
             </Row>
         </Stack>
