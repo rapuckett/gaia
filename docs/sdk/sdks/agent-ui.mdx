@@ -1826,7 +1826,7 @@ Used to reach the UI from a phone.
     Scripts a user who declines the shell commands in `decline_commands` and
     answers no questions, so `gaia eval agent` can score what the agent does
     after a "no". An empty list turns it off. The runner sets it from a
-    scenario's `setup.decline_commands` and clears it afterwards.
+    scenario's `setup.decline_commands` and clears it afterwards. PC-only.
   </Accordion>
 </AccordionGroup>
 
@@ -2239,13 +2239,13 @@ The Memory endpoints expose the agent's persistent knowledge system. See the [Me
   <Accordion title="POST /api/memory/admin/clear">
     **Eval-only**, gated by `GAIA_MEMORY_ADMIN=1` (403 otherwise). Wipes
     memory for a scenario reset — `scope` is `all` / `knowledge` /
-    `conversations`.
+    `conversations`. PC-only, as every eval route is.
   </Accordion>
 
   <Accordion title="POST /api/memory/admin/seed">
     **Eval-only**, gated by `GAIA_MEMORY_ADMIN=1`. Bulk-inserts knowledge
     items verbatim, bypassing dedup, to plant a known state for stress
-    scenarios.
+    scenarios. PC-only.
   </Accordion>
 </AccordionGroup>
 
@@ -2273,7 +2273,7 @@ OAuth and MCP-server connections for the Settings page and per-agent grants
   <Accordion title="GET /api/connectors/eval-mailbox">
     **Eval-only**, gated by `GAIA_EVAL_MAILBOX` (403 otherwise). Reports the
     offline fixture mailbox the `gaia_email` scenarios read: its path, whether
-    the file exists, and whether it is attached.
+    the file exists, and whether it is attached. PC-only.
   </Accordion>
 
   <Accordion title="POST /api/connectors/eval-mailbox">
@@ -2281,11 +2281,11 @@ OAuth and MCP-server connections for the Settings page and per-agent grants
     `{"attached": false}` makes the mail tools answer as if no mailbox were
     connected, for sessions that start reading mail afterwards; `true` restores
     the fixture. The eval runner calls it from each scenario's
-    `setup.mailbox_fixture`.
+    `setup.mailbox_fixture`. PC-only.
   </Accordion>
 
   <Accordion title="GET /api/connectors/_debug">
-    Diagnostics dump, gated by `GAIA_DEBUG=1` (404 otherwise).
+    Diagnostics dump, gated by `GAIA_DEBUG=1` (404 otherwise). PC-only.
   </Accordion>
 
   <Accordion title="GET /api/connectors/{connector_id}">
@@ -2346,7 +2346,7 @@ OAuth and MCP-server connections for the Settings page and per-agent grants
   <Accordion title="PUT /api/connectors/{connector_id}/grants/{agent_id}">
     Write the per-agent grant ledger — the scope ceiling an activation may
     request. Rejects an id the catalog doesn't publish (404) or scopes
-    outside the connector's ceiling (400).
+    outside the connector's ceiling (400). PC-only (**403** from mobile access, a paired device or another computer).
   </Accordion>
 
   <Accordion title="DELETE /api/connectors/{connector_id}/grants/{agent_id}">
@@ -2356,13 +2356,13 @@ OAuth and MCP-server connections for the Settings page and per-agent grants
   <Accordion title="PUT /api/connectors/{connector_id}/activations/{agent_id}">
     Activate `agent_id` for `connector_id` (`mcp_server` only — OAuth
     connectors 400). Auto-grants when no grant exists and the body supplies
-    scopes; 400 if it doesn't.
+    scopes; 400 if it doesn't. PC-only, like the grant.
   </Accordion>
 
   <Accordion title="DELETE /api/connectors/{connector_id}/activations/{agent_id}">
     Deactivate `agent_id` for `connector_id`. Idempotent, and non-destructive
     — the grant is preserved so re-activating is one call; delete the grant
-    separately to wipe it.
+    separately to wipe it. PC-only, like activating.
   </Accordion>
 </AccordionGroup>
 
@@ -2984,7 +2984,7 @@ credential store (the slot the TUI uses). A key is never echoed back or logged.
   <Accordion title="DELETE /api/providers/{provider}/key">
     Clear the key from Lemonade and from the OS credential store. Returns
     `{"removed": bool}`. On the user's own Lemonade only GAIA's stored copy is
-    removed; the server keeps its key.
+    removed; the server keeps its key. PC-only (**403** from mobile access, a paired device or another computer).
   </Accordion>
 
   <Accordion title="POST /api/providers/key-store/retry">
@@ -3296,7 +3296,7 @@ Every route is in one class, pinned by `tests/unit/chat/ui/test_route_access.py`
 
 | Class | Who | Routes |
 |---|---|---|
-| PC-only | `pc` | Tunnel start and stop, provider keys, the model-server target, logs, messaging, GPU memory apply and revert, the default full-access setting, connector configure and authorize, `POST /v1/connections/{provider}`, skill and agent installs, `POST /api/files/open`, `POST /api/setup/npu/memlock-fix`, the troubleshooting report |
+| PC-only | `pc` | Tunnel start and stop, provider keys, the model-server target, logs, messaging, GPU memory apply and revert, the default full-access setting, connector configure and authorize, an agent's connector grant and activations, deleting a provider key, `POST /v1/connections/{provider}`, skill and agent installs, `POST /api/files/open`, `POST /api/setup/npu/memlock-fix`, the troubleshooting report, the eval-only routes and `GET /api/connectors/_debug` |
 | Setup | `pc`, or an allowed device | Setup's changes (see [Setup](#setup)), `POST /api/system/download-model`, `PUT /api/system/model-server/backend` |
 | Not from a device | `pc`, `tunnel` | `GET /api/providers`, which can register a provider |
 | Everything else | `pc`, `tunnel`, an allowed device | Chats, documents, memory, goals, schedules and the rest |

@@ -39,7 +39,12 @@ from gaia.logger import get_logger
 
 from ..database import ChatDatabase
 from ..dependencies import get_db
-from ..security import is_local_pc, refuse_on_device_listener, require_ui_header
+from ..security import (
+    is_local_pc,
+    refuse_on_device_listener,
+    require_local_pc,
+    require_ui_header,
+)
 
 logger = get_logger(__name__)
 
@@ -1324,7 +1329,9 @@ def _connect_on_users_server(provider: str) -> Dict[str, Any]:
     }
 
 
-@router.delete("/api/providers/{provider}/key")
+@router.delete(
+    "/api/providers/{provider}/key", dependencies=[Depends(require_local_pc)]
+)
 def forget_provider_key(provider: str) -> Dict[str, Any]:
     """Clear the key from Lemonade and from the OS credential store."""
     from gaia.connectors.credential_wait import discard

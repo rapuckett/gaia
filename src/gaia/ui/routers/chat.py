@@ -705,7 +705,7 @@ class ScriptedUserRequest(BaseModel):
     decline_commands: List[str] = []
 
 
-@router.post("/api/eval/scripted-user")
+@router.post("/api/eval/scripted-user", dependencies=[Depends(require_local_pc)])
 async def set_scripted_user(request: ScriptedUserRequest):
     """Script a user who declines these commands and answers nothing (#4447).
 

@@ -644,7 +644,7 @@ async def connector_events() -> StreamingResponse:
     )
 
 
-@router.get("/_debug")
+@router.get("/_debug", dependencies=[Depends(require_local_pc)])
 async def debug_state() -> Dict[str, Any]:
     """Diagnostics endpoint, gated by ``GAIA_DEBUG=1``."""
     if os.environ.get("GAIA_DEBUG") != "1":
@@ -779,12 +779,15 @@ def _eval_mailbox_state() -> Dict[str, Any]:
     }
 
 
-@router.get("/eval-mailbox")
+@router.get("/eval-mailbox", dependencies=[Depends(require_local_pc)])
 async def get_eval_mailbox() -> Dict[str, Any]:
     return _eval_mailbox_state()
 
 
-@router.post("/eval-mailbox", dependencies=[Depends(_require_ui_header)])
+@router.post(
+    "/eval-mailbox",
+    dependencies=[Depends(_require_ui_header), Depends(require_local_pc)],
+)
 async def set_eval_mailbox(body: EvalMailboxRequest) -> Dict[str, Any]:
     """Attach or detach the fixture for sessions that start reading mail next."""
     from gaia.agents.tools._email import fixture
@@ -1090,8 +1093,10 @@ async def cancel_flow_endpoint(flow_id: str) -> Response:
     return Response(status_code=204)
 
 
+# Widens what an agent may do with an account, like configure and authorize.
 @router.put(
-    "/{connector_id}/grants/{agent_id:path}", dependencies=[Depends(_require_ui_header)]
+    "/{connector_id}/grants/{agent_id:path}",
+    dependencies=[Depends(_require_ui_header), Depends(require_local_pc)],
 )
 async def put_grant(
     connector_id: str, agent_id: str, body: GrantRequest
@@ -1143,7 +1148,7 @@ async def delete_grant(connector_id: str, agent_id: str) -> Response:
 
 @router.put(
     "/{connector_id}/activations/{agent_id:path}",
-    dependencies=[Depends(_require_ui_header)],
+    dependencies=[Depends(_require_ui_header), Depends(require_local_pc)],
 )
 async def put_activation(
     connector_id: str, agent_id: str, body: ActivationRequest
@@ -1189,7 +1194,7 @@ async def put_activation(
 @router.delete(
     "/{connector_id}/activations/{agent_id:path}",
     status_code=204,
-    dependencies=[Depends(_require_ui_header)],
+    dependencies=[Depends(_require_ui_header), Depends(require_local_pc)],
 )
 async def delete_activation(connector_id: str, agent_id: str) -> Response:
     """Deactivate ``agent_id`` for ``connector_id``. Idempotent.
