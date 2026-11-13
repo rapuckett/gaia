@@ -1,7 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import type { Message, Session, StreamEvent } from '@webui/types';
+import type { Message, Session, StreamEvent, SystemStatus } from '@webui/types';
 
 import type { FetchLike, FetchRequestInit, FetchResponseLike } from '@/platform/fetch.types';
 
@@ -10,15 +10,32 @@ import {
     GaiaAuthError,
     GaiaConfigError,
     GaiaNetworkError,
+    GaiaStreamDroppedError,
     GaiaStreamError,
+    GaiaStreamTimeoutError,
     parseErrorDetail,
+    type StreamEndpoint,
 } from './errors';
-import type { GaiaClient, HealthResponse, MessageList, RequestOptions, SessionList } from './client.types';
+import type {
+    CancelChatResult,
+    ConfirmToolResult,
+    GaiaClient,
+    HealthResponse,
+    MessageList,
+    RequestOptions,
+    SessionList,
+    UserInputResult,
+} from './client.types';
 import {
+    ATTACH_HEADER_TIMEOUT_MS,
     ENDPOINTS,
     MESSAGE_PAGE_SIZE,
+    QUEUED_IDLE_MS,
+    SEND_HEADER_TIMEOUT_MS,
     SESSION_PAGE_SIZE,
     sessionMessagesPath,
+    sessionPath,
+    STREAM_IDLE_MS,
     UI_HEADERS,
 } from './constants';
 import { parseSseStream } from './sse';
@@ -27,6 +44,12 @@ export interface HttpClientConfig {
     baseUrl: string;
     token?: string | null;
     fetch: FetchLike;
+}
+
+interface HeaderLimit {
+    endpoint: StreamEndpoint;
+    ms: number;
+    abort: () => void;
 }
 
 function normalizeBaseUrl(baseUrl: string): string {
@@ -42,6 +65,27 @@ function normalizeBaseUrl(baseUrl: string): string {
     return baseUrl.replace(/\/+$/, '');
 }
 
+// A non-recoverable agent_error ends the turn; the closing `done` may never come.
+function endsTurn(event: StreamEvent): boolean {
+    return event.type === 'done' || event.type === 'error' || (event.type === 'agent_error' && event.recoverable !== true);
+}
+
+// A turn waiting in line for the model only speaks when its place changes.
+function idleLimit(last: StreamEvent | undefined): number {
+    return last?.type === 'status' && last.phase === 'queued' ? QUEUED_IDLE_MS : STREAM_IDLE_MS;
+}
+
+function within<T>(limit: HeaderLimit, pending: Promise<T>): Promise<T> {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const expired = new Promise<never>((_, reject) => {
+        timer = setTimeout(() => {
+            limit.abort();
+            reject(new GaiaStreamTimeoutError(limit.endpoint, limit.ms));
+        }, limit.ms);
+    });
+    return Promise.race([pending, expired]).finally(() => clearTimeout(timer));
+}
+
 export function createHttpClient(config: HttpClientConfig): GaiaClient {
     const base = normalizeBaseUrl(config.baseUrl);
     const { token, fetch } = config;
@@ -54,7 +98,13 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
         };
     }
 
-    async function request(method: string, path: string, body: unknown, signal?: AbortSignal): Promise<FetchResponseLike> {
+    async function request(
+        method: string,
+        path: string,
+        body: unknown,
+        signal?: AbortSignal,
+        headerLimit?: HeaderLimit,
+    ): Promise<FetchResponseLike> {
         const url = `${base}${path}`;
         const init: FetchRequestInit = {
             method,
@@ -64,9 +114,10 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
         };
         let res: FetchResponseLike;
         try {
-            res = await fetch(url, init);
+            const pending = fetch(url, init);
+            res = await (headerLimit ? within(headerLimit, pending) : pending);
         } catch (err) {
-            if (signal?.aborted) throw err;
+            if (err instanceof GaiaStreamTimeoutError || signal?.aborted) throw err;
             throw new GaiaNetworkError(url, err);
         }
         if (!res.ok) {
@@ -77,13 +128,67 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
         return res;
     }
 
-    async function getJson<T>(path: string, signal?: AbortSignal): Promise<T> {
-        const res = await request('GET', path, undefined, signal);
+    async function readJson<T>(res: FetchResponseLike, path: string): Promise<T> {
         const text = await res.text();
         try {
             return JSON.parse(text) as T;
         } catch {
             throw new GaiaApiError(res.status, text.slice(0, 200), 'mobileApp.error.notJson', { path });
+        }
+    }
+
+    async function getJson<T>(path: string, signal?: AbortSignal): Promise<T> {
+        return readJson<T>(await request('GET', path, undefined, signal), path);
+    }
+
+    async function postJson<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
+        return readJson<T>(await request('POST', path, body, signal), path);
+    }
+
+    async function* streamTurn(
+        method: 'GET' | 'POST',
+        path: string,
+        body: unknown,
+        endpoint: StreamEndpoint,
+        headerMs: number,
+        signal?: AbortSignal,
+    ): AsyncGenerator<StreamEvent> {
+        // One controller drops the connection whether the caller left, the headers or the stream timed out.
+        const connection = new AbortController();
+        const drop = () => connection.abort();
+        if (signal?.aborted) drop();
+        else signal?.addEventListener('abort', drop);
+        let ended = false;
+        try {
+            let res: FetchResponseLike;
+            try {
+                res = await request(method, path, body, connection.signal, { endpoint, ms: headerMs, abort: drop });
+            } catch (err) {
+                // No turn is running: its answer, if it had one, is already saved.
+                if (endpoint === 'attach' && err instanceof GaiaApiError && err.status === 404) return;
+                throw err;
+            }
+            if (!res.body) {
+                throw new GaiaStreamError('mobileApp.error.noBody');
+            }
+            try {
+                for await (const event of parseSseStream(res.body, idleLimit)) {
+                    if (endsTurn(event)) ended = true;
+                    yield event;
+                }
+            } catch (err) {
+                if (signal?.aborted) throw err;
+                // The turn already ended; a connection that dies or goes quiet after that changes nothing.
+                if (ended) return;
+                if (err instanceof GaiaStreamError) throw err;
+                throw new GaiaStreamDroppedError(err);
+            }
+            if (!ended) {
+                throw new GaiaStreamError('mobileApp.error.streamClosed');
+            }
+        } finally {
+            signal?.removeEventListener('abort', drop);
+            if (!ended) drop();
         }
     }
 
@@ -108,6 +213,14 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             return { sessions: [...byId.values()], total };
         },
 
+        getSession(sessionId, options) {
+            return getJson<Session>(sessionPath(sessionId), options?.signal);
+        },
+
+        createSession(request = {}, options) {
+            return postJson<Session>(ENDPOINTS.sessions, request, options?.signal);
+        },
+
         async getMessages(sessionId: string, options?: RequestOptions): Promise<MessageList> {
             const path = sessionMessagesPath(sessionId);
             const first = await getJson<MessageList>(`${path}?limit=${MESSAGE_PAGE_SIZE}&offset=0`, options?.signal);
@@ -124,29 +237,37 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             return { messages, total: first.total };
         },
 
-        async *sendMessage(sessionId: string, message: string, options?: RequestOptions): AsyncGenerator<StreamEvent> {
-            const res = await request(
-                'POST',
-                ENDPOINTS.chatSend,
-                { session_id: sessionId, message, stream: true },
-                options?.signal,
-            );
-            if (!res.body) {
-                throw new GaiaStreamError('mobileApp.error.noBody');
-            }
-            let finished = false;
-            try {
-                for await (const event of parseSseStream(res.body)) {
-                    if (event.type === 'done' || event.type === 'error') finished = true;
-                    yield event;
-                }
-            } catch (err) {
-                if (options?.signal?.aborted || err instanceof GaiaStreamError) throw err;
-                throw new GaiaStreamError('mobileApp.error.streamBroke', {}, { cause: err });
-            }
-            if (!finished) {
-                throw new GaiaStreamError('mobileApp.error.streamClosed');
-            }
+        sendMessage(sessionId, message, options) {
+            const body = { session_id: sessionId, message, stream: true };
+            return streamTurn('POST', ENDPOINTS.chatSend, body, 'send', SEND_HEADER_TIMEOUT_MS, options?.signal);
+        },
+
+        attachToRun(sessionId, options) {
+            const path = `${ENDPOINTS.chatAttach}?session_id=${encodeURIComponent(sessionId)}`;
+            return streamTurn('GET', path, undefined, 'attach', ATTACH_HEADER_TIMEOUT_MS, options?.signal);
+        },
+
+        cancelChat(sessionId, options) {
+            return postJson<CancelChatResult>(ENDPOINTS.chatCancel, { session_id: sessionId }, options?.signal);
+        },
+
+        confirmTool(request, options) {
+            const body = {
+                session_id: request.session_id,
+                approved: request.approved,
+                always: request.always ?? false,
+                ...(request.confirm_id ? { confirm_id: request.confirm_id } : {}),
+            };
+            return postJson<ConfirmToolResult>(ENDPOINTS.chatConfirmTool, body, options?.signal);
+        },
+
+        sendUserInput(request, options) {
+            const body = { session_id: request.session_id, request_id: request.request_id, value: request.value };
+            return postJson<UserInputResult>(ENDPOINTS.chatUserInput, body, options?.signal);
+        },
+
+        getSystemStatus(options) {
+            return getJson<SystemStatus>(ENDPOINTS.systemStatus, options?.signal);
         },
     };
 }
