@@ -299,10 +299,10 @@ function PhoneAccess() {
         <Row label={t('env.phone')}>
             <Switch
                 checked={active}
-                onChange={(on) => { setPending(true); requestMobileAccess(on); }}
+                onChange={(on) => { if (on) { requestMobileAccess(true); } else { setPending(true); requestMobileAccess(false); } }}
                 disabled={pending}
                 label={t('env.phone')}
-                text={pending ? (active ? t('env.stopping') : t('env.starting')) : active ? t('env.on') : t('env.off')}
+                text={pending ? t('env.stopping') : active ? t('env.on') : t('env.off')}
             />
             {active && (
                 <span className="sp-meta">

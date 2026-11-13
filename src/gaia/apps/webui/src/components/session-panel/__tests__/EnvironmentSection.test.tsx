@@ -293,7 +293,7 @@ describe('Internet', () => {
 });
 
 describe('Phone access', () => {
-    it('asks the app to start it, then shows the connected device', async () => {
+    it('asks the app to open Mobile access, and shows on only once the tunnel runs', async () => {
         const requests: boolean[] = [];
         const onRequest = (e: Event) => requests.push((e as CustomEvent<boolean>).detail);
         window.addEventListener('gaia:mobile-access-request', onRequest);
@@ -301,7 +301,7 @@ describe('Phone access', () => {
         const toggle = await screen.findByRole('switch', { name: 'Phone access' });
         fireEvent.click(toggle);
         expect(requests).toEqual([true]);
-        expect(screen.getByText('Starting…')).toBeInTheDocument();
+        expect(toggle).toHaveAttribute('aria-checked', 'false');
 
         mocked.getTunnelStatus.mockResolvedValue({
             active: true, url: 'https://x', token: 't', startedAt: null, error: null, publicIp: null,

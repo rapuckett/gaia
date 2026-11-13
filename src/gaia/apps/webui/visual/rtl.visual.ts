@@ -1764,11 +1764,22 @@ for (const locale of ['ar', 'en']) {
         expect(await audit(page)).toEqual([]);
     });
 
-    test(`Mobile access without ngrok (${locale})`, async ({ page }) => {
+    test(`Mobile access starts on Start; without ngrok it asks for setup (${locale})`, async ({ page }) => {
         const missing = { active: false, url: null, token: null, startedAt: null, publicIp: null, reason: 'ngrok_not_installed', installCommands: ['choco install ngrok'], error: 'ngrok is not installed. Install it from https://ngrok.com/download or run:\n    choco install ngrok' };
-        await open(page, '', locale, (p) => p.route('**/api/tunnel/start', (route) => route.fulfill({ json: missing })));
+        let started = 0;
+        await open(page, '', locale, (p) => p.route('**/api/tunnel/start', (route) => { started += 1; return route.fulfill({ json: missing }); }));
         await page.locator('.sb-icon-btn').filter({ has: page.locator('.lucide-smartphone') }).click();
         const dialog = page.locator('.mobile-modal');
+        // Opening starts nothing: one privacy line and a Start button, until it is pressed.
+        const start = dialog.getByRole('button', { name: /Start mobile access|ابدأ الوصول من الهاتف/ });
+        await expect(start).toBeVisible();
+        expect(started).toBe(0);
+        const startBox = await start.boundingBox();
+        const dialogBox = await dialog.boundingBox();
+        expect(startBox && dialogBox && startBox.x >= dialogBox.x && startBox.x + startBox.width <= dialogBox.x + dialogBox.width).toBe(true);
+        await shot(page, `mobile-access-start-${locale}`);
+        expect(await audit(page)).toEqual([]);
+        await start.click();
         await expect(dialog.locator('.tunnel-setup')).toBeVisible();
         // Desktop text names what is needed and where to get it, never a command to run (#7415).
         await expect(dialog).not.toContainText('choco');
