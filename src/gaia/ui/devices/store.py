@@ -192,6 +192,13 @@ class DeviceStore:
             ).fetchone()
         return self._device(row)
 
+    def get(self, device_id: str) -> Optional[Device]:
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT * FROM paired_devices WHERE id = ?", (device_id,)
+            ).fetchone()
+        return self._device(row) if row else None
+
     def revoke(self, device_id: str) -> bool:
         with self._lock, self._conn:
             gone = self._conn.execute(

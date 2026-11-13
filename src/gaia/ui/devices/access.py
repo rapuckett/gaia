@@ -16,6 +16,7 @@ import ipaddress
 import os
 import platform
 import socket
+import sqlite3
 import time
 from pathlib import Path
 from typing import Callable, List, Optional, Tuple
@@ -40,6 +41,7 @@ from .storage import (
     TABLE_NAME,
     DeviceCertificateError,
     UnsafeDeviceFolderError,
+    ensure_private_folder,
     load_identity,
     reset_folder,
     server_context,
@@ -159,6 +161,7 @@ class DeviceAccess:
 
     def _open_store(self) -> DeviceStore:
         if self._store is None:
+            ensure_private_folder(self.folder)
             self._store = DeviceStore(self.folder / TABLE_NAME, clock=self._clock)
         return self._store
 
@@ -229,7 +232,11 @@ class DeviceAccess:
         except GaiaConfigError as e:
             logger.error("Device listener not resumed: %s", e)
             return
-        store = self._existing_store()
+        try:
+            store = self._existing_store()
+        except UnsafeDeviceFolderError as e:
+            self._failed(ListenerError("unsafe_folder", str(e)))
+            return
         if store is None or store.setting(_LISTENER_SETTING) != "on":
             return
         try:
@@ -257,10 +264,16 @@ class DeviceAccess:
                 await self.stop(remember=False)
                 return
             store = self._store
-            if store is not None:
-                for device_id in await asyncio.to_thread(store.expire):
-                    logger.info("Device %s expired and was unpaired", device_id)
-                    self.requests.end(device_id)
+            if store is None:
+                continue
+            try:
+                expired = await asyncio.to_thread(store.expire)
+            except sqlite3.Error as e:
+                logger.error("Expiring idle devices failed (%s); trying again later", e)
+                continue
+            for device_id in expired:
+                logger.info("Device %s expired and was unpaired", device_id)
+                self.requests.end(device_id)
 
     # ── What the PC sees ──────────────────────────────────────────────────
 
@@ -288,6 +301,14 @@ class DeviceAccess:
     def devices(self) -> List[Device]:
         store = self._existing_store()
         return store.devices() if store else []
+
+    def now(self) -> float:
+        return self._clock()
+
+    def describe_id(self, device_id: str) -> Optional[dict]:
+        store = self._existing_store()
+        device = store.get(device_id) if store else None
+        return self.describe(device) if device else None
 
     @staticmethod
     def describe(device: Device) -> dict:
@@ -334,7 +355,9 @@ class DeviceAccess:
             "exp": int(expires_at),
         }
 
-    def redeem(self, invitation: str, device_name: str, platform_name: str, peer: str):
+    def redeem(
+        self, invitation: str, device_name: str, platform_name: str, peer: str
+    ) -> dict:
         """Pair a device with *invitation*; its new pending record and token.
 
         Raises:
@@ -369,12 +392,15 @@ class DeviceAccess:
             logger.info("Device %s allowed", device_id)
         return device
 
-    def revoke(self, device_id: str) -> bool:
+    def revoke(self, device_id: str, *, end_requests: bool = True) -> bool:
+        """Unpair a device; its open requests end too unless *end_requests* is
+        False, for a device unpairing itself, whose own request must finish."""
         store = self._existing_store()
         gone = bool(store and store.revoke(device_id))
         if gone:
             logger.info("Device %s unpaired", device_id)
-            self.requests.end(device_id)
+            if end_requests:
+                self.requests.end(device_id)
         return gone
 
     async def reset(self) -> None:

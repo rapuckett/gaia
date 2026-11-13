@@ -59,6 +59,18 @@ ListenerErrorCode = Literal[
     "port_in_use", "unsafe_folder", "certificate", "start_failed"
 ]
 LISTENER_ERROR_CODES = get_args(ListenerErrorCode)
+#: Why the PC can't show a pairing code: the listener is off, or the PC has
+#: no home-network address to put in it.
+PairingErrorCode = Literal["listener_off", "no_home_network"]
+
+#: What the PC's windows hear on ``/api/sessions/events`` when a device pairs,
+#: and the only actions that notification offers: allowing happens in the
+#: device list alone.
+DEVICE_PAIRED_EVENT = "device_paired"
+DEVICE_PAIRED_ACTIONS = ("review", "deny")
+#: And when an address is locked out for failing to pair too often.
+SECURITY_ALERT_EVENT = "security_alert"
+PAIRING_LOCKOUT_ALERT = "pairing_locked_out"
 
 #: Invitation and token sizes. A token starts with the prefix, so a leaked
 #: one is recognizable; only its SHA-256 is stored.

@@ -11,7 +11,9 @@ checks the certificate pin before it sends anything.
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
+import os
 import socket
 import ssl
 import threading
@@ -19,11 +21,15 @@ import time
 import uuid
 from types import SimpleNamespace
 
+import httpx
 import pytest
 from fastapi.testclient import TestClient
 
+from gaia.config import GaiaConfig
 from gaia.ui.devices.access import DeviceAccess
 from gaia.ui.devices.listener import DeviceGate, ListenerError
+from gaia.ui.devices.store import token_hash
+from gaia.ui.routers import sessions as sessions_router
 from gaia.ui.security import ListenerScopeMiddleware
 from gaia.ui.server import create_app
 
@@ -89,15 +95,25 @@ def _tunnel_token(app) -> str:
     return tunnel._token
 
 
+def _served_count(served, expected):
+    """uvicorn counts a request after writing its response, on its own thread."""
+    deadline = time.monotonic() + 5
+    while served.access.requests_served < expected and time.monotonic() < deadline:
+        time.sleep(0.01)
+    return served.access.requests_served
+
+
 def test_client_checks_pin_before_sending(served):
     """The pin is the served leaf's SHA-256; a wrong one sends no request."""
     status, _, _ = call(served.port, served.pin, "GET", "/api/sessions")
     assert status == 401
-    assert served.access.requests_served == 1
+    assert _served_count(served, 1) == 1
 
     with pytest.raises(PinMismatch):
         call(served.port, "0" * 64, "GET", "/api/sessions")
-    assert served.access.requests_served == 1
+    call(served.port, served.pin, "GET", "/api/sessions")
+    # Had the mismatched connection sent its request, this would be 3.
+    assert _served_count(served, 2) == 2
 
 
 def test_tls_min_version_1_2(served):
@@ -176,9 +192,10 @@ async def _through_gate(app, scope, allow_loopback=False):
 )
 def test_listener_refuses(served, case):
     device = _pair(served)
-    get = lambda path, **kw: call(
-        served.port, served.pin, "GET", path, **kw
-    )  # noqa: E731
+
+    def get(path, **kwargs):
+        return call(served.port, served.pin, "GET", path, **kwargs)
+
     if case == "no-token":
         assert get("/api/sessions")[0] == 401
     elif case == "tunnel-token":
@@ -237,12 +254,126 @@ def test_listener_refuses(served, case):
         assert resp.status_code == 401 and "plain http" in resp.json()["detail"]
 
 
-def test_an_allowed_device_is_served(served):
-    device = _pair(served)
-    status, headers, _ = call(
-        served.port, served.pin, "GET", "/api/sessions", token=device["token"]
+def _pc(served, method, path, **kwargs):
+    """The PC's own call to the main app, on the listener's loop."""
+
+    async def go():
+        transport = httpx.ASGITransport(app=served.app, client=PC)
+        async with httpx.AsyncClient(
+            transport=transport, base_url="http://127.0.0.1:4200"
+        ) as client:
+            return await client.request(
+                method, path, headers={"X-Gaia-UI": "1"}, **kwargs
+            )
+
+    return served.run(go())
+
+
+def _redeem(served, invite, pin=None):
+    status, headers, body = call(
+        served.port,
+        pin or served.pin,
+        "POST",
+        "/api/devices/pair",
+        body={
+            "invitation": invite,
+            "device_name": "Rich's \u202ePhone",
+            "platform": "ios",
+        },
     )
-    assert status == 200
+    return status, headers, json.loads(body)
+
+
+def test_pair_allow_use_and_unpair(served):
+    GaiaConfig.save_key("device_pairing", True)
+    events = served.run(sessions_router._system_emitter.subscribe())
+    assert _pc(served, "POST", "/api/devices/listener").json()["listening"] is True
+    offer = _pc(served, "POST", "/api/devices/pairing").json()
+    assert offer["origins"] == [f"https://127.0.0.1:{served.port}"]
+    assert offer["pin"] == served.pin
+
+    status, headers, paired = _redeem(served, offer["invite"])
+    assert status == 200 and headers["cache-control"] == "no-store"
+    token = paired["token"]
+    assert paired["status"] == "pending" and paired["pc_id"] == offer["pc_id"]
+    event = served.run(asyncio.wait_for(events.get(), 5))
+    assert event["type"] == "device_paired" and event["actions"] == ["review", "deny"]
+    assert event["device"]["id"] == paired["device_id"]
+
+    assert call(served.port, served.pin, "GET", "/api/sessions", token=token)[0] == 403
+    listing = _pc(served, "GET", "/api/devices")
+    status_now = _pc(served, "GET", "/api/devices/status")
+    for resp in (listing, status_now):
+        assert resp.headers["cache-control"] == "no-store"
+        for secret in (token, token[:14], token_hash(token), offer["invite"]):
+            assert secret not in resp.text
+    (device,) = listing.json()["devices"]
+    assert device["name"] == "Rich's Phone" and device["status"] == "pending"
+    assert device["expires_at"] is not None
+    assert status_now.json()["pairing_open"] is False
+
+    allowed = _pc(served, "POST", f"/api/devices/{paired['device_id']}/allow")
+    assert allowed.json()["status"] == "allowed"
+    assert call(served.port, served.pin, "GET", "/api/sessions", token=token)[0] == 200
+
+    gone = call(served.port, served.pin, "DELETE", "/api/devices/me", token=token)
+    assert gone[0] == 204
+    assert call(served.port, served.pin, "GET", "/api/sessions", token=token)[0] == 401
+    assert _pc(served, "GET", "/api/devices").json()["devices"] == []
+
+
+def test_pair_window_closed_gives_uniform_refusal(served):
+    GaiaConfig.save_key("device_pairing", True)
+    events = served.run(sessions_router._system_emitter.subscribe())
+    _pc(served, "DELETE", "/api/devices/pairing")
+    refusals = [_redeem(served, "no-window-is-open")]
+    invite = _pc(served, "POST", "/api/devices/pairing").json()["invite"]
+    refusals.append(_redeem(served, "not-the-code"))
+    assert _redeem(served, invite)[0] == 200
+    refusals.append(_redeem(served, invite))
+    assert {status for status, _, _ in refusals} == {403}
+    assert len({json.dumps(body) for _, _, body in refusals}) == 1
+
+    reasons = _pc(served, "GET", "/api/devices/status").json()["failed_redemptions"]
+    assert [r["reason"] for r in reasons] == ["closed", "wrong", "used"]
+    assert {r["address"] for r in reasons} == {"127.0.0.1"}
+
+    served.run(asyncio.wait_for(events.get(), 5))  # the pairing itself
+    for _ in range(2):
+        assert _redeem(served, "guess")[0] == 403
+    alert = served.run(asyncio.wait_for(events.get(), 5))
+    assert alert["type"] == "security_alert" and alert["kind"] == "pairing_locked_out"
+    status, headers, _ = _redeem(served, "guess")
+    assert status == 429 and int(headers["retry-after"]) > 0
+
+
+def test_reset_rotates_key_and_revokes_all(served):
+    GaiaConfig.save_key("device_pairing", True)
+    old_pin = served.pin
+    paired = _pair(served)
+    pc_id = served.access.open_pairing()["pc_id"]
+
+    _pc(served, "DELETE", "/api/devices/listener")
+    if os.name != "nt":  # mode bits only widen access on POSIX
+        (served.access.folder / "listener.key").chmod(0o644)
+        refused = _pc(served, "POST", "/api/devices/listener")
+        assert refused.status_code == 409
+        assert refused.json()["detail"]["code"] == "unsafe_folder"
+        status = _pc(served, "GET", "/api/devices/status").json()
+        assert status["error_code"] == "unsafe_folder"
+
+    assert _pc(served, "POST", "/api/devices/pairing/reset").status_code == 200
+    now_on = _pc(served, "POST", "/api/devices/listener").json()
+    assert now_on["listening"] is True and now_on["error_code"] is None
+    offer = _pc(served, "POST", "/api/devices/pairing").json()
+    assert offer["pin"] != old_pin and offer["pc_id"] == pc_id
+    with pytest.raises(PinMismatch):
+        call(now_on["port"], old_pin, "GET", "/api/sessions")
+    status, _, _ = call(
+        now_on["port"], offer["pin"], "GET", "/api/sessions", token=paired["token"]
+    )
+    assert status == 401
+    assert _pc(served, "GET", "/api/devices").json()["devices"] == []
 
 
 def test_revoke_closes_inflight_stream(served):

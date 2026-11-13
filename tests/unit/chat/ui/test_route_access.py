@@ -13,6 +13,8 @@ fails for a route nobody has decided about:
   access, never a paired device (``refuse_on_device_listener``).
 * ``remote``: the PC, mobile access with its token, and allowed devices.
 * ``web``: the web UI and the API docs, which the device listener never serves.
+* ``pair``: the pairing redemption, only on the device listener, with no token.
+* ``device_self``: a paired device unpairing itself, pending or allowed.
 """
 
 from __future__ import annotations
@@ -27,6 +29,7 @@ from starlette.exceptions import HTTPException
 from starlette.requests import Request
 from starlette.routing import Mount
 
+from gaia.config import GaiaConfig
 from gaia.ui import security
 from gaia.ui.devices.access import DeviceAccess
 from gaia.ui.devices.listener import DeviceGate
@@ -46,9 +49,14 @@ PC = ("127.0.0.1", 50000)
 PC_ONLY = {
     "DELETE /api/agents/{agent_id}",
     "DELETE /api/connectors/{connector_id}/activations/{agent_id:path}",
+    "DELETE /api/devices/listener",
+    "DELETE /api/devices/pairing",
+    "DELETE /api/devices/{device_id}",
     "DELETE /api/providers/{provider}/key",
     "GET /api/connectors/_debug",
     "GET /api/connectors/eval-mailbox",
+    "GET /api/devices",
+    "GET /api/devices/status",
     "GET /api/logs",
     "GET /api/logs/{source}",
     "GET /api/messaging/discord",
@@ -58,6 +66,10 @@ PC_ONLY = {
     "POST /api/connectors/{connector_id}/authorize",
     "POST /api/connectors/{connector_id}/authorize-device",
     "POST /api/connectors/{connector_id}/configure",
+    "POST /api/devices/listener",
+    "POST /api/devices/pairing",
+    "POST /api/devices/pairing/reset",
+    "POST /api/devices/{device_id}/allow",
     "POST /api/eval/scripted-user",
     "POST /api/files/open",
     "POST /api/gpu-memory/apply",
@@ -97,6 +109,10 @@ PC_OR_DEVICE = {
 NOT_ON_LISTENER = {
     "GET /api/providers",
 }
+
+PAIR = {"POST /api/devices/pair"}
+
+DEVICE_SELF = {"DELETE /api/devices/me"}
 
 WEB = {
     "GET /docs",
@@ -331,6 +347,8 @@ EXPECTED = {
     **{r: "pc" for r in PC_ONLY},
     **{r: "pc_or_device" for r in PC_OR_DEVICE},
     **{r: "not_on_listener" for r in NOT_ON_LISTENER},
+    **{r: "pair" for r in PAIR},
+    **{r: "device_self" for r in DEVICE_SELF},
     **{r: "web" for r in WEB},
     **{r: "remote" for r in REMOTE},
 }
@@ -343,11 +361,15 @@ LETS_IN = {
     "not_on_listener": {"pc", "tunnel"},
     "remote": {"pc", "tunnel", "device"},
     "web": {"pc", "tunnel"},
+    "pair": {"device", "pending", "no_token"},
+    "device_self": {"device", "pending"},
 }
 GUARDS = (
     security.require_local_pc,
     security.require_pc_or_device,
     security.refuse_on_device_listener,
+    security.require_device_listener,
+    security.require_device,
 )
 
 
@@ -399,6 +421,10 @@ def _access_class(key, route):
         return "pc_or_device"
     if security.refuse_on_device_listener in guards:
         return "not_on_listener"
+    if security.require_device_listener in guards:
+        return "pair"
+    if security.require_device in guards:
+        return "device_self"
     return "remote"
 
 
@@ -406,8 +432,12 @@ def _request_for(caller, device):
     scope = {"type": "http", "method": "GET", "path": "/", "headers": [], "client": PC}
     if caller == "tunnel":
         scope["headers"] = [(b"x-forwarded-for", b"203.0.113.7")]
-    elif caller == "device":
-        scope.update({LISTENER_SCOPE_KEY: LAN_LISTENER, DEVICE_SCOPE_KEY: device})
+    elif caller in ("device", "pending", "no_token"):
+        scope[LISTENER_SCOPE_KEY] = LAN_LISTENER
+        if caller != "no_token":
+            scope[DEVICE_SCOPE_KEY] = DevicePrincipal(
+                device.device_id, caller == "device"
+            )
     return Request(scope)
 
 
@@ -471,6 +501,8 @@ def test_every_route_is_classified(setup):
     guards without sending it, since the route would do its work.
     """
     app, clients, device = setup
+    # On, so the device routes' own guards decide rather than the switch.
+    GaiaConfig.save_key("device_pairing", True)
     routes = _routes(app)
     actual = {key: _access_class(key, route) for key, route in routes.items()}
     assert len(actual) > 200, "the route walk found too little to check"
@@ -489,7 +521,10 @@ def test_every_route_is_classified(setup):
     for key, route in sorted(routes.items()):
         access_class = actual[key]
         method, path = _request_path(key)
-        refusals = {404} if access_class == "web" else {401, 403}
+        refusals = {404} if access_class in ("web", "pair") else {401, 403}
+        if path.startswith("/api/devices"):
+            # Reads are GETs; everything that changes state is POST or DELETE.
+            assert method in ("GET", "POST", "DELETE"), key
         for caller in CALLERS:
             if caller in LETS_IN[access_class]:
                 request = _request_for(caller, device)

@@ -316,6 +316,26 @@ def require_pc_or_device(request: Request) -> None:
         )
 
 
+def require_device_listener(request: Request) -> None:
+    """A route that exists only on the device listener: a 404 anywhere else."""
+    if not on_device_listener(request):
+        raise HTTPException(status_code=404, detail="Not Found")
+
+
+def require_device(request: Request) -> str:
+    """A paired device acting on itself; its id."""
+    device = (
+        request.scope.get(DEVICE_SCOPE_KEY) if on_device_listener(request) else None
+    )
+    if not isinstance(device, DevicePrincipal):
+        raise HTTPException(
+            status_code=403,
+            detail="Only a paired device can do this, with its own token. On the "
+            "PC, unpair it from the device list.",
+        )
+    return device.device_id
+
+
 def refuse_on_device_listener(request: Request) -> None:
     """For a read with side effects on the PC that a paired device may not cause."""
     if on_device_listener(request):

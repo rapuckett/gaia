@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import hmac
 import os
@@ -15,6 +16,7 @@ import threading
 from pathlib import Path
 
 import pytest
+from fastapi.testclient import TestClient
 
 from gaia import env as gaia_env
 from gaia.config import GaiaConfig
@@ -27,6 +29,7 @@ from gaia.ui.devices import (
 )
 from gaia.ui.devices import pairing as pairing_mod
 from gaia.ui.devices import store as store_mod
+from gaia.ui.devices.access import DeviceAccess
 from gaia.ui.devices.pairing import (
     PairingRefused,
     PairingWindow,
@@ -35,10 +38,14 @@ from gaia.ui.devices.pairing import (
 from gaia.ui.devices.storage import (
     DeviceCertificateError,
     UnsafeDeviceFolderError,
+    ensure_private_folder,
     load_identity,
     pin_of,
 )
 from gaia.ui.devices.store import DeviceStore, token_hash
+from gaia.ui.server import create_app
+
+pytestmark = pytest.mark.allow_network  # TestClient only; nothing leaves the machine
 
 
 class Clock:
@@ -64,6 +71,23 @@ def test_device_pairing_not_enabled_by_env_or_dotenv(tmp_path, monkeypatch):
     gaia_env.load_env()
 
     assert GaiaConfig.load().device_pairing is False
+    app = create_app(db_path=":memory:")
+    app.state.devices = DeviceAccess(app, folder=tmp_path / "devices", port=0)
+    pc = TestClient(app, client=("127.0.0.1", 50000))
+    for method, path in [
+        ("GET", "/api/devices"),
+        ("GET", "/api/devices/status"),
+        ("POST", "/api/devices/listener"),
+        ("POST", "/api/devices/pairing"),
+        ("POST", "/api/devices/pairing/reset"),
+        ("POST", "/api/devices/pair"),
+        ("DELETE", "/api/devices/me"),
+    ]:
+        resp = pc.request(method, path, json={})
+        assert resp.status_code == 403 and "device_pairing" in resp.text, path
+    asyncio.run(app.state.devices.resume())
+    assert not app.state.devices.listening
+    assert not (tmp_path / "devices").exists()
 
     GaiaConfig.save_key("device_pairing", "true")
     assert GaiaConfig.load().device_pairing is True
@@ -113,18 +137,19 @@ def test_device_folder_acl_is_owner_only_on_windows(tmp_path):
 
 
 def test_device_token_256_bit_and_stored_hashed(tmp_path, monkeypatch):
-    store = DeviceStore(tmp_path / "paired.db")
+    table = ensure_private_folder(tmp_path / "devices") / "paired.db"
+    store = DeviceStore(table)
     device, token = store.add_pending("Pixel", "android")
     _, other = store.add_pending("iPad", "ipados")
 
     assert token.startswith(DEVICE_TOKEN_PREFIX) and token != other
     raw = token[len(DEVICE_TOKEN_PREFIX) :]
     assert len(base64.urlsafe_b64decode(raw + "=" * (-len(raw) % 4))) == 32
-    stored = sqlite3.connect(tmp_path / "paired.db").execute(
+    stored = sqlite3.connect(table).execute(
         "SELECT token_hash FROM paired_devices WHERE id = ?", (device.id,)
     )
     assert stored.fetchone() == (token_hash(token),)
-    assert token.encode() not in (tmp_path / "paired.db").read_bytes()
+    assert token.encode() not in table.read_bytes()
 
     compared, real_compare = [], hmac.compare_digest
 
@@ -135,13 +160,15 @@ def test_device_token_256_bit_and_stored_hashed(tmp_path, monkeypatch):
     monkeypatch.setattr(store_mod.hmac, "compare_digest", spy)
     assert store.authenticate(token).id == device.id
     assert compared == [(token_hash(token), token_hash(token))]
-    assert store.authenticate(token[:-1] + "A") is None
+    assert store.authenticate(token[:-1] + ("B" if token[-1] == "A" else "A")) is None
     assert store.authenticate("00000000-0000-4000-8000-000000000000") is None
 
 
 def test_idle_and_pending_devices_expire(tmp_path):
     clock = Clock()
-    store = DeviceStore(tmp_path / "paired.db", clock=clock)
+    store = DeviceStore(
+        ensure_private_folder(tmp_path / "devices") / "paired.db", clock=clock
+    )
     waiting, waiting_token = store.add_pending("Phone", "ios")
     used, used_token = store.add_pending("Tablet", "ipados")
     assert store.allow(used.id).allowed
@@ -245,3 +272,40 @@ def test_device_name_sanitized():
     assert len(sanitize_device_name("x" * 500)) == 64
     with pytest.raises(ValueError):
         sanitize_device_name("⁦⁩\x00 ")
+
+
+def test_diagnostics_bundle_excludes_phone_secrets(tmp_path, monkeypatch):
+    import argparse
+    import subprocess
+    import tarfile
+
+    from gaia import cli
+
+    gaia_dir = tmp_path / ".gaia"
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path))
+    monkeypatch.setenv("GAIA_HOME", str(gaia_dir))
+    monkeypatch.setenv("GAIA_DAEMON_HOME", str(tmp_path / "daemon-home"))
+    monkeypatch.delenv("GAIA_CONFIG_DIR", raising=False)
+    monkeypatch.setattr(
+        cli.subprocess,
+        "run",
+        lambda cmd, **_: subprocess.CompletedProcess(cmd, 0, stdout="", stderr=""),
+    )
+    identity = load_identity(gaia_dir / "devices")
+    store = DeviceStore(gaia_dir / "devices" / "paired.db")
+    _, token = store.add_pending("Phone", "ios")
+    store.close()
+    (gaia_dir / "gaia.log").write_text("gaia\n", encoding="utf-8")
+
+    bundle = tmp_path / "bundle.tgz"
+    cli.handle_diagnostics_command(
+        argparse.Namespace(output=str(bundle), no_logs=False)
+    )
+    with tarfile.open(bundle) as tar:
+        members = {m.name: tar.extractfile(m).read() for m in tar if m.isfile()}
+
+    assert "gaia.log" in members
+    assert not [name for name in members if "devices" in name.split("/")]
+    key = identity.key_path.read_bytes()
+    for blob in members.values():
+        assert key not in blob and token.encode() not in blob
