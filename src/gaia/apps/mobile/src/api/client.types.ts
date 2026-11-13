@@ -2,10 +2,13 @@
 // SPDX-License-Identifier: MIT
 
 import type { Message, Session, StreamEvent, SystemStatus } from '@webui/types';
-import type { CreateSessionRequest, ToolConfirmRequest, UserInputRequest } from '@webui/types/api.gen';
+import type { CreateSessionRequest, ToolConfirmRequest, UserInputRequest as ApiUserInputRequest } from '@webui/types/api.gen';
 
 export type { Message, Session, StreamEvent, SystemStatus } from '@webui/types';
-export type { CreateSessionRequest, ToolConfirmRequest, UserInputRequest } from '@webui/types/api.gen';
+export type { CreateSessionRequest, ToolConfirmRequest } from '@webui/types/api.gen';
+
+/** `display` is what the phone shows as the answer; it is never sent to GAIA. */
+export type UserInputRequest = ApiUserInputRequest & { display?: string };
 
 export interface SessionList {
     sessions: Session[];
