@@ -13,6 +13,7 @@ import {
     Disclosure,
     EmptyState,
     ErrorState,
+    Icon,
     List,
     ListRow,
     ListSkeleton,
@@ -70,6 +71,8 @@ export function ListsGallery() {
                 <Section title="ListRow">
                     <ListRow title={t('modelStatus.model')} subtitle={t('row.status.running')} leading={<StatusDot tone="running" label={t('row.status.running')} />} trailing={<Badge label="3" tone="accent" />} onPress={() => {}} />
                     <ListRow title={long} subtitle={t('logs.hint.service')} onPress={() => {}} selected />
+                    <ListRow title={t('modelStatus.model')} subtitle={t('chatError.connection')} subtitleTone="danger" onPress={() => {}} />
+                    <ListRow title="quarterly-report.pdf" subtitle={t('row.status.running')} selected trailing={<Icon icon={Copy} />} onPress={() => {}} />
                     <ListRow title={long} titleLines={2} subtitle={t('env.offline')} trailing={<Badge label="12" />} />
                 </Section>
 
