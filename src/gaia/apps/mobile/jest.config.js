@@ -23,10 +23,11 @@ const project = (preset) => ({
     displayName: preset,
     preset: `jest-expo/${preset}`,
     moduleNameMapper,
+    setupFiles: ['<rootDir>/jest.setup.js'],
     transformIgnorePatterns,
     testMatch: ['<rootDir>/src/**/*.test.{ts,tsx}'],
-    // Sheets are native-only: the web project has no BackHandler or native gesture module to test.
-    testPathIgnorePatterns: preset === 'web' ? ['/node_modules/', '/SheetHost\\.test\\.tsx$'] : ['/node_modules/'],
+    // Sheets are native-only (no BackHandler or native gesture module on web), and the component test renderer can't mount react-native-web's DOM.
+    testPathIgnorePatterns: preset === 'web' ? ['/node_modules/', '/SheetHost\\.test\\.tsx$', '/Markdown\\.test\\.tsx$'] : ['/node_modules/'],
 });
 
 module.exports = {
