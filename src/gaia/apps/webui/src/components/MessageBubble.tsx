@@ -24,6 +24,7 @@ import { ReadAloudButton, ReadAloudError, ReadAloudNote } from './ReadAloudButto
 import { TroubleshootingReport, namesFailureRecord, type ReportClasses } from './TroubleshootingReport';
 import { CODE_COLLAPSE_LINES, CODE_PREVIEW_LINES, ExpandToggle, countLines, isLongUserMessage, lineCount, sizeLabel } from './LongContent';
 import { dateLocale, useT, type Translate } from '../i18n/useT';
+import { CUT_OFF_NOTICE_TEXT } from '../utils/constants';
 import type { MessageKey } from '../i18n/registry';
 import { useChatStore } from '../stores/chatStore';
 import { useLogsStore } from '../stores/logsStore';
@@ -450,9 +451,9 @@ const SERVER_CANCELLED_TEXT = 'Cancelled.';
 
 /** The notices that close a turn cut off before its answer (gaia/ui/restart_recovery.py), and their translations. */
 const CUT_OFF_NOTICES: ReadonlyArray<readonly [string, MessageKey]> = [
-    ['This answer was interrupted when GAIA closed. Send again to retry.', 'msg.cutOff.interrupted'],
-    ['This answer was interrupted before it finished. Send again to retry.', 'msg.cutOff.cancelled'],
-    ['This answer ended before GAIA could save a reply. Send again to retry.', 'msg.cutOff.noReply'],
+    [CUT_OFF_NOTICE_TEXT.interrupted, 'msg.cutOff.interrupted'],
+    [CUT_OFF_NOTICE_TEXT.cancelled, 'msg.cutOff.cancelled'],
+    [CUT_OFF_NOTICE_TEXT.noReply, 'msg.cutOff.noReply'],
 ];
 
 /** restart_recovery.tools_ran_notice, the line the server puts just above a cut-off notice. */
@@ -827,7 +828,7 @@ export function MessageBubble({ message, isStreaming, agentSteps, agentStepsActi
                                 </span>
                             )}
                             {message.stats?.retried && message.stats.model && (
-                                <span title={`This answer was kept from Retry with… (${message.stats.model})`}>{displayModelName(message.stats.model)}</span>
+                                <span title={t('msg.retriedWithTitle', { model: message.stats.model })}>{displayModelName(message.stats.model)}</span>
                             )}
                             <AnswerStats latencyMs={latencyMs} stats={message.stats} ended={turnEnding(message.content, stopState, isError)} />
                         </div>
@@ -958,6 +959,7 @@ function inlineCodePath(children: React.ReactNode): string | null {
 }
 
 function FilePathLink({ path, label }: { path: string; label?: string }) {
+    const t = useT();
     const handleClick = (e: React.MouseEvent) => {
         e.preventDefault();
         api.openFileOrFolder(path).catch((err) => {
@@ -969,7 +971,7 @@ function FilePathLink({ path, label }: { path: string; label?: string }) {
             className="file-path-link"
             dir="ltr"
             onClick={handleClick}
-            title={`Open in file explorer: ${path}`}
+            title={t('msg.openInExplorer', { path })}
             role="button"
             tabIndex={0}
             onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleClick(e as unknown as React.MouseEvent); } }}
