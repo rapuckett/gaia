@@ -52,6 +52,7 @@ from gaia.eval.fixture_env import localize
 from gaia.eval.process_tree import kill_tree as _kill_tree
 from gaia.eval.scenario_backend import ScenarioBackend, validate_approve_prompts
 from gaia.eval.scorecard import NOT_RUN, SKIPPED_STATUSES
+from gaia.home import gaia_home
 from gaia.llm.local_only import assert_provider_permitted, cloud_blocked
 
 logger = logging.getLogger(__name__)
@@ -166,8 +167,8 @@ REAL_WORLD_MANIFEST = REAL_WORLD_CORPUS_DIR / "manifest.json"
 
 # User-local directories for custom scenarios and corpus.
 # Auto-discovered if they exist; also addable via --scenario-dir / --corpus-dir.
-USER_SCENARIOS_DIR = Path.home() / ".gaia" / "eval" / "scenarios"
-USER_CORPUS_DIR = Path.home() / ".gaia" / "eval" / "corpus"
+USER_SCENARIOS_DIR = gaia_home() / "eval" / "scenarios"
+USER_CORPUS_DIR = gaia_home() / "eval" / "corpus"
 
 # Personas defined in eval/prompts/simulator.md.  validate_scenario enforces this list.
 # Custom personas are allowed — these are documented defaults.
@@ -4283,7 +4284,7 @@ def generate_corpus():
 # --capture-session: convert a real Agent UI conversation to a YAML scenario
 # ---------------------------------------------------------------------------
 
-GAIA_DB_PATH = Path.home() / ".gaia" / "chat" / "gaia_chat.db"
+GAIA_DB_PATH = gaia_home() / "chat" / "gaia_chat.db"
 
 
 def capture_session(session_id, output_dir=None, db_path=None):

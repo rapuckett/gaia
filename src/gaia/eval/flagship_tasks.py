@@ -65,6 +65,7 @@ from gaia.eval.bench.gateway import Gateway
 from gaia.eval.bench.leaks import Scrubber
 from gaia.eval.claude_credential import announce, resolve_claude_credential
 from gaia.eval.task_setups import SETUPS, remove_leftovers
+from gaia.home import gaia_home
 from gaia.llm.lemonade_client import (
     resolve_lemonade_api_key,
     resolve_lemonade_base_url,
@@ -1314,7 +1315,7 @@ def _revision() -> Optional[str]:
 def fenced_paths(config: BenchConfig, out_dir: Path) -> Tuple[Path, ...]:
     """What an agent must not read: the task definitions, every workdir, every result."""
     paths = [TASKS_DIR, config.work_root, out_dir.resolve().parent]
-    lemonade_state = Path.home() / ".gaia" / "lemonade"
+    lemonade_state = gaia_home() / "lemonade"
     if lemonade_state.exists():
         paths.append(lemonade_state)
     return tuple(paths)

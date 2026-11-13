@@ -14,9 +14,9 @@ import os
 import signal
 import sys
 import webbrowser
-from pathlib import Path
 from typing import Callable, List, Optional, Sequence, Set
 
+from gaia.home import gaia_home
 from gaia.logger import get_logger
 from gaia.messaging.slack import credentials, manifest, onboarding
 
@@ -24,7 +24,7 @@ log = get_logger(__name__)
 
 #: Where a backgrounded bridge records its pid, matching the Telegram adapter's
 #: layout so one supervisor convention covers both.
-PID_PATH = Path.home() / ".gaia" / "slack.pid"
+PID_PATH = gaia_home() / "slack.pid"
 
 
 def parse_allowed_users(raw: Optional[str]) -> Set[str]:
