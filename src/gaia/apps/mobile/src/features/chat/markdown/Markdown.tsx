@@ -2,12 +2,15 @@
 // SPDX-License-Identifier: MIT
 
 import type { PhrasingContent, Root, RootContent } from 'mdast';
-import { useMemo, type ReactNode } from 'react';
+import { useCallback, useMemo, type ReactNode } from 'react';
+import { Linking } from 'react-native';
 
 import { buildCitationIndex, type LibraryDoc } from '@webui/utils/citations';
 import { isolate } from '@webui/i18n/registry';
 import { useDirection, useT } from '@/i18n/useT';
-import { Divider, HScroll, Icon, Row, Stack, Surface, Text } from '@/ui';
+import { documentFileUrl } from '@/api/constants';
+import { useConnectionStore } from '@/state/connection';
+import { Divider, HScroll, Icon, Notice, Row, Stack, Surface, Text } from '@/ui';
 import { Check, Square } from '@/ui/icons';
 
 import { CodeBlock } from './CodeBlock';
@@ -25,6 +28,7 @@ export interface MarkdownProps {
     documents?: LibraryDoc[];
     /** Library notices the server sent with the answer, shown under it. */
     notes?: string[];
+    /** Replaces opening the file in the system browser from the paired PC. */
     onOpenCitation?: (doc: LibraryDoc, page?: number) => void;
 }
 
@@ -149,14 +153,31 @@ function endsInline(tree: Root): boolean {
     return last?.type === 'paragraph' || last?.type === 'heading';
 }
 
+/** Opens a cited library file in the system browser, at its page, from the paired PC. */
+function useOpenCitation(): (doc: LibraryDoc, page?: number) => void {
+    const baseUrl = useConnectionStore((state) => state.connection?.baseUrl);
+    return useCallback(
+        (doc, page) => {
+            if (!baseUrl) {
+                console.error(`Opening ${doc.filename} needs a paired PC, and none is connected. Pair this phone with GAIA first.`);
+                return;
+            }
+            const url = documentFileUrl(baseUrl, doc.id, page);
+            Linking.openURL(url).catch((error: unknown) => console.error(`Opening ${url} failed`, error));
+        },
+        [baseUrl],
+    );
+}
+
 /** An assistant answer as native Markdown: the same parser and rules as the web UI's answer. */
 export function Markdown({ text, streaming = false, documents = NO_DOCS as LibraryDoc[], notes, onOpenCitation }: MarkdownProps) {
     const t = useT();
+    const openCitation = useOpenCitation();
     const uiDir = useDirection();
     const shown = useThrottledText(text, streaming, STREAM_PARSE_MS);
     const tree = useMemo(() => parseAnswer(shown, streaming), [shown, streaming]);
     const index = useMemo(() => buildCitationIndex(documents), [documents]);
-    const ctx: RenderContext = { index, t, onOpenCitation, uiDir, streaming };
+    const ctx: RenderContext = { index, t, onOpenCitation: onOpenCitation ?? openCitation, uiDir, streaming };
     const caretInline = streaming && endsInline(tree);
 
     return (
@@ -168,11 +189,9 @@ export function Markdown({ text, streaming = false, documents = NO_DOCS as Libra
                 </Text>
             )}
             {notes && notes.length > 0 && (
-                <Stack gap="xs">
+                <Stack gap="sm">
                     {notes.map((note, i) => (
-                        <Text key={`${i}-${note}`} role="caption" tone="muted" dir={contentDir(note, uiDir)}>
-                            {note}
-                        </Text>
+                        <Notice key={`${i}-${note}`} tone="info" role="note" message={note} />
                     ))}
                 </Stack>
             )}

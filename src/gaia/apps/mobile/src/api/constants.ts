@@ -13,10 +13,17 @@ export const ENDPOINTS = {
     sessions: '/api/sessions',
     sessionMessages: '/api/sessions/{session_id}/messages',
     chatSend: '/api/chat/send',
+    documentFile: '/api/documents/{doc_id}/file',
 } as const;
 
 export function sessionMessagesPath(sessionId: string): string {
     return ENDPOINTS.sessionMessages.replace('{session_id}', encodeURIComponent(sessionId));
+}
+
+/** The library file's URL, as the web UI's `documentFileUrl` builds it: the page rides in the fragment. */
+export function documentFileUrl(baseUrl: string, docId: string, page?: number): string {
+    const path = ENDPOINTS.documentFile.replace('{doc_id}', encodeURIComponent(docId));
+    return `${baseUrl.replace(/\/+$/, '')}${path}${page ? `#page=${page}` : ''}`;
 }
 
 export const SESSION_PAGE_SIZE = 200;

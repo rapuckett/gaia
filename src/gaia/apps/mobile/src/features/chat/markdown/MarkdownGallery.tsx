@@ -28,7 +28,6 @@ export function MarkdownGallery() {
                             text={sample.text}
                             streaming={sample.streaming}
                             documents={sample.cite ? LIBRARY : undefined}
-                            onOpenCitation={sample.cite ? () => undefined : undefined}
                             notes={sample.cite ? ['Added to your library as a copy.'] : undefined}
                         />
                         <Divider />

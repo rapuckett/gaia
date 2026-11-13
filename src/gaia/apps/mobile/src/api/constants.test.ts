@@ -56,6 +56,7 @@ describe('endpoints', () => {
         sessions: 'GET',
         sessionMessages: 'GET',
         chatSend: 'POST',
+        documentFile: 'GET',
     };
 
     it.each(Object.entries(ENDPOINTS))('%s (%s) has a route under src/gaia/ui', (name, path) => {
