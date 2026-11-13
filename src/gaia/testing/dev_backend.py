@@ -107,13 +107,15 @@ def load_script(path: Optional[str]) -> List[Dict[str, Any]]:
 
 def validate_home(home: Optional[str]) -> Path:
     """The resolved ``--home``, refusing one that is missing or is/inside ``~/.gaia``."""
+    from gaia.home import default_gaia_home
+
     if not home:
         raise DevBackendError(
             "--home is required: pass a dedicated directory for this backend's "
             "state, e.g. --home $(mktemp -d)."
         )
     resolved = Path(home).expanduser().resolve()
-    real = (Path.home() / ".gaia").resolve()
+    real = default_gaia_home().resolve()
     if resolved == real or real in resolved.parents:
         raise DevBackendError(
             f"--home {resolved} is or is inside {real}, the installed GAIA's "
