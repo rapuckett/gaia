@@ -1,0 +1,30 @@
+date	lane	task	category	model	tokens	tool_uses	minutes	first_pass_ok	rework_rounds	ci_first_push	notes	cost_usd
+2026-11-12	lead	Create .venv, webui npm ci, first verify.sh run	setup	sonnet	87027			yes	0		est:3089bc2a	0.309736
+2026-11-12	lead	Land mobile/docs-mobile-access-setup	landing	haiku	81558			yes	0		est:4263e65f	0.013108
+2026-11-12	parity	Parity inventory: chat surfaces (64 components)	research	sonnet	390330			yes	0		est:05a871af	5.951109
+2026-11-12	parity	Parity inventory: settings, setup, system status (61 components)	research	sonnet	330929			yes	0		est:a593d3d8	4.583916
+2026-11-12	parity	Parity inventory: library, memory, schedules, mobile access, shell, PC-only routes	research	sonnet	353456			yes	0		est:49223859	6.021245
+2026-11-12	lead	Security review: phone transport T1 design (pinned TLS, pairing, device tokens)	security-review	opus	139839			yes	0		est:b9315a00	1.541525
+2026-11-13	lead	Full mobile-app parity backlog with estimates, recorded as a Central sprint	planning	opus	257998			yes	0		est:7b7e073e	5.400212
+2026-11-13	parity	Web UI prep: Make the upstream watch flag catalog, schema, constants and token changes as app rows to update	tooling	haiku	126096			yes	0		est:ad65db28	0.044152
+2026-11-13	lead	Rebuild .venv on Python 3.12 and get verify.sh green	setup	sonnet	121700			yes	0		est:921ac895	2.045135
+2026-11-13	lead	dev-kit: node22.sh refuses stale Node; landing_claim accepts <repo>-integration locks	tooling	sonnet	141867			yes	0		est:a645dd21	2.661364
+2026-11-13	design	Read-only screenshot audit of Rich's installed GAIA 0.25.0 (8 variants, every reachable surface)	audit	sonnet	155408			yes	0		est:23cd454d	3.526854
+2026-11-13	parity	Map Design's 0.25.4 installed audit onto the parity matrix	research	sonnet	122980			yes	0		est:6b73fd7c	0.69625
+2026-11-13	design	Arabic pass of installed GAIA 0.25.4 (390 and 1280, light, every reachable screen)	audit	sonnet	81115			yes	0		est:3f08283b	
+2026-11-13	parity	Map Design's 0.25.4 Arabic pass onto the parity matrix	research	sonnet	148043			yes	0		est:7811a837	
+2026-11-13	lead	Fix the 9 unit-suite failures blocking every Python landing	debugging	opus	174209			yes	0		est:c730d18d	9.322021
+2026-11-13	lead	dev-kit: dk-panic-watch LaunchAgent; npm ci/install allowed in light class	tooling	sonnet	163574			yes	0		est:b0e5acc5	3.079006
+2026-11-13	sre	Foundations: A dev backend harness with its own GAIA_HOME on ports 4210-4229 for app tests, never Rich's GAIA	tooling	sonnet	154682			yes	0		est:4c01be43	3.179029
+2026-11-13	mobile	T1 backend: The /api/devices routes: open pairing, pair, list, allow, revoke, unpair self, status, reset pairing	security-feature	opus	945337			yes	0		est:e60b6ad6	68.225618
+2026-11-13	sre	dev backend follow-up: memory settings honor GAIA_HOME, dev_backend nits	bugfix	sonnet	61941			yes	0		est:b1765526	0.36273
+2026-11-13	design	Fixture screenshot audit of main 0.26.0: test:rtl shots, 4-width matrix en/ar, palettes	audit	sonnet	197647			yes	0		est:077d3b55	5.234466
+2026-11-13	lead	Land lead/unit-suite-green then mobile/t1-hardening	landing	haiku	86296			yes	0		est:477dfba6	0.034935
+2026-11-13	mobile	Foundations: Finish and land the Expo scaffold: toolchain, API client, i18n, jest projects, web export	tooling	sonnet	186397			yes	0		est:061a1eac	7.025045
+2026-11-13	sre	unit tests never build the web UI: find the unmocked ensure_webui_built caller, mock it, conftest default	bugfix	sonnet	61354			yes	0		est:d8b5fa9b	0.341876
+2026-11-13	design	Web UI prep: Move the 96 P1 visible English strings in 10 web UI files into the en and ar catalogs	ui	sonnet	383109			yes	0		est:df325a03	26.606695
+2026-11-13	lead	prq-schema-export: type memory routes	scoped-impl	sonnet	162073			yes	0		est:8dfdaefc	5.258391
+2026-11-13	lead	prq-schema-export: type setup routes	scoped-impl	sonnet	232720			yes	0		est:6ceaada3	8.313488
+2026-11-13	lead	prq-schema-export: type misc routes	scoped-impl	sonnet	174748			yes	0		est:bb05b856	11.221668
+2026-11-13	mobile	Web UI: Mobile access starts ngrok only on an explicit Start, with a privacy line	ui	sonnet	102777			yes	0		est:d0647472	2.283314
+2026-11-13	mobile	Foundations: App config: ids ai.amd.gaia.mobile and .mobile.dev, scheme, local network and camera text, ATS off	tooling	sonnet	408752			yes	0		est:1c5658b0	17.851058

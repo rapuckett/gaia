@@ -1,0 +1,129 @@
+# GET allowlist for read-only capture of Rich's installed GAIA 0.25.4 (Parity, 2026-11-12, re-swept after his 15:09 update)
+# One FastAPI route path per line; {param} matches one path segment. Lines starting with # are comments.
+# Source: every GET route in ~/.gaia/venv/lib/python3.12/site-packages/gaia/ui (107 routes + 1 static mount),
+# each body and its same-module helpers read for side effects. Reasons: installed-0.25.0-get-routes.md (0.25.4 delta at its end).
+# Anything not listed here, and every non-GET, should be aborted.
+#
+# Apply the deny list FIRST: a {param} pattern also matches literal sibling routes, so
+# /api/connectors/{connector_id} would otherwise let /api/connectors/_debug through (found by Design).
+# DENY /api/memory/stream-discovery
+# DENY /api/memory/stream-inference
+# DENY /api/mcp/servers/{name}/tools
+# DENY /v1/email/health
+# DENY /v1/email/init
+# DENY /v1/email/version
+# DENY /v1/email/calendar/events
+# DENY /api/setup/check with any load query parameter
+# DENY /api/files/search
+# DENY /api/agents/catalog
+# DENY /api/connectors/_debug
+# DENY /api/sessions/{session_id}/changes/git
+# DENY /api/setup/report/{name}
+# DENY /api/providers
+# DENY /api/providers/active, unless last_model in ~/.gaia/config.json is local (then safe: see the routes note)
+#
+# Static: also allow any path outside /api/ and /v1/ (the SPA catch-all /{full_path:path} and its assets).
+/api/files/uploads/{path}
+#
+# Pure reads
+/api/agents
+/api/agents/{agent_id}/install-status
+/api/chat/active
+/api/chat/attach
+/api/chat/permissions
+/api/chat/permissions/{session_id}
+/api/connectors
+/api/connectors/
+/api/connectors/agent-mcps
+/api/connectors/eval-mailbox
+/api/connectors/events
+/api/connectors/{connector_id}
+/api/connectors/{connector_id}/activations
+/api/connectors/{connector_id}/grants
+/api/documents
+/api/documents/monitor/status
+/api/documents/{doc_id}/status
+/api/files/browse
+/api/files/image
+/api/files/preview
+/api/goals
+/api/goals/pending-approval
+/api/goals/stats
+/api/goals/{goal_id}
+/api/health
+/api/lemonade/detect
+/api/lemonade/target
+/api/mcp/agent-server/status
+/api/mcp/status
+/api/memory/activity
+/api/memory/contexts
+/api/memory/conversations
+/api/memory/conversations/search
+/api/memory/conversations/{session_id}
+/api/memory/embedding-coverage
+/api/memory/entities
+/api/memory/entities/{entity}
+/api/memory/errors
+/api/memory/knowledge
+/api/memory/knowledge/{knowledge_id}
+/api/memory/stats
+/api/memory/tools
+/api/memory/tools/{tool_name}/history
+/api/memory/upcoming
+/api/onboarding/preflight
+/api/providers/{provider}/models
+/api/schedules
+/api/schedules/{name}
+/api/schedules/{name}/results
+/api/sessions
+/api/sessions/events
+/api/sessions/{session_id}
+/api/sessions/{session_id}/export
+/api/sessions/{session_id}/messages
+/api/settings
+# /api/setup/check: allow only when the query has no load=true (the 0.25 UI never sends it).
+/api/setup/check
+/api/setup/status
+/api/skills
+/api/system/model-server
+/api/system/status
+/api/system/tasks
+/api/system/warm-up
+/api/tunnel/status
+/v1/connections
+/v1/connections/
+/v1/connections/{provider}
+#
+# Conditional repairs: a write only when state is already inconsistent; Rich's own app makes the
+# same call whenever it shows that screen. Recommended allow (blocking leaves the screen empty).
+/api/mcp/servers
+/api/memory/settings
+#
+# New in 0.25.4: pure reads
+/api/chat/context/{session_id}
+/api/chat/followup/{session_id}
+/api/chat/performance/{session_id}
+/api/documents/{doc_id}/file
+/api/gpu-memory
+/api/media/{kind}/{name}
+/api/providers/local/context
+/api/providers/local/status
+/api/sessions/search
+/api/sessions/{session_id}/capabilities
+/api/sessions/{session_id}/changes
+/api/sessions/{session_id}/changes/total
+/api/sessions/{session_id}/changes/{turn_id}/diff
+/api/sessions/{session_id}/environment
+/api/sessions/{session_id}/outputs
+/api/settings/undo
+/api/setup/needs/{job}
+/api/setup/plan
+/api/skills/preferences
+/api/skills/{name}/preferences
+/api/spending
+/api/spending/prices/{provider}
+/api/system/work-in-progress
+#
+# New in 0.25.4: conditional (asks the flagship whether it takes folders; can start it if it runs as a sidecar).
+# Rich's own app calls it every time New chat opens. Recommended allow.
+/api/onboarding/start

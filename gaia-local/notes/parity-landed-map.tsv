@@ -1,0 +1,9 @@
+# branch<TAB>sprint task, for branches whose name doesn't resolve to a task on its own (parity-sprint-sync.mjs).
+# A task of "-" marks a branch that isn't a sprint task, so the sync skips it quietly.
+design/i18n-p1	prq-strings-p1
+mobile/expo-scaffold	fnd-scaffold-land
+mobile/docs-mobile-access-setup	-
+lead/unit-suite-green	-
+sre/dev-backend-followup	-
+mobile/upstream-skilltry-test-fix	-
+sre/no-ui-build-in-tests	-

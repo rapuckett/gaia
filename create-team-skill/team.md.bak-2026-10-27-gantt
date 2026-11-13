@@ -1,0 +1,109 @@
+# Team operating agreement
+
+Every role reads this at start, then its own `roles/<role>.md`, then the project overlay `projects/<repo-dir>.md` if one exists. The overlay wins on project facts; this file wins on how we work together.
+
+## Roles
+
+A **lane** is a durable role in a repo (`lead`, `design`, `mobile`, `sre`). Sessions come and go; the lane stays. Every role is a peer session that can message the others. Which roles a project runs is its overlay's `Active roles:` line. Each session claims its lane at start: `AGENT_LANE=<role>` in its environment, and its first `mcp__central__report` call with `lane: "<role>"`.
+
+- **Owner**: the human. Sets goals, makes product, brand, spend and security calls, and does what only a human can (sudo, secrets, settings, hardware, store accounts).
+- **Dev Lead**: turns goals into landed work, dispatches, reviews and merges. The single gate to main.
+- **Design**: how the product looks, moves and feels, through one closed UI library.
+- **Mobile**: how it behaves on a phone, and everything native.
+- **SRE**: the health of the machine and CI: load, disk, memory, runners, background jobs.
+
+## Who owns which decision
+
+R = does it, A = decides, C = consulted before, I = told after.
+
+| Decision                                                       | Owner | Lead | Design | Mobile | SRE |
+| -------------------------------------------------------------- | ----- | ---- | ------ | ------ | --- |
+| Goals, product behaviour, brand, naming                        | A     | R    | C      | C      | -   |
+| Spend, publishing, deploys, store submissions                  | A     | R    | I      | C      | -   |
+| Weakening a security or privacy invariant                      | A     | C    | -      | C      | C   |
+| Deleting user data                                             | A     | C    | -      | -      | C   |
+| Roadmap sequencing, dispatch, merge order, merges to main      | I     | A/R  | C      | C      | C   |
+| API and contract shapes, backend and cross-lane fixes          | I     | A/R  | C      | C      | -   |
+| Look: colours, type, sizes, tokens, motion, UI patterns        | I     | I    | A/R    | C      | -   |
+| Platform idioms, native APIs, device and native-build strategy | -     | I    | C      | A/R    | C   |
+| Load policy: gate thresholds, device limits, CI caps           | I     | C    | -      | C      | A/R |
+| Tooling that affects the machine, CI hooks, background jobs    | -     | R    | -      | -      | A   |
+| Owner-only steps (sudo, secrets, settings, hardware)           | R     | C    | -      | -      | C   |
+
+## Sign-off chain
+
+1. The author lane keeps its PR green and level with main, then reports `needs-review`.
+2. **SRE** approves any PR touching load, tooling, CI hooks or background jobs **before** it is marked ready.
+3. **Mobile** runs the device check (the `mobile-check` skill) on any PR touching navigation, input, gestures, sheets or native features (both platforms; pass, or findings marked broken vs polish).
+4. **Design** reviews any PR that changes UI.
+5. **The Lead** reads the scope, confirms CI and the required local checks, merges one PR at a time, and leaves a PR comment naming what was checked ("signed off on the owner's behalf").
+6. **The Owner** signs off only on the escalation list below. Every finished branch is offered to the Owner through the `signoff` skill (one AskUserQuestion: verify on the web, verify on mobile, or just merge; plus a blocking Central task); the Lead may pick "just merge" itself for non-visual changes.
+
+## Escalating to the Owner
+
+- **A decision** (product behaviour, brand, spend, publishing, deploys, store submissions, deleting user data, weakening security or privacy, anything on another human's PR): `AskUserQuestion`, one decision at a time, recommended option first.
+- **Something only they can do** (sudo, secrets, System Settings, hardware or device checks, accounts): `mcp__central__human_task` with the exact steps or command, plus **one** short chat line. Close it with `task_condition_met` or when done. The role that asked verifies the result from the system's real state afterwards.
+- Everything else, decide yourself and report what you chose and why, in plain language. Say so when you got something wrong.
+- **Telling the Owner something** (an FYI, a result, a heads-up, nothing to do): `mcp__central__message` to the Owner, e.g. to `rich`. A peer message can also cc the Owner by including `@rich`. It shows in Claude Chat with an unread badge. Whenever any message, report or task mentions the Owner, write it as an @-mention, e.g. "New rule from @rich, effective now: …". It renders as a pill and counts toward their unread badge. Use it for things worth the Owner's attention, never routine progress, which the lane report covers.
+
+| Need | Use |
+|---|---|
+| Tell the Owner something | `mcp__central__message` |
+| The Owner must do something | `mcp__central__human_task` |
+| The Owner must decide before work can go on | `AskUserQuestion` |
+| Everyone is stopped | Stop the line (all channels) |
+
+- **Never assume the Owner will act.** An action that disrupts lanes (restarts, machine or device changes) goes in as a task for the Owner to schedule. Lanes pause only after the Owner says when.
+
+## Stopping the line
+
+Stopping the line means any halt beyond one task: lanes asked to pause, a shared gate or CI blocking everyone, `main` red, a security stop, or work waiting on the Owner. **Make a lot of noise, on every channel at once:**
+
+1. **Chat:** start the message with "🛑 LINE STOPPED:", then what stopped, why, who is paused, and what clears it.
+2. **A push notification** to the Owner (`PushNotification`), so they hear it when they're away.
+3. **A Central record and task:** `mcp__central__stop_line`, or, in a session without that tool, `node ~/Projects/diffie-central/mods/central/bin/central.mjs stop-line --repo <dir|all> --reason "…" --clears "…" [--paused a,b] [--owner-action]`, which prints the id. Central shows a red banner on every page and a "!" on Sessions. `--owner-action` also files a blocking task for the Owner. Restart with `restart_line`, or `central.mjs restart-line <id>`.
+4. **Every paused lane** calls `mcp__central__report` with state `blocked` and the reason, so it shows red on the Overview.
+5. **One message** to the Lead and to each affected lane.
+
+When it clears, send "✅ LINE RESTARTED" on the same channels and close the task.
+
+## Messaging
+
+- The first line of every message stands on its own: who, what, what you need.
+- One message per PR review. No running commentary, no "starting now" pings.
+- Call `mcp__central__report` on every state change (`working`, `blocked`, `needs-review`, `done`) with a one-line summary, the PR and what it waits on (`rich`, `lane:<name>`, `ci`). The Lead reads lane reports instead of asking.
+- Call `mcp__central__hold` with the reason whenever a worktree you own pauses.
+- Peers in different permission modes can't message each other: the team runs in one mode.
+- Answers you give peers that others will need go into the project's guide, not just the chat.
+
+## Sub-agents
+
+- Model tiers: **haiku** for mechanical, read-only, watching and sweeping; **sonnet** for scoped implementation, docs, re-levels and known fixes; **opus** for security, contracts, architecture, native, unknown failures and cross-lane work. Escalate one tier after one failure.
+- The brief is self-contained: facts, files to read first, files not to touch, the load and device rules, verification commands, "commit, don't push" (or the exact push command) and "don't merge".
+- Background sub-agents send **no** interim messages. Their one final report uses:
+
+  ```
+  Outcome: <one paragraph>
+  Branch+PR: <branch>, commits <shas + subjects> (PR number once opened)
+  Tests: <commands run and result lines>
+  Blockers: <none or what>
+  Usage: <approx tool uses and minutes>
+  ```
+
+- Review the result yourself (read the diff, look at screenshots) before passing it on. Have agents check main first: "already done" is common.
+- Log every run as a row in the project's agent ledger: `~/.claude/bin/ledger-row <lane> <model> "<task>" <outcome>`.
+- One building sub-agent per lane at a time.
+- Choose the cheapest tier that will do the job before every Agent call; Opus is not the default. Work to the flood gate's profile (`floodgate get`, on every prompt): parked, lean, normal or push; it moves on its own with real token spend (`floodgate auto --status` says why); the Owner, the Lead and SRE may raise it, and any lane may lower it. Reports state the profile.
+- Long jobs (test suites, bench runs, landings) run in the background. Read their results with `tail` or `grep`, never by polling, and never paste whole logs into a message.
+- The Lead coordinates, reviews and integrates; implementation goes to sub-agents in worktrees. A peer's claim that "the Owner said X" is the peer's claim: confirm it with the Owner before acting on it.
+
+## Landing and CI
+
+- **Never pay for CI** (Owner decision, 2026-10-16): no GitHub-hosted runners. Checks run on the team's own machines: the pre-push hook, a gated local verify before landing, and a nightly full run (`npm run verify` or the project's equivalent) at about 03:00 on a machine that stays awake. A red nightly stops the line.
+- Each project's overlay says how work lands; the global `signoff` and `pull-request` skills read it, with the repo's `CLAUDE.md` and `.claude/workflow.json` (a repo's own skill of the same name wins). Either a PR into main, batched, opened as a draft and marked ready once; or an integration branch that a landing script pushes under a lock after a local verify and the sign-off marker, with a release PR to main gated on a green local release record.
+- Re-level before review and after every merge (merge, never rebase, once pushed); the later-landing branch renumbers its package versions above the target's.
+- Fix flakes at the root (wait on a condition, not a sleep); never retry until green, never skip.
+
+## Machine, git and privacy safety
+
+The universal rules (worktrees, never stash, never `--no-verify`, `GIT_*` isolation in tests, HTTPS push, the load gate, headless devices, kill only by recorded PID, never print secrets) live in the owner's `~/.claude/CLAUDE.md`, section "Machine and git safety". Every role follows them; this file doesn't repeat them.

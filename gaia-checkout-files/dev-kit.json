@@ -1,0 +1,13 @@
+{
+  "schema": "dev-kit.config/1",
+  "worktreesDir": ".worktrees",
+  "verifyCommand": "/Users/rapuckett/Projects/gaia/.local/dev/verify.sh",
+  "setupCommand": "(cd src/gaia/apps/webui && npm ci --prefer-offline --no-audit --no-fund) && if [ -f src/gaia/apps/mobile/package-lock.json ]; then cd src/gaia/apps/mobile && npm ci --prefer-offline --no-audit --no-fund; fi",
+  "setupInputs": ["src/gaia/apps/webui/package-lock.json", "src/gaia/apps/mobile/package-lock.json"],
+  "nightly": {
+    "time": "03:45",
+    "steps": [{ "name": "verify", "command": "/Users/rapuckett/Projects/gaia/.local/dev/verify.sh" }],
+    "notify": "rich"
+  },
+  "devicePrefix": "mobile-"
+}

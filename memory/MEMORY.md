@@ -1,0 +1,19 @@
+- [Shared memory dir](shared-memory-dir.md) — every gaia lane shares this directory: change MEMORY.md with Edit, never rewrite it with Write
+- [Akira code is private](akira-code-is-private.md) — Akira is a private repo; copying its code into the public gaia fork would publish it
+- [Reuse GAIA constants](reuse-gaia-constants.md) — import or generate from GAIA's constants, catalogs and schemas; never hardcode a string GAIA defines
+- [Frugal unit tests](frugal-unit-tests.md) — add unit tests only when they test material functionality
+- [Installed GAIA unsafe GETs](installed-gaia-unsafe-gets.md) — what each GET in Rich's installed GAIA does; no longer a hard limit since it became a development install (2026-11-12)
+- [gaia disk floors](gaia-disk-floors.md) — SRE's Data-volume free-space floors and the 2026-11-12 baseline
+- [Gate Node and landing priority](gaia-gate-node-and-landing.md) — why gated npm jobs need Node 20.20 from nvm, and why gaia landings lost landing priority
+- [Gate slots and cpu 9](gate-slots-cpu9-history.md) — read agent-host's panic record before proposing more heavy-gate slots
+- [gaia SRE start-up](gaia-sre-start-up.md) — nightly slot, verify load hot spots, venv Python, Central monitoring
+- [Parity lane setup](parity-lane-setup.md) — where the matrix, inventory, upstream watch and parity state live
+- [Design lane local files](design-lane-local-files.md) — where the Design lane's queue, plans and read-only capture harness live (untracked .local/)
+- [Release lane role](release-lane-role.md) — what the Release and QA lane owns and where its record lives
+- [See Rich's install passively](release-owner-install-passive-check.md) — how to see what GAIA Rich runs without touching it
+- [gaia-desktop auto-update is off](release-gaia-desktop-autoupdate-off.md) — Rich's version changes only when he clicks update or Release installs one
+- [Release acceptance runs headless](release-acceptance-runs-headless.md) — acceptance passes use the browser build in headless Playwright
+- [Akira fastlane template](release-akira-fastlane-template.md) — Akira's fastlane setup as the template for GAIA's phone builds, and Rich-only first-build steps
+- [Sprint recording](gaia-sprint-recording.md) — record runs against mobile-parity sprint ids, never a new forecast
+- [Installed GAIA is a dev install](installed-gaia-is-dev.md) — test against, restart or reset Rich's GAIA without asking; data may be lost
+- [Never playwright install](no-playwright-install.md) — builders use cached headless shells; install prunes other projects' browsers

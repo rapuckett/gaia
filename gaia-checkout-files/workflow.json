@@ -1,0 +1,5 @@
+{
+  "version": 1,
+  "pullRequests": true,
+  "integrationBranch": "integration/rapuckett"
+}
