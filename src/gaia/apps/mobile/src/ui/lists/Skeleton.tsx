@@ -7,6 +7,7 @@ import { Row } from '../layout/layout';
 import { useTheme } from '../theme/ThemeProvider';
 import { motion } from '../tokens/generated';
 import { Pulse } from './Pulse';
+import { a11yVisibility } from '../theme/a11y';
 
 export interface SkeletonProps {
     width?: DimensionValue;
@@ -18,8 +19,7 @@ export function Skeleton({ width = '100%', height = 14, circle }: SkeletonProps)
     const { colors, radius } = useTheme();
     return (
         <View
-            accessibilityElementsHidden
-            importantForAccessibility="no-hide-descendants"
+            {...a11yVisibility({ accessibilityElementsHidden: true, importantForAccessibility: 'no-hide-descendants' })}
             style={{ width: circle ? height : width, maxWidth: '100%' }}
         >
             <Pulse duration={motion.duration.Shimmer / 2}>

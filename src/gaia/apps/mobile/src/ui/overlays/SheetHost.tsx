@@ -14,6 +14,7 @@ import { Row } from '../layout/layout';
 import { useTheme } from '../theme/ThemeProvider';
 import { Text } from '../text/Text';
 import { motion } from '../tokens/generated';
+import { a11yVisibility } from '../theme/a11y';
 import { sheetStore, type SheetEntry } from './sheetStore';
 
 export const WIDE_BREAKPOINT = 600;
@@ -28,8 +29,7 @@ export function SheetHost({ children }: { children: ReactNode }) {
         <View style={{ flex: 1 }}>
             <View
                 style={{ flex: 1 }}
-                accessibilityElementsHidden={!!active}
-                importantForAccessibility={active ? 'no-hide-descendants' : 'auto'}
+                {...a11yVisibility({ accessibilityElementsHidden: !!active, importantForAccessibility: active ? 'no-hide-descendants' : 'auto' })}
             >
                 {children}
             </View>
@@ -142,7 +142,6 @@ function ActiveSheet({ entry }: { entry: SheetEntry }) {
                 style={{ flex: 1, justifyContent: wide ? 'center' : 'flex-end', alignItems: wide ? 'center' : 'stretch' }}
             >
                 <Animated.View
-                    accessible={false}
                     style={[
                         {
                             backgroundColor: colors.bgPrimary,

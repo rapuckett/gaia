@@ -19,6 +19,7 @@ export const ENDPOINTS = {
     chatConfirmTool: '/api/chat/confirm-tool',
     chatUserInput: '/api/chat/user-input',
     systemStatus: '/api/system/status',
+    documentFile: '/api/documents/{doc_id}/file',
     onboardingStart: '/api/onboarding/start',
 } as const;
 
@@ -28,6 +29,12 @@ export function sessionPath(sessionId: string): string {
 
 export function sessionMessagesPath(sessionId: string): string {
     return ENDPOINTS.sessionMessages.replace('{session_id}', encodeURIComponent(sessionId));
+}
+
+/** The library file's URL, as the web UI's `documentFileUrl` builds it: the page rides in the fragment. */
+export function documentFileUrl(baseUrl: string, docId: string, page?: number): string {
+    const path = ENDPOINTS.documentFile.replace('{doc_id}', encodeURIComponent(docId));
+    return `${baseUrl.replace(/\/+$/, '')}${path}${page ? `#page=${page}` : ''}`;
 }
 
 export const SESSION_PAGE_SIZE = 200;

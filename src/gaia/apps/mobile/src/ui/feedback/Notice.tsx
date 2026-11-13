@@ -17,6 +17,8 @@ export interface NoticeProps {
     title?: string;
     message?: string;
     action?: { label: string; onPress: () => void };
+    /** `note` marks a side remark that isn't an alert, e.g. a library notice. */
+    role?: 'note';
     testID?: string;
 }
 
@@ -24,7 +26,7 @@ const ICONS = { info: Info, warning: TriangleAlert, danger: CircleAlert, success
 const ICON_TONE: Record<NoticeTone, Tone> = { info: 'accent', warning: 'warning', danger: 'danger', success: 'success' };
 
 // The icon carries the tone with the color, so it never rests on color alone.
-export function Notice({ tone, title, message, action, testID }: NoticeProps) {
+export function Notice({ tone, title, message, action, role, testID }: NoticeProps) {
     const { colors, radius, space } = useTheme();
     const bar = { info: colors.accentSolid, warning: colors.accentYellow, danger: colors.danger, success: colors.accentGreen }[tone];
     const bg = { info: colors.accentDim2, warning: colors.accentYellowDim, danger: colors.dangerDim, success: colors.accentGreenDim }[tone];
@@ -32,7 +34,8 @@ export function Notice({ tone, title, message, action, testID }: NoticeProps) {
         <View
             testID={testID}
             accessible
-            accessibilityRole={tone === 'danger' || tone === 'warning' ? 'alert' : undefined}
+            role={role}
+            accessibilityRole={role ? undefined : tone === 'danger' || tone === 'warning' ? 'alert' : undefined}
             accessibilityLiveRegion={tone === 'danger' || tone === 'warning' ? 'assertive' : 'polite'}
             style={{
                 backgroundColor: bg,
