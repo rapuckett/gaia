@@ -337,7 +337,7 @@ export function ConnectorsSection() {
                 <div className="connector-personalize connector-personalize--offer" role="status">
                     <p>
                         <strong>{t('settings.connectors.personalize.connected', { name: justConnected.display_name })}</strong>{' '}
-                        {t('settings.connectors.personalize.offer', { source: personalizeSourceRef(justConnected) })}
+                        {t('settings.connectors.personalize.offer', { source: personalizeSourceRef(justConnected), name: justConnected.display_name })}
                     </p>
                     <PersonalizeButton connector={justConnected} primary onStarted={() => setJustConnected(null)} />
                     <button type="button" className="btn-secondary" onClick={() => setJustConnected(null)}>
@@ -504,7 +504,7 @@ function ConnectorTile({
                     )}
                     {connector.configured && connector.enabled !== false && (
                         <div className="connector-personalize">
-                            <p>{t('settings.connectors.personalize.tile', { source: personalizeSourceRef(connector) })}</p>
+                            <p>{t('settings.connectors.personalize.tile', { source: personalizeSourceRef(connector), name: connector.display_name })}</p>
                             <PersonalizeButton connector={connector} />
                         </div>
                     )}
@@ -1003,7 +1003,7 @@ function OAuthClientEditor({
                     )}
                     <div className="configure-actions">
                         <button
-                            className={`btn-model-save${saved ? ' saved' : ''}`}
+                            className="btn-primary"
                             disabled={busy || !values['client_id']?.trim()}
                             onClick={() => void handleSave()}
                         >
@@ -1223,7 +1223,7 @@ function MCPServerConfigureBody({
             <div className="configure-actions">
                 {!(keyless && connector.configured) && (
                     <button
-                        className={`btn-model-save${saved ? ' saved' : ''}`}
+                        className="btn-primary"
                         disabled={busy || (!keyless && nothingTyped)}
                         onClick={() => void handleSave()}
                     >
