@@ -20,6 +20,7 @@ from typing import Any, Callable, ClassVar, Dict, Iterator, List, Optional
 # Re-exported: the resolver lives in a leaf module so gaia.logger can use it.
 from gaia.home import (  # noqa: F401  pylint: disable=unused-import
     default_gaia_home,
+    devices_dir,
     gaia_home,
 )
 from gaia.utils.file_lock import (

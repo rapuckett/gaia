@@ -51,7 +51,7 @@ PairFailureReason = Literal["expired", "used", "wrong", "closed", "rate_limited"
 PAIR_FAILURE_REASONS = get_args(PairFailureReason)
 #: Why the listener isn't serving, as the PC sees it.
 ListenerErrorCode = Literal[
-    "port_in_use", "unsafe_folder", "certificate", "no_home_network", "start_failed"
+    "port_in_use", "unsafe_folder", "certificate", "start_failed"
 ]
 LISTENER_ERROR_CODES = get_args(ListenerErrorCode)
 
