@@ -1,11 +1,14 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import type { Message, Session, StreamEvent, SystemStatus } from '@webui/types';
-import type { CreateSessionRequest, ToolConfirmRequest, UserInputRequest } from '@webui/types/api.gen';
+import type { Message, Session, StartScreen, StreamEvent, SystemStatus } from '@webui/types';
+import type { CreateSessionRequest, ToolConfirmRequest, UserInputRequest as ApiUserInputRequest } from '@webui/types/api.gen';
 
-export type { Message, Session, StreamEvent, SystemStatus } from '@webui/types';
-export type { CreateSessionRequest, ToolConfirmRequest, UserInputRequest } from '@webui/types/api.gen';
+export type { Message, Session, StartScreen, StreamEvent, SystemStatus } from '@webui/types';
+export type { CreateSessionRequest, ToolConfirmRequest } from '@webui/types/api.gen';
+
+/** `display` is what the phone shows as the answer; it is never sent to GAIA. */
+export type UserInputRequest = ApiUserInputRequest & { display?: string };
 
 export interface SessionList {
     sessions: Session[];
@@ -66,4 +69,6 @@ export interface GaiaClient {
     /** Answers a `needs_input` question; the turn continues once GAIA has it. */
     sendUserInput(request: UserInputRequest, options?: RequestOptions): Promise<UserInputResult>;
     getSystemStatus(options?: RequestOptions): Promise<SystemStatus>;
+    /** The new-chat screen's cards and working folder; `skills_error` says why the assistant can't list its skills. */
+    getStartScreen(options?: RequestOptions): Promise<StartScreen>;
 }

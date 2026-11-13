@@ -9,6 +9,7 @@ import { asGaiaError, GaiaApiError, GaiaConfigError, type GaiaError } from '@/ap
 import {
     applyEvent,
     beginTurn,
+    expirePendingPrompts,
     IDLE_TURN,
     openTurn,
     readTurn,
@@ -128,11 +129,13 @@ async function follow(deps: ChatStreamDeps, sessionId: string, run: Run, stream:
                 update(sessionId, run, openTurn);
                 if (run.stopRequested) requestStop(deps, sessionId, run);
             }
+            if (event.type === 'done' || event.type === 'error') expirePendingPrompts(sessionId);
             update(sessionId, run, (turn) => applyEvent(turn, event));
         }
     } catch (err) {
         if (!isCurrent(sessionId, run)) return;
         const error = asGaiaError(err);
+        expirePendingPrompts(sessionId);
         update(sessionId, run, (turn) => ({
             ...turn,
             status: 'idle',
@@ -152,6 +155,7 @@ async function follow(deps: ChatStreamDeps, sessionId: string, run: Run, stream:
         void deps.queryClient.invalidateQueries({ queryKey: queryKeys.messages(sessionId) }, { cancelRefetch: false });
         return;
     }
+    expirePendingPrompts(sessionId);
     await endWithTranscript(deps.queryClient, sessionId, () => {
         if (!isCurrent(sessionId, run)) return;
         runs.delete(sessionId);
