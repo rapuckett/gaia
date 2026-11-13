@@ -22,7 +22,7 @@ from gaia.ui.routers import skills as skills_router
 def client():
     app = FastAPI()
     app.include_router(skills_router.router)
-    return TestClient(app)
+    return TestClient(app, client=("127.0.0.1", 50000))
 
 
 def _fake_agent_module(monkeypatch, skill_dirs):
