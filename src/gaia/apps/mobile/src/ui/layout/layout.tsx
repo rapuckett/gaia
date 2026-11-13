@@ -1,7 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { View, type ViewStyle } from 'react-native';
+import { View, type AccessibilityRole, type ViewStyle } from 'react-native';
 import type { ReactNode } from 'react';
 import { useTheme } from '../theme/ThemeProvider';
 import type { Space } from '../tokens/space';
@@ -21,6 +21,7 @@ interface BoxProps {
     /** Layout direction of this box, for content whose language differs from the UI's. */
     dir?: 'ltr' | 'rtl';
     testID?: string;
+    accessibilityRole?: AccessibilityRole;
 }
 
 export interface StackProps extends BoxProps {
@@ -45,26 +46,26 @@ function boxStyle(space: Record<Space, number>, p: BoxProps): Mut<ViewStyle> {
     return style;
 }
 
-export function Stack({ children, padding, paddingX, paddingY, testID, ...box }: StackProps) {
+export function Stack({ children, padding, paddingX, paddingY, testID, accessibilityRole, ...box }: StackProps) {
     const { space } = useTheme();
     const style = boxStyle(space, box);
     if (padding) style.padding = space[padding];
     if (paddingX) style.paddingHorizontal = space[paddingX];
     if (paddingY) style.paddingVertical = space[paddingY];
     return (
-        <View style={style} testID={testID}>
+        <View style={style} testID={testID} accessibilityRole={accessibilityRole}>
             {children}
         </View>
     );
 }
 
-export function Row({ children, wrap, align = 'center', testID, ...box }: RowProps) {
+export function Row({ children, wrap, align = 'center', testID, accessibilityRole, ...box }: RowProps) {
     const { space } = useTheme();
     const style = boxStyle(space, { ...box, align });
     style.flexDirection = 'row';
     if (wrap) style.flexWrap = 'wrap';
     return (
-        <View style={style} testID={testID}>
+        <View style={style} testID={testID} accessibilityRole={accessibilityRole}>
             {children}
         </View>
     );

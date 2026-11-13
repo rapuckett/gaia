@@ -64,7 +64,7 @@ import { isPlaceholderTitle } from '../utils/sessionTitle';
 import { lastSentMessage } from '../utils/editLast';
 import { addDroppedFiles, showAddedDocuments } from '../utils/chatDocuments';
 import { requestErrorParam } from '../utils/requestErrors';
-import { MAX_SESSION_TITLE_CHARS, STARTING_REASON } from '../utils/constants';
+import { MAX_SESSION_TITLE_CHARS, RECONNECTING_PHASE, STARTING_REASON } from '../utils/constants';
 import { scrollBehavior } from '../utils/motion';
 import { setVisibleInterval } from '../utils/visibleInterval';
 import { ModelServerDownNotice } from './ModelServerDownNotice';
@@ -75,7 +75,6 @@ import { getT, useT } from '../i18n/useT';
 
 /** Events that only come after the agent got past a permission prompt. */
 const RESOLVES_PROMPTS = new Set(['tool_start', 'tool_end', 'tool_result']);
-const RECONNECTING_PREFIX = 'Connection lost. Reconnecting';
 
 /** How long Stop waits for the server's closing `done` before the client closes the turn itself. */
 export const STOP_GRACE_MS = 15_000;
@@ -541,7 +540,7 @@ export function ChatView({ sessionId }: ChatViewProps) {
         const notTaken = (outcome: SendOutcome) => { if (fromQueue) options?.onQueuedOutcome?.(outcome); };
         if (!reattach && retiredAgent) {
             log.chat.warn(`Send blocked: chat ${sessionId} belongs to the retired "${retiredAgent}" agent`);
-            notTaken({ kind: 'failed', error: `This chat's "${retiredAgent}" agent was retired, so it cannot take new messages.` });
+            notTaken({ kind: 'failed', error: getT()('chat.retiredSend', { agent: retiredAgent }) });
             return false;
         }
         // Waiting messages go first, so a new one joins the end of the line.
@@ -619,7 +618,10 @@ export function ChatView({ sessionId }: ChatViewProps) {
         stepIdRef.current = 0;
         toolOccurredRef.current = false;
         if (reconnect) {
-            useChatStore.getState().setLiveStatus(`${RECONNECTING_PREFIX} (attempt ${reconnect} of ${MAX_STREAM_RECONNECTS})…`);
+            useChatStore.getState().setLiveStatus(
+                getT()('live.reconnectingStream', { attempt: reconnect, max: MAX_STREAM_RECONNECTS }),
+                RECONNECTING_PHASE,
+            );
         }
 
         log.stream.info('Starting agent stream...');
@@ -682,7 +684,7 @@ export function ChatView({ sessionId }: ChatViewProps) {
             gaveUpOnRunRef.current = true;
             streamEndedAtRef.current = Date.now();
             endStopWait();
-            settleQueued({ kind: 'failed', error: 'Stopped before GAIA confirmed it got this message.' });
+            settleQueued({ kind: 'failed', error: getT()('chat.stoppedBeforeConfirmed') });
             abortRef.current?.abort();
             abortRef.current = null;
             if (streamRafRef.current !== null) {
@@ -714,7 +716,7 @@ export function ChatView({ sessionId }: ChatViewProps) {
             onConnected: () => {
                 if (isStale()) return;
                 const store = useChatStore.getState();
-                if (store.liveStatus === api.SEND_WAITING_NOTICE_TEXT || store.liveStatus?.startsWith(RECONNECTING_PREFIX)) {
+                if (store.liveStatus === api.SEND_WAITING_NOTICE_TEXT || store.livePhase === RECONNECTING_PHASE) {
                     store.setLiveStatus(null);
                 }
             },
@@ -1154,7 +1156,10 @@ export function ChatView({ sessionId }: ChatViewProps) {
                     const attempt = ++reconnectsRef.current;
                     const delay = RECONNECT_DELAYS_MS[attempt - 1] ?? 0;
                     log.chat.warn(`Stream for session=${sessionId} lost (${err.name}); reconnecting in ${delay}ms (${attempt}/${MAX_STREAM_RECONNECTS})`);
-                    useChatStore.getState().setLiveStatus(`${RECONNECTING_PREFIX} (attempt ${attempt} of ${MAX_STREAM_RECONNECTS})…`);
+                    useChatStore.getState().setLiveStatus(
+                        getT()('live.reconnectingStream', { attempt, max: MAX_STREAM_RECONNECTS }),
+                        RECONNECTING_PHASE,
+                    );
                     const reattach = () => {
                         reconnectTimerRef.current = null;
                         if (!mountedRef.current || isStale() || stopRequestedRef.current) return;
@@ -1196,7 +1201,7 @@ export function ChatView({ sessionId }: ChatViewProps) {
                         agentSteps: steps.length > 0 ? steps : undefined,
                         cards: cardsSnapshot.length > 0 ? cardsSnapshot : undefined,
                         stopState: 'stopped',
-                        stopError: err.message || 'Unknown error',
+                        stopError: err.message || getT()('chat.unknownError'),
                     });
                     // The server persisted its own row for this turn; don't let the poll swap ours out.
                     lastMsgCountRef.current = useChatStore.getState().messages.length;
@@ -1619,7 +1624,7 @@ export function ChatView({ sessionId }: ChatViewProps) {
     }, [messages]);
 
     const composerBlocked = retiredAgent
-        ? `This chat used the retired "${retiredAgent}" agent and is read-only. Start a new chat.`
+        ? t('chat.retiredReadOnly', { agent: retiredAgent })
         : isStarting(systemStatus)
             ? STARTING_REASON
             : null;
@@ -1631,7 +1636,7 @@ export function ChatView({ sessionId }: ChatViewProps) {
             onDrop={handleDrop}
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
-            aria-label={session?.title || 'Chat'}
+            aria-label={session?.title || t('chat.label')}
         >
             <header className="task-header">
                 <div className="task-header-left">
@@ -1648,7 +1653,7 @@ export function ChatView({ sessionId }: ChatViewProps) {
                             }}
                             {...CLAIMS_ESCAPE}
                             autoFocus
-                            aria-label="Chat title"
+                            aria-label={t('chat.titleLabel')}
                             dir="auto"
                         />
                     ) : (
@@ -1670,10 +1675,10 @@ export function ChatView({ sessionId }: ChatViewProps) {
                         <Activity size={15} aria-hidden="true" />
                     </button>
                     <PrivateChatButton isPrivate={!!session?.private} onToggle={handleTogglePrivate} />
-                    <button className="btn-icon-sm" onClick={() => setShowFileBrowser(true)} title="Browse files on this PC" aria-label="Browse files on this PC">
+                    <button className="btn-icon-sm" onClick={() => setShowFileBrowser(true)} title={t('chat.browseFiles')} aria-label={t('chat.browseFiles')}>
                         <FolderSearch size={15} />
                     </button>
-                    <button className="btn-icon-sm" onClick={exportChat} title="Export as Markdown" aria-label="Export chat">
+                    <button className="btn-icon-sm" onClick={exportChat} title={t('chat.exportMarkdown')} aria-label={t('chat.exportChat')}>
                         <Download size={15} />
                     </button>
                     <SessionPanelToggle messages={messages} busy={isStreaming} />
@@ -1687,7 +1692,7 @@ export function ChatView({ sessionId }: ChatViewProps) {
             <div className="messages-scroll" ref={messagesScrollRef} {...followListProps}>
                 <div className="messages-column">
                     {isLoadingMessages && !openingShown && (
-                        <div className="skeleton-messages" aria-label="Loading messages">
+                        <div className="skeleton-messages" aria-label={t('chat.loadingMessages')}>
                             {[0, 1, 2].map((i) => (
                                 <div key={i} className="skeleton-msg">
                                     <div className="skeleton-lines">
@@ -1806,7 +1811,7 @@ export function ChatView({ sessionId }: ChatViewProps) {
             />
 
             {showScrollBtn && (
-                <button className="scroll-bottom-btn" onClick={scrollToBottom} title="Scroll to bottom" aria-label="Scroll to bottom">
+                <button className="scroll-bottom-btn" onClick={scrollToBottom} title={t('chat.scrollToBottom')} aria-label={t('chat.scrollToBottom')}>
                     <ArrowDown size={16} />
                 </button>
             )}
@@ -1814,13 +1819,13 @@ export function ChatView({ sessionId }: ChatViewProps) {
             {isDragOver && (
                 <div className="drag-overlay">
                     <Upload size={32} strokeWidth={1.5} aria-hidden="true" />
-                    <span>Drop files to index them for this chat</span>
+                    <span>{t('chat.dropToIndex')}</span>
                 </div>
             )}
 
             {policyToast && (
                 <div className="toast policy-alert-toast" role="alert">
-                    <span>Blocked: {policyToast.tool} is restricted by policy.</span>
+                    <span>{t('activity.policy.blocked', { tool: policyToast.tool })}</span>
                     {policyToast.receiptId ? (
                         <button
                             type="button"
@@ -1833,10 +1838,10 @@ export function ChatView({ sessionId }: ChatViewProps) {
                                 setPendingReceiptScroll(receiptId);
                             }}
                         >
-                            View receipt
+                            {t('activity.policy.viewReceipt')}
                         </button>
                     ) : (
-                        <span className="policy-alert-toast-missing">Receipt unavailable</span>
+                        <span className="policy-alert-toast-missing">{t('activity.policy.receiptUnavailable')}</span>
                     )}
                 </div>
             )}

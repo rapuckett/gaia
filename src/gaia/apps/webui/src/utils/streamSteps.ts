@@ -2,12 +2,13 @@
 // SPDX-License-Identifier: MIT
 
 import { getT } from '../i18n/useT';
+import { PROGRESS_TICK_PREFIX } from './constants';
 import type { StreamEvent, AgentStep } from '../types';
 
 /** The backend's periodic "Model is processing... (Ns)" tick; the live line beside GAIA's name already times that wait. */
 export function isProgressTick(event: StreamEvent): boolean {
     return event.type === 'status' && event.status === 'working' && !event.phase
-        && (event.message ?? '').startsWith('Model is processing');
+        && (event.message ?? '').startsWith(PROGRESS_TICK_PREFIX);
 }
 
 /** A status event's line for the user; the tool-list re-read is said in their language. */
@@ -33,6 +34,7 @@ function queueText(queue: NonNullable<StreamEvent['queue']>): string {
 export function agentEventToStep(event: StreamEvent, stepIdRef: { current: number }): AgentStep | null {
     const id = ++stepIdRef.current;
     const ts = Date.now();
+    const t = getT();
 
     switch (event.type) {
         case 'thinking':
@@ -49,7 +51,7 @@ export function agentEventToStep(event: StreamEvent, stepIdRef: { current: numbe
             return {
                 id, type: 'tool',
                 // Label is determined by AgentActivity based on tool name
-                label: 'Using tool',
+                label: t('tool.default.active'),
                 tool: event.tool,
                 detail: event.detail,
                 narration: event.narration,
@@ -60,13 +62,13 @@ export function agentEventToStep(event: StreamEvent, stepIdRef: { current: numbe
             };
         case 'skill_use':
             return {
-                id, type: 'tool', label: 'Using tool', tool: 'use_skill',
+                id, type: 'tool', label: t('tool.default.active'), tool: 'use_skill',
                 detail: event.skill, narration: `Using skill: ${event.skill}`,
                 active: false, success: true, timestamp: ts,
             };
         case 'plan':
             return {
-                id, type: 'plan', label: 'Created plan',
+                id, type: 'plan', label: t('activity.createdPlan'),
                 planSteps: event.steps, planNarrations: event.step_narrations,
                 currentStep: event.current_step, active: false,
                 success: true, timestamp: ts,
@@ -74,7 +76,9 @@ export function agentEventToStep(event: StreamEvent, stepIdRef: { current: numbe
         case 'step':
             return {
                 id, type: 'status',
-                label: `Step ${event.step}${event.total ? ` of ${event.total}` : ''}`,
+                label: event.total
+                    ? t('cards.stepOf', { n: String(event.step), total: String(event.total) })
+                    : t('cards.stepTitle', { n: String(event.step) }),
                 active: true, timestamp: ts,
             };
         case 'status':
@@ -93,16 +97,16 @@ export function agentEventToStep(event: StreamEvent, stepIdRef: { current: numbe
                 active: false, timestamp: ts,
             };
         case 'policy_alert': {
-            const toolName = event.tool || 'unknown tool';
+            const toolName = event.tool || t('activity.policy.unknownTool');
             const reason =
                 event.reason ||
                 event.message ||
                 event.content ||
-                'Tool execution was blocked by governance policy.';
+                t('activity.policy.defaultReason');
             return {
                 id,
                 type: 'policy_alert',
-                label: `Policy blocked ${toolName}`,
+                label: t('activity.policy.blockedTool', { tool: toolName }),
                 detail: reason,
                 tool: toolName,
                 decision: event.decision || 'BLOCK',

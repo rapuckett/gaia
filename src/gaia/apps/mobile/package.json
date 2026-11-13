@@ -5,6 +5,7 @@
   "main": "expo-router/entry",
   "scripts": {
     "gen:tokens": "node scripts/gen-tokens.mjs",
+    "check:tokens": "node scripts/gen-tokens.mjs --check",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "jest",
