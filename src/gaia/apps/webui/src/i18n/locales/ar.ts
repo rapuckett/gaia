@@ -3362,6 +3362,20 @@ const messages: Messages = {
     'errorBoundary.bodyWindow': 'واجه GAIA خطأً. أعد التحميل للمتابعة.',
     'errorBoundary.retry': 'إعادة المحاولة',
     'errorBoundary.reload': 'إعادة التحميل',
+    // Mobile app
+    'mobileApp.notConnected': 'غير متصل بجهاز كمبيوتر بعد',
+    'mobileApp.error.badAddress': '"{address}" ليس عنوان GAIA صالحًا. استخدم العنوان الكامل لجهاز الكمبيوتر، مثل http://192.168.1.20:4200.',
+    'mobileApp.error.badScheme': 'يجب أن يبدأ عنوان GAIA "{address}" بـ http:// أو https://.',
+    'mobileApp.error.network': 'تعذّر الوصول إلى GAIA على {url}: {reason}. تأكد من أن الكمبيوتر يعمل ويمكن الوصول إليه من هذا الهاتف.',
+    'mobileApp.error.auth': 'لم يقبل GAIA اقتران هذا الهاتف: {detail}. اقرن هذا الهاتف بالكمبيوتر مرة أخرى.',
+    'mobileApp.error.http': 'ردّ GAIA بخطأ ({status}): {detail}',
+    'mobileApp.error.notJson': 'ردّ GAIA على {path} بشيء ليس JSON. تأكد من أن العنوان يشير إلى GAIA على الكمبيوتر.',
+    'mobileApp.error.incompleteTranscript': 'أعاد GAIA محادثة غير مكتملة. أعد تحميلها.',
+    'mobileApp.error.noBody': 'لم يرسل GAIA محتوى للرد، لذا لا يوجد ما يمكن قراءته.',
+    'mobileApp.error.streamClosed': 'أغلق GAIA الاتصال قبل اكتمال الرد. أعد إرسال الرسالة، وإذا تكرر ذلك فافحص سجل GAIA على الكمبيوتر.',
+    'mobileApp.error.streamBroke': 'انقطع الاتصال بـ GAIA أثناء وصول الرد.',
+    'mobileApp.error.badEvent': 'أرسل GAIA حدثًا في الرد لا يستطيع هذا الهاتف قراءته: {preview}',
+    'mobileApp.error.noConnection': 'لا يوجد كمبيوتر متصل. اقرن هذا الهاتف بالكمبيوتر أولًا.',
 };
 
 export const ar: Locale = {
