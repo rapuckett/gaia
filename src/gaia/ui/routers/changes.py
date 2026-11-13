@@ -28,6 +28,7 @@ from gaia.logger import get_logger
 from .. import session_git
 from ..database import ChatDatabase
 from ..dependencies import get_db
+from ..models import WireModel
 
 logger = get_logger(__name__)
 
@@ -44,6 +45,16 @@ class UndoRequest(BaseModel):
 class UndoSettings(BaseModel):
     retention_days: int = Field(..., ge=1, le=365)
     max_mb: int = Field(..., ge=10, le=100_000)
+
+
+class UndoSettingsResponse(WireModel):
+    """The undo history limits and how much of it is used."""
+
+    retention_days: int
+    max_mb: int
+    used_bytes: int
+    turns: int
+    path: str
 
 
 def _require_session(db: ChatDatabase, session_id: str) -> None:
@@ -299,7 +310,11 @@ def _settings_payload() -> dict:
     }
 
 
-@router.get("/api/settings/undo")
+@router.get(
+    "/api/settings/undo",
+    response_model=UndoSettingsResponse,
+    response_model_exclude_unset=True,
+)
 async def get_undo_settings():
     """How long and how much undo history is kept, and how much is used."""
     try:
@@ -308,7 +323,11 @@ async def get_undo_settings():
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
-@router.put("/api/settings/undo")
+@router.put(
+    "/api/settings/undo",
+    response_model=UndoSettingsResponse,
+    response_model_exclude_unset=True,
+)
 async def put_undo_settings(body: UndoSettings):
     """Change the limits and trim history to fit them now."""
 

@@ -48,6 +48,7 @@ from ..models import (
     SessionResponse,
     SessionSearchResponse,
     UpdateSessionRequest,
+    WireModel,
 )
 from ..run_manager import run_manager
 from ..security import flagship_only
@@ -57,6 +58,18 @@ from .memory import _get_store as get_memory_store
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["sessions"])
+
+
+class SessionDeleteResponse(WireModel):
+    """Confirmation that a session was deleted."""
+
+    deleted: bool
+
+
+class SessionAttachResponse(WireModel):
+    """Confirmation that a document was attached to a session."""
+
+    attached: bool
 
 
 def _reject_if_turn_running(http_request: Request, session_id: str) -> None:
@@ -434,7 +447,11 @@ async def update_session(
     return await _session_response(db, session)
 
 
-@router.delete("/api/sessions/{session_id}")
+@router.delete(
+    "/api/sessions/{session_id}",
+    response_model=SessionDeleteResponse,
+    response_model_exclude_unset=True,
+)
 async def delete_session(
     session_id: str,
     http_request: Request,
@@ -640,7 +657,11 @@ async def export_session(
 # ── Session-Document Attachments ─────────────────────────────────────────────
 
 
-@router.post("/api/sessions/{session_id}/documents")
+@router.post(
+    "/api/sessions/{session_id}/documents",
+    response_model=SessionAttachResponse,
+    response_model_exclude_unset=True,
+)
 async def attach_document(
     session_id: str,
     request: AttachDocumentRequest,

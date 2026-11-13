@@ -36,7 +36,7 @@ from .._chat_helpers import (
 )
 from ..database import ChatDatabase
 from ..dependencies import get_db
-from ..models import ChatRequest, ChatResponse
+from ..models import ChatRequest, ChatResponse, WireModel
 from ..restart_recovery import CANCELLED_TURN_NOTICE
 from ..run_manager import run_manager
 from ..security import flagship_only, require_local_pc
@@ -465,6 +465,37 @@ class PermissionModeRequest(BaseModel):
     mode: str
 
 
+PermissionMode = Literal[session_permissions.MODES]  # type: ignore[valid-type]
+
+
+class PermissionGrantResponse(WireModel):
+    """One "always allow" grant: its key and the label shown for it."""
+
+    key: str
+    label: str
+
+
+class SessionPermissionsResponse(WireModel):
+    """A chat's permission mode and its "always allow" grants."""
+
+    session_id: str
+    mode: PermissionMode
+    grants: List[PermissionGrantResponse]
+
+
+class PermissionsListResponse(WireModel):
+    """The default mode for new chats and every chat with non-default permissions."""
+
+    default_mode: PermissionMode
+    sessions: List[SessionPermissionsResponse]
+
+
+class DefaultPermissionModeResponse(WireModel):
+    """The mode new chats start in."""
+
+    default_mode: PermissionMode
+
+
 def _permissions_view(session_id: str) -> dict:
     perms = session_permissions.get(session_id)
     if perms is None:
@@ -481,7 +512,11 @@ def _require_session(db: ChatDatabase, session_id: str) -> None:
         raise HTTPException(status_code=404, detail=f"No chat {session_id!r}.")
 
 
-@router.get("/api/chat/permissions")
+@router.get(
+    "/api/chat/permissions",
+    response_model=PermissionsListResponse,
+    response_model_exclude_unset=True,
+)
 async def list_permissions():
     """Every chat with full access on or "always allow" grants, for Settings.
 
@@ -497,7 +532,12 @@ async def list_permissions():
     }
 
 
-@router.put("/api/chat/permissions", dependencies=[Depends(require_local_pc)])
+@router.put(
+    "/api/chat/permissions",
+    dependencies=[Depends(require_local_pc)],
+    response_model=DefaultPermissionModeResponse,
+    response_model_exclude_unset=True,
+)
 async def set_default_permission_mode(body: PermissionModeRequest):
     """Set the mode new chats start in: ``full_access`` in ``~/.gaia/config.json``.
 
@@ -525,14 +565,22 @@ async def set_default_permission_mode(body: PermissionModeRequest):
     return {"default_mode": session_permissions.default_mode()}
 
 
-@router.get("/api/chat/permissions/{session_id}")
+@router.get(
+    "/api/chat/permissions/{session_id}",
+    response_model=SessionPermissionsResponse,
+    response_model_exclude_unset=True,
+)
 async def get_permissions(session_id: str, db: ChatDatabase = Depends(get_db)):
     """This chat's permission mode and its "always allow" grants."""
     _require_session(db, session_id)
     return _permissions_view(session_id)
 
 
-@router.put("/api/chat/permissions/{session_id}")
+@router.put(
+    "/api/chat/permissions/{session_id}",
+    response_model=SessionPermissionsResponse,
+    response_model_exclude_unset=True,
+)
 async def set_permission_mode(
     session_id: str, body: PermissionModeRequest, db: ChatDatabase = Depends(get_db)
 ):
@@ -589,7 +637,11 @@ async def _sync_relayed_mode(session_id: str, enabled: bool) -> None:
         ) from exc
 
 
-@router.delete("/api/chat/permissions/{session_id}/grants")
+@router.delete(
+    "/api/chat/permissions/{session_id}/grants",
+    response_model=SessionPermissionsResponse,
+    response_model_exclude_unset=True,
+)
 async def revoke_grants(
     session_id: str, key: Optional[str] = None, db: ChatDatabase = Depends(get_db)
 ):

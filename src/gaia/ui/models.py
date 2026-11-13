@@ -5,9 +5,19 @@
 
 from typing import Any, Dict, List, Literal, Optional
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from gaia.version import __version__ as _gaia_version
+
+class WireModel(BaseModel):
+    """Base for a model that types a route's existing dict response.
+
+    An undeclared key fails response validation instead of being dropped, so
+    the model can't quietly drift from what the route sends.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
 
 # ── System ──────────────────────────────────────────────────────────────────
 

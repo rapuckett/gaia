@@ -21,6 +21,8 @@ from pydantic import BaseModel
 
 from gaia.mcp.client.config import MCPConfig
 
+from ..models import WireModel
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["mcp"])
@@ -44,6 +46,12 @@ class MCPServerStatus(BaseModel):
     connected: bool
     tool_count: int
     error: Optional[str] = None
+
+
+class MCPStatusResponse(WireModel):
+    """Result of ``GET /api/mcp/status``."""
+
+    servers: List[MCPServerStatus]
 
 
 # ---------------------------------------------------------------------------
@@ -131,7 +139,11 @@ async def list_mcp_server_tools(name: str):
         )
 
 
-@router.get("/api/mcp/status")
+@router.get(
+    "/api/mcp/status",
+    response_model=MCPStatusResponse,
+    response_model_exclude_unset=True,
+)
 async def get_mcp_runtime_status():
     """Return runtime MCP server connection status from the most recent chat session.
 

@@ -20,7 +20,7 @@ import shutil
 import threading
 import uuid
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 from fastapi import APIRouter, File, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse
@@ -43,6 +43,7 @@ from ..models import (
     FileStatusResponse,
     FileUploadResponse,
     OpenFileRequest,
+    WireModel,
 )
 from ..turn_summary import is_openable
 from ..utils import (
@@ -94,6 +95,13 @@ SEARCH_STALL_GRACE_SEC = 1.0
 SEARCH_SETUP_ALLOWANCE_SEC = 1.0
 
 router = APIRouter(tags=["files"])
+
+
+class OpenFileResponse(WireModel):
+    """The resolved path that was opened."""
+
+    status: Literal["ok"]
+    path: str
 
 
 # ── Upload ───────────────────────────────────────────────────────────────────
@@ -409,7 +417,11 @@ async def browse_files(path: Optional[str] = None):
 # ── Open File/Folder ─────────────────────────────────────────────────────────
 
 
-@router.post("/api/files/open")
+@router.post(
+    "/api/files/open",
+    response_model=OpenFileResponse,
+    response_model_exclude_unset=True,
+)
 async def open_file_or_folder(request: OpenFileRequest):
     """Open a file or its containing folder in the system file explorer.
 

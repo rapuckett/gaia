@@ -13,17 +13,49 @@ the running agent is asked instead.
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
+
+from gaia.skills.format import SECURITY_TIERS
+from gaia.skills.listing import SKILL_SOURCES
+
+from ..models import WireModel
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["skills"])
 
+SkillTier = Literal[SECURITY_TIERS]  # type: ignore[valid-type]
+SkillSource = Literal[SKILL_SOURCES]  # type: ignore[valid-type]
 
-@router.get("/api/skills")
+
+class SkillListEntry(WireModel):
+    """One installed skill in the Skills settings list."""
+
+    name: str
+    description: str
+    version: Optional[str]
+    tier: SkillTier
+    tools: List[str]
+    path: str
+    always_on: bool
+    source: Optional[SkillSource]
+
+
+class SkillsListResponse(WireModel):
+    """Installed skills, and any folder that failed to parse (path to message)."""
+
+    skills: List[SkillListEntry]
+    invalid: Dict[str, str]
+
+
+@router.get(
+    "/api/skills",
+    response_model=SkillsListResponse,
+    response_model_exclude_unset=True,
+)
 def list_skills() -> Dict[str, Any]:
     """Installed skills, and any folder that failed to parse."""
     from gaia.skills.errors import SkillError
@@ -83,7 +115,78 @@ class SkillLinkAddRequest(SkillLinkRequest):
     force: bool = False
 
 
-@router.get("/api/skills/featured")
+class SkillFeaturedLibrary(WireModel):
+    """A skills library offered as a one-click add."""
+
+    id: str
+    name: str
+    url: str
+    description: str
+
+
+class SkillFeaturedResponse(WireModel):
+    """Result of ``GET /api/skills/featured``."""
+
+    libraries: List[SkillFeaturedLibrary]
+
+
+class SkillLinkPermission(WireModel):
+    """One permission a linked skill declares, raw grant plus a sentence."""
+
+    grant: str
+    text: str
+
+
+class SkillLinkEntry(WireModel):
+    """One skill found behind a pasted link, and what its audit said."""
+
+    name: str
+    description: str
+    path: str
+    has_code: bool
+    permissions: List[SkillLinkPermission]
+    permissions_unreadable: bool
+    verdict: str
+    findings: List[str]
+    installed: bool
+    update: bool
+    error: Optional[str]
+
+
+class SkillLinkPreviewResponse(WireModel):
+    """Result of ``POST /api/skills/link/preview``; ``pin`` goes back on add."""
+
+    link: str
+    source: str
+    skills: List[SkillLinkEntry]
+    pin: str
+    warning: str
+
+
+class SkillLinkAdded(WireModel):
+    """One skill the add wrote to ``~/.gaia/skills``."""
+
+    name: str
+    updated: bool
+    path: str
+    verdict: str
+    has_code: bool
+    code_trusted: bool
+    findings: List[str]
+
+
+class SkillLinkAddResponse(WireModel):
+    """Result of ``POST /api/skills/link/add``; ``failed`` maps name to reason."""
+
+    added: List[SkillLinkAdded]
+    failed: Dict[str, str]
+
+
+@router.get(
+    "/api/skills/featured",
+    response_model=SkillFeaturedResponse,
+    response_model_exclude_unset=True,
+)
 def featured_skill_libraries() -> Dict[str, Any]:
     """Libraries the Skills panel offers as one-click adds."""
     from gaia.skills.link import FEATURED_LIBRARIES
@@ -91,7 +194,11 @@ def featured_skill_libraries() -> Dict[str, Any]:
     return {"libraries": FEATURED_LIBRARIES}
 
 
-@router.post("/api/skills/link/preview")
+@router.post(
+    "/api/skills/link/preview",
+    response_model=SkillLinkPreviewResponse,
+    response_model_exclude_unset=True,
+)
 def preview_skill_link(body: SkillLinkRequest) -> Dict[str, Any]:
     """List and audit the skills behind a pasted link. Writes nothing."""
     from gaia.skills.errors import SkillError
@@ -105,7 +212,11 @@ def preview_skill_link(body: SkillLinkRequest) -> Dict[str, Any]:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
-@router.post("/api/skills/link/add")
+@router.post(
+    "/api/skills/link/add",
+    response_model=SkillLinkAddResponse,
+    response_model_exclude_unset=True,
+)
 def add_skill_link(body: SkillLinkAddRequest) -> Dict[str, Any]:
     """Add the chosen skills behind a pasted link to ``~/.gaia/skills``.
 
