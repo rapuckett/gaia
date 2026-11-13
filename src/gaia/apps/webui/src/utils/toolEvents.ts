@@ -4,11 +4,14 @@
 import { useNotificationStore, PATH_ACCESS_TOOL, PROJECT_TRUST_TOOL, pathAccessQuestion, pathAccessTitle, isPathAccessFollowUp } from '../stores/notificationStore';
 import type { GaiaNotification } from '../types/agent';
 import type { StreamEvent, AgentStep } from '../types';
+import { getT } from '../i18n/useT';
+import { APP_NAME } from './constants';
 
 /** Raise the prompt for a `permission_request`, or bring back the one a re-attach replays. */
 export function showPermissionRequest(event: StreamEvent, sessionId: string): void {
     const toolName = event.tool || '';
     const toolLabel = event.tool_label || toolName;
+    const t = getT();
     const { addNotification: addNotif, notifications } = useNotificationStore.getState();
     // A re-attach replays the run: keep an answered prompt as it is, and
     // bring back one still waiting that earlier replayed steps hid.
@@ -28,15 +31,15 @@ export function showPermissionRequest(event: StreamEvent, sessionId: string): vo
         type: 'permission_request',
         agentId: sessionId,
         sessionId,
-        agentName: 'GAIA',
+        agentName: APP_NAME,
         title: isPathAccess
-            ? pathAccessTitle(event.args, followUp)
-            : toolName === PROJECT_TRUST_TOOL ? "Trust this folder's instructions and skills?" : `Allow ${toolLabel}?`,
+            ? pathAccessTitle(event.args, followUp, t)
+            : toolName === PROJECT_TRUST_TOOL ? t('prompt.trust.title') : t('prompt.title.tool', { tool: toolLabel }),
         message: isPathAccess
-            ? pathAccessQuestion(event.args, followUp)
+            ? pathAccessQuestion(event.args, followUp, t)
             : toolName === PROJECT_TRUST_TOOL
-                ? "GAIA would put this folder's CLAUDE.md, AGENTS.md and skills in the model's prompt, now and every time you work in it."
-                : `GAIA needs your OK before ${toolLabel}.`,
+                ? t('prompt.trust.ask')
+                : t('prompt.needsOk', { tool: toolLabel }),
         timestamp: Date.now(),
         read: false,
         dismissed: false,
@@ -63,18 +66,19 @@ export function policyAlertNotification(
     sessionId: string,
     fallbackId: string,
 ): GaiaNotification & { tool: string } {
-    const toolName = event.tool || 'unknown tool';
+    const t = getT();
+    const toolName = event.tool || t('activity.policy.unknownTool');
     const reason =
         event.reason ||
         event.message ||
         event.content ||
-        'Tool execution was blocked by governance policy.';
+        t('activity.policy.defaultReason');
     return {
         id: event.receipt_id ?? fallbackId,
         type: 'policy_alert',
         agentId: sessionId,
-        agentName: 'GAIA',
-        title: `Blocked: ${toolName} is restricted by policy.`,
+        agentName: APP_NAME,
+        title: t('activity.policy.blocked', { tool: toolName }),
         message: reason,
         timestamp: Date.now(),
         read: false,
