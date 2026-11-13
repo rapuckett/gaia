@@ -119,13 +119,41 @@ export function questionAnswered(turn: ChatTurn, requestId: string): ChatTurn {
     return turn.pendingQuestion?.request_id === requestId ? { ...turn, pendingQuestion: null } : turn;
 }
 
+export interface ResolvedPrompt {
+    state: 'answered' | 'expired';
+    /** What to show as "You answered": a question's chosen label or typed text. Never kept for a sensitive question. */
+    answer?: string;
+}
+
 interface ChatStreamsState {
     /** By chat id; a chat with no entry is idle. */
     turns: Readonly<Record<string, ChatTurn>>;
+    /** How each prompt ended, by chat id then prompt id (a question's `request_id`, an approval's `confirm_id`). Outlives turns. */
+    resolved: Readonly<Record<string, Readonly<Record<string, ResolvedPrompt>>>>;
 }
 
 // Live turns only: once a turn ends, its messages come from the transcript query.
-export const useChatStreamStore = create<ChatStreamsState>(() => ({ turns: {} }));
+export const useChatStreamStore = create<ChatStreamsState>(() => ({ turns: {}, resolved: {} }));
+
+/** An answer is final; an expiry never replaces one. */
+export function markPromptResolved(sessionId: string, promptId: string, resolution: ResolvedPrompt): void {
+    useChatStreamStore.setState((state) => {
+        const chat = state.resolved[sessionId] ?? {};
+        if (chat[promptId]?.state === 'answered' && resolution.state === 'expired') return state;
+        return { resolved: { ...state.resolved, [sessionId]: { ...chat, [promptId]: resolution } } };
+    });
+}
+
+/** The turn is over with a prompt still open: it can no longer be answered. */
+export function expirePendingPrompts(sessionId: string): void {
+    const turn = useChatStreamStore.getState().turns[sessionId];
+    if (turn?.pendingPermission?.confirm_id) markPromptResolved(sessionId, turn.pendingPermission.confirm_id, { state: 'expired' });
+    if (turn?.pendingQuestion) markPromptResolved(sessionId, turn.pendingQuestion.request_id, { state: 'expired' });
+}
+
+export function useResolvedPrompt(sessionId: string, promptId: string): ResolvedPrompt | undefined {
+    return useChatStreamStore((state) => state.resolved[sessionId]?.[promptId]);
+}
 
 export function readTurn(sessionId: string): ChatTurn {
     return useChatStreamStore.getState().turns[sessionId] ?? IDLE_TURN;
