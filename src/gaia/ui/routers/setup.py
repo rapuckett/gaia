@@ -20,7 +20,7 @@ from gaia.logger import get_logger
 from .. import setup_plan as plan_api
 from ..database import ChatDatabase
 from ..dependencies import get_db
-from ..security import require_local_pc, require_ui_header
+from ..security import require_local_pc, require_pc_or_device, require_ui_header
 from ..setup_plan import (
     CantRunHere,
     ServerNotRunning,
@@ -114,7 +114,11 @@ def setup_plan() -> Dict[str, Any]:
         raise _plan_error(e, _PLAN_FAILED) from e
 
 
-@router.post("/api/setup/npu/recheck", dependencies=[Depends(require_ui_header)])
+#: First-run setup: the PC, or a paired device the PC allowed.
+_SETS_UP = [Depends(require_ui_header), Depends(require_pc_or_device)]
+
+
+@router.post("/api/setup/npu/recheck", dependencies=_SETS_UP)
 def setup_npu_recheck() -> Dict[str, Any]:
     """Read the NPU's setup afresh, after the user fixed something; returns the plan."""
     from gaia.llm import npu_linux
@@ -162,7 +166,7 @@ class ChatModelRequest(BaseModel):
     acknowledge_no_fit: bool = False
 
 
-@router.post("/api/setup/chat-model", dependencies=[Depends(require_ui_header)])
+@router.post("/api/setup/chat-model", dependencies=_SETS_UP)
 def setup_chat_model(body: ChatModelRequest) -> Dict[str, Any]:
     """Pick the chat model, saved as ``default_model``; returns the new plan.
 
@@ -188,7 +192,7 @@ class VisionModelRequest(BaseModel):
     model_id: Optional[str] = None
 
 
-@router.post("/api/setup/vision-model", dependencies=[Depends(require_ui_header)])
+@router.post("/api/setup/vision-model", dependencies=_SETS_UP)
 def setup_vision_model(body: VisionModelRequest) -> Dict[str, Any]:
     """Pick the model that reads images; returns the new plan."""
     try:
@@ -198,7 +202,11 @@ def setup_vision_model(body: VisionModelRequest) -> Dict[str, Any]:
         raise _plan_error(e, f"{body.model_id} can't read images.") from e
 
 
-@router.post("/api/setup/report", dependencies=[Depends(require_ui_header)])
+#: The report bundles every GAIA log, which only the PC may read.
+_AT_THIS_PC = [Depends(require_ui_header), Depends(require_local_pc)]
+
+
+@router.post("/api/setup/report", dependencies=_AT_THIS_PC)
 def setup_report() -> Dict[str, Any]:
     """Bundle setup's record, every GAIA log and a system snapshot for a bug report."""
     record = runner.report()
@@ -214,7 +222,7 @@ def setup_report() -> Dict[str, Any]:
     return {"name": path.name, "path": str(path), "size_bytes": path.stat().st_size}
 
 
-@router.get("/api/setup/report/{name}", dependencies=[Depends(require_ui_header)])
+@router.get("/api/setup/report/{name}", dependencies=_AT_THIS_PC)
 def setup_report_file(name: str) -> FileResponse:
     """A troubleshooting report written by ``POST /api/setup/report``."""
     from gaia.home import gaia_home
@@ -246,7 +254,7 @@ class SkipModelRequest(BaseModel):
     skipped: bool = True
 
 
-@router.post("/api/setup/models/skip", dependencies=[Depends(require_ui_header)])
+@router.post("/api/setup/models/skip", dependencies=_SETS_UP)
 def setup_skip_model(body: SkipModelRequest) -> Dict[str, Any]:
     """Skip one of setup's models, or take it back; returns the new plan."""
     try:
@@ -266,11 +274,7 @@ class DownloadModelRequest(BaseModel):
     keep_trying: bool = False
 
 
-@router.post(
-    "/api/setup/models/download",
-    status_code=202,
-    dependencies=[Depends(require_ui_header)],
-)
+@router.post("/api/setup/models/download", status_code=202, dependencies=_SETS_UP)
 def setup_download_model(body: DownloadModelRequest) -> Dict[str, Any]:
     """Download one model now: Retry, Resume, or one skipped at setup.
 
@@ -298,7 +302,7 @@ class RemoveModelRequest(BaseModel):
     model_id: str
 
 
-@router.post("/api/setup/models/remove", dependencies=[Depends(require_ui_header)])
+@router.post("/api/setup/models/remove", dependencies=_SETS_UP)
 def setup_remove_model(body: RemoveModelRequest) -> Dict[str, Any]:
     """Delete one model from Lemonade at the user's request; it joins
     ``skipped_models``. Returns the new plan and ``freed_gb``."""
@@ -339,7 +343,7 @@ class SetupRunRequest(BaseModel):
     upgrade_embedded: bool = False
 
 
-@router.post("/api/setup/run")
+@router.post("/api/setup/run", dependencies=[Depends(require_pc_or_device)])
 def setup_run(
     body: SetupRunRequest, db: ChatDatabase = Depends(get_db)
 ) -> Dict[str, Any]:
@@ -418,7 +422,7 @@ class CancelRequest(BaseModel):
     model_id: Optional[str] = None
 
 
-@router.post("/api/setup/cancel")
+@router.post("/api/setup/cancel", dependencies=[Depends(require_pc_or_device)])
 def setup_cancel(body: Optional[CancelRequest] = None) -> Dict[str, Any]:
     """Stop the running setup, or one model's download. Finished models and
     partial files are kept, so a later run or download resumes."""

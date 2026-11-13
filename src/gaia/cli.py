@@ -972,6 +972,7 @@ def _launch_agent_ui(port=4200, base_url=None, log=None, debug=False, webui_dist
             create_app,
             lemonade_is_remote,
             start_model_server_owner,
+            uvicorn_options,
         )
 
         # Forward --base-url to the UI server via environment variable
@@ -995,13 +996,7 @@ def _launch_agent_ui(port=4200, base_url=None, log=None, debug=False, webui_dist
         if not base_url and not lemonade_is_remote():
             # First run is set up in the app; the daemon owns the model server.
             start_model_server_owner()
-        uvicorn.run(
-            app,
-            host="127.0.0.1",
-            port=port,
-            log_level="debug" if debug else "info",
-            access_log=debug,
-        )
+        uvicorn.run(app, **uvicorn_options("127.0.0.1", port, debug=debug))
         log.warning(
             "Agent UI server stopped: uvicorn returned after a shutdown signal "
             "(Ctrl+C or Ctrl+Break reached this process)"
