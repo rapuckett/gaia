@@ -1063,7 +1063,6 @@ const messages: Messages = {
     'env.offBlocked': 'متوقف: البحث على الويب والصفحات محظورة',
     'env.phone': 'الوصول من الهاتف',
     'env.stopping': 'جارٍ الإيقاف…',
-    'env.starting': 'جارٍ التشغيل…',
     'env.phoneConnected': '{name} متصل',
     'env.noPhone': 'لا يوجد هاتف متصل بعد',
     'env.qr': 'إظهار رمز QR',
@@ -2792,6 +2791,8 @@ const messages: Messages = {
     'mobile.downloadPage': 'الحصول على ngrok',
     'mobile.retry': 'إعادة المحاولة',
     'mobile.close': 'إغلاق',
+    'mobile.privacy': 'يصل هاتفك إلى هذا الجهاز عبر ngrok، وهي خدمة خارجية يمكنها الاطلاع على ما يمر عبرها.',
+    'mobile.start': 'ابدأ الوصول من الهاتف',
     'mobile.startFailed': 'تعذّر تشغيل الوصول من الهاتف',
     'mobile.stopFailed': 'تعذّر إيقاف الوصول من الهاتف',
 
