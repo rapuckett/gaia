@@ -664,7 +664,9 @@ class TestSidecarRegistrationEndToEnd:
         )
         monkeypatch.setattr("gaia.connectors.start_authorization", mock_start)
 
-        with TestClient(create_app(db_path=":memory:")) as client:
+        with TestClient(
+            create_app(db_path=":memory:"), client=("127.0.0.1", 50000)
+        ) as client:
             resp = client.post(
                 "/api/connectors/google/authorize",
                 json={"scopes": ["openid"], "grant_agents": ["installed:email"]},
@@ -736,7 +738,9 @@ class TestSidecarRegistrationEndToEnd:
         )
         monkeypatch.setattr("gaia.connectors.start_authorization", mock_start)
 
-        with TestClient(create_app(db_path=":memory:")) as client:
+        with TestClient(
+            create_app(db_path=":memory:"), client=("127.0.0.1", 50000)
+        ) as client:
             resp = client.post(
                 f"/api/connectors/{connector_id}/authorize",
                 json={"scopes": [], "grant_agents": ["installed:gaia"]},
@@ -766,7 +770,9 @@ class TestSidecarRegistrationEndToEnd:
         )
         monkeypatch.setattr("gaia.connectors.start_authorization", AsyncMock())
 
-        with TestClient(create_app(db_path=":memory:")) as client:
+        with TestClient(
+            create_app(db_path=":memory:"), client=("127.0.0.1", 50000)
+        ) as client:
             resp = client.post(
                 "/api/connectors/google/authorize",
                 json={"scopes": ["openid"], "grant_agents": ["installed:email"]},
@@ -812,7 +818,9 @@ class TestSidecarInstallNoRestart:
         sha256 = hashlib.sha256(artifact_bytes).hexdigest()
         manifest = self._binary_manifest(sha256, len(artifact_bytes))
 
-        with TestClient(create_app(db_path=":memory:")) as client:
+        with TestClient(
+            create_app(db_path=":memory:"), client=("127.0.0.1", 50000)
+        ) as client:
             registry = client.app.state.agent_registry
 
             # Baseline: email is not installed yet, so the grant flow 404s.

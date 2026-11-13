@@ -608,9 +608,7 @@ class TunnelManager:
             if self._url:
                 self._started_at = datetime.now(timezone.utc).isoformat()
                 self._error = None
-                logger.info(
-                    "Tunnel started: %s (token: %s...)", self._url, self._token[:8]
-                )
+                logger.info("Tunnel started: %s", self._url)
             else:
                 # _poll_ngrok_api already sets self._error with a friendly
                 # message; keep a sensible fallback if it somehow didn't.
