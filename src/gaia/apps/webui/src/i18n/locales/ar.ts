@@ -343,6 +343,7 @@ const messages: Messages = {
     'msg.editCancel': 'إلغاء',
     'msg.editSend': 'إرسال',
     'msg.copy': 'نسخ الرسالة',
+    'msg.actions': 'إجراءات الرسالة',
     'msg.copied': 'تم النسخ!',
     'msg.copiedAria': 'تم النسخ إلى الحافظة',
     'msg.delete': 'حذف الرسالة',

@@ -343,6 +343,7 @@ export const enMessages = {
     'msg.editCancel': 'Cancel',
     'msg.editSend': 'Send',
     'msg.copy': 'Copy message',
+    'msg.actions': 'Message actions',
     'msg.copied': 'Copied!',
     'msg.copiedAria': 'Copied to clipboard',
     'msg.delete': 'Delete message',
