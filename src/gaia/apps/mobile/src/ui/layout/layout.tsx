@@ -1,3 +1,6 @@
+// Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
+// SPDX-License-Identifier: MIT
+
 import { View, type ViewStyle } from 'react-native';
 import type { ReactNode } from 'react';
 import { useTheme } from '../theme/ThemeProvider';
@@ -10,58 +13,60 @@ const ALIGN = { start: 'flex-start', center: 'center', end: 'flex-end', stretch:
 const JUSTIFY = { start: 'flex-start', center: 'center', end: 'flex-end', between: 'space-between' } as const;
 
 interface BoxProps {
-  children?: ReactNode;
-  gap?: Space;
-  align?: Align;
-  justify?: Justify;
-  flex?: number;
-  testID?: string;
+    children?: ReactNode;
+    gap?: Space;
+    align?: Align;
+    justify?: Justify;
+    flex?: number;
+    testID?: string;
 }
 
 export interface StackProps extends BoxProps {
-  padding?: Space;
-  paddingX?: Space;
-  paddingY?: Space;
+    padding?: Space;
+    paddingX?: Space;
+    paddingY?: Space;
 }
 
 export interface RowProps extends BoxProps {
-  wrap?: boolean;
+    wrap?: boolean;
 }
 
-function useBox(p: BoxProps): ViewStyle {
-  const { space } = useTheme();
-  const style: ViewStyle = {};
-  if (p.gap) style.gap = space[p.gap];
-  if (p.align) style.alignItems = ALIGN[p.align];
-  if (p.justify) style.justifyContent = JUSTIFY[p.justify];
-  if (p.flex !== undefined) style.flex = p.flex;
-  return style;
+type Mut<T> = { -readonly [K in keyof T]: T[K] };
+
+function boxStyle(space: Record<Space, number>, p: BoxProps): Mut<ViewStyle> {
+    const style: Mut<ViewStyle> = {};
+    if (p.gap) style.gap = space[p.gap];
+    if (p.align) style.alignItems = ALIGN[p.align];
+    if (p.justify) style.justifyContent = JUSTIFY[p.justify];
+    if (p.flex !== undefined) style.flex = p.flex;
+    return style;
 }
 
 export function Stack({ children, padding, paddingX, paddingY, testID, ...box }: StackProps) {
-  const { space } = useTheme();
-  const style = useBox(box);
-  if (padding) style.padding = space[padding];
-  if (paddingX) style.paddingHorizontal = space[paddingX];
-  if (paddingY) style.paddingVertical = space[paddingY];
-  return (
-    <View style={style} testID={testID}>
-      {children}
-    </View>
-  );
+    const { space } = useTheme();
+    const style = boxStyle(space, box);
+    if (padding) style.padding = space[padding];
+    if (paddingX) style.paddingHorizontal = space[paddingX];
+    if (paddingY) style.paddingVertical = space[paddingY];
+    return (
+        <View style={style} testID={testID}>
+            {children}
+        </View>
+    );
 }
 
 export function Row({ children, wrap, align = 'center', testID, ...box }: RowProps) {
-  const style = useBox({ ...box, align });
-  style.flexDirection = 'row';
-  if (wrap) style.flexWrap = 'wrap';
-  return (
-    <View style={style} testID={testID}>
-      {children}
-    </View>
-  );
+    const { space } = useTheme();
+    const style = boxStyle(space, { ...box, align });
+    style.flexDirection = 'row';
+    if (wrap) style.flexWrap = 'wrap';
+    return (
+        <View style={style} testID={testID}>
+            {children}
+        </View>
+    );
 }
 
 export function Spacer() {
-  return <View style={{ flex: 1 }} />;
+    return <View style={{ flex: 1 }} />;
 }
