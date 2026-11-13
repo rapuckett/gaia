@@ -15,6 +15,7 @@ export {
   CircleAlert,
   Copy,
   Ellipsis,
+  EyeOff,
   FileText,
   Info,
   Lock,

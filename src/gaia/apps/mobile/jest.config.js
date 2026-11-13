@@ -11,6 +11,8 @@ const project = (preset) => ({
     preset: `jest-expo/${preset}`,
     moduleNameMapper,
     testMatch: ['<rootDir>/src/**/*.test.{ts,tsx}'],
+    // Sheets are native-only: the web project has no BackHandler or native gesture module to test.
+    testPathIgnorePatterns: preset === 'web' ? ['/node_modules/', '/SheetHost\\.test\\.tsx$'] : ['/node_modules/'],
 });
 
 module.exports = {

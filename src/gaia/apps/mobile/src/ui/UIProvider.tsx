@@ -7,6 +7,7 @@ import { useFonts } from 'expo-font';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { SheetHost } from './overlays/SheetHost';
 import { fontFiles } from './theme/fonts';
 import { ThemeProvider, useTheme } from './theme/ThemeProvider';
 
@@ -26,8 +27,7 @@ function Frame({ children }: { children: ReactNode }) {
             <SafeAreaProvider>
                 <KeyboardProvider>
                     <StatusBar barStyle={scheme === 'dark' ? 'light-content' : 'dark-content'} />
-                    {children}
-                    {/* The sheet host mounts here (design/mobile-ui-lists). */}
+                    <SheetHost>{children}</SheetHost>
                 </KeyboardProvider>
             </SafeAreaProvider>
         </GestureHandlerRootView>
