@@ -25,17 +25,22 @@ interface MobileAccessModalProps {
     setupCommands?: string[] | null;
     /** Try starting the tunnel again, e.g. after installing ngrok. */
     onRetry?: () => void;
+    /** The tunnel is off and nothing has been asked of it yet: show Start, start nothing. */
+    awaitingStart?: boolean;
+    /** Start the tunnel. Only this button does. */
+    onStart?: () => void;
 }
 
 const NGROK_DOWNLOAD_URL = 'https://ngrok.com/download';
 
-export function MobileAccessModal({ isOpen, onClose, onStop, error, setupCommands, onRetry }: MobileAccessModalProps) {
+export function MobileAccessModal({ isOpen, onClose, onStop, error, setupCommands, onRetry, awaitingStart, onStart }: MobileAccessModalProps) {
     const [status, setStatus] = useState<TunnelStatus | null>(null);
     const [copied, setCopied] = useState(false);
     const t = useT();
     const needsSetup = Array.isArray(setupCommands);
     // Nothing to poll for or scan while the tunnel cannot start.
-    const halted = !!error || needsSetup;
+    const idle = !!awaitingStart && !!onStart;
+    const halted = !!error || needsSetup || idle;
     const [qrError, setQrError] = useState<string | null>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
     useEscapeToClose(isOpen, onClose);
@@ -165,7 +170,7 @@ export function MobileAccessModal({ isOpen, onClose, onStop, error, setupCommand
 
                 <div className="modal-body mobile-modal-body">
                     {/* Status indicator */}
-                    <div className="tunnel-status">
+                    {!idle && <div className="tunnel-status">
                         <span className={`status-dot ${
                             status?.active ? 'is-active' :
                             needsSetup ? 'is-setup' :
@@ -182,7 +187,14 @@ export function MobileAccessModal({ isOpen, onClose, onStop, error, setupCommand
                                         : 'Starting tunnel...'}
                         </span>
                         {!status?.active && !halted && <span className="tunnel-spinner" />}
-                    </div>
+                    </div>}
+
+                    {idle && (
+                        <div className="tunnel-setup">
+                            <div className="tunnel-setup-title">{t('mobile.setupTitle')}</div>
+                            <p>{t('mobile.privacy')}</p>
+                        </div>
+                    )}
 
                     {/* Missing prerequisite: a setup step, not a failure. */}
                     {needsSetup && (
@@ -286,6 +298,9 @@ export function MobileAccessModal({ isOpen, onClose, onStop, error, setupCommand
                             >
                                 Stop tunnel
                             </button>
+                        )}
+                        {idle && (
+                            <button className="btn-primary" onClick={onStart}>{t('mobile.start')}</button>
                         )}
                         {needsSetup && onRetry && (
                             <button className="btn-primary" onClick={onRetry}>
