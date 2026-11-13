@@ -1029,7 +1029,6 @@ export const enMessages = {
     'env.offBlocked': 'Off: web search and pages are blocked',
     'env.phone': 'Phone access',
     'env.stopping': 'Stopping…',
-    'env.starting': 'Starting…',
     'env.phoneConnected': '{name} connected',
     'env.noPhone': 'No phone connected yet',
     'env.qr': 'Show QR code',
@@ -2725,6 +2724,8 @@ export const enMessages = {
     'mobile.downloadPage': 'Get ngrok',
     'mobile.retry': 'Retry',
     'mobile.close': 'Close',
+    'mobile.privacy': 'Your phone reaches this PC through ngrok, an outside service that can see what passes through it.',
+    'mobile.start': 'Start mobile access',
 
     // Approving a calendar change
     'permission.calendar.event': 'Event',

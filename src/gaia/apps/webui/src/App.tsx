@@ -170,6 +170,7 @@ function App() {
     const [tunnelActive, setTunnelActive] = useState(false);
     const [tunnelError, setTunnelError] = useState<string | null>(null);
     const [tunnelSetup, setTunnelSetup] = useState<string[] | null>(null);
+    const [tunnelStarting, setTunnelStarting] = useState(false);
 
     // Set once the status poller and chat list exist further down.
     const refreshStatus = useRef<() => Promise<void>>(async () => {});
@@ -709,13 +710,16 @@ ${prompt}` : prompt);
             .catch((err) => log.system.debug('Mobile access unavailable', err));
     }, []);
 
-    const openMobileAccess = useCallback(async () => {
+    const openMobileAccess = useCallback(() => {
         setShowMobileAccess(true);
         setTunnelError(null);
-        if (tunnelActive) {
-            setTunnelSetup(null);
-            return;
-        }
+        setTunnelSetup(null);
+    }, []);
+
+    // The only path that starts the tunnel: the dialog's Start button (and Retry).
+    const startMobileAccess = useCallback(async () => {
+        setTunnelError(null);
+        setTunnelStarting(true);
         try {
             const status = await api.startTunnel();
             // Kept until the retry answers, so the setup panel doesn't flash to "Starting".
@@ -727,8 +731,10 @@ ${prompt}` : prompt);
         } catch (err) {
             setTunnelSetup(null);
             setTunnelError(err instanceof Error ? err.message : 'Could not start mobile access');
+        } finally {
+            setTunnelStarting(false);
         }
-    }, [tunnelActive]);
+    }, []);
 
     const stopMobileAccess = useCallback(async () => {
         try {
@@ -740,8 +746,8 @@ ${prompt}` : prompt);
         }
     }, []);
 
-    // The session panel's Phone access toggle drives the same flow.
-    useMobileAccessRequests((on) => { void (on ? openMobileAccess() : stopMobileAccess()); });
+    // The session panel's Phone access toggle opens the dialog; only Start starts the tunnel.
+    useMobileAccessRequests((on) => { if (on) openMobileAccess(); else void stopMobileAccess(); });
     useEffect(() => { announceMobileAccess(tunnelActive); }, [tunnelActive]);
 
     const isMobile = useMediaQuery('(max-width: 768px)');
@@ -819,7 +825,7 @@ ${prompt}` : prompt);
             <ErrorBoundary area="sidebar" variant="compact">
                 <Sidebar
                     onNewChat={newChat}
-                    onMobileAccess={isMobile ? undefined : () => void openMobileAccess()}
+                    onMobileAccess={isMobile ? undefined : openMobileAccess}
                     tunnelActive={tunnelActive}
                 />
             </ErrorBoundary>
@@ -885,7 +891,9 @@ ${prompt}` : prompt);
                         onStop={() => void stopMobileAccess()}
                         error={tunnelError}
                         setupCommands={tunnelSetup}
-                        onRetry={() => void openMobileAccess()}
+                        onRetry={() => void startMobileAccess()}
+                        awaitingStart={!tunnelActive && !tunnelStarting && !tunnelError && !tunnelSetup}
+                        onStart={() => void startMobileAccess()}
                     />
                 </Suspense>
             )}
