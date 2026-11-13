@@ -49,7 +49,7 @@ export function ProgressLine({ value, label }: ProgressLineProps) {
             style={{ gap: space.xs }}
         >
             {label ? (
-                <Text role="caption" tone="secondary" numberOfLines={2}>
+                <Text role="caption" tone="secondary">
                     {label}
                 </Text>
             ) : null}
