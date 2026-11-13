@@ -92,6 +92,7 @@ from gaia.agents.base.tool_outcome import (
 )
 from gaia.agents.base.verification import check_was_executed
 from gaia.chat.sdk import AgentSDK, LLMCallCancelled
+from gaia.home import gaia_home
 from gaia.llm.lemonade_client import (
     DEFAULT_EMBEDDING_MODEL,
     EMBED_MAX_CHARS,
@@ -115,49 +116,51 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-#: Path to the user-level memory settings file.
-_MEMORY_SETTINGS_PATH = Path.home() / ".gaia" / "memory_settings.json"
+
+def _memory_settings_path() -> Path:
+    """The user-level memory settings file, under ``GAIA_HOME`` when set."""
+    return gaia_home() / "memory_settings.json"
 
 
 def _load_memory_settings() -> Dict:
-    """Read ~/.gaia/memory_settings.json, returning {} if it is unusable."""
+    """Read memory_settings.json, returning {} if it is unusable."""
     try:
-        loaded = json.loads(_MEMORY_SETTINGS_PATH.read_text(encoding="utf-8"))
+        loaded = json.loads(_memory_settings_path().read_text(encoding="utf-8"))
         return loaded if isinstance(loaded, dict) else {}
     except FileNotFoundError:
         return {}
     except (OSError, json.JSONDecodeError) as exc:
         logger.warning(
-            "failed to load memory settings from %s: %s", _MEMORY_SETTINGS_PATH, exc
+            "failed to load memory settings from %s: %s", _memory_settings_path(), exc
         )
         return {}
 
 
 def _save_memory_settings(settings: Dict) -> None:
-    """Merge *settings* into ~/.gaia/memory_settings.json or raise on failure."""
+    """Merge *settings* into memory_settings.json or raise on failure."""
     try:
-        current = json.loads(_MEMORY_SETTINGS_PATH.read_text(encoding="utf-8"))
+        current = json.loads(_memory_settings_path().read_text(encoding="utf-8"))
     except FileNotFoundError:
         current = {}
     except (OSError, json.JSONDecodeError) as exc:
         raise RuntimeError(
-            f"Could not read memory settings from {_MEMORY_SETTINGS_PATH}: {exc}"
+            f"Could not read memory settings from {_memory_settings_path()}: {exc}"
         ) from exc
 
     if not isinstance(current, dict):
         raise RuntimeError(
-            f"Could not read memory settings from {_MEMORY_SETTINGS_PATH}: "
+            f"Could not read memory settings from {_memory_settings_path()}: "
             "the JSON root must be an object"
         )
     current.update(settings)
     try:
-        _MEMORY_SETTINGS_PATH.parent.mkdir(parents=True, exist_ok=True)
-        _MEMORY_SETTINGS_PATH.write_text(
+        _memory_settings_path().parent.mkdir(parents=True, exist_ok=True)
+        _memory_settings_path().write_text(
             json.dumps(current, indent=2), encoding="utf-8"
         )
     except OSError as exc:
         raise RuntimeError(
-            f"Could not save memory settings to {_MEMORY_SETTINGS_PATH}: {exc}"
+            f"Could not save memory settings to {_memory_settings_path()}: {exc}"
         ) from exc
 
 

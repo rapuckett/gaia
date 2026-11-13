@@ -160,6 +160,8 @@ def _isolate_gaia_state() -> None:
         os.environ[name] = str(path)
         ours.append(name)
     os.environ[_STATE_SET_BY_CONFTEST] = ",".join(ours)
+    # A test must never run the real npm install and build of the web UI.
+    os.environ.setdefault("GAIA_SKIP_WEBUI_BUILD", "1")
 
 
 def _isolate_config_dir() -> None:

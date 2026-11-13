@@ -1171,7 +1171,10 @@ def client(monkeypatch):
     app = FastAPI()
     app.include_router(setup_router.router)
     app.state.db = ChatDatabase(":memory:")
-    return TestClient(app, headers={"X-Gaia-UI": "1"}), runner
+    return (
+        TestClient(app, client=("127.0.0.1", 50000), headers={"X-Gaia-UI": "1"}),
+        runner,
+    )
 
 
 def test_check_route_adds_the_steps(client, monkeypatch):

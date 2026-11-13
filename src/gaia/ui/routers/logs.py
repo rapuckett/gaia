@@ -13,29 +13,18 @@ from __future__ import annotations
 import asyncio
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from ..models import LogReadResponse, LogSourcesResponse
-from ..security import _is_loopback_name, require_ui_header, via_tunnel
+from ..security import require_local_pc, require_ui_header
 
 router = APIRouter(tags=["logs"])
-
-_ELSEWHERE = (
-    "Read GAIA's logs on the PC running GAIA, not over mobile access or from "
-    "another computer."
-)
-
-
-def _at_this_pc(request: Request) -> None:
-    host = request.client.host if request.client else ""
-    if not _is_loopback_name(host) or via_tunnel(request):
-        raise HTTPException(status_code=403, detail=_ELSEWHERE)
 
 
 @router.get(
     "/api/logs",
     response_model=LogSourcesResponse,
-    dependencies=[Depends(require_ui_header), Depends(_at_this_pc)],
+    dependencies=[Depends(require_ui_header), Depends(require_local_pc)],
 )
 def list_logs() -> Dict[str, Any]:
     """Each log source and the files it has now."""
@@ -47,7 +36,7 @@ def list_logs() -> Dict[str, Any]:
 @router.get(
     "/api/logs/{source}",
     response_model=LogReadResponse,
-    dependencies=[Depends(require_ui_header), Depends(_at_this_pc)],
+    dependencies=[Depends(require_ui_header), Depends(require_local_pc)],
 )
 async def read_log(
     source: str,

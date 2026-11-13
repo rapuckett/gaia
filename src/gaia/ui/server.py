@@ -84,7 +84,13 @@ from .routers import speech as speech_router_mod
 from .routers import spending as spending_router_mod
 from .routers import system as system_router_mod
 from .routers import tunnel as tunnel_router_mod
-from .security import UIRequestGuardMiddleware
+from .security import (
+    DEVICE_AUTH_SCOPE_KEY,
+    UIRequestGuardMiddleware,
+    is_local_pc,
+    on_device_listener,
+    reached_over_network,
+)
 from .tunnel import TunnelManager
 from .utils import UploadStaticFiles
 from .utils import sanitize_static_path as _sanitize_static_path
@@ -94,9 +100,6 @@ logger = logging.getLogger(__name__)
 
 # Default port for agent UI server
 DEFAULT_PORT = 4200
-
-# Localhost addresses that bypass tunnel authentication (Electron app)
-_LOCAL_HOSTS = {"127.0.0.1", "localhost", "::1"}
 
 # API paths that bypass tunnel authentication (monitoring / preflight)
 _AUTH_EXEMPT_PATHS = {"/api/health"}
@@ -169,8 +172,14 @@ class TunnelAuthMiddleware(BaseHTTPMiddleware):
     2. ``gaia_tunnel_token`` cookie (set by ``serve_spa`` when a mobile
        browser first opens the QR-code URL containing ``?token=<uuid>``)
 
-    Local requests (from the Electron desktop app) and the ``/api/health``
-    monitoring endpoint are always allowed through.
+    A server bound beyond loopback applies the same rule to every request
+    that reached it over the network, whether or not the tunnel is up; with
+    the tunnel off no token is valid, so other computers are refused.
+
+    Requests from the PC (the Electron desktop app) and the ``/api/health``
+    monitoring endpoint are always allowed through. The device listener's
+    requests are left to its own device auth: the tunnel token means nothing
+    there.
     """
 
     async def dispatch(self, request: Request, call_next):
@@ -182,37 +191,50 @@ class TunnelAuthMiddleware(BaseHTTPMiddleware):
         if not (path.startswith("/api/") or path.startswith("/v1/")):
             return await call_next(request)
 
+        if on_device_listener(request):
+            if request.scope.get(DEVICE_AUTH_SCOPE_KEY) is not True:
+                logger.error(
+                    "Device listener served %s %s without device auth; refused",
+                    request.method,
+                    path,
+                )
+                return JSONResponse(
+                    status_code=401,
+                    content={"detail": "This request skipped device auth."},
+                )
+            return await call_next(request)
+
         # Always allow exempt paths (health check, etc.)
         if path in _AUTH_EXEMPT_PATHS:
             return await call_next(request)
 
-        # Check whether the tunnel is active
         tunnel: TunnelManager = getattr(request.app.state, "tunnel", None)
-        if tunnel is None or not tunnel.active:
+        tunnel_active = tunnel is not None and tunnel.active
+        if not tunnel_active and not reached_over_network(request):
             return await call_next(request)
 
-        # ── Localhost bypass (Electron desktop app) ────────────────────
-        # The bypass requires BOTH the raw TCP peer to be on localhost
-        # AND the request to lack any ``X-Forwarded-*`` headers. The
-        # second clause is what makes the bypass spoof-resistant: ngrok
-        # always *adds* ``X-Forwarded-For`` / ``X-Forwarded-Host`` /
-        # ``X-Forwarded-Proto`` to tunnelled requests, so if any of those
-        # are present the request came in over the wire and must
-        # authenticate — even if a remote attacker tried to set
-        # ``X-Forwarded-For: 127.0.0.1`` to fake a localhost source.
-        #
-        # Note: ``request.client.host`` reflects the raw TCP peer because
-        # the standalone runner in ``main()`` passes
-        # ``forwarded_allow_ips=""`` to uvicorn, disabling the proxy-header
-        # rewrite that would otherwise let the ``X-Forwarded-For`` value
-        # take precedence.
+        # The PC: a loopback peer with no ``X-Forwarded-*`` header, which
+        # ngrok always adds. The peer is the raw TCP one because every runner
+        # takes its settings from ``uvicorn_options()``.
         client_host = request.client.host if request.client else None
-        has_forwarded_marker = any(
-            h in request.headers
-            for h in ("x-forwarded-for", "x-forwarded-host", "x-forwarded-proto")
-        )
-        if client_host in _LOCAL_HOSTS and not has_forwarded_marker:
+        if is_local_pc(request):
             return await call_next(request)
+
+        if not tunnel_active:
+            logger.warning(
+                "Network auth: rejecting %s %s from %s (mobile access is off)",
+                request.method,
+                path,
+                client_host,
+            )
+            return JSONResponse(
+                status_code=401,
+                content={
+                    "detail": "This GAIA server answers other computers only "
+                    "through mobile access. Start mobile access on the PC "
+                    "running GAIA and use its link, or open GAIA on the PC."
+                },
+            )
 
         # ── Remote request through tunnel -- require valid token ─────────
         # Extract token from Authorization header OR cookie.
@@ -1216,6 +1238,24 @@ def create_app(db_path: str = None, webui_dist: str = None) -> FastAPI:
 # ── Standalone runner ───────────────────────────────────────────────────────
 
 
+def uvicorn_options(host: str, port: int, *, debug: bool = False) -> dict:
+    """The uvicorn settings every Agent UI runner uses.
+
+    Forwarded headers are never trusted: ngrok connects from loopback, so
+    uvicorn's default of honouring ``X-Forwarded-For`` from 127.0.0.1 would
+    let a tunnelled request set its own peer address and pass as the PC.
+    Access logs are on only with *debug*.
+    """
+    return {
+        "host": host,
+        "port": port,
+        "log_level": "debug" if debug else "info",
+        "access_log": debug,
+        "proxy_headers": False,
+        "forwarded_allow_ips": "",
+    }
+
+
 def main():
     """Run the Agent UI server."""
     import argparse
@@ -1241,7 +1281,6 @@ def main():
     )
     args = parser.parse_args()
 
-    log_level = "debug" if args.debug else "info"
     print(f"Starting GAIA Agent UI server on http://{args.host}:{args.port}")
     try:
         server_app = create_app(webui_dist=args.ui_dist)
@@ -1253,24 +1292,7 @@ def main():
         raise SystemExit(64) from exc
     if not lemonade_is_remote():
         start_model_server_owner()
-    uvicorn.run(
-        server_app,
-        host=args.host,
-        port=args.port,
-        log_level=log_level,
-        access_log=args.debug,  # Only show HTTP access logs in debug mode
-        # SECURITY: do NOT trust ``X-Forwarded-For`` / ``X-Forwarded-Proto``
-        # to rewrite ``request.client.host``. ngrok forwards from the
-        # local agent (127.0.0.1), so uvicorn's default of trusting
-        # forwarded headers from 127.0.0.1 would let a remote attacker
-        # send ``X-Forwarded-For: 127.0.0.1`` through the tunnel and
-        # impersonate the Electron app. The localhost-bypass check in
-        # ``TunnelAuthMiddleware`` separately requires the request to
-        # carry no ``X-Forwarded-*`` headers, giving us a spoof-resistant
-        # distinction between Electron-direct and ngrok-tunnelled traffic.
-        proxy_headers=False,
-        forwarded_allow_ips="",
-    )
+    uvicorn.run(server_app, **uvicorn_options(args.host, args.port, debug=args.debug))
 
 
 if __name__ == "__main__":
