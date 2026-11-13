@@ -52,7 +52,8 @@ interface HeaderLimit {
     abort: () => void;
 }
 
-function normalizeBaseUrl(baseUrl: string): string {
+/** The address without trailing slashes; GaiaConfigError when it isn't an http(s) URL. */
+export function normalizeBaseUrl(baseUrl: string): string {
     let url: URL;
     try {
         url = new URL(baseUrl);
