@@ -3,8 +3,16 @@
 
 import { createRecordingFetch, jsonResponse, streamResponse, textResponse } from '@/test-support/fakeFetch';
 
-import type { StreamEvent } from './client.types';
-import { GaiaApiError, GaiaAuthError, GaiaConfigError, GaiaNetworkError, GaiaStreamError } from './errors';
+import type { GaiaClient, StreamEvent } from './client.types';
+import { SEND_HEADER_TIMEOUT_MS } from './constants';
+import {
+    GaiaApiError,
+    GaiaAuthError,
+    GaiaConfigError,
+    GaiaNetworkError,
+    GaiaStreamError,
+    GaiaStreamTimeoutError,
+} from './errors';
 import { createHttpClient } from './http';
 
 const BASE = 'http://192.168.1.20:4200';
@@ -104,7 +112,82 @@ describe('createHttpClient requests', () => {
             'Content-Type': 'application/json',
         });
         expect(JSON.parse(call.body!)).toEqual({ session_id: 'sid', message: 'hello', stream: true });
-        expect(call.signal).toBe(controller.signal);
+    });
+
+    const JSON_HEADERS = { ...UI_HEADERS, 'Content-Type': 'application/json' };
+    it.each<[string, (c: GaiaClient) => Promise<unknown>, string, string, Record<string, string>, unknown]>([
+        ['getSession', (c) => c.getSession('a b'), 'GET', '/api/sessions/a%20b', UI_HEADERS, undefined],
+        ['createSession', (c) => c.createSession({ title: 'Trip' }), 'POST', '/api/sessions', JSON_HEADERS, { title: 'Trip' }],
+        ['createSession with no fields', (c) => c.createSession(), 'POST', '/api/sessions', JSON_HEADERS, {}],
+        ['cancelChat', (c) => c.cancelChat('s1'), 'POST', '/api/chat/cancel', JSON_HEADERS, { session_id: 's1' }],
+        [
+            'confirmTool, allow once',
+            (c) => c.confirmTool({ session_id: 's1', approved: true, confirm_id: 'c1' }),
+            'POST',
+            '/api/chat/confirm-tool',
+            JSON_HEADERS,
+            { session_id: 's1', approved: true, always: false, confirm_id: 'c1' },
+        ],
+        [
+            'confirmTool, always allow, no prompt id',
+            (c) => c.confirmTool({ session_id: 's1', approved: true, always: true }),
+            'POST',
+            '/api/chat/confirm-tool',
+            JSON_HEADERS,
+            { session_id: 's1', approved: true, always: true },
+        ],
+        [
+            'sendUserInput',
+            (c) => c.sendUserInput({ session_id: 's1', request_id: 'r1', value: 'Paris' }),
+            'POST',
+            '/api/chat/user-input',
+            JSON_HEADERS,
+            { session_id: 's1', request_id: 'r1', value: 'Paris' },
+        ],
+        ['getSystemStatus', (c) => c.getSystemStatus(), 'GET', '/api/system/status', UI_HEADERS, undefined],
+    ])('%s: %s', async (_name, call, method, path, headers, body) => {
+        const { fetch, calls } = createRecordingFetch(() => jsonResponse({ status: 'ok' }));
+        await call(createHttpClient({ baseUrl: BASE, fetch }));
+        expect(calls).toHaveLength(1);
+        const sent = calls[0]!;
+        expect([sent.method, sent.url, sent.headers]).toEqual([method, `${BASE}${path}`, headers]);
+        expect(sent.body === undefined ? undefined : JSON.parse(sent.body)).toEqual(body);
+    });
+
+    it('attachToRun: GET /api/chat/attach for the chat; no turn running ends with no events', async () => {
+        const { fetch, calls } = createRecordingFetch(() => jsonResponse({ detail: 'No active run for this session.' }, 404));
+        const events = await collect(createHttpClient({ baseUrl: BASE, fetch }).attachToRun('a b'));
+        expect(events).toEqual([]);
+        expect(calls.map((c) => [c.method, c.url, c.headers, c.body])).toEqual([
+            ['GET', `${BASE}/api/chat/attach?session_id=a%20b`, UI_HEADERS, undefined],
+        ]);
+    });
+});
+
+describe('createHttpClient stream connections', () => {
+    afterEach(() => jest.useRealTimers());
+
+    it('a send GAIA never answers raises GaiaStreamTimeoutError and drops the request', async () => {
+        jest.useFakeTimers({ doNotFake: ['nextTick', 'queueMicrotask'] });
+        const { fetch, calls } = createRecordingFetch(() => new Promise<never>(() => {}));
+        const outcome = collect(createHttpClient({ baseUrl: BASE, fetch }).sendMessage('s', 'm')).catch((e) => e);
+        await jest.advanceTimersByTimeAsync(SEND_HEADER_TIMEOUT_MS);
+        const err = await outcome;
+        expect(err).toBeInstanceOf(GaiaStreamTimeoutError);
+        expect([err.endpoint, err.params]).toEqual(['send', { seconds: SEND_HEADER_TIMEOUT_MS / 1000 }]);
+        expect(calls[0]!.signal?.aborted).toBe(true);
+    });
+
+    it("the caller's abort drops the request and comes back as the abort, not a network error", async () => {
+        const aborted = new Error('aborted');
+        const { fetch, calls } = createRecordingFetch(
+            (call) => new Promise<never>((_, reject) => call.signal?.addEventListener('abort', () => reject(aborted))),
+        );
+        const controller = new AbortController();
+        const outcome = collect(createHttpClient({ baseUrl: BASE, fetch }).attachToRun('s', { signal: controller.signal }));
+        controller.abort();
+        await expect(outcome).rejects.toBe(aborted);
+        expect(calls[0]!.signal?.aborted).toBe(true);
     });
 });
 
