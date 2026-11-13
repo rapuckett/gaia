@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: MIT
 
 import { useState } from 'react';
-import { DEFAULT_MODEL_NAME } from '@webui/utils/constants';
 import { useT } from '@/i18n/useT';
 import { Brain, Check, ChevronRight, Copy, Plus, RotateCcw, Search, Send, Square, X } from '../icons';
 import {
@@ -63,7 +62,7 @@ export function UIGallery() {
                     </Row>
                     <Text>
                         {t('settings.privacy.deleteFailed', { n: 3, reason: t('settings.advanced.saveFailed') })}{' '}
-                        <Ltr>{DEFAULT_MODEL_NAME}</Ltr>
+                        <Ltr>{t.locale}</Ltr>
                     </Text>
                 </Stack>
 
