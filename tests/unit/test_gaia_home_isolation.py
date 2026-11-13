@@ -17,8 +17,8 @@ from gaia.logger import LOG_FILE_ENV, configure
 # module does the equivalent so the log-file location can be asserted.
 log_manager = configure()
 
-# Read at collection, before any test can patch the home.
-_REAL_GAIA_HOME = Path.home() / ".gaia"
+# The root conftest points HOME at a tmp dir and records the real one here.
+_REAL_GAIA_HOME = Path(os.environ.get("_GAIA_TEST_REAL_HOME") or Path.home()) / ".gaia"
 
 
 def _under(path: Path, root: Path) -> bool:

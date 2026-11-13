@@ -242,8 +242,21 @@ def _isolate_user_home() -> None:
     """
     if os.environ.get("GAIA_REQUIRE_SD") == "1" or os.environ.get(_REAL_HOME_ENV):
         return
-    home = _STATE_ROOT / "home"
-    home.mkdir(parents=True, exist_ok=True)
+    # Outside the temp dir: GAIA treats paths under it as temporary, and a real
+    # home never is.
+    if os.name == "nt":
+        cache = Path(
+            os.environ.get("LOCALAPPDATA") or _REAL_USER_HOME / "AppData" / "Local"
+        )
+    elif sys.platform == "darwin":
+        cache = _REAL_USER_HOME / "Library" / "Caches"
+    else:
+        cache = Path(os.environ.get("XDG_CACHE_HOME") or _REAL_USER_HOME / ".cache")
+    (cache / "gaia-test-homes").mkdir(parents=True, exist_ok=True)
+    home = Path(
+        _REALPATH(tempfile.mkdtemp(prefix="home-", dir=cache / "gaia-test-homes"))
+    )
+    atexit.register(shutil.rmtree, home, ignore_errors=True)
     for config in (Path(".gitconfig"), Path(".config", "git", "config")):
         if (_REAL_USER_HOME / config).is_file():
             (home / config).parent.mkdir(parents=True, exist_ok=True)
