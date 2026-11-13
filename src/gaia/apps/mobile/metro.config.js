@@ -9,6 +9,6 @@ const webui = path.resolve(__dirname, '../webui/src');
 const config = getDefaultConfig(__dirname);
 
 // Only the webui folders this app imports from; paths come from tsconfig `@webui/*`.
-config.watchFolders = [...(config.watchFolders ?? []), path.join(webui, 'i18n'), path.join(webui, 'types')];
+config.watchFolders = [...(config.watchFolders ?? []), path.join(webui, 'i18n'), path.join(webui, 'types'), path.join(webui, 'utils')];
 
 module.exports = config;
