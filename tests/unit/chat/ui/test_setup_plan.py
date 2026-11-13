@@ -460,7 +460,7 @@ def client():
     app = FastAPI()
     app.include_router(setup_router.router)
     app.state.db = ChatDatabase(":memory:")
-    return TestClient(app)
+    return TestClient(app, client=("127.0.0.1", 50000))
 
 
 def test_plan_endpoint(client, running):
