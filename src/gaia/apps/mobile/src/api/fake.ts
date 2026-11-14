@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: MIT
 
 import type {
+    AgentMcpServer,
+    ConnectorListEntry,
     CreateSessionRequest,
     GaiaClient,
     HealthResponse,
@@ -24,6 +26,8 @@ export interface FakeClientData {
     replies?: StreamEvent[] | ((message: string) => AsyncIterable<StreamEvent>);
     /** What attachToRun replays, by chat; a chat not listed has no turn running. */
     running?: Record<string, StreamEvent[]>;
+    connectors?: ConnectorListEntry[];
+    agentMcps?: AgentMcpServer[];
     status?: SystemStatus;
     start?: StartScreen;
 }
@@ -117,6 +121,12 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         async sendUserInput(request) {
             answers.push(request);
             return { status: 'ok', request_id: request.request_id };
+        },
+        async listConnectors() {
+            return { connectors: [...(data.connectors ?? [])] };
+        },
+        async listAgentMcps() {
+            return { agent_mcps: [...(data.agentMcps ?? [])] };
         },
         async getSystemStatus() {
             if (!data.status) throw new GaiaApiError(503, 'This fake client was given no system status.');

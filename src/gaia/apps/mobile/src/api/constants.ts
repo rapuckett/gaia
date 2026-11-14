@@ -19,6 +19,8 @@ export const ENDPOINTS = {
     chatCancel: '/api/chat/cancel',
     chatConfirmTool: '/api/chat/confirm-tool',
     chatUserInput: '/api/chat/user-input',
+    connectors: '/api/connectors',
+    connectorsAgentMcps: '/api/connectors/agent-mcps',
     systemStatus: '/api/system/status',
     documentFile: '/api/documents/{doc_id}/file',
     onboardingStart: '/api/onboarding/start',

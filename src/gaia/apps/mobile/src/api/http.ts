@@ -17,8 +17,10 @@ import {
     type StreamEndpoint,
 } from './errors';
 import type {
+    AgentMcpList,
     CancelChatResult,
     ConfirmToolResult,
+    ConnectorList,
     DeleteMessagesResult,
     GaiaClient,
     HealthResponse,
@@ -276,6 +278,14 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
         sendUserInput(request, options) {
             const body = { session_id: request.session_id, request_id: request.request_id, value: request.value };
             return postJson<UserInputResult>(ENDPOINTS.chatUserInput, body, options?.signal);
+        },
+
+        listConnectors(options) {
+            return getJson<ConnectorList>(ENDPOINTS.connectors, options?.signal);
+        },
+
+        listAgentMcps(options) {
+            return getJson<AgentMcpList>(ENDPOINTS.connectorsAgentMcps, options?.signal);
         },
 
         getSystemStatus(options) {

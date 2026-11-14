@@ -76,11 +76,15 @@ describe('request headers', () => {
 });
 
 describe('endpoints', () => {
-    const decorators = pythonFiles(UI_DIR).flatMap((file) =>
-        [...readFileSync(file, 'utf-8').matchAll(/@(?:router|app)\.(get|post|put|patch|delete)\(\s*"([^"]+)"/g)].map(
-            (m) => `${m[1]!.toUpperCase()} ${m[2]!}`,
-        ),
-    );
+    // A router mounted with `APIRouter(prefix=...)` declares its routes relative to it.
+    const decorators = pythonFiles(UI_DIR).flatMap((file) => {
+        const source = readFileSync(file, 'utf-8');
+        const prefix = /APIRouter\([^)]*prefix="([^"]*)"/.exec(source)?.[1] ?? '';
+        return [...source.matchAll(/@(?:router|app)\.(get|post|put|patch|delete)\(\s*"([^"]*)"/g)].flatMap((m) => [
+            `${m[1]!.toUpperCase()} ${m[2]!}`,
+            `${m[1]!.toUpperCase()} ${prefix}${m[2]!}`,
+        ]);
+    });
     const methods: Record<keyof typeof ENDPOINTS, string[]> = {
         health: ['GET'],
         sessions: ['GET', 'POST'],
@@ -92,6 +96,8 @@ describe('endpoints', () => {
         chatCancel: ['POST'],
         chatConfirmTool: ['POST'],
         chatUserInput: ['POST'],
+        connectors: ['GET'],
+        connectorsAgentMcps: ['GET'],
         systemStatus: ['GET'],
         documentFile: ['GET'],
         onboardingStart: ['GET'],

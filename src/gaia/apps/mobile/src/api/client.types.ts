@@ -1,10 +1,10 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import type { Message, Session, StartScreen, StreamEvent, SystemStatus } from '@webui/types';
+import type { AgentMcpServer, ConnectorListEntry, Message, Session, StartScreen, StreamEvent, SystemStatus } from '@webui/types';
 import type { CreateSessionRequest, ToolConfirmRequest, UserInputRequest as ApiUserInputRequest } from '@webui/types/api.gen';
 
-export type { Message, Session, StartScreen, StreamEvent, SystemStatus } from '@webui/types';
+export type { AgentMcpServer, ConnectorListEntry, ConnectorRow, UnavailableConnectorRow, Message, Session, StartScreen, StreamEvent, SystemStatus } from '@webui/types';
 export type { CreateSessionRequest, ToolConfirmRequest } from '@webui/types/api.gen';
 
 /** `display` is what the phone shows as the answer; it is never sent to GAIA. */
@@ -18,6 +18,14 @@ export interface SessionList {
 export interface MessageList {
     messages: Message[];
     total: number;
+}
+
+export interface ConnectorList {
+    connectors: ConnectorListEntry[];
+}
+
+export interface AgentMcpList {
+    agent_mcps: AgentMcpServer[];
 }
 
 export interface HealthResponse {
@@ -75,6 +83,9 @@ export interface GaiaClient {
     confirmTool(request: ToolConfirmRequest, options?: RequestOptions): Promise<ConfirmToolResult>;
     /** Answers a `needs_input` question; the turn continues once GAIA has it. */
     sendUserInput(request: UserInputRequest, options?: RequestOptions): Promise<UserInputResult>;
+    listConnectors(options?: RequestOptions): Promise<ConnectorList>;
+    /** Servers that custom agents declare in their own mcp_servers.json; read-only. */
+    listAgentMcps(options?: RequestOptions): Promise<AgentMcpList>;
     getSystemStatus(options?: RequestOptions): Promise<SystemStatus>;
     /** The new-chat screen's cards and working folder; `skills_error` says why the assistant can't list its skills. */
     getStartScreen(options?: RequestOptions): Promise<StartScreen>;
