@@ -97,7 +97,7 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
                                     onContinue={continueReply}
                                 />
                             ) : null}
-                            <ChatPrompts question={stream.pendingQuestion} />
+                            <ChatPrompts sessionId={sessionId} question={stream.pendingQuestion} />
                         </>
                     }
                 />
