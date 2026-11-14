@@ -95,6 +95,7 @@ describe('endpoints', () => {
         ]);
     });
     const methods: Record<keyof typeof ENDPOINTS, string[]> = {
+        agents: ['GET'],
         health: ['GET'],
         localModelRestart: ['POST'],
         localModelStatus: ['GET'],
@@ -122,9 +123,14 @@ describe('endpoints', () => {
         chatAttach: ['GET'],
         chatCancel: ['POST'],
         chatConfirmTool: ['POST'],
+        chatContext: ['GET'],
         chatFollowup: ['POST'],
         chatFollowupOutcome: ['GET'],
         chatUserInput: ['POST'],
+        connectorActivation: ['DELETE', 'PUT'],
+        connectorActivations: ['GET'],
+        connectorGrant: ['DELETE', 'PUT'],
+        connectorGrants: ['GET'],
         connectors: ['GET'],
         connectorsAgentMcps: ['GET'],
         systemResources: ['GET'],
