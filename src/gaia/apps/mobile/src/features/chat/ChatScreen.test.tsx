@@ -112,4 +112,42 @@ describe('ChatScreen', () => {
         await waitFor(() => expect(client.sent.map((s) => s.message)).toEqual(['Summarize it', 'Summarize it']));
         expect(client.deleted).toEqual([{ sessionId: CHAT, messageId: 1 }]);
     });
+
+    describe('tool approval', () => {
+        const REQUEST: StreamEvent = { type: 'permission_request', tool: 'write_file', confirm_id: 'c1', always_scope: 'write_file', timeout_seconds: 60 };
+        let hold = gate();
+        beforeEach(() => {
+            hold = gate();
+        });
+        // The stream stays open on the request, as a turn waiting on the person does.
+        const permissionClient = (event: StreamEvent) =>
+            createFakeClient({
+                sessions: [SESSION],
+                messages: { [CHAT]: [message(1, 'user', 'Save it')] },
+                replies: async function* (): AsyncGenerator<StreamEvent> {
+                    yield event;
+                    await hold.opened;
+                    yield { type: 'done', message_id: 2, content: '' };
+                },
+            });
+
+        it('shows the waiting prompt, posts the answer, and clears it as answered', async () => {
+            const client = permissionClient(REQUEST);
+            await mount(client);
+            await sendText('Save it');
+            await fireEvent.press(await screen.findByTestId('permission-allow'));
+            await waitFor(() => expect(client.confirmations).toEqual([{ session_id: CHAT, approved: true, always: false, confirm_id: 'c1' }]));
+            await waitFor(() => expect(screen.queryByTestId('permission-prompt')).toBeNull());
+            expect(useChatStreamStore.getState().resolved[CHAT]?.c1).toEqual({ state: 'answered' });
+            await act(async () => hold.open());
+        });
+
+        it('clears a prompt whose deadline has passed as expired', async () => {
+            await mount(permissionClient({ ...REQUEST, expires_at: Date.now() / 1000 - 5 }));
+            await sendText('Save it');
+            await waitFor(() => expect(useChatStreamStore.getState().resolved[CHAT]?.c1).toEqual({ state: 'expired' }));
+            expect(screen.queryByTestId('permission-prompt')).toBeNull();
+            expect(useChatStreamStore.getState().turns[CHAT]?.pendingPermission).toBeNull();
+        });
+    });
 });
