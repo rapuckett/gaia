@@ -9,6 +9,9 @@ import type {
     MessageList,
     Session,
     SessionList,
+    SetupCheck,
+    SetupPlan,
+    SetupRunStatus,
     StartScreen,
     StreamEvent,
     SystemStatus,
@@ -26,6 +29,11 @@ export interface FakeClientData {
     running?: Record<string, StreamEvent[]>;
     status?: SystemStatus;
     start?: StartScreen;
+    /** Each check answers the next entry (the last one repeats); an Error entry is thrown. */
+    setupChecks?: (SetupCheck | Error)[];
+    /** Each status read answers the next entry (the last one repeats); defaults to idle. */
+    setupStatuses?: (SetupRunStatus | Error)[];
+    setupPlan?: SetupPlan;
 }
 
 export interface FakeGaiaClient extends GaiaClient {
@@ -35,6 +43,7 @@ export interface FakeGaiaClient extends GaiaClient {
     readonly deleted: { sessionId: string; messageId: number }[];
     readonly confirmations: ToolConfirmRequest[];
     readonly answers: UserInputRequest[];
+    readonly setupStarts: { skipChatModel: boolean; gaiaLemonade: boolean; upgradeEmbedded: boolean }[];
 }
 
 export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
@@ -48,6 +57,14 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
     const deleted: FakeGaiaClient['deleted'] = [];
     const confirmations: ToolConfirmRequest[] = [];
     const answers: UserInputRequest[] = [];
+    const setupStarts: FakeGaiaClient['setupStarts'] = [];
+    let checkAt = 0;
+    let statusAt = 0;
+    const nextOf = <T,>(list: (T | Error)[], at: number): T => {
+        const item = list[Math.min(at, list.length - 1)]!;
+        if (item instanceof Error) throw item;
+        return item;
+    };
 
     function findSession(sessionId: string): Session {
         const session = sessions.find((s) => s.id === sessionId);
@@ -62,6 +79,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         deleted,
         confirmations,
         answers,
+        setupStarts,
         async health(): Promise<HealthResponse> {
             return { status: 'ok', service: 'gaia-agent-ui' };
         },
@@ -125,6 +143,22 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         async getStartScreen() {
             if (!data.start) throw new GaiaApiError(503, 'This fake client was given no start screen.');
             return data.start;
+        },
+        async checkSetup() {
+            if (!data.setupChecks?.length) throw new GaiaApiError(503, 'This fake client was given no setup checks.');
+            return nextOf(data.setupChecks, checkAt++);
+        },
+        async getSetupStatus() {
+            if (!data.setupStatuses?.length) return { state: 'idle' };
+            return nextOf(data.setupStatuses, statusAt++);
+        },
+        async getSetupPlan() {
+            if (!data.setupPlan) throw new GaiaApiError(503, 'This fake client was given no setup plan.');
+            return data.setupPlan;
+        },
+        async startSetup(skipChatModel, gaiaLemonade = false, options = {}) {
+            setupStarts.push({ skipChatModel, gaiaLemonade, upgradeEmbedded: !!options.upgradeEmbedded });
+            return { state: 'running', upgrade_embedded: !!options.upgradeEmbedded };
         },
     };
 }

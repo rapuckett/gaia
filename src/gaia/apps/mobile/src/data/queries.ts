@@ -17,6 +17,8 @@ export const queryKeys = {
     messages: (sessionId: string) => ['messages', sessionId] as const,
     systemStatus: ['systemStatus'] as const,
     startScreen: ['startScreen'] as const,
+    setupStatus: ['setupStatus'] as const,
+    setupPlan: ['setupPlan'] as const,
 };
 
 export function requireClient(client: GaiaClient | null): GaiaClient {

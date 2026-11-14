@@ -1,10 +1,14 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import type { Message, Session, StartScreen, StreamEvent, SystemStatus } from '@webui/types';
+import type {
+    Message, Session, SetupCheck, SetupPlan, SetupRunStatus, StartScreen, StreamEvent, SystemStatus,
+} from '@webui/types';
 import type { CreateSessionRequest, ToolConfirmRequest, UserInputRequest as ApiUserInputRequest } from '@webui/types/api.gen';
 
-export type { Message, Session, StartScreen, StreamEvent, SystemStatus } from '@webui/types';
+export type {
+    Message, Session, SetupCheck, SetupPlan, SetupRunStatus, StartScreen, StreamEvent, SystemStatus,
+} from '@webui/types';
 export type { CreateSessionRequest, ToolConfirmRequest } from '@webui/types/api.gen';
 
 /** `display` is what the phone shows as the answer; it is never sent to GAIA. */
@@ -49,6 +53,16 @@ export interface UserInputResult {
     request_id: string;
 }
 
+/** What `POST /api/setup/run` takes; the web UI's `SetupRunOptions` (services/setupApi.ts). */
+export interface SetupRunOptions {
+    acknowledgeLowDisk?: boolean;
+    keepTrying?: boolean;
+    extraModels?: string[];
+    serverOnly?: boolean;
+    /** Replace GAIA's older embedded Lemonade without downloading models again. */
+    upgradeEmbedded?: boolean;
+}
+
 export interface RequestOptions {
     signal?: AbortSignal;
 }
@@ -78,4 +92,14 @@ export interface GaiaClient {
     getSystemStatus(options?: RequestOptions): Promise<SystemStatus>;
     /** The new-chat screen's cards and working folder; `skills_error` says why the assistant can't list its skills. */
     getStartScreen(options?: RequestOptions): Promise<StartScreen>;
+    /** Is GAIA set up on this PC: ready, or the stage and reasons it is not. */
+    checkSetup(skipChatModel: boolean, options?: RequestOptions): Promise<SetupCheck>;
+    getSetupStatus(options?: RequestOptions): Promise<SetupRunStatus>;
+    /** What setup will use and download, before it starts; `catalog` marks partial downloads. */
+    getSetupPlan(options?: RequestOptions): Promise<SetupPlan>;
+    startSetup(
+        skipChatModel: boolean,
+        gaiaLemonade?: boolean,
+        options?: SetupRunOptions & RequestOptions,
+    ): Promise<SetupRunStatus>;
 }
