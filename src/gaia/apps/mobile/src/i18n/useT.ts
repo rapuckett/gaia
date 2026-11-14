@@ -7,6 +7,7 @@ import { DEFAULT_LOCALE, getLocale, isLocaleCode } from '@webui/i18n/registry';
 import { translator, type Translate } from '@webui/i18n/translator';
 
 import { GaiaError } from '@/api/errors';
+import { useLocaleStore } from '@/state/locale';
 
 export { translator, type Translate };
 
@@ -20,10 +21,16 @@ export function describeError(error: unknown, t: Translate): string {
     return error instanceof Error ? error.message : String(error);
 }
 
+/** The language picked in the app, else the phone's. */
+export function useLocaleCode(): string {
+    const picked = useLocaleStore((s) => s.locale);
+    return picked && isLocaleCode(picked) ? picked : deviceLocaleCode();
+}
+
 export function useT(): Translate {
-    return translator(deviceLocaleCode());
+    return translator(useLocaleCode());
 }
 
 export function useDirection(): 'ltr' | 'rtl' {
-    return getLocale(deviceLocaleCode()).meta.dir;
+    return getLocale(useLocaleCode()).meta.dir;
 }
