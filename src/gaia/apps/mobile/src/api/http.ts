@@ -33,6 +33,7 @@ import type {
     Schedule,
     ScheduleList,
     SessionList,
+    SessionSearchResponse,
     SetupRunStatus,
     UserInputResult,
 } from './client.types';
@@ -248,6 +249,11 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         getFollowUpOutcome(sessionId, options) {
             return getJson<FollowUpOutcome>(followupOutcomePath(sessionId), options?.signal);
+        },
+
+        searchSessions(query: string, includeAutomated: boolean, options?: RequestOptions): Promise<SessionSearchResponse> {
+            const params = new URLSearchParams({ q: query, include_automated: String(includeAutomated) });
+            return getJson<SessionSearchResponse>(`${ENDPOINTS.sessionSearch}?${params}`, options?.signal);
         },
 
         async getMessages(sessionId: string, options?: RequestOptions): Promise<MessageList> {
