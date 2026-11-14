@@ -26,6 +26,7 @@ import type {
     ConnectorActivations,
     ConnectorGrants,
     ConnectorList,
+    ContextUsageResult,
     DeleteMessagesResult,
     DeleteScheduleResult,
     DocumentListResponse,
@@ -56,6 +57,7 @@ import {
     connectorGrantPath,
     connectorGrantsPath,
     ENDPOINTS,
+    chatContextPath,
     followupOutcomePath,
     MESSAGE_PAGE_SIZE,
     QUEUED_IDLE_MS,
@@ -268,6 +270,10 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         createSession(request = {}, options) {
             return postJson<Session>(ENDPOINTS.sessions, request, options?.signal);
+        },
+
+        getContextUsage(sessionId, options) {
+            return getJson<ContextUsageResult>(chatContextPath(sessionId), options?.signal);
         },
 
         getFollowUpOutcome(sessionId, options) {
