@@ -43,6 +43,10 @@ Metro; only a change that moves the native fingerprint needs a new build.
   refuses plain HTTP.
 - **Android C++ compiles** run at most `AGENT_HOST_HEAVY_JOBS` (default 4) at a
   time in each module.
+- **iOS builds with fastlane:** `bundle exec fastlane ios check` (an unsigned
+  simulator build), `ios device` and `ios sideload` (a signed build on your own
+  iPhone). Every account value comes from environment variables; see
+  [`fastlane/README.md`](fastlane/README.md).
 - **The fingerprint a build must match:**
   `APP_ENV=development npx @expo/fingerprint fingerprint:generate . --platform ios`
   (or `android`). npm scripts and `.gitignore` don't count (`fingerprint.config.js`).
