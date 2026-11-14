@@ -7,6 +7,7 @@ export type { Tone } from './theme/tone';
 export { Text, type TextProps } from './text/Text';
 export { Ltr } from './text/Ltr';
 export { Stack, Row, Spacer, type StackProps, type RowProps } from './layout/layout';
+export { Floating, type FloatingProps } from './layout/Floating';
 export { HScroll } from './layout/HScroll';
 export { Surface, Card, Divider, type SurfaceProps, type CardProps } from './layout/Surface';
 export { Pressable, type PressableProps } from './controls/Pressable';
