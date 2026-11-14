@@ -923,6 +923,7 @@ export const enMessages = {
     'docs.count.other': '{n} documents',
     'docs.empty': 'No documents yet',
     'docs.emptyHint': 'Drop files above or enter a file path',
+    'docs.emptyHintPhone': 'Documents you add will appear here.',
     'docs.indexingFile': 'Indexing {name}...',
     'docs.indexingFolder': 'Indexing the documents in {name}...',
     'docs.willAttach': '{name} will be attached to your next new chat.',
