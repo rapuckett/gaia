@@ -1,9 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import type {
-    Message, Session, SetupCheck, SetupPlan, SetupRunStatus, StartScreen, StreamEvent, SystemStatus,
-} from '@webui/types';
+import type { Message, Session, StartScreen, StreamEvent, SystemStatus } from '@webui/types';
 
 import type { FetchLike, FetchRequestInit, FetchResponseLike } from '@/platform/fetch.types';
 
@@ -36,6 +34,8 @@ import type {
     ScheduleList,
     SessionList,
     SessionSearchResponse,
+    SetupCheck,
+    SetupPlan,
     SetupRunStatus,
     UserInputResult,
 } from './client.types';
