@@ -3,6 +3,7 @@
 
 import type {
     CreateSessionRequest,
+    FollowUpOutcome,
     GaiaClient,
     HealthResponse,
     Message,
@@ -26,6 +27,10 @@ export interface FakeClientData {
     replies?: StreamEvent[] | ((message: string) => AsyncIterable<StreamEvent>);
     /** What attachToRun replays, by chat; a chat not listed has no turn running. */
     running?: Record<string, StreamEvent[]>;
+    /** What getFollowUpOutcome answers; a function may throw to script a 409. */
+    followUpOutcome?: FollowUpOutcome | (() => FollowUpOutcome);
+    /** Makes sendFollowUp reject, as a turn that can't take the message does. */
+    followUpRefusal?: GaiaApiError;
     status?: SystemStatus;
     start?: StartScreen;
 }
@@ -38,6 +43,7 @@ export interface FakeGaiaClient extends GaiaClient {
     readonly confirmations: ToolConfirmRequest[];
     readonly answers: UserInputRequest[];
     readonly scheduleActions: { action: 'pause' | 'resume' | 'run' | 'delete'; name: string }[];
+    readonly followUps: { sessionId: string; text: string }[];
 }
 
 export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
@@ -59,6 +65,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         if (!schedule) throw new GaiaApiError(404, `Schedule '${name}' not found`);
         return schedule;
     }
+    const followUps: FakeGaiaClient['followUps'] = [];
 
     function findSession(sessionId: string): Session {
         const session = sessions.find((s) => s.id === sessionId);
@@ -74,6 +81,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         confirmations,
         answers,
         scheduleActions,
+        followUps,
         async health(): Promise<HealthResponse> {
             return { status: 'ok', service: 'gaia-agent-ui' };
         },
@@ -99,6 +107,10 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             sessions.unshift(session);
             return session;
         },
+        async getFollowUpOutcome() {
+            const outcome = data.followUpOutcome ?? { taken: [], returned: [] };
+            return typeof outcome === 'function' ? outcome() : outcome;
+        },
         async getMessages(sessionId): Promise<MessageList> {
             const list = messages[sessionId] ?? [];
             return { messages: list, total: list.length };
@@ -110,6 +122,11 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             if (at < 0) throw new GaiaApiError(404, 'Message not found');
             messages[sessionId] = list.slice(0, at);
             return { deleted: true, count: list.length - at };
+        },
+        async sendFollowUp(sessionId, text) {
+            if (data.followUpRefusal) throw data.followUpRefusal;
+            followUps.push({ sessionId, text });
+            return { delivered: true };
         },
         async *sendMessage(sessionId, message) {
             sent.push({ sessionId, message });

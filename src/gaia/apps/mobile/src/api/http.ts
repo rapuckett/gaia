@@ -21,6 +21,8 @@ import type {
     ConfirmToolResult,
     DeleteMessagesResult,
     DeleteScheduleResult,
+    FollowUpOutcome,
+    FollowUpResult,
     GaiaClient,
     HealthResponse,
     MessageList,
@@ -33,6 +35,7 @@ import type {
 import {
     ATTACH_HEADER_TIMEOUT_MS,
     ENDPOINTS,
+    followupOutcomePath,
     MESSAGE_PAGE_SIZE,
     QUEUED_IDLE_MS,
     schedulePath,
@@ -238,6 +241,10 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             return postJson<Session>(ENDPOINTS.sessions, request, options?.signal);
         },
 
+        getFollowUpOutcome(sessionId, options) {
+            return getJson<FollowUpOutcome>(followupOutcomePath(sessionId), options?.signal);
+        },
+
         async getMessages(sessionId: string, options?: RequestOptions): Promise<MessageList> {
             const path = sessionMessagesPath(sessionId);
             const first = await getJson<MessageList>(`${path}?limit=${MESSAGE_PAGE_SIZE}&offset=0`, options?.signal);
@@ -252,6 +259,10 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
                 messages.push(...page.messages);
             }
             return { messages, total: first.total };
+        },
+
+        sendFollowUp(sessionId, text, options) {
+            return postJson<FollowUpResult>(ENDPOINTS.chatFollowup, { session_id: sessionId, text }, options?.signal);
         },
 
         sendMessage(sessionId, message, options) {

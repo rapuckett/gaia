@@ -21,6 +21,8 @@ export const ENDPOINTS = {
     chatAttach: '/api/chat/attach',
     chatCancel: '/api/chat/cancel',
     chatConfirmTool: '/api/chat/confirm-tool',
+    chatFollowup: '/api/chat/followup',
+    chatFollowupOutcome: '/api/chat/followup/{session_id}',
     chatUserInput: '/api/chat/user-input',
     systemStatus: '/api/system/status',
     documentFile: '/api/documents/{doc_id}/file',
@@ -37,6 +39,10 @@ export function scheduleRunPath(name: string): string {
 
 export function sessionPath(sessionId: string): string {
     return ENDPOINTS.session.replace('{session_id}', encodeURIComponent(sessionId));
+}
+
+export function followupOutcomePath(sessionId: string): string {
+    return ENDPOINTS.chatFollowupOutcome.replace('{session_id}', encodeURIComponent(sessionId));
 }
 
 export function sessionMessagesPath(sessionId: string): string {

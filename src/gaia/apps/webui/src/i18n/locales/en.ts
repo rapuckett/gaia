@@ -291,6 +291,7 @@ export const enMessages = {
     'queue.steerTitle': 'GAIA reads it at its next step, without starting over. It may not answer it separately.',
     'queue.steer': 'Add to this reply',
     'queue.removeAria': 'Remove queued message: {text}',
+    'queue.steerRefused': "Can't add to this reply; it will send when the reply ends.",
     'composer.stop': 'Stop',
     'composer.stopping': 'Stopping…',
     'composer.send': 'Send',
