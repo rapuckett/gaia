@@ -20,8 +20,8 @@ import { GaiaApiError } from './errors';
 export interface FakeClientData {
     sessions?: Session[];
     messages?: Record<string, Message[]>;
-    /** What every send streams back. */
-    replies?: StreamEvent[];
+    /** What every send streams back; a function takes the sent text and streams what a test scripts. */
+    replies?: StreamEvent[] | ((message: string) => AsyncIterable<StreamEvent>);
     /** What attachToRun replays, by chat; a chat not listed has no turn running. */
     running?: Record<string, StreamEvent[]>;
     status?: SystemStatus;
@@ -32,6 +32,7 @@ export interface FakeGaiaClient extends GaiaClient {
     readonly sent: { sessionId: string; message: string }[];
     readonly created: CreateSessionRequest[];
     readonly cancelled: string[];
+    readonly deleted: { sessionId: string; messageId: number }[];
     readonly confirmations: ToolConfirmRequest[];
     readonly answers: UserInputRequest[];
 }
@@ -39,11 +40,12 @@ export interface FakeGaiaClient extends GaiaClient {
 export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
     const sessions = [...(data.sessions ?? [])];
     const messages = data.messages ?? {};
-    const replies: StreamEvent[] = data.replies ?? [{ type: 'done' }];
+    const replies = data.replies ?? [{ type: 'done' } as StreamEvent];
     const running = data.running ?? {};
     const sent: FakeGaiaClient['sent'] = [];
     const created: CreateSessionRequest[] = [];
     const cancelled: string[] = [];
+    const deleted: FakeGaiaClient['deleted'] = [];
     const confirmations: ToolConfirmRequest[] = [];
     const answers: UserInputRequest[] = [];
 
@@ -57,6 +59,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         sent,
         created,
         cancelled,
+        deleted,
         confirmations,
         answers,
         async health(): Promise<HealthResponse> {
@@ -88,9 +91,17 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             const list = messages[sessionId] ?? [];
             return { messages: list, total: list.length };
         },
+        async deleteMessagesFrom(sessionId, messageId) {
+            deleted.push({ sessionId, messageId });
+            const list = messages[sessionId] ?? [];
+            const at = list.findIndex((m) => m.id === messageId);
+            if (at < 0) throw new GaiaApiError(404, 'Message not found');
+            messages[sessionId] = list.slice(0, at);
+            return { deleted: true, count: list.length - at };
+        },
         async *sendMessage(sessionId, message) {
             sent.push({ sessionId, message });
-            yield* replies;
+            yield* typeof replies === 'function' ? replies(message) : replies;
         },
         async *attachToRun(sessionId) {
             yield* running[sessionId] ?? [];

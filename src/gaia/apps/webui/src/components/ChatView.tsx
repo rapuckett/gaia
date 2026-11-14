@@ -73,12 +73,12 @@ import { useChatDraft } from '../hooks/useSavedDraft';
 import { chatDraftKey, clearSavedDraft } from '../utils/savedDraft';
 import { useOpeningMessage } from '../hooks/useOpeningMessage';
 import { getT, useT } from '../i18n/useT';
+import { STOP_GRACE_MS } from '../utils/turnEnding.core';
 
 /** Events that only come after the agent got past a permission prompt. */
 const RESOLVES_PROMPTS = new Set(['tool_start', 'tool_end', 'tool_result']);
 
-/** How long Stop waits for the server's closing `done` before the client closes the turn itself. */
-export const STOP_GRACE_MS = 15_000;
+export { STOP_GRACE_MS };
 
 export { QUEUE_BUSY_WAIT_MS } from '../services/queueDispatch';
 

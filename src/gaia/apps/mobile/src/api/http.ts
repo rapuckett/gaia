@@ -19,6 +19,7 @@ import {
 import type {
     CancelChatResult,
     ConfirmToolResult,
+    DeleteMessagesResult,
     GaiaClient,
     HealthResponse,
     MessageList,
@@ -33,6 +34,7 @@ import {
     QUEUED_IDLE_MS,
     SEND_HEADER_TIMEOUT_MS,
     SESSION_PAGE_SIZE,
+    sessionMessagesAndBelowPath,
     sessionMessagesPath,
     sessionPath,
     STREAM_IDLE_MS,
@@ -146,6 +148,10 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
         return readJson<T>(await request('POST', path, body, signal), path);
     }
 
+    async function deleteJson<T>(path: string, signal?: AbortSignal): Promise<T> {
+        return readJson<T>(await request('DELETE', path, undefined, signal), path);
+    }
+
     async function* streamTurn(
         method: 'GET' | 'POST',
         path: string,
@@ -247,6 +253,10 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
         attachToRun(sessionId, options) {
             const path = `${ENDPOINTS.chatAttach}?session_id=${encodeURIComponent(sessionId)}`;
             return streamTurn('GET', path, undefined, 'attach', ATTACH_HEADER_TIMEOUT_MS, options?.signal);
+        },
+
+        deleteMessagesFrom(sessionId, messageId, options) {
+            return deleteJson<DeleteMessagesResult>(sessionMessagesAndBelowPath(sessionId, messageId), options?.signal);
         },
 
         cancelChat(sessionId, options) {

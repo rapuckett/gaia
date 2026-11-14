@@ -1,11 +1,14 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
+import { SERVER_CANCELLED_TEXT, splitCutOff } from '@webui/utils/turnEnding.core';
+
 import type { Message } from '@/api/client.types';
 import { useT } from '@/i18n/useT';
 import { IconButton, Pressable, Row, Stack } from '@/ui';
 import { Check, Copy, Ellipsis } from '@/ui/icons';
 
+import { CutOffNote, StoppedNote } from '../EndingNotes';
 import { Markdown } from '../markdown/Markdown';
 import { useMessageActions } from './useMessageActions';
 
@@ -18,11 +21,16 @@ export interface AssistantBubbleProps {
 export function AssistantBubble({ message, streaming = false }: AssistantBubbleProps) {
     const t = useT();
     const actions = useMessageActions(message);
+    const cutOff = streaming ? null : splitCutOff(message.content);
+    const cancelled = message.content.trim() === SERVER_CANCELLED_TEXT;
+    const text = cancelled ? '' : cutOff ? cutOff.body : message.content;
     return (
         <Stack paddingX="lg" paddingY="xs">
             <Pressable onLongPress={actions.openSheet} accessible={false} minSize={0}>
-                <Markdown text={message.content} streaming={streaming} />
+                {text ? <Markdown text={text} streaming={streaming} /> : null}
             </Pressable>
+            {cutOff ? <CutOffNote cutOff={cutOff} /> : null}
+            {cancelled ? <StoppedNote stop={{ state: 'stopped' }} /> : null}
             {!streaming ? (
                 <Row>
                     <IconButton
