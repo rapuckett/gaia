@@ -12,7 +12,10 @@ import pytest
 from gaia.filesystem.index import FileSystemIndexService
 from gaia.scratchpad.service import ScratchpadService
 
-REAL_GAIA_HOME = (Path.home() / ".gaia").resolve()
+# The root conftest points HOME at a tmp dir and records the real one here.
+REAL_GAIA_HOME = (
+    Path(os.environ.get("_GAIA_TEST_REAL_HOME") or Path.home()) / ".gaia"
+).resolve()
 
 
 def _is_under_real_home(path: Path) -> bool:

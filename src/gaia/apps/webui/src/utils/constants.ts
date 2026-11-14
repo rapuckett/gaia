@@ -38,11 +38,13 @@ export const NEW_CHAT_TITLE = 'New chat';
 /** How the backend's periodic "still working" status tick starts (`gaia/ui/run_manager.py`). */
 export const PROGRESS_TICK_PREFIX = 'Model is processing';
 
-/** The notices the server stores in a turn cut off before its answer. Must match `gaia/ui/restart_recovery.py`. */
+/** The notices the server stores in a turn cut off before its answer. Must match `gaia/ui/restart_recovery.py` and `gaia/ui/scheduler.py`. */
 export const CUT_OFF_NOTICE_TEXT = {
     interrupted: 'This answer was interrupted when GAIA closed. Send again to retry.',
     cancelled: 'This answer was interrupted before it finished. Send again to retry.',
     noReply: 'This answer ended before GAIA could save a reply. Send again to retry.',
+    scheduleDeleted: 'This run was stopped because its schedule was deleted.',
+    schedulePaused: 'This run was stopped because its schedule was paused.',
 } as const;
 
 /** The live line's phase while a dead stream is being re-attached; the line's own words are the user's language. */

@@ -18,6 +18,7 @@ import { requiresFreshConsent } from '../utils/permissionPrompts.core';
 export {
   PATH_ACCESS_TOOL,
   PROJECT_TRUST_TOOL,
+  alwaysScopeText,
   isPathAccessFollowUp,
   pathAccessQuestion,
   pathAccessTitle,
