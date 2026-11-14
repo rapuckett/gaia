@@ -1,27 +1,24 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { FlatList, NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
+import { useEffect, useState } from 'react';
 
 import { useChatStream, useMessages, useSession } from '@/data';
 import { Composer, useComposerQueue } from '@/features/composer';
 import { ScreenHeader } from '@/features/nav/ScreenHeader';
 import { describeError, useT } from '@/i18n/useT';
-import { Button, ErrorState, List, LoadingState, Notice, Screen, Stack, useTheme } from '@/ui';
-import { ArrowDown } from '@/ui/icons';
+import { ErrorState, Notice, Screen, Stack } from '@/ui';
 
 import { ChatPrompts } from './ChatPrompts';
 import { liveStatusLine } from './liveStatus';
-import { ReplyBubble } from './ReplyBubble';
-import { buildRows, type ChatRow } from './rows';
-import { UserBubble } from './UserBubble';
+import { MessageList } from './messages/MessageList';
+import { buildTail } from './tailState';
+import { TurnTail } from './TurnTail';
 
 const NO_MESSAGES: never[] = [];
 
 export function ChatScreen({ sessionId }: { sessionId: string }) {
     const t = useT();
-    const { space } = useTheme();
     const session = useSession(sessionId);
     const messages = useMessages(sessionId);
     const stream = useChatStream(sessionId);
@@ -30,7 +27,7 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
     const busy = stream.status !== 'idle';
     const saved = messages.data?.messages ?? NO_MESSAGES;
 
-    const rows = useMemo(() => buildRows(saved, stream), [saved, stream]);
+    const tail = buildTail(saved, stream);
     const line = liveStatusLine(
         stream.events,
         { waitingOnPerson: !!stream.pendingPermission || !!stream.pendingQuestion, answering: stream.liveText !== '' },
@@ -58,33 +55,11 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
         stream.send(t('msg.continuePrompt'));
     };
 
-    const listRef = useRef<FlatList<ChatRow>>(null);
-    const atBottomRef = useRef(true);
-    const [atBottom, setAtBottom] = useState(true);
-    const onScroll = useCallback(
-        (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-            const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
-            const near = contentSize.height - (contentOffset.y + layoutMeasurement.height) <= space.xl;
-            atBottomRef.current = near;
-            setAtBottom(near);
-        },
-        [space.xl],
-    );
-    // New content follows only while the person is already at the newest.
-    const followNewest = useCallback(() => {
-        if (atBottomRef.current) listRef.current?.scrollToEnd({ animated: false });
-    }, []);
-    const jumpToLatest = () => {
-        atBottomRef.current = true;
-        setAtBottom(true);
-        listRef.current?.scrollToEnd({ animated: true });
-    };
-
     const placeholder = stream.pendingQuestion
         ? t('composer.answerQuestion')
         : busy
           ? t('composer.queueNext')
-          : rows.length > 0
+          : saved.length > 0 || tail
             ? t('composer.reply')
             : undefined;
 
@@ -105,41 +80,23 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
         >
             {session.isError ? (
                 <ErrorState title={describeError(session.error, t)} onRetry={() => void session.refetch()} />
-            ) : messages.isError ? (
-                <ErrorState title={describeError(messages.error, t)} onRetry={() => void messages.refetch()} />
-            ) : messages.isPending ? (
-                <LoadingState title={t('chat.loadingMessages')} />
             ) : (
-                <>
-                    <List
-                        listRef={listRef}
-                        data={rows}
-                        keyExtractor={(row) => row.key}
-                        renderItem={({ item }) =>
-                            item.kind === 'user' ? (
-                                <UserBubble text={item.text} />
-                            ) : (
-                                <ReplyBubble
-                                    reply={item}
+                <MessageList
+                    sessionId={sessionId}
+                    live={
+                        <>
+                            {tail ? (
+                                <TurnTail
+                                    tail={tail}
                                     line={line}
-                                    onTryAgain={() => tryAgain(item.replyId)}
+                                    onTryAgain={() => tryAgain(tail.replyId)}
                                     onContinue={continueReply}
                                 />
-                            )
-                        }
-                        ItemSeparatorComponent={() => <Stack padding="sm" />}
-                        ListFooterComponent={<ChatPrompts permission={stream.pendingPermission} question={stream.pendingQuestion} />}
-                        contentContainerStyle={{ paddingVertical: space.lg }}
-                        onScroll={onScroll}
-                        scrollEventThrottle={100}
-                        onContentSizeChange={followNewest}
-                    />
-                    {atBottom ? null : (
-                        <Stack align="center" padding="sm">
-                            <Button size="sm" icon={ArrowDown} label={t('chat.scrollToBottom')} onPress={jumpToLatest} testID="jump-to-latest" />
-                        </Stack>
-                    )}
-                </>
+                            ) : null}
+                            <ChatPrompts permission={stream.pendingPermission} question={stream.pendingQuestion} />
+                        </>
+                    }
+                />
             )}
         </Screen>
     );
