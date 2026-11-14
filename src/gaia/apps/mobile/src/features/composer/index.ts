@@ -2,4 +2,4 @@
 // SPDX-License-Identifier: MIT
 
 export { Composer, type ComposerProps } from './Composer';
-export { useComposerQueue, type ComposerQueue } from './composerQueue';
+export { useComposerQueue, useFollowUpEvents, type ComposerQueue } from './composerQueue';
