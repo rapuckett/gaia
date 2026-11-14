@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: MIT
 
 import type {
+    AgentInfo,
+    AgentInstallStatus,
     AgentMcpServer,
     ConnectorListEntry,
     CreateSessionRequest,
@@ -19,6 +21,7 @@ import type {
     SessionList,
     SessionSearchResponse,
     SessionSearchResult,
+    SetupCheck,
     SetupRunStatus,
     StartScreen,
     StreamEvent,
@@ -27,6 +30,7 @@ import type {
     UserInputRequest,
 } from './client.types';
 import { foldText, splitMatch } from '@webui/utils/chatSearch';
+import { FLAGSHIP_AGENT_ID } from '@webui/utils/newTask';
 
 import { GaiaApiError } from './errors';
 
@@ -40,6 +44,12 @@ export interface FakeClientData {
     running?: Record<string, StreamEvent[]>;
     connectors?: ConnectorListEntry[];
     agentMcps?: AgentMcpServer[];
+    /** What listAgents answers; the default is the flagship alone. */
+    agents?: AgentInfo[];
+    /** What each poll of getAgentInstallStatus answers, in turn; the last one repeats. */
+    installStatuses?: AgentInstallStatus[];
+    /** What checkSetup answers. */
+    setupCheck?: SetupCheck;
     /** What getFollowUpOutcome answers; a function may throw to script a 409. */
     followUpOutcome?: FollowUpOutcome | (() => FollowUpOutcome);
     /** Makes sendFollowUp reject, as a turn that can't take the message does. */
@@ -72,6 +82,7 @@ export interface FakeGaiaClient extends GaiaClient {
     readonly restarts: { confirm: boolean }[];
     readonly downloads: { modelId: string; acknowledgeLowDisk: boolean }[];
     readonly detached: { sessionId: string; docId: string }[];
+    readonly installs: string[];
 }
 
 export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
@@ -97,6 +108,8 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
     }
     const followUps: FakeGaiaClient['followUps'] = [];
     const detached: FakeGaiaClient['detached'] = [];
+    const installs: string[] = [];
+    let polls = 0;
 
     function findSession(sessionId: string): Session {
         const session = sessions.find((s) => s.id === sessionId);
@@ -116,6 +129,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         restarts,
         downloads,
         detached,
+        installs,
         async health(): Promise<HealthResponse> {
             return { status: 'ok', service: 'gaia-agent-ui' };
         },
@@ -226,6 +240,24 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         },
         async listAgentMcps() {
             return { agent_mcps: [...(data.agentMcps ?? [])] };
+        },
+        async listAgents() {
+            const agents = data.agents ?? [
+                { id: FLAGSHIP_AGENT_ID, name: 'GAIA', description: '', source: 'builtin', conversation_starters: [], models: [] },
+            ];
+            return { agents: [...agents], total: agents.length };
+        },
+        async installAgent(id) {
+            installs.push(id);
+            return { id, status: 'queued' };
+        },
+        async getAgentInstallStatus(id) {
+            const statuses = data.installStatuses;
+            if (!statuses?.length) throw new GaiaApiError(404, `No install status for '${id}'.`);
+            return statuses[Math.min(polls++, statuses.length - 1)]!;
+        },
+        async checkSetup() {
+            return data.setupCheck ?? { ready: true, steps: [] };
         },
         async listSchedules() {
             return { schedules: [...schedules], total: schedules.length };

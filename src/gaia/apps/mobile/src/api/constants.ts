@@ -9,6 +9,9 @@ export const UI_HEADERS = {
 } as const;
 
 export const ENDPOINTS = {
+    agentInstallStatus: '/api/agents/{agent_id}/install-status',
+    agents: '/api/agents',
+    agentsInstall: '/api/agents/install',
     health: '/api/health',
     localModelRestart: '/api/providers/local/restart',
     localModelStatus: '/api/providers/local/status',
@@ -23,6 +26,7 @@ export const ENDPOINTS = {
     sessionPrivate: '/api/sessions/{session_id}/private',
     sessionSearch: '/api/sessions/search',
     setupCancel: '/api/setup/cancel',
+    setupCheck: '/api/setup/check',
     setupModelDownload: '/api/setup/models/download',
     setupNeeds: '/api/setup/needs/{job}',
     setupStatus: '/api/setup/status',
@@ -41,6 +45,10 @@ export const ENDPOINTS = {
     documents: '/api/documents',
     onboardingStart: '/api/onboarding/start',
 } as const;
+
+export function agentInstallStatusPath(agentId: string): string {
+    return ENDPOINTS.agentInstallStatus.replace('{agent_id}', encodeURIComponent(agentId));
+}
 
 export function schedulePath(name: string): string {
     return ENDPOINTS.schedule.replace('{name:path}', encodeURIComponent(name));

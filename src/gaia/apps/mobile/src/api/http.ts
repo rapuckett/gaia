@@ -17,6 +17,8 @@ import {
     type StreamEndpoint,
 } from './errors';
 import type {
+    AgentInstallStatus,
+    AgentList,
     AgentMcpList,
     CancelChatResult,
     ConfirmToolResult,
@@ -37,10 +39,12 @@ import type {
     ScheduleList,
     SessionList,
     SessionSearchResponse,
+    SetupCheck,
     SetupRunStatus,
     UserInputResult,
 } from './client.types';
 import {
+    agentInstallStatusPath,
     ATTACH_HEADER_TIMEOUT_MS,
     ENDPOINTS,
     followupOutcomePath,
@@ -340,6 +344,22 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         listAgentMcps(options) {
             return getJson<AgentMcpList>(ENDPOINTS.connectorsAgentMcps, options?.signal);
+        },
+
+        listAgents(options) {
+            return getJson<AgentList>(ENDPOINTS.agents, options?.signal);
+        },
+
+        installAgent(id, options) {
+            return postJson<{ id: string; status: string }>(ENDPOINTS.agentsInstall, { id }, options?.signal);
+        },
+
+        getAgentInstallStatus(id, options) {
+            return getJson<AgentInstallStatus>(agentInstallStatusPath(id), options?.signal);
+        },
+
+        checkSetup(options) {
+            return getJson<SetupCheck>(ENDPOINTS.setupCheck, options?.signal);
         },
 
         listSchedules(options) {

@@ -95,6 +95,9 @@ describe('endpoints', () => {
         ]);
     });
     const methods: Record<keyof typeof ENDPOINTS, string[]> = {
+        agentInstallStatus: ['GET'],
+        agents: ['GET'],
+        agentsInstall: ['POST'],
         health: ['GET'],
         localModelRestart: ['POST'],
         localModelStatus: ['GET'],
@@ -109,6 +112,7 @@ describe('endpoints', () => {
         sessionPrivate: ['PATCH'],
         sessionSearch: ['GET'],
         setupCancel: ['POST'],
+        setupCheck: ['GET'],
         setupModelDownload: ['POST'],
         setupNeeds: ['GET'],
         setupStatus: ['GET'],
