@@ -9,12 +9,16 @@ import type {
     MessageList,
     Session,
     SessionList,
+    SessionSearchResponse,
+    SessionSearchResult,
     StartScreen,
     StreamEvent,
     SystemStatus,
     ToolConfirmRequest,
     UserInputRequest,
 } from './client.types';
+import { foldText, splitMatch } from '@webui/utils/chatSearch';
+
 import { GaiaApiError } from './errors';
 
 export interface FakeClientData {
@@ -26,6 +30,10 @@ export interface FakeClientData {
     running?: Record<string, StreamEvent[]>;
     status?: SystemStatus;
     start?: StartScreen;
+    /** Most chats a search returns before it says `truncated`. */
+    searchLimit?: number;
+    /** Makes every search fail with this message. */
+    searchError?: string;
 }
 
 export interface FakeGaiaClient extends GaiaClient {
@@ -86,6 +94,26 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             };
             sessions.unshift(session);
             return session;
+        },
+        async searchSessions(query): Promise<SessionSearchResponse> {
+            if (data.searchError) throw new GaiaApiError(500, data.searchError);
+            const needle = foldText(query);
+            const results: SessionSearchResult[] = [];
+            for (const s of sessions) {
+                if (foldText(s.title).includes(needle)) {
+                    results.push({ session_id: s.id, title: s.title, field: 'title', snippet: splitMatch(s.title, query)! });
+                    continue;
+                }
+                for (const m of messages[s.id] ?? []) {
+                    const snippet = splitMatch(m.content, query);
+                    if (snippet) {
+                        results.push({ session_id: s.id, title: s.title, field: 'message', snippet });
+                        break;
+                    }
+                }
+            }
+            const limit = data.searchLimit ?? Infinity;
+            return { query, results: results.slice(0, limit), truncated: results.length > limit };
         },
         async getMessages(sessionId): Promise<MessageList> {
             const list = messages[sessionId] ?? [];

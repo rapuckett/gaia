@@ -14,6 +14,7 @@ export const ENDPOINTS = {
     session: '/api/sessions/{session_id}',
     sessionMessages: '/api/sessions/{session_id}/messages',
     sessionMessagesAndBelow: '/api/sessions/{session_id}/messages/{message_id}/and-below',
+    sessionSearch: '/api/sessions/search',
     chatSend: '/api/chat/send',
     chatAttach: '/api/chat/attach',
     chatCancel: '/api/chat/cancel',
@@ -43,6 +44,9 @@ export function documentFileUrl(baseUrl: string, docId: string, page?: number): 
     const path = ENDPOINTS.documentFile.replace('{doc_id}', encodeURIComponent(docId));
     return `${baseUrl.replace(/\/+$/, '')}${path}${page ? `#page=${page}` : ''}`;
 }
+
+/** Typing pauses this long before a search goes out; the web UI's `SEARCH_DEBOUNCE_MS`. */
+export const SEARCH_DEBOUNCE_MS = 200;
 
 export const SESSION_PAGE_SIZE = 200;
 export const MESSAGE_PAGE_SIZE = 100;
