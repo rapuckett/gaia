@@ -9,6 +9,7 @@ import { useWindowDimensions } from 'react-native';
 import { createHttpClient } from '@/api/http';
 import { GaiaClientProvider } from '@/data/GaiaClientProvider';
 import { AppDrawer } from '@/features/nav/AppDrawer';
+import { RoutingEffects } from '@/features/nav/RoutingEffects';
 import { INITIAL_ROUTE, PERMANENT_DRAWER_MIN_WIDTH } from '@/features/nav/navigation';
 import { useDirection } from '@/i18n/useT';
 import { applyDirection } from '@/platform/direction';
@@ -38,6 +39,7 @@ export default function RootLayout() {
         <QueryClientProvider client={queryClient}>
             <GaiaClientProvider client={client}>
                 <UIProvider>
+                    <RoutingEffects />
                     <Drawer
                         drawerContent={(props) => <AppDrawer {...props} />}
                         backBehavior="initialRoute"

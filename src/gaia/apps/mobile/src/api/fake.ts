@@ -26,6 +26,8 @@ export interface FakeClientData {
     running?: Record<string, StreamEvent[]>;
     status?: SystemStatus;
     start?: StartScreen;
+    /** What watchSessionEvents streams before it ends; the real stream never ends on its own. */
+    sessionEvents?: unknown[];
 }
 
 export interface FakeGaiaClient extends GaiaClient {
@@ -117,6 +119,9 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         async sendUserInput(request) {
             answers.push(request);
             return { status: 'ok', request_id: request.request_id };
+        },
+        async *watchSessionEvents() {
+            yield* (data.sessionEvents ?? []) as StreamEvent[];
         },
         async getSystemStatus() {
             if (!data.status) throw new GaiaApiError(503, 'This fake client was given no system status.');

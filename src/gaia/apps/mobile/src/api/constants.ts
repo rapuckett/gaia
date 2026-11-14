@@ -12,6 +12,7 @@ export const ENDPOINTS = {
     health: '/api/health',
     sessions: '/api/sessions',
     session: '/api/sessions/{session_id}',
+    sessionEvents: '/api/sessions/events',
     sessionMessages: '/api/sessions/{session_id}/messages',
     sessionMessagesAndBelow: '/api/sessions/{session_id}/messages/{message_id}/and-below',
     chatSend: '/api/chat/send',
@@ -53,6 +54,8 @@ export const STREAM_IDLE_MS = 30_000;
 export const QUEUED_IDLE_MS = 10 * 60_000;
 /** The backend may hold a send for 60 s while another chat has the model, then answers 429. */
 export const SEND_HEADER_TIMEOUT_MS = 90_000;
+/** The chat-list event stream sends a keepalive every 30 s. */
+export const SESSION_EVENTS_IDLE_MS = 90_000;
 /** An attach replays at once; a slower answer means the backend is stuck or unreachable. */
 export const ATTACH_HEADER_TIMEOUT_MS = 30_000;
 /** How often to re-read the PC's status while it is still starting or warming up. */

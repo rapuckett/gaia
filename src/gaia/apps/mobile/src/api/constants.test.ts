@@ -85,6 +85,7 @@ describe('endpoints', () => {
         health: ['GET'],
         sessions: ['GET', 'POST'],
         session: ['GET'],
+        sessionEvents: ['GET'],
         sessionMessages: ['GET'],
         sessionMessagesAndBelow: ['DELETE'],
         chatSend: ['POST'],

@@ -75,6 +75,11 @@ export interface GaiaClient {
     confirmTool(request: ToolConfirmRequest, options?: RequestOptions): Promise<ConfirmToolResult>;
     /** Answers a `needs_input` question; the turn continues once GAIA has it. */
     sendUserInput(request: UserInputRequest, options?: RequestOptions): Promise<UserInputResult>;
+    /**
+     * Streams events about the PC's chat list, such as `set_active_session`. Never ends on its own:
+     * it throws when the connection drops or goes silent, and the caller reconnects.
+     */
+    watchSessionEvents(options?: RequestOptions): AsyncIterable<StreamEvent>;
     getSystemStatus(options?: RequestOptions): Promise<SystemStatus>;
     /** The new-chat screen's cards and working folder; `skills_error` says why the assistant can't list its skills. */
     getStartScreen(options?: RequestOptions): Promise<StartScreen>;

@@ -3495,6 +3495,7 @@ export const enMessages = {
     'mobileApp.error.streamBroke': 'The connection to GAIA broke while the reply was arriving. The answer may still finish on your PC: reopen this chat in a minute to see it.',
     'mobileApp.error.badEvent': 'GAIA sent a reply event this phone cannot read: {preview}',
     'mobileApp.error.noConnection': 'No PC is connected. Pair this phone with your PC first.',
+    'mobileApp.chat.notFound': 'That chat is no longer on your PC.',
 } as const;
 
 export const en: Locale = {

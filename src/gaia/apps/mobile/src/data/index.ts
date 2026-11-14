@@ -5,3 +5,4 @@ export * from './chatStream';
 export * from './GaiaClientProvider';
 export * from './mutations';
 export * from './queries';
+export * from './sessionEvents';

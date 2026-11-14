@@ -33,6 +33,7 @@ import {
     MESSAGE_PAGE_SIZE,
     QUEUED_IDLE_MS,
     SEND_HEADER_TIMEOUT_MS,
+    SESSION_EVENTS_IDLE_MS,
     SESSION_PAGE_SIZE,
     sessionMessagesAndBelowPath,
     sessionMessagesPath,
@@ -253,6 +254,26 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
         attachToRun(sessionId, options) {
             const path = `${ENDPOINTS.chatAttach}?session_id=${encodeURIComponent(sessionId)}`;
             return streamTurn('GET', path, undefined, 'attach', ATTACH_HEADER_TIMEOUT_MS, options?.signal);
+        },
+
+        async *watchSessionEvents(options) {
+            const connection = new AbortController();
+            const drop = () => connection.abort();
+            if (options?.signal?.aborted) drop();
+            else options?.signal?.addEventListener('abort', drop);
+            try {
+                const res = await request('GET', ENDPOINTS.sessionEvents, undefined, connection.signal, {
+                    endpoint: 'attach',
+                    ms: ATTACH_HEADER_TIMEOUT_MS,
+                    abort: drop,
+                });
+                if (!res.body) throw new GaiaStreamError('mobileApp.error.noBody');
+                yield* parseSseStream(res.body, () => SESSION_EVENTS_IDLE_MS);
+                throw new GaiaStreamError('mobileApp.error.streamClosed');
+            } finally {
+                options?.signal?.removeEventListener('abort', drop);
+                drop();
+            }
         },
 
         deleteMessagesFrom(sessionId, messageId, options) {
