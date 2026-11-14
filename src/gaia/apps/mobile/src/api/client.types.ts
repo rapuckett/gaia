@@ -5,7 +5,6 @@ import type { FollowUpOutcome } from '@webui/utils/messageQueue';
 import type {
     AgentMcpServer,
     ConnectorListEntry,
-    ContextUsage,
     ContextUsageResult,
     LocalModelStatus,
     Message,
