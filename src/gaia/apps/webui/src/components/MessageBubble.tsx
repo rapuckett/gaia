@@ -14,7 +14,10 @@ import { EmailConnectCta, isAuthRequiredMessage } from './email/EmailConnectCta'
 import { RenderCard } from './render/RenderCard';
 import * as api from '../services/api';
 import { log } from '../utils/logger';
-import { AnswerStats, type TurnEnding } from './AnswerStats';
+import { AnswerStats } from './AnswerStats';
+import { SERVER_CANCELLED_TEXT, splitCutOff, turnEnding } from '../utils/turnEnding.core';
+
+export { splitCutOff, turnEnding };
 import { displayModelName, useInferencePlace, useModelNames } from '../stores/modelStore';
 import { MODEL_WAIT_HINT_S, isModelWaitLabel } from '../utils/modelWait';
 import { localizeLiveStatus } from '../utils/liveStatus';
@@ -24,8 +27,6 @@ import { ReadAloudButton, ReadAloudError, ReadAloudNote } from './ReadAloudButto
 import { TroubleshootingReport, namesFailureRecord, type ReportClasses } from './TroubleshootingReport';
 import { CODE_COLLAPSE_LINES, CODE_PREVIEW_LINES, ExpandToggle, countLines, isLongUserMessage, lineCount, sizeLabel } from './LongContent';
 import { dateLocale, useT, type Translate } from '../i18n/useT';
-import { CUT_OFF_NOTICE_TEXT } from '../utils/constants';
-import type { MessageKey } from '../i18n/registry';
 import { useChatStore } from '../stores/chatStore';
 import { useLogsStore } from '../stores/logsStore';
 import { CLAIMS_ESCAPE } from '../hooks/useEscapeToClose';
@@ -198,44 +199,6 @@ function formatFullTimestamp(iso: string, t: Translate): string {
         month: 'short', day: 'numeric', year: 'numeric',
         hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true,
     });
-}
-
-/** What the server persists for a turn stopped before it wrote any text (_empty_answer_outcome). */
-const SERVER_CANCELLED_TEXT = 'Cancelled.';
-
-/** The notices that close a turn cut off before its answer (gaia/ui/restart_recovery.py), and their translations. */
-const CUT_OFF_NOTICES: ReadonlyArray<readonly [string, MessageKey]> = [
-    [CUT_OFF_NOTICE_TEXT.interrupted, 'msg.cutOff.interrupted'],
-    [CUT_OFF_NOTICE_TEXT.cancelled, 'msg.cutOff.cancelled'],
-    [CUT_OFF_NOTICE_TEXT.noReply, 'msg.cutOff.noReply'],
-];
-
-/** restart_recovery.tools_ran_notice, the line the server puts just above a cut-off notice. */
-const TOOLS_RAN_RE = /(?:^|\n\n)Before it stopped, it had started these tools: (.+)\.$/;
-
-export interface CutOff {
-    /** What the turn streamed before it was cut off. */
-    body: string;
-    notice: MessageKey;
-    tools: string | null;
-}
-
-/** A reply the server closed with a cut-off notice, split so the notice shows in the UI's language. */
-export function splitCutOff(content: string): CutOff | null {
-    let text = content.trim();
-    const hit = CUT_OFF_NOTICES.find(([notice]) => text.endsWith(notice));
-    if (!hit) return null;
-    text = text.slice(0, -hit[0].length).trimEnd();
-    const tools = TOOLS_RAN_RE.exec(text);
-    if (tools) text = text.slice(0, tools.index).trimEnd();
-    return { body: text, notice: hit[1], tools: tools ? tools[1] : null };
-}
-
-/** How an assistant turn ended short of an answer, or undefined when it answered. */
-export function turnEnding(content: string, stopState: Message['stopState'], failed = false): TurnEnding | undefined {
-    if (stopState) return 'stopped';
-    if (splitCutOff(content)) return 'interrupted';
-    return failed ? 'failed' : undefined;
 }
 
 const EDITOR_MAX_HEIGHT = 320;

@@ -39,6 +39,11 @@ export interface ConfirmToolResult {
     granted: string | null;
 }
 
+export interface DeleteMessagesResult {
+    deleted: boolean;
+    count: number;
+}
+
 export interface UserInputResult {
     status: string;
     request_id: string;
@@ -54,6 +59,8 @@ export interface GaiaClient {
     getSession(sessionId: string, options?: RequestOptions): Promise<Session>;
     createSession(request?: CreateSessionRequest, options?: RequestOptions): Promise<Session>;
     getMessages(sessionId: string, options?: RequestOptions): Promise<MessageList>;
+    /** Deletes the message and everything after it, so the exchange can be asked again. */
+    deleteMessagesFrom(sessionId: string, messageId: number, options?: RequestOptions): Promise<DeleteMessagesResult>;
     /** Starts a turn and streams it to its `done` or `error` event. */
     sendMessage(sessionId: string, message: string, options?: RequestOptions): AsyncIterable<StreamEvent>;
     /**
