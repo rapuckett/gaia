@@ -9,6 +9,9 @@ import { translator } from '@/i18n/useT';
 import { GaiaApiError } from '@/api/errors';
 import { IDLE_TURN, type ChatTurn } from '@/state/chatStreams';
 
+import { DOCS_SHOWN, foldDocuments, splitDocuments } from './attachedDocs';
+import { setupError } from './setupFailed';
+import { withExample } from './tryExamples';
 import { createFirstSend } from './firstSend';
 import { greetingKey } from './greeting';
 import { startingReason } from './starting';
@@ -155,5 +158,46 @@ describe('assistant did not start', () => {
         expect(assistantProblem(null, { ...screen, skills_error: 'no skills' }, t)).toBe('no skills');
         expect(assistantProblem(null, screen, t)).toBeNull();
         expect(assistantProblem(null, undefined, t)).toBeNull();
+    });
+});
+
+describe('try-an-example chips', () => {
+    it('fill an empty box, add after typed text, and swap the last example for the next', () => {
+        const first = withExample('', '', 'Plan 3 days in Lisbon');
+        expect(first).toBe('Plan 3 days in Lisbon');
+        expect(withExample('Something for two', '', 'Plan 3 days in Lisbon')).toBe('Something for two\n\nPlan 3 days in Lisbon');
+        expect(withExample(first, 'Plan 3 days in Lisbon', 'A 15-minute workout')).toBe('A 15-minute workout');
+        expect(withExample('Mine\n\nPlan 3 days in Lisbon', 'Plan 3 days in Lisbon', 'A 15-minute workout')).toBe(
+            'Mine\n\nA 15-minute workout',
+        );
+    });
+});
+
+describe('documents for the new chat', () => {
+    const doc = (id: string, status = 'complete') =>
+        ({ id, filename: `${id}.txt`, indexing_status: status }) as Parameters<typeof splitDocuments>[0][number];
+
+    it('splits attached from offered, offering only indexed documents', () => {
+        const { attached, offered } = splitDocuments([doc('a'), doc('b'), doc('c', 'indexing')], ['a']);
+        expect(attached.map((d) => d.id)).toEqual(['a']);
+        expect(offered.map((d) => d.id)).toEqual(['b']);
+    });
+
+    it('folds past five until expanded', () => {
+        const ids = Array.from({ length: DOCS_SHOWN + 3 }, (_, i) => i);
+        expect(foldDocuments(ids, false)).toEqual({ shown: ids.slice(0, DOCS_SHOWN), hidden: 3 });
+        expect(foldDocuments(ids, true)).toEqual({ shown: ids, hidden: 3 });
+        expect(foldDocuments(ids.slice(0, DOCS_SHOWN), false).hidden).toBe(0);
+    });
+});
+
+describe('setup-failed banner', () => {
+    const status = (patch: Partial<SystemStatus>) => ({ ...patch }) as SystemStatus;
+
+    it('shows the error until a model has loaded', () => {
+        expect(setupError(undefined)).toBeNull();
+        expect(setupError(status({ setup_error: 'disk full', model_loaded: null }))).toBe('disk full');
+        expect(setupError(status({ setup_error: 'disk full', model_loaded: 'Gemma' }))).toBeNull();
+        expect(setupError(status({ model_loaded: null }))).toBeNull();
     });
 });

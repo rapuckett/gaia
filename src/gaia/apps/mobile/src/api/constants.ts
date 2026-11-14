@@ -32,8 +32,11 @@ export const ENDPOINTS = {
     chatFollowup: '/api/chat/followup',
     chatFollowupOutcome: '/api/chat/followup/{session_id}',
     chatUserInput: '/api/chat/user-input',
+    connectors: '/api/connectors',
+    connectorsAgentMcps: '/api/connectors/agent-mcps',
     systemStatus: '/api/system/status',
     documentFile: '/api/documents/{doc_id}/file',
+    documents: '/api/documents',
     onboardingStart: '/api/onboarding/start',
 } as const;
 

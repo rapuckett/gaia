@@ -7,7 +7,15 @@ import { useQuery } from '@tanstack/react-query';
 
 import type { StartScreen } from '@webui/types';
 
-import type { GaiaClient, MessageList, Session, SessionList, SessionSearchResponse, SystemStatus } from '@/api/client.types';
+import type {
+    DocumentListResponse,
+    GaiaClient,
+    MessageList,
+    Session,
+    SessionList,
+    SessionSearchResponse,
+    SystemStatus,
+} from '@/api/client.types';
 import { SEARCH_DEBOUNCE_MS, STATUS_POLL_MS } from '@/api/constants';
 import { GaiaConfigError } from '@/api/errors';
 
@@ -20,6 +28,9 @@ export const queryKeys = {
     messages: (sessionId: string) => ['messages', sessionId] as const,
     systemStatus: ['systemStatus'] as const,
     startScreen: ['startScreen'] as const,
+    connectors: ['connectors'] as const,
+    agentMcps: ['agentMcps'] as const,
+    documents: ['documents'] as const,
 };
 
 export function requireClient(client: GaiaClient | null): GaiaClient {
@@ -123,5 +134,15 @@ export function useStartScreen() {
         queryKey: queryKeys.startScreen,
         enabled: client !== null,
         queryFn: ({ signal }) => requireClient(client).getStartScreen({ signal }),
+    });
+}
+
+/** The library's documents, to offer for a new chat. */
+export function useDocuments() {
+    const client = useGaiaClient();
+    return useQuery<DocumentListResponse>({
+        queryKey: queryKeys.documents,
+        enabled: client !== null,
+        queryFn: ({ signal }) => requireClient(client).listDocuments({ signal }),
     });
 }

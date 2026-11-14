@@ -3,6 +3,8 @@
 
 import type { FollowUpOutcome } from '@webui/utils/messageQueue';
 import type {
+    AgentMcpServer,
+    ConnectorListEntry,
     LocalModelStatus,
     Message,
     ModelNeed,
@@ -15,9 +17,12 @@ import type {
     StreamEvent,
     SystemStatus,
 } from '@webui/types';
-import type { CreateSessionRequest, SessionSearchResponse, ToolConfirmRequest, UserInputRequest as ApiUserInputRequest } from '@webui/types/api.gen';
+import type { CreateSessionRequest, DocumentListResponse, SessionSearchResponse, ToolConfirmRequest, UserInputRequest as ApiUserInputRequest } from '@webui/types/api.gen';
 
 export type {
+    AgentMcpServer,
+    ConnectorListEntry,
+    ConnectorRow,
     LocalModelStatus,
     Message,
     ModelNeed,
@@ -29,8 +34,9 @@ export type {
     StartScreen,
     StreamEvent,
     SystemStatus,
+    UnavailableConnectorRow,
 } from '@webui/types';
-export type { CreateSessionRequest, SessionSearchResponse, SessionSearchResult, ToolConfirmRequest } from '@webui/types/api.gen';
+export type { CreateSessionRequest, DocumentListResponse, SessionSearchResponse, SessionSearchResult, ToolConfirmRequest } from '@webui/types/api.gen';
 
 /** `display` is what the phone shows as the answer; it is never sent to GAIA. */
 export type UserInputRequest = ApiUserInputRequest & { display?: string };
@@ -43,6 +49,14 @@ export interface SessionList {
 export interface MessageList {
     messages: Message[];
     total: number;
+}
+
+export interface ConnectorList {
+    connectors: ConnectorListEntry[];
+}
+
+export interface AgentMcpList {
+    agent_mcps: AgentMcpServer[];
 }
 
 export interface ScheduleList {
@@ -135,6 +149,9 @@ export interface GaiaClient {
     confirmTool(request: ToolConfirmRequest, options?: RequestOptions): Promise<ConfirmToolResult>;
     /** Answers a `needs_input` question; the turn continues once GAIA has it. */
     sendUserInput(request: UserInputRequest, options?: RequestOptions): Promise<UserInputResult>;
+    listConnectors(options?: RequestOptions): Promise<ConnectorList>;
+    /** Servers that custom agents declare in their own mcp_servers.json; read-only. */
+    listAgentMcps(options?: RequestOptions): Promise<AgentMcpList>;
     listSchedules(options?: RequestOptions): Promise<ScheduleList>;
     /** Creates a schedule; `interval` is the plain-words "when to run", parsed by the PC. 409 when the name is taken. */
     createSchedule(request: CreateScheduleRequest, options?: RequestOptions): Promise<Schedule>;
@@ -145,6 +162,8 @@ export interface GaiaClient {
     /** Runs a schedule once now (409 while a run is in flight); its next scheduled run stays as it was. */
     runSchedule(name: string, options?: RequestOptions): Promise<Schedule>;
     deleteSchedule(name: string, options?: RequestOptions): Promise<DeleteScheduleResult>;
+    /** The library's documents; a chat searches only the ones attached to it. */
+    listDocuments(options?: RequestOptions): Promise<DocumentListResponse>;
     getSystemStatus(options?: RequestOptions): Promise<SystemStatus>;
     /** The model server's state, what it runs on and its memory; the pill and its sheet read it. */
     getLocalModelStatus(options?: RequestOptions): Promise<LocalModelStatus>;

@@ -2,8 +2,11 @@
 // SPDX-License-Identifier: MIT
 
 import type {
+    AgentMcpServer,
+    ConnectorListEntry,
     CreateSessionRequest,
     FollowUpOutcome,
+    DocumentListResponse,
     GaiaClient,
     HealthResponse,
     LocalModelStatus,
@@ -35,6 +38,8 @@ export interface FakeClientData {
     replies?: StreamEvent[] | ((message: string) => AsyncIterable<StreamEvent>);
     /** What attachToRun replays, by chat; a chat not listed has no turn running. */
     running?: Record<string, StreamEvent[]>;
+    connectors?: ConnectorListEntry[];
+    agentMcps?: AgentMcpServer[];
     /** What getFollowUpOutcome answers; a function may throw to script a 409. */
     followUpOutcome?: FollowUpOutcome | (() => FollowUpOutcome);
     /** Makes sendFollowUp reject, as a turn that can't take the message does. */
@@ -51,6 +56,7 @@ export interface FakeClientData {
     searchLimit?: number;
     /** Makes every search fail with this message. */
     searchError?: string;
+    documents?: DocumentListResponse;
 }
 
 export interface FakeGaiaClient extends GaiaClient {
@@ -191,6 +197,12 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             answers.push(request);
             return { status: 'ok', request_id: request.request_id };
         },
+        async listConnectors() {
+            return { connectors: [...(data.connectors ?? [])] };
+        },
+        async listAgentMcps() {
+            return { agent_mcps: [...(data.agentMcps ?? [])] };
+        },
         async listSchedules() {
             return { schedules: [...schedules], total: schedules.length };
         },
@@ -249,6 +261,9 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             scheduleActions.push({ action: 'delete', name });
             schedules.splice(schedules.indexOf(schedule), 1);
             return { deleted: true };
+        },
+        async listDocuments() {
+            return data.documents ?? { documents: [], total: 0, total_chunks: 0, total_size_bytes: 0 };
         },
         async getSystemStatus() {
             if (!data.status) throw new GaiaApiError(503, 'This fake client was given no system status.');

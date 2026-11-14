@@ -151,7 +151,7 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
                                     onContinue={continueReply}
                                 />
                             ) : null}
-                            <ChatPrompts sessionId={sessionId} question={stream.pendingQuestion} />
+                            <ChatPrompts sessionId={sessionId} question={stream.pendingQuestion} confirmation={stream.pendingConfirmation} />
                         </>
                     }
                 />

@@ -17,10 +17,13 @@ import {
     type StreamEndpoint,
 } from './errors';
 import type {
+    AgentMcpList,
     CancelChatResult,
     ConfirmToolResult,
+    ConnectorList,
     DeleteMessagesResult,
     DeleteScheduleResult,
+    DocumentListResponse,
     FollowUpOutcome,
     FollowUpResult,
     GaiaClient,
@@ -310,6 +313,14 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             return postJson<UserInputResult>(ENDPOINTS.chatUserInput, body, options?.signal);
         },
 
+        listConnectors(options) {
+            return getJson<ConnectorList>(ENDPOINTS.connectors, options?.signal);
+        },
+
+        listAgentMcps(options) {
+            return getJson<AgentMcpList>(ENDPOINTS.connectorsAgentMcps, options?.signal);
+        },
+
         listSchedules(options) {
             return getJson<ScheduleList>(ENDPOINTS.schedules, options?.signal);
         },
@@ -332,6 +343,10 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         deleteSchedule(name, options) {
             return deleteJson<DeleteScheduleResult>(schedulePath(name), options?.signal);
+        },
+
+        listDocuments(options) {
+            return getJson<DocumentListResponse>(ENDPOINTS.documents, options?.signal);
         },
 
         getSystemStatus(options) {
