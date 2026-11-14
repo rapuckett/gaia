@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: MIT
 
 import type {
+    AgentMcpServer,
+    ConnectorListEntry,
     CreateSessionRequest,
     FollowUpOutcome,
     DocumentListResponse,
@@ -36,6 +38,8 @@ export interface FakeClientData {
     replies?: StreamEvent[] | ((message: string) => AsyncIterable<StreamEvent>);
     /** What attachToRun replays, by chat; a chat not listed has no turn running. */
     running?: Record<string, StreamEvent[]>;
+    connectors?: ConnectorListEntry[];
+    agentMcps?: AgentMcpServer[];
     /** What getFollowUpOutcome answers; a function may throw to script a 409. */
     followUpOutcome?: FollowUpOutcome | (() => FollowUpOutcome);
     /** Makes sendFollowUp reject, as a turn that can't take the message does. */
@@ -216,6 +220,12 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         async sendUserInput(request) {
             answers.push(request);
             return { status: 'ok', request_id: request.request_id };
+        },
+        async listConnectors() {
+            return { connectors: [...(data.connectors ?? [])] };
+        },
+        async listAgentMcps() {
+            return { agent_mcps: [...(data.agentMcps ?? [])] };
         },
         async listSchedules() {
             return { schedules: [...schedules], total: schedules.length };

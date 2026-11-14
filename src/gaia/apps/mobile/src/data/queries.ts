@@ -30,6 +30,8 @@ export const queryKeys = {
     systemStatus: ['systemStatus'] as const,
     resourceUsage: ['resourceUsage'] as const,
     startScreen: ['startScreen'] as const,
+    connectors: ['connectors'] as const,
+    agentMcps: ['agentMcps'] as const,
     documents: ['documents'] as const,
 };
 

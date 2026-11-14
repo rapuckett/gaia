@@ -3,6 +3,8 @@
 
 import type { FollowUpOutcome } from '@webui/utils/messageQueue';
 import type {
+    AgentMcpServer,
+    ConnectorListEntry,
     LocalModelStatus,
     Message,
     ModelNeed,
@@ -18,6 +20,9 @@ import type {
 import type { CreateSessionRequest, DocumentListResponse, SessionSearchResponse, ToolConfirmRequest, UserInputRequest as ApiUserInputRequest } from '@webui/types/api.gen';
 
 export type {
+    AgentMcpServer,
+    ConnectorListEntry,
+    ConnectorRow,
     LocalModelStatus,
     Message,
     ModelNeed,
@@ -29,6 +34,7 @@ export type {
     StartScreen,
     StreamEvent,
     SystemStatus,
+    UnavailableConnectorRow,
 } from '@webui/types';
 export type { CreateSessionRequest, DocumentListResponse, SessionSearchResponse, SessionSearchResult, ToolConfirmRequest } from '@webui/types/api.gen';
 
@@ -43,6 +49,14 @@ export interface SessionList {
 export interface MessageList {
     messages: Message[];
     total: number;
+}
+
+export interface ConnectorList {
+    connectors: ConnectorListEntry[];
+}
+
+export interface AgentMcpList {
+    agent_mcps: AgentMcpServer[];
 }
 
 export interface ScheduleList {
@@ -140,6 +154,9 @@ export interface GaiaClient {
     confirmTool(request: ToolConfirmRequest, options?: RequestOptions): Promise<ConfirmToolResult>;
     /** Answers a `needs_input` question; the turn continues once GAIA has it. */
     sendUserInput(request: UserInputRequest, options?: RequestOptions): Promise<UserInputResult>;
+    listConnectors(options?: RequestOptions): Promise<ConnectorList>;
+    /** Servers that custom agents declare in their own mcp_servers.json; read-only. */
+    listAgentMcps(options?: RequestOptions): Promise<AgentMcpList>;
     listSchedules(options?: RequestOptions): Promise<ScheduleList>;
     /** Pauses or resumes a schedule; answers with the schedule as it now is. */
     updateScheduleStatus(name: string, status: 'active' | 'paused', options?: RequestOptions): Promise<Schedule>;
