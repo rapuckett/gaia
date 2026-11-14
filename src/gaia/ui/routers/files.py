@@ -374,13 +374,17 @@ async def browse_files(
         path: Directory to browse. Defaults to user home directory.
               On Windows, pass "/" to list drive letters.
         session_id: The chat whose folders a caller away from the PC browses;
-              required for them, who must also name a folder in it.
+              required for them. With no path they start in its first folder.
     """
     roots = _remote_read_roots(request, session_id)
     if roots is not None and not path:
-        raise HTTPException(
-            status_code=403, detail=f"{_AWAY_FROM_PC} Name one of its folders."
-        )
+        path = next((root for root in roots if Path(root).is_dir()), None)
+        if path is None:
+            raise HTTPException(
+                status_code=403,
+                detail=f"{_AWAY_FROM_PC} This chat has no folders yet; add one "
+                "in its session panel.",
+            )
     quick_links = (
         build_quick_links()
         if roots is None

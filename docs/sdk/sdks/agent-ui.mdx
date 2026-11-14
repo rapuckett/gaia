@@ -1547,7 +1547,8 @@ chat or a read that names no chat. The PC reads its home folder as before.
   <Accordion title="GET /api/files/browse">
     Browse filesystem contents. Returns entries under a directory with size,
     mtime, and type metadata. Away from the PC, `path` must be one of the
-    chat's folders or inside one; `quick_links` lists the chat's folders and
+    chat's folders or inside one, and with no `path` the listing opens the
+    chat's first folder; `quick_links` lists the chat's folders and
     `parent_path` never leaves them.
   </Accordion>
 

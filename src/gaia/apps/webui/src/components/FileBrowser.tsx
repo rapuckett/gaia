@@ -259,7 +259,7 @@ export function FileBrowser({ onStartChat }: FileBrowserProps) {
         setSearchQuery('');
         setSearchedLocations([]);
         try {
-            const data: BrowseResponse = await api.browseFiles(path);
+            const data: BrowseResponse = await api.browseFiles(path, useChatStore.getState().currentSessionId);
             setCurrentPath(data.current_path);
             setParentPath(data.parent_path);
             setEntries(data.entries);
@@ -302,7 +302,7 @@ export function FileBrowser({ onStartChat }: FileBrowserProps) {
         setIsSearching(true);
         setError(null);
         try {
-            const data = await api.searchFiles(searchQuery.trim(), typeFilter || undefined, 30);
+            const data = await api.searchFiles(searchQuery.trim(), typeFilter || undefined, 30, useChatStore.getState().currentSessionId);
             setSearchResults(data.results);
             setSearchedLocations(data.searched_locations ?? []);
             setSearchTruncated(data.truncated === true);
@@ -331,7 +331,7 @@ export function FileBrowser({ onStartChat }: FileBrowserProps) {
     const handleFilePreview = useCallback(async (path: string) => {
         setPreviewLoading(true);
         try {
-            const data = await api.previewFile(path);
+            const data = await api.previewFile(path, undefined, useChatStore.getState().currentSessionId);
             setPreviewFile(data as FilePreview);
         } catch (err) {
             log.ui.error('Preview failed', err);

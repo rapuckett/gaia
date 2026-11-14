@@ -968,9 +968,15 @@ export async function detachDocument(sessionId: string, documentId: string): Pro
 
 // -- File Browser -----------------------------------------------------------------
 
-export async function browseFiles(path?: string): Promise<BrowseResponse> {
-    const params = path ? `?path=${encodeURIComponent(path)}` : '';
-    return apiFetch('GET', `/files/browse${params}`);
+/** Away from the PC (mobile access, a paired device) file reads name the chat and see only its folders. */
+function withChat(params: URLSearchParams, sessionId?: string | null): URLSearchParams {
+    if (sessionId) params.set('session_id', sessionId);
+    return params;
+}
+
+export async function browseFiles(path?: string, sessionId?: string | null): Promise<BrowseResponse> {
+    const params = withChat(new URLSearchParams(path ? { path } : {}), sessionId).toString();
+    return apiFetch('GET', `/files/browse${params ? `?${params}` : ''}`);
 }
 
 export async function indexFolder(folderPath: string, recursive: boolean = true): Promise<IndexFolderResponse> {
@@ -1056,7 +1062,7 @@ export function uploadMedia(file: File, onProgress: (percent: number) => void, s
 
 // -- File Search & Preview ----------------------------------------------------------
 
-export async function searchFiles(query: string, fileTypes?: string, maxResults?: number): Promise<{
+export async function searchFiles(query: string, fileTypes?: string, maxResults?: number, sessionId?: string | null): Promise<{
     results: Array<{ name: string; path: string; size: number; size_display: string; extension: string; modified: string; directory: string }>;
     total: number;
     query: string;
@@ -1066,10 +1072,10 @@ export async function searchFiles(query: string, fileTypes?: string, maxResults?
     const params = new URLSearchParams({ query });
     if (fileTypes) params.set('file_types', fileTypes);
     if (maxResults) params.set('max_results', String(maxResults));
-    return apiFetch('GET', `/files/search?${params}`);
+    return apiFetch('GET', `/files/search?${withChat(params, sessionId)}`);
 }
 
-export async function previewFile(path: string, lines?: number): Promise<{
+export async function previewFile(path: string, lines?: number, sessionId?: string | null): Promise<{
     path: string;
     name: string;
     size: number;
@@ -1084,7 +1090,7 @@ export async function previewFile(path: string, lines?: number): Promise<{
 }> {
     const params = new URLSearchParams({ path });
     if (lines) params.set('lines', String(lines));
-    return apiFetch('GET', `/files/preview?${params}`);
+    return apiFetch('GET', `/files/preview?${withChat(params, sessionId)}`);
 }
 
 // -- Mobile Access / Tunnel -------------------------------------------------------

@@ -88,7 +88,6 @@ def wide(app, home):
         ("/api/files/preview", "elsewhere.md", "chat"),
         ("/api/files/preview", "project/notes.md", None),
         ("/api/files/image", "project/chart.png", None),
-        ("/api/files/browse", "", "chat"),
         ("/api/files/browse", ".", "chat"),
     ],
     ids=[
@@ -99,7 +98,6 @@ def wide(app, home):
         "outside-the-chat",
         "preview-names-no-chat",
         "image-names-no-chat",
-        "browse-names-no-folder",
         "browse-above-the-chat",
     ],
 )
@@ -156,6 +154,8 @@ def test_allowed_reads_and_the_line_cap(app, device, chat, home):
     assert listing["parent_path"] is None
     assert {"notes.md", "chart.png"} <= {e["name"] for e in listing["entries"]}
     assert not {".env", "id_rsa"} & {e["name"] for e in listing["entries"]}
+    started = device.get("/api/files/browse", params={"session_id": chat}).json()
+    assert started["current_path"] == started["quick_links"][0]["path"]
 
     pc = TestClient(app, client=PC)
     assert (
