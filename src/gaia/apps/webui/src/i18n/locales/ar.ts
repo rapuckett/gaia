@@ -291,6 +291,7 @@ const messages: Messages = {
     'queue.steerTitle': 'يقرؤها GAIA في خطوته التالية دون أن يبدأ من جديد. وقد لا يجيب عنها على حدة.',
     'queue.steer': 'إضافة إلى هذا الرد',
     'queue.removeAria': 'إزالة الرسالة من قائمة الانتظار: {text}',
+    'queue.steerRefused': 'تعذّرت إضافتها إلى هذا الرد؛ ستُرسل عند انتهائه.',
     'composer.stop': 'إيقاف',
     'composer.stopping': 'جارٍ الإيقاف…',
     'composer.send': 'إرسال',
