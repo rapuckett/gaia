@@ -2,9 +2,11 @@
 // SPDX-License-Identifier: MIT
 
 import { View } from 'react-native';
+import { useT } from '@/i18n/useT';
 import { Button } from '../controls/Button';
 import { Icon } from '../controls/Icon';
-import { Check, CircleAlert, Info, TriangleAlert } from '../icons';
+import { IconButton } from '../controls/IconButton';
+import { Check, CircleAlert, Info, TriangleAlert, X } from '../icons';
 import { Row } from '../layout/layout';
 import { useTheme } from '../theme/ThemeProvider';
 import { Text } from '../text/Text';
@@ -17,6 +19,8 @@ export interface NoticeProps {
     title?: string;
     message?: string;
     action?: { label: string; onPress: () => void };
+    /** Shows a close button at the end. */
+    onDismiss?: () => void;
     /** `note` marks a side remark that isn't an alert, e.g. a library notice. */
     role?: 'note';
     testID?: string;
@@ -26,7 +30,8 @@ const ICONS = { info: Info, warning: TriangleAlert, danger: CircleAlert, success
 const ICON_TONE: Record<NoticeTone, Tone> = { info: 'accent', warning: 'warning', danger: 'danger', success: 'success' };
 
 // The icon carries the tone with the color, so it never rests on color alone.
-export function Notice({ tone, title, message, action, role, testID }: NoticeProps) {
+export function Notice({ tone, title, message, action, onDismiss, role, testID }: NoticeProps) {
+    const t = useT();
     const { colors, radius, space } = useTheme();
     const bar = { info: colors.accentSolid, warning: colors.accentYellow, danger: colors.danger, success: colors.accentGreen }[tone];
     const bg = { info: colors.accentDim2, warning: colors.accentYellowDim, danger: colors.dangerDim, success: colors.accentGreenDim }[tone];
@@ -60,6 +65,7 @@ export function Notice({ tone, title, message, action, role, testID }: NoticePro
                     ) : null}
                     {action ? <Button variant="ghost" size="sm" label={action.label} onPress={action.onPress} /> : null}
                 </View>
+                {onDismiss ? <IconButton icon={X} size="sm" label={t('banner.dismiss')} onPress={onDismiss} /> : null}
             </Row>
         </View>
     );

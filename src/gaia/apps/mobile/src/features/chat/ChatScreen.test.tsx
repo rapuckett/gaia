@@ -19,7 +19,7 @@ import { ThemeProvider } from '@/ui';
 import { ChatScreen } from './ChatScreen';
 
 jest.mock('expo-clipboard', () => ({ setStringAsync: jest.fn(() => Promise.resolve(true)) }));
-jest.mock('@/features/nav/ScreenHeader', () => ({ ScreenHeader: () => null }));
+jest.mock('./header', () => ({ ChatHeader: () => null }));
 
 const t = translator('en');
 const CHAT = 'chat-1';
