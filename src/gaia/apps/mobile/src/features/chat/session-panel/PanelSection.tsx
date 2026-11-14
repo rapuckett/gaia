@@ -32,6 +32,7 @@ export function PanelSection({ id, title, summary, children }: PanelSectionProps
                 ) : undefined
             }
             testID={`panel-section-${id}`}
+            headerTestID={`panel-section-${id}-toggle`}
         >
             {children}
         </Disclosure>
