@@ -79,6 +79,10 @@ def test_scripted_reply_streams_through_real_chat_api(tmp_path):
             e.get("type") == "answer" and e.get("content") == "The scripted answer."
             for e in events
         ), events[-3:]
+        # Memory is off by default (no embedder behind the fake LLM): no warning.
+        assert not any("Memory is unavailable" in json.dumps(e) for e in events), [
+            e for e in events if "Memory" in json.dumps(e)
+        ]
     finally:
         proc.terminate()
         try:
