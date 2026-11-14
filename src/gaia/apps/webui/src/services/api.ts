@@ -6,117 +6,12 @@
 import type { Session, Message, FeaturedLibrary, LinkAddResult, LinkPreview, Document, SystemStatus, Settings, StreamEvent, TunnelStatus, Schedule, ScheduleResult, ParsedSchedule, BrowseResponse, IndexFolderResponse, MCPServerStatus, AgentInfo, ProvidersResponse, ProviderInfo, ProviderModelsResponse, ActiveModel, ContextChoice, CustomModelReport, CustomModelRemoved, LocalModelStatus, CloudPriceList, SpendingReport, ChatSpending, ConnectProviderBody, SkillInfo, WarmUpStatus, LemonadeTarget, LemonadeFound, LemonadeTargetBody, ResourceUsage } from '../types';
 import type { LogReadResponse, LogSourcesResponse, ModelServerInfo, SessionSearchResponse } from '../types/api.gen';
 import type { FileDiff, TurnChanges, UndoResult, UndoSettings } from '../types/changes';
-import type { AgentCapabilities, SessionChanges, SessionEnvironment, SessionGit, SessionOutputs, UndoAllResult } from '../types/sessionPanel';
 import { getApiBase } from '../utils/apiBase';
 import { log } from '../utils/logger';
 import { chatDraftKey, clearSavedDraft } from '../utils/savedDraft';
+import { ApiError, getFriendlyError, isBareInternalError, parseErrorBody, parseErrorDetail, parseErrorFields, parseErrorStatus, StreamDroppedError, StreamStalledError, StreamTimeoutError } from './apiErrors';
 
-// -- Helpers -------------------------------------------------------------------
-
-/**
- * Pull a human-readable message out of an error response body.
- *
- * FastAPI's `detail` is a plain string for `HTTPException`, but a *list of
- * error objects* for request-validation failures (422) — interpolating one of
- * those into a message renders "[object Object]" in the UI.
- */
-export function parseErrorDetail(errorText: string): string {
-    try {
-        const parsed = JSON.parse(errorText).detail;
-        if (Array.isArray(parsed)) {
-            return parsed.map((e) => e?.msg ?? JSON.stringify(e)).join('; ') || errorText;
-        }
-        if (parsed && typeof parsed === 'object' && typeof parsed.message === 'string') return parsed.message;
-        if (parsed && typeof parsed !== 'string') return JSON.stringify(parsed);
-        return parsed || errorText;
-    } catch {
-        // Body isn't JSON (proxy HTML, empty response) — the raw text is the useful thing.
-        return errorText;
-    }
-}
-
-/** `detail.status` from a structured error body, e.g. `needs_key`; null otherwise. */
-export function parseErrorStatus(errorText: string): string | null {
-    try {
-        const status = JSON.parse(errorText).detail?.status;
-        return typeof status === 'string' ? status : null;
-    } catch {
-        return null;
-    }
-}
-
-/** Request fields a 422 names, from the last part of each error's `loc` (e.g. `retention_days`). */
-export function parseErrorFields(errorText: string): string[] {
-    try {
-        const parsed = JSON.parse(errorText).detail;
-        if (!Array.isArray(parsed)) return [];
-        return parsed
-            .map((e) => (Array.isArray(e?.loc) ? e.loc[e.loc.length - 1] : undefined))
-            .filter((f): f is string => typeof f === 'string');
-    } catch {
-        return [];
-    }
-}
-
-/** `detail` when the backend sent an object (e.g. a 409 asking to confirm), else null. */
-function parseErrorBody(errorText: string): Record<string, unknown> | null {
-    try {
-        const parsed = JSON.parse(errorText).detail;
-        return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null;
-    } catch {
-        return null;
-    }
-}
-
-/** A non-2xx answer: the message to show, the backend's own words, and its machine-readable reason. */
-export class ApiError extends Error {
-    readonly httpStatus: number;
-    readonly detail: string;
-    readonly reason: string | null;
-    readonly fields: string[];
-    /** The structured `detail` object, when the backend sent one. */
-    readonly body: Record<string, unknown> | null;
-
-    constructor(message: string, httpStatus: number, detail: string, reason: string | null, fields: string[] = [], body: Record<string, unknown> | null = null) {
-        super(message);
-        this.name = 'ApiError';
-        this.httpStatus = httpStatus;
-        this.detail = detail;
-        this.reason = reason;
-        this.fields = fields;
-        this.body = body;
-    }
-}
-
-/** Starlette's bare body or the UI server's catch-all ("Internal server error") — no cause. */
-function isBareInternalError(detail: string): boolean {
-    return detail.trim().toLowerCase() === 'internal server error';
-}
-
-/**
- * False when a 500 carries no real cause: a bare "Internal Server Error",
- * a proxy HTML page, or a raw JSON body with an empty or missing `detail`.
- */
-function hasUsefulServerDetail(detail: string): boolean {
-    const text = detail.trim();
-    return text !== '' && !isBareInternalError(text) && !/^[<{[]/.test(text);
-}
-
-export function getFriendlyError(status: number, detail: string): string {
-    switch (status) {
-        case 403: return detail || 'Access denied.';
-        // Prefer the backend's detail for 404s — the previous canned string
-        // ("The file or folder may have been moved or deleted.") was misleading
-        // for upload/indexing flows where the real cause was a malformed
-        // filepath, not a missing file. See issue #728.
-        case 404: return detail || 'The requested item was not found.';
-        case 413: return detail || 'File too large to process.';
-        case 500: return hasUsefulServerDetail(detail) ? detail : 'Server error. Please try again.';
-        case 502: return 'Service unavailable. Is the backend running?';
-        case 503: return detail || 'Service unavailable.';
-        default: return detail || `Request failed (HTTP ${status})`;
-    }
-}
+export { ApiError, getFriendlyError, parseErrorDetail, parseErrorFields, parseErrorStatus, StreamDroppedError, StreamStalledError, StreamTimeoutError } from './apiErrors';
 
 /**
  * CSRF marker required by the backend on every mutating request.
@@ -713,30 +608,6 @@ export const SEND_WAITING_NOTICE_TEXT = 'Waiting for GAIA to start this answer�
 /** An attach replays at once; a slower answer means the backend is stuck or unreachable. */
 export const ATTACH_HEADER_TIMEOUT_MS = 30_000;
 
-/** The stream went silent past STREAM_IDLE_MS; the run may still be going server-side. */
-export class StreamStalledError extends Error {
-    constructor(readonly idleMs: number) {
-        super(`The connection to GAIA went silent for ${Math.round(idleMs / 1000)} s.`);
-        this.name = 'StreamStalledError';
-    }
-}
-
-/** The connection broke after the run started (network switch, proxy reset, restart). */
-export class StreamDroppedError extends Error {
-    /** `unreachable`: the request never reached GAIA, so nothing there is still answering. */
-    constructor(readonly cause: unknown, readonly unreachable = false) {
-        super(`The connection to GAIA was cut: ${cause instanceof Error ? cause.message : String(cause)}`);
-        this.name = 'StreamDroppedError';
-    }
-}
-
-/** The backend never started answering the request. */
-export class StreamTimeoutError extends Error {
-    constructor(readonly endpoint: 'send' | 'attach', readonly timeoutMs: number) {
-        super(`GAIA did not start answering within ${Math.round(timeoutMs / 1000)} s.`);
-        this.name = 'StreamTimeoutError';
-    }
-}
 
 /** Bound the wait for response headers, and say so when it runs long. */
 function watchHeaders(
@@ -1001,6 +872,11 @@ export async function uploadDocumentByPath(filepath: string): Promise<Document> 
     return apiFetch('POST', '/documents/upload-path', { filepath });
 }
 
+function uploadError(status: number, errorText: string): ApiError {
+    const detail = parseErrorDetail(errorText);
+    return new ApiError(getFriendlyError(status, detail), status, detail, parseErrorStatus(errorText), [], parseErrorBody(errorText));
+}
+
 /**
  * Upload a document as a multipart blob for indexing.
  *
@@ -1032,8 +908,7 @@ export async function uploadDocumentBlob(file: File): Promise<Document> {
     if (!res.ok) {
         const errorText = await res.text().catch(() => '');
         log.api.error(`POST ${url} - HTTP ${res.status}`, { errorText });
-        const detail = parseErrorDetail(errorText);
-        throw new ApiError(getFriendlyError(res.status, detail), res.status, detail, parseErrorStatus(errorText));
+        throw uploadError(res.status, errorText);
     }
 
     const data = await res.json();
@@ -1143,8 +1018,7 @@ export async function uploadFile(file: File): Promise<{
     if (!res.ok) {
         const errorText = await res.text().catch(() => '');
         log.api.error(`POST ${url} - HTTP ${res.status}`, { errorText });
-        const detail = parseErrorDetail(errorText);
-        throw new ApiError(getFriendlyError(res.status, detail), res.status, detail, parseErrorStatus(errorText));
+        throw uploadError(res.status, errorText);
     }
 
     const data = await res.json();
@@ -1174,7 +1048,7 @@ export function uploadMedia(file: File, onProgress: (percent: number) => void, s
             }
             log.api.error(`POST ${url} - HTTP ${request.status}`, { errorText: request.responseText });
             const detail = parseErrorDetail(request.responseText);
-            reject(new ApiError(getFriendlyError(request.status, detail), request.status, detail, parseErrorStatus(request.responseText)));
+            reject(new ApiError(getFriendlyError(request.status, detail), request.status, detail, parseErrorStatus(request.responseText), [], parseErrorBody(request.responseText)));
         };
         request.send(file);
     });
@@ -1297,51 +1171,6 @@ export async function updateUndoSettings(retentionDays: number, maxMb: number): 
     return apiFetch('PUT', '/settings/undo', { retention_days: retentionDays, max_mb: maxMb });
 }
 
-// -- Session panel: Environment, Outputs, Changes (#5279) --------------------
+// -- Session panel: Environment, Outputs, Changes (#5279): see sessionPanelApi.ts
 
-const sessionPath = (sessionId: string) => `/sessions/${encodeURIComponent(sessionId)}`;
-
-export async function getEnvironment(sessionId: string): Promise<SessionEnvironment> {
-    return apiFetch('GET', `${sessionPath(sessionId)}/environment`);
-}
-
-export async function addEnvironmentFolder(sessionId: string, path: string): Promise<SessionEnvironment> {
-    return apiFetch('POST', `${sessionPath(sessionId)}/environment/folders`, { path });
-}
-
-export async function removeEnvironmentFolder(sessionId: string, path: string): Promise<SessionEnvironment> {
-    return apiFetch('POST', `${sessionPath(sessionId)}/environment/folders/remove`, { path });
-}
-
-export async function setInternet(sessionId: string, on: boolean): Promise<SessionEnvironment> {
-    return apiFetch('PUT', `${sessionPath(sessionId)}/environment/internet`, { on });
-}
-
-export async function getOutputs(sessionId: string): Promise<SessionOutputs> {
-    return apiFetch('GET', `${sessionPath(sessionId)}/outputs`);
-}
-
-/** The tools the chat's agent has; a 409 when it isn't running yet. */
-export async function getCapabilities(sessionId: string): Promise<AgentCapabilities> {
-    return apiFetch('GET', `${sessionPath(sessionId)}/capabilities`);
-}
-
-export async function getSessionChanges(sessionId: string): Promise<SessionChanges> {
-    return apiFetch('GET', `${sessionPath(sessionId)}/changes/total`);
-}
-
-export async function undoAllChanges(sessionId: string, force = false): Promise<UndoAllResult> {
-    return apiFetch('POST', `${sessionPath(sessionId)}/changes/undo`, { force });
-}
-
-export async function getSessionGit(sessionId: string): Promise<SessionGit> {
-    return apiFetch('GET', `${sessionPath(sessionId)}/changes/git`);
-}
-
-export async function commitChanges(sessionId: string, root: string, message: string): Promise<{ root: string; commit: string; files: string[]; ignored: string[] }> {
-    return apiFetch('POST', `${sessionPath(sessionId)}/changes/git/commit`, { root, message, confirmed: true });
-}
-
-export async function createPullRequest(sessionId: string, root: string, title: string, body: string): Promise<{ root: string; url: string }> {
-    return apiFetch('POST', `${sessionPath(sessionId)}/changes/git/pr`, { root, title, body, confirmed: true });
-}
+export * from './sessionPanelApi';

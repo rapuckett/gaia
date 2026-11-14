@@ -33,6 +33,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union
 
 import requests
 
+from gaia.home import gaia_home
 from gaia.logger import get_logger
 from gaia.mcp.ports import TUI_MCP_PORT
 
@@ -110,7 +111,7 @@ def control_dir() -> Path:
     if override:
         return Path(override)
     try:
-        return Path.home() / ".gaia" / "tui"
+        return gaia_home() / "tui"
     except RuntimeError as e:
         raise ControlHomeError(
             f"Cannot locate your home directory ({e}), so the GAIA TUI control "

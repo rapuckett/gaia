@@ -111,7 +111,7 @@ function LibraryDocuments() {
                     {attached.map((d) => (
                         <li key={d.id} className="new-chat-doc">
                             <FileText size={12} aria-hidden="true" />
-                            <span dir="auto">{d.filename}</span>
+                            <span dir="ltr">{d.filename}</span>
                             <button
                                 type="button"
                                 className="new-chat-doc-remove"
@@ -241,7 +241,7 @@ export function NewChat({ onSend, initialText = '', focusRequest = 0 }: NewChatP
             if (held.length > 0 && sessionId) {
                 // The chat is open now; if its first message never went out, the rest wait for Send again.
                 const add = (items: messageQueue.QueuedMessage[], text: string) => sent === false
-                    ? [...items, { ...messageQueue.item(text, 'failed'), error: 'The first message was not sent.' }]
+                    ? [...items, { ...messageQueue.item(text, 'failed'), error: t('newChat.firstNotSent') }]
                     : messageQueue.enqueue(items, text, 'queued');
                 useChatStore.getState().updateQueue(sessionId, (q) => held.reduce(add, q));
             }
@@ -254,7 +254,7 @@ export function NewChat({ onSend, initialText = '', focusRequest = 0 }: NewChatP
             sendingRef.current = false;
             setSending(false);
         }
-    }, [attachments, onSend]);
+    }, [attachments, onSend, t]);
 
     const submit = useCallback(() => send(attachments.compose(text.trim()), text.trim()), [attachments, send, text]);
 
@@ -282,10 +282,14 @@ export function NewChat({ onSend, initialText = '', focusRequest = 0 }: NewChatP
         );
     });
 
+    const lastExample = useRef('');
     const fillPrompt = useCallback((prompt: string) => {
-        setText(prompt);
+        const prev = lastExample.current;
+        const draft = (prev && text.endsWith(prev) ? text.slice(0, -prev.length) : text).trimEnd();
+        lastExample.current = prompt;
+        setText(draft ? `${draft}\n\n${prompt}` : prompt);
         inputRef.current?.focus();
-    }, []);
+    }, [text, setText]);
 
     const downloading = download?.state === 'starting' || download?.state === 'downloading';
     const activity = sending ? 'sending' : downloading ? 'download' : starting || warming !== null ? 'loading' : 'idle';

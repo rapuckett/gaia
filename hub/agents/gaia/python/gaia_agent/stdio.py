@@ -83,6 +83,7 @@ from gaia.agents.base.readiness import (
     resolve_probe_base,
     start_advice,
 )
+from gaia.home import gaia_home
 from gaia.llm import create_client
 from gaia.llm.inference_location import resolve_inference_location
 from gaia.llm.lemonade_client import (
@@ -1098,8 +1099,10 @@ def run_skills_command(agent: Any, query: str, out) -> None:
     """
     from gaia.skills.errors import SkillError
     from gaia.skills.link import (
+        APP_LOCAL_COPY_REMEDY,
         SECURITY_WARNING,
         SkillLinkChangedError,
+        SkillLinkNotFoundError,
         add_from_link,
         preview_link,
     )
@@ -1167,7 +1170,10 @@ def run_skills_command(agent: Any, query: str, out) -> None:
             # A stale pin can never match again; the next confirm previews anew.
             pins.pop(link, None)
         logger.warning("/skills add %s failed: %s", link, exc)
-        _write({"type": "error", "detail": str(exc)}, out)
+        detail = str(exc)
+        if isinstance(exc, SkillLinkNotFoundError):
+            detail = f"{detail} {APP_LOCAL_COPY_REMEDY}"
+        _write({"type": "error", "detail": detail}, out)
         return
     # One preview covers one add; a later add of the same link previews again.
     pins.pop(link, None)
@@ -1450,7 +1456,7 @@ def log_path() -> "Path":
     override = os.environ.get(LOG_PATH_ENV, "").strip()
     if override:
         return Path(override).expanduser()
-    return Path.home() / ".gaia" / "logs" / "gaia-agent.log"
+    return gaia_home() / "logs" / "gaia-agent.log"
 
 
 def _configure_logging(real_stdout, *, dev: bool) -> "Path":
@@ -2106,7 +2112,7 @@ def main(argv: Optional[list] = None) -> int:
         from gaia.agents.base.history import SessionHistory
 
         history_path = args.history_file or str(
-            Path(os.environ.get("GAIA_TUI_HOME", str(Path.home() / ".gaia" / "tui")))
+            Path(os.environ.get("GAIA_TUI_HOME", str(gaia_home() / "tui")))
             / "history"
             / f"{uuid4().hex}.sqlite3"
         )

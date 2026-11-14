@@ -18,7 +18,7 @@ Exception → HTTP mapping:
 - ``ConnectionRevokedError``                       → 401
 - ``ConnectionBusyError``                          → 503 + Retry-After
 - ``ScopeMismatchError``                           → 403
-- ``ConfigurationError``                           → 503
+- ``ConfigurationError``                           → 503 ``not_configured``
 - ``FlowInProgressError``                          → 409
 - ``FlowTimeoutError``                             → 408
 - ``ConsentDeniedError``                           → 400
@@ -74,7 +74,7 @@ from gaia.connectors.errors import (
 from gaia.connectors.events import set_emitter
 from gaia.connectors.flow import _pending as _flow_pending
 from gaia.connectors.grants import (
-    GRANTS_FILE,
+    _grants_path,
     grant_agent,
     list_agent_grants,
     revoke_agent_grant,
@@ -278,7 +278,11 @@ def _raise_http_for(exc: ConnectorsError) -> HTTPException:
             headers={"Retry-After": "1"},
         )
     if isinstance(exc, ConfigurationError):
-        return HTTPException(status_code=503, detail=str(exc))
+        # Tagged, so a client can tell "set up this provider" from other 503s.
+        return HTTPException(
+            status_code=503,
+            detail={"error": "not_configured", "message": str(exc)},
+        )
     if isinstance(exc, InvalidConfigValueError):
         return HTTPException(status_code=400, detail=str(exc))
     if isinstance(exc, ScopeNotAllowedError):
@@ -654,8 +658,9 @@ async def debug_state() -> Dict[str, Any]:
 
     grants_writable = False
     try:
-        GRANTS_FILE.parent.mkdir(parents=True, exist_ok=True)
-        grants_writable = os.access(str(GRANTS_FILE.parent), os.W_OK)
+        grants_dir = _grants_path().parent
+        grants_dir.mkdir(parents=True, exist_ok=True)
+        grants_writable = os.access(str(grants_dir), os.W_OK)
     except OSError:
         pass
 
@@ -671,7 +676,7 @@ async def debug_state() -> Dict[str, Any]:
         "provider_registered": "google" in provider_registry,
         "env_var_present": bool(os.environ.get("GAIA_GOOGLE_CLIENT_ID")),
         "keyring_backend_class": type(keyring.get_keyring()).__name__,
-        "grants_path": str(GRANTS_FILE),
+        "grants_path": str(_grants_path()),
         "grants_path_writable": grants_writable,
         "in_flight_flow_count": len(_flow_pending),
         "catalog_size": len(REGISTRY.all()),

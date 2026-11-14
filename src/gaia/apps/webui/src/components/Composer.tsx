@@ -8,6 +8,7 @@ import { useT } from '../i18n/useT';
 import { middleTruncate } from '../utils/format';
 import { isVideoFile } from '../utils/mediaFiles';
 import { isEditLastKey } from '../utils/editLast';
+import { MAX_MESSAGE_CHARS } from '../utils/messageLimits';
 import type { Attachment } from '../types';
 import './Composer.css';
 
@@ -44,8 +45,7 @@ interface ComposerProps {
 
 const MAX_INPUT_HEIGHT = 240;
 
-/** The most a message may carry; the backend refuses more (`ChatRequest.message` in ui/models.py). */
-export const MAX_MESSAGE_CHARS = 100_000;
+export { MAX_MESSAGE_CHARS };
 
 export function Composer({
     value, onChange, onSubmit, onStop, streaming = false, stopping = false, queueWhileStreaming = false, answering = false, disabledReason, attachments,
@@ -120,7 +120,7 @@ export function Composer({
                             {a.isImage && a.url
                                 ? <img src={a.url} alt="" className="composer-attachment-thumb" />
                                 : <Icon size={14} aria-hidden="true" />}
-                            <span className="composer-attachment-name" title={a.name} dir="auto">{middleTruncate(a.name)}</span>
+                            <span className="composer-attachment-name" title={a.name} dir="ltr">{middleTruncate(a.name)}</span>
                             {a.uploading && (
                                 <span className="composer-attachment-state">
                                     {a.progress === undefined

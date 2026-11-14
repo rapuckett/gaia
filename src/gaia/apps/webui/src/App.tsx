@@ -25,17 +25,20 @@ import { useScheduleStore } from './stores/scheduleStore';
 import { useGoalHealthStore } from './stores/goalHealthStore';
 import { useTrayBridge } from './hooks/useTrayBridge';
 import { useChatAlerts } from './hooks/useChatAlerts';
+import { useWindowTitle } from './hooks/useWindowTitle';
 import { useMediaQuery } from './hooks/useMediaQuery';
 import { startActiveRunsPoll } from './services/activeRuns';
 import { startQueueDispatcher } from './services/queueDispatch';
 import * as api from './services/api';
-import { createStatusPoller, type StatusOutcome } from './services/statusPoll';
+import { createStatusPoller, modelServerHealth, type StatusOutcome } from './services/statusPoll';
 import { log, logBanner } from './utils/logger';
 import { announceMobileAccess, useMobileAccessRequests } from './utils/mobileAccessEvents';
 import { getSessionHash } from './utils/format';
 import { lastSessionTarget, readUrlTarget, rememberLastSession, resolveUrlNavTarget } from './utils/sessionNav';
 import { NEW_CHAT_DRAFT_KEY, chatDraftKey, clearSavedDraft, readSavedDraft, writeSavedDraft } from './utils/savedDraft';
 import { getApiBase } from './utils/apiBase';
+import { NEW_CHAT_TITLE } from './utils/constants';
+import { requestErrorParam } from './utils/requestErrors';
 import { followBackendLifecycle, resyncBackend } from './stores/backendStore';
 import { cleanupAbandonedDraft, isAbandonedDraft } from './utils/sessionCleanup';
 import { FLAGSHIP_AGENT_ID, hasFlagshipAgent, isFlagshipMissingError } from './utils/newTask';
@@ -60,7 +63,7 @@ type SetupGate =
     | { state: 'ready' }
     | { state: 'needed'; check: SetupCheck }
     /** Set up before, but its model server isn't answering: the app, with a notice. */
-    | { state: 'serverDown' }
+    | { state: 'serverDown'; modelListUnread?: boolean }
     | { state: 'addingLocal' }
     /** `upgradeFailed`: the check answered, but updating GAIA's own model server failed. */
     | { state: 'unknown'; error: string; upgradeFailed?: boolean };
@@ -103,7 +106,8 @@ async function waitForEmbeddedUpgrade(): Promise<void> {
 }
 
 function Loading() {
-    return <div className="loading-spinner" role="status" aria-label="Loading" />;
+    const t = useT();
+    return <div className="loading-spinner" role="status" aria-label={t('startup.loading')} />;
 }
 
 // First failure, then every 10th (~5 min at the 30 s cap), so a stuck read stays in the log.
@@ -111,6 +115,7 @@ const shouldLogRetry = (attempt: number) => attempt === 1 || attempt % 10 === 0;
 
 function App() {
     const t = useT();
+    useWindowTitle();
     const currentSessionId = useChatStore((s) => s.currentSessionId);
     const setSessions = useChatStore((s) => s.setSessions);
     const setCurrentSession = useChatStore((s) => s.setCurrentSession);
@@ -166,10 +171,12 @@ function App() {
     // A task picked at the end of setup that needs the user to finish typing it.
     const [draftText, setDraftText] = useState('');
     const [newChatFocus, setNewChatFocus] = useState(0);
+    const [newChatSeed, setNewChatSeed] = useState(0);
     const [showMobileAccess, setShowMobileAccess] = useState(false);
     const [tunnelActive, setTunnelActive] = useState(false);
     const [tunnelError, setTunnelError] = useState<string | null>(null);
     const [tunnelSetup, setTunnelSetup] = useState<string[] | null>(null);
+    const [tunnelStarting, setTunnelStarting] = useState(false);
 
     // Set once the status poller and chat list exist further down.
     const refreshStatus = useRef<() => Promise<void>>(async () => {});
@@ -216,7 +223,9 @@ function App() {
                 setNoAgentBuild(!!check.no_agent_build);
                 // Seen ready before: an unreachable server is an outage, not a first run.
                 const serverDown = !check.ready && check.stage === 'server' && !!check.initialized;
-                setSetup(check.ready ? { state: 'ready' } : serverDown ? { state: 'serverDown' } : { state: 'needed', check });
+                setSetup(check.ready ? { state: 'ready' }
+                    : serverDown ? { state: 'serverDown', modelListUnread: !!check.model_list_unread }
+                    : { state: 'needed', check });
                 return;
             }
         } catch (err) {
@@ -232,6 +241,8 @@ function App() {
         }
     }, []);
 
+    // Listening but hung: the connection banner already says so; a second notice would replace it.
+    const serverHung = useChatStore((s) => !!s.systemStatus && modelServerHealth(s.systemStatus) === 'unresponsive');
     // The status poll sees the model server again: ask whether GAIA is ready now.
     const lemonadeRunning = useChatStore((s) => s.systemStatus?.lemonade_running === true);
     useEffect(() => {
@@ -330,7 +341,7 @@ function App() {
             slowCount.current = 0;
             slowSince.current = null;
             setBackendSlow(false);
-            setBackendError(`HTTP ${outcome.httpStatus}: ${outcome.message}`);
+            setBackendError(getT()('banner.httpError', { status: outcome.httpStatus, message: outcome.message }));
             setBackendConnected(true);
             return;
         }
@@ -534,7 +545,7 @@ function App() {
         let session;
         try {
             session = await api.createSession({
-                title: 'New chat',
+                title: NEW_CHAT_TITLE,
                 agent_type: FLAGSHIP_AGENT_ID,
                 document_ids: store.draftDocumentIds,
                 private: store.draftPrivate,
@@ -575,10 +586,7 @@ function App() {
         setMessages([]);
         setDraftText('');
         if (modeError) {
-            setCreateError(
-                `The chat was created, but its permission mode could not be set, so your message was not sent${
-                    session.private ? '' : " — it is in the chat's box"}: ${modeError instanceof Error ? modeError.message : modeError}`,
-            );
+            setCreateError(getT()(session.private ? 'newChat.modeFailed' : 'newChat.modeFailedKept', { error: requestErrorParam(modeError) }));
             return false;
         }
         store.resetDraftPermissionMode();
@@ -614,6 +622,13 @@ function App() {
         }
         setCurrentSession(id);
     }, [setCurrentSession, setMessages]);
+    const openChatFromNotification = useCallback((id: string) => {
+        const store = useChatStore.getState();
+        store.setShowMemoryDashboard(false);
+        store.setShowSchedules(false);
+        setShowNotificationPanel(false);
+        openChatFromTray(id);
+    }, [openChatFromTray]);
     const newChatFromTray = useCallback(() => {
         useChatStore.getState().closeSettings();
         newChat();
@@ -621,14 +636,19 @@ function App() {
     useTrayBridge({ openChat: openChatFromTray, newChat: newChatFromTray, refreshStatus: () => void checkSystemStatus() });
 
     // The prompt waits in the box, so the user sees what goes to the model and sends it.
+    // Written to the saved draft, which the new-chat box reads over a suggested prefill.
     const useSkill = useCallback((name: string) => {
         const store = useChatStore.getState();
         const unsent = store.pendingPrompt?.sessionId === store.currentSessionId ? store.pendingPrompt?.text : null;
         newChat();
         const prompt = t.bare('settings.skills.tryPrompt', { name });
-        setDraftText(unsent ? `${unsent}
-
-${prompt}` : prompt);
+        const base = [readSavedDraft(NEW_CHAT_DRAFT_KEY), unsent].filter(Boolean).join('\n\n');
+        // A repeat Try with the prompt still in the box must not paste it twice.
+        const text = base.trimEnd().endsWith(prompt) ? base : [base, prompt].filter(Boolean).join('\n\n');
+        writeSavedDraft(NEW_CHAT_DRAFT_KEY, text);
+        setDraftText(text);
+        // Remount even when the box is already open with this same text.
+        setNewChatSeed((n) => n + 1);
     }, [newChat, t]);
 
     useEffect(() => {
@@ -709,13 +729,16 @@ ${prompt}` : prompt);
             .catch((err) => log.system.debug('Mobile access unavailable', err));
     }, []);
 
-    const openMobileAccess = useCallback(async () => {
+    const openMobileAccess = useCallback(() => {
         setShowMobileAccess(true);
         setTunnelError(null);
-        if (tunnelActive) {
-            setTunnelSetup(null);
-            return;
-        }
+        setTunnelSetup(null);
+    }, []);
+
+    // The only path that starts the tunnel: the dialog's Start button (and Retry).
+    const startMobileAccess = useCallback(async () => {
+        setTunnelError(null);
+        setTunnelStarting(true);
         try {
             const status = await api.startTunnel();
             // Kept until the retry answers, so the setup panel doesn't flash to "Starting".
@@ -726,9 +749,11 @@ ${prompt}` : prompt);
             else setTunnelActive(true);
         } catch (err) {
             setTunnelSetup(null);
-            setTunnelError(err instanceof Error ? err.message : 'Could not start mobile access');
+            setTunnelError(err instanceof Error ? err.message : getT()('mobile.startFailed'));
+        } finally {
+            setTunnelStarting(false);
         }
-    }, [tunnelActive]);
+    }, []);
 
     const stopMobileAccess = useCallback(async () => {
         try {
@@ -736,12 +761,12 @@ ${prompt}` : prompt);
             setTunnelActive(false);
             setShowMobileAccess(false);
         } catch (err) {
-            setTunnelError(err instanceof Error ? err.message : 'Could not stop mobile access');
+            setTunnelError(err instanceof Error ? err.message : getT()('mobile.stopFailed'));
         }
     }, []);
 
-    // The session panel's Phone access toggle drives the same flow.
-    useMobileAccessRequests((on) => { void (on ? openMobileAccess() : stopMobileAccess()); });
+    // The session panel's Phone access toggle opens the dialog; only Start starts the tunnel.
+    useMobileAccessRequests((on) => { if (on) openMobileAccess(); else void stopMobileAccess(); });
     useEffect(() => { announceMobileAccess(tunnelActive); }, [tunnelActive]);
 
     const isMobile = useMediaQuery('(max-width: 768px)');
@@ -759,9 +784,9 @@ ${prompt}` : prompt);
     if (showStartup) {
         return (
             <div className="app">
-                <main className="startup" role="status" aria-label="Starting GAIA">
+                <main className="startup" role="status" aria-label={t('engine.stage.start')}>
                     <div className="loading-spinner" aria-hidden="true" />
-                    <p className="startup-text">Starting GAIA…</p>
+                    <p className="startup-text">{t('startup.starting')}</p>
                 </main>
             </div>
         );
@@ -800,13 +825,13 @@ ${prompt}` : prompt);
     ) : currentSessionId ? (
         <ChatView key={currentSessionId} sessionId={currentSessionId} />
     ) : (
-        <NewChat key={draftText} onSend={startChat} initialText={draftText} focusRequest={newChatFocus} />
+        <NewChat key={`${newChatSeed}:${draftText}`} onSend={startChat} initialText={draftText} focusRequest={newChatFocus} />
     );
 
     return (
         <div className="app">
             {!sidebarOpen && (
-                <button className="sidebar-toggle" onClick={() => setSidebarOpen(true)} aria-label="Open sidebar">
+                <button className="sidebar-toggle" onClick={() => setSidebarOpen(true)} aria-label={t('sidebar.open')}>
                     <Menu size={18} />
                 </button>
             )}
@@ -819,18 +844,20 @@ ${prompt}` : prompt);
             <ErrorBoundary area="sidebar" variant="compact">
                 <Sidebar
                     onNewChat={newChat}
-                    onMobileAccess={isMobile ? undefined : () => void openMobileAccess()}
+                    onMobileAccess={isMobile ? undefined : openMobileAccess}
                     tunnelActive={tunnelActive}
                 />
             </ErrorBoundary>
 
             <div className="main-content">
-                {setup.state === 'ready' && <ConnectionBanner onRetry={checkSystemStatus} backendSlow={backendSlow} backendError={backendError} />}
-                {setup.state === 'serverDown' && (
+                {/* The setup check can wait a minute on a hung model server; the chat shows meanwhile, so the warning must too. */}
+                {(setup.state === 'ready' || setup.state === 'checking' || (setup.state === 'serverDown' && serverHung)) && <ConnectionBanner onRetry={checkSystemStatus} backendSlow={backendSlow} backendError={backendError} />}
+                {setup.state === 'serverDown' && !serverHung && (
                     <div className="app-notice is-warning" role="status">
-                        <span>{t('setup.serverDown.notice')}</span>
+                        <span>{t(setup.modelListUnread ? 'setup.modelListUnread.notice' : 'setup.serverDown.notice')}</span>
                         <button type="button" className="link-btn" onClick={() => void checkSetup(true)}>{t('setup.unknown.retry')}</button>
-                        <button type="button" className="link-btn" onClick={() => runSetupAgain(true)}>{t('setup.serverDown.setup')}</button>
+                        {/* Setup can't fix a list the server sends in the wrong shape. */}
+                        {!setup.modelListUnread && <button type="button" className="link-btn" onClick={() => runSetupAgain(true)}>{t('setup.serverDown.setup')}</button>}
                     </div>
                 )}
                 {setup.state === 'unknown' && (setup.upgradeFailed ? (
@@ -852,10 +879,10 @@ ${prompt}` : prompt);
                         <span>{restoreNotice.message}</span>
                         {!restoreNotice.ok && (
                             <button type="button" className="link-btn" onClick={() => { dismissRestoreNotice(); openSettings('model'); }}>
-                                Pick a model
+                                {t('startup.pickModel')}
                             </button>
                         )}
-                        <button type="button" className="app-notice-close" onClick={dismissRestoreNotice} aria-label="Dismiss">
+                        <button type="button" className="app-notice-close" onClick={dismissRestoreNotice} aria-label={t('banner.dismiss')}>
                             <X size={14} />
                         </button>
                     </div>
@@ -874,7 +901,7 @@ ${prompt}` : prompt);
             {showFileBrowser && <Suspense fallback={null}><FileBrowser onStartChat={startChat} /></Suspense>}
             {showNotificationPanel && (
                 <div className="notification-center-popover">
-                    <NotificationCenter onClose={() => setShowNotificationPanel(false)} />
+                    <NotificationCenter onClose={() => setShowNotificationPanel(false)} onOpenChat={openChatFromNotification} />
                 </div>
             )}
             {showMobileAccess && (
@@ -885,7 +912,9 @@ ${prompt}` : prompt);
                         onStop={() => void stopMobileAccess()}
                         error={tunnelError}
                         setupCommands={tunnelSetup}
-                        onRetry={() => void openMobileAccess()}
+                        onRetry={() => void startMobileAccess()}
+                        awaitingStart={!tunnelActive && !tunnelStarting && !tunnelError && !tunnelSetup}
+                        onStart={() => void startMobileAccess()}
                     />
                 </Suspense>
             )}

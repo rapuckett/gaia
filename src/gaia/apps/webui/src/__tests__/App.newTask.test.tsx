@@ -16,6 +16,7 @@ import * as api from '../services/api';
 import * as memoryApi from '../services/memoryApi';
 import { useChatStore } from '../stores/chatStore';
 import { useModelStore } from '../stores/modelStore';
+import { requestMobileAccess } from '../utils/mobileAccessEvents';
 import type { Session, SetupCheck, StartCard } from '../types';
 
 const mocked = vi.mocked(api);
@@ -688,5 +689,31 @@ describe('New chat right after sending a first message', () => {
 
         expect(useChatStore.getState().pendingPrompt).toEqual({ sessionId: 'elsewhere', text: 'NOT-MINE' });
         expect(await screen.findByLabelText('Message')).toHaveValue('');
+    });
+});
+
+describe('Mobile access', () => {
+    beforeEach(() => {
+        mocked.startTunnel.mockResolvedValue({ active: false, error: 'stub stops here' } as never);
+    });
+
+    it.each([
+        ['the sidebar entry', () => userEvent.click(screen.getByRole('button', { name: 'Mobile access' }))],
+        ['the Phone access toggle', async () => { act(() => requestMobileAccess(true)); }],
+    ])('opened from %s, it starts nothing until Start is pressed', async (_name, open) => {
+        render(<App />);
+        await screen.findByLabelText('Message');
+        act(() => useChatStore.setState({ sidebarOpen: true }));
+
+        await open();
+
+        const start = await screen.findByRole('button', { name: 'Start mobile access' });
+        expect(screen.getByText(/ngrok, an outside service/)).toBeInTheDocument();
+        expect(mocked.startTunnel).not.toHaveBeenCalled();
+
+        await userEvent.click(start);
+
+        await waitFor(() => expect(mocked.startTunnel).toHaveBeenCalledTimes(1));
+        expect(await screen.findByText('stub stops here')).toBeInTheDocument();
     });
 });

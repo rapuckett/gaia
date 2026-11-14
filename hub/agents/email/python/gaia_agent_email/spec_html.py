@@ -83,6 +83,8 @@ from gaia_agent_email.contract import (
 )
 from pydantic import BaseModel
 
+from gaia.home import gaia_home
+
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
@@ -1210,7 +1212,9 @@ def render_endpoint_spec_html() -> str:
 
 
 # Default location for the generated spec when no explicit path is given.
-DEFAULT_SPEC_PATH = Path.home() / ".gaia" / "email" / "endpoint-spec.html"
+def default_spec_path() -> Path:
+    return gaia_home() / "email" / "endpoint-spec.html"
+
 
 # Committed artifact lives at the email package root (next to pyproject.toml and
 # openapi.email.json). It is a pure render of ``render_endpoint_spec_html()`` —
@@ -1248,7 +1252,7 @@ def write_and_open_spec(output_path: Optional[str] = None) -> Path:
     if output_path:
         dest = Path(output_path).expanduser().resolve()
     else:
-        dest = DEFAULT_SPEC_PATH
+        dest = default_spec_path()
     dest.parent.mkdir(parents=True, exist_ok=True)
     dest.write_text(render_endpoint_spec_html(), encoding="utf-8")
     webbrowser.open(dest.as_uri())
@@ -1304,7 +1308,7 @@ __all__ = [
     "write_and_open_spec",
     "write_artifact",
     "check_artifact",
-    "DEFAULT_SPEC_PATH",
+    "default_spec_path",
     "ARTIFACT_PATH",
 ]
 

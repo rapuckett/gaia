@@ -199,7 +199,6 @@ class FileSystemIndexService(DatabaseMixin):
         files = service.query_files(name="report", extension="pdf")
     """
 
-    DB_PATH = "~/.gaia/file_index.db"
     SCHEMA_VERSION = 2
 
     def __init__(self, db_path: Optional[str] = None):

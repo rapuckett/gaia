@@ -351,6 +351,24 @@ python -m pytest tests/ -xvs        # All tests, verbose
 python -m pytest tests/ --hybrid    # Cloud + local testing
 ```
 
+For end-to-end tests of a client (a mobile app, the web UI) that needs a real
+Agent UI API but no model, run the dev backend. It serves the real Agent UI API
+against a scripted fake LLM, keeps all state under `--home`, and never starts a
+daemon or Lemonade, so it can run beside an installed GAIA:
+
+```bash
+python -m gaia.testing.dev_backend --port 4210 --llm-port 4211 \
+  --home "$(mktemp -d)" [--script replies.json]
+```
+
+It prints one `READY` line with both URLs and stops cleanly on SIGTERM. The
+script is a JSON list; each chat completion takes the next entry, either a text
+reply (`"hi"`) or a tool call (`{"tool_call": {"name": "write_file",
+"arguments": {...}}}`) that raises a tool-approval prompt. A request past the end
+of the script fails with an error rather than inventing a reply. `--home`
+is required and is refused if it is, or is inside, `~/.gaia`. The flagship runs
+from this checkout's `hub/agents/gaia/python` when it isn't pip-installed.
+
 The packaged email-agent tests are hermetic and must not invoke an interactive
 OS keychain. Run them with the null keyring backend (the email test package's
 `conftest.py` and CI workflow apply this setting automatically):

@@ -11,6 +11,7 @@ from gaia.agents.base.file_snapshots import before_change
 from gaia.agents.install_hints import missing_package_hint
 from gaia.agents.tools.path_access import write_access_error
 from gaia.agents.tools.workspace_paths import _workspace_target
+from gaia.home import gaia_home
 from gaia.logger import get_logger
 
 logger = get_logger(__name__)
@@ -48,7 +49,7 @@ class ScreenshotToolsMixin:
         # Determine output path
         if not output_path:
             # GAIA's own output folder, not the user's files.
-            screenshots_dir = Path.home() / ".gaia" / "screenshots"
+            screenshots_dir = gaia_home() / "screenshots"
             screenshots_dir.mkdir(parents=True, exist_ok=True)
             ts = datetime.now().strftime("%Y%m%d_%H%M%S")
             output_path = str(screenshots_dir / f"screenshot_{ts}.png")

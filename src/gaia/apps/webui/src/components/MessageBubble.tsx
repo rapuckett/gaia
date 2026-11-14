@@ -5,7 +5,7 @@ import React, { createContext, useCallback, useContext, useId, useLayoutEffect, 
 import type { Components } from 'react-markdown';
 import { Copy, Check, AlertTriangle, Trash2, RefreshCw, RotateCw, Play, Pencil, FolderOpen, Square, FileText, ScrollText } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
-import { SAFE_DISALLOWED_ELEMENTS, safeUrlTransform } from '../utils/markdown';
+import { SAFE_DISALLOWED_ELEMENTS, joinAttachmentLinks, safeUrlTransform, splitAttachmentLinks } from '../utils/markdown';
 import remarkGfm from 'remark-gfm';
 import remarkWindowsPaths from '../utils/remarkWindowsPaths';
 import { remarkSoftBreaks } from '../utils/remarkSoftBreaks';
@@ -14,7 +14,11 @@ import { EmailConnectCta, isAuthRequiredMessage } from './email/EmailConnectCta'
 import { RenderCard } from './render/RenderCard';
 import * as api from '../services/api';
 import { log } from '../utils/logger';
-import { AnswerStats, type TurnEnding } from './AnswerStats';
+import { plainAnswerText } from '../utils/plainText';
+import { AnswerStats } from './AnswerStats';
+import { SERVER_CANCELLED_TEXT, splitCutOff, turnEnding } from '../utils/turnEnding.core';
+
+export { splitCutOff, turnEnding };
 import { displayModelName, useInferencePlace, useModelNames } from '../stores/modelStore';
 import { MODEL_WAIT_HINT_S, isModelWaitLabel } from '../utils/modelWait';
 import { localizeLiveStatus } from '../utils/liveStatus';
@@ -24,15 +28,17 @@ import { ReadAloudButton, ReadAloudError, ReadAloudNote } from './ReadAloudButto
 import { TroubleshootingReport, namesFailureRecord, type ReportClasses } from './TroubleshootingReport';
 import { CODE_COLLAPSE_LINES, CODE_PREVIEW_LINES, ExpandToggle, countLines, isLongUserMessage, lineCount, sizeLabel } from './LongContent';
 import { dateLocale, useT, type Translate } from '../i18n/useT';
-import type { MessageKey } from '../i18n/registry';
 import { useChatStore } from '../stores/chatStore';
 import { useLogsStore } from '../stores/logsStore';
 import { CLAIMS_ESCAPE } from '../hooks/useEscapeToClose';
 import { dropAnswerDrafts } from '../utils/answerDrafts';
 import {
     buildCitationIndex, docForToken, findCitations, findPages,
-    type CitationIndex, type FoundPage, type LibraryDoc,
+    type CitationIndex, type CitedDoc, type FoundPage,
 } from '../utils/citations';
+import { WIN_PATH_ONLY_RE, findFilePaths } from '../utils/windowsPaths';
+import { cleanToolCallContent } from '../utils/toolCallContent';
+export { cleanToolCallContent, escapeBareNumberLines } from '../utils/toolCallContent';
 import './MessageBubble.css';
 
 interface MessageBubbleProps {
@@ -66,6 +72,8 @@ interface MessageBubbleProps {
     /** Sends the edited text in place of this message and everything after it. */
     onEdit?: (message: Message, text: string) => void;
     onEditCancel?: () => void;
+    /** Later messages that Resend or Edit on this message delete for good; above zero, they ask first. */
+    laterCount?: number;
     /** Shows Continue under a stopped reply that wrote something. */
     onContinue?: () => void;
     /** The chat's latest answer, whose actions stay in view. */
@@ -169,12 +177,16 @@ const squash = (text: string) => text.replace(/\s+/g, ' ').trim();
  * error keeps the step, as does one ending with an error that isn't the
  * turn's last step.
  */
-export function dropErrorsEchoedInAnswer(steps: AgentStep[], content: string): { steps: AgentStep[]; echoed: boolean } {
+export function dropErrorsEchoedInAnswer(
+    steps: AgentStep[],
+    content: string,
+): { steps: AgentStep[]; echoed: boolean; endedBy: string | null } {
     const answer = squash(content);
-    if (!answer) return { steps, echoed: false };
+    if (!answer) return { steps, echoed: false, endedBy: null };
     const tail = content.trimEnd();
     const last = steps[steps.length - 1];
     let echoed = false;
+    let endedBy: string | null = null;
     const kept = steps.filter((s) => {
         if (s.type !== 'error' || !s.detail?.trim()) return true;
         if (squash(s.detail) === answer) {
@@ -182,258 +194,11 @@ export function dropErrorsEchoedInAnswer(steps: AgentStep[], content: string): {
             return false;
         }
         // The server appends the error that ended the turn as its own paragraph.
-        return s !== last || !tail.endsWith(`\n\n${s.detail.trim()}`);
+        if (s !== last || !tail.endsWith(`\n\n${s.detail.trim()}`)) return true;
+        endedBy = s.detail.trim();
+        return false;
     });
-    return { steps: kept, echoed };
-}
-
-/**
- * Safety-net regex to strip raw tool-call JSON from rendered message content.
- *
- * Primary filtering happens server-side in sse_handler.py (see _TOOL_CALL_JSON_RE
- * and _TOOL_CALL_JSON_SUB_RE). This frontend regex is a secondary safety net for
- * messages that were persisted before the backend filter was in place, or in case
- * any tool-call JSON leaks through. Keep in sync with the server-side pattern.
- */
-const TOOL_CALL_JSON_RE = /\s*\{\s*"?tool"?\s*:\s*"[^"]+"\s*,\s*"?tool_args"?\s*:\s*\{[^}]*\}\s*\}/g;
-
-/**
- * Keys that belong to the agent's JSON envelope. An object made up only of
- * these is machinery; an object that mixes them with anything else is content.
- */
-const ENVELOPE_KEYS = new Set(['thought', 'answer', 'tool', 'tool_args', 'goal']);
-
-/** An envelope always opens with one of its own keys — cheap gate before parsing. */
-const ENVELOPE_OPENER_RE = /^\{\s*"(thought|answer|tool|tool_args|goal)"\s*:/;
-
-/** Index of the `}` matching the `{` at `start`, or -1 if unbalanced. Braces inside JSON strings don't count. */
-function findMatchingBrace(text: string, start: number): number {
-    let depth = 0;
-    let inString = false;
-    let escaped = false;
-    for (let i = start; i < text.length; i++) {
-        const ch = text[i];
-        if (inString) {
-            if (escaped) escaped = false;
-            else if (ch === '\\') escaped = true;
-            else if (ch === '"') inString = false;
-            continue;
-        }
-        if (ch === '"') inString = true;
-        else if (ch === '{') depth++;
-        else if (ch === '}') {
-            depth--;
-            if (depth === 0) return i;
-        }
-    }
-    return -1;
-}
-
-/**
- * Pull the `answer` string out of a block JSON.parse rejected — models emit
- * literal newlines inside string values, which is not valid JSON.
- * Returns null when the block carries no `answer` field.
- */
-function extractAnswerField(block: string): string | null {
-    const answerKeyIdx = block.indexOf('"answer"');
-    if (answerKeyIdx === -1) return null;
-    const colonIdx = block.indexOf(':', answerKeyIdx + 8);
-    if (colonIdx === -1) return null;
-    let start = colonIdx + 1;
-    while (start < block.length && /\s/.test(block[start])) start++;
-    if (start >= block.length || block[start] !== '"') return null;
-    let content = block.slice(start + 1);
-    if (content.endsWith('"}')) content = content.slice(0, -2);
-    else if (content.endsWith('"')) content = content.slice(0, -1);
-    return content.replace(/\\"/g, '"').replace(/\\n/g, '\n').replace(/\\\\/g, '\\');
-}
-
-type EnvelopeVerdict =
-    | { action: 'drop' }
-    | { action: 'answer'; text: string }
-    | { action: 'keep' };
-
-/**
- * Decide what a `{...}` region is. Only a complete agent envelope is removed or
- * unwrapped; anything a user or model could have written as a JSON example —
- * including one with a `tool` key — is kept verbatim.
- */
-function classifyEnvelope(block: string): EnvelopeVerdict {
-    let parsed: unknown;
-    try {
-        parsed = JSON.parse(block);
-    } catch {
-        const answer = extractAnswerField(block);
-        if (answer !== null) return { action: 'answer', text: answer };
-        // A malformed tool call is still machinery; anything else stays visible.
-        if (block.includes('"tool_args"')) return { action: 'drop' };
-        return { action: 'keep' };
-    }
-
-    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
-        return { action: 'keep' };
-    }
-    const obj = parsed as Record<string, unknown>;
-    const keys = Object.keys(obj);
-    const envelopeOnly = keys.length > 0 && keys.every((k) => ENVELOPE_KEYS.has(k));
-
-    if (typeof obj.tool === 'string' && obj.tool_args !== undefined) return { action: 'drop' };
-    if (typeof obj.answer === 'string' && envelopeOnly) return { action: 'answer', text: obj.answer };
-    if (typeof obj.thought === 'string' && obj.answer === undefined && envelopeOnly) {
-        return { action: 'drop' };
-    }
-    return { action: 'keep' };
-}
-
-/**
- * Remove agent JSON envelopes from assistant output, keeping their `answer` text.
- *
- * Primary filtering is server-side (sse_handler.py); this is the safety net for
- * history persisted before that filter existed. A finished message is never
- * truncated: an unbalanced `{` (a shell one-liner, a code snippet) emits the
- * remaining text verbatim. Only while streaming is an unclosed envelope held
- * back, so a tool call does not flash on screen before its closing brace lands.
- */
-function cleanLLMJsonBlocks(text: string, streaming: boolean): string {
-    let result = '';
-    let i = 0;
-
-    while (i < text.length) {
-        const braceIdx = text.indexOf('{', i);
-        if (braceIdx === -1) {
-            result += text.slice(i);
-            break;
-        }
-        if (!ENVELOPE_OPENER_RE.test(text.slice(braceIdx, braceIdx + 40))) {
-            result += text.slice(i, braceIdx + 1);
-            i = braceIdx + 1;
-            continue;
-        }
-        const closeIdx = findMatchingBrace(text, braceIdx);
-        if (closeIdx === -1) {
-            result += streaming ? text.slice(i, braceIdx) : text.slice(i);
-            break;
-        }
-        result += text.slice(i, braceIdx);
-
-        const block = text.slice(braceIdx, closeIdx + 1);
-        const verdict = classifyEnvelope(block);
-        if (verdict.action === 'answer') result += verdict.text;
-        else if (verdict.action === 'keep') result += block;
-        i = closeIdx + 1;
-    }
-    return result;
-}
-
-/**
- * Real language tags. Only consulted for 1-2 character tags, so genuine short
- * languages (c, r, go, js) keep their fence while a stray ```i does not.
- */
-const KNOWN_CODE_LANGS = new Set([
-    'python', 'py', 'javascript', 'js', 'typescript', 'ts', 'java', 'c', 'cpp',
-    'csharp', 'cs', 'go', 'rust', 'ruby', 'rb', 'php', 'swift', 'kotlin',
-    'scala', 'r', 'perl', 'lua', 'bash', 'sh', 'zsh', 'powershell', 'ps1',
-    'sql', 'html', 'css', 'scss', 'sass', 'less', 'xml', 'json', 'yaml',
-    'yml', 'toml', 'ini', 'csv', 'markdown', 'md', 'dockerfile', 'docker',
-    'makefile', 'cmake', 'nginx', 'apache', 'graphql', 'proto', 'protobuf',
-    'jsx', 'tsx', 'vue', 'svelte', 'dart', 'elixir', 'ex', 'erlang',
-    'haskell', 'hs', 'ocaml', 'ml', 'fsharp', 'fs', 'clojure', 'clj',
-    'lisp', 'scheme', 'racket', 'zig', 'nim', 'crystal', 'julia',
-    'matlab', 'octave', 'fortran', 'cobol', 'pascal', 'delphi', 'ada',
-    'assembly', 'asm', 'nasm', 'wasm', 'solidity', 'sol', 'verilog', 'vhdl',
-    'text', 'txt', 'plaintext', 'diff', 'patch', 'log',
-    // Retired fence-payload tags (#2109 cutover): cards now arrive via
-    // tool_result.render, never fences. Kept ONLY so pre-cutover session
-    // history shows those payloads as fenced JSON code blocks, not bare prose.
-    'email_pre_scan', 'email-pre-scan',
-]);
-
-/**
- * Unwrap fences whose language tag is obvious garbage.
- *
- * Local LLMs (especially Qwen-Coder) sometimes wrap prose in a fence tagged
- * with a single stray letter (```i, ```a). Only those are unwrapped: a tag of
- * 1-2 characters that is not a real language. Every other tag keeps its fence,
- * including an empty one — a tag list can never keep up with what people write
- * (shell, console, mermaid, jsonc, env, hcl), and unwrapping a real block turns
- * `# comment` into a heading and swallows `<tag>`.
- */
-function stripBogusCodeFences(text: string): string {
-    return text.replace(
-        /```(\w*)[ \t]*\n([\s\S]*?)```/g,
-        (match, lang: string, inner: string) => {
-            const langLower = lang.toLowerCase();
-            const isStrayLetter =
-                langLower.length > 0 && langLower.length <= 2 && !KNOWN_CODE_LANGS.has(langLower);
-            return isStrayLetter ? inner.trim() : match;
-        },
-    );
-}
-
-/**
- * A trailing "Verification: unverified ..." line is the agent's no-op scope
- * note on a turn that ran no checks — the same disclaimer under every chat
- * answer. "verified" / "partially verified" lines report real check results
- * and stay. Mirrors the TUI's StripVerificationScope.
- */
-const UNVERIFIED_SCOPE_RE = /\n{1,2}Verification: unverified[^\n]*\s*$/;
-
-function stripUnverifiedScope(content: string): string {
-    let text = content;
-    for (;;) {
-        const stripped = text.replace(UNVERIFIED_SCOPE_RE, '');
-        if (stripped === text) return text;
-        text = stripped;
-    }
-}
-
-export function cleanToolCallContent(content: string, streaming = false): string {
-    if (!content) return content;
-    content = stripUnverifiedScope(content);
-    let cleaned = content;
-
-    // Remove all tool-call JSON blocks from the content
-    cleaned = cleaned.replace(TOOL_CALL_JSON_RE, '');
-
-    // Remove/extract LLM JSON blocks (thought, answer, tool) from output.
-    // These have nested braces so we use a brace-depth parser instead of regex.
-    // Blocks with "answer" have their answer text extracted; others are removed.
-    cleaned = cleanLLMJsonBlocks(cleaned, streaming);
-
-    // Remove <think>...</think> tags that some models output
-    cleaned = cleaned.replace(/<think>[\s\S]*?<\/think>/g, '');
-
-    // Fix double-escaped newlines/tabs from LLM output.
-    // Some models output literal "\n" (two chars) instead of actual newlines,
-    // which breaks markdown rendering. Only unescape when there are many
-    // literal \n sequences compared to real newlines (avoids breaking code blocks).
-    const literalNewlines = (cleaned.match(/\\n/g) || []).length;
-    const realNewlines = (cleaned.match(/\n/g) || []).length;
-    if (literalNewlines > 2 && literalNewlines > realNewlines * 2) {
-        cleaned = cleaned.replace(/\\n/g, '\n');
-        cleaned = cleaned.replace(/\\"/g, '"');
-    }
-
-    // Strip bogus code fences AFTER all other cleaning — catches fences
-    // that were inside JSON answer blocks or other wrappers. Only removes
-    // fences with unknown/fake language tags; preserves real code blocks.
-    cleaned = stripBogusCodeFences(cleaned).trim();
-
-    return escapeBareNumberLines(cleaned);
-}
-
-/**
- * A line that is only a number and a period ("391.") parses as an empty ordered
- * list item, which shows the marker and hides the number. Escaping the period
- * keeps it as text; fenced code is left alone.
- */
-export function escapeBareNumberLines(text: string): string {
-    let inFence = false;
-    return text.split('\n').map((line) => {
-        if (/^\s*(```|~~~)/.test(line)) inFence = !inFence;
-        if (inFence) return line;
-        return line.replace(/^(\s*\d+)\.(\s*)$/, '$1\\.$2');
-    }).join('\n');
+    return { steps: kept, echoed, endedBy };
 }
 
 /** Format a full absolute timestamp for the stats tooltip. */
@@ -445,58 +210,25 @@ function formatFullTimestamp(iso: string, t: Translate): string {
     });
 }
 
-/** What the server persists for a turn stopped before it wrote any text (_empty_answer_outcome). */
-const SERVER_CANCELLED_TEXT = 'Cancelled.';
-
-/** The notices that close a turn cut off before its answer (gaia/ui/restart_recovery.py), and their translations. */
-const CUT_OFF_NOTICES: ReadonlyArray<readonly [string, MessageKey]> = [
-    ['This answer was interrupted when GAIA closed. Send again to retry.', 'msg.cutOff.interrupted'],
-    ['This answer was interrupted before it finished. Send again to retry.', 'msg.cutOff.cancelled'],
-    ['This answer ended before GAIA could save a reply. Send again to retry.', 'msg.cutOff.noReply'],
-];
-
-/** restart_recovery.tools_ran_notice, the line the server puts just above a cut-off notice. */
-const TOOLS_RAN_RE = /(?:^|\n\n)Before it stopped, it had started these tools: (.+)\.$/;
-
-export interface CutOff {
-    /** What the turn streamed before it was cut off. */
-    body: string;
-    notice: MessageKey;
-    tools: string | null;
-}
-
-/** A reply the server closed with a cut-off notice, split so the notice shows in the UI's language. */
-export function splitCutOff(content: string): CutOff | null {
-    let text = content.trim();
-    const hit = CUT_OFF_NOTICES.find(([notice]) => text.endsWith(notice));
-    if (!hit) return null;
-    text = text.slice(0, -hit[0].length).trimEnd();
-    const tools = TOOLS_RAN_RE.exec(text);
-    if (tools) text = text.slice(0, tools.index).trimEnd();
-    return { body: text, notice: hit[1], tools: tools ? tools[1] : null };
-}
-
-/** How an assistant turn ended short of an answer, or undefined when it answered. */
-export function turnEnding(content: string, stopState: Message['stopState'], failed = false): TurnEnding | undefined {
-    if (stopState) return 'stopped';
-    if (splitCutOff(content)) return 'interrupted';
-    return failed ? 'failed' : undefined;
-}
-
 const EDITOR_MAX_HEIGHT = 320;
 
 /** A sent message opened for editing: Enter sends it again, Escape puts it back. */
-function MessageEditor({ original, draft, onDraft, onSend, onCancel }: {
+function MessageEditor({ original, draft, onDraft, onSend, onCancel, confirming = false }: {
     original: string;
     draft?: string | null;
     onDraft?: (text: string) => void;
     onSend: (text: string) => void;
     onCancel: () => void;
+    /** The delete-later-messages question is open and owns the buttons. */
+    confirming?: boolean;
 }) {
     const t = useT();
-    const [text, setText] = useState(draft ?? original);
+    // Attachments stay out of the text box and go back on when the edit is sent.
+    const { text: originalText, links } = useMemo(() => splitAttachmentLinks(original), [original]);
+    const [text, setText] = useState(() => (draft != null ? splitAttachmentLinks(draft).text : originalText));
     const ref = useRef<HTMLTextAreaElement>(null);
-    const changed = text.trim() !== '' && text !== original;
+    const changed = text.trim() !== '' && text !== originalText;
+    const send = () => onSend(joinAttachmentLinks(text, links));
 
     useLayoutEffect(() => {
         const el = ref.current;
@@ -518,7 +250,7 @@ function MessageEditor({ original, draft, onDraft, onSend, onCancel }: {
             onCancel();
         } else if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
             e.preventDefault();
-            if (changed) onSend(text);
+            if (changed && !confirming) send();
         }
     };
 
@@ -531,27 +263,42 @@ function MessageEditor({ original, draft, onDraft, onSend, onCancel }: {
                 onChange={(e) => { setText(e.target.value); onDraft?.(e.target.value); }}
                 onKeyDown={handleKeyDown}
                 aria-label={t('msg.editLabel')}
+                readOnly={confirming}
                 rows={1}
                 dir="auto"
                 {...CLAIMS_ESCAPE}
             />
-            <div className="msg-edit-actions">
-                <button type="button" className="btn-secondary msg-edit-btn" onClick={onCancel}>{t('msg.editCancel')}</button>
-                <button type="button" className="btn-primary msg-edit-btn" onClick={() => onSend(text)} disabled={!changed}>
-                    {t('msg.editSend')}
-                </button>
-            </div>
+            {links.length > 0 && (
+                <ul className="msg-edit-attachments" aria-label={t('composer.attached')}>
+                    {links.map((l, i) => (
+                        <li key={i} className="msg-edit-attachment">
+                            <FileText size={14} aria-hidden="true" />
+                            <span className="msg-edit-attachment-name" title={l.name} dir="auto">{l.name}</span>
+                        </li>
+                    ))}
+                </ul>
+            )}
+            {!confirming && (
+                <div className="msg-edit-actions">
+                    <button type="button" className="btn-secondary msg-edit-btn" onClick={onCancel}>{t('msg.editCancel')}</button>
+                    <button type="button" className="btn-primary msg-edit-btn" onClick={send} disabled={!changed}>
+                        {t('msg.editSend')}
+                    </button>
+                </div>
+            )}
         </div>
     );
 }
 
-export function MessageBubble({ message, isStreaming, agentSteps, agentStepsActive, cards, onDelete, onResend, extraActions, onTryAgain, onContinue, onRegenerate, onEditStart, editing = false, editDraft = null, onEditDraft, onEdit, onEditCancel, latest = false, latencyMs, liveStatus, toolStatus, awaitingUser }: MessageBubbleProps) {
+const SCHEDULE_RUN_MARKER = /^\[schedule-run\] Run #(\d+) \u00b7 (.+)$/;
+
+export function MessageBubble({ message, isStreaming, agentSteps, agentStepsActive, cards, onDelete, onResend, extraActions, onTryAgain, onContinue, onRegenerate, onEditStart, editing = false, editDraft = null, onEditDraft, onEdit, onEditCancel, laterCount = 0, latest = false, latencyMs, liveStatus, toolStatus, awaitingUser }: MessageBubbleProps) {
     const t = useT();
     useModelNames();
     const echo = useMemo(() => {
-        if (message.role !== 'assistant' || !agentSteps) return { steps: agentSteps, echoed: false };
+        if (message.role !== 'assistant' || !agentSteps) return { steps: agentSteps, echoed: false, endedBy: null };
         const steps = dropAnswerDrafts(agentSteps, message.content);
-        return isStreaming ? { steps, echoed: false } : dropErrorsEchoedInAnswer(steps, message.content);
+        return isStreaming ? { steps, echoed: false, endedBy: null } : dropErrorsEchoedInAnswer(steps, message.content);
     }, [agentSteps, message.content, message.role, isStreaming]);
     const isError = message.role === 'assistant' && (echo.echoed || message.failed === true || isErrorContent(message.content));
     const place = useInferencePlace();
@@ -563,14 +310,21 @@ export function MessageBubble({ message, isStreaming, agentSteps, agentStepsActi
         () => (message.role === 'assistant' && !isStreaming ? splitCutOff(message.content) : null),
         [message.content, message.role, isStreaming],
     );
+    // The error that ended a partly written answer, shown apart from the answer.
+    const endedBy = cutOff ? null : echo.endedBy;
     // What the user typed is never agent output — render it verbatim.
     // Memoized because the assistant path runs a brace-depth parser.
     const cleanedContent = useMemo(
-        () => (message.role === 'user'
-            ? message.content
-            : cleanToolCallContent(cutOff ? cutOff.body : message.content, Boolean(isStreaming))),
-        [message.content, message.role, isStreaming, cutOff],
+        () => {
+            if (message.role === 'user') return message.content;
+            const body = cutOff
+                ? cutOff.body
+                : endedBy ? message.content.trimEnd().slice(0, -endedBy.length) : message.content;
+            return cleanToolCallContent(body, Boolean(isStreaming));
+        },
+        [message.content, message.role, isStreaming, cutOff, endedBy],
     );
+    const hasAnswerText = Boolean(cleanedContent.trim()) && !(stopState && cleanedContent.trim() === SERVER_CANCELLED_TEXT);
     const summaryFiles = message.turnSummary?.files;
     const writtenFiles = useMemo(() => summaryFiles?.map((f) => f.path) ?? [], [summaryFiles]);
     const readAloudId = `${message.session_id}:${message.id}`;
@@ -603,12 +357,13 @@ export function MessageBubble({ message, isStreaming, agentSteps, agentStepsActi
     }, []);
 
     const handleCopy = useCallback(() => {
+        const text = message.role === 'assistant' ? plainAnswerText(cleanedContent) : message.content;
         if (navigator.clipboard?.writeText) {
-            navigator.clipboard.writeText(message.content).catch(() => {});
+            navigator.clipboard.writeText(text).catch(() => {});
         } else {
             // Fallback for non-HTTPS contexts (common for localhost)
             const textarea = document.createElement('textarea');
-            textarea.value = message.content;
+            textarea.value = text;
             textarea.style.position = 'fixed';
             textarea.style.opacity = '0';
             document.body.appendChild(textarea);
@@ -619,7 +374,7 @@ export function MessageBubble({ message, isStreaming, agentSteps, agentStepsActi
         setCopied(true);
         if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
         copyTimerRef.current = setTimeout(() => setCopied(false), 2000);
-    }, [message.content]);
+    }, [cleanedContent, message.content, message.role]);
 
     const handleDelete = useCallback(() => {
         if (!confirmDelete) {
@@ -634,9 +389,15 @@ export function MessageBubble({ message, isStreaming, agentSteps, agentStepsActi
         onDelete?.(message.id);
     }, [confirmDelete, message.id, onDelete]);
 
+    const [pendingDrop, setPendingDrop] = useState<(() => void) | null>(null);
+    const askBeforeDropping = useCallback((go: () => void) => {
+        if (laterCount > 0) setPendingDrop(() => go);
+        else go();
+    }, [laterCount]);
+
     const handleResend = useCallback(() => {
-        onResend?.(message);
-    }, [message, onResend]);
+        askBeforeDropping(() => onResend?.(message));
+    }, [message, onResend, askBeforeDropping]);
 
     // Tooltip shown on hover anywhere over the bubble — full absolute
     // timestamp (e.g. "Apr 25, 2026, 11:02:04 PM"). Both user and assistant
@@ -645,6 +406,11 @@ export function MessageBubble({ message, isStreaming, agentSteps, agentStepsActi
     const hoverTimestamp = message.created_at
         ? t(message.role === 'user' ? 'msg.sent' : 'msg.replied', { time: formatFullTimestamp(message.created_at, t) })
         : undefined;
+
+    const runMarker = message.role === 'system' ? SCHEDULE_RUN_MARKER.exec(message.content) : null;
+    if (runMarker) {
+        return <div className="msg-run-divider" role="separator">{t('msg.scheduledRun', { n: runMarker[1], time: runMarker[2] })}</div>;
+    }
 
     return (
         <div
@@ -690,17 +456,19 @@ export function MessageBubble({ message, isStreaming, agentSteps, agentStepsActi
                                 </button>
                             )}
                             {extraActions}
-                            {message.role === 'assistant' && !isError && cleanedContent.trim() && (
+                            {message.role === 'assistant' && !isError && hasAnswerText && (
                                 <ReadAloudButton messageId={readAloudId} content={cleanedContent} />
                             )}
-                            <button
-                                className={`msg-copy ${copied ? 'copied' : ''}`}
-                                onClick={handleCopy}
-                                title={copied ? t('msg.copied') : t('msg.copy')}
-                                aria-label={copied ? t('msg.copiedAria') : t('msg.copy')}
-                            >
-                                {copied ? <Check size={12} /> : <Copy size={12} />}
-                            </button>
+                            {hasAnswerText && (
+                                <button
+                                    className={`msg-copy ${copied ? 'copied' : ''}`}
+                                    onClick={handleCopy}
+                                    title={copied ? t('msg.copied') : t('msg.copy')}
+                                    aria-label={copied ? t('msg.copiedAria') : t('msg.copy')}
+                                >
+                                    {copied ? <Check size={12} /> : <Copy size={12} />}
+                                </button>
+                            )}
                             {/* Delete button */}
                             {onDelete && (
                                 <button
@@ -749,8 +517,9 @@ export function MessageBubble({ message, isStreaming, agentSteps, agentStepsActi
                             original={message.content}
                             draft={editDraft}
                             onDraft={onEditDraft}
-                            onSend={(text) => onEdit(message, text)}
-                            onCancel={() => onEditCancel?.()}
+                            onSend={(text) => askBeforeDropping(() => onEdit(message, text))}
+                            onCancel={() => { setPendingDrop(null); onEditCancel?.(); }}
+                            confirming={pendingDrop !== null && !isStreaming}
                         />
                     ) : collapsibleUser ? (
                         <>
@@ -773,6 +542,19 @@ export function MessageBubble({ message, isStreaming, agentSteps, agentStepsActi
                     ) : !(stopState && cleanedContent.trim() === SERVER_CANCELLED_TEXT) && (
                         <RenderedContent content={cleanedContent} showCursor={isStreaming && !!cleanedContent && !agentStepsActive} isStreaming={isStreaming} writtenFiles={writtenFiles} />
                     )}
+                    {pendingDrop && !isStreaming && (
+                        <div className="msg-drop-confirm" role="alertdialog" aria-labelledby={`${userBodyId}-drop`}>
+                            <span id={`${userBodyId}-drop`}>{t.plural('msg.dropLater', laterCount)}</span>
+                            <div className="msg-edit-actions">
+                                <button type="button" className="btn-secondary msg-edit-btn" onClick={() => setPendingDrop(null)} autoFocus>
+                                    {t('msg.editCancel')}
+                                </button>
+                                <button type="button" className="btn-primary msg-edit-btn" onClick={() => { setPendingDrop(null); pendingDrop(); }}>
+                                    {t('msg.dropLaterGo')}
+                                </button>
+                            </div>
+                        </div>
+                    )}
                     {stopState && (
                         <div className={`msg-stopped${stopState === 'unconfirmed' || message.stopError ? ' is-unconfirmed' : ''}`} role="note">
                             <Square size={9} fill="currentColor" aria-hidden="true" />
@@ -791,6 +573,9 @@ export function MessageBubble({ message, isStreaming, agentSteps, agentStepsActi
                                 ? `${say('msg.cutOff.toolsRan', { tools: cutOff.tools })} ${say(cutOff.notice)}`
                                 : say(cutOff.notice)))}
                         </p>
+                    )}
+                    {endedBy && (
+                        <p className="msg-cut-off" role="note" dir="auto">{endedBy}</p>
                     )}
                     {onContinue && stopState && !isStreaming && cleanedContent.trim() && cleanedContent.trim() !== SERVER_CANCELLED_TEXT && (
                         <button type="button" className="msg-try-again" onClick={onContinue}>
@@ -827,9 +612,9 @@ export function MessageBubble({ message, isStreaming, agentSteps, agentStepsActi
                                 </span>
                             )}
                             {message.stats?.retried && message.stats.model && (
-                                <span title={`This answer was kept from Retry with… (${message.stats.model})`}>{displayModelName(message.stats.model)}</span>
+                                <span title={t('msg.retriedWithTitle', { model: message.stats.model })}>{displayModelName(message.stats.model)}</span>
                             )}
-                            <AnswerStats latencyMs={latencyMs} stats={message.stats} ended={turnEnding(message.content, stopState, isError)} />
+                            <AnswerStats latencyMs={latencyMs} stats={message.stats} ended={turnEnding(message.content, stopState, isError || Boolean(endedBy))} />
                         </div>
                     )}
                     {message.role === 'assistant' && !isStreaming && message.id > 0 && message.session_id && (
@@ -917,22 +702,6 @@ function CodeBlock({ lang, code }: { lang: string; code: string }) {
 /** Markdown renderer using react-markdown with GFM support. */
 // ── File Path Linkification ──────────────────────────────────────────────
 
-/** Regex to detect Windows file paths like C:\Users\... or C:/Users/... */
-// Path separators are excluded from the segment class so each `(segment sep)`
-// repetition has exactly one parse — the ambiguity CodeQL flagged as
-// exponential-backtracking ReDoS (js/redos) on adversarial non-matching input.
-// Exactly one separator between segments, so a last segment without an
-// extension (`C:\Users\me\notes`) is kept as well as `...\a.txt` or `...\dir\`.
-// A space stays inside a folder name a `\` follows (`Program Files (x86)\`) and
-// inside a last name of at most three words ending in an extension (`Q3 report.txt`);
-// otherwise it ends the path, so "C:\out\docs and look at a.pdf" stops at `docs`.
-// A path in double quotes runs to the closing quote, spaces and all.
-const WIN_PATH_RE = /(?<=["\u201c])[A-Z]:[\\/][^*?"<>|\r\n\u201c\u201d]+(?=["\u201d])|\b[A-Z]:[\\/](?=[^\s*?"<>|,;)}\]\\/])(?:[^\s*?"<>|,;)}\]\\/]+(?:(?: +(?:[^\s*?"<>|,;:)}\]\\/]+|\([^\s*?"<>|,;:)}\]\\/]+\)))+\\|[\\/]))*(?:(?:[^\s*?"<>|,;:.)}\]\\/]+ +){1,2}[^\s*?"<>|,;)}\]\\/]+\.[A-Za-z0-9]{1,5}\b|[^\s*?"<>|,;)}\]\\/]+)?/gi;
-/** Sentence punctuation the path regex swallows: "see C:\a\b." ends at `b`. */
-const PATH_TRAILING_PUNCT_RE = /[.:!']+$/;
-/** An inline-code span that is one absolute path and nothing else, e.g. "Saved to `C:\out\answer.md`". */
-const WIN_PATH_ONLY_RE = new RegExp(`^(?:${WIN_PATH_RE.source})$`, 'i');
-
 /** Paths of the files this answer's turn wrote (`turn_summary.files`). */
 const WrittenFilesContext = createContext<readonly string[]>([]);
 
@@ -958,6 +727,7 @@ function inlineCodePath(children: React.ReactNode): string | null {
 }
 
 function FilePathLink({ path, label }: { path: string; label?: string }) {
+    const t = useT();
     const handleClick = (e: React.MouseEvent) => {
         e.preventDefault();
         api.openFileOrFolder(path).catch((err) => {
@@ -969,7 +739,7 @@ function FilePathLink({ path, label }: { path: string; label?: string }) {
             className="file-path-link"
             dir="ltr"
             onClick={handleClick}
-            title={`Open in file explorer: ${path}`}
+            title={t('msg.openInExplorer', { path })}
             role="button"
             tabIndex={0}
             onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleClick(e as unknown as React.MouseEvent); } }}
@@ -978,15 +748,6 @@ function FilePathLink({ path, label }: { path: string; label?: string }) {
             {label ?? path}
         </span>
     );
-}
-
-/** Each Windows path in `text`; a quoted one is kept exactly, a trailing dot and all. */
-function findFilePaths(text: string): Array<{ start: number; path: string }> {
-    return [...text.matchAll(new RegExp(WIN_PATH_RE.source, 'gi'))].map((m) => {
-        const end = m.index + m[0].length;
-        const quoted = '"“'.includes(text[m.index - 1] ?? '\n') && '"”'.includes(text[end] ?? '\n');
-        return { start: m.index, path: quoted ? m[0] : m[0].replace(PATH_TRAILING_PUNCT_RE, '') };
-    });
 }
 
 /** Split text into segments, replacing file paths with clickable links. */
@@ -1016,7 +777,7 @@ function linkifyFilePaths(text: string): React.ReactNode {
 const CitationContext = createContext<CitationIndex>(buildCitationIndex([]));
 
 /** A cited library document; opens at `page` (the first page cited after it, when there is one). */
-function CitationLink({ doc, page, t }: { doc: LibraryDoc; page?: number; t: Translate }) {
+function CitationLink({ doc, page, t }: { doc: CitedDoc; page?: number; t: Translate }) {
     return (
         <a
             className="citation-link"
@@ -1024,17 +785,17 @@ function CitationLink({ doc, page, t }: { doc: LibraryDoc; page?: number; t: Tra
             target="_blank"
             rel="noopener noreferrer"
             dir="ltr"
-            title={page ? t('citation.openPage', { page }) : t('citation.open', { name: doc.filename })}
+            title={page ? t('citation.openPage', { page }) : t('citation.open', { name: doc.label })}
             data-doc-id={doc.id}
             data-page={page}
         >
             <FileText size={12} className="citation-icon" aria-hidden="true" />
-            {doc.filename}
+            {doc.label}
         </a>
     );
 }
 
-function PageLink({ doc, page, label, t }: { doc: LibraryDoc; page: number; label: string; t: Translate }) {
+function PageLink({ doc, page, label, t }: { doc: CitedDoc; page: number; label: string; t: Translate }) {
     return (
         <a
             className="citation-page"
@@ -1061,14 +822,14 @@ function leadingPages(index: CitationIndex, text: string): FoundPage[] {
  * path linked as before. `carried` is a document named just before this run
  * (in inline code), whose pages may open the run.
  */
-function citeText(text: string, index: CitationIndex, t: Translate, carried: LibraryDoc | null): React.ReactNode {
+function citeText(text: string, index: CitationIndex, t: Translate, carried: CitedDoc | null): React.ReactNode {
     // A filename that ends a longer path stays inside that path's chip.
     const paths = findFilePaths(text);
     const citations = findCitations(index, text).filter(
         (c) => !paths.some((p) => p.start < c.start && c.start < p.start + p.path.length),
     );
     const parts: Array<{ start: number; end: number; node: React.ReactNode }> = [];
-    const addPages = (doc: LibraryDoc, pages: FoundPage[], offset: number) => {
+    const addPages = (doc: CitedDoc, pages: FoundPage[], offset: number) => {
         for (const pg of pages) {
             const start = offset + pg.start;
             const end = offset + pg.end;
@@ -1096,7 +857,7 @@ function citeText(text: string, index: CitationIndex, t: Translate, carried: Lib
 }
 
 /** The library document an inline-code span names (a filename or a path to one), or null. */
-function inlineCodeDoc(index: CitationIndex, children: React.ReactNode): LibraryDoc | null {
+function inlineCodeDoc(index: CitationIndex, children: React.ReactNode): CitedDoc | null {
     return typeof children === 'string' ? docForToken(index, children) : null;
 }
 
@@ -1110,7 +871,7 @@ function Linkified({ children }: { children?: React.ReactNode }) {
     const index = useContext(CitationContext);
     const t = useT();
     const items = React.Children.toArray(children);
-    let carried: LibraryDoc | null = null;
+    let carried: CitedDoc | null = null;
     const out = items.map((child, i) => {
         if (typeof child === 'string') {
             const node = citeText(child, index, t, carried);
@@ -1231,8 +992,8 @@ const MARKDOWN_COMPONENTS: Components = {
     ol({ children, start }) {
         return <ol className="md-ol" start={start} dir="auto">{children}</ol>;
     },
-    li({ children }) {
-        return <li className="md-li" dir="auto"><Linkified>{children}</Linkified></li>;
+    li({ children, className }) {
+        return <li className={className ? `md-li ${className}` : 'md-li'} dir="auto"><Linkified>{children}</Linkified></li>;
     },
     // Blockquote
     blockquote({ children }) {
@@ -1242,12 +1003,12 @@ const MARKDOWN_COMPONENTS: Components = {
     hr() {
         return <hr className="md-hr" />;
     },
-    // Table cells
+    // Table cells set no dir: the table's dir="auto" skips any cell that has its own.
     td({ children }) {
-        return <td dir="auto"><Linkified>{children}</Linkified></td>;
+        return <td><Linkified>{children}</Linkified></td>;
     },
     th({ children }) {
-        return <th dir="auto"><Linkified>{children}</Linkified></th>;
+        return <th><Linkified>{children}</Linkified></th>;
     },
 };
 

@@ -62,6 +62,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
+from gaia.home import gaia_home
 from gaia.logger import get_logger
 
 logger = get_logger(__name__)
@@ -93,7 +94,7 @@ TERMINAL_TYPES: "frozenset[str]" = frozenset({"final", "error"})
 
 #: Where the live harness takes its cross-process serial lock. Overridable via
 #: ``GAIA_EVAL_LOCK_PATH`` so an isolated test run never contends with a real one.
-DEFAULT_LOCK_PATH = Path.home() / ".gaia" / "eval" / ".sidecar-eval.lock"
+DEFAULT_LOCK_PATH = gaia_home() / "eval" / ".sidecar-eval.lock"
 
 
 # ---------------------------------------------------------------------------

@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Callable
 
 from gaia.engineering.repository import repository_lock
+from gaia.home import gaia_home
 from gaia.utils.owner_only import lock_down_windows_acl
 
 BACKENDS = frozenset({"claude", "codex"})
@@ -26,11 +27,7 @@ _ID = re.compile(r"[a-f0-9]{32}\Z")
 def default_root() -> Path:
     """An explicit test/profile root never aliases the normal engineering store."""
     return (
-        Path(
-            os.environ.get(
-                "GAIA_ENGINEERING_HOME", Path.home() / ".gaia" / "engineering"
-            )
-        )
+        Path(os.environ.get("GAIA_ENGINEERING_HOME", gaia_home() / "engineering"))
         .expanduser()
         .resolve()
     )

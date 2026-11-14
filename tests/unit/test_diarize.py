@@ -56,7 +56,7 @@ class TestAudioValidation:
 
 class TestAvailability:
     def test_unavailable_without_models(self, tmp_path):
-        with patch.object(diarize, "_SEGMENTATION_MODEL", tmp_path / "nope.onnx"):
+        with patch.object(diarize, "model_dir", lambda: tmp_path):
             assert diarize.is_available() is False
 
     def test_setup_is_lazy(self):

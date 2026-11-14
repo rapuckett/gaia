@@ -644,6 +644,7 @@ jobs:
             tests/integration/test_audio_generation_live.py \
             tests/integration/test_chat_hub_wheel_journey.py \
             tests/integration/test_chat_ui_integration.py \
+            tests/integration/test_dev_backend.py \
             tests/integration/test_documents_router.py \
             tests/integration/test_email_thin_client.py \
             tests/integration/test_files_router.py \
