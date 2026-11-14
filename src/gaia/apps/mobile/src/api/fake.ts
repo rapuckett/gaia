@@ -34,6 +34,10 @@ import { foldText, splitMatch } from '@webui/utils/chatSearch';
 
 import { GaiaApiError } from './errors';
 
+function cloneNested<T>(source: Record<string, Record<string, T>> | undefined): Record<string, Record<string, T>> {
+    return Object.fromEntries(Object.entries(source ?? {}).map(([key, inner]) => [key, { ...inner }]));
+}
+
 export interface FakeClientData {
     sessions?: Session[];
     schedules?: Schedule[];
@@ -102,8 +106,8 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
     const deletedOne: FakeGaiaClient['deletedOne'] = [];
     const confirmations: ToolConfirmRequest[] = [];
     const answers: UserInputRequest[] = [];
-    const grants: Record<string, Record<string, string[]>> = structuredClone(data.grants ?? {});
-    const activations: Record<string, Record<string, boolean>> = structuredClone(data.activations ?? {});
+    const grants: Record<string, Record<string, string[]>> = cloneNested(data.grants);
+    const activations: Record<string, Record<string, boolean>> = cloneNested(data.activations);
     const restarts: FakeGaiaClient['restarts'] = [];
     const downloads: FakeGaiaClient['downloads'] = [];
     const schedules = [...(data.schedules ?? [])];
