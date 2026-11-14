@@ -7,9 +7,8 @@ import { isolate } from '@webui/i18n/registry';
 import { isLongUserMessage, sizeLabel, USER_COLLAPSE_LINES } from '@webui/utils/longContent';
 import type { Message } from '@/api/client.types';
 import { useDirection, useT } from '@/i18n/useT';
-import { Pressable, Stack, Surface, Text } from '@/ui';
+import { contentDir, Pressable, Stack, Surface, Text } from '@/ui';
 
-import { contentDir } from '../markdown/direction';
 import { useMessageActions } from './useMessageActions';
 
 export interface UserBubbleProps {

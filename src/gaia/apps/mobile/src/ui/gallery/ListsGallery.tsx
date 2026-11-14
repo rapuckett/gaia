@@ -130,6 +130,11 @@ export function ListsGallery() {
                     <Notice tone="success" title={t('activity.filter.success')} />
                 </Section>
 
+                <Section title='Text dir="auto"'>
+                    <Text dir="auto">{`مرحبا ${t('modelStatus.model')}`}</Text>
+                    <Text dir="auto">{`Hello ${t('modelStatus.model')}`}</Text>
+                </Section>
+
                 <Section title="ProgressLine">
                     <ProgressLine value={0.6} label={t('modelStatus.state.warming')} />
                     <ProgressLine value={0} />

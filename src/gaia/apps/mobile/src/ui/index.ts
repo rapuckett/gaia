@@ -6,6 +6,7 @@ export { ThemeProvider, useTheme, type Theme, type Scheme } from './theme/ThemeP
 export type { Tone } from './theme/tone';
 export { Text, type TextProps } from './text/Text';
 export { Ltr } from './text/Ltr';
+export { contentDir } from './text/direction';
 export { Stack, Row, Spacer, type StackProps, type RowProps } from './layout/layout';
 export { Floating, type FloatingProps } from './layout/Floating';
 export { HScroll } from './layout/HScroll';
