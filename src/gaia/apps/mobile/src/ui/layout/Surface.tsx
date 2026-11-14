@@ -15,8 +15,12 @@ export interface SurfaceProps {
     tone?: SurfaceTone;
     radius?: keyof Theme['radius'] | 'none';
     padding?: Space;
-    border?: boolean;
+    /** `accent` draws the border in the accent color, for a card that needs an answer. */
+    border?: boolean | 'accent';
     elevation?: Elevation;
+    /** A panel that interrupts and needs an answer; screen readers announce it as a dialog. */
+    role?: 'alertdialog';
+    accessibilityLabel?: string;
     testID?: string;
 }
 
@@ -34,7 +38,7 @@ export function useSurfaceStyle({ tone = 'primary', radius, padding, border, ele
         borderRadius: radius === undefined || radius === 'none' ? 0 : radii[radius],
         ...(padding ? { padding: space[padding] } : null),
         ...(border
-            ? { borderWidth: 1, borderColor: tone === 'recessed' ? colors.borderRecessed : colors.borderLight }
+            ? { borderWidth: 1, borderColor: border === 'accent' ? colors.accentLight : tone === 'recessed' ? colors.borderRecessed : colors.borderLight }
             : null),
         ...(elevation !== 'none' ? { boxShadow: shadows[elevation] } : null),
     } as const;
@@ -43,7 +47,13 @@ export function useSurfaceStyle({ tone = 'primary', radius, padding, border, ele
 export function Surface(props: SurfaceProps) {
     const style = useSurfaceStyle(props);
     return (
-        <View style={style} testID={props.testID}>
+        <View
+            style={style}
+            testID={props.testID}
+            role={props.role}
+            accessibilityLabel={props.accessibilityLabel}
+            accessibilityLiveRegion={props.role ? 'polite' : undefined}
+        >
             {props.children}
         </View>
     );
