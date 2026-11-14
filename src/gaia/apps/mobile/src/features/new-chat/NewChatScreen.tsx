@@ -7,6 +7,7 @@ import { useEffect, useState } from 'react';
 import { useCreateSession, useSystemStatus } from '@/data';
 import { Composer, useComposerQueue } from '@/features/composer';
 import { useComposerQueueStore } from '@/features/composer/composerQueue';
+import { ScreenHeader } from '@/features/nav/ScreenHeader';
 import { useT } from '@/i18n/useT';
 import { Disclosure, Notice, ProgressLine, Screen, Stack, Text } from '@/ui';
 
@@ -65,6 +66,7 @@ export function NewChatScreen({ onOpen, initialText = '', prompt }: NewChatScree
         <Screen
             keyboard="avoid"
             scroll
+            header={<ScreenHeader />}
             footer={
                 <Composer
                     value={state.text}
