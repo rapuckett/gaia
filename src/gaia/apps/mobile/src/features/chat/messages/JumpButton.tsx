@@ -11,12 +11,13 @@ import { ArrowDown } from '@/ui/icons';
 export function JumpButton({ visible, onPress }: { visible: boolean; onPress: () => void }) {
     const t = useT();
     const reduced = useReducedMotion();
-    if (!visible) return null;
     return (
         <Floating>
-            <Animated.View entering={reduced ? FadeIn : FadeInDown} exiting={reduced ? FadeOut : FadeOutDown}>
-                <IconButton icon={ArrowDown} label={t('chat.scrollToBottom')} variant="filled" onPress={onPress} />
-            </Animated.View>
+            {visible ? (
+                <Animated.View entering={reduced ? FadeIn : FadeInDown} exiting={reduced ? FadeOut : FadeOutDown}>
+                    <IconButton icon={ArrowDown} label={t('chat.scrollToBottom')} variant="filled" onPress={onPress} />
+                </Animated.View>
+            ) : null}
         </Floating>
     );
 }
