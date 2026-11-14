@@ -34,12 +34,13 @@ const MANY = Array.from({ length: 12 }, (_, i) => [
     msg('assistant', `Run ${i + 1} copied ${i + 4} files.`, i * 2 + 1),
 ]).flat();
 
-export type MessagesFixture = 'loading' | 'long' | 'many' | 'streaming';
+export type MessagesFixture = 'loading' | 'long' | 'many' | 'short' | 'streaming';
 
 export const FIXTURES: Record<MessagesFixture, { messages: Message[]; live?: Message }> = {
     loading: { messages: [] },
     long: { messages: [...SHORT.slice(0, 2), msg('user', LONG_USER, 4), msg('assistant', ANSWER, 5)] },
     many: { messages: MANY },
+    short: { messages: SHORT },
     streaming: {
         messages: SHORT,
         live: { ...msg('assistant', 'Counting the files in', 6), id: -1 },

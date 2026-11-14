@@ -167,6 +167,7 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
                                 <TurnTail
                                     tail={tail}
                                     line={line}
+                                    awaitingUser={!!stream.pendingPermission || !!stream.pendingQuestion}
                                     onTryAgain={() => tryAgain(tail.replyId)}
                                     onContinue={continueReply}
                                 />

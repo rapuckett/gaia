@@ -11,10 +11,14 @@ import type {
     Message,
     ModelNeed,
     ModelNeedJob,
+    ParsedSchedule,
     ResourceUsage,
     Schedule,
     Session,
+    SetupCheck,
+    SetupPlan,
     SetupRunStatus,
+    SkillInfo,
     StartScreen,
     StreamEvent,
     SystemStatus,
@@ -33,10 +37,15 @@ export type {
     Message,
     ModelNeed,
     ModelNeedJob,
+    ParsedSchedule,
     ResourceUsage,
     Schedule,
     Session,
+    SetupCheck,
+    SetupPlan,
     SetupRunStatus,
+    SkillInfo,
+    SkillSource,
     StartScreen,
     StreamEvent,
     SystemStatus,
@@ -64,6 +73,12 @@ export interface ConnectorList {
 export interface AgentList {
     agents: AgentInfo[];
     total: number;
+}
+
+/** `invalid` maps each unreadable skill's path to why GAIA skipped it. */
+export interface SkillList {
+    skills: SkillInfo[];
+    invalid: Record<string, string>;
 }
 
 export interface AgentMcpList {
@@ -109,6 +124,24 @@ export interface UserInputResult {
     request_id: string;
 }
 
+/** What `POST /api/setup/run` takes; the web UI's `SetupRunOptions` (services/setupApi.ts). */
+export interface SetupRunOptions {
+    acknowledgeLowDisk?: boolean;
+    keepTrying?: boolean;
+    extraModels?: string[];
+    serverOnly?: boolean;
+    /** Replace GAIA's older embedded Lemonade without downloading models again. */
+    upgradeEmbedded?: boolean;
+}
+
+export interface CreateScheduleRequest {
+    name: string;
+    interval: string;
+    prompt: string;
+    /** IANA zone the times are in; the device's. */
+    timezone?: string;
+}
+
 export interface DeleteScheduleResult {
     deleted: boolean;
 }
@@ -139,6 +172,8 @@ export interface GaiaClient {
     /** Chats whose title or messages match `query`, newest first; `truncated` says the backend capped the list. */
     searchSessions(query: string, includeAutomated: boolean, options?: RequestOptions): Promise<SessionSearchResponse>;
     getMessages(sessionId: string, options?: RequestOptions): Promise<MessageList>;
+    /** Removes only this message. */
+    deleteMessage(sessionId: string, messageId: number, options?: RequestOptions): Promise<{ deleted: boolean }>;
     /** Renames a chat; the title is pinned against the auto-retitler. */
     updateSession(sessionId: string, update: SessionUpdate, options?: RequestOptions): Promise<Session>;
     /** Flips the chat's private mode (not saved to memory) and returns the chat. */
@@ -176,6 +211,12 @@ export interface GaiaClient {
     /** Whether setup is done and, when it isn't, why; `no_agent_build` says the hub has no agent for this PC. */
     checkSetup(options?: RequestOptions): Promise<SetupCheck>;
     listSchedules(options?: RequestOptions): Promise<ScheduleList>;
+    /** Every skill GAIA can load, plus the folders it skipped. */
+    listSkills(options?: RequestOptions): Promise<SkillList>;
+    /** Creates a schedule; `interval` is the plain-words "when to run", parsed by the PC. 409 when the name is taken. */
+    createSchedule(request: CreateScheduleRequest, options?: RequestOptions): Promise<Schedule>;
+    /** Reads a plain-words "when to run" without saving it, for the form's live preview. */
+    parseSchedule(input: string, timezone: string | undefined, options?: RequestOptions): Promise<ParsedSchedule>;
     /** Pauses or resumes a schedule; answers with the schedule as it now is. */
     updateScheduleStatus(name: string, status: 'active' | 'paused', options?: RequestOptions): Promise<Schedule>;
     /** Runs a schedule once now (409 while a run is in flight); its next scheduled run stays as it was. */
@@ -197,4 +238,13 @@ export interface GaiaClient {
     cancelSetup(modelId: string, options?: RequestOptions): Promise<{ cancelled: boolean }>;
     /** The new-chat screen's cards and working folder; `skills_error` says why the assistant can't list its skills. */
     getStartScreen(options?: RequestOptions): Promise<StartScreen>;
+    /** Is GAIA set up on this PC: ready, or the stage and reasons it is not. */
+    checkSetup(skipChatModel: boolean, options?: RequestOptions): Promise<SetupCheck>;
+    /** What setup will use and download, before it starts; `catalog` marks partial downloads. */
+    getSetupPlan(options?: RequestOptions): Promise<SetupPlan>;
+    startSetup(
+        skipChatModel: boolean,
+        gaiaLemonade?: boolean,
+        options?: SetupRunOptions & RequestOptions,
+    ): Promise<SetupRunStatus>;
 }
