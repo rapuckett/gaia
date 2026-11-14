@@ -3,7 +3,7 @@
 
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 
-import type { DeleteScheduleResult, Schedule, ScheduleList } from '@/api/client.types';
+import type { CreateScheduleRequest, DeleteScheduleResult, Schedule, ScheduleList } from '@/api/client.types';
 import { SCHEDULES_POLL_MS } from '@/api/constants';
 
 import { useGaiaClient } from './GaiaClientProvider';
@@ -28,6 +28,16 @@ function replaceSchedule(queryClient: QueryClient, updated: Schedule): void {
     queryClient.setQueryData<ScheduleList>(scheduleKeys.list, (list) =>
         list && { ...list, schedules: list.schedules.map((s) => (s.name === updated.name ? updated : s)) },
     );
+}
+
+/** Creates a schedule: `mutate({ name, interval, prompt, timezone })`, then re-reads the list. A 409 `GaiaApiError` means the name is taken. */
+export function useCreateSchedule() {
+    const client = useGaiaClient();
+    const queryClient = useQueryClient();
+    return useMutation<Schedule, Error, CreateScheduleRequest>({
+        mutationFn: (request) => requireClient(client).createSchedule(request),
+        onSuccess: () => queryClient.invalidateQueries({ queryKey: scheduleKeys.list }),
+    });
 }
 
 /** Pauses or resumes a schedule: `mutate({ name, status })`. */

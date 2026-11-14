@@ -9,33 +9,70 @@ export const UI_HEADERS = {
 } as const;
 
 export const ENDPOINTS = {
+    agents: '/api/agents',
     health: '/api/health',
     localModelRestart: '/api/providers/local/restart',
     localModelStatus: '/api/providers/local/status',
     schedule: '/api/schedules/{name:path}',
     scheduleRun: '/api/schedules/{name:path}/run',
+    scheduleParse: '/api/schedules/parse',
     schedules: '/api/schedules',
     sessions: '/api/sessions',
     session: '/api/sessions/{session_id}',
+    sessionDocument: '/api/sessions/{session_id}/documents/{doc_id}',
+    sessionMessage: '/api/sessions/{session_id}/messages/{message_id}',
     sessionMessages: '/api/sessions/{session_id}/messages',
     sessionMessagesAndBelow: '/api/sessions/{session_id}/messages/{message_id}/and-below',
+    sessionPrivate: '/api/sessions/{session_id}/private',
     sessionSearch: '/api/sessions/search',
     setupCancel: '/api/setup/cancel',
+    setupCheck: '/api/setup/check',
     setupModelDownload: '/api/setup/models/download',
     setupNeeds: '/api/setup/needs/{job}',
+    setupPlan: '/api/setup/plan',
+    setupRun: '/api/setup/run',
     setupStatus: '/api/setup/status',
+    skills: '/api/skills',
     chatSend: '/api/chat/send',
     chatAttach: '/api/chat/attach',
     chatCancel: '/api/chat/cancel',
     chatConfirmTool: '/api/chat/confirm-tool',
+    chatContext: '/api/chat/context/{session_id}',
     chatFollowup: '/api/chat/followup',
     chatFollowupOutcome: '/api/chat/followup/{session_id}',
     chatUserInput: '/api/chat/user-input',
+    connectorActivation: '/api/connectors/{connector_id}/activations/{agent_id:path}',
+    connectorActivations: '/api/connectors/{connector_id}/activations',
+    connectorGrant: '/api/connectors/{connector_id}/grants/{agent_id:path}',
+    connectorGrants: '/api/connectors/{connector_id}/grants',
+    connectors: '/api/connectors',
+    connectorsAgentMcps: '/api/connectors/agent-mcps',
+    systemResources: '/api/system/resources',
     systemStatus: '/api/system/status',
     documentFile: '/api/documents/{doc_id}/file',
     documents: '/api/documents',
     onboardingStart: '/api/onboarding/start',
 } as const;
+
+export function connectorActivationPath(connectorId: string, agentId: string): string {
+    return ENDPOINTS.connectorActivation
+        .replace('{connector_id}', encodeURIComponent(connectorId))
+        .replace('{agent_id:path}', encodeURIComponent(agentId));
+}
+
+export function connectorActivationsPath(connectorId: string): string {
+    return ENDPOINTS.connectorActivations.replace('{connector_id}', encodeURIComponent(connectorId));
+}
+
+export function connectorGrantPath(connectorId: string, agentId: string): string {
+    return ENDPOINTS.connectorGrant
+        .replace('{connector_id}', encodeURIComponent(connectorId))
+        .replace('{agent_id:path}', encodeURIComponent(agentId));
+}
+
+export function connectorGrantsPath(connectorId: string): string {
+    return ENDPOINTS.connectorGrants.replace('{connector_id}', encodeURIComponent(connectorId));
+}
 
 export function schedulePath(name: string): string {
     return ENDPOINTS.schedule.replace('{name:path}', encodeURIComponent(name));
@@ -53,12 +90,32 @@ export function sessionPath(sessionId: string): string {
     return ENDPOINTS.session.replace('{session_id}', encodeURIComponent(sessionId));
 }
 
+export function chatContextPath(sessionId: string): string {
+    return ENDPOINTS.chatContext.replace('{session_id}', encodeURIComponent(sessionId));
+}
+
 export function followupOutcomePath(sessionId: string): string {
     return ENDPOINTS.chatFollowupOutcome.replace('{session_id}', encodeURIComponent(sessionId));
 }
 
+export function sessionDocumentPath(sessionId: string, docId: string): string {
+    return ENDPOINTS.sessionDocument
+        .replace('{session_id}', encodeURIComponent(sessionId))
+        .replace('{doc_id}', encodeURIComponent(docId));
+}
+
+export function sessionPrivatePath(sessionId: string): string {
+    return ENDPOINTS.sessionPrivate.replace('{session_id}', encodeURIComponent(sessionId));
+}
+
 export function sessionMessagesPath(sessionId: string): string {
     return ENDPOINTS.sessionMessages.replace('{session_id}', encodeURIComponent(sessionId));
+}
+
+export function sessionMessagePath(sessionId: string, messageId: number): string {
+    return ENDPOINTS.sessionMessage
+        .replace('{session_id}', encodeURIComponent(sessionId))
+        .replace('{message_id}', String(messageId));
 }
 
 export function sessionMessagesAndBelowPath(sessionId: string, messageId: number): string {
@@ -103,6 +160,8 @@ export const MODEL_NEED_CHECK_LIMIT_MS = 8_000;
 /** What the PC answers a log request from a phone; the model server log opens only on the PC (security.py). */
 export const PC_ONLY_REFUSAL =
     "Do this on the PC running GAIA. It isn't allowed over mobile access, from a paired device or from another computer.";
+/** How long to wait after a failed resource read before trying again (webui's `RETRY_MS`). */
+export const RESOURCE_RETRY_MS = 5_000;
 /** How often to re-read the PC's status while it is still starting or warming up. */
 export const STATUS_POLL_MS = 5_000;
 

@@ -1,8 +1,11 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
+import { useEffect } from 'react';
+
 import { useSystemStatus } from '@/data';
 import { useT } from '@/i18n/useT';
+import { useBannerDismissedStore } from '@/state/bannerDismissed';
 import { Notice, ProgressLine, Stack } from '@/ui';
 
 import { pickBanner } from './pickBanner';
@@ -11,7 +14,10 @@ import { pickBanner } from './pickBanner';
 export function ConnectionBanner() {
     const t = useT();
     const { data, error, refetch } = useSystemStatus();
-    const banner = pickBanner(data, error, t);
+    const picked = pickBanner(data, error, t);
+    const { dismissed, dismiss, reconcile } = useBannerDismissedStore();
+    useEffect(() => reconcile(picked), [picked?.id, picked?.dismissible, reconcile]); // eslint-disable-line react-hooks/exhaustive-deps
+    const banner = picked && picked.id === dismissed ? null : picked;
     if (!banner) return null;
     return (
         <Stack gap="sm" testID={`banner-${banner.id}`}>
@@ -19,6 +25,7 @@ export function ConnectionBanner() {
                 tone={banner.tone}
                 title={banner.title}
                 message={banner.message}
+                onDismiss={banner.dismissible ? () => dismiss(banner.id) : undefined}
                 action={banner.retry ? { label: t('settings.key.checkAgain'), onPress: () => void refetch() } : undefined}
             />
             {banner.progress ? <ProgressLine value={banner.progress.value} label={banner.progress.label} /> : null}

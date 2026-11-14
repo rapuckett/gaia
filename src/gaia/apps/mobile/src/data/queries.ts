@@ -11,12 +11,13 @@ import type {
     DocumentListResponse,
     GaiaClient,
     MessageList,
+    ResourceUsage,
     Session,
     SessionList,
     SessionSearchResponse,
     SystemStatus,
 } from '@/api/client.types';
-import { SEARCH_DEBOUNCE_MS, STATUS_POLL_MS } from '@/api/constants';
+import { RESOURCE_RETRY_MS, SEARCH_DEBOUNCE_MS, STATUS_POLL_MS } from '@/api/constants';
 import { GaiaConfigError } from '@/api/errors';
 
 import { useGaiaClient } from './GaiaClientProvider';
@@ -25,9 +26,18 @@ export const queryKeys = {
     sessions: ['sessions'] as const,
     session: (sessionId: string) => ['session', sessionId] as const,
     sessionSearch: (query: string) => ['sessionSearch', query] as const,
+    skills: ['skills'] as const,
     messages: (sessionId: string) => ['messages', sessionId] as const,
     systemStatus: ['systemStatus'] as const,
+    resourceUsage: ['resourceUsage'] as const,
     startScreen: ['startScreen'] as const,
+    setupStatus: ['setupStatus'] as const,
+    setupPlan: ['setupPlan'] as const,
+    agentMcps: ['agentMcps'] as const,
+    agents: ['agents'] as const,
+    connectorActivations: (connectorId: string) => ['connectorActivations', connectorId] as const,
+    connectorGrants: (connectorId: string) => ['connectorGrants', connectorId] as const,
+    connectors: ['connectors'] as const,
     documents: ['documents'] as const,
 };
 
@@ -85,6 +95,18 @@ export function useMessages(sessionId: string) {
         queryKey: queryKeys.messages(sessionId),
         enabled: client !== null,
         queryFn: ({ signal }) => requireClient(client).getMessages(sessionId, { signal }),
+    });
+}
+
+/** This PC's resource use, re-read at the interval the backend asks for while `enabled`. */
+export function useResourceUsage(enabled: boolean) {
+    const client = useGaiaClient();
+    return useQuery<ResourceUsage>({
+        queryKey: queryKeys.resourceUsage,
+        enabled: enabled && client !== null,
+        queryFn: ({ signal }) => requireClient(client).getResourceUsage({ signal }),
+        refetchInterval: (query) => query.state.data?.interval_ms ?? RESOURCE_RETRY_MS,
+        retry: false,
     });
 }
 
