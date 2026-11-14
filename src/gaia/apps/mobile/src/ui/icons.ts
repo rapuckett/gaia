@@ -43,6 +43,7 @@ export {
   Send,
   Settings,
   ShieldQuestion,
+  Sparkles,
   Square,
   Trash2,
   TriangleAlert,
