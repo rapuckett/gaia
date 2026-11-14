@@ -37,7 +37,9 @@ export const ENDPOINTS = {
     systemStatus: '/api/system/status',
     documentFile: '/api/documents/{doc_id}/file',
     documents: '/api/documents',
+    onboardingPreflight: '/api/onboarding/preflight',
     onboardingStart: '/api/onboarding/start',
+    providers: '/api/providers',
 } as const;
 
 export function schedulePath(name: string): string {

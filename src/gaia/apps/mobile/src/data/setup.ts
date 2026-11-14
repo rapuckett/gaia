@@ -1,10 +1,10 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import type { GaiaClient, SetupCheck, SetupPlan, SetupRunStatus } from '@/api/client.types';
+import type { GaiaClient, PreflightReport, ProvidersResponse, SetupCheck, SetupPlan, SetupRunOptions, SetupRunStatus } from '@/api/client.types';
 import { GaiaError, GaiaNetworkError } from '@/api/errors';
 
 import { useGaiaClient } from './GaiaClientProvider';
@@ -172,5 +172,38 @@ export function useSetupPlan(enabled = true) {
         queryKey: queryKeys.setupPlan,
         enabled: enabled && client !== null,
         queryFn: ({ signal }) => requireClient(client).getSetupPlan({ signal }),
+    });
+}
+
+/** What this PC can run (its graphics chip, and what blocks GAIA's models); read once per setup. */
+export function useSetupPreflight(enabled = true) {
+    const client = useGaiaClient();
+    return useQuery<PreflightReport>({
+        queryKey: ['setupPreflight'],
+        enabled: enabled && client !== null,
+        queryFn: ({ signal }) => requireClient(client).getOnboardingPreflight({ signal }),
+    });
+}
+
+/** The cloud providers, each `blocked` while Local only is on. */
+export function useCloudProviders(enabled = true) {
+    const client = useGaiaClient();
+    return useQuery<ProvidersResponse>({
+        queryKey: ['cloudProviders'],
+        enabled: enabled && client !== null,
+        queryFn: ({ signal }) => requireClient(client).listProviders({ signal }),
+    });
+}
+
+/** `mutate({ options })` starts the setup run; the status poll then follows it. */
+export function useStartSetup() {
+    const client = useGaiaClient();
+    const queryClient = useQueryClient();
+    return useMutation<SetupRunStatus, Error, { options?: SetupRunOptions }>({
+        mutationFn: ({ options }) => requireClient(client).startSetup(false, false, options),
+        onSuccess: (status) => {
+            queryClient.setQueryData(queryKeys.setupStatus, status);
+            void queryClient.invalidateQueries({ queryKey: queryKeys.setupStatus });
+        },
     });
 }

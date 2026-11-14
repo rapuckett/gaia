@@ -16,6 +16,8 @@ import type {
     SessionList,
     SessionSearchResponse,
     SessionSearchResult,
+    PreflightReport,
+    ProvidersResponse,
     SetupCheck,
     SetupPlan,
     SetupRunStatus,
@@ -58,6 +60,8 @@ export interface FakeClientData {
     /** Each status read answers the next entry (the last one repeats); defaults to idle. */
     setupStatuses?: (SetupRunStatus | Error)[];
     setupPlan?: SetupPlan;
+    preflight?: PreflightReport;
+    providers?: ProvidersResponse;
     documents?: DocumentListResponse;
 }
 
@@ -271,6 +275,14 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         async getSetupPlan() {
             if (!data.setupPlan) throw new GaiaApiError(503, 'This fake client was given no setup plan.');
             return data.setupPlan;
+        },
+        async getOnboardingPreflight() {
+            if (!data.preflight) throw new GaiaApiError(503, 'This fake client was given no preflight report.');
+            return data.preflight;
+        },
+        async listProviders() {
+            if (!data.providers) throw new GaiaApiError(503, 'This fake client was given no providers.');
+            return data.providers;
         },
         async startSetup(skipChatModel, gaiaLemonade = false, options = {}) {
             setupStarts.push({ skipChatModel, gaiaLemonade, upgradeEmbedded: !!options.upgradeEmbedded });

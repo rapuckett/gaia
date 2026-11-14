@@ -7,6 +7,8 @@ import type {
     Message,
     ModelNeed,
     ModelNeedJob,
+    PreflightReport,
+    ProvidersResponse,
     Schedule,
     Session,
     SetupCheck,
@@ -23,6 +25,8 @@ export type {
     Message,
     ModelNeed,
     ModelNeedJob,
+    PreflightReport,
+    ProvidersResponse,
     Schedule,
     Session,
     SetupCheck,
@@ -165,6 +169,10 @@ export interface GaiaClient {
     checkSetup(skipChatModel: boolean, options?: RequestOptions): Promise<SetupCheck>;
     /** What setup will use and download, before it starts; `catalog` marks partial downloads. */
     getSetupPlan(options?: RequestOptions): Promise<SetupPlan>;
+    /** What this PC can run: its graphics chip, and `blockers` when it can't run GAIA's models. */
+    getOnboardingPreflight(options?: RequestOptions): Promise<PreflightReport>;
+    /** The cloud providers; `blocked` is set on each while Local only is on. */
+    listProviders(options?: RequestOptions): Promise<ProvidersResponse>;
     startSetup(
         skipChatModel: boolean,
         gaiaLemonade?: boolean,

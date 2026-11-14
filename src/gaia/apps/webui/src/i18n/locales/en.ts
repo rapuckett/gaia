@@ -1556,6 +1556,7 @@ export const enMessages = {
     'setup.plan.start': 'Download and start',
     'setup.plan.startNoDownload': 'Test and start',
     'setup.plan.customize': 'Customize',
+    'setup.plan.pcOnly': 'Change this on the PC running GAIA',
     'setup.plan.cloud': 'Use a cloud model',
     'setup.plan.cloudLabel': 'Cloud model',
     'setup.plan.cloudWhy.stillLocal': "The chat model runs on the provider's computers. GAIA still sets up graphics support and a small model on this PC to search your files and remember things.",
