@@ -14,12 +14,15 @@ import type {
     Message,
     MessageList,
     ModelNeed,
+    ParsedSchedule,
     Schedule,
     ResourceUsage,
     Session,
     SessionList,
     SessionSearchResponse,
     SessionSearchResult,
+    SetupCheck,
+    SetupPlan,
     SetupRunStatus,
     StartScreen,
     StreamEvent,
@@ -63,6 +66,11 @@ export interface FakeClientData {
     searchLimit?: number;
     /** Makes every search fail with this message. */
     searchError?: string;
+    /** Each check answers the next entry (the last one repeats); an Error entry is thrown. */
+    setupChecks?: (SetupCheck | Error)[];
+    /** Each status read answers the next entry (the last one repeats); defaults to idle. */
+    setupStatuses?: (SetupRunStatus | Error)[];
+    setupPlan?: SetupPlan;
     documents?: DocumentListResponse;
 }
 
@@ -77,6 +85,7 @@ export interface FakeGaiaClient extends GaiaClient {
     readonly followUps: { sessionId: string; text: string }[];
     readonly restarts: { confirm: boolean }[];
     readonly downloads: { modelId: string; acknowledgeLowDisk: boolean }[];
+    readonly setupStarts: { skipChatModel: boolean; gaiaLemonade: boolean; upgradeEmbedded: boolean }[];
     readonly detached: { sessionId: string; docId: string }[];
 }
 
@@ -104,6 +113,14 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         return schedule;
     }
     const followUps: FakeGaiaClient['followUps'] = [];
+    const setupStarts: FakeGaiaClient['setupStarts'] = [];
+    let checkAt = 0;
+    let statusAt = 0;
+    const nextOf = <T,>(list: (T | Error)[], at: number): T => {
+        const item = list[Math.min(at, list.length - 1)]!;
+        if (item instanceof Error) throw item;
+        return item;
+    };
     const detached: FakeGaiaClient['detached'] = [];
 
     function findSession(sessionId: string): Session {
@@ -123,6 +140,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         followUps,
         restarts,
         downloads,
+        setupStarts,
         detached,
         async health(): Promise<HealthResponse> {
             return { status: 'ok', service: 'gaia-agent-ui' };
@@ -264,6 +282,43 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         async listSchedules() {
             return { schedules: [...schedules], total: schedules.length };
         },
+        async createSchedule(request) {
+            if (schedules.some((s) => s.name === request.name)) throw new GaiaApiError(409, `Schedule '${request.name}' already exists`);
+            const schedule: Schedule = {
+                id: `schedule-${schedules.length + 1}`,
+                name: request.name,
+                interval_seconds: 3600,
+                prompt: request.prompt,
+                status: 'active',
+                created_at: new Date().toISOString(),
+                last_run_at: null,
+                next_run_at: new Date(Date.now() + 3_600_000).toISOString(),
+                last_result: null,
+                run_count: 0,
+                error_count: 0,
+                session_id: null,
+                schedule_config: null,
+                description: request.interval,
+                description_parts: { kind: 'every', count: 1, unit: 'hour', days: null, time: null, start_hour: null, end_hour: null },
+                last_error: null,
+            };
+            schedules.push(schedule);
+            return { ...schedule };
+        },
+        async parseSchedule(input): Promise<ParsedSchedule> {
+            const valid = /every|daily|\d/i.test(input);
+            return {
+                interval_seconds: valid ? 3600 : 0,
+                time_of_day: null,
+                start_hour: null,
+                end_hour: null,
+                days_of_week: null,
+                description: valid ? input : "Couldn't read that schedule",
+                description_parts: valid ? { kind: 'every', count: 1, unit: 'hour', days: null, time: null, start_hour: null, end_hour: null } : null,
+                next_run_at: valid ? new Date(Date.now() + 3_600_000).toISOString() : null,
+                valid,
+            };
+        },
         async updateScheduleStatus(name, status) {
             const schedule = findSchedule(name);
             scheduleActions.push({ action: status === 'paused' ? 'pause' : 'resume', name });
@@ -306,6 +361,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             return data.setupStatus ?? { state: 'running' };
         },
         async getSetupStatus() {
+            if (data.setupStatuses?.length) return nextOf(data.setupStatuses, statusAt++);
             return data.setupStatus ?? { state: 'idle' };
         },
         async cancelSetup() {
@@ -314,6 +370,18 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         async getStartScreen() {
             if (!data.start) throw new GaiaApiError(503, 'This fake client was given no start screen.');
             return data.start;
+        },
+        async checkSetup() {
+            if (!data.setupChecks?.length) throw new GaiaApiError(503, 'This fake client was given no setup checks.');
+            return nextOf(data.setupChecks, checkAt++);
+        },
+        async getSetupPlan() {
+            if (!data.setupPlan) throw new GaiaApiError(503, 'This fake client was given no setup plan.');
+            return data.setupPlan;
+        },
+        async startSetup(skipChatModel, gaiaLemonade = false, options = {}) {
+            setupStarts.push({ skipChatModel, gaiaLemonade, upgradeEmbedded: !!options.upgradeEmbedded });
+            return { state: 'running', upgrade_embedded: !!options.upgradeEmbedded };
         },
     };
 }
