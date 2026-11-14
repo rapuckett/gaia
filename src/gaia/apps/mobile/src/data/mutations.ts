@@ -66,3 +66,43 @@ export function useAnswerQuestion() {
         mutationFn: (request) => answerQuestion(requireClient(client), request),
     });
 }
+
+/** `mutate({ sessionId, title })` renames a chat and pins the title against the auto-retitler (#2165). */
+export function useRenameSession() {
+    const client = useGaiaClient();
+    const queryClient = useQueryClient();
+    return useMutation<Session, Error, { sessionId: string; title: string }>({
+        mutationFn: ({ sessionId, title }) =>
+            requireClient(client).updateSession(sessionId, { title, title_is_custom: true }),
+        onSuccess: (session) => {
+            queryClient.setQueryData(queryKeys.session(session.id), session);
+            void queryClient.invalidateQueries({ queryKey: queryKeys.sessions });
+        },
+    });
+}
+
+/** `mutate(sessionId)` flips the chat's private mode. */
+export function useTogglePrivate() {
+    const client = useGaiaClient();
+    const queryClient = useQueryClient();
+    return useMutation<Session, Error, string>({
+        mutationFn: (sessionId) => requireClient(client).toggleSessionPrivate(sessionId),
+        onSuccess: (session) => {
+            queryClient.setQueryData(queryKeys.session(session.id), session);
+            void queryClient.invalidateQueries({ queryKey: queryKeys.sessions });
+        },
+    });
+}
+
+/** `mutate({ sessionId, docId })` takes a document out of the chat; the library keeps it. */
+export function useDetachDocument() {
+    const client = useGaiaClient();
+    const queryClient = useQueryClient();
+    return useMutation<void, Error, { sessionId: string; docId: string }>({
+        mutationFn: ({ sessionId, docId }) => requireClient(client).detachDocument(sessionId, docId),
+        onSuccess: (_result, { sessionId }) => {
+            void queryClient.invalidateQueries({ queryKey: queryKeys.session(sessionId) });
+            void queryClient.invalidateQueries({ queryKey: queryKeys.sessions });
+        },
+    });
+}

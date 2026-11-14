@@ -3,10 +3,14 @@
 
 import type { FollowUpOutcome } from '@webui/utils/messageQueue';
 import type {
+    AgentMcpServer,
+    ConnectorListEntry,
     LocalModelStatus,
     Message,
     ModelNeed,
     ModelNeedJob,
+    ParsedSchedule,
+    ResourceUsage,
     Schedule,
     Session,
     SetupCheck,
@@ -19,10 +23,15 @@ import type {
 import type { CreateSessionRequest, DocumentListResponse, SessionSearchResponse, ToolConfirmRequest, UserInputRequest as ApiUserInputRequest } from '@webui/types/api.gen';
 
 export type {
+    AgentMcpServer,
+    ConnectorListEntry,
+    ConnectorRow,
     LocalModelStatus,
     Message,
     ModelNeed,
     ModelNeedJob,
+    ParsedSchedule,
+    ResourceUsage,
     Schedule,
     Session,
     SetupCheck,
@@ -31,6 +40,7 @@ export type {
     StartScreen,
     StreamEvent,
     SystemStatus,
+    UnavailableConnectorRow,
 } from '@webui/types';
 export type { CreateSessionRequest, DocumentListResponse, SessionSearchResponse, SessionSearchResult, ToolConfirmRequest } from '@webui/types/api.gen';
 
@@ -47,9 +57,22 @@ export interface MessageList {
     total: number;
 }
 
+export interface ConnectorList {
+    connectors: ConnectorListEntry[];
+}
+
+export interface AgentMcpList {
+    agent_mcps: AgentMcpServer[];
+}
+
 export interface ScheduleList {
     schedules: Schedule[];
     total: number;
+}
+
+export interface SessionUpdate {
+    title?: string;
+    title_is_custom?: boolean;
 }
 
 export interface HealthResponse {
@@ -91,6 +114,14 @@ export interface SetupRunOptions {
     upgradeEmbedded?: boolean;
 }
 
+export interface CreateScheduleRequest {
+    name: string;
+    interval: string;
+    prompt: string;
+    /** IANA zone the times are in; the device's. */
+    timezone?: string;
+}
+
 export interface DeleteScheduleResult {
     deleted: boolean;
 }
@@ -121,6 +152,14 @@ export interface GaiaClient {
     /** Chats whose title or messages match `query`, newest first; `truncated` says the backend capped the list. */
     searchSessions(query: string, includeAutomated: boolean, options?: RequestOptions): Promise<SessionSearchResponse>;
     getMessages(sessionId: string, options?: RequestOptions): Promise<MessageList>;
+    /** Renames a chat; the title is pinned against the auto-retitler. */
+    updateSession(sessionId: string, update: SessionUpdate, options?: RequestOptions): Promise<Session>;
+    /** Flips the chat's private mode (not saved to memory) and returns the chat. */
+    toggleSessionPrivate(sessionId: string, options?: RequestOptions): Promise<Session>;
+    /** Removes a document from this chat; the library keeps it. */
+    detachDocument(sessionId: string, docId: string, options?: RequestOptions): Promise<void>;
+    /** This PC's CPU, memory, GPU, NPU and network use. */
+    getResourceUsage(options?: RequestOptions): Promise<ResourceUsage>;
     /** Deletes the message and everything after it, so the exchange can be asked again. */
     deleteMessagesFrom(sessionId: string, messageId: number, options?: RequestOptions): Promise<DeleteMessagesResult>;
     /** Hands a message to the running turn, read at its next step; rejects when the turn can't take it. */
@@ -139,7 +178,14 @@ export interface GaiaClient {
     confirmTool(request: ToolConfirmRequest, options?: RequestOptions): Promise<ConfirmToolResult>;
     /** Answers a `needs_input` question; the turn continues once GAIA has it. */
     sendUserInput(request: UserInputRequest, options?: RequestOptions): Promise<UserInputResult>;
+    listConnectors(options?: RequestOptions): Promise<ConnectorList>;
+    /** Servers that custom agents declare in their own mcp_servers.json; read-only. */
+    listAgentMcps(options?: RequestOptions): Promise<AgentMcpList>;
     listSchedules(options?: RequestOptions): Promise<ScheduleList>;
+    /** Creates a schedule; `interval` is the plain-words "when to run", parsed by the PC. 409 when the name is taken. */
+    createSchedule(request: CreateScheduleRequest, options?: RequestOptions): Promise<Schedule>;
+    /** Reads a plain-words "when to run" without saving it, for the form's live preview. */
+    parseSchedule(input: string, timezone: string | undefined, options?: RequestOptions): Promise<ParsedSchedule>;
     /** Pauses or resumes a schedule; answers with the schedule as it now is. */
     updateScheduleStatus(name: string, status: 'active' | 'paused', options?: RequestOptions): Promise<Schedule>;
     /** Runs a schedule once now (409 while a run is in flight); its next scheduled run stays as it was. */
