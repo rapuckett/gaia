@@ -100,7 +100,9 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
         else stream.send(message);
     };
     const sendRef = useRef(send);
-    sendRef.current = send;
+    useEffect(() => {
+        sendRef.current = send;
+    });
     useEffect(() => registerOpenChat((text) => void sendRef.current(text)), []);
 
     const tryAgain = (replyId: number | null) => {
