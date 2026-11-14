@@ -54,6 +54,8 @@ export function ListsGallery() {
     const [many, setMany] = useState<string[]>(['a']);
     const [chip, setChip] = useState(true);
     const [name, setName] = useState('');
+    const [banner, setBanner] = useState(true);
+    const [noticeOpen, setNoticeOpen] = useState(true);
     const long = t('chatError.context');
     const options = [
         { value: 'a', label: t('modelMenu.ready'), description: t('logs.hint.service') },
@@ -66,7 +68,10 @@ export function ListsGallery() {
     ];
 
     return (
-        <Screen scroll>
+        <Screen
+            scroll
+            banner={banner ? <Notice tone="warning" title={t('settings.custom.warning')} message={t('chatError.connection')} onDismiss={() => setBanner(false)} /> : null}
+        >
             <Stack paddingX="lg" paddingY="lg" gap="md">
                 <Section title="ListRow">
                     <ListRow title={t('modelStatus.model')} subtitle={t('row.status.running')} leading={<StatusDot tone="running" label={t('row.status.running')} />} trailing={<Badge label="3" tone="accent" />} onPress={() => {}} />
@@ -128,6 +133,7 @@ export function ListsGallery() {
                     <Notice tone="warning" title={t('settings.custom.warning')} message={long} action={{ label: t('docs.retry'), onPress: () => {} }} />
                     <Notice tone="danger" title={t('activity.filter.error')} message={t('logs.reason.notRunning')} />
                     <Notice tone="success" title={t('activity.filter.success')} />
+                    {noticeOpen ? <Notice tone="info" title={t('notifications.filter.info')} message={long} onDismiss={() => setNoticeOpen(false)} /> : null}
                 </Section>
 
                 <Section title='Text dir="auto"'>

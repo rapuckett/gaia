@@ -8,6 +8,7 @@ import { useWindowDimensions } from 'react-native';
 
 import { createHttpClient } from '@/api/http';
 import { GaiaClientProvider } from '@/data/GaiaClientProvider';
+import { ConnectionBanner } from '@/features/banners/ConnectionBanner';
 import { ModelNeededHost } from '@/features/model';
 import { AppDrawer } from '@/features/nav/AppDrawer';
 import { INITIAL_ROUTE, PERMANENT_DRAWER_MIN_WIDTH } from '@/features/nav/navigation';
@@ -15,7 +16,7 @@ import { useDirection } from '@/i18n/useT';
 import { applyDirection } from '@/platform/direction';
 import { platformFetch } from '@/platform/fetch';
 import { useConnectionStore } from '@/state/connection';
-import { UIProvider } from '@/ui';
+import { ScreenBannerProvider, UIProvider } from '@/ui';
 
 // A chat opened cold (deep link, notification) has the home screen beneath it.
 export const unstable_settings = { anchor: INITIAL_ROUTE };
@@ -39,19 +40,21 @@ export default function RootLayout() {
         <QueryClientProvider client={queryClient}>
             <GaiaClientProvider client={client}>
                 <UIProvider>
-                    <Drawer
-                        drawerContent={(props) => <AppDrawer {...props} />}
-                        backBehavior="initialRoute"
-                        screenOptions={{
-                            headerShown: false,
-                            drawerPosition: dir === 'rtl' ? 'right' : 'left',
-                            drawerType: width >= PERMANENT_DRAWER_MIN_WIDTH ? 'permanent' : 'front',
-                        }}
-                    >
-                        {ROUTES.map((name) => (
-                            <Drawer.Screen key={name} name={name} />
-                        ))}
-                    </Drawer>
+                    <ScreenBannerProvider banner={<ConnectionBanner />}>
+                        <Drawer
+                            drawerContent={(props) => <AppDrawer {...props} />}
+                            backBehavior="initialRoute"
+                            screenOptions={{
+                                headerShown: false,
+                                drawerPosition: dir === 'rtl' ? 'right' : 'left',
+                                drawerType: width >= PERMANENT_DRAWER_MIN_WIDTH ? 'permanent' : 'front',
+                            }}
+                        >
+                            {ROUTES.map((name) => (
+                                <Drawer.Screen key={name} name={name} />
+                            ))}
+                        </Drawer>
+                    </ScreenBannerProvider>
                     <ModelNeededHost />
                 </UIProvider>
             </GaiaClientProvider>
