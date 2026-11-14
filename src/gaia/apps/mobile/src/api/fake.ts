@@ -6,11 +6,14 @@ import type {
     FollowUpOutcome,
     GaiaClient,
     HealthResponse,
+    LocalModelStatus,
     Message,
     MessageList,
+    ModelNeed,
     Schedule,
     Session,
     SessionList,
+    SetupRunStatus,
     StartScreen,
     StreamEvent,
     SystemStatus,
@@ -32,6 +35,12 @@ export interface FakeClientData {
     /** Makes sendFollowUp reject, as a turn that can't take the message does. */
     followUpRefusal?: GaiaApiError;
     status?: SystemStatus;
+    /** What getLocalModelStatus answers; restarting it records the call. */
+    localModel?: LocalModelStatus;
+    /** What getModelNeed answers, by job; a job not listed needs nothing. */
+    modelNeeds?: Partial<Record<ModelNeed['job'], ModelNeed>>;
+    /** What getSetupStatus answers. */
+    setupStatus?: SetupRunStatus;
     start?: StartScreen;
 }
 
@@ -44,6 +53,8 @@ export interface FakeGaiaClient extends GaiaClient {
     readonly answers: UserInputRequest[];
     readonly scheduleActions: { action: 'pause' | 'resume' | 'run' | 'delete'; name: string }[];
     readonly followUps: { sessionId: string; text: string }[];
+    readonly restarts: { confirm: boolean }[];
+    readonly downloads: { modelId: string; acknowledgeLowDisk: boolean }[];
 }
 
 export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
@@ -57,6 +68,8 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
     const deleted: FakeGaiaClient['deleted'] = [];
     const confirmations: ToolConfirmRequest[] = [];
     const answers: UserInputRequest[] = [];
+    const restarts: FakeGaiaClient['restarts'] = [];
+    const downloads: FakeGaiaClient['downloads'] = [];
     const schedules = [...(data.schedules ?? [])];
     const scheduleActions: FakeGaiaClient['scheduleActions'] = [];
 
@@ -82,6 +95,8 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         answers,
         scheduleActions,
         followUps,
+        restarts,
+        downloads,
         async health(): Promise<HealthResponse> {
             return { status: 'ok', service: 'gaia-agent-ui' };
         },
@@ -172,6 +187,27 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         async getSystemStatus() {
             if (!data.status) throw new GaiaApiError(503, 'This fake client was given no system status.');
             return data.status;
+        },
+        async getLocalModelStatus() {
+            if (!data.localModel) throw new GaiaApiError(503, 'This fake client was given no model status.');
+            return data.localModel;
+        },
+        async restartLocalModel(confirm) {
+            restarts.push({ confirm });
+            return { status: 'restarting', model: data.localModel?.model ?? '', starting_server: false };
+        },
+        async getModelNeed(job) {
+            return data.modelNeeds?.[job] ?? { job, needed: false, model: null, disk_free_gb: null };
+        },
+        async downloadSetupModel(modelId, acknowledgeLowDisk) {
+            downloads.push({ modelId, acknowledgeLowDisk });
+            return data.setupStatus ?? { state: 'running' };
+        },
+        async getSetupStatus() {
+            return data.setupStatus ?? { state: 'idle' };
+        },
+        async cancelSetup() {
+            return { cancelled: true };
         },
         async getStartScreen() {
             if (!data.start) throw new GaiaApiError(503, 'This fake client was given no start screen.');

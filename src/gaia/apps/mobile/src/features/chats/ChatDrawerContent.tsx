@@ -6,6 +6,7 @@ import { useMemo } from 'react';
 import { APP_NAME } from '@webui/utils/constants';
 
 import { useSessions } from '@/data';
+import { ModelStatusPill } from '@/features/model';
 import { describeError, useT } from '@/i18n/useT';
 import {
     EmptyState,
@@ -69,7 +70,7 @@ export function ChatDrawerContent({ activeId, onSelect, onClose, onNewChat, live
     const state = chatListState(sessions, sections);
 
     return (
-        <Screen edges={['top', 'bottom', 'start']} header={<Header onClose={onClose} onNewChat={onNewChat} />}>
+        <Screen edges={['top', 'bottom', 'start']} header={<Header onClose={onClose} onNewChat={onNewChat} />} footer={<ModelStatusPill />}>
             {error ? (
                 <Notice tone="danger" message={rowErrorMessage(error.kind, error.error, t)} />
             ) : null}

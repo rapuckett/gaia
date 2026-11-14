@@ -8,8 +8,14 @@ import {
     AGENT_EVENT_TYPES,
     ATTACH_HEADER_TIMEOUT_MS,
     CONFIRM_DELETE_MS,
+    DOWNLOAD_MISS_LIMIT,
+    DOWNLOAD_NO_ROW_LIMIT,
+    DOWNLOAD_POLL_MS,
     ENDPOINTS,
     MESSAGE_PAGE_SIZE,
+    MODEL_NEED_CHECK_LIMIT_MS,
+    MODEL_STATUS_OPEN_POLL_MS,
+    PC_ONLY_REFUSAL,
     QUEUED_IDLE_MS,
     RESOLVES_PROMPTS,
     SEND_HEADER_TIMEOUT_MS,
@@ -42,7 +48,7 @@ function webuiSource(file: string): string {
 
 // `export const NAME = 10 * 60_000;` -> 600000; anything but a product of literals fails the test.
 function tsNumber(file: string, name: string): number {
-    const match = new RegExp(`export const ${name} = ([^;]+);`).exec(webuiSource(file));
+    const match = new RegExp(`(?:export )?const ${name} = ([^;]+);`).exec(webuiSource(file));
     if (!match) throw new Error(`${name} not found in webui ${file}; update api/constants.test.ts`);
     return match[1]!.split('*').reduce((product, factor) => product * Number(factor.trim().replace(/_/g, '')), 1);
 }
@@ -84,6 +90,8 @@ describe('endpoints', () => {
     );
     const methods: Record<keyof typeof ENDPOINTS, string[]> = {
         health: ['GET'],
+        localModelRestart: ['POST'],
+        localModelStatus: ['GET'],
         schedule: ['DELETE', 'PUT'],
         scheduleRun: ['POST'],
         schedules: ['GET'],
@@ -91,6 +99,10 @@ describe('endpoints', () => {
         session: ['GET'],
         sessionMessages: ['GET'],
         sessionMessagesAndBelow: ['DELETE'],
+        setupCancel: ['POST'],
+        setupModelDownload: ['POST'],
+        setupNeeds: ['GET'],
+        setupStatus: ['GET'],
         chatSend: ['POST'],
         chatAttach: ['GET'],
         chatCancel: ['POST'],
@@ -108,6 +120,13 @@ describe('endpoints', () => {
 
     it.each(calls)('%s has a route under src/gaia/ui', (call) => {
         expect(decorators).toContain(call);
+    });
+});
+
+describe('log refusal', () => {
+    it("is the PC's refusal in ui/security.py", () => {
+        const security = readFileSync(join(UI_DIR, 'security.py'), 'utf-8').replace(/"\s*\n\s*"/g, '');
+        expect(security).toContain(PC_ONLY_REFUSAL);
     });
 });
 
@@ -131,6 +150,11 @@ describe("webui's stream rules", () => {
         ['services/api.ts', 'ATTACH_HEADER_TIMEOUT_MS', ATTACH_HEADER_TIMEOUT_MS],
         ['services/statusPoll.ts', 'STATUS_POLL_MS', STATUS_POLL_MS],
         ['components/ScheduleManager.tsx', 'CONFIRM_DELETE_MS', CONFIRM_DELETE_MS],
+        ['components/ModelStatusPill.tsx', 'POLL_MS', MODEL_STATUS_OPEN_POLL_MS],
+        ['components/ModelNeededDialog.tsx', 'POLL_MS', DOWNLOAD_POLL_MS],
+        ['components/ModelNeededDialog.tsx', 'NO_ROW_LIMIT', DOWNLOAD_NO_ROW_LIMIT],
+        ['components/ModelNeededDialog.tsx', 'MISS_LIMIT', DOWNLOAD_MISS_LIMIT],
+        ['stores/modelNeededStore.ts', 'CHECK_LIMIT_MS', MODEL_NEED_CHECK_LIMIT_MS],
     ])('%s %s', (file, name, ours) => {
         expect(ours).toBe(tsNumber(file, name));
     });
