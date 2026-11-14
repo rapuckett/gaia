@@ -20,7 +20,7 @@ import shutil
 import threading
 import uuid
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse
@@ -43,6 +43,7 @@ from ..models import (
     FileStatusResponse,
     FileUploadResponse,
     OpenFileRequest,
+    WireModel,
 )
 from ..security import require_local_pc
 from ..turn_summary import is_openable
@@ -98,6 +99,13 @@ SEARCH_STALL_GRACE_SEC = 1.0
 SEARCH_SETUP_ALLOWANCE_SEC = 1.0
 
 router = APIRouter(tags=["files"])
+
+
+class OpenFileResponse(WireModel):
+    """The resolved path that was opened."""
+
+    status: Literal["ok"]
+    path: str
 
 
 # ── Upload ───────────────────────────────────────────────────────────────────
@@ -450,7 +458,12 @@ async def browse_files(path: Optional[str] = None):
 
 # Opens a window or an app on the PC, which a remote caller can neither see
 # nor close.
-@router.post("/api/files/open", dependencies=[Depends(require_local_pc)])
+@router.post(
+    "/api/files/open",
+    dependencies=[Depends(require_local_pc)],
+    response_model=OpenFileResponse,
+    response_model_exclude_unset=True,
+)
 async def open_file_or_folder(request: OpenFileRequest):
     """Open a file or its containing folder in the system file explorer.
 
@@ -929,7 +942,16 @@ async def preview_file(path: str, lines: int = 50):
 # ── Serve Local Image ─────────────────────────────────────────────────────────
 
 
-@router.get("/api/files/image")
+@router.get(
+    "/api/files/image",
+    response_class=FileResponse,
+    responses={
+        200: {
+            "content": {"application/octet-stream": {}},
+            "description": "The image file.",
+        }
+    },
+)
 async def serve_local_image(path: str):
     """Serve a local image file from the user's home directory.
 
@@ -986,7 +1008,16 @@ async def serve_local_image(path: str):
 # ── Serve Generated Media ────────────────────────────────────────────────────
 
 
-@router.get("/api/media/{kind}/{name}")
+@router.get(
+    "/api/media/{kind}/{name}",
+    response_class=FileResponse,
+    responses={
+        200: {
+            "content": {"application/octet-stream": {}},
+            "description": "The generated image or audio file.",
+        }
+    },
+)
 async def serve_generated_media(kind: str, name: str):
     """Serve an image or audio file GAIA generated, for the chat's inline cards.
 

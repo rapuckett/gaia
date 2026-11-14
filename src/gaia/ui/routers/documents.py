@@ -20,7 +20,7 @@ import tempfile
 import unicodedata
 import uuid
 from pathlib import Path
-from typing import List
+from typing import List, Literal, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
@@ -36,6 +36,7 @@ from ..models import (
     DocumentUploadRequest,
     IndexFolderRequest,
     IndexFolderResponse,
+    WireModel,
 )
 from ..utils import (
     ALLOWED_EXTENSIONS,
@@ -54,6 +55,38 @@ from ..utils import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["documents"])
+
+
+class IndexProgressResponse(WireModel):
+    """How far a running index has got."""
+
+    phase: Literal["reading", "embedding"]
+    done: int
+    total: Optional[int]
+
+
+class DocumentStatusResponse(WireModel):
+    """A document's indexing status."""
+
+    id: str
+    indexing_status: str
+    chunk_count: int
+    is_active: bool
+    progress: Optional[IndexProgressResponse]
+
+
+class DocumentCancelResponse(WireModel):
+    """Confirmation that a document's indexing was cancelled."""
+
+    cancelled: bool
+    id: str
+
+
+class DocumentDeleteResponse(WireModel):
+    """Confirmation that a document was removed from the library."""
+
+    deleted: bool
+
 
 # ── Blob upload configuration ────────────────────────────────────────────────
 
@@ -546,7 +579,11 @@ async def upload_document_blob(
     return doc_to_response(doc)
 
 
-@router.get("/api/documents/{doc_id}/status")
+@router.get(
+    "/api/documents/{doc_id}/status",
+    response_model=DocumentStatusResponse,
+    response_model_exclude_unset=True,
+)
 async def get_document_status(
     doc_id: str,
     db: ChatDatabase = Depends(get_db),
@@ -573,7 +610,16 @@ _INLINE_MEDIA_TYPES = {
 }
 
 
-@router.get("/api/documents/{doc_id}/file")
+@router.get(
+    "/api/documents/{doc_id}/file",
+    response_class=FileResponse,
+    responses={
+        200: {
+            "content": {"application/octet-stream": {}},
+            "description": "The document's file, in its own media type.",
+        }
+    },
+)
 async def get_document_file(doc_id: str, db: ChatDatabase = Depends(get_db)):
     """Serve a library document's file inline, so a citation can open it at its page."""
     doc = db.get_document(doc_id)
@@ -610,7 +656,11 @@ async def get_document_file(doc_id: str, db: ChatDatabase = Depends(get_db)):
     return harden_served_file(response, path.name)
 
 
-@router.post("/api/documents/{doc_id}/cancel")
+@router.post(
+    "/api/documents/{doc_id}/cancel",
+    response_model=DocumentCancelResponse,
+    response_model_exclude_unset=True,
+)
 async def cancel_indexing(
     doc_id: str,
     db: ChatDatabase = Depends(get_db),
@@ -695,7 +745,11 @@ async def reindex_document(
     return doc_to_response(updated)
 
 
-@router.delete("/api/documents/{doc_id}")
+@router.delete(
+    "/api/documents/{doc_id}",
+    response_model=DocumentDeleteResponse,
+    response_model_exclude_unset=True,
+)
 async def delete_document(doc_id: str, db: ChatDatabase = Depends(get_db)):
     """Remove a document from the library.
 
