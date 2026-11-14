@@ -27,11 +27,16 @@ import type {
     FollowUpResult,
     GaiaClient,
     HealthResponse,
+    LocalModelStatus,
     MessageList,
+    ModelNeed,
+    RestartModelResult,
     RequestOptions,
     Schedule,
     ScheduleList,
     SessionList,
+    SessionSearchResponse,
+    SetupRunStatus,
     UserInputResult,
 } from './client.types';
 import {
@@ -47,6 +52,7 @@ import {
     sessionMessagesAndBelowPath,
     sessionMessagesPath,
     sessionPath,
+    setupNeedsPath,
     STREAM_IDLE_MS,
     UI_HEADERS,
 } from './constants';
@@ -247,6 +253,11 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             return getJson<FollowUpOutcome>(followupOutcomePath(sessionId), options?.signal);
         },
 
+        searchSessions(query: string, includeAutomated: boolean, options?: RequestOptions): Promise<SessionSearchResponse> {
+            const params = new URLSearchParams({ q: query, include_automated: String(includeAutomated) });
+            return getJson<SessionSearchResponse>(`${ENDPOINTS.sessionSearch}?${params}`, options?.signal);
+        },
+
         async getMessages(sessionId: string, options?: RequestOptions): Promise<MessageList> {
             const path = sessionMessagesPath(sessionId);
             const first = await getJson<MessageList>(`${path}?limit=${MESSAGE_PAGE_SIZE}&offset=0`, options?.signal);
@@ -320,16 +331,40 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             return getJson<SystemStatus>(ENDPOINTS.systemStatus, options?.signal);
         },
 
+        getLocalModelStatus(options) {
+            return getJson<LocalModelStatus>(ENDPOINTS.localModelStatus, options?.signal);
+        },
+
+        restartLocalModel(confirm, options) {
+            return postJson<RestartModelResult>(ENDPOINTS.localModelRestart, { confirm }, options?.signal);
+        },
+
+        getModelNeed(job, options) {
+            return getJson<ModelNeed>(setupNeedsPath(job), options?.signal);
+        },
+
+        downloadSetupModel(modelId, acknowledgeLowDisk, options) {
+            return postJson<SetupRunStatus>(
+                ENDPOINTS.setupModelDownload,
+                { model_id: modelId, acknowledge_low_disk: acknowledgeLowDisk, keep_trying: false },
+                options?.signal,
+            );
+        },
+
+        getSetupStatus(options) {
+            return getJson<SetupRunStatus>(ENDPOINTS.setupStatus, options?.signal);
+        },
+
+        cancelSetup(modelId, options) {
+            return postJson<{ cancelled: boolean }>(ENDPOINTS.setupCancel, { model_id: modelId }, options?.signal);
+        },
+
         getStartScreen(options) {
             return getJson<StartScreen>(ENDPOINTS.onboardingStart, options?.signal);
         },
 
         checkSetup(skipChatModel, options) {
             return getJson<SetupCheck>(`${ENDPOINTS.setupCheck}?skip_chat_model=${skipChatModel}`, options?.signal);
-        },
-
-        getSetupStatus(options) {
-            return getJson<SetupRunStatus>(ENDPOINTS.setupStatus, options?.signal);
         },
 
         getSetupPlan(options) {

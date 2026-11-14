@@ -134,16 +134,17 @@ export function useSetupGate() {
     useEffect(() => {
         if (!client) return undefined;
         const ticket = ++latest.current;
+        let current = true;
         void runSetupCheck(client, {
             waitForStart: true,
             onUpgrading: () => {
-                if (ticket === latest.current) setGate({ state: 'upgrading' });
+                if (current && ticket === latest.current) setGate({ state: 'upgrading' });
             },
         }).then((next) => {
-            if (ticket === latest.current) setGate(next);
+            if (current && ticket === latest.current) setGate(next);
         });
         return () => {
-            latest.current++;
+            current = false;
         };
     }, [client]);
 

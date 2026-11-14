@@ -8,6 +8,7 @@ import { useWindowDimensions } from 'react-native';
 
 import { createHttpClient } from '@/api/http';
 import { GaiaClientProvider } from '@/data/GaiaClientProvider';
+import { ModelNeededHost } from '@/features/model';
 import { AppDrawer } from '@/features/nav/AppDrawer';
 import { INITIAL_ROUTE, PERMANENT_DRAWER_MIN_WIDTH } from '@/features/nav/navigation';
 import { SetupGate } from '@/features/setup/SetupGate';
@@ -53,6 +54,7 @@ export default function RootLayout() {
                                 <Drawer.Screen key={name} name={name} />
                             ))}
                         </Drawer>
+                        <ModelNeededHost />
                     </SetupGate>
                 </UIProvider>
             </GaiaClientProvider>

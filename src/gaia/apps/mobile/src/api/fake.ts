@@ -6,11 +6,15 @@ import type {
     FollowUpOutcome,
     GaiaClient,
     HealthResponse,
+    LocalModelStatus,
     Message,
     MessageList,
+    ModelNeed,
     Schedule,
     Session,
     SessionList,
+    SessionSearchResponse,
+    SessionSearchResult,
     SetupCheck,
     SetupPlan,
     SetupRunStatus,
@@ -20,6 +24,8 @@ import type {
     ToolConfirmRequest,
     UserInputRequest,
 } from './client.types';
+import { foldText, splitMatch } from '@webui/utils/chatSearch';
+
 import { GaiaApiError } from './errors';
 
 export interface FakeClientData {
@@ -35,7 +41,17 @@ export interface FakeClientData {
     /** Makes sendFollowUp reject, as a turn that can't take the message does. */
     followUpRefusal?: GaiaApiError;
     status?: SystemStatus;
+    /** What getLocalModelStatus answers; restarting it records the call. */
+    localModel?: LocalModelStatus;
+    /** What getModelNeed answers, by job; a job not listed needs nothing. */
+    modelNeeds?: Partial<Record<ModelNeed['job'], ModelNeed>>;
+    /** What getSetupStatus answers. */
+    setupStatus?: SetupRunStatus;
     start?: StartScreen;
+    /** Most chats a search returns before it says `truncated`. */
+    searchLimit?: number;
+    /** Makes every search fail with this message. */
+    searchError?: string;
     /** Each check answers the next entry (the last one repeats); an Error entry is thrown. */
     setupChecks?: (SetupCheck | Error)[];
     /** Each status read answers the next entry (the last one repeats); defaults to idle. */
@@ -52,6 +68,8 @@ export interface FakeGaiaClient extends GaiaClient {
     readonly answers: UserInputRequest[];
     readonly scheduleActions: { action: 'pause' | 'resume' | 'run' | 'delete'; name: string }[];
     readonly followUps: { sessionId: string; text: string }[];
+    readonly restarts: { confirm: boolean }[];
+    readonly downloads: { modelId: string; acknowledgeLowDisk: boolean }[];
     readonly setupStarts: { skipChatModel: boolean; gaiaLemonade: boolean; upgradeEmbedded: boolean }[];
 }
 
@@ -66,6 +84,8 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
     const deleted: FakeGaiaClient['deleted'] = [];
     const confirmations: ToolConfirmRequest[] = [];
     const answers: UserInputRequest[] = [];
+    const restarts: FakeGaiaClient['restarts'] = [];
+    const downloads: FakeGaiaClient['downloads'] = [];
     const schedules = [...(data.schedules ?? [])];
     const scheduleActions: FakeGaiaClient['scheduleActions'] = [];
 
@@ -99,6 +119,8 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         answers,
         scheduleActions,
         followUps,
+        restarts,
+        downloads,
         setupStarts,
         async health(): Promise<HealthResponse> {
             return { status: 'ok', service: 'gaia-agent-ui' };
@@ -128,6 +150,26 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         async getFollowUpOutcome() {
             const outcome = data.followUpOutcome ?? { taken: [], returned: [] };
             return typeof outcome === 'function' ? outcome() : outcome;
+        },
+        async searchSessions(query): Promise<SessionSearchResponse> {
+            if (data.searchError) throw new GaiaApiError(500, data.searchError);
+            const needle = foldText(query);
+            const results: SessionSearchResult[] = [];
+            for (const s of sessions) {
+                if (foldText(s.title).includes(needle)) {
+                    results.push({ session_id: s.id, title: s.title, field: 'title', snippet: splitMatch(s.title, query)! });
+                    continue;
+                }
+                for (const m of messages[s.id] ?? []) {
+                    const snippet = splitMatch(m.content, query);
+                    if (snippet) {
+                        results.push({ session_id: s.id, title: s.title, field: 'message', snippet });
+                        break;
+                    }
+                }
+            }
+            const limit = data.searchLimit ?? Infinity;
+            return { query, results: results.slice(0, limit), truncated: results.length > limit };
         },
         async getMessages(sessionId): Promise<MessageList> {
             const list = messages[sessionId] ?? [];
@@ -191,6 +233,28 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             if (!data.status) throw new GaiaApiError(503, 'This fake client was given no system status.');
             return data.status;
         },
+        async getLocalModelStatus() {
+            if (!data.localModel) throw new GaiaApiError(503, 'This fake client was given no model status.');
+            return data.localModel;
+        },
+        async restartLocalModel(confirm) {
+            restarts.push({ confirm });
+            return { status: 'restarting', model: data.localModel?.model ?? '', starting_server: false };
+        },
+        async getModelNeed(job) {
+            return data.modelNeeds?.[job] ?? { job, needed: false, model: null, disk_free_gb: null };
+        },
+        async downloadSetupModel(modelId, acknowledgeLowDisk) {
+            downloads.push({ modelId, acknowledgeLowDisk });
+            return data.setupStatus ?? { state: 'running' };
+        },
+        async getSetupStatus() {
+            if (data.setupStatuses?.length) return nextOf(data.setupStatuses, statusAt++);
+            return data.setupStatus ?? { state: 'idle' };
+        },
+        async cancelSetup() {
+            return { cancelled: true };
+        },
         async getStartScreen() {
             if (!data.start) throw new GaiaApiError(503, 'This fake client was given no start screen.');
             return data.start;
@@ -198,10 +262,6 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         async checkSetup() {
             if (!data.setupChecks?.length) throw new GaiaApiError(503, 'This fake client was given no setup checks.');
             return nextOf(data.setupChecks, checkAt++);
-        },
-        async getSetupStatus() {
-            if (!data.setupStatuses?.length) return { state: 'idle' };
-            return nextOf(data.setupStatuses, statusAt++);
         },
         async getSetupPlan() {
             if (!data.setupPlan) throw new GaiaApiError(503, 'This fake client was given no setup plan.');

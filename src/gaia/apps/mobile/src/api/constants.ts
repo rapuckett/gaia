@@ -10,6 +10,8 @@ export const UI_HEADERS = {
 
 export const ENDPOINTS = {
     health: '/api/health',
+    localModelRestart: '/api/providers/local/restart',
+    localModelStatus: '/api/providers/local/status',
     schedule: '/api/schedules/{name:path}',
     scheduleRun: '/api/schedules/{name:path}/run',
     schedules: '/api/schedules',
@@ -17,7 +19,11 @@ export const ENDPOINTS = {
     session: '/api/sessions/{session_id}',
     sessionMessages: '/api/sessions/{session_id}/messages',
     sessionMessagesAndBelow: '/api/sessions/{session_id}/messages/{message_id}/and-below',
+    sessionSearch: '/api/sessions/search',
+    setupCancel: '/api/setup/cancel',
     setupCheck: '/api/setup/check',
+    setupModelDownload: '/api/setup/models/download',
+    setupNeeds: '/api/setup/needs/{job}',
     setupPlan: '/api/setup/plan',
     setupRun: '/api/setup/run',
     setupStatus: '/api/setup/status',
@@ -39,6 +45,10 @@ export function schedulePath(name: string): string {
 
 export function scheduleRunPath(name: string): string {
     return ENDPOINTS.scheduleRun.replace('{name:path}', encodeURIComponent(name));
+}
+
+export function setupNeedsPath(job: string): string {
+    return ENDPOINTS.setupNeeds.replace('{job}', encodeURIComponent(job));
 }
 
 export function sessionPath(sessionId: string): string {
@@ -65,6 +75,9 @@ export function documentFileUrl(baseUrl: string, docId: string, page?: number): 
     return `${baseUrl.replace(/\/+$/, '')}${path}${page ? `#page=${page}` : ''}`;
 }
 
+/** Typing pauses this long before a search goes out; the web UI's `SEARCH_DEBOUNCE_MS`. */
+export const SEARCH_DEBOUNCE_MS = 200;
+
 export const SESSION_PAGE_SIZE = 200;
 export const MESSAGE_PAGE_SIZE = 100;
 
@@ -80,6 +93,18 @@ export const ATTACH_HEADER_TIMEOUT_MS = 30_000;
 export const SCHEDULES_POLL_MS = 10_000;
 /** How long a Delete button waits for its "Confirm?" press; the web UI's CONFIRM_DELETE_MS. */
 export const CONFIRM_DELETE_MS = 8000;
+/** How often the model status pill re-reads the model server while its sheet is open, and while it is closed. */
+export const MODEL_STATUS_OPEN_POLL_MS = 3_000;
+export const MODEL_STATUS_POLL_MS = 15_000;
+/** How often a model download's progress is read, and how many missing or failed reads end the wait. */
+export const DOWNLOAD_POLL_MS = 1_000;
+export const DOWNLOAD_NO_ROW_LIMIT = 15;
+export const DOWNLOAD_MISS_LIMIT = 5;
+/** The longest the model-needed check may take before the job goes ahead without it. */
+export const MODEL_NEED_CHECK_LIMIT_MS = 8_000;
+/** What the PC answers a log request from a phone; the model server log opens only on the PC (security.py). */
+export const PC_ONLY_REFUSAL =
+    "Do this on the PC running GAIA. It isn't allowed over mobile access, from a paired device or from another computer.";
 /** How often to re-read the PC's status while it is still starting or warming up. */
 export const STATUS_POLL_MS = 5_000;
 
