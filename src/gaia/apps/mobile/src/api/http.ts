@@ -14,6 +14,7 @@ import {
     GaiaStreamDroppedError,
     GaiaStreamError,
     GaiaStreamTimeoutError,
+    parseErrorBody,
     parseErrorDetail,
     type StreamEndpoint,
 } from './errors';
@@ -158,7 +159,7 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
         if (!res.ok) {
             const errorText = await res.text().catch(() => '');
             const detail = parseErrorDetail(errorText);
-            throw res.status === 401 ? new GaiaAuthError(detail) : new GaiaApiError(res.status, detail);
+            throw res.status === 401 ? new GaiaAuthError(detail) : new GaiaApiError(res.status, detail, undefined, undefined, parseErrorBody(errorText));
         }
         return res;
     }
