@@ -1,10 +1,14 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
+import { useMemo } from 'react';
+
 import { useT } from '@/i18n/useT';
 import { Button, Notice, Row, Spinner, Stack, Text } from '@/ui';
 import { RotateCcw } from '@/ui/icons';
 
+import { ActivityTimeline } from './activity/ActivityTimeline';
+import { stepsFromEvents } from './activity/stepsFromEvents';
 import { chatErrorText } from './chatErrors';
 import { StoppedNote } from './EndingNotes';
 import { Markdown } from './markdown/Markdown';
@@ -14,16 +18,22 @@ export interface TurnTailProps {
     tail: Tail;
     /** What the agent is doing now, or null for "Thinking...". Only used while the turn is live. */
     line: string | null;
+    /** The turn is waiting on the person's answer. */
+    awaitingUser?: boolean;
     onTryAgain(): void;
     onContinue(): void;
 }
 
 /** The running or just-ended turn, under the saved messages. */
-export function TurnTail({ tail, line, onTryAgain, onContinue }: TurnTailProps) {
+export function TurnTail({ tail, line, awaitingUser = false, onTryAgain, onContinue }: TurnTailProps) {
     const t = useT();
-    const showLine = tail.live && (line !== null || !tail.text);
+    const steps = useMemo(() => stepsFromEvents(tail.events, t), [tail.events, t]);
+    // A running step row already says what is happening.
+    const rowRuns = steps.some((s) => s.active && s.type !== 'status');
+    const showLine = tail.live && !rowRuns && (line !== null || !tail.text);
     return (
         <Stack gap="sm" paddingX="lg" paddingY="xs" testID="turn-tail">
+            <ActivityTimeline steps={steps} running={tail.live} awaitingUser={awaitingUser} answer={tail.text} />
             {tail.text ? <Markdown text={tail.text} streaming={tail.live} /> : null}
             {showLine ? (
                 <Row gap="sm" accessibilityRole="progressbar">
