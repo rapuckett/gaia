@@ -12,6 +12,7 @@ from typing import List, Literal, Optional
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
+from ..models import WireModel
 from ..scheduler import DuplicateScheduleName, Scheduler
 
 logger = logging.getLogger(__name__)
@@ -97,6 +98,12 @@ class ScheduleResultsResponse(BaseModel):
 
     results: list
     total: int
+
+
+class ScheduleDeleteResponse(WireModel):
+    """Confirmation that a schedule was deleted."""
+
+    deleted: bool
 
 
 class ParseScheduleRequest(BaseModel):
@@ -286,7 +293,11 @@ async def run_schedule_now(
         raise HTTPException(status_code=409, detail=str(e))
 
 
-@router.delete("/api/schedules/{name:path}")
+@router.delete(
+    "/api/schedules/{name:path}",
+    response_model=ScheduleDeleteResponse,
+    response_model_exclude_unset=True,
+)
 async def delete_schedule(
     name: str,
     scheduler: Scheduler = Depends(get_scheduler),
