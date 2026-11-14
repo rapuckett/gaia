@@ -22,7 +22,6 @@ import { ScreenBannerProvider, UIProvider } from '@/ui';
 // A chat opened cold (deep link, notification) has the home screen beneath it.
 export const unstable_settings = { anchor: INITIAL_ROUTE };
 
-=======
 const ROUTES = [INITIAL_ROUTE, 'new', 'connectors', 'schedules', 'skills', 'chat/[id]', 'dev/ui', 'dev/ui-lists', 'dev/composer', 'dev/forms', 'dev/markdown', 'dev/messages', 'dev/permission'];
 
 export default function RootLayout() {
