@@ -5,6 +5,8 @@ import type {
     CreateSessionRequest,
     FollowUpOutcome,
     DocumentListResponse,
+    DocumentResponse,
+    DocumentStatus,
     GaiaClient,
     HealthResponse,
     LocalModelStatus,
@@ -52,7 +54,13 @@ export interface FakeClientData {
     /** Makes every search fail with this message. */
     searchError?: string;
     documents?: DocumentListResponse;
+    /** What getDocumentStatus answers, by document; one not listed reports its row's status. */
+    documentStatuses?: Record<string, Partial<DocumentStatus>>;
+    /** Makes a library action on a document reject with this message, by action. */
+    documentFailures?: Partial<Record<DocumentAction, string>>;
 }
+
+export type DocumentAction = 'cancel' | 'delete' | 'reindex';
 
 export interface FakeGaiaClient extends GaiaClient {
     readonly sent: { sessionId: string; message: string }[];
@@ -65,6 +73,7 @@ export interface FakeGaiaClient extends GaiaClient {
     readonly followUps: { sessionId: string; text: string }[];
     readonly restarts: { confirm: boolean }[];
     readonly downloads: { modelId: string; acknowledgeLowDisk: boolean }[];
+    readonly documentActions: { action: DocumentAction; docId: string }[];
 }
 
 export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
@@ -82,6 +91,17 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
     const downloads: FakeGaiaClient['downloads'] = [];
     const schedules = [...(data.schedules ?? [])];
     const scheduleActions: FakeGaiaClient['scheduleActions'] = [];
+    const documentActions: FakeGaiaClient['documentActions'] = [];
+    const library: DocumentListResponse = data.documents ?? { documents: [], total: 0, total_chunks: 0, total_size_bytes: 0 };
+
+    function findDocument(docId: string, action: DocumentAction): DocumentResponse {
+        documentActions.push({ action, docId });
+        const failure = data.documentFailures?.[action];
+        if (failure) throw new GaiaApiError(500, failure);
+        const doc = library.documents.find((d) => d.id === docId);
+        if (!doc) throw new GaiaApiError(404, 'Document not found');
+        return doc;
+    }
 
     function findSchedule(name: string): Schedule {
         const schedule = schedules.find((s) => s.name === name);
@@ -104,6 +124,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         confirmations,
         answers,
         scheduleActions,
+        documentActions,
         followUps,
         restarts,
         downloads,
@@ -215,7 +236,36 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             return { deleted: true };
         },
         async listDocuments() {
-            return data.documents ?? { documents: [], total: 0, total_chunks: 0, total_size_bytes: 0 };
+            return { ...library, documents: [...library.documents] };
+        },
+        async cancelDocumentIndexing(docId) {
+            const doc = findDocument(docId, 'cancel');
+            doc.indexing_status = 'cancelled';
+            return { cancelled: true, id: docId };
+        },
+        async deleteDocument(docId) {
+            const doc = findDocument(docId, 'delete');
+            library.documents.splice(library.documents.indexOf(doc), 1);
+            return { deleted: true };
+        },
+        async getDocumentStatus(docId) {
+            const doc = library.documents.find((d) => d.id === docId);
+            if (!doc) throw new GaiaApiError(404, 'Document not found');
+            return {
+                id: docId,
+                indexing_status: doc.indexing_status ?? 'complete',
+                chunk_count: doc.chunk_count,
+                is_active: false,
+                progress: null,
+                ...data.documentStatuses?.[docId],
+            };
+        },
+        async reindexDocument(docId) {
+            const doc = findDocument(docId, 'reindex');
+            doc.indexing_status = 'indexing';
+            doc.last_error = null;
+            doc.error_kind = null;
+            return doc;
         },
         async getSystemStatus() {
             if (!data.status) throw new GaiaApiError(503, 'This fake client was given no system status.');

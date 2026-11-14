@@ -18,10 +18,14 @@ import {
 } from './errors';
 import type {
     CancelChatResult,
+    CancelIndexingResult,
     ConfirmToolResult,
+    DeleteDocumentResult,
     DeleteMessagesResult,
     DeleteScheduleResult,
     DocumentListResponse,
+    DocumentResponse,
+    DocumentStatus,
     FollowUpOutcome,
     FollowUpResult,
     GaiaClient,
@@ -40,6 +44,7 @@ import type {
 } from './client.types';
 import {
     ATTACH_HEADER_TIMEOUT_MS,
+    documentPath,
     ENDPOINTS,
     followupOutcomePath,
     MESSAGE_PAGE_SIZE,
@@ -328,6 +333,22 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         listDocuments(options) {
             return getJson<DocumentListResponse>(ENDPOINTS.documents, options?.signal);
+        },
+
+        cancelDocumentIndexing(docId, options) {
+            return postJson<CancelIndexingResult>(documentPath(docId, 'documentCancel'), undefined, options?.signal);
+        },
+
+        deleteDocument(docId, options) {
+            return deleteJson<DeleteDocumentResult>(documentPath(docId), options?.signal);
+        },
+
+        getDocumentStatus(docId, options) {
+            return getJson<DocumentStatus>(documentPath(docId, 'documentStatus'), options?.signal);
+        },
+
+        reindexDocument(docId, options) {
+            return postJson<DocumentResponse>(documentPath(docId, 'documentReindex'), undefined, options?.signal);
         },
 
         getSystemStatus(options) {

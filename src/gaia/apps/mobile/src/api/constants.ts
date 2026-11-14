@@ -32,7 +32,11 @@ export const ENDPOINTS = {
     chatFollowupOutcome: '/api/chat/followup/{session_id}',
     chatUserInput: '/api/chat/user-input',
     systemStatus: '/api/system/status',
+    document: '/api/documents/{doc_id}',
+    documentCancel: '/api/documents/{doc_id}/cancel',
     documentFile: '/api/documents/{doc_id}/file',
+    documentReindex: '/api/documents/{doc_id}/reindex',
+    documentStatus: '/api/documents/{doc_id}/status',
     documents: '/api/documents',
     onboardingStart: '/api/onboarding/start',
 } as const;
@@ -65,6 +69,10 @@ export function sessionMessagesAndBelowPath(sessionId: string, messageId: number
     return ENDPOINTS.sessionMessagesAndBelow
         .replace('{session_id}', encodeURIComponent(sessionId))
         .replace('{message_id}', String(messageId));
+}
+
+export function documentPath(docId: string, endpoint: 'document' | 'documentCancel' | 'documentReindex' | 'documentStatus' = 'document'): string {
+    return ENDPOINTS[endpoint].replace('{doc_id}', encodeURIComponent(docId));
 }
 
 /** The library file's URL, as the web UI's `documentFileUrl` builds it: the page rides in the fragment. */

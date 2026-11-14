@@ -1,6 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
+import type { IndexProgress } from '@webui/utils/documentLibrary.core';
 import type { FollowUpOutcome } from '@webui/utils/messageQueue';
 import type {
     LocalModelStatus,
@@ -14,7 +15,7 @@ import type {
     StreamEvent,
     SystemStatus,
 } from '@webui/types';
-import type { CreateSessionRequest, DocumentListResponse, SessionSearchResponse, ToolConfirmRequest, UserInputRequest as ApiUserInputRequest } from '@webui/types/api.gen';
+import type { CreateSessionRequest, DocumentListResponse, DocumentResponse, SessionSearchResponse, ToolConfirmRequest, UserInputRequest as ApiUserInputRequest } from '@webui/types/api.gen';
 
 export type {
     LocalModelStatus,
@@ -28,7 +29,7 @@ export type {
     StreamEvent,
     SystemStatus,
 } from '@webui/types';
-export type { CreateSessionRequest, DocumentListResponse, SessionSearchResponse, SessionSearchResult, ToolConfirmRequest } from '@webui/types/api.gen';
+export type { CreateSessionRequest, DocumentListResponse, DocumentResponse, SessionSearchResponse, SessionSearchResult, ToolConfirmRequest } from '@webui/types/api.gen';
 
 /** `display` is what the phone shows as the answer; it is never sent to GAIA. */
 export type UserInputRequest = ApiUserInputRequest & { display?: string };
@@ -76,6 +77,26 @@ export interface UserInputResult {
     status: string;
     request_id: string;
 }
+
+export interface DeleteDocumentResult {
+    deleted: boolean;
+}
+
+export interface CancelIndexingResult {
+    cancelled: boolean;
+    id: string;
+}
+
+export interface DocumentStatus {
+    id: string;
+    indexing_status: string;
+    chunk_count: number;
+    is_active: boolean;
+    /** Null unless the document is being indexed right now. */
+    progress: IndexProgress | null;
+}
+
+export type { IndexProgress };
 
 export interface DeleteScheduleResult {
     deleted: boolean;
@@ -133,6 +154,14 @@ export interface GaiaClient {
     deleteSchedule(name: string, options?: RequestOptions): Promise<DeleteScheduleResult>;
     /** The library's documents; a chat searches only the ones attached to it. */
     listDocuments(options?: RequestOptions): Promise<DocumentListResponse>;
+    /** Stops a document's indexing; rejects with 404 when none is running. */
+    cancelDocumentIndexing(docId: string, options?: RequestOptions): Promise<CancelIndexingResult>;
+    /** Takes a document out of the library; the file on the PC is untouched. */
+    deleteDocument(docId: string, options?: RequestOptions): Promise<DeleteDocumentResult>;
+    /** Where a document's indexing has got, with its progress while it runs. */
+    getDocumentStatus(docId: string, options?: RequestOptions): Promise<DocumentStatus>;
+    /** Indexes a document again; rejects with the reason when it fails once more. */
+    reindexDocument(docId: string, options?: RequestOptions): Promise<DocumentResponse>;
     getSystemStatus(options?: RequestOptions): Promise<SystemStatus>;
     /** The model server's state, what it runs on and its memory; the pill and its sheet read it. */
     getLocalModelStatus(options?: RequestOptions): Promise<LocalModelStatus>;

@@ -113,7 +113,11 @@ describe('endpoints', () => {
         chatFollowupOutcome: ['GET'],
         chatUserInput: ['POST'],
         systemStatus: ['GET'],
+        document: ['DELETE'],
+        documentCancel: ['POST'],
         documentFile: ['GET'],
+        documentReindex: ['POST'],
+        documentStatus: ['GET'],
         documents: ['GET'],
         onboardingStart: ['GET'],
     };
