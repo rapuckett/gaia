@@ -39,6 +39,8 @@ import type {
     ScheduleList,
     SessionList,
     SessionSearchResponse,
+    SetupCheck,
+    SetupPlan,
     SetupRunStatus,
     UserInputResult,
 } from './client.types';
@@ -411,6 +413,30 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         getStartScreen(options) {
             return getJson<StartScreen>(ENDPOINTS.onboardingStart, options?.signal);
+        },
+
+        checkSetup(skipChatModel, options) {
+            return getJson<SetupCheck>(`${ENDPOINTS.setupCheck}?skip_chat_model=${skipChatModel}`, options?.signal);
+        },
+
+        getSetupPlan(options) {
+            return getJson<SetupPlan>(ENDPOINTS.setupPlan, options?.signal);
+        },
+
+        startSetup(skipChatModel, gaiaLemonade = false, options = {}) {
+            return postJson<SetupRunStatus>(
+                ENDPOINTS.setupRun,
+                {
+                    skip_chat_model: skipChatModel,
+                    gaia_lemonade: gaiaLemonade,
+                    acknowledge_low_disk: !!options.acknowledgeLowDisk,
+                    keep_trying: !!options.keepTrying,
+                    extra_models: options.extraModels ?? [],
+                    server_only: !!options.serverOnly,
+                    upgrade_embedded: !!options.upgradeEmbedded,
+                },
+                options.signal,
+            );
         },
     };
 }
