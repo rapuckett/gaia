@@ -10,20 +10,21 @@ import { Check, Copy, Ellipsis } from '@/ui/icons';
 
 import { CutOffNote, StoppedNote } from '../EndingNotes';
 import { Markdown } from '../markdown/Markdown';
-import { useMessageActions } from './useMessageActions';
+import { useMessageActions, type MessageContext } from './useMessageActions';
 
 export interface AssistantBubbleProps {
     message: Message;
     /** The answer is still being written: the row stays hidden. */
     streaming?: boolean;
+    context?: MessageContext;
 }
 
-export function AssistantBubble({ message, streaming = false }: AssistantBubbleProps) {
+export function AssistantBubble({ message, streaming = false, context }: AssistantBubbleProps) {
     const t = useT();
     const cutOff = streaming ? null : splitCutOff(message.content);
     const cancelled = message.content.trim() === SERVER_CANCELLED_TEXT;
     const text = cancelled ? '' : cutOff ? cutOff.body : message.content;
-    const actions = useMessageActions(message, text);
+    const actions = useMessageActions(message, text, context);
     return (
         <Stack paddingX="lg" paddingY="xs">
             <Pressable onLongPress={cancelled ? undefined : actions.openSheet} accessible={false} minSize={0}>

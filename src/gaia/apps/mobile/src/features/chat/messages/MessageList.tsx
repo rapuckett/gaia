@@ -12,6 +12,7 @@ import { AssistantBubble } from './AssistantBubble';
 import { JumpButton } from './JumpButton';
 import { UserBubble } from './UserBubble';
 import { useFollowScroll } from './useFollowScroll';
+import type { MessageContext } from './useMessageActions';
 
 export interface MessageListViewProps {
     /** Oldest first, as GAIA stores them. */
@@ -21,6 +22,14 @@ export interface MessageListViewProps {
     onRetry?: () => void;
     /** The answer being written, shown under the last message. */
     live?: ReactNode;
+}
+
+/** `shown` is newest first, so the messages after `index` are the ones before it. */
+function contextOf(shown: readonly Message[], index: number): MessageContext {
+    for (let i = index - 1; i >= 0; i--) {
+        if (shown[i].role === 'user') return { later: index, laterTurns: i + 1 };
+    }
+    return { later: index, laterTurns: 0 };
 }
 
 export function MessageListView({ messages, loading = false, error, onRetry, live }: MessageListViewProps) {
@@ -43,13 +52,14 @@ export function MessageListView({ messages, loading = false, error, onRetry, liv
                 inverted
                 data={shown}
                 keyExtractor={(m) => String(m.id)}
-                renderItem={({ item, index }) =>
-                    item.role === 'user' ? (
-                        <UserBubble message={item} onCollapse={() => bringIntoView(index)} />
+                renderItem={({ item, index }) => {
+                    const context = contextOf(shown, index);
+                    return item.role === 'user' ? (
+                        <UserBubble message={item} onCollapse={() => bringIntoView(index)} context={context} />
                     ) : (
-                        <AssistantBubble message={item} />
-                    )
-                }
+                        <AssistantBubble message={item} context={context} />
+                    );
+                }}
                 ListHeaderComponent={live ? <>{live}</> : undefined}
                 onScroll={onScroll}
                 scrollEventThrottle={64}
