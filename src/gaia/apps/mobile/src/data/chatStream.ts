@@ -20,6 +20,7 @@ import {
     writeTurn,
     type ChatStreamStatus,
     type ChatTurn,
+    type ConfirmationRequest,
     type PermissionRequest,
     type QuestionRequest,
 } from '@/state/chatStreams';
@@ -27,7 +28,7 @@ import {
 import { useGaiaClient } from './GaiaClientProvider';
 import { queryKeys } from './queries';
 
-export type { ChatStreamStatus, PermissionRequest, QuestionRequest } from '@/state/chatStreams';
+export type { ChatStreamStatus, ConfirmationRequest, PermissionRequest, QuestionRequest } from '@/state/chatStreams';
 
 export interface ChatStreamDeps {
     client: GaiaClient;
@@ -170,13 +171,23 @@ async function follow(deps: ChatStreamDeps, sessionId: string, run: Run, stream:
     await endWithTranscript(deps.queryClient, sessionId, () => {
         if (!isCurrent(sessionId, run)) return;
         finishRun(sessionId);
-        const { error, stopState, stopError, liveText, failed, failure, policyAlert } = readTurn(sessionId);
+        const { error, stopState, stopError, liveText, failed, failure, policyAlert, pendingConfirmation } = readTurn(sessionId);
         // The stop note, a failure and a policy block outlive the turn; a stop GAIA never confirmed has no saved answer to show, so its text stays too.
-        const kept = error || stopState || failed || policyAlert;
+        const kept = error || stopState || failed || policyAlert || pendingConfirmation;
         writeTurn(
             sessionId,
             kept
-                ? { ...IDLE_TURN, error, stopState, stopError, failed, failure, policyAlert, liveText: stopState === 'unconfirmed' ? liveText : '' }
+                ? {
+                      ...IDLE_TURN,
+                      error,
+                      stopState,
+                      stopError,
+                      failed,
+                      failure,
+                      policyAlert,
+                      pendingConfirmation,
+                      liveText: stopState === 'unconfirmed' ? liveText : '',
+                  }
                 : null,
         );
     });
@@ -266,7 +277,8 @@ export function attachTurn(deps: ChatStreamDeps, sessionId: string): void {
 export function detachTurn(sessionId: string): void {
     runs.get(sessionId)?.view.abort();
     finishRun(sessionId);
-    writeTurn(sessionId, null);
+    const { pendingConfirmation } = readTurn(sessionId);
+    writeTurn(sessionId, pendingConfirmation ? { ...IDLE_TURN, pendingConfirmation } : null);
 }
 
 function subscribe(deps: ChatStreamDeps, sessionId: string): () => void {
@@ -299,6 +311,8 @@ export interface ChatStream {
     pendingPermission: PermissionRequest | null;
     /** Answer it with useAnswerQuestion. */
     pendingQuestion: QuestionRequest | null;
+    /** Informational: the run ended on a tool it won't run unattended; nothing to answer. */
+    pendingConfirmation: ConfirmationRequest | null;
     /** Why the last send, stop or stream failed; cleared by the next send. */
     error: GaiaError | null;
     /** GAIA closed the last turn as failed, or its answer echoes a tool's error. */
@@ -372,6 +386,7 @@ export function useChatStream(sessionId: string): ChatStream {
             events: turn.events,
             pendingPermission: turn.pendingPermission,
             pendingQuestion: turn.pendingQuestion,
+            pendingConfirmation: turn.pendingConfirmation,
             error: turn.error,
             stopState: turn.stopState,
             stopError: turn.stopError,

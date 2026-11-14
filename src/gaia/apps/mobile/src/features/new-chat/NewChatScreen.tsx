@@ -2,17 +2,21 @@
 // SPDX-License-Identifier: MIT
 
 import { bracketParts } from '@webui/i18n/registry';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { useCreateSession, useSystemStatus } from '@/data';
+import { useCreateSession, useDocuments, useSystemStatus } from '@/data';
 import { Composer, useComposerQueue } from '@/features/composer';
-import { useComposerQueueStore } from '@/features/composer/composerQueue';
+import { QueuedMessages } from '@/features/composer/QueuedMessages';
 import { ScreenHeader } from '@/features/nav/ScreenHeader';
 import { useT } from '@/i18n/useT';
 import { Disclosure, Notice, ProgressLine, Screen, Stack, Text } from '@/ui';
 
+import { LibraryDocuments } from './LibraryDocuments';
 import { greetingKey } from './greeting';
+import { setupError } from './setupFailed';
 import { showWarmUp, startingReason } from './starting';
+import { TryChips } from './TryChips';
+import { withExample } from './tryExamples';
 import { useAssistantNotice, useFirstSend } from './useNewChat';
 import { shortModelName, warmUpLine, warmUpProgress } from './warmUp';
 
@@ -24,25 +28,20 @@ export interface NewChatScreenProps {
     prompt?: { id: string; text: string };
 }
 
-// Texts typed while the chat was being created, taken out of the queue for good.
-function takeHeld(): string[] {
-    const items = useComposerQueueStore.getState().byChat[''] ?? [];
-    useComposerQueueStore.setState((s) => ({ byChat: { ...s.byChat, '': [] } }));
-    return items.map((i) => i.text);
-}
-
 export function NewChatScreen({ onOpen, initialText = '', prompt }: NewChatScreenProps) {
     const t = useT();
     const status = useSystemStatus().data;
     const createSession = useCreateSession();
+    const documents = useDocuments().data?.documents;
+    const [attachedIds, setAttachedIds] = useState<string[]>([]);
     const queue = useComposerQueue(null);
     const { state, setText, submit } = useFirstSend(
         {
-            createSession: () => createSession.mutateAsync(),
+            createSession: () => createSession.mutateAsync({ document_ids: attachedIds }),
             deliver: queue.deliver,
             flush: queue.flush,
             queueHeld: queue.queueHeld,
-            takeHeld,
+            takeHeld: () => queue.takeHeld().map((item) => item.text),
         },
         initialText,
     );
@@ -59,6 +58,16 @@ export function NewChatScreen({ onOpen, initialText = '', prompt }: NewChatScree
         if (promptText) setText((draft) => (draft.trim() ? `${draft}\n\n${promptText}` : promptText));
     }, [promptId, promptText, setText]);
 
+    const lastExample = useRef('');
+    const fillExample = useCallback(
+        (example: string) => {
+            setText((draft) => withExample(draft, lastExample.current, example));
+            lastExample.current = example;
+        },
+        [setText],
+    );
+
+    const failedSetup = setupError(status);
     const warming = warmUpProgress(status?.warm_up);
     const [greeting, gloss] = bracketParts(t(greetingKey(new Date())));
 
@@ -68,12 +77,15 @@ export function NewChatScreen({ onOpen, initialText = '', prompt }: NewChatScree
             scroll
             header={<ScreenHeader />}
             footer={
-                <Composer
-                    value={state.text}
-                    onChange={setText}
-                    onSend={(message) => void submit(message, queue.hold)}
-                    disabledReason={startingReason(status, t) ?? undefined}
-                />
+                <>
+                    <QueuedMessages items={queue.held} replying={false} onRemove={queue.remove} onRetry={queue.retry} />
+                    <Composer
+                        value={state.text}
+                        onChange={setText}
+                        onSend={(message) => void submit(message, queue.hold)}
+                        disabledReason={startingReason(status, t) ?? undefined}
+                    />
+                </>
             }
         >
             <Stack gap="lg" paddingX="lg" paddingY="xl" flex={1} justify="center">
@@ -89,10 +101,26 @@ export function NewChatScreen({ onOpen, initialText = '', prompt }: NewChatScree
                         )}
                     </Stack>
                 )}
+                {failedSetup !== null && (
+                    <Notice
+                        tone="danger"
+                        title={t('newChat.setupFailed.title')}
+                        message={`${failedSetup}\n\n${t('newChat.setupFailed.hint')}`}
+                    />
+                )}
+                {documents && !state.sending && (
+                    <LibraryDocuments
+                        documents={documents}
+                        attachedIds={attachedIds}
+                        onAttach={(ids) => setAttachedIds((cur) => [...cur, ...ids.filter((id) => !cur.includes(id))])}
+                        onRemove={(id) => setAttachedIds((cur) => cur.filter((x) => x !== id))}
+                    />
+                )}
                 {warming !== null && showWarmUp(status) && (
                     <ProgressLine label={warmUpLine(warming, t, shortModelName)} />
                 )}
                 {state.error !== null && <Notice tone="danger" message={state.error} />}
+                {!state.sending && startingReason(status, t) === null && <TryChips onPick={fillExample} />}
                 {assistant.problem !== null && (
                     <Stack gap="sm">
                         <Notice

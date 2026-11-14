@@ -222,6 +222,8 @@ const messages: Messages = {
     'newChat.docs.attachIt': 'إرفاقه',
     'newChat.docs.attachAll': 'إرفاق المستندات كلها ({n})',
     'newChat.docs.choose': 'اختيار',
+    'newChat.docs.hidden': '+{n} أخرى',
+    'newChat.docs.fewer': 'عرض أقل',
 
     // مجلدات المحادثة الجديدة
     'folderChip.add': 'إضافة مجلد',
@@ -291,6 +293,7 @@ const messages: Messages = {
     'queue.steerTitle': 'يقرؤها GAIA في خطوته التالية دون أن يبدأ من جديد. وقد لا يجيب عنها على حدة.',
     'queue.steer': 'إضافة إلى هذا الرد',
     'queue.removeAria': 'إزالة الرسالة من قائمة الانتظار: {text}',
+    'queue.steerRefused': 'تعذّرت إضافتها إلى هذا الرد؛ ستُرسل عند انتهائه.',
     'composer.stop': 'إيقاف',
     'composer.stopping': 'جارٍ الإيقاف…',
     'composer.send': 'إرسال',
@@ -3502,6 +3505,9 @@ const messages: Messages = {
     'mobileApp.pcOnly.report': 'حفظ GAIA تقريرًا عن هذه المشكلة على الكمبيوتر. أنشئ تقرير استكشاف الأخطاء هناك لإرفاقه ببلاغ عن خطأ.',
     'mobileApp.connectorRetry.connected': 'تم ربط {name} منذ هذا الرد. اسأل مرة أخرى لتشغيله الآن.',
     'mobileApp.connectorRetry.askAgain': 'اسأل مرة أخرى',
+    'mobileApp.connectors.comingLater': 'الربط من الهاتف قادم في إصدار لاحق. في الوقت الحالي، اربطه من الكمبيوتر الذي يشغّل GAIA.',
+    'mobileApp.connectors.googlePcOnly': 'لا يستطيع هذا الهاتف ربط حسابات Google. اربط Google من الكمبيوتر الذي يشغّل GAIA.',
+    'mobileApp.banner.openOnPc': 'افتح GAIA على جهاز الكمبيوتر لتشغيل خادم النماذج.',
 };
 
 export const ar: Locale = {

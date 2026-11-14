@@ -25,6 +25,9 @@ export type PermissionRequest = StreamEvent & { type: 'permission_request' };
 /** A question the turn is blocked on until it is answered. */
 export type QuestionRequest = StreamEvent & { type: 'needs_input'; request_id: string };
 
+/** The run ended on a tool GAIA won't run unattended; informational, it has no id and nothing to answer. */
+export type ConfirmationRequest = StreamEvent & { type: 'needs_confirmation' };
+
 export interface ChatTurn {
     status: ChatStreamStatus;
     /** The answer so far. */
@@ -33,6 +36,8 @@ export interface ChatTurn {
     events: readonly StreamEvent[];
     pendingPermission: PermissionRequest | null;
     pendingQuestion: QuestionRequest | null;
+    // Outlives the turn on purpose: the card is informational and often arrives after the run.
+    pendingConfirmation: ConfirmationRequest | null;
     error: GaiaError | null;
     /** A tool ran since the last answer text, so the next text starts a new paragraph. */
     toolSinceText: boolean;
@@ -54,6 +59,7 @@ export const IDLE_TURN: ChatTurn = {
     events: [],
     pendingPermission: null,
     pendingQuestion: null,
+    pendingConfirmation: null,
     error: null,
     toolSinceText: false,
 };
@@ -89,6 +95,9 @@ function applyAgentEvent(turn: ChatTurn, event: StreamEvent): ChatTurn {
     // A question without an id can't be answered; it stays visible in `events`.
     if (event.type === 'needs_input' && event.request_id) {
         next = { ...next, pendingQuestion: event as QuestionRequest };
+    }
+    if (event.type === 'needs_confirmation') {
+        next = { ...next, pendingConfirmation: event as ConfirmationRequest };
     }
     if (event.type === 'tool_start') {
         next = { ...next, toolSinceText: true };
@@ -150,6 +159,11 @@ export function permissionAnswered(turn: ChatTurn, confirmId?: string | null): C
     const pending = turn.pendingPermission;
     if (!pending || (confirmId && pending.confirm_id !== confirmId)) return turn;
     return { ...turn, pendingPermission: null };
+}
+
+/** The card's local Dismiss: nothing is sent, the card just stops showing. */
+export function confirmationDismissed(turn: ChatTurn): ChatTurn {
+    return turn.pendingConfirmation ? { ...turn, pendingConfirmation: null } : turn;
 }
 
 export function questionAnswered(turn: ChatTurn, requestId: string): ChatTurn {

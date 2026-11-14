@@ -5,7 +5,7 @@ import { useState } from 'react';
 
 import { connectedProviderLabel, referencedProviderConnected } from '@webui/utils/connectorRetry.core';
 
-import { useConnectors } from '@/data';
+import { useConnectorWatch } from '@/data';
 import { useT } from '@/i18n/useT';
 import { Button, Notice, Stack } from '@/ui';
 
@@ -20,7 +20,7 @@ export interface ConnectorRetryProps {
 export function ConnectorRetry({ content, onRetry }: ConnectorRetryProps) {
     const t = useT();
     const [dismissed, setDismissed] = useState(false);
-    const connectors = useConnectors(true, (list) => referencedProviderConnected(content, list?.connectors ?? []));
+    const connectors = useConnectorWatch(true, (list) => referencedProviderConnected(content, list?.connectors ?? []));
     const list = connectors.data?.connectors ?? [];
     if (dismissed || !referencedProviderConnected(content, list)) return null;
     return (
