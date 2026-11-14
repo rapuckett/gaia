@@ -91,6 +91,8 @@ describe('endpoints', () => {
         chatAttach: ['GET'],
         chatCancel: ['POST'],
         chatConfirmTool: ['POST'],
+        chatFollowup: ['POST'],
+        chatFollowupOutcome: ['GET'],
         chatUserInput: ['POST'],
         systemStatus: ['GET'],
         documentFile: ['GET'],
