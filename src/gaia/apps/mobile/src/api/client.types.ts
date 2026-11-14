@@ -16,7 +16,7 @@ import type {
     StreamEvent,
     SystemStatus,
 } from '@webui/types';
-import type { CreateSessionRequest, SessionSearchResponse, ToolConfirmRequest, UserInputRequest as ApiUserInputRequest } from '@webui/types/api.gen';
+import type { CreateSessionRequest, DocumentListResponse, SessionSearchResponse, ToolConfirmRequest, UserInputRequest as ApiUserInputRequest } from '@webui/types/api.gen';
 
 export type {
     Document,
@@ -32,7 +32,7 @@ export type {
     StreamEvent,
     SystemStatus,
 } from '@webui/types';
-export type { CreateSessionRequest, SessionSearchResponse, SessionSearchResult, ToolConfirmRequest } from '@webui/types/api.gen';
+export type { CreateSessionRequest, DocumentListResponse, SessionSearchResponse, SessionSearchResult, ToolConfirmRequest } from '@webui/types/api.gen';
 
 /** `display` is what the phone shows as the answer; it is never sent to GAIA. */
 export type UserInputRequest = ApiUserInputRequest & { display?: string };
@@ -49,11 +49,6 @@ export interface MessageList {
 
 export interface ScheduleList {
     schedules: Schedule[];
-    total: number;
-}
-
-export interface DocumentList {
-    documents: Document[];
     total: number;
 }
 
@@ -125,8 +120,6 @@ export interface GaiaClient {
     updateSession(sessionId: string, update: SessionUpdate, options?: RequestOptions): Promise<Session>;
     /** Flips the chat's private mode (not saved to memory) and returns the chat. */
     toggleSessionPrivate(sessionId: string, options?: RequestOptions): Promise<Session>;
-    /** The documents in the library. */
-    listDocuments(options?: RequestOptions): Promise<DocumentList>;
     /** Removes a document from this chat; the library keeps it. */
     detachDocument(sessionId: string, docId: string, options?: RequestOptions): Promise<void>;
     /** This PC's CPU, memory, GPU, NPU and network use. */
@@ -155,6 +148,8 @@ export interface GaiaClient {
     /** Runs a schedule once now (409 while a run is in flight); its next scheduled run stays as it was. */
     runSchedule(name: string, options?: RequestOptions): Promise<Schedule>;
     deleteSchedule(name: string, options?: RequestOptions): Promise<DeleteScheduleResult>;
+    /** The library's documents; a chat searches only the ones attached to it. */
+    listDocuments(options?: RequestOptions): Promise<DocumentListResponse>;
     getSystemStatus(options?: RequestOptions): Promise<SystemStatus>;
     /** The model server's state, what it runs on and its memory; the pill and its sheet read it. */
     getLocalModelStatus(options?: RequestOptions): Promise<LocalModelStatus>;

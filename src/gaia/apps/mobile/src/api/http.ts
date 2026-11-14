@@ -21,9 +21,9 @@ import type {
     ConfirmToolResult,
     DeleteMessagesResult,
     DeleteScheduleResult,
+    DocumentListResponse,
     FollowUpOutcome,
     FollowUpResult,
-    DocumentList,
     GaiaClient,
     HealthResponse,
     LocalModelStatus,
@@ -291,10 +291,6 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             return patchJson<Session>(sessionPrivatePath(sessionId), options?.signal);
         },
 
-        listDocuments(options) {
-            return getJson<DocumentList>(ENDPOINTS.documents, options?.signal);
-        },
-
         async detachDocument(sessionId, docId, options) {
             await request('DELETE', sessionDocumentPath(sessionId, docId), undefined, options?.signal);
         },
@@ -350,6 +346,10 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         deleteSchedule(name, options) {
             return deleteJson<DeleteScheduleResult>(schedulePath(name), options?.signal);
+        },
+
+        listDocuments(options) {
+            return getJson<DocumentListResponse>(ENDPOINTS.documents, options?.signal);
         },
 
         getSystemStatus(options) {

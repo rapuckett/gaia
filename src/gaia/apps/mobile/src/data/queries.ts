@@ -7,7 +7,16 @@ import { useQuery } from '@tanstack/react-query';
 
 import type { StartScreen } from '@webui/types';
 
-import type { DocumentList, GaiaClient, MessageList, ResourceUsage, Session, SessionList, SessionSearchResponse, SystemStatus } from '@/api/client.types';
+import type {
+    DocumentListResponse,
+    GaiaClient,
+    MessageList,
+    ResourceUsage,
+    Session,
+    SessionList,
+    SessionSearchResponse,
+    SystemStatus,
+} from '@/api/client.types';
 import { RESOURCE_RETRY_MS, SEARCH_DEBOUNCE_MS, STATUS_POLL_MS } from '@/api/constants';
 import { GaiaConfigError } from '@/api/errors';
 
@@ -19,9 +28,9 @@ export const queryKeys = {
     sessionSearch: (query: string) => ['sessionSearch', query] as const,
     messages: (sessionId: string) => ['messages', sessionId] as const,
     systemStatus: ['systemStatus'] as const,
-    documents: ['documents'] as const,
     resourceUsage: ['resourceUsage'] as const,
     startScreen: ['startScreen'] as const,
+    documents: ['documents'] as const,
 };
 
 export function requireClient(client: GaiaClient | null): GaiaClient {
@@ -81,16 +90,6 @@ export function useMessages(sessionId: string) {
     });
 }
 
-/** The document library; the chat's own documents are the ones whose ids its session lists. */
-export function useDocuments() {
-    const client = useGaiaClient();
-    return useQuery<DocumentList>({
-        queryKey: queryKeys.documents,
-        enabled: client !== null,
-        queryFn: ({ signal }) => requireClient(client).listDocuments({ signal }),
-    });
-}
-
 /** This PC's resource use, re-read at the interval the backend asks for while `enabled`. */
 export function useResourceUsage(enabled: boolean) {
     const client = useGaiaClient();
@@ -147,5 +146,15 @@ export function useStartScreen() {
         queryKey: queryKeys.startScreen,
         enabled: client !== null,
         queryFn: ({ signal }) => requireClient(client).getStartScreen({ signal }),
+    });
+}
+
+/** The library's documents, to offer for a new chat. */
+export function useDocuments() {
+    const client = useGaiaClient();
+    return useQuery<DocumentListResponse>({
+        queryKey: queryKeys.documents,
+        enabled: client !== null,
+        queryFn: ({ signal }) => requireClient(client).listDocuments({ signal }),
     });
 }

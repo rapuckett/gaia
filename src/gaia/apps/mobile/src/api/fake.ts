@@ -4,7 +4,7 @@
 import type {
     CreateSessionRequest,
     FollowUpOutcome,
-    Document,
+    DocumentListResponse,
     GaiaClient,
     HealthResponse,
     LocalModelStatus,
@@ -47,13 +47,13 @@ export interface FakeClientData {
     modelNeeds?: Partial<Record<ModelNeed['job'], ModelNeed>>;
     /** What getSetupStatus answers. */
     setupStatus?: SetupRunStatus;
-    documents?: Document[];
     resources?: ResourceUsage;
     start?: StartScreen;
     /** Most chats a search returns before it says `truncated`. */
     searchLimit?: number;
     /** Makes every search fail with this message. */
     searchError?: string;
+    documents?: DocumentListResponse;
 }
 
 export interface FakeGaiaClient extends GaiaClient {
@@ -189,10 +189,6 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             session.private = !session.private;
             return { ...session };
         },
-        async listDocuments() {
-            const documents = data.documents ?? [];
-            return { documents: [...documents], total: documents.length };
-        },
         async detachDocument(sessionId, docId) {
             const session = findSession(sessionId);
             detached.push({ sessionId, docId });
@@ -242,6 +238,9 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             scheduleActions.push({ action: 'delete', name });
             schedules.splice(schedules.indexOf(schedule), 1);
             return { deleted: true };
+        },
+        async listDocuments() {
+            return data.documents ?? { documents: [], total: 0, total_chunks: 0, total_size_bytes: 0 };
         },
         async getSystemStatus() {
             if (!data.status) throw new GaiaApiError(503, 'This fake client was given no system status.');
