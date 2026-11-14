@@ -21,7 +21,7 @@ export interface UserBubbleProps {
 export function UserBubble({ message, onCollapse }: UserBubbleProps) {
     const t = useT();
     const uiDir = useDirection();
-    const actions = useMessageActions(message);
+    const actions = useMessageActions(message, message.content);
     const long = isLongUserMessage(message.content);
     const [expanded, setExpanded] = useState(false);
     const collapsed = long && !expanded;

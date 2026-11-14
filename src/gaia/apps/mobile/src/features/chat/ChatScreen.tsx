@@ -10,6 +10,8 @@ import { describeError, useT } from '@/i18n/useT';
 import { ErrorState, Notice, Screen, Stack } from '@/ui';
 
 import { ChatPrompts } from './ChatPrompts';
+import { PermissionPromptSlot } from './permission/PermissionPromptSlot';
+import { usePermissionPrompt } from './permission/usePermissionPrompt';
 import { liveStatusLine } from './liveStatus';
 import { MessageList } from './messages/MessageList';
 import { buildTail } from './tailState';
@@ -23,6 +25,7 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
     const messages = useMessages(sessionId);
     const stream = useChatStream(sessionId);
     const queue = useComposerQueue(sessionId);
+    const permission = usePermissionPrompt(sessionId);
     const [actionError, setActionError] = useState<unknown>(null);
     const busy = stream.status !== 'idle';
     const saved = messages.data?.messages ?? NO_MESSAGES;
@@ -74,6 +77,7 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
                             <Notice tone="danger" message={describeError(actionError, t)} testID="action-error" />
                         </Stack>
                     ) : null}
+                    {permission ? <PermissionPromptSlot {...permission} key={permission.prompt.id} /> : null}
                     <Composer onSend={send} onStop={stream.stop} running={busy} placeholder={placeholder} />
                 </>
             }
@@ -93,7 +97,7 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
                                     onContinue={continueReply}
                                 />
                             ) : null}
-                            <ChatPrompts permission={stream.pendingPermission} question={stream.pendingQuestion} />
+                            <ChatPrompts question={stream.pendingQuestion} />
                         </>
                     }
                 />
