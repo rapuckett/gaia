@@ -30,6 +30,7 @@ from gaia.ui.devices import (
 from gaia.ui.devices import pairing as pairing_mod
 from gaia.ui.devices import store as store_mod
 from gaia.ui.devices.access import DeviceAccess
+from gaia.ui.devices.listener import ListenerError
 from gaia.ui.devices.pairing import (
     PairingRefused,
     PairingWindow,
@@ -86,6 +87,8 @@ def test_device_pairing_not_enabled_by_env_or_dotenv(tmp_path, monkeypatch):
         resp = pc.request(method, path, json={})
         assert resp.status_code == 403 and "device_pairing" in resp.text, path
     asyncio.run(app.state.devices.resume())
+    with pytest.raises(ListenerError, match="device_pairing"):
+        asyncio.run(app.state.devices.start())
     assert not app.state.devices.listening
     assert not (tmp_path / "devices").exists()
 

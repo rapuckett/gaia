@@ -47,6 +47,7 @@ class _Running:
 
 @pytest.fixture
 def served(tmp_path):
+    GaiaConfig.save_key("device_pairing", True)
     app = create_app(db_path=":memory:")
     access = DeviceAccess(app, folder=tmp_path / "devices", host="127.0.0.1", port=0)
     app.state.devices = access
@@ -401,6 +402,7 @@ def test_revoke_closes_inflight_stream(served):
 
 
 def test_port_in_use_fails_loudly(tmp_path):
+    GaiaConfig.save_key("device_pairing", True)
     with socket.socket() as taken:
         taken.bind(("127.0.0.1", 0))
         taken.listen(1)

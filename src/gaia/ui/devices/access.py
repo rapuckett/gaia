@@ -177,8 +177,19 @@ class DeviceAccess:
         """Turn the listener on, making the key and certificate the first time.
 
         Raises:
-            ListenerError: It can't start; the status says why too.
+            ListenerError: It can't start, or ``device_pairing`` is off; the
+                status says why too.
         """
+        try:
+            enabled = GaiaConfig.load().device_pairing
+        except GaiaConfigError as e:
+            raise self._failed(ListenerError("start_failed", str(e))) from e
+        if not enabled:
+            raise ListenerError(
+                "start_failed",
+                'Device pairing is off. Set "device_pairing": true in '
+                "~/.gaia/config.json to try it.",
+            )
         async with self._lock:
             await self._start()
 
