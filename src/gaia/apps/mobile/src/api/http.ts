@@ -56,6 +56,7 @@ import {
     SEND_HEADER_TIMEOUT_MS,
     SESSION_PAGE_SIZE,
     sessionDocumentPath,
+    sessionMessagePath,
     sessionMessagesAndBelowPath,
     sessionMessagesPath,
     sessionPath,
@@ -314,6 +315,10 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
         attachToRun(sessionId, options) {
             const path = `${ENDPOINTS.chatAttach}?session_id=${encodeURIComponent(sessionId)}`;
             return streamTurn('GET', path, undefined, 'attach', ATTACH_HEADER_TIMEOUT_MS, options?.signal);
+        },
+
+        deleteMessage(sessionId, messageId, options) {
+            return deleteJson<{ deleted: boolean }>(sessionMessagePath(sessionId, messageId), options?.signal);
         },
 
         deleteMessagesFrom(sessionId, messageId, options) {

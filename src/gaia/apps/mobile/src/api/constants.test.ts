@@ -105,6 +105,7 @@ describe('endpoints', () => {
         sessions: ['GET', 'POST'],
         session: ['GET', 'PUT'],
         sessionDocument: ['DELETE'],
+        sessionMessage: ['DELETE'],
         sessionMessages: ['GET'],
         sessionMessagesAndBelow: ['DELETE'],
         sessionPrivate: ['PATCH'],
