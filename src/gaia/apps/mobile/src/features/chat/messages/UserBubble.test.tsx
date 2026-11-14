@@ -1,6 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen } from '@testing-library/react-native';
 import * as Clipboard from 'expo-clipboard';
 
@@ -30,11 +31,13 @@ describe('UserBubble', () => {
     it('collapses a long message, brings it back into view on "Show less", and copies from the long-press sheet', async () => {
         const onCollapse = jest.fn();
         await render(
-            <ThemeProvider>
-                <SheetHost>
-                    <UserBubble message={message} onCollapse={onCollapse} />
-                </SheetHost>
-            </ThemeProvider>,
+            <QueryClientProvider client={new QueryClient()}>
+                <ThemeProvider>
+                    <SheetHost>
+                        <UserBubble message={message} onCollapse={onCollapse} />
+                    </SheetHost>
+                </ThemeProvider>
+            </QueryClientProvider>,
         );
 
         const showAll = screen.getByLabelText(/^Show all/);
