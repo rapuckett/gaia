@@ -14,9 +14,13 @@ import { useDirection } from '@/i18n/useT';
 import { applyDirection } from '@/platform/direction';
 import { platformFetch } from '@/platform/fetch';
 import { useConnectionStore } from '@/state/connection';
+import { UIProvider } from '@/ui';
 
 // A chat opened cold (deep link, notification) has the home screen beneath it.
-export const unstable_settings = { initialRouteName: INITIAL_ROUTE };
+export const unstable_settings = { anchor: INITIAL_ROUTE };
+
+// Expo Router renders only the screens a layout declares.
+const ROUTES = [INITIAL_ROUTE, 'new', 'chat/[id]', 'dev/ui', 'dev/ui-lists', 'dev/composer', 'dev/markdown'];
 
 export default function RootLayout() {
     const [queryClient] = useState(() => new QueryClient());
@@ -33,15 +37,21 @@ export default function RootLayout() {
     return (
         <QueryClientProvider client={queryClient}>
             <GaiaClientProvider client={client}>
-                <Drawer
-                    drawerContent={(props) => <AppDrawer {...props} />}
-                    backBehavior="initialRoute"
-                    screenOptions={{
-                        headerShown: false,
-                        drawerPosition: dir === 'rtl' ? 'right' : 'left',
-                        drawerType: width >= PERMANENT_DRAWER_MIN_WIDTH ? 'permanent' : 'front',
-                    }}
-                />
+                <UIProvider>
+                    <Drawer
+                        drawerContent={(props) => <AppDrawer {...props} />}
+                        backBehavior="initialRoute"
+                        screenOptions={{
+                            headerShown: false,
+                            drawerPosition: dir === 'rtl' ? 'right' : 'left',
+                            drawerType: width >= PERMANENT_DRAWER_MIN_WIDTH ? 'permanent' : 'front',
+                        }}
+                    >
+                        {ROUTES.map((name) => (
+                            <Drawer.Screen key={name} name={name} />
+                        ))}
+                    </Drawer>
+                </UIProvider>
             </GaiaClientProvider>
         </QueryClientProvider>
     );
