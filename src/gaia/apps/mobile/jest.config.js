@@ -27,7 +27,7 @@ const project = (preset) => ({
     transformIgnorePatterns,
     testMatch: ['<rootDir>/src/**/*.test.{ts,tsx}'],
     // Sheets are native-only (no BackHandler or native gesture module on web), and the component test renderer can't mount react-native-web's DOM.
-    testPathIgnorePatterns: preset === 'web' ? ['/node_modules/', '/SheetHost\\.test\\.tsx$', '/Markdown\\.test\\.tsx$', '/ChatScreen\\.test\\.tsx$'] : ['/node_modules/'],
+    testPathIgnorePatterns: preset === 'web' ? ['/node_modules/', '/SheetHost\\.test\\.tsx$', '/Markdown\\.test\\.tsx$', '/QuestionCard\\.test\\.tsx$', '/ChatScreen\\.test\\.tsx$'] : ['/node_modules/'],
 });
 
 module.exports = {
