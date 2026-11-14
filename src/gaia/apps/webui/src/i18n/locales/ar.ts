@@ -291,6 +291,7 @@ const messages: Messages = {
     'queue.steerTitle': 'يقرؤها GAIA في خطوته التالية دون أن يبدأ من جديد. وقد لا يجيب عنها على حدة.',
     'queue.steer': 'إضافة إلى هذا الرد',
     'queue.removeAria': 'إزالة الرسالة من قائمة الانتظار: {text}',
+    'queue.steerRefused': 'تعذّرت إضافتها إلى هذا الرد؛ ستُرسل عند انتهائه.',
     'composer.stop': 'إيقاف',
     'composer.stopping': 'جارٍ الإيقاف…',
     'composer.send': 'إرسال',
@@ -3497,6 +3498,7 @@ const messages: Messages = {
     'mobileApp.error.noConnection': 'لا يوجد كمبيوتر متصل. اقرن هذا الهاتف بالكمبيوتر أولًا.',
     'mobileApp.connectors.comingLater': 'الربط من الهاتف قادم في إصدار لاحق. في الوقت الحالي، اربطه من الكمبيوتر الذي يشغّل GAIA.',
     'mobileApp.connectors.googlePcOnly': 'لا يستطيع هذا الهاتف ربط حسابات Google. اربط Google من الكمبيوتر الذي يشغّل GAIA.',
+    'mobileApp.banner.openOnPc': 'افتح GAIA على جهاز الكمبيوتر لتشغيل خادم النماذج.',
 };
 
 export const ar: Locale = {
