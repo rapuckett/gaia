@@ -16,9 +16,10 @@ import * as api from '../services/api';
 import { log } from '../utils/logger';
 import { plainAnswerText } from '../utils/plainText';
 import { AnswerStats } from './AnswerStats';
+import { dropErrorsEchoedInAnswer, isErrorContent } from '../utils/answerErrors.core';
 import { SERVER_CANCELLED_TEXT, splitCutOff, turnEnding } from '../utils/turnEnding.core';
 
-export { splitCutOff, turnEnding };
+export { dropErrorsEchoedInAnswer, isErrorContent, splitCutOff, turnEnding };
 import { displayModelName, useInferencePlace, useModelNames } from '../stores/modelStore';
 import { MODEL_WAIT_HINT_S, isModelWaitLabel } from '../utils/modelWait';
 import { localizeLiveStatus } from '../utils/liveStatus';
@@ -151,55 +152,6 @@ const CHAT_REPORT_CLASSES: ReportClasses = {
     hint: 'msg-report-hint',
     error: 'msg-report-error',
 };
-
-/** Detect if message content looks like an error. */
-export function isErrorContent(content: string): boolean {
-    if (!content) return false;
-    const lower = content.toLowerCase();
-    return (
-        lower.startsWith('error:') ||
-        lower.startsWith('error -') ||
-        lower.includes('traceback (most recent') ||
-        lower.includes("object has no attribute") ||
-        lower.includes('is lemonade server running') ||
-        lower.includes('connection refused') ||
-        lower.includes('failed to fetch')
-    );
-}
-
-const squash = (text: string) => text.replace(/\s+/g, ' ').trim();
-
-/**
- * Drop an error step the answer is, or ends with, word for word. A run that
- * fails before answering saves its error as the whole answer (`echoed`); one
- * that dies mid-answer saves what it wrote, then the error, which then reads
- * below that text rather than above it. An answer that only quotes a tool's
- * error keeps the step, as does one ending with an error that isn't the
- * turn's last step.
- */
-export function dropErrorsEchoedInAnswer(
-    steps: AgentStep[],
-    content: string,
-): { steps: AgentStep[]; echoed: boolean; endedBy: string | null } {
-    const answer = squash(content);
-    if (!answer) return { steps, echoed: false, endedBy: null };
-    const tail = content.trimEnd();
-    const last = steps[steps.length - 1];
-    let echoed = false;
-    let endedBy: string | null = null;
-    const kept = steps.filter((s) => {
-        if (s.type !== 'error' || !s.detail?.trim()) return true;
-        if (squash(s.detail) === answer) {
-            echoed = true;
-            return false;
-        }
-        // The server appends the error that ended the turn as its own paragraph.
-        if (s !== last || !tail.endsWith(`\n\n${s.detail.trim()}`)) return true;
-        endedBy = s.detail.trim();
-        return false;
-    });
-    return { steps: kept, echoed, endedBy };
-}
 
 /** Format a full absolute timestamp for the stats tooltip. */
 function formatFullTimestamp(iso: string, t: Translate): string {

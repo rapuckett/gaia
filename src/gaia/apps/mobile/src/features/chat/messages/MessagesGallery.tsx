@@ -3,11 +3,23 @@
 
 import { AssistantBubble } from './AssistantBubble';
 import { MessageListView } from './MessageList';
+import { UserBubble } from './UserBubble';
+import type { StartOpen } from './useMessageActions';
 import { FIXTURES, type MessagesFixture } from './__fixtures__/messages';
 import { Screen } from '@/ui';
 
 /** Developer gallery of the message list in each state; not part of the shipped screens. */
-export function MessagesGallery({ state }: { state: MessagesFixture }) {
+export type MessagesGalleryState = MessagesFixture | StartOpen;
+
+export function MessagesGallery({ state }: { state: MessagesGalleryState }) {
+    if (state === 'actions' || state === 'delete' || state === 'edit') {
+        const [question] = FIXTURES.short.messages;
+        return (
+            <Screen>
+                <UserBubble message={question} context={{ laterTurns: 2 }} startOpen={state} />
+            </Screen>
+        );
+    }
     const fixture = FIXTURES[state];
     return (
         <Screen>
