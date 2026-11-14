@@ -20,18 +20,18 @@ export interface AssistantBubbleProps {
 
 export function AssistantBubble({ message, streaming = false }: AssistantBubbleProps) {
     const t = useT();
-    const actions = useMessageActions(message);
     const cutOff = streaming ? null : splitCutOff(message.content);
     const cancelled = message.content.trim() === SERVER_CANCELLED_TEXT;
     const text = cancelled ? '' : cutOff ? cutOff.body : message.content;
+    const actions = useMessageActions(message, text);
     return (
         <Stack paddingX="lg" paddingY="xs">
-            <Pressable onLongPress={actions.openSheet} accessible={false} minSize={0}>
+            <Pressable onLongPress={cancelled ? undefined : actions.openSheet} accessible={false} minSize={0}>
                 {text ? <Markdown text={text} streaming={streaming} /> : null}
             </Pressable>
             {cutOff ? <CutOffNote cutOff={cutOff} /> : null}
             {cancelled ? <StoppedNote stop={{ state: 'stopped' }} /> : null}
-            {!streaming ? (
+            {!streaming && !cancelled ? (
                 <Row>
                     <IconButton
                         icon={actions.copied ? Check : Copy}

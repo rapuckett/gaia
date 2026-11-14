@@ -29,7 +29,7 @@ export interface MessageActions {
 }
 
 // Edit, Resend, Try again, Delete and Read aloud wait for GaiaClient endpoints; Copy is the one that needs none.
-export function useMessageActions(message: Message): MessageActions {
+export function useMessageActions(message: Message, copyText: string): MessageActions {
     const t = useT();
     const [open, setOpen] = useState(false);
     const [copied, setCopied] = useState(false);
@@ -44,7 +44,7 @@ export function useMessageActions(message: Message): MessageActions {
     );
 
     const copy = useCallback(() => {
-        Clipboard.setStringAsync(message.content).then(
+        Clipboard.setStringAsync(copyText).then(
             () => {
                 setFailure(null);
                 setCopied(true);
@@ -53,7 +53,7 @@ export function useMessageActions(message: Message): MessageActions {
             },
             (error: unknown) => setFailure(describeError(error, t)),
         );
-    }, [message.content, t]);
+    }, [copyText, t]);
 
     const openSheet = () => setOpen(true);
     const actions: SheetAction[] = [{ label: t('msg.copy'), icon: Copy, onPress: copy }];
