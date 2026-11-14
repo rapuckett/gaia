@@ -123,6 +123,7 @@ describe('endpoints', () => {
         chatAttach: ['GET'],
         chatCancel: ['POST'],
         chatConfirmTool: ['POST'],
+        chatContext: ['GET'],
         chatFollowup: ['POST'],
         chatFollowupOutcome: ['GET'],
         chatUserInput: ['POST'],
