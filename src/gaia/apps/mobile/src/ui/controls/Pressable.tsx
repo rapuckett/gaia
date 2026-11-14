@@ -21,6 +21,8 @@ export interface PressableProps {
     /** Extra screen-reader actions, e.g. what a long-press does. */
     accessibilityActions?: readonly AccessibilityActionInfo[];
     onAccessibilityAction?: (event: AccessibilityActionEvent) => void;
+    /** False lets a screen reader reach the children (links) instead of reading one element. */
+    accessible?: boolean;
     /** Minimum hit area in points; 48 unless a parent already guarantees it. */
     minSize?: number;
     testID?: string;
@@ -36,6 +38,7 @@ export function Pressable({
     accessibilityState,
     accessibilityActions,
     onAccessibilityAction,
+    accessible,
     minSize = 48,
     testID,
 }: PressableProps) {
@@ -46,6 +49,7 @@ export function Pressable({
             disabled={disabled}
             accessibilityRole={accessibilityRole}
             accessibilityLabel={accessibilityLabel}
+            accessible={accessible}
             accessibilityActions={accessibilityActions}
             onAccessibilityAction={onAccessibilityAction}
             accessibilityState={{ ...accessibilityState, disabled: !!disabled }}
