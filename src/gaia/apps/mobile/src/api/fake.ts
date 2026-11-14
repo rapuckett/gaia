@@ -73,6 +73,7 @@ export interface FakeGaiaClient extends GaiaClient {
     readonly created: CreateSessionRequest[];
     readonly cancelled: string[];
     readonly deleted: { sessionId: string; messageId: number }[];
+    readonly deletedOne: { sessionId: string; messageId: number }[];
     readonly confirmations: ToolConfirmRequest[];
     readonly answers: UserInputRequest[];
     readonly scheduleActions: { action: 'pause' | 'resume' | 'run' | 'delete'; name: string }[];
@@ -92,6 +93,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
     const created: CreateSessionRequest[] = [];
     const cancelled: string[] = [];
     const deleted: FakeGaiaClient['deleted'] = [];
+    const deletedOne: FakeGaiaClient['deletedOne'] = [];
     const confirmations: ToolConfirmRequest[] = [];
     const answers: UserInputRequest[] = [];
     const restarts: FakeGaiaClient['restarts'] = [];
@@ -126,6 +128,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         created,
         cancelled,
         deleted,
+        deletedOne,
         confirmations,
         answers,
         scheduleActions,
@@ -186,6 +189,13 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         async getMessages(sessionId): Promise<MessageList> {
             const list = messages[sessionId] ?? [];
             return { messages: list, total: list.length };
+        },
+        async deleteMessage(sessionId, messageId) {
+            deletedOne.push({ sessionId, messageId });
+            const list = messages[sessionId] ?? [];
+            if (!list.some((m) => m.id === messageId)) throw new GaiaApiError(404, 'Message not found');
+            messages[sessionId] = list.filter((m) => m.id !== messageId);
+            return { deleted: true };
         },
         async deleteMessagesFrom(sessionId, messageId) {
             deleted.push({ sessionId, messageId });

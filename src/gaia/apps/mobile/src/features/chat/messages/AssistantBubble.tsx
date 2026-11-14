@@ -15,7 +15,7 @@ import { AnswerFooter } from '../activity/AnswerFooter';
 import { savedActivity } from '../activity/savedActivity';
 import { CutOffNote, StoppedNote } from '../EndingNotes';
 import { Markdown } from '../markdown/Markdown';
-import { useMessageActions } from './useMessageActions';
+import { useMessageActions, type MessageContext } from './useMessageActions';
 
 export interface AssistantBubbleProps {
     message: Message;
@@ -23,14 +23,15 @@ export interface AssistantBubbleProps {
     streaming?: boolean;
     /** How long the reply took, from the question before it. */
     latencyMs?: number;
+    context?: MessageContext;
 }
 
-export function AssistantBubble({ message, streaming = false, latencyMs }: AssistantBubbleProps) {
+export function AssistantBubble({ message, streaming = false, latencyMs, context }: AssistantBubbleProps) {
     const t = useT();
     const cutOff = streaming ? null : splitCutOff(message.content);
     const cancelled = message.content.trim() === SERVER_CANCELLED_TEXT;
     const text = cancelled ? '' : cutOff ? cutOff.body : message.content;
-    const actions = useMessageActions(message, text);
+    const actions = useMessageActions(message, text, context);
     const activity = useMemo(() => savedActivity(message), [message]);
     return (
         <Stack paddingX="lg" paddingY="xs">
