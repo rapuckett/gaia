@@ -76,14 +76,23 @@ function useNow(active: boolean): number {
     return now;
 }
 
-/** The pairing code as a QR image, black on white in both themes so any scanner reads it. */
+/** The pairing code as a QR image, the theme's ink on its paper, as Mobile access draws its code. */
 function PairingQr({ offer }: { offer: DevicePairingOffer }) {
     const t = useT();
     const [src, setSrc] = useState<string | null>(null);
     const [failed, setFailed] = useState<string | null>(null);
     useEffect(() => {
         let live = true;
-        QRCode.toDataURL(JSON.stringify(offer), { width: 200, margin: 2, color: { dark: '#000000', light: '#ffffff' } })
+        // The raster needs literal colors: read the tokens as they resolve now.
+        const css = getComputedStyle(document.documentElement);
+        const ink = css.getPropertyValue('--text-primary').trim();
+        const paper = css.getPropertyValue('--bg-primary').trim();
+        if (!ink || !paper) {
+            log.ui.error('Pairing QR code skipped: --text-primary/--bg-primary did not resolve; styles/index.css must load first.');
+            setFailed('--text-primary/--bg-primary');
+            return;
+        }
+        QRCode.toDataURL(JSON.stringify(offer), { width: 200, margin: 2, color: { dark: ink, light: paper } })
             .then((url: string) => { if (live) setSrc(url); })
             .catch((err: unknown) => {
                 log.ui.error('Pairing QR code could not be drawn', err);

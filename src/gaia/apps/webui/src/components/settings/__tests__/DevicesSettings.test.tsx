@@ -23,6 +23,8 @@ const OFFER: DevicePairingOffer = {
 let replies: Record<string, { status?: number; body: unknown }>;
 
 beforeEach(() => {
+    document.documentElement.style.setProperty('--text-primary', '#111111');
+    document.documentElement.style.setProperty('--bg-primary', '#FFFFFF');
     useDeviceStore.setState({ available: null, status: null, devices: [], loadError: null });
     replies = {
         'GET /devices/status': { body: STATUS },

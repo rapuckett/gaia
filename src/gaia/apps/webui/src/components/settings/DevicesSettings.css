@@ -7,13 +7,10 @@
     gap: 16px;
 }
 
-/* A white plate in both themes: scanners need ink on paper. */
 .devices-qr {
     flex: none;
     width: 200px;
     height: 200px;
-    background: #ffffff;
-    border-radius: var(--radius-md);
 }
 
 .devices-qr img {
@@ -97,7 +94,7 @@
 
 @media (prefers-reduced-motion: no-preference) {
     .devices-row {
-        animation: devices-row-in var(--duration, 150ms) var(--ease, ease-out);
+        animation: devices-row-in var(--duration) var(--ease);
     }
 }
 
