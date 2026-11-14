@@ -15,7 +15,7 @@ import { activeChatId, liveRunsFromTurns, openChat, openNewChat } from './naviga
 // Queues are empty until the composer queue is wired to the drawer.
 const NO_QUEUES = {};
 
-export function AppDrawer({ navigation }: DrawerContentComponentProps) {
+export function AppDrawer({ navigation, state }: DrawerContentComponentProps) {
     const router = useRouter();
     const pathname = usePathname();
     const queryClient = useQueryClient();
@@ -30,6 +30,12 @@ export function AppDrawer({ navigation }: DrawerContentComponentProps) {
             activeId={activeChatId(pathname)}
             live={live}
             queues={NO_QUEUES}
+            routeNames={state.routeNames}
+            activeRoute={pathname.split('/')[1] || null}
+            onOpenRoute={(route) => {
+                router.push(`/${route}`);
+                navigation.closeDrawer();
+            }}
             onSelect={(id) => {
                 openChat(router, id);
                 navigation.closeDrawer();

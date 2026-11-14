@@ -5,11 +5,13 @@ import { useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 
 import { APP_NAME } from '@webui/utils/constants';
+import { hiddenAutomatedCount } from '@webui/utils/sessionGrouping';
 
 import { useDeleteSession, useMarkRead, useRenameSession, useSessions, useSessionSearch, useSetPinned } from '@/data';
 import { ModelStatusPill } from '@/features/model';
 import { describeError, useT } from '@/i18n/useT';
 import {
+    Chip,
     EmptyState,
     ErrorState,
     Icon,
@@ -30,7 +32,9 @@ import {
 import { Ellipsis, EyeOff, Plus, X } from '@/ui/icons';
 
 import { ChatRowSheets, type RowSheet } from './ChatRowSheets';
+import { declaredNavEntries, type NavEntry } from './navEntries';
 import { SearchResultRow } from './SearchResultRow';
+import { useShowAutomated } from './showAutomated';
 import { useMarkReadWhenSeen } from './useMarkReadWhenSeen';
 import { useNow } from './useNow';
 import {
@@ -59,19 +63,30 @@ export interface ChatDrawerContentProps {
     onClose: () => void;
     /** Shows a New chat button in the header when given. */
     onNewChat?: () => void;
+    /** Route names the navigator declares; the section entries for the others stay hidden. */
+    routeNames?: readonly string[];
+    /** The section open now, so its entry is the only selected row. */
+    activeRoute?: string | null;
+    onOpenRoute?: (route: string) => void;
     live?: LiveRuns;
     queues?: Readonly<Record<string, readonly QueuedMessage[]>>;
     /** The last failed row action, shown as an alert until the next one succeeds. */
     error?: ChatListError | null;
 }
 
-export function ChatDrawerContent({ activeId, onSelect, onClose, onNewChat, live, queues, error }: ChatDrawerContentProps) {
+export function ChatDrawerContent({ activeId, onSelect, onClose, onNewChat, routeNames = [], activeRoute, onOpenRoute, live, queues, error }: ChatDrawerContentProps) {
     const t = useT();
     const sessions = useSessions();
     const now = useNow();
     const [text, setText] = useState('');
     const search = useSessionSearch(text);
+    const [showAutomated, toggleAutomated] = useShowAutomated();
+    const entries = useMemo(() => declaredNavEntries(routeNames), [routeNames]);
     const q = text.trim();
+    const open = useCallback((route: string) => {
+        setText('');
+        onOpenRoute?.(route);
+    }, [onOpenRoute]);
     // Opening a chat or leaving the drawer ends the search.
     const select = useCallback((id: string) => {
         setText('');
@@ -94,9 +109,10 @@ export function ChatDrawerContent({ activeId, onSelect, onClose, onNewChat, live
         [sessions.data, q, hits],
     );
     const sections = useMemo(
-        () => buildChatSections({ sessions: shown, activeId, live, queues, now }),
-        [shown, activeId, live, queues, now],
+        () => buildChatSections({ sessions: shown, activeId, live, queues, now, showAutomated }),
+        [shown, activeId, live, queues, now, showAutomated],
     );
+    const hiddenCount = hiddenAutomatedCount([...(sessions.data?.sessions ?? [])]);
     const state = chatListState(sessions, sections);
     const searchFailed = q !== '' && search.query === q && search.isError;
     const settled = search.settled || searchFailed;
@@ -122,7 +138,14 @@ export function ChatDrawerContent({ activeId, onSelect, onClose, onNewChat, live
         <Screen
             edges={['top', 'bottom', 'start']}
             header={<Header onClose={close} onNewChat={onNewChat ? newChat : undefined} />}
-            footer={<ModelStatusPill />}
+            footer={
+                <Stack>
+                    {entries.filter((e) => e.footer).map((e) => (
+                        <NavRow key={e.key} entry={e} active={activeRoute === e.route} onOpen={open} />
+                    ))}
+                    <ModelStatusPill />
+                </Stack>
+            }
         >
             <Stack paddingX="lg" paddingY="sm">
                 <TextField
@@ -133,6 +156,9 @@ export function ChatDrawerContent({ activeId, onSelect, onClose, onNewChat, live
                     returnKeyType="search"
                 />
             </Stack>
+            {entries.filter((e) => !e.footer).map((e) => (
+                <NavRow key={e.key} entry={e} active={activeRoute === e.route} onOpen={open} />
+            ))}
             {alert ? (
                 <Notice tone="danger" message={rowErrorMessage(alert.kind, alert.error, t)} />
             ) : null}
@@ -180,6 +206,15 @@ export function ChatDrawerContent({ activeId, onSelect, onClose, onNewChat, live
                 onSetPinned={(id, pinned) => setPinned.mutate({ id, pinned }, outcome(pinned ? 'pin' : 'unpin'))}
                 onDelete={(id) => remove.mutate(id, outcome('delete'))}
             />
+            {hiddenCount > 0 ? (
+                <Stack paddingX="lg" paddingY="sm">
+                    <Chip
+                        label={showAutomated ? t('sidebar.hideBackground') : t.plural('sidebar.showBackground', hiddenCount)}
+                        selected={showAutomated}
+                        onPress={toggleAutomated}
+                    />
+                </Stack>
+            ) : null}
         </Screen>
     );
 }
@@ -195,6 +230,18 @@ function Header({ onClose, onNewChat }: { onClose: () => void; onNewChat?: () =>
                 <IconButton icon={X} label={t('sidebar.collapse')} onPress={onClose} />
             </Row>
         </Stack>
+    );
+}
+
+function NavRow({ entry, active, onOpen }: { entry: NavEntry; active: boolean; onOpen: (route: string) => void }) {
+    const t = useT();
+    return (
+        <ListRow
+            title={t(entry.labelKey)}
+            selected={active}
+            leading={<Icon icon={entry.icon} size="sm" tone="secondary" />}
+            onPress={() => onOpen(entry.route)}
+        />
     );
 }
 
