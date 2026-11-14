@@ -23,6 +23,7 @@ import type {
     SetupCheck,
     SetupPlan,
     SetupRunStatus,
+    SkillList,
     StartScreen,
     StreamEvent,
     SystemStatus,
@@ -54,6 +55,7 @@ export interface FakeClientData {
     modelNeeds?: Partial<Record<ModelNeed['job'], ModelNeed>>;
     /** What getSetupStatus answers. */
     setupStatus?: SetupRunStatus;
+    skills?: SkillList;
     resources?: ResourceUsage;
     start?: StartScreen;
     /** Most chats a search returns before it says `truncated`. */
@@ -254,6 +256,9 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         },
         async listAgentMcps() {
             return { agent_mcps: [...(data.agentMcps ?? [])] };
+        },
+        async listSkills() {
+            return { skills: [...(data.skills?.skills ?? [])], invalid: { ...(data.skills?.invalid ?? {}) } };
         },
         async listSchedules() {
             return { schedules: [...schedules], total: schedules.length };
