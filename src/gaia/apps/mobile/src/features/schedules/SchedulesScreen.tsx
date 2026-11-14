@@ -8,9 +8,10 @@ import { GaiaApiError } from '@/api/errors';
 import { useDeleteSchedule, useRunSchedule, useSchedules, useUpdateScheduleStatus } from '@/data';
 import { ScreenHeader } from '@/features/nav/ScreenHeader';
 import { describeError, useT } from '@/i18n/useT';
-import { EmptyState, ErrorState, IconButton, List, ListSkeleton, Notice, Row, Screen, SectionHeader, Stack, useTheme } from '@/ui';
-import { X } from '@/ui/icons';
+import { Button, EmptyState, ErrorState, IconButton, List, ListSkeleton, Notice, Row, Screen, SectionHeader, Stack, useTheme } from '@/ui';
+import { Plus, X } from '@/ui/icons';
 
+import { NewScheduleSheet } from './NewScheduleSheet';
 import { ScheduleCard } from './ScheduleCard';
 import { isCountdownRange } from './scheduleText';
 
@@ -53,6 +54,7 @@ export function SchedulesScreen({ onOpenChat }: SchedulesScreenProps) {
     const run = useRunSchedule();
     const remove = useDeleteSchedule();
     const [actionError, setActionError] = useState<string | null>(null);
+    const [creating, setCreating] = useState(false);
     const schedules = query.data?.schedules ?? [];
     const now = useClock(schedules);
     useRefreshWhenDue(schedules, now, () => void query.refetch());
@@ -64,6 +66,10 @@ export function SchedulesScreen({ onOpenChat }: SchedulesScreenProps) {
 
     return (
         <Screen header={<ScreenHeader title={t('schedules.title')} />}>
+            <NewScheduleSheet open={creating} onClose={() => setCreating(false)} />
+            <Stack paddingX="lg" paddingY="sm" align="start">
+                <Button label={t('schedules.new')} icon={Plus} variant="primary" size="sm" onPress={() => setCreating(true)} />
+            </Stack>
             {query.isPending ? <ListSkeleton rows={4} /> : null}
             {query.isError && !query.data ? (
                 <ErrorState title={t('schedules.loadFailed')} message={describeError(query.error, t)} onRetry={() => void query.refetch()} />

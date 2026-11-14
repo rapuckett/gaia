@@ -1,7 +1,8 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import type { Message, Session, StartScreen, StreamEvent, SystemStatus } from '@webui/types';
+import type { Message, ResourceUsage, Session, StartScreen, StreamEvent, SystemStatus } from '@webui/types';
+import { fromApiMessages } from '@webui/utils/chatStream';
 
 import type { FetchLike, FetchRequestInit, FetchResponseLike } from '@/platform/fetch.types';
 
@@ -13,13 +14,20 @@ import {
     GaiaStreamDroppedError,
     GaiaStreamError,
     GaiaStreamTimeoutError,
+    parseErrorBody,
     parseErrorDetail,
     type StreamEndpoint,
 } from './errors';
 import type {
+    AgentList,
+    AgentMcpList,
     CancelChatResult,
     CancelIndexingResult,
     ConfirmToolResult,
+    ConnectorActivations,
+    ConnectorGrants,
+    ConnectorList,
+    ContextUsageResult,
     DeleteDocumentResult,
     DeleteMessagesResult,
     DeleteScheduleResult,
@@ -35,17 +43,26 @@ import type {
     ModelNeed,
     RestartModelResult,
     RequestOptions,
+    ParsedSchedule,
     Schedule,
     ScheduleList,
     SessionList,
     SessionSearchResponse,
+    SetupCheck,
+    SetupPlan,
     SetupRunStatus,
+    SkillList,
     UserInputResult,
 } from './client.types';
 import {
     ATTACH_HEADER_TIMEOUT_MS,
+    connectorActivationPath,
+    connectorActivationsPath,
+    connectorGrantPath,
+    connectorGrantsPath,
     documentPath,
     ENDPOINTS,
+    chatContextPath,
     followupOutcomePath,
     MESSAGE_PAGE_SIZE,
     QUEUED_IDLE_MS,
@@ -53,9 +70,12 @@ import {
     scheduleRunPath,
     SEND_HEADER_TIMEOUT_MS,
     SESSION_PAGE_SIZE,
+    sessionDocumentPath,
+    sessionMessagePath,
     sessionMessagesAndBelowPath,
     sessionMessagesPath,
     sessionPath,
+    sessionPrivatePath,
     setupNeedsPath,
     STREAM_IDLE_MS,
     UI_HEADERS,
@@ -146,7 +166,7 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
         if (!res.ok) {
             const errorText = await res.text().catch(() => '');
             const detail = parseErrorDetail(errorText);
-            throw res.status === 401 ? new GaiaAuthError(detail) : new GaiaApiError(res.status, detail);
+            throw res.status === 401 ? new GaiaAuthError(detail) : new GaiaApiError(res.status, detail, undefined, undefined, parseErrorBody(errorText));
         }
         return res;
     }
@@ -166,6 +186,10 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
     async function postJson<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
         return readJson<T>(await request('POST', path, body, signal), path);
+    }
+
+    async function patchJson<T>(path: string, signal?: AbortSignal): Promise<T> {
+        return readJson<T>(await request('PATCH', path, undefined, signal), path);
     }
 
     async function deleteJson<T>(path: string, signal?: AbortSignal): Promise<T> {
@@ -253,6 +277,10 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             return postJson<Session>(ENDPOINTS.sessions, request, options?.signal);
         },
 
+        getContextUsage(sessionId, options) {
+            return getJson<ContextUsageResult>(chatContextPath(sessionId), options?.signal);
+        },
+
         getFollowUpOutcome(sessionId, options) {
             return getJson<FollowUpOutcome>(followupOutcomePath(sessionId), options?.signal);
         },
@@ -275,11 +303,27 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
                 }
                 messages.push(...page.messages);
             }
-            return { messages, total: first.total };
+            return { messages: fromApiMessages(messages), total: first.total };
         },
 
         sendFollowUp(sessionId, text, options) {
             return postJson<FollowUpResult>(ENDPOINTS.chatFollowup, { session_id: sessionId, text }, options?.signal);
+        },
+
+        updateSession(sessionId, update, options) {
+            return putJson<Session>(sessionPath(sessionId), update, options?.signal);
+        },
+
+        toggleSessionPrivate(sessionId, options) {
+            return patchJson<Session>(sessionPrivatePath(sessionId), options?.signal);
+        },
+
+        async detachDocument(sessionId, docId, options) {
+            await request('DELETE', sessionDocumentPath(sessionId, docId), undefined, options?.signal);
+        },
+
+        getResourceUsage(options) {
+            return getJson<ResourceUsage>(ENDPOINTS.systemResources, options?.signal);
         },
 
         sendMessage(sessionId, message, options) {
@@ -290,6 +334,10 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
         attachToRun(sessionId, options) {
             const path = `${ENDPOINTS.chatAttach}?session_id=${encodeURIComponent(sessionId)}`;
             return streamTurn('GET', path, undefined, 'attach', ATTACH_HEADER_TIMEOUT_MS, options?.signal);
+        },
+
+        deleteMessage(sessionId, messageId, options) {
+            return deleteJson<{ deleted: boolean }>(sessionMessagePath(sessionId, messageId), options?.signal);
         },
 
         deleteMessagesFrom(sessionId, messageId, options) {
@@ -315,8 +363,56 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             return postJson<UserInputResult>(ENDPOINTS.chatUserInput, body, options?.signal);
         },
 
+        listAgents(options) {
+            return getJson<AgentList>(ENDPOINTS.agents, options?.signal);
+        },
+
+        listConnectors(options) {
+            return getJson<ConnectorList>(ENDPOINTS.connectors, options?.signal);
+        },
+
+        listConnectorGrants(connectorId, options) {
+            return getJson<ConnectorGrants>(connectorGrantsPath(connectorId), options?.signal);
+        },
+
+        listConnectorActivations(connectorId, options) {
+            return getJson<ConnectorActivations>(connectorActivationsPath(connectorId), options?.signal);
+        },
+
+        async grantConnectorAgent(connectorId, agentId, scopes, options) {
+            await request('PUT', connectorGrantPath(connectorId, agentId), { scopes }, options?.signal);
+        },
+
+        async revokeConnectorAgentGrant(connectorId, agentId, options) {
+            await request('DELETE', connectorGrantPath(connectorId, agentId), undefined, options?.signal);
+        },
+
+        async activateConnectorAgent(connectorId, agentId, scopes, options) {
+            await request('PUT', connectorActivationPath(connectorId, agentId), scopes ? { scopes } : {}, options?.signal);
+        },
+
+        async deactivateConnectorAgent(connectorId, agentId, options) {
+            await request('DELETE', connectorActivationPath(connectorId, agentId), undefined, options?.signal);
+        },
+
+        listAgentMcps(options) {
+            return getJson<AgentMcpList>(ENDPOINTS.connectorsAgentMcps, options?.signal);
+        },
+
+        listSkills(options) {
+            return getJson<SkillList>(ENDPOINTS.skills, options?.signal);
+        },
+
         listSchedules(options) {
             return getJson<ScheduleList>(ENDPOINTS.schedules, options?.signal);
+        },
+
+        createSchedule(request, options) {
+            return postJson<Schedule>(ENDPOINTS.schedules, request, options?.signal);
+        },
+
+        parseSchedule(input, timezone, options) {
+            return postJson<ParsedSchedule>(ENDPOINTS.scheduleParse, { input, timezone }, options?.signal);
         },
 
         updateScheduleStatus(name, status, options) {
@@ -385,6 +481,30 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         getStartScreen(options) {
             return getJson<StartScreen>(ENDPOINTS.onboardingStart, options?.signal);
+        },
+
+        checkSetup(skipChatModel, options) {
+            return getJson<SetupCheck>(`${ENDPOINTS.setupCheck}?skip_chat_model=${skipChatModel}`, options?.signal);
+        },
+
+        getSetupPlan(options) {
+            return getJson<SetupPlan>(ENDPOINTS.setupPlan, options?.signal);
+        },
+
+        startSetup(skipChatModel, gaiaLemonade = false, options = {}) {
+            return postJson<SetupRunStatus>(
+                ENDPOINTS.setupRun,
+                {
+                    skip_chat_model: skipChatModel,
+                    gaia_lemonade: gaiaLemonade,
+                    acknowledge_low_disk: !!options.acknowledgeLowDisk,
+                    keep_trying: !!options.keepTrying,
+                    extra_models: options.extraModels ?? [],
+                    server_only: !!options.serverOnly,
+                    upgrade_embedded: !!options.upgradeEmbedded,
+                },
+                options.signal,
+            );
         },
     };
 }

@@ -2099,6 +2099,7 @@ const messages: Messages = {
     'setup.logs.reportNote': 'سجلات الإعداد وسجلات GAIA وتفاصيل هذا الكمبيوتر في ملف واحد. تُحذف المفاتيح والأسرار الأخرى، لكن قد تقتبس السجلات من محادثاتك، فراجعه قبل إرفاقه بالبلاغ.',
     'setup.logs.reportSaved': 'تم الحفظ ({size}). توجد نسخة أيضًا في',
     'setup.logs.reportFailed': 'تعذّر حفظ التقرير: {error}',
+    'setup.logs.reportOnPc': 'غيّر هذا على الكمبيوتر الذي يشغّل GAIA',
     'setup.progress.retry': 'إعادة المحاولة',
     'setup.progress.resume': 'استئناف',
     'setup.progress.resumeAll': 'استئناف الكل',
@@ -2980,6 +2981,14 @@ const messages: Messages = {
     'permission.calendar.notifies.one': 'سيتم إشعار {n} شخص',
     'permission.calendar.notifies.other': 'سيتم إشعار {n} أشخاص',
     'permission.calendar.noOne': 'لن يتم إشعار أحد',
+    // Chat alerts
+    'chatAlert.ended': 'توقفت محادثة عن العمل',
+    'chatAlert.failed': 'واجه GAIA مشكلة',
+    'chatAlert.finished': 'انتهى GAIA',
+    'chatAlert.needsApproval': 'يحتاج GAIA إلى موافقتك',
+    'chatAlert.question': 'لدى GAIA سؤال',
+    'chatAlert.stopped': 'توقّف GAIA',
+    'chatAlert.untitled': 'محادثة',
     // Scheduled tasks
     'schedules.title': 'المهام المجدولة',
     'schedules.close': 'إغلاق المهام المجدولة',
@@ -3003,6 +3012,9 @@ const messages: Messages = {
     'schedules.dismissError': 'إغلاق رسالة الخطأ',
     'schedules.loading': 'جارٍ تحميل المهام المجدولة…',
     'schedules.loadFailed': 'تعذّر تحميل المهام المجدولة',
+    'schedules.updateFailed': 'تعذّر تحديث المهمة المجدولة',
+    'schedules.runNowFailed': 'تعذّر تشغيل المهمة المجدولة الآن',
+    'schedules.deleteFailed': 'تعذّر حذف المهمة المجدولة',
     'schedules.empty': 'لا توجد مهام مجدولة بعد. أنشئ مهمة للبدء.',
     'schedules.status.active': 'نشطة',
     'schedules.status.paused': 'متوقفة مؤقتًا',
@@ -3505,6 +3517,8 @@ const messages: Messages = {
     'mobileApp.error.streamBroke': 'انقطع الاتصال بـ GAIA أثناء وصول الرد. قد تكتمل الإجابة رغم ذلك على الكمبيوتر: أعد فتح هذه المحادثة بعد دقيقة لرؤيتها.',
     'mobileApp.error.badEvent': 'أرسل GAIA حدثًا في الرد لا يستطيع هذا الهاتف قراءته: {preview}',
     'mobileApp.error.noConnection': 'لا يوجد كمبيوتر متصل. اقرن هذا الهاتف بالكمبيوتر أولًا.',
+    'mobileApp.connectors.comingLater': 'الربط من الهاتف قادم في إصدار لاحق. في الوقت الحالي، اربطه من الكمبيوتر الذي يشغّل GAIA.',
+    'mobileApp.connectors.googlePcOnly': 'لا يستطيع هذا الهاتف ربط حسابات Google. اربط Google من الكمبيوتر الذي يشغّل GAIA.',
     'mobileApp.banner.openOnPc': 'افتح GAIA على جهاز الكمبيوتر لتشغيل خادم النماذج.',
 };
 

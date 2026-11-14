@@ -2099,6 +2099,7 @@ export const enMessages = {
     'setup.logs.reportNote': "Setup's logs, GAIA's logs and this PC's details in one file. Keys and other secrets are removed, but a log can quote your chats, so look it over before you attach it to a report.",
     'setup.logs.reportSaved': 'Saved ({size}). A copy is also in',
     'setup.logs.reportFailed': "Couldn't save the report: {error}",
+    'setup.logs.reportOnPc': 'Change this on the PC running GAIA',
     'setup.progress.retry': 'Retry',
     'setup.progress.resume': 'Resume',
     'setup.progress.resumeAll': 'Resume all',
@@ -2979,6 +2980,14 @@ export const enMessages = {
     'permission.calendar.notifies.one': 'Notifies {n} person',
     'permission.calendar.notifies.other': 'Notifies {n} people',
     'permission.calendar.noOne': 'Nobody is notified',
+    // Chat alerts
+    'chatAlert.ended': 'A chat stopped running',
+    'chatAlert.failed': 'GAIA hit a problem',
+    'chatAlert.finished': 'GAIA finished',
+    'chatAlert.needsApproval': 'GAIA needs your approval',
+    'chatAlert.question': 'GAIA has a question',
+    'chatAlert.stopped': 'GAIA stopped',
+    'chatAlert.untitled': 'A chat',
     // Scheduled tasks
     'schedules.title': 'Scheduled tasks',
     'schedules.close': 'Close schedule manager',
@@ -3002,6 +3011,9 @@ export const enMessages = {
     'schedules.dismissError': 'Dismiss error',
     'schedules.loading': 'Loading schedules...',
     'schedules.loadFailed': 'Failed to load schedules',
+    'schedules.updateFailed': 'Failed to update schedule',
+    'schedules.runNowFailed': 'Could not run the schedule now',
+    'schedules.deleteFailed': 'Failed to delete schedule',
     'schedules.empty': 'No scheduled tasks yet. Create one to get started.',
     'schedules.status.active': 'active',
     'schedules.status.paused': 'paused',
@@ -3505,6 +3517,8 @@ export const enMessages = {
     'mobileApp.error.streamBroke': 'The connection to GAIA broke while the reply was arriving. The answer may still finish on your PC: reopen this chat in a minute to see it.',
     'mobileApp.error.badEvent': 'GAIA sent a reply event this phone cannot read: {preview}',
     'mobileApp.error.noConnection': 'No PC is connected. Pair this phone with your PC first.',
+    'mobileApp.connectors.comingLater': "Connecting from the phone is coming in a later build. For now, connect it on the PC running GAIA.",
+    'mobileApp.connectors.googlePcOnly': "This phone can't connect Google accounts. Connect Google on the PC running GAIA.",
     'mobileApp.banner.openOnPc': 'Open GAIA on your PC to start the model server.',
 } as const;
 
