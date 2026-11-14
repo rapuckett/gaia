@@ -47,7 +47,7 @@ function Output({ step, t }: { step: AgentStep; t: ReturnType<typeof useT> }) {
     if (!step.result) return null;
     return (
         <Section label={step.success === false ? t('activity.detail.error') : t('activity.detail.result')}>
-            <Text role="label" tone={step.success === false ? 'danger' : 'secondary'} selectable dir="auto" testID="step-result">
+            <Text role="label" tone={step.success === false ? 'danger' : 'secondary'} selectable testID="step-result">
                 {step.result}
             </Text>
         </Section>
@@ -103,7 +103,7 @@ export function ToolStepRow({ step, awaitingUser = false, now, testID }: ToolSte
                 <Stack gap="sm">
                     {step.thought?.detail ? (
                         <Section label={thoughtLabel(false, undefined, t)}>
-                            <Text role="label" tone="secondary" dir="auto">
+                            <Text role="label" tone="secondary">
                                 {step.thought.detail.trim()}
                             </Text>
                         </Section>
@@ -124,7 +124,7 @@ export function ToolStepRow({ step, awaitingUser = false, now, testID }: ToolSte
                         <Section label={t('activity.detail.arguments')}>
                             <Stack gap="xs">
                                 {argRows(step.detail).map((row, i) => (
-                                    <Text key={i} role="label" tone="secondary" selectable dir="auto">
+                                    <Text key={i} role="label" tone="secondary" selectable>
                                         {row.key !== undefined ? `${row.key}: ${row.value}` : row.value}
                                     </Text>
                                 ))}

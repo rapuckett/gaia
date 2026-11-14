@@ -45,7 +45,7 @@ import { StepResult } from './LongContent';
 import { isMessageKey, ref, type MessageKey } from '../i18n/registry';
 import {
     FILTER_MIN_TOOL_ROWS, MCP_OUTPUT_PREVIEW_LINES, SKILL_USE_TOOLS, consolidateSteps, failureText, foldThoughts, thoughtLabel,
-    formatElapsed, argRows, getToolLabels, isTurnError, isWarning, say, shownWhenDone, stepsSummary, thoughtDurations,
+    formatElapsed, formatToolLatency, compactNarration, argRows, getToolLabels, isTurnError, isWarning, say, shownWhenDone, stepsSummary, thoughtDurations,
     toTimeline, toolRowText,
     type ActivityRow, type PlanItemStatus, type TimelineItem, type ToolLabels,
 } from '../utils/agentActivity.core';

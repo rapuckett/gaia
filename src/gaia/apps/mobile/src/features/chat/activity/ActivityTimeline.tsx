@@ -28,7 +28,6 @@ function useNow(ticking: boolean): number {
     const [now, setNow] = useState(() => Date.now());
     useEffect(() => {
         if (!ticking) return undefined;
-        setNow(Date.now());
         const timer = setInterval(() => setNow(Date.now()), 1000);
         return () => clearInterval(timer);
     }, [ticking]);
@@ -42,7 +41,7 @@ function Thought({ step, live, durationMs }: { step: ActivityRow; live: boolean;
     if (!text) return null;
     return (
         <Disclosure title={thoughtLabel(live, durationMs, t)} open={open} onToggle={() => setOpen((v) => !v)}>
-            <Text role="label" tone="secondary" dir="auto">
+            <Text role="label" tone="secondary">
                 {text}
             </Text>
         </Disclosure>
@@ -89,7 +88,7 @@ export function ActivityTimeline({ steps, running = false, awaitingUser = false,
             {timeline.map((item, i) => {
                 if (item.kind === 'note') {
                     return (
-                        <Text key={item.row.id} role="label" tone="secondary" dir="auto">
+                        <Text key={item.row.id} role="label" tone="secondary">
                             {item.row.detail}
                         </Text>
                     );

@@ -8,7 +8,7 @@ import { useState } from 'react';
 import { useT } from '@/i18n/useT';
 import { Disclosure, Stack, Text } from '@/ui';
 
-import { answerFooterText } from './answerFooter';
+import { answerFooterText } from './footerText';
 
 export interface AnswerFooterProps {
     latencyMs?: number;
