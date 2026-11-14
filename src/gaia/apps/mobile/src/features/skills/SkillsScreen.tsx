@@ -1,7 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 
 import type { SkillInfo } from '@/api/client.types';
 import { useSkills } from '@/data';
@@ -38,7 +38,7 @@ export function SkillsScreen({ onTry }: { onTry: (name: string, prompt: string) 
     const all = skills.data?.skills ?? [];
     const invalid = Object.entries(skills.data?.invalid ?? {});
     const q = query.trim();
-    const shown = useMemo(() => filterSkills(all, query), [all, query]);
+    const shown = filterSkills(all, query);
     const grouped = isGrouped(all);
 
     const groupOpen = (id: string, byDefault: boolean) => !!q || (openGroups[id] ?? byDefault);
