@@ -15,17 +15,20 @@ export interface DisclosureProps {
     open: boolean;
     onToggle: () => void;
     children?: ReactNode;
+    /** Icon slot before the title; mirrors in Arabic. */
+    leading?: ReactNode;
     trailing?: ReactNode;
     testID?: string;
 }
 
-export function Disclosure({ title, open, onToggle, children, trailing, testID }: DisclosureProps) {
+export function Disclosure({ title, open, onToggle, children, leading, trailing, testID }: DisclosureProps) {
     const { space } = useTheme();
     return (
         <View testID={testID}>
             <Pressable onPress={onToggle} accessibilityLabel={title} accessibilityState={{ expanded: open }}>
                 <Row gap="sm">
                     <Icon icon={open ? ChevronDown : ChevronRight} size="sm" tone="muted" />
+                    {leading}
                     <View style={{ flex: 1, minWidth: 0 }}>
                         <Text role="label" weight="medium" tone="secondary" numberOfLines={1}>
                             {title}
