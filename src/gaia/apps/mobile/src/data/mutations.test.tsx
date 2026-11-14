@@ -12,8 +12,8 @@ import { GaiaClientProvider } from './GaiaClientProvider';
 import { useDeleteSession, useRenameSession, useSetPinned } from './mutations';
 import { queryKeys, useSessions } from './queries';
 
-const replace = jest.fn();
-jest.mock('expo-router', () => ({ useRouter: () => ({ replace }) }));
+const mockReplace = jest.fn();
+jest.mock('expo-router', () => ({ useRouter: () => ({ replace: mockReplace }) }));
 
 function session(id: string, over: Partial<Session> = {}): Session {
     return {
@@ -33,7 +33,7 @@ function setup(client = createFakeClient({ sessions: [session('a'), session('b')
 }
 
 describe('session mutations', () => {
-    beforeEach(() => replace.mockClear());
+    beforeEach(() => mockReplace.mockClear());
 
     it('rename and pin show at once, refetch the list and the chat, and a failure puts the row back', async () => {
         const { client, queryClient, wrapper } = setup();
@@ -63,9 +63,9 @@ describe('session mutations', () => {
 
         await act(async () => open.result.current.mutate('b'));
         await waitFor(() => expect(client.deletedSessions).toEqual(['b']));
-        expect(replace).not.toHaveBeenCalled();
+        expect(mockReplace).not.toHaveBeenCalled();
 
         await act(async () => open.result.current.mutate('a'));
-        await waitFor(() => expect(replace).toHaveBeenCalledWith('/'));
+        await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/'));
     });
 });
