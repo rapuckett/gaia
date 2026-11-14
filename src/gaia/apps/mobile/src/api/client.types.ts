@@ -12,6 +12,7 @@ import type {
     ParsedSchedule,
     ResourceUsage,
     Schedule,
+    ScheduleResult,
     Session,
     SetupRunStatus,
     StartScreen,
@@ -31,6 +32,7 @@ export type {
     ParsedSchedule,
     ResourceUsage,
     Schedule,
+    ScheduleResult,
     Session,
     SetupRunStatus,
     StartScreen,
@@ -108,6 +110,11 @@ export interface CreateScheduleRequest {
     timezone?: string;
 }
 
+export interface ScheduleResults {
+    results: ScheduleResult[];
+    total: number;
+}
+
 export interface DeleteScheduleResult {
     deleted: boolean;
 }
@@ -177,6 +184,8 @@ export interface GaiaClient {
     /** Runs a schedule once now (409 while a run is in flight); its next scheduled run stays as it was. */
     runSchedule(name: string, options?: RequestOptions): Promise<Schedule>;
     deleteSchedule(name: string, options?: RequestOptions): Promise<DeleteScheduleResult>;
+    /** A schedule's most recent runs, newest first. */
+    listScheduleResults(name: string, limit: number, options?: RequestOptions): Promise<ScheduleResults>;
     /** The library's documents; a chat searches only the ones attached to it. */
     listDocuments(options?: RequestOptions): Promise<DocumentListResponse>;
     getSystemStatus(options?: RequestOptions): Promise<SystemStatus>;
