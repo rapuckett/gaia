@@ -27,7 +27,6 @@ export function MessageListView({ messages, loading = false, error, onRetry, liv
     const t = useT();
     const { listRef, following, showJump, onScroll, jumpToBottom } = useFollowScroll<Message>();
     const shown = useMemo(() => messages.filter((m) => m.role !== 'system').reverse(), [messages]);
-    const latestAnswerId = !live && shown[0]?.role === 'assistant' ? shown[0].id : null;
 
     const bringIntoView = useCallback(
         (index: number) => listRef.current?.scrollToIndex({ index, viewPosition: 0.5, animated: true }),
@@ -48,7 +47,7 @@ export function MessageListView({ messages, loading = false, error, onRetry, liv
                     item.role === 'user' ? (
                         <UserBubble message={item} onCollapse={() => bringIntoView(index)} />
                     ) : (
-                        <AssistantBubble message={item} latest={item.id === latestAnswerId} />
+                        <AssistantBubble message={item} />
                     )
                 }
                 ListHeaderComponent={live ? <>{live}</> : undefined}
