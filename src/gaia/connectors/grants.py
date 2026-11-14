@@ -46,14 +46,9 @@ from gaia.connectors.errors import (
     ScopeNotAllowedError,
     UnknownConnectorError,
 )
+from gaia.home import gaia_home
 
 logger = logging.getLogger(__name__)
-
-
-# Read at import time. Tests monkeypatch ``Path.home`` BEFORE this module is
-# imported (or after — see test conftest); the runtime helper ``_grants_path``
-# evaluates ``Path.home()`` on every call so it sees the latest patched value.
-GRANTS_FILE = Path.home() / ".gaia" / "connectors" / "grants.json"
 
 
 # Per-process write lock. Both an asyncio.Lock and a threading.Lock are
@@ -65,9 +60,8 @@ _write_lock = threading.Lock()
 
 
 def _grants_path() -> Path:
-    """Resolve the grants path on each call so tests can ``monkeypatch.setattr``
-    on ``Path.home`` after import."""
-    return Path.home() / ".gaia" / "connectors" / "grants.json"
+    """Resolve the grants path on each call so a late ``GAIA_HOME`` applies."""
+    return gaia_home() / "connectors" / "grants.json"
 
 
 def _ensure_parent(path: Path) -> None:

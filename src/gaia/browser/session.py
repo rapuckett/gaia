@@ -33,6 +33,7 @@ from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
 
 from gaia.browser.errors import SessionStoreError
+from gaia.home import gaia_home
 from gaia.logger import get_logger
 
 logger = get_logger(__name__)
@@ -52,8 +53,8 @@ _HOSTNAME_RE = re.compile(
 
 
 def sessions_dir() -> Path:
-    """``~/.gaia/browser/sessions``, created 0700 on first use."""
-    d = Path.home() / ".gaia" / "browser" / "sessions"
+    """``<GAIA_HOME>/browser/sessions``, created 0700 on first use."""
+    d = gaia_home() / "browser" / "sessions"
     d.mkdir(parents=True, exist_ok=True)
     if os.name != "nt":
         try:
