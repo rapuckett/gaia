@@ -4,8 +4,10 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { needsOutcome, nextToSend } from '@webui/utils/messageQueue';
+import { FLAGSHIP_AGENT_ID } from '@webui/utils/newTask';
 
 import { useAnswerQuestion, useChatStream, useMessages, useSession } from '@/data';
+import { FlagshipAgentBanner } from '@/features/banners/FlagshipAgentBanner';
 import { Composer, useComposerQueue, useFollowUpEvents } from '@/features/composer';
 import { QueuedMessages } from '@/features/composer/QueuedMessages';
 import { describeError, useT } from '@/i18n/useT';
@@ -18,6 +20,7 @@ import { PermissionPrompt } from './permission/PermissionPrompt';
 import { usePermissionPrompt } from './permission/usePermissionPrompt';
 import { liveStatusLine } from './liveStatus';
 import { MessageList } from './messages/MessageList';
+import { registerOpenChat } from './sendToOpenChat';
 import { buildTail } from './tailState';
 import { TurnTail } from './TurnTail';
 
@@ -37,7 +40,11 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
     const busy = stream.status !== 'idle';
     const saved = messages.data?.messages ?? NO_MESSAGES;
 
-    const tail = buildTail(saved, stream);
+    // A chat made by a retired agent can be read but not continued.
+    const retiredAgent = session.data?.agent_type && session.data.agent_type !== FLAGSHIP_AGENT_ID ? session.data.agent_type : null;
+
+    const builtTail = buildTail(saved, stream);
+    const tail = builtTail && retiredAgent ? { ...builtTail, canTryAgain: false, canContinue: false } : builtTail;
     const line = liveStatusLine(
         stream.events,
         { waitingOnPerson: !!stream.pendingPermission || !!stream.pendingQuestion, answering: stream.liveText !== '' },
@@ -84,10 +91,18 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
 
     const send = (message: string): boolean | void => {
         setActionError(null);
+        if (retiredAgent) {
+            setActionError(t('chat.retiredSend', { agent: retiredAgent }));
+            return false;
+        }
         if (question) return answerQuestion(message, question);
         if (busy) queue.hold(message);
         else stream.send(message);
     };
+    const sendRef = useRef(send);
+    sendRef.current = send;
+    useEffect(() => registerOpenChat((text) => void sendRef.current(text)), []);
+
     const tryAgain = (replyId: number | null) => {
         setActionError(null);
         stream.retry(replyId).catch((err: unknown) => setActionError(err));
@@ -104,6 +119,7 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
           : saved.length > 0 || tail
             ? t('composer.reply')
             : undefined;
+    const disabledReason = retiredAgent ? t('chat.retiredReadOnly', { agent: retiredAgent }) : undefined;
 
     return (
         <Screen
@@ -111,6 +127,7 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
             header={<ChatHeader sessionId={sessionId} />}
             footer={
                 <>
+                    <FlagshipAgentBanner />
                     {actionError ? (
                         <Stack paddingX="lg">
                             <Notice tone="danger" message={describeError(actionError, t)} testID="action-error" />
@@ -132,6 +149,7 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
                         running={busy}
                         answering={!!question}
                         placeholder={placeholder}
+                        disabledReason={disabledReason}
                     />
                 </>
             }

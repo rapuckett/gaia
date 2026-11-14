@@ -5,6 +5,7 @@ import { bracketParts } from '@webui/i18n/registry';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { useCreateSession, useDocuments, useSystemStatus } from '@/data';
+import { FlagshipAgentBanner } from '@/features/banners/FlagshipAgentBanner';
 import { Composer, useComposerQueue } from '@/features/composer';
 import { QueuedMessages } from '@/features/composer/QueuedMessages';
 import { ScreenHeader } from '@/features/nav/ScreenHeader';
@@ -101,6 +102,7 @@ export function NewChatScreen({ onOpen, initialText = '', prompt }: NewChatScree
                         )}
                     </Stack>
                 )}
+                <FlagshipAgentBanner />
                 {failedSetup !== null && (
                     <Notice
                         tone="danger"
