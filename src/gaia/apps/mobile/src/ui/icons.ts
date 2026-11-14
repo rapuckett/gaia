@@ -8,6 +8,7 @@ export {
   ArrowLeft,
   ArrowRight,
   ArrowUp,
+  Ban,
   Brain,
   Check,
   ChevronDown,
