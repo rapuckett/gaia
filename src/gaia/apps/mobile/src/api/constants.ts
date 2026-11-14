@@ -24,6 +24,7 @@ export const ENDPOINTS = {
     setupModelDownload: '/api/setup/models/download',
     setupNeeds: '/api/setup/needs/{job}',
     setupStatus: '/api/setup/status',
+    skills: '/api/skills',
     chatSend: '/api/chat/send',
     chatAttach: '/api/chat/attach',
     chatCancel: '/api/chat/cancel',

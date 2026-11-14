@@ -12,6 +12,7 @@ import type {
     Schedule,
     Session,
     SetupRunStatus,
+    SkillInfo,
     StartScreen,
     StreamEvent,
     SystemStatus,
@@ -29,6 +30,8 @@ export type {
     Schedule,
     Session,
     SetupRunStatus,
+    SkillInfo,
+    SkillSource,
     StartScreen,
     StreamEvent,
     SystemStatus,
@@ -51,6 +54,12 @@ export interface MessageList {
 
 export interface ConnectorList {
     connectors: ConnectorListEntry[];
+}
+
+/** `invalid` maps each unreadable skill's path to why GAIA skipped it. */
+export interface SkillList {
+    skills: SkillInfo[];
+    invalid: Record<string, string>;
 }
 
 export interface AgentMcpList {
@@ -143,6 +152,8 @@ export interface GaiaClient {
     /** Servers that custom agents declare in their own mcp_servers.json; read-only. */
     listAgentMcps(options?: RequestOptions): Promise<AgentMcpList>;
     listSchedules(options?: RequestOptions): Promise<ScheduleList>;
+    /** Every skill GAIA can load, plus the folders it skipped. */
+    listSkills(options?: RequestOptions): Promise<SkillList>;
     /** Pauses or resumes a schedule; answers with the schedule as it now is. */
     updateScheduleStatus(name: string, status: 'active' | 'paused', options?: RequestOptions): Promise<Schedule>;
     /** Runs a schedule once now (409 while a run is in flight); its next scheduled run stays as it was. */

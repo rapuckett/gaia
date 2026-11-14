@@ -25,6 +25,7 @@ export const queryKeys = {
     sessions: ['sessions'] as const,
     session: (sessionId: string) => ['session', sessionId] as const,
     sessionSearch: (query: string) => ['sessionSearch', query] as const,
+    skills: ['skills'] as const,
     messages: (sessionId: string) => ['messages', sessionId] as const,
     systemStatus: ['systemStatus'] as const,
     startScreen: ['startScreen'] as const,
