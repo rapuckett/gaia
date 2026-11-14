@@ -4,6 +4,7 @@
 import type {
     CreateSessionRequest,
     FollowUpOutcome,
+    Document,
     GaiaClient,
     HealthResponse,
     LocalModelStatus,
@@ -11,6 +12,7 @@ import type {
     MessageList,
     ModelNeed,
     Schedule,
+    ResourceUsage,
     Session,
     SessionList,
     SessionSearchResponse,
@@ -45,6 +47,8 @@ export interface FakeClientData {
     modelNeeds?: Partial<Record<ModelNeed['job'], ModelNeed>>;
     /** What getSetupStatus answers. */
     setupStatus?: SetupRunStatus;
+    documents?: Document[];
+    resources?: ResourceUsage;
     start?: StartScreen;
     /** Most chats a search returns before it says `truncated`. */
     searchLimit?: number;
@@ -63,6 +67,7 @@ export interface FakeGaiaClient extends GaiaClient {
     readonly followUps: { sessionId: string; text: string }[];
     readonly restarts: { confirm: boolean }[];
     readonly downloads: { modelId: string; acknowledgeLowDisk: boolean }[];
+    readonly detached: { sessionId: string; docId: string }[];
 }
 
 export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
@@ -87,6 +92,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         return schedule;
     }
     const followUps: FakeGaiaClient['followUps'] = [];
+    const detached: FakeGaiaClient['detached'] = [];
 
     function findSession(sessionId: string): Session {
         const session = sessions.find((s) => s.id === sessionId);
@@ -105,6 +111,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         followUps,
         restarts,
         downloads,
+        detached,
         async health(): Promise<HealthResponse> {
             return { status: 'ok', service: 'gaia-agent-ui' };
         },
@@ -170,6 +177,30 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             if (data.followUpRefusal) throw data.followUpRefusal;
             followUps.push({ sessionId, text });
             return { delivered: true };
+        },
+        async updateSession(sessionId, update) {
+            const session = findSession(sessionId);
+            if (update.title !== undefined) session.title = update.title;
+            if (update.title_is_custom !== undefined) session.title_is_custom = update.title_is_custom;
+            return { ...session };
+        },
+        async toggleSessionPrivate(sessionId) {
+            const session = findSession(sessionId);
+            session.private = !session.private;
+            return { ...session };
+        },
+        async listDocuments() {
+            const documents = data.documents ?? [];
+            return { documents: [...documents], total: documents.length };
+        },
+        async detachDocument(sessionId, docId) {
+            const session = findSession(sessionId);
+            detached.push({ sessionId, docId });
+            session.document_ids = session.document_ids.filter((id) => id !== docId);
+        },
+        async getResourceUsage() {
+            if (!data.resources) throw new GaiaApiError(503, 'This fake client was given no resource usage.');
+            return data.resources;
         },
         async *sendMessage(sessionId, message) {
             sent.push({ sessionId, message });

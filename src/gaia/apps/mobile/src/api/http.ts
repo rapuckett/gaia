@@ -1,7 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import type { Message, Session, StartScreen, StreamEvent, SystemStatus } from '@webui/types';
+import type { Message, ResourceUsage, Session, StartScreen, StreamEvent, SystemStatus } from '@webui/types';
 
 import type { FetchLike, FetchRequestInit, FetchResponseLike } from '@/platform/fetch.types';
 
@@ -23,6 +23,7 @@ import type {
     DeleteScheduleResult,
     FollowUpOutcome,
     FollowUpResult,
+    DocumentList,
     GaiaClient,
     HealthResponse,
     LocalModelStatus,
@@ -47,9 +48,11 @@ import {
     scheduleRunPath,
     SEND_HEADER_TIMEOUT_MS,
     SESSION_PAGE_SIZE,
+    sessionDocumentPath,
     sessionMessagesAndBelowPath,
     sessionMessagesPath,
     sessionPath,
+    sessionPrivatePath,
     setupNeedsPath,
     STREAM_IDLE_MS,
     UI_HEADERS,
@@ -160,6 +163,10 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
     async function postJson<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
         return readJson<T>(await request('POST', path, body, signal), path);
+    }
+
+    async function patchJson<T>(path: string, signal?: AbortSignal): Promise<T> {
+        return readJson<T>(await request('PATCH', path, undefined, signal), path);
     }
 
     async function deleteJson<T>(path: string, signal?: AbortSignal): Promise<T> {
@@ -274,6 +281,26 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         sendFollowUp(sessionId, text, options) {
             return postJson<FollowUpResult>(ENDPOINTS.chatFollowup, { session_id: sessionId, text }, options?.signal);
+        },
+
+        updateSession(sessionId, update, options) {
+            return putJson<Session>(sessionPath(sessionId), update, options?.signal);
+        },
+
+        toggleSessionPrivate(sessionId, options) {
+            return patchJson<Session>(sessionPrivatePath(sessionId), options?.signal);
+        },
+
+        listDocuments(options) {
+            return getJson<DocumentList>(ENDPOINTS.documents, options?.signal);
+        },
+
+        async detachDocument(sessionId, docId, options) {
+            await request('DELETE', sessionDocumentPath(sessionId, docId), undefined, options?.signal);
+        },
+
+        getResourceUsage(options) {
+            return getJson<ResourceUsage>(ENDPOINTS.systemResources, options?.signal);
         },
 
         sendMessage(sessionId, message, options) {

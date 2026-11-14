@@ -17,8 +17,10 @@ export const ENDPOINTS = {
     schedules: '/api/schedules',
     sessions: '/api/sessions',
     session: '/api/sessions/{session_id}',
+    sessionDocument: '/api/sessions/{session_id}/documents/{doc_id}',
     sessionMessages: '/api/sessions/{session_id}/messages',
     sessionMessagesAndBelow: '/api/sessions/{session_id}/messages/{message_id}/and-below',
+    sessionPrivate: '/api/sessions/{session_id}/private',
     sessionSearch: '/api/sessions/search',
     setupCancel: '/api/setup/cancel',
     setupModelDownload: '/api/setup/models/download',
@@ -31,8 +33,10 @@ export const ENDPOINTS = {
     chatFollowup: '/api/chat/followup',
     chatFollowupOutcome: '/api/chat/followup/{session_id}',
     chatUserInput: '/api/chat/user-input',
+    systemResources: '/api/system/resources',
     systemStatus: '/api/system/status',
     documentFile: '/api/documents/{doc_id}/file',
+    documents: '/api/documents',
     onboardingStart: '/api/onboarding/start',
 } as const;
 
@@ -54,6 +58,16 @@ export function sessionPath(sessionId: string): string {
 
 export function followupOutcomePath(sessionId: string): string {
     return ENDPOINTS.chatFollowupOutcome.replace('{session_id}', encodeURIComponent(sessionId));
+}
+
+export function sessionDocumentPath(sessionId: string, docId: string): string {
+    return ENDPOINTS.sessionDocument
+        .replace('{session_id}', encodeURIComponent(sessionId))
+        .replace('{doc_id}', encodeURIComponent(docId));
+}
+
+export function sessionPrivatePath(sessionId: string): string {
+    return ENDPOINTS.sessionPrivate.replace('{session_id}', encodeURIComponent(sessionId));
 }
 
 export function sessionMessagesPath(sessionId: string): string {
@@ -102,6 +116,8 @@ export const MODEL_NEED_CHECK_LIMIT_MS = 8_000;
 /** What the PC answers a log request from a phone; the model server log opens only on the PC (security.py). */
 export const PC_ONLY_REFUSAL =
     "Do this on the PC running GAIA. It isn't allowed over mobile access, from a paired device or from another computer.";
+/** How long to wait after a failed resource read before trying again (webui's `RETRY_MS`). */
+export const RESOURCE_RETRY_MS = 5_000;
 /** How often to re-read the PC's status while it is still starting or warming up. */
 export const STATUS_POLL_MS = 5_000;
 

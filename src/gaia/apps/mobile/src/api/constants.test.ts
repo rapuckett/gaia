@@ -18,6 +18,7 @@ import {
     PC_ONLY_REFUSAL,
     QUEUED_IDLE_MS,
     RESOLVES_PROMPTS,
+    RESOURCE_RETRY_MS,
     SEARCH_DEBOUNCE_MS,
     SEND_HEADER_TIMEOUT_MS,
     SESSION_PAGE_SIZE,
@@ -97,9 +98,11 @@ describe('endpoints', () => {
         scheduleRun: ['POST'],
         schedules: ['GET'],
         sessions: ['GET', 'POST'],
-        session: ['GET'],
+        session: ['GET', 'PUT'],
+        sessionDocument: ['DELETE'],
         sessionMessages: ['GET'],
         sessionMessagesAndBelow: ['DELETE'],
+        sessionPrivate: ['PATCH'],
         sessionSearch: ['GET'],
         setupCancel: ['POST'],
         setupModelDownload: ['POST'],
@@ -112,8 +115,10 @@ describe('endpoints', () => {
         chatFollowup: ['POST'],
         chatFollowupOutcome: ['GET'],
         chatUserInput: ['POST'],
+        systemResources: ['GET'],
         systemStatus: ['GET'],
         documentFile: ['GET'],
+        documents: ['GET'],
         onboardingStart: ['GET'],
     };
     const calls = Object.entries(ENDPOINTS).flatMap(([name, path]) =>
@@ -158,6 +163,7 @@ describe("webui's stream rules", () => {
         ['components/ModelNeededDialog.tsx', 'NO_ROW_LIMIT', DOWNLOAD_NO_ROW_LIMIT],
         ['components/ModelNeededDialog.tsx', 'MISS_LIMIT', DOWNLOAD_MISS_LIMIT],
         ['stores/modelNeededStore.ts', 'CHECK_LIMIT_MS', MODEL_NEED_CHECK_LIMIT_MS],
+        ['hooks/useResourceUsage.ts', 'RETRY_MS', RESOURCE_RETRY_MS],
     ])('%s %s', (file, name, ours) => {
         expect(ours).toBe(tsNumber(file, name));
     });

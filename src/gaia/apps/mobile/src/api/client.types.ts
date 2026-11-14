@@ -3,10 +3,12 @@
 
 import type { FollowUpOutcome } from '@webui/utils/messageQueue';
 import type {
+    Document,
     LocalModelStatus,
     Message,
     ModelNeed,
     ModelNeedJob,
+    ResourceUsage,
     Schedule,
     Session,
     SetupRunStatus,
@@ -17,10 +19,12 @@ import type {
 import type { CreateSessionRequest, SessionSearchResponse, ToolConfirmRequest, UserInputRequest as ApiUserInputRequest } from '@webui/types/api.gen';
 
 export type {
+    Document,
     LocalModelStatus,
     Message,
     ModelNeed,
     ModelNeedJob,
+    ResourceUsage,
     Schedule,
     Session,
     SetupRunStatus,
@@ -46,6 +50,16 @@ export interface MessageList {
 export interface ScheduleList {
     schedules: Schedule[];
     total: number;
+}
+
+export interface DocumentList {
+    documents: Document[];
+    total: number;
+}
+
+export interface SessionUpdate {
+    title?: string;
+    title_is_custom?: boolean;
 }
 
 export interface HealthResponse {
@@ -107,6 +121,16 @@ export interface GaiaClient {
     /** Chats whose title or messages match `query`, newest first; `truncated` says the backend capped the list. */
     searchSessions(query: string, includeAutomated: boolean, options?: RequestOptions): Promise<SessionSearchResponse>;
     getMessages(sessionId: string, options?: RequestOptions): Promise<MessageList>;
+    /** Renames a chat; the title is pinned against the auto-retitler. */
+    updateSession(sessionId: string, update: SessionUpdate, options?: RequestOptions): Promise<Session>;
+    /** Flips the chat's private mode (not saved to memory) and returns the chat. */
+    toggleSessionPrivate(sessionId: string, options?: RequestOptions): Promise<Session>;
+    /** The documents in the library. */
+    listDocuments(options?: RequestOptions): Promise<DocumentList>;
+    /** Removes a document from this chat; the library keeps it. */
+    detachDocument(sessionId: string, docId: string, options?: RequestOptions): Promise<void>;
+    /** This PC's CPU, memory, GPU, NPU and network use. */
+    getResourceUsage(options?: RequestOptions): Promise<ResourceUsage>;
     /** Deletes the message and everything after it, so the exchange can be asked again. */
     deleteMessagesFrom(sessionId: string, messageId: number, options?: RequestOptions): Promise<DeleteMessagesResult>;
     /** Hands a message to the running turn, read at its next step; rejects when the turn can't take it. */
