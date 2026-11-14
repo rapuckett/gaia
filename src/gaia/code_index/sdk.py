@@ -17,6 +17,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+from gaia.home import gaia_home
 from gaia.llm.lemonade_client import DEFAULT_EMBEDDING_MODEL, LemonadeClientError
 from gaia.llm.lemonade_launcher import describe_client_hint, describe_start_hint
 from gaia.logger import get_logger
@@ -114,7 +115,7 @@ class CodeIndexConfig:
     max_file_size_mb: float = 1
     chunk_overlap: int = 50
     embedding_model: str = DEFAULT_EMBEDDING_MODEL
-    cache_dir: str = "~/.gaia/code_index"
+    cache_dir: Optional[str] = None
     embedding_base_url: Optional[str] = None
 
 
@@ -208,7 +209,12 @@ class CodeIndexSDK:
         self._path_validator = PathValidator(allowed_paths=[str(self._repo_root)])
 
         # Cache directory
-        self._cache_dir = Path(config.cache_dir).expanduser() / self._repo_hash()
+        cache_root = (
+            Path(config.cache_dir).expanduser()
+            if config.cache_dir
+            else gaia_home() / "code_index"
+        )
+        self._cache_dir = cache_root / self._repo_hash()
         self._meta_path = self._cache_dir / "metadata.json"
         self._index_path = self._cache_dir / "index.faiss"
 

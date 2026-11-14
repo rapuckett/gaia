@@ -33,6 +33,10 @@ export interface ChatTurn {
     error: GaiaError | null;
     /** A tool ran since the last answer text, so the next text starts a new paragraph. */
     toolSinceText: boolean;
+    /** How a turn the person stopped ended; `unconfirmed` means GAIA never confirmed the stop. */
+    stopState?: 'stopped' | 'unconfirmed';
+    /** What GAIA reported while stopping. */
+    stopError?: GaiaError;
 }
 
 export const IDLE_TURN: ChatTurn = {
@@ -99,10 +103,17 @@ export function applyEvent(turn: ChatTurn, event: StreamEvent): ChatTurn {
             // The whole answer, not a piece of it.
             if (!event.content) return turn;
             return { ...withoutPrompts(turn), liveText: event.content, toolSinceText: false };
-        case 'done':
-            return { ...withoutPrompts(turn), liveText: event.content || turn.liveText };
-        case 'error':
-            return { ...withoutPrompts(turn), error: new GaiaTurnError(event.content ?? '') };
+        case 'done': {
+            // A `done` with no message id was made up by the client when the stream closed unreported.
+            const stopState = event.cancelled === true ? 'stopped' : turn.status === 'stopping' && event.message_id == null ? 'unconfirmed' : undefined;
+            return { ...withoutPrompts(turn), liveText: event.content || turn.liveText, ...(stopState ? { stopState } : null) };
+        }
+        case 'error': {
+            const error = new GaiaTurnError(event.content ?? '');
+            // An error while stopping is part of the stop, not a failed answer.
+            if (turn.status === 'stopping') return { ...withoutPrompts(turn), stopState: 'stopped', stopError: error };
+            return { ...withoutPrompts(turn), error };
+        }
         default:
             return AGENT_EVENT_TYPES.has(event.type) ? applyAgentEvent(turn, event) : turn;
     }

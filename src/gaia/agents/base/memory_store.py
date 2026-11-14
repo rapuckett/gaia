@@ -48,6 +48,7 @@ from typing import (
 )
 from uuid import uuid4
 
+from gaia.home import gaia_home
 from gaia.utils.sqlite_wal import enable_wal
 
 logger = logging.getLogger(__name__)
@@ -954,7 +955,7 @@ def resolve_memory_db_path() -> Path:
         logger.info("[MemoryStore] using %s override: %s", env_var, candidate)
         return candidate
 
-    gaia_dir = Path.home() / ".gaia"
+    gaia_dir = gaia_home()
     gaia_dir.mkdir(parents=True, exist_ok=True)
     return gaia_dir / "memory.db"
 

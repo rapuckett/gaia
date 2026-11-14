@@ -30,6 +30,7 @@ from gaia.agents.base.agent import default_max_steps
 from gaia.connectors.api import connected_mailbox_providers, get_connection
 from gaia.connectors.errors import ConnectionBusyError, ConnectorsError
 from gaia.connectors.providers.microsoft import ACCOUNT_TYPES
+from gaia.home import gaia_home
 from gaia.llm.lemonade_client import configured_lemonade_url
 from gaia.logger import get_logger
 
@@ -495,9 +496,7 @@ class EmailAgentConfig:
         """
         if self.db_path:
             return self.db_path
-        from pathlib import Path
-
-        return str(Path.home() / ".gaia" / "email" / "state.db")
+        return str(gaia_home() / "email" / "state.db")
 
     def resolved_memory_db_path(self) -> str:
         """Return the SQLite path for the memory store with ``$HOME`` expanded.
@@ -509,9 +508,7 @@ class EmailAgentConfig:
         """
         if self.memory_db_path:
             return self.memory_db_path
-        from pathlib import Path
-
-        return str(Path.home() / ".gaia" / "email" / "memory.db")
+        return str(gaia_home() / "email" / "memory.db")
 
     def resolve_mail_backend(self) -> Any:
         """Return the mailbox backend for the configured ``mail_provider``.

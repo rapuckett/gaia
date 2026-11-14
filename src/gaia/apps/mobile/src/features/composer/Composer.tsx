@@ -17,6 +17,8 @@ export interface ComposerProps {
     onStop?(): void;
     /** A reply is running: Send queues the next message and Stop appears. */
     running?: boolean;
+    /** Replaces the placeholder: `composer.queueNext` while running, else `composer.placeholder`. */
+    placeholder?: string;
     /** Why the box can't be used right now; shown as the hint and the placeholder. */
     disabledReason?: string;
     /** The chat is being created: the text stays editable and Send waits. */
@@ -33,6 +35,7 @@ export function Composer({
     onChange,
     onSend,
     onStop,
+    placeholder: placeholderText,
     running = false,
     disabledReason,
     starting = false,
@@ -68,7 +71,7 @@ export function Composer({
         onStop?.();
     };
 
-    const placeholder = disabledReason ?? (running ? t('composer.queueNext') : t('composer.placeholder'));
+    const placeholder = disabledReason ?? placeholderText ?? (running ? t('composer.queueNext') : t('composer.placeholder'));
 
     return (
         <Stack gap="sm" padding="md">

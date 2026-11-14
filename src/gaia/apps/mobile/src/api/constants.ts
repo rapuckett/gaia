@@ -13,6 +13,7 @@ export const ENDPOINTS = {
     sessions: '/api/sessions',
     session: '/api/sessions/{session_id}',
     sessionMessages: '/api/sessions/{session_id}/messages',
+    sessionMessagesAndBelow: '/api/sessions/{session_id}/messages/{message_id}/and-below',
     chatSend: '/api/chat/send',
     chatAttach: '/api/chat/attach',
     chatCancel: '/api/chat/cancel',
@@ -29,6 +30,12 @@ export function sessionPath(sessionId: string): string {
 
 export function sessionMessagesPath(sessionId: string): string {
     return ENDPOINTS.sessionMessages.replace('{session_id}', encodeURIComponent(sessionId));
+}
+
+export function sessionMessagesAndBelowPath(sessionId: string, messageId: number): string {
+    return ENDPOINTS.sessionMessagesAndBelow
+        .replace('{session_id}', encodeURIComponent(sessionId))
+        .replace('{message_id}', String(messageId));
 }
 
 /** The library file's URL, as the web UI's `documentFileUrl` builds it: the page rides in the fragment. */

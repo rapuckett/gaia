@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { pluralKey, ref, type MessageKey, type Param, type Say } from '../i18n/registry';
 import { tEn, useT, type Translate } from '../i18n/useT';
 import type { InferenceStats } from '../types';
+import type { TurnEnding } from '../utils/turnEnding.core';
 import { spokenDuration, type Mark } from '../utils/spokenDuration.core';
 import { MarkedText, markLtr as marked } from './MarkedText';
 import './AnswerStats.css';
@@ -13,8 +14,7 @@ const plain: Mark = (text) => text;
 
 export { spokenDuration };
 
-/** How a turn that never finished its answer ended. */
-export type TurnEnding = 'stopped' | 'interrupted' | 'failed';
+export type { TurnEnding };
 
 const LEAD: Record<TurnEnding | 'answered', readonly [MessageKey, MessageKey]> = {
     answered: ['answer.answeredIn', 'answer.answeredInPlace'],

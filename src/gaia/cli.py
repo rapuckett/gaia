@@ -23,6 +23,7 @@ from gaia.agents.install_hints import (
 from gaia.config import gaia_agents_dir
 from gaia.env import load_env
 from gaia.eval.config import DEFAULT_AGENT_TYPE, DEFAULT_CLAUDE_MODEL
+from gaia.home import gaia_home
 from gaia.llm import create_client
 from gaia.llm.lemonade_client import (
     DEFAULT_LEMONADE_URL,
@@ -5383,7 +5384,7 @@ def main():
             import contextlib
             import signal
 
-            pid_path = os.path.expanduser("~/.gaia/telegram.pid")
+            pid_path = str(gaia_home() / "telegram.pid")
             if not os.path.exists(pid_path):
                 print("Telegram adapter is not running (no PID file).")
                 return
@@ -5470,7 +5471,7 @@ def main():
 
             from gaia.messaging.telegram import is_adapter_process
 
-            pid_path = os.path.expanduser("~/.gaia/telegram.pid")
+            pid_path = str(gaia_home() / "telegram.pid")
             pid = None
             if os.path.exists(pid_path):
                 try:
@@ -6207,8 +6208,7 @@ Let me know your answer!
             from gaia.eval.session_eval import TUIDriver
 
             control = args.control or os.path.join(
-                os.environ.get("GAIA_TUI_HOME")
-                or os.path.join(os.path.expanduser("~"), ".gaia", "tui"),
+                os.environ.get("GAIA_TUI_HOME") or str(gaia_home() / "tui"),
                 "control.json",
             )
             if not Path(control).is_file():
@@ -6288,8 +6288,7 @@ Let me know your answer!
                 return
 
             control = args.control or os.path.join(
-                os.environ.get("GAIA_TUI_HOME")
-                or os.path.join(os.path.expanduser("~"), ".gaia", "tui"),
+                os.environ.get("GAIA_TUI_HOME") or str(gaia_home() / "tui"),
                 "control.json",
             )
             if not Path(control).is_file():
@@ -9634,7 +9633,7 @@ def handle_diagnostics_command(args):
 
     diag_log = get_logger(__name__)
 
-    gaia_dir = Path.home() / ".gaia"
+    gaia_dir = gaia_home()
     timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 
     if args.output:
@@ -9652,7 +9651,6 @@ def handle_diagnostics_command(args):
         sys.exit(1)
 
     log_files = _diag_log_files(gaia_dir)
-    from gaia.home import gaia_home
 
     state_files = [
         gaia_dir / "electron-install-state.json",
@@ -9929,7 +9927,7 @@ def handle_agent_export(args):
 
     output = args.output
     if output is None:
-        output_path = Path.home() / ".gaia" / "export.zip"
+        output_path = gaia_home() / "export.zip"
     else:
         output_path = Path(output).expanduser()
 

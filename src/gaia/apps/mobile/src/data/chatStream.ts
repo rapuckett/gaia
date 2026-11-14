@@ -3,8 +3,11 @@
 
 import { hashKey, notifyManager, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo } from 'react';
+import { AppState } from 'react-native';
 
-import type { GaiaClient, MessageList, StreamEvent } from '@/api/client.types';
+import { STOP_GRACE_MS } from '@webui/utils/turnEnding.core';
+
+import type { GaiaClient, Message, MessageList, StreamEvent } from '@/api/client.types';
 import { asGaiaError, GaiaApiError, GaiaConfigError, type GaiaError } from '@/api/errors';
 import {
     applyEvent,
@@ -38,6 +41,8 @@ interface Run {
     /** An event arrived, so the turn exists on the PC and a stop can reach it. */
     sawEvent: boolean;
     stopRequested: boolean;
+    /** Ends the turn here when GAIA never confirms a stop. */
+    graceTimer?: ReturnType<typeof setTimeout>;
 }
 
 const runs = new Map<string, Run>();
@@ -49,6 +54,12 @@ function isCurrent(sessionId: string, run: Run): boolean {
 
 function update(sessionId: string, run: Run, change: (turn: ChatTurn) => ChatTurn): void {
     if (isCurrent(sessionId, run)) writeTurn(sessionId, change(readTurn(sessionId)));
+}
+
+/** The run is over: nothing of it is left running on this phone. */
+function finishRun(sessionId: string): void {
+    clearTimeout(runs.get(sessionId)?.graceTimer);
+    runs.delete(sessionId);
 }
 
 function newRun(kind: Run['kind']): Run {
@@ -141,16 +152,16 @@ async function follow(deps: ChatStreamDeps, sessionId: string, run: Run, stream:
             status: 'idle',
             pendingPermission: null,
             pendingQuestion: null,
-            error,
+            ...(turn.status === 'stopping' ? { stopState: 'stopped' as const, stopError: error } : { error }),
         }));
-        runs.delete(sessionId);
+        finishRun(sessionId);
         // Drops the sent message if GAIA never took it, or shows what it saved.
         void refreshChat(deps.queryClient, sessionId);
         return;
     }
     if (!isCurrent(sessionId, run)) return;
     if (!run.sawEvent) {
-        runs.delete(sessionId);
+        finishRun(sessionId);
         // No turn is running, but one that ended just now may be missing from a transcript read before it.
         void deps.queryClient.invalidateQueries({ queryKey: queryKeys.messages(sessionId) }, { cancelRefetch: false });
         return;
@@ -158,9 +169,14 @@ async function follow(deps: ChatStreamDeps, sessionId: string, run: Run, stream:
     expirePendingPrompts(sessionId);
     await endWithTranscript(deps.queryClient, sessionId, () => {
         if (!isCurrent(sessionId, run)) return;
-        runs.delete(sessionId);
-        const { error } = readTurn(sessionId);
-        writeTurn(sessionId, error ? { ...IDLE_TURN, error } : null);
+        finishRun(sessionId);
+        const { error, stopState, stopError, liveText } = readTurn(sessionId);
+        // The stop note outlives the turn; a stop GAIA never confirmed has no saved answer to show, so its text stays too.
+        const kept = error || stopState;
+        writeTurn(
+            sessionId,
+            kept ? { ...IDLE_TURN, error, stopState, stopError, liveText: stopState === 'unconfirmed' ? liveText : '' } : null,
+        );
     });
 }
 
@@ -192,6 +208,48 @@ export function stopTurn(deps: ChatStreamDeps, sessionId: string): void {
     update(sessionId, run, (turn) => ({ ...turn, status: 'stopping' }));
     // Before its first event the turn may not exist on the PC yet; the stop goes out with that event.
     if (run.sawEvent) requestStop(deps, sessionId, run);
+    run.graceTimer = setTimeout(() => closeUnconfirmed(sessionId, run), STOP_GRACE_MS);
+}
+
+/** GAIA never closed the stopped turn: end it here and say so, keeping what was seen. */
+function closeUnconfirmed(sessionId: string, run: Run): void {
+    if (!isCurrent(sessionId, run)) return;
+    expirePendingPrompts(sessionId);
+    run.view.abort();
+    finishRun(sessionId);
+    writeTurn(sessionId, {
+        ...readTurn(sessionId),
+        status: 'idle',
+        pendingPermission: null,
+        pendingQuestion: null,
+        stopState: 'unconfirmed',
+    });
+}
+
+/** The message that started the chat's latest exchange, as GAIA saved it. */
+function lastQuestion(messages: Message[]): Message | undefined {
+    return [...messages].reverse().find((m) => m.role === 'user');
+}
+
+/**
+ * Asks the chat's latest question again: deletes it and everything after it, then
+ * sends it afresh. Resolves false when nothing was sent (a turn is running, or the
+ * question already has an answer GAIA saved that this screen had not shown).
+ * `replyId` is the saved reply being retried; null when the failed reply was never saved.
+ */
+export async function retryLastTurn(deps: ChatStreamDeps, sessionId: string, replyId: number | null): Promise<boolean> {
+    if (runs.has(sessionId)) return false;
+    const { messages } = await deps.client.getMessages(sessionId);
+    const question = lastQuestion(messages);
+    if (!question) return false;
+    const answered = messages.some((m) => m.role === 'assistant' && m.id > question.id);
+    if (answered && replyId === null) {
+        await refreshChat(deps.queryClient, sessionId);
+        return false;
+    }
+    await deps.client.deleteMessagesFrom(sessionId, question.id);
+    await refreshChat(deps.queryClient, sessionId);
+    return sendTurn(deps, sessionId, question.content);
 }
 
 /** Follows the chat's running turn, if it has one; the turn shows once its replay arrives. */
@@ -205,7 +263,7 @@ export function attachTurn(deps: ChatStreamDeps, sessionId: string): void {
 /** Stops following the chat's turn on this phone; the turn goes on on the PC. */
 export function detachTurn(sessionId: string): void {
     runs.get(sessionId)?.view.abort();
-    runs.delete(sessionId);
+    finishRun(sessionId);
     writeTurn(sessionId, null);
 }
 
@@ -228,6 +286,8 @@ export interface ChatStream {
     send(text: string): boolean;
     /** Asks GAIA to stop the running turn. */
     stop(): void;
+    /** Asks the latest question again; see `retryLastTurn`. */
+    retry(replyId: number | null): Promise<boolean>;
     status: ChatStreamStatus;
     /** The answer so far. A finished turn's stays until the transcript holds it; a failed one's stays beside `error`. */
     liveText: string;
@@ -239,6 +299,10 @@ export interface ChatStream {
     pendingQuestion: QuestionRequest | null;
     /** Why the last send, stop or stream failed; cleared by the next send. */
     error: GaiaError | null;
+    /** How the last turn ended when the person stopped it; cleared by the next send. */
+    stopState: ChatTurn['stopState'];
+    /** What GAIA reported while stopping. */
+    stopError: GaiaError | undefined;
 }
 
 /**
@@ -255,6 +319,20 @@ export function useChatStream(sessionId: string): ChatStream {
         return subscribe({ client, queryClient }, sessionId);
     }, [client, queryClient, sessionId]);
 
+    // A phone that was backgrounded lost its connection while the turn went on, so pick it up again.
+    useEffect(() => {
+        if (!client || !sessionId) return undefined;
+        let wasBackgrounded = false;
+        const subscription = AppState.addEventListener('change', (state) => {
+            if (state === 'background') wasBackgrounded = true;
+            if (state !== 'active' || !wasBackgrounded) return;
+            wasBackgrounded = false;
+            detachTurn(sessionId);
+            attachTurn({ client, queryClient }, sessionId);
+        });
+        return () => subscription.remove();
+    }, [client, queryClient, sessionId]);
+
     const send = useCallback(
         (text: string) => {
             if (client) return sendTurn({ client, queryClient }, sessionId, text);
@@ -268,17 +346,28 @@ export function useChatStream(sessionId: string): ChatStream {
         if (client) stopTurn({ client, queryClient }, sessionId);
     }, [client, queryClient, sessionId]);
 
+    const retry = useCallback(
+        (replyId: number | null) => {
+            if (!client) return Promise.reject(new GaiaConfigError('mobileApp.error.noConnection'));
+            return retryLastTurn({ client, queryClient }, sessionId, replyId);
+        },
+        [client, queryClient, sessionId],
+    );
+
     return useMemo(
         () => ({
             send,
             stop,
+            retry,
             status: turn.status,
             liveText: turn.liveText,
             events: turn.events,
             pendingPermission: turn.pendingPermission,
             pendingQuestion: turn.pendingQuestion,
             error: turn.error,
+            stopState: turn.stopState,
+            stopError: turn.stopError,
         }),
-        [send, stop, turn],
+        [send, stop, retry, turn],
     );
 }

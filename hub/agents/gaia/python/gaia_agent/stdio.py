@@ -83,6 +83,7 @@ from gaia.agents.base.readiness import (
     resolve_probe_base,
     start_advice,
 )
+from gaia.home import gaia_home
 from gaia.llm import create_client
 from gaia.llm.inference_location import resolve_inference_location
 from gaia.llm.lemonade_client import (
@@ -1455,7 +1456,7 @@ def log_path() -> "Path":
     override = os.environ.get(LOG_PATH_ENV, "").strip()
     if override:
         return Path(override).expanduser()
-    return Path.home() / ".gaia" / "logs" / "gaia-agent.log"
+    return gaia_home() / "logs" / "gaia-agent.log"
 
 
 def _configure_logging(real_stdout, *, dev: bool) -> "Path":
@@ -2111,7 +2112,7 @@ def main(argv: Optional[list] = None) -> int:
         from gaia.agents.base.history import SessionHistory
 
         history_path = args.history_file or str(
-            Path(os.environ.get("GAIA_TUI_HOME", str(Path.home() / ".gaia" / "tui")))
+            Path(os.environ.get("GAIA_TUI_HOME", str(gaia_home() / "tui")))
             / "history"
             / f"{uuid4().hex}.sqlite3"
         )

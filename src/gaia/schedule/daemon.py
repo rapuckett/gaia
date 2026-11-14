@@ -31,12 +31,12 @@ from gaia.logger import get_logger
 from gaia.schedule import runner
 from gaia.schedule.lock import daemon_lock
 from gaia.schedule.store import (
-    DEFAULT_STORE_PATH,
     ONE_SHOT_PENDING,
     MissedRuns,
     Schedule,
     ScheduleStore,
     TomlScheduleStore,
+    default_store_path,
 )
 
 log = get_logger(__name__)
@@ -405,12 +405,14 @@ def _reload_or_keep_armed(scheduler: BackgroundScheduler, store: ScheduleStore) 
         )
 
 
-def run_daemon(store_path: Path = DEFAULT_STORE_PATH) -> None:
+def run_daemon(store_path: Optional[Path] = None) -> None:
     """Start the scheduler and block until SIGINT/SIGTERM.
 
     Raises :class:`~gaia.schedule.lock.ScheduleLockError` if another daemon is
     already running against the same store.
     """
+    if store_path is None:
+        store_path = default_store_path()
     with daemon_lock(store_path):
         store = TomlScheduleStore(store_path)
         scheduler = build_scheduler(store)

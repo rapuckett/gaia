@@ -21,6 +21,7 @@ from gaia.engineering.store import (
     read_json,
     validate_backend,
 )
+from gaia.home import gaia_home
 
 
 class EngineeringService:
@@ -41,7 +42,7 @@ class EngineeringService:
         # A custom profile must not share worktrees with the normal installation.
         cache = (
             self.root.parent / "cache" / "engineering"
-            if self.root == (Path.home() / ".gaia" / "engineering").resolve()
+            if self.root == (gaia_home() / "engineering").resolve()
             else self.root / "cache"
         )
         self.repository = Repository(cache)
