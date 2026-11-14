@@ -1082,6 +1082,7 @@ export const enMessages = {
     'sp.showWarn': 'Show session panel: couldn\'t get live data',
     'sp.section.answer': 'This answer',
     'sp.section.context': 'Context & performance',
+    'sp.details': 'Details',
     'sp.checking': 'Checking…',
     'sp.open': 'Open',
     'sp.showInFolder': 'Show in folder',
