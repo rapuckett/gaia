@@ -4892,7 +4892,11 @@ def _handle_schedule(args):
             sink=args.sink,
             sink_args=sink_args,
         )
-        store.add(schedule)
+        try:
+            store.add(schedule)
+        except ValueError as exc:
+            print(f"❌ Cannot add schedule {args.name!r}: {exc}", file=sys.stderr)
+            sys.exit(1)
         if schedule.one_shot:
             print(
                 f"✅ Added one-time schedule {schedule.name!r} "
@@ -4983,6 +4987,7 @@ def _handle_schedule(args):
             schedule = store.get(args.name)
         except KeyError as exc:
             _exit_unknown_schedule(exc)
+        cannot_run = (schedule_runner.ScheduleModelError, LemonadeClientError)
         if schedule.one_shot:
             claimed = store.claim_one_shot(
                 schedule.name, datetime.now(timezone.utc), due_only=False
@@ -4995,9 +5000,19 @@ def _handle_schedule(args):
                     file=sys.stderr,
                 )
                 sys.exit(1)
-            schedule_daemon.run_one_shot(claimed, store)
+            try:
+                schedule_daemon.run_one_shot(claimed, store)
+            except cannot_run as exc:
+                print(
+                    f"❌ Schedule {schedule.name!r} did not run: {exc}", file=sys.stderr
+                )
+                sys.exit(1)
             return
-        schedule_runner.fire(schedule)
+        try:
+            schedule_runner.fire(schedule)
+        except cannot_run as exc:
+            print(f"❌ Schedule {schedule.name!r} did not run: {exc}", file=sys.stderr)
+            sys.exit(1)
         store.mark_run(
             schedule.name,
             datetime.now(timezone.utc).isoformat(),
@@ -6664,6 +6679,11 @@ Let me know your answer!
                 sys.exit(0)
             if status.stage == "load":
                 print(f"NOT READY: profile '{profile}' is downloaded but will not load")
+            elif status.model_list_unread:
+                print(
+                    f"NOT READY: profile '{profile}': the model server's model list "
+                    "can't be read"
+                )
             else:
                 print(f"NOT READY: profile '{profile}' needs setup")
             for reason in status.reasons:
@@ -9460,6 +9480,7 @@ def _diag_log_files(gaia_dir):
     files += [(p, "logs/") for p in sorted((gaia_dir / "logs").glob("*.log"))]
     files.append((daemon_paths.log_path(), "host/"))
     files.append((lemonade_home() / "lemonade" / "lemond.log", "lemonade/"))
+    files.append((gaia_dir / "discord" / "bridge.log", "discord/"))
     files += [
         (p, f"agents/{p.parent.parent.name}/logs/")
         for p in sorted(gaia_agents_dir().glob("*/logs/*.log"))
