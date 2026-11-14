@@ -42,6 +42,8 @@ export interface ChatTurn {
     stopState?: 'stopped' | 'unconfirmed';
     /** What GAIA reported while stopping. */
     stopError?: GaiaError;
+    /** Re-attach attempt under way after the live view dropped; cleared when the replay starts. */
+    reconnecting?: number;
 }
 
 export const IDLE_TURN: ChatTurn = {

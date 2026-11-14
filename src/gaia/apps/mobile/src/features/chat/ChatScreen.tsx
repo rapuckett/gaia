@@ -4,6 +4,7 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { needsOutcome, nextToSend } from '@webui/utils/messageQueue';
+import { MAX_STREAM_RECONNECTS } from '@webui/utils/streamErrors.core';
 
 import { useAnswerQuestion, useChatStream, useMessages, useSession } from '@/data';
 import { Composer, useComposerQueue, useFollowUpEvents } from '@/features/composer';
@@ -38,11 +39,13 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
     const saved = messages.data?.messages ?? NO_MESSAGES;
 
     const tail = buildTail(saved, stream);
-    const line = liveStatusLine(
-        stream.events,
-        { waitingOnPerson: !!stream.pendingPermission || !!stream.pendingQuestion, answering: stream.liveText !== '' },
-        t,
-    );
+    const line = stream.reconnecting
+        ? t('live.reconnectingStream', { attempt: stream.reconnecting, max: MAX_STREAM_RECONNECTS })
+        : liveStatusLine(
+              stream.events,
+              { waitingOnPerson: !!stream.pendingPermission || !!stream.pendingQuestion, answering: stream.liveText !== '' },
+              t,
+          );
 
     const question = stream.pendingQuestion && !stream.pendingQuestion.sensitive ? stream.pendingQuestion : null;
     const steerable = stream.status === 'streaming' && !followUps.unavailable;

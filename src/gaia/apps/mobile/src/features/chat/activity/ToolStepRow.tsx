@@ -9,7 +9,7 @@ import { isolate } from '@webui/i18n/registry';
 import { useState } from 'react';
 
 import { useT } from '@/i18n/useT';
-import { Disclosure, Icon, Row, Spinner, Stack, Text } from '@/ui';
+import { Disclosure, Icon, Row, ScrollBox, Spinner, Stack, Text } from '@/ui';
 import { Ban, CircleAlert } from '@/ui/icons';
 
 import { CodeBlock } from '../markdown/CodeBlock';
@@ -25,13 +25,17 @@ function Section({ label, children }: { label: string; children: React.ReactNode
     );
 }
 
+const OUTPUT_MAX_HEIGHT = 240;
+
 function Output({ step, t }: { step: AgentStep; t: ReturnType<typeof useT> }) {
     const cmd = step.commandOutput;
     if (cmd) {
         const text = [cmd.stdout, cmd.stderr].filter(Boolean).join('\n');
         return (
             <Section label={t('activity.terminal')}>
-                <CodeBlock lang="" code={cmd.command ? `$ ${cmd.command}\n${text}` : text} streaming={false} />
+                <ScrollBox maxHeight={OUTPUT_MAX_HEIGHT}>
+                    <CodeBlock lang="" code={cmd.command ? `$ ${cmd.command}\n${text}` : text} streaming={false} />
+                </ScrollBox>
                 {cmd.truncated ? <Text role="caption" tone="muted">{t('activity.truncated')}</Text> : null}
             </Section>
         );
@@ -39,7 +43,9 @@ function Output({ step, t }: { step: AgentStep; t: ReturnType<typeof useT> }) {
     if (step.mcpOutput) {
         return (
             <Section label={t('activity.detail.output')}>
-                <CodeBlock lang="" code={step.mcpOutput.text} streaming={false} />
+                <ScrollBox maxHeight={OUTPUT_MAX_HEIGHT}>
+                    <CodeBlock lang="" code={step.mcpOutput.text} streaming={false} />
+                </ScrollBox>
                 {step.mcpOutput.truncated ? <Text role="caption" tone="muted">{t('activity.truncated')}</Text> : null}
             </Section>
         );
@@ -47,9 +53,11 @@ function Output({ step, t }: { step: AgentStep; t: ReturnType<typeof useT> }) {
     if (!step.result) return null;
     return (
         <Section label={step.success === false ? t('activity.detail.error') : t('activity.detail.result')}>
-            <Text role="label" tone={step.success === false ? 'danger' : 'secondary'} selectable testID="step-result">
-                {step.result}
-            </Text>
+            <ScrollBox maxHeight={OUTPUT_MAX_HEIGHT}>
+                <Text role="label" dir="auto" tone={step.success === false ? 'danger' : 'secondary'} selectable testID="step-result">
+                    {step.result}
+                </Text>
+            </ScrollBox>
         </Section>
     );
 }
@@ -92,18 +100,24 @@ export function ToolStepRow({ step, awaitingUser = false, now, testID }: ToolSte
                     {isolate(timing, 'ltr')}
                 </Text>
             ) : null}
-            {step.active && !waiting ? <Spinner size="sm" /> : null}
-            {notRun ? <Icon icon={Ban} size="sm" tone="muted" /> : step.success === false ? <Icon icon={CircleAlert} size="sm" tone="danger" /> : null}
         </Row>
     );
+    const leading =
+        step.active && !waiting ? (
+            <Spinner size="sm" />
+        ) : notRun ? (
+            <Icon icon={Ban} size="sm" tone="muted" />
+        ) : step.success === false ? (
+            <Icon icon={CircleAlert} size="sm" tone="danger" />
+        ) : null;
 
     return (
-        <Stack testID={testID}>
-            <Disclosure title={line} open={open} onToggle={() => setOpen((v) => !v)} trailing={trailing}>
+        <Stack>
+            <Disclosure title={line} open={open} onToggle={() => setOpen((v) => !v)} leading={leading} trailing={trailing} testID={testID}>
                 <Stack gap="sm">
                     {step.thought?.detail ? (
                         <Section label={thoughtLabel(false, undefined, t)}>
-                            <Text role="label" tone="secondary">
+                            <Text role="label" dir="auto" tone="secondary">
                                 {step.thought.detail.trim()}
                             </Text>
                         </Section>
@@ -114,7 +128,7 @@ export function ToolStepRow({ step, awaitingUser = false, now, testID }: ToolSte
                                 {step.tool || t('activity.policy.unknownTool')}
                             </Text>
                             {step.mcpServer ? (
-                                <Text role="caption" tone="muted">
+                                <Text role="caption" dir="auto" tone="muted">
                                     {t('activity.detail.via', { server: step.mcpServer })}
                                 </Text>
                             ) : null}
@@ -124,14 +138,14 @@ export function ToolStepRow({ step, awaitingUser = false, now, testID }: ToolSte
                         <Section label={t('activity.detail.arguments')}>
                             <Stack gap="xs">
                                 {argRows(step.detail).map((row, i) => (
-                                    <Text key={i} role="label" tone="secondary" selectable>
+                                    <Text key={i} role="label" dir="auto" tone="secondary" selectable>
                                         {row.key !== undefined ? `${row.key}: ${row.value}` : row.value}
                                     </Text>
                                 ))}
                             </Stack>
                         </Section>
                     ) : null}
-                    {failure ? <Text role="caption" tone="danger">{failure}</Text> : null}
+                    {failure ? <Text role="caption" dir="auto" tone="danger">{failure}</Text> : null}
                     <Output step={step} t={t} />
                 </Stack>
             </Disclosure>
