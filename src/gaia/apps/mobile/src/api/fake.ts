@@ -10,6 +10,7 @@ import type {
     Message,
     MessageList,
     ModelNeed,
+    ParsedSchedule,
     Schedule,
     Session,
     SessionList,
@@ -192,6 +193,43 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         },
         async listSchedules() {
             return { schedules: [...schedules], total: schedules.length };
+        },
+        async createSchedule(request) {
+            if (schedules.some((s) => s.name === request.name)) throw new GaiaApiError(409, `Schedule '${request.name}' already exists`);
+            const schedule: Schedule = {
+                id: `schedule-${schedules.length + 1}`,
+                name: request.name,
+                interval_seconds: 3600,
+                prompt: request.prompt,
+                status: 'active',
+                created_at: new Date().toISOString(),
+                last_run_at: null,
+                next_run_at: new Date(Date.now() + 3_600_000).toISOString(),
+                last_result: null,
+                run_count: 0,
+                error_count: 0,
+                session_id: null,
+                schedule_config: null,
+                description: request.interval,
+                description_parts: { kind: 'every', count: 1, unit: 'hour', days: null, time: null, start_hour: null, end_hour: null },
+                last_error: null,
+            };
+            schedules.push(schedule);
+            return { ...schedule };
+        },
+        async parseSchedule(input): Promise<ParsedSchedule> {
+            const valid = /every|daily|\d/i.test(input);
+            return {
+                interval_seconds: valid ? 3600 : 0,
+                time_of_day: null,
+                start_hour: null,
+                end_hour: null,
+                days_of_week: null,
+                description: valid ? input : "Couldn't read that schedule",
+                description_parts: valid ? { kind: 'every', count: 1, unit: 'hour', days: null, time: null, start_hour: null, end_hour: null } : null,
+                next_run_at: valid ? new Date(Date.now() + 3_600_000).toISOString() : null,
+                valid,
+            };
         },
         async updateScheduleStatus(name, status) {
             const schedule = findSchedule(name);
