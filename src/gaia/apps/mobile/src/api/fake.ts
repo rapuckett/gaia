@@ -4,6 +4,7 @@
 import type {
     CreateSessionRequest,
     FollowUpOutcome,
+    DocumentListResponse,
     GaiaClient,
     HealthResponse,
     Message,
@@ -41,6 +42,7 @@ export interface FakeClientData {
     searchLimit?: number;
     /** Makes every search fail with this message. */
     searchError?: string;
+    documents?: DocumentListResponse;
 }
 
 export interface FakeGaiaClient extends GaiaClient {
@@ -196,6 +198,8 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             scheduleActions.push({ action: 'delete', name });
             schedules.splice(schedules.indexOf(schedule), 1);
             return { deleted: true };
+        async listDocuments() {
+            return data.documents ?? { documents: [], total: 0, total_chunks: 0, total_size_bytes: 0 };
         },
         async getSystemStatus() {
             if (!data.status) throw new GaiaApiError(503, 'This fake client was given no system status.');
