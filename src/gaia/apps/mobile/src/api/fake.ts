@@ -198,6 +198,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             scheduleActions.push({ action: 'delete', name });
             schedules.splice(schedules.indexOf(schedule), 1);
             return { deleted: true };
+        },
         async listDocuments() {
             return data.documents ?? { documents: [], total: 0, total_chunks: 0, total_size_bytes: 0 };
         },
