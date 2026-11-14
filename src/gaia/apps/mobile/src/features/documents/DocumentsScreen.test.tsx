@@ -78,10 +78,10 @@ describe('DocumentsScreen', () => {
             const client = createFakeClient({ documents: library() });
             await mount(client);
             fireEvent.press(await screen.findByLabelText('Remove notes.txt'));
-            expect(screen.queryByText(/notes\.txt/)).toBeNull();
+            expect(screen.queryByLabelText('Remove notes.txt')).toBeNull();
             fireEvent.press(screen.getByText('Undo'));
             await act(() => jest.advanceTimersByTimeAsync(REMOVE_UNDO_MS * 2));
-            expect(screen.getByText(/notes\.txt/)).toBeTruthy();
+            expect(screen.getByLabelText('Remove notes.txt')).toBeTruthy();
             expect(client.documentActions).toEqual([]);
         });
 
@@ -101,7 +101,7 @@ describe('DocumentsScreen', () => {
             fireEvent.press(await screen.findByLabelText('Remove notes.txt'));
             await act(() => jest.advanceTimersByTimeAsync(REMOVE_UNDO_MS));
             expect(await screen.findByText(/Couldn't remove notes\.txt: disk is read-only/)).toBeTruthy();
-            expect(screen.getByText(/notes\.txt/)).toBeTruthy();
+            expect(screen.getByLabelText('Remove notes.txt')).toBeTruthy();
         });
     });
 });
