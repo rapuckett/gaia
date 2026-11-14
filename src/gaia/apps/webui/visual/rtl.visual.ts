@@ -2696,6 +2696,25 @@ for (const locale of ['ar', 'en']) {
             await check(page, 'list');
         });
 
+        for (const width of [390, 1280]) {
+            test(`a failed Run now says why in the interface language, at ${width} wide`, async ({ page }) => {
+                // A rejection that is not an Error is the case the catalog's own wording covers.
+                await page.addInitScript(() => {
+                    const real = window.fetch.bind(window);
+                    window.fetch = (input, init) =>
+                        /\/api\/schedules\/[^/]+\/run/.test(String(input instanceof Request ? input.url : input))
+                            ? Promise.reject('offline')
+                            : real(input, init);
+                });
+                await page.setViewportSize({ width, height: 844 });
+                await openSchedules(page);
+                await page.locator('.schedule-card').first().getByRole('button', { name: locale === 'ar' ? /تشغيل الآن/ : /Run now/ }).click();
+                const error = page.locator('.schedule-action-error');
+                await expect(error).toContainText(locale === 'ar' ? 'تعذّر تشغيل المهمة المجدولة الآن' : 'Could not run the schedule now');
+                await check(page, `run-failed-${width}`);
+            });
+        }
+
         test('a long prompt stops at three lines inside its card', async ({ page }) => {
             await openSchedules(page);
             const card = page.locator('.schedule-card', { hasText: 'Long instructions' });
