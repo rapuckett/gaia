@@ -31,11 +31,11 @@ export function Skeleton({ width = '100%', height = 14, circle }: SkeletonProps)
 
 const WIDTHS = ['70%', '55%', '82%', '48%', '64%'] as const;
 
-export function ListSkeleton({ rows = 5 }: { rows?: number }) {
+export function ListSkeleton({ rows = 5, label }: { rows?: number; label?: string }) {
     const t = useT();
     const { space } = useTheme();
     return (
-        <View accessible accessibilityRole="progressbar" accessibilityLabel={t('pick.loading')} style={{ paddingVertical: space.sm }}>
+        <View accessible accessibilityRole="progressbar" accessibilityLabel={label ?? t('pick.loading')} style={{ paddingVertical: space.sm }}>
             {Array.from({ length: rows }, (_, i) => (
                 <View key={i} style={{ minHeight: 48, paddingHorizontal: space.lg, justifyContent: 'center' }}>
                     <Row gap="md">

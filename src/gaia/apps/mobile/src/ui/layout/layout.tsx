@@ -1,7 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { View, type AccessibilityRole, type ViewStyle } from 'react-native';
+import { View, type AccessibilityRole, type DimensionValue, type ViewStyle } from 'react-native';
 import type { ReactNode } from 'react';
 import { useTheme } from '../theme/ThemeProvider';
 import type { Space } from '../tokens/space';
@@ -18,6 +18,9 @@ interface BoxProps {
     align?: Align;
     justify?: Justify;
     flex?: number;
+    /** Where this box sits across its parent's axis; `end` is the reading end in either direction. */
+    self?: 'start' | 'center' | 'end';
+    maxWidth?: DimensionValue;
     /** Layout direction of this box, for content whose language differs from the UI's. */
     dir?: 'ltr' | 'rtl';
     testID?: string;
@@ -43,6 +46,8 @@ function boxStyle(space: Record<Space, number>, p: BoxProps): Mut<ViewStyle> {
     if (p.justify) style.justifyContent = JUSTIFY[p.justify];
     if (p.flex !== undefined) style.flex = p.flex;
     if (p.dir) style.direction = p.dir;
+    if (p.self) style.alignSelf = ALIGN[p.self];
+    if (p.maxWidth !== undefined) style.maxWidth = p.maxWidth;
     return style;
 }
 

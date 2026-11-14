@@ -365,6 +365,7 @@ export const enMessages = {
     'msg.dropLater.other': 'This also deletes the {n} later messages in this chat.',
     'msg.dropLaterGo': 'Delete and send',
     'msg.copy': 'Copy message',
+    'msg.actions': 'Message actions',
     'msg.copied': 'Copied!',
     'msg.copiedAria': 'Copied to clipboard',
     'msg.delete': 'Delete message',

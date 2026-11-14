@@ -2,7 +2,13 @@
 // SPDX-License-Identifier: MIT
 
 import type { ReactNode } from 'react';
-import { Pressable as RNPressable, type AccessibilityRole, type AccessibilityState } from 'react-native';
+import {
+    Pressable as RNPressable,
+    type AccessibilityActionEvent,
+    type AccessibilityActionInfo,
+    type AccessibilityRole,
+    type AccessibilityState,
+} from 'react-native';
 
 export interface PressableProps {
     children?: ReactNode;
@@ -12,6 +18,11 @@ export interface PressableProps {
     accessibilityLabel?: string;
     accessibilityRole?: AccessibilityRole;
     accessibilityState?: AccessibilityState;
+    /** Extra screen-reader actions, e.g. what a long-press does. */
+    accessibilityActions?: readonly AccessibilityActionInfo[];
+    onAccessibilityAction?: (event: AccessibilityActionEvent) => void;
+    /** False lets a screen reader reach the children (links) instead of reading one element. */
+    accessible?: boolean;
     /** Minimum hit area in points; 48 unless a parent already guarantees it. */
     minSize?: number;
     testID?: string;
@@ -25,6 +36,9 @@ export function Pressable({
     accessibilityLabel,
     accessibilityRole = 'button',
     accessibilityState,
+    accessibilityActions,
+    onAccessibilityAction,
+    accessible,
     minSize = 48,
     testID,
 }: PressableProps) {
@@ -35,6 +49,9 @@ export function Pressable({
             disabled={disabled}
             accessibilityRole={accessibilityRole}
             accessibilityLabel={accessibilityLabel}
+            accessible={accessible}
+            accessibilityActions={accessibilityActions}
+            onAccessibilityAction={onAccessibilityAction}
             accessibilityState={{ ...accessibilityState, disabled: !!disabled }}
             testID={testID}
             style={({ pressed }) => ({

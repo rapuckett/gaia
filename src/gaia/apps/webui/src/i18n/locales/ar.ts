@@ -365,6 +365,7 @@ const messages: Messages = {
     'msg.dropLater.other': 'سيؤدي هذا أيضًا إلى حذف الرسائل اللاحقة في هذه المحادثة: {n}',
     'msg.dropLaterGo': 'احذف وأرسل',
     'msg.copy': 'نسخ الرسالة',
+    'msg.actions': 'إجراءات الرسالة',
     'msg.copied': 'تم النسخ!',
     'msg.copiedAria': 'تم النسخ إلى الحافظة',
     'msg.delete': 'حذف الرسالة',
