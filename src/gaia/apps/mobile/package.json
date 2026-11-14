@@ -9,7 +9,8 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "jest",
-    "export:web": "expo export --platform web"
+    "export:web": "expo export --platform web",
+    "test:e2e-web": "playwright test -c e2e/playwright.config.ts"
   },
   "dependencies": {
     "@expo-google-fonts/fraunces": "0.4.1",
@@ -63,6 +64,7 @@
     "zustand": "5.1.0"
   },
   "devDependencies": {
+    "@playwright/test": "1.65.0",
     "@testing-library/react-native": "14.1.0",
     "@types/jest": "30.0.0",
     "@types/node": "22.20.5",

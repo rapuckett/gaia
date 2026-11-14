@@ -12,3 +12,5 @@ expo-env.d.ts
 /fastlane/report.xml
 /fastlane/Preview.html
 /fastlane/test_output/
+/e2e/.out/
+/e2e/test-results/
