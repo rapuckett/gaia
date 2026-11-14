@@ -104,6 +104,7 @@ describe('endpoints', () => {
         schedules: ['GET', 'POST'],
         sessions: ['GET', 'POST'],
         session: ['GET', 'PUT'],
+        sessionCapabilities: ['GET'],
         sessionDocument: ['DELETE'],
         sessionMessage: ['DELETE'],
         sessionMessages: ['GET'],

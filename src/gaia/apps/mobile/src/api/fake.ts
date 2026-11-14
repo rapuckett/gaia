@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import type {
+    AgentCapabilities,
     AgentMcpServer,
     ConnectorListEntry,
     CreateSessionRequest,
@@ -66,6 +67,8 @@ export interface FakeClientData {
     setupStatuses?: (SetupRunStatus | Error)[];
     setupPlan?: SetupPlan;
     documents?: DocumentListResponse;
+    /** What getCapabilities answers, by chat; a chat not listed has no agent running (409). */
+    capabilities?: Record<string, AgentCapabilities>;
 }
 
 export interface FakeGaiaClient extends GaiaClient {
@@ -82,6 +85,7 @@ export interface FakeGaiaClient extends GaiaClient {
     readonly downloads: { modelId: string; acknowledgeLowDisk: boolean }[];
     readonly setupStarts: { skipChatModel: boolean; gaiaLemonade: boolean; upgradeEmbedded: boolean }[];
     readonly detached: { sessionId: string; docId: string }[];
+    readonly capabilityReads: string[];
 }
 
 export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
@@ -116,6 +120,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         return item;
     };
     const detached: FakeGaiaClient['detached'] = [];
+    const capabilityReads: string[] = [];
 
     function findSession(sessionId: string): Session {
         const session = sessions.find((s) => s.id === sessionId);
@@ -137,6 +142,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         downloads,
         setupStarts,
         detached,
+        capabilityReads,
         async health(): Promise<HealthResponse> {
             return { status: 'ok', service: 'gaia-agent-ui' };
         },
@@ -316,6 +322,12 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         },
         async listDocuments() {
             return data.documents ?? { documents: [], total: 0, total_chunks: 0, total_size_bytes: 0 };
+        },
+        async getCapabilities(sessionId) {
+            capabilityReads.push(sessionId);
+            const found = data.capabilities?.[sessionId];
+            if (!found) throw new GaiaApiError(409, "This chat's agent isn't running yet.");
+            return found;
         },
         async getSystemStatus() {
             if (!data.status) throw new GaiaApiError(503, 'This fake client was given no system status.');
