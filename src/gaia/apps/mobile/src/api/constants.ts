@@ -35,6 +35,7 @@ export const ENDPOINTS = {
     connectorsAgentMcps: '/api/connectors/agent-mcps',
     systemStatus: '/api/system/status',
     documentFile: '/api/documents/{doc_id}/file',
+    documents: '/api/documents',
     onboardingStart: '/api/onboarding/start',
 } as const;
 

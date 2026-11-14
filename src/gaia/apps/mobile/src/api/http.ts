@@ -23,6 +23,7 @@ import type {
     ConnectorList,
     DeleteMessagesResult,
     DeleteScheduleResult,
+    DocumentListResponse,
     FollowUpOutcome,
     FollowUpResult,
     GaiaClient,
@@ -333,6 +334,10 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         deleteSchedule(name, options) {
             return deleteJson<DeleteScheduleResult>(schedulePath(name), options?.signal);
+        },
+
+        listDocuments(options) {
+            return getJson<DocumentListResponse>(ENDPOINTS.documents, options?.signal);
         },
 
         getSystemStatus(options) {

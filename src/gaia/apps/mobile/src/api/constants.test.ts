@@ -120,6 +120,7 @@ describe('endpoints', () => {
         connectorsAgentMcps: ['GET'],
         systemStatus: ['GET'],
         documentFile: ['GET'],
+        documents: ['GET'],
         onboardingStart: ['GET'],
     };
     const calls = Object.entries(ENDPOINTS).flatMap(([name, path]) =>
