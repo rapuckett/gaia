@@ -406,6 +406,8 @@ export const enMessages = {
     'serverDown.stillDown': 'The model server still isn’t answering.',
     'serverDown.back': 'The model server is running again. Send your message again.',
     'chatError.unknown': 'Something went wrong while GAIA was answering. Try again; if it keeps happening, report it with the link below.',
+    'chatError.unexpected': 'Unexpected error?',
+    'chatError.report': 'Report it on GitHub',
     'chatError.gaiaStopped': 'GAIA stopped before it finished this answer. Once GAIA is running again, press Try again.',
     'chatError.liveViewLost': 'Lost the live view of this answer: the connection to GAIA dropped {n} times. The answer may still finish. Reopen this chat in a minute to see it.',
     'msg.cutOff.interrupted': 'This answer was interrupted when GAIA closed.',
@@ -3495,6 +3497,11 @@ export const enMessages = {
     'mobileApp.error.streamBroke': 'The connection to GAIA broke while the reply was arriving. The answer may still finish on your PC: reopen this chat in a minute to see it.',
     'mobileApp.error.badEvent': 'GAIA sent a reply event this phone cannot read: {preview}',
     'mobileApp.error.noConnection': 'No PC is connected. Pair this phone with your PC first.',
+    'mobileApp.pcOnly.modelServer': 'Start the model server on the PC running GAIA, then try again. It can’t be started from a phone.',
+    'mobileApp.pcOnly.logs': 'Read GAIA’s logs on the PC running GAIA. They can’t be read from a phone.',
+    'mobileApp.pcOnly.report': 'GAIA saved a problem report for this on the PC. Create the troubleshooting report there to attach to a bug report.',
+    'mobileApp.connectorRetry.connected': '{name} connected since this reply. Ask again to run it now.',
+    'mobileApp.connectorRetry.askAgain': 'Ask again',
 } as const;
 
 export const en: Locale = {

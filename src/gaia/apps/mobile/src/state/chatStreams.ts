@@ -3,7 +3,10 @@
 
 import { create } from 'zustand';
 
+import { translator } from '@webui/i18n/translator';
 import type { StreamEvent } from '@webui/types';
+import { dropErrorsEchoedInAnswer } from '@webui/utils/messageErrors.core';
+import { agentEventToStep } from '@webui/utils/streamSteps.core';
 
 import { AGENT_EVENT_TYPES, RESOLVES_PROMPTS } from '@/api/constants';
 import { GaiaTurnError, type GaiaError } from '@/api/errors';
@@ -37,6 +40,12 @@ export interface ChatTurn {
     stopState?: 'stopped' | 'unconfirmed';
     /** What GAIA reported while stopping. */
     stopError?: GaiaError;
+    /** GAIA closed the turn as failed, or its answer only echoes a tool's error. */
+    failed?: boolean;
+    /** The cause a failed turn named (`done.failure`), for its fix. */
+    failure?: string;
+    /** The last tool call governance policy blocked; `seq` tells one alert from the next. */
+    policyAlert?: { tool: string; receiptId?: string; seq: number };
 }
 
 export const IDLE_TURN: ChatTurn = {
@@ -84,11 +93,21 @@ function applyAgentEvent(turn: ChatTurn, event: StreamEvent): ChatTurn {
     if (event.type === 'tool_start') {
         next = { ...next, toolSinceText: true };
     }
+    if (event.type === 'policy_alert') {
+        next = { ...next, policyAlert: { tool: event.tool ?? '', receiptId: event.receipt_id, seq: turn.events.length } };
+    }
     // The text so far narrated a tool call, was reasoning, or was cut off: it is not the answer.
     if (event.type === 'commentary' || event.retracts_answer) {
         next = { ...next, liveText: '', toolSinceText: false };
     }
     return { ...next, events: appendEvent(next.events, event) };
+}
+
+/** The answer is, word for word, an error step of the turn: the reply stands in for a failure. */
+function echoesError(events: readonly StreamEvent[], answer: string): boolean {
+    const t = translator('en');
+    const steps = events.flatMap((event) => agentEventToStep(event, { current: 0 }, t) ?? []);
+    return dropErrorsEchoedInAnswer(steps, answer).echoed;
 }
 
 /** One stream event folded into the turn, as the web Agent UI's chat view folds it. */
@@ -106,7 +125,14 @@ export function applyEvent(turn: ChatTurn, event: StreamEvent): ChatTurn {
         case 'done': {
             // A `done` with no message id was made up by the client when the stream closed unreported.
             const stopState = event.cancelled === true ? 'stopped' : turn.status === 'stopping' && event.message_id == null ? 'unconfirmed' : undefined;
-            return { ...withoutPrompts(turn), liveText: event.content || turn.liveText, ...(stopState ? { stopState } : null) };
+            const answer = event.content || turn.liveText;
+            const failed = event.failed === true || echoesError(turn.events, answer);
+            return {
+                ...withoutPrompts(turn),
+                liveText: answer,
+                ...(stopState ? { stopState } : null),
+                ...(failed ? { failed, failure: event.failed ? event.failure : undefined } : null),
+            };
         }
         case 'error': {
             const error = new GaiaTurnError(event.content ?? '');

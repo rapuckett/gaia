@@ -145,6 +145,7 @@ describe('createHttpClient requests', () => {
             { session_id: 's1', request_id: 'r1', value: 'Paris' },
         ],
         ['getSystemStatus', (c) => c.getSystemStatus(), 'GET', '/api/system/status', UI_HEADERS, undefined],
+        ['listConnectors', (c) => c.listConnectors(), 'GET', '/api/connectors', UI_HEADERS, undefined],
     ])('%s: %s', async (_name, call, method, path, headers, body) => {
         const { fetch, calls } = createRecordingFetch(() => jsonResponse({ status: 'ok' }));
         await call(createHttpClient({ baseUrl: BASE, fetch }));

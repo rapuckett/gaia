@@ -1,6 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
+import { isAuthRequiredMessage } from '@webui/utils/connectorRetry.core';
 import { useEffect, useState } from 'react';
 
 import { useChatStream, useMessages, useSession } from '@/data';
@@ -10,10 +11,12 @@ import { describeError, useT } from '@/i18n/useT';
 import { ErrorState, Notice, Screen, Stack } from '@/ui';
 
 import { ChatPrompts } from './ChatPrompts';
+import { ConnectorRetry } from './ConnectorRetry';
 import { PermissionPromptSlot } from './permission/PermissionPromptSlot';
 import { usePermissionPrompt } from './permission/usePermissionPrompt';
 import { liveStatusLine } from './liveStatus';
 import { MessageList } from './messages/MessageList';
+import { TailIssues } from './ReplyErrors';
 import { buildTail } from './tailState';
 import { TurnTail } from './TurnTail';
 
@@ -31,6 +34,8 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
     const saved = messages.data?.messages ?? NO_MESSAGES;
 
     const tail = buildTail(saved, stream);
+    const lastReply = saved.filter((m) => m.role !== 'system').at(-1);
+    const connectorError = !busy && lastReply?.role === 'assistant' && isAuthRequiredMessage(lastReply.content) ? lastReply : null;
     const line = liveStatusLine(
         stream.events,
         { waitingOnPerson: !!stream.pendingPermission || !!stream.pendingQuestion, answering: stream.liveText !== '' },
@@ -74,9 +79,15 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
                 <>
                     {actionError ? (
                         <Stack paddingX="lg">
-                            <Notice tone="danger" message={describeError(actionError, t)} testID="action-error" />
+                            <Notice
+                                tone="danger"
+                                message={describeError(actionError, t)}
+                                action={{ label: t('chat.dismissError'), onPress: () => setActionError(null) }}
+                                testID="action-error"
+                            />
                         </Stack>
                     ) : null}
+                    {connectorError ? <ConnectorRetry content={connectorError.content} onRetry={() => tryAgain(connectorError.id)} /> : null}
                     {permission ? <PermissionPromptSlot {...permission} key={permission.prompt.id} /> : null}
                     <Composer onSend={send} onStop={stream.stop} running={busy} placeholder={placeholder} />
                 </>
@@ -97,6 +108,7 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
                                     onContinue={continueReply}
                                 />
                             ) : null}
+                            {tail ? <TailIssues tail={tail} local={session.data?.inference_remote === false} /> : null}
                             <ChatPrompts question={stream.pendingQuestion} />
                         </>
                     }

@@ -19,6 +19,7 @@ import {
 import type {
     CancelChatResult,
     ConfirmToolResult,
+    ConnectorList,
     DeleteMessagesResult,
     GaiaClient,
     HealthResponse,
@@ -280,6 +281,10 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         getSystemStatus(options) {
             return getJson<SystemStatus>(ENDPOINTS.systemStatus, options?.signal);
+        },
+
+        listConnectors(options) {
+            return getJson<ConnectorList>(ENDPOINTS.connectors, options?.signal);
         },
 
         getStartScreen(options) {

@@ -19,6 +19,7 @@ export const ENDPOINTS = {
     chatCancel: '/api/chat/cancel',
     chatConfirmTool: '/api/chat/confirm-tool',
     chatUserInput: '/api/chat/user-input',
+    connectors: '/api/connectors',
     systemStatus: '/api/system/status',
     documentFile: '/api/documents/{doc_id}/file',
     onboardingStart: '/api/onboarding/start',
@@ -55,6 +56,8 @@ export const QUEUED_IDLE_MS = 10 * 60_000;
 export const SEND_HEADER_TIMEOUT_MS = 90_000;
 /** An attach replays at once; a slower answer means the backend is stuck or unreachable. */
 export const ATTACH_HEADER_TIMEOUT_MS = 30_000;
+/** How often to re-read the PC's connectors while a reply waits on an account being connected (webui's ConnectorRetryBanner). */
+export const CONNECTOR_POLL_MS = 4_000;
 /** How often to re-read the PC's status while it is still starting or warming up. */
 export const STATUS_POLL_MS = 5_000;
 

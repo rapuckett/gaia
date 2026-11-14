@@ -76,11 +76,15 @@ describe('request headers', () => {
 });
 
 describe('endpoints', () => {
-    const decorators = pythonFiles(UI_DIR).flatMap((file) =>
-        [...readFileSync(file, 'utf-8').matchAll(/@(?:router|app)\.(get|post|put|patch|delete)\(\s*"([^"]+)"/g)].map(
-            (m) => `${m[1]!.toUpperCase()} ${m[2]!}`,
-        ),
-    );
+    // A router may declare its paths relative to `APIRouter(prefix=...)`.
+    const decorators = pythonFiles(UI_DIR).flatMap((file) => {
+        const source = readFileSync(file, 'utf-8');
+        const prefix = /APIRouter\([^)]*prefix="([^"]*)"/.exec(source)?.[1] ?? '';
+        return [...source.matchAll(/@(?:router|app)\.(get|post|put|patch|delete)\(\s*"([^"]*)"/g)].flatMap((m) => {
+            const method = m[1]!.toUpperCase();
+            return [`${method} ${m[2]!}`, `${method} ${prefix}${m[2]!}`];
+        });
+    });
     const methods: Record<keyof typeof ENDPOINTS, string[]> = {
         health: ['GET'],
         sessions: ['GET', 'POST'],
@@ -92,6 +96,7 @@ describe('endpoints', () => {
         chatCancel: ['POST'],
         chatConfirmTool: ['POST'],
         chatUserInput: ['POST'],
+        connectors: ['GET'],
         systemStatus: ['GET'],
         documentFile: ['GET'],
         onboardingStart: ['GET'],

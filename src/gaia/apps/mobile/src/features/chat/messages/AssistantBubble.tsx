@@ -10,6 +10,7 @@ import { Check, Copy, Ellipsis } from '@/ui/icons';
 
 import { CutOffNote, StoppedNote } from '../EndingNotes';
 import { Markdown } from '../markdown/Markdown';
+import { SavedReplyErrors } from '../ReplyErrors';
 import { useMessageActions } from './useMessageActions';
 
 export interface AssistantBubbleProps {
@@ -31,6 +32,7 @@ export function AssistantBubble({ message, streaming = false }: AssistantBubbleP
             </Pressable>
             {cutOff ? <CutOffNote cutOff={cutOff} /> : null}
             {cancelled ? <StoppedNote stop={{ state: 'stopped' }} /> : null}
+            {!streaming && !cancelled ? <SavedReplyErrors message={message} /> : null}
             {!streaming && !cancelled ? (
                 <Row>
                     <IconButton

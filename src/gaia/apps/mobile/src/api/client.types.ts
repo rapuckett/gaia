@@ -1,7 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import type { Message, Session, StartScreen, StreamEvent, SystemStatus } from '@webui/types';
+import type { ConnectorListEntry, Message, Session, StartScreen, StreamEvent, SystemStatus } from '@webui/types';
 import type { CreateSessionRequest, ToolConfirmRequest, UserInputRequest as ApiUserInputRequest } from '@webui/types/api.gen';
 
 export type { Message, Session, StartScreen, StreamEvent, SystemStatus } from '@webui/types';
@@ -49,6 +49,10 @@ export interface UserInputResult {
     request_id: string;
 }
 
+export interface ConnectorList {
+    connectors: ConnectorListEntry[];
+}
+
 export interface RequestOptions {
     signal?: AbortSignal;
 }
@@ -76,6 +80,8 @@ export interface GaiaClient {
     /** Answers a `needs_input` question; the turn continues once GAIA has it. */
     sendUserInput(request: UserInputRequest, options?: RequestOptions): Promise<UserInputResult>;
     getSystemStatus(options?: RequestOptions): Promise<SystemStatus>;
+    /** The PC's connectors and whether each account is connected. */
+    listConnectors(options?: RequestOptions): Promise<ConnectorList>;
     /** The new-chat screen's cards and working folder; `skills_error` says why the assistant can't list its skills. */
     getStartScreen(options?: RequestOptions): Promise<StartScreen>;
 }

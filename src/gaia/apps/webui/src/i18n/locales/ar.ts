@@ -406,6 +406,8 @@ const messages: Messages = {
     'serverDown.stillDown': 'لا يزال خادم النماذج لا يستجيب.',
     'serverDown.back': 'عاد خادم النماذج إلى العمل. أرسل رسالتك مجددًا.',
     'chatError.unknown': 'حدث خطأ ما أثناء إجابة GAIA. حاول مجددًا؛ وإن تكرر ذلك، أبلغ عنه عبر الرابط أدناه.',
+    'chatError.unexpected': 'خطأ غير متوقع؟',
+    'chatError.report': 'أبلغ عنه على GitHub',
     'chatError.gaiaStopped': 'توقّف GAIA قبل أن يُكمل هذه الإجابة. عندما يعمل GAIA مجددًا، اضغط «حاول مجددًا».',
     'chatError.liveViewLost': 'فُقد العرض المباشر لهذه الإجابة: انقطع الاتصال بـ GAIA (عدد المرات: {n}). قد تكتمل الإجابة رغم ذلك. أعد فتح هذه المحادثة بعد دقيقة لرؤيتها.',
     'msg.cutOff.interrupted': 'انقطعت هذه الإجابة عندما أُغلق GAIA.',
@@ -3495,6 +3497,11 @@ const messages: Messages = {
     'mobileApp.error.streamBroke': 'انقطع الاتصال بـ GAIA أثناء وصول الرد. قد تكتمل الإجابة رغم ذلك على الكمبيوتر: أعد فتح هذه المحادثة بعد دقيقة لرؤيتها.',
     'mobileApp.error.badEvent': 'أرسل GAIA حدثًا في الرد لا يستطيع هذا الهاتف قراءته: {preview}',
     'mobileApp.error.noConnection': 'لا يوجد كمبيوتر متصل. اقرن هذا الهاتف بالكمبيوتر أولًا.',
+    'mobileApp.pcOnly.modelServer': 'شغّل خادم النموذج على الكمبيوتر الذي يشغّل GAIA ثم حاول مرة أخرى. لا يمكن تشغيله من الهاتف.',
+    'mobileApp.pcOnly.logs': 'اقرأ سجلات GAIA على الكمبيوتر الذي يشغّل GAIA. لا يمكن قراءتها من الهاتف.',
+    'mobileApp.pcOnly.report': 'حفظ GAIA تقريرًا عن هذه المشكلة على الكمبيوتر. أنشئ تقرير استكشاف الأخطاء هناك لإرفاقه ببلاغ عن خطأ.',
+    'mobileApp.connectorRetry.connected': 'تم ربط {name} منذ هذا الرد. اسأل مرة أخرى لتشغيله الآن.',
+    'mobileApp.connectorRetry.askAgain': 'اسأل مرة أخرى',
 };
 
 export const ar: Locale = {
