@@ -4,6 +4,7 @@
 import type {
     AgentMcpServer,
     ConnectorListEntry,
+    ContextUsageResult,
     CreateSessionRequest,
     FollowUpOutcome,
     DocumentListResponse,
@@ -44,6 +45,8 @@ export interface FakeClientData {
     running?: Record<string, StreamEvent[]>;
     connectors?: ConnectorListEntry[];
     agentMcps?: AgentMcpServer[];
+    /** What getContextUsage answers. */
+    contextUsage?: ContextUsageResult;
     /** What getFollowUpOutcome answers; a function may throw to script a 409. */
     followUpOutcome?: FollowUpOutcome | (() => FollowUpOutcome);
     /** Makes sendFollowUp reject, as a turn that can't take the message does. */
@@ -163,6 +166,9 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             };
             sessions.unshift(session);
             return session;
+        },
+        async getContextUsage() {
+            return data.contextUsage ?? { available: false, reason: 'Measured once GAIA has answered in this chat.' };
         },
         async getFollowUpOutcome() {
             const outcome = data.followUpOutcome ?? { taken: [], returned: [] };
