@@ -213,9 +213,9 @@ describe('ChatScreen', () => {
             const client = permissionClient(REQUEST);
             await mount(client);
             await sendText('Save it');
-            await fireEvent.press(await screen.findByTestId('permission-allow'));
+            await fireEvent.press(await screen.findByTestId('perm-allow'));
             await waitFor(() => expect(client.confirmations).toEqual([{ session_id: CHAT, approved: true, always: false, confirm_id: 'c1' }]));
-            await waitFor(() => expect(screen.queryByTestId('permission-prompt')).toBeNull());
+            await waitFor(() => expect(screen.queryByTestId('perm-card')).toBeNull());
             expect(useChatStreamStore.getState().resolved[CHAT]?.c1).toEqual({ state: 'answered' });
             await act(async () => hold.open());
         });
@@ -224,7 +224,7 @@ describe('ChatScreen', () => {
             await mount(permissionClient({ ...REQUEST, expires_at: Date.now() / 1000 - 5 }));
             await sendText('Save it');
             await waitFor(() => expect(useChatStreamStore.getState().resolved[CHAT]?.c1).toEqual({ state: 'expired' }));
-            expect(screen.queryByTestId('permission-prompt')).toBeNull();
+            expect(screen.queryByTestId('perm-card')).toBeNull();
             expect(useChatStreamStore.getState().turns[CHAT]?.pendingPermission).toBeNull();
         });
     });

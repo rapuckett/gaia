@@ -14,7 +14,7 @@ import { isQuestionGone, questionCardData, resolveTypedAnswer } from '@/features
 import { ErrorState, Notice, Screen, Stack } from '@/ui';
 
 import { ChatPrompts } from './ChatPrompts';
-import { PermissionPromptSlot } from './permission/PermissionPromptSlot';
+import { PermissionPrompt } from './permission/PermissionPrompt';
 import { usePermissionPrompt } from './permission/usePermissionPrompt';
 import { liveStatusLine } from './liveStatus';
 import { MessageList } from './messages/MessageList';
@@ -116,7 +116,7 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
                             <Notice tone="danger" message={describeError(actionError, t)} testID="action-error" />
                         </Stack>
                     ) : null}
-                    {permission ? <PermissionPromptSlot {...permission} key={permission.prompt.id} /> : null}
+                    {permission ? <PermissionPrompt key={permission.prompt.id} {...permission} /> : null}
                     <QueuedMessages
                         items={queue.held}
                         replying={busy}
