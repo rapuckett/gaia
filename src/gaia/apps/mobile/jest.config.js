@@ -23,6 +23,8 @@ const project = (preset) => ({
     displayName: preset,
     preset: `jest-expo/${preset}`,
     moduleNameMapper,
+    // Web UI files imported through @webui resolve their packages here, as Metro does; webui may have no node_modules of its own.
+    modulePaths: ['<rootDir>/node_modules'],
     setupFiles: ['<rootDir>/jest.setup.js'],
     transformIgnorePatterns,
     testMatch: ['<rootDir>/src/**/*.test.{ts,tsx}'],
