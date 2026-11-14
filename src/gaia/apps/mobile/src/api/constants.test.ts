@@ -114,6 +114,7 @@ describe('endpoints', () => {
         chatUserInput: ['POST'],
         systemStatus: ['GET'],
         documentFile: ['GET'],
+        documents: ['GET'],
         onboardingStart: ['GET'],
     };
     const calls = Object.entries(ENDPOINTS).flatMap(([name, path]) =>
