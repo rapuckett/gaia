@@ -33,8 +33,11 @@ export const queryKeys = {
     startScreen: ['startScreen'] as const,
     setupStatus: ['setupStatus'] as const,
     setupPlan: ['setupPlan'] as const,
-    connectors: ['connectors'] as const,
     agentMcps: ['agentMcps'] as const,
+    agents: ['agents'] as const,
+    connectorActivations: (connectorId: string) => ['connectorActivations', connectorId] as const,
+    connectorGrants: (connectorId: string) => ['connectorGrants', connectorId] as const,
+    connectors: ['connectors'] as const,
     documents: ['documents'] as const,
 };
 
