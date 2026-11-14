@@ -16,6 +16,7 @@ import type {
     SetupCheck,
     SetupPlan,
     SetupRunStatus,
+    SkillInfo,
     StartScreen,
     StreamEvent,
     SystemStatus,
@@ -37,6 +38,8 @@ export type {
     SetupCheck,
     SetupPlan,
     SetupRunStatus,
+    SkillInfo,
+    SkillSource,
     StartScreen,
     StreamEvent,
     SystemStatus,
@@ -59,6 +62,12 @@ export interface MessageList {
 
 export interface ConnectorList {
     connectors: ConnectorListEntry[];
+}
+
+/** `invalid` maps each unreadable skill's path to why GAIA skipped it. */
+export interface SkillList {
+    skills: SkillInfo[];
+    invalid: Record<string, string>;
 }
 
 export interface AgentMcpList {
@@ -161,6 +170,8 @@ export interface GaiaClient {
     /** Chats whose title or messages match `query`, newest first; `truncated` says the backend capped the list. */
     searchSessions(query: string, includeAutomated: boolean, options?: RequestOptions): Promise<SessionSearchResponse>;
     getMessages(sessionId: string, options?: RequestOptions): Promise<MessageList>;
+    /** Removes only this message. */
+    deleteMessage(sessionId: string, messageId: number, options?: RequestOptions): Promise<{ deleted: boolean }>;
     /** Renames a chat; the title is pinned against the auto-retitler. */
     updateSession(sessionId: string, update: SessionUpdate, options?: RequestOptions): Promise<Session>;
     /** Flips the chat's private mode (not saved to memory) and returns the chat. */
@@ -191,6 +202,8 @@ export interface GaiaClient {
     /** Servers that custom agents declare in their own mcp_servers.json; read-only. */
     listAgentMcps(options?: RequestOptions): Promise<AgentMcpList>;
     listSchedules(options?: RequestOptions): Promise<ScheduleList>;
+    /** Every skill GAIA can load, plus the folders it skipped. */
+    listSkills(options?: RequestOptions): Promise<SkillList>;
     /** Creates a schedule; `interval` is the plain-words "when to run", parsed by the PC. 409 when the name is taken. */
     createSchedule(request: CreateScheduleRequest, options?: RequestOptions): Promise<Schedule>;
     /** Reads a plain-words "when to run" without saving it, for the form's live preview. */

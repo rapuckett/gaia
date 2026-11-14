@@ -19,6 +19,7 @@ export const ENDPOINTS = {
     sessions: '/api/sessions',
     session: '/api/sessions/{session_id}',
     sessionDocument: '/api/sessions/{session_id}/documents/{doc_id}',
+    sessionMessage: '/api/sessions/{session_id}/messages/{message_id}',
     sessionMessages: '/api/sessions/{session_id}/messages',
     sessionMessagesAndBelow: '/api/sessions/{session_id}/messages/{message_id}/and-below',
     sessionPin: '/api/sessions/{session_id}/pin',
@@ -32,6 +33,7 @@ export const ENDPOINTS = {
     setupPlan: '/api/setup/plan',
     setupRun: '/api/setup/run',
     setupStatus: '/api/setup/status',
+    skills: '/api/skills',
     chatSend: '/api/chat/send',
     chatAttach: '/api/chat/attach',
     chatCancel: '/api/chat/cancel',
@@ -88,6 +90,12 @@ export function sessionReadPath(sessionId: string): string {
 
 export function sessionMessagesPath(sessionId: string): string {
     return ENDPOINTS.sessionMessages.replace('{session_id}', encodeURIComponent(sessionId));
+}
+
+export function sessionMessagePath(sessionId: string, messageId: number): string {
+    return ENDPOINTS.sessionMessage
+        .replace('{session_id}', encodeURIComponent(sessionId))
+        .replace('{message_id}', String(messageId));
 }
 
 export function sessionMessagesAndBelowPath(sessionId: string, messageId: number): string {

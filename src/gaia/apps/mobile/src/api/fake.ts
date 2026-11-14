@@ -23,6 +23,7 @@ import type {
     SetupCheck,
     SetupPlan,
     SetupRunStatus,
+    SkillList,
     StartScreen,
     StreamEvent,
     SystemStatus,
@@ -54,6 +55,7 @@ export interface FakeClientData {
     modelNeeds?: Partial<Record<ModelNeed['job'], ModelNeed>>;
     /** What getSetupStatus answers. */
     setupStatus?: SetupRunStatus;
+    skills?: SkillList;
     resources?: ResourceUsage;
     start?: StartScreen;
     /** Most chats a search returns before it says `truncated`. */
@@ -76,6 +78,7 @@ export interface FakeGaiaClient extends GaiaClient {
     readonly pinned: { sessionId: string; pinned: boolean }[];
     readonly deletedSessions: string[];
     readonly read: string[];
+    readonly deletedOne: { sessionId: string; messageId: number }[];
     readonly confirmations: ToolConfirmRequest[];
     readonly answers: UserInputRequest[];
     readonly scheduleActions: { action: 'pause' | 'resume' | 'run' | 'delete'; name: string }[];
@@ -98,6 +101,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
     const pinned: FakeGaiaClient['pinned'] = [];
     const deletedSessions: string[] = [];
     const read: string[] = [];
+    const deletedOne: FakeGaiaClient['deletedOne'] = [];
     const confirmations: ToolConfirmRequest[] = [];
     const answers: UserInputRequest[] = [];
     const restarts: FakeGaiaClient['restarts'] = [];
@@ -143,6 +147,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         pinned,
         deletedSessions,
         read,
+        deletedOne,
         confirmations,
         answers,
         scheduleActions,
@@ -220,6 +225,13 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             const list = messages[sessionId] ?? [];
             return { messages: list, total: list.length };
         },
+        async deleteMessage(sessionId, messageId) {
+            deletedOne.push({ sessionId, messageId });
+            const list = messages[sessionId] ?? [];
+            if (!list.some((m) => m.id === messageId)) throw new GaiaApiError(404, 'Message not found');
+            messages[sessionId] = list.filter((m) => m.id !== messageId);
+            return { deleted: true };
+        },
         async deleteMessagesFrom(sessionId, messageId) {
             deleted.push({ sessionId, messageId });
             const list = messages[sessionId] ?? [];
@@ -277,6 +289,9 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         },
         async listAgentMcps() {
             return { agent_mcps: [...(data.agentMcps ?? [])] };
+        },
+        async listSkills() {
+            return { skills: [...(data.skills?.skills ?? [])], invalid: { ...(data.skills?.invalid ?? {}) } };
         },
         async listSchedules() {
             return { schedules: [...schedules], total: schedules.length };

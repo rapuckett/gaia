@@ -37,6 +37,7 @@ export {
   PinOff,
   Play,
   Plus,
+  RefreshCw,
   RotateCcw,
   RotateCw,
   ScrollText,

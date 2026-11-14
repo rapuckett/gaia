@@ -43,6 +43,7 @@ import type {
     SetupCheck,
     SetupPlan,
     SetupRunStatus,
+    SkillList,
     UserInputResult,
 } from './client.types';
 import {
@@ -56,6 +57,7 @@ import {
     SEND_HEADER_TIMEOUT_MS,
     SESSION_PAGE_SIZE,
     sessionDocumentPath,
+    sessionMessagePath,
     sessionMessagesAndBelowPath,
     sessionMessagesPath,
     sessionPath,
@@ -330,6 +332,10 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             return streamTurn('GET', path, undefined, 'attach', ATTACH_HEADER_TIMEOUT_MS, options?.signal);
         },
 
+        deleteMessage(sessionId, messageId, options) {
+            return deleteJson<{ deleted: boolean }>(sessionMessagePath(sessionId, messageId), options?.signal);
+        },
+
         deleteMessagesFrom(sessionId, messageId, options) {
             return deleteJson<DeleteMessagesResult>(sessionMessagesAndBelowPath(sessionId, messageId), options?.signal);
         },
@@ -359,6 +365,10 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         listAgentMcps(options) {
             return getJson<AgentMcpList>(ENDPOINTS.connectorsAgentMcps, options?.signal);
+        },
+
+        listSkills(options) {
+            return getJson<SkillList>(ENDPOINTS.skills, options?.signal);
         },
 
         listSchedules(options) {
