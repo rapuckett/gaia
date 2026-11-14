@@ -3,9 +3,14 @@
 
 import { useLocalSearchParams } from 'expo-router';
 
+import { AppErrorBoundary } from '@/features/errors/AppErrorBoundary';
 import { ChatScreen } from '@/features/chat/ChatScreen';
 
 export default function ChatRoute() {
     const { id } = useLocalSearchParams<{ id: string }>();
-    return <ChatScreen sessionId={id} />;
+    return (
+        <AppErrorBoundary resetKey={id}>
+            <ChatScreen sessionId={id} />
+        </AppErrorBoundary>
+    );
 }
