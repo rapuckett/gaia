@@ -19,9 +19,12 @@ import {
     type StreamEndpoint,
 } from './errors';
 import type {
+    AgentList,
     AgentMcpList,
     CancelChatResult,
     ConfirmToolResult,
+    ConnectorActivations,
+    ConnectorGrants,
     ConnectorList,
     DeleteMessagesResult,
     DeleteScheduleResult,
@@ -43,10 +46,15 @@ import type {
     SetupCheck,
     SetupPlan,
     SetupRunStatus,
+    SkillList,
     UserInputResult,
 } from './client.types';
 import {
     ATTACH_HEADER_TIMEOUT_MS,
+    connectorActivationPath,
+    connectorActivationsPath,
+    connectorGrantPath,
+    connectorGrantsPath,
     ENDPOINTS,
     followupOutcomePath,
     MESSAGE_PAGE_SIZE,
@@ -344,12 +352,44 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             return postJson<UserInputResult>(ENDPOINTS.chatUserInput, body, options?.signal);
         },
 
+        listAgents(options) {
+            return getJson<AgentList>(ENDPOINTS.agents, options?.signal);
+        },
+
         listConnectors(options) {
             return getJson<ConnectorList>(ENDPOINTS.connectors, options?.signal);
         },
 
+        listConnectorGrants(connectorId, options) {
+            return getJson<ConnectorGrants>(connectorGrantsPath(connectorId), options?.signal);
+        },
+
+        listConnectorActivations(connectorId, options) {
+            return getJson<ConnectorActivations>(connectorActivationsPath(connectorId), options?.signal);
+        },
+
+        async grantConnectorAgent(connectorId, agentId, scopes, options) {
+            await request('PUT', connectorGrantPath(connectorId, agentId), { scopes }, options?.signal);
+        },
+
+        async revokeConnectorAgentGrant(connectorId, agentId, options) {
+            await request('DELETE', connectorGrantPath(connectorId, agentId), undefined, options?.signal);
+        },
+
+        async activateConnectorAgent(connectorId, agentId, scopes, options) {
+            await request('PUT', connectorActivationPath(connectorId, agentId), scopes ? { scopes } : {}, options?.signal);
+        },
+
+        async deactivateConnectorAgent(connectorId, agentId, options) {
+            await request('DELETE', connectorActivationPath(connectorId, agentId), undefined, options?.signal);
+        },
+
         listAgentMcps(options) {
             return getJson<AgentMcpList>(ENDPOINTS.connectorsAgentMcps, options?.signal);
+        },
+
+        listSkills(options) {
+            return getJson<SkillList>(ENDPOINTS.skills, options?.signal);
         },
 
         listSchedules(options) {
