@@ -6,14 +6,16 @@ import { useCallback, useMemo, type ReactNode } from 'react';
 import { latencyByMessage } from '@webui/utils/answerStats.core';
 
 import type { Message } from '@/api/client.types';
-import { useMessages } from '@/data';
+import { useChatStream, useMessages } from '@/data';
 import { describeError, useT } from '@/i18n/useT';
 import { ErrorState, List, ListSkeleton, Stack } from '@/ui';
 
 import { AssistantBubble } from './AssistantBubble';
 import { JumpButton } from './JumpButton';
+import { MessageActionsContext } from './MessageActionsContext';
 import { UserBubble } from './UserBubble';
 import { useFollowScroll } from './useFollowScroll';
+import type { MessageContext } from './useMessageActions';
 
 export interface MessageListViewProps {
     /** Oldest first, as GAIA stores them. */
@@ -23,6 +25,14 @@ export interface MessageListViewProps {
     onRetry?: () => void;
     /** The answer being written, shown under the last message. */
     live?: ReactNode;
+}
+
+/** `shown` is newest first, so the messages after `index` are the ones before it. */
+function contextOf(shown: readonly Message[], index: number): MessageContext {
+    for (let i = index - 1; i >= 0; i--) {
+        if (shown[i].role === 'user') return { laterTurns: i + 1 };
+    }
+    return { laterTurns: 0 };
 }
 
 export function MessageListView({ messages, loading = false, error, onRetry, live }: MessageListViewProps) {
@@ -46,13 +56,18 @@ export function MessageListView({ messages, loading = false, error, onRetry, liv
                 inverted
                 data={shown}
                 keyExtractor={(m) => String(m.id)}
-                renderItem={({ item, index }) =>
-                    item.role === 'user' ? (
-                        <UserBubble message={item} onCollapse={() => bringIntoView(index)} />
+                renderItem={({ item, index }) => {
+                    const context = contextOf(shown, index);
+                    return item.role === 'user' ? (
+                        <UserBubble message={item} onCollapse={() => bringIntoView(index)} context={context} />
                     ) : (
-                        <AssistantBubble message={item} latencyMs={item.stats?.seconds != null ? item.stats.seconds * 1000 : latency.get(item.id)} />
-                    )
-                }
+                        <AssistantBubble
+                            message={item}
+                            context={context}
+                            latencyMs={item.stats?.seconds != null ? item.stats.seconds * 1000 : latency.get(item.id)}
+                        />
+                    );
+                }}
                 ListHeaderComponent={live ? <>{live}</> : undefined}
                 onScroll={onScroll}
                 scrollEventThrottle={64}
@@ -69,13 +84,17 @@ export function MessageListView({ messages, loading = false, error, onRetry, liv
 /** A chat's transcript, from the PC. `live` is the answer still being written. */
 export function MessageList({ sessionId, live }: { sessionId: string; live?: ReactNode }) {
     const query = useMessages(sessionId);
+    const { send, status } = useChatStream(sessionId);
+    const actions = useMemo(() => ({ send, busy: status !== 'idle' }), [send, status]);
     return (
-        <MessageListView
-            messages={query.data?.messages ?? []}
-            loading={query.isPending}
-            error={query.error}
-            onRetry={() => void query.refetch()}
-            live={live}
-        />
+        <MessageActionsContext.Provider value={actions}>
+            <MessageListView
+                messages={query.data?.messages ?? []}
+                loading={query.isPending}
+                error={query.error}
+                onRetry={() => void query.refetch()}
+                live={live}
+            />
+        </MessageActionsContext.Provider>
     );
 }

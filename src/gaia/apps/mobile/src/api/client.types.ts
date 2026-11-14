@@ -152,6 +152,8 @@ export interface GaiaClient {
     /** Chats whose title or messages match `query`, newest first; `truncated` says the backend capped the list. */
     searchSessions(query: string, includeAutomated: boolean, options?: RequestOptions): Promise<SessionSearchResponse>;
     getMessages(sessionId: string, options?: RequestOptions): Promise<MessageList>;
+    /** Removes only this message. */
+    deleteMessage(sessionId: string, messageId: number, options?: RequestOptions): Promise<{ deleted: boolean }>;
     /** Renames a chat; the title is pinned against the auto-retitler. */
     updateSession(sessionId: string, update: SessionUpdate, options?: RequestOptions): Promise<Session>;
     /** Flips the chat's private mode (not saved to memory) and returns the chat. */
