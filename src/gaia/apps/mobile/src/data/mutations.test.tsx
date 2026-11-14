@@ -13,7 +13,6 @@ import { useDeleteSession, useRenameSession, useSetPinned } from './mutations';
 import { queryKeys, useSessions } from './queries';
 
 const mockReplace = jest.fn();
-jest.mock('expo-router', () => ({ useRouter: () => ({ replace: mockReplace }) }));
 
 function session(id: string, over: Partial<Session> = {}): Session {
     return {
@@ -59,7 +58,7 @@ describe('session mutations', () => {
 
     it('deleting the open chat goes back to the new-chat screen; another chat stays put', async () => {
         const { client, wrapper } = setup();
-        const open = await renderHook(() => useDeleteSession('a'), { wrapper });
+        const open = await renderHook(() => useDeleteSession('a', () => mockReplace('/')), { wrapper });
 
         await act(async () => open.result.current.mutate('b'));
         await waitFor(() => expect(client.deletedSessions).toEqual(['b']));

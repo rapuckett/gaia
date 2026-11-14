@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: MIT
 
 import { useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
-import { useRouter } from 'expo-router';
 
 import type {
     ConfirmToolResult,
@@ -124,18 +123,17 @@ export function useSetPinned() {
     });
 }
 
-/** `mutate(id)`; when `id` is the open chat, the app goes back to the new-chat screen. */
-export function useDeleteSession(openId?: string | null) {
+/** `mutate(id)`; `onDeletedOpenChat` runs when `id` is the open chat, so the caller can leave its screen. */
+export function useDeleteSession(openId?: string | null, onDeletedOpenChat?: () => void) {
     const client = useGaiaClient();
     const queryClient = useQueryClient();
-    const router = useRouter();
     return useMutation<unknown, Error, string>({
         mutationFn: (id) => requireClient(client).deleteSession(id),
         onSuccess: (_data, id) => {
             // The open chat's screen would refetch a chat that is gone.
             queryClient.removeQueries({ queryKey: queryKeys.session(id) });
             queryClient.removeQueries({ queryKey: queryKeys.messages(id) });
-            if (id === openId) router.replace('/');
+            if (id === openId) onDeletedOpenChat?.();
         },
         onSettled: () => void queryClient.invalidateQueries({ queryKey: queryKeys.sessions }),
     });

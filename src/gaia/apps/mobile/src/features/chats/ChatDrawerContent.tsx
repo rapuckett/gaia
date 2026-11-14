@@ -1,6 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
+import { useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 
 import { APP_NAME } from '@webui/utils/constants';
@@ -107,9 +108,10 @@ export function ChatDrawerContent({ activeId, onSelect, onClose, onNewChat, live
         onSuccess: () => setFailure(null),
         onError: (e: unknown) => setFailure({ kind, error: e }),
     });
+    const router = useRouter();
     const rename = useRenameSession();
     const setPinned = useSetPinned();
-    const remove = useDeleteSession(activeId);
+    const remove = useDeleteSession(activeId, () => router.replace('/'));
     const markRead = useMarkRead();
     const mutateRead = markRead.mutate;
     const markSeen = useCallback((id: string) => mutateRead(id, { onError: (e) => setFailure({ kind: 'markRead', error: e }) }), [mutateRead]);
