@@ -6,6 +6,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { APP_NAME } from '@webui/utils/constants';
 
 import { useSessions, useSessionSearch } from '@/data';
+import { ModelStatusPill } from '@/features/model';
 import { describeError, useT } from '@/i18n/useT';
 import {
     EmptyState,
@@ -99,7 +100,11 @@ export function ChatDrawerContent({ activeId, onSelect, onClose, onNewChat, live
     const rowCount = sections.reduce((n, s) => n + s.data.length, 0);
 
     return (
-        <Screen edges={['top', 'bottom', 'start']} header={<Header onClose={close} onNewChat={onNewChat ? newChat : undefined} />}>
+        <Screen
+            edges={['top', 'bottom', 'start']}
+            header={<Header onClose={close} onNewChat={onNewChat ? newChat : undefined} />}
+            footer={<ModelStatusPill />}
+        >
             <Stack paddingX="lg" paddingY="sm">
                 <TextField
                     value={text}

@@ -2,10 +2,32 @@
 // SPDX-License-Identifier: MIT
 
 import type { FollowUpOutcome } from '@webui/utils/messageQueue';
-import type { Message, Schedule, Session, StartScreen, StreamEvent, SystemStatus } from '@webui/types';
+import type {
+    LocalModelStatus,
+    Message,
+    ModelNeed,
+    ModelNeedJob,
+    Schedule,
+    Session,
+    SetupRunStatus,
+    StartScreen,
+    StreamEvent,
+    SystemStatus,
+} from '@webui/types';
 import type { CreateSessionRequest, SessionSearchResponse, ToolConfirmRequest, UserInputRequest as ApiUserInputRequest } from '@webui/types/api.gen';
 
-export type { Message, Schedule, Session, StartScreen, StreamEvent, SystemStatus } from '@webui/types';
+export type {
+    LocalModelStatus,
+    Message,
+    ModelNeed,
+    ModelNeedJob,
+    Schedule,
+    Session,
+    SetupRunStatus,
+    StartScreen,
+    StreamEvent,
+    SystemStatus,
+} from '@webui/types';
 export type { CreateSessionRequest, SessionSearchResponse, SessionSearchResult, ToolConfirmRequest } from '@webui/types/api.gen';
 
 /** `display` is what the phone shows as the answer; it is never sent to GAIA. */
@@ -59,6 +81,12 @@ export interface DeleteScheduleResult {
     deleted: boolean;
 }
 
+export interface RestartModelResult {
+    status: string;
+    model: string;
+    starting_server: boolean;
+}
+
 export interface FollowUpResult {
     delivered: boolean;
 }
@@ -104,6 +132,17 @@ export interface GaiaClient {
     runSchedule(name: string, options?: RequestOptions): Promise<Schedule>;
     deleteSchedule(name: string, options?: RequestOptions): Promise<DeleteScheduleResult>;
     getSystemStatus(options?: RequestOptions): Promise<SystemStatus>;
+    /** The model server's state, what it runs on and its memory; the pill and its sheet read it. */
+    getLocalModelStatus(options?: RequestOptions): Promise<LocalModelStatus>;
+    /** Starts the model server if stopped, then reloads the chat model. `confirm` agrees to reload a Lemonade GAIA doesn't own. */
+    restartLocalModel(confirm: boolean, options?: RequestOptions): Promise<RestartModelResult>;
+    /** Whether a job needs a model that isn't on the PC, and which. */
+    getModelNeed(job: ModelNeedJob, options?: RequestOptions): Promise<ModelNeed>;
+    /** Starts one model's download on the PC; follow it with `getSetupStatus`. */
+    downloadSetupModel(modelId: string, acknowledgeLowDisk: boolean, options?: RequestOptions): Promise<SetupRunStatus>;
+    getSetupStatus(options?: RequestOptions): Promise<SetupRunStatus>;
+    /** Stops one model's download; finished and partial files are kept. */
+    cancelSetup(modelId: string, options?: RequestOptions): Promise<{ cancelled: boolean }>;
     /** The new-chat screen's cards and working folder; `skills_error` says why the assistant can't list its skills. */
     getStartScreen(options?: RequestOptions): Promise<StartScreen>;
 }
