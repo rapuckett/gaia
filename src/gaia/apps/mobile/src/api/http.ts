@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import type { Message, Session, StartScreen, StreamEvent, SystemStatus } from '@webui/types';
+import { fromApiMessages } from '@webui/utils/chatStream';
 
 import type { FetchLike, FetchRequestInit, FetchResponseLike } from '@/platform/fetch.types';
 
@@ -242,7 +243,7 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
                 }
                 messages.push(...page.messages);
             }
-            return { messages, total: first.total };
+            return { messages: fromApiMessages(messages), total: first.total };
         },
 
         sendMessage(sessionId, message, options) {
