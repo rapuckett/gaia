@@ -21,6 +21,8 @@ export interface ButtonProps {
     busy?: boolean;
     disabled?: boolean;
     full?: boolean;
+    /** Let a long label take more lines instead of truncating. */
+    wrap?: boolean;
     testID?: string;
 }
 
@@ -34,6 +36,7 @@ export function Button({
     busy,
     disabled,
     full,
+    wrap,
     testID,
 }: ButtonProps) {
     const { colors, radius } = useTheme();
@@ -71,9 +74,17 @@ export function Button({
                         ) : icon ? (
                             <Icon icon={icon} size="sm" tone={v.tone} />
                         ) : null}
-                        <Text role="ui" weight="medium" tone={v.tone} numberOfLines={1}>
-                            {label}
-                        </Text>
+                        {wrap ? (
+                            <View style={{ flexShrink: 1, paddingVertical: 10 }}>
+                                <Text role="ui" weight="medium" tone={v.tone} align="center">
+                                    {label}
+                                </Text>
+                            </View>
+                        ) : (
+                            <Text role="ui" weight="medium" tone={v.tone} numberOfLines={1}>
+                                {label}
+                            </Text>
+                        )}
                         {iconEnd && !busy ? <Icon icon={iconEnd} size="sm" tone={v.tone} /> : null}
                     </Row>
                 </View>
