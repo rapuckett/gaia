@@ -3,7 +3,6 @@
 
 import type { FollowUpOutcome } from '@webui/utils/messageQueue';
 import type {
-    Document,
     LocalModelStatus,
     Message,
     ModelNeed,
@@ -19,7 +18,6 @@ import type {
 import type { CreateSessionRequest, DocumentListResponse, SessionSearchResponse, ToolConfirmRequest, UserInputRequest as ApiUserInputRequest } from '@webui/types/api.gen';
 
 export type {
-    Document,
     LocalModelStatus,
     Message,
     ModelNeed,

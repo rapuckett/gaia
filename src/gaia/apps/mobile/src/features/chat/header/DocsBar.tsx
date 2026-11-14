@@ -6,13 +6,15 @@ import { useState } from 'react';
 import { pluralKey } from '@webui/i18n/registry';
 import { middleTruncate } from '@webui/utils/format';
 
-import type { Document } from '@/api/client.types';
+import type { DocumentListResponse } from '@/api/client.types';
 import { useDetachDocument, useDocuments, useSession } from '@/data';
 import { useT } from '@/i18n/useT';
 import { Icon, IconButton, Ltr, Pressable, Row, Stack, Surface, Text } from '@/ui';
 import { CircleAlert, CircleCheck, FileText, X } from '@/ui/icons';
 
 import { failureReason } from './failureText';
+
+type LibraryDocument = DocumentListResponse['documents'][number];
 
 const COLLAPSED_PILLS = 3;
 
@@ -43,7 +45,7 @@ export function DocsBar({ sessionId, onFailed }: { sessionId: string; onFailed: 
     const visible = expanded ? docs : docs.slice(0, COLLAPSED_PILLS);
     const hidden = docs.length - COLLAPSED_PILLS;
 
-    const remove = (doc: Document) =>
+    const remove = (doc: LibraryDocument) =>
         detach.mutate(
             { sessionId, docId: doc.id },
             {
