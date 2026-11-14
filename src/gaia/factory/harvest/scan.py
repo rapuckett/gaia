@@ -18,8 +18,9 @@ from typing import Dict, List, Optional
 
 from gaia.factory.harvest.analyze import analyze, duration_minutes
 from gaia.factory.harvest.reader import Trace, iter_traces
+from gaia.home import gaia_home
 
-DEFAULT_OUT = Path.home() / ".gaia" / "cache" / "factory"
+DEFAULT_OUT = gaia_home() / "cache" / "factory"
 
 # USD per million tokens, per token class. Source: Anthropic pricing page,
 # https://platform.claude.com/docs/en/about-claude/pricing (retrieved 2026-08-25).

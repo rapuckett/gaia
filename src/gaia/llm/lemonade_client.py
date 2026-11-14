@@ -49,6 +49,7 @@ import requests
 from openai import OpenAI
 
 from gaia.env import child_env, load_env
+from gaia.home import gaia_home
 from gaia.llm import call_ledger, stream_watchdog
 from gaia.llm.lemonade_launcher import (
     build_start_command,
@@ -367,7 +368,7 @@ def _embedded_lemonade_state_path() -> Optional[Path]:
     ``gaia.logger._home_log_file`` for the same guard).
     """
     try:
-        return Path.home() / ".gaia" / "lemonade" / "state.json"
+        return gaia_home() / "lemonade" / "state.json"
     except RuntimeError:
         return None
 

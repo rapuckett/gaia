@@ -30,6 +30,7 @@ from pathlib import Path
 from typing import Callable, List, Optional
 
 from gaia.env import child_env
+from gaia.home import gaia_home
 from gaia.logger import get_logger
 from gaia.tool_cancellation import ToolCancelled, current_cancel_event
 from gaia.utils.archive import ArchiveError, safe_extract
@@ -38,8 +39,12 @@ log = get_logger(__name__)
 
 DOCS_URL = "https://amd-gaia.ai/docs/guides/transcription"
 
+
 #: Where the models live once fetched.
-MODEL_DIR = Path.home() / ".gaia" / "models" / "diarization"
+def model_dir() -> Path:
+    """Where the diarization models live, resolved at call time."""
+    return gaia_home() / "models" / "diarization"
+
 
 _SEGMENTATION_ARCHIVE = (
     "https://github.com/k2-fsa/sherpa-onnx/releases/download/"
@@ -51,8 +56,14 @@ _EMBEDDING_URL = (
     "speaker-recongition-models/wespeaker_en_voxceleb_resnet34_LM.onnx"
 )
 
-_SEGMENTATION_MODEL = MODEL_DIR / "sherpa-onnx-pyannote-segmentation-3-0" / "model.onnx"
-_EMBEDDING_MODEL = MODEL_DIR / "wespeaker_en_voxceleb_resnet34_LM.onnx"
+
+def _segmentation_model() -> Path:
+    return model_dir() / "sherpa-onnx-pyannote-segmentation-3-0" / "model.onnx"
+
+
+def _embedding_model() -> Path:
+    return model_dir() / "wespeaker_en_voxceleb_resnet34_LM.onnx"
+
 
 #: Measured on a 46-minute 4-speaker meeting: 0.50 over-split to 10 clusters and
 #: 0.75 collapsed to 2, while 0.65 gave 5. Tuned on one recording, so it is a
@@ -82,7 +93,7 @@ class SpeakerSpan:
 
 def is_available() -> bool:
     """Whether diarization can run right now without downloading anything."""
-    if not (_SEGMENTATION_MODEL.is_file() and _EMBEDDING_MODEL.is_file()):
+    if not (_segmentation_model().is_file() and _embedding_model().is_file()):
         return False
     return _package_installed()
 
@@ -141,19 +152,19 @@ def diarize(
     config = sherpa_onnx.OfflineSpeakerDiarizationConfig(
         segmentation=sherpa_onnx.OfflineSpeakerSegmentationModelConfig(
             pyannote=sherpa_onnx.OfflineSpeakerSegmentationPyannoteModelConfig(
-                model=str(_SEGMENTATION_MODEL)
+                model=str(_segmentation_model())
             ),
             num_threads=NUM_THREADS,
         ),
         embedding=sherpa_onnx.SpeakerEmbeddingExtractorConfig(
-            model=str(_EMBEDDING_MODEL), num_threads=NUM_THREADS
+            model=str(_embedding_model()), num_threads=NUM_THREADS
         ),
         clustering=clustering,
     )
     if not config.validate():
         raise DiarizationError(
             "The diarization models failed validation. Delete "
-            f"{MODEL_DIR} and run this again to re-download them."
+            f"{model_dir()} and run this again to re-download them."
         )
 
     if progress:
@@ -342,21 +353,23 @@ def _ensure_package(say: Callable[[str], None]) -> None:
 
 
 def _ensure_models(say: Callable[[str], None]) -> None:
-    MODEL_DIR.mkdir(parents=True, exist_ok=True)
-    if not _SEGMENTATION_MODEL.is_file():
+    model_dir().mkdir(parents=True, exist_ok=True)
+    if not _segmentation_model().is_file():
         say("Downloading the speaker-segmentation model (7 MB, once)...")
-        archive = MODEL_DIR / "segmentation.tar.bz2"
+        archive = model_dir() / "segmentation.tar.bz2"
         _download(_SEGMENTATION_ARCHIVE, archive)
         try:
-            _unpack_models(archive, MODEL_DIR)
+            _unpack_models(archive, model_dir())
         finally:
             archive.unlink(missing_ok=True)
 
-    if not _EMBEDDING_MODEL.is_file():
+    if not _embedding_model().is_file():
         say("Downloading the voice-embedding model (26 MB, once)...")
-        _download(_EMBEDDING_URL, _EMBEDDING_MODEL)
+        _download(_EMBEDDING_URL, _embedding_model())
 
-    missing = [p for p in (_SEGMENTATION_MODEL, _EMBEDDING_MODEL) if not p.is_file()]
+    missing = [
+        p for p in (_segmentation_model(), _embedding_model()) if not p.is_file()
+    ]
     if missing:
         raise DiarizationError(
             "The diarization models are still missing after download: "

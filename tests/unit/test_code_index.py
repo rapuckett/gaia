@@ -37,7 +37,7 @@ class TestCodeIndexConfig:
         assert config.max_file_size_mb == 1
         assert config.chunk_overlap == 50
         assert config.embedding_model == "user.embeddinggemma-300m-GGUF"
-        assert config.cache_dir == "~/.gaia/code_index"
+        assert config.cache_dir is None
 
     def test_custom_values(self):
         skip_if_unavailable()

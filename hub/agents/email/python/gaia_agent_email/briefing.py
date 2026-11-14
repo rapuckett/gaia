@@ -49,6 +49,7 @@ from datetime import timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional
 
+from gaia.home import gaia_home
 from gaia.logger import get_logger
 
 logger = get_logger(__name__)
@@ -167,7 +168,7 @@ def briefing_path() -> Path:
     ``Path.home()`` is resolved at call time so test home-isolation
     fixtures are honored (same rule as ``EmailAgentConfig.resolved_db_path``).
     """
-    return Path.home() / ".gaia" / "email" / "briefing_latest.json"
+    return gaia_home() / "email" / "briefing_latest.json"
 
 
 def persist_briefing(record: Dict[str, Any], path: Optional[Path] = None) -> Path:

@@ -34,10 +34,14 @@ except ModuleNotFoundError:  # pragma: no cover - exercised only on 3.10
 
 import tomli_w
 
+from gaia.home import gaia_home
 from gaia.schedule.lock import store_lock
 from gaia.utils.file_lock import replace_retrying
 
-DEFAULT_STORE_PATH = Path(os.path.expanduser("~/.gaia/schedules.toml"))
+
+def default_store_path() -> Path:
+    """``schedules.toml`` under ``GAIA_HOME``, resolved at call time."""
+    return gaia_home() / "schedules.toml"
 
 
 #: States of a one-time schedule. Only ``pending`` ever fires.
@@ -323,8 +327,8 @@ class ScheduleStore(Protocol):
 class TomlScheduleStore:
     """Load/save a collection of :class:`Schedule` objects to a TOML file."""
 
-    def __init__(self, path: Path = DEFAULT_STORE_PATH):
-        self.path = Path(path)
+    def __init__(self, path: Optional[Path] = None):
+        self.path = Path(path) if path is not None else default_store_path()
 
     def load(self) -> Dict[str, Schedule]:
         if not self.path.exists():

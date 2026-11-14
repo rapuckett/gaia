@@ -41,6 +41,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
+from gaia.home import gaia_home
 from gaia.logger import get_logger
 
 logger = get_logger(__name__)
@@ -95,7 +96,7 @@ def get_hub_base_url() -> str:
 
 def default_cache_path() -> Path:
     """Path of the on-disk offline catalog cache."""
-    return Path.home() / ".gaia" / "catalog-cache.json"
+    return gaia_home() / "catalog-cache.json"
 
 
 def index_url(base_url: Optional[str] = None) -> str:

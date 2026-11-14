@@ -28,6 +28,7 @@ import threading
 from typing import Callable, Dict, Optional, Set
 
 from gaia.chat.sdk import AgentConfig, AgentSDK
+from gaia.home import gaia_home
 from gaia.llm.lemonade_client import resolve_default_chat_model
 from gaia.logger import get_logger
 from gaia.mcp.ports import TELEGRAM_HEALTH_PORT
@@ -549,7 +550,7 @@ class TelegramAdapter:
 
         pid_path = None
         if background:
-            pid_dir = os.path.expanduser("~/.gaia")
+            pid_dir = str(gaia_home())
             os.makedirs(pid_dir, exist_ok=True)
             pid_path = os.path.join(pid_dir, "telegram.pid")
             try:

@@ -25,7 +25,6 @@ import pytest
 
 from gaia.connectors.errors import ConnectorsError
 from gaia.connectors.grants import (
-    GRANTS_FILE,
     check_agent_grant,
     grant_agent,
     list_agent_grants,
@@ -70,13 +69,6 @@ class TestPathAndMode:
         path = _grants_path(fake_home)
         mode = os.stat(path.parent).st_mode & 0o777
         assert mode == 0o700
-
-    def test_grants_file_constant_matches_runtime_path(self, fake_home):
-        # The exported GRANTS_FILE constant resolves at module-load time;
-        # tests monkeypatch Path.home AFTER import. Use the function path
-        # in tests, but verify the constant is what callers expect.
-        assert "connectors" in str(GRANTS_FILE)
-        assert str(GRANTS_FILE).endswith("grants.json")
 
 
 class TestRoundTrip:

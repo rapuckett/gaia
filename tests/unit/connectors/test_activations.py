@@ -30,7 +30,6 @@ import sys
 import pytest
 
 from gaia.connectors.activations import (
-    ACTIVATIONS_FILE,
     SCHEMA_VERSION,
     activate_agent,
     deactivate_agent,
@@ -68,10 +67,6 @@ class TestPathAndMode:
         activate_agent("github", "builtin:chat")
         path = _activations_path(fake_home)
         assert os.stat(path.parent).st_mode & 0o777 == 0o700
-
-    def test_activations_file_constant_matches_path_shape(self, fake_home):
-        assert "connectors" in str(ACTIVATIONS_FILE)
-        assert str(ACTIVATIONS_FILE).endswith("activations.json")
 
 
 class TestRoundTrip:

@@ -32,7 +32,6 @@ Three further rules, each load-bearing:
 
 from __future__ import annotations
 
-import os
 import re
 import threading
 import uuid
@@ -40,6 +39,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Sequence, Set
 
+from gaia.home import gaia_home
 from gaia.logger import get_logger
 from gaia.messaging.bridge import (
     DECISION_ALLOW,
@@ -164,9 +164,7 @@ def _is_slack_file_url(url: str) -> bool:
 
 def inbox_dir() -> Path:
     """Where files shared over Slack are saved for the agent to read."""
-    base = os.environ.get("GAIA_CONFIG_DIR")
-    root = Path(base) if base else Path.home() / ".gaia"
-    return root / "slack" / "inbox"
+    return gaia_home() / "slack" / "inbox"
 
 
 #: How to bring the bridge back once its agent has been given up on. A second
