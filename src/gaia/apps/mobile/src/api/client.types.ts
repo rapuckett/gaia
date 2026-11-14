@@ -1,6 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
+import type { FollowUpOutcome } from '@webui/utils/messageQueue';
 import type { Message, Session, StartScreen, StreamEvent, SystemStatus } from '@webui/types';
 import type { CreateSessionRequest, ToolConfirmRequest, UserInputRequest as ApiUserInputRequest } from '@webui/types/api.gen';
 
@@ -49,6 +50,12 @@ export interface UserInputResult {
     request_id: string;
 }
 
+export interface FollowUpResult {
+    delivered: boolean;
+}
+
+export type { FollowUpOutcome };
+
 export interface RequestOptions {
     signal?: AbortSignal;
 }
@@ -58,9 +65,13 @@ export interface GaiaClient {
     listSessions(options?: RequestOptions): Promise<SessionList>;
     getSession(sessionId: string, options?: RequestOptions): Promise<Session>;
     createSession(request?: CreateSessionRequest, options?: RequestOptions): Promise<Session>;
+    /** What the chat's last finished turn did with the messages added to it; rejects with 409 while a turn still runs. */
+    getFollowUpOutcome(sessionId: string, options?: RequestOptions): Promise<FollowUpOutcome>;
     getMessages(sessionId: string, options?: RequestOptions): Promise<MessageList>;
     /** Deletes the message and everything after it, so the exchange can be asked again. */
     deleteMessagesFrom(sessionId: string, messageId: number, options?: RequestOptions): Promise<DeleteMessagesResult>;
+    /** Hands a message to the running turn, read at its next step; rejects when the turn can't take it. */
+    sendFollowUp(sessionId: string, text: string, options?: RequestOptions): Promise<FollowUpResult>;
     /** Starts a turn and streams it to its `done` or `error` event. */
     sendMessage(sessionId: string, message: string, options?: RequestOptions): AsyncIterable<StreamEvent>;
     /**

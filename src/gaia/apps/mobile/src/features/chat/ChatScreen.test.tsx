@@ -6,9 +6,12 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-
 import type { ReactNode } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { item, type QueuedMessage } from '@webui/utils/messageQueue';
+
 import type { Message, StreamEvent } from '@/api/client.types';
 import { createFakeClient } from '@/api/fake';
 import { GaiaClientProvider } from '@/data';
+import { useComposerQueueStore } from '@/features/composer/composerQueue';
 import { translator } from '@/i18n/useT';
 import { useChatStreamStore } from '@/state/chatStreams';
 import { ThemeProvider } from '@/ui';
@@ -62,7 +65,10 @@ async function sendText(text: string) {
 }
 
 describe('ChatScreen', () => {
-    beforeEach(() => useChatStreamStore.setState({ turns: {}, resolved: {} }));
+    beforeEach(() => {
+        useChatStreamStore.setState({ turns: {}, resolved: {} });
+        useComposerQueueStore.setState({ byChat: {}, drafts: {} });
+    });
 
     it('streams an answer, shows the stopped note after Stop, and Continue sends the web UI text', async () => {
         const stopped = gate();
@@ -111,6 +117,78 @@ describe('ChatScreen', () => {
         await fireEvent.press(await screen.findByTestId('try-again'));
         await waitFor(() => expect(client.sent.map((s) => s.message)).toEqual(['Summarize it', 'Summarize it']));
         expect(client.deleted).toEqual([{ sessionId: CHAT, messageId: 1 }]);
+    });
+
+    it('Stop returns the queued messages to the box and sends none of them', async () => {
+        const finish = gate();
+        const client = createFakeClient({
+            sessions: [SESSION],
+            messages: { [CHAT]: [message(1, 'user', 'first')] },
+            replies: async function* (): AsyncGenerator<StreamEvent> {
+                yield { type: 'chunk', content: 'Working' };
+                await finish.opened;
+                yield { type: 'done', cancelled: true, message_id: 2, content: 'Working' };
+            },
+        });
+        await mount(client);
+
+        await sendText('first');
+        await screen.findByText(/Working/);
+        await sendText('second');
+        await sendText('third');
+        await fireEvent.press(screen.getByTestId('composer-stop'));
+        await act(async () => finish.open());
+
+        await waitFor(() => expect(screen.getByTestId('composer-input').props.value).toBe('second\n\nthird'));
+        expect(client.sent.map((s) => s.message)).toEqual(['first']);
+        expect(useComposerQueueStore.getState().byChat[CHAT]).toEqual([]);
+    });
+
+    it('holds the messages behind a failed one until Send again', async () => {
+        const failed: QueuedMessage = { ...item('first', 'failed'), error: 'no connection' };
+        useComposerQueueStore.setState({ byChat: { [CHAT]: [failed, item('second', 'queued')] } });
+        const client = createFakeClient({
+            sessions: [SESSION],
+            messages: { [CHAT]: [] },
+            replies: [{ type: 'done', message_id: 2, content: 'ok' }],
+        });
+        await mount(client);
+
+        expect(await screen.findByText(t('queue.notSentWhy', { error: 'no connection' }))).toBeTruthy();
+        expect(client.sent).toEqual([]);
+
+        await fireEvent.press(screen.getByTestId(`queued-retry-${failed.id}`));
+        await waitFor(() => expect(client.sent.map((s) => s.message)).toEqual(['first', 'second']));
+    });
+
+    it('sends a typed answer to the waiting question as its value, shown as typed', async () => {
+        const hold = gate();
+        const client = createFakeClient({
+            sessions: [SESSION],
+            messages: { [CHAT]: [message(1, 'user', 'Pick one')] },
+            replies: async function* (): AsyncGenerator<StreamEvent> {
+                yield {
+                    type: 'needs_input',
+                    request_id: 'q1',
+                    question: 'Which color?',
+                    options: [
+                        { value: 'r', label: 'Red', description: '' },
+                        { value: 'b', label: 'Blue', description: '' },
+                    ],
+                    allow_free_text: false,
+                };
+                await hold.opened;
+                yield { type: 'done', message_id: 2, content: '' };
+            },
+        });
+        await mount(client);
+
+        await sendText('Pick one');
+        await screen.findByLabelText(t('composer.sendAnswer'));
+        await sendText('blue');
+        await waitFor(() => expect(client.answers).toEqual([{ session_id: CHAT, request_id: 'q1', value: 'b', display: 'blue' }]));
+        expect(client.sent.map((m) => m.message)).toEqual(['Pick one']);
+        await act(async () => hold.open());
     });
 
     describe('tool approval', () => {
