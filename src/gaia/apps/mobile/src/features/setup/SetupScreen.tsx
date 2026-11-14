@@ -17,6 +17,7 @@ import { LanguagePicker } from './LanguagePicker';
 import { Reveal } from './Reveal';
 import { SetupFooterBar, SetupFooterProvider } from './SetupFooter';
 import { SetupRail } from './SetupRail';
+import { SETUP_STEPS } from './steps';
 
 /** What a step's body is given: where setup is, and the way to move it. */
 export interface SetupStepContext {
@@ -107,6 +108,7 @@ export function SetupScreen({ onReady, onClose, renderStep }: SetupScreenProps) 
     const locked = viewing != null && running && (shown === 'check' || shown === 'plan');
     const at = SETUP_STAGES.indexOf(shown);
     const ctx: SetupStepContext = { stage: shown, run, plan: plan.data, locked, goTo, startedRun, finish: onReady };
+    const Step = SETUP_STEPS[shown];
 
     return (
         <SetupFooterProvider>
@@ -141,6 +143,8 @@ export function SetupScreen({ onReady, onClose, renderStep }: SetupScreenProps) 
 
                     {renderStep ? (
                         renderStep(ctx)
+                    ) : Step ? (
+                        <Step key={shown} ctx={ctx} />
                     ) : (
                         <Stack gap="sm">
                             <Text role="title" weight="semibold" accessibilityRole="header">{t(STAGE_LABELS[shown])}</Text>
