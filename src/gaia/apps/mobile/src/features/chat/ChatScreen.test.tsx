@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, fireEvent, render, screen } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import type { ReactNode } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
@@ -31,7 +31,7 @@ function gate() {
     return { opened, open };
 }
 
-function mount(client: ReturnType<typeof createFakeClient>) {
+async function mount(client: ReturnType<typeof createFakeClient>) {
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const wrap = ({ children }: { children: ReactNode }) => (
         <QueryClientProvider client={queryClient}>
@@ -42,12 +42,12 @@ function mount(client: ReturnType<typeof createFakeClient>) {
             </GaiaClientProvider>
         </QueryClientProvider>
     );
-    return render(<ChatScreen sessionId={CHAT} />, { wrapper: wrap });
+    await render(<ChatScreen sessionId={CHAT} />, { wrapper: wrap });
 }
 
 async function sendText(text: string) {
-    fireEvent.changeText(await screen.findByTestId('composer-input'), text);
-    fireEvent.press(screen.getByTestId('composer-send'));
+    await fireEvent.changeText(await screen.findByTestId('composer-input'), text);
+    await fireEvent.press(screen.getByTestId('composer-send'));
 }
 
 describe('ChatScreen', () => {
@@ -64,19 +64,19 @@ describe('ChatScreen', () => {
                 yield { type: 'done', cancelled: true, message_id: 2, content: 'Once upon' };
             },
         });
-        mount(client);
+        await mount(client);
 
         await sendText('Tell a story');
         expect(await screen.findByText('Once upon')).toBeTruthy();
 
-        fireEvent.press(screen.getByTestId('composer-stop'));
+        await fireEvent.press(screen.getByTestId('composer-stop'));
         expect(client.cancelled).toEqual([CHAT]);
         messages[CHAT]!.push(message(2, 'assistant', 'Once upon'));
         await act(async () => stopped.open());
 
         expect(await screen.findByText(t('msg.stopped'))).toBeTruthy();
-        fireEvent.press(screen.getByTestId('continue'));
-        expect(client.sent.map((s) => s.message)).toEqual(['Tell a story', t('msg.continuePrompt')]);
+        await fireEvent.press(screen.getByTestId('continue'));
+        await waitFor(() => expect(client.sent.map((s) => s.message)).toEqual(['Tell a story', t('msg.continuePrompt')]));
     });
 
     it('shows a failed turn as its classified text and Try again deletes the exchange and resends', async () => {
@@ -90,13 +90,13 @@ describe('ChatScreen', () => {
                 else yield { type: 'done', message_id: 3, content: 'Done.' };
             },
         });
-        mount(client);
+        await mount(client);
 
         await sendText('Summarize it');
         expect(await screen.findByText(t('chatError.modelServer'))).toBeTruthy();
 
-        await act(async () => fireEvent.press(screen.getByTestId('try-again')));
+        await fireEvent.press(await screen.findByTestId('try-again'));
+        await waitFor(() => expect(client.sent.map((s) => s.message)).toEqual(['Summarize it', 'Summarize it']));
         expect(client.deleted).toEqual([{ sessionId: CHAT, messageId: 1 }]);
-        expect(client.sent.map((s) => s.message)).toEqual(['Summarize it', 'Summarize it']);
     });
 });
