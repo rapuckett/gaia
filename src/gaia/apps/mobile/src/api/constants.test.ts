@@ -7,6 +7,7 @@ import { join, resolve } from 'node:path';
 import {
     AGENT_EVENT_TYPES,
     ATTACH_HEADER_TIMEOUT_MS,
+    CONFIRM_DELETE_MS,
     ENDPOINTS,
     MESSAGE_PAGE_SIZE,
     QUEUED_IDLE_MS,
@@ -83,6 +84,9 @@ describe('endpoints', () => {
     );
     const methods: Record<keyof typeof ENDPOINTS, string[]> = {
         health: ['GET'],
+        schedule: ['DELETE', 'PUT'],
+        scheduleRun: ['POST'],
+        schedules: ['GET'],
         sessions: ['GET', 'POST'],
         session: ['GET'],
         sessionMessages: ['GET'],
@@ -124,6 +128,7 @@ describe("webui's stream rules", () => {
         ['services/api.ts', 'SEND_HEADER_TIMEOUT_MS', SEND_HEADER_TIMEOUT_MS],
         ['services/api.ts', 'ATTACH_HEADER_TIMEOUT_MS', ATTACH_HEADER_TIMEOUT_MS],
         ['services/statusPoll.ts', 'STATUS_POLL_MS', STATUS_POLL_MS],
+        ['components/ScheduleManager.tsx', 'CONFIRM_DELETE_MS', CONFIRM_DELETE_MS],
     ])('%s %s', (file, name, ours) => {
         expect(ours).toBe(tsNumber(file, name));
     });
