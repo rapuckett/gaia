@@ -1840,6 +1840,12 @@ or unpaired token is a **401** (`code: device_unknown`), and a device token sent
 over plain http to the main server is a **401** too. What a device may call is
 in [Who may call a route](#who-may-call-a-route).
 
+A file the device opens, such as a cited document
+(`GET /api/documents/{doc_id}/file`), comes over the listener like any other
+call, with the token. The device fetches it itself and shows or shares it; a
+browser it handed the link to couldn't send the token, so it would get a
+**401**.
+
 Two events reach the PC's own windows on `GET /api/sessions/events`, and no one
 else's:
 
