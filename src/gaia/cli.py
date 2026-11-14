@@ -9651,7 +9651,6 @@ def handle_diagnostics_command(args):
         sys.exit(1)
 
     log_files = _diag_log_files(gaia_dir)
-    from gaia.home import gaia_home
 
     state_files = [
         gaia_dir / "electron-install-state.json",
