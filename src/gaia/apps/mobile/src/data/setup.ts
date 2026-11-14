@@ -130,10 +130,22 @@ export function useSetupGate() {
         [client],
     );
 
-    // The gate starts as `checking`, so the launch check is quiet.
+    // The gate starts as `checking`, so the launch check sets nothing until it has an answer.
     useEffect(() => {
-        void recheck({ quiet: true, waitForStart: true });
-    }, [recheck]);
+        if (!client) return undefined;
+        const ticket = ++latest.current;
+        void runSetupCheck(client, {
+            waitForStart: true,
+            onUpgrading: () => {
+                if (ticket === latest.current) setGate({ state: 'upgrading' });
+            },
+        }).then((next) => {
+            if (ticket === latest.current) setGate(next);
+        });
+        return () => {
+            latest.current++;
+        };
+    }, [client]);
 
     const finish = useCallback(() => setGate({ state: 'ready' }), []);
     const open = useCallback(() => setGate({ state: 'addingLocal' }), []);
