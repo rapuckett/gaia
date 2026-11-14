@@ -1,7 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import type { Message, Session, StartScreen, StreamEvent, SystemStatus } from '@webui/types';
+import type { Message, ResourceUsage, Session, StartScreen, StreamEvent, SystemStatus } from '@webui/types';
 
 import type { FetchLike, FetchRequestInit, FetchResponseLike } from '@/platform/fetch.types';
 
@@ -17,20 +17,28 @@ import {
     type StreamEndpoint,
 } from './errors';
 import type {
+    AgentMcpList,
     CancelChatResult,
     ConfirmToolResult,
+    ConnectorList,
     DeleteMessagesResult,
     DeleteScheduleResult,
+    DocumentListResponse,
     FollowUpOutcome,
     FollowUpResult,
     GaiaClient,
     HealthResponse,
+    LocalModelStatus,
     MessageList,
+    ModelNeed,
+    RestartModelResult,
     RequestOptions,
+    ParsedSchedule,
     Schedule,
     ScheduleList,
     SessionList,
     SessionSearchResponse,
+    SetupRunStatus,
     UserInputResult,
 } from './client.types';
 import {
@@ -43,9 +51,12 @@ import {
     scheduleRunPath,
     SEND_HEADER_TIMEOUT_MS,
     SESSION_PAGE_SIZE,
+    sessionDocumentPath,
     sessionMessagesAndBelowPath,
     sessionMessagesPath,
     sessionPath,
+    sessionPrivatePath,
+    setupNeedsPath,
     STREAM_IDLE_MS,
     UI_HEADERS,
 } from './constants';
@@ -155,6 +166,10 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
     async function postJson<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
         return readJson<T>(await request('POST', path, body, signal), path);
+    }
+
+    async function patchJson<T>(path: string, signal?: AbortSignal): Promise<T> {
+        return readJson<T>(await request('PATCH', path, undefined, signal), path);
     }
 
     async function deleteJson<T>(path: string, signal?: AbortSignal): Promise<T> {
@@ -271,6 +286,22 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             return postJson<FollowUpResult>(ENDPOINTS.chatFollowup, { session_id: sessionId, text }, options?.signal);
         },
 
+        updateSession(sessionId, update, options) {
+            return putJson<Session>(sessionPath(sessionId), update, options?.signal);
+        },
+
+        toggleSessionPrivate(sessionId, options) {
+            return patchJson<Session>(sessionPrivatePath(sessionId), options?.signal);
+        },
+
+        async detachDocument(sessionId, docId, options) {
+            await request('DELETE', sessionDocumentPath(sessionId, docId), undefined, options?.signal);
+        },
+
+        getResourceUsage(options) {
+            return getJson<ResourceUsage>(ENDPOINTS.systemResources, options?.signal);
+        },
+
         sendMessage(sessionId, message, options) {
             const body = { session_id: sessionId, message, stream: true };
             return streamTurn('POST', ENDPOINTS.chatSend, body, 'send', SEND_HEADER_TIMEOUT_MS, options?.signal);
@@ -304,8 +335,24 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             return postJson<UserInputResult>(ENDPOINTS.chatUserInput, body, options?.signal);
         },
 
+        listConnectors(options) {
+            return getJson<ConnectorList>(ENDPOINTS.connectors, options?.signal);
+        },
+
+        listAgentMcps(options) {
+            return getJson<AgentMcpList>(ENDPOINTS.connectorsAgentMcps, options?.signal);
+        },
+
         listSchedules(options) {
             return getJson<ScheduleList>(ENDPOINTS.schedules, options?.signal);
+        },
+
+        createSchedule(request, options) {
+            return postJson<Schedule>(ENDPOINTS.schedules, request, options?.signal);
+        },
+
+        parseSchedule(input, timezone, options) {
+            return postJson<ParsedSchedule>(ENDPOINTS.scheduleParse, { input, timezone }, options?.signal);
         },
 
         updateScheduleStatus(name, status, options) {
@@ -320,8 +367,40 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             return deleteJson<DeleteScheduleResult>(schedulePath(name), options?.signal);
         },
 
+        listDocuments(options) {
+            return getJson<DocumentListResponse>(ENDPOINTS.documents, options?.signal);
+        },
+
         getSystemStatus(options) {
             return getJson<SystemStatus>(ENDPOINTS.systemStatus, options?.signal);
+        },
+
+        getLocalModelStatus(options) {
+            return getJson<LocalModelStatus>(ENDPOINTS.localModelStatus, options?.signal);
+        },
+
+        restartLocalModel(confirm, options) {
+            return postJson<RestartModelResult>(ENDPOINTS.localModelRestart, { confirm }, options?.signal);
+        },
+
+        getModelNeed(job, options) {
+            return getJson<ModelNeed>(setupNeedsPath(job), options?.signal);
+        },
+
+        downloadSetupModel(modelId, acknowledgeLowDisk, options) {
+            return postJson<SetupRunStatus>(
+                ENDPOINTS.setupModelDownload,
+                { model_id: modelId, acknowledge_low_disk: acknowledgeLowDisk, keep_trying: false },
+                options?.signal,
+            );
+        },
+
+        getSetupStatus(options) {
+            return getJson<SetupRunStatus>(ENDPOINTS.setupStatus, options?.signal);
+        },
+
+        cancelSetup(modelId, options) {
+            return postJson<{ cancelled: boolean }>(ENDPOINTS.setupCancel, { model_id: modelId }, options?.signal);
         },
 
         getStartScreen(options) {

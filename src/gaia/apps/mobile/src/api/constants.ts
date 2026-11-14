@@ -10,14 +10,23 @@ export const UI_HEADERS = {
 
 export const ENDPOINTS = {
     health: '/api/health',
+    localModelRestart: '/api/providers/local/restart',
+    localModelStatus: '/api/providers/local/status',
     schedule: '/api/schedules/{name:path}',
     scheduleRun: '/api/schedules/{name:path}/run',
+    scheduleParse: '/api/schedules/parse',
     schedules: '/api/schedules',
     sessions: '/api/sessions',
     session: '/api/sessions/{session_id}',
+    sessionDocument: '/api/sessions/{session_id}/documents/{doc_id}',
     sessionMessages: '/api/sessions/{session_id}/messages',
     sessionMessagesAndBelow: '/api/sessions/{session_id}/messages/{message_id}/and-below',
+    sessionPrivate: '/api/sessions/{session_id}/private',
     sessionSearch: '/api/sessions/search',
+    setupCancel: '/api/setup/cancel',
+    setupModelDownload: '/api/setup/models/download',
+    setupNeeds: '/api/setup/needs/{job}',
+    setupStatus: '/api/setup/status',
     chatSend: '/api/chat/send',
     chatAttach: '/api/chat/attach',
     chatCancel: '/api/chat/cancel',
@@ -25,8 +34,12 @@ export const ENDPOINTS = {
     chatFollowup: '/api/chat/followup',
     chatFollowupOutcome: '/api/chat/followup/{session_id}',
     chatUserInput: '/api/chat/user-input',
+    connectors: '/api/connectors',
+    connectorsAgentMcps: '/api/connectors/agent-mcps',
+    systemResources: '/api/system/resources',
     systemStatus: '/api/system/status',
     documentFile: '/api/documents/{doc_id}/file',
+    documents: '/api/documents',
     onboardingStart: '/api/onboarding/start',
 } as const;
 
@@ -38,12 +51,26 @@ export function scheduleRunPath(name: string): string {
     return ENDPOINTS.scheduleRun.replace('{name:path}', encodeURIComponent(name));
 }
 
+export function setupNeedsPath(job: string): string {
+    return ENDPOINTS.setupNeeds.replace('{job}', encodeURIComponent(job));
+}
+
 export function sessionPath(sessionId: string): string {
     return ENDPOINTS.session.replace('{session_id}', encodeURIComponent(sessionId));
 }
 
 export function followupOutcomePath(sessionId: string): string {
     return ENDPOINTS.chatFollowupOutcome.replace('{session_id}', encodeURIComponent(sessionId));
+}
+
+export function sessionDocumentPath(sessionId: string, docId: string): string {
+    return ENDPOINTS.sessionDocument
+        .replace('{session_id}', encodeURIComponent(sessionId))
+        .replace('{doc_id}', encodeURIComponent(docId));
+}
+
+export function sessionPrivatePath(sessionId: string): string {
+    return ENDPOINTS.sessionPrivate.replace('{session_id}', encodeURIComponent(sessionId));
 }
 
 export function sessionMessagesPath(sessionId: string): string {
@@ -80,6 +107,20 @@ export const ATTACH_HEADER_TIMEOUT_MS = 30_000;
 export const SCHEDULES_POLL_MS = 10_000;
 /** How long a Delete button waits for its "Confirm?" press; the web UI's CONFIRM_DELETE_MS. */
 export const CONFIRM_DELETE_MS = 8000;
+/** How often the model status pill re-reads the model server while its sheet is open, and while it is closed. */
+export const MODEL_STATUS_OPEN_POLL_MS = 3_000;
+export const MODEL_STATUS_POLL_MS = 15_000;
+/** How often a model download's progress is read, and how many missing or failed reads end the wait. */
+export const DOWNLOAD_POLL_MS = 1_000;
+export const DOWNLOAD_NO_ROW_LIMIT = 15;
+export const DOWNLOAD_MISS_LIMIT = 5;
+/** The longest the model-needed check may take before the job goes ahead without it. */
+export const MODEL_NEED_CHECK_LIMIT_MS = 8_000;
+/** What the PC answers a log request from a phone; the model server log opens only on the PC (security.py). */
+export const PC_ONLY_REFUSAL =
+    "Do this on the PC running GAIA. It isn't allowed over mobile access, from a paired device or from another computer.";
+/** How long to wait after a failed resource read before trying again (webui's `RETRY_MS`). */
+export const RESOURCE_RETRY_MS = 5_000;
 /** How often to re-read the PC's status while it is still starting or warming up. */
 export const STATUS_POLL_MS = 5_000;
 

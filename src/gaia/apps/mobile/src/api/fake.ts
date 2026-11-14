@@ -2,17 +2,25 @@
 // SPDX-License-Identifier: MIT
 
 import type {
+    AgentMcpServer,
+    ConnectorListEntry,
     CreateSessionRequest,
     FollowUpOutcome,
+    DocumentListResponse,
     GaiaClient,
     HealthResponse,
+    LocalModelStatus,
     Message,
     MessageList,
+    ModelNeed,
+    ParsedSchedule,
     Schedule,
+    ResourceUsage,
     Session,
     SessionList,
     SessionSearchResponse,
     SessionSearchResult,
+    SetupRunStatus,
     StartScreen,
     StreamEvent,
     SystemStatus,
@@ -31,16 +39,26 @@ export interface FakeClientData {
     replies?: StreamEvent[] | ((message: string) => AsyncIterable<StreamEvent>);
     /** What attachToRun replays, by chat; a chat not listed has no turn running. */
     running?: Record<string, StreamEvent[]>;
+    connectors?: ConnectorListEntry[];
+    agentMcps?: AgentMcpServer[];
     /** What getFollowUpOutcome answers; a function may throw to script a 409. */
     followUpOutcome?: FollowUpOutcome | (() => FollowUpOutcome);
     /** Makes sendFollowUp reject, as a turn that can't take the message does. */
     followUpRefusal?: GaiaApiError;
     status?: SystemStatus;
+    /** What getLocalModelStatus answers; restarting it records the call. */
+    localModel?: LocalModelStatus;
+    /** What getModelNeed answers, by job; a job not listed needs nothing. */
+    modelNeeds?: Partial<Record<ModelNeed['job'], ModelNeed>>;
+    /** What getSetupStatus answers. */
+    setupStatus?: SetupRunStatus;
+    resources?: ResourceUsage;
     start?: StartScreen;
     /** Most chats a search returns before it says `truncated`. */
     searchLimit?: number;
     /** Makes every search fail with this message. */
     searchError?: string;
+    documents?: DocumentListResponse;
 }
 
 export interface FakeGaiaClient extends GaiaClient {
@@ -52,6 +70,9 @@ export interface FakeGaiaClient extends GaiaClient {
     readonly answers: UserInputRequest[];
     readonly scheduleActions: { action: 'pause' | 'resume' | 'run' | 'delete'; name: string }[];
     readonly followUps: { sessionId: string; text: string }[];
+    readonly restarts: { confirm: boolean }[];
+    readonly downloads: { modelId: string; acknowledgeLowDisk: boolean }[];
+    readonly detached: { sessionId: string; docId: string }[];
 }
 
 export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
@@ -65,6 +86,8 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
     const deleted: FakeGaiaClient['deleted'] = [];
     const confirmations: ToolConfirmRequest[] = [];
     const answers: UserInputRequest[] = [];
+    const restarts: FakeGaiaClient['restarts'] = [];
+    const downloads: FakeGaiaClient['downloads'] = [];
     const schedules = [...(data.schedules ?? [])];
     const scheduleActions: FakeGaiaClient['scheduleActions'] = [];
 
@@ -74,6 +97,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         return schedule;
     }
     const followUps: FakeGaiaClient['followUps'] = [];
+    const detached: FakeGaiaClient['detached'] = [];
 
     function findSession(sessionId: string): Session {
         const session = sessions.find((s) => s.id === sessionId);
@@ -90,6 +114,9 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         answers,
         scheduleActions,
         followUps,
+        restarts,
+        downloads,
+        detached,
         async health(): Promise<HealthResponse> {
             return { status: 'ok', service: 'gaia-agent-ui' };
         },
@@ -156,6 +183,26 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             followUps.push({ sessionId, text });
             return { delivered: true };
         },
+        async updateSession(sessionId, update) {
+            const session = findSession(sessionId);
+            if (update.title !== undefined) session.title = update.title;
+            if (update.title_is_custom !== undefined) session.title_is_custom = update.title_is_custom;
+            return { ...session };
+        },
+        async toggleSessionPrivate(sessionId) {
+            const session = findSession(sessionId);
+            session.private = !session.private;
+            return { ...session };
+        },
+        async detachDocument(sessionId, docId) {
+            const session = findSession(sessionId);
+            detached.push({ sessionId, docId });
+            session.document_ids = session.document_ids.filter((id) => id !== docId);
+        },
+        async getResourceUsage() {
+            if (!data.resources) throw new GaiaApiError(503, 'This fake client was given no resource usage.');
+            return data.resources;
+        },
         async *sendMessage(sessionId, message) {
             sent.push({ sessionId, message });
             yield* typeof replies === 'function' ? replies(message) : replies;
@@ -175,8 +222,51 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             answers.push(request);
             return { status: 'ok', request_id: request.request_id };
         },
+        async listConnectors() {
+            return { connectors: [...(data.connectors ?? [])] };
+        },
+        async listAgentMcps() {
+            return { agent_mcps: [...(data.agentMcps ?? [])] };
+        },
         async listSchedules() {
             return { schedules: [...schedules], total: schedules.length };
+        },
+        async createSchedule(request) {
+            if (schedules.some((s) => s.name === request.name)) throw new GaiaApiError(409, `Schedule '${request.name}' already exists`);
+            const schedule: Schedule = {
+                id: `schedule-${schedules.length + 1}`,
+                name: request.name,
+                interval_seconds: 3600,
+                prompt: request.prompt,
+                status: 'active',
+                created_at: new Date().toISOString(),
+                last_run_at: null,
+                next_run_at: new Date(Date.now() + 3_600_000).toISOString(),
+                last_result: null,
+                run_count: 0,
+                error_count: 0,
+                session_id: null,
+                schedule_config: null,
+                description: request.interval,
+                description_parts: { kind: 'every', count: 1, unit: 'hour', days: null, time: null, start_hour: null, end_hour: null },
+                last_error: null,
+            };
+            schedules.push(schedule);
+            return { ...schedule };
+        },
+        async parseSchedule(input): Promise<ParsedSchedule> {
+            const valid = /every|daily|\d/i.test(input);
+            return {
+                interval_seconds: valid ? 3600 : 0,
+                time_of_day: null,
+                start_hour: null,
+                end_hour: null,
+                days_of_week: null,
+                description: valid ? input : "Couldn't read that schedule",
+                description_parts: valid ? { kind: 'every', count: 1, unit: 'hour', days: null, time: null, start_hour: null, end_hour: null } : null,
+                next_run_at: valid ? new Date(Date.now() + 3_600_000).toISOString() : null,
+                valid,
+            };
         },
         async updateScheduleStatus(name, status) {
             const schedule = findSchedule(name);
@@ -197,9 +287,33 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             schedules.splice(schedules.indexOf(schedule), 1);
             return { deleted: true };
         },
+        async listDocuments() {
+            return data.documents ?? { documents: [], total: 0, total_chunks: 0, total_size_bytes: 0 };
+        },
         async getSystemStatus() {
             if (!data.status) throw new GaiaApiError(503, 'This fake client was given no system status.');
             return data.status;
+        },
+        async getLocalModelStatus() {
+            if (!data.localModel) throw new GaiaApiError(503, 'This fake client was given no model status.');
+            return data.localModel;
+        },
+        async restartLocalModel(confirm) {
+            restarts.push({ confirm });
+            return { status: 'restarting', model: data.localModel?.model ?? '', starting_server: false };
+        },
+        async getModelNeed(job) {
+            return data.modelNeeds?.[job] ?? { job, needed: false, model: null, disk_free_gb: null };
+        },
+        async downloadSetupModel(modelId, acknowledgeLowDisk) {
+            downloads.push({ modelId, acknowledgeLowDisk });
+            return data.setupStatus ?? { state: 'running' };
+        },
+        async getSetupStatus() {
+            return data.setupStatus ?? { state: 'idle' };
+        },
+        async cancelSetup() {
+            return { cancelled: true };
         },
         async getStartScreen() {
             if (!data.start) throw new GaiaApiError(503, 'This fake client was given no start screen.');
