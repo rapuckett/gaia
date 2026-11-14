@@ -17,7 +17,8 @@ still resolves elsewhere, rather than letting a green run mean nothing.
 It also points GAIA's config file, daemon home, TUI home, memory database, log
 file, file index and scratchpad at a per-session tmp dir, so no result depends
 on the developer's real ~/.gaia, and fails any test that opens a database
-inside it.
+inside it. HOME itself points at a tmp dir too, and any write a test tries
+into the real ~/.gaia is refused and fails that test.
 
 Set ``GAIA_ALLOW_EXTERNAL_IMPORTS=1`` to opt out — testing an actually-installed
 wheel is a legitimate thing to do, it just must not happen by accident.
@@ -188,8 +189,12 @@ def _keep_ssl_unpatched() -> None:
 #: run is killed before any teardown runs. Mirrors gaia.daemon.lifetime.
 _EXIT_WITH_PID_ENV = "GAIA_DAEMON_EXIT_WITH_PID"
 
-#: The developer's real GAIA home, read before any test patches ``Path.home``.
-_REAL_GAIA_HOME = Path.home() / ".gaia"
+#: The developer's real home, read before this file points HOME at a tmp dir
+#: (_isolate_user_home) or any test patches ``Path.home``. A pytest-xdist worker
+#: inherits the tmp HOME, so it reads the real one from the controller.
+_REAL_HOME_ENV = "_GAIA_TEST_REAL_HOME"
+_REAL_USER_HOME = Path(os.environ.get(_REAL_HOME_ENV) or Path.home())
+_REAL_GAIA_HOME = _REAL_USER_HOME / ".gaia"
 
 #: Bound before any test patches ``os.path.realpath``: a test that breaks it
 #: must not break the guards, which coverage also reaches via sqlite3.connect.
@@ -227,9 +232,132 @@ def _child_gaia_home(env) -> Path:
     return (Path(user_home) if user_home else _REAL_GAIA_HOME.parent) / ".gaia"
 
 
+def _isolate_user_home() -> None:
+    """Point HOME at a per-session tmp dir, so no test or child process writes ~/.gaia.
+
+    GAIA builds many paths from ``Path.home()`` rather than ``gaia_home()``, and a
+    ``gaia`` subprocess inherits HOME, so naming each state file (_STATE_ENV)
+    can't cover them all. Git's own config is copied in, so tests that commit
+    behave as they would in the real home. The real SD lane keeps its home.
+    """
+    if os.environ.get("GAIA_REQUIRE_SD") == "1" or os.environ.get(_REAL_HOME_ENV):
+        return
+    # Outside the temp dir: GAIA treats paths under it as temporary, and a real
+    # home never is.
+    if os.name == "nt":
+        cache = Path(
+            os.environ.get("LOCALAPPDATA") or _REAL_USER_HOME / "AppData" / "Local"
+        )
+    elif sys.platform == "darwin":
+        cache = _REAL_USER_HOME / "Library" / "Caches"
+    else:
+        cache = Path(os.environ.get("XDG_CACHE_HOME") or _REAL_USER_HOME / ".cache")
+    (cache / "gaia-test-homes").mkdir(parents=True, exist_ok=True)
+    home = Path(
+        _REALPATH(tempfile.mkdtemp(prefix="home-", dir=cache / "gaia-test-homes"))
+    )
+    atexit.register(shutil.rmtree, home, ignore_errors=True)
+    for config in (Path(".gitconfig"), Path(".config", "git", "config")):
+        if (_REAL_USER_HOME / config).is_file():
+            (home / config).parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(_REAL_USER_HOME / config, home / config)
+    os.environ[_REAL_HOME_ENV] = str(_REAL_USER_HOME)
+    os.environ["HOME"] = str(home)
+    if os.name == "nt":
+        os.environ["USERPROFILE"] = str(home)
+
+
+#: Writes into the real ~/.gaia this process tried, as (test, event, path).
+_REAL_HOME_WRITES: list = []
+_WRITE_EVENTS = frozenset(
+    {"open", "os.mkdir", "os.rename", "os.replace", "os.remove", "os.rmdir"}
+    | {"os.symlink", "os.link", "os.truncate", "shutil.rmtree", "shutil.move"}
+)
+_WRITE_FLAGS = os.O_WRONLY | os.O_RDWR | os.O_CREAT | os.O_APPEND | os.O_TRUNC
+
+
+def _refuse_real_home_writes() -> None:
+    """Refuse, and fail the test for, any in-process write into the real ~/.gaia.
+
+    The tmp HOME covers code that asks for the home at run time; this catches a
+    path computed before it, or spelled out, which would reach the developer's
+    own chats, settings and connectors.
+    """
+    real = os.path.normcase(os.path.abspath(_REAL_GAIA_HOME))
+    roots = {real, os.path.normcase(_REALPATH(real))}
+
+    def inside(path) -> bool:
+        if isinstance(path, int) or path is None:
+            return False
+        try:
+            path = os.path.normcase(os.path.abspath(os.fsdecode(path)))
+        except (TypeError, ValueError):
+            return False
+        return any(path == root or path.startswith(root + os.sep) for root in roots)
+
+    def hook(event, args):
+        if event not in _WRITE_EVENTS:
+            return
+        if event == "open":
+            path, mode, flags = args
+            writes = (
+                any(c in mode for c in "wax+")
+                if isinstance(mode, str)
+                else bool(flags & _WRITE_FLAGS)
+            )
+            paths = (path,) if writes else ()
+        else:
+            paths = (
+                args[:2]
+                if event in {"os.rename", "os.replace", "shutil.move"}
+                else args[:1]
+            )
+        for target in paths:
+            if inside(target):
+                test = os.environ.get("PYTEST_CURRENT_TEST", "outside any test")
+                _REAL_HOME_WRITES.append((test, event, os.fsdecode(target)))
+                raise PermissionError(
+                    f"{event} {os.fsdecode(target)}: tests must not write the real "
+                    f"GAIA home {_REAL_GAIA_HOME}. Use tmp_path, or set GAIA_HOME "
+                    "with monkeypatch.setenv."
+                )
+
+    sys.addaudithook(hook)
+
+
 _prepend_source_roots()
+_isolate_user_home()
+if os.environ.get("GAIA_REQUIRE_SD") != "1":
+    _refuse_real_home_writes()
 _isolate_gaia_state()
 os.environ[_EXIT_WITH_PID_ENV] = str(os.getpid())
+
+
+@pytest.fixture(autouse=True)
+def _no_real_gaia_home_writes():
+    """Fail a test that tried to write the real ~/.gaia, even if its code caught the error."""
+    before = len(_REAL_HOME_WRITES)
+    yield
+    tried = _REAL_HOME_WRITES[before:]
+    if tried:
+        listed = "; ".join(f"{event} {path}" for _test, event, path in tried[:5])
+        pytest.fail(
+            f"this test tried to write the real GAIA home {_REAL_GAIA_HOME} "
+            f"({listed}). Use tmp_path, or set GAIA_HOME with monkeypatch.setenv.",
+            pytrace=False,
+        )
+
+
+def pytest_sessionfinish(session, exitstatus):  # noqa: D103 — pytest hook
+    if not _REAL_HOME_WRITES:
+        return
+    print(
+        f"\nWrites into the real GAIA home {_REAL_GAIA_HOME}, refused:", file=sys.stderr
+    )
+    for test, event, path in _REAL_HOME_WRITES:
+        print(f"  {test}: {event} {path}", file=sys.stderr)
+    if session.exitstatus == 0:
+        session.exitstatus = 1
 
 
 def pytest_sessionstart(session):  # noqa: D103 — pytest hook
@@ -482,6 +610,24 @@ def _guard_real_gaia_home():
             )
         return real_post_start(*args, **kwargs)
 
+    from gaia.automations import files as automation_files
+
+    real_write_json = automation_files.write_json
+
+    def guarded_write_json(path, data):
+        # A daemon's clock runs the automations pass on every poll.
+        if _is_real_gaia_home(path):
+            pytest.fail(
+                _REAL_HOME_MESSAGE.format(
+                    action=f"write {Path(path).name} in",
+                    home=_REAL_GAIA_HOME,
+                    harm="it would take, queue or drop your own reminders.",
+                    hint="Set GAIA_CONFIG_DIR or GAIA_HOME to tmp_path.",
+                ),
+                pytrace=False,
+            )
+        return real_write_json(path, data)
+
     def guarded_spawn(*args, **kwargs):
         home = _child_gaia_home(os.environ)
         if _is_real_gaia_home(home):
@@ -508,6 +654,76 @@ def _guard_real_gaia_home():
         # sqlite3.dbapi2 is the module SQLAlchemy and other drivers bind.
         for module in (sqlite3, sqlite3.dbapi2):
             mp.setattr(module, "connect", _guard_connect(module.connect))
+        mp.setattr(automation_files, "write_json", guarded_write_json)
+        yield
+
+
+_DEFAULT_LEMONADE_PORT = 13305
+_LOOPBACK_HOSTS = {"localhost", "::1", "0:0:0:0:0:0:0:1"}
+
+
+def _is_loopback(host) -> bool:
+    return isinstance(host, str) and (
+        host.lower() in _LOOPBACK_HOSTS or host.startswith("127.")
+    )
+
+
+def _redirected_lemonade_url() -> str | None:
+    """LEMONADE_BASE_URL when it points away from a local Lemonade on 13305."""
+    base_url = os.environ.get("LEMONADE_BASE_URL", "").strip()
+    if not base_url:
+        return None
+    parsed = urllib.parse.urlsplit(base_url)
+    if _is_loopback(parsed.hostname) and parsed.port == _DEFAULT_LEMONADE_PORT:
+        return None
+    return base_url
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _guard_default_lemonade_port():
+    """Fail a test that reaches local 13305 while LEMONADE_BASE_URL says otherwise.
+
+    Covers sockets opened in this process (requests, urllib, httpx sync); a
+    subprocess or a Windows proactor event loop is not seen.
+    """
+    redirected = _redirected_lemonade_url()
+    if redirected is None:
+        yield
+        return
+
+    import socket
+
+    def _check(address):
+        if (
+            isinstance(address, tuple)
+            and len(address) >= 2
+            and address[1] == _DEFAULT_LEMONADE_PORT
+            and _is_loopback(address[0])
+        ):
+            pytest.fail(
+                f"This test connected to {address[0]}:{_DEFAULT_LEMONADE_PORT}, "
+                f"but LEMONADE_BASE_URL={redirected} points tests elsewhere: it "
+                "would reach, and could load models on, the real Lemonade on "
+                "this machine. Resolve the address from LEMONADE_BASE_URL "
+                "(gaia.llm.lemonade_client._get_lemonade_config) instead of "
+                "hard-coding the default port.",
+                pytrace=False,
+            )
+
+    real_connect = socket.socket.connect
+    real_connect_ex = socket.socket.connect_ex
+
+    def guarded_connect(self, address):
+        _check(address)
+        return real_connect(self, address)
+
+    def guarded_connect_ex(self, address):
+        _check(address)
+        return real_connect_ex(self, address)
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(socket.socket, "connect", guarded_connect)
+        mp.setattr(socket.socket, "connect_ex", guarded_connect_ex)
         yield
 
 

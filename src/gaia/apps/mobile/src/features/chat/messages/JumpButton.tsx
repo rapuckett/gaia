@@ -15,7 +15,7 @@ export function JumpButton({ visible, onPress }: { visible: boolean; onPress: ()
         <Floating>
             {visible ? (
                 <Animated.View entering={reduced ? FadeIn : FadeInDown} exiting={reduced ? FadeOut : FadeOutDown}>
-                    <IconButton icon={ArrowDown} label={t('chat.scrollToBottom')} variant="filled" onPress={onPress} />
+                    <IconButton icon={ArrowDown} label={t('chat.scrollBottom')} variant="filled" onPress={onPress} />
                 </Animated.View>
             ) : null}
         </Floating>

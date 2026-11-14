@@ -5,22 +5,13 @@ import { useState } from 'react';
 import { pluralKey, ref, type MessageKey, type Param, type Say } from '../i18n/registry';
 import { tEn, useT, type Translate } from '../i18n/useT';
 import type { InferenceStats } from '../types';
+import { spokenDuration, type Mark } from '../utils/spokenDuration.core';
 import { MarkedText, markLtr as marked } from './MarkedText';
 import './AnswerStats.css';
 
-/** Marks a number with its unit, so the renderer can keep it left to right. */
-type Mark = (text: string) => string;
 const plain: Mark = (text) => text;
 
-/** `40200` -> "40 s", `400` -> "under a second", `95000` -> "1 min 35 s". */
-export function spokenDuration(ms: number, say: Say = tEn.bare, mark: Mark = plain): string {
-    if (ms < 1000) return say('answer.duration.underSecond');
-    const total = Math.round(ms / 1000);
-    if (total < 60) return mark(say('answer.duration.sec', { n: total }));
-    const mins = Math.floor(total / 60);
-    const secs = total % 60;
-    return mark(secs ? say('answer.duration.minSec', { m: mins, s: secs }) : say('answer.duration.min', { n: mins }));
-}
+export { spokenDuration };
 
 /** How a turn that never finished its answer ended. */
 export type TurnEnding = 'stopped' | 'interrupted' | 'failed';
@@ -48,6 +39,11 @@ function placeParam(place: string): Param {
     return place;
 }
 
+/** A failed turn's first token is the error, not a word of an answer. */
+function wroteFirstWord(stats: InferenceStats | undefined, ended: TurnEnding | undefined): stats is InferenceStats {
+    return ended !== 'failed' && stats?.time_to_first_token != null && stats.time_to_first_token > 0;
+}
+
 function summaryLine(
     latencyMs: number | undefined,
     stats: InferenceStats | undefined,
@@ -64,7 +60,7 @@ function summaryLine(
     } else if (place) {
         parts.push(say(ended ? 'answer.ranPlace' : 'answer.answeredPlace', { place }));
     }
-    if (stats?.time_to_first_token != null && stats.time_to_first_token > 0) {
+    if (wroteFirstWord(stats, ended)) {
         const time = spokenDuration(stats.time_to_first_token * 1000, say, mark);
         parts.push(say(parts.length ? 'answer.firstWord' : 'answer.firstWordLead', { time }));
     }
@@ -103,6 +99,7 @@ export function exactStats(
     stats: InferenceStats | undefined,
     t: Translate = tEn,
     mark: Mark = plain,
+    ended?: TurnEnding,
 ): string[] {
     const lines: string[] = [];
     if (latencyMs != null && latencyMs > 0) {
@@ -110,7 +107,7 @@ export function exactStats(
             time: mark(say('answer.duration.sec', { n: (latencyMs / 1000).toFixed(1) })),
         })));
     }
-    if (stats?.time_to_first_token != null && stats.time_to_first_token > 0) {
+    if (wroteFirstWord(stats, ended)) {
         const ms = (stats.time_to_first_token * 1000).toFixed(0);
         lines.push(t.compose((say) => say('answer.exact.firstToken', { time: mark(say('answer.duration.ms', { n: ms })) })));
     }
@@ -129,7 +126,7 @@ export function AnswerStats({ latencyMs, stats, ended }: { latencyMs?: number; s
     const t = useT();
     const [open, setOpen] = useState(false);
     const summary = composeSummary(latencyMs, stats, ended, t, marked);
-    const exact = exactStats(latencyMs, stats, t, marked);
+    const exact = exactStats(latencyMs, stats, t, marked, ended);
     if (!summary && exact.length === 0) return null;
     return (
         <>
@@ -138,7 +135,7 @@ export function AnswerStats({ latencyMs, stats, ended }: { latencyMs?: number; s
                     type="button"
                     className="msg-stats-summary"
                     aria-expanded={open}
-                    title={exactStats(latencyMs, stats, t).join('\n')}
+                    title={exactStats(latencyMs, stats, t, plain, ended).join('\n')}
                     onClick={() => setOpen((v) => !v)}
                 >
                     {summary ? <MarkedText text={summary} /> : t('answer.details')}
