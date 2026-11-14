@@ -6,7 +6,7 @@ import { useEffect, useState } from 'react';
 
 import { useCreateSession, useSystemStatus } from '@/data';
 import { Composer, useComposerQueue } from '@/features/composer';
-import { useComposerQueueStore } from '@/features/composer/composerQueue';
+import { QueuedMessages } from '@/features/composer/QueuedMessages';
 import { ScreenHeader } from '@/features/nav/ScreenHeader';
 import { useT } from '@/i18n/useT';
 import { useLastChatStore } from '@/state/lastChat';
@@ -26,13 +26,6 @@ export interface NewChatScreenProps {
     prompt?: { id: string; text: string };
 }
 
-// Texts typed while the chat was being created, taken out of the queue for good.
-function takeHeld(): string[] {
-    const items = useComposerQueueStore.getState().byChat[''] ?? [];
-    useComposerQueueStore.setState((s) => ({ byChat: { ...s.byChat, '': [] } }));
-    return items.map((i) => i.text);
-}
-
 export function NewChatScreen({ onOpen, initialText = '', prompt }: NewChatScreenProps) {
     const t = useT();
     const status = useSystemStatus().data;
@@ -44,7 +37,7 @@ export function NewChatScreen({ onOpen, initialText = '', prompt }: NewChatScree
             deliver: queue.deliver,
             flush: queue.flush,
             queueHeld: queue.queueHeld,
-            takeHeld,
+            takeHeld: () => queue.takeHeld().map((item) => item.text),
         },
         initialText,
     );
@@ -78,12 +71,15 @@ export function NewChatScreen({ onOpen, initialText = '', prompt }: NewChatScree
             scroll
             header={<ScreenHeader />}
             footer={
-                <Composer
-                    value={state.text}
-                    onChange={setText}
-                    onSend={(message) => void submit(message, queue.hold)}
-                    disabledReason={startingReason(status, t) ?? undefined}
-                />
+                <>
+                    <QueuedMessages items={queue.held} replying={false} onRemove={queue.remove} onRetry={queue.retry} />
+                    <Composer
+                        value={state.text}
+                        onChange={setText}
+                        onSend={(message) => void submit(message, queue.hold)}
+                        disabledReason={startingReason(status, t) ?? undefined}
+                    />
+                </>
             }
         >
             <Stack gap="lg" paddingX="lg" paddingY="xl" flex={1} justify="center">

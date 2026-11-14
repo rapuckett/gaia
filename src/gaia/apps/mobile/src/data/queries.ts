@@ -1,12 +1,14 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
+import { useEffect, useState } from 'react';
+
 import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 
 import type { StartScreen } from '@webui/types';
 
-import type { GaiaClient, MessageList, Session, SessionList, SystemStatus } from '@/api/client.types';
-import { STATUS_POLL_MS } from '@/api/constants';
+import type { GaiaClient, MessageList, Session, SessionList, SessionSearchResponse, SystemStatus } from '@/api/client.types';
+import { SEARCH_DEBOUNCE_MS, STATUS_POLL_MS } from '@/api/constants';
 import { GaiaConfigError } from '@/api/errors';
 
 import { useGaiaClient } from './GaiaClientProvider';
@@ -14,6 +16,7 @@ import { useGaiaClient } from './GaiaClientProvider';
 export const queryKeys = {
     sessions: ['sessions'] as const,
     session: (sessionId: string) => ['session', sessionId] as const,
+    sessionSearch: (query: string) => ['sessionSearch', query] as const,
     messages: (sessionId: string) => ['messages', sessionId] as const,
     systemStatus: ['systemStatus'] as const,
     startScreen: ['startScreen'] as const,
@@ -49,6 +52,31 @@ export function useSessions() {
     });
 }
 
+/**
+ * Chats whose title or messages match `q`, read 200 ms after the last keystroke.
+ * `settled` is false while the typed text is ahead of the answer, and a superseded request is aborted.
+ */
+export function useSessionSearch(q: string) {
+    const client = useGaiaClient();
+    const text = q.trim();
+    const [typed, setDebounced] = useState(text);
+    const debounced = text ? typed : '';
+    useEffect(() => {
+        if (!text) return;
+        const timer = setTimeout(() => setDebounced(text), SEARCH_DEBOUNCE_MS);
+        return () => clearTimeout(timer);
+    }, [text]);
+    const query = useQuery<SessionSearchResponse>({
+        queryKey: queryKeys.sessionSearch(debounced),
+        enabled: client !== null && debounced !== '',
+        queryFn: ({ signal }) => requireClient(client).searchSessions(debounced, false, { signal }),
+        gcTime: 0,
+        retry: false,
+    });
+    const settled = text !== '' && debounced === text && !query.isFetching;
+    return { ...query, query: debounced, settled };
+}
+
 export function useSession(sessionId: string) {
     const client = useGaiaClient();
     return useQuery<Session>({
@@ -82,6 +110,13 @@ export function isWarmingUp(status: SystemStatus | null | undefined): boolean {
     return status?.warm_up?.state === 'warming';
 }
 
+/** Anything the connection banner reports as in progress or recoverable, so it clears by itself. */
+function needsWatching(status: SystemStatus | undefined, failed: boolean): boolean {
+    if (failed || isStarting(status) || isWarmingUp(status)) return true;
+    const download = status?.download_progress?.state;
+    return download === 'downloading' || download === 'starting' || status?.lemonade_running === false;
+}
+
 /**
  * What the PC runs and whether it's ready: `default_model_name` is this PC's
  * model, `model_loaded` the one in memory. Re-read while it is starting or
@@ -93,8 +128,7 @@ export function useSystemStatus() {
         queryKey: queryKeys.systemStatus,
         enabled: client !== null,
         queryFn: ({ signal }) => requireClient(client).getSystemStatus({ signal }),
-        refetchInterval: (query) =>
-            isStarting(query.state.data) || isWarmingUp(query.state.data) ? STATUS_POLL_MS : false,
+        refetchInterval: (query) => (needsWatching(query.state.data, query.state.status === 'error') ? STATUS_POLL_MS : false),
     });
 }
 
