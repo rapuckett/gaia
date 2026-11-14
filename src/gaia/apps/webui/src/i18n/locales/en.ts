@@ -1848,6 +1848,7 @@ export const enMessages = {
     'setup.offer.ownNote': 'The version GAIA is tested with, kept up to date by GAIA. It keeps its own copy of each model.',
     'setup.offer.mineNote': 'Keeps one copy of each model. GAIA leaves its version and settings as they are.',
     'setup.offer.recommended': 'Recommended',
+    'setup.check.pcOnly': 'Change this on the PC running GAIA',
     'setup.title': 'Set up GAIA',
     'setup.lede.start': 'A few minutes of setup, then your first chat.',
     'setup.lede.running': 'Setting things up. Setup keeps going if you switch away.',

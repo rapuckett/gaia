@@ -26,9 +26,12 @@ import type {
     FollowUpResult,
     GaiaClient,
     HealthResponse,
+    LemonadeFound,
+    LemonadeTarget,
     LocalModelStatus,
     MessageList,
     ModelNeed,
+    PreflightReport,
     RestartModelResult,
     RequestOptions,
     Schedule,
@@ -361,7 +364,7 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
         },
 
         cancelSetup(modelId, options) {
-            return postJson<{ cancelled: boolean }>(ENDPOINTS.setupCancel, { model_id: modelId }, options?.signal);
+            return postJson<{ cancelled: boolean }>(ENDPOINTS.setupCancel, { model_id: modelId ?? null }, options?.signal);
         },
 
         getStartScreen(options) {
@@ -370,6 +373,18 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         checkSetup(skipChatModel, options) {
             return getJson<SetupCheck>(`${ENDPOINTS.setupCheck}?skip_chat_model=${skipChatModel}`, options?.signal);
+        },
+
+        getPreflight(options) {
+            return getJson<PreflightReport>(ENDPOINTS.onboardingPreflight, options?.signal);
+        },
+
+        getLemonadeTarget(options) {
+            return getJson<LemonadeTarget>(ENDPOINTS.lemonadeTarget, options?.signal);
+        },
+
+        detectLemonade(options) {
+            return getJson<{ found: LemonadeFound | null; unchecked?: string[] }>(ENDPOINTS.lemonadeDetect, options?.signal);
         },
 
         getSetupPlan(options) {
