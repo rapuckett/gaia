@@ -45,6 +45,7 @@ import type {
     SetupCheck,
     SetupPlan,
     SetupRunStatus,
+    SkillList,
     UserInputResult,
 } from './client.types';
 import {
@@ -384,6 +385,10 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         listAgentMcps(options) {
             return getJson<AgentMcpList>(ENDPOINTS.connectorsAgentMcps, options?.signal);
+        },
+
+        listSkills(options) {
+            return getJson<SkillList>(ENDPOINTS.skills, options?.signal);
         },
 
         listSchedules(options) {
