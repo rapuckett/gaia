@@ -184,6 +184,7 @@ function ChatListRow({ row, onSelect }: { row: ChatRow; onSelect: (sessionId: st
                 </Row>
             }
             subtitle={text.note ?? undefined}
+            subtitleTone={text.noteFailed ? 'danger' : undefined}
         />
     );
 }
