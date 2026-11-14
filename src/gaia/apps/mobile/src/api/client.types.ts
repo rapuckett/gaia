@@ -1,10 +1,11 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import type { Message, Session, StartScreen, StreamEvent, SystemStatus } from '@webui/types';
+import type { FollowUpOutcome } from '@webui/utils/messageQueue';
+import type { Message, Schedule, Session, StartScreen, StreamEvent, SystemStatus } from '@webui/types';
 import type { CreateSessionRequest, SessionSearchResponse, ToolConfirmRequest, UserInputRequest as ApiUserInputRequest } from '@webui/types/api.gen';
 
-export type { Message, Session, StartScreen, StreamEvent, SystemStatus } from '@webui/types';
+export type { Message, Schedule, Session, StartScreen, StreamEvent, SystemStatus } from '@webui/types';
 export type { CreateSessionRequest, SessionSearchResponse, SessionSearchResult, ToolConfirmRequest } from '@webui/types/api.gen';
 
 /** `display` is what the phone shows as the answer; it is never sent to GAIA. */
@@ -17,6 +18,11 @@ export interface SessionList {
 
 export interface MessageList {
     messages: Message[];
+    total: number;
+}
+
+export interface ScheduleList {
+    schedules: Schedule[];
     total: number;
 }
 
@@ -49,6 +55,16 @@ export interface UserInputResult {
     request_id: string;
 }
 
+export interface DeleteScheduleResult {
+    deleted: boolean;
+}
+
+export interface FollowUpResult {
+    delivered: boolean;
+}
+
+export type { FollowUpOutcome };
+
 export interface RequestOptions {
     signal?: AbortSignal;
 }
@@ -58,11 +74,15 @@ export interface GaiaClient {
     listSessions(options?: RequestOptions): Promise<SessionList>;
     getSession(sessionId: string, options?: RequestOptions): Promise<Session>;
     createSession(request?: CreateSessionRequest, options?: RequestOptions): Promise<Session>;
+    /** What the chat's last finished turn did with the messages added to it; rejects with 409 while a turn still runs. */
+    getFollowUpOutcome(sessionId: string, options?: RequestOptions): Promise<FollowUpOutcome>;
     /** Chats whose title or messages match `query`, newest first; `truncated` says the backend capped the list. */
     searchSessions(query: string, includeAutomated: boolean, options?: RequestOptions): Promise<SessionSearchResponse>;
     getMessages(sessionId: string, options?: RequestOptions): Promise<MessageList>;
     /** Deletes the message and everything after it, so the exchange can be asked again. */
     deleteMessagesFrom(sessionId: string, messageId: number, options?: RequestOptions): Promise<DeleteMessagesResult>;
+    /** Hands a message to the running turn, read at its next step; rejects when the turn can't take it. */
+    sendFollowUp(sessionId: string, text: string, options?: RequestOptions): Promise<FollowUpResult>;
     /** Starts a turn and streams it to its `done` or `error` event. */
     sendMessage(sessionId: string, message: string, options?: RequestOptions): AsyncIterable<StreamEvent>;
     /**
@@ -77,6 +97,12 @@ export interface GaiaClient {
     confirmTool(request: ToolConfirmRequest, options?: RequestOptions): Promise<ConfirmToolResult>;
     /** Answers a `needs_input` question; the turn continues once GAIA has it. */
     sendUserInput(request: UserInputRequest, options?: RequestOptions): Promise<UserInputResult>;
+    listSchedules(options?: RequestOptions): Promise<ScheduleList>;
+    /** Pauses or resumes a schedule; answers with the schedule as it now is. */
+    updateScheduleStatus(name: string, status: 'active' | 'paused', options?: RequestOptions): Promise<Schedule>;
+    /** Runs a schedule once now (409 while a run is in flight); its next scheduled run stays as it was. */
+    runSchedule(name: string, options?: RequestOptions): Promise<Schedule>;
+    deleteSchedule(name: string, options?: RequestOptions): Promise<DeleteScheduleResult>;
     getSystemStatus(options?: RequestOptions): Promise<SystemStatus>;
     /** The new-chat screen's cards and working folder; `skills_error` says why the assistant can't list its skills. */
     getStartScreen(options?: RequestOptions): Promise<StartScreen>;

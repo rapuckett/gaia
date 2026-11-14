@@ -163,3 +163,63 @@ export function repeatedAllowCount(notifications: GaiaNotification[], prompt: Ga
     && n.risk === prompt.risk
   ).length;
 }
+
+/** One-line description of a tool call, e.g. `run_shell_command · git status`. */
+export function summarize(n: GaiaNotification): string {
+  const args = n.toolArgs ?? {};
+  const primary = ['command', 'file_path', 'path', 'url', 'query', 'name']
+    .map((k) => args[k])
+    .find((v) => typeof v === 'string' && v.trim());
+  return typeof primary === 'string' ? primary : '';
+}
+
+/** Tools whose relayed summary is a command and its risk note (`COMMAND_SUMMARY_TOOLS` in sse_translation.py). */
+export const COMMAND_SUMMARY_TOOLS = new Set(['run_shell_command', 'wait_for_condition']);
+
+/** Tools whose relayed summary is the exact text being approved (`EXACT_TEXT_ARG` in call_risk.py). The flagship runs them from its send-email skill, so they also arrive namespaced. */
+const EXACT_MAIL_TOOLS = ['send_now', 'send_draft', 'reply_to_message', 'forward_message', 'discard_draft', 'update_draft'];
+export const EXACT_SUMMARY_TOOLS = new Set([...EXACT_MAIL_TOOLS, ...EXACT_MAIL_TOOLS.map((tool) => `send-email/${tool}`)]);
+
+/**
+ * A relayed command prompt with no args: `command[\n…]\nin <folder>[\n(extras)]\n<risk note>`
+ * (`render_command_summary` in sse_translation.py). The command keeps its own lines.
+ */
+export function splitCommandSummary(summary: string): { command: string; folder: string; extras: string; note: string } | null {
+  const lines = summary.split('\n');
+  if (lines.length < 2) return null;
+  // No note when the call carries no risk worth naming: the folder is then last.
+  const hasNote = !lines[lines.length - 1].startsWith('in ');
+  const note = hasNote ? lines[lines.length - 1].trim() : '';
+  const body = hasNote ? lines.slice(0, -1) : lines;
+  let at = -1;
+  for (let i = body.length - 1; i > 0; i--) {
+    if (body[i].startsWith('in ')) { at = i; break; }
+  }
+  if (at < 0) return { command: body.join('\n'), folder: '', extras: '', note };
+  return {
+    command: body.slice(0, at).join('\n'),
+    folder: body[at].slice(3).trim(),
+    extras: body.slice(at + 1).join(' ').trim(),
+    note,
+  };
+}
+
+/** A grant's folder by its name alone, for a button; the full path stays in its tooltip. */
+export function shortScope(scope: string): string {
+  return scope.replace(/(\s)((?:[A-Za-z]:)?[\\/][^]*)$/, (_, space: string, path: string) => {
+    const name = path.split(/[\\/]/).filter(Boolean).pop();
+    return name ? `${space}${name}` : `${space}${path}`;
+  });
+}
+
+/** Lines of code a prompt shows before "Show all". */
+export const PROMPT_CODE_PREVIEW_LINES = 12;
+
+/** `45` -> "45s", `600` -> "10:00". */
+export function formatCountdown(seconds: number): string {
+  if (seconds < 60) return `${seconds}s`;
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return `${mins}:${String(secs).padStart(2, '0')}`;
+}
+

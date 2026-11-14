@@ -3,10 +3,12 @@
 
 import type {
     CreateSessionRequest,
+    FollowUpOutcome,
     GaiaClient,
     HealthResponse,
     Message,
     MessageList,
+    Schedule,
     Session,
     SessionList,
     SessionSearchResponse,
@@ -23,11 +25,16 @@ import { GaiaApiError } from './errors';
 
 export interface FakeClientData {
     sessions?: Session[];
+    schedules?: Schedule[];
     messages?: Record<string, Message[]>;
     /** What every send streams back; a function takes the sent text and streams what a test scripts. */
     replies?: StreamEvent[] | ((message: string) => AsyncIterable<StreamEvent>);
     /** What attachToRun replays, by chat; a chat not listed has no turn running. */
     running?: Record<string, StreamEvent[]>;
+    /** What getFollowUpOutcome answers; a function may throw to script a 409. */
+    followUpOutcome?: FollowUpOutcome | (() => FollowUpOutcome);
+    /** Makes sendFollowUp reject, as a turn that can't take the message does. */
+    followUpRefusal?: GaiaApiError;
     status?: SystemStatus;
     start?: StartScreen;
     /** Most chats a search returns before it says `truncated`. */
@@ -43,6 +50,8 @@ export interface FakeGaiaClient extends GaiaClient {
     readonly deleted: { sessionId: string; messageId: number }[];
     readonly confirmations: ToolConfirmRequest[];
     readonly answers: UserInputRequest[];
+    readonly scheduleActions: { action: 'pause' | 'resume' | 'run' | 'delete'; name: string }[];
+    readonly followUps: { sessionId: string; text: string }[];
 }
 
 export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
@@ -56,6 +65,15 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
     const deleted: FakeGaiaClient['deleted'] = [];
     const confirmations: ToolConfirmRequest[] = [];
     const answers: UserInputRequest[] = [];
+    const schedules = [...(data.schedules ?? [])];
+    const scheduleActions: FakeGaiaClient['scheduleActions'] = [];
+
+    function findSchedule(name: string): Schedule {
+        const schedule = schedules.find((s) => s.name === name);
+        if (!schedule) throw new GaiaApiError(404, `Schedule '${name}' not found`);
+        return schedule;
+    }
+    const followUps: FakeGaiaClient['followUps'] = [];
 
     function findSession(sessionId: string): Session {
         const session = sessions.find((s) => s.id === sessionId);
@@ -70,6 +88,8 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         deleted,
         confirmations,
         answers,
+        scheduleActions,
+        followUps,
         async health(): Promise<HealthResponse> {
             return { status: 'ok', service: 'gaia-agent-ui' };
         },
@@ -94,6 +114,10 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             };
             sessions.unshift(session);
             return session;
+        },
+        async getFollowUpOutcome() {
+            const outcome = data.followUpOutcome ?? { taken: [], returned: [] };
+            return typeof outcome === 'function' ? outcome() : outcome;
         },
         async searchSessions(query): Promise<SessionSearchResponse> {
             if (data.searchError) throw new GaiaApiError(500, data.searchError);
@@ -127,6 +151,11 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             messages[sessionId] = list.slice(0, at);
             return { deleted: true, count: list.length - at };
         },
+        async sendFollowUp(sessionId, text) {
+            if (data.followUpRefusal) throw data.followUpRefusal;
+            followUps.push({ sessionId, text });
+            return { delivered: true };
+        },
         async *sendMessage(sessionId, message) {
             sent.push({ sessionId, message });
             yield* typeof replies === 'function' ? replies(message) : replies;
@@ -145,6 +174,28 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         async sendUserInput(request) {
             answers.push(request);
             return { status: 'ok', request_id: request.request_id };
+        },
+        async listSchedules() {
+            return { schedules: [...schedules], total: schedules.length };
+        },
+        async updateScheduleStatus(name, status) {
+            const schedule = findSchedule(name);
+            scheduleActions.push({ action: status === 'paused' ? 'pause' : 'resume', name });
+            Object.assign(schedule, { status });
+            return { ...schedule };
+        },
+        async runSchedule(name) {
+            const schedule = findSchedule(name);
+            scheduleActions.push({ action: 'run', name });
+            if (schedule.running) throw new GaiaApiError(409, `Schedule '${name}' is already running`);
+            Object.assign(schedule, { running: true, run_count: schedule.run_count + 1 });
+            return { ...schedule };
+        },
+        async deleteSchedule(name) {
+            const schedule = findSchedule(name);
+            scheduleActions.push({ action: 'delete', name });
+            schedules.splice(schedules.indexOf(schedule), 1);
+            return { deleted: true };
         },
         async getSystemStatus() {
             if (!data.status) throw new GaiaApiError(503, 'This fake client was given no system status.');

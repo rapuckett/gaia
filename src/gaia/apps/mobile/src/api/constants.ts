@@ -10,6 +10,9 @@ export const UI_HEADERS = {
 
 export const ENDPOINTS = {
     health: '/api/health',
+    schedule: '/api/schedules/{name:path}',
+    scheduleRun: '/api/schedules/{name:path}/run',
+    schedules: '/api/schedules',
     sessions: '/api/sessions',
     session: '/api/sessions/{session_id}',
     sessionMessages: '/api/sessions/{session_id}/messages',
@@ -19,14 +22,28 @@ export const ENDPOINTS = {
     chatAttach: '/api/chat/attach',
     chatCancel: '/api/chat/cancel',
     chatConfirmTool: '/api/chat/confirm-tool',
+    chatFollowup: '/api/chat/followup',
+    chatFollowupOutcome: '/api/chat/followup/{session_id}',
     chatUserInput: '/api/chat/user-input',
     systemStatus: '/api/system/status',
     documentFile: '/api/documents/{doc_id}/file',
     onboardingStart: '/api/onboarding/start',
 } as const;
 
+export function schedulePath(name: string): string {
+    return ENDPOINTS.schedule.replace('{name:path}', encodeURIComponent(name));
+}
+
+export function scheduleRunPath(name: string): string {
+    return ENDPOINTS.scheduleRun.replace('{name:path}', encodeURIComponent(name));
+}
+
 export function sessionPath(sessionId: string): string {
     return ENDPOINTS.session.replace('{session_id}', encodeURIComponent(sessionId));
+}
+
+export function followupOutcomePath(sessionId: string): string {
+    return ENDPOINTS.chatFollowupOutcome.replace('{session_id}', encodeURIComponent(sessionId));
 }
 
 export function sessionMessagesPath(sessionId: string): string {
@@ -59,6 +76,10 @@ export const QUEUED_IDLE_MS = 10 * 60_000;
 export const SEND_HEADER_TIMEOUT_MS = 90_000;
 /** An attach replays at once; a slower answer means the backend is stuck or unreachable. */
 export const ATTACH_HEADER_TIMEOUT_MS = 30_000;
+/** How often to re-read the schedules while their screen is open, so counts and times follow the PC. */
+export const SCHEDULES_POLL_MS = 10_000;
+/** How long a Delete button waits for its "Confirm?" press; the web UI's CONFIRM_DELETE_MS. */
+export const CONFIRM_DELETE_MS = 8000;
 /** How often to re-read the PC's status while it is still starting or warming up. */
 export const STATUS_POLL_MS = 5_000;
 
