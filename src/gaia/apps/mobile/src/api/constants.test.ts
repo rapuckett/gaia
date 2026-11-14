@@ -117,6 +117,7 @@ describe('endpoints', () => {
         setupPlan: ['GET'],
         setupRun: ['POST'],
         setupStatus: ['GET'],
+        skills: ['GET'],
         chatSend: ['POST'],
         chatAttach: ['GET'],
         chatCancel: ['POST'],
