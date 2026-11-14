@@ -5,8 +5,8 @@ import { useState } from 'react';
 
 import { isolate } from '@webui/i18n/registry';
 import {
-    PERMANENT_FAILURE_HINTS,
     elapsed,
+    failureHint,
     formatFullTimestamp,
     formatTimestamp,
     isIndexing,
@@ -43,7 +43,7 @@ export function DocumentRow({ document: doc, progress, startedAt, now, retrying,
     const full = doc.indexed_at ? formatFullTimestamp(doc.indexed_at, t) : '';
     const size = isolate(formatSize(doc.file_size), 'ltr');
     const running = isIndexing(status);
-    const hint = doc.error_kind ? PERMANENT_FAILURE_HINTS[doc.error_kind] : undefined;
+    const hint = failureHint(t, doc.error_kind);
     const reason = doc.last_error ? splitFailureReason(doc.last_error) : null;
     const pct = progress ? progressPercent(progress) : null;
     const indexingText = startedAt ? t.hint(t('docs.indexingLabel'), elapsed(startedAt, now)) : t('docs.indexing');

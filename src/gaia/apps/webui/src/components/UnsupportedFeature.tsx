@@ -3,7 +3,7 @@
 
 import { useEffect, useRef } from 'react';
 import { AlertTriangle, X, AlertCircle, Bug } from 'lucide-react';
-import { PERMANENT_FAILURE_HINTS } from '../utils/documentLibrary.core';
+import { failureHint } from '../utils/documentLibrary.core';
 import { AUDIO_EXTENSIONS, VIDEO_EXTENSIONS } from '../utils/mediaFiles';
 import { useT } from '../i18n/useT';
 import './UnsupportedFeature.css';
@@ -268,7 +268,7 @@ export function UploadErrorToast({ filename, error, status, kind, onDismiss, tim
     let issueUrl: string | null;
     let Icon = AlertCircle;
 
-    const permanentHint = kind ? PERMANENT_FAILURE_HINTS[kind] : undefined;
+    const permanentHint = failureHint(t, kind);
 
     // A wrong path, a file outside the readable folders or a damaged file is the user's to fix, not a bug to report.
     if (permanentHint) {

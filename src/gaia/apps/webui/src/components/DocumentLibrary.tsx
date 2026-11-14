@@ -14,7 +14,7 @@ import { requestErrorParam } from '../utils/requestErrors';
 import { formatSize, middleTruncate } from '../utils/format';
 import { examplePath } from '../utils/platform';
 import { cleanPastedPath } from '../utils/pastedPath';
-import { INDEX_POLL_MS, PERMANENT_FAILURE_HINTS, REMOVE_UNDO_MS, countText, elapsed, formatFullTimestamp, formatTimestamp, isIndexing, splitFailureReason } from '../utils/documentLibrary.core';
+import { INDEX_POLL_MS, REMOVE_UNDO_MS, countText, elapsed, failureHint, formatFullTimestamp, formatTimestamp, isIndexing, splitFailureReason } from '../utils/documentLibrary.core';
 
 export { INDEX_POLL_MS, REMOVE_UNDO_MS };
 import { UploadErrorToast, getUnsupportedCategory, isExtensionSupported } from './UnsupportedFeature';
@@ -578,7 +578,7 @@ export function DocumentLibrary() {
                 );
             }
             case 'failed': {
-                const hint = doc.error_kind ? PERMANENT_FAILURE_HINTS[doc.error_kind] : undefined;
+                const hint = failureHint(t, doc.error_kind);
                 const reason = doc.last_error ? splitFailureReason(doc.last_error) : null;
                 return (
                     <div className="doc-failure">

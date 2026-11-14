@@ -3,7 +3,7 @@
 
 /** Library formatting shared by the web UI and the phone app; no DOM. */
 
-import { isolate, type PluralKey } from '../i18n/registry';
+import { isolate, type MessageKey, type PluralKey } from '../i18n/registry';
 import { dateLocale, type Translate } from '../i18n/translator';
 
 /** How far a running index has got: PDF pages read, then chunks embedded. */
@@ -20,14 +20,19 @@ export const INDEX_POLL_MS = 1000;
 /** How long a removed document can be put back before it is deleted. */
 export const REMOVE_UNDO_MS = 6000;
 
-/** Failures retrying can't fix until the file changes (the backend's error kind), and what to do instead. */
-export const PERMANENT_FAILURE_HINTS: Record<string, string> = {
-    corrupted: 'The file looks damaged. Re-download or re-export it, then index the new copy.',
-    encrypted: 'The PDF needs a password to open. Save a copy without the password, then index that.',
-    empty: 'The PDF has no readable text, which usually means it is a scan. Run OCR on it, then index it again.',
-    empty_file: 'This file is empty. Add content to it, then index it again.',
-    unsupported_workbook: 'This is an old .xls workbook or has a password. Open it in Excel, save a copy as .xlsx without a password, then index that.',
+const FAILURE_HINT_KEYS: Record<string, MessageKey> = {
+    corrupted: 'docs.failureHint.corrupted',
+    encrypted: 'docs.failureHint.encrypted',
+    empty: 'docs.failureHint.empty',
+    empty_file: 'docs.failureHint.emptyFile',
+    unsupported_workbook: 'docs.failureHint.unsupportedWorkbook',
 };
+
+/** What to do about a failure retrying can't fix until the file changes (the backend's error kind); undefined for any other. */
+export function failureHint(t: Translate, kind: string | null | undefined): string | undefined {
+    const key = kind ? FAILURE_HINT_KEYS[kind] : undefined;
+    return key ? t(key) : undefined;
+}
 
 /** Whether a document's indexing is still running. */
 export function isIndexing(status: string | undefined): boolean {
