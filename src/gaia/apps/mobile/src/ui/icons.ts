@@ -19,6 +19,7 @@ export {
   Copy,
   Cpu,
   Ellipsis,
+  Eye,
   EyeOff,
   FileText,
   Info,
