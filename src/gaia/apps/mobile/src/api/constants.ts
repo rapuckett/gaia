@@ -14,6 +14,7 @@ export const ENDPOINTS = {
     localModelStatus: '/api/providers/local/status',
     schedule: '/api/schedules/{name:path}',
     scheduleRun: '/api/schedules/{name:path}/run',
+    scheduleParse: '/api/schedules/parse',
     schedules: '/api/schedules',
     sessions: '/api/sessions',
     session: '/api/sessions/{session_id}',

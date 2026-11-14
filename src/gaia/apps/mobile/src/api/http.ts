@@ -33,6 +33,7 @@ import type {
     ModelNeed,
     RestartModelResult,
     RequestOptions,
+    ParsedSchedule,
     Schedule,
     ScheduleList,
     SessionList,
@@ -344,6 +345,14 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         listSchedules(options) {
             return getJson<ScheduleList>(ENDPOINTS.schedules, options?.signal);
+        },
+
+        createSchedule(request, options) {
+            return postJson<Schedule>(ENDPOINTS.schedules, request, options?.signal);
+        },
+
+        parseSchedule(input, timezone, options) {
+            return postJson<ParsedSchedule>(ENDPOINTS.scheduleParse, { input, timezone }, options?.signal);
         },
 
         updateScheduleStatus(name, status, options) {
