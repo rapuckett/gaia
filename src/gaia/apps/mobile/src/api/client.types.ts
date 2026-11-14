@@ -2,7 +2,16 @@
 // SPDX-License-Identifier: MIT
 
 import type { Message, Session, StartScreen, StreamEvent, SystemStatus } from '@webui/types';
-import type { CreateSessionRequest, ToolConfirmRequest, UserInputRequest as ApiUserInputRequest } from '@webui/types/api.gen';
+import type {
+    AgentUiHealthResponse,
+    CancelStreamResponse,
+    ConfirmToolResponse,
+    CreateSessionRequest,
+    MessagesDeleteResponse,
+    ToolConfirmRequest,
+    UserInputRequest as ApiUserInputRequest,
+    UserInputResponse,
+} from '@webui/types/api.gen';
 
 export type { Message, Session, StartScreen, StreamEvent, SystemStatus } from '@webui/types';
 export type { CreateSessionRequest, ToolConfirmRequest } from '@webui/types/api.gen';
@@ -20,34 +29,11 @@ export interface MessageList {
     total: number;
 }
 
-export interface HealthResponse {
-    status: string;
-    service: string;
-    stats?: Record<string, unknown>;
-}
-
-// These routes declare no response model, so api.gen.ts has none; the shapes are what they return.
-export interface CancelChatResult {
-    status: string;
-    cancelled: boolean;
-}
-
-export interface ConfirmToolResult {
-    status: string;
-    approved: boolean;
-    /** What "always allow" granted, or null. */
-    granted: string | null;
-}
-
-export interface DeleteMessagesResult {
-    deleted: boolean;
-    count: number;
-}
-
-export interface UserInputResult {
-    status: string;
-    request_id: string;
-}
+export type HealthResponse = AgentUiHealthResponse;
+export type CancelChatResult = CancelStreamResponse;
+export type ConfirmToolResult = ConfirmToolResponse;
+export type DeleteMessagesResult = MessagesDeleteResponse;
+export type UserInputResult = UserInputResponse;
 
 export interface RequestOptions {
     signal?: AbortSignal;
