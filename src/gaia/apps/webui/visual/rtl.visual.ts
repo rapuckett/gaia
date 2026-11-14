@@ -2707,11 +2707,17 @@ for (const locale of ['ar', 'en']) {
                             : real(input, init);
                 });
                 await page.setViewportSize({ width, height: 844 });
-                await openSchedules(page);
+                await open(page, '', locale, (p) => withSchedules(p));
+                if (width < 600) await page.getByRole('button', { name: locale === 'ar' ? /فتح الشريط الجانبي/ : 'Open sidebar' }).click();
+                await page.locator('.sb').getByRole('button', { name: locale === 'ar' ? /المهام المجدولة/ : /Scheduled tasks/ }).click();
+                await expect(page.locator('.schedule-modal')).toBeVisible();
                 await page.locator('.schedule-card').first().getByRole('button', { name: locale === 'ar' ? /تشغيل الآن/ : /Run now/ }).click();
                 const error = page.locator('.schedule-action-error');
                 await expect(error).toContainText(locale === 'ar' ? 'تعذّر تشغيل المهمة المجدولة الآن' : 'Could not run the schedule now');
-                await check(page, `run-failed-${width}`);
+                // The sidebar drawer waits behind the dialog at phone width; judge the dialog.
+                await shot(page, `schedules-${locale}-run-failed-${width}`);
+                expect((await audit(page)).filter((p) => p.includes('schedule') || p.includes('scrolls sideways'))).toEqual([]);
+                if (locale === 'ar') expect(await untranslated(page, '.schedule-modal', '[dir="auto"], textarea')).toEqual([]);
             });
         }
 
