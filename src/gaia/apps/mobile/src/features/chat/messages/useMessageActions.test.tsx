@@ -11,6 +11,7 @@ import { translator } from '@/i18n/useT';
 import { ThemeProvider } from '@/ui';
 import { SheetHost } from '@/ui/overlays/SheetHost';
 
+import { MessageActionsContext } from './MessageActionsContext';
 import { UserBubble } from './UserBubble';
 
 jest.mock('expo-clipboard', () => ({ setStringAsync: jest.fn(() => Promise.resolve(true)) }));
@@ -28,12 +29,18 @@ const question: Message = {
 
 async function setup(laterTurns: number) {
     const client = createFakeClient({ messages: { s: [question] } });
+    const send = (text: string) => {
+        void client.sendMessage('s', text)[Symbol.asyncIterator]().next();
+        return true;
+    };
     await render(
         <QueryClientProvider client={new QueryClient()}>
             <GaiaClientProvider client={client}>
                 <ThemeProvider>
                     <SheetHost>
-                        <UserBubble message={question} context={{ later: laterTurns, laterTurns }} />
+                        <MessageActionsContext.Provider value={{ send, busy: false }}>
+                            <UserBubble message={question} context={{ later: laterTurns, laterTurns }} />
+                        </MessageActionsContext.Provider>
                     </SheetHost>
                 </ThemeProvider>
             </GaiaClientProvider>

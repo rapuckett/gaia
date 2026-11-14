@@ -7,11 +7,12 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 
 import type { Message } from '@/api/client.types';
 import { GaiaConfigError } from '@/api/errors';
-import { queryKeys, useChatStream, useGaiaClient } from '@/data';
+import { queryKeys, useGaiaClient } from '@/data';
 import { describeError, useT } from '@/i18n/useT';
 import { ActionSheet, Button, Notice, Sheet, Stack, Text, type SheetAction } from '@/ui';
 import { Copy, Pencil, RefreshCw, Trash2 } from '@/ui/icons';
 
+import { useMessageActionsContext } from './MessageActionsContext';
 import { MessageEditor } from './MessageEditor';
 import { formatFullTimestamp } from './time';
 
@@ -52,7 +53,7 @@ export function useMessageActions(message: Message, copyText: string, context: M
     const t = useT();
     const client = useGaiaClient();
     const queryClient = useQueryClient();
-    const stream = useChatStream(message.session_id);
+    const { send, busy } = useMessageActionsContext();
     const [open, setOpen] = useState(startOpen === 'actions');
     const [copied, setCopied] = useState(false);
     const [failure, setFailure] = useState<string | null>(null);
@@ -81,7 +82,6 @@ export function useMessageActions(message: Message, copyText: string, context: M
         );
     }, [copyText, t]);
 
-    const busy = stream.status !== 'idle';
     // A message still showing under a temporary id isn't on the PC yet.
     const saved = message.id > 0;
     const sessionId = message.session_id;
@@ -94,7 +94,7 @@ export function useMessageActions(message: Message, copyText: string, context: M
             await client.deleteMessagesFrom(sessionId, message.id);
             void queryClient.invalidateQueries({ queryKey: queryKeys.sessions });
             await queryClient.invalidateQueries({ queryKey: queryKeys.messages(sessionId) });
-            if (text !== undefined) stream.send(text);
+            if (text !== undefined) send(text);
             return true;
         } catch (error) {
             setFailure(describeError(error, t));
