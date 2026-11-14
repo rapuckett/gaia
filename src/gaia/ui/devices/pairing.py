@@ -40,7 +40,9 @@ T = TypeVar("T")
 
 #: Embedding, override and isolate controls, and the bare marks: each can make
 #: a name read as something else when the PC shows it.
-_BIDI_CONTROLS = frozenset("؜‎‏‪‫‬‭‮⁦⁧⁨⁩")
+_BIDI_CONTROLS = frozenset(
+    "\u061c\u200e\u200f\u202a\u202b\u202c\u202d\u202e\u2066\u2067\u2068\u2069"
+)
 
 
 def sanitize_device_name(raw: str) -> str:

@@ -291,6 +291,7 @@ class _ListenerServer:
                 yield
 
             async def startup(self, sockets=None) -> None:
+                del sockets  # The listener serves its own socket, bound below.
                 # An empty list: the lifespan (off) and the bookkeeping, no bind.
                 await super().startup(sockets=[])
                 config = self.config
@@ -327,7 +328,7 @@ def _bind(host: str, port: int) -> socket.socket:
             # SO_REUSEADDR on Windows would let another program take the port.
             sock.setsockopt(
                 socket.SOL_SOCKET,
-                socket.SO_EXCLUSIVEADDRUSE,  # type: ignore[attr-defined]
+                socket.SO_EXCLUSIVEADDRUSE,  # type: ignore[attr-defined]  # pylint: disable=no-member
                 1,
             )
         else:
@@ -436,10 +437,12 @@ class DeviceListener:
         if self._server is None or self._task is None:
             return
         self._access.requests.end_all()
+        # pylint: disable-next=attribute-defined-outside-init
         self._server.should_exit = True
         try:
             await asyncio.wait_for(self._task, LISTENER_SHUTDOWN_SECONDS * 2)
         except asyncio.TimeoutError:
+            # pylint: disable-next=attribute-defined-outside-init
             self._server.force_exit = True
             logger.warning("The device listener took too long to stop; forced it")
             await self._task
