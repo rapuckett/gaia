@@ -99,15 +99,16 @@ function refreshSession(queryClient: QueryClient, id: string) {
     void queryClient.invalidateQueries({ queryKey: queryKeys.session(id) });
 }
 
-/** `mutate({ id, title })` names the chat for good: GAIA stops retitling it. */
+/** `mutate({ sessionId, title })` renames a chat and pins the title against the auto-retitler (#2165); shown at once, put back on failure. */
 export function useRenameSession() {
     const client = useGaiaClient();
     const queryClient = useQueryClient();
-    return useMutation<Session, Error, { id: string; title: string }, Previous>({
-        mutationFn: ({ id, title }) => requireClient(client).updateSession(id, { title, title_is_custom: true }),
-        onMutate: ({ id, title }) => applyToSession(queryClient, id, { title, title_is_custom: true }),
-        onError: (_error, { id }, previous) => restoreSession(queryClient, id, previous),
-        onSettled: (_data, _error, { id }) => refreshSession(queryClient, id),
+    return useMutation<Session, Error, { sessionId: string; title: string }, Previous>({
+        mutationFn: ({ sessionId, title }) =>
+            requireClient(client).updateSession(sessionId, { title, title_is_custom: true }),
+        onMutate: ({ sessionId, title }) => applyToSession(queryClient, sessionId, { title, title_is_custom: true }),
+        onError: (_error, { sessionId }, previous) => restoreSession(queryClient, sessionId, previous),
+        onSettled: (_data, _error, { sessionId }) => refreshSession(queryClient, sessionId),
     });
 }
 
@@ -148,5 +149,31 @@ export function useMarkRead() {
         mutationFn: (id) => requireClient(client).markSessionRead(id),
         onMutate: (id) => applyToSession(queryClient, id, { unread: false }),
         onSuccess: (_session, id) => refreshSession(queryClient, id),
+    });
+}
+
+/** `mutate(sessionId)` flips the chat's private mode. */
+export function useTogglePrivate() {
+    const client = useGaiaClient();
+    const queryClient = useQueryClient();
+    return useMutation<Session, Error, string>({
+        mutationFn: (sessionId) => requireClient(client).toggleSessionPrivate(sessionId),
+        onSuccess: (session) => {
+            queryClient.setQueryData(queryKeys.session(session.id), session);
+            void queryClient.invalidateQueries({ queryKey: queryKeys.sessions });
+        },
+    });
+}
+
+/** `mutate({ sessionId, docId })` takes a document out of the chat; the library keeps it. */
+export function useDetachDocument() {
+    const client = useGaiaClient();
+    const queryClient = useQueryClient();
+    return useMutation<void, Error, { sessionId: string; docId: string }>({
+        mutationFn: ({ sessionId, docId }) => requireClient(client).detachDocument(sessionId, docId),
+        onSuccess: (_result, { sessionId }) => {
+            void queryClient.invalidateQueries({ queryKey: queryKeys.session(sessionId) });
+            void queryClient.invalidateQueries({ queryKey: queryKeys.sessions });
+        },
     });
 }

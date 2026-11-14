@@ -3,6 +3,8 @@
 
 import { useCallback, useMemo, type ReactNode } from 'react';
 
+import { latencyByMessage } from '@webui/utils/answerStats.core';
+
 import type { Message } from '@/api/client.types';
 import { useMessages } from '@/data';
 import { describeError, useT } from '@/i18n/useT';
@@ -26,6 +28,7 @@ export interface MessageListViewProps {
 export function MessageListView({ messages, loading = false, error, onRetry, live }: MessageListViewProps) {
     const t = useT();
     const { listRef, following, showJump, onScroll, jumpToBottom } = useFollowScroll<Message>();
+    const latency = useMemo(() => latencyByMessage(messages), [messages]);
     const shown = useMemo(() => messages.filter((m) => m.role !== 'system').reverse(), [messages]);
 
     const bringIntoView = useCallback(
@@ -47,7 +50,7 @@ export function MessageListView({ messages, loading = false, error, onRetry, liv
                     item.role === 'user' ? (
                         <UserBubble message={item} onCollapse={() => bringIntoView(index)} />
                     ) : (
-                        <AssistantBubble message={item} />
+                        <AssistantBubble message={item} latencyMs={item.stats?.seconds != null ? item.stats.seconds * 1000 : latency.get(item.id)} />
                     )
                 }
                 ListHeaderComponent={live ? <>{live}</> : undefined}

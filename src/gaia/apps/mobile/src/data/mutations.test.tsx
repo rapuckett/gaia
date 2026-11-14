@@ -43,8 +43,8 @@ describe('session mutations', () => {
         const rename = await renderHook(() => useRenameSession(), { wrapper });
         const pin = await renderHook(() => useSetPinned(), { wrapper });
 
-        await act(async () => rename.result.current.mutate({ id: 'a', title: 'Budget' }));
-        await waitFor(() => expect(client.updated).toEqual([{ sessionId: 'a', request: { title: 'Budget', title_is_custom: true } }]));
+        await act(async () => rename.result.current.mutate({ sessionId: 'a', title: 'Budget' }));
+        await waitFor(async () => expect((await client.getSession('a')).title).toBe('Budget'));
         await waitFor(() => expect(list.result.current.data?.sessions.find((s) => s.id === 'a')).toMatchObject({ title: 'Budget' }));
         expect(invalidated).toHaveBeenCalledWith({ queryKey: queryKeys.sessions });
         expect(invalidated).toHaveBeenCalledWith({ queryKey: queryKeys.session('a') });

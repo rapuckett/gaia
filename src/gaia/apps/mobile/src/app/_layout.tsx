@@ -11,6 +11,7 @@ import { GaiaClientProvider } from '@/data/GaiaClientProvider';
 import { ModelNeededHost } from '@/features/model';
 import { AppDrawer } from '@/features/nav/AppDrawer';
 import { INITIAL_ROUTE, PERMANENT_DRAWER_MIN_WIDTH } from '@/features/nav/navigation';
+import { SetupGate } from '@/features/setup/SetupGate';
 import { useDirection } from '@/i18n/useT';
 import { applyDirection } from '@/platform/direction';
 import { platformFetch } from '@/platform/fetch';
@@ -39,20 +40,22 @@ export default function RootLayout() {
         <QueryClientProvider client={queryClient}>
             <GaiaClientProvider client={client}>
                 <UIProvider>
-                    <Drawer
-                        drawerContent={(props) => <AppDrawer {...props} />}
-                        backBehavior="initialRoute"
-                        screenOptions={{
-                            headerShown: false,
-                            drawerPosition: dir === 'rtl' ? 'right' : 'left',
-                            drawerType: width >= PERMANENT_DRAWER_MIN_WIDTH ? 'permanent' : 'front',
-                        }}
-                    >
-                        {ROUTES.map((name) => (
-                            <Drawer.Screen key={name} name={name} />
-                        ))}
-                    </Drawer>
-                    <ModelNeededHost />
+                    <SetupGate>
+                        <Drawer
+                            drawerContent={(props) => <AppDrawer {...props} />}
+                            backBehavior="initialRoute"
+                            screenOptions={{
+                                headerShown: false,
+                                drawerPosition: dir === 'rtl' ? 'right' : 'left',
+                                drawerType: width >= PERMANENT_DRAWER_MIN_WIDTH ? 'permanent' : 'front',
+                            }}
+                        >
+                            {ROUTES.map((name) => (
+                                <Drawer.Screen key={name} name={name} />
+                            ))}
+                        </Drawer>
+                        <ModelNeededHost />
+                    </SetupGate>
                 </UIProvider>
             </GaiaClientProvider>
         </QueryClientProvider>

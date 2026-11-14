@@ -174,7 +174,7 @@ export function ChatDrawerContent({ activeId, onSelect, onClose, onNewChat, live
             <ChatRowSheets
                 target={target}
                 onTarget={setTarget}
-                onRename={(id, title) => rename.mutate({ id, title }, outcome('rename'))}
+                onRename={(id, title) => rename.mutate({ sessionId: id, title }, outcome('rename'))}
                 onSetPinned={(id, pinned) => setPinned.mutate({ id, pinned }, outcome(pinned ? 'pin' : 'unpin'))}
                 onDelete={(id) => remove.mutate(id, outcome('delete'))}
             />
