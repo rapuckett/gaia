@@ -25,6 +25,17 @@ function message(id: number, role: 'user' | 'assistant', content: string): Messa
     return { id, session_id: CHAT, role, content, created_at: '2026-11-14T00:00:00Z', rag_sources: null };
 }
 
+const SESSION = {
+    id: CHAT,
+    title: 'A chat',
+    created_at: '2026-11-14T00:00:00Z',
+    updated_at: '2026-11-14T00:00:00Z',
+    model: '',
+    system_prompt: null,
+    message_count: 1,
+    document_ids: [],
+};
+
 function gate() {
     let open!: () => void;
     const opened = new Promise<void>((resolve) => (open = resolve));
@@ -57,6 +68,7 @@ describe('ChatScreen', () => {
         const stopped = gate();
         const messages = { [CHAT]: [message(1, 'user', 'Tell a story')] };
         const client = createFakeClient({
+            sessions: [SESSION],
             messages,
             replies: async function* (): AsyncGenerator<StreamEvent> {
                 yield { type: 'chunk', content: 'Once upon' };
@@ -67,7 +79,7 @@ describe('ChatScreen', () => {
         await mount(client);
 
         await sendText('Tell a story');
-        expect(await screen.findByText('Once upon')).toBeTruthy();
+        expect(await screen.findByText(/Once upon/)).toBeTruthy();
 
         await fireEvent.press(screen.getByTestId('composer-stop'));
         expect(client.cancelled).toEqual([CHAT]);
@@ -83,6 +95,7 @@ describe('ChatScreen', () => {
         const messages = { [CHAT]: [message(1, 'user', 'Summarize it')] };
         let attempt = 0;
         const client = createFakeClient({
+            sessions: [SESSION],
             messages,
             replies: async function* (): AsyncGenerator<StreamEvent> {
                 attempt += 1;
