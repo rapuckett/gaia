@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import type {
+    AgentInfo,
     AgentMcpServer,
     ConnectorListEntry,
     CreateSessionRequest,
@@ -39,6 +40,11 @@ export interface FakeClientData {
     /** What attachToRun replays, by chat; a chat not listed has no turn running. */
     running?: Record<string, StreamEvent[]>;
     connectors?: ConnectorListEntry[];
+    agents?: AgentInfo[];
+    /** Grants by connector id, then namespaced agent id. */
+    grants?: Record<string, Record<string, string[]>>;
+    /** Activations by connector id, then namespaced agent id. */
+    activations?: Record<string, Record<string, boolean>>;
     agentMcps?: AgentMcpServer[];
     /** What getFollowUpOutcome answers; a function may throw to script a 409. */
     followUpOutcome?: FollowUpOutcome | (() => FollowUpOutcome);
@@ -85,6 +91,8 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
     const deleted: FakeGaiaClient['deleted'] = [];
     const confirmations: ToolConfirmRequest[] = [];
     const answers: UserInputRequest[] = [];
+    const grants: Record<string, Record<string, string[]>> = structuredClone(data.grants ?? {});
+    const activations: Record<string, Record<string, boolean>> = structuredClone(data.activations ?? {});
     const restarts: FakeGaiaClient['restarts'] = [];
     const downloads: FakeGaiaClient['downloads'] = [];
     const schedules = [...(data.schedules ?? [])];
@@ -223,6 +231,32 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         },
         async listConnectors() {
             return { connectors: [...(data.connectors ?? [])] };
+        },
+        async listAgents() {
+            return { agents: [...(data.agents ?? [])] };
+        },
+        async listConnectorGrants(connectorId) {
+            return { grants: { ...grants[connectorId] } };
+        },
+        async listConnectorActivations(connectorId) {
+            return { activations: { ...activations[connectorId] } };
+        },
+        async grantConnectorAgent(connectorId, agentId, scopes) {
+            grants[connectorId] = { ...grants[connectorId], [agentId]: [...scopes] };
+        },
+        async revokeConnectorAgentGrant(connectorId, agentId) {
+            const { [agentId]: _gone, ...rest } = grants[connectorId] ?? {};
+            grants[connectorId] = rest;
+        },
+        async activateConnectorAgent(connectorId, agentId, scopes) {
+            if (scopes && !grants[connectorId]?.[agentId]) {
+                grants[connectorId] = { ...grants[connectorId], [agentId]: [...scopes] };
+            }
+            activations[connectorId] = { ...activations[connectorId], [agentId]: true };
+        },
+        async deactivateConnectorAgent(connectorId, agentId) {
+            const { [agentId]: _gone, ...rest } = activations[connectorId] ?? {};
+            activations[connectorId] = rest;
         },
         async listAgentMcps() {
             return { agent_mcps: [...(data.agentMcps ?? [])] };
