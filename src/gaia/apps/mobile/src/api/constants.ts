@@ -9,6 +9,7 @@ export const UI_HEADERS = {
 } as const;
 
 export const ENDPOINTS = {
+    agents: '/api/agents',
     health: '/api/health',
     localModelRestart: '/api/providers/local/restart',
     localModelStatus: '/api/providers/local/status',
@@ -36,9 +37,14 @@ export const ENDPOINTS = {
     chatAttach: '/api/chat/attach',
     chatCancel: '/api/chat/cancel',
     chatConfirmTool: '/api/chat/confirm-tool',
+    chatContext: '/api/chat/context/{session_id}',
     chatFollowup: '/api/chat/followup',
     chatFollowupOutcome: '/api/chat/followup/{session_id}',
     chatUserInput: '/api/chat/user-input',
+    connectorActivation: '/api/connectors/{connector_id}/activations/{agent_id:path}',
+    connectorActivations: '/api/connectors/{connector_id}/activations',
+    connectorGrant: '/api/connectors/{connector_id}/grants/{agent_id:path}',
+    connectorGrants: '/api/connectors/{connector_id}/grants',
     connectors: '/api/connectors',
     connectorsAgentMcps: '/api/connectors/agent-mcps',
     systemResources: '/api/system/resources',
@@ -47,6 +53,26 @@ export const ENDPOINTS = {
     documents: '/api/documents',
     onboardingStart: '/api/onboarding/start',
 } as const;
+
+export function connectorActivationPath(connectorId: string, agentId: string): string {
+    return ENDPOINTS.connectorActivation
+        .replace('{connector_id}', encodeURIComponent(connectorId))
+        .replace('{agent_id:path}', encodeURIComponent(agentId));
+}
+
+export function connectorActivationsPath(connectorId: string): string {
+    return ENDPOINTS.connectorActivations.replace('{connector_id}', encodeURIComponent(connectorId));
+}
+
+export function connectorGrantPath(connectorId: string, agentId: string): string {
+    return ENDPOINTS.connectorGrant
+        .replace('{connector_id}', encodeURIComponent(connectorId))
+        .replace('{agent_id:path}', encodeURIComponent(agentId));
+}
+
+export function connectorGrantsPath(connectorId: string): string {
+    return ENDPOINTS.connectorGrants.replace('{connector_id}', encodeURIComponent(connectorId));
+}
 
 export function schedulePath(name: string): string {
     return ENDPOINTS.schedule.replace('{name:path}', encodeURIComponent(name));
@@ -62,6 +88,10 @@ export function setupNeedsPath(job: string): string {
 
 export function sessionPath(sessionId: string): string {
     return ENDPOINTS.session.replace('{session_id}', encodeURIComponent(sessionId));
+}
+
+export function chatContextPath(sessionId: string): string {
+    return ENDPOINTS.chatContext.replace('{session_id}', encodeURIComponent(sessionId));
 }
 
 export function followupOutcomePath(sessionId: string): string {
