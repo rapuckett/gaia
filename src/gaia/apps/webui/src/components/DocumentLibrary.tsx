@@ -14,20 +14,15 @@ import { requestErrorParam } from '../utils/requestErrors';
 import { formatSize, middleTruncate } from '../utils/format';
 import { examplePath } from '../utils/platform';
 import { cleanPastedPath } from '../utils/pastedPath';
-import { countText, formatFullTimestamp, formatTimestamp } from '../utils/documentLibrary.core';
-import { PERMANENT_FAILURE_HINTS, UploadErrorToast, getUnsupportedCategory, isExtensionSupported } from './UnsupportedFeature';
+import { INDEX_POLL_MS, PERMANENT_FAILURE_HINTS, REMOVE_UNDO_MS, countText, elapsed, formatFullTimestamp, formatTimestamp, isIndexing, splitFailureReason } from '../utils/documentLibrary.core';
+
+export { INDEX_POLL_MS, REMOVE_UNDO_MS };
+import { UploadErrorToast, getUnsupportedCategory, isExtensionSupported } from './UnsupportedFeature';
 import type { Document, IndexFolderResponse } from '../types';
 import { useT, type Translate } from '../i18n/useT';
 import { pluralKey } from '../i18n/registry';
 import { IndexingProgress } from './IndexingProgress';
 import './DocumentLibrary.css';
-
-/** Split a stored indexing error into a one-line summary and the rest. */
-function splitFailureReason(lastError: string): { summary: string; more: string } {
-    const text = lastError.replace(/^RAG indexing failed for [^:]+:\s*/, '').trim();
-    const [first, ...rest] = text.split('\n');
-    return { summary: first.trim(), more: rest.join('\n').trim() };
-}
 
 /** One sentence on what folder indexing added, skipped and couldn't read. */
 function describeFolderResult(t: Translate, folderName: string, result: IndexFolderResponse): string {
@@ -55,12 +50,6 @@ function describeFolderResult(t: Translate, folderName: string, result: IndexFol
     });
 }
 
-/** How often an indexing document's status (and progress) is asked for. */
-export const INDEX_POLL_MS = 1000;
-
-/** How long a removed document can be put back before it is deleted. */
-export const REMOVE_UNDO_MS = 6000;
-
 interface PendingRemoval { id: string; name: string }
 
 /** The progress map with `id` set to `progress`, or dropped once there is none. */
@@ -69,15 +58,6 @@ function withProgress(map: Record<string, api.IndexProgress>, id: string, progre
     if (!(id in map)) return map;
     const { [id]: _gone, ...rest } = map;
     return rest;
-}
-
-/** Compute elapsed time as human-readable string. */
-function elapsed(startMs: number): string {
-    const sec = Math.floor((Date.now() - startMs) / 1000);
-    if (sec < 60) return `${sec}s`;
-    const min = Math.floor(sec / 60);
-    const rem = sec % 60;
-    return `${min}m ${rem}s`;
 }
 
 export function DocumentLibrary() {
@@ -145,7 +125,7 @@ export function DocumentLibrary() {
 
     // Poll for indexing status on documents that are still 'indexing'
     const hasIndexingDocs = documents.some(
-        (d) => d.indexing_status === 'indexing' || d.indexing_status === 'pending'
+        (d) => isIndexing(d.indexing_status)
     );
 
     useEffect(() => {
@@ -172,7 +152,7 @@ export function DocumentLibrary() {
                 // Read fresh state inside callback to avoid stale closure
                 const freshDocs = useChatStore.getState().documents;
                 const indexingDocs = freshDocs.filter(
-                    (d) => d.indexing_status === 'indexing' || d.indexing_status === 'pending'
+                    (d) => isIndexing(d.indexing_status)
                 );
 
                 for (const doc of indexingDocs) {
@@ -202,7 +182,7 @@ export function DocumentLibrary() {
     useEffect(() => {
         const activeIds = new Set(
             documents
-                .filter((d) => d.indexing_status === 'indexing' || d.indexing_status === 'pending')
+                .filter((d) => isIndexing(d.indexing_status))
                 .map((d) => d.id)
         );
         for (const id of indexingStartTimes.current.keys()) {
