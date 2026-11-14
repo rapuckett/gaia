@@ -119,7 +119,7 @@ describe('ChatScreen', () => {
         expect(client.deleted).toEqual([{ sessionId: CHAT, messageId: 1 }]);
     });
 
-    it('shows the model-server-down notice, with the PC-only line, under a failed reply', async () => {
+    it('shows the model-server-down notice under a failed reply', async () => {
         const client = createFakeClient({
             sessions: [SESSION],
             messages: { [CHAT]: [message(1, 'user', 'Hi')] },
@@ -130,8 +130,7 @@ describe('ChatScreen', () => {
         await mount(client);
 
         await sendText('Hi');
-        expect(await screen.findByTestId('model-server-down')).toBeTruthy();
-        expect(screen.getByText(t('mobileApp.pcOnly.modelServer'))).toBeTruthy();
+        expect(await screen.findByTestId('server-down-notice')).toBeTruthy();
     });
 
     it('Stop returns the queued messages to the box and sends none of them', async () => {

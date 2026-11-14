@@ -9,6 +9,7 @@ import { isErrorContent, isModelFailure } from '@webui/utils/messageErrors.core'
 
 import type { Message } from '@/api/client.types';
 import { useSession } from '@/data';
+import { ModelServerDownNotice } from '@/features/model/ModelServerDownNotice';
 import { describeError, useT } from '@/i18n/useT';
 import { Button, Icon, Notice, Row, Stack, Text } from '@/ui';
 import { Info } from '@/ui/icons';
@@ -59,17 +60,6 @@ export function SavedReplyErrors({ message }: { message: Message }) {
         <Stack gap="sm">
             {isError ? <ErrorBanner /> : null}
             <PcOnlyFailureLines showLog={showLog} showReport={showReport} />
-        </Stack>
-    );
-}
-
-/** The local model server is down. Starting it is PC-only, so the phone says where. */
-function ModelServerDownNotice() {
-    const t = useT();
-    return (
-        <Stack gap="sm" testID="model-server-down">
-            <Notice tone="warning" title={t('serverDown.title')} message={t('serverDown.body')} />
-            <PcOnlyLine text={t('mobileApp.pcOnly.modelServer')} testID="pc-only-model-server" />
         </Stack>
     );
 }

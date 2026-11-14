@@ -3,8 +3,10 @@
 
 import type { FollowUpOutcome } from '@webui/utils/messageQueue';
 import type {
+    AgentInfo,
     AgentMcpServer,
     ConnectorListEntry,
+    ContextUsageResult,
     LocalModelStatus,
     Message,
     ModelNeed,
@@ -13,7 +15,10 @@ import type {
     ResourceUsage,
     Schedule,
     Session,
+    SetupCheck,
+    SetupPlan,
     SetupRunStatus,
+    SkillInfo,
     StartScreen,
     StreamEvent,
     SystemStatus,
@@ -21,9 +26,12 @@ import type {
 import type { CreateSessionRequest, DocumentListResponse, SessionSearchResponse, ToolConfirmRequest, UserInputRequest as ApiUserInputRequest } from '@webui/types/api.gen';
 
 export type {
+    AgentInfo,
     AgentMcpServer,
     ConnectorListEntry,
     ConnectorRow,
+    ContextUsage,
+    ContextUsageResult,
     LocalModelStatus,
     Message,
     ModelNeed,
@@ -32,7 +40,11 @@ export type {
     ResourceUsage,
     Schedule,
     Session,
+    SetupCheck,
+    SetupPlan,
     SetupRunStatus,
+    SkillInfo,
+    SkillSource,
     StartScreen,
     StreamEvent,
     SystemStatus,
@@ -55,6 +67,26 @@ export interface MessageList {
 
 export interface ConnectorList {
     connectors: ConnectorListEntry[];
+}
+
+export interface AgentList {
+    agents: AgentInfo[];
+}
+
+/** Namespaced agent ids to the scopes granted to them. */
+export interface ConnectorGrants {
+    grants: Record<string, string[]>;
+}
+
+/** Namespaced agent ids to whether the agent may use the connector's tools. */
+export interface ConnectorActivations {
+    activations: Record<string, boolean>;
+}
+
+/** `invalid` maps each unreadable skill's path to why GAIA skipped it. */
+export interface SkillList {
+    skills: SkillInfo[];
+    invalid: Record<string, string>;
 }
 
 export interface AgentMcpList {
@@ -100,6 +132,16 @@ export interface UserInputResult {
     request_id: string;
 }
 
+/** What `POST /api/setup/run` takes; the web UI's `SetupRunOptions` (services/setupApi.ts). */
+export interface SetupRunOptions {
+    acknowledgeLowDisk?: boolean;
+    keepTrying?: boolean;
+    extraModels?: string[];
+    serverOnly?: boolean;
+    /** Replace GAIA's older embedded Lemonade without downloading models again. */
+    upgradeEmbedded?: boolean;
+}
+
 export interface CreateScheduleRequest {
     name: string;
     interval: string;
@@ -133,11 +175,15 @@ export interface GaiaClient {
     listSessions(options?: RequestOptions): Promise<SessionList>;
     getSession(sessionId: string, options?: RequestOptions): Promise<Session>;
     createSession(request?: CreateSessionRequest, options?: RequestOptions): Promise<Session>;
+    /** How full the model's context window is for the chat's next message, or why there is no reading yet. */
+    getContextUsage(sessionId: string, options?: RequestOptions): Promise<ContextUsageResult>;
     /** What the chat's last finished turn did with the messages added to it; rejects with 409 while a turn still runs. */
     getFollowUpOutcome(sessionId: string, options?: RequestOptions): Promise<FollowUpOutcome>;
     /** Chats whose title or messages match `query`, newest first; `truncated` says the backend capped the list. */
     searchSessions(query: string, includeAutomated: boolean, options?: RequestOptions): Promise<SessionSearchResponse>;
     getMessages(sessionId: string, options?: RequestOptions): Promise<MessageList>;
+    /** Removes only this message. */
+    deleteMessage(sessionId: string, messageId: number, options?: RequestOptions): Promise<{ deleted: boolean }>;
     /** Renames a chat; the title is pinned against the auto-retitler. */
     updateSession(sessionId: string, update: SessionUpdate, options?: RequestOptions): Promise<Session>;
     /** Flips the chat's private mode (not saved to memory) and returns the chat. */
@@ -164,10 +210,23 @@ export interface GaiaClient {
     confirmTool(request: ToolConfirmRequest, options?: RequestOptions): Promise<ConfirmToolResult>;
     /** Answers a `needs_input` question; the turn continues once GAIA has it. */
     sendUserInput(request: UserInputRequest, options?: RequestOptions): Promise<UserInputResult>;
+    listAgents(options?: RequestOptions): Promise<AgentList>;
     listConnectors(options?: RequestOptions): Promise<ConnectorList>;
+    listConnectorGrants(connectorId: string, options?: RequestOptions): Promise<ConnectorGrants>;
+    listConnectorActivations(connectorId: string, options?: RequestOptions): Promise<ConnectorActivations>;
+    /** Sets the scopes an agent holds on a connector; the PC answers 400 for a scope past what the connector allows. */
+    grantConnectorAgent(connectorId: string, agentId: string, scopes: string[], options?: RequestOptions): Promise<void>;
+    /** Removes an agent's grant on a connector. */
+    revokeConnectorAgentGrant(connectorId: string, agentId: string, options?: RequestOptions): Promise<void>;
+    /** Lets an agent use an MCP server's tools; `scopes` creates the grant when the agent has none. */
+    activateConnectorAgent(connectorId: string, agentId: string, scopes?: string[], options?: RequestOptions): Promise<void>;
+    /** Hides an MCP server's tools from an agent; its grant stays. */
+    deactivateConnectorAgent(connectorId: string, agentId: string, options?: RequestOptions): Promise<void>;
     /** Servers that custom agents declare in their own mcp_servers.json; read-only. */
     listAgentMcps(options?: RequestOptions): Promise<AgentMcpList>;
     listSchedules(options?: RequestOptions): Promise<ScheduleList>;
+    /** Every skill GAIA can load, plus the folders it skipped. */
+    listSkills(options?: RequestOptions): Promise<SkillList>;
     /** Creates a schedule; `interval` is the plain-words "when to run", parsed by the PC. 409 when the name is taken. */
     createSchedule(request: CreateScheduleRequest, options?: RequestOptions): Promise<Schedule>;
     /** Reads a plain-words "when to run" without saving it, for the form's live preview. */
@@ -193,4 +252,13 @@ export interface GaiaClient {
     cancelSetup(modelId: string, options?: RequestOptions): Promise<{ cancelled: boolean }>;
     /** The new-chat screen's cards and working folder; `skills_error` says why the assistant can't list its skills. */
     getStartScreen(options?: RequestOptions): Promise<StartScreen>;
+    /** Is GAIA set up on this PC: ready, or the stage and reasons it is not. */
+    checkSetup(skipChatModel: boolean, options?: RequestOptions): Promise<SetupCheck>;
+    /** What setup will use and download, before it starts; `catalog` marks partial downloads. */
+    getSetupPlan(options?: RequestOptions): Promise<SetupPlan>;
+    startSetup(
+        skipChatModel: boolean,
+        gaiaLemonade?: boolean,
+        options?: SetupRunOptions & RequestOptions,
+    ): Promise<SetupRunStatus>;
 }
