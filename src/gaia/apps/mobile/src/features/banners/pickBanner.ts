@@ -13,6 +13,8 @@ export interface Banner {
     tone: NoticeTone;
     title: string;
     message?: string;
+    /** The web lets these go: a failed download, a stopped or hung model server, a too-small context window. */
+    dismissible?: boolean;
     /** Re-asks GAIA; shown as the "Check again" action. */
     retry?: boolean;
     /** 0 to 1 for a determinate line; undefined for an indeterminate one. */
@@ -31,7 +33,7 @@ export function pickBanner(status: SystemStatus | undefined, fetchError: unknown
     if (progress?.state === 'downloading' || progress?.state === 'starting' || progress?.state === 'error') {
         const name = progress.model_name || status?.default_model_name || '';
         if (progress.state === 'error') {
-            return { id: 'download', tone: 'danger', title: t('banner.download.failed', { name }), message: progress.message ?? undefined };
+            return { id: 'download', tone: 'danger', title: t('banner.download.failed', { name }), message: progress.message ?? undefined, dismissible: true };
         }
         const size = progress.total_bytes ? `${gb(progress.total_bytes, 1)} ${GB_UNIT}` : t('banner.download.sizeUnknown');
         const file = progress.file ? `${t('banner.download.file', { index: progress.file_index, total: progress.total_files })} ${progress.file}` : undefined;
@@ -74,6 +76,7 @@ export function pickBanner(status: SystemStatus | undefined, fetchError: unknown
             title: t(hung ? 'banner.serverHung' : 'banner.serverStopped'),
             message: t('mobileApp.banner.openOnPc'),
             retry: true,
+            dismissible: true,
         };
     }
 
@@ -85,6 +88,7 @@ export function pickBanner(status: SystemStatus | undefined, fetchError: unknown
             title: t('banner.contextTooSmall', { current: size.toLocaleString(), required: MIN_CONTEXT_SIZE.toLocaleString() }),
             message: t('banner.contextTooSmallHint'),
             retry: true,
+            dismissible: true,
         };
     }
     return null;

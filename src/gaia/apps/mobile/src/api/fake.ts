@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import type {
+    AgentInfo,
     AgentMcpServer,
     ConnectorListEntry,
     ContextUsageResult,
@@ -35,6 +36,10 @@ import { foldText, splitMatch } from '@webui/utils/chatSearch';
 
 import { GaiaApiError } from './errors';
 
+function cloneNested<T>(source: Record<string, Record<string, T>> | undefined): Record<string, Record<string, T>> {
+    return Object.fromEntries(Object.entries(source ?? {}).map(([key, inner]) => [key, { ...inner }]));
+}
+
 export interface FakeClientData {
     sessions?: Session[];
     schedules?: Schedule[];
@@ -44,6 +49,11 @@ export interface FakeClientData {
     /** What attachToRun replays, by chat; a chat not listed has no turn running. */
     running?: Record<string, StreamEvent[]>;
     connectors?: ConnectorListEntry[];
+    agents?: AgentInfo[];
+    /** Grants by connector id, then namespaced agent id. */
+    grants?: Record<string, Record<string, string[]>>;
+    /** Activations by connector id, then namespaced agent id. */
+    activations?: Record<string, Record<string, boolean>>;
     agentMcps?: AgentMcpServer[];
     /** What getContextUsage answers. */
     contextUsage?: ContextUsageResult;
@@ -101,6 +111,8 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
     const deletedOne: FakeGaiaClient['deletedOne'] = [];
     const confirmations: ToolConfirmRequest[] = [];
     const answers: UserInputRequest[] = [];
+    const grants: Record<string, Record<string, string[]>> = cloneNested(data.grants);
+    const activations: Record<string, Record<string, boolean>> = cloneNested(data.activations);
     const restarts: FakeGaiaClient['restarts'] = [];
     const downloads: FakeGaiaClient['downloads'] = [];
     const schedules = [...(data.schedules ?? [])];
@@ -259,6 +271,32 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         },
         async listConnectors() {
             return { connectors: [...(data.connectors ?? [])] };
+        },
+        async listAgents() {
+            return { agents: [...(data.agents ?? [])] };
+        },
+        async listConnectorGrants(connectorId) {
+            return { grants: { ...grants[connectorId] } };
+        },
+        async listConnectorActivations(connectorId) {
+            return { activations: { ...activations[connectorId] } };
+        },
+        async grantConnectorAgent(connectorId, agentId, scopes) {
+            grants[connectorId] = { ...grants[connectorId], [agentId]: [...scopes] };
+        },
+        async revokeConnectorAgentGrant(connectorId, agentId) {
+            const { [agentId]: _gone, ...rest } = grants[connectorId] ?? {};
+            grants[connectorId] = rest;
+        },
+        async activateConnectorAgent(connectorId, agentId, scopes) {
+            if (scopes && !grants[connectorId]?.[agentId]) {
+                grants[connectorId] = { ...grants[connectorId], [agentId]: [...scopes] };
+            }
+            activations[connectorId] = { ...activations[connectorId], [agentId]: true };
+        },
+        async deactivateConnectorAgent(connectorId, agentId) {
+            const { [agentId]: _gone, ...rest } = activations[connectorId] ?? {};
+            activations[connectorId] = rest;
         },
         async listAgentMcps() {
             return { agent_mcps: [...(data.agentMcps ?? [])] };
