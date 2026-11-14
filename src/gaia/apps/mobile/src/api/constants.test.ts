@@ -12,6 +12,7 @@ import {
     MESSAGE_PAGE_SIZE,
     QUEUED_IDLE_MS,
     RESOLVES_PROMPTS,
+    SEARCH_DEBOUNCE_MS,
     SEND_HEADER_TIMEOUT_MS,
     SESSION_PAGE_SIZE,
     STATUS_POLL_MS,
@@ -42,7 +43,7 @@ function webuiSource(file: string): string {
 
 // `export const NAME = 10 * 60_000;` -> 600000; anything but a product of literals fails the test.
 function tsNumber(file: string, name: string): number {
-    const match = new RegExp(`export const ${name} = ([^;]+);`).exec(webuiSource(file));
+    const match = new RegExp(`(?:export )?const ${name} = ([^;]+);`).exec(webuiSource(file));
     if (!match) throw new Error(`${name} not found in webui ${file}; update api/constants.test.ts`);
     return match[1]!.split('*').reduce((product, factor) => product * Number(factor.trim().replace(/_/g, '')), 1);
 }
@@ -91,6 +92,7 @@ describe('endpoints', () => {
         session: ['GET'],
         sessionMessages: ['GET'],
         sessionMessagesAndBelow: ['DELETE'],
+        sessionSearch: ['GET'],
         chatSend: ['POST'],
         chatAttach: ['GET'],
         chatCancel: ['POST'],
@@ -129,6 +131,7 @@ describe("webui's stream rules", () => {
         ['services/api.ts', 'QUEUED_IDLE_MS', QUEUED_IDLE_MS],
         ['services/api.ts', 'SEND_HEADER_TIMEOUT_MS', SEND_HEADER_TIMEOUT_MS],
         ['services/api.ts', 'ATTACH_HEADER_TIMEOUT_MS', ATTACH_HEADER_TIMEOUT_MS],
+        ['components/Sidebar.tsx', 'SEARCH_DEBOUNCE_MS', SEARCH_DEBOUNCE_MS],
         ['services/statusPoll.ts', 'STATUS_POLL_MS', STATUS_POLL_MS],
         ['components/ScheduleManager.tsx', 'CONFIRM_DELETE_MS', CONFIRM_DELETE_MS],
     ])('%s %s', (file, name, ours) => {

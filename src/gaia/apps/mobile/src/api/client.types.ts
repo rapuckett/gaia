@@ -3,10 +3,10 @@
 
 import type { FollowUpOutcome } from '@webui/utils/messageQueue';
 import type { Message, Schedule, Session, StartScreen, StreamEvent, SystemStatus } from '@webui/types';
-import type { CreateSessionRequest, ToolConfirmRequest, UserInputRequest as ApiUserInputRequest } from '@webui/types/api.gen';
+import type { CreateSessionRequest, SessionSearchResponse, ToolConfirmRequest, UserInputRequest as ApiUserInputRequest } from '@webui/types/api.gen';
 
 export type { Message, Schedule, Session, StartScreen, StreamEvent, SystemStatus } from '@webui/types';
-export type { CreateSessionRequest, ToolConfirmRequest } from '@webui/types/api.gen';
+export type { CreateSessionRequest, SessionSearchResponse, SessionSearchResult, ToolConfirmRequest } from '@webui/types/api.gen';
 
 /** `display` is what the phone shows as the answer; it is never sent to GAIA. */
 export type UserInputRequest = ApiUserInputRequest & { display?: string };
@@ -76,6 +76,8 @@ export interface GaiaClient {
     createSession(request?: CreateSessionRequest, options?: RequestOptions): Promise<Session>;
     /** What the chat's last finished turn did with the messages added to it; rejects with 409 while a turn still runs. */
     getFollowUpOutcome(sessionId: string, options?: RequestOptions): Promise<FollowUpOutcome>;
+    /** Chats whose title or messages match `query`, newest first; `truncated` says the backend capped the list. */
+    searchSessions(query: string, includeAutomated: boolean, options?: RequestOptions): Promise<SessionSearchResponse>;
     getMessages(sessionId: string, options?: RequestOptions): Promise<MessageList>;
     /** Deletes the message and everything after it, so the exchange can be asked again. */
     deleteMessagesFrom(sessionId: string, messageId: number, options?: RequestOptions): Promise<DeleteMessagesResult>;
