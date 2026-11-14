@@ -8,12 +8,12 @@ import { needsOutcome, nextToSend } from '@webui/utils/messageQueue';
 import { useAnswerQuestion, useChatStream, useMessages, useSession } from '@/data';
 import { Composer, useComposerQueue, useFollowUpEvents } from '@/features/composer';
 import { QueuedMessages } from '@/features/composer/QueuedMessages';
-import { ScreenHeader } from '@/features/nav/ScreenHeader';
 import { describeError, useT } from '@/i18n/useT';
 import { isQuestionGone, questionCardData, resolveTypedAnswer } from '@/features/questions/questionLogic';
 import { ErrorState, Notice, Screen, Stack } from '@/ui';
 
 import { ChatPrompts } from './ChatPrompts';
+import { ChatHeader } from './header';
 import { PermissionPrompt } from './permission/PermissionPrompt';
 import { usePermissionPrompt } from './permission/usePermissionPrompt';
 import { liveStatusLine } from './liveStatus';
@@ -108,7 +108,7 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
     return (
         <Screen
             keyboard="avoid"
-            header={<ScreenHeader title={session.data?.title} />}
+            header={<ChatHeader sessionId={sessionId} />}
             footer={
                 <>
                     {actionError ? (
@@ -147,11 +147,12 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
                                 <TurnTail
                                     tail={tail}
                                     line={line}
+                                    awaitingUser={!!stream.pendingPermission || !!stream.pendingQuestion}
                                     onTryAgain={() => tryAgain(tail.replyId)}
                                     onContinue={continueReply}
                                 />
                             ) : null}
-                            <ChatPrompts sessionId={sessionId} question={stream.pendingQuestion} />
+                            <ChatPrompts sessionId={sessionId} question={stream.pendingQuestion} confirmation={stream.pendingConfirmation} />
                         </>
                     }
                 />

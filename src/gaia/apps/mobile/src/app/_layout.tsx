@@ -12,6 +12,7 @@ import { ConnectionBanner } from '@/features/banners/ConnectionBanner';
 import { ModelNeededHost } from '@/features/model';
 import { AppDrawer } from '@/features/nav/AppDrawer';
 import { INITIAL_ROUTE, PERMANENT_DRAWER_MIN_WIDTH } from '@/features/nav/navigation';
+import { SetupGate } from '@/features/setup/SetupGate';
 import { useDirection } from '@/i18n/useT';
 import { applyDirection } from '@/platform/direction';
 import { platformFetch } from '@/platform/fetch';
@@ -22,7 +23,7 @@ import { ScreenBannerProvider, UIProvider } from '@/ui';
 export const unstable_settings = { anchor: INITIAL_ROUTE };
 
 // Expo Router renders only the screens a layout declares.
-const ROUTES = [INITIAL_ROUTE, 'new', 'schedules', 'chat/[id]', 'dev/ui', 'dev/ui-lists', 'dev/composer', 'dev/markdown', 'dev/permission'];
+const ROUTES = [INITIAL_ROUTE, 'new', 'connectors', 'schedules', 'chat/[id]', 'dev/ui', 'dev/ui-lists', 'dev/composer', 'dev/forms', 'dev/markdown', 'dev/permission'];
 
 export default function RootLayout() {
     const [queryClient] = useState(() => new QueryClient());
@@ -41,21 +42,23 @@ export default function RootLayout() {
             <GaiaClientProvider client={client}>
                 <UIProvider>
                     <ScreenBannerProvider banner={<ConnectionBanner />}>
-                        <Drawer
-                            drawerContent={(props) => <AppDrawer {...props} />}
-                            backBehavior="initialRoute"
-                            screenOptions={{
-                                headerShown: false,
-                                drawerPosition: dir === 'rtl' ? 'right' : 'left',
-                                drawerType: width >= PERMANENT_DRAWER_MIN_WIDTH ? 'permanent' : 'front',
-                            }}
-                        >
-                            {ROUTES.map((name) => (
-                                <Drawer.Screen key={name} name={name} />
-                            ))}
-                        </Drawer>
+                        <SetupGate>
+                            <Drawer
+                                drawerContent={(props) => <AppDrawer {...props} />}
+                                backBehavior="initialRoute"
+                                screenOptions={{
+                                    headerShown: false,
+                                    drawerPosition: dir === 'rtl' ? 'right' : 'left',
+                                    drawerType: width >= PERMANENT_DRAWER_MIN_WIDTH ? 'permanent' : 'front',
+                                }}
+                            >
+                                {ROUTES.map((name) => (
+                                    <Drawer.Screen key={name} name={name} />
+                                ))}
+                            </Drawer>
+                            <ModelNeededHost />
+                        </SetupGate>
                     </ScreenBannerProvider>
-                    <ModelNeededHost />
                 </UIProvider>
             </GaiaClientProvider>
         </QueryClientProvider>

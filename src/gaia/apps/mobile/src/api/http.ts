@@ -1,7 +1,8 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import type { Message, Session, StartScreen, StreamEvent, SystemStatus } from '@webui/types';
+import type { Message, ResourceUsage, Session, StartScreen, StreamEvent, SystemStatus } from '@webui/types';
+import { fromApiMessages } from '@webui/utils/chatStream';
 
 import type { FetchLike, FetchRequestInit, FetchResponseLike } from '@/platform/fetch.types';
 
@@ -17,10 +18,13 @@ import {
     type StreamEndpoint,
 } from './errors';
 import type {
+    AgentMcpList,
     CancelChatResult,
     ConfirmToolResult,
+    ConnectorList,
     DeleteMessagesResult,
     DeleteScheduleResult,
+    DocumentListResponse,
     FollowUpOutcome,
     FollowUpResult,
     GaiaClient,
@@ -30,10 +34,13 @@ import type {
     ModelNeed,
     RestartModelResult,
     RequestOptions,
+    ParsedSchedule,
     Schedule,
     ScheduleList,
     SessionList,
     SessionSearchResponse,
+    SetupCheck,
+    SetupPlan,
     SetupRunStatus,
     UserInputResult,
 } from './client.types';
@@ -47,9 +54,11 @@ import {
     scheduleRunPath,
     SEND_HEADER_TIMEOUT_MS,
     SESSION_PAGE_SIZE,
+    sessionDocumentPath,
     sessionMessagesAndBelowPath,
     sessionMessagesPath,
     sessionPath,
+    sessionPrivatePath,
     setupNeedsPath,
     STREAM_IDLE_MS,
     UI_HEADERS,
@@ -162,6 +171,10 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
         return readJson<T>(await request('POST', path, body, signal), path);
     }
 
+    async function patchJson<T>(path: string, signal?: AbortSignal): Promise<T> {
+        return readJson<T>(await request('PATCH', path, undefined, signal), path);
+    }
+
     async function deleteJson<T>(path: string, signal?: AbortSignal): Promise<T> {
         return readJson<T>(await request('DELETE', path, undefined, signal), path);
     }
@@ -269,11 +282,27 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
                 }
                 messages.push(...page.messages);
             }
-            return { messages, total: first.total };
+            return { messages: fromApiMessages(messages), total: first.total };
         },
 
         sendFollowUp(sessionId, text, options) {
             return postJson<FollowUpResult>(ENDPOINTS.chatFollowup, { session_id: sessionId, text }, options?.signal);
+        },
+
+        updateSession(sessionId, update, options) {
+            return putJson<Session>(sessionPath(sessionId), update, options?.signal);
+        },
+
+        toggleSessionPrivate(sessionId, options) {
+            return patchJson<Session>(sessionPrivatePath(sessionId), options?.signal);
+        },
+
+        async detachDocument(sessionId, docId, options) {
+            await request('DELETE', sessionDocumentPath(sessionId, docId), undefined, options?.signal);
+        },
+
+        getResourceUsage(options) {
+            return getJson<ResourceUsage>(ENDPOINTS.systemResources, options?.signal);
         },
 
         sendMessage(sessionId, message, options) {
@@ -309,8 +338,24 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             return postJson<UserInputResult>(ENDPOINTS.chatUserInput, body, options?.signal);
         },
 
+        listConnectors(options) {
+            return getJson<ConnectorList>(ENDPOINTS.connectors, options?.signal);
+        },
+
+        listAgentMcps(options) {
+            return getJson<AgentMcpList>(ENDPOINTS.connectorsAgentMcps, options?.signal);
+        },
+
         listSchedules(options) {
             return getJson<ScheduleList>(ENDPOINTS.schedules, options?.signal);
+        },
+
+        createSchedule(request, options) {
+            return postJson<Schedule>(ENDPOINTS.schedules, request, options?.signal);
+        },
+
+        parseSchedule(input, timezone, options) {
+            return postJson<ParsedSchedule>(ENDPOINTS.scheduleParse, { input, timezone }, options?.signal);
         },
 
         updateScheduleStatus(name, status, options) {
@@ -323,6 +368,10 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         deleteSchedule(name, options) {
             return deleteJson<DeleteScheduleResult>(schedulePath(name), options?.signal);
+        },
+
+        listDocuments(options) {
+            return getJson<DocumentListResponse>(ENDPOINTS.documents, options?.signal);
         },
 
         getSystemStatus(options) {
@@ -359,6 +408,30 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         getStartScreen(options) {
             return getJson<StartScreen>(ENDPOINTS.onboardingStart, options?.signal);
+        },
+
+        checkSetup(skipChatModel, options) {
+            return getJson<SetupCheck>(`${ENDPOINTS.setupCheck}?skip_chat_model=${skipChatModel}`, options?.signal);
+        },
+
+        getSetupPlan(options) {
+            return getJson<SetupPlan>(ENDPOINTS.setupPlan, options?.signal);
+        },
+
+        startSetup(skipChatModel, gaiaLemonade = false, options = {}) {
+            return postJson<SetupRunStatus>(
+                ENDPOINTS.setupRun,
+                {
+                    skip_chat_model: skipChatModel,
+                    gaia_lemonade: gaiaLemonade,
+                    acknowledge_low_disk: !!options.acknowledgeLowDisk,
+                    keep_trying: !!options.keepTrying,
+                    extra_models: options.extraModels ?? [],
+                    server_only: !!options.serverOnly,
+                    upgrade_embedded: !!options.upgradeEmbedded,
+                },
+                options.signal,
+            );
         },
     };
 }
