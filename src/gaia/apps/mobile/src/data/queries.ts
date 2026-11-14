@@ -66,6 +66,13 @@ export function isWarmingUp(status: SystemStatus | null | undefined): boolean {
     return status?.warm_up?.state === 'warming';
 }
 
+/** Anything the connection banner reports as in progress or recoverable, so it clears by itself. */
+function needsWatching(status: SystemStatus | undefined, failed: boolean): boolean {
+    if (failed || isStarting(status) || isWarmingUp(status)) return true;
+    const download = status?.download_progress?.state;
+    return download === 'downloading' || download === 'starting' || status?.lemonade_running === false;
+}
+
 /**
  * What the PC runs and whether it's ready: `default_model_name` is this PC's
  * model, `model_loaded` the one in memory. Re-read while it is starting or
@@ -77,8 +84,7 @@ export function useSystemStatus() {
         queryKey: queryKeys.systemStatus,
         enabled: client !== null,
         queryFn: ({ signal }) => requireClient(client).getSystemStatus({ signal }),
-        refetchInterval: (query) =>
-            isStarting(query.state.data) || isWarmingUp(query.state.data) ? STATUS_POLL_MS : false,
+        refetchInterval: (query) => (needsWatching(query.state.data, query.state.status === 'error') ? STATUS_POLL_MS : false),
     });
 }
 
