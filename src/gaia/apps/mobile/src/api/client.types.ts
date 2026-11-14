@@ -60,6 +60,8 @@ export interface GaiaClient {
     createSession(request?: CreateSessionRequest, options?: RequestOptions): Promise<Session>;
     getMessages(sessionId: string, options?: RequestOptions): Promise<MessageList>;
     /** Deletes the message and everything after it, so the exchange can be asked again. */
+    /** Removes only this message. */
+    deleteMessage(sessionId: string, messageId: number, options?: RequestOptions): Promise<{ deleted: boolean }>;
     deleteMessagesFrom(sessionId: string, messageId: number, options?: RequestOptions): Promise<DeleteMessagesResult>;
     /** Starts a turn and streams it to its `done` or `error` event. */
     sendMessage(sessionId: string, message: string, options?: RequestOptions): AsyncIterable<StreamEvent>;

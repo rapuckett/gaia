@@ -16,7 +16,7 @@ export function MessagesGallery({ state }: { state: MessagesGalleryState }) {
         const [question] = FIXTURES.short.messages;
         return (
             <Screen>
-                <UserBubble message={question} context={{ later: 3, laterTurns: 2 }} startOpen={state} />
+                <UserBubble message={question} context={{ laterTurns: 2 }} startOpen={state} />
             </Screen>
         );
     }

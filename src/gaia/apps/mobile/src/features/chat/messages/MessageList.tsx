@@ -28,9 +28,9 @@ export interface MessageListViewProps {
 /** `shown` is newest first, so the messages after `index` are the ones before it. */
 function contextOf(shown: readonly Message[], index: number): MessageContext {
     for (let i = index - 1; i >= 0; i--) {
-        if (shown[i].role === 'user') return { later: index, laterTurns: i + 1 };
+        if (shown[i].role === 'user') return { laterTurns: i + 1 };
     }
-    return { later: index, laterTurns: 0 };
+    return { laterTurns: 0 };
 }
 
 export function MessageListView({ messages, loading = false, error, onRetry, live }: MessageListViewProps) {

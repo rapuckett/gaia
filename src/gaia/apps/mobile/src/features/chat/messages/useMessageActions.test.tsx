@@ -39,7 +39,7 @@ async function setup(laterTurns: number) {
                 <ThemeProvider>
                     <SheetHost>
                         <MessageActionsContext.Provider value={{ send, busy: false }}>
-                            <UserBubble message={question} context={{ later: laterTurns, laterTurns }} />
+                            <UserBubble message={question} context={{ laterTurns }} />
                         </MessageActionsContext.Provider>
                     </SheetHost>
                 </ThemeProvider>
@@ -50,14 +50,15 @@ async function setup(laterTurns: number) {
 }
 
 describe('message actions', () => {
-    it('Delete asks first, then deletes from that message down', async () => {
-        const client = await setup(2);
+    it('Delete asks first, then deletes only that message', async () => {
+        const client = await setup(0);
         await fireEvent(screen.getByText(question.content), 'longPress');
         await fireEvent.press(screen.getByLabelText(t('msg.delete')));
-        expect(await screen.findByText(t.plural('msg.dropLater', 2))).toBeTruthy();
-        expect(client.deleted).toEqual([]);
+        expect(await screen.findByText(t('msg.confirmDeleteAria'))).toBeTruthy();
+        expect(client.deletedOne).toEqual([]);
         await fireEvent.press(screen.getByLabelText(t('msg.delete')));
-        await waitFor(() => expect(client.deleted).toEqual([{ sessionId: 's', messageId: 7 }]));
+        await waitFor(() => expect(client.deletedOne).toEqual([{ sessionId: 's', messageId: 7 }]));
+        expect(client.deleted).toEqual([]);
     });
 
     it("Edit's Send deletes from the message down, then sends the edited text", async () => {

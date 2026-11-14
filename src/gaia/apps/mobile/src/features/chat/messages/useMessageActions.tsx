@@ -18,10 +18,8 @@ import { formatFullTimestamp } from './time';
 
 const COPIED_MS = 2000;
 
-/** Where a message sits in its chat, so Delete and Resend can say what else goes. */
+/** Where a message sits in its chat, so Resend and Edit can say what else goes. */
 export interface MessageContext {
-    /** Messages after this one; Delete removes them all. */
-    later: number;
     /** Messages from the next question on; Resend and Edit remove them. */
     laterTurns: number;
 }
@@ -29,7 +27,7 @@ export interface MessageContext {
 /** What a bubble starts with open; for the dev gallery. */
 export type StartOpen = 'actions' | 'delete' | 'edit';
 
-const ALONE: MessageContext = { later: 0, laterTurns: 0 };
+const ALONE: MessageContext = { laterTurns: 0 };
 
 export interface MessageActions {
     copy(): void;
@@ -86,12 +84,13 @@ export function useMessageActions(message: Message, copyText: string, context: M
     const saved = message.id > 0;
     const sessionId = message.session_id;
 
-    // Removes this message and everything after it, then sends `text` when given.
+    // Removes this message (and, to send it again, everything after it), then sends `text` when given.
     const removeFrom = async (text?: string): Promise<boolean> => {
         setFailure(null);
         try {
             if (!client) throw new GaiaConfigError('mobileApp.error.noConnection');
-            await client.deleteMessagesFrom(sessionId, message.id);
+            if (text === undefined) await client.deleteMessage(sessionId, message.id);
+            else await client.deleteMessagesFrom(sessionId, message.id);
             void queryClient.invalidateQueries({ queryKey: queryKeys.sessions });
             await queryClient.invalidateQueries({ queryKey: queryKeys.messages(sessionId) });
             if (text !== undefined) send(text);
@@ -158,7 +157,7 @@ export function useMessageActions(message: Message, copyText: string, context: M
                 {confirmDelete
                     ? confirm(
                           t('msg.confirmDeleteAria'),
-                          context.later > 0 ? t.plural('msg.dropLater', context.later) : null,
+                          null,
                           t('msg.delete'),
                           () => void removeFrom(),
                           () => setConfirmDelete(false),
