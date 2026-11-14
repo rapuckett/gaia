@@ -49,7 +49,7 @@ export function DocumentsScreen({ chatId }: DocumentsScreenProps) {
                     accessibilityLabel={t('docs.title')}
                     contentContainerStyle={{ paddingBottom: space.xl }}
                     ListHeaderComponent={
-                        <Stack gap="sm" paddingX="lg" paddingBottom="sm">
+                        <Stack gap="sm" paddingX="lg" paddingY="sm">
                             {chatId ? (
                                 <ChatTargetChooser chatId={chatId} target={target} onChange={setTarget} />
                             ) : (
