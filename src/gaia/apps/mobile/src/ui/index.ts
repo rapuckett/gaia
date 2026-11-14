@@ -37,3 +37,4 @@ export { SegmentedControl, type SegmentedControlProps } from './forms/SegmentedC
 export { Select, type SelectProps } from './forms/Select';
 export { Slider, type SliderProps } from './forms/Slider';
 export { SearchField, type SearchFieldProps } from './forms/SearchField';
+export { ScrollBox, type ScrollBoxProps } from './layout/ScrollBox';
