@@ -26,6 +26,7 @@ export {
   RotateCcw,
   Search,
   Send,
+  ShieldQuestion,
   Square,
   TriangleAlert,
   Wrench,
