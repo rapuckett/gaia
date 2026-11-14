@@ -5,22 +5,13 @@ import { useState } from 'react';
 import { pluralKey, ref, type MessageKey, type Param, type Say } from '../i18n/registry';
 import { tEn, useT, type Translate } from '../i18n/useT';
 import type { InferenceStats } from '../types';
+import { spokenDuration, type Mark } from '../utils/spokenDuration.core';
 import { MarkedText, markLtr as marked } from './MarkedText';
 import './AnswerStats.css';
 
-/** Marks a number with its unit, so the renderer can keep it left to right. */
-type Mark = (text: string) => string;
 const plain: Mark = (text) => text;
 
-/** `40200` -> "40 s", `400` -> "under a second", `95000` -> "1 min 35 s". */
-export function spokenDuration(ms: number, say: Say = tEn.bare, mark: Mark = plain): string {
-    if (ms < 1000) return say('answer.duration.underSecond');
-    const total = Math.round(ms / 1000);
-    if (total < 60) return mark(say('answer.duration.sec', { n: total }));
-    const mins = Math.floor(total / 60);
-    const secs = total % 60;
-    return mark(secs ? say('answer.duration.minSec', { m: mins, s: secs }) : say('answer.duration.min', { n: mins }));
-}
+export { spokenDuration };
 
 /** How a turn that never finished its answer ended. */
 export type TurnEnding = 'stopped' | 'interrupted' | 'failed';

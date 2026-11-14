@@ -16,7 +16,7 @@ import { Check, Square } from '@/ui/icons';
 import { CodeBlock } from './CodeBlock';
 import { contentDir } from './direction';
 import { Caret, plainText, renderInline, type InlineContext } from './inline';
-import { parseAnswer } from './parse';
+import { parseAnswer, parseFormatting } from './parse';
 import { useThrottledText } from './useStreamingText';
 
 const STREAM_PARSE_MS = 80;
@@ -24,6 +24,8 @@ const NO_DOCS: readonly LibraryDoc[] = [];
 
 export interface MarkdownProps {
     text: string;
+    /** 'formatting' is for agent-supplied text: no links, images, headings, citations or path links. */
+    variant?: 'answer' | 'formatting';
     streaming?: boolean;
     documents?: LibraryDoc[];
     /** Library notices the server sent with the answer, shown under it. */
@@ -170,14 +172,17 @@ function useOpenCitation(): (doc: LibraryDoc, page?: number) => void {
 }
 
 /** An assistant answer as native Markdown: the same parser and rules as the web UI's answer. */
-export function Markdown({ text, streaming = false, documents = NO_DOCS as LibraryDoc[], notes, onOpenCitation }: MarkdownProps) {
+export function Markdown({ text, variant = 'answer', streaming: streamingProp = false, documents = NO_DOCS as LibraryDoc[], notes, onOpenCitation }: MarkdownProps) {
+    const formatting = variant === 'formatting';
+    // The formatting variant ignores streaming, documents, notes and onOpenCitation.
+    const streaming = streamingProp && !formatting;
     const t = useT();
     const openCitation = useOpenCitation();
     const uiDir = useDirection();
     const shown = useThrottledText(text, streaming, STREAM_PARSE_MS);
-    const tree = useMemo(() => parseAnswer(shown, streaming), [shown, streaming]);
-    const index = useMemo(() => buildCitationIndex(documents), [documents]);
-    const ctx: RenderContext = { index, t, onOpenCitation: onOpenCitation ?? openCitation, uiDir, streaming };
+    const tree = useMemo(() => (formatting ? parseFormatting(shown) : parseAnswer(shown, streaming)), [shown, streaming, formatting]);
+    const index = useMemo(() => buildCitationIndex(formatting ? NO_DOCS : documents), [documents, formatting]);
+    const ctx: RenderContext = { index, t, onOpenCitation: formatting ? undefined : (onOpenCitation ?? openCitation), uiDir, streaming };
     const caretInline = streaming && endsInline(tree);
 
     return (
@@ -188,7 +193,7 @@ export function Markdown({ text, streaming = false, documents = NO_DOCS as Libra
                     <Caret />
                 </Text>
             )}
-            {notes && notes.length > 0 && (
+            {!formatting && notes && notes.length > 0 && (
                 <Stack gap="sm">
                     {notes.map((note, i) => (
                         <Notice key={`${i}-${note}`} tone="info" role="note" message={note} />

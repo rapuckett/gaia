@@ -274,8 +274,10 @@ async def test_turn_stopped_mid_answer_without_a_recorded_turn_keeps_the_stop_no
 )
 def test_the_ui_matches_the_same_cut_off_text(text):
     """The footer matches these by text; a reworded notice would read as answered."""
-    bubble = (
-        Path(__file__).resolve().parents[4]
-        / "src/gaia/apps/webui/src/components/MessageBubble.tsx"
-    ).read_text(encoding="utf-8")
-    assert f"'{text}'" in bubble, f"MessageBubble.tsx no longer lists {text!r}"
+    # MessageBubble.tsx keeps "Cancelled." and reads the notices from utils/constants.ts.
+    webui = Path(__file__).resolve().parents[4] / "src/gaia/apps/webui/src"
+    sources = "".join(
+        (webui / name).read_text(encoding="utf-8")
+        for name in ("components/MessageBubble.tsx", "utils/constants.ts")
+    )
+    assert f"'{text}'" in sources, f"the web UI no longer lists {text!r}"
