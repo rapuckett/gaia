@@ -23,6 +23,7 @@ import type {
     StreamEvent,
     SystemStatus,
     ToolConfirmRequest,
+    UpdateSessionRequest,
     UserInputRequest,
 } from './client.types';
 import { foldText, splitMatch } from '@webui/utils/chatSearch';
@@ -63,6 +64,10 @@ export interface FakeGaiaClient extends GaiaClient {
     readonly created: CreateSessionRequest[];
     readonly cancelled: string[];
     readonly deleted: { sessionId: string; messageId: number }[];
+    readonly updated: { sessionId: string; request: UpdateSessionRequest }[];
+    readonly pinned: { sessionId: string; pinned: boolean }[];
+    readonly deletedSessions: string[];
+    readonly read: string[];
     readonly confirmations: ToolConfirmRequest[];
     readonly answers: UserInputRequest[];
     readonly scheduleActions: { action: 'pause' | 'resume' | 'run' | 'delete'; name: string }[];
@@ -80,6 +85,10 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
     const created: CreateSessionRequest[] = [];
     const cancelled: string[] = [];
     const deleted: FakeGaiaClient['deleted'] = [];
+    const updated: FakeGaiaClient['updated'] = [];
+    const pinned: FakeGaiaClient['pinned'] = [];
+    const deletedSessions: string[] = [];
+    const read: string[] = [];
     const confirmations: ToolConfirmRequest[] = [];
     const answers: UserInputRequest[] = [];
     const restarts: FakeGaiaClient['restarts'] = [];
@@ -100,11 +109,23 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         return session;
     }
 
+    // Replaces the object, so a refetch sees a changed row.
+    function patch(sessionId: string, changes: Partial<Session>): Session {
+        const at = sessions.findIndex((s) => s.id === sessionId);
+        if (at < 0) throw new GaiaApiError(404, 'Session not found');
+        sessions[at] = { ...sessions[at]!, ...changes };
+        return sessions[at]!;
+    }
+
     return {
         sent,
         created,
         cancelled,
         deleted,
+        updated,
+        pinned,
+        deletedSessions,
+        read,
         confirmations,
         answers,
         scheduleActions,
@@ -159,6 +180,30 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             }
             const limit = data.searchLimit ?? Infinity;
             return { query, results: results.slice(0, limit), truncated: results.length > limit };
+        },
+        async updateSession(sessionId, request) {
+            findSession(sessionId);
+            updated.push({ sessionId, request });
+            return patch(sessionId, {
+                ...(request.title != null ? { title: request.title } : null),
+                ...(request.title_is_custom != null ? { title_is_custom: request.title_is_custom } : null),
+            });
+        },
+        async setSessionPinned(sessionId, value) {
+            findSession(sessionId);
+            pinned.push({ sessionId, pinned: value });
+            return patch(sessionId, { pinned: value });
+        },
+        async deleteSession(sessionId) {
+            findSession(sessionId);
+            deletedSessions.push(sessionId);
+            sessions.splice(sessions.findIndex((s) => s.id === sessionId), 1);
+            return { deleted: true };
+        },
+        async markSessionRead(sessionId) {
+            findSession(sessionId);
+            read.push(sessionId);
+            return patch(sessionId, { unread: false });
         },
         async getMessages(sessionId): Promise<MessageList> {
             const list = messages[sessionId] ?? [];

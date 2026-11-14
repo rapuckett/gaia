@@ -16,7 +16,7 @@ import type {
     StreamEvent,
     SystemStatus,
 } from '@webui/types';
-import type { CreateSessionRequest, DocumentListResponse, SessionSearchResponse, ToolConfirmRequest, UserInputRequest as ApiUserInputRequest } from '@webui/types/api.gen';
+import type { CreateSessionRequest, DocumentListResponse, SessionSearchResponse, ToolConfirmRequest, UpdateSessionRequest, UserInputRequest as ApiUserInputRequest } from '@webui/types/api.gen';
 
 export type {
     AgentMcpServer,
@@ -34,7 +34,7 @@ export type {
     SystemStatus,
     UnavailableConnectorRow,
 } from '@webui/types';
-export type { CreateSessionRequest, DocumentListResponse, SessionSearchResponse, SessionSearchResult, ToolConfirmRequest } from '@webui/types/api.gen';
+export type { CreateSessionRequest, DocumentListResponse, SessionSearchResponse, SessionSearchResult, ToolConfirmRequest, UpdateSessionRequest } from '@webui/types/api.gen';
 
 /** `display` is what the phone shows as the answer; it is never sent to GAIA. */
 export type UserInputRequest = ApiUserInputRequest & { display?: string };
@@ -86,6 +86,10 @@ export interface DeleteMessagesResult {
     count: number;
 }
 
+export interface DeleteSessionResult {
+    deleted: boolean;
+}
+
 export interface UserInputResult {
     status: string;
     request_id: string;
@@ -116,6 +120,13 @@ export interface GaiaClient {
     listSessions(options?: RequestOptions): Promise<SessionList>;
     getSession(sessionId: string, options?: RequestOptions): Promise<Session>;
     createSession(request?: CreateSessionRequest, options?: RequestOptions): Promise<Session>;
+    /** Renames or edits the chat; a `title` sent with `title_is_custom: true` stops GAIA retitling it. */
+    updateSession(sessionId: string, request: UpdateSessionRequest, options?: RequestOptions): Promise<Session>;
+    setSessionPinned(sessionId: string, pinned: boolean, options?: RequestOptions): Promise<Session>;
+    /** Deletes the chat and its messages; a turn still running on it is stopped first. */
+    deleteSession(sessionId: string, options?: RequestOptions): Promise<DeleteSessionResult>;
+    /** Clears the chat's unread mark. */
+    markSessionRead(sessionId: string, options?: RequestOptions): Promise<Session>;
     /** What the chat's last finished turn did with the messages added to it; rejects with 409 while a turn still runs. */
     getFollowUpOutcome(sessionId: string, options?: RequestOptions): Promise<FollowUpOutcome>;
     /** Chats whose title or messages match `query`, newest first; `truncated` says the backend capped the list. */
