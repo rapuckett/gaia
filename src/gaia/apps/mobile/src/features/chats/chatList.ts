@@ -10,7 +10,9 @@ import {
     type RowStatus,
 } from '@webui/utils/sessionGrouping';
 
-import type { Session } from '@/api/client.types';
+import { foldText } from '@webui/utils/chatSearch';
+
+import type { Session, SessionSearchResult } from '@/api/client.types';
 
 export type { LiveRuns, RowStatus };
 
@@ -159,4 +161,14 @@ export function rowErrorMessage(kind: RowErrorKind, error: unknown, t: Say): str
     const cause = error instanceof Error ? error.message : String(error);
     if (kind === 'markRead') return t('sidebar.markReadFailed', { error: cause });
     return error instanceof Error && cause ? cause : t(ROW_ERROR_KEY[kind]);
+}
+
+/** Chats whose title holds `query` or whose messages the backend matched, in the list's own order. */
+export function searchedSessions(
+    sessions: readonly Session[],
+    query: string,
+    hits: ReadonlyMap<string, SessionSearchResult>,
+): Session[] {
+    const needle = foldText(query.trim());
+    return sessions.filter((s) => foldText(s.title).includes(needle) || hits.has(s.id));
 }

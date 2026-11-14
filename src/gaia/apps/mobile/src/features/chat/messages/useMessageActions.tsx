@@ -1,22 +1,38 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
+import { useQueryClient } from '@tanstack/react-query';
 import * as Clipboard from 'expo-clipboard';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 
 import type { Message } from '@/api/client.types';
+import { GaiaConfigError } from '@/api/errors';
+import { queryKeys, useGaiaClient } from '@/data';
 import { describeError, useT } from '@/i18n/useT';
-import { ActionSheet, Notice, type SheetAction } from '@/ui';
-import { Copy } from '@/ui/icons';
+import { ActionSheet, Button, Notice, Sheet, Stack, Text, type SheetAction } from '@/ui';
+import { Copy, Pencil, RefreshCw, Trash2 } from '@/ui/icons';
 
+import { useMessageActionsContext } from './MessageActionsContext';
+import { MessageEditor } from './MessageEditor';
 import { formatFullTimestamp } from './time';
 
 const COPIED_MS = 2000;
 
+/** Where a message sits in its chat, so Resend and Edit can say what else goes. */
+export interface MessageContext {
+    /** Messages from the next question on; Resend and Edit remove them. */
+    laterTurns: number;
+}
+
+/** What a bubble starts with open; for the dev gallery. */
+export type StartOpen = 'actions' | 'delete' | 'edit';
+
+const ALONE: MessageContext = { laterTurns: 0 };
+
 export interface MessageActions {
     copy(): void;
     copied: boolean;
-    /** The sheet, closed until `openSheet`; render it once beside the bubble. */
+    /** The sheets, closed until opened; render once beside the bubble. */
     sheet: ReactNode;
     openSheet(): void;
     /** Spread onto the Pressable that long-press opens the sheet from. */
@@ -24,16 +40,25 @@ export interface MessageActions {
         accessibilityActions: readonly { name: string; label: string }[];
         onAccessibilityAction: (event: { nativeEvent: { actionName: string } }) => void;
     };
-    /** Shown when copying failed. */
+    /** The edit box, shown in place of the text while the message is being edited. */
+    editor: ReactNode;
+    /** Shown when an action failed. */
     notice: ReactNode;
 }
 
-// Edit, Resend, Try again, Delete and Read aloud wait for GaiaClient endpoints; Copy is the one that needs none.
-export function useMessageActions(message: Message): MessageActions {
+// Read aloud waits for the voice work; Try again is the turn tail's button.
+export function useMessageActions(message: Message, copyText: string, context: MessageContext = ALONE, startOpen?: StartOpen): MessageActions {
     const t = useT();
-    const [open, setOpen] = useState(false);
+    const client = useGaiaClient();
+    const queryClient = useQueryClient();
+    const { send, busy } = useMessageActionsContext();
+    const [open, setOpen] = useState(startOpen === 'actions');
     const [copied, setCopied] = useState(false);
     const [failure, setFailure] = useState<string | null>(null);
+    const [editing, setEditing] = useState(startOpen === 'edit');
+    const [sending, setSending] = useState(false);
+    const [confirmDelete, setConfirmDelete] = useState(startOpen === 'delete');
+    const [drop, setDrop] = useState<string | null>(null);
     const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     useEffect(
@@ -44,7 +69,7 @@ export function useMessageActions(message: Message): MessageActions {
     );
 
     const copy = useCallback(() => {
-        Clipboard.setStringAsync(message.content).then(
+        Clipboard.setStringAsync(copyText).then(
             () => {
                 setFailure(null);
                 setCopied(true);
@@ -53,12 +78,68 @@ export function useMessageActions(message: Message): MessageActions {
             },
             (error: unknown) => setFailure(describeError(error, t)),
         );
-    }, [message.content, t]);
+    }, [copyText, t]);
+
+    // A message still showing under a temporary id isn't on the PC yet.
+    const saved = message.id > 0;
+    const sessionId = message.session_id;
+
+    // Removes this message (and, to send it again, everything after it), then sends `text` when given.
+    const removeFrom = async (text?: string): Promise<boolean> => {
+        setFailure(null);
+        try {
+            if (!client) throw new GaiaConfigError('mobileApp.error.noConnection');
+            if (text === undefined) await client.deleteMessage(sessionId, message.id);
+            else await client.deleteMessagesFrom(sessionId, message.id);
+            void queryClient.invalidateQueries({ queryKey: queryKeys.sessions });
+            await queryClient.invalidateQueries({ queryKey: queryKeys.messages(sessionId) });
+            if (text !== undefined) send(text);
+            return true;
+        } catch (error) {
+            setFailure(describeError(error, t));
+            void queryClient.invalidateQueries({ queryKey: queryKeys.messages(sessionId) });
+            return false;
+        }
+    };
+
+    // Sending an earlier question again drops what came after it, so ask first.
+    const sendAgain = async (text: string) => {
+        setSending(true);
+        const sent = await removeFrom(text);
+        setSending(false);
+        if (sent) setEditing(false);
+    };
+    const askThenSend = (text: string) => {
+        if (context.laterTurns > 0) setDrop(text);
+        else void sendAgain(text);
+    };
 
     const openSheet = () => setOpen(true);
-    const actions: SheetAction[] = [{ label: t('msg.copy'), icon: Copy, onPress: copy }];
+    const canChange = saved && !busy;
+    const isUser = message.role === 'user';
+    const actions: SheetAction[] = [
+        ...(isUser && canChange
+            ? [
+                  { label: t('msg.edit'), icon: Pencil, onPress: () => setEditing(true) },
+                  { label: t('msg.resend'), icon: RefreshCw, onPress: () => askThenSend(message.content) },
+              ]
+            : []),
+        ...(copyText ? [{ label: t('msg.copy'), icon: Copy, onPress: copy }] : []),
+        ...(canChange ? [{ label: t('msg.delete'), icon: Trash2, destructive: true, onPress: () => setConfirmDelete(true) }] : []),
+    ];
+
     const when = formatFullTimestamp(message.created_at, t);
     const title = when ? t(message.role === 'user' ? 'msg.sent' : 'msg.replied', { time: when }) : undefined;
+
+    const confirm = (heading: string, detail: string | null, go: string, onGo: () => void, onClose: () => void, destructive = false) => (
+        <Sheet open onClose={onClose} title={heading}>
+            <Stack gap="md">
+                {detail ? <Text role="body">{detail}</Text> : null}
+                <Button label={go} variant={destructive ? 'danger' : 'primary'} full onPress={() => { onClose(); onGo(); }} />
+                <Button label={t('msg.editCancel')} variant="secondary" full onPress={onClose} />
+            </Stack>
+        </Sheet>
+    );
 
     return {
         copy,
@@ -70,7 +151,38 @@ export function useMessageActions(message: Message): MessageActions {
                 if (event.nativeEvent.actionName === 'activate') openSheet();
             },
         },
-        sheet: <ActionSheet open={open} onClose={() => setOpen(false)} actions={actions} title={title} />,
+        sheet: (
+            <>
+                <ActionSheet open={open} onClose={() => setOpen(false)} actions={actions} title={title} />
+                {confirmDelete
+                    ? confirm(
+                          t('msg.confirmDeleteAria'),
+                          null,
+                          t('msg.delete'),
+                          () => void removeFrom(),
+                          () => setConfirmDelete(false),
+                          true,
+                      )
+                    : null}
+                {drop !== null
+                    ? confirm(
+                          t.plural('msg.dropLater', context.laterTurns),
+                          null,
+                          t('msg.dropLaterGo'),
+                          () => void sendAgain(drop),
+                          () => setDrop(null),
+                      )
+                    : null}
+            </>
+        ),
+        editor: editing ? (
+            <MessageEditor
+                original={message.content}
+                onSend={askThenSend}
+                onCancel={() => setEditing(false)}
+                disabled={busy || sending}
+            />
+        ) : null,
         notice: failure ? <Notice tone="danger" message={failure} /> : null,
     };
 }

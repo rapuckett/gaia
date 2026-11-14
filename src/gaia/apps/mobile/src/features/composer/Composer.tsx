@@ -13,7 +13,8 @@ export interface ComposerProps {
     /** Give `value` and `onChange` together to control the text; leave both out to let the composer keep it. */
     value?: string;
     onChange?(value: string): void;
-    onSend(text: string): void;
+    /** Returns false to keep the text in the box, as when an answer matches none of a question's choices. */
+    onSend(text: string): boolean | void;
     onStop?(): void;
     /** A reply is running: Send queues the next message and Stop appears. */
     running?: boolean;
@@ -21,6 +22,8 @@ export interface ComposerProps {
     placeholder?: string;
     /** Why the box can't be used right now; shown as the hint and the placeholder. */
     disabledReason?: string;
+    /** GAIA waits on a question: Send answers it instead of queueing. */
+    answering?: boolean;
     /** The chat is being created: the text stays editable and Send waits. */
     starting?: boolean;
     leftControls?: ReactNode;
@@ -37,6 +40,7 @@ export function Composer({
     onStop,
     placeholder: placeholderText,
     running = false,
+    answering = false,
     disabledReason,
     starting = false,
     leftControls,
@@ -62,8 +66,7 @@ export function Composer({
     // Clears without blurring, so the keyboard stays up for the next message.
     const send = () => {
         if (!canSend) return;
-        onSend(message);
-        setText('');
+        if (onSend(message) !== false) setText('');
     };
 
     const stop = () => {
@@ -71,6 +74,7 @@ export function Composer({
         onStop?.();
     };
 
+    const sendLabel = answering ? t('composer.sendAnswer') : running && message ? t('composer.queue') : t('composer.send');
     const placeholder = disabledReason ?? placeholderText ?? (running ? t('composer.queueNext') : t('composer.placeholder'));
 
     return (
@@ -116,7 +120,7 @@ export function Composer({
                     <IconButton
                         variant="primary"
                         icon={ArrowUp}
-                        label={t('composer.send')}
+                        label={sendLabel}
                         onPress={send}
                         busy={starting}
                         disabled={!canSend}

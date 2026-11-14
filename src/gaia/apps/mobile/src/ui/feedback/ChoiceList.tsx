@@ -17,7 +17,7 @@ export interface ChoiceOption {
 
 type Single = { multiple?: false; value?: string; onChange: (value: string) => void };
 type Multiple = { multiple: true; value: string[]; onChange: (value: string[]) => void };
-export type ChoiceListProps = { options: ChoiceOption[]; testID?: string } & (Single | Multiple);
+export type ChoiceListProps = { options: ChoiceOption[]; accessibilityLabel?: string; testID?: string } & (Single | Multiple);
 
 // Radio rows pick one; checkbox rows pick several. The mark's shape differs, not just its color.
 export function ChoiceList(props: ChoiceListProps) {
@@ -29,7 +29,7 @@ export function ChoiceList(props: ChoiceListProps) {
         else props.onChange(v);
     };
     return (
-        <View testID={props.testID} accessibilityRole={multiple ? undefined : 'radiogroup'} style={{ gap: space.xs }}>
+        <View testID={props.testID} accessibilityLabel={props.accessibilityLabel} accessibilityRole={multiple ? undefined : 'radiogroup'} style={{ gap: space.xs }}>
             {options.map((o) => {
                 const on = picked(o.value);
                 return (

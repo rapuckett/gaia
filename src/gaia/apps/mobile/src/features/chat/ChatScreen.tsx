@@ -1,15 +1,21 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
-import { useChatStream, useMessages, useSession } from '@/data';
-import { Composer, useComposerQueue } from '@/features/composer';
-import { ScreenHeader } from '@/features/nav/ScreenHeader';
+import { needsOutcome, nextToSend } from '@webui/utils/messageQueue';
+
+import { useAnswerQuestion, useChatStream, useMessages, useSession } from '@/data';
+import { Composer, useComposerQueue, useFollowUpEvents } from '@/features/composer';
+import { QueuedMessages } from '@/features/composer/QueuedMessages';
 import { describeError, useT } from '@/i18n/useT';
+import { isQuestionGone, questionCardData, resolveTypedAnswer } from '@/features/questions/questionLogic';
 import { ErrorState, Notice, Screen, Stack } from '@/ui';
 
 import { ChatPrompts } from './ChatPrompts';
+import { ChatHeader } from './header';
+import { PermissionPrompt } from './permission/PermissionPrompt';
+import { usePermissionPrompt } from './permission/usePermissionPrompt';
 import { liveStatusLine } from './liveStatus';
 import { MessageList } from './messages/MessageList';
 import { buildTail } from './tailState';
@@ -23,6 +29,10 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
     const messages = useMessages(sessionId);
     const stream = useChatStream(sessionId);
     const queue = useComposerQueue(sessionId);
+    const permission = usePermissionPrompt(sessionId);
+    const answer = useAnswerQuestion();
+    const followUps = useFollowUpEvents(sessionId, stream.events);
+    const stopped = useRef(false);
     const [actionError, setActionError] = useState<unknown>(null);
     const busy = stream.status !== 'idle';
     const saved = messages.data?.messages ?? NO_MESSAGES;
@@ -34,17 +44,49 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
         t,
     );
 
-    // Messages typed while a reply runs wait here and go out one by one once it ends.
-    const heldCount = queue.held.length;
-    const { flush } = queue;
-    useEffect(() => {
-        if (!busy && heldCount > 0) void flush(sessionId);
-    }, [busy, heldCount, flush, sessionId]);
+    const question = stream.pendingQuestion && !stream.pendingQuestion.sensitive ? stream.pendingQuestion : null;
+    const steerable = stream.status === 'streaming' && !followUps.unavailable;
 
-    const send = (text: string) => {
+    // Messages typed while a reply runs go out one by one once it ends; after Stop they return to the box.
+    const sendable = nextToSend(queue.held) !== undefined || needsOutcome(queue.held);
+    const { flush, giveBack } = queue;
+    useEffect(() => {
+        if (busy) return;
+        if (stopped.current) {
+            stopped.current = false;
+            giveBack();
+            return;
+        }
+        if (sendable) void flush(sessionId);
+    }, [busy, sendable, flush, giveBack, sessionId]);
+
+    const stop = () => {
+        stopped.current = true;
+        stream.stop();
+    };
+
+    const answerQuestion = (message: string, asked: NonNullable<typeof question>): boolean => {
+        const data = questionCardData(sessionId, asked);
+        const resolved = data && resolveTypedAnswer(message, data);
+        if (!resolved) {
+            setActionError(t('composer.pickAnOption'));
+            return false;
+        }
+        answer
+            .mutateAsync({ session_id: sessionId, request_id: asked.request_id, value: resolved.value, display: message })
+            .catch((err: unknown) => {
+                // Back in the box, so nothing typed is lost; an expired question says so in its card.
+                queue.setDraft((prev) => (prev.trim() ? `${message}\n\n${prev}` : message));
+                if (!isQuestionGone(err)) setActionError(t('composer.answerFailed', { error: describeError(err, t) }));
+            });
+        return true;
+    };
+
+    const send = (message: string): boolean | void => {
         setActionError(null);
-        if (busy) queue.hold(text);
-        else stream.send(text);
+        if (question) return answerQuestion(message, question);
+        if (busy) queue.hold(message);
+        else stream.send(message);
     };
     const tryAgain = (replyId: number | null) => {
         setActionError(null);
@@ -55,7 +97,7 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
         stream.send(t('msg.continuePrompt'));
     };
 
-    const placeholder = stream.pendingQuestion
+    const placeholder = question
         ? t('composer.answerQuestion')
         : busy
           ? t('composer.queueNext')
@@ -66,7 +108,7 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
     return (
         <Screen
             keyboard="avoid"
-            header={<ScreenHeader title={session.data?.title} />}
+            header={<ChatHeader sessionId={sessionId} />}
             footer={
                 <>
                     {actionError ? (
@@ -74,7 +116,23 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
                             <Notice tone="danger" message={describeError(actionError, t)} testID="action-error" />
                         </Stack>
                     ) : null}
-                    <Composer onSend={send} onStop={stream.stop} running={busy} placeholder={placeholder} />
+                    {permission ? <PermissionPrompt key={permission.prompt.id} {...permission} /> : null}
+                    <QueuedMessages
+                        items={queue.held}
+                        replying={busy}
+                        onRemove={queue.remove}
+                        onRetry={queue.retry}
+                        onSteer={steerable ? queue.steer : undefined}
+                    />
+                    <Composer
+                        value={queue.draft}
+                        onChange={queue.setDraft}
+                        onSend={send}
+                        onStop={stop}
+                        running={busy}
+                        answering={!!question}
+                        placeholder={placeholder}
+                    />
                 </>
             }
         >
@@ -89,11 +147,12 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
                                 <TurnTail
                                     tail={tail}
                                     line={line}
+                                    awaitingUser={!!stream.pendingPermission || !!stream.pendingQuestion}
                                     onTryAgain={() => tryAgain(tail.replyId)}
                                     onContinue={continueReply}
                                 />
                             ) : null}
-                            <ChatPrompts permission={stream.pendingPermission} question={stream.pendingQuestion} />
+                            <ChatPrompts sessionId={sessionId} question={stream.pendingQuestion} confirmation={stream.pendingConfirmation} />
                         </>
                     }
                 />
