@@ -119,6 +119,7 @@ describe('createHttpClient requests', () => {
         ['getSession', (c) => c.getSession('a b'), 'GET', '/api/sessions/a%20b', UI_HEADERS, undefined],
         ['createSession', (c) => c.createSession({ title: 'Trip' }), 'POST', '/api/sessions', JSON_HEADERS, { title: 'Trip' }],
         ['createSession with no fields', (c) => c.createSession(), 'POST', '/api/sessions', JSON_HEADERS, {}],
+        ['listDocuments', (c) => c.listDocuments(), 'GET', '/api/documents', UI_HEADERS, undefined],
         ['cancelChat', (c) => c.cancelChat('s1'), 'POST', '/api/chat/cancel', JSON_HEADERS, { session_id: 's1' }],
         [
             'confirmTool, allow once',

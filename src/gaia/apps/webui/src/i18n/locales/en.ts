@@ -222,6 +222,8 @@ export const enMessages = {
     'newChat.docs.attachIt': 'Attach it',
     'newChat.docs.attachAll': 'Attach all {n}',
     'newChat.docs.choose': 'Choose',
+    'newChat.docs.hidden': '+{n} more',
+    'newChat.docs.fewer': 'Show fewer',
 
     // The new chat's folders
     'folderChip.add': 'Add a folder',
@@ -3497,6 +3499,8 @@ export const enMessages = {
     'mobileApp.error.badEvent': 'GAIA sent a reply event this phone cannot read: {preview}',
     'mobileApp.error.noConnection': 'No PC is connected. Pair this phone with your PC first.',
     'mobileApp.chat.notFound': 'That chat is no longer on your PC.',
+    'mobileApp.connectors.comingLater': "Connecting from the phone is coming in a later build. For now, connect it on the PC running GAIA.",
+    'mobileApp.connectors.googlePcOnly': "This phone can't connect Google accounts. Connect Google on the PC running GAIA.",
     'mobileApp.banner.openOnPc': 'Open GAIA on your PC to start the model server.',
 } as const;
 

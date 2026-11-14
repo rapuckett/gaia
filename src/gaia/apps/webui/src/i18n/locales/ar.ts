@@ -222,6 +222,8 @@ const messages: Messages = {
     'newChat.docs.attachIt': 'إرفاقه',
     'newChat.docs.attachAll': 'إرفاق المستندات كلها ({n})',
     'newChat.docs.choose': 'اختيار',
+    'newChat.docs.hidden': '+{n} أخرى',
+    'newChat.docs.fewer': 'عرض أقل',
 
     // مجلدات المحادثة الجديدة
     'folderChip.add': 'إضافة مجلد',
@@ -3497,6 +3499,8 @@ const messages: Messages = {
     'mobileApp.error.badEvent': 'أرسل GAIA حدثًا في الرد لا يستطيع هذا الهاتف قراءته: {preview}',
     'mobileApp.error.noConnection': 'لا يوجد كمبيوتر متصل. اقرن هذا الهاتف بالكمبيوتر أولًا.',
     'mobileApp.chat.notFound': 'هذه المحادثة لم تعد موجودة على جهاز الكمبيوتر.',
+    'mobileApp.connectors.comingLater': 'الربط من الهاتف قادم في إصدار لاحق. في الوقت الحالي، اربطه من الكمبيوتر الذي يشغّل GAIA.',
+    'mobileApp.connectors.googlePcOnly': 'لا يستطيع هذا الهاتف ربط حسابات Google. اربط Google من الكمبيوتر الذي يشغّل GAIA.',
     'mobileApp.banner.openOnPc': 'افتح GAIA على جهاز الكمبيوتر لتشغيل خادم النماذج.',
 };
 

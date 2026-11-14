@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: MIT
 
 export * from './chatStream';
+export * from './connectors';
 export * from './GaiaClientProvider';
+export * from './models';
 export * from './mutations';
 export * from './queries';
 export * from './schedules';
