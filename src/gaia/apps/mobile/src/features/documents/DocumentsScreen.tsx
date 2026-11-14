@@ -5,10 +5,10 @@ import { useState } from 'react';
 
 import { isolate } from '@webui/i18n/registry';
 
-import { useDocuments } from '@/data';
+import { useCancelIndexing, useDocumentRemoval, useDocuments, useIndexingView, useReindexDocument } from '@/data';
 import { ScreenHeader } from '@/features/nav/ScreenHeader';
 import { describeError, useT } from '@/i18n/useT';
-import { Button, EmptyState, ErrorState, IconButton, List, ListSkeleton, Notice, Row, Screen, Stack, Text, useTheme } from '@/ui';
+import { EmptyState, ErrorState, IconButton, List, ListSkeleton, Notice, Row, Screen, Stack, Text, useTheme } from '@/ui';
 import { X } from '@/ui/icons';
 
 import { DocumentRow } from './DocumentRow';
@@ -32,8 +32,26 @@ export function DocumentsScreen({ chatId }: DocumentsScreenProps) {
     const query = useDocuments();
     const [target, setTarget] = useState<LibraryTarget>('chat');
     const action = useActionError();
-    const documents = query.data?.documents ?? [];
+    const removal = useDocumentRemoval((r, error) => action.report(t('docs.deleteFailed', { name: r.name, error: describeError(error, t) })));
+    const cancel = useCancelIndexing();
+    const reindex = useReindexDocument();
+    const all = query.data?.documents ?? [];
+    const documents = all.filter((d) => d.id !== removal.pending?.id);
+    const view = useIndexingView(all);
     const stats = libraryStats(documents, t);
+    const nameOf = (id: string) => all.find((d) => d.id === id)?.filename ?? id;
+    const onCancel = (id: string) => {
+        action.dismiss();
+        cancel.mutate(id, { onError: (e) => action.report(t('docs.cancelFailed', { name: nameOf(id), error: describeError(e, t) })) });
+    };
+    const onRetry = (id: string) => {
+        action.dismiss();
+        reindex.mutate(id, { onError: (e) => action.report(t('docs.retryFailed', { name: nameOf(id), error: describeError(e, t) })) });
+    };
+    const onRemove = (id: string) => {
+        action.dismiss();
+        removal.remove({ id, name: nameOf(id) });
+    };
     const loadFailed = query.isError ? t('docs.loadFailed', { error: describeError(query.error, t) }) : null;
     const retry = { label: t('docs.loadRetry'), onPress: () => void query.refetch() };
 
@@ -42,6 +60,16 @@ export function DocumentsScreen({ chatId }: DocumentsScreenProps) {
             {query.isPending ? <ListSkeleton rows={4} /> : null}
             {loadFailed && documents.length === 0 ? <ErrorState title={loadFailed} action={retry} /> : null}
             {query.data && documents.length === 0 ? <EmptyState title={t('docs.empty')} message={t('docs.emptyHintPhone')} /> : null}
+            {removal.pending ? (
+                <Stack paddingX="lg" paddingY="sm">
+                    <Notice
+                        tone="info"
+                        role="note"
+                        message={t('docs.removed', { name: isolate(removal.pending.name, 'ltr') })}
+                        action={{ label: t('docs.undo'), onPress: removal.undo }}
+                    />
+                </Stack>
+            ) : null}
             {documents.length > 0 ? (
                 <List
                     data={documents}
@@ -49,7 +77,7 @@ export function DocumentsScreen({ chatId }: DocumentsScreenProps) {
                     accessibilityLabel={t('docs.title')}
                     contentContainerStyle={{ paddingBottom: space.xl }}
                     ListHeaderComponent={
-                        <Stack gap="sm" paddingX="lg" paddingBottom="sm">
+                        <Stack gap="sm" paddingX="lg" paddingY="sm">
                             {chatId ? (
                                 <ChatTargetChooser chatId={chatId} target={target} onChange={setTarget} />
                             ) : (
@@ -81,7 +109,18 @@ export function DocumentsScreen({ chatId }: DocumentsScreenProps) {
                             ) : null}
                         </Stack>
                     }
-                    renderItem={({ item }) => <DocumentRow document={item} />}
+                    renderItem={({ item }) => (
+                        <DocumentRow
+                            document={item}
+                            progress={view.progress[item.id]}
+                            startedAt={view.startedAt[item.id]}
+                            now={view.now}
+                            retrying={reindex.isPending && reindex.variables === item.id}
+                            onCancel={onCancel}
+                            onRetry={onRetry}
+                            onRemove={onRemove}
+                        />
+                    )}
                 />
             ) : null}
         </Screen>

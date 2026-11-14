@@ -2,11 +2,12 @@
 // SPDX-License-Identifier: MIT
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import type { ReactNode } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { stripIsolates } from '@webui/i18n/registry';
+import { REMOVE_UNDO_MS } from '@webui/utils/documentLibrary.core';
 
 import type { DocumentListResponse } from '@/api/client.types';
 import { createFakeClient } from '@/api/fake';
@@ -66,5 +67,41 @@ describe('DocumentsScreen', () => {
         fireEvent.press(screen.getByText('Try again'));
         expect(await screen.findByText('No documents yet')).toBeTruthy();
         expect(listDocuments).toHaveBeenCalledTimes(2);
+    });
+
+    describe('remove with Undo', () => {
+        const library = () => ({ documents: [doc('a', 'notes.txt', 'complete', 2048)], total: 1, total_chunks: 3, total_size_bytes: 2048 }) as DocumentListResponse;
+        beforeEach(() => jest.useFakeTimers());
+        afterEach(() => jest.useRealTimers());
+
+        it('Undo puts the row back and the document is never deleted', async () => {
+            const client = createFakeClient({ documents: library() });
+            await mount(client);
+            fireEvent.press(await screen.findByLabelText('Remove notes.txt'));
+            expect(screen.queryByText(/notes\.txt/)).toBeNull();
+            fireEvent.press(screen.getByText('Undo'));
+            await act(() => jest.advanceTimersByTimeAsync(REMOVE_UNDO_MS * 2));
+            expect(screen.getByText(/notes\.txt/)).toBeTruthy();
+            expect(client.documentActions).toEqual([]);
+        });
+
+        it('without Undo the DELETE goes out once the window ends, not before', async () => {
+            const client = createFakeClient({ documents: library() });
+            await mount(client);
+            fireEvent.press(await screen.findByLabelText('Remove notes.txt'));
+            await act(() => jest.advanceTimersByTimeAsync(REMOVE_UNDO_MS - 1));
+            expect(client.documentActions).toEqual([]);
+            await act(() => jest.advanceTimersByTimeAsync(1));
+            expect(client.documentActions).toEqual([{ action: 'delete', docId: 'a' }]);
+        });
+
+        it('a failed DELETE brings the row back with the reason', async () => {
+            const client = createFakeClient({ documents: library(), documentFailures: { delete: 'disk is read-only' } });
+            await mount(client);
+            fireEvent.press(await screen.findByLabelText('Remove notes.txt'));
+            await act(() => jest.advanceTimersByTimeAsync(REMOVE_UNDO_MS));
+            expect(await screen.findByText(/Couldn't remove notes\.txt: disk is read-only/)).toBeTruthy();
+            expect(screen.getByText(/notes\.txt/)).toBeTruthy();
+        });
     });
 });
