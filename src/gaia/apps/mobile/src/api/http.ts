@@ -20,12 +20,15 @@ import type {
     CancelChatResult,
     ConfirmToolResult,
     DeleteMessagesResult,
+    DeleteScheduleResult,
     FollowUpOutcome,
     FollowUpResult,
     GaiaClient,
     HealthResponse,
     MessageList,
     RequestOptions,
+    Schedule,
+    ScheduleList,
     SessionList,
     UserInputResult,
 } from './client.types';
@@ -35,6 +38,8 @@ import {
     followupOutcomePath,
     MESSAGE_PAGE_SIZE,
     QUEUED_IDLE_MS,
+    schedulePath,
+    scheduleRunPath,
     SEND_HEADER_TIMEOUT_MS,
     SESSION_PAGE_SIZE,
     sessionMessagesAndBelowPath,
@@ -153,6 +158,10 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
     async function deleteJson<T>(path: string, signal?: AbortSignal): Promise<T> {
         return readJson<T>(await request('DELETE', path, undefined, signal), path);
+    }
+
+    async function putJson<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
+        return readJson<T>(await request('PUT', path, body, signal), path);
     }
 
     async function* streamTurn(
@@ -287,6 +296,22 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
         sendUserInput(request, options) {
             const body = { session_id: request.session_id, request_id: request.request_id, value: request.value };
             return postJson<UserInputResult>(ENDPOINTS.chatUserInput, body, options?.signal);
+        },
+
+        listSchedules(options) {
+            return getJson<ScheduleList>(ENDPOINTS.schedules, options?.signal);
+        },
+
+        updateScheduleStatus(name, status, options) {
+            return putJson<Schedule>(schedulePath(name), { status }, options?.signal);
+        },
+
+        runSchedule(name, options) {
+            return postJson<Schedule>(scheduleRunPath(name), undefined, options?.signal);
+        },
+
+        deleteSchedule(name, options) {
+            return deleteJson<DeleteScheduleResult>(schedulePath(name), options?.signal);
         },
 
         getSystemStatus(options) {

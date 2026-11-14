@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: MIT
 
 import type { FollowUpOutcome } from '@webui/utils/messageQueue';
-import type { Message, Session, StartScreen, StreamEvent, SystemStatus } from '@webui/types';
+import type { Message, Schedule, Session, StartScreen, StreamEvent, SystemStatus } from '@webui/types';
 import type { CreateSessionRequest, ToolConfirmRequest, UserInputRequest as ApiUserInputRequest } from '@webui/types/api.gen';
 
-export type { Message, Session, StartScreen, StreamEvent, SystemStatus } from '@webui/types';
+export type { Message, Schedule, Session, StartScreen, StreamEvent, SystemStatus } from '@webui/types';
 export type { CreateSessionRequest, ToolConfirmRequest } from '@webui/types/api.gen';
 
 /** `display` is what the phone shows as the answer; it is never sent to GAIA. */
@@ -18,6 +18,11 @@ export interface SessionList {
 
 export interface MessageList {
     messages: Message[];
+    total: number;
+}
+
+export interface ScheduleList {
+    schedules: Schedule[];
     total: number;
 }
 
@@ -48,6 +53,10 @@ export interface DeleteMessagesResult {
 export interface UserInputResult {
     status: string;
     request_id: string;
+}
+
+export interface DeleteScheduleResult {
+    deleted: boolean;
 }
 
 export interface FollowUpResult {
@@ -86,6 +95,12 @@ export interface GaiaClient {
     confirmTool(request: ToolConfirmRequest, options?: RequestOptions): Promise<ConfirmToolResult>;
     /** Answers a `needs_input` question; the turn continues once GAIA has it. */
     sendUserInput(request: UserInputRequest, options?: RequestOptions): Promise<UserInputResult>;
+    listSchedules(options?: RequestOptions): Promise<ScheduleList>;
+    /** Pauses or resumes a schedule; answers with the schedule as it now is. */
+    updateScheduleStatus(name: string, status: 'active' | 'paused', options?: RequestOptions): Promise<Schedule>;
+    /** Runs a schedule once now (409 while a run is in flight); its next scheduled run stays as it was. */
+    runSchedule(name: string, options?: RequestOptions): Promise<Schedule>;
+    deleteSchedule(name: string, options?: RequestOptions): Promise<DeleteScheduleResult>;
     getSystemStatus(options?: RequestOptions): Promise<SystemStatus>;
     /** The new-chat screen's cards and working folder; `skills_error` says why the assistant can't list its skills. */
     getStartScreen(options?: RequestOptions): Promise<StartScreen>;
