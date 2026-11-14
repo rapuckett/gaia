@@ -20,7 +20,7 @@ import { UIProvider } from '@/ui';
 export const unstable_settings = { anchor: INITIAL_ROUTE };
 
 // Expo Router renders only the screens a layout declares.
-const ROUTES = [INITIAL_ROUTE, 'new', 'chat/[id]', 'dev/ui', 'dev/ui-lists', 'dev/composer', 'dev/markdown', 'dev/permission'];
+const ROUTES = [INITIAL_ROUTE, 'new', 'chat/[id]', 'dev/ui', 'dev/ui-lists', 'dev/composer', 'dev/markdown', 'dev/messages', 'dev/permission'];
 
 export default function RootLayout() {
     const [queryClient] = useState(() => new QueryClient());
