@@ -39,7 +39,6 @@ export interface FakeClientData {
     start?: StartScreen;
     /** What watchSessionEvents streams before it ends; the real stream never ends on its own. */
     sessionEvents?: unknown[];
-        },
     /** Most chats a search returns before it says `truncated`. */
     searchLimit?: number;
     /** Makes every search fail with this message. */
