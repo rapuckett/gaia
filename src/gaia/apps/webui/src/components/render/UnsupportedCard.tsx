@@ -1,6 +1,8 @@
 // Copyright(C) 2025-2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
+import { useT } from '../../i18n/useT';
+
 /** Above this length (JSON.stringify(data).length), skip the pretty-printed
  *  dump and show a size notice instead — a malformed/huge payload must not
  *  freeze the tab rendering a multi-megabyte <pre>. */
@@ -24,6 +26,7 @@ export interface UnsupportedCardProps {
  * debuggable, not silently dropped.
  */
 export function UnsupportedCard({ variant, render, data }: UnsupportedCardProps) {
+    const t = useT();
     let rawJson: string;
     try {
         rawJson = JSON.stringify(data);
@@ -40,18 +43,16 @@ export function UnsupportedCard({ variant, render, data }: UnsupportedCardProps)
         }
     }
 
-    const message = variant === 'unknown'
-        ? `Unsupported card type: "${render}"`
-        : `Invalid ${render} payload`;
+    const message = t(variant === 'unknown' ? 'cards.unsupported.unknown' : 'cards.unsupported.invalid', { render });
 
     return (
         <div className="render-unsupported">
             <p className="render-unsupported__message">{message}</p>
             <details className="render-unsupported__details">
-                <summary>Raw payload</summary>
+                <summary>{t('cards.unsupported.raw')}</summary>
                 {tooLarge ? (
                     <p className="render-unsupported__too-large">
-                        Payload too large to display ({rawJson.length} bytes)
+                        {t('cards.unsupported.tooLarge', { size: String(rawJson.length) })}
                     </p>
                 ) : (
                     <pre className="render-unsupported__json">{pretty}</pre>

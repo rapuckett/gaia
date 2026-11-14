@@ -11,10 +11,10 @@ import { useChatStore } from '../stores/chatStore';
 import {
     useModelStore, useInferencePlace, selectChipModel, displayModelName, distinctModelLabels, sameModelId, UNKNOWN_PLACE_TITLE,
 } from '../stores/modelStore';
-import { STATE_LABELS, isDownloading, modelState, placementText } from './modelMeta';
+import { isDownloading, modelState } from './modelMeta';
 import { InfoBubble } from './InfoBubble';
 import { formatPrice } from './settings/cloudPrice';
-import { useT } from '../i18n/useT';
+import { useT, type Translate } from '../i18n/useT';
 import { providerName, providerNotice } from '../utils/providerText';
 import { MarkedText, markLtr } from './MarkedText';
 import type { ProviderInfo, ProviderModel } from '../types';
@@ -32,15 +32,17 @@ const KEY_LOCKED = 'store_locked';
 const PICK_START_POLLS = 5;
 
 /** What the info bubble lists for *m*: where it runs, size, speed, rank, price. */
-function modelDetails(m: ProviderModel, remote: boolean): string[] {
+function modelDetails(m: ProviderModel, remote: boolean, t: Translate): string[] {
     const rank = m.rank ? `#${m.rank} ${m.note ?? ''}`.trim() : null;
     if (remote) return [rank, formatPrice(m.price)].filter((x): x is string => !!x);
     return [
-        placementText(m.placement),
+        m.placement?.label
+            ? (m.placement.source === 'expected' ? t('modelStatus.expected', { label: m.placement.label }) : m.placement.label)
+            : null,
         m.size_gb ? `${m.size_gb} GB` : null,
-        m.tokens_per_second ? `${Math.round(m.tokens_per_second)} tok/s on this PC` : null,
+        m.tokens_per_second ? t('modelMenu.speedOnThisPc', { n: Math.round(m.tokens_per_second) }) : null,
         rank,
-        m.custom ? 'added by you' : null,
+        m.custom ? t('modelMenu.addedByYou') : null,
     ].filter((x): x is string => !!x);
 }
 
@@ -66,7 +68,7 @@ function StateMark({ m, onDownload, busy }: { m: ProviderModel; onDownload: () =
     if (isDownloading(m)) {
         const pct = Math.round(m.download_progress?.percent ?? 0);
         return (
-            <span className="model-state is-downloading" title={`Downloading, ${pct}%`}>
+            <span className="model-state is-downloading" title={t('modelMenu.downloadingPct', { pct: String(pct) })}>
                 <Loader2 size={12} className="spin" aria-hidden="true" /> {pct}%
             </span>
         );
@@ -80,7 +82,7 @@ function StateMark({ m, onDownload, busy }: { m: ProviderModel; onDownload: () =
                 onClick={(e) => { e.stopPropagation(); onDownload(); }}
                 disabled={busy}
                 aria-label={t('modelMenu.downloadModel', { name: m.display_name ?? m.id })}
-                title={m.size_gb ? `${STATE_LABELS.not_downloaded} (${m.size_gb} GB)` : STATE_LABELS.not_downloaded}
+                title={m.size_gb ? t.hint(t('settings.model.notDownloaded'), `${m.size_gb} GB`) : t('settings.model.notDownloaded')}
                 // Picking the row downloads it too, so the list keeps one Tab stop.
                 tabIndex={-1}
             >
@@ -89,9 +91,9 @@ function StateMark({ m, onDownload, busy }: { m: ProviderModel; onDownload: () =
         );
     }
     if (state === 'loaded') {
-        return <span className="model-state is-loaded" role="img" aria-label={STATE_LABELS.loaded} title={STATE_LABELS.loaded} />;
+        return <span className="model-state is-loaded" role="img" aria-label={t('settings.model.loaded')} title={t('settings.model.loaded')} />;
     }
-    return <span className="model-state is-ready" title={STATE_LABELS.downloaded}>{t('modelMenu.ready')}</span>;
+    return <span className="model-state is-ready" title={t('modelMenu.downloadedReady')}>{t('modelMenu.ready')}</span>;
 }
 
 /** The model the open chat runs on, where it runs, and a picker to change it. */
@@ -333,7 +335,7 @@ export function ModelChip() {
         if (!m) {
             if (!missedPoll()) return;
             setPickAfterDownload(null);
-            setAutoSwitchError(`${displayModelName(model)} is no longer in the model list, so it wasn't switched to.`);
+            setAutoSwitchError(t('modelMenu.switchMissing', { name: displayModelName(model) }));
             return;
         }
         if (isDownloading(m)) {
@@ -343,21 +345,21 @@ export function ModelChip() {
         const progress = m.download_progress;
         if (progress?.state === 'error') {
             setPickAfterDownload(null);
-            setAutoSwitchError(`Downloading ${displayModelName(model)} failed: ${progress.message ?? 'no reason given'}`);
+            setAutoSwitchError(t('modelMenu.downloadFailed', { name: displayModelName(model), reason: progress.message ?? t.bare('modelMenu.noReason') }));
             return;
         }
         // The model list can lag the finished download by a poll; "complete" already means downloaded.
         if (progress?.state !== 'complete' && modelState(m) === 'not_downloaded') {
             if (!missedPoll()) return;
             setPickAfterDownload(null);
-            setAutoSwitchError(`The download of ${displayModelName(model)} never started. Try the download button again.`);
+            setAutoSwitchError(t('modelMenu.downloadNeverStarted', { name: displayModelName(model) }));
             return;
         }
         setPickAfterDownload(null);
         void choose(model, provider).then((failed) => {
-            if (failed) setAutoSwitchError(`${displayModelName(model)} downloaded, but switching to it failed: ${failed}`);
+            if (failed) setAutoSwitchError(t('modelMenu.switchFailedAfterDownload', { name: displayModelName(model), reason: failed }));
         });
-    }, [groups, pickAfterDownload, requestsPending, choose]);
+    }, [groups, pickAfterDownload, requestsPending, choose, t]);
 
     // The row Tab lands on: the last one focused, else the current model, else the first.
     const fireworksCollapsed = (provider: ProviderInfo, models: ProviderModel[]) =>
@@ -388,7 +390,7 @@ export function ModelChip() {
     });
 
     const Icon = place?.remote ? Cloud : place ? Cpu : HelpCircle;
-    const name = chipModel ? displayModelName(chipModel) : 'Model';
+    const name = chipModel ? displayModelName(chipModel) : t('modelStatus.fallbackName');
     const label = `${name}${place ? ` · ${place.label}` : ''}`;
     const rowLabels = Object.fromEntries((groups ?? []).map((g) => [g.provider.id, distinctModelLabels(g.models)]));
     const shownGroups = groups && orderGroups(groups, active?.provider, currentModel);
@@ -398,11 +400,11 @@ export function ModelChip() {
         : queueError
         ? queueError
         : queued
-            ? `${displayModelName(queued)} is used from your next message.`
+            ? t('modelMenu.usedNextMessage', { name: displayModelName(queued) })
             : active?.config_error
                 ? active.config_error
                 : notDownloaded
-                    ? `${name} isn't downloaded yet. Open the list to download it.`
+                    ? t('modelMenu.notDownloadedYet', { name })
                     : !place
                         ? UNKNOWN_PLACE_TITLE
                         // The server writes the model name as Markdown code; a tooltip shows backticks literally.
@@ -422,9 +424,9 @@ export function ModelChip() {
             >
                 <Icon size={13} aria-hidden="true" />
                 <span className="composer-chip-label" dir="auto">{label}</span>
-                {queued && <span className="composer-chip-next">→ {displayModelName(queued)} next</span>}
-                {notDownloaded && <Download size={12} aria-label="Not downloaded" />}
-                {autoSwitchError && <AlertCircle size={12} aria-label="Model switch failed" />}
+                {queued && <span className="composer-chip-next">{t('modelMenu.nextChip', { name: displayModelName(queued) })}</span>}
+                {notDownloaded && <Download size={12} aria-label={t('settings.model.notDownloaded')} />}
+                {autoSwitchError && <AlertCircle size={12} aria-label={t('modelMenu.switchFailed')} />}
                 <ChevronDown size={12} aria-hidden="true" />
             </button>
             <Popover open={open} onClose={close} anchor={anchor} label={t('modelMenu.label')} align="end" className="model-menu">
@@ -490,7 +492,7 @@ export function ModelChip() {
                             const current = sameModelId(queued ?? active?.model, m.id);
                             const needsDownload = !provider.remote && modelState(m) === 'not_downloaded';
                             const modelName = rowLabels[provider.id][m.id];
-                            const details = modelDetails(m, provider.remote);
+                            const details = modelDetails(m, provider.remote, t);
                             const infoId = `${listId}-info-${provider.id}-${m.id}`;
                             return (
                                 <Fragment key={m.id}>
@@ -528,7 +530,7 @@ export function ModelChip() {
                                             </span>
                                         </button>
                                         <InfoBubble
-                                            label={`About ${modelName}`}
+                                            label={t('modelMenu.about', { name: modelName })}
                                             warning={!!m.placement?.warning}
                                             id={infoId}
                                             pinned={infoRow === m.id}
