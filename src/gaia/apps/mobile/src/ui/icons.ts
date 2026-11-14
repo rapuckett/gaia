@@ -12,6 +12,7 @@ export {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  ChevronUp,
   CircleAlert,
   Copy,
   Ellipsis,

@@ -7,10 +7,13 @@ import { Pressable } from '../controls/Pressable';
 import { Row } from '../layout/layout';
 import { useTheme } from '../theme/ThemeProvider';
 import { Text } from '../text/Text';
+import type { Tone } from '../theme/tone';
 
 export interface ListRowProps {
     title: string;
     subtitle?: string;
+    /** `danger` for a failed state such as "1 not sent". */
+    subtitleTone?: Tone;
     leading?: ReactNode;
     trailing?: ReactNode;
     onPress?: () => void;
@@ -26,6 +29,7 @@ export interface ListRowProps {
 export function ListRow({
     title,
     subtitle,
+    subtitleTone = 'muted',
     leading,
     trailing,
     onPress,
@@ -56,7 +60,7 @@ export function ListRow({
                         {title}
                     </Text>
                     {subtitle ? (
-                        <Text role="caption" tone="muted" numberOfLines={1}>
+                        <Text role="caption" tone={subtitleTone} numberOfLines={1}>
                             {subtitle}
                         </Text>
                     ) : null}

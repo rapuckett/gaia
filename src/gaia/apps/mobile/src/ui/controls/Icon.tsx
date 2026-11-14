@@ -4,6 +4,7 @@
 import type { LucideIcon } from 'lucide-react-native';
 import { useDirection } from '@/i18n/useT';
 import { useTheme } from '../theme/ThemeProvider';
+import { a11yVisibility } from '../theme/a11y';
 import { toneColor, type Tone } from '../theme/tone';
 
 const SIZES = { sm: 16, md: 20, lg: 24 } as const;
@@ -35,8 +36,7 @@ export function Icon({ icon: Glyph, size = 'md', tone = 'secondary', label }: Ic
             size={px}
             color={toneColor(colors, tone)}
             accessibilityLabel={label}
-            accessible={!!label}
-            importantForAccessibility={label ? 'yes' : 'no-hide-descendants'}
+            {...a11yVisibility({ accessible: !!label, importantForAccessibility: label ? 'yes' : 'no-hide-descendants' })}
             style={mirror ? { transform: [{ scaleX: -1 }] } : undefined}
         />
     );
