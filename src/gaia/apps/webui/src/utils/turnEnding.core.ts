@@ -21,6 +21,8 @@ const CUT_OFF_NOTICES: ReadonlyArray<readonly [string, MessageKey]> = [
     [CUT_OFF_NOTICE_TEXT.interrupted, 'msg.cutOff.interrupted'],
     [CUT_OFF_NOTICE_TEXT.cancelled, 'msg.cutOff.cancelled'],
     [CUT_OFF_NOTICE_TEXT.noReply, 'msg.cutOff.noReply'],
+    [CUT_OFF_NOTICE_TEXT.scheduleDeleted, 'msg.cutOff.scheduleDeleted'],
+    [CUT_OFF_NOTICE_TEXT.schedulePaused, 'msg.cutOff.schedulePaused'],
 ];
 
 /** restart_recovery.tools_ran_notice, the line the server puts just above a cut-off notice. */
