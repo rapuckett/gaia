@@ -3,6 +3,7 @@
 
 // The same icon set as the web UI (lucide). Add a line here to use another icon.
 export {
+  Activity,
   ArrowDown,
   ArrowLeft,
   ArrowRight,
@@ -14,17 +15,20 @@ export {
   ChevronRight,
   ChevronUp,
   CircleAlert,
+  CircleCheck,
   Clock,
   Cloud,
   Copy,
   Cpu,
   Ellipsis,
+  Eye,
   EyeOff,
   FileText,
   Info,
   Lock,
   Menu,
   MessageSquare,
+  PanelRight,
   Paperclip,
   Pause,
   Play,

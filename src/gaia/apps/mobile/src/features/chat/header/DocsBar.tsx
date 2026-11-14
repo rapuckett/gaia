@@ -1,0 +1,105 @@
+// Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
+// SPDX-License-Identifier: MIT
+
+import { useState } from 'react';
+
+import { pluralKey } from '@webui/i18n/registry';
+import { middleTruncate } from '@webui/utils/format';
+
+import type { Document } from '@/api/client.types';
+import { useDetachDocument, useDocuments, useSession } from '@/data';
+import { useT } from '@/i18n/useT';
+import { Icon, IconButton, Ltr, Pressable, Row, Stack, Surface, Text } from '@/ui';
+import { CircleAlert, CircleCheck, FileText, X } from '@/ui/icons';
+
+import { failureReason } from './failureText';
+
+const COLLAPSED_PILLS = 3;
+
+/** The documents in this chat, under the header; renders nothing when there are none. */
+export function DocsBar({ sessionId, onFailed }: { sessionId: string; onFailed: (message: string) => void }) {
+    const t = useT();
+    const session = useSession(sessionId);
+    const library = useDocuments();
+    const detach = useDetachDocument();
+    const [expanded, setExpanded] = useState(false);
+
+    const ids = new Set(session.data?.document_ids ?? []);
+    const docs = (library.data?.documents ?? [])
+        .filter((d) => ids.has(d.id))
+        .sort((a, b) => (b.last_accessed_at || b.indexed_at || '').localeCompare(a.last_accessed_at || a.indexed_at || ''));
+    if (docs.length === 0) return null;
+
+    const failedCount = docs.filter((d) => d.indexing_status === 'failed').length;
+    const readable = docs.length - failedCount;
+    const label = t.compose((say) =>
+        [
+            readable > 0 ? say(pluralKey('docsBar.count', readable), { n: readable }) : null,
+            failedCount > 0 ? say(pluralKey('docsBar.failed', failedCount), { n: failedCount }) : null,
+        ]
+            .filter(Boolean)
+            .join(' · '),
+    );
+    const visible = expanded ? docs : docs.slice(0, COLLAPSED_PILLS);
+    const hidden = docs.length - COLLAPSED_PILLS;
+
+    const remove = (doc: Document) =>
+        detach.mutate(
+            { sessionId, docId: doc.id },
+            {
+                onSuccess: () => {
+                    if (docs.length - 1 <= COLLAPSED_PILLS) setExpanded(false);
+                },
+                onError: (err) => onFailed(t('chat.detachFailed', { name: doc.filename, error: failureReason(err, t) })),
+            },
+        );
+
+    return (
+        <Stack paddingX="lg" paddingY="xs" gap="xs" testID="docs-bar">
+            <Row gap="xs">
+                <Icon icon={failedCount > 0 ? CircleAlert : CircleCheck} size="sm" tone={failedCount > 0 ? 'danger' : 'success'} />
+                <Text role="label" tone="secondary" accessibilityLabel={failedCount > 0 ? label : t.plural('docsBar.aria', readable)}>
+                    {label}
+                </Text>
+            </Row>
+            <Row gap="xs" wrap>
+                {visible.map((doc) => {
+                    const failed = doc.indexing_status === 'failed';
+                    return (
+                        <Surface key={doc.id} tone="card" radius="full" border padding="xs">
+                            <Row gap="xs">
+                                <Icon icon={failed ? CircleAlert : FileText} size="sm" tone={failed ? 'danger' : 'secondary'} />
+                                <Pressable
+                                    accessibilityLabel={failed ? t('docsBar.failedTitle', { name: doc.filename }) : doc.filename}
+                                    minSize={32}
+                                >
+                                    <Ltr>{middleTruncate(doc.filename, 24)}</Ltr>
+                                </Pressable>
+                                <IconButton
+                                    icon={X}
+                                    size="sm"
+                                    label={t('docsBar.remove', { name: doc.filename })}
+                                    onPress={() => remove(doc)}
+                                />
+                            </Row>
+                        </Surface>
+                    );
+                })}
+                {!expanded && hidden > 0 ? (
+                    <Pressable onPress={() => setExpanded(true)}>
+                        <Text role="label" tone="accent">
+                            {t('docsBar.more', { n: hidden })}
+                        </Text>
+                    </Pressable>
+                ) : null}
+                {expanded && hidden > 0 ? (
+                    <Pressable onPress={() => setExpanded(false)}>
+                        <Text role="label" tone="accent">
+                            {t('docsBar.less')}
+                        </Text>
+                    </Pressable>
+                ) : null}
+            </Row>
+        </Stack>
+    );
+}
