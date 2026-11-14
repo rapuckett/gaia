@@ -4,7 +4,7 @@
 import type { LemonadeFound, LemonadeTarget } from '@/api/client.types';
 
 /** The statuses webui's `ExistingLemonadeOffer` (SetupScreen.tsx) shows a choice for. */
-const OFFERED: ReadonlyArray<LemonadeFound['status']> = ['ok', 'needs_key', 'too_old'];
+const OFFERED: readonly LemonadeFound['status'][] = ['ok', 'needs_key', 'too_old'];
 
 export type OfferState =
     | { kind: 'looking' }

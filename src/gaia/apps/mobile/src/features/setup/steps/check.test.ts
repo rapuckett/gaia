@@ -32,7 +32,7 @@ describe('checkRows', () => {
     });
 
     it('works on the hardware while the server has not answered', () => {
-        const rows = checkRows({ hardware: null, hardwareError: null, plan: plan({ lemonade: { mode: 'gaia', url: null, reachable: false } }), serverRun: null, awaitingChoice: false }, t);
+        const rows = checkRows({ hardware: null, hardwareError: null, plan: plan({ lemonade: { mode: 'gaia', url: null, reachable: false }, capacity_gb: null }), serverRun: null, awaitingChoice: false }, t);
         expect(states(rows)).toEqual(['active', 'active', 'active', 'waiting', 'waiting']);
     });
 
