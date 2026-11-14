@@ -7,6 +7,7 @@ import { KeyboardAvoidingView, KeyboardAwareScrollView, useKeyboardState } from 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useDirection } from '@/i18n/useT';
 import { useTheme } from '../theme/ThemeProvider';
+import { ScreenBannerSlot, useScreenBanner } from './ScreenBanner';
 
 export type ScreenEdge = 'top' | 'bottom' | 'start' | 'end';
 
@@ -16,6 +17,8 @@ export interface ScreenProps {
     keyboard?: 'avoid' | 'none';
     scroll?: boolean;
     header?: ReactNode;
+    /** Shown above `header`. Unset uses the app's banner (`ScreenBannerProvider`); `null` shows none. */
+    banner?: ReactNode | null;
     footer?: ReactNode;
     background?: 'primary' | 'secondary' | 'recessed';
     testID?: string;
@@ -29,6 +32,7 @@ export function Screen({
     keyboard = 'none',
     scroll,
     header,
+    banner,
     footer,
     background = 'primary',
     testID,
@@ -37,6 +41,8 @@ export function Screen({
     const insets = useSafeAreaInsets();
     const rtl = useDirection() === 'rtl';
     const keyboardUp = useKeyboardState((s) => s.isVisible);
+    const ambientBanner = useScreenBanner();
+    const shownBanner = banner === undefined ? ambientBanner : banner;
     const avoid = keyboard === 'avoid';
 
     const has = (e: ScreenEdge) => edges.includes(e);
@@ -68,6 +74,7 @@ export function Screen({
 
     const content = (
         <>
+            {shownBanner ? <ScreenBannerSlot banner={shownBanner} /> : null}
             {header}
             {body}
             {footer ? <View>{footer}</View> : null}
