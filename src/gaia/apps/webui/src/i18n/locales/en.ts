@@ -1048,6 +1048,7 @@ export const enMessages = {
     'docs.loadRetry': 'Try again',
     'docs.deleteFailed': 'Couldn\'t remove {name}: {error}',
     'docs.cancelFailed': 'Couldn\'t cancel indexing {name}: {error}',
+    'docs.retryFailed': 'Couldn\'t retry indexing {name}: {error}',
     'docs.openFolderFailed': 'Couldn\'t open the folder for {name}: {error}',
     'docs.dismissError': 'Dismiss error',
     'docs.notAdded': '{name} couldn\'t be added: GAIA can\'t read it. Why, and Retry, are on its row below.',

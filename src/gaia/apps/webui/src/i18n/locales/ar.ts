@@ -1048,6 +1048,7 @@ const messages: Messages = {
     'docs.loadRetry': 'إعادة المحاولة',
     'docs.deleteFailed': 'تعذّرت إزالة {name}: {error}',
     'docs.cancelFailed': 'تعذّر إلغاء فهرسة {name}: {error}',
+    'docs.retryFailed': 'تعذّرت إعادة محاولة فهرسة {name}: {error}',
     'docs.openFolderFailed': 'تعذّر فتح المجلد الذي يحتوي {name}: {error}',
     'docs.dismissError': 'إغلاق الخطأ',
     'docs.notAdded': 'تعذّرت إضافة {name}: لا يستطيع GAIA قراءته. السبب وزر إعادة المحاولة في صفّه أدناه.',
