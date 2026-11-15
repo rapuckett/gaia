@@ -1057,6 +1057,8 @@ export const enMessages = {
     'docs.cancelFailed': 'Couldn\'t cancel indexing {name}: {error}',
     'docs.retryFailed': 'Couldn\'t retry indexing {name}: {error}',
     'docs.attachFailed': 'Couldn\'t attach {name} to {chat}: {error}',
+    'docs.attachFailedAfterIndex': 'Indexed, but not attached to {chat}: {error}',
+    'docs.uploadUnavailable': 'Adding files isn\'t available over this connection yet. Add them from your PC for now.',
     'docs.failureHint.corrupted': 'The file looks damaged. Re-download or re-export it, then index the new copy.',
     'docs.failureHint.encrypted': 'The PDF needs a password to open. Save a copy without the password, then index that.',
     'docs.failureHint.empty': 'The PDF has no readable text, which usually means it is a scan. Run OCR on it, then index it again.',

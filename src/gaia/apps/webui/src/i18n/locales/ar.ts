@@ -1057,6 +1057,8 @@ const messages: Messages = {
     'docs.cancelFailed': 'تعذّر إلغاء فهرسة {name}: {error}',
     'docs.retryFailed': 'تعذّرت إعادة محاولة فهرسة {name}: {error}',
     'docs.attachFailed': 'تعذّر إرفاق {name} بـ {chat}: {error}',
+    'docs.attachFailedAfterIndex': 'تمت الفهرسة، لكن تعذّر الإرفاق بـ {chat}: {error}',
+    'docs.uploadUnavailable': 'إضافة الملفات غير متاحة عبر هذا الاتصال بعد. أضفها من حاسوبك في الوقت الحالي.',
     'docs.failureHint.corrupted': 'يبدو الملف تالفًا. نزّله أو صدّره من جديد ثم فهرس النسخة الجديدة.',
     'docs.failureHint.encrypted': 'يحتاج ملف PDF إلى كلمة مرور لفتحه. احفظ نسخة بدون كلمة مرور ثم فهرس تلك النسخة.',
     'docs.failureHint.empty': 'لا يحتوي ملف PDF على نص قابل للقراءة، وهذا يعني عادةً أنه مسح ضوئي. شغّل التعرف الضوئي على الحروف عليه ثم فهرسه مرة أخرى.',
