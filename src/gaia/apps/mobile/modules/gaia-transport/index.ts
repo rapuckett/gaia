@@ -34,6 +34,8 @@ export interface GaiaTransportNative {
     cancel(id: string): void;
     isPaired(pcId: string): boolean;
     drop(pcId: string): Promise<void>;
+    /** Moves the secret `pair` saved under `stagedId` to `pcId`, replacing what `pcId` had. */
+    promote(stagedId: string, pcId: string): Promise<void>;
 }
 
 const UNSUPPORTED =
@@ -52,6 +54,7 @@ const STUB: GaiaTransportNative = {
     cancel: () => unsupported(),
     isPaired: () => unsupported(),
     drop: async () => unsupported(),
+    promote: async () => unsupported(),
 };
 
 const native = Platform.OS === 'ios' ? requireOptionalNativeModule<GaiaTransportNative>('GaiaTransport') : null;

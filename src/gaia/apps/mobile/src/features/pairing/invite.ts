@@ -19,6 +19,12 @@ export interface PairingInvite {
 export const PAIRING_OFFER_VERSION = 1;
 
 const PIN_HEX = /^[0-9a-f]{64}$/i;
+// The PC's id is 16 random bytes in hex (gaia/ui/devices/store.py).
+const PC_ID = /^[0-9a-f]{32}$/;
+// The PC's own limit for a device name (sanitize_device_name).
+const NAME_MAX = 64;
+// Control and bidi-override characters, which could disguise the name the phone asks about.
+const HIDDEN = /[\u0000-\u001f\u007f-\u009f\u061c\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]/g;
 // The PC allows invitations up to 64 characters.
 const INVITE_MAX = 64;
 
@@ -76,8 +82,9 @@ export function parseInvite(text: string, nowSeconds: number = Date.now() / 1000
         if (typeof raw.v === 'number') throw new PairingInviteError('mobileApp.pairing.invite.version');
         throw incomplete('v');
     }
-    if (typeof raw.name !== 'string' || !raw.name.trim()) throw incomplete('name');
-    if (typeof raw.pc_id !== 'string' || !raw.pc_id) throw incomplete('pc_id');
+    const name = typeof raw.name === 'string' ? raw.name.replace(/\s+/g, ' ').replace(HIDDEN, '').trim().slice(0, NAME_MAX).trim() : '';
+    if (!name) throw incomplete('name');
+    if (typeof raw.pc_id !== 'string' || !PC_ID.test(raw.pc_id)) throw incomplete('pc_id');
     if (!Array.isArray(raw.origins) || raw.origins.length === 0 || !raw.origins.every((o) => typeof o === 'string')) throw incomplete('origins');
     if (typeof raw.pin !== 'string' || !PIN_HEX.test(raw.pin)) throw incomplete('pin');
     if (typeof raw.invite !== 'string' || !raw.invite || raw.invite.length > INVITE_MAX) throw incomplete('invite');
@@ -88,7 +95,7 @@ export function parseInvite(text: string, nowSeconds: number = Date.now() / 1000
     if (raw.exp <= nowSeconds) throw new PairingInviteError('mobileApp.pairing.invite.expired');
     return {
         v: raw.v,
-        name: raw.name,
+        name,
         pc_id: raw.pc_id,
         origins: origins as string[],
         pin: raw.pin.toLowerCase(),

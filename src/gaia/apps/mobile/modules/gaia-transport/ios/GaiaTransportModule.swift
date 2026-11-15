@@ -61,6 +61,15 @@ public class GaiaTransportModule: Module {
     AsyncFunction("drop") { (pcId: String) throws in
       try DeviceVault.delete(pcId)
     }
+
+    // Makes a secret saved by `pair` under a staging id the one for that PC, once the PC allows it.
+    AsyncFunction("promote") { (stagedId: String, pcId: String) throws in
+      guard let staged = try DeviceVault.load(stagedId) else {
+        throw transportError("not_paired", "The new pairing's key isn't on this phone anymore. Pair the phone again.")
+      }
+      try DeviceVault.save(pcId, staged)
+      try DeviceVault.delete(stagedId)
+    }
   }
 
   private func start(

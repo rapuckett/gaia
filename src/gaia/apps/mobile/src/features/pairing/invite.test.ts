@@ -11,7 +11,7 @@ const NOW = 1_800_000_000;
 const offer: PairingInvite = {
     v: 1,
     name: 'Office PC',
-    pc_id: 'pc-1',
+    pc_id: 'a1'.repeat(16),
     origins: ['https://192.168.1.20:4243'],
     pin: 'AB'.repeat(32),
     invite: 'abc123_-xyz',
