@@ -3664,6 +3664,8 @@ const messages: Messages = {
     'mobileApp.settings.memory.lede': 'يتذكر GAIA الحقائق والتفضيلات والمحادثات السابقة عبر المحادثات، على جهاز الكمبيوتر لديك فقط. لا يتذكّر GAIA المحادثات الخاصة (أيقونة العين في المحادثة) أبدًا.',
     'mobileApp.settings.pcOnly': 'غيّر هذا من الكمبيوتر الذي يشغّل GAIA.',
     'mobileApp.settings.comingSoon': 'هذا القسم قادم إلى الهاتف قريبًا. في الوقت الحالي، غيّره من الكمبيوتر الذي يشغّل GAIA.',
+    'mobileApp.settings.alerts.bannersHint': 'تظهر اللافتات أعلى التطبيق أثناء فتح GAIA على هذا الهاتف.',
+    'mobileApp.settings.alerts.keepAwakePc': 'يُضبط إبقاء الكمبيوتر مستيقظًا أثناء عمل GAIA من تطبيق GAIA لسطح المكتب على الكمبيوتر.',
     'mobileApp.settings.permissionsWarning': 'يتيح الوصول الكامل لـ GAIA تغيير الملفات أو حذفها وتشغيل الأوامر على الكمبيوتر الذي يشغّله دون سؤالك أولًا، في كل محادثة جديدة، حتى توقفه. قد يُحدث خطأ أو تعليمات ضارة في مستند يقرأه ضررًا حقيقيًا.',
     'mobileApp.settings.colors.invalidHex': 'أدخل لونًا بهذا الشكل: #1F5FA8.',
     'mobileApp.pairing.cameraAsk': 'يحتاج GAIA إلى الكاميرا لمسح رمز الاقتران الظاهر على جهاز الكمبيوتر.',
