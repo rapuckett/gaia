@@ -24,4 +24,8 @@ describe('segmentsFit', () => {
         expect(segmentsFit([60, 70], 390)).toBe(true);
         expect(segmentsFit([60, 190], 390)).toBe(false);
     });
+
+    it('fits "Match system" beside two short labels at phone width', () => {
+        expect(segmentsFit([92, 40, 40], 342)).toBe(true);
+    });
 });

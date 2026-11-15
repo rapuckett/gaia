@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import { Redirect, useLocalSearchParams } from 'expo-router';
+import { devGalleryEnabled } from '@/features/dev/devGallery';
 import { useMemo, useState } from 'react';
 
 import type { GaiaNotification } from '@webui/types/agent';
@@ -104,7 +105,7 @@ export default function PermissionGalleryRoute() {
     const { only } = useLocalSearchParams<{ only?: string }>();
     const fixtures = useFixtures();
     const [last, setLast] = useState('none');
-    if (!__DEV__) return <Redirect href="/" />;
+    if (!devGalleryEnabled()) return <Redirect href="/" />;
     const shown = only ? fixtures.filter((f) => f.id === only) : fixtures;
     return (
         <UIProvider>

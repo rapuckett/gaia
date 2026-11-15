@@ -1,15 +1,15 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { GaiaApiError } from '@/api/errors';
+import { GaiaApiError, GaiaNetworkError } from '@/api/errors';
 import type { SystemStatus } from '@/api/client.types';
 import { isStarting } from '@/data';
-import { describeError, type Translate } from '@/i18n/useT';
+import { describeErrorWith, type Translate } from '@/i18n/useT';
 import type { NoticeTone } from '@/ui';
 import { GB_UNIT, MIN_CONTEXT_SIZE } from '@webui/utils/constants';
 
 export interface Banner {
-    id: 'download' | 'starting' | 'unreachable' | 'backendError' | 'configError' | 'serverHung' | 'serverStopped' | 'contextTooSmall';
+    id: 'download' | 'goalStore' | 'starting' | 'unreachable' | 'backendError' | 'configError' | 'serverHung' | 'serverStopped' | 'contextTooSmall';
     tone: NoticeTone;
     title: string;
     message?: string;
@@ -28,7 +28,7 @@ const gb = (bytes: number, digits: number) => (bytes / 1e9).toFixed(digits);
  * download, start-up, backend trouble, model server, context window.
  * `fetchError` is the status request's failure, if it failed.
  */
-export function pickBanner(status: SystemStatus | undefined, fetchError: unknown, t: Translate): Banner | null {
+export function pickBanner(status: SystemStatus | undefined, fetchError: unknown, t: Translate, goalStoreError?: string | null): Banner | null {
     const progress = status?.download_progress ?? null;
     if (progress?.state === 'downloading' || progress?.state === 'starting' || progress?.state === 'error') {
         const name = progress.model_name || status?.default_model_name || '';
@@ -49,10 +49,14 @@ export function pickBanner(status: SystemStatus | undefined, fetchError: unknown
             return {
                 id: 'backendError',
                 tone: 'danger',
-                title: t('banner.backendError', { error: describeError(fetchError, t) }),
+                title: t.compose((say) => say('banner.backendError', { error: describeErrorWith(fetchError, say) })),
                 message: t('banner.backendErrorHint'),
                 retry: true,
             };
+        }
+        // The PC itself not answering reads as the setup gate does; the assistant wording is for a PC that answers.
+        if (fetchError instanceof GaiaNetworkError) {
+            return { id: 'unreachable', tone: 'danger', title: t('mobileApp.pairing.off.title'), message: t('mobileApp.pairing.unreachable.body'), retry: true };
         }
         return { id: 'unreachable', tone: 'danger', title: t('banner.unreachable'), message: t('banner.unreachableHint'), retry: true };
     }
@@ -90,6 +94,9 @@ export function pickBanner(status: SystemStatus | undefined, fetchError: unknown
             retry: true,
             dismissible: true,
         };
+    }
+    if (goalStoreError) {
+        return { id: 'goalStore', tone: 'warning', title: t('mem.goals.storeError'), message: goalStoreError, dismissible: true };
     }
     return null;
 }

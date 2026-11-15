@@ -12,15 +12,21 @@ import type {
     ConnectorListEntry,
     ContextChoice,
     ContextUsageResult,
+    CustomModelRemoved,
+    CustomModelReport,
+    FeaturedLibrary,
+    GpuMemoryStatus,
     LemonadeFound,
     LemonadeTarget,
+    LemonadeTargetBody,
+    LinkPreview,
     LocalModelStatus,
+    MCPServerStatus,
     Message,
     ModelNeed,
     ModelNeedJob,
     PermissionMode,
     PreflightReport,
-    ProvidersResponse,
     ParsedSchedule,
     ProviderModelsResponse,
     ResourceUsage,
@@ -31,15 +37,20 @@ import type {
     SetupCheck,
     SetupPlan,
     SetupRunStatus,
+    Settings,
     SkillInfo,
+    SpendingReport,
     StartScreen,
     StreamEvent,
     SystemStatus,
 } from '@webui/types';
+import type { UndoSettings } from '@webui/types/changes';
+import type { DiscordStatus } from '@webui/services/messagingApi';
 import type { AgentCapabilities } from '@webui/types/sessionPanel';
-import type { MemorySettings } from '@webui/services/memoryApi';
-import type { ActivityDay, TemporalItem, ToolStat } from '@webui/utils/memoryFormat.core';
-import type { CreateSessionRequest, DocumentListResponse, DocumentResponse, ModelServerInfo, SessionSearchResponse, ToolConfirmRequest, UserInputRequest as ApiUserInputRequest } from '@webui/types/api.gen';
+import type { DiscoveryFinding, Goal, GoalStats, InferenceInsight, KnowledgeCreateBody, KnowledgeListParams, KnowledgeSaveResult, KnowledgeUpdateBody, MemoryCleared, MemoryReinitializeResult, MemorySettings, MemorySettingsUpdateResponse, Priority as GoalPriority } from '@webui/services/memoryApi';
+import type { SpeechModel, SpeechSettings } from '@webui/services/speechApi';
+import type { ActivityDay, ConvSession, ConvTurn, EntityInfo, KnowledgeEntry, TemporalItem, ToolStat } from '@webui/utils/memoryFormat.core';
+import type { CreateSessionRequest, DocumentListResponse, DocumentResponse, ModelServerInfo, ProviderSummaryList, SessionSearchResponse, ToolConfirmRequest, UserInputRequest as ApiUserInputRequest, FilePreviewResponse } from '@webui/types/api.gen';
 
 export type {
     ActiveModel,
@@ -52,15 +63,22 @@ export type {
     ContextChoice,
     ContextUsage,
     ContextUsageResult,
+    CustomModelRemoved,
+    CustomModelReport,
+    FeaturedLibrary,
+    GpuMemoryStatus,
     LemonadeFound,
     LemonadeTarget,
+    LemonadeTargetBody,
+    LinkPreview,
+    LinkSkill,
     LocalModelStatus,
+    MCPServerStatus,
     Message,
     ModelNeed,
     ModelNeedJob,
     PermissionMode,
     PreflightReport,
-    ProvidersResponse,
     ParsedSchedule,
     ProviderId,
     ProviderInfo,
@@ -74,15 +92,26 @@ export type {
     SetupCheck,
     SetupPlan,
     SetupRunStatus,
+    Settings,
     SkillInfo,
     SkillSource,
+    SpendingReport,
     StartScreen,
     StreamEvent,
     SystemStatus,
     UnavailableConnectorRow,
 } from '@webui/types';
+export type { UndoSettings } from '@webui/types/changes';
 export type { ActiveSkill, AgentCapabilities, AgentTool, SkillOrigin } from '@webui/types/sessionPanel';
-export type { CreateSessionRequest, DocumentListResponse, DocumentResponse, ModelServerInfo, SessionSearchResponse, SessionSearchResult, ToolConfirmRequest } from '@webui/types/api.gen';
+export type { CreateSessionRequest, DocumentListResponse, DocumentResponse, ModelServerInfo, ProviderSummary, ProviderSummaryList, SessionSearchResponse, SessionSearchResult, ToolConfirmRequest, FilePreviewResponse } from '@webui/types/api.gen';
+
+/** A photo or file chosen on this phone: where it is, and what it is called. */
+export interface PickedFile {
+    uri: string;
+    name: string;
+    mimeType: string | null;
+    size: number | null;
+}
 
 /** `display` is what the phone shows as the answer; it is never sent to GAIA. */
 export type UserInputRequest = ApiUserInputRequest & { display?: string };
@@ -95,6 +124,13 @@ export interface SessionList {
 export interface MessageList {
     messages: Message[];
     total: number;
+}
+
+/** The `connector.disconnected` event's payload: the provider-side revoke outcome (#2591). */
+export interface DisconnectOutcome {
+    revoke_supported?: boolean;
+    revoked_remotely?: boolean;
+    revoke_error?: string | null;
 }
 
 export interface ConnectorList {
@@ -126,6 +162,10 @@ export interface SkillList {
     invalid: Record<string, string>;
 }
 
+export interface FeaturedLibraries {
+    libraries: FeaturedLibrary[];
+}
+
 export interface AgentMcpList {
     agent_mcps: AgentMcpServer[];
 }
@@ -135,9 +175,46 @@ export interface ScheduleList {
     total: number;
 }
 
-export type { MemorySettings } from '@webui/services/memoryApi';
+/** POST /api/providers/{id}/connect's answer, as the web's Model settings reads it. */
+export interface ProviderConnected {
+    remembered: boolean;
+    remember_error?: string | null;
+    known_models?: boolean;
+}
+
+export type { MemoryCleared, MemoryReinitializeResult, MemorySettings, MemorySettingsUpdateResponse } from '@webui/services/memoryApi';
+/** GET /api/messaging/discord, typed as Settings > Messaging on the web types it. */
+export type { DiscordState, DiscordStatus } from '@webui/services/messagingApi';
+export type { DiscoveryFinding, InferenceInsight } from '@webui/services/memoryApi';
+
+/** One event of the profile-setup streams (`stream-discovery`, `stream-inference`), as ui/routers/memory.py documents them. */
+export type ProfileStreamEvent =
+    | { type: 'log'; message: string }
+    | { type: 'finding'; source: string; item: DiscoveryFinding }
+    | { type: 'insight'; item: InferenceInsight }
+    | { type: 'error'; message: string; source?: string }
+    | { type: 'done'; total: number };
 /** One day of GET /api/memory/activity, one tool of GET /api/memory/tools, one item of GET /api/memory/upcoming; typed as the web's `MemoryDashboard` types them. */
 export type { ActivityDay as MemoryActivityDay, TemporalItem as MemoryUpcomingItem, ToolStat as MemoryToolStat } from '@webui/utils/memoryFormat.core';
+
+export type { Goal, GoalStats, GoalStatus, GoalTask, Priority as GoalPriority } from '@webui/services/memoryApi';
+
+export type { KnowledgeCreateBody, KnowledgeListParams, KnowledgeSaveResult, KnowledgeUpdateBody } from '@webui/services/memoryApi';
+export type { AboutYouItem as MemoryKnowledgeItem } from '@webui/utils/memoryFormat.core';
+export type { ConvSession as MemoryConversation, ConvTurn as MemoryTurn, EntityInfo as MemoryEntity, KnowledgeEntry as MemoryKnowledgeEntry } from '@webui/utils/memoryFormat.core';
+
+/** The body of POST /api/goals. */
+export interface CreateGoalBody {
+    title: string;
+    description: string;
+    priority: GoalPriority;
+}
+
+/** One page of GET /api/memory/knowledge; `total` counts every match, not just this page. */
+export interface MemoryKnowledgePage {
+    items: KnowledgeEntry[];
+    total?: number;
+}
 
 /** GET /api/memory/embedding-coverage; typed as the web's `MemoryDashboard` types it. */
 export interface EmbeddingCoverage {
@@ -319,6 +396,16 @@ export interface RequestOptions {
     signal?: AbortSignal;
 }
 
+export type { SpeechModel, SpeechSettings, Voice } from '@webui/services/speechApi';
+/** The read-aloud settings `PUT /api/speech/settings` changes; the rest stay as saved. */
+export type SpeechSettingsUpdate = Partial<Pick<SpeechSettings, 'voice' | 'speed' | 'auto'>>;
+
+/** Audio the PC made, as bytes; `contentType` is the response's media type. */
+export interface PcAudioBytes {
+    bytes: Uint8Array<ArrayBuffer>;
+    contentType: string;
+}
+
 export interface GaiaClient {
     health(options?: RequestOptions): Promise<HealthResponse>;
     listSessions(options?: RequestOptions): Promise<SessionList>;
@@ -331,15 +418,30 @@ export interface GaiaClient {
     deleteSession(sessionId: string, options?: RequestOptions): Promise<DeleteSessionResult>;
     /** Clears the chat's unread mark. */
     markSessionRead(sessionId: string, options?: RequestOptions): Promise<Session>;
+    /** The PC's settings, among them `network_policy` (Local only). */
+    getSettings(options?: RequestOptions): Promise<Settings>;
+    /** Saves the custom model ID (`''` clears it) or the dynamic-tools switch; answers the settings as now saved, with the custom ID's `model_status`. */
+    updateSettings(patch: { custom_model?: string; dynamic_tools?: boolean }, options?: RequestOptions): Promise<Settings>;
+    /** Turns Local only on or off. The PC alone may change it: 403 from a phone. */
+    setNetworkPolicy(policy: Settings['network_policy'], options?: RequestOptions): Promise<Settings>;
+    /** How long and how much undo history is kept, and how much is in use. */
+    getUndoSettings(options?: RequestOptions): Promise<UndoSettings>;
+    /** Saves the undo limits; the PC trims history to fit them at once. */
+    updateUndoSettings(retentionDays: number, maxMb: number, options?: RequestOptions): Promise<UndoSettings>;
     /** The model new chats run on and where it runs. */
     getActiveModel(options?: RequestOptions): Promise<ActiveModel>;
     getContextChoice(model: string, options?: RequestOptions): Promise<ContextChoice>;
     /** Remembers a context size for a local model; null returns it to Automatic. */
     setContextChoice(model: string, ctxSize: number | null, options?: RequestOptions): Promise<ContextChoice>;
     /** A cloud provider's list prices, readable before it is connected. */
-    getCloudPrices(provider: string, options?: RequestOptions): Promise<CloudPriceList>;
     /** One provider's chat models; `local` also carries each one's state, size and download. */
     listProviderModels(provider: string, options?: RequestOptions): Promise<ProviderModelsResponse>;
+    /** Checks a pasted Hugging Face link; nothing is saved or downloaded. `quant` is a quantization or one of its file names. */
+    checkCustomModel(url: string, quant?: string, options?: RequestOptions): Promise<CustomModelReport>;
+    /** Adds the model a link names to the list; it downloads on request. */
+    addCustomModel(url: string, quant?: string, options?: RequestOptions): Promise<{ report: CustomModelReport }>;
+    /** Removes a model the person added, and its download. */
+    removeCustomModel(model: string, options?: RequestOptions): Promise<CustomModelRemoved>;
     /** Makes `model` the one new messages use; a cloud model is picked after the person agrees to what leaves the PC. */
     selectModel(model: string, options?: RequestOptions): Promise<ActiveModel>;
     /** The chat's permission mode and the tools it always allows. */
@@ -407,6 +509,14 @@ export interface GaiaClient {
     activateConnectorAgent(connectorId: string, agentId: string, scopes?: string[], options?: RequestOptions): Promise<void>;
     /** Hides an MCP server's tools from an agent; its grant stays. */
     deactivateConnectorAgent(connectorId: string, agentId: string, options?: RequestOptions): Promise<void>;
+    /** Pauses an MCP server; its credentials and grants stay. Turning it back on is PC-only. */
+    disableConnector(connectorId: string, options?: RequestOptions): Promise<void>;
+    /**
+     * Removes a connector's credentials from the PC. Resolves with what the PC reported about the
+     * provider-side revoke, `{}` for a connector with no revoke concept, or null when the PC's
+     * event stream could not be read in time.
+     */
+    disconnectConnector(connectorId: string, options?: RequestOptions): Promise<DisconnectOutcome | null>;
     /** Servers that custom agents declare in their own mcp_servers.json; read-only. */
     listAgentMcps(options?: RequestOptions): Promise<AgentMcpList>;
     listSchedules(options?: RequestOptions): Promise<ScheduleList>;
@@ -417,7 +527,55 @@ export interface GaiaClient {
     /** Memories due within `days` days, plus the overdue ones. */
     getMemoryUpcoming(days: number, options?: RequestOptions): Promise<TemporalItem[]>;
     getMemoryStats(options?: RequestOptions): Promise<MemoryStats>;
+    /** The Discord bridge's state, pairing code and links. The PC answers only itself: a phone gets the 403 PC-only refusal. */
+    getDiscordStatus(options?: RequestOptions): Promise<DiscordStatus>;
+    /** Every goal with its tasks, newest first. */
+    listGoals(options?: RequestOptions): Promise<{ goals: Goal[]; total: number }>;
+    /** Goal and task counts by status. */
+    getGoalStats(options?: RequestOptions): Promise<GoalStats>;
+    /** Why GAIA can't run approved goals (the goal list can't be read); null when it can. */
+    getGoalStoreHealth(options?: RequestOptions): Promise<{ error: string | null }>;
+    /** Makes a goal GAIA will work on; it starts queued. */
+    createGoal(body: CreateGoalBody, options?: RequestOptions): Promise<Goal>;
+    /** Accepts a goal GAIA suggested. A paired device's approval is audit-logged on the PC with the device's id. */
+    approveGoal(goalId: string, options?: RequestOptions): Promise<Goal>;
+    /** Turns down a goal GAIA suggested; also audit-logged. */
+    rejectGoal(goalId: string, options?: RequestOptions): Promise<Goal>;
+    /** Stops a queued or running goal. */
+    cancelGoal(goalId: string, options?: RequestOptions): Promise<Goal>;
+    /** Deletes a goal and its tasks. */
+    deleteGoal(goalId: string, options?: RequestOptions): Promise<void>;
+    /** One page of stored memories; the About you tab asks `about_user` so GAIA's own notes stay out. */
+    listMemoryKnowledge(params: KnowledgeListParams, options?: RequestOptions): Promise<MemoryKnowledgePage>;
+    /** Every entity with a memory, with its count. */
+    listMemoryEntities(options?: RequestOptions): Promise<EntityInfo[]>;
+    /** The most recent conversations in memory, newest first. */
+    listMemoryConversations(limit: number, options?: RequestOptions): Promise<ConvSession[]>;
+    /** Turns that match `query`, across every conversation. */
+    searchMemoryConversations(query: string, limit: number, options?: RequestOptions): Promise<ConvTurn[]>;
+    /** One conversation's turns, oldest first. */
+    getMemoryConversation(sessionId: string, options?: RequestOptions): Promise<ConvTurn[]>;
+    /** Saves a memory and embeds it. */
+    addMemoryKnowledge(body: KnowledgeCreateBody, options?: RequestOptions): Promise<KnowledgeSaveResult>;
+    /** Changes a memory's text or due date; only the fields given are sent. */
+    updateMemoryKnowledge(knowledgeId: string, body: KnowledgeUpdateBody, options?: RequestOptions): Promise<KnowledgeSaveResult>;
+    /** Forgets a memory. */
+    deleteMemoryKnowledge(knowledgeId: string, options?: RequestOptions): Promise<unknown>;
+    /** The voice and speed replies are read in, whether every reply is read, and the voices offered. */
+    getSpeechSettings(options?: RequestOptions): Promise<SpeechSettings>;
+    /** Saves the fields given; answers with all the settings. Shared with the terminal app. */
+    updateSpeechSettings(change: SpeechSettingsUpdate, options?: RequestOptions): Promise<SpeechSettings>;
+    /** Whether the voice model is on the PC; the first speech request downloads it if not. */
+    getSpeechModel(options?: RequestOptions): Promise<SpeechModel>;
+    /** Speaks `text` (at most MAX_SPEECH_CHARS) as audio, in the saved voice unless one is given. */
+    speak(text: string, voice?: { voice?: string; speed?: number }, options?: RequestOptions): Promise<PcAudioBytes>;
     getMemorySettings(options?: RequestOptions): Promise<MemorySettings>;
+    /** Changes the memory switches named in `settings`; answers with all of them, and what the system scan did when discovery was switched on. */
+    updateMemorySettings(settings: Partial<MemorySettings>, options?: RequestOptions): Promise<MemorySettingsUpdateResponse>;
+    /** Deletes every memory, conversation and tool log; irreversible. Answers with the rows deleted. */
+    clearAllMemory(options?: RequestOptions): Promise<MemoryCleared>;
+    /** Deletes everything as clearAllMemory does, then re-collects this PC's facts; irreversible. */
+    reinitializeMemory(options?: RequestOptions): Promise<MemoryReinitializeResult>;
     getEmbeddingCoverage(options?: RequestOptions): Promise<EmbeddingCoverage>;
     /** Folds finished chats into lasting memory. */
     consolidateMemory(options?: RequestOptions): Promise<ConsolidateMemoryResult>;
@@ -428,8 +586,20 @@ export interface GaiaClient {
     rebuildMemoryFts(options?: RequestOptions): Promise<{ status: string }>;
     /** Re-reads this PC's facts into memory; `skipped` when system context collection is off. */
     refreshSystemContext(options?: RequestOptions): Promise<RefreshSystemContextResult>;
+    /** Scans the PC and streams what it finds, ending at `done`; nothing is saved until commitMemoryDiscovery. */
+    streamMemoryDiscovery(options?: RequestOptions): AsyncIterable<ProfileStreamEvent>;
+    /** Asks a model on the PC to describe the person, streamed to `done`; `includeBrowser` adds 30 days of browser history. */
+    streamMemoryInference(includeBrowser: boolean, options?: RequestOptions): AsyncIterable<ProfileStreamEvent>;
+    /** Saves the findings the person kept. */
+    commitMemoryDiscovery(items: DiscoveryFinding[], options?: RequestOptions): Promise<{ stored: number }>;
+    /** Saves the insights the person kept, replacing the earlier inferred profile. */
+    commitMemoryInference(insights: InferenceInsight[], options?: RequestOptions): Promise<{ stored: number }>;
     /** Every skill GAIA can load, plus the folders it skipped. */
     listSkills(options?: RequestOptions): Promise<SkillList>;
+    /** Skill libraries GAIA suggests adding from a link. */
+    listFeaturedSkillLibraries(options?: RequestOptions): Promise<FeaturedLibraries>;
+    /** Reads and audits the skills behind a link; writes nothing. Adding them is PC-only. */
+    previewSkillLink(url: string, options?: RequestOptions): Promise<LinkPreview>;
     /** Creates a schedule; `interval` is the plain-words "when to run", parsed by the PC. 409 when the name is taken. */
     createSchedule(request: CreateScheduleRequest, options?: RequestOptions): Promise<Schedule>;
     /** Reads a plain-words "when to run" without saving it, for the form's live preview. */
@@ -439,6 +609,10 @@ export interface GaiaClient {
     /** Runs a schedule once now (409 while a run is in flight); its next scheduled run stays as it was. */
     runSchedule(name: string, options?: RequestOptions): Promise<Schedule>;
     deleteSchedule(name: string, options?: RequestOptions): Promise<DeleteScheduleResult>;
+    /** Puts a file from this phone in the library and indexes it; resolves once GAIA has read it or failed to. */
+    uploadDocument(file: PickedFile, options?: RequestOptions): Promise<DocumentResponse>;
+    /** Attaches a library document to a chat, so the chat searches it. */
+    attachDocument(sessionId: string, docId: string, options?: RequestOptions): Promise<void>;
     /** A schedule's most recent runs, newest first. */
     listScheduleResults(name: string, limit: number, options?: RequestOptions): Promise<ScheduleResults>;
     /** The library's documents; a chat searches only the ones attached to it. */
@@ -451,15 +625,29 @@ export interface GaiaClient {
     getDocumentStatus(docId: string, options?: RequestOptions): Promise<DocumentStatus>;
     /** Indexes a document again; rejects with the reason when it fails once more. */
     reindexDocument(docId: string, options?: RequestOptions): Promise<DocumentResponse>;
+    /** A PC file's first lines (or its columns, or just its details) as the chat's folders allow; rejects with 403 for a file this chat may not read. */
+    getFilePreview(path: string, sessionId: string, options?: RequestOptions): Promise<FilePreviewResponse>;
+    /** An image on the PC, as bytes; the chat's id is what lets a phone read it. */
+    getImageBytes(path: string, sessionId: string, options?: RequestOptions): Promise<Uint8Array>;
+    /** A library document's file, as bytes. */
+    getDocumentBytes(docId: string, options?: RequestOptions): Promise<Uint8Array>;
     getSystemStatus(options?: RequestOptions): Promise<SystemStatus>;
+    /** Starts a model's download on the PC (`force` downloads it again); follow it in `getSystemStatus().download_progress`. */
+    downloadModel(model: string, options?: { force?: boolean; loadAfter?: boolean } & RequestOptions): Promise<{ status: string; model: string }>;
+    /** Loads a model on the PC at the context window chat needs; 409 when a chat is answering, until `force`. */
+    loadModel(modelName: string, force: boolean, options?: RequestOptions): Promise<{ status: string; model: string; ctx_size: number }>;
     /** The model server's state, what it runs on and its memory; the pill and its sheet read it. */
     getLocalModelStatus(options?: RequestOptions): Promise<LocalModelStatus>;
     /** Starts the model server if stopped, then reloads the chat model. `confirm` agrees to reload a Lemonade GAIA doesn't own. */
     restartLocalModel(confirm: boolean, options?: RequestOptions): Promise<RestartModelResult>;
     /** Whether a job needs a model that isn't on the PC, and which. */
     getModelNeed(job: ModelNeedJob, options?: RequestOptions): Promise<ModelNeed>;
+    /** How this PC's memory is split, the presets and what each unlocks; `settingGb` also reads the manual steps for that size. Read only: changing it is done on the PC. */
+    getGpuMemory(settingGb?: number, options?: RequestOptions): Promise<GpuMemoryStatus>;
     /** Starts one model's download on the PC; follow it with `getSetupStatus`. */
     downloadSetupModel(modelId: string, acknowledgeLowDisk: boolean, options?: RequestOptions): Promise<SetupRunStatus>;
+    /** Deletes one downloaded model from the PC's model server; answers the new plan and the space freed. */
+    removeSetupModel(modelId: string, options?: RequestOptions): Promise<SetupPlan & { freed_gb: number }>;
     getSetupStatus(options?: RequestOptions): Promise<SetupRunStatus>;
     /** Stops one model's download, or the whole run without a model; finished and partial files are kept. */
     cancelSetup(modelId?: string, options?: RequestOptions): Promise<{ cancelled: boolean }>;
@@ -469,18 +657,43 @@ export interface GaiaClient {
     checkSetup(skipChatModel: boolean, options?: RequestOptions): Promise<SetupCheck>;
     /** This PC's memory, disk, GPU and NPU as setup reads them. */
     getPreflight(options?: RequestOptions): Promise<PreflightReport>;
-    /** The cloud providers; `blocked` is set on each while Local only is on. */
-    listProviders(options?: RequestOptions): Promise<ProvidersResponse>;
+    /** Every provider and whether it is set up (`configured`) or held off by Local only (`blocked`); reads only, so a paired phone may. */
+    listProviderSummaries(options?: RequestOptions): Promise<ProviderSummaryList>;
     /** The model server GAIA uses: whether it answers, and the llama.cpp backends it lists and prefers. */
     getModelServer(options?: RequestOptions): Promise<ModelServerInfo>;
     /** Saves the llama.cpp backend for chat models (`auto` or a backend name); PC-only. */
     setModelServerBackend(backend: string, options?: RequestOptions): Promise<ModelServerInfo>;
     /** Which model server GAIA uses, and whether the PC still has to choose one. */
     getLemonadeTarget(options?: RequestOptions): Promise<LemonadeTarget>;
+    /** Switches GAIA to its own model server or to the one at `base_url`; PC-only (403 from a phone). A 422 body carries `status` (`needs_key`, `bad_key`, ...). */
+    setLemonadeTarget(body: LemonadeTargetBody, options?: RequestOptions): Promise<LemonadeTarget & { daemon: unknown }>;
+    /** Each MCP server GAIA runs: whether it connected and how many tools it offers. */
+    getMcpStatus(options?: RequestOptions): Promise<{ servers: MCPServerStatus[] }>;
     /** A model server the PC already runs; `unchecked` lists addresses that took the connection but didn't answer. */
     detectLemonade(options?: RequestOptions): Promise<{ found: LemonadeFound | null; unchecked?: string[] }>;
+    /** Registers the provider with the key the PC already holds; the phone never sends a key. */
+    connectProvider(provider: string, options?: RequestOptions): Promise<ProviderConnected>;
+    /** After the PC's OS key-store unlock prompt was closed: lets GAIA ask once more, on the PC. */
+    retryKeyStore(options?: RequestOptions): Promise<{ retrying: boolean }>;
+    /** A cloud provider's list prices, ranked; the first row is the model GAIA uses unless another is picked. */
+    getCloudPrices(provider: string, options?: RequestOptions): Promise<CloudPriceList>;
+    /** This month's cloud spending at list price, the monthly limit and where it stands. */
+    getSpending(options?: RequestOptions): Promise<SpendingReport>;
+    /** Sets the monthly limit in dollars; null removes it. Answers with the new report. */
+    setSpendingLimit(limitUsd: number | null, options?: RequestOptions): Promise<SpendingReport>;
+    /** Lets cloud chats go on past the limit until the month ends. */
+    allowSpendingThisMonth(options?: RequestOptions): Promise<SpendingReport>;
+    /** Reads the NPU's setup afresh after a fix on the PC; answers the plan. */
+    recheckSetupNpu(options?: RequestOptions): Promise<SetupPlan>;
     /** What setup will use and download, before it starts; `catalog` marks partial downloads. */
     getSetupPlan(options?: RequestOptions): Promise<SetupPlan>;
+    /** Saves setup's chat model; a 409 `no_fit` asks to be sent again with `acknowledgeNoFit`. Returns the new plan. */
+    chooseSetupChatModel(modelId: string, acknowledgeNoFit: boolean, options?: RequestOptions): Promise<SetupPlan>;
+    /** Saves the model that reads images; null goes back to GAIA's choice. Returns the new plan. */
+    chooseSetupVisionModel(modelId: string | null, options?: RequestOptions): Promise<SetupPlan>;
+    /** Skips one of setup's models, or takes it back. Returns the new plan. */
+    skipSetupModel(modelId: string, skipped: boolean, options?: RequestOptions): Promise<SetupPlan>;
+    /** The GPU's share of this PC's memory, and whether it can be changed. */
     startSetup(
         skipChatModel: boolean,
         gaiaLemonade?: boolean,

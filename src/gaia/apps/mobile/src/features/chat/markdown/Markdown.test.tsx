@@ -9,6 +9,9 @@ import { translator } from '@/i18n/useT';
 import { useConnectionStore } from '@/state/connection';
 import { ThemeProvider } from '@/ui';
 
+import { FileScopeContext } from '@/features/files/scopeContext';
+import { usePreviewStore } from '@/features/files/previewStore';
+
 import { Markdown } from './Markdown';
 
 jest.mock('expo-clipboard', () => ({ setStringAsync: jest.fn(() => Promise.resolve(true)) }));
@@ -48,21 +51,37 @@ describe('Markdown', () => {
         expect(paths.every((el) => el.props.onPress === undefined)).toBe(true);
     });
 
-    it('opens a cited library file in the system browser at its page, and shows library notices as notes', async () => {
+    it('opens a cited library file in the in-app preview at its page, never in the browser, and shows library notices as notes', async () => {
         useConnectionStore.getState().setConnection({ baseUrl: 'http://pc.local:4200/', token: null });
         const open = jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined);
+        open.mockClear();
         await render(
             <ThemeProvider>
-                <Markdown
-                    text="See `quarterly-report.pdf` on page 12."
-                    documents={[{ id: 'doc 1', filename: 'quarterly-report.pdf' }]}
-                    notes={['Added to your library as a copy.']}
-                />
+                <FileScopeContext.Provider value="s1">
+                    <Markdown
+                        text="See `quarterly-report.pdf` on page 12."
+                        documents={[{ id: 'doc 1', filename: 'quarterly-report.pdf' }]}
+                        notes={['Added to your library as a copy.']}
+                    />
+                </FileScopeContext.Provider>
             </ThemeProvider>,
         );
         screen.getByText(/quarterly-report\.pdf/).props.onPress();
-        expect(open).toHaveBeenLastCalledWith('http://pc.local:4200/api/documents/doc%201/file#page=12');
+        expect(usePreviewStore.getState().target).toEqual({ kind: 'document', docId: 'doc 1', name: 'quarterly-report.pdf', sessionId: 's1', page: 12 });
+        expect(open).not.toHaveBeenCalled();
         expect(screen.getByRole('note')).toBeTruthy();
+    });
+
+    it('links a Windows path to the preview only when a chat is in scope', async () => {
+        await render(
+            <ThemeProvider>
+                <FileScopeContext.Provider value="s1">
+                    <Markdown text={'Saved to `C:\\out\\a.txt`.'} />
+                </FileScopeContext.Provider>
+            </ThemeProvider>,
+        );
+        screen.getByText(/a\.txt/).props.onPress();
+        expect(usePreviewStore.getState().target).toEqual({ kind: 'path', path: 'C:\\out\\a.txt', sessionId: 's1' });
     });
 
     it('formatting variant renders a link, an image, a heading and HTML as plain text', async () => {

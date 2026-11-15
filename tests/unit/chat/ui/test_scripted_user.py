@@ -113,7 +113,7 @@ _UI = {"X-Gaia-UI": "1"}
 def ui_client():
     """No lifespan: entering it installs a process-wide agent registry that
     outlives this test and changes what later suites see."""
-    return TestClient(create_app(db_path=":memory:"))
+    return TestClient(create_app(db_path=":memory:"), client=("127.0.0.1", 50000))
 
 
 class TestTheEndpoint:

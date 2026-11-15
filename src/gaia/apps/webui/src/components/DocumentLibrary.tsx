@@ -17,7 +17,8 @@ import { cleanPastedPath } from '../utils/pastedPath';
 import { INDEX_POLL_MS, REMOVE_UNDO_MS, countText, elapsed, failureHint, formatFullTimestamp, formatTimestamp, isIndexing, splitFailureReason } from '../utils/documentLibrary.core';
 
 export { INDEX_POLL_MS, REMOVE_UNDO_MS };
-import { UploadErrorToast, getUnsupportedCategory, isExtensionSupported } from './UnsupportedFeature';
+import { UploadErrorToast } from './UnsupportedFeature';
+import { fileExtension, unsupportedTypeMessage } from '../utils/uploadErrors.core';
 import type { Document, IndexFolderResponse } from '../types';
 import { useT, type Translate } from '../i18n/useT';
 import { pluralKey } from '../i18n/registry';
@@ -283,10 +284,8 @@ export function DocumentLibrary() {
         onFolder?: () => Promise<boolean>,
     ): Promise<boolean> => {
         if (!(await ensureModel('embedding'))) return false;
-        const ext = filename.includes('.') ? '.' + filename.split('.').pop()?.toLowerCase() : '';
-        const unsupportedMessage = ext && !isExtensionSupported(ext)
-            ? (getUnsupportedCategory(ext)?.message ?? `The file type "${ext}" is not supported for indexing.`)
-            : null;
+        const ext = fileExtension(filename);
+        const unsupportedMessage = unsupportedTypeMessage(filename);
         // A typed path may be a dotted folder name (notes.v2), so only the server can rule it out.
         if (unsupportedMessage && !onFolder) {
             log.doc.warn(`Unsupported file type: ${filename} (${ext})`);
@@ -351,7 +350,7 @@ export function DocumentLibrary() {
         setUploadStatus(t('docs.indexingFolder', { name: folderName }));
         try {
             // Top level only: a typed path like a home folder would otherwise index everything below it.
-            const result = await api.indexFolder(folder, false);
+            const result = await api.indexFolder(folder, false, currentSessionId);
             await attachIndexed(result.documents.map((d) => d.id).filter(Boolean), folderName);
             setFolderNotice(describeFolderResult(t, folderName, result));
             const data = await api.listDocuments();
@@ -366,16 +365,16 @@ export function DocumentLibrary() {
         } finally {
             setUploadStatus('');
         }
-    }, [attachIndexed, setDocuments, t]);
+    }, [attachIndexed, currentSessionId, setDocuments, t]);
 
     /** Index a document by a server-side filesystem path (used by the file browser and path input). */
     const uploadFile = useCallback(async (filepath: string, filename: string) => {
         return runUpload(
             filename,
-            () => api.uploadDocumentByPath(filepath),
+            () => api.uploadDocumentByPath(filepath, currentSessionId),
             () => indexFolderPath(filepath, filename),
         );
-    }, [runUpload, indexFolderPath]);
+    }, [runUpload, indexFolderPath, currentSessionId]);
 
     /**
      * Index a document by uploading its bytes directly (used by drag-and-drop).

@@ -3,8 +3,9 @@
 
 import type { ApplyDirection, LayoutDirection } from './direction.types';
 
-export const applyDirection: ApplyDirection = (dir) => {
+export const applyDirection: ApplyDirection = (dir, lang) => {
     document.documentElement.dir = dir;
+    document.documentElement.lang = lang;
 };
 
 export const layoutDirection: LayoutDirection = () => (document.documentElement.dir === 'rtl' ? 'rtl' : 'ltr');
