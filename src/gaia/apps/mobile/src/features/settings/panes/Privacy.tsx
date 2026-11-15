@@ -36,14 +36,6 @@ function policyText(t: Translate, notices: PolicyNotices, on: boolean): { text: 
     return { text, details };
 }
 
-function CardTitle({ children }: { children: string }) {
-    return (
-        <Text role="ui" weight="semibold" accessibilityRole="header">
-            {children}
-        </Text>
-    );
-}
-
 function LocalOnly() {
     const t = useT();
     const settings = useSettings();
@@ -153,20 +145,20 @@ function DataFolder({ path }: { path: string }) {
 
     return (
         <Stack gap="xs">
-            <Row gap="sm" justify="between">
-                <Text role="label" weight="medium" tone="secondary">
+            <Row gap="sm">
+                <Text role="label" tone="secondary">
                     {t('settings.privacy.dataFolder')}
                 </Text>
-                <Row gap="sm">
-                    {copied ? (
-                        <Text role="caption" tone="secondary">
-                            {t(copied === 'done' ? 'setup.found.copied' : 'setup.found.copyFailed')}
-                        </Text>
-                    ) : null}
+                <Row gap="xs" justify="end" flex={1}>
+                    <Ltr chip>{path}</Ltr>
                     <IconButton icon={copied === 'done' ? Check : Copy} label={t('mobileApp.settings.privacy.copyPath')} size="sm" onPress={copy} />
                 </Row>
             </Row>
-            <Ltr>{path}</Ltr>
+            {copied ? (
+                <Text role="caption" tone="secondary">
+                    {t(copied === 'done' ? 'setup.found.copied' : 'setup.found.copyFailed')}
+                </Text>
+            ) : null}
         </Stack>
     );
 }
@@ -178,7 +170,6 @@ function WhereYourDataIs() {
     return (
         <Card>
             <Stack gap="sm">
-                <CardTitle>{t('settings.privacy.whereTitle')}</CardTitle>
                 <Text role="label">{t('mobileApp.settings.privacy.stays')}</Text>
                 <Text role="label" tone={answers.state === 'remote' ? 'primary' : 'muted'}>
                     {answers.state === 'remote'
@@ -197,7 +188,6 @@ function TroubleshootingReport() {
     return (
         <Card>
             <Stack gap="sm">
-                <CardTitle>{t('settings.privacy.reportTitle')}</CardTitle>
                 <Notice tone="info" message={t('setup.logs.reportOnPc')} testID="privacy-report-pc-only" />
             </Stack>
         </Card>
