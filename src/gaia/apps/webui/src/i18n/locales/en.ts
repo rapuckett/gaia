@@ -3549,6 +3549,7 @@ export const enMessages = {
     'mobileApp.pairing.off.body': 'Pairing may be off on your PC, or this phone is on a different network. On your PC, open Settings, then Phones and tablets, turn on “Allow paired devices to connect”, and make sure both are on the same home network.',
     'mobileApp.pairing.off.retry': 'Try again',
     'mobileApp.pairing.pinMismatch': "Your PC's security certificate has changed, so this phone stopped connecting to it. If you reset pairing on the PC, pair this phone again.",
+    'mobileApp.pairing.removed': 'This phone was removed from {pc}. Pair it again to use GAIA here.',
     'mobileApp.chat.notFound': 'That chat is no longer on your PC.',
     'mobileApp.connectors.comingLater': "Connecting from the phone is coming in a later build. For now, connect it on the PC running GAIA.",
     'mobileApp.connectors.googlePcOnly': "This phone can't connect Google accounts. Connect Google on the PC running GAIA.",

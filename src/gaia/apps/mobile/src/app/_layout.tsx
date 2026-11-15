@@ -14,13 +14,16 @@ import { ModelNeededHost } from '@/features/model';
 import { AppDrawer } from '@/features/nav/AppDrawer';
 import { RoutingEffects } from '@/features/nav/RoutingEffects';
 import { INITIAL_ROUTE, PERMANENT_DRAWER_MIN_WIDTH } from '@/features/nav/navigation';
-import { PairingGate } from '@/features/pairing';
+import { installPinnedPairing, PairingGate } from '@/features/pairing';
 import { SetupGate } from '@/features/setup/SetupGate';
 import { useDirection } from '@/i18n/useT';
 import { applyDirection } from '@/platform/direction';
 import { platformFetch } from '@/platform/fetch';
 import { useConnectionStore } from '@/state/connection';
 import { ScreenBannerProvider, UIProvider } from '@/ui';
+
+// Before the first render, so the pairing screens and the saved PC use the pinned transport.
+installPinnedPairing();
 
 // A chat opened cold (deep link, notification) has the home screen beneath it.
 export const unstable_settings = { anchor: INITIAL_ROUTE };
