@@ -6,10 +6,11 @@ import { describeError, useT } from '@/i18n/useT';
 import { EmptyState, ErrorState, LoadingState, Stack } from '@/ui';
 import { Brain } from '@/ui/icons';
 
+import { AdvancedBody } from '../advanced/AdvancedBody';
 import { CoveragePill } from '../CoveragePill';
 import type { MemoryPaneProps } from '../tabs';
 
-/** The Advanced tab: the load and failed states, "Memory is off", then the tab's content (a later mem-* task fills it). */
+/** The Advanced tab: the load and failed states, "Memory is off", then the stats, activity, tools and upcoming items. */
 export function AdvancedPane(_props: MemoryPaneProps) {
     const t = useT();
     const stats = useMemoryStats();
@@ -36,7 +37,7 @@ export function AdvancedPane(_props: MemoryPaneProps) {
             ) : settings.data && !settings.data.memory_enabled ? (
                 <EmptyState icon={Brain} title={t('mem.offAdvanced')} />
             ) : (
-                <Stack flex={1} testID="memory-pane-advanced" />
+                stats.data ? <AdvancedBody stats={stats.data} /> : null
             )}
         </Stack>
     );

@@ -1,13 +1,18 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
+import type { IndexProgress } from '@webui/utils/documentLibrary.core';
 import type { FollowUpOutcome } from '@webui/utils/messageQueue';
 import type {
     ActiveModel,
     AgentInfo,
     AgentMcpServer,
+    ChatPerformance,
+    CloudPriceList,
     ConnectorListEntry,
+    ContextChoice,
     ContextUsageResult,
+    GpuMemoryStatus,
     LemonadeFound,
     LemonadeTarget,
     LocalModelStatus,
@@ -16,6 +21,7 @@ import type {
     ModelNeedJob,
     PermissionMode,
     PreflightReport,
+    ProvidersResponse,
     ParsedSchedule,
     ProviderModelsResponse,
     ResourceUsage,
@@ -35,16 +41,21 @@ import type {
 import type { UndoSettings } from '@webui/types/changes';
 import type { AgentCapabilities } from '@webui/types/sessionPanel';
 import type { MemorySettings } from '@webui/services/memoryApi';
-import type { CreateSessionRequest, DocumentListResponse, SessionSearchResponse, ToolConfirmRequest, UserInputRequest as ApiUserInputRequest } from '@webui/types/api.gen';
+import type { ActivityDay, TemporalItem, ToolStat } from '@webui/utils/memoryFormat.core';
+import type { CreateSessionRequest, DocumentListResponse, DocumentResponse, ModelServerInfo, SessionSearchResponse, ToolConfirmRequest, UserInputRequest as ApiUserInputRequest } from '@webui/types/api.gen';
 
 export type {
     ActiveModel,
     AgentInfo,
     AgentMcpServer,
+    ChatPerformance,
+    CloudPriceList,
     ConnectorListEntry,
     ConnectorRow,
+    ContextChoice,
     ContextUsage,
     ContextUsageResult,
+    GpuMemoryStatus,
     LemonadeFound,
     LemonadeTarget,
     LocalModelStatus,
@@ -53,7 +64,11 @@ export type {
     ModelNeedJob,
     PermissionMode,
     PreflightReport,
+    ProvidersResponse,
     ParsedSchedule,
+    ProviderId,
+    ProviderInfo,
+    ProviderModel,
     ProviderModelsResponse,
     ResourceUsage,
     Schedule,
@@ -73,7 +88,7 @@ export type {
 } from '@webui/types';
 export type { UndoSettings } from '@webui/types/changes';
 export type { ActiveSkill, AgentCapabilities, AgentTool, SkillOrigin } from '@webui/types/sessionPanel';
-export type { CreateSessionRequest, DocumentListResponse, SessionSearchResponse, SessionSearchResult, ToolConfirmRequest } from '@webui/types/api.gen';
+export type { CreateSessionRequest, DocumentListResponse, DocumentResponse, ModelServerInfo, SessionSearchResponse, SessionSearchResult, ToolConfirmRequest } from '@webui/types/api.gen';
 
 /** `display` is what the phone shows as the answer; it is never sent to GAIA. */
 export type UserInputRequest = ApiUserInputRequest & { display?: string };
@@ -94,6 +109,11 @@ export interface ConnectorList {
 
 export interface AgentList {
     agents: AgentInfo[];
+}
+
+export interface AllPermissions {
+    default_mode: PermissionMode;
+    sessions: SessionPermissions[];
 }
 
 /** Namespaced agent ids to the scopes granted to them. */
@@ -122,6 +142,8 @@ export interface ScheduleList {
 }
 
 export type { MemorySettings } from '@webui/services/memoryApi';
+/** One day of GET /api/memory/activity, one tool of GET /api/memory/tools, one item of GET /api/memory/upcoming; typed as the web's `MemoryDashboard` types them. */
+export type { ActivityDay as MemoryActivityDay, TemporalItem as MemoryUpcomingItem, ToolStat as MemoryToolStat } from '@webui/utils/memoryFormat.core';
 
 /** GET /api/memory/embedding-coverage; typed as the web's `MemoryDashboard` types it. */
 export interface EmbeddingCoverage {
@@ -230,6 +252,26 @@ export interface UserInputResult {
     request_id: string;
 }
 
+export interface DeleteDocumentResult {
+    deleted: boolean;
+}
+
+export interface CancelIndexingResult {
+    cancelled: boolean;
+    id: string;
+}
+
+export interface DocumentStatus {
+    id: string;
+    indexing_status: string;
+    chunk_count: number;
+    is_active: boolean;
+    /** Null unless the document is being indexed right now. */
+    progress: IndexProgress | null;
+}
+
+export type { IndexProgress };
+
 /** What `POST /api/setup/run` takes; the web UI's `SetupRunOptions` (services/setupApi.ts). */
 export interface SetupRunOptions {
     acknowledgeLowDisk?: boolean;
@@ -305,15 +347,27 @@ export interface GaiaClient {
     updateUndoSettings(retentionDays: number, maxMb: number, options?: RequestOptions): Promise<UndoSettings>;
     /** The model new chats run on and where it runs. */
     getActiveModel(options?: RequestOptions): Promise<ActiveModel>;
+    getContextChoice(model: string, options?: RequestOptions): Promise<ContextChoice>;
+    /** Remembers a context size for a local model; null returns it to Automatic. */
+    setContextChoice(model: string, ctxSize: number | null, options?: RequestOptions): Promise<ContextChoice>;
+    /** A cloud provider's list prices, readable before it is connected. */
     /** One provider's chat models; `local` also carries each one's state, size and download. */
     listProviderModels(provider: string, options?: RequestOptions): Promise<ProviderModelsResponse>;
     /** Makes `model` the one new messages use; a cloud model is picked after the person agrees to what leaves the PC. */
     selectModel(model: string, options?: RequestOptions): Promise<ActiveModel>;
     /** The chat's permission mode and the tools it always allows. */
     getPermissions(sessionId: string, options?: RequestOptions): Promise<SessionPermissions>;
+    /** Every chat with full access or grants, and the mode new chats start in. */
+    listAllPermissions(options?: RequestOptions): Promise<AllPermissions>;
+    /** The mode new chats start in. The PC refuses it with a 403 from anywhere but the PC itself. */
+    setDefaultPermissionMode(mode: PermissionMode, options?: RequestOptions): Promise<{ default_mode: PermissionMode }>;
+    /** Revokes one "always allow" grant, or all of the chat's when `key` is omitted. */
+    revokeGrants(sessionId: string, key?: string, options?: RequestOptions): Promise<SessionPermissions>;
     setPermissionMode(sessionId: string, mode: PermissionMode, options?: RequestOptions): Promise<SessionPermissions>;
     /** How full the model's context window is for the chat's next message, or why there is no reading yet. */
     getContextUsage(sessionId: string, options?: RequestOptions): Promise<ContextUsageResult>;
+    /** Where each answer's time and tokens went, and the model as Lemonade reports it now. */
+    getChatPerformance(sessionId: string, options?: RequestOptions): Promise<ChatPerformance>;
     /** What the chat's last finished turn did with the messages added to it; rejects with 409 while a turn still runs. */
     getFollowUpOutcome(sessionId: string, options?: RequestOptions): Promise<FollowUpOutcome>;
     /** Chats whose title or messages match `query`, newest first; `truncated` says the backend capped the list. */
@@ -369,8 +423,16 @@ export interface GaiaClient {
     /** Servers that custom agents declare in their own mcp_servers.json; read-only. */
     listAgentMcps(options?: RequestOptions): Promise<AgentMcpList>;
     listSchedules(options?: RequestOptions): Promise<ScheduleList>;
+    /** The last `days` days of conversations, tool calls, learned entries and errors, oldest first. */
+    getMemoryActivity(days: number, options?: RequestOptions): Promise<ActivityDay[]>;
+    /** Per-tool call counts and timings; memory's own tools are not logged. */
+    getMemoryTools(options?: RequestOptions): Promise<ToolStat[]>;
+    /** Memories due within `days` days, plus the overdue ones. */
+    getMemoryUpcoming(days: number, options?: RequestOptions): Promise<TemporalItem[]>;
     getMemoryStats(options?: RequestOptions): Promise<MemoryStats>;
     getMemorySettings(options?: RequestOptions): Promise<MemorySettings>;
+    /** Changes the memory switches named in `settings`; answers with all of them. */
+    updateMemorySettings(settings: Partial<MemorySettings>, options?: RequestOptions): Promise<MemorySettings>;
     getEmbeddingCoverage(options?: RequestOptions): Promise<EmbeddingCoverage>;
     /** Folds finished chats into lasting memory. */
     consolidateMemory(options?: RequestOptions): Promise<ConsolidateMemoryResult>;
@@ -396,6 +458,14 @@ export interface GaiaClient {
     listScheduleResults(name: string, limit: number, options?: RequestOptions): Promise<ScheduleResults>;
     /** The library's documents; a chat searches only the ones attached to it. */
     listDocuments(options?: RequestOptions): Promise<DocumentListResponse>;
+    /** Stops a document's indexing; rejects with 404 when none is running. */
+    cancelDocumentIndexing(docId: string, options?: RequestOptions): Promise<CancelIndexingResult>;
+    /** Takes a document out of the library; the file on the PC is untouched. */
+    deleteDocument(docId: string, options?: RequestOptions): Promise<DeleteDocumentResult>;
+    /** Where a document's indexing has got, with its progress while it runs. */
+    getDocumentStatus(docId: string, options?: RequestOptions): Promise<DocumentStatus>;
+    /** Indexes a document again; rejects with the reason when it fails once more. */
+    reindexDocument(docId: string, options?: RequestOptions): Promise<DocumentResponse>;
     getSystemStatus(options?: RequestOptions): Promise<SystemStatus>;
     /** The model server's state, what it runs on and its memory; the pill and its sheet read it. */
     getLocalModelStatus(options?: RequestOptions): Promise<LocalModelStatus>;
@@ -403,6 +473,8 @@ export interface GaiaClient {
     restartLocalModel(confirm: boolean, options?: RequestOptions): Promise<RestartModelResult>;
     /** Whether a job needs a model that isn't on the PC, and which. */
     getModelNeed(job: ModelNeedJob, options?: RequestOptions): Promise<ModelNeed>;
+    /** How this PC's memory is split, the presets and what each unlocks; `settingGb` also reads the manual steps for that size. Read only: changing it is done on the PC. */
+    getGpuMemory(settingGb?: number, options?: RequestOptions): Promise<GpuMemoryStatus>;
     /** Starts one model's download on the PC; follow it with `getSetupStatus`. */
     downloadSetupModel(modelId: string, acknowledgeLowDisk: boolean, options?: RequestOptions): Promise<SetupRunStatus>;
     getSetupStatus(options?: RequestOptions): Promise<SetupRunStatus>;
@@ -414,12 +486,31 @@ export interface GaiaClient {
     checkSetup(skipChatModel: boolean, options?: RequestOptions): Promise<SetupCheck>;
     /** This PC's memory, disk, GPU and NPU as setup reads them. */
     getPreflight(options?: RequestOptions): Promise<PreflightReport>;
+    /** The cloud providers; `blocked` is set on each while Local only is on. */
+    listProviders(options?: RequestOptions): Promise<ProvidersResponse>;
+    /** The model server GAIA uses: whether it answers, and the llama.cpp backends it lists and prefers. */
+    getModelServer(options?: RequestOptions): Promise<ModelServerInfo>;
+    /** Saves the llama.cpp backend for chat models (`auto` or a backend name); PC-only. */
+    setModelServerBackend(backend: string, options?: RequestOptions): Promise<ModelServerInfo>;
     /** Which model server GAIA uses, and whether the PC still has to choose one. */
     getLemonadeTarget(options?: RequestOptions): Promise<LemonadeTarget>;
     /** A model server the PC already runs; `unchecked` lists addresses that took the connection but didn't answer. */
     detectLemonade(options?: RequestOptions): Promise<{ found: LemonadeFound | null; unchecked?: string[] }>;
+    /** Registers the provider with the key the PC already holds; the phone never sends a key. */
+    connectProvider(provider: string, options?: RequestOptions): Promise<{ remembered: boolean }>;
+    /** A cloud provider's list prices, ranked; the first row is the model GAIA uses unless another is picked. */
+    getCloudPrices(provider: string, options?: RequestOptions): Promise<CloudPriceList>;
+    /** Reads the NPU's setup afresh after a fix on the PC; answers the plan. */
+    recheckSetupNpu(options?: RequestOptions): Promise<SetupPlan>;
     /** What setup will use and download, before it starts; `catalog` marks partial downloads. */
     getSetupPlan(options?: RequestOptions): Promise<SetupPlan>;
+    /** Saves setup's chat model; a 409 `no_fit` asks to be sent again with `acknowledgeNoFit`. Returns the new plan. */
+    chooseSetupChatModel(modelId: string, acknowledgeNoFit: boolean, options?: RequestOptions): Promise<SetupPlan>;
+    /** Saves the model that reads images; null goes back to GAIA's choice. Returns the new plan. */
+    chooseSetupVisionModel(modelId: string | null, options?: RequestOptions): Promise<SetupPlan>;
+    /** Skips one of setup's models, or takes it back. Returns the new plan. */
+    skipSetupModel(modelId: string, skipped: boolean, options?: RequestOptions): Promise<SetupPlan>;
+    /** The GPU's share of this PC's memory, and whether it can be changed. */
     startSetup(
         skipChatModel: boolean,
         gaiaLemonade?: boolean,

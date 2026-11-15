@@ -122,7 +122,8 @@ def backend(monkeypatch, tmp_path):
     monkeypatch.setenv("GAIA_HOME", str(tmp_path / "home" / ".gaia"))
     store = MemoryStore(db_path=tmp_path / "memory.db")
     monkeypatch.setattr(memory_router, "_store", store)
-    client = TestClient(create_app(db_path=":memory:"))
+    # The eval runner reaches the backend over loopback: it is the PC.
+    client = TestClient(create_app(db_path=":memory:"), client=("127.0.0.1", 50000))
     sent = []
 
     def urlopen(req, timeout=None):

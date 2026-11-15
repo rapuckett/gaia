@@ -35,7 +35,7 @@ def app():
 @pytest.fixture
 def client(app):
     """Create test client for the app."""
-    return TestClient(app)
+    return TestClient(app, client=("127.0.0.1", 50000))
 
 
 @pytest.fixture

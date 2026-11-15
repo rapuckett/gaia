@@ -81,6 +81,8 @@ export interface ChatListInput {
     /** Per-chat messages typed but not yet sent (the composer's queue). */
     queues?: Readonly<Record<string, readonly QueuedMessage[]>>;
     now?: Date;
+    /** Include eval and scheduled runs, which the list hides by default. */
+    showAutomated?: boolean;
 }
 
 export function buildChatSections({
@@ -89,8 +91,9 @@ export function buildChatSections({
     live = NO_LIVE_RUNS,
     queues = {},
     now,
+    showAutomated,
 }: ChatListInput): ChatSection[] {
-    return groupSessionsForList([...sessions], live, { now }).map((group) => ({
+    return groupSessionsForList([...sessions], live, { now, showAutomated }).map((group) => ({
         key: group.label,
         titleKey: GROUP_TITLE[group.label],
         data: group.sessions.map((s): ChatRow => {
