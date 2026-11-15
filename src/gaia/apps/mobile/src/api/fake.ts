@@ -39,6 +39,8 @@ import type {
     ModelServerInfo,
     PreflightReport,
     ProvidersResponse,
+    Goal,
+    GoalStats,
     ParsedSchedule,
     AllPermissions,
     PermissionMode,
@@ -193,6 +195,10 @@ export interface FakeClientData {
     /** What getCapabilities answers, by chat; a chat not listed has no agent running (409). */
     capabilities?: Record<string, AgentCapabilities>;
     memorySettings?: MemorySettings;
+    /** What listGoals answers; approve, reject, cancel and delete change it. */
+    goals?: Goal[] | Error;
+    /** What getGoalStoreHealth answers. */
+    goalStoreError?: string | null;
     /** What getSettings answers; setNetworkPolicy changes it. */
     settings?: Settings;
     /** Thrown by setNetworkPolicy, as the PC's 403 is. */
@@ -229,7 +235,13 @@ export type KnowledgeCall =
     | { action: 'update'; id: string; body: KnowledgeUpdateBody }
     | { action: 'delete'; id: string };
 
+export type GoalCall =
+    | { action: 'create'; title: string; description: string; priority: string }
+    | { action: 'approve' | 'reject' | 'cancel' | 'delete'; id: string };
+
 export interface FakeGaiaClient extends GaiaClient {
+    /** Each goal create, approve, reject, cancel and delete, in order. */
+    readonly goalCalls: GoalCall[];
     readonly sent: { sessionId: string; message: string }[];
     readonly created: CreateSessionRequest[];
     readonly cancelled: string[];
@@ -339,6 +351,19 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
     let memoryStatsReads = 0;
     const memoryActivityReads: number[] = [];
     const knowledgeCalls: KnowledgeCall[] = [];
+    const goalCalls: GoalCall[] = [];
+    let goals = data.goals instanceof Error ? [] : [...(data.goals ?? [])];
+    const goalById = (id: string): Goal => {
+        const goal = goals.find((g) => g.id === id);
+        if (!goal) throw new GaiaApiError(404, 'Goal not found');
+        return goal;
+    };
+    const setGoal = (id: string, status: Goal['status']): Goal => {
+        const goal = goalById(id);
+        const next = { ...goal, status };
+        goals = goals.map((g) => (g.id === id ? next : g));
+        return next;
+    };
     let knowledge = data.memoryKnowledge instanceof Error ? [] : [...(data.memoryKnowledge ?? [])];
     let knowledgeAdds = 0;
     function memoryAction<T>(name: string, result: T | Error): T {
@@ -395,6 +420,55 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         memoryActions,
         memoryActivityReads,
         knowledgeCalls,
+        goalCalls,
+        async listGoals() {
+            if (data.goals instanceof Error) throw data.goals;
+            return { goals, total: goals.length };
+        },
+        async getGoalStats(): Promise<GoalStats> {
+            if (data.goals instanceof Error) throw data.goals;
+            const count: GoalStats = { goals: {}, tasks: {} };
+            for (const goal of goals) count.goals[goal.status] = (count.goals[goal.status] ?? 0) + 1;
+            return count;
+        },
+        async getGoalStoreHealth() {
+            return { error: data.goalStoreError ?? null };
+        },
+        async createGoal(body) {
+            goalCalls.push({ action: 'create', ...body });
+            const now = new Date().toISOString();
+            const goal: Goal = {
+                id: `goal-${goals.length + 1}`,
+                ...body,
+                status: 'queued',
+                source: 'user',
+                mode_required: 'goal_driven',
+                approved_for_auto: true,
+                progress_notes: '',
+                created_at: now,
+                updated_at: now,
+                tasks: [],
+            };
+            goals = [goal, ...goals];
+            return goal;
+        },
+        async approveGoal(id) {
+            goalCalls.push({ action: 'approve', id });
+            return setGoal(id, 'queued');
+        },
+        async rejectGoal(id) {
+            goalCalls.push({ action: 'reject', id });
+            return setGoal(id, 'rejected');
+        },
+        async cancelGoal(id) {
+            goalCalls.push({ action: 'cancel', id });
+            return setGoal(id, 'cancelled');
+        },
+        async deleteGoal(id) {
+            goalCalls.push({ action: 'delete', id });
+            goalById(id);
+            goals = goals.filter((g) => g.id !== id);
+        },
         get memoryStatsReads() {
             return memoryStatsReads;
         },
@@ -598,6 +672,14 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         },
         async listConnectors() {
             return { connectors: [...(data.connectors ?? [])] };
+        },
+        async disableConnector(connectorId) {
+            data.connectors = (data.connectors ?? []).map((c) => (c.id === connectorId && !('error' in c) ? { ...c, enabled: false } : c));
+        },
+        async disconnectConnector(connectorId) {
+            data.connectors = (data.connectors ?? []).map((c) =>
+                c.id === connectorId && !('error' in c) ? { ...c, configured: false, enabled: true, account_id: null } : c,
+            );
         },
         async listAgents() {
             return { agents: [...(data.agents ?? [])] };
