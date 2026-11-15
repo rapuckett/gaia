@@ -50,7 +50,7 @@ export function AddMemory({ notify }: Pick<MemoryPaneProps, 'notify'>) {
             <TextField
                 value={text}
                 onChangeText={setText}
-                placeholder={t('mem.about.addPlaceholder')}
+                placeholder={t.bare('mem.about.addPlaceholder')}
                 accessibilityLabel={t('mem.about.addLabel')}
                 multiline
                 maxLines={4}

@@ -47,6 +47,7 @@ export function ModelRow({ model: m, label, current, remote, busy, onUse, onDown
                     {m.rank ? (
                         <Badge
                             label={`#${m.rank}${m.note ? ` ${RANK_NOTES[m.note] ? t.bare(RANK_NOTES[m.note]!) : m.note}` : ''}`}
+                            accessibilityLabel={`#${m.rank}${m.note ? ` ${RANK_NOTES[m.note] ? t(RANK_NOTES[m.note]!) : m.note}` : ''}`}
                             tone="accent"
                         />
                     ) : null}

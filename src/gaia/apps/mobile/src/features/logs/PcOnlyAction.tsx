@@ -3,7 +3,7 @@
 
 import { useState } from 'react';
 
-import { PC_ONLY_REFUSAL } from '@/api/constants';
+import { useT } from '@/i18n/useT';
 import { Button, Notice, Stack, Text } from '@/ui';
 import type { LucideIcon } from '@/ui/icons';
 
@@ -17,13 +17,16 @@ export function PcOnlyAction({ label, icon, note, detail, testID }: {
     detail: string;
     testID: string;
 }) {
+    const t = useT();
     const [pressed, setPressed] = useState(false);
+    const refusal = t('mobileApp.pcOnly.refusal');
+    const generic = t('mobileApp.settings.pcOnly');
     return (
         <Stack gap="sm">
             <Button label={label} icon={icon} onPress={() => setPressed(true)} testID={testID} />
             {note ? <Text role="caption" tone="muted">{note}</Text> : null}
             {pressed ? (
-                <Notice tone="info" message={`${PC_ONLY_REFUSAL} ${detail}`} testID={`${testID}-refusal`} />
+                <Notice tone="info" message={detail === generic ? refusal : `${refusal} ${detail}`} testID={`${testID}-refusal`} />
             ) : null}
         </Stack>
     );

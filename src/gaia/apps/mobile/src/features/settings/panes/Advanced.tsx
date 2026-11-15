@@ -166,7 +166,7 @@ function StatusBody({ status, modelName, actions, detailsOpen, onToggleDetails }
             {notDownloaded ? (
                 <Stack gap="sm">
                     <Divider />
-                    <Text role="label" weight="semibold">{t('settings.advanced.notDownloaded')}</Text>
+                    <Text role="label" weight="semibold" accessibilityRole="header">{t('settings.advanced.notDownloaded')}</Text>
                     <Text role="caption" tone="muted">{t('settings.advanced.notDownloadedHint', { name: isolate(name, 'ltr'), need: needText(status) })}</Text>
                     <Button
                         label={downloading ? t('settings.advanced.downloading') : t('settings.model.download')}
@@ -186,7 +186,7 @@ function StatusBody({ status, modelName, actions, detailsOpen, onToggleDetails }
             {needsLoad ? (
                 <Stack gap="sm">
                     <Divider />
-                    <Text role="label" weight="semibold">{wrongModel ? t('settings.advanced.wrongModel') : t('settings.advanced.smallContext')}</Text>
+                    <Text role="label" weight="semibold" accessibilityRole="header">{wrongModel ? t('settings.advanced.wrongModel') : t('settings.advanced.smallContext')}</Text>
                     <Text role="caption" tone="muted">{t('settings.advanced.loadHint', { name: isolate(name, 'ltr') })}</Text>
                     <Button
                         label={actions.pending === 'load' ? t('settings.advanced.loading') : t('settings.advanced.load')}
@@ -227,7 +227,7 @@ function StatusBody({ status, modelName, actions, detailsOpen, onToggleDetails }
                     />
                     {status.gpu_name ? (
                         <StatusRow
-                            label={t.bare('resources.gpu')}
+                            label={t('resources.gpu')}
                             value={<Ltr>{`${status.gpu_name}${status.gpu_vram_gb ? ` (${status.gpu_vram_gb.toFixed(1)} GB)` : ''}`}</Ltr>}
                             ok
                         />
