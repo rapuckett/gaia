@@ -102,7 +102,7 @@ export default function Setup() {
             <Stack gap="lg" paddingX="lg" paddingY="md">
                 <Text role="body" tone="secondary">{t('settings.setup.lede')}</Text>
                 <Stack gap="sm">
-                    <Text role="ui" weight="semibold">
+                    <Text role="ui" weight="semibold" accessibilityRole="header">
                         {t('settings.setup.ready')}
                         {chatName ? <Text role="label" tone="muted">{` ${t('settings.setup.running', { name: chatName })}`}</Text> : null}
                     </Text>

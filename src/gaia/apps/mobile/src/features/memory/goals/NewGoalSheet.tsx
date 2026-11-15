@@ -70,7 +70,7 @@ export function NewGoalSheet({ open, onClose }: NewGoalSheetProps) {
                 <TextField
                     value={title}
                     onChangeText={setTitle}
-                    placeholder={t('mem.goals.titlePlaceholder')}
+                    placeholder={t.bare('mem.goals.titlePlaceholder')}
                     accessibilityLabel={t('mem.goals.titlePlaceholder')}
                     autoFocus
                     testID="goals-create-title"
@@ -78,7 +78,7 @@ export function NewGoalSheet({ open, onClose }: NewGoalSheetProps) {
                 <TextField
                     value={description}
                     onChangeText={setDescription}
-                    placeholder={t('mem.goals.descPlaceholder')}
+                    placeholder={t.bare('mem.goals.descPlaceholder')}
                     accessibilityLabel={t('mem.goals.descPlaceholder')}
                     multiline
                     maxLines={5}
@@ -87,11 +87,11 @@ export function NewGoalSheet({ open, onClose }: NewGoalSheetProps) {
                 <SegmentedControl
                     value={priority}
                     onChange={(value) => setPriority(value as GoalPriority)}
-                    accessibilityLabel={t.bare(PRIORITY_CHOICES.find((choice) => choice.value === priority)!.label)}
+                    accessibilityLabel={t(PRIORITY_CHOICES.find((choice) => choice.value === priority)!.label)}
                     options={PRIORITY_CHOICES.map((choice) => ({
                         value: choice.value,
                         label: t.bare(PRIORITY_KEYS[choice.value]),
-                        accessibilityLabel: t.bare(choice.label),
+                        accessibilityLabel: t(choice.label),
                     }))}
                     testID="goals-create-priority"
                 />
