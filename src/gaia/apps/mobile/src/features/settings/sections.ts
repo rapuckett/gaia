@@ -11,6 +11,7 @@ import Memory from './panes/Memory';
 import Model from './panes/Model';
 import Permissions from './panes/Permissions';
 import Placeholder from './panes/Placeholder';
+import Setup from './panes/Setup';
 
 /** The web's settings sections, in its nav order; `voice` is "Read aloud". */
 export type SectionId =
@@ -38,7 +39,7 @@ export interface SettingsSectionEntry {
 
 export const SETTINGS_SECTIONS: Record<SectionId, SettingsSectionEntry> = {
     general: { titleKey: 'settings.section.general', icon: SlidersHorizontal, pane: General },
-    setup: { titleKey: 'settings.section.setup', icon: ListChecks, pane: Placeholder },
+    setup: { titleKey: 'settings.section.setup', icon: ListChecks, pane: Setup },
     model: { titleKey: 'settings.section.model', icon: Cpu, pane: Model },
     permissions: { titleKey: 'settings.section.permissions', icon: ShieldQuestion, pane: Permissions },
     skills: { titleKey: 'settings.section.skills', icon: Sparkles, pane: Placeholder },

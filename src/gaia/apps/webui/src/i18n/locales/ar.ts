@@ -1725,6 +1725,8 @@ const messages: Messages = {
     'settings.setup.confirmTitle': 'هل تريد تشغيل الإعداد مرة أخرى؟',
     'settings.setup.confirmBody': 'تبقى نماذجك ومفاتيحك ومحادثاتك. لن يتغير شيء حتى تختار شيئًا جديدًا.',
     'settings.setup.confirmYes': 'بدء الإعداد',
+    'settings.setup.memoryOf': '{size} من {total} للنماذج',
+    'settings.setup.memoryFor': '{size} للنماذج',
     'settings.section.messaging': 'المراسلة',
     'settings.messaging.discord': 'ديسكورد',
     'settings.messaging.pitch': 'راسل GAIA من ديسكورد على هاتفك، ويجيبك من هذا الجهاز.',
