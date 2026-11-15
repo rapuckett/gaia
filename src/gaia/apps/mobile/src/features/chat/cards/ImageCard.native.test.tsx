@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import { render, screen } from '@testing-library/react-native';
-import { Platform } from 'react-native';
+import { Image, Platform } from 'react-native';
 
 import { translator } from '@/i18n/useT';
 import { ThemeProvider } from '@/ui';
@@ -12,6 +12,14 @@ import { RenderCard } from './RenderCard';
 jest.mock('@/platform/fetch', () => ({ platformFetch: jest.fn() }));
 jest.mock('expo-file-system', () => ({ File: jest.fn(), Paths: { cache: '' } }));
 jest.mock('expo-sharing', () => ({ isAvailableAsync: jest.fn(), shareAsync: jest.fn() }));
+
+// Pin Image.getSize's callback form, whichever preset mock is loaded.
+beforeEach(() => {
+    jest.spyOn(Image, 'getSize').mockImplementation((_uri: string, ok?: (w: number, h: number) => void) => {
+        ok?.(320, 240);
+        return Promise.resolve({ width: 320, height: 240 });
+    });
+});
 
 const t = translator('en');
 const describeNative = Platform.OS === 'web' ? describe.skip : describe;

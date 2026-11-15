@@ -31,6 +31,8 @@ export const ENDPOINTS = {
     mcpStatus: '/api/mcp/status',
     memoryActivity: '/api/memory/activity',
     memoryAll: '/api/memory/all',
+    memoryCommitDiscovery: '/api/memory/commit-discovery',
+    memoryCommitInference: '/api/memory/commit-inference',
     memoryConsolidate: '/api/memory/consolidate',
     memoryConversation: '/api/memory/conversations/{session_id}',
     memoryConversations: '/api/memory/conversations',
@@ -46,6 +48,8 @@ export const ENDPOINTS = {
     memoryReinitialize: '/api/memory/reinitialize',
     memorySettings: '/api/memory/settings',
     memoryStats: '/api/memory/stats',
+    memoryStreamDiscovery: '/api/memory/stream-discovery',
+    memoryStreamInference: '/api/memory/stream-inference',
     memoryTools: '/api/memory/tools',
     memoryUpcoming: '/api/memory/upcoming',
     messagingDiscord: '/api/messaging/discord',
@@ -194,6 +198,10 @@ export function memoryKnowledgePath(params: object): string {
     return parts.length ? `${ENDPOINTS.memoryKnowledge}?${parts.join('&')}` : ENDPOINTS.memoryKnowledge;
 }
 
+export function memoryStreamInferencePath(includeBrowser: boolean): string {
+    return `${ENDPOINTS.memoryStreamInference}?include_browser=${includeBrowser}`;
+}
+
 export function memoryUpcomingPath(days: number): string {
     return `${ENDPOINTS.memoryUpcoming}?days=${days}`;
 }
@@ -340,6 +348,8 @@ export const GOAL_HEALTH_POLL_MS = 30_000;
 export const DISCORD_POLL_MS = 3_000;
 export const DISCORD_LIVE_STATES: ReadonlySet<string> = new Set(['starting', 'pairing', 'connected']);
 /** How long a memory result notice stays up, as the web's toasts do (4 s); a failure stays twice as long to be read. */
+/** A profile scan or inference may go quiet for a while (a model call, a big home folder); the web's EventSource waits without limit, so this is only a dead-connection guard. */
+export const PROFILE_STREAM_IDLE_MS = 5 * 60_000;
 export const MEMORY_NOTICE_MS = 4_000;
 export const MEMORY_ERROR_NOTICE_MS = 8_000;
 /** How long a Delete button waits for its "Confirm?" press; the web UI's CONFIRM_DELETE_MS. */

@@ -43,6 +43,7 @@ import type {
     MemoryStats,
     MemoryToolStat,
     MemoryUpcomingItem,
+    ProfileStreamEvent,
     Message,
     MessageList,
     ModelNeed,
@@ -243,6 +244,10 @@ export interface FakeClientData {
     /** The conversations in memory, newest first, with each one's turns; an Error makes the reads fail. */
     memoryConversations?: { sessions: MemoryConversation[]; turns: Record<string, MemoryTurn[]> } | Error;
     memoryUpcoming?: MemoryUpcomingItem[] | Error;
+    /** What each profile-setup stream sends; `hang` leaves it open after its events until the caller stops it, `error` throws once they are read. */
+    profileStreams?: { discovery?: ProfileScript; inference?: ProfileScript };
+    /** Thrown by both profile commits. */
+    profileCommitError?: Error;
     /** What each maintenance POST answers; an Error makes it fail. Unlisted ones answer a zero result. */
     memoryActionResults?: {
         consolidate?: ConsolidateMemoryResult | Error;
@@ -251,6 +256,12 @@ export interface FakeClientData {
         rebuildFts?: Error;
         refreshSystemContext?: RefreshSystemContextResult | Error;
     };
+}
+
+export interface ProfileScript {
+    events: ProfileStreamEvent[];
+    hang?: boolean;
+    error?: Error;
 }
 
 export type DocumentAction = 'cancel' | 'delete' | 'reindex';
@@ -321,6 +332,10 @@ export interface FakeGaiaClient extends GaiaClient {
     readonly conversationSearches: string[];
     /** The range of each activity read, in order. */
     readonly memoryActivityReads: number[];
+    /** Each profile stream opened (with the browser-history choice for inference), and whether the caller has since stopped it. */
+    readonly profileStreamOpens: { kind: 'discovery' | 'inference'; includeBrowser?: boolean; stopped: boolean }[];
+    /** Each profile commit, in order. */
+    readonly profileCommits: { kind: 'discovery' | 'inference'; items: unknown[] }[];
     /** How many times the stats were read. */
     readonly memoryStatsReads: number;
 }
@@ -403,6 +418,18 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
     const knowledgeCalls: KnowledgeCall[] = [];
     const knowledgeReads: KnowledgeListParams[] = [];
     const conversationSearches: string[] = [];
+    const profileStreamOpens: FakeGaiaClient['profileStreamOpens'] = [];
+    const profileCommits: FakeGaiaClient['profileCommits'] = [];
+    async function* profileStream(kind: 'discovery' | 'inference', includeBrowser: boolean | undefined, signal?: AbortSignal): AsyncGenerator<ProfileStreamEvent> {
+        const open = { kind, ...(includeBrowser === undefined ? {} : { includeBrowser }), stopped: false };
+        profileStreamOpens.push(open);
+        signal?.addEventListener('abort', () => (open.stopped = true));
+        const script = data.profileStreams?.[kind];
+        if (!script) throw new GaiaApiError(503, 'This fake client was given no profile stream.');
+        yield* script.events;
+        if (script.error) throw script.error;
+        if (script.hang) await new Promise<void>((resolve) => (signal?.aborted ? resolve() : signal?.addEventListener('abort', () => resolve())));
+    }
     const goalCalls: GoalCall[] = [];
     let goals = data.goals instanceof Error ? [] : [...(data.goals ?? [])];
     const goalById = (id: string): Goal => {
@@ -482,6 +509,8 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         capabilityReads,
         memoryActions,
         memoryActivityReads,
+        profileStreamOpens,
+        profileCommits,
         knowledgeCalls,
         knowledgeReads,
         conversationSearches,
@@ -998,6 +1027,22 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         },
         async refreshSystemContext() {
             return memoryAction('refreshSystemContext', data.memoryActionResults?.refreshSystemContext ?? { stored: 0, skipped: false });
+        },
+        streamMemoryDiscovery(options) {
+            return profileStream('discovery', undefined, options?.signal);
+        },
+        streamMemoryInference(includeBrowser, options) {
+            return profileStream('inference', includeBrowser, options?.signal);
+        },
+        async commitMemoryDiscovery(items) {
+            if (data.profileCommitError) throw data.profileCommitError;
+            profileCommits.push({ kind: 'discovery', items });
+            return { stored: items.length };
+        },
+        async commitMemoryInference(insights) {
+            if (data.profileCommitError) throw data.profileCommitError;
+            profileCommits.push({ kind: 'inference', items: insights });
+            return { stored: insights.length };
         },
         async listSchedules() {
             return { schedules: [...schedules], total: schedules.length };

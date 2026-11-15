@@ -75,6 +75,7 @@ import type {
     MCPServerStatus,
     MemoryTurn,
     MemoryUpcomingItem,
+    ProfileStreamEvent,
     MessageList,
     ModelNeed,
     ModelServerInfo,
@@ -134,7 +135,9 @@ import {
     memoryConversationsSearchPath,
     memoryKnowledgeItemPath,
     memoryKnowledgePath,
+    memoryStreamInferencePath,
     memoryUpcomingPath,
+    PROFILE_STREAM_IDLE_MS,
     schedulePath,
     scheduleResultsPath,
     scheduleRunPath,
@@ -358,6 +361,26 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
         }
     }
 
+    /** A profile-setup stream, to its `done` event; one that closes before it is an error, as the web's onerror treats it. */
+    async function* streamProfile(path: string, signal?: AbortSignal): AsyncGenerator<ProfileStreamEvent> {
+        const connection = new AbortController();
+        const drop = () => connection.abort();
+        if (signal?.aborted) drop();
+        else signal?.addEventListener('abort', drop);
+        try {
+            const res = await request('GET', path, undefined, connection.signal, { endpoint: 'attach', ms: ATTACH_HEADER_TIMEOUT_MS, abort: drop });
+            if (!res.body) throw new GaiaStreamError('mobileApp.error.noBody');
+            for await (const event of parseSseStream(res.body, () => PROFILE_STREAM_IDLE_MS)) {
+                yield event as unknown as ProfileStreamEvent;
+                if (event.type === 'done') return;
+            }
+            throw new GaiaStreamError('mobileApp.error.streamClosed');
+        } finally {
+            signal?.removeEventListener('abort', drop);
+            drop();
+        }
+    }
+
     return {
         health(options?: RequestOptions) {
             return getJson<HealthResponse>(ENDPOINTS.health, options?.signal);
@@ -567,6 +590,22 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
         attachToRun(sessionId, options) {
             const path = `${ENDPOINTS.chatAttach}?session_id=${encodeURIComponent(sessionId)}`;
             return streamTurn('GET', path, undefined, 'attach', ATTACH_HEADER_TIMEOUT_MS, options?.signal);
+        },
+
+        streamMemoryDiscovery(options) {
+            return streamProfile(ENDPOINTS.memoryStreamDiscovery, options?.signal);
+        },
+
+        streamMemoryInference(includeBrowser, options) {
+            return streamProfile(memoryStreamInferencePath(includeBrowser), options?.signal);
+        },
+
+        commitMemoryDiscovery(items, options) {
+            return postJson<{ stored: number }>(ENDPOINTS.memoryCommitDiscovery, { items }, options?.signal);
+        },
+
+        commitMemoryInference(insights, options) {
+            return postJson<{ stored: number }>(ENDPOINTS.memoryCommitInference, { insights }, options?.signal);
         },
 
         async *watchSessionEvents(options) {
