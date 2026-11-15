@@ -29,7 +29,7 @@ import {
     Text,
     TextField,
 } from '@/ui';
-import { Ellipsis, EyeOff, Plus, X } from '@/ui/icons';
+import { Ellipsis, EyeOff, Monitor, Plus, X } from '@/ui/icons';
 
 import { ChatRowSheets, type RowSheet } from './ChatRowSheets';
 import { declaredNavEntries, type NavEntry } from './navEntries';
@@ -68,13 +68,15 @@ export interface ChatDrawerContentProps {
     /** The section open now, so its entry is the only selected row. */
     activeRoute?: string | null;
     onOpenRoute?: (route: string) => void;
+    /** Shows a Your PCs button in the header when given. */
+    onPcs?: () => void;
     live?: LiveRuns;
     queues?: Readonly<Record<string, readonly QueuedMessage[]>>;
     /** The last failed row action, shown as an alert until the next one succeeds. */
     error?: ChatListError | null;
 }
 
-export function ChatDrawerContent({ activeId, onSelect, onClose, onNewChat, routeNames = [], activeRoute, onOpenRoute, live, queues, error }: ChatDrawerContentProps) {
+export function ChatDrawerContent({ activeId, onSelect, onClose, onNewChat, onPcs, routeNames = [], activeRoute, onOpenRoute, live, queues, error }: ChatDrawerContentProps) {
     const t = useT();
     const sessions = useSessions();
     const now = useNow();
@@ -137,7 +139,7 @@ export function ChatDrawerContent({ activeId, onSelect, onClose, onNewChat, rout
     return (
         <Screen
             edges={['top', 'bottom', 'start']}
-            header={<Header onClose={close} onNewChat={onNewChat ? newChat : undefined} />}
+            header={<Header onClose={close} onNewChat={onNewChat ? newChat : undefined} onPcs={onPcs} />}
             footer={
                 <Stack>
                     {entries.filter((e) => e.footer).map((e) => (
@@ -219,13 +221,14 @@ export function ChatDrawerContent({ activeId, onSelect, onClose, onNewChat, rout
     );
 }
 
-function Header({ onClose, onNewChat }: { onClose: () => void; onNewChat?: () => void }) {
+function Header({ onClose, onNewChat, onPcs }: { onClose: () => void; onNewChat?: () => void; onPcs?: () => void }) {
     const t = useT();
     return (
         <Stack paddingX="lg" paddingY="sm">
             <Row gap="sm" accessibilityRole="header">
                 <Text role="title" weight="semibold">{APP_NAME}</Text>
                 <Spacer />
+                {onPcs ? <IconButton icon={Monitor} label={t('mobileApp.pairing.pcs.title')} onPress={onPcs} /> : null}
                 {onNewChat ? <IconButton icon={Plus} label={t('sidebar.newChat')} onPress={onNewChat} /> : null}
                 <IconButton icon={X} label={t('sidebar.collapse')} onPress={onClose} />
             </Row>

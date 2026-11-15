@@ -7,7 +7,9 @@ import type {
     AgentInfo,
     AgentMcpServer,
     ChatPerformance,
+    CloudPriceList,
     ConnectorListEntry,
+    ContextChoice,
     ContextUsageResult,
     LemonadeFound,
     LemonadeTarget,
@@ -42,8 +44,10 @@ export type {
     AgentInfo,
     AgentMcpServer,
     ChatPerformance,
+    CloudPriceList,
     ConnectorListEntry,
     ConnectorRow,
+    ContextChoice,
     ContextUsage,
     ContextUsageResult,
     LemonadeFound,
@@ -56,6 +60,9 @@ export type {
     PreflightReport,
     ProvidersResponse,
     ParsedSchedule,
+    ProviderId,
+    ProviderInfo,
+    ProviderModel,
     ProviderModelsResponse,
     ResourceUsage,
     Schedule,
@@ -297,6 +304,11 @@ export interface GaiaClient {
     markSessionRead(sessionId: string, options?: RequestOptions): Promise<Session>;
     /** The model new chats run on and where it runs. */
     getActiveModel(options?: RequestOptions): Promise<ActiveModel>;
+    getContextChoice(model: string, options?: RequestOptions): Promise<ContextChoice>;
+    /** Remembers a context size for a local model; null returns it to Automatic. */
+    setContextChoice(model: string, ctxSize: number | null, options?: RequestOptions): Promise<ContextChoice>;
+    /** A cloud provider's list prices, readable before it is connected. */
+    getCloudPrices(provider: string, options?: RequestOptions): Promise<CloudPriceList>;
     /** One provider's chat models; `local` also carries each one's state, size and download. */
     listProviderModels(provider: string, options?: RequestOptions): Promise<ProviderModelsResponse>;
     /** Makes `model` the one new messages use; a cloud model is picked after the person agrees to what leaves the PC. */

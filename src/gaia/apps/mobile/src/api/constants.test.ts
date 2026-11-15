@@ -97,8 +97,10 @@ describe('endpoints', () => {
     const methods: Record<keyof typeof ENDPOINTS, string[]> = {
         agents: ['GET'],
         health: ['GET'],
+        cloudPrices: ['GET'],
         lemonadeDetect: ['GET'],
         lemonadeTarget: ['GET'],
+        localModelContext: ['GET', 'PUT'],
         localModelRestart: ['POST'],
         localModelStatus: ['GET'],
         memoryConsolidate: ['POST'],
