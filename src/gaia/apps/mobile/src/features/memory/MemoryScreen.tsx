@@ -15,11 +15,13 @@ import { useMemoryNotice } from './useMemoryNotice';
 
 export interface MemoryScreenProps {
     onBack: () => void;
+    /** The tab to open on; the dev gallery uses it. */
+    initialTab?: MemoryTabKey;
 }
 
-export function MemoryScreen({ onBack }: MemoryScreenProps) {
+export function MemoryScreen({ onBack, initialTab = 'about' }: MemoryScreenProps) {
     const t = useT();
-    const [tab, setTab] = useState<MemoryTabKey>('about');
+    const [tab, setTab] = useState<MemoryTabKey>(initialTab);
     const [menuOpen, setMenuOpen] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
     const { notice, notify, dismiss } = useMemoryNotice();

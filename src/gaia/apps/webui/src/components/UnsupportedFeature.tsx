@@ -4,6 +4,7 @@
 import { useEffect, useRef } from 'react';
 import { AlertTriangle, X, AlertCircle, Bug } from 'lucide-react';
 import { GITHUB_NEW_ISSUE_URL, buildBugReportUrl } from '../utils/bugReport.core';
+import { failureHint } from '../utils/documentLibrary.core';
 import { AUDIO_EXTENSIONS, VIDEO_EXTENSIONS } from '../utils/mediaFiles';
 import { useT } from '../i18n/useT';
 import './UnsupportedFeature.css';
@@ -181,15 +182,6 @@ export function bugReportUrl(title: string, errorDetail?: string): string {
 
 // ── Upload Error Toast ───────────────────────────────────────────────────
 
-/** Failures retrying can't fix until the file changes (the backend's error kind), and what to do instead. */
-export const PERMANENT_FAILURE_HINTS: Record<string, string> = {
-    corrupted: 'The file looks damaged. Re-download or re-export it, then index the new copy.',
-    encrypted: 'The PDF needs a password to open. Save a copy without the password, then index that.',
-    empty: 'The PDF has no readable text, which usually means it is a scan. Run OCR on it, then index it again.',
-    empty_file: 'This file is empty. Add content to it, then index it again.',
-    unsupported_workbook: 'This is an old .xls workbook or has a password. Open it in Excel, save a copy as .xlsx without a password, then index that.',
-};
-
 /** The backend's message without its leading category label, e.g. "File not found:". */
 function stripPrefix(message: string, prefix: string): string {
     return message.startsWith(prefix) ? message.slice(prefix.length).trim() : message;
@@ -246,7 +238,7 @@ export function UploadErrorToast({ filename, error, status, kind, onDismiss, tim
     let issueUrl: string | null;
     let Icon = AlertCircle;
 
-    const permanentHint = kind ? PERMANENT_FAILURE_HINTS[kind] : undefined;
+    const permanentHint = failureHint(t, kind);
 
     // A wrong path, a file outside the readable folders or a damaged file is the user's to fix, not a bug to report.
     if (permanentHint) {
