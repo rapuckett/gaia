@@ -18,10 +18,10 @@ beside an installed GAIA without touching its ports or ``~/.gaia``.
   lets a test drive a tool-approval prompt.
 
 The backend starts already set up: the fake Lemonade lists every model the
-flagship profile needs, and its speech model, as downloaded, the flagship's install sentinel is written
-under ``--home``, and the setup marker is set, so ``/api/setup/check`` reports
-``ready: true`` and a client goes straight to chat. ``--fresh`` leaves all three
-out, for flows that drive the first-run Setup wizard.
+flagship profile needs, and its speech model, as downloaded; the flagship's
+install sentinel is written under ``--home``; and the setup marker is set, so
+``/api/setup/check`` reports ``ready: true`` and a client goes straight to chat.
+``--fresh`` leaves all three out, for flows that drive the first-run Setup wizard.
 
 With no script every completion answers :data:`DEFAULT_REPLY`. When a script
 runs out the fake LLM answers HTTP 500 instead of inventing a reply.
