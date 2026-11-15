@@ -43,6 +43,16 @@ export function useMemorySettings() {
     });
 }
 
+/** Turns a memory switch on or off: `mutate({ memory_enabled: false })`. */
+export function useUpdateMemorySettings() {
+    const client = useGaiaClient();
+    const queryClient = useQueryClient();
+    return useMutation<MemorySettings, Error, Partial<MemorySettings>>({
+        mutationFn: (settings) => requireClient(client).updateMemorySettings(settings),
+        onSettled: () => queryClient.invalidateQueries({ queryKey: memoryKeys.all }),
+    });
+}
+
 export function useEmbeddingCoverage() {
     const client = useGaiaClient();
     return useQuery<EmbeddingCoverage>({

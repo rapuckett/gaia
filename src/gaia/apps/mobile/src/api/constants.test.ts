@@ -107,7 +107,7 @@ describe('endpoints', () => {
         memoryRebuildFts: ['POST'],
         memoryReconcile: ['POST'],
         memoryRefreshSystemContext: ['POST'],
-        memorySettings: ['GET'],
+        memorySettings: ['GET', 'PUT'],
         memoryStats: ['GET'],
         providerModels: ['GET'],
         providersActive: ['GET'],

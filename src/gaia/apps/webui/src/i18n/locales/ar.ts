@@ -3563,6 +3563,8 @@ const messages: Messages = {
     'mobileApp.serverDown.title': 'خادم النماذج على الكمبيوتر لا يستجيب',
     'mobileApp.skills.yoursEmpty': 'لا شيء بعد. أضف مجلدًا فيه ملف SKILL.md إلى {path} على الكمبيوتر وسيظهر هنا.',
     'mobileApp.banner.openOnPc': 'افتح GAIA على جهاز الكمبيوتر لتشغيل خادم النماذج.',
+    'mobileApp.settings.memory.lede': 'يتذكر GAIA الحقائق والتفضيلات والمحادثات السابقة عبر المحادثات، على جهاز الكمبيوتر لديك فقط. لا تُحفظ المحادثات الخاصة (أيقونة العين في المحادثة) أبدًا.',
+    'mobileApp.settings.pcOnly': 'غيّر هذا من الكمبيوتر الذي يشغّل GAIA.',
     'mobileApp.settings.comingSoon': 'هذا القسم قادم إلى الهاتف قريبًا. في الوقت الحالي، غيّره من الكمبيوتر الذي يشغّل GAIA.',
 };
 

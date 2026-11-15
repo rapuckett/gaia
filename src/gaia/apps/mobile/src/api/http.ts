@@ -527,6 +527,10 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             return getJson<MemorySettings>(ENDPOINTS.memorySettings, options?.signal);
         },
 
+        updateMemorySettings(settings, options) {
+            return putJson<MemorySettings>(ENDPOINTS.memorySettings, settings, options?.signal);
+        },
+
         getEmbeddingCoverage(options) {
             return getJson<EmbeddingCoverage>(ENDPOINTS.memoryEmbeddingCoverage, options?.signal);
         },
