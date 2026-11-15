@@ -21,6 +21,7 @@ import { downloadsActive } from '@webui/components/setup/downloadModel';
 import { catalogOf, savedVision, skipChanges, type Selection } from '@webui/components/setup/selection';
 
 import { useGaiaClient } from './GaiaClientProvider';
+import { modelMenuKeys } from './modelMenu';
 import { queryKeys, requireClient } from './queries';
 
 /** How often to re-read a running setup, as the web UI's setup screen does. */
@@ -209,6 +210,19 @@ export function useGpuMemory(settingGb: number | null = null, enabled = true) {
     });
 }
 
+/** "I've done this" with a size, or "Keep {gb}" with none: records or drops the pending GPU memory change, then rereads the split. */
+export function useGpuMemoryPending() {
+    const client = useGaiaClient();
+    const queryClient = useQueryClient();
+    return useMutation<GpuMemoryStatus, Error, number | null>({
+        mutationFn: (settingGb) => {
+            const api = requireClient(client);
+            return settingGb == null ? api.dismissGpuMemoryPending() : api.recordGpuMemoryPending(settingGb);
+        },
+        onSuccess: () => queryClient.invalidateQueries({ queryKey: ['gpuMemory'] }),
+    });
+}
+
 /** Which model server GAIA uses; `offer` stays true until someone on the PC chooses, so it is re-read while waiting. */
 export function useLemonadeTarget() {
     const client = useGaiaClient();
@@ -390,6 +404,7 @@ export function useConnectCloud() {
             queryClient.setQueryData(queryKeys.setupStatus, status);
             void queryClient.invalidateQueries({ queryKey: queryKeys.setupStatus });
             void queryClient.invalidateQueries({ queryKey: ['cloudProviders'] });
+            void queryClient.invalidateQueries({ queryKey: modelMenuKeys.active });
         },
     });
 }
