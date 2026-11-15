@@ -23,6 +23,8 @@ export interface FirstSendState {
     // From the first Send until the chat's first turn is under way.
     sending: boolean;
     error: string | null;
+    // The first message, shown at once while its chat is made.
+    opening: string | null;
     // The chat to open once its first turn is under way.
     open: string | null;
     // The chat whose first turn is being waited on.
@@ -41,7 +43,7 @@ export interface FirstSend {
 
 // Creates the chat on the first send; messages typed meanwhile wait and follow into it.
 export function createFirstSend(initialDeps: FirstSendDeps, initialText = ''): FirstSend {
-    let state: FirstSendState = { text: initialText, sending: false, error: null, open: null, waiting: null };
+    let state: FirstSendState = { text: initialText, sending: false, opening: null, error: null, open: null, waiting: null };
     let deps = initialDeps;
     let pending: { id: string; message: string } | null = null;
     const listeners = new Set<() => void>();
@@ -53,7 +55,7 @@ export function createFirstSend(initialDeps: FirstSendDeps, initialText = ''): F
 
     const putBack = (message: string, error: string) => {
         // Nothing was sent, so every message goes back in the box.
-        set({ text: [message, ...deps.takeHeld()].join('\n\n'), error, sending: false, waiting: null });
+        set({ text: [message, ...deps.takeHeld()].join('\n\n'), error, sending: false, opening: null, waiting: null });
     };
 
     return {
@@ -73,7 +75,7 @@ export function createFirstSend(initialDeps: FirstSendDeps, initialText = ''): F
                 set({ text: '' });
                 return;
             }
-            set({ sending: true, error: null, text: '' });
+            set({ sending: true, opening: message, error: null, text: '' });
             try {
                 const session = await deps.createSession();
                 const sent = await deps.deliver(session.id, message);
