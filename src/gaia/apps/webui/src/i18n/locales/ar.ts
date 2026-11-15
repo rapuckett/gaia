@@ -3637,6 +3637,7 @@ const messages: Messages = {
     'mobileApp.mem.activityTapHint': 'اضغط على عمود لعرض ذلك اليوم.',
     'mobileApp.mem.metric': '{label}: {value}',
     'mobileApp.mem.sectionFailed': 'تعذّر تحميل هذا القسم.',
+    'mobileApp.mem.whenHint': 'السنة-الشهر-اليوم والوقت، مثل 2026-11-20 09:00',
     'mobileApp.connectors.comingLater': 'الربط من الهاتف قادم في إصدار لاحق. في الوقت الحالي، اربطه من الكمبيوتر الذي يشغّل GAIA.',
     'mobileApp.connectors.googlePcOnly': 'لا يستطيع هذا الهاتف ربط حسابات Google. اربط Google من الكمبيوتر الذي يشغّل GAIA.',
     'mobileApp.model.onYourPc': 'على الكمبيوتر',

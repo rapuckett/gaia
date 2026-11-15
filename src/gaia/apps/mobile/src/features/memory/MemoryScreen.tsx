@@ -78,7 +78,7 @@ export function MemoryScreen({ onBack, initialTab = 'about' }: MemoryScreenProps
             <MemoryTabs value={tab} onChange={setTab} />
             {notice ? (
                 <Stack paddingX="lg">
-                    <Notice tone={notice.tone} message={notice.text} onDismiss={dismiss} testID="memory-notice" />
+                    <Notice tone={notice.tone} message={notice.text} action={notice.action} onDismiss={dismiss} testID="memory-notice" />
                 </Stack>
             ) : null}
         </Stack>
@@ -87,7 +87,7 @@ export function MemoryScreen({ onBack, initialTab = 'about' }: MemoryScreenProps
     return (
         <Screen scroll refreshing={refreshing} onRefresh={() => void pullToRefresh()} header={header}>
             <ActionSheet open={menuOpen} onClose={() => setMenuOpen(false)} title={t('mem.maint.label')} actions={actions} />
-            <Pane notify={notify} memoryEnabled={settings.data?.memory_enabled} />
+            <Pane notify={notify} memoryEnabled={settings.data?.memory_enabled} onOpenAdvanced={() => setTab('advanced')} />
         </Screen>
     );
 }

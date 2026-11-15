@@ -21,6 +21,8 @@ export const ENDPOINTS = {
     memoryActivity: '/api/memory/activity',
     memoryConsolidate: '/api/memory/consolidate',
     memoryEmbeddingCoverage: '/api/memory/embedding-coverage',
+    memoryKnowledge: '/api/memory/knowledge',
+    memoryKnowledgeItem: '/api/memory/knowledge/{knowledge_id}',
     memoryRebuildEmbeddings: '/api/memory/rebuild-embeddings',
     memoryRebuildFts: '/api/memory/rebuild-fts',
     memoryReconcile: '/api/memory/reconcile',
@@ -121,6 +123,18 @@ export function connectorGrantsPath(connectorId: string): string {
 
 export function memoryActivityPath(days: number): string {
     return `${ENDPOINTS.memoryActivity}?days=${days}`;
+}
+
+export function memoryKnowledgeItemPath(knowledgeId: string): string {
+    return ENDPOINTS.memoryKnowledgeItem.replace('{knowledge_id}', encodeURIComponent(knowledgeId));
+}
+
+/** The knowledge list's query, built as the web's `toQuery` does: empty values dropped, the rest encoded. */
+export function memoryKnowledgePath(params: object): string {
+    const parts = Object.entries(params as Record<string, unknown>)
+        .filter(([, value]) => value !== undefined && value !== null && value !== '')
+        .flatMap(([key, value]) => (Array.isArray(value) ? value : [value]).map((one) => `${encodeURIComponent(key)}=${encodeURIComponent(String(one))}`));
+    return parts.length ? `${ENDPOINTS.memoryKnowledge}?${parts.join('&')}` : ENDPOINTS.memoryKnowledge;
 }
 
 export function memoryUpcomingPath(days: number): string {
