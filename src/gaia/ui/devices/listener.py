@@ -19,8 +19,9 @@ import json
 import os
 import socket
 import ssl
+import sys
 import threading
-from typing import Any, Dict, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from starlette.datastructures import Headers
 from starlette.exceptions import HTTPException
@@ -327,6 +328,63 @@ class _ListenerServer:
         return Server(config)
 
 
+def local_ipv4_addresses() -> List[str]:
+    """Every IPv4 address on this PC's up interfaces, loopback included."""
+    import psutil
+
+    stats = psutil.net_if_stats()
+    found: List[str] = []
+    for nic, entries in psutil.net_if_addrs().items():
+        if nic in stats and not stats[nic].isup:
+            continue
+        for entry in entries:
+            if entry.family == socket.AF_INET and entry.address not in found:
+                found.append(entry.address)
+    return found
+
+
+# macOS answers a bind to an address that is gone (VPN utun, link-local,
+# an interface dropping mid-check) with EADDRNOTAVAIL.
+_ADDRESS_GONE = frozenset({errno.EADDRNOTAVAIL})
+
+
+def _refuse_shared_port(port: int) -> None:
+    """macOS lets a wildcard bind share *port* with a program on one address.
+
+    Phones dialing that address would reach the other program and see a pin
+    mismatch, so a holder on any local address counts as the port in use.
+    The probe sets SO_REUSEADDR too, so this listener's own TIME_WAIT
+    connections from a restart don't count.
+
+    Addresses that vanished (``_ADDRESS_GONE``) are skipped.
+
+    Raises:
+        OSError: ``EADDRINUSE`` naming the address another program holds, or
+            any other probe errno, named in the message.
+    """
+    for address in local_ipv4_addresses():
+        probe = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            probe.bind((address, port))
+        except OSError as e:
+            if e.errno == errno.EADDRINUSE:
+                raise OSError(
+                    errno.EADDRINUSE,
+                    f"another program holds {address}:{port}",
+                ) from e
+            if e.errno in _ADDRESS_GONE:
+                logger.debug("Skipping %s: address is gone (%s)", address, e)
+                continue
+            raise OSError(
+                e.errno,
+                f"could not probe {address}:{port} "
+                f"(errno {e.errno} {errno.errorcode.get(e.errno, '?')}): {e.strerror}",
+            ) from e
+        finally:
+            probe.close()
+
+
 def _bind(host: str, port: int) -> socket.socket:
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
@@ -340,6 +398,8 @@ def _bind(host: str, port: int) -> socket.socket:
         else:
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         sock.bind((host, port))
+        if sys.platform == "darwin" and ipaddress.ip_address(host).is_unspecified:
+            _refuse_shared_port(int(sock.getsockname()[1]))
         sock.listen(LISTENER_MAX_CONCURRENCY * 4)
         sock.setblocking(False)
     except OSError:

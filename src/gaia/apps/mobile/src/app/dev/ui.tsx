@@ -2,11 +2,13 @@
 // SPDX-License-Identifier: MIT
 
 import { Redirect } from 'expo-router';
+
+import { devGalleryEnabled } from '@/features/dev/devGallery';
 import { UIProvider } from '@/ui';
 import { UIGallery } from '@/ui/gallery/UIGallery';
 
 export default function UIGalleryRoute() {
-    if (!__DEV__) return <Redirect href="/" />;
+    if (!devGalleryEnabled()) return <Redirect href="/" />;
     return (
         <UIProvider>
             <UIGallery />
