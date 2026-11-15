@@ -113,7 +113,7 @@ export function ToolStepRow({ step, awaitingUser = false, now, testID }: ToolSte
 
     return (
         <Stack>
-            <Disclosure title={line} open={open} onToggle={() => setOpen((v) => !v)} leading={leading} trailing={trailing} testID={testID}>
+            <Disclosure title={line} open={open} onToggle={() => setOpen((v) => !v)} leading={leading} trailing={trailing} headerTestID={testID}>
                 <Stack gap="sm">
                     {step.thought?.detail ? (
                         <Section label={thoughtLabel(false, undefined, t)}>
