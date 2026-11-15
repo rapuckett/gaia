@@ -2,7 +2,10 @@
 // SPDX-License-Identifier: MIT
 
 import { View, type AccessibilityRole, type DimensionValue, type ViewStyle } from 'react-native';
-import type { ReactNode } from 'react';
+import { Children, cloneElement, isValidElement, type ReactElement, type ReactNode } from 'react';
+import { Ltr } from '../text/Ltr';
+import { Text } from '../text/Text';
+import { useLargeText } from '../theme/a11y';
 import { useTheme } from '../theme/ThemeProvider';
 import type { Space } from '../tokens/space';
 
@@ -38,6 +41,8 @@ export interface StackProps extends BoxProps {
 
 export interface RowProps extends BoxProps {
     wrap?: boolean;
+    /** At large text sizes the children stack, full width, instead of sharing the line (a pair of buttons). */
+    stack?: boolean;
 }
 
 type Mut<T> = { -readonly [K in keyof T]: T[K] };
@@ -74,14 +79,32 @@ export function Stack({ children, padding, paddingX, paddingY, testID, accessibi
     );
 }
 
-export function Row({ children, wrap, align = 'center', testID, accessibilityRole, ...box }: RowProps) {
+/** A text run beside an icon or control must be allowed to wrap rather than push the row wider than the screen. */
+function shrinkable(child: ReactNode): ReactNode {
+    if (isValidElement(child) && (child.type === Text || child.type === Ltr)) {
+        return <View style={{ flexShrink: 1, minWidth: 0 }}>{child}</View>;
+    }
+    return child;
+}
+
+/** A `flex` share only means something along a row; in a column it would collapse the child. */
+function unflexed(child: ReactNode): ReactNode {
+    if (isValidElement(child) && child.type === Stack) return cloneElement(child as ReactElement<StackProps>, { flex: undefined });
+    return child;
+}
+
+export function Row({ children, wrap, stack, align = 'center', testID, accessibilityRole, ...box }: RowProps) {
     const { space } = useTheme();
+    const largeText = useLargeText();
     const style = boxStyle(space, { ...box, align });
-    style.flexDirection = 'row';
-    if (wrap) style.flexWrap = 'wrap';
+    const stacked = !!stack && largeText;
+    style.flexDirection = stacked ? 'column' : 'row';
+    if (stacked) style.alignItems = 'stretch';
+    // At large text a label beside its value stacks instead of squeezing or clipping.
+    if (!stacked && (wrap || (largeText && box.justify === 'between' && wrap === undefined))) style.flexWrap = 'wrap';
     return (
         <View style={style} testID={testID} accessibilityRole={accessibilityRole}>
-            {children}
+            {stacked ? Children.map(children, unflexed) : largeText ? Children.map(children, shrinkable) : children}
         </View>
     );
 }

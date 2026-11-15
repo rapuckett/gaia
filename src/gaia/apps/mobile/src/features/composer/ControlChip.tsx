@@ -32,7 +32,7 @@ export function ControlChip({ label, icon, onPress, menu, warning, chip, disable
             <Icon icon={icon} size="sm" tone={warning ? 'warning' : 'secondary'} />
             {compact ? null : (
                 <View style={{ flexShrink: chip === 'model' ? 1 : 0 }}>
-                    <Text role="label" tone={warning ? 'warning' : 'secondary'} numberOfLines={1}>
+                    <Text role="label" tone={warning ? 'warning' : 'secondary'} numberOfLines={1} compact>
                         {label}
                     </Text>
                 </View>

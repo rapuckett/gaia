@@ -47,11 +47,13 @@ import type {
     DeleteScheduleResult,
     Goal,
     GoalStats,
+    BrowseResponse,
     DocumentListResponse,
     DocumentResponse,
     DocumentStatus,
     EmbeddingCoverage,
     FilePreviewResponse,
+    FileSearchResponse,
     FollowUpOutcome,
     FollowUpResult,
     DeleteSessionResult,
@@ -130,6 +132,9 @@ import {
     connectorPath,
     cloudPricesPath,
     documentFilePath,
+    documentUploadPathPath,
+    filesBrowsePath,
+    filesSearchPath,
     documentPath,
     goalPath,
     ENDPOINTS,
@@ -998,6 +1003,18 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             const form = new FormData();
             form.append('file', bytes, file.name);
             return readJson<DocumentResponse>(await request('POST', ENDPOINTS.documentUpload, new RawBody(form), options?.signal), ENDPOINTS.documentUpload);
+        },
+
+        uploadDocumentByPath(filepath, sessionId, options) {
+            return postJson<DocumentResponse>(documentUploadPathPath(sessionId), { filepath }, options?.signal);
+        },
+
+        browseFiles(sessionId, path, options) {
+            return getJson<BrowseResponse>(filesBrowsePath(sessionId, path), options?.signal);
+        },
+
+        searchFiles(sessionId, query, fileTypes, limit, options) {
+            return getJson<FileSearchResponse>(filesSearchPath(sessionId, query, fileTypes, limit), options?.signal);
         },
 
         async attachDocument(sessionId, docId, options) {
