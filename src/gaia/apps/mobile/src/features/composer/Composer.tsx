@@ -1,7 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { useState, type ReactNode } from 'react';
+import { useCallback, useMemo, useState, type ReactNode } from 'react';
 import { View, type ViewStyle } from 'react-native';
 
 import { MAX_MESSAGE_CHARS } from '@webui/utils/messageLimits';
@@ -12,7 +12,8 @@ import { ArrowUp, Square } from '@/ui/icons';
 
 import { AttachButton } from './AttachButton';
 import { AttachmentChips } from './AttachmentChips';
-import { CompactChipsContext } from './ControlChip';
+import { ChipFitContext } from './ChipFitContext';
+import { CHIP_GAP, collapsedChips, type ChipId } from './chipRoom';
 import type { Attachments } from './useAttachments';
 
 export interface ComposerProps {
@@ -44,10 +45,8 @@ const MAX_LINES = 9;
 // Row flow follows the layout direction, so Arabic mirrors without left/right.
 // Attach, Stop and Send keep their size; the chips give way first.
 const FIXED: ViewStyle = { flexDirection: 'row', alignItems: 'center', flexShrink: 0, gap: 8 };
-/** Below this width the chip row shows icons only; wider rows fit every label (a 390 pt phone's row is about 230). */
-const COMPACT_CHIPS_BELOW = 300;
-const CHIPS: ViewStyle = { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexGrow: 1, flexShrink: 1, minWidth: 0, gap: 8 };
-const GROUP: ViewStyle = { flexDirection: 'row', alignItems: 'center', flexShrink: 1, minWidth: 0, gap: 8 };
+const CHIPS: ViewStyle = { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexGrow: 1, flexShrink: 1, minWidth: 0, gap: CHIP_GAP };
+const GROUP: ViewStyle = { flexDirection: 'row', alignItems: 'center', flexShrink: 1, minWidth: 0, gap: CHIP_GAP };
 
 export function Composer({
     value,
@@ -67,7 +66,13 @@ export function Composer({
     const [own, setOwn] = useState('');
     const [stopping, setStopping] = useState(false);
     const [chipsWidth, setChipsWidth] = useState(0);
+    const [fullWidths, setFullWidths] = useState<Partial<Record<ChipId, number>>>({});
     const text = value ?? own;
+    const report = useCallback(
+        (id: ChipId, width: number) => setFullWidths((prev) => (prev[id] === width ? prev : { ...prev, [id]: width })),
+        [],
+    );
+    const chipFit = useMemo(() => ({ collapsed: collapsedChips(fullWidths, chipsWidth), report }), [fullWidths, chipsWidth, report]);
 
     // Reset during render, so a later reply never starts out as Stopping.
     if (!running && stopping) setStopping(false);
@@ -132,10 +137,10 @@ export function Composer({
                     <Row gap="sm" align="center">
                         <View style={FIXED}>{attachments ? <AttachButton onPick={attachments.add} disabled={!!disabledReason} /> : null}</View>
                         <View style={CHIPS} testID="composer-controls" onLayout={(e) => setChipsWidth(e.nativeEvent.layout.width)}>
-                            <CompactChipsContext.Provider value={chipsWidth > 0 && chipsWidth < COMPACT_CHIPS_BELOW}>
+                            <ChipFitContext.Provider value={chipFit}>
                                 <View style={GROUP}>{leftControls}</View>
                                 <View style={GROUP}>{rightControls}</View>
-                            </CompactChipsContext.Provider>
+                            </ChipFitContext.Provider>
                         </View>
                         <View style={FIXED} testID="composer-actions">
                             {running ? (
