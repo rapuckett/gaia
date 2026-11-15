@@ -58,7 +58,7 @@ export class GaiaPinMismatchError extends GaiaError {
     }
 }
 
-/** A file upload to a paired PC: the pinned transport sends text bodies only for now. */
+/** A file upload to a paired PC this app can't send: the app build predates uploads, or the file isn't on disk. */
 export class GaiaUploadUnsupportedError extends GaiaError {
     readonly code = 'unsupported_body';
 
