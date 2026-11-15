@@ -15,7 +15,8 @@ import {
     useSystemStatus,
 } from '@/data';
 import { useT } from '@/i18n/useT';
-import { Disclosure, Notice, Row, SegmentedControl, Spinner, Stack, StatusDot, Text } from '@/ui';
+import { Card, Disclosure, Notice, PillTabs, Row, Spinner, Stack, Text } from '@/ui';
+import { Cloud, Cpu } from '@/ui/icons';
 
 import { isPcRefusal, PcOnlyNotice } from '../PcOnlyNotice';
 import { SettingsAnchor } from '../targets';
@@ -27,14 +28,14 @@ import { LocalModels } from './model/LocalModels';
 import { ModelInUse } from './model/ModelInUse';
 import { ModelList } from './model/ModelList';
 import { ProviderKey } from './model/ProviderKey';
-import { errorText, modelLabel, sameModelId } from './model/modelText';
+import { errorText, isolate, modelLabel, sameModelId } from './model/modelText';
 
 /** Memory for models, read from the PC only while "How this works" is open. */
 function LocalMemory() {
     const t = useT();
     const status = useLocalModelStatus(false);
     const s = status.data;
-    const memory = s?.memory ? `${s.memory.total_gb} GB (${s.memory.source})` : s?.memory_error;
+    const memory = s?.memory ? isolate(`${s.memory.total_gb} GB (${s.memory.source})`) : s?.memory_error;
     if (!memory) return null;
     return <Text role="caption" tone="muted">{t('settings.model.memory', { memory })}</Text>;
 }
@@ -76,7 +77,7 @@ export default function Model({ provider: requested }: { provider?: string }) {
         select.mutate(model, {
             onSuccess: () => {
                 const m = models?.find((x) => x.id === model);
-                setSwitched(t('settings.model.switched', { name: m ? modelLabel(m) : modelLabel({ id: model }) }));
+                setSwitched(t('settings.model.switched', { name: isolate(m ? modelLabel(m) : modelLabel({ id: model })) }));
             },
         });
     };
@@ -106,14 +107,21 @@ export default function Model({ provider: requested }: { provider?: string }) {
             {select.error ? <Notice tone="danger" message={errorText(select.error, t)} /> : null}
 
             <Stack gap="sm">
-                <Text role="label" weight="medium" tone="secondary">{t('settings.model.whereRuns')}</Text>
                 {pcOnly ? <PcOnlyNotice testID="model-providers-pc-only" /> : null}
                 {providers ? (
-                    <SegmentedControl
+                    <PillTabs
                         accessibilityLabel={t('settings.model.whereRuns')}
-                        options={providers.map((p) => ({ value: p.id, label: providerName(t, p), accessibilityLabel: providerNameFull(t, p) }))}
+                        tabs={providers.map((p) => ({
+                            value: p.id,
+                            label: providerName(t, p),
+                            accessibilityLabel: providerNameFull(t, p),
+                            icon: p.remote ? Cloud : Cpu,
+                            dot: p.remote && p.configured ? t('settings.key.connectedDot') : undefined,
+                            disabled: !!p.blocked,
+                        }))}
                         value={chosen}
                         onChange={(v) => setPicked(v as ProviderId)}
+                        testID="model-providers"
                     />
                 ) : null}
             </Stack>
@@ -131,57 +139,53 @@ export default function Model({ provider: requested }: { provider?: string }) {
             ) : null}
 
             {provider ? (
-                <Stack gap="md">
-                    {provider.remote ? (
-                        <Row gap="sm">
-                            {provider.configured ? <StatusDot tone="success" label={t('settings.key.connectedDot')} /> : null}
-                            <Text role="ui" weight="semibold">{providerName(t, provider)}</Text>
-                        </Row>
-                    ) : null}
-                    {provider.remote ? <Notice tone="info" role="note" message={providerNotice(t, provider)} /> : null}
-                    {blocked ? <Notice tone="danger" message={t('settings.privacy.localOnlyBlocked')} /> : null}
-                    <Disclosure title={t('settings.model.howItWorks')} open={howOpen} onToggle={() => setHowOpen((o) => !o)}>
-                        <Stack gap="sm">
-                            <Text role="caption" tone="muted">{t('mobileApp.settings.model.lede')}</Text>
-                            {local ? <Text role="caption" tone="muted">{providerNotice(t, provider)}</Text> : null}
-                            {local ? <Text role="caption" tone="muted">{t('settings.model.devices')}</Text> : null}
-                            {local ? <LocalMemory /> : null}
-                        </Stack>
-                    </Disclosure>
-                    {provider.remote && !connected ? (
-                        <Stack gap="sm">
-                            <Text role="label" weight="medium" tone="secondary">{t('settings.model.prices')}</Text>
-                            <CloudPrices provider={provider.id} />
-                        </Stack>
-                    ) : null}
-                    {provider.remote && !blocked ? (
-                        <SettingsAnchor name="cloud-key">
-                            <ProviderKey key={provider.id} provider={provider} connected={connected} />
-                        </SettingsAnchor>
-                    ) : null}
-                    {isPcRefusal(modelsQuery.error) ? (
-                        <PcOnlyNotice testID="model-list-pc-only" />
-                    ) : modelsQuery.error ? (
-                        <Notice tone="danger" message={errorText(modelsQuery.error, t)} />
-                    ) : null}
-                    {local && connected ? <LocalDownloads /> : null}
-                    {connected ? (
-                        <SettingsAnchor name="models-on-pc">
-                            <ModelList
-                                provider={provider.id}
-                                remote={!!provider.remote}
-                                models={models}
-                                activeModel={active?.model}
-                                switching={select.isPending ? (select.variables ?? null) : null}
-                                onUse={switchTo}
-                                onRefresh={() => void modelsQuery.refetch()}
-                            />
-                        </SettingsAnchor>
-                    ) : null}
-                    {local && connected ? <LocalModels /> : null}
-                    {local && connected ? <GpuMemory /> : null}
-                    {provider.remote ? <CloudSpending /> : null}
-                </Stack>
+                <Card padding="md">
+                    <Stack gap="md">
+                        {provider.remote ? <Notice tone="info" role="note" message={providerNotice(t, provider)} /> : null}
+                        {blocked ? <Notice tone="danger" message={t('settings.privacy.localOnlyBlocked')} /> : null}
+                        <Disclosure title={t('settings.model.howItWorks')} open={howOpen} onToggle={() => setHowOpen((o) => !o)}>
+                            <Stack gap="sm">
+                                <Text role="caption" tone="muted">{t('mobileApp.settings.model.lede')}</Text>
+                                {local ? <Text role="caption" tone="muted">{providerNotice(t, provider)}</Text> : null}
+                                {local ? <Text role="caption" tone="muted">{t('settings.model.devices')}</Text> : null}
+                                {local ? <LocalMemory /> : null}
+                            </Stack>
+                        </Disclosure>
+                        {provider.remote && !connected ? (
+                            <Stack gap="sm">
+                                <Text role="label" weight="medium" tone="secondary">{t('settings.model.prices')}</Text>
+                                <CloudPrices provider={provider.id} />
+                            </Stack>
+                        ) : null}
+                        {provider.remote && !blocked ? (
+                            <SettingsAnchor name="cloud-key">
+                                <ProviderKey key={provider.id} provider={provider} connected={connected} />
+                            </SettingsAnchor>
+                        ) : null}
+                        {isPcRefusal(modelsQuery.error) ? (
+                            <PcOnlyNotice testID="model-list-pc-only" />
+                        ) : modelsQuery.error ? (
+                            <Notice tone="danger" message={errorText(modelsQuery.error, t)} />
+                        ) : null}
+                        {local && connected ? <LocalDownloads /> : null}
+                        {connected ? (
+                            <SettingsAnchor name="models-on-pc">
+                                <ModelList
+                                    provider={provider.id}
+                                    remote={!!provider.remote}
+                                    models={models}
+                                    activeModel={active?.model}
+                                    switching={select.isPending ? (select.variables ?? null) : null}
+                                    onUse={switchTo}
+                                    onRefresh={() => void modelsQuery.refetch()}
+                                />
+                            </SettingsAnchor>
+                        ) : null}
+                        {local && connected ? <LocalModels /> : null}
+                        {local && connected ? <GpuMemory /> : null}
+                        {provider.remote ? <CloudSpending /> : null}
+                    </Stack>
+                </Card>
             ) : null}
         </Stack>
     );

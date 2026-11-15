@@ -3,7 +3,7 @@
 
 import type { ActiveModel, ProviderModel } from '@/api/client.types';
 import { useT } from '@/i18n/useT';
-import { Badge, Card, Ltr, Notice, Row, Select, Spinner, Stack, Text } from '@/ui';
+import { Badge, Ltr, Notice, Row, Select, Spinner, Stack, Surface, Text } from '@/ui';
 
 import { SettingsAnchor } from '../../targets';
 import { ContextSize } from './ContextSize';
@@ -45,7 +45,7 @@ export function ModelInUse({ active, readFailed, row, waitingServer, choices, bu
 
     return (
         <SettingsAnchor name="model-in-use">
-            <Card padding="lg">
+            <Surface tone="card" radius="lg" padding="lg" border="accent">
                 <Stack gap="md">
                     <Text role="caption" tone="muted" weight="semibold" accessibilityRole="header">
                         {t('settings.model.inUseTitle')}
@@ -97,7 +97,7 @@ export function ModelInUse({ active, readFailed, row, waitingServer, choices, bu
                     ) : null}
                     {model && !remote && active?.downloaded !== false ? <ContextSize model={model} /> : null}
                 </Stack>
-            </Card>
+            </Surface>
         </SettingsAnchor>
     );
 }

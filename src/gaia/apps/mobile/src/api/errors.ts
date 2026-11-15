@@ -67,6 +67,13 @@ export class GaiaUploadUnsupportedError extends GaiaError {
     }
 }
 
+/** A production build has no pinned transport, and the app won't send a request to the PC without it. */
+export class GaiaTransportMissingError extends GaiaError {
+    constructor() {
+        super('mobileApp.pairing.transportMissing', {});
+    }
+}
+
 export class GaiaStreamError extends GaiaError {}
 
 export type StreamEndpoint = 'send' | 'attach';

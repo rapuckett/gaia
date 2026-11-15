@@ -79,7 +79,7 @@ export function SchedulesScreen({ onOpenChat }: SchedulesScreenProps) {
         <Screen header={<ScreenHeader title={t('schedules.title')} />}>
             <NewScheduleSheet open={creating} onClose={() => setCreating(false)} />
             <Stack paddingX="lg" paddingY="sm" align="start">
-                <ChipButton label={t('schedules.new')} icon={Plus} variant="accent" onPress={() => setCreating(true)} />
+                <ChipButton label={t.bare('schedules.new')} accessibilityLabel={t('schedules.new')} icon={Plus} variant="accent" onPress={() => setCreating(true)} />
             </Stack>
             {query.isPending && !failure.failed ? <ListSkeleton rows={4} /> : null}
             {failure.failed ? (

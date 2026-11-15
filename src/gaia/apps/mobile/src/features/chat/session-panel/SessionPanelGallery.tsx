@@ -4,14 +4,15 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 
-import type { ChatPerformance, ContextUsage, LocalModelStatus, Session, SessionEnvironment } from '@/api/client.types';
+import type { BrowseResponse, ChatPerformance, ContextUsage, LocalModelStatus, Message, OutputItem, Session, SessionChanges, SessionEnvironment, SessionGit } from '@/api/client.types';
 import { createFakeClient } from '@/api/fake';
 import { GaiaApiError } from '@/api/errors';
 import { GaiaClientProvider } from '@/data';
 import { FIXTURES } from '@/features/chat/messages/__fixtures__/messages';
 import { MessageListView } from '@/features/chat/messages/MessageList';
 import { Screen } from '@/ui';
-import type { TurnPerformance } from '@webui/types';
+import { IDLE_TURN, writeTurn } from '@/state/chatStreams';
+import type { TurnPerformance, TurnSummary } from '@webui/types';
 
 import { useSessionPanelStore } from './panelStore';
 import { SessionPanel } from './SessionPanel';
@@ -32,11 +33,128 @@ export type SessionPanelGalleryState =
     | 'envRemove'
     | 'envOffline'
     | 'envFull'
-    | 'envEmpty';
+    | 'envEmpty'
+    | 'chgList'
+    | 'chgConfirm'
+    | 'chgConflict'
+    | 'chgGit'
+    | 'chgPending'
+    | 'chgError'
+    | 'chgReview'
+    | 'ansFull'
+    | 'ansPending'
+    | 'ansNoLive'
+    | 'ansError'
+    | 'outItems'
+    | 'outEmpty'
+    | 'envPick'
+    | 'envPickRefused';
 
 const CONTEXT_STATES: readonly SessionPanelGalleryState[] = ['ctxMeasuring', 'ctxNormal', 'ctxEstimated', 'ctxFilling', 'ctxChat', 'ctxNoTurn'];
 
-const ENV_STATES: readonly SessionPanelGalleryState[] = ['envFolders', 'envRemove', 'envOffline', 'envFull', 'envEmpty'];
+const ENV_STATES: readonly SessionPanelGalleryState[] = ['envFolders', 'envRemove', 'envOffline', 'envFull', 'envEmpty', 'envPick', 'envPickRefused'];
+
+const CHANGES_STATES: readonly SessionPanelGalleryState[] = ['chgList', 'chgConfirm', 'chgConflict', 'chgGit', 'chgPending', 'chgError', 'chgReview'];
+
+const DIFF = '@@ -1,3 +1,3 @@\n # Q3 summary\n-Revenue was flat.\n+Revenue grew 4%.\n Costs held steady.\n';
+const CHANGE = (path: string, change: 'edited' | 'created' | 'deleted', additions: number | null, deletions: number | null, turns = 1): SessionChanges['files'][number] => ({
+    path,
+    change,
+    unified: additions === null ? '' : DIFF,
+    binary: additions === null,
+    too_large: false,
+    truncated: false,
+    additions,
+    deletions,
+    before_size: 120,
+    after_size: 140,
+    message_ids: Array.from({ length: turns }, (_, i) => i + 1),
+    changed_since: null,
+});
+
+const CHANGES: SessionChanges = {
+    files: [
+        CHANGE('/Users/avery/Documents/Quarterly reports/q3-summary.md', 'edited', 12, 4, 2),
+        CHANGE('/Users/avery/Documents/Quarterly reports/forecast.csv', 'created', 40, 0),
+        CHANGE('/Users/avery/Documents/Quarterly reports/old-draft.txt', 'deleted', 0, 18),
+        CHANGE('/Users/avery/Documents/Quarterly reports/chart.png', 'created', null, null),
+    ],
+    totals: { files: 4, additions: 52, deletions: 22, uncounted: 1 },
+    turns: 3,
+    pending: false,
+    untracked: [],
+    incomplete: false,
+};
+
+const GIT: SessionGit = {
+    available: true,
+    repos: [
+        {
+            root: '/Users/avery/Documents/Quarterly reports',
+            branch: 'main',
+            remote: 'origin',
+            default_branch: 'main',
+            gh: true,
+            files: CHANGES.files.map((f) => f.path),
+            uncommitted: CHANGES.files.slice(0, 3).map((f) => f.path),
+            ignored: [],
+            draft: { title: 'Update the Q3 summary and add a forecast', body: 'Revenue grew 4%.' },
+            pr_blocked: 'You are on the default branch (main). Switch to a feature branch first.',
+        },
+    ],
+};
+
+const ANSWER_STATES: readonly SessionPanelGalleryState[] = ['ansFull', 'ansPending', 'ansNoLive', 'ansError'];
+
+const OUTPUT_STATES: readonly SessionPanelGalleryState[] = ['outItems', 'outEmpty'];
+
+const SUMMARY: TurnSummary = {
+    cost: { kind: 'estimate', usd: 0.0016 },
+    model: { name: 'claude-sonnet-4-5', provider: 'claude', provider_name: 'Claude', remote: true },
+    pages: [
+        { kind: 'page', title: 'Mount Rainier weather forecast', url: 'https://www.weather.gov/rainier' },
+        { kind: 'search_result', title: null, url: 'https://www.nps.gov/mora/planyourvisit/conditions.htm' },
+    ],
+    documents: [
+        { name: 'trail-guide.pdf', path: '/Users/avery/Documents/trail-guide.pdf', pages: [5, 6, 8], passages: 6 },
+        { name: 'notes.md', path: '/Users/avery/Documents/notes.md', passages: 1 },
+    ],
+    files: [
+        { name: 'packing-list.md', path: '/Users/avery/Documents/packing-list.md', mtime: 100, openable: true },
+        { name: 'old-plan.md', path: '/Users/avery/Documents/old-plan.md', mtime: 100, openable: true },
+    ],
+    sites: ['weather.gov', 'nps.gov'],
+    live_data: { attempted: 2, failed: 0 },
+};
+
+const utc = (minutesAgo: number) => new Date(Date.now() - minutesAgo * 60_000).toISOString().slice(0, 19).replace('T', ' ');
+
+const OUTPUT = (id: string, kind: OutputItem['kind'], name: string, minutesAgo: number, extra: Partial<OutputItem> = {}): OutputItem => ({
+    id,
+    kind,
+    name,
+    path: kind === 'file' || kind === 'export' || kind === 'image' ? `/Users/avery/Documents/${name}` : null,
+    detail: null,
+    message_id: 2,
+    created_at: utc(minutesAgo),
+    change: kind === 'file' ? 'created' : null,
+    state: 'present',
+    openable: true,
+    revealable: true,
+    ...extra,
+});
+
+const OUTPUTS: OutputItem[] = [
+    OUTPUT('o1', 'file', 'packing-list.md', 2),
+    OUTPUT('o2', 'image', 'summit-sketch.png', 14),
+    OUTPUT('o3', 'file', 'itinerary.md', 95, { change: 'edited' }),
+    OUTPUT('o4', 'document', 'trail-guide.pdf', 180),
+    OUTPUT('o5', 'memory', 'Prefers early starts', 300),
+    OUTPUT('o6', 'file', 'old-plan.md', 600, { state: 'gone', change: 'deleted' }),
+    OUTPUT('o7', 'schedule', 'Weekly forecast check', 1500, { message_id: null }),
+];
+
+const withSummary = (m: Message, summary: TurnSummary): Message => ({ ...m, turn_summary: summary }) as Message;
 
 const FOLDER = (path: string, source: SessionEnvironment['folders'][number]['source'], removable = true) =>
     ({ path, name: path.split('/').pop(), kind: 'folder' as const, source, removable });
@@ -57,6 +175,27 @@ const ENVIRONMENT: SessionEnvironment = {
     internet: true,
     enforced: true,
     internet_enforced: true,
+};
+
+const entry = (name: string, dir: string) => ({ name, path: `${dir}/${name}`, type: 'folder' as const, size: 0, extension: null, modified: '2026-11-10T09:00:00Z' });
+const QUICK_LINKS = [
+    { name: 'Home', path: '/Users/avery', icon: 'home' },
+    { name: 'Documents', path: '/Users/avery/Documents', icon: 'documents' },
+];
+const BROWSE_FOLDERS: Record<string, BrowseResponse> = {
+    '': {
+        current_path: '/Users/avery/Documents',
+        parent_path: '/Users/avery',
+        entries: [entry('Quarterly reports', '/Users/avery/Documents'), entry('Tax 2025', '/Users/avery/Documents'), entry('.cache', '/Users/avery/Documents')],
+        quick_links: QUICK_LINKS,
+    },
+    '/Users/avery': {
+        current_path: '/Users/avery',
+        parent_path: '/Users',
+        entries: [entry('Documents', '/Users/avery'), entry('Downloads', '/Users/avery')],
+        quick_links: QUICK_LINKS,
+        folder_refusal: "That's your whole user folder. Pick a folder inside it.",
+    },
 };
 
 const USAGE: ContextUsage = {
@@ -188,6 +327,7 @@ export function SessionPanelGallery({ state }: { state: SessionPanelGalleryState
     const client = useMemo(() => {
         const ctx = CONTEXT_STATES.includes(state);
         const env = ENV_STATES.includes(state);
+        const chg = CHANGES_STATES.includes(state);
         const environment: SessionEnvironment =
             state === 'envOffline'
                 ? { ...ENVIRONMENT, folders: ENVIRONMENT.folders.slice(0, 2), internet: false, removed: ['/Users/avery/Downloads/old-drafts'] }
@@ -196,9 +336,24 @@ export function SessionPanelGallery({ state }: { state: SessionPanelGalleryState
                   : state === 'envFull'
                     ? { ...ENVIRONMENT, folders: ENVIRONMENT.folders.slice(1, 2) }
                     : ENVIRONMENT;
+        const answerState = ANSWER_STATES.includes(state);
+        const summary: TurnSummary =
+            state === 'ansNoLive'
+                ? { ...SUMMARY, live_data: { attempted: 2, failed: 2 }, pages: [], sites: [] }
+                : state === 'ansError'
+                  ? { cost: { kind: 'unreported' }, error: 'the PC ran out of memory' }
+                  : SUMMARY;
+        const reply = FIXTURES.short.messages[1]!;
         const base = createFakeClient({
-            sessions: env ? [SESSION] : undefined,
+            messages: { dev: [FIXTURES.short.messages[0]!, withSummary(reply, summary)] },
+            outputs: state === 'outItems' ? { dev: { session_id: 'dev', items: OUTPUTS } } : undefined,
+            fileStatus: answerState ? { '/Users/avery/Documents/packing-list.md': { path: '/Users/avery/Documents/packing-list.md', exists: true, mtime: 200 }, '/Users/avery/Documents/old-plan.md': { path: '/Users/avery/Documents/old-plan.md', exists: false } } : undefined,
+            sessions: env || chg ? [SESSION] : undefined,
+            sessionChanges: chg && state !== 'chgError' ? { dev: { ...CHANGES, pending: state === 'chgPending' } } : undefined,
+            sessionGit: state === 'chgGit' || state === 'chgConfirm' ? { dev: GIT } : undefined,
+            undoConflict: state === 'chgConflict' ? new GaiaApiError(409, 'a file changed since', undefined, undefined, { status: 'conflict' }) : undefined,
             environments: env ? { dev: environment } : undefined,
+            fileFolders: env ? (state === 'envPickRefused' ? { ...BROWSE_FOLDERS, '': BROWSE_FOLDERS['/Users/avery']! } : BROWSE_FOLDERS) : undefined,
             permissions: state === 'envOffline' ? { dev: 'full_access' } : undefined,
             activeModel: env ? { provider: 'local', model: 'Gemma-4-E4B-it-GGUF', display_name: 'Gemma 4 E4B', label: null, remote: false, is_default: true, downloaded: true } : undefined,
             localModel: env ? LOCAL_MODEL : undefined,
@@ -240,6 +395,11 @@ export function SessionPanelGallery({ state }: { state: SessionPanelGalleryState
             base.getContextUsage = () => new Promise(() => undefined);
             base.getChatPerformance = () => new Promise(() => undefined);
         }
+        if (state === 'chgError') {
+            base.getSessionChanges = async () => {
+                throw new GaiaApiError(500, 'The PC could not read its saved copies');
+            };
+        }
         if (state === 'error') {
             base.getCapabilities = async () => {
                 throw new GaiaApiError(500, 'The agent stopped responding');
@@ -251,12 +411,30 @@ export function SessionPanelGallery({ state }: { state: SessionPanelGalleryState
         const store = useSessionPanelStore.getState();
         const ctx = CONTEXT_STATES.includes(state);
         const env = ENV_STATES.includes(state);
+        const chg = CHANGES_STATES.includes(state);
+        const ans = ANSWER_STATES.includes(state);
+        const out = OUTPUT_STATES.includes(state);
+        store.setSection('answer', ans);
+        store.setSection('outputs', out);
         store.setSection('environment', env);
-        store.setSection('skills', !ctx && !env);
-        store.setSection('tools', !ctx && !env);
+        store.setSection('changes', chg);
+        store.setSection('skills', !ctx && !env && !chg && !ans && !out);
+        store.setSection('tools', !ctx && !env && !chg && !ans && !out);
+        store.setChangesSeed(
+            state === 'chgConfirm'
+                ? { phase: 'confirm' }
+                : state === 'chgConflict'
+                  ? { phase: 'conflict', message: 'a file changed since' }
+                  : state === 'chgReview'
+                    ? { review: true }
+                    : null,
+        );
+        writeTurn('dev', state === 'ansPending' ? { ...IDLE_TURN, status: 'streaming' } : null);
         store.setSection('context', ctx);
+        store.setEnvPicking(state === 'envPick' || state === 'envPickRefused');
         store.setEnvConfirm(state === 'envRemove' ? { kind: 'remove', path: ENVIRONMENT.folders[0]!.path } : state === 'envFull' ? { kind: 'full' } : null);
         store.setContextScope(state === 'ctxChat' ? 'chat' : 'turn');
+        return () => writeTurn('dev', null);
     }, [state]);
     return (
         <>
