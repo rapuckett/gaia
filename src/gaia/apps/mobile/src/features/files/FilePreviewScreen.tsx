@@ -45,9 +45,7 @@ export function FilePreviewScreen({ target, onClose }: { target: PreviewTarget; 
             }
             footer={
                 cached ? (
-                    <Stack paddingX="lg" paddingY="sm">
-                        <Button label={t('cards.share')} full onPress={() => setSharing(true)} />
-                    </Stack>
+                    <Button label={t('cards.share')} full onPress={() => setSharing(true)} />
                 ) : undefined
             }
         >

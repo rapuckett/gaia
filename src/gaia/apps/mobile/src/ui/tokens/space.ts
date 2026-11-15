@@ -10,6 +10,8 @@ export const space = {
     lg: 16,
     xl: 24,
     xxl: 32,
+    // The side margin between content and the screen edge.
+    gutter: 16,
 } as const;
 
 export type Space = keyof typeof space;
