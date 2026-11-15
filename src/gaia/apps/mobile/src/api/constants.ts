@@ -48,6 +48,7 @@ export const ENDPOINTS = {
     memoryStats: '/api/memory/stats',
     memoryTools: '/api/memory/tools',
     memoryUpcoming: '/api/memory/upcoming',
+    messagingDiscord: '/api/messaging/discord',
     modelServer: '/api/system/model-server',
     modelServerBackend: '/api/system/model-server/backend',
     providerConnect: '/api/providers/{provider}/connect',
@@ -335,6 +336,9 @@ export const SCHEDULES_POLL_MS = 10_000;
 /** How often the goal store's health is re-read, as the web's does (30 s). */
 export const GOAL_HEALTH_POLL_MS = 30_000;
 
+/** How often Settings > Messaging re-reads the Discord bridge while it is in one of the states it can leave by itself (webui's MessagingSettings). */
+export const DISCORD_POLL_MS = 3_000;
+export const DISCORD_LIVE_STATES: ReadonlySet<string> = new Set(['starting', 'pairing', 'connected']);
 /** How long a memory result notice stays up, as the web's toasts do (4 s); a failure stays twice as long to be read. */
 export const MEMORY_NOTICE_MS = 4_000;
 export const MEMORY_ERROR_NOTICE_MS = 8_000;

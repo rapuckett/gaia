@@ -16,6 +16,7 @@ import type {
     ContextUsageResult,
     ConsolidateMemoryResult,
     CreateSessionRequest,
+    DiscordStatus,
     EmbeddingCoverage,
     FollowUpOutcome,
     DocumentListResponse,
@@ -225,6 +226,8 @@ export interface FakeClientData {
     networkPolicyError?: Error;
     /** What getUndoSettings answers; updateUndoSettings changes it. */
     undoSettings?: UndoSettings;
+    /** What getDiscordStatus answers; an Error is thrown (a phone gets the PC's 403). */
+    discordStatus?: DiscordStatus | Error;
     /** Thrown by deleteSession for these chat ids. */
     deleteSessionErrors?: Record<string, Error>;
     /** Thrown by updateMemorySettings. */
@@ -937,6 +940,11 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             if (data.networkPolicyError) throw data.networkPolicyError;
             data.settings = { ...data.settings, network_policy: policy };
             return data.settings;
+        },
+        async getDiscordStatus() {
+            if (!data.discordStatus) throw new GaiaApiError(503, 'This fake client was given no Discord status.');
+            if (data.discordStatus instanceof Error) throw data.discordStatus;
+            return data.discordStatus;
         },
         async getUndoSettings() {
             if (!data.undoSettings) throw new GaiaApiError(503, 'This fake client was given no undo settings.');

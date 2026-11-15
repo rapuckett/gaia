@@ -52,6 +52,7 @@ import type {
     FollowUpOutcome,
     FollowUpResult,
     DeleteSessionResult,
+    DiscordStatus,
     FeaturedLibraries,
     GaiaClient,
     GpuMemoryStatus,
@@ -419,6 +420,10 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         setNetworkPolicy(policy, options) {
             return putJson<Settings>(ENDPOINTS.settings, { network_policy: policy }, options?.signal);
+        },
+
+        getDiscordStatus(options) {
+            return getJson<DiscordStatus>(ENDPOINTS.messagingDiscord, options?.signal);
         },
 
         getUndoSettings(options) {

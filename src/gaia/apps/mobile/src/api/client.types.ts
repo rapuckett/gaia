@@ -46,6 +46,7 @@ import type {
     SystemStatus,
 } from '@webui/types';
 import type { UndoSettings } from '@webui/types/changes';
+import type { DiscordStatus } from '@webui/services/messagingApi';
 import type { AgentCapabilities } from '@webui/types/sessionPanel';
 import type { Goal, GoalStats, KnowledgeCreateBody, KnowledgeListParams, KnowledgeSaveResult, KnowledgeUpdateBody, MemoryCleared, MemoryReinitializeResult, MemorySettings, MemorySettingsUpdateResponse, Priority as GoalPriority } from '@webui/services/memoryApi';
 import type { ActivityDay, ConvSession, ConvTurn, EntityInfo, KnowledgeEntry, TemporalItem, ToolStat } from '@webui/utils/memoryFormat.core';
@@ -183,6 +184,8 @@ export interface ProviderConnected {
 }
 
 export type { MemoryCleared, MemoryReinitializeResult, MemorySettings, MemorySettingsUpdateResponse } from '@webui/services/memoryApi';
+/** GET /api/messaging/discord, typed as Settings > Messaging on the web types it. */
+export type { DiscordState, DiscordStatus } from '@webui/services/messagingApi';
 /** One day of GET /api/memory/activity, one tool of GET /api/memory/tools, one item of GET /api/memory/upcoming; typed as the web's `MemoryDashboard` types them. */
 export type { ActivityDay as MemoryActivityDay, TemporalItem as MemoryUpcomingItem, ToolStat as MemoryToolStat } from '@webui/utils/memoryFormat.core';
 
@@ -506,6 +509,8 @@ export interface GaiaClient {
     /** Memories due within `days` days, plus the overdue ones. */
     getMemoryUpcoming(days: number, options?: RequestOptions): Promise<TemporalItem[]>;
     getMemoryStats(options?: RequestOptions): Promise<MemoryStats>;
+    /** The Discord bridge's state, pairing code and links. The PC answers only itself: a phone gets the 403 PC-only refusal. */
+    getDiscordStatus(options?: RequestOptions): Promise<DiscordStatus>;
     /** Every goal with its tasks, newest first. */
     listGoals(options?: RequestOptions): Promise<{ goals: Goal[]; total: number }>;
     /** Goal and task counts by status. */
