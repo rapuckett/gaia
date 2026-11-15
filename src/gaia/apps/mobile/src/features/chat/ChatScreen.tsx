@@ -191,6 +191,7 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
             ) : (
                 <MessageList
                     sessionId={sessionId}
+                    readOnly={!!retiredAgent}
                     live={
                         <>
                             {tail ? (

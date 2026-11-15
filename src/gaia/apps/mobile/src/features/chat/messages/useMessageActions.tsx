@@ -51,7 +51,7 @@ export function useMessageActions(message: Message, copyText: string, context: M
     const t = useT();
     const client = useGaiaClient();
     const queryClient = useQueryClient();
-    const { send, busy } = useMessageActionsContext();
+    const { send, busy, readOnly } = useMessageActionsContext();
     const [open, setOpen] = useState(startOpen === 'actions');
     const [copied, setCopied] = useState(false);
     const [failure, setFailure] = useState<string | null>(null);
@@ -118,7 +118,7 @@ export function useMessageActions(message: Message, copyText: string, context: M
     const canChange = saved && !busy;
     const isUser = message.role === 'user';
     const actions: SheetAction[] = [
-        ...(isUser && canChange
+        ...(isUser && canChange && !readOnly
             ? [
                   { label: t('msg.edit'), icon: Pencil, onPress: () => setEditing(true) },
                   { label: t('msg.resend'), icon: RefreshCw, onPress: () => askThenSend(message.content) },
