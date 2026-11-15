@@ -1,13 +1,14 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { Redirect } from 'expo-router';
+import { Redirect, useLocalSearchParams } from 'expo-router';
 
 import { devGalleryEnabled } from '@/features/dev/devGallery';
 import { useState } from 'react';
 
 import { MAX_MESSAGE_CHARS } from '@webui/utils/messageLimits';
 
+import { COMPOSER_MENU_STATES, ComposerMenusGallery, type ComposerMenuState } from '@/features/composer/ComposerMenusGallery';
 import { Composer, type Attachments, FolderChip, PermissionChip, PrivateChip } from '@/features/composer';
 import { ControlChip } from '@/features/composer/ControlChip';
 import { useT } from '@/i18n/useT';
@@ -34,12 +35,18 @@ const attachmentsFixture: Attachments = {
 
 export default function ComposerGalleryRoute() {
     const t = useT();
+    const { state } = useLocalSearchParams<{ state?: string }>();
     const [text, setText] = useState('');
     if (!devGalleryEnabled()) return <Redirect href="/" />;
+    if (state && (COMPOSER_MENU_STATES as readonly string[]).includes(state)) return <ComposerMenusGallery state={state as ComposerMenuState} />;
     const folder = { path: '/Users/rich/Projects/gaia', name: 'gaia-notes', gaia_folder: false, choosable: false };
-    const chipRow = (
+    const chipRow = (running = false, value?: string) => (
         <Composer
             onSend={noop}
+            onStop={noop}
+            running={running}
+            value={value}
+            onChange={value === undefined ? undefined : noop}
             leftControls={
                 <>
                     <FolderChip folder={folder} />
@@ -62,9 +69,17 @@ export default function ComposerGalleryRoute() {
                     <Divider />
                     <Composer onSend={noop} starting />
                     <Divider />
-                    {chipRow}
+                    {chipRow()}
                     <Divider />
-                    <Stack maxWidth={320}>{chipRow}</Stack>
+                    <Stack maxWidth={320}>{chipRow()}</Stack>
+                    <Divider />
+                    {chipRow(true)}
+                    <Divider />
+                    {chipRow(true, 'Summarize it')}
+                    <Divider />
+                    <Stack maxWidth={360}>{chipRow(true, 'Summarize it')}</Stack>
+                    <Divider />
+                    <Stack maxWidth={340}>{chipRow(true, 'Summarize it')}</Stack>
                     <Divider />
                     <Composer onSend={noop} disabledReason={t('composer.starting')} />
                     <Divider />

@@ -5,7 +5,7 @@ import { useState } from 'react';
 
 import { useAddMemory } from '@/data';
 import { describeFailureWith, useT } from '@/i18n/useT';
-import { Button, Select, Stack, TextField } from '@/ui';
+import { Button, Row, Select, Stack, TextField } from '@/ui';
 import { Plus } from '@/ui/icons';
 
 import type { MemoryPaneProps } from '../tabs';
@@ -50,19 +50,33 @@ export function AddMemory({ notify }: Pick<MemoryPaneProps, 'notify'>) {
             <TextField
                 value={text}
                 onChangeText={setText}
-                placeholder={t('mem.about.addPlaceholder')}
+                placeholder={t.bare('mem.about.addPlaceholder')}
                 accessibilityLabel={t('mem.about.addLabel')}
-                multiline
-                maxLines={4}
+                onSubmitEditing={submit}
                 testID="memory-about-add-text"
             />
-            <Select
-                label={t('mem.about.kind')}
-                value={category}
-                onChange={setCategory}
-                options={KINDS.map((kind) => ({ value: kind.value, label: t.bare(kind.label) }))}
-                testID="memory-about-add-kind"
-            />
+            <Row gap="sm" align="end">
+                <Stack flex={1}>
+                    <Select
+                        label={t('mem.about.kind')}
+                        hideLabel
+                        value={category}
+                        onChange={setCategory}
+                        options={KINDS.map((kind) => ({ value: kind.value, label: t.bare(kind.label) }))}
+                        testID="memory-about-add-kind"
+                    />
+                </Stack>
+                <Button
+                    label={t.bare('mem.about.add')}
+                    accessibilityLabel={t('mem.about.add')}
+                    icon={Plus}
+                    variant="primary"
+                    disabled={!ready}
+                    busy={add.isPending}
+                    onPress={submit}
+                    testID="memory-about-add-submit"
+                />
+            </Row>
             {reminder ? (
                 <TextField
                     value={when}
@@ -74,18 +88,6 @@ export function AddMemory({ notify }: Pick<MemoryPaneProps, 'notify'>) {
                     testID="memory-about-add-when"
                 />
             ) : null}
-            <Stack align="start">
-                <Button
-                    label={t.bare('mem.about.add')}
-                    accessibilityLabel={t('mem.about.add')}
-                    icon={Plus}
-                    variant="primary"
-                    disabled={!ready}
-                    busy={add.isPending}
-                    onPress={submit}
-                    testID="memory-about-add-submit"
-                />
-            </Stack>
         </Stack>
     );
 }

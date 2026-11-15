@@ -8,7 +8,7 @@ import { bracketParts } from '@webui/i18n/registry';
 import { MAX_MESSAGE_CHARS } from '@webui/utils/messageLimits';
 
 import { useT } from '@/i18n/useT';
-import { Button, IconButton, Notice, Row, Stack, Surface, TextField } from '@/ui';
+import { IconButton, Notice, Row, Stack, Surface, TextField } from '@/ui';
 import { ArrowUp, Square } from '@/ui/icons';
 
 import { AttachButton } from './AttachButton';
@@ -48,6 +48,8 @@ const MAX_LINES = 9;
 const FIXED: ViewStyle = { flexDirection: 'row', alignItems: 'center', flexShrink: 0, gap: 8 };
 const CHIPS: ViewStyle = { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexGrow: 1, flexShrink: 1, minWidth: 0, gap: CHIP_GAP };
 const GROUP: ViewStyle = { flexDirection: 'row', alignItems: 'center', flexShrink: 1, minWidth: 0, gap: CHIP_GAP };
+// The left chips collapse to icons in chipRoom; only the right group (the model) gives up width, so none draw over another.
+const LEFT: ViewStyle = { ...GROUP, flexShrink: 0 };
 
 export function Composer({
     value,
@@ -104,6 +106,8 @@ export function Composer({
         onStop?.();
     };
 
+    // While a reply runs, an empty draft has nothing to queue, so Stop stands alone; a waiting question keeps Send.
+    const showSend = !running || hasContent || !!answering;
     const sendLabel = answering ? t('composer.sendAnswer') : running && message ? t('composer.queue') : t('composer.send');
     const spoken = disabledReason ?? placeholderText ?? (running ? t('composer.queueNext') : t('composer.placeholder'));
     // A placeholder can't draw the muted English half, so it shows the Arabic alone; screen readers get both.
@@ -142,31 +146,32 @@ export function Composer({
                         <View style={FIXED}>{attachments ? <AttachButton onPick={attachments.add} onError={attachments.addFailed} disabled={!!disabledReason} /> : null}</View>
                         <View style={CHIPS} testID="composer-controls" onLayout={(e) => setChipsWidth(e.nativeEvent.layout.width)}>
                             <ChipFitContext.Provider value={chipFit}>
-                                <View style={GROUP}>{leftControls}</View>
+                                <View style={LEFT}>{leftControls}</View>
                                 <View style={GROUP}>{rightControls}</View>
                             </ChipFitContext.Provider>
                         </View>
                         <View style={FIXED} testID="composer-actions">
                             {running ? (
-                                <Button
+                                <IconButton
                                     variant="danger"
                                     icon={Square}
-                                    label={stopping ? t.bare('composer.stopping') : t.bare('composer.stop')}
-                                    accessibilityLabel={stopping ? t('composer.stopping') : t('composer.stop')}
+                                    label={stopping ? t('composer.stopping') : t('composer.stop')}
                                     onPress={stop}
                                     disabled={stopping}
                                     testID="composer-stop"
                                 />
                             ) : null}
-                            <IconButton
-                                variant="primary"
-                                icon={ArrowUp}
-                                label={sendLabel}
-                                onPress={send}
-                                busy={starting}
-                                disabled={!canSend}
-                                testID="composer-send"
-                            />
+                            {showSend ? (
+                                <IconButton
+                                    variant="primary"
+                                    icon={ArrowUp}
+                                    label={sendLabel}
+                                    onPress={send}
+                                    busy={starting}
+                                    disabled={!canSend}
+                                    testID="composer-send"
+                                />
+                            ) : null}
                         </View>
                     </Row>
                 </Stack>

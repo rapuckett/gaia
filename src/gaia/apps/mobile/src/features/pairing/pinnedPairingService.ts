@@ -11,7 +11,7 @@ import { onDeviceGone, pinnedFetch, transportError } from '@/platform/pinnedFetc
 import { useConnectionStore, type ConnectionConfig } from '@/state/connection';
 
 import { GaiaTransport, transportAvailable } from '../../../modules/gaia-transport';
-import type { PairingInvite } from './invite';
+import { PairingInviteError, type PairingInvite } from './invite';
 import { setPairingService } from './registry';
 import type { PairedPc, PairingService, PairingStatus, RedeemResult } from './service';
 
@@ -19,6 +19,9 @@ import type { PairedPc, PairingService, PairingStatus, RedeemResult } from './se
 const STORAGE_KEY = 'gaia:paired-pcs';
 // The route a paired device unpairs itself with (gaia/ui/devices SELF_ROUTE).
 const SELF_ROUTE = '/api/devices/me';
+
+/** Where a redeemed code's secret waits for Allow, so a PC already paired keeps its own until then. */
+const stagedId = (pcId: string) => `${pcId}.pending`;
 
 interface SavedPc {
     id: string;
@@ -81,7 +84,7 @@ export function createPinnedPairingService(): PairingService & { restore(): Prom
 
     /** The PC's answer to this phone's token: allowed, still pending, or unknown (unpaired, or never allowed in time). */
     async function check(pc: SavedPc): Promise<'allowed' | 'pending' | 'unknown'> {
-        const res = await pinnedFetch(pc.id, `${pc.origin}${ENDPOINTS.health}`, { headers: { ...UI_HEADERS } });
+        const res = await pinnedFetch(stagedId(pc.id), `${pc.origin}${ENDPOINTS.health}`, { headers: { ...UI_HEADERS } });
         const text = await res.text();
         if (res.ok) return 'allowed';
         if (res.status === 401) return 'unknown';
@@ -90,8 +93,8 @@ export function createPinnedPairingService(): PairingService & { restore(): Prom
     }
 
     /** Tells the PC to forget this phone; a 401 means it already had. */
-    async function unpairOnPc(pc: SavedPc): Promise<void> {
-        const res = await pinnedFetch(pc.id, `${pc.origin}${SELF_ROUTE}`, { method: 'DELETE', headers: { ...UI_HEADERS } });
+    async function unpairOnPc(pc: SavedPc, vaultId: string = pc.id): Promise<void> {
+        const res = await pinnedFetch(vaultId, `${pc.origin}${SELF_ROUTE}`, { method: 'DELETE', headers: { ...UI_HEADERS } });
         const text = await res.text();
         // 401: the PC no longer knows this phone.
         if (!res.ok && res.status !== 401) throw new GaiaApiError(res.status, parseErrorDetail(text));
@@ -125,12 +128,15 @@ export function createPinnedPairingService(): PairingService & { restore(): Prom
         async redeem(invite: PairingInvite): Promise<RedeemResult> {
             const state = await load();
             const body = JSON.stringify({ invitation: invite.invite, device_name: deviceName(), platform: devicePlatform() });
+            await GaiaTransport.drop(stagedId(invite.pc_id));
             let answer;
             try {
-                answer = await GaiaTransport.pair(invite.pc_id, invite.origins, invite.pin, { ...UI_HEADERS, 'Content-Type': 'application/json' }, body);
+                answer = await GaiaTransport.pair(stagedId(invite.pc_id), invite.origins, invite.pin, { ...UI_HEADERS, 'Content-Type': 'application/json' }, body);
             } catch (err) {
                 const e = transportError(err);
-                if (NO_ANSWER.has(String((e as { code?: unknown }).code))) return { state: 'unreachable' };
+                const code = String((e as { code?: unknown }).code);
+                if (code === 'not_home_origin') throw new PairingInviteError('mobileApp.pairing.invite.notHomeNetwork', undefined, { cause: err });
+                if (NO_ANSWER.has(code)) return { state: 'unreachable' };
                 throw e;
             }
             if (answer.status === 403) return { state: 'refused' };
@@ -139,7 +145,7 @@ export function createPinnedPairingService(): PairingService & { restore(): Prom
             const paired = JSON.parse(answer.body) as PairAnswer;
             const expiresAt = paired.expires_at ? Date.parse(paired.expires_at) / 1000 : undefined;
             const pending = { id: invite.pc_id, name: paired.pc_name || invite.name, origin: answer.origin, deviceId: paired.device_id, expiresAt };
-            // Pairing the same PC again replaced its token, so it waits for Allow too; it stays the one in use.
+            // A PC already paired keeps its saved token, and stays the one in use, until this one is allowed.
             await save({ ...state, pending });
             return { state: 'pending', pcName: pending.name, expiresAt };
         },
@@ -153,15 +159,19 @@ export function createPinnedPairingService(): PairingService & { restore(): Prom
                 answer = await check(pending);
             } catch (err) {
                 if (err instanceof GaiaPinMismatchError || err instanceof GaiaApiError) throw err;
-                if (NO_ANSWER.has(String((err as { code?: unknown }).code))) return { state: 'unreachable' };
-                throw err;
+                const code = String((err as { code?: unknown }).code);
+                if (NO_ANSWER.has(code)) return { state: 'unreachable' };
+                // The new key isn't on this phone, so this redemption can't finish.
+                if (code !== 'not_paired') throw err;
+                answer = 'unknown' as const;
             }
             if (answer === 'pending') return { state: 'pending', pcName: pending.name, expiresAt: pending.expiresAt };
             if (answer === 'unknown') {
-                await GaiaTransport.drop(pending.id);
+                await GaiaTransport.drop(stagedId(pending.id));
                 await save({ ...state, pending: null });
                 return { state: 'refused' };
             }
+            await GaiaTransport.promote(stagedId(pending.id), pending.id);
             const pc: SavedPc = { id: pending.id, name: pending.name, origin: pending.origin, deviceId: pending.deviceId };
             await save({ pcs: [...state.pcs.filter((p) => p.id !== pc.id), pc], currentId: pc.id, pending: null });
             return { state: 'paired', pc: pairedOf(pc) };
@@ -172,12 +182,12 @@ export function createPinnedPairingService(): PairingService & { restore(): Prom
             const { pending } = state;
             if (!pending) return;
             try {
-                await unpairOnPc(pending);
+                await unpairOnPc(pending, stagedId(pending.id));
             } catch (err) {
                 // The PC drops a device nobody allowed after 10 minutes anyway.
                 console.warn(`Couldn't tell ${pending.name} to forget this phone; it drops it in 10 minutes.`, err);
             }
-            await GaiaTransport.drop(pending.id);
+            await GaiaTransport.drop(stagedId(pending.id));
             await save({ ...state, pending: null });
         },
 

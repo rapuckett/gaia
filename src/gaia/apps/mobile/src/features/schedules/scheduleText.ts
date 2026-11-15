@@ -4,8 +4,13 @@
 // The wording rules of webui's ScheduleManager.tsx, which is a component and can't be imported.
 
 import type { ScheduleDescription } from '@webui/types';
-import { isMessageKey, type MessageKey, type Say } from '@webui/i18n/registry';
+import { DEFAULT_LOCALE, isMessageKey, type MessageKey, type Say } from '@webui/i18n/registry';
 import { dateLocale, translator, type Translate } from '@webui/i18n/translator';
+
+/** The locale for dates in one half of a composed line; the English half of a bracketed line is English, not the phone's region. */
+export function composeDateLocale(code: string, ui: Translate): string | undefined {
+    return code === DEFAULT_LOCALE && ui.locale !== DEFAULT_LOCALE ? DEFAULT_LOCALE : dateLocale(translator(code));
+}
 
 /** When a past or future time is, as the card's "Last:" line says it. */
 export function formatTime(iso: string | null, say: Say, now: Date, locale?: string): string {
@@ -48,14 +53,14 @@ export function isCountdownRange(iso: string | null, now: Date): boolean {
 }
 
 /** A clock time as the UI language writes it, 12h or 24h. */
-function formatClock(t: Translate, hour: number, minute = 0): string {
+function formatClock(locale: string | undefined, hour: number, minute = 0): string {
     const at = new Date(2000, 0, 1, hour, minute);
-    return new Intl.DateTimeFormat(dateLocale(t), { hour: 'numeric', minute: '2-digit' }).format(at);
+    return new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit' }).format(at);
 }
 
-function formatTimeOfDay(time: string, t: Translate): string {
+function formatTimeOfDay(time: string, locale: string | undefined): string {
     const [h, m] = time.split(':').map(Number);
-    return formatClock(t, h!, m);
+    return formatClock(locale, h!, m);
 }
 
 /** `base.<CLDR plural form>` for `n` in the UI language; null when that form has no message. */
@@ -79,8 +84,9 @@ function dayPhrase(days: number[], t: Translate, say: Say): string | null {
 
 // `t` picks the plural form (the UI language's), `clock` writes the times.
 function schedulePhrase(parts: ScheduleDescription, t: Translate, say: Say, clock: Translate): string | null {
+    const clockLocale = composeDateLocale(clock.locale, t);
     const { kind, count, unit, days, time, start_hour, end_hour } = parts;
-    const at = (when: string) => (time ? say('schedules.desc.at', { when, time: formatTimeOfDay(time, clock) }) : when);
+    const at = (when: string) => (time ? say('schedules.desc.at', { when, time: formatTimeOfDay(time, clockLocale) }) : when);
     if (kind === 'every' || kind === 'window') {
         const key = count && unit ? countedKey(`schedules.span.${unit}`, count, t) : null;
         const on = days ? dayPhrase(days, t, say) : undefined;
@@ -90,7 +96,7 @@ function schedulePhrase(parts: ScheduleDescription, t: Translate, say: Say, cloc
             return on ? say('schedules.desc.everyOn', { span, days: on }) : say('schedules.desc.every', { span });
         }
         if (start_hour == null || end_hour == null) return null;
-        const hours = say('schedules.hours', { start: formatClock(clock, start_hour), end: formatClock(clock, end_hour) });
+        const hours = say('schedules.hours', { start: formatClock(clockLocale, start_hour), end: formatClock(clockLocale, end_hour) });
         return on ? say('schedules.desc.windowOn', { span, hours, days: on }) : say('schedules.desc.window', { span, hours });
     }
     if (kind === 'daily') return time ? at(say('schedules.desc.daily')) : null;
