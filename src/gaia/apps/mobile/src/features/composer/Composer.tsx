@@ -8,7 +8,7 @@ import { bracketParts } from '@webui/i18n/registry';
 import { MAX_MESSAGE_CHARS } from '@webui/utils/messageLimits';
 
 import { useT } from '@/i18n/useT';
-import { Button, IconButton, Notice, Row, Stack, Surface, TextField } from '@/ui';
+import { IconButton, Notice, Row, Stack, Surface, TextField } from '@/ui';
 import { ArrowUp, Square } from '@/ui/icons';
 
 import { AttachButton } from './AttachButton';
@@ -104,6 +104,8 @@ export function Composer({
         onStop?.();
     };
 
+    // While a reply runs, an empty draft has nothing to queue, so Stop stands alone.
+    const showSend = !running || hasContent;
     const sendLabel = answering ? t('composer.sendAnswer') : running && message ? t('composer.queue') : t('composer.send');
     const spoken = disabledReason ?? placeholderText ?? (running ? t('composer.queueNext') : t('composer.placeholder'));
     // A placeholder can't draw the muted English half, so it shows the Arabic alone; screen readers get both.
@@ -148,25 +150,26 @@ export function Composer({
                         </View>
                         <View style={FIXED} testID="composer-actions">
                             {running ? (
-                                <Button
+                                <IconButton
                                     variant="danger"
                                     icon={Square}
-                                    label={stopping ? t.bare('composer.stopping') : t.bare('composer.stop')}
-                                    accessibilityLabel={stopping ? t('composer.stopping') : t('composer.stop')}
+                                    label={stopping ? t('composer.stopping') : t('composer.stop')}
                                     onPress={stop}
                                     disabled={stopping}
                                     testID="composer-stop"
                                 />
                             ) : null}
-                            <IconButton
-                                variant="primary"
-                                icon={ArrowUp}
-                                label={sendLabel}
-                                onPress={send}
-                                busy={starting}
-                                disabled={!canSend}
-                                testID="composer-send"
-                            />
+                            {showSend ? (
+                                <IconButton
+                                    variant="primary"
+                                    icon={ArrowUp}
+                                    label={sendLabel}
+                                    onPress={send}
+                                    busy={starting}
+                                    disabled={!canSend}
+                                    testID="composer-send"
+                                />
+                            ) : null}
                         </View>
                     </Row>
                 </Stack>

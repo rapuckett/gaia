@@ -20,9 +20,13 @@ export default function ComposerGalleryRoute() {
     if (!devGalleryEnabled()) return <Redirect href="/" />;
     const noop = () => {};
     const folder = { path: '/Users/rich/Projects/gaia', name: 'gaia-notes', gaia_folder: false, choosable: false };
-    const chipRow = (
+    const chipRow = (running = false, value?: string) => (
         <Composer
             onSend={noop}
+            onStop={noop}
+            running={running}
+            value={value}
+            onChange={value === undefined ? undefined : noop}
             leftControls={
                 <>
                     <FolderChip folder={folder} />
@@ -43,9 +47,13 @@ export default function ComposerGalleryRoute() {
                     <Divider />
                     <Composer onSend={noop} starting />
                     <Divider />
-                    {chipRow}
+                    {chipRow()}
                     <Divider />
-                    <Stack maxWidth={320}>{chipRow}</Stack>
+                    <Stack maxWidth={320}>{chipRow()}</Stack>
+                    <Divider />
+                    {chipRow(true)}
+                    <Divider />
+                    {chipRow(true, 'Summarize it')}
                     <Divider />
                     <Composer onSend={noop} disabledReason={t('composer.starting')} />
                     <Divider />
