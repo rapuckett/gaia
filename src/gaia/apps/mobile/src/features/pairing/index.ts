@@ -1,0 +1,9 @@
+// Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
+// SPDX-License-Identifier: MIT
+
+export { PairingFlow, type PairingFlowProps, type PairingStep } from './PairingFlow';
+export { PairingGate } from './PairingGate';
+export { createFakePairingService } from './fakePairingService';
+export { parseInvite, PairingInviteError, type PairingInvite } from './invite';
+export { getPairingService, setPairingService } from './registry';
+export type { PairedPc, PairingService, PairingStatus, RedeemResult } from './service';

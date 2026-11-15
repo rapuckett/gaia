@@ -8,6 +8,7 @@ import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-quer
 import type { StartScreen } from '@webui/types';
 
 import type {
+    ConnectorList,
     DocumentListResponse,
     GaiaClient,
     MessageList,
@@ -17,7 +18,7 @@ import type {
     SessionSearchResponse,
     SystemStatus,
 } from '@/api/client.types';
-import { RESOURCE_RETRY_MS, SEARCH_DEBOUNCE_MS, STATUS_POLL_MS } from '@/api/constants';
+import { CONNECTOR_POLL_MS, RESOURCE_RETRY_MS, SEARCH_DEBOUNCE_MS, STATUS_POLL_MS } from '@/api/constants';
 import { GaiaConfigError } from '@/api/errors';
 
 import { useGaiaClient } from './GaiaClientProvider';
@@ -171,6 +172,17 @@ export function useStartScreen() {
         queryKey: queryKeys.startScreen,
         enabled: client !== null,
         queryFn: ({ signal }) => requireClient(client).getStartScreen({ signal }),
+    });
+}
+
+/** The PC's connectors, re-read every few seconds until `done` says the account a reply waits on is connected. */
+export function useConnectorWatch(enabled: boolean, done: (list: ConnectorList | undefined) => boolean) {
+    const client = useGaiaClient();
+    return useQuery<ConnectorList>({
+        queryKey: queryKeys.connectors,
+        enabled: enabled && client !== null,
+        queryFn: ({ signal }) => requireClient(client).listConnectors({ signal }),
+        refetchInterval: (query) => (done(query.state.data) ? false : CONNECTOR_POLL_MS),
     });
 }
 

@@ -1,6 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
+import { isErrorContent } from '@webui/utils/answerErrors.core';
 import { SERVER_CANCELLED_TEXT, splitCutOff } from '@webui/utils/turnEnding.core';
 
 import type { Message, StreamEvent } from '@/api/client.types';
@@ -21,9 +22,19 @@ export interface TurnTail {
     replyId: number | null;
     canTryAgain: boolean;
     canContinue: boolean;
+    /** The turn ended as a failed reply (GAIA said so, or the send failed for good). */
+    failedReply?: boolean;
+    /** Show "Something went wrong": a failed reply whose saved text doesn't already look like an error. */
+    errorBanner?: boolean;
+    /** The cause a failed turn named, for its fix. */
+    failure?: string;
+    policyAlert?: ChatStream['policyAlert'];
 }
 
-type Turn = Pick<ChatStream, 'status' | 'liveText' | 'events' | 'error' | 'stopState' | 'stopError'>;
+type Turn = Pick<
+    ChatStream,
+    'status' | 'liveText' | 'events' | 'error' | 'stopState' | 'stopError' | 'failed' | 'failure' | 'policyAlert'
+>;
 
 /**
  * What goes under the saved messages: the running turn, how the last one ended
@@ -40,7 +51,16 @@ export function buildTail(messages: readonly Message[], turn: Turn): TurnTail | 
     const stopOnSaved = !busy && !!turn.stopState && !!lastReply && !(turn.stopState === 'unconfirmed' && turn.liveText);
 
     if (busy) {
-        return { live: true, text: turn.liveText, events: turn.events, error: turn.error ?? undefined, replyId: null, canTryAgain: false, canContinue: false };
+        return {
+            live: true,
+            text: turn.liveText,
+            events: turn.events,
+            error: turn.error ?? undefined,
+            replyId: null,
+            canTryAgain: false,
+            canContinue: false,
+            policyAlert: turn.policyAlert,
+        };
     }
     if (stopOnSaved && lastReply) {
         const stoppedCleanly = turn.stopState === 'stopped' && !turn.stopError;
@@ -54,10 +74,12 @@ export function buildTail(messages: readonly Message[], turn: Turn): TurnTail | 
             replyId: lastReply.id,
             canTryAgain: stoppedCleanly,
             canContinue: stoppedCleanly && hasText,
+            policyAlert: turn.policyAlert,
         };
     }
-    if (turn.error || turn.liveText || turn.stopState) {
+    if (turn.error || turn.liveText || turn.stopState || turn.failed || turn.policyAlert) {
         const failed = !!turn.error && !mayStillFinish(turn.error);
+        const failedReply = failed || !!turn.failed;
         const stop: Stop | undefined = turn.stopState ? { state: turn.stopState, error: turn.stopError } : undefined;
         return {
             live: false,
@@ -65,9 +87,14 @@ export function buildTail(messages: readonly Message[], turn: Turn): TurnTail | 
             events: turn.events,
             stop,
             error: turn.error ?? undefined,
-            replyId: null,
-            canTryAgain: failed || (stop?.state === 'stopped' && !stop.error),
+            // A failed reply GAIA saved is the one a retry replaces.
+            replyId: turn.failed && !turn.error && lastReply ? lastReply.id : null,
+            canTryAgain: failedReply || (stop?.state === 'stopped' && !stop.error),
             canContinue: false,
+            failedReply,
+            errorBanner: !!turn.failed && !turn.error && !(lastReply && isErrorContent(lastReply.content)),
+            failure: turn.failure,
+            policyAlert: turn.policyAlert,
         };
     }
     if (lastReply && (cutOff || cancelled)) {

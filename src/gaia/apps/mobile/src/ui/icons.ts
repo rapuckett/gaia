@@ -51,6 +51,7 @@ export {
   ShieldAlert,
   ShieldCheck,
   ShieldQuestion,
+  Smartphone,
   Sparkles,
   Square,
   Trash2,
