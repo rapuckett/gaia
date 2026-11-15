@@ -1,7 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { GaiaPinMismatchError } from '@/api/errors';
+import { GaiaPinMismatchError, GaiaUploadUnsupportedError } from '@/api/errors';
 import { createUtf8Decoder } from '@/api/utf8';
 
 import { GaiaTransport } from '../../modules/gaia-transport';
@@ -33,9 +33,7 @@ export function transportError(err: unknown): Error {
 export async function pinnedFetch(pcId: string, url: string, init: FetchRequestInit = {}): Promise<FetchResponseLike> {
     const { signal, body: sent } = init;
     if (sent !== undefined && typeof sent !== 'string') {
-        throw Object.assign(new Error("Sending a file to a paired PC isn't supported yet; this request carried one, so it wasn't sent."), {
-            code: 'unsupported_body',
-        });
+        throw new GaiaUploadUnsupportedError();
     }
     const id = `pinned-${++lastId}`;
     if (signal?.aborted) throw Object.assign(new Error('The request was canceled.'), { code: 'aborted' });
