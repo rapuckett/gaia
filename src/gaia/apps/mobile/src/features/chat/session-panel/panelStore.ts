@@ -23,6 +23,9 @@ interface PanelState {
     contextScope: 'turn' | 'chat';
     setContextScope(scope: 'turn' | 'chat'): void;
     /** The Environment confirmation showing: removing a folder, or turning on full access. */
+    /** The folder picker is open inside Environment. */
+    envPicking: boolean;
+    setEnvPicking(picking: boolean): void;
     envConfirm: { kind: 'remove'; path: string } | { kind: 'full' } | null;
     setEnvConfirm(confirm: PanelState['envConfirm']): void;
 }
@@ -32,6 +35,8 @@ export const useSessionPanelStore = create<PanelState>((set) => ({
     setSection: (id, open) => set((state) => ({ sections: { ...state.sections, [id]: open } })),
     contextScope: 'turn',
     setContextScope: (contextScope) => set({ contextScope }),
+    envPicking: false,
+    setEnvPicking: (envPicking) => set({ envPicking }),
     envConfirm: null,
     setEnvConfirm: (envConfirm) => set({ envConfirm }),
 }));

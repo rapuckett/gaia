@@ -1,7 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import {
     Pressable as RNPressable,
     type AccessibilityActionEvent,
@@ -25,6 +25,8 @@ export interface PressableProps {
     accessible?: boolean;
     /** Minimum hit area in points; 48 unless a parent already guarantees it. */
     minSize?: number;
+    /** Sizes to its content (a short label in a row of text); a horizontal hit slop keeps the target `minSize` wide. */
+    inline?: boolean;
     testID?: string;
 }
 
@@ -40,8 +42,11 @@ export function Pressable({
     onAccessibilityAction,
     accessible,
     minSize = 48,
+    inline,
     testID,
 }: PressableProps) {
+    const [width, setWidth] = useState(0);
+    const slop = inline ? Math.max(0, Math.ceil((minSize - width) / 2)) : 0;
     return (
         <RNPressable
             onPress={onPress}
@@ -54,8 +59,10 @@ export function Pressable({
             onAccessibilityAction={onAccessibilityAction}
             accessibilityState={{ ...accessibilityState, disabled: !!disabled }}
             testID={testID}
+            hitSlop={slop ? { left: slop, right: slop } : undefined}
+            onLayout={inline ? (e) => setWidth(e.nativeEvent.layout.width) : undefined}
             style={({ pressed }) => ({
-                minWidth: minSize,
+                minWidth: inline ? undefined : minSize,
                 minHeight: minSize,
                 justifyContent: 'center',
                 opacity: disabled ? 0.45 : pressed ? 0.72 : 1,

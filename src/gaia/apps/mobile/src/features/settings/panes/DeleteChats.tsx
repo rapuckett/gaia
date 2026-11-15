@@ -35,9 +35,6 @@ export function DeleteChats() {
     return (
         <Card>
             <Stack gap="md">
-                <Text role="ui" weight="semibold" accessibilityRole="header">
-                    {t('settings.privacy.deleteTitle')}
-                </Text>
                 <Text role="label" tone="muted">
                     {sessions.length === 0 ? t('settings.privacy.nothingToDelete') : t('settings.privacy.deleteWarning')}
                 </Text>

@@ -34,7 +34,7 @@ export function ConversationTurns({ turns, onOpenChat }: { turns: UseQueryResult
                     <Stack key={turn.id} gap="sm">
                         {index > 0 ? <Divider /> : null}
                         <Row gap="sm" wrap>
-                            <Badge label={ROLE_KEYS[turn.role] ? t.bare(ROLE_KEYS[turn.role]!) : turn.role} tone={turn.role === 'user' ? 'accent' : 'neutral'} />
+                            <Badge label={ROLE_KEYS[turn.role] ? t.bare(ROLE_KEYS[turn.role]!) : turn.role} accessibilityLabel={ROLE_KEYS[turn.role] ? t(ROLE_KEYS[turn.role]!) : turn.role} tone={turn.role === 'user' ? 'accent' : 'neutral'} />
                             <Text role="caption" tone="muted">
                                 {formatDateFull(turn.timestamp, locale)}
                             </Text>

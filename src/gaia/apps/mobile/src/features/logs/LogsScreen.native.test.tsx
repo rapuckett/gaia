@@ -6,7 +6,6 @@ import type { ReactNode } from 'react';
 import { Platform } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-import { PC_ONLY_REFUSAL } from '@/api/constants';
 import { ThemeProvider } from '@/ui';
 
 import { LogsScreen } from './LogsScreen';
@@ -24,7 +23,7 @@ describeNative('LogsScreen', () => {
         expect(screen.queryByTestId('logs-save-all-refusal')).toBeNull();
 
         fireEvent.press(screen.getByTestId('logs-save-all'));
-        expect(await screen.findByText(new RegExp(`^${PC_ONLY_REFUSAL.slice(0, 30)}`))).toBeTruthy();
+        expect(await screen.findByText(/^Do this on your PC\./)).toBeTruthy();
         fireEvent.press(screen.getByTestId('logs-report'));
         expect(await screen.findByTestId('logs-report-refusal')).toBeTruthy();
     });

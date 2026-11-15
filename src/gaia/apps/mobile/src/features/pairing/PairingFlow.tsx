@@ -7,16 +7,21 @@ import { Platform } from 'react-native';
 import { describeError, useT } from '@/i18n/useT';
 import { useConnectionStore } from '@/state/connection';
 import { Button, Card, Icon, Notice, Row, Screen, Spinner, Stack, Text, TextField } from '@/ui';
-import { CircleAlert, Clock, Smartphone } from '@/ui/icons';
+import { CircleAlert, Clock, Monitor, Smartphone } from '@/ui/icons';
 
-import { parseInvite } from './invite';
+import { parseInvite, type PairingInvite } from './invite';
 import { PairingScanner } from './PairingScanner';
 import { getPairingService } from './registry';
 import type { PairingStatus, RedeemResult } from './service';
 
 export type PairingStep = 'welcome' | 'how' | 'manual' | 'scan';
 
-type View = PairingStep | { at: 'waiting'; pcName: string } | { at: 'refused'; rateLimited: boolean } | { at: 'unreachable' };
+type View =
+    | PairingStep
+    | { at: 'confirm'; invite: PairingInvite; replaces: boolean; back: PairingStep }
+    | { at: 'waiting'; pcName: string }
+    | { at: 'refused'; rateLimited: boolean }
+    | { at: 'unreachable' };
 
 const POLL_MS = 2000;
 
@@ -92,6 +97,7 @@ export function PairingFlow({ initialStep = 'welcome', onPaired, onScan }: Pairi
         return () => clearInterval(timer);
     }, [waiting, settle, t]);
 
+    // A code only names a PC; the person confirms it before this phone sends the invitation.
     const submit = async (code: string = text) => {
         setError(null);
         let invite;
@@ -101,6 +107,20 @@ export function PairingFlow({ initialStep = 'welcome', onPaired, onScan }: Pairi
             setError(describeError(e, t));
             return;
         }
+        setBusy(true);
+        try {
+            const paired = await getPairingService().list();
+            if (!alive.current) return;
+            setView({ at: 'confirm', invite, replaces: paired.some((pc) => pc.id === invite.pc_id), back: view === 'scan' ? 'scan' : 'manual' });
+        } catch (e) {
+            if (alive.current) setError(describeError(e, t));
+        } finally {
+            if (alive.current) setBusy(false);
+        }
+    };
+
+    const redeem = async (invite: PairingInvite) => {
+        setError(null);
         setBusy(true);
         try {
             settle(await getPairingService().redeem(invite));
@@ -121,6 +141,36 @@ export function PairingFlow({ initialStep = 'welcome', onPaired, onScan }: Pairi
         setView('how');
     };
 
+    if (typeof view === 'object' && view.at === 'confirm') {
+        const { invite, replaces, back } = view;
+        const addresses = invite.origins.map((o) => o.slice('https://'.length)).join(', ');
+        return (
+            <Page
+                icon={Monitor}
+                title={t('mobileApp.pairing.confirm.title', { pc: invite.name })}
+                body={t('mobileApp.pairing.confirm.body')}
+                footer={
+                    <>
+                        <Button variant="primary" label={t('mobileApp.pairing.confirm.pair')} onPress={() => void redeem(invite)} busy={busy} full testID="pairing-confirm" />
+                        <Button variant="secondary" label={t('mobileApp.pairing.confirm.cancel')} onPress={() => setView(back)} disabled={busy} full />
+                    </>
+                }
+            >
+                <Card>
+                    <Stack gap="xs">
+                        <Text role="caption" tone="secondary">
+                            {t('mobileApp.pairing.confirm.address')}
+                        </Text>
+                        <Text role="body" selectable>
+                            {addresses}
+                        </Text>
+                    </Stack>
+                </Card>
+                {replaces ? <Notice tone="warning" message={t('mobileApp.pairing.confirm.replaces', { pc: invite.name })} /> : null}
+                {error ? <Notice tone="danger" message={error} /> : null}
+            </Page>
+        );
+    }
     if (typeof view === 'object' && view.at === 'waiting') {
         return (
             <Page icon={Clock} title={t('mobileApp.pairing.waiting.title')} body={t('mobileApp.pairing.waiting.body', { pc: view.pcName })} busy>
@@ -215,16 +265,30 @@ function Page({
     title,
     body,
     busy,
+    footer,
     children,
 }: {
     icon?: typeof Clock;
     title: string;
     body?: string;
     busy?: boolean;
+    /** Actions pinned to the bottom of the screen, in thumb reach. */
+    footer?: React.ReactNode;
     children?: React.ReactNode;
 }) {
     return (
-        <Screen banner={null} keyboard="avoid" scroll>
+        <Screen
+            banner={null}
+            keyboard="avoid"
+            scroll
+            footer={
+                footer ? (
+                    <Stack gap="sm" padding="xl">
+                        {footer}
+                    </Stack>
+                ) : undefined
+            }
+        >
             <Stack flex={1} gap="lg" padding="xl" justify="center" maxWidth={560} self="center">
                 {icon ? (
                     <Stack align="center">
