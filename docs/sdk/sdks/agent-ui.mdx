@@ -2522,7 +2522,8 @@ OAuth and MCP-server connections for the Settings page and per-agent grants
     Run the connector's health check and return `{"ok": bool, "detail": str}`.
     An OAuth connector refreshes its token. An `mcp_server` connector starts
     the server once and reports whether it started; a server that only checks
-    its key on a tool call still passes with a bad key.
+    its key on a tool call still passes with a bad key. PC-only: the check can
+    raise an OS key-store prompt on the PC.
   </Accordion>
 
   <Accordion title="DELETE /api/connectors/{connector_id}">
@@ -2532,7 +2533,7 @@ OAuth and MCP-server connections for the Settings page and per-agent grants
 
   <Accordion title="POST /api/connectors/{connector_id}/enable">
     Re-enable a previously-disabled `mcp_server` connector. Its tools
-    materialize live.
+    materialize live. PC-only, like `configure`.
   </Accordion>
 
   <Accordion title="POST /api/connectors/{connector_id}/disable">
@@ -3244,7 +3245,8 @@ credential store (the slot the TUI uses). A key is never echoed back or logged.
     Let the next key read ask the OS to unlock the credential store again. After
     a dismissed or refused unlock prompt GAIA stops reading the store for five
     minutes, and providers report `key_state: "store_locked"`; the Try again
-    button calls this. Returns `{"retrying": true}`.
+    button calls this. Returns `{"retrying": true}`. PC-only: the prompt it
+    allows shows on the PC.
   </Accordion>
 
   <Accordion title="GET /api/providers/{provider}/models">
