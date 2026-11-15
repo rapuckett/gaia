@@ -130,7 +130,7 @@ def _speech_model() -> SpeechModel:
         )
         raise LemonadeTTSError(
             "The voice model isn't installed on this PC yet, and the model "
-            "server doesn't offer it to download."
+            "server doesn't offer it. Update the model server, then try again."
         )
     size = entry.get("size")
     return SpeechModel(
