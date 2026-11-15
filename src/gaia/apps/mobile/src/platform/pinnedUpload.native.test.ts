@@ -6,11 +6,11 @@ import { Platform } from 'react-native';
 import { createHttpClient } from '@/api/http';
 import { useConnectionStore } from '@/state/connection';
 
-import { GaiaTransport, type NativeBodySegment } from '../../modules/gaia-transport';
+import { GaiaTransport, type NativeBodySegment, type NativeUploadProgress } from '../../modules/gaia-transport';
 import { platformFetch } from './fetch';
 
 jest.mock('../../modules/gaia-transport', () => ({
-    GaiaTransport: { start: jest.fn(), upload: jest.fn(), read: jest.fn(), cancel: jest.fn() },
+    GaiaTransport: { start: jest.fn(), upload: jest.fn(), read: jest.fn(), cancel: jest.fn(), addListener: jest.fn() },
     transportAvailable: true,
 }));
 jest.mock('expo/fetch', () => ({ fetch: jest.fn(() => Promise.reject(new Error('unpinned fetch used'))) }));
@@ -53,5 +53,33 @@ describeNative('an upload to a paired PC', () => {
             `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="Q3 %22final%22.pdf"\r\n` +
                 `Content-Type: application/pdf\r\n\r\n<${uri}>\r\n--${boundary}--\r\n`,
         );
+    });
+
+    it("reports only its own upload's progress, and stops listening once the answer is read", async () => {
+        useConnectionStore.getState().setConnection({ baseUrl: BASE, pcId: 'pc-1', pinned: true });
+        const listeners = new Set<(e: NativeUploadProgress) => void>();
+        native.addListener!.mockImplementation((_event, listener) => {
+            listeners.add(listener);
+            return { remove: () => listeners.delete(listener) };
+        });
+        const emit = (e: NativeUploadProgress) => listeners.forEach((l) => l(e));
+        native.upload!.mockImplementation(async (id) => {
+            emit({ id: 'pinned-other', sent: 5, total: 9 });
+            emit({ id, sent: 1, total: 3 });
+            emit({ id, sent: 3, total: 3 });
+            return { status: 200, headers: { 'content-type': 'application/json' } };
+        });
+        native.read.mockResolvedValueOnce(new TextEncoder().encode('{"id":"d2"}')).mockResolvedValueOnce(null);
+
+        const client = createHttpClient({ baseUrl: BASE, token: null, fetch: platformFetch });
+        const onUploadProgress = jest.fn();
+        const file = { uri: 'file:///var/mobile/Caches/DocumentPicker/2A.pdf', name: 'a.pdf', mimeType: 'application/pdf', size: 3 };
+        await client.uploadDocument(file, { onUploadProgress });
+
+        expect(onUploadProgress.mock.calls).toEqual([
+            [1, 3],
+            [3, 3],
+        ]);
+        expect(listeners.size).toBe(0);
     });
 });

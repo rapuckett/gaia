@@ -200,7 +200,10 @@ import { parseSseStream } from './sse';
 
 /** A body sent as it is, not as JSON: a file, or a multipart form. */
 class RawBody {
-    constructor(readonly body: Blob | FormData) {}
+    constructor(
+        readonly body: Blob | FormData,
+        readonly onUploadProgress?: (sent: number, total: number) => void,
+    ) {}
 }
 
 export interface HttpClientConfig {
@@ -274,6 +277,7 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             method,
             headers: headers(body !== undefined && !(body instanceof RawBody)),
             ...(body === undefined ? {} : { body: body instanceof RawBody ? body.body : JSON.stringify(body) }),
+            ...(body instanceof RawBody && body.onUploadProgress ? { onUploadProgress: body.onUploadProgress } : {}),
             ...(signal ? { signal } : {}),
         };
         let res: FetchResponseLike;
@@ -487,7 +491,7 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
                 body = new FormData();
                 body.append('file', typeof uri === 'string' ? await formFile(uri, name, file.type || null) : file, name);
             }
-            return readJson<UploadedFile>(await request('POST', path, new RawBody(body), options?.signal), path);
+            return readJson<UploadedFile>(await request('POST', path, new RawBody(body, options?.onUploadProgress), options?.signal), path);
         },
 
         exportSessionMarkdown(sessionId, options) {
@@ -1054,7 +1058,8 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             // The multipart boundary header is the fetch's to set.
             const form = new FormData();
             form.append('file', await formFile(file.uri, file.name, file.mimeType), file.name);
-            return readJson<DocumentResponse>(await request('POST', ENDPOINTS.documentUpload, new RawBody(form), options?.signal), ENDPOINTS.documentUpload);
+            const body = new RawBody(form, options?.onUploadProgress);
+            return readJson<DocumentResponse>(await request('POST', ENDPOINTS.documentUpload, body, options?.signal), ENDPOINTS.documentUpload);
         },
 
         uploadDocumentByPath(filepath, sessionId, options) {
