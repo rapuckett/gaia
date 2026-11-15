@@ -63,7 +63,7 @@ export function NotificationCenterScreen({ onBack, onOpenChat }: { onBack: () =>
             footer={
                 items.length > 0 ? (
                     <Stack paddingX="lg" paddingY="sm">
-                        <Row gap="sm">
+                        <Row gap="sm" stack>
                             <Stack flex={1}>
                                 <Button label={t('notifications.markAllRead')} icon={Check} variant="secondary" full disabled={unread === 0} onPress={markAllNotificationsRead} testID="ntf-mark-all" />
                             </Stack>
@@ -166,7 +166,7 @@ function NotificationItem({ n, now, locale, waiting, answered, onOpenChat }: Ite
                     <Text role="ui" tone="secondary">{message}</Text>
                     {n.type === 'policy_alert' ? <PolicyDetails n={n} /> : null}
                     {approval && !answered && waiting ? (
-                        <Row gap="sm">
+                        <Row gap="sm" stack>
                             <Stack flex={1}>
                                 <Button label={t('notifications.approve')} icon={Check} full disabled={confirm.isPending} onPress={() => answer(true)} testID="ntf-approve" />
                             </Stack>

@@ -31,7 +31,7 @@ export function ScreenHeader({ title, titleNode, end }: { title?: string; titleN
                 {titleNode ? (
                     <Stack flex={1}>{titleNode}</Stack>
                 ) : title ? (
-                    <Stack flex={end ? 1 : undefined}>
+                    <Stack flex={1}>
                         <Text role="title" weight="semibold" numberOfLines={1}>{title}</Text>
                     </Stack>
                 ) : (
