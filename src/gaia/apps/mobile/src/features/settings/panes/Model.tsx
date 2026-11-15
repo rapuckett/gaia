@@ -147,7 +147,7 @@ export default function Model({ provider: requested }: { provider?: string }) {
                             <CloudPrices provider={provider.id} />
                         </Stack>
                     ) : null}
-                    {provider.remote && !offline && !blocked ? (
+                    {provider.remote && !blocked ? (
                         <SettingsAnchor name="cloud-key">
                             <ProviderKey key={provider.id} provider={provider} connected={connected} />
                         </SettingsAnchor>
