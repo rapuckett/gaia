@@ -7,6 +7,7 @@ import { glossParts } from '@webui/i18n/registry';
 import { useDirection } from '@/i18n/useT';
 import { metrics } from '../tokens/generated';
 import { fontFamily, type Weight } from '../theme/fonts';
+import { COMPACT_MAX_FONT_SCALE, useLargeText } from '../theme/a11y';
 import { useTheme } from '../theme/ThemeProvider';
 import { toneColor, type Tone } from '../theme/tone';
 import { contentDir } from './direction';
@@ -20,7 +21,10 @@ export interface TextProps {
     mono?: boolean;
     italic?: boolean;
     align?: 'start' | 'center' | 'end';
+    /** Lines to show at normal text size; a person who chose a large size gets the whole text (up to 3 lines) unless `compact`. */
     numberOfLines?: number;
+    /** A label inside a fixed-size control: stops scaling at 1.3x and keeps `numberOfLines`. Give the control the full label in `accessibilityLabel`. */
+    compact?: boolean;
     selectable?: boolean;
     strike?: boolean;
     underline?: boolean;
@@ -71,6 +75,7 @@ export function Text({
     italic,
     align,
     numberOfLines,
+    compact,
     selectable,
     strike,
     underline,
@@ -86,6 +91,8 @@ export function Text({
     const rtl = uiDir === 'rtl';
     const dir = dirProp === 'auto' ? (typeof children === 'string' ? contentDir(children, uiDir) : uiDir) : dirProp;
     const nested = useContext(InsideText);
+    const largeText = useLargeText();
+    const lines = !compact && largeText && numberOfLines !== undefined && numberOfLines <= 3 ? undefined : numberOfLines;
 
     // A nested Text is a span: it inherits everything it isn't given.
     const baseSize = type[role ?? 'body'];
@@ -125,7 +132,8 @@ export function Text({
         <InsideText.Provider value>
             <RNText
                 style={style}
-                numberOfLines={numberOfLines}
+                numberOfLines={lines}
+                maxFontSizeMultiplier={compact ? COMPACT_MAX_FONT_SCALE : undefined}
                 ellipsizeMode="tail"
                 selectable={selectable}
                 onPress={onPress}

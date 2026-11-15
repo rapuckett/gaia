@@ -33,7 +33,7 @@ export function Badge({ label, tone = 'neutral', shape = 'tag', accessibilityLab
             accessibilityLabel={accessibilityLabel}
             style={{ alignSelf: 'flex-start', backgroundColor: v.bg, borderRadius: shape === 'pill' ? radius.full : radius.sm, paddingHorizontal: 8, paddingVertical: 2, minWidth: 20 }}
         >
-            <Text role="caption" weight="semibold" tone={v.text} numberOfLines={1} align="center">
+            <Text role="caption" weight="semibold" tone={v.text} numberOfLines={1} compact align="center">
                 {label}
             </Text>
         </View>

@@ -22,6 +22,7 @@ export const ENDPOINTS = {
     goalsHealth: '/api/goals/health',
     goalsStats: '/api/goals/stats',
     gpuMemory: '/api/gpu-memory',
+    gpuMemoryPending: '/api/gpu-memory/pending',
     health: '/api/health',
     cloudPrices: '/api/spending/prices/{provider}',
     lemonadeDetect: '/api/lemonade/detect',
@@ -146,9 +147,12 @@ export const ENDPOINTS = {
     documentReindex: '/api/documents/{doc_id}/reindex',
     documentStatus: '/api/documents/{doc_id}/status',
     documentUpload: '/api/documents/upload',
+    documentUploadPath: '/api/documents/upload-path',
     documents: '/api/documents',
+    filesBrowse: '/api/files/browse',
     filesImage: '/api/files/image',
     filesPreview: '/api/files/preview',
+    filesSearch: '/api/files/search',
     filesUpload: '/api/files/upload',
     filesUploadMedia: '/api/files/upload-media',
     onboardingPreflight: '/api/onboarding/preflight',
@@ -448,3 +452,22 @@ export const AGENT_EVENT_TYPES: ReadonlySet<string> = new Set([
 
 /** Once the run reaches one of these, a permission prompt or question before it is no longer waiting. */
 export const RESOLVES_PROMPTS: ReadonlySet<string> = new Set(['tool_start', 'tool_end', 'tool_result']);
+
+/** The PC's folder listing; a phone names the chat whose folders it may see. */
+export function filesBrowsePath(sessionId: string, path?: string): string {
+    const query = new URLSearchParams(path ? { path } : {});
+    query.set('session_id', sessionId);
+    return `${ENDPOINTS.filesBrowse}?${query}`;
+}
+
+/** A name search on the PC; `fileTypes` is a comma list of extensions. */
+export function filesSearchPath(sessionId: string, query: string, fileTypes: string | undefined, limit: number): string {
+    const params = new URLSearchParams({ query, max_results: String(limit), session_id: sessionId });
+    if (fileTypes) params.set('file_types', fileTypes);
+    return `${ENDPOINTS.filesSearch}?${params}`;
+}
+
+/** Indexes a file that is already on the PC, naming the chat that may read it. */
+export function documentUploadPathPath(sessionId: string): string {
+    return `${ENDPOINTS.documentUploadPath}?session_id=${encodeURIComponent(sessionId)}`;
+}

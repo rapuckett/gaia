@@ -5,6 +5,7 @@ import { View } from 'react-native';
 import type { LucideIcon } from 'lucide-react-native';
 import { Row } from '../layout/layout';
 import { Text } from '../text/Text';
+import { useLargeText } from '../theme/a11y';
 import { useTheme } from '../theme/ThemeProvider';
 import type { Tone } from '../theme/tone';
 import { Icon } from './Icon';
@@ -25,6 +26,7 @@ export interface SmallButtonProps {
 /** The desktop's compact action button (`.btn-sm`): a small bordered button inside a 44 pt touch target. */
 export function SmallButton({ label, accessibilityLabel, icon, variant = 'default', disabled, onPress, testID }: SmallButtonProps) {
     const { colors, radius, space } = useTheme();
+    const largeText = useLargeText();
     const accent = variant === 'accent' || variant === 'plain' || variant === 'primary';
     const tone: Tone = variant === 'default' || variant === 'plain' ? 'primary' : variant === 'primary' ? 'onAccent' : 'accent';
     return (
@@ -42,7 +44,7 @@ export function SmallButton({ label, accessibilityLabel, icon, variant = 'defaul
             >
                 <Row gap="xs" justify="center">
                     {icon ? <Icon icon={icon} size="sm" tone={tone} /> : null}
-                    <Text role={accent ? 'ui' : 'caption'} weight={accent ? 'semibold' : 'medium'} tone={tone} numberOfLines={1}>
+                    <Text role={accent ? 'ui' : 'caption'} weight={accent ? 'semibold' : 'medium'} tone={tone} numberOfLines={largeText ? undefined : 1} compact>
                         {label}
                     </Text>
                 </Row>
