@@ -14,7 +14,7 @@ import { ModelNeededHost } from '@/features/model';
 import { AppDrawer } from '@/features/nav/AppDrawer';
 import { RoutingEffects } from '@/features/nav/RoutingEffects';
 import { INITIAL_ROUTE, PERMANENT_DRAWER_MIN_WIDTH } from '@/features/nav/navigation';
-import { PairingGate } from '@/features/pairing';
+import { installPinnedPairing, PairingGate } from '@/features/pairing';
 import { SetupGate } from '@/features/setup/SetupGate';
 import { useDirection } from '@/i18n/useT';
 import { applyDirection } from '@/platform/direction';
@@ -23,11 +23,14 @@ import { useConnectionStore } from '@/state/connection';
 import { useLocaleStore } from '@/state/locale';
 import { ScreenBannerProvider, UIProvider } from '@/ui';
 
+// Before the first render, so the pairing screens and the saved PC use the pinned transport.
+installPinnedPairing();
+
 // A chat opened cold (deep link, notification) has the home screen beneath it.
 export const unstable_settings = { anchor: INITIAL_ROUTE };
 
 // Expo Router renders only the screens a layout declares.
-const ROUTES = [INITIAL_ROUTE, 'new', 'connectors', 'schedules', 'settings', 'documents', 'skills', 'memory', 'pair', 'pair/manual', 'pair/pcs', 'chat/[id]', 'dev/ui', 'dev/ui-lists', 'dev/composer', 'dev/forms', 'dev/markdown', 'dev/memory-gallery', 'dev/messages', 'dev/permission'];
+const ROUTES = [INITIAL_ROUTE, 'new', 'connectors', 'schedules', 'settings', 'documents', 'logs', 'skills', 'memory', 'pair', 'pair/manual', 'pair/pcs', 'chat/[id]', 'dev/ui', 'dev/ui-lists', 'dev/composer', 'dev/forms', 'dev/markdown', 'dev/memory-gallery', 'dev/messages', 'dev/permission'];
 
 export default function RootLayout() {
     const [queryClient] = useState(() => new QueryClient());

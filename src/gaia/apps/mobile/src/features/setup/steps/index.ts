@@ -6,6 +6,7 @@ import type { ComponentType } from 'react';
 import type { SetupStage } from '../flow';
 import type { SetupStepContext } from '../SetupScreen';
 import { CheckStep } from './CheckStep';
+import { DownloadStep } from './DownloadStep';
 import { PlanWithScreens } from './PlanScreensHost';
 import { ReadyStep } from './ReadyStep';
 import { TestStep } from './TestStep';
@@ -17,6 +18,7 @@ export type SetupStep = ComponentType<{ ctx: SetupStepContext }>;
 export const SETUP_STEPS: Partial<Record<SetupStage, SetupStep>> = {
     check: CheckStep,
     plan: PlanWithScreens,
+    download: DownloadStep,
     test: TestStep,
     ready: ReadyStep,
 };
