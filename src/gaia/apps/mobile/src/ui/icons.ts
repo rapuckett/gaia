@@ -25,6 +25,7 @@ export {
   Eye,
   EyeOff,
   FileText,
+  Image,
   Info,
   Lock,
   Menu,

@@ -166,6 +166,16 @@ export interface FollowUpResult {
 
 export type { FollowUpOutcome };
 
+/** What the PC answers an upload with; `url` is the link a message carries so the agent can read the file. */
+export interface UploadedFile {
+    filename: string;
+    original_name: string;
+    url: string;
+    size: number;
+    content_type: string;
+    is_image: boolean;
+}
+
 export interface RequestOptions {
     signal?: AbortSignal;
 }
@@ -175,6 +185,8 @@ export interface GaiaClient {
     listSessions(options?: RequestOptions): Promise<SessionList>;
     getSession(sessionId: string, options?: RequestOptions): Promise<Session>;
     createSession(request?: CreateSessionRequest, options?: RequestOptions): Promise<Session>;
+    /** Sends a file to the PC; recordings go to the transcription folder. Rejects with the PC's refusal (type, size, empty). */
+    uploadFile(file: Blob, name: string, options?: RequestOptions): Promise<UploadedFile>;
     /** How full the model's context window is for the chat's next message, or why there is no reading yet. */
     getContextUsage(sessionId: string, options?: RequestOptions): Promise<ContextUsageResult>;
     /** What the chat's last finished turn did with the messages added to it; rejects with 409 while a turn still runs. */

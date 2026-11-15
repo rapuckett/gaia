@@ -278,6 +278,8 @@ const messages: Messages = {
     'composer.tooLong': 'الرسالة أطول من أن تُرسل: عدد الأحرف {sent} والحد الأقصى {max}.',
     'composer.tooLongHint': 'احفظها في ملف وأرفقه بزر +، وسيتمكن GAIA من قراءتها كاملة.',
     'composer.attach': 'إرفاق ملفات',
+    'composer.attachFile': 'ملف',
+    'composer.attachPhoto': 'صورة',
     'composer.queue': 'إضافة الرسالة إلى قائمة الانتظار',
     'composer.queueTitle': 'أضفها إلى قائمة الانتظار لتُرسل عند انتهاء هذا الرد (Enter)',
     'queue.listAria': 'رسائل بانتظار الإرسال',

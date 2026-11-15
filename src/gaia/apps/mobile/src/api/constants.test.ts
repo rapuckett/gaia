@@ -137,6 +137,8 @@ describe('endpoints', () => {
         systemStatus: ['GET'],
         documentFile: ['GET'],
         documents: ['GET'],
+        filesUpload: ['POST'],
+        filesUploadMedia: ['POST'],
         onboardingStart: ['GET'],
     };
     const calls = Object.entries(ENDPOINTS).flatMap(([name, path]) =>

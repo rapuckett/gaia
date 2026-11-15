@@ -51,6 +51,8 @@ export const ENDPOINTS = {
     systemStatus: '/api/system/status',
     documentFile: '/api/documents/{doc_id}/file',
     documents: '/api/documents',
+    filesUpload: '/api/files/upload',
+    filesUploadMedia: '/api/files/upload-media',
     onboardingStart: '/api/onboarding/start',
 } as const;
 

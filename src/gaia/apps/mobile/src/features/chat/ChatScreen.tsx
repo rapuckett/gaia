@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from 'react';
 import { needsOutcome, nextToSend } from '@webui/utils/messageQueue';
 
 import { useAnswerQuestion, useChatStream, useContextUsage, useMessages, useSession } from '@/data';
-import { Composer, ContextMeter, ContextWarning, ModelChip, useComposerQueue, useFollowUpEvents } from '@/features/composer';
+import { Composer, ContextMeter, ContextWarning, ModelChip, useAttachments, useComposerQueue, useFollowUpEvents } from '@/features/composer';
 import { QueuedMessages } from '@/features/composer/QueuedMessages';
 import { describeError, useT } from '@/i18n/useT';
 import { isQuestionGone, questionCardData, resolveTypedAnswer } from '@/features/questions/questionLogic';
@@ -29,6 +29,7 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
     const messages = useMessages(sessionId);
     const stream = useChatStream(sessionId);
     const queue = useComposerQueue(sessionId);
+    const attachments = useAttachments();
     const permission = usePermissionPrompt(sessionId);
     const answer = useAnswerQuestion();
     const followUps = useFollowUpEvents(sessionId, stream.events);
@@ -132,6 +133,7 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
                         onSend={send}
                         onStop={stop}
                         running={busy}
+                        attachments={attachments}
                         answering={!!question}
                         placeholder={placeholder}
                         rightControls={
