@@ -6,7 +6,10 @@ import { useState } from 'react';
 import { GaiaApiError } from '@/api/errors';
 import { useLocalModelStatus, useRestartLocalModel } from '@/data';
 import { describeError, useT } from '@/i18n/useT';
-import { Button, Notice, Row, Stack, Text } from '@/ui';
+import { ChipButton } from '@/features/schedules/ChipButton';
+import { Icon, Notice, Row, Text, useTheme } from '@/ui';
+import { TriangleAlert } from '@/ui/icons';
+import { View } from 'react-native';
 
 /**
  * Under a turn that failed because the model server took no connection: start GAIA's own
@@ -16,6 +19,7 @@ export function ModelServerDownNotice() {
     const t = useT();
     const status = useLocalModelStatus(true);
     const restart = useRestartLocalModel();
+    const { colors, radius, space } = useTheme();
     const [asked, setAsked] = useState(false);
 
     const s = status.data;
@@ -33,35 +37,50 @@ export function ModelServerDownNotice() {
         : s?.restart_error;
     const stillDown = asked && !starting && !status.isFetching && down && !raw;
     return (
-        <Stack gap="sm" testID="server-down-notice">
-            <Notice tone="warning" title={t('serverDown.title')} message={t('serverDown.body')} />
-            {s && !ours ? <Text role="label" tone="secondary">{t('serverDown.notOurs')}</Text> : null}
-            {stillDown ? <Text role="label" tone="secondary">{t('serverDown.stillDown')}</Text> : null}
-            {raw ? <Text role="label" tone="danger">{raw}</Text> : null}
-            <Row gap="sm" wrap>
+        <View
+            testID="server-down-notice"
+            accessibilityRole="alert"
+            style={{
+                gap: space.sm,
+                padding: space.md,
+                backgroundColor: colors.bgCard,
+                borderColor: colors.accentYellow,
+                borderWidth: 1,
+                borderRadius: radius.md,
+            }}
+        >
+            <Row gap="sm">
+                <Icon icon={TriangleAlert} size="sm" tone="warning" />
+                <Text role="ui" weight="semibold">{t('serverDown.title')}</Text>
+            </Row>
+            <Text role="ui">{t('serverDown.body')}</Text>
+            {s && !ours ? <Text role="ui">{t('serverDown.notOurs')}</Text> : null}
+            {stillDown ? <Text role="ui">{t('serverDown.stillDown')}</Text> : null}
+            {raw ? <Text role="label" tone="secondary" mono dir="ltr">{raw}</Text> : null}
+            <Row gap="xs" wrap>
                 {ours ? (
-                    <Button
-                        size="sm"
+                    <ChipButton
+                        variant="primary"
                         label={starting ? t('serverDown.starting') : t('serverDown.start')}
                         disabled={starting}
+                        testID="server-down-start"
                         onPress={() => {
                             setAsked(true);
                             restart.mutate({ confirm: false });
                         }}
-                        testID="server-down-start"
                     />
                 ) : null}
-                <Button
-                    size="sm"
+                <ChipButton
+                    variant="plain"
                     label={t('settings.key.checkAgain')}
                     disabled={starting}
+                    testID="server-down-check"
                     onPress={() => {
                         setAsked(true);
                         void status.refetch();
                     }}
-                    testID="server-down-check"
                 />
             </Row>
-        </Stack>
+        </View>
     );
 }
