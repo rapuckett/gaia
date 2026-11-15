@@ -119,6 +119,20 @@ describe('ChatScreen', () => {
         expect(client.deleted).toEqual([{ sessionId: CHAT, messageId: 1 }]);
     });
 
+    it('shows the model-server-down notice under a failed reply', async () => {
+        const client = createFakeClient({
+            sessions: [SESSION],
+            messages: { [CHAT]: [message(1, 'user', 'Hi')] },
+            replies: async function* (): AsyncGenerator<StreamEvent> {
+                yield { type: 'done', message_id: 2, content: 'Lemonade is not running.', failed: true, failure: 'model_server_down' };
+            },
+        });
+        await mount(client);
+
+        await sendText('Hi');
+        expect(await screen.findByTestId('server-down-notice')).toBeTruthy();
+    });
+
     it('Stop returns the queued messages to the box and sends none of them', async () => {
         const finish = gate();
         const client = createFakeClient({
