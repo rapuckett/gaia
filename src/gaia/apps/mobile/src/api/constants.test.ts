@@ -96,6 +96,7 @@ describe('endpoints', () => {
     });
     const methods: Record<keyof typeof ENDPOINTS, string[]> = {
         agents: ['GET'],
+        gpuMemory: ['GET'],
         health: ['GET'],
         lemonadeDetect: ['GET'],
         lemonadeTarget: ['GET'],
