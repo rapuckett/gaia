@@ -149,7 +149,7 @@ export function Composer({
                         testID="composer-input"
                     />
                     <Row gap="sm" align="center">
-                        <View style={FIXED}>{attachments ? <AttachButton onPick={attachments.add} disabled={!!disabledReason} /> : null}</View>
+                        <View style={FIXED}>{attachments ? <AttachButton onPick={attachments.add} onError={attachments.addFailed} disabled={!!disabledReason} /> : null}</View>
                         <View style={CHIPS} testID="composer-controls" onLayout={(e) => setChipsWidth(e.nativeEvent.layout.width)}>
                             <ChipFitContext.Provider value={chipFit}>
                                 <View style={LEFT}>{leftControls}</View>
