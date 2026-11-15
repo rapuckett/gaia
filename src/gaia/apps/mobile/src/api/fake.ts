@@ -11,10 +11,13 @@ import type {
     DocumentListResponse,
     GaiaClient,
     HealthResponse,
+    LemonadeFound,
+    LemonadeTarget,
     LocalModelStatus,
     Message,
     MessageList,
     ModelNeed,
+    PreflightReport,
     ParsedSchedule,
     Schedule,
     ScheduleResult,
@@ -83,6 +86,12 @@ export interface FakeClientData {
     /** Each status read answers the next entry (the last one repeats); defaults to idle. */
     setupStatuses?: (SetupRunStatus | Error)[];
     setupPlan?: SetupPlan;
+    /** What getPreflight answers; an Error is thrown. */
+    preflight?: PreflightReport | Error;
+    /** What getLemonadeTarget answers; an Error is thrown. */
+    lemonadeTarget?: LemonadeTarget | Error;
+    /** What detectLemonade answers; an Error is thrown. */
+    lemonadeDetect?: { found: LemonadeFound | null; unchecked?: string[] } | Error;
     documents?: DocumentListResponse;
 }
 
@@ -101,7 +110,7 @@ export interface FakeGaiaClient extends GaiaClient {
     readonly followUps: { sessionId: string; text: string }[];
     readonly restarts: { confirm: boolean }[];
     readonly downloads: { modelId: string; acknowledgeLowDisk: boolean }[];
-    readonly setupStarts: { skipChatModel: boolean; gaiaLemonade: boolean; upgradeEmbedded: boolean }[];
+    readonly setupStarts: { skipChatModel: boolean; gaiaLemonade: boolean; upgradeEmbedded: boolean; serverOnly: boolean }[];
     readonly detached: { sessionId: string; docId: string }[];
 }
 
@@ -441,12 +450,27 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             if (!data.setupChecks?.length) throw new GaiaApiError(503, 'This fake client was given no setup checks.');
             return nextOf(data.setupChecks, checkAt++);
         },
+        async getPreflight() {
+            if (!data.preflight) throw new GaiaApiError(503, 'This fake client was given no preflight.');
+            if (data.preflight instanceof Error) throw data.preflight;
+            return data.preflight;
+        },
+        async getLemonadeTarget() {
+            if (!data.lemonadeTarget) throw new GaiaApiError(503, 'This fake client was given no model server target.');
+            if (data.lemonadeTarget instanceof Error) throw data.lemonadeTarget;
+            return data.lemonadeTarget;
+        },
+        async detectLemonade() {
+            if (!data.lemonadeDetect) return { found: null };
+            if (data.lemonadeDetect instanceof Error) throw data.lemonadeDetect;
+            return data.lemonadeDetect;
+        },
         async getSetupPlan() {
             if (!data.setupPlan) throw new GaiaApiError(503, 'This fake client was given no setup plan.');
             return data.setupPlan;
         },
         async startSetup(skipChatModel, gaiaLemonade = false, options = {}) {
-            setupStarts.push({ skipChatModel, gaiaLemonade, upgradeEmbedded: !!options.upgradeEmbedded });
+            setupStarts.push({ skipChatModel, gaiaLemonade, upgradeEmbedded: !!options.upgradeEmbedded, serverOnly: !!options.serverOnly });
             return { state: 'running', upgrade_embedded: !!options.upgradeEmbedded };
         },
     };

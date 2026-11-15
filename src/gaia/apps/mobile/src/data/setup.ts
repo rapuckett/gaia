@@ -1,10 +1,18 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import type { GaiaClient, SetupCheck, SetupPlan, SetupRunStatus } from '@/api/client.types';
+import type {
+    GaiaClient,
+    LemonadeFound,
+    LemonadeTarget,
+    PreflightReport,
+    SetupCheck,
+    SetupPlan,
+    SetupRunStatus,
+} from '@/api/client.types';
 import { GaiaError, GaiaNetworkError } from '@/api/errors';
 
 import { useGaiaClient } from './GaiaClientProvider';
@@ -172,5 +180,64 @@ export function useSetupPlan(enabled = true) {
         queryKey: queryKeys.setupPlan,
         enabled: enabled && client !== null,
         queryFn: ({ signal }) => requireClient(client).getSetupPlan({ signal }),
+    });
+}
+
+/** This PC's hardware as setup reads it (memory, disk, GPU, NPU); a failed read stays an error for the screen to say so. */
+export function useSetupPreflight() {
+    const client = useGaiaClient();
+    return useQuery<PreflightReport>({
+        queryKey: ['setupPreflight'],
+        enabled: client !== null,
+        retry: false,
+        queryFn: ({ signal }) => requireClient(client).getPreflight({ signal }),
+    });
+}
+
+/** Which model server GAIA uses; `offer` stays true until someone on the PC chooses, so it is re-read while waiting. */
+export function useLemonadeTarget() {
+    const client = useGaiaClient();
+    return useQuery<LemonadeTarget>({
+        queryKey: ['lemonadeTarget'],
+        enabled: client !== null,
+        retry: false,
+        queryFn: ({ signal }) => requireClient(client).getLemonadeTarget({ signal }),
+        refetchInterval: (query) => (query.state.data?.offer ? SETUP_POLL_MS * 3 : false),
+    });
+}
+
+/** A model server the PC already runs; only asked while the PC still has to choose one. */
+export function useLemonadeDetect(enabled: boolean) {
+    const client = useGaiaClient();
+    return useQuery<{ found: LemonadeFound | null; unchecked?: string[] }>({
+        queryKey: ['lemonadeDetect'],
+        enabled: enabled && client !== null,
+        retry: false,
+        staleTime: Infinity,
+        queryFn: ({ signal }) => requireClient(client).detectLemonade({ signal }),
+    });
+}
+
+/** Starts only the model server on the PC (no models); `gaiaLemonade` switches to GAIA's own. Follow it with `useSetupStatus`. */
+export function useStartSetupServer() {
+    const client = useGaiaClient();
+    const queryClient = useQueryClient();
+    return useMutation<SetupRunStatus, Error, { gaiaLemonade?: boolean } | void>({
+        mutationFn: (options) =>
+            requireClient(client).startSetup(false, !!options?.gaiaLemonade, { serverOnly: true }),
+        onSuccess: (run) => {
+            queryClient.setQueryData(queryKeys.setupStatus, run);
+            void queryClient.invalidateQueries({ queryKey: queryKeys.setupStatus });
+        },
+    });
+}
+
+/** Stops the running setup on the PC; finished files are kept. */
+export function useCancelSetup() {
+    const client = useGaiaClient();
+    const queryClient = useQueryClient();
+    return useMutation<{ cancelled: boolean }, Error, void>({
+        mutationFn: () => requireClient(client).cancelSetup(),
+        onSettled: () => void queryClient.invalidateQueries({ queryKey: queryKeys.setupStatus }),
     });
 }

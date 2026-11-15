@@ -7,10 +7,13 @@ import type {
     AgentMcpServer,
     ConnectorListEntry,
     ContextUsageResult,
+    LemonadeFound,
+    LemonadeTarget,
     LocalModelStatus,
     Message,
     ModelNeed,
     ModelNeedJob,
+    PreflightReport,
     ParsedSchedule,
     ResourceUsage,
     Schedule,
@@ -33,10 +36,13 @@ export type {
     ConnectorRow,
     ContextUsage,
     ContextUsageResult,
+    LemonadeFound,
+    LemonadeTarget,
     LocalModelStatus,
     Message,
     ModelNeed,
     ModelNeedJob,
+    PreflightReport,
     ParsedSchedule,
     ResourceUsage,
     Schedule,
@@ -266,12 +272,18 @@ export interface GaiaClient {
     /** Starts one model's download on the PC; follow it with `getSetupStatus`. */
     downloadSetupModel(modelId: string, acknowledgeLowDisk: boolean, options?: RequestOptions): Promise<SetupRunStatus>;
     getSetupStatus(options?: RequestOptions): Promise<SetupRunStatus>;
-    /** Stops one model's download; finished and partial files are kept. */
-    cancelSetup(modelId: string, options?: RequestOptions): Promise<{ cancelled: boolean }>;
+    /** Stops one model's download, or the whole run without a model; finished and partial files are kept. */
+    cancelSetup(modelId?: string, options?: RequestOptions): Promise<{ cancelled: boolean }>;
     /** The new-chat screen's cards and working folder; `skills_error` says why the assistant can't list its skills. */
     getStartScreen(options?: RequestOptions): Promise<StartScreen>;
     /** Is GAIA set up on this PC: ready, or the stage and reasons it is not. */
     checkSetup(skipChatModel: boolean, options?: RequestOptions): Promise<SetupCheck>;
+    /** This PC's memory, disk, GPU and NPU as setup reads them. */
+    getPreflight(options?: RequestOptions): Promise<PreflightReport>;
+    /** Which model server GAIA uses, and whether the PC still has to choose one. */
+    getLemonadeTarget(options?: RequestOptions): Promise<LemonadeTarget>;
+    /** A model server the PC already runs; `unchecked` lists addresses that took the connection but didn't answer. */
+    detectLemonade(options?: RequestOptions): Promise<{ found: LemonadeFound | null; unchecked?: string[] }>;
     /** What setup will use and download, before it starts; `catalog` marks partial downloads. */
     getSetupPlan(options?: RequestOptions): Promise<SetupPlan>;
     startSetup(

@@ -11,6 +11,8 @@ export const UI_HEADERS = {
 export const ENDPOINTS = {
     agents: '/api/agents',
     health: '/api/health',
+    lemonadeDetect: '/api/lemonade/detect',
+    lemonadeTarget: '/api/lemonade/target',
     localModelRestart: '/api/providers/local/restart',
     localModelStatus: '/api/providers/local/status',
     schedule: '/api/schedules/{name:path}',
@@ -54,6 +56,7 @@ export const ENDPOINTS = {
     systemStatus: '/api/system/status',
     documentFile: '/api/documents/{doc_id}/file',
     documents: '/api/documents',
+    onboardingPreflight: '/api/onboarding/preflight',
     onboardingStart: '/api/onboarding/start',
 } as const;
 
