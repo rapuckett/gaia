@@ -300,7 +300,8 @@ export function PermissionPrompt({
     }, [heading]);
 
     const scope = requiresFreshConsent(prompt.tool) ? undefined : prompt.alwaysScope;
-    const scopeIn = (say: Say) => alwaysScopeWith(prompt, say) ?? prompt.alwaysLabel ?? scope ?? '';
+    // Isolate the file or folder name so an LTR name can't reorder the Arabic around it.
+    const scopeIn = (say: Say) => alwaysScopeWith(prompt, say, (name) => `\u2068${shortScope(` ${name}`).trim()}\u2069`) ?? prompt.alwaysLabel ?? scope ?? '';
     const suggestAlways = !!scope && repeats > 0;
     const allowLabel = t(
         prompt.tool === PROJECT_TRUST_TOOL ? 'prompt.trust.allow' : prompt.tool === PATH_ACCESS_TOOL ? 'prompt.allowForChat' : 'prompt.allowOnce',

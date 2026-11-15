@@ -101,13 +101,13 @@ export function alwaysScopeText(n: GaiaNotification, t: Translate): string | nul
 }
 
 /** `alwaysScopeText` in the language `say` writes, for a line built inside `t.compose`. */
-export function alwaysScopeWith(n: GaiaNotification, say: Say): string | null {
+export function alwaysScopeWith(n: GaiaNotification, say: Say, wrapName: (name: string) => string = (name) => name): string | null {
   const action = toolAction(n, say);
   const prefix = `${n.tool} `;
   if (!action || !n.alwaysScope?.startsWith(prefix)) return null;
   const rest = n.alwaysScope.slice(prefix.length);
-  if (rest.startsWith('on files in ')) return say('prompt.always.folder', { action, folder: rest.slice('on files in '.length) });
-  return say('prompt.always.file', { action, name: rest.startsWith('on ') ? rest.slice(3) : rest });
+  if (rest.startsWith('on files in ')) return say('prompt.always.folder', { action, folder: wrapName(rest.slice('on files in '.length)) });
+  return say('prompt.always.file', { action, name: wrapName(rest.startsWith('on ') ? rest.slice(3) : rest) });
 }
 
 /**
