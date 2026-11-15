@@ -12,7 +12,7 @@ import { useAnswerQuestion, useChatStream, useContextUsage, usePermissionMode, u
 import { FlagshipAgentBanner } from '@/features/banners/FlagshipAgentBanner';
 import { Composer, ContextMeter, ContextWarning, ModelChip, PermissionChip, useAttachments, useComposerQueue, useFollowUpEvents } from '@/features/composer';
 import { QueuedMessages } from '@/features/composer/QueuedMessages';
-import { describeError, useT } from '@/i18n/useT';
+import { describeError, describeErrorWith, useT } from '@/i18n/useT';
 import { isQuestionGone, questionCardData, resolveTypedAnswer } from '@/features/questions/questionLogic';
 import { ErrorState, Notice, Screen, Stack } from '@/ui';
 
@@ -97,7 +97,7 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
             .catch((err: unknown) => {
                 // Back in the box, so nothing typed is lost; an expired question says so in its card.
                 queue.setDraft((prev) => (prev.trim() ? `${message}\n\n${prev}` : message));
-                if (!isQuestionGone(err)) setActionError(t('composer.answerFailed', { error: describeError(err, t) }));
+                if (!isQuestionGone(err)) setActionError(t.compose((say) => say('composer.answerFailed', { error: describeErrorWith(err, say) })));
             });
         return true;
     };

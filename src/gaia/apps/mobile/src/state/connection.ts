@@ -1,6 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
+import { Platform } from 'react-native';
 import { create } from 'zustand';
 
 import { normalizeBaseUrl } from '@/api/http';
@@ -30,7 +31,11 @@ interface ConnectionState {
 }
 
 // The PC's address for development, inlined by Expo when Metro starts; GAIA's port changes at every launch.
-const SEED_URL = process.env.EXPO_PUBLIC_GAIA_URL || null;
+// A production phone build ignores it: it reaches a PC only by pairing, over pinned TLS.
+export function seedUrl(env: string | undefined, dev: boolean, os: string): string | null {
+    return env && (dev || os === 'web') ? env : null;
+}
+const SEED_URL = seedUrl(process.env.EXPO_PUBLIC_GAIA_URL, __DEV__, Platform.OS);
 
 export const useConnectionStore = create<ConnectionState>((set) => ({
     connection: SEED_URL ? { baseUrl: normalizeBaseUrl(SEED_URL) } : null,

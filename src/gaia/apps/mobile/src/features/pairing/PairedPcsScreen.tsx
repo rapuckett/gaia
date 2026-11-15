@@ -52,6 +52,7 @@ export function PairedPcsScreen({ onAdd }: { onAdd: () => void }) {
                                         size="sm"
                                         label={t('mobileApp.pairing.pcs.more', { name: item.name })}
                                         onPress={() => setTarget({ pc: item, mode: 'menu' })}
+                                        testID={`pc-row-${item.id}-more`}
                                     />
                                 </Row>
                             }
@@ -79,6 +80,7 @@ export function PairedPcsScreen({ onAdd }: { onAdd: () => void }) {
                         <Button
                             label={t('mobileApp.pairing.pcs.forgetConfirm', { name: pc?.name ?? '' })}
                             variant="danger"
+                            testID="pc-forget-confirm"
                             onPress={() => {
                                 close();
                                 if (pc) forget.mutate(pc);

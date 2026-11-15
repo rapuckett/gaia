@@ -165,7 +165,17 @@ describe('createHttpClient requests', () => {
             { session_id: 's1', request_id: 'r1', value: 'Paris' },
         ],
         ['getSystemStatus', (c) => c.getSystemStatus(), 'GET', '/api/system/status', UI_HEADERS, undefined],
+        [
+            'downloadModel',
+            (c) => c.downloadModel('m', { force: true }),
+            'POST',
+            '/api/system/download-model',
+            JSON_HEADERS,
+            { model_name: 'm', force: true, load_after: false },
+        ],
+        ['loadModel', (c) => c.loadModel('m', false), 'POST', '/api/system/load-model', JSON_HEADERS, { model_name: 'm', force: false }],
         ['listConnectors', (c) => c.listConnectors(), 'GET', '/api/connectors', UI_HEADERS, undefined],
+        ['disableConnector', (c) => c.disableConnector('slack'), 'POST', '/api/connectors/slack/disable', JSON_HEADERS, {}],
     ])('%s: %s', async (_name, call, method, path, headers, body) => {
         const { fetch, calls } = createRecordingFetch(() => jsonResponse({ status: 'ok' }));
         await call(createHttpClient({ baseUrl: BASE, fetch }));
@@ -173,6 +183,19 @@ describe('createHttpClient requests', () => {
         const sent = calls[0]!;
         expect([sent.method, sent.url, sent.headers]).toEqual([method, `${BASE}${path}`, headers]);
         expect(sent.body === undefined ? undefined : JSON.parse(sent.body)).toEqual(body);
+    });
+
+    it('disconnectConnector: listens on the connector events, deletes, and returns the revoke outcome', async () => {
+        const event = { type: 'connector.disconnected', payload: { connector_id: 'google', revoke_supported: true, revoked_remotely: false, revoke_error: 'timeout' } };
+        const { fetch, calls } = createRecordingFetch((call) =>
+            call.method === 'DELETE' ? textResponse('', 204) : streamResponse([`data: ${JSON.stringify(event)}\n\n`]),
+        );
+        const outcome = await createHttpClient({ baseUrl: BASE, fetch }).disconnectConnector('google');
+        expect(calls.map((c) => [c.method, c.url])).toEqual([
+            ['GET', `${BASE}/api/connectors/events`],
+            ['DELETE', `${BASE}/api/connectors/google`],
+        ]);
+        expect(outcome).toEqual(event.payload);
     });
 
     it('attachToRun: GET /api/chat/attach for the chat; no turn running ends with no events', async () => {
