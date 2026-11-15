@@ -11,8 +11,7 @@ import { GaiaApiError } from '@/api/errors';
 import { requireClient, useGaiaClient } from '@/data';
 import { describeError, useT } from '@/i18n/useT';
 import { useModelNeededStore } from '@/state/modelNeeded';
-import { ChipButton } from '@/features/schedules/ChipButton';
-import { Notice, ProgressLine, Row, Sheet, Spinner, Stack, Text } from '@/ui';
+import { Button, Notice, ProgressLine, Row, Sheet, Spinner, Stack, Text } from '@/ui';
 
 /**
  * The prompt for a job whose model isn't on the PC: names the model, its size and source, and downloads it
@@ -124,10 +123,10 @@ function NeedPrompt({ need }: { need: ModelNeed }) {
                 onClose={close}
                 title={t(`modelNeeded.off.${need.off}.title`)}
                 footer={
-                    <Row gap="sm" wrap justify="end">
-                        <ChipButton variant="plain" label={t('modelNeeded.notNow')} onPress={close} />
-                        <ChipButton variant="primary" label={t('modelNeeded.off.send')} onPress={() => settle(true)} />
-                    </Row>
+                    <Stack gap="sm">
+                        <Button full variant="primary" label={t('modelNeeded.off.send')} onPress={() => settle(true)} />
+                        <Button full label={t('modelNeeded.notNow')} onPress={close} />
+                    </Stack>
                 }
             >
                 <Text role="body">{t(`modelNeeded.off.${need.off}.body`)}</Text>
@@ -145,9 +144,9 @@ function NeedPrompt({ need }: { need: ModelNeed }) {
             onClose={close}
             title={t(`modelNeeded.title.${job}`)}
             footer={
-                <Row gap="sm" wrap justify="end">
-                    <ChipButton variant="plain" label={t('modelNeeded.notNow')} onPress={close} />
-                    <ChipButton
+                <Stack gap="sm">
+                    <Button
+                        full
                         variant="primary"
                         label={
                             short
@@ -159,7 +158,8 @@ function NeedPrompt({ need }: { need: ModelNeed }) {
                         disabled={downloading}
                         onPress={() => void download(short)}
                     />
-                </Row>
+                    <Button full label={t('modelNeeded.notNow')} onPress={close} />
+                </Stack>
             }
         >
             <Stack gap="md">
