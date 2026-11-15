@@ -12,7 +12,7 @@ import { useT } from '@/i18n/useT';
 import { Icon, IconButton, Ltr, Pressable, Row, Stack, Surface, Text } from '@/ui';
 import { CircleAlert, CircleCheck, FileText, X } from '@/ui/icons';
 
-import { failureReason } from './failureText';
+import { failureReasonWith } from './failureText';
 
 type LibraryDocument = DocumentListResponse['documents'][number];
 
@@ -52,7 +52,7 @@ export function DocsBar({ sessionId, onFailed }: { sessionId: string; onFailed: 
                 onSuccess: () => {
                     if (docs.length - 1 <= COLLAPSED_PILLS) setExpanded(false);
                 },
-                onError: (err) => onFailed(t('chat.detachFailed', { name: doc.filename, error: failureReason(err, t) })),
+                onError: (err) => onFailed(t.compose((say) => say('chat.detachFailed', { name: doc.filename, error: failureReasonWith(err, say) }))),
             },
         );
 

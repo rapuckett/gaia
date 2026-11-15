@@ -8,7 +8,7 @@ import { useState } from 'react';
 import { Linking } from 'react-native';
 
 import { GaiaApiError } from '@/api/errors';
-import { useCloudPrices, useCloudProviders, useConnectCloud, useLemonadeTarget } from '@/data';
+import { useActiveModel, useCloudPrices, useCloudProviders, useConnectCloud, useLemonadeTarget } from '@/data';
 import { describeError, useLocaleCode, useT, type Translate } from '@/i18n/useT';
 import { Button, Card, ChoiceList, Notice, Spinner, Stack, Row, Text, TextField, type ChoiceOption } from '@/ui';
 
@@ -106,7 +106,6 @@ function ConnectError({ error, t }: { error: Error; t: Translate }) {
  */
 export const KeyScreen: PlanScreen = ({ ctx, close }) => {
     const t = useT();
-    const locale = useLocaleCode();
     const providers = useCloudProviders();
     const usersServer = useLemonadeTarget().data?.source === 'config';
     const connect = useConnectCloud();
@@ -114,22 +113,18 @@ export const KeyScreen: PlanScreen = ({ ctx, close }) => {
     const [picked, setPicked] = useState<string | null>(null);
 
     const infoOf = (id: Provider) => providers.data?.providers.find((p) => p.id === id);
-    const active = providers.data?.active;
+    const active = useActiveModel().data;
     const choice: Provider = chosen ?? (active?.provider === 'amd' ? 'amd' : 'fireworks');
     const info = infoOf(choice);
     const blocked = (id: Provider) => !!infoOf(id)?.blocked;
-    const gateway = infoOf('amd')?.network;
-    const unavailable = (id: Provider) => blocked(id) || (id === 'amd' && gateway?.reachable === false);
-    const gatewayShown = gateway?.reachable !== false || choice === 'amd';
-    const connected = !!info?.key_source;
-    const canConnect = (connected || usersServer) && !unavailable(choice);
+    const connected = !!info?.configured;
+    const canConnect = (connected || usersServer) && !blocked(choice);
     const inUse = active?.provider === choice ? active.model : null;
-    const env = info?.key_source === 'environment' && info.key_hint ? info : undefined;
 
-    const options: ChoiceOption[] = PROVIDERS.filter((p) => p.id !== 'amd' || gatewayShown).map((p) => ({
+    const options: ChoiceOption[] = PROVIDERS.map((p) => ({
         value: p.id,
         label: p.title,
-        description: unavailable(p.id) ? (blocked(p.id) ? t('settings.privacy.localOnlyBlocked') : t('setup.key.gatewayOff')) : t(p.note),
+        description: blocked(p.id) ? t('settings.privacy.localOnlyBlocked') : t(p.note),
     }));
 
     const go = () => connect.mutate({ provider: choice, wanted: picked, wantedName: picked ? shortModelName(picked) : undefined }, { onSuccess: () => ctx.startedRun() });
@@ -149,9 +144,6 @@ export const KeyScreen: PlanScreen = ({ ctx, close }) => {
                     connect.reset();
                 }}
             />
-            {gateway?.reachable === false && gatewayShown ? (
-                <Button variant="ghost" label={t('setup.key.checkAgain')} onPress={() => void providers.refetch()} />
-            ) : null}
             {blocked(choice) ? (
                 <Notice tone="warning" message={t('settings.privacy.localOnlyBlocked')} />
             ) : (
@@ -174,11 +166,6 @@ export const KeyScreen: PlanScreen = ({ ctx, close }) => {
                 </Stack>
             )}
             <Text role="caption" tone="secondary">{usersServer ? t('setup.key.usersServer') : t('setup.key.where')}</Text>
-            {env && !usersServer ? (
-                <Text role="caption" tone="secondary">
-                    {t('setup.key.foundEnv', { name: env.name, hint: ltrIn(locale, env.key_hint ?? '') })}
-                </Text>
-            ) : null}
             {connect.isPending ? <Text role="caption" tone="secondary">{t('setup.key.testing')}</Text> : null}
             {connect.error ? <ConnectError error={connect.error} t={t} /> : null}
             <SetupFooter>

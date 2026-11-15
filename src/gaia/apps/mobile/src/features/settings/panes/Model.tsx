@@ -17,9 +17,13 @@ import {
 import { useT } from '@/i18n/useT';
 import { Disclosure, Notice, Row, SegmentedControl, Spinner, Stack, StatusDot, Text } from '@/ui';
 
+import { isPcRefusal, PcOnlyNotice } from '../PcOnlyNotice';
 import { SettingsAnchor } from '../targets';
 import { CloudPrices } from './model/CloudPrices';
 import { CloudSpending } from './model/CloudSpending';
+import { GpuMemory } from './model/GpuMemory';
+import { LocalDownloads } from './model/LocalDownloads';
+import { LocalModels } from './model/LocalModels';
 import { ModelInUse } from './model/ModelInUse';
 import { ModelList } from './model/ModelList';
 import { ProviderKey } from './model/ProviderKey';
@@ -37,6 +41,7 @@ function LocalMemory() {
 
 export default function Model({ provider: requested }: { provider?: string }) {
     const t = useT();
+    // The PC serves its provider list (with key details) only to itself; a paired phone isn't asked.
     const providersQuery = useProviders();
     const activeQuery = useActiveModel();
     const systemStatus = useSystemStatus();
@@ -47,13 +52,12 @@ export default function Model({ provider: requested }: { provider?: string }) {
     const [inUseRow, setInUseRow] = useState<ProviderModel | null>(null);
 
     const providers = providersQuery.data?.providers;
-    const active = activeQuery.data ?? providersQuery.data?.active;
+    const active = activeQuery.data;
     const asked = providers?.find((p) => p.id === requested)?.id;
     const chosen: ProviderId = picked ?? asked ?? active?.provider ?? 'local';
     const provider = providers?.find((p) => p.id === chosen) ?? null;
-    const offline = provider?.network?.reachable === false;
     const blocked = !!provider?.blocked;
-    const connected = !!provider && !blocked && (!provider.remote || !!provider.models_discovered);
+    const connected = !!provider && !blocked && provider.configured;
     const local = provider?.id === 'local';
     const serverHung = !!systemStatus.data && !systemStatus.data.lemonade_running && !!systemStatus.data.lemonade_error;
 
@@ -77,7 +81,8 @@ export default function Model({ provider: requested }: { provider?: string }) {
         });
     };
 
-    const loadError = providersQuery.error ? errorText(providersQuery.error, t) : providersQuery.data?.lemonade_error;
+    const pcOnly = isPcRefusal(providersQuery.error);
+    const loadError = pcOnly ? null : providersQuery.error ? errorText(providersQuery.error, t) : providersQuery.data?.lemonadeError;
     const row = listedInUse ?? (sameModelId(inUseRow?.id, active?.model) ? inUseRow : null);
 
     return (
@@ -102,6 +107,7 @@ export default function Model({ provider: requested }: { provider?: string }) {
 
             <Stack gap="sm">
                 <Text role="label" weight="medium" tone="secondary">{t('settings.model.whereRuns')}</Text>
+                {pcOnly ? <PcOnlyNotice testID="model-providers-pc-only" /> : null}
                 {providers ? (
                     <SegmentedControl
                         accessibilityLabel={t('settings.model.whereRuns')}
@@ -112,7 +118,7 @@ export default function Model({ provider: requested }: { provider?: string }) {
                 ) : null}
             </Stack>
 
-            {!providers && !loadError ? (
+            {!providers && !loadError && !pcOnly ? (
                 <Row gap="sm">
                     <Spinner />
                     <Text role="label" tone="muted">
@@ -128,22 +134,15 @@ export default function Model({ provider: requested }: { provider?: string }) {
                 <Stack gap="md">
                     {provider.remote ? (
                         <Row gap="sm">
-                            {provider.models_discovered ? <StatusDot tone="success" label={t('settings.key.connectedDot')} /> : null}
+                            {provider.configured ? <StatusDot tone="success" label={t('settings.key.connectedDot')} /> : null}
                             <Text role="ui" weight="semibold">{providerName(t, provider)}</Text>
                         </Row>
                     ) : null}
                     {provider.remote ? <Notice tone="info" role="note" message={providerNotice(t, provider)} /> : null}
                     {blocked ? <Notice tone="danger" message={t('settings.privacy.localOnlyBlocked')} /> : null}
-                    {offline ? (
-                        <Notice
-                            tone="danger"
-                            message={provider.network?.detail ?? undefined}
-                            action={{ label: t('settings.key.checkAgain'), onPress: () => void providersQuery.refetch() }}
-                        />
-                    ) : null}
                     <Disclosure title={t('settings.model.howItWorks')} open={howOpen} onToggle={() => setHowOpen((o) => !o)}>
                         <Stack gap="sm">
-                            <Text role="caption" tone="muted">{t('settings.model.lede')}</Text>
+                            <Text role="caption" tone="muted">{t('mobileApp.settings.model.lede')}</Text>
                             {local ? <Text role="caption" tone="muted">{providerNotice(t, provider)}</Text> : null}
                             {local ? <Text role="caption" tone="muted">{t('settings.model.devices')}</Text> : null}
                             {local ? <LocalMemory /> : null}
@@ -155,12 +154,17 @@ export default function Model({ provider: requested }: { provider?: string }) {
                             <CloudPrices provider={provider.id} />
                         </Stack>
                     ) : null}
-                    {provider.remote && !offline && !blocked ? (
+                    {provider.remote && !blocked ? (
                         <SettingsAnchor name="cloud-key">
                             <ProviderKey key={provider.id} provider={provider} connected={connected} />
                         </SettingsAnchor>
                     ) : null}
-                    {modelsQuery.error ? <Notice tone="danger" message={errorText(modelsQuery.error, t)} /> : null}
+                    {isPcRefusal(modelsQuery.error) ? (
+                        <PcOnlyNotice testID="model-list-pc-only" />
+                    ) : modelsQuery.error ? (
+                        <Notice tone="danger" message={errorText(modelsQuery.error, t)} />
+                    ) : null}
+                    {local && connected ? <LocalDownloads /> : null}
                     {connected ? (
                         <SettingsAnchor name="models-on-pc">
                             <ModelList
@@ -174,6 +178,8 @@ export default function Model({ provider: requested }: { provider?: string }) {
                             />
                         </SettingsAnchor>
                     ) : null}
+                    {local && connected ? <LocalModels /> : null}
+                    {local && connected ? <GpuMemory /> : null}
                     {provider.remote ? <CloudSpending /> : null}
                 </Stack>
             ) : null}

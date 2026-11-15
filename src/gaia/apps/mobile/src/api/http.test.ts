@@ -48,8 +48,8 @@ describe('createHttpClient requests', () => {
             headers: { ...UI_HEADERS, Authorization: 'Bearer tok-1' },
             body: undefined,
         });
-        await client.getDocumentBytes('d 1');
-        expect(calls[1]).toMatchObject({ url: `${BASE}/api/documents/d%201/file`, method: 'GET', body: undefined });
+        await client.getDocumentBytes('d 1', 's 1');
+        expect(calls[1]).toMatchObject({ url: `${BASE}/api/documents/d%201/file?session_id=s%201`, method: 'GET', body: undefined });
     });
 
     it('getGeneratedAudio reads only the fixed media path, and refuses a reply that is not audio', async () => {
