@@ -81,13 +81,13 @@ describe('DocumentsScreen', () => {
             expect(await screen.findByText(/Attached notes\.txt to/)).toBeTruthy();
             expect(client.uploaded.map((f) => f.name)).toEqual(['notes.txt']);
             expect(client.attached).toEqual([{ sessionId: 'c1', docId: 'doc-1' }]);
-            expect(await screen.findByText(/notes\.txt/)).toBeTruthy();
+            expect((await screen.findAllByText(/notes\.txt/)).length).toBeGreaterThan(1);
         });
 
         it('shows the category help when GAIA refuses the file', async () => {
             (pickDocuments as jest.Mock).mockResolvedValue([file('big.pdf')]);
-            const uploadError = new GaiaApiError(400, 'too big', undefined, undefined, { status: 'too_large', max_mb: 20 });
-            await mount(createFakeClient({ uploadError }));
+            const documentUploadError = new GaiaApiError(400, 'too big', undefined, undefined, { status: 'too_large', max_mb: 20 });
+            await mount(createFakeClient({ documentUploadError }));
             fireEvent.press(await screen.findByText('Add a file'));
             expect(await screen.findByText('"big.pdf" is too large')).toBeTruthy();
             expect(screen.getByText(/up to 20 MB/)).toBeTruthy();

@@ -101,7 +101,7 @@ export interface FakeClientData {
     lemonadeDetect?: { found: LemonadeFound | null; unchecked?: string[] } | Error;
     documents?: DocumentListResponse;
     /** Makes every upload fail with this error. */
-    uploadError?: Error;
+    documentUploadError?: Error;
     /** The state an uploaded document comes back in; defaults to complete. */
     uploadStatus?: DocumentResponse['indexing_status'];
     /** What getCapabilities answers, by chat; a chat not listed has no agent running (409). */
@@ -448,7 +448,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             return { deleted: true };
         },
         async uploadDocument(file) {
-            if (data.uploadError) throw data.uploadError;
+            if (data.documentUploadError) throw data.documentUploadError;
             uploaded.push(file);
             const doc = {
                 id: `doc-${uploaded.length}`,
