@@ -14,14 +14,19 @@ import {
     GaiaStreamDroppedError,
     GaiaStreamError,
     GaiaStreamTimeoutError,
+    parseErrorBody,
     parseErrorDetail,
     type StreamEndpoint,
 } from './errors';
 import type {
+    AgentList,
     AgentMcpList,
     CancelChatResult,
     ConfirmToolResult,
+    ConnectorActivations,
+    ConnectorGrants,
     ConnectorList,
+    ContextUsageResult,
     DeleteMessagesResult,
     DeleteScheduleResult,
     DocumentListResponse,
@@ -45,11 +50,17 @@ import type {
     SetupCheck,
     SetupPlan,
     SetupRunStatus,
+    SkillList,
     UserInputResult,
 } from './client.types';
 import {
     ATTACH_HEADER_TIMEOUT_MS,
+    connectorActivationPath,
+    connectorActivationsPath,
+    connectorGrantPath,
+    connectorGrantsPath,
     ENDPOINTS,
+    chatContextPath,
     followupOutcomePath,
     MESSAGE_PAGE_SIZE,
     QUEUED_IDLE_MS,
@@ -58,6 +69,7 @@ import {
     SEND_HEADER_TIMEOUT_MS,
     SESSION_PAGE_SIZE,
     sessionDocumentPath,
+    sessionMessagePath,
     sessionMessagesAndBelowPath,
     sessionMessagesPath,
     sessionPath,
@@ -152,7 +164,7 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
         if (!res.ok) {
             const errorText = await res.text().catch(() => '');
             const detail = parseErrorDetail(errorText);
-            throw res.status === 401 ? new GaiaAuthError(detail) : new GaiaApiError(res.status, detail);
+            throw res.status === 401 ? new GaiaAuthError(detail) : new GaiaApiError(res.status, detail, undefined, undefined, parseErrorBody(errorText));
         }
         return res;
     }
@@ -263,6 +275,10 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             return postJson<Session>(ENDPOINTS.sessions, request, options?.signal);
         },
 
+        getContextUsage(sessionId, options) {
+            return getJson<ContextUsageResult>(chatContextPath(sessionId), options?.signal);
+        },
+
         getFollowUpOutcome(sessionId, options) {
             return getJson<FollowUpOutcome>(followupOutcomePath(sessionId), options?.signal);
         },
@@ -318,6 +334,10 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             return streamTurn('GET', path, undefined, 'attach', ATTACH_HEADER_TIMEOUT_MS, options?.signal);
         },
 
+        deleteMessage(sessionId, messageId, options) {
+            return deleteJson<{ deleted: boolean }>(sessionMessagePath(sessionId, messageId), options?.signal);
+        },
+
         deleteMessagesFrom(sessionId, messageId, options) {
             return deleteJson<DeleteMessagesResult>(sessionMessagesAndBelowPath(sessionId, messageId), options?.signal);
         },
@@ -341,12 +361,44 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             return postJson<UserInputResult>(ENDPOINTS.chatUserInput, body, options?.signal);
         },
 
+        listAgents(options) {
+            return getJson<AgentList>(ENDPOINTS.agents, options?.signal);
+        },
+
         listConnectors(options) {
             return getJson<ConnectorList>(ENDPOINTS.connectors, options?.signal);
         },
 
+        listConnectorGrants(connectorId, options) {
+            return getJson<ConnectorGrants>(connectorGrantsPath(connectorId), options?.signal);
+        },
+
+        listConnectorActivations(connectorId, options) {
+            return getJson<ConnectorActivations>(connectorActivationsPath(connectorId), options?.signal);
+        },
+
+        async grantConnectorAgent(connectorId, agentId, scopes, options) {
+            await request('PUT', connectorGrantPath(connectorId, agentId), { scopes }, options?.signal);
+        },
+
+        async revokeConnectorAgentGrant(connectorId, agentId, options) {
+            await request('DELETE', connectorGrantPath(connectorId, agentId), undefined, options?.signal);
+        },
+
+        async activateConnectorAgent(connectorId, agentId, scopes, options) {
+            await request('PUT', connectorActivationPath(connectorId, agentId), scopes ? { scopes } : {}, options?.signal);
+        },
+
+        async deactivateConnectorAgent(connectorId, agentId, options) {
+            await request('DELETE', connectorActivationPath(connectorId, agentId), undefined, options?.signal);
+        },
+
         listAgentMcps(options) {
             return getJson<AgentMcpList>(ENDPOINTS.connectorsAgentMcps, options?.signal);
+        },
+
+        listSkills(options) {
+            return getJson<SkillList>(ENDPOINTS.skills, options?.signal);
         },
 
         listSchedules(options) {

@@ -9,6 +9,7 @@ export const UI_HEADERS = {
 } as const;
 
 export const ENDPOINTS = {
+    agents: '/api/agents',
     health: '/api/health',
     lemonadeDetect: '/api/lemonade/detect',
     lemonadeTarget: '/api/lemonade/target',
@@ -21,6 +22,7 @@ export const ENDPOINTS = {
     sessions: '/api/sessions',
     session: '/api/sessions/{session_id}',
     sessionDocument: '/api/sessions/{session_id}/documents/{doc_id}',
+    sessionMessage: '/api/sessions/{session_id}/messages/{message_id}',
     sessionMessages: '/api/sessions/{session_id}/messages',
     sessionMessagesAndBelow: '/api/sessions/{session_id}/messages/{message_id}/and-below',
     sessionPrivate: '/api/sessions/{session_id}/private',
@@ -32,13 +34,19 @@ export const ENDPOINTS = {
     setupPlan: '/api/setup/plan',
     setupRun: '/api/setup/run',
     setupStatus: '/api/setup/status',
+    skills: '/api/skills',
     chatSend: '/api/chat/send',
     chatAttach: '/api/chat/attach',
     chatCancel: '/api/chat/cancel',
     chatConfirmTool: '/api/chat/confirm-tool',
+    chatContext: '/api/chat/context/{session_id}',
     chatFollowup: '/api/chat/followup',
     chatFollowupOutcome: '/api/chat/followup/{session_id}',
     chatUserInput: '/api/chat/user-input',
+    connectorActivation: '/api/connectors/{connector_id}/activations/{agent_id:path}',
+    connectorActivations: '/api/connectors/{connector_id}/activations',
+    connectorGrant: '/api/connectors/{connector_id}/grants/{agent_id:path}',
+    connectorGrants: '/api/connectors/{connector_id}/grants',
     connectors: '/api/connectors',
     connectorsAgentMcps: '/api/connectors/agent-mcps',
     systemResources: '/api/system/resources',
@@ -48,6 +56,26 @@ export const ENDPOINTS = {
     onboardingPreflight: '/api/onboarding/preflight',
     onboardingStart: '/api/onboarding/start',
 } as const;
+
+export function connectorActivationPath(connectorId: string, agentId: string): string {
+    return ENDPOINTS.connectorActivation
+        .replace('{connector_id}', encodeURIComponent(connectorId))
+        .replace('{agent_id:path}', encodeURIComponent(agentId));
+}
+
+export function connectorActivationsPath(connectorId: string): string {
+    return ENDPOINTS.connectorActivations.replace('{connector_id}', encodeURIComponent(connectorId));
+}
+
+export function connectorGrantPath(connectorId: string, agentId: string): string {
+    return ENDPOINTS.connectorGrant
+        .replace('{connector_id}', encodeURIComponent(connectorId))
+        .replace('{agent_id:path}', encodeURIComponent(agentId));
+}
+
+export function connectorGrantsPath(connectorId: string): string {
+    return ENDPOINTS.connectorGrants.replace('{connector_id}', encodeURIComponent(connectorId));
+}
 
 export function schedulePath(name: string): string {
     return ENDPOINTS.schedule.replace('{name:path}', encodeURIComponent(name));
@@ -63,6 +91,10 @@ export function setupNeedsPath(job: string): string {
 
 export function sessionPath(sessionId: string): string {
     return ENDPOINTS.session.replace('{session_id}', encodeURIComponent(sessionId));
+}
+
+export function chatContextPath(sessionId: string): string {
+    return ENDPOINTS.chatContext.replace('{session_id}', encodeURIComponent(sessionId));
 }
 
 export function followupOutcomePath(sessionId: string): string {
@@ -81,6 +113,12 @@ export function sessionPrivatePath(sessionId: string): string {
 
 export function sessionMessagesPath(sessionId: string): string {
     return ENDPOINTS.sessionMessages.replace('{session_id}', encodeURIComponent(sessionId));
+}
+
+export function sessionMessagePath(sessionId: string, messageId: number): string {
+    return ENDPOINTS.sessionMessage
+        .replace('{session_id}', encodeURIComponent(sessionId))
+        .replace('{message_id}', String(messageId));
 }
 
 export function sessionMessagesAndBelowPath(sessionId: string, messageId: number): string {
