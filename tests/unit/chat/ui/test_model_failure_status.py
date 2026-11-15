@@ -196,3 +196,38 @@ async def test_a_failure_answer_with_its_own_headline_is_saved_failed(db):
     assert done["failed"] is True
     (session,) = db.list_sessions()
     assert message_to_response(db.get_messages(session["id"])[-1]).failed is True
+
+
+class _PlainAgent(_Agent):
+    def process_query(self, _message):
+        return self.result
+
+
+async def test_a_non_streamed_failure_answer_is_saved_failed():
+    from fastapi.testclient import TestClient
+
+    from gaia.ui.server import create_app
+
+    app = create_app(db_path=":memory:")
+    session = app.state.db.create_session(model="M-GGUF", agent_type="chat")
+    agent = _PlainAgent([], {"result": _STOPPED, "model_failed": True})
+    helpers._agent_cache.clear()
+    helpers._store_agent(session["id"], "M-GGUF", [], agent, "chat")
+    try:
+        with (
+            patch.object(helpers, "_agent_registry", None),
+            patch.object(helpers, "_maybe_load_expected_model"),
+            patch.object(helpers, "_maybe_update_session_title", AsyncMock()),
+            patch.object(helpers, "wait_for_warm_up"),
+        ):
+            resp = TestClient(app).post(
+                "/api/chat/send",
+                json={"session_id": session["id"], "message": "hi", "stream": False},
+            )
+    finally:
+        helpers._agent_cache.clear()
+
+    assert resp.status_code == 200 and resp.json()["content"] == _STOPPED
+    saved = app.state.db.get_messages(session["id"])[-1]
+    assert message_to_response(saved).failed is True
+    assert app.state.db.get_session(session["id"])["last_run_status"] == "failed"
