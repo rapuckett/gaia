@@ -44,7 +44,7 @@ import type { UndoSettings } from '@webui/types/changes';
 import type { AgentCapabilities } from '@webui/types/sessionPanel';
 import type { KnowledgeCreateBody, KnowledgeListParams, KnowledgeSaveResult, KnowledgeUpdateBody, MemorySettings } from '@webui/services/memoryApi';
 import type { AboutYouItem, ActivityDay, TemporalItem, ToolStat } from '@webui/utils/memoryFormat.core';
-import type { CreateSessionRequest, DocumentListResponse, DocumentResponse, ModelServerInfo, SessionSearchResponse, ToolConfirmRequest, UserInputRequest as ApiUserInputRequest } from '@webui/types/api.gen';
+import type { CreateSessionRequest, DocumentListResponse, FilePreviewResponse, DocumentResponse, ModelServerInfo, SessionSearchResponse, ToolConfirmRequest, UserInputRequest as ApiUserInputRequest } from '@webui/types/api.gen';
 
 export type {
     ActiveModel,
@@ -93,7 +93,7 @@ export type {
 } from '@webui/types';
 export type { UndoSettings } from '@webui/types/changes';
 export type { ActiveSkill, AgentCapabilities, AgentTool, SkillOrigin } from '@webui/types/sessionPanel';
-export type { CreateSessionRequest, DocumentListResponse, DocumentResponse, ModelServerInfo, SessionSearchResponse, SessionSearchResult, ToolConfirmRequest } from '@webui/types/api.gen';
+export type { CreateSessionRequest, DocumentListResponse, FilePreviewResponse, DocumentResponse, ModelServerInfo, SessionSearchResponse, SessionSearchResult, ToolConfirmRequest } from '@webui/types/api.gen';
 
 /** A photo or file chosen on this phone: where it is, and what it is called. */
 export interface PickedFile {
@@ -508,6 +508,12 @@ export interface GaiaClient {
     getDocumentStatus(docId: string, options?: RequestOptions): Promise<DocumentStatus>;
     /** Indexes a document again; rejects with the reason when it fails once more. */
     reindexDocument(docId: string, options?: RequestOptions): Promise<DocumentResponse>;
+    /** A PC file's first lines (or its columns, or just its details) as the chat's folders allow; rejects with 403 for a file this chat may not read. */
+    getFilePreview(path: string, sessionId: string, options?: RequestOptions): Promise<FilePreviewResponse>;
+    /** An image on the PC, as bytes; the chat's id is what lets a phone read it. */
+    getImageBytes(path: string, sessionId: string, options?: RequestOptions): Promise<Uint8Array>;
+    /** A library document's file, as bytes. */
+    getDocumentBytes(docId: string, options?: RequestOptions): Promise<Uint8Array>;
     getSystemStatus(options?: RequestOptions): Promise<SystemStatus>;
     /** The model server's state, what it runs on and its memory; the pill and its sheet read it. */
     getLocalModelStatus(options?: RequestOptions): Promise<LocalModelStatus>;

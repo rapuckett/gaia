@@ -1046,6 +1046,7 @@ export const enMessages = {
     'fileBrowser.selectAria': 'Select {name}',
     'fileBrowser.closePreview': 'Close preview',
     'fileBrowser.lines': '{n} lines',
+    'fileBrowser.firstLines': 'First {shown} of {total} lines',
     'fileBrowser.columnCount': '{n} columns',
     'fileBrowser.rows': '{n} rows',
     'fileBrowser.columnsLabel': 'Columns:',

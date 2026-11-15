@@ -38,6 +38,25 @@ describe('createHttpClient requests', () => {
         expect(calls[1]!.rawBody).toBe(blob);
     });
 
+    it('reads a PC file as bytes through the client, with the chat named and no body', async () => {
+        const { fetch, calls } = createRecordingFetch(() => streamResponse([new Uint8Array([1, 2]), new Uint8Array([3])]));
+        const client = createHttpClient({ baseUrl: BASE, token: 'tok-1', fetch });
+        expect(await client.getImageBytes('C:\\Users\\me\\a b.png', 's 1')).toEqual(new Uint8Array([1, 2, 3]));
+        expect(calls[0]).toMatchObject({
+            url: `${BASE}/api/files/image?path=C%3A%5CUsers%5Cme%5Ca%20b.png&session_id=s%201`,
+            method: 'GET',
+            headers: { ...UI_HEADERS, Authorization: 'Bearer tok-1' },
+            body: undefined,
+        });
+        await client.getDocumentBytes('d 1');
+        expect(calls[1]).toMatchObject({ url: `${BASE}/api/documents/d%201/file`, method: 'GET', body: undefined });
+    });
+
+    it('a refused file read rejects with the PC status', async () => {
+        const { fetch } = createRecordingFetch(() => jsonResponse({ detail: 'Access denied' }, 403));
+        await expect(createHttpClient({ baseUrl: BASE, fetch }).getFilePreview('/x', 's1')).rejects.toMatchObject({ status: 403 });
+    });
+
     it('health: GET /api/health with the UI headers and no body', async () => {
         const { fetch, calls } = createRecordingFetch(() => jsonResponse({ status: 'ok', service: 'gaia-agent-ui' }));
         const result = await createHttpClient({ baseUrl: BASE, token: null, fetch }).health();
