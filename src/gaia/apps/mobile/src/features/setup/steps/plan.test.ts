@@ -73,7 +73,7 @@ describe('startOptions', () => {
         const p = plan([chat, extra], 100);
         const selection = initialSelection(p);
         const ticked = { ...selection, ticked: new Set([...selection.ticked, 'extra']) };
-        expect(startOptions(p, ticked, true)).toEqual({ acknowledgeLowDisk: true, keepTrying: false, extraModels: ['extra'] });
-        expect(startOptions(p, selection, false).extraModels).toEqual([]);
+        expect(startOptions(p, ticked, true, true)).toEqual({ acknowledgeLowDisk: true, keepTrying: true, extraModels: ['extra'] });
+        expect(startOptions(p, selection, false, false).extraModels).toEqual([]);
     });
 });
