@@ -26,4 +26,6 @@ jest.mock('react-native-reanimated', () => {
 });
 // The package's ESM entry is .mjs, which Babel doesn't transform; icons render as nothing.
 jest.mock('lucide-react-native', () => new Proxy({ __esModule: true }, { get: (target, name) => (name in target ? target[name] : () => null) }));
+// Its player is a native shared object; playPcAudio.test.ts mocks the behavior it checks.
+jest.mock('expo-audio', () => ({ createAudioPlayer: jest.fn(), setAudioModeAsync: jest.fn(() => Promise.resolve()) }));
 jest.mock('@react-native-async-storage/async-storage', () => require('@react-native-async-storage/async-storage/jest/async-storage-mock'));

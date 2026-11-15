@@ -220,6 +220,11 @@ class _Proc:
         self._on_kill = on_kill
         self.killed = False
 
+    def as_dict(self, attrs):
+        if isinstance(self.info, Exception):
+            raise self.info
+        return {name: self.info[name] for name in attrs}
+
     def kill(self):
         if self._on_kill:
             raise self._on_kill(self.pid)
@@ -227,7 +232,7 @@ class _Proc:
 
 
 def _table(monkeypatch, procs, alive=()):
-    monkeypatch.setattr(psutil, "process_iter", lambda *_a, **_k: iter(procs))
+    monkeypatch.setattr(psutil, "process_iter", lambda: iter(procs))
     monkeypatch.setattr(
         psutil, "wait_procs", lambda procs, timeout=None: ([], list(alive))
     )
@@ -235,7 +240,9 @@ def _table(monkeypatch, procs, alive=()):
 
 async def test_an_ngrok_it_cannot_inspect_is_left_alone(monkeypatch):
     uninspectable = _Proc(41, "ngrok.exe", None)
-    _table(monkeypatch, [uninspectable])
+    exiting = _Proc(43, "ngrok", None)
+    exiting.info = SystemError("proc_cmdline returned a result with an exception set")
+    _table(monkeypatch, [exiting, uninspectable])
     manager = TunnelManager(port=4200)
 
     await manager._kill_stale_ngrok()

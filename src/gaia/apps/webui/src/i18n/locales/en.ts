@@ -3716,6 +3716,7 @@ export const enMessages = {
     'mobileApp.setup.models.loading': 'Reading the models on your PC…',
     'mobileApp.setup.pc.step': 'Your PC',
     'mobileApp.settings.pcOnly': 'Change this on the PC running GAIA.',
+    'mobileApp.settings.appearanceSystem': 'System',
     'mobileApp.settings.model.removeDownloadBody': 'Its downloaded files are deleted from your PC. You can add it again later.',
     'mobileApp.settings.comingSoon': 'This section is coming to the phone soon. For now, change it on the PC running GAIA.',
     'mobileApp.settings.alerts.bannersHint': 'Banners appear at the top of the app while GAIA is open on this phone.',

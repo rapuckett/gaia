@@ -48,6 +48,7 @@ import type { UndoSettings } from '@webui/types/changes';
 import type { DiscordStatus } from '@webui/services/messagingApi';
 import type { AgentCapabilities } from '@webui/types/sessionPanel';
 import type { DiscoveryFinding, Goal, GoalStats, InferenceInsight, KnowledgeCreateBody, KnowledgeListParams, KnowledgeSaveResult, KnowledgeUpdateBody, MemoryCleared, MemoryReinitializeResult, MemorySettings, MemorySettingsUpdateResponse, Priority as GoalPriority } from '@webui/services/memoryApi';
+import type { SpeechModel, SpeechSettings } from '@webui/services/speechApi';
 import type { ActivityDay, ConvSession, ConvTurn, EntityInfo, KnowledgeEntry, TemporalItem, ToolStat } from '@webui/utils/memoryFormat.core';
 import type { CreateSessionRequest, DocumentListResponse, DocumentResponse, ModelServerInfo, ProviderSummaryList, SessionSearchResponse, ToolConfirmRequest, UserInputRequest as ApiUserInputRequest, FilePreviewResponse } from '@webui/types/api.gen';
 
@@ -395,6 +396,16 @@ export interface RequestOptions {
     signal?: AbortSignal;
 }
 
+export type { SpeechModel, SpeechSettings, Voice } from '@webui/services/speechApi';
+/** The read-aloud settings `PUT /api/speech/settings` changes; the rest stay as saved. */
+export type SpeechSettingsUpdate = Partial<Pick<SpeechSettings, 'voice' | 'speed' | 'auto'>>;
+
+/** Audio the PC made, as bytes; `contentType` is the response's media type. */
+export interface PcAudioBytes {
+    bytes: Uint8Array<ArrayBuffer>;
+    contentType: string;
+}
+
 export interface GaiaClient {
     health(options?: RequestOptions): Promise<HealthResponse>;
     listSessions(options?: RequestOptions): Promise<SessionList>;
@@ -550,6 +561,14 @@ export interface GaiaClient {
     updateMemoryKnowledge(knowledgeId: string, body: KnowledgeUpdateBody, options?: RequestOptions): Promise<KnowledgeSaveResult>;
     /** Forgets a memory. */
     deleteMemoryKnowledge(knowledgeId: string, options?: RequestOptions): Promise<unknown>;
+    /** The voice and speed replies are read in, whether every reply is read, and the voices offered. */
+    getSpeechSettings(options?: RequestOptions): Promise<SpeechSettings>;
+    /** Saves the fields given; answers with all the settings. Shared with the terminal app. */
+    updateSpeechSettings(change: SpeechSettingsUpdate, options?: RequestOptions): Promise<SpeechSettings>;
+    /** Whether the voice model is on the PC; the first speech request downloads it if not. */
+    getSpeechModel(options?: RequestOptions): Promise<SpeechModel>;
+    /** Speaks `text` (at most MAX_SPEECH_CHARS) as audio, in the saved voice unless one is given. */
+    speak(text: string, voice?: { voice?: string; speed?: number }, options?: RequestOptions): Promise<PcAudioBytes>;
     getMemorySettings(options?: RequestOptions): Promise<MemorySettings>;
     /** Changes the memory switches named in `settings`; answers with all of them, and what the system scan did when discovery was switched on. */
     updateMemorySettings(settings: Partial<MemorySettings>, options?: RequestOptions): Promise<MemorySettingsUpdateResponse>;
