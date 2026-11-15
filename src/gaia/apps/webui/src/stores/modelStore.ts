@@ -391,7 +391,4 @@ export function distinctModelLabels(models: Array<{ id: string; display_name?: s
     return labels;
 }
 
-/** A cloud provider's name as people know it; an unknown id is shown as given. */
-export function cloudProviderName(provider: string): string {
-    return provider === 'fireworks' ? 'Fireworks AI' : provider === 'amd' ? 'AMD LLM Gateway' : provider;
-}
+export { cloudProviderName } from '../utils/contextPanel.core';
