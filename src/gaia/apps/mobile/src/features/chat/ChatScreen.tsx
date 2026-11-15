@@ -9,7 +9,7 @@ import { FLAGSHIP_AGENT_ID } from '@webui/utils/newTask';
 import { MAX_STREAM_RECONNECTS } from '@webui/utils/streamErrors.core';
 
 import { useChatReadAloud } from '@/features/audio/useChatReadAloud';
-import { useAnswerQuestion, useChatStream, useContextUsage, usePermissionMode, useMessages, useSession } from '@/data';
+import { useAnswerQuestion, useChatStream, useContextUsage, usePermissionMode, useMessages, useRefreshTurnChanges, useSession } from '@/data';
 import { FlagshipAgentBanner } from '@/features/banners/FlagshipAgentBanner';
 import { Composer, ContextMeter, ContextWarning, ModelChip, PermissionChip, useAttachments, useComposerQueue, useFollowUpEvents } from '@/features/composer';
 import { QueuedMessages } from '@/features/composer/QueuedMessages';
@@ -31,6 +31,7 @@ import { registerOpenChat } from './sendToOpenChat';
 import { SessionPanel } from './session-panel';
 import { buildTail } from './tailState';
 import { TurnTail } from './TurnTail';
+import { useTurnAnnouncer, useTurnEnd } from './useTurnAnnouncer';
 
 const NO_MESSAGES: never[] = [];
 
@@ -55,6 +56,9 @@ export function ChatScreen({ sessionId, onManageDocuments }: { sessionId: string
     const context = useContextUsage(sessionId, stream.events, busy);
     const saved = messages.data?.messages ?? NO_MESSAGES;
     useChatReadAloud(sessionId, stream, saved);
+    useTurnAnnouncer(stream, saved);
+    const refreshChanges = useRefreshTurnChanges(sessionId);
+    useTurnEnd(busy, () => void refreshChanges());
 
     // A chat made by a retired agent can be read but not continued.
     const retiredAgent = session.data?.agent_type && session.data.agent_type !== FLAGSHIP_AGENT_ID ? session.data.agent_type : null;
