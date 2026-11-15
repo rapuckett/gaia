@@ -137,6 +137,8 @@ describe('endpoints', () => {
         setupCancel: ['POST'],
         setupCheck: ['GET'],
         setupModelDownload: ['POST'],
+        setupModelRemove: ['POST'],
+        setupModelSkip: ['POST'],
         setupNeeds: ['GET'],
         setupPlan: ['GET'],
         setupRun: ['POST'],

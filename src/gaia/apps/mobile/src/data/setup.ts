@@ -16,6 +16,7 @@ import type {
     SetupRunStatus,
 } from '@/api/client.types';
 import { GaiaError, GaiaNetworkError } from '@/api/errors';
+import { downloadsActive } from '@webui/components/setup/downloadModel';
 
 import { useGaiaClient } from './GaiaClientProvider';
 import { queryKeys, requireClient } from './queries';
@@ -163,15 +164,14 @@ export function useSetupGate() {
     return { gate, recheck, finish, open };
 }
 
-/** The setup run: polled every second while it is running or verifying. */
+/** The setup run: polled every second while it is running or verifying, or a single model is moving. */
 export function useSetupStatus() {
     const client = useGaiaClient();
     return useQuery<SetupRunStatus>({
         queryKey: queryKeys.setupStatus,
         enabled: client !== null,
         queryFn: ({ signal }) => requireClient(client).getSetupStatus({ signal }),
-        refetchInterval: (query) =>
-            query.state.data?.state === 'running' || query.state.data?.state === 'verifying' ? SETUP_POLL_MS : false,
+        refetchInterval: (query) => (downloadsActive(query.state.data) ? SETUP_POLL_MS : false),
     });
 }
 
@@ -234,12 +234,12 @@ export function useStartSetupServer() {
     });
 }
 
-/** Stops the running setup on the PC; finished files are kept. */
+/** Stops the running setup on the PC, or one model's download with `mutate(modelId)`; finished files are kept. */
 export function useCancelSetup() {
     const client = useGaiaClient();
     const queryClient = useQueryClient();
-    return useMutation<{ cancelled: boolean }, Error, void>({
-        mutationFn: () => requireClient(client).cancelSetup(),
+    return useMutation<{ cancelled: boolean }, Error, string | void>({
+        mutationFn: (modelId) => requireClient(client).cancelSetup(modelId || undefined),
         onSettled: () => void queryClient.invalidateQueries({ queryKey: queryKeys.setupStatus }),
     });
 }
@@ -284,4 +284,40 @@ export async function applyTestedBackend(client: GaiaClient): Promise<boolean> {
 export function useApplyTestedBackend() {
     const client = useGaiaClient();
     return useMutation<boolean, Error, void>({ mutationFn: () => applyTestedBackend(requireClient(client)) });
+}
+
+/** Starts one model's download now (Retry, Resume, or one skipped); the status poll then follows it. */
+export function useDownloadSetupModel() {
+    const client = useGaiaClient();
+    const queryClient = useQueryClient();
+    return useMutation<SetupRunStatus, Error, { modelId: string; acknowledgeLowDisk?: boolean }>({
+        mutationFn: ({ modelId, acknowledgeLowDisk }) => requireClient(client).downloadSetupModel(modelId, !!acknowledgeLowDisk),
+        onSuccess: (status) => {
+            queryClient.setQueryData(queryKeys.setupStatus, status);
+            void queryClient.invalidateQueries({ queryKey: queryKeys.setupStatus });
+        },
+    });
+}
+
+/** Skips one of setup's models (`skipped` false takes it back); the new plan replaces the cached one. */
+export function useSkipSetupModel() {
+    const client = useGaiaClient();
+    const queryClient = useQueryClient();
+    return useMutation<SetupPlan, Error, { modelId: string; skipped?: boolean }>({
+        mutationFn: ({ modelId, skipped = true }) => requireClient(client).skipSetupModel(modelId, skipped),
+        onSuccess: (plan) => {
+            queryClient.setQueryData(queryKeys.setupPlan, plan);
+            void queryClient.invalidateQueries({ queryKey: queryKeys.setupStatus });
+        },
+    });
+}
+
+/** Deletes a model that downloaded but didn't load, before it downloads again. */
+export function useRemoveSetupModel() {
+    const client = useGaiaClient();
+    const queryClient = useQueryClient();
+    return useMutation<SetupPlan & { freed_gb: number }, Error, string>({
+        mutationFn: (modelId) => requireClient(client).removeSetupModel(modelId),
+        onSuccess: (plan) => queryClient.setQueryData(queryKeys.setupPlan, plan),
+    });
 }

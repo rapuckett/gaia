@@ -638,6 +638,14 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             );
         },
 
+        removeSetupModel(modelId, options) {
+            return postJson<SetupPlan & { freed_gb: number }>(ENDPOINTS.setupModelRemove, { model_id: modelId }, options?.signal);
+        },
+
+        skipSetupModel(modelId, skipped, options) {
+            return postJson<SetupPlan>(ENDPOINTS.setupModelSkip, { model_id: modelId, skipped }, options?.signal);
+        },
+
         getSetupStatus(options) {
             return getJson<SetupRunStatus>(ENDPOINTS.setupStatus, options?.signal);
         },
