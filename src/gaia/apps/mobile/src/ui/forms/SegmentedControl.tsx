@@ -28,8 +28,9 @@ const PAD = 2;
 // Falls back to a ChoiceList when a label wouldn't fit its segment on one line.
 export function SegmentedControl({ options, value, onChange, accessibilityLabel, testID }: SegmentedControlProps) {
     const { colors, radius } = useTheme();
-    // The row flips with the layout, not the locale; they differ until a native restart.
+    // The track is always laid out LTR and mirrored by hand: iOS swaps `left` in RTL, the web doesn't.
     const rtl = layoutDirection() === 'rtl';
+    const shown = rtl ? [...options].reverse() : options;
     const reduced = useReducedMotion();
     const [width, setWidth] = useState(0);
     const [labelWidths, setLabelWidths] = useState<number[]>([]);
@@ -76,6 +77,7 @@ export function SegmentedControl({ options, value, onChange, accessibilityLabel,
                     accessibilityLabel={accessibilityLabel}
                     style={{
                         flexDirection: 'row',
+                        direction: 'ltr',
                         height: HEIGHT,
                         padding: PAD,
                         borderRadius: radius.md,
@@ -98,7 +100,7 @@ export function SegmentedControl({ options, value, onChange, accessibilityLabel,
                             indicatorStyle,
                         ]}
                     />
-                    {options.map((o) => {
+                    {shown.map((o) => {
                         const on = o.value === value;
                         return (
                             <View key={o.value} style={{ flex: 1 }}>
