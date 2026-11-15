@@ -44,13 +44,18 @@ export function Notice({ tone, title, message, action, onDismiss, role, variant 
     const bar = { info: colors.accentSolid, warning: colors.accentYellow, danger: colors.danger, success: colors.accentGreen }[tone];
     const bg = { info: colors.accentDim2, warning: colors.accentYellowDim, danger: colors.dangerDim, success: colors.accentGreenDim }[tone];
     const card = variant === 'card';
+    // On iOS an accessible ancestor swallows its children, so with buttons only the text block is one element.
+    const hasControls = !!action || !!onDismiss;
+    const semantics = {
+        accessible: true,
+        role,
+        accessibilityRole: role ? undefined : tone === 'danger' || tone === 'warning' ? ('alert' as const) : undefined,
+        accessibilityLiveRegion: tone === 'danger' || tone === 'warning' ? ('assertive' as const) : ('polite' as const),
+    };
     return (
         <View
             testID={testID}
-            accessible
-            role={role}
-            accessibilityRole={role ? undefined : tone === 'danger' || tone === 'warning' ? 'alert' : undefined}
-            accessibilityLiveRegion={tone === 'danger' || tone === 'warning' ? 'assertive' : 'polite'}
+            {...(hasControls ? {} : semantics)}
             style={{
                 backgroundColor: bg,
                 borderRadius: radius.md,
@@ -62,16 +67,18 @@ export function Notice({ tone, title, message, action, onDismiss, role, variant 
             <Row gap="md" align="start">
                 <Icon icon={ICONS[tone]} size="md" tone={ICON_TONE[tone]} />
                 <View style={{ flex: 1, minWidth: 0, gap: space.xs }}>
-                    {title ? (
-                        <Text role="ui" weight="semibold" tone={card ? ICON_TONE[tone] : undefined}>
-                            {title}
-                        </Text>
-                    ) : null}
-                    {message ? (
-                        <Text role="label" tone="secondary">
-                            {message}
-                        </Text>
-                    ) : null}
+                    <View {...(hasControls ? semantics : {})} style={{ gap: space.xs }}>
+                        {title ? (
+                            <Text role="ui" weight="semibold" tone={card ? ICON_TONE[tone] : undefined}>
+                                {title}
+                            </Text>
+                        ) : null}
+                        {message ? (
+                            <Text role="label" tone="secondary">
+                                {message}
+                            </Text>
+                        ) : null}
+                    </View>
                     {action ? <Button variant="ghost" size="sm" label={action.label} onPress={action.onPress} /> : null}
                 </View>
                 {onDismiss ? <IconButton icon={X} size="sm" label={t('banner.dismiss')} onPress={onDismiss} /> : null}
