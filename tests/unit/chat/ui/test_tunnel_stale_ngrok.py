@@ -25,6 +25,11 @@ class _FakeNgrok:
         self._killed = killed
         self._deny = deny
 
+    def as_dict(self, attrs):
+        if isinstance(self.info, Exception):
+            raise self.info
+        return {name: self.info[name] for name in attrs}
+
     def kill(self):
         if self._deny:
             raise psutil.AccessDenied(self.pid)
@@ -47,14 +52,17 @@ def machine(monkeypatch):
         _FakeNgrok(21, "ngrok.exe", ["C:\\tools\\ngrok.exe", *_GAIA_ARGS], killed),
         # Not ngrok at all, though the arguments match.
         _FakeNgrok(31, "python.exe", ["python.exe", *_GAIA_ARGS], killed),
+        # psutil on macOS fails to read a process as it exits.
+        _FakeNgrok(41, "ngrok", [], killed),
     ]
+    table[-1].info = SystemError("proc_cmdline returned a result with an exception set")
 
     def fake_run(argv, **_kwargs):
         calls.append(list(argv))
         return subprocess.CompletedProcess(argv, 0, "", "")
 
     monkeypatch.setattr(tunnel_mod.subprocess, "run", fake_run)
-    monkeypatch.setattr(psutil, "process_iter", lambda *_a, **_k: iter(table))
+    monkeypatch.setattr(psutil, "process_iter", lambda: iter(table))
     monkeypatch.setattr(psutil, "wait_procs", lambda procs, timeout=None: ([], []))
     return killed, calls
 
@@ -121,7 +129,7 @@ async def test_stops_its_own_previous_process_first(machine):
 
 async def test_unkillable_stale_agent_is_reported_not_raised(monkeypatch):
     stale = _FakeNgrok(21, "ngrok.exe", ["ngrok.exe", *_GAIA_ARGS], [], deny=True)
-    monkeypatch.setattr(psutil, "process_iter", lambda *_a, **_k: iter([stale]))
+    monkeypatch.setattr(psutil, "process_iter", lambda: iter([stale]))
     monkeypatch.setattr(tunnel_mod, "_check_ngrok_authtoken_configured", lambda: True)
     manager = TunnelManager(port=4200)
     manager._find_ngrok = lambda: "ngrok"

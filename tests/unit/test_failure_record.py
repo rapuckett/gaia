@@ -104,6 +104,11 @@ def home(tmp_path, monkeypatch):
         def __init__(self, pid, name):
             self.info = {"pid": pid, "name": name}
 
+        def as_dict(self, attrs):
+            if isinstance(self.info, Exception):
+                raise self.info
+            return {key: self.info[key] for key in attrs}
+
         def status(self):
             return "running"
 
@@ -112,10 +117,13 @@ def home(tmp_path, monkeypatch):
 
     import psutil
 
+    # psutil on macOS fails to read a process as it exits.
+    exiting = _Proc(14, "lemond")
+    exiting.info = SystemError("proc_cmdline returned a result with an exception set")
     monkeypatch.setattr(
         psutil,
         "process_iter",
-        lambda attrs=None: [_Proc(11, "lemond"), _Proc(12, "flm"), _Proc(13, "bash")],
+        lambda: [_Proc(11, "lemond"), exiting, _Proc(12, "flm"), _Proc(13, "bash")],
     )
     return SimpleNamespace(dir=gaia_dir / "failures", calls=calls, tmp=tmp_path)
 
