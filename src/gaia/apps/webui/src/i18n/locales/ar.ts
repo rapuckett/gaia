@@ -1848,6 +1848,7 @@ const messages: Messages = {
     'setup.offer.ownNote': 'الإصدار الذي اختُبر عليه GAIA، ويُبقيه GAIA محدّثًا. يحتفظ بنسخته الخاصة من كل نموذج.',
     'setup.offer.mineNote': 'يحتفظ بنسخة واحدة من كل نموذج. ويترك GAIA إصداره وإعداداته كما هي.',
     'setup.offer.recommended': 'موصى به',
+    'setup.check.pcOnly': 'غيّر هذا على الجهاز الذي يشغّل GAIA',
     'setup.title': 'إعداد GAIA',
     'setup.lede.start': 'بضع دقائق من الإعداد، ثم محادثتك الأولى.',
     'setup.lede.running': 'جارٍ الإعداد. يستمر الإعداد حتى لو انتقلت إلى نافذة أخرى.',
@@ -3510,6 +3511,7 @@ const messages: Messages = {
     'mobileApp.error.streamBroke': 'انقطع الاتصال بـ GAIA أثناء وصول الرد. قد تكتمل الإجابة رغم ذلك على الكمبيوتر: أعد فتح هذه المحادثة بعد دقيقة لرؤيتها.',
     'mobileApp.error.badEvent': 'أرسل GAIA حدثًا في الرد لا يستطيع هذا الهاتف قراءته: {preview}',
     'mobileApp.error.noConnection': 'لا يوجد كمبيوتر متصل. اقرن هذا الهاتف بالكمبيوتر أولًا.',
+<<<<<<< HEAD
     'mobileApp.pairing.welcome.title': 'استخدم GAIA من هاتفك',
     'mobileApp.pairing.welcome.body': 'يعمل GAIA على جهاز الكمبيوتر لديك وتبقى محادثاتك عليه. اقرن هذا الهاتف بالكمبيوتر لاستخدام GAIA هنا.',
     'mobileApp.pairing.welcome.start': 'اقرن مع الكمبيوتر',
@@ -3541,6 +3543,9 @@ const messages: Messages = {
     'mobileApp.pairing.off.title': 'تعذّر الوصول إلى الكمبيوتر',
     'mobileApp.pairing.off.body': 'قد يكون الاقتران متوقفًا على الكمبيوتر، أو أن هذا الهاتف على شبكة مختلفة. على الكمبيوتر افتح الإعدادات ثم الهواتف والأجهزة اللوحية، وفعّل «السماح للأجهزة المقترنة بالاتصال»، وتأكد أن الاثنين على شبكة المنزل نفسها.',
     'mobileApp.pairing.off.retry': 'حاول مرة أخرى',
+=======
+    'mobileApp.chat.notFound': 'هذه المحادثة لم تعد موجودة على جهاز الكمبيوتر.',
+>>>>>>> origin/integration/rapuckett
     'mobileApp.connectors.comingLater': 'الربط من الهاتف قادم في إصدار لاحق. في الوقت الحالي، اربطه من الكمبيوتر الذي يشغّل GAIA.',
     'mobileApp.connectors.googlePcOnly': 'لا يستطيع هذا الهاتف ربط حسابات Google. اربط Google من الكمبيوتر الذي يشغّل GAIA.',
     'mobileApp.banner.openOnPc': 'افتح GAIA على جهاز الكمبيوتر لتشغيل خادم النماذج.',
