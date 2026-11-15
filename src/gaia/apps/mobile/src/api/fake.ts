@@ -20,6 +20,7 @@ import type {
     PreflightReport,
     ParsedSchedule,
     Schedule,
+    ScheduleResult,
     ResourceUsage,
     Session,
     SessionList,
@@ -46,6 +47,8 @@ function cloneNested<T>(source: Record<string, Record<string, T>> | undefined): 
 export interface FakeClientData {
     sessions?: Session[];
     schedules?: Schedule[];
+    /** Past runs by schedule name, newest first. */
+    scheduleResults?: Record<string, ScheduleResult[]>;
     messages?: Record<string, Message[]>;
     /** What every send streams back; a function takes the sent text and streams what a test scripts. */
     replies?: StreamEvent[] | ((message: string) => AsyncIterable<StreamEvent>);
@@ -97,6 +100,9 @@ export interface FakeGaiaClient extends GaiaClient {
     readonly created: CreateSessionRequest[];
     readonly cancelled: string[];
     readonly deleted: { sessionId: string; messageId: number }[];
+    readonly pinned: { sessionId: string; pinned: boolean }[];
+    readonly deletedSessions: string[];
+    readonly read: string[];
     readonly deletedOne: { sessionId: string; messageId: number }[];
     readonly confirmations: ToolConfirmRequest[];
     readonly answers: UserInputRequest[];
@@ -117,6 +123,9 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
     const created: CreateSessionRequest[] = [];
     const cancelled: string[] = [];
     const deleted: FakeGaiaClient['deleted'] = [];
+    const pinned: FakeGaiaClient['pinned'] = [];
+    const deletedSessions: string[] = [];
+    const read: string[] = [];
     const deletedOne: FakeGaiaClient['deletedOne'] = [];
     const confirmations: ToolConfirmRequest[] = [];
     const answers: UserInputRequest[] = [];
@@ -149,11 +158,22 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         return session;
     }
 
+    // Replaces the object, so a refetch sees a changed row.
+    function patch(sessionId: string, changes: Partial<Session>): Session {
+        const at = sessions.findIndex((s) => s.id === sessionId);
+        if (at < 0) throw new GaiaApiError(404, 'Session not found');
+        sessions[at] = { ...sessions[at]!, ...changes };
+        return sessions[at]!;
+    }
+
     return {
         sent,
         created,
         cancelled,
         deleted,
+        pinned,
+        deletedSessions,
+        read,
         deletedOne,
         confirmations,
         answers,
@@ -214,6 +234,22 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             }
             const limit = data.searchLimit ?? Infinity;
             return { query, results: results.slice(0, limit), truncated: results.length > limit };
+        },
+        async setSessionPinned(sessionId, value) {
+            findSession(sessionId);
+            pinned.push({ sessionId, pinned: value });
+            return patch(sessionId, { pinned: value });
+        },
+        async deleteSession(sessionId) {
+            findSession(sessionId);
+            deletedSessions.push(sessionId);
+            sessions.splice(sessions.findIndex((s) => s.id === sessionId), 1);
+            return { deleted: true };
+        },
+        async markSessionRead(sessionId) {
+            findSession(sessionId);
+            read.push(sessionId);
+            return patch(sessionId, { unread: false });
         },
         async getMessages(sessionId): Promise<MessageList> {
             const list = messages[sessionId] ?? [];
@@ -365,6 +401,11 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             if (schedule.running) throw new GaiaApiError(409, `Schedule '${name}' is already running`);
             Object.assign(schedule, { running: true, run_count: schedule.run_count + 1 });
             return { ...schedule };
+        },
+        async listScheduleResults(name, limit) {
+            findSchedule(name);
+            const all = data.scheduleResults?.[name] ?? [];
+            return { results: all.slice(0, limit), total: all.length };
         },
         async deleteSchedule(name) {
             const schedule = findSchedule(name);
