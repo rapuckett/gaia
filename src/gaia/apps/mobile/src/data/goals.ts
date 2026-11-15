@@ -7,7 +7,7 @@ import type { CreateGoalBody, Goal, GoalStats } from '@/api/client.types';
 import { GOAL_HEALTH_POLL_MS } from '@/api/constants';
 
 import { useGaiaClient } from './GaiaClientProvider';
-import { requireClient } from './queries';
+import { failedWithoutData, requireClient } from './queries';
 
 /** Under `memory`, so the screen's pull-to-refresh re-reads goals too. */
 export const goalKeys = {
@@ -43,7 +43,7 @@ export function useGoalStoreError() {
         queryKey: goalKeys.health,
         enabled: client !== null,
         queryFn: async ({ signal }) => (await requireClient(client).getGoalStoreHealth({ signal })).error,
-        refetchInterval: GOAL_HEALTH_POLL_MS,
+        refetchInterval: (query) => (failedWithoutData(query) ? false : GOAL_HEALTH_POLL_MS),
     });
 }
 

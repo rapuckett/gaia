@@ -5,7 +5,7 @@ import { useState } from 'react';
 
 import { PC_ONLY_REFUSAL } from '@/api/constants';
 import { GaiaApiError } from '@/api/errors';
-import { useLocalModelStatus, useRestartLocalModel } from '@/data';
+import { useLocalModelStatus, useQueryFailure, useRestartLocalModel } from '@/data';
 import { describeError, useT } from '@/i18n/useT';
 import { ChipButton } from '@/features/schedules/ChipButton';
 import { Button, Notice, Row, Sheet, Spinner, Stack, StatusDot, Text, type StatusTone } from '@/ui';
@@ -45,6 +45,7 @@ function Fact({ label, value }: { label: string; value: string }) {
 export function ModelStatusSheet({ open, onClose, onOpenSettings }: ModelStatusSheetProps) {
     const t = useT();
     const query = useLocalModelStatus(open);
+    const failure = useQueryFailure(query);
     const restart = useRestartLocalModel();
     const [confirming, setConfirming] = useState(false);
     const [logRefused, setLogRefused] = useState(false);
@@ -70,13 +71,13 @@ export function ModelStatusSheet({ open, onClose, onOpenSettings }: ModelStatusS
     return (
         <Sheet open={open} onClose={close} title={t('modelStatus.label')}>
             <Stack gap="md">
-                {!s && !query.isError ? (
+                {!s && !failure.failed ? (
                     <Row gap="sm">
                         <Spinner />
                         <Text role="label">{t('modelStatus.checking')}</Text>
                     </Row>
                 ) : null}
-                {query.isError && !s ? <Notice tone="danger" message={describeError(query.error, t)} /> : null}
+                {failure.failed && !s ? <Notice tone="danger" message={describeError(failure.error, t)} /> : null}
                 {s ? (
                     <>
                         <Row gap="sm">

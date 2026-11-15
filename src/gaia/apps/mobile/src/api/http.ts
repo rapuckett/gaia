@@ -86,6 +86,8 @@ import type {
     PreflightReport,
     ProviderConnected,
     ProviderSummaryList,
+    RetryChoice,
+    RetryResult,
     RestartModelResult,
     RequestOptions,
     ParsedSchedule,
@@ -568,6 +570,14 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         getContextUsage(sessionId, options) {
             return getJson<ContextUsageResult>(chatContextPath(sessionId), options?.signal);
+        },
+
+        retryWith(sessionId, messageId, model, options) {
+            return postJson<RetryResult>(ENDPOINTS.chatRetryWith, { session_id: sessionId, message_id: messageId, model }, options?.signal);
+        },
+
+        chooseRetry(sessionId, messageId, keep, options) {
+            return postJson<RetryChoice>(ENDPOINTS.chatRetryWithChoose, { session_id: sessionId, message_id: messageId, keep }, options?.signal);
         },
 
         getChatPerformance(sessionId, options) {

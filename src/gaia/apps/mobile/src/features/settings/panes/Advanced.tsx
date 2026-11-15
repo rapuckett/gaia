@@ -6,7 +6,7 @@ import { useState, type ReactNode } from 'react';
 import { isolate } from '@webui/i18n/registry';
 import type { SystemStatus } from '@webui/types';
 
-import { useModelActions, useSystemStatus } from '@/data';
+import { useModelActions, useQueryFailure, useSystemStatus } from '@/data';
 import { describeError, useT } from '@/i18n/useT';
 import { Button, Card, Disclosure, Divider, Ltr, Notice, ProgressLine, Row, Spinner, Stack, Text } from '@/ui';
 
@@ -52,6 +52,7 @@ function StatusRow({ label, value, ok, hint }: { label: string; value: ReactNode
 function StatusCard() {
     const t = useT();
     const query = useSystemStatus();
+    const failure = useQueryFailure(query);
     const status = query.data;
     const modelName = status ? status.default_model_name : null;
     const actions = useModelActions(modelName, status);
@@ -61,7 +62,7 @@ function StatusCard() {
         <Card padding="lg" testID="advanced-status">
             <Stack gap="md">
                 <Text role="title" accessibilityRole="header">{t('settings.advanced.status')}</Text>
-                {query.isPending ? (
+                {query.isPending && !failure.failed ? (
                     <Row gap="sm">
                         <Spinner />
                         <Text role="label" tone="muted">{t('settings.advanced.checking')}</Text>
@@ -76,7 +77,7 @@ function StatusCard() {
                             action={{ label: t('settings.key.checkAgain'), onPress: () => void query.refetch() }}
                             testID="advanced-unreachable"
                         />
-                        <RawDetails text={describeError(query.error, t)} />
+                        <RawDetails text={describeError(failure.error, t)} />
                     </Stack>
                 ) : (
                     <StatusBody
