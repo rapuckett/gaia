@@ -169,6 +169,8 @@ export interface FakeClientData {
     /** What getCapabilities answers, by chat; a chat not listed has no agent running (409). */
     capabilities?: Record<string, AgentCapabilities>;
     memorySettings?: MemorySettings;
+    /** Thrown by updateMemorySettings. */
+    memorySettingsError?: Error;
     /** Each stats read answers the next entry (the last one repeats); an Error entry is thrown. */
     memoryStats?: (MemoryStats | Error)[];
     embeddingCoverage?: EmbeddingCoverage;
@@ -583,6 +585,12 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         },
         async getMemorySettings() {
             if (!data.memorySettings) throw new GaiaApiError(503, 'This fake client was given no memory settings.');
+            return data.memorySettings;
+        },
+        async updateMemorySettings(settings) {
+            if (!data.memorySettings) throw new GaiaApiError(503, 'This fake client was given no memory settings.');
+            if (data.memorySettingsError) throw data.memorySettingsError;
+            data.memorySettings = { ...data.memorySettings, ...settings };
             return data.memorySettings;
         },
         async getEmbeddingCoverage() {

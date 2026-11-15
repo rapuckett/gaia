@@ -3643,8 +3643,9 @@ export const enMessages = {
     'mobileApp.serverDown.title': 'The model server on your PC isn’t answering',
     'mobileApp.skills.yoursEmpty': 'None yet. Add a folder with a SKILL.md file to {path} on your PC and it shows up here.',
     'mobileApp.banner.openOnPc': 'Open GAIA on your PC to start the model server.',
-    'mobileApp.settings.comingSoon': 'This section is coming to the phone soon. For now, change it on the PC running GAIA.',
+    'mobileApp.settings.memory.lede': 'GAIA remembers facts, preferences and past conversations across chats, on your PC only. Private chats (the eye icon in a chat) are never remembered.',
     'mobileApp.settings.pcOnly': 'Change this on the PC running GAIA.',
+    'mobileApp.settings.comingSoon': 'This section is coming to the phone soon. For now, change it on the PC running GAIA.',
     'mobileApp.settings.permissionsWarning': 'Full access lets GAIA change or delete files and run commands on your PC without asking you first, in every new chat, until you turn this off. A mistake or a bad instruction in a document it reads can do real damage.',
     'mobileApp.settings.colors.invalidHex': 'Enter a color like #1F5FA8.',
 } as const;
