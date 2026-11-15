@@ -9,6 +9,7 @@ export * from './documents';
 export * from './GaiaClientProvider';
 export * from './goals';
 export * from './memory';
+export * from './messaging';
 export * from './modelActions';
 export * from './modelList';
 export * from './modelMenu';
