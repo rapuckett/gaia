@@ -1851,6 +1851,7 @@ const messages: Messages = {
     'setup.offer.ownNote': 'الإصدار الذي اختُبر عليه GAIA، ويُبقيه GAIA محدّثًا. يحتفظ بنسخته الخاصة من كل نموذج.',
     'setup.offer.mineNote': 'يحتفظ بنسخة واحدة من كل نموذج. ويترك GAIA إصداره وإعداداته كما هي.',
     'setup.offer.recommended': 'موصى به',
+    'setup.check.pcOnly': 'غيّر هذا على الجهاز الذي يشغّل GAIA',
     'setup.title': 'إعداد GAIA',
     'setup.lede.start': 'بضع دقائق من الإعداد، ثم محادثتك الأولى.',
     'setup.lede.running': 'جارٍ الإعداد. يستمر الإعداد حتى لو انتقلت إلى نافذة أخرى.',

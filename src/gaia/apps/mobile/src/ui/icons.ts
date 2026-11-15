@@ -34,6 +34,8 @@ export {
   Paperclip,
   Pause,
   Pencil,
+  Pin,
+  PinOff,
   Play,
   Plus,
   RefreshCw,
