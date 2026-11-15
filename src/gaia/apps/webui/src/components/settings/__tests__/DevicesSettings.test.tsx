@@ -7,6 +7,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DevicesSettings } from '../DevicesSettings';
 import { useDeviceStore } from '../../../stores/deviceStore';
+import { pairingLink } from '../../../utils/pairingLink';
 import type { DeviceAccessStatus, DevicePairingOffer } from '../../../services/devicesApi';
 
 vi.mock('qrcode', () => ({ default: { toDataURL: async () => 'data:image/png;base64,AAAA' } }));
@@ -58,5 +59,19 @@ describe('DevicesSettings', () => {
         replies['GET /devices/status'] = { status: 403, body: { detail: 'Device pairing is off.' } };
         await useDeviceStore.getState().refresh();
         expect(useDeviceStore.getState()).toMatchObject({ available: false, status: null, loadError: null });
+    });
+
+    it('copies the pairing link and says so, or shows why it could not', async () => {
+        const writeText = vi.fn().mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('denied'));
+        vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText } });
+        render(<DevicesSettings />);
+        replies['GET /devices/status'] = { body: { ...STATUS, pairing_open: true } };
+        fireEvent.click(await screen.findByRole('button', { name: 'Pair a phone or tablet' }));
+        fireEvent.click(await screen.findByRole('button', { name: 'Copy pairing link' }));
+        expect(await screen.findByRole('button', { name: 'Copied' })).toBeInTheDocument();
+        expect(writeText).toHaveBeenCalledWith(pairingLink(OFFER));
+
+        fireEvent.click(screen.getByRole('button', { name: 'Copied' }));
+        expect(await screen.findByRole('alert')).toHaveTextContent("Couldn't copy the link");
     });
 });
