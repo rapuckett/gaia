@@ -120,6 +120,7 @@ import {
     CONNECTOR_REVOKE_OUTCOME_MS,
     connectorPath,
     cloudPricesPath,
+    documentFilePath,
     documentPath,
     goalPath,
     ENDPOINTS,
@@ -950,8 +951,8 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             return readBytes(filePath('filesImage', path, sessionId), options?.signal);
         },
 
-        getDocumentBytes(docId, options) {
-            return readBytes(documentPath(docId, 'documentFile'), options?.signal);
+        getDocumentBytes(docId, sessionId, options) {
+            return readBytes(documentFilePath(docId, sessionId), options?.signal);
         },
 
         getDocumentStatus(docId, options) {
