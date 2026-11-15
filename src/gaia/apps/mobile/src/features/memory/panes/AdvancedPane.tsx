@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import { useMemorySettings, useMemoryStats } from '@/data';
+import { isPcRefusal, PcOnlyNotice } from '@/features/settings/PcOnlyNotice';
 import { describeError, useT } from '@/i18n/useT';
 import { EmptyState, ErrorState, LoadingState, Stack } from '@/ui';
 import { Brain } from '@/ui/icons';
@@ -29,6 +30,10 @@ export function AdvancedPane({ notify, onOpenChat }: MemoryPaneProps) {
             <CoveragePill />
             {loading ? (
                 <LoadingState title={t('mem.loadingData')} />
+            ) : failed && isPcRefusal(stats.error ?? settings.error) ? (
+                <Stack paddingX="lg" paddingY="md">
+                    <PcOnlyNotice testID="memory-advanced-pc-only" />
+                </Stack>
             ) : failed ? (
                 <ErrorState
                     title={t('mem.loadFailed')}

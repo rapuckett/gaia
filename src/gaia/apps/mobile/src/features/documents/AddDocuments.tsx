@@ -3,15 +3,15 @@
 
 import { useState } from 'react';
 
-import { GaiaApiError } from '@/api/errors';
-import { useAddDocument, useSession } from '@/data';
-import { describeError, useT } from '@/i18n/useT';
+import { GaiaApiError, GaiaError } from '@/api/errors';
+import { useAddDocument } from '@/data';
+import { describeError, describeErrorWith, useT } from '@/i18n/useT';
 import { pickDocuments, pickPhotos, type PickedFile } from '@/platform/pickers';
 import { Button, Notice, ProgressLine, Row, Stack, Text } from '@/ui';
 import { FileText, Image as ImageIcon } from '@/ui/icons';
 import { describeUploadError, unsupportedTypeMessage, type UploadErrorView } from '@webui/utils/uploadErrors.core';
 
-import type { LibraryTarget } from './TargetChooser';
+import { useNextChatDocs } from './nextChatDocs';
 
 // One line at a time: the indexing status, the result of the last add, or why it failed.
 type AddLine =
@@ -19,7 +19,8 @@ type AddLine =
     | { kind: 'done'; message: string }
     | { kind: 'unreadable'; message: string }
     | { kind: 'failed'; error: UploadErrorView }
-    | { kind: 'picker'; message: string };
+    | { kind: 'picker'; message: string }
+    | { kind: 'unsupported'; message: string };
 
 interface AddDocumentsProps {
     // The chat documents are attached to; null leaves them for the next new chat.
@@ -32,6 +33,7 @@ interface AddDocumentsProps {
 export function AddDocuments({ chatId, chatName, onStart }: AddDocumentsProps) {
     const t = useT();
     const add = useAddDocument();
+    const holdForNextChat = useNextChatDocs((s) => s.add);
     const [line, setLine] = useState<AddLine | null>(null);
     const busy = line?.kind === 'busy';
 
@@ -44,11 +46,15 @@ export function AddDocuments({ chatId, chatName, onStart }: AddDocumentsProps) {
             const name = document.filename || file.name;
             if (document.indexing_status === 'failed') return { kind: 'unreadable', message: t('docs.notAdded', { name }) };
             if (attachError) {
-                const error = `Indexed, but not attached to ${chatName}: ${describeError(attachError, t)}`;
+                const error = t.compose((say) => say('docs.attachFailedAfterIndex', { chat: chatName ?? '', error: describeErrorWith(attachError, say) }));
                 return { kind: 'failed', error: describeUploadError(t, { filename: file.name, error }) };
             }
+            if (!chatId) holdForNextChat([document.id]);
             return { kind: 'done', message: chatId ? t('docs.attached', { name, chat: chatName ?? '' }) : t('docs.willAttach', { name }) };
         } catch (err) {
+            // The pinned transport can't send a file yet; the request wraps its error, so look at the cause too.
+            const refusal = [err, err instanceof Error ? err.cause : null].find((e) => (e as { code?: string } | null)?.code === 'unsupported_body');
+            if (refusal) return { kind: 'unsupported', message: describeError(refusal, t) };
             const api = err instanceof GaiaApiError ? err : null;
             const kind = typeof api?.body?.status === 'string' ? api.body.status : null;
             const error = kind === 'too_large' ? t('docs.tooLargeDetail', { max: String(api?.body?.max_mb) }) : describeError(err, t);
@@ -90,6 +96,7 @@ export function AddDocuments({ chatId, chatName, onStart }: AddDocumentsProps) {
                 </Stack>
             ) : null}
             {line?.kind === 'done' ? <Notice tone="success" role="note" message={line.message} onDismiss={() => setLine(null)} /> : null}
+            {line?.kind === 'unsupported' ? <Notice tone="warning" message={line.message} onDismiss={() => setLine(null)} /> : null}
             {line?.kind === 'unreadable' || line?.kind === 'picker' ? (
                 <Notice tone="danger" message={line.message} onDismiss={() => setLine(null)} />
             ) : null}
@@ -103,11 +110,4 @@ export function AddDocuments({ chatId, chatName, onStart }: AddDocumentsProps) {
             ) : null}
         </Stack>
     );
-}
-
-export function ChatAddDocuments({ chatId, target, onStart }: { chatId: string; target: LibraryTarget; onStart?: () => void }) {
-    const t = useT();
-    const session = useSession(chatId);
-    const chatName = `“${session.data?.title || t('docs.untitledChat')}”`;
-    return <AddDocuments chatId={target === 'chat' ? chatId : null} chatName={chatName} onStart={onStart} />;
 }

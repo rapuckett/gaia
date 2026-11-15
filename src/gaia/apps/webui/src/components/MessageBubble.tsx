@@ -473,7 +473,7 @@ export function MessageBubble({ message, isStreaming, agentSteps, agentStepsActi
                                 id={userBodyId}
                                 className={`msg-collapsible${userExpanded ? '' : ' is-collapsed'}`}
                             >
-                                <RenderedContent content={cleanedContent} />
+                                <RenderedContent content={cleanedContent} sessionId={message.session_id} />
                             </div>
                             <ExpandToggle
                                 expanded={userExpanded}
@@ -485,7 +485,7 @@ export function MessageBubble({ message, isStreaming, agentSteps, agentStepsActi
                             />
                         </>
                     ) : !(stopState && cleanedContent.trim() === SERVER_CANCELLED_TEXT) && (
-                        <RenderedContent content={cleanedContent} showCursor={isStreaming && !!cleanedContent && !agentStepsActive} isStreaming={isStreaming} writtenFiles={writtenFiles} />
+                        <RenderedContent content={cleanedContent} sessionId={message.session_id} showCursor={isStreaming && !!cleanedContent && !agentStepsActive} isStreaming={isStreaming} writtenFiles={writtenFiles} />
                     )}
                     {pendingDrop && !isStreaming && (
                         <div className="msg-drop-confirm" role="alertdialog" aria-labelledby={`${userBodyId}-drop`}>
@@ -720,13 +720,16 @@ function linkifyFilePaths(text: string): React.ReactNode {
 
 /** The library's documents, as citations in an answer can name them. */
 const CitationContext = createContext<CitationIndex>(buildCitationIndex([]));
+/** The chat the answer belongs to, which a citation names to open its document. */
+const CitationChatContext = createContext<string | null>(null);
 
 /** A cited library document; opens at `page` (the first page cited after it, when there is one). */
 function CitationLink({ doc, page, t }: { doc: CitedDoc; page?: number; t: Translate }) {
+    const sessionId = useContext(CitationChatContext);
     return (
         <a
             className="citation-link"
-            href={api.documentFileUrl(doc.id, page)}
+            href={api.documentFileUrl(doc.id, sessionId, page)}
             target="_blank"
             rel="noopener noreferrer"
             dir="ltr"
@@ -741,10 +744,11 @@ function CitationLink({ doc, page, t }: { doc: CitedDoc; page?: number; t: Trans
 }
 
 function PageLink({ doc, page, label, t }: { doc: CitedDoc; page: number; label: string; t: Translate }) {
+    const sessionId = useContext(CitationChatContext);
     return (
         <a
             className="citation-page"
-            href={api.documentFileUrl(doc.id, page)}
+            href={api.documentFileUrl(doc.id, sessionId, page)}
             target="_blank"
             rel="noopener noreferrer"
             title={t('citation.openPage', { page })}
@@ -959,7 +963,7 @@ const MARKDOWN_COMPONENTS: Components = {
 
 const NO_WRITTEN_FILES: readonly string[] = [];
 
-export function RenderedContent({ content, showCursor, isStreaming = false, writtenFiles = NO_WRITTEN_FILES }: { content: string; showCursor?: boolean; isStreaming?: boolean; writtenFiles?: readonly string[] }) {
+export function RenderedContent({ content, sessionId = null, showCursor, isStreaming = false, writtenFiles = NO_WRITTEN_FILES }: { content: string; sessionId?: string | null; showCursor?: boolean; isStreaming?: boolean; writtenFiles?: readonly string[] }) {
     const documents = useChatStore((s) => s.documents);
     const citations = useMemo(() => buildCitationIndex(documents), [documents]);
     if (!content && !showCursor) return null;
@@ -968,6 +972,7 @@ export function RenderedContent({ content, showCursor, isStreaming = false, writ
     return (
         <StreamingContext.Provider value={isStreaming}>
         <CitationContext.Provider value={citations}>
+        <CitationChatContext.Provider value={sessionId}>
         <WrittenFilesContext.Provider value={writtenFiles}>
         <div className="md-content">
             <ReactMarkdown
@@ -981,6 +986,7 @@ export function RenderedContent({ content, showCursor, isStreaming = false, writ
             {showCursor && <span className="cursor" />}
         </div>
         </WrittenFilesContext.Provider>
+        </CitationChatContext.Provider>
         </CitationContext.Provider>
         </StreamingContext.Provider>
     );

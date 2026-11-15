@@ -82,8 +82,8 @@ export function ChatDrawerContent({ activeId, onSelect, onClose, onNewChat, onPc
     const sessions = useSessions();
     const now = useNow();
     const [text, setText] = useState('');
-    const search = useSessionSearch(text);
     const [showAutomated, toggleAutomated] = useShowAutomated();
+    const search = useSessionSearch(text, showAutomated);
     const entries = useMemo(() => declaredNavEntries(routeNames), [routeNames]);
     const q = text.trim();
     const open = useCallback((route: string) => {

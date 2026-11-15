@@ -9,6 +9,7 @@ import { useContextChoice, useSetContextChoice } from '@/data';
 import { useT } from '@/i18n/useT';
 import { Disclosure, Notice, Row, Select, Spinner, Stack, Text } from '@/ui';
 
+import { isPcRefusal, PcOnlyNotice } from '../../PcOnlyNotice';
 import { SettingsAnchor } from '../../targets';
 import { AUTOMATIC, contextOutcome, ctxLabel, errorText, isolate } from './modelText';
 
@@ -33,7 +34,9 @@ export function ContextSize({ model }: { model: string }) {
         const down = choice.error && isServerDown(errorText(choice.error, t));
         return (
             <SettingsAnchor name="ctx-size">
-                {choice.error ? (
+                {isPcRefusal(choice.error) ? (
+                    <PcOnlyNotice testID="ctx-size-pc-only" />
+                ) : choice.error ? (
                     down ? (
                         <Text role="caption" tone="muted">{t('settings.ctx.serverDown')}</Text>
                     ) : (
@@ -74,7 +77,7 @@ export function ContextSize({ model }: { model: string }) {
                 {!view.note && view.max_fit ? (
                     <Disclosure title={t('settings.ctx.about')} open={aboutOpen} onToggle={() => setAboutOpen((o) => !o)}>
                         <Text role="caption" tone="muted">
-                            {t('settings.ctx.explain', {
+                            {t('mobileApp.settings.ctx.explain', {
                                 size: isolate(ctxLabel(view.max_fit)),
                                 name: view.display_name,
                                 memory: view.memory_source,
@@ -92,7 +95,7 @@ export function ContextSize({ model }: { model: string }) {
                     </Row>
                 ) : null}
                 {notice ? <Notice tone="success" message={notice} /> : null}
-                {save.error ? <Notice tone="danger" message={errorText(save.error, t)} /> : null}
+                {isPcRefusal(save.error) ? <PcOnlyNotice testID="ctx-size-pc-only" /> : save.error ? <Notice tone="danger" message={errorText(save.error, t)} /> : null}
             </Stack>
         </SettingsAnchor>
     );
