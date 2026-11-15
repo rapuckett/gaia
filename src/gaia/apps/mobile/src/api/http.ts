@@ -99,6 +99,7 @@ import type {
     Schedule,
     ScheduleList,
     ScheduleResults,
+    SessionEnvironment,
     SessionList,
     SessionPermissions,
     SessionSearchResponse,
@@ -164,6 +165,7 @@ import {
     sessionCapabilitiesPath,
     sessionDocumentPath,
     sessionDocumentsPath,
+    sessionEnvironmentPath,
     sessionMessagePath,
     sessionMessagesAndBelowPath,
     sessionMessagesPath,
@@ -645,6 +647,18 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         getCapabilities(sessionId, options) {
             return getJson<AgentCapabilities>(sessionCapabilitiesPath(sessionId), options?.signal);
+        },
+
+        getEnvironment(sessionId, options) {
+            return getJson<SessionEnvironment>(sessionEnvironmentPath(sessionId), options?.signal);
+        },
+
+        removeEnvironmentFolder(sessionId, path, options) {
+            return postJson<SessionEnvironment>(sessionEnvironmentPath(sessionId, 'folderRemove'), { path }, options?.signal);
+        },
+
+        setInternet(sessionId, on, options) {
+            return putJson<SessionEnvironment>(sessionEnvironmentPath(sessionId, 'internet'), { on }, options?.signal);
         },
 
         getResourceUsage(options) {

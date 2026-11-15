@@ -49,7 +49,7 @@ import type {
 } from '@webui/types';
 import type { FileDiff, TurnChanges, UndoResult, UndoSettings } from '@webui/types/changes';
 import type { DiscordStatus } from '@webui/services/messagingApi';
-import type { AgentCapabilities } from '@webui/types/sessionPanel';
+import type { AgentCapabilities, SessionEnvironment } from '@webui/types/sessionPanel';
 import type { DiscoveryFinding, Goal, GoalStats, InferenceInsight, KnowledgeCreateBody, KnowledgeListParams, KnowledgeSaveResult, KnowledgeUpdateBody, MemoryCleared, MemoryReinitializeResult, MemorySettings, MemorySettingsUpdateResponse, Priority as GoalPriority } from '@webui/services/memoryApi';
 import type { SpeechModel, SpeechSettings } from '@webui/services/speechApi';
 import type { ActivityDay, ConvSession, ConvTurn, EntityInfo, KnowledgeEntry, TemporalItem, ToolStat } from '@webui/utils/memoryFormat.core';
@@ -108,7 +108,7 @@ export type {
     UnavailableConnectorRow,
 } from '@webui/types';
 export type { FileDiff, TurnChanges, UndoResult, UndoSettings } from '@webui/types/changes';
-export type { ActiveSkill, AgentCapabilities, AgentTool, SkillOrigin } from '@webui/types/sessionPanel';
+export type { ActiveSkill, AgentCapabilities, AgentTool, ScopeEntry, SessionEnvironment, SkillOrigin } from '@webui/types/sessionPanel';
 export type { CreateSessionRequest, DocumentListResponse, DocumentResponse, ModelServerInfo, ProviderSummary, ProviderSummaryList, SessionSearchResponse, SessionSearchResult, ToolConfirmRequest, FilePreviewResponse } from '@webui/types/api.gen';
 
 /** A photo or file chosen on this phone: where it is, and what it is called. */
@@ -488,6 +488,12 @@ export interface GaiaClient {
     detachDocument(sessionId: string, docId: string, options?: RequestOptions): Promise<void>;
     /** The tools and skills of the chat's running agent; rejects with 409 until the agent has started. */
     getCapabilities(sessionId: string, options?: RequestOptions): Promise<AgentCapabilities>;
+    /** The folders this chat may touch and whether its web tools are on. */
+    getEnvironment(sessionId: string, options?: RequestOptions): Promise<SessionEnvironment>;
+    /** Takes a folder or file away from the chat; rejects with 409 when the PC refuses. */
+    removeEnvironmentFolder(sessionId: string, path: string, options?: RequestOptions): Promise<SessionEnvironment>;
+    /** Turns the chat's web tools on or off; rejects with 409 or 502 when the PC can't apply it. */
+    setInternet(sessionId: string, on: boolean, options?: RequestOptions): Promise<SessionEnvironment>;
     /** This PC's CPU, memory, GPU, NPU and network use. */
     getResourceUsage(options?: RequestOptions): Promise<ResourceUsage>;
     /** Deletes the message and everything after it, so the exchange can be asked again. */

@@ -33,6 +33,7 @@ jest.mock('@/ui', () => {
             return null;
         },
         Disclosure: ({ children }: { children?: unknown }) => children ?? null,
+        HScroll: Pass,
         Icon: () => null,
         Notice: ({ message }: { message: string }) => <RNText>{message}</RNText>,
         Pressable: Pass,

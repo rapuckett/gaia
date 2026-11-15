@@ -28,7 +28,7 @@ import { liveStatusLine } from './liveStatus';
 import { MessageList } from './messages/MessageList';
 import { TailIssues } from './ReplyErrors';
 import { registerOpenChat } from './sendToOpenChat';
-import { SessionPanel } from './session-panel';
+import { OfflineNotice, SessionPanel } from './session-panel';
 import { buildTail } from './tailState';
 import { TurnTail } from './TurnTail';
 import { useTurnAnnouncer, useTurnEnd } from './useTurnAnnouncer';
@@ -174,6 +174,7 @@ export function ChatScreen({ sessionId, onManageDocuments }: { sessionId: string
                         onRetry={queue.retry}
                         onSteer={steerable ? queue.steer : undefined}
                     />
+                    <OfflineNotice sessionId={sessionId} live={busy} />
                     <ContextWarning usage={context.usage} />
                     <Composer
                         value={queue.draft}

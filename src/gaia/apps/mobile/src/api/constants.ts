@@ -79,6 +79,9 @@ export const ENDPOINTS = {
     sessionChangesUndo: '/api/sessions/{session_id}/changes/{turn_id}/undo',
     sessionDocument: '/api/sessions/{session_id}/documents/{doc_id}',
     sessionDocuments: '/api/sessions/{session_id}/documents',
+    sessionEnvironment: '/api/sessions/{session_id}/environment',
+    sessionEnvironmentFolderRemove: '/api/sessions/{session_id}/environment/folders/remove',
+    sessionEnvironmentInternet: '/api/sessions/{session_id}/environment/internet',
     sessionEvents: '/api/sessions/events',
     sessionMessage: '/api/sessions/{session_id}/messages/{message_id}',
     sessionMessages: '/api/sessions/{session_id}/messages',
@@ -294,6 +297,12 @@ export function sessionDocumentsPath(sessionId: string): string {
 
 export function sessionCapabilitiesPath(sessionId: string): string {
     return ENDPOINTS.sessionCapabilities.replace('{session_id}', encodeURIComponent(sessionId));
+}
+
+export function sessionEnvironmentPath(sessionId: string, part?: 'folderRemove' | 'internet'): string {
+    const template =
+        part === 'folderRemove' ? ENDPOINTS.sessionEnvironmentFolderRemove : part === 'internet' ? ENDPOINTS.sessionEnvironmentInternet : ENDPOINTS.sessionEnvironment;
+    return template.replace('{session_id}', encodeURIComponent(sessionId));
 }
 
 export function sessionChangesPath(sessionId: string): string {

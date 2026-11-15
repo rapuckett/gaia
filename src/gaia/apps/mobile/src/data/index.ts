@@ -7,6 +7,7 @@ export * from './chatStream';
 export * from './connectors';
 export * from './context';
 export * from './documents';
+export * from './environment';
 export * from './GaiaClientProvider';
 export * from './goals';
 export * from './memory';
