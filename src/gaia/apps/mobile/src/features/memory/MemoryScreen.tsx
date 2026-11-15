@@ -8,7 +8,7 @@ import { useDeviceRefused } from '@/api/routeAccess';
 import { useMemoryMaintenance, useMemorySettings, useRefreshMemory, type MemoryMaintenanceAction } from '@/data';
 import { useT } from '@/i18n/useT';
 import { ActionSheet, Badge, IconButton, Notice, Row, Screen, Stack, Text, type SheetAction } from '@/ui';
-import { ArrowLeft, Ellipsis } from '@/ui/icons';
+import { ArrowLeft, Ellipsis, RefreshCw } from '@/ui/icons';
 
 import { failureNotice, MAINTENANCE_ACTIONS, MAINTENANCE_LABELS, outcomeNotice } from './maintenance';
 import { MemoryTabs } from './MemoryTabs';
@@ -70,12 +70,13 @@ export function MemoryScreen({ onBack, onOpenChat, initialTab = 'about' }: Memor
                     <IconButton icon={ArrowLeft} label={t('mem.back')} onPress={onBack} />
                     <Stack flex={1}>
                         <Row gap="sm" wrap>
-                            <Text role="title" weight="semibold">
+                            <Text role="title" weight="semibold" accessibilityRole="header">
                                 {t('mem.title')}
                             </Text>
                             <Badge label={t.bare('mem.beta')} accessibilityLabel={t('mem.beta')} tone="warning" />
                         </Row>
                     </Stack>
+                    <IconButton icon={RefreshCw} label={t('mem.refreshAria')} busy={refreshing} onPress={() => void pullToRefresh()} testID="memory-refresh" />
                     {tab === 'advanced' ? (
                         <IconButton icon={Ellipsis} label={t('mem.maint.label')} busy={!!running} onPress={() => setMenuOpen(true)} testID="memory-maintenance" />
                     ) : null}

@@ -260,7 +260,7 @@ export function FileBrowserScreen({ chatId, onClose, initial }: FileBrowserScree
                                         {crumbs.map((crumb, i) => (
                                             <Row key={crumb.path} gap="xs">
                                                 {i > 0 ? <Icon icon={ChevronRight} size="sm" tone="muted" /> : null}
-                                                <Pressable accessibilityLabel={crumb.label} onPress={() => open(crumb.path)}>
+                                                <Pressable inline accessibilityLabel={crumb.label} onPress={() => open(crumb.path)}>
                                                     <Text role="label" tone={i === crumbs.length - 1 ? 'primary' : 'secondary'}>
                                                         {crumb.label}
                                                     </Text>
