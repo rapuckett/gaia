@@ -8,7 +8,9 @@ import { providerName } from '@webui/utils/providerText';
 import type { ProviderConnected } from '@/api/client.types';
 import { useReconnectProvider, type ProviderRow } from '@/data';
 import { useT, type Translate } from '@/i18n/useT';
+import { PcOnlyAction } from '@/features/logs/PcOnlyAction';
 import { Badge, Button, Notice, Row, Stack, Text } from '@/ui';
+import { KeyRound, Trash2 } from '@/ui/icons';
 
 import { errorText, refusedOnPhone } from './modelText';
 
@@ -77,6 +79,14 @@ export function ProviderKey({ provider, connected }: { provider: ProviderRow; co
                 />
             )}
 
+            {connected ? (
+                <>
+                    <PcOnlyAction label={t('settings.key.replace')} icon={KeyRound} detail={t('mobileApp.settings.pcOnly')} testID="provider-key-replace" />
+                    <PcOnlyAction label={t('settings.key.remove')} icon={Trash2} detail={t('mobileApp.settings.pcOnly')} testID="provider-key-remove" />
+                </>
+            ) : (
+                <PcOnlyAction label={t('settings.key.paste')} icon={KeyRound} detail={t('mobileApp.settings.pcOnly')} testID="provider-key-paste" />
+            )}
             <Notice tone="info" role="note" message={t('mobileApp.settings.pcOnly')} testID="provider-key-pc-only" />
             {outcome && outcome.tone !== 'pcOnly' ? <Notice tone={outcome.tone} message={outcome.text} /> : null}
         </Stack>
