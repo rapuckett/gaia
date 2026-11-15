@@ -21,6 +21,8 @@ import { AnswerCards } from '../cards/RenderCard';
 import { CutOffNote, StoppedNote } from '../EndingNotes';
 import { Markdown } from '../markdown/Markdown';
 import { SavedReplyErrors } from '../ReplyErrors';
+import { AnswerComparison } from '../compare/AnswerComparison';
+import { useAnswerComparison } from '../compare/useAnswerComparison';
 import { useMessageActions, type MessageContext } from './useMessageActions';
 
 export interface AssistantBubbleProps {
@@ -50,6 +52,7 @@ export function AssistantBubble({ message, streaming = false, latencyMs, context
         undefined,
         readable ? [{ label: readAloud.label, icon: readAloud.active ? Square : Volume2, onPress: readAloud.toggle }] : undefined,
     );
+    const compare = useAnswerComparison(message.session_id);
     return (
         <Stack paddingX="lg" paddingY="xs">
             {activity.steps.length > 0 ? <ActivityTimeline steps={activity.steps} answer={text} /> : null}
@@ -77,6 +80,16 @@ export function AssistantBubble({ message, streaming = false, latencyMs, context
             <ReadAloudErrorNotice messageId={speakId} />
             {actions.notice}
             {actions.sheet}
+            {compare.comparison?.messageId === message.id ? (
+                <AnswerComparison
+                    original={message}
+                    originalModel={message.stats?.model}
+                    originalLatencyMs={latencyMs}
+                    comparison={compare.comparison}
+                    onKeep={(which) => void compare.keep(which)}
+                    onClose={compare.close}
+                />
+            ) : null}
         </Stack>
     );
 }

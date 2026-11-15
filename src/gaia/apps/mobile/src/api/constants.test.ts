@@ -202,6 +202,8 @@ describe('endpoints', () => {
         chatFollowup: ['POST'],
         chatFollowupOutcome: ['GET'],
         chatPerformance: ['GET'],
+        chatRetryWith: ['POST'],
+        chatRetryWithChoose: ['POST'],
         chatUserInput: ['POST'],
         connector: ['DELETE'],
         connectorActivation: ['DELETE', 'PUT'],
