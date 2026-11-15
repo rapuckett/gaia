@@ -15,7 +15,8 @@ import { formatSize, middleTruncate } from '../utils/format';
 import { examplePath } from '../utils/platform';
 import { cleanPastedPath } from '../utils/pastedPath';
 import { countText, formatFullTimestamp, formatTimestamp } from '../utils/documentLibrary.core';
-import { PERMANENT_FAILURE_HINTS, UploadErrorToast, getUnsupportedCategory, isExtensionSupported } from './UnsupportedFeature';
+import { PERMANENT_FAILURE_HINTS, UploadErrorToast } from './UnsupportedFeature';
+import { fileExtension, unsupportedTypeMessage } from '../utils/uploadErrors.core';
 import type { Document, IndexFolderResponse } from '../types';
 import { useT, type Translate } from '../i18n/useT';
 import { pluralKey } from '../i18n/registry';
@@ -303,10 +304,8 @@ export function DocumentLibrary() {
         onFolder?: () => Promise<boolean>,
     ): Promise<boolean> => {
         if (!(await ensureModel('embedding'))) return false;
-        const ext = filename.includes('.') ? '.' + filename.split('.').pop()?.toLowerCase() : '';
-        const unsupportedMessage = ext && !isExtensionSupported(ext)
-            ? (getUnsupportedCategory(ext)?.message ?? `The file type "${ext}" is not supported for indexing.`)
-            : null;
+        const ext = fileExtension(filename);
+        const unsupportedMessage = unsupportedTypeMessage(filename);
         // A typed path may be a dotted folder name (notes.v2), so only the server can rule it out.
         if (unsupportedMessage && !onFolder) {
             log.doc.warn(`Unsupported file type: ${filename} (${ext})`);
