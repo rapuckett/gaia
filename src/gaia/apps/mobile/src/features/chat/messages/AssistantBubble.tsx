@@ -44,7 +44,7 @@ export function AssistantBubble({ message, streaming = false, latencyMs, context
             <Pressable onLongPress={cancelled ? undefined : actions.openSheet} accessible={false} minSize={0}>
                 {text ? <Markdown text={text} streaming={streaming} /> : null}
             </Pressable>
-            {!streaming && !cancelled && activity.ended !== 'failed' ? <AnswerFooter latencyMs={latencyMs} stats={message.stats} ended={activity.ended} /> : null}
+            {!streaming && !cancelled ? <AnswerFooter latencyMs={latencyMs} stats={message.stats} ended={activity.ended} /> : null}
             {cutOff ? <CutOffNote cutOff={cutOff} /> : null}
             {cancelled ? <StoppedNote stop={{ state: 'stopped' }} /> : null}
             {!streaming && !cancelled ? <SavedReplyErrors message={message} /> : null}
