@@ -11,7 +11,7 @@ import { MAX_STREAM_RECONNECTS } from '@webui/utils/streamErrors.core';
 import { useChatReadAloud } from '@/features/audio/useChatReadAloud';
 import { useAnswerQuestion, useChatStream, useContextUsage, usePermissionMode, useMessages, useRefreshTurnChanges, useSession } from '@/data';
 import { FlagshipAgentBanner } from '@/features/banners/FlagshipAgentBanner';
-import { Composer, ContextMeter, ContextWarning, ModelChip, PermissionChip, useAttachments, useComposerQueue, useFollowUpEvents } from '@/features/composer';
+import { Composer, ContextMeter, ContextWarning, ModelChip, PermissionChip, SpendMeter, useAttachments, useComposerQueue, useFollowUpEvents } from '@/features/composer';
 import { QueuedMessages } from '@/features/composer/QueuedMessages';
 import { FileScope } from '@/features/files';
 import { describeError, describeErrorWith, useT } from '@/i18n/useT';
@@ -21,6 +21,7 @@ import { ErrorState, Notice, Screen, Stack } from '@/ui';
 import { useAnswerComparison } from './compare/useAnswerComparison';
 import { ChatPrompts } from './ChatPrompts';
 import { ConnectorRetry } from './ConnectorRetry';
+import { HistoryNotice, historyNoticeText } from './HistoryNotice';
 import { ChatHeader } from './header';
 import { PermissionPrompt } from './permission/PermissionPrompt';
 import { usePermissionPrompt } from './permission/usePermissionPrompt';
@@ -54,6 +55,7 @@ export function ChatScreen({ sessionId, onManageDocuments }: { sessionId: string
     const { comparing } = useAnswerComparison(sessionId);
     const hold = busy || comparing;
     const context = useContextUsage(sessionId, stream.events, busy);
+    const historyNotice = historyNoticeText(stream.events);
     const saved = messages.data?.messages ?? NO_MESSAGES;
     useChatReadAloud(sessionId, stream, saved);
     useTurnAnnouncer(stream, saved);
@@ -191,7 +193,8 @@ export function ChatScreen({ sessionId, onManageDocuments }: { sessionId: string
                         disabledReason={disabledReason}
                         rightControls={
                             <>
-                                <ContextMeter usage={context.usage} unavailable={context.unavailable} />
+                                <SpendMeter sessionId={sessionId} busy={busy} />
+                                <ContextMeter usage={context.usage} unavailable={context.unavailable} onDetails={() => setPanelOpen(true)} />
                                 <ModelChip turnRunning={busy} />
                             </>
                         }
@@ -207,6 +210,7 @@ export function ChatScreen({ sessionId, onManageDocuments }: { sessionId: string
                     readOnly={!!retiredAgent}
                     live={
                         <>
+                            {historyNotice ? <HistoryNotice text={historyNotice} /> : null}
                             {tail ? (
                                 <TurnTail
                                     tail={tail}

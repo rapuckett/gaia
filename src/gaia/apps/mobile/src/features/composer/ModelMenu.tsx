@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import { useEffect, useRef, useState } from 'react';
+import { View } from 'react-native';
 
 import { isDownloading, modelState } from '@webui/components/modelMeta';
 
@@ -11,8 +12,10 @@ import type { ProviderModel } from '@webui/types';
 import { useActiveModel, useDownloadModel, useProviderModels, useProviders, useSelectModel } from '@/data';
 import { openSettings } from '@/features/settings/openSettings';
 import { describeError, useT } from '@/i18n/useT';
-import { Button, Divider, Icon, ListRow, Notice, Row, Sheet, Spinner, Stack, StatusDot, Text } from '@/ui';
-import { Check, Download, KeyRound } from '@/ui/icons';
+import { Button, Divider, Icon, IconButton, ListRow, Ltr, Notice, Row, Sheet, Spinner, Stack, StatusDot, Text } from '@/ui';
+import { Check, Download, Info, KeyRound } from '@/ui/icons';
+
+import { modelDetails } from './modelDetails';
 
 /** The id without its provider prefix or catalogue path, when the PC gave no friendly name. */
 export function modelLabel(m: Pick<ProviderModel, 'id' | 'display_name'>): string {
@@ -30,10 +33,15 @@ export interface ModelMenuProps {
     /** The model picked while a reply ran. */
     queued: string | null;
     onQueue: (model: string | null) => void;
+    /** Why the switch after a download failed; the chip shows a warning while it is set. */
+    switchError: string | null;
+    onSwitchError: (message: string | null) => void;
+    /** Starts with this row's facts open (developer gallery). */
+    initialInfoRow?: string;
 }
 
 /** Switch the model, download one that isn't on the PC, or see what only the PC can do. */
-export function ModelMenu({ open, onClose, turnRunning, queued, onQueue }: ModelMenuProps) {
+export function ModelMenu({ open, onClose, turnRunning, queued, onQueue, switchError, onSwitchError, initialInfoRow }: ModelMenuProps) {
     const t = useT();
     const active = useActiveModel().data;
     const local = useProviderModels('local', open);
@@ -43,6 +51,8 @@ export function ModelMenu({ open, onClose, turnRunning, queued, onQueue }: Model
     const download = useDownloadModel();
     const [error, setError] = useState<string | null>(null);
     const [askDownload, setAskDownload] = useState<ProviderModel | null>(null);
+    // The row whose facts are open; a phone has no hover, so each row has an info button.
+    const [infoRow, setInfoRow] = useState<string | null>(initialInfoRow ?? null);
     const pickAfterDownload = useRef<string | null>(null);
     const [wasOpen, setWasOpen] = useState(open);
     const current = queued ?? active?.model;
@@ -53,10 +63,11 @@ export function ModelMenu({ open, onClose, turnRunning, queued, onQueue }: Model
         if (open) {
             setError(null);
             setAskDownload(null);
+            setInfoRow(initialInfoRow ?? null);
         }
     }
 
-    const choose = (model: string) => {
+    const choose = (model: string, afterDownload?: string) => {
         setError(null);
         if (turnRunning) {
             onQueue(sameModel(model, active?.model) ? null : model);
@@ -65,7 +76,10 @@ export function ModelMenu({ open, onClose, turnRunning, queued, onQueue }: Model
         }
         select.mutate(model, {
             onSuccess: onClose,
-            onError: (err) => setError(describeError(err, t)),
+            onError: (err) => {
+                if (afterDownload) onSwitchError(t('modelMenu.switchAfterFailed', { model: afterDownload, reason: describeError(err, t) }));
+                else setError(describeError(err, t));
+            },
         });
     };
 
@@ -73,10 +87,21 @@ export function ModelMenu({ open, onClose, turnRunning, queued, onQueue }: Model
     const models = local.data?.models;
     useEffect(() => {
         if (!pickAfterDownload.current || !models) return;
-        const m = models.find((x) => x.id === pickAfterDownload.current);
-        if (m && !isDownloading(m) && modelState(m) !== 'not_downloaded') {
+        const picked = pickAfterDownload.current;
+        const m = models.find((x) => x.id === picked);
+        if (!m) {
             pickAfterDownload.current = null;
-            choose(m.id);
+            onSwitchError(t('modelMenu.modelGone', { model: picked }));
+            return;
+        }
+        if (isDownloading(m)) return;
+        if (m.download_progress?.state === 'error') {
+            pickAfterDownload.current = null;
+            onSwitchError(t('modelMenu.downloadFailed', { model: modelLabel(m), message: m.download_progress.message ?? '' }));
+        } else if (m.download_progress?.state === 'complete' || modelState(m) !== 'not_downloaded') {
+            pickAfterDownload.current = null;
+            onSwitchError(null);
+            choose(m.id, modelLabel(m));
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [models]);
@@ -84,6 +109,7 @@ export function ModelMenu({ open, onClose, turnRunning, queued, onQueue }: Model
     const startDownload = (m: ProviderModel, pick: boolean) => {
         setAskDownload(null);
         setError(null);
+        onSwitchError(null);
         if (pick) pickAfterDownload.current = m.id;
         download.mutate(m.id, {
             onError: (err) => setError(describeError(err, t)),
@@ -116,6 +142,8 @@ export function ModelMenu({ open, onClose, turnRunning, queued, onQueue }: Model
         }
         return (
             <Stack key={`${remote ? 'cloud' : 'local'}:${m.id}`} gap="xs">
+                <Row gap="xs" align="center">
+                    <View style={{ flex: 1 }}>
                 <ListRow
                     title={name}
                     subtitle={!remote && m.size_gb ? `${m.size_gb} GB` : undefined}
@@ -139,6 +167,32 @@ export function ModelMenu({ open, onClose, turnRunning, queued, onQueue }: Model
                     }
                     testID={`model-row-${m.id}`}
                 />
+                    </View>
+                    <IconButton
+                        icon={Info}
+                        size="sm"
+                        label={t('modelMenu.about', { name })}
+                        onPress={() => setInfoRow(infoRow === m.id ? null : m.id)}
+                        testID={`model-info-${m.id}`}
+                    />
+                </Row>
+                {infoRow === m.id ? (
+                    <Stack gap="xs" paddingX="md" testID={`model-facts-${m.id}`}>
+                        {modelDetails(m, remote, t).map((d) => (
+                            <Text key={d} role="caption" tone="secondary">
+                                {d}
+                            </Text>
+                        ))}
+                        {m.placement?.warning ? (
+                            <Text role="caption" tone="warning">
+                                {m.placement.warning}
+                            </Text>
+                        ) : null}
+                        <Text role="caption" tone="muted">
+                            <Ltr>{m.id}</Ltr>
+                        </Text>
+                    </Stack>
+                ) : null}
                 {askDownload?.id === m.id ? (
                     <Notice
                         tone="info"
@@ -187,6 +241,7 @@ export function ModelMenu({ open, onClose, turnRunning, queued, onQueue }: Model
                             : t('modelMenu.keepsItsModel')}
                     </Text>
                 ) : null}
+                {switchError ? <Notice tone="danger" message={switchError} onDismiss={() => onSwitchError(null)} /> : null}
                 {error ? <Notice tone="danger" message={error} /> : null}
                 {local.isLoading ? (
                     <Row gap="sm">
@@ -197,6 +252,18 @@ export function ModelMenu({ open, onClose, turnRunning, queued, onQueue }: Model
                     </Row>
                 ) : null}
                 {local.isError ? <Notice tone="danger" message={describeError(local.error, t)} /> : null}
+                <View accessibilityRole="list" accessibilityLabel={t('modelMenu.models')}>
+                <Stack gap="sm">
+                {active?.remote && cloud.isSuccess && cloudModels.length === 0 ? (
+                    <Stack gap="xs">
+                        <Text role="label" weight="semibold" tone="secondary">
+                            {active.provider_name || active.provider}
+                        </Text>
+                        <Text role="caption" tone="secondary">
+                            {t('modelMenu.noModels')}
+                        </Text>
+                    </Stack>
+                ) : null}
                 {cloudModels.length > 0 && active ? (
                     <Stack gap="xs">
                         <Text role="label" weight="semibold" tone="secondary">
@@ -222,6 +289,18 @@ export function ModelMenu({ open, onClose, turnRunning, queued, onQueue }: Model
                         ))}
                     </Stack>
                 ) : null}
+                {local.isSuccess && localModels.length === 0 ? (
+                    <Stack gap="xs">
+                        <Text role="label" weight="semibold" tone="secondary">
+                            {t.bare('providers.local.name')}
+                        </Text>
+                        <Text role="caption" tone="secondary">
+                            {t('modelMenu.noModels')}
+                        </Text>
+                    </Stack>
+                ) : null}
+                </Stack>
+                </View>
                 <Divider />
                 {needsKey.map((p) => (
                     <ListRow

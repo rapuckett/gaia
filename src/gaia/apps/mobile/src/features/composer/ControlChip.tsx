@@ -23,13 +23,14 @@ export interface ControlChipProps {
     chip: ChipId;
     disabled?: boolean;
     accessibilityLabel?: string;
+    accessibilityHint?: string;
     testID?: string;
 }
 
 const MODEL_CHIP_MIN = 44;
 
 /** A flat control in the message box's bottom row, as the desktop's composer chips: an icon, a short label and a chevron. */
-export function ControlChip({ label, icon, onPress, menu, warning, chip, disabled, accessibilityLabel, testID }: ControlChipProps) {
+export function ControlChip({ label, icon, onPress, menu, warning, chip, disabled, accessibilityLabel, accessibilityHint, testID }: ControlChipProps) {
     const collapsed = useChipCollapsed(chip);
     const [modelWidth, setModelWidth] = useState<number | null>(null);
     // Below the floor the model shows icon and chevron, never a sliver of its name.
@@ -74,6 +75,7 @@ export function ControlChip({ label, icon, onPress, menu, warning, chip, disable
                 onPress={onPress}
                 disabled={disabled}
                 accessibilityLabel={accessibilityLabel ?? label}
+                accessibilityHint={accessibilityHint}
                 accessibilityState={menu ? { expanded: false } : undefined}
                 minSize={44}
                 testID={testID}

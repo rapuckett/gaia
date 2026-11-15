@@ -43,6 +43,7 @@ import type {
     Settings,
     SkillInfo,
     SpendingReport,
+    ChatSpending,
     StartScreen,
     StreamEvent,
     SystemStatus,
@@ -102,6 +103,7 @@ export type {
     SkillInfo,
     SkillSource,
     SpendingReport,
+    ChatSpending,
     StartScreen,
     StreamEvent,
     SystemStatus,
@@ -707,6 +709,8 @@ export interface GaiaClient {
     getCloudPrices(provider: string, options?: RequestOptions): Promise<CloudPriceList>;
     /** This month's cloud spending at list price, the monthly limit and where it stands. */
     getSpending(options?: RequestOptions): Promise<SpendingReport>;
+    /** This chat's cloud spending and every chat's since `since` (the local day's start), for `model`. */
+    getChatSpending(sessionId: string, since: string, model: string | null, options?: RequestOptions): Promise<ChatSpending>;
     /** Sets the monthly limit in dollars; null removes it. Answers with the new report. */
     setSpendingLimit(limitUsd: number | null, options?: RequestOptions): Promise<SpendingReport>;
     /** Lets cloud chats go on past the limit until the month ends. */

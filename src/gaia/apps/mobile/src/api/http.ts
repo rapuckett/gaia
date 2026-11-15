@@ -111,6 +111,7 @@ import type {
     SpeechModel,
     SpeechSettings,
     SpendingReport,
+    ChatSpending,
     FileDiff,
     TurnChanges,
     UndoResult,
@@ -128,6 +129,7 @@ import {
     connectorGrantsPath,
     CONNECTOR_REVOKE_OUTCOME_MS,
     connectorPath,
+    chatSpendingPath,
     cloudPricesPath,
     documentFilePath,
     documentPath,
@@ -534,6 +536,10 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         getSpending(options) {
             return getJson<SpendingReport>(ENDPOINTS.spending, options?.signal);
+        },
+
+        getChatSpending(sessionId, since, model, options) {
+            return getJson<ChatSpending>(chatSpendingPath(sessionId, since, model), options?.signal);
         },
 
         setSpendingLimit(limitUsd, options) {
