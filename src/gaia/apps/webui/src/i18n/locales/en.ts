@@ -3548,6 +3548,9 @@ export const enMessages = {
     'mobileApp.chat.notFound': 'That chat is no longer on your PC.',
     'mobileApp.connectors.comingLater': "Connecting from the phone is coming in a later build. For now, connect it on the PC running GAIA.",
     'mobileApp.connectors.googlePcOnly': "This phone can't connect Google accounts. Connect Google on the PC running GAIA.",
+    'mobileApp.model.onYourPc': 'On your PC',
+    'mobileApp.serverDown.title': 'The model server on your PC isn’t answering',
+    'mobileApp.skills.yoursEmpty': 'None yet. Add a folder with a SKILL.md file to {path} on your PC and it shows up here.',
     'mobileApp.banner.openOnPc': 'Open GAIA on your PC to start the model server.',
 } as const;
 

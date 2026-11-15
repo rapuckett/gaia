@@ -35,7 +35,7 @@ export interface PillText {
 export function pillText(status: LocalModelStatus | undefined, t: Translate): PillText {
     const remote = !!status?.active_remote;
     const name = (remote ? status?.active_display_name : (status?.display_name ?? status?.active_display_name)) ?? null;
-    const place = !remote && name ? t('modelStatus.local') : null;
+    const place = !remote && name ? t('mobileApp.model.onYourPc') : null;
     const text = [place, name].filter(Boolean).join(' · ') || t('modelStatus.fallbackName');
     return {
         text,
