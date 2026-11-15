@@ -17,6 +17,7 @@ import type {
     ModelNeed,
     ParsedSchedule,
     Schedule,
+    ScheduleResult,
     ResourceUsage,
     Session,
     SessionList,
@@ -43,6 +44,8 @@ function cloneNested<T>(source: Record<string, Record<string, T>> | undefined): 
 export interface FakeClientData {
     sessions?: Session[];
     schedules?: Schedule[];
+    /** Past runs by schedule name, newest first. */
+    scheduleResults?: Record<string, ScheduleResult[]>;
     messages?: Record<string, Message[]>;
     /** What every send streams back; a function takes the sent text and streams what a test scripts. */
     replies?: StreamEvent[] | ((message: string) => AsyncIterable<StreamEvent>);
@@ -356,6 +359,11 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             if (schedule.running) throw new GaiaApiError(409, `Schedule '${name}' is already running`);
             Object.assign(schedule, { running: true, run_count: schedule.run_count + 1 });
             return { ...schedule };
+        },
+        async listScheduleResults(name, limit) {
+            findSchedule(name);
+            const all = data.scheduleResults?.[name] ?? [];
+            return { results: all.slice(0, limit), total: all.length };
         },
         async deleteSchedule(name) {
             const schedule = findSchedule(name);
