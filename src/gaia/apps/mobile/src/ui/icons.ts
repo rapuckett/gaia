@@ -43,6 +43,7 @@ export {
   Send,
   Settings,
   ShieldQuestion,
+  Smartphone,
   Square,
   Trash2,
   TriangleAlert,
