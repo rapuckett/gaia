@@ -19,6 +19,7 @@ import { Disclosure, Notice, Row, SegmentedControl, Spinner, Stack, StatusDot, T
 
 import { CloudPrices } from './model/CloudPrices';
 import { ModelInUse } from './model/ModelInUse';
+import { ModelList } from './model/ModelList';
 import { errorText, modelLabel, sameModelId } from './model/modelText';
 
 /** Memory for models, read from the PC only while "How this works" is open. */
@@ -151,6 +152,17 @@ export default function Model() {
                         </Stack>
                     ) : null}
                     {modelsQuery.error ? <Notice tone="danger" message={errorText(modelsQuery.error, t)} /> : null}
+                    {connected ? (
+                        <ModelList
+                            provider={provider.id}
+                            remote={!!provider.remote}
+                            models={models}
+                            activeModel={active?.model}
+                            switching={select.isPending ? (select.variables ?? null) : null}
+                            onUse={switchTo}
+                            onRefresh={() => void modelsQuery.refetch()}
+                        />
+                    ) : null}
                 </Stack>
             ) : null}
         </Stack>

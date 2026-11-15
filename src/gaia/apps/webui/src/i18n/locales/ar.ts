@@ -3645,6 +3645,7 @@ const messages: Messages = {
     'mobileApp.banner.openOnPc': 'افتح GAIA على جهاز الكمبيوتر لتشغيل خادم النماذج.',
     'mobileApp.settings.memory.lede': 'يتذكر GAIA الحقائق والتفضيلات والمحادثات السابقة عبر المحادثات، على جهاز الكمبيوتر لديك فقط. لا تُحفظ المحادثات الخاصة (أيقونة العين في المحادثة) أبدًا.',
     'mobileApp.settings.pcOnly': 'غيّر هذا من الكمبيوتر الذي يشغّل GAIA.',
+    'mobileApp.settings.model.removeDownloadBody': 'تُحذف الملفات التي نزّلتها من الكمبيوتر الذي يشغّل GAIA. يمكنك إضافته مرة أخرى لاحقًا.',
     'mobileApp.settings.comingSoon': 'هذا القسم قادم إلى الهاتف قريبًا. في الوقت الحالي، غيّره من الكمبيوتر الذي يشغّل GAIA.',
     'mobileApp.settings.permissionsWarning': 'يتيح الوصول الكامل لـ GAIA تغيير الملفات أو حذفها وتشغيل الأوامر على الكمبيوتر الذي يشغّله دون سؤالك أولًا، في كل محادثة جديدة، حتى توقفه. قد يُحدث خطأ أو تعليمات ضارة في مستند يقرأه ضررًا حقيقيًا.',
     'mobileApp.settings.colors.invalidHex': 'أدخل لونًا بهذا الشكل: #1F5FA8.',
