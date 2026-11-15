@@ -29,7 +29,7 @@ export function ModelStatusPill({ onOpenSettings }: ModelStatusPillProps) {
     const [open, setOpen] = useState(false);
     const { data } = useLocalModelStatus(open);
     const pill = pillText(data, t);
-    const place = !pill.remote && pill.name ? t('modelStatus.local') : null;
+    const place = !pill.remote && pill.name ? t('mobileApp.model.onYourPc') : null;
     return (
         <>
             <Stack paddingX="lg" paddingY="sm">

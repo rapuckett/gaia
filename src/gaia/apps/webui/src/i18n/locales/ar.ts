@@ -3558,6 +3558,9 @@ const messages: Messages = {
     'mobileApp.chat.notFound': 'هذه المحادثة لم تعد موجودة على جهاز الكمبيوتر.',
     'mobileApp.connectors.comingLater': 'الربط من الهاتف قادم في إصدار لاحق. في الوقت الحالي، اربطه من الكمبيوتر الذي يشغّل GAIA.',
     'mobileApp.connectors.googlePcOnly': 'لا يستطيع هذا الهاتف ربط حسابات Google. اربط Google من الكمبيوتر الذي يشغّل GAIA.',
+    'mobileApp.model.onYourPc': 'على الكمبيوتر',
+    'mobileApp.serverDown.title': 'خادم النماذج على الكمبيوتر لا يستجيب',
+    'mobileApp.skills.yoursEmpty': 'لا شيء بعد. أضف مجلدًا فيه ملف SKILL.md إلى {path} على الكمبيوتر وسيظهر هنا.',
     'mobileApp.banner.openOnPc': 'افتح GAIA على جهاز الكمبيوتر لتشغيل خادم النماذج.',
 };
 
