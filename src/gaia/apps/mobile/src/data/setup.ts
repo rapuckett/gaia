@@ -407,6 +407,19 @@ export function useDownloadSetupModel() {
     });
 }
 
+/** Deletes a downloaded model at the user's request; the plan it answers (with `freed_gb`) replaces the cached one. */
+export function useRemoveSetupModel() {
+    const client = useGaiaClient();
+    const queryClient = useQueryClient();
+    return useMutation<SetupPlan & { freed_gb: number }, Error, { modelId: string }>({
+        mutationFn: ({ modelId }) => requireClient(client).removeSetupModel(modelId),
+        onSuccess: (plan) => {
+            queryClient.setQueryData(queryKeys.setupPlan, plan);
+            void queryClient.invalidateQueries({ queryKey: ['providerModels'] });
+        },
+    });
+}
+
 /** Skips one of setup's models; the new plan replaces the cached one. */
 export function useSkipSetupModel() {
     const client = useGaiaClient();
