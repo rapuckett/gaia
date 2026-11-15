@@ -8,7 +8,7 @@ import { GITHUB_NEW_ISSUE_URL, buildBugReportUrl } from '../utils/bugReport.core
 import { useT } from '../i18n/useT';
 import './UnsupportedFeature.css';
 
-export { getUnsupportedCategory, isExtensionSupported, PERMANENT_FAILURE_HINTS, SUPPORTED_EXTENSIONS } from '../utils/uploadErrors.core';
+export { getUnsupportedCategory, isExtensionSupported, SUPPORTED_EXTENSIONS } from '../utils/uploadErrors.core';
 
 const GITHUB_FEATURE_REQUEST_URL = `${GITHUB_NEW_ISSUE_URL}?template=feature_request.md`;
 const GITHUB_BUG_REPORT_URL = `${GITHUB_NEW_ISSUE_URL}?template=bug_report.md`;

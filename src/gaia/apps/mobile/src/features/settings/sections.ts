@@ -6,6 +6,9 @@ import type { ComponentType } from 'react';
 import type { LucideIcon } from '@/ui/icons';
 import { Bell, Brain, Clock, Cpu, Info, ListChecks, Lock, MessageSquare, Plug, ShieldQuestion, SlidersHorizontal, Sparkles, Volume2, Wrench } from '@/ui/icons';
 
+import General from './panes/General';
+import Model from './panes/Model';
+import Permissions from './panes/Permissions';
 import Placeholder from './panes/Placeholder';
 
 /** The web's settings sections, in its nav order; `voice` is "Read aloud". */
@@ -33,10 +36,10 @@ export interface SettingsSectionEntry {
 }
 
 export const SETTINGS_SECTIONS: Record<SectionId, SettingsSectionEntry> = {
-    general: { titleKey: 'settings.section.general', icon: SlidersHorizontal, pane: Placeholder },
+    general: { titleKey: 'settings.section.general', icon: SlidersHorizontal, pane: General },
     setup: { titleKey: 'settings.section.setup', icon: ListChecks, pane: Placeholder },
-    model: { titleKey: 'settings.section.model', icon: Cpu, pane: Placeholder },
-    permissions: { titleKey: 'settings.section.permissions', icon: ShieldQuestion, pane: Placeholder },
+    model: { titleKey: 'settings.section.model', icon: Cpu, pane: Model },
+    permissions: { titleKey: 'settings.section.permissions', icon: ShieldQuestion, pane: Permissions },
     skills: { titleKey: 'settings.section.skills', icon: Sparkles, pane: Placeholder },
     connectors: { titleKey: 'settings.section.connectors', icon: Plug, pane: Placeholder },
     messaging: { titleKey: 'settings.section.messaging', icon: MessageSquare, pane: Placeholder },

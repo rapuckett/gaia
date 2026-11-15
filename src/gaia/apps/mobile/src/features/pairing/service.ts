@@ -37,4 +37,10 @@ export interface PairingService {
     status(): Promise<PairingStatus>;
     /** Give up waiting for Allow, and tell the PC when it can be told. */
     cancel(): Promise<void>;
+    /** Every PC this phone is paired with. */
+    list(): Promise<PairedPc[]>;
+    /** Make this paired PC the one the app talks to. */
+    use(pcId: string): Promise<void>;
+    /** Unpair: `DELETE /api/devices/me` on that PC, then drop its token and pin from this phone. */
+    forget(pcId: string): Promise<void>;
 }
