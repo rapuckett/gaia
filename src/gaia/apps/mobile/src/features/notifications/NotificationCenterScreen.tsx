@@ -60,7 +60,7 @@ export function NotificationCenterScreen({ onBack, onOpenChat }: { onBack: () =>
             }
             footer={
                 items.length > 0 ? (
-                    <Stack paddingX="lg" paddingY="sm">
+                    <Stack>
                         <Row gap="sm" stack>
                             <Stack flex={1}>
                                 <Button label={t.bare('notifications.markAllRead')} accessibilityLabel={t('notifications.markAllRead')} icon={Check} variant="secondary" full disabled={unread === 0} onPress={markAllNotificationsRead} testID="ntf-mark-all" />
