@@ -47,6 +47,7 @@ import type {
     FollowUpResult,
     DeleteSessionResult,
     GaiaClient,
+    GpuMemoryStatus,
     HealthResponse,
     LemonadeFound,
     LemonadeTarget,
@@ -95,6 +96,7 @@ import {
     chatPermissionGrantsPath,
     chatPerformancePath,
     chatPermissionsPath,
+    providerConnectPath,
     providerModelsPath,
     followupOutcomePath,
     MESSAGE_PAGE_SIZE,
@@ -587,6 +589,10 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             return getJson<MemorySettings>(ENDPOINTS.memorySettings, options?.signal);
         },
 
+        updateMemorySettings(settings, options) {
+            return putJson<MemorySettings>(ENDPOINTS.memorySettings, settings, options?.signal);
+        },
+
         getEmbeddingCoverage(options) {
             return getJson<EmbeddingCoverage>(ENDPOINTS.memoryEmbeddingCoverage, options?.signal);
         },
@@ -647,6 +653,11 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             return postJson<RestartModelResult>(ENDPOINTS.localModelRestart, { confirm }, options?.signal);
         },
 
+        getGpuMemory(settingGb, options) {
+            const query = settingGb == null ? '' : `?setting_gb=${encodeURIComponent(String(settingGb))}`;
+            return getJson<GpuMemoryStatus>(`${ENDPOINTS.gpuMemory}${query}`, options?.signal);
+        },
+
         getModelNeed(job, options) {
             return getJson<ModelNeed>(setupNeedsPath(job), options?.signal);
         },
@@ -703,8 +714,33 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             return getJson<{ found: LemonadeFound | null; unchecked?: string[] }>(ENDPOINTS.lemonadeDetect, options?.signal);
         },
 
+        connectProvider(provider, options) {
+            // No key travels from the phone: a blank body keeps the key the PC already holds.
+            return postJson<{ remembered: boolean }>(providerConnectPath(provider), {}, options?.signal);
+        },
+
+        recheckSetupNpu(options) {
+            return postJson<SetupPlan>(ENDPOINTS.setupNpuRecheck, undefined, options?.signal);
+        },
+
         getSetupPlan(options) {
             return getJson<SetupPlan>(ENDPOINTS.setupPlan, options?.signal);
+        },
+
+        chooseSetupChatModel(modelId, acknowledgeNoFit, options) {
+            return postJson<SetupPlan>(
+                ENDPOINTS.setupChatModel,
+                { model_id: modelId, acknowledge_no_fit: acknowledgeNoFit },
+                options?.signal,
+            );
+        },
+
+        chooseSetupVisionModel(modelId, options) {
+            return postJson<SetupPlan>(ENDPOINTS.setupVisionModel, { model_id: modelId }, options?.signal);
+        },
+
+        skipSetupModel(modelId, skipped, options) {
+            return postJson<SetupPlan>(ENDPOINTS.setupModelSkip, { model_id: modelId, skipped }, options?.signal);
         },
 
         startSetup(skipChatModel, gaiaLemonade = false, options = {}) {

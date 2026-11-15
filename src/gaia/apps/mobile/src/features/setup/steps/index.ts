@@ -6,7 +6,7 @@ import type { ComponentType } from 'react';
 import type { SetupStage } from '../flow';
 import type { SetupStepContext } from '../SetupScreen';
 import { CheckStep } from './CheckStep';
-import { PlanStep } from './PlanStep';
+import { PlanWithScreens } from './PlanScreensHost';
 import { ReadyStep } from './ReadyStep';
 import { TestStep } from './TestStep';
 
@@ -16,7 +16,7 @@ export type SetupStep = ComponentType<{ ctx: SetupStepContext }>;
 /** Each stage's body, one line per step screen; a stage with none shows only its title. */
 export const SETUP_STEPS: Partial<Record<SetupStage, SetupStep>> = {
     check: CheckStep,
-    plan: PlanStep,
+    plan: PlanWithScreens,
     test: TestStep,
     ready: ReadyStep,
 };

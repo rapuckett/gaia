@@ -12,6 +12,7 @@ import type {
     ConnectorListEntry,
     ContextChoice,
     ContextUsageResult,
+    GpuMemoryStatus,
     LemonadeFound,
     LemonadeTarget,
     LocalModelStatus,
@@ -52,6 +53,7 @@ export type {
     ContextChoice,
     ContextUsage,
     ContextUsageResult,
+    GpuMemoryStatus,
     LemonadeFound,
     LemonadeTarget,
     LocalModelStatus,
@@ -337,7 +339,6 @@ export interface GaiaClient {
     /** Remembers a context size for a local model; null returns it to Automatic. */
     setContextChoice(model: string, ctxSize: number | null, options?: RequestOptions): Promise<ContextChoice>;
     /** A cloud provider's list prices, readable before it is connected. */
-    getCloudPrices(provider: string, options?: RequestOptions): Promise<CloudPriceList>;
     /** One provider's chat models; `local` also carries each one's state, size and download. */
     listProviderModels(provider: string, options?: RequestOptions): Promise<ProviderModelsResponse>;
     /** Makes `model` the one new messages use; a cloud model is picked after the person agrees to what leaves the PC. */
@@ -418,6 +419,8 @@ export interface GaiaClient {
     getMemoryUpcoming(days: number, options?: RequestOptions): Promise<TemporalItem[]>;
     getMemoryStats(options?: RequestOptions): Promise<MemoryStats>;
     getMemorySettings(options?: RequestOptions): Promise<MemorySettings>;
+    /** Changes the memory switches named in `settings`; answers with all of them. */
+    updateMemorySettings(settings: Partial<MemorySettings>, options?: RequestOptions): Promise<MemorySettings>;
     getEmbeddingCoverage(options?: RequestOptions): Promise<EmbeddingCoverage>;
     /** Folds finished chats into lasting memory. */
     consolidateMemory(options?: RequestOptions): Promise<ConsolidateMemoryResult>;
@@ -458,6 +461,8 @@ export interface GaiaClient {
     restartLocalModel(confirm: boolean, options?: RequestOptions): Promise<RestartModelResult>;
     /** Whether a job needs a model that isn't on the PC, and which. */
     getModelNeed(job: ModelNeedJob, options?: RequestOptions): Promise<ModelNeed>;
+    /** How this PC's memory is split, the presets and what each unlocks; `settingGb` also reads the manual steps for that size. Read only: changing it is done on the PC. */
+    getGpuMemory(settingGb?: number, options?: RequestOptions): Promise<GpuMemoryStatus>;
     /** Starts one model's download on the PC; follow it with `getSetupStatus`. */
     downloadSetupModel(modelId: string, acknowledgeLowDisk: boolean, options?: RequestOptions): Promise<SetupRunStatus>;
     /** Deletes one downloaded model from the PC's model server; answers the new plan and the space freed. */
@@ -481,8 +486,21 @@ export interface GaiaClient {
     getLemonadeTarget(options?: RequestOptions): Promise<LemonadeTarget>;
     /** A model server the PC already runs; `unchecked` lists addresses that took the connection but didn't answer. */
     detectLemonade(options?: RequestOptions): Promise<{ found: LemonadeFound | null; unchecked?: string[] }>;
+    /** Registers the provider with the key the PC already holds; the phone never sends a key. */
+    connectProvider(provider: string, options?: RequestOptions): Promise<{ remembered: boolean }>;
+    /** A cloud provider's list prices, ranked; the first row is the model GAIA uses unless another is picked. */
+    getCloudPrices(provider: string, options?: RequestOptions): Promise<CloudPriceList>;
+    /** Reads the NPU's setup afresh after a fix on the PC; answers the plan. */
+    recheckSetupNpu(options?: RequestOptions): Promise<SetupPlan>;
     /** What setup will use and download, before it starts; `catalog` marks partial downloads. */
     getSetupPlan(options?: RequestOptions): Promise<SetupPlan>;
+    /** Saves setup's chat model; a 409 `no_fit` asks to be sent again with `acknowledgeNoFit`. Returns the new plan. */
+    chooseSetupChatModel(modelId: string, acknowledgeNoFit: boolean, options?: RequestOptions): Promise<SetupPlan>;
+    /** Saves the model that reads images; null goes back to GAIA's choice. Returns the new plan. */
+    chooseSetupVisionModel(modelId: string | null, options?: RequestOptions): Promise<SetupPlan>;
+    /** Skips one of setup's models, or takes it back. Returns the new plan. */
+    skipSetupModel(modelId: string, skipped: boolean, options?: RequestOptions): Promise<SetupPlan>;
+    /** The GPU's share of this PC's memory, and whether it can be changed. */
     startSetup(
         skipChatModel: boolean,
         gaiaLemonade?: boolean,
