@@ -3,7 +3,7 @@
 
 import { useState } from 'react';
 
-import { providerName, providerNotice } from '@webui/utils/providerText';
+import { providerName, providerNameFull, providerNotice } from '@webui/utils/providerText';
 
 import type { ProviderId, ProviderModel } from '@/api/client.types';
 import {
@@ -100,7 +100,7 @@ export default function Model() {
                 {providers ? (
                     <SegmentedControl
                         accessibilityLabel={t('settings.model.whereRuns')}
-                        options={providers.map((p) => ({ value: p.id, label: providerName(t, p) }))}
+                        options={providers.map((p) => ({ value: p.id, label: providerName(t, p), accessibilityLabel: providerNameFull(t, p) }))}
                         value={chosen}
                         onChange={(v) => setPicked(v as ProviderId)}
                     />
