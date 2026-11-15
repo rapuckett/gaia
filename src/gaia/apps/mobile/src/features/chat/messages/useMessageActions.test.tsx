@@ -10,6 +10,7 @@ import { GaiaClientProvider } from '@/data';
 import { translator } from '@/i18n/useT';
 import { ThemeProvider } from '@/ui';
 import { SheetHost } from '@/ui/overlays/SheetHost';
+import { sheetStore } from '@/ui/overlays/sheetStore';
 
 import { MessageActionsContext } from './MessageActionsContext';
 import { UserBubble } from './UserBubble';
@@ -50,6 +51,9 @@ async function setup(laterTurns: number) {
 }
 
 describe('message actions', () => {
+    // The sheet store is module-wide: a sheet still closing from the last test would hide this one's messages.
+    afterEach(() => act(() => sheetStore.reset()));
+
     it('Delete asks first, then deletes only that message', async () => {
         const client = await setup(0);
         await fireEvent(screen.getByText(question.content), 'longPress');
