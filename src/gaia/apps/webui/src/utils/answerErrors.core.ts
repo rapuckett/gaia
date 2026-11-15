@@ -3,13 +3,6 @@
 
 /** How an assistant reply shows it failed. Pure, so the phone app can import it. */
 
-/** The answer an agent writes when a model call ends its turn (`_model_failure_answer` in agent.py). */
-const MODEL_FAILURE_RE = /^The model (?:call failed|stopped responding) at step \d+, so this request is unfinished\./;
-
-export function isModelFailure(content: string): boolean {
-    return MODEL_FAILURE_RE.test(content.trimStart());
-}
-
 /** Detect if message content looks like an error. */
 export function isErrorContent(content: string): boolean {
     if (!content) return false;

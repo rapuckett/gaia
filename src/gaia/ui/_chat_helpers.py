@@ -5549,6 +5549,8 @@ async def _stream_chat_impl(run, db: ChatDatabase, session: dict, request: ChatR
                 library_notices=library_notices,
                 ends_turn=True,
                 stopped=turn_cancelled,
+                # As on `done`: a Stop wins over the failure it cut short.
+                failed=turn_failed and not turn_cancelled,
             )
             link_warning = (
                 turn_box["recording"].link_message(msg_id)
@@ -5659,6 +5661,7 @@ async def _stream_chat_impl(run, db: ChatDatabase, session: dict, request: ChatR
                     library_notices=library_notices,
                     ends_turn=True,
                     stopped=turn_cancelled,
+                    failed=failed,
                 )
                 done_event = _done_event(
                     msg_id,
