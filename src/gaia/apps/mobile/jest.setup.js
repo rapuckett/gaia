@@ -26,3 +26,4 @@ jest.mock('react-native-reanimated', () => {
 });
 // The package's ESM entry is .mjs, which Babel doesn't transform; icons render as nothing.
 jest.mock('lucide-react-native', () => new Proxy({ __esModule: true }, { get: (target, name) => (name in target ? target[name] : () => null) }));
+jest.mock('@react-native-async-storage/async-storage', () => require('@react-native-async-storage/async-storage/jest/async-storage-mock'));

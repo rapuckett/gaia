@@ -6,6 +6,7 @@ import type {
     AgentCapabilities,
     AgentInfo,
     AgentMcpServer,
+    ChatPerformance,
     ConnectorListEntry,
     ContextUsageResult,
     ConsolidateMemoryResult,
@@ -23,7 +24,9 @@ import type {
     Message,
     MessageList,
     ModelNeed,
+    ModelServerInfo,
     PreflightReport,
+    ProvidersResponse,
     ParsedSchedule,
     PermissionMode,
     ProviderModelsResponse,
@@ -56,6 +59,26 @@ function cloneNested<T>(source: Record<string, Record<string, T>> | undefined): 
     return Object.fromEntries(Object.entries(source ?? {}).map(([key, inner]) => [key, { ...inner }]));
 }
 
+const EMPTY_PERFORMANCE: ChatPerformance = {
+    latest_message_id: null,
+    turns: [],
+    totals: {
+        turns: 0,
+        wall_seconds: null,
+        model_seconds: null,
+        gaia_seconds: null,
+        tokens_in: null,
+        tokens_cached: null,
+        tokens_out: null,
+        tool_calls: null,
+        loads: 0,
+        load_seconds: null,
+        usd: null,
+        unpriced_turns: 0,
+    },
+    now: { model: null, provider: 'unknown', loaded: null, device: null, backend: null, ctx_size: null, weights_gb: null, kv_cache_gb: null, free_gb: null, error: null },
+};
+
 export interface FakeClientData {
     sessions?: Session[];
     schedules?: Schedule[];
@@ -83,6 +106,8 @@ export interface FakeClientData {
     permissions?: Record<string, PermissionMode>;
     /** What getContextUsage answers. */
     contextUsage?: ContextUsageResult;
+    /** What getChatPerformance answers. */
+    chatPerformance?: ChatPerformance;
     /** What getFollowUpOutcome answers; a function may throw to script a 409. */
     followUpOutcome?: FollowUpOutcome | (() => FollowUpOutcome);
     /** Makes sendFollowUp reject, as a turn that can't take the message does. */
@@ -108,6 +133,8 @@ export interface FakeClientData {
     /** Each status read answers the next entry (the last one repeats); defaults to idle. */
     setupStatuses?: (SetupRunStatus | Error)[];
     setupPlan?: SetupPlan;
+    modelServer?: ModelServerInfo;
+    providers?: ProvidersResponse;
     /** What getPreflight answers; an Error is thrown. */
     preflight?: PreflightReport | Error;
     /** What getLemonadeTarget answers; an Error is thrown. */
@@ -148,6 +175,7 @@ export interface FakeGaiaClient extends GaiaClient {
     /** The files uploadFile took, in order. */
     readonly uploads: { name: string; size: number }[];
     readonly downloads: { modelId: string; acknowledgeLowDisk: boolean }[];
+    readonly backendSets: string[];
     readonly setupStarts: { skipChatModel: boolean; gaiaLemonade: boolean; upgradeEmbedded: boolean; serverOnly: boolean }[];
     readonly detached: { sessionId: string; docId: string }[];
     readonly capabilityReads: string[];
@@ -187,6 +215,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
     }
     const followUps: FakeGaiaClient['followUps'] = [];
     const setupStarts: FakeGaiaClient['setupStarts'] = [];
+    const backendSets: string[] = [];
     let checkAt = 0;
     let statusAt = 0;
     const nextOf = <T,>(list: (T | Error)[], at: number): T => {
@@ -235,6 +264,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         uploads,
         downloads,
         setupStarts,
+        backendSets,
         detached,
         capabilityReads,
         memoryActions,
@@ -292,6 +322,9 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         },
         async getContextUsage() {
             return data.contextUsage ?? { available: false, reason: 'Measured once GAIA has answered in this chat.' };
+        },
+        async getChatPerformance() {
+            return data.chatPerformance ?? EMPTY_PERFORMANCE;
         },
         async getFollowUpOutcome() {
             const outcome = data.followUpOutcome ?? { taken: [], returned: [] };
@@ -570,6 +603,18 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         async checkSetup() {
             if (!data.setupChecks?.length) throw new GaiaApiError(503, 'This fake client was given no setup checks.');
             return nextOf(data.setupChecks, checkAt++);
+        },
+        async listProviders() {
+            if (!data.providers) throw new GaiaApiError(503, 'This fake client was given no providers.');
+            return data.providers;
+        },
+        async getModelServer() {
+            if (!data.modelServer) throw new GaiaApiError(503, 'This fake client was given no model server.');
+            return data.modelServer;
+        },
+        async setModelServerBackend(backend) {
+            backendSets.push(backend);
+            return { ...(data.modelServer as ModelServerInfo), preferred_backend: backend };
         },
         async getPreflight() {
             if (!data.preflight) throw new GaiaApiError(503, 'This fake client was given no preflight.');

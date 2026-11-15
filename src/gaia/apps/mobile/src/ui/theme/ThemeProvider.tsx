@@ -3,11 +3,13 @@
 
 import { createContext, useContext, useMemo, type ReactNode } from 'react';
 import { useColorScheme } from 'react-native';
-import { colors, palettes, radius, shadows, motion, faces, type ColorRole, type PaletteId } from '../tokens/generated';
+import { radius, shadows, motion, faces, type ColorRole } from '../tokens/generated';
 import { space } from '../tokens/space';
 import { typeScale } from '../tokens/type';
+import { resolveScheme, themeColors, type Scheme } from './appearance';
+import { useAppearance } from './appearanceStore';
 
-export type Scheme = 'light' | 'dark';
+export type { Scheme };
 
 export interface Theme {
     scheme: Scheme;
@@ -22,18 +24,16 @@ export interface Theme {
 
 const ThemeContext = createContext<Theme | null>(null);
 
-export function ThemeProvider({
-    children,
-    palette = 'default',
-}: {
-    children: ReactNode;
-    palette?: 'default' | PaletteId;
-}) {
-    const scheme: Scheme = useColorScheme() === 'dark' ? 'dark' : 'light';
+export function ThemeProvider({ children }: { children: ReactNode }) {
+    const system: Scheme = useColorScheme() === 'dark' ? 'dark' : 'light';
+    const preference = useAppearance((s) => s.scheme);
+    const palette = useAppearance((s) => s.palette);
+    const custom = useAppearance((s) => s.custom);
+    const scheme = resolveScheme(preference, system);
     const theme = useMemo<Theme>(
         () => ({
             scheme,
-            colors: palette === 'default' ? colors[scheme] : palettes[palette][scheme],
+            colors: themeColors(scheme, palette, custom),
             radius,
             space,
             type: typeScale,
@@ -41,7 +41,7 @@ export function ThemeProvider({
             shadows: shadows[scheme],
             motion,
         }),
-        [scheme, palette],
+        [scheme, palette, custom],
     );
     return <ThemeContext.Provider value={theme}>{children}</ThemeContext.Provider>;
 }
