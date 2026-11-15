@@ -190,7 +190,7 @@ export function WhatYouGet({ plan, selection }: { plan: SetupPlan; selection: Se
     const chat = catalog.find((e) => e.id === selection.defaultChat);
     const vision = resolveVision(catalog, selection);
     const voice = [ticked('speech') && t('setup.job.speech'), ticked('voice') && t('setup.job.voice')].filter(Boolean).join(', ');
-    const rows: Array<[string, string, boolean]> = [
+    const rows: [string, string, boolean][] = [
         [t('setup.job.chat'), name(selection.defaultChat), true],
         [t('setup.job.vision'), chat && isNpu(chat) ? t('setup.get.offNpu') : vision ? name(vision) : t('setup.get.off'), true],
         [t('setup.job.documents'), embedder ? embedder.name : t('setup.get.off'), true],

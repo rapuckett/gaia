@@ -1,7 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 
 import { formatBytes, formatSize, ltrIn } from '@webui/components/setup/format';
 import {
@@ -135,10 +135,8 @@ export function ModelChecklist({ plan, selection, onToggle, onDefaultChat, disab
     const main = mainRows(catalog);
     const more = moreRows(catalog);
     const installed = installedOnlyRows(catalog);
-    const shownInstalled = useMemo(() => {
-        const q = query.trim().toLowerCase();
-        return q ? installed.filter((e) => e.id.toLowerCase().includes(q) || e.name.toLowerCase().includes(q)) : installed;
-    }, [installed, query]);
+    const q = query.trim().toLowerCase();
+    const shownInstalled = q ? installed.filter((e) => e.id.toLowerCase().includes(q) || e.name.toLowerCase().includes(q)) : installed;
     const candidates = chatCandidates(catalog, selection.ticked);
 
     const row = (e: SetupCatalogEntry) => (

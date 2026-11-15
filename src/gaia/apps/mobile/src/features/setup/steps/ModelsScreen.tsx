@@ -32,7 +32,7 @@ function BackendChoice({ view, onPick, disabled }: {
 }) {
     const t = useT();
     const { npuModel, npuProblems, npuUnusable, onNpu } = view;
-    const choices: Array<{ id: 'gpu' | 'npu'; label: string; unavailable?: boolean }> = [
+    const choices: { id: 'gpu' | 'npu'; label: string; unavailable?: boolean }[] = [
         { id: 'gpu', label: t('setup.backend.gpu') },
         ...(npuModel ? [{ id: 'npu' as const, label: t('setup.backend.npu') }] : []),
         ...(npuProblems.length ? [{ id: 'npu' as const, label: t('setup.backend.npu'), unavailable: true }] : []),
@@ -178,6 +178,7 @@ export function ModelsScreen({ ctx, close }: { ctx: SetupStepContext; close: () 
                     onPress={() => void commit(false)}
                 />
             </SetupFooter>
+            {sheet}
         </Stack>
     );
 }
