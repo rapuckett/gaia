@@ -228,3 +228,24 @@ def test_fake_system_info_is_what_model_fit_reads():
     capacity = capacity_from_system_info(resp.json())
     assert capacity.memory_gb > dev_backend.GPU_MEMORY_MARGIN_GB
     assert not capacity.has_npu
+
+
+def test_fake_labels_the_embedder_so_chat_menus_hide_it():
+    from fastapi.testclient import TestClient
+
+    from gaia.llm.lemonade_client import (
+        DEFAULT_EMBEDDING_MODEL,
+        DEFAULT_MODEL_NAME,
+        is_llm_model_entry,
+    )
+    from gaia.testing import dev_backend
+
+    client = TestClient(
+        dev_backend.build_fake_llm(
+            [{"text": "x"}], DEFAULT_MODEL_NAME, downloaded=[DEFAULT_EMBEDDING_MODEL]
+        )
+    )
+    rows = {m["id"]: m for m in client.get("/api/v1/models").json()["data"]}
+
+    assert not is_llm_model_entry(rows[DEFAULT_EMBEDDING_MODEL])
+    assert is_llm_model_entry(rows[DEFAULT_MODEL_NAME])
