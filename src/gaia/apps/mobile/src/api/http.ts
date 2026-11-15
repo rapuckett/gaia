@@ -658,6 +658,10 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             return getJson<SessionEnvironment>(sessionEnvironmentPath(sessionId), options?.signal);
         },
 
+        addEnvironmentFolder(sessionId, path, options) {
+            return postJson<SessionEnvironment>(sessionEnvironmentPath(sessionId, 'folders'), { path }, options?.signal);
+        },
+
         removeEnvironmentFolder(sessionId, path, options) {
             return postJson<SessionEnvironment>(sessionEnvironmentPath(sessionId, 'folderRemove'), { path }, options?.signal);
         },

@@ -482,6 +482,8 @@ export interface GaiaClient {
     getCapabilities(sessionId: string, options?: RequestOptions): Promise<AgentCapabilities>;
     /** The folders this chat may touch and whether its web tools are on. */
     getEnvironment(sessionId: string, options?: RequestOptions): Promise<SessionEnvironment>;
+    /** Gives the chat a folder on the PC; rejects with 400 when the PC refuses it (too broad, missing). */
+    addEnvironmentFolder(sessionId: string, path: string, options?: RequestOptions): Promise<SessionEnvironment>;
     /** Takes a folder or file away from the chat; rejects with 409 when the PC refuses. */
     removeEnvironmentFolder(sessionId: string, path: string, options?: RequestOptions): Promise<SessionEnvironment>;
     /** Turns the chat's web tools on or off; rejects with 409 or 502 when the PC can't apply it. */
