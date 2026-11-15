@@ -47,8 +47,11 @@ import type {
     LemonadeFound,
     LemonadeTarget,
     LocalModelStatus,
+    MemoryActivityDay,
     MemorySettings,
     MemoryStats,
+    MemoryToolStat,
+    MemoryUpcomingItem,
     MessageList,
     ModelNeed,
     ModelServerInfo,
@@ -91,6 +94,8 @@ import {
     followupOutcomePath,
     MESSAGE_PAGE_SIZE,
     QUEUED_IDLE_MS,
+    memoryActivityPath,
+    memoryUpcomingPath,
     schedulePath,
     scheduleResultsPath,
     scheduleRunPath,
@@ -555,6 +560,18 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         listScheduleResults(name, limit, options) {
             return getJson<ScheduleResults>(scheduleResultsPath(name, limit), options?.signal);
+        },
+
+        getMemoryActivity(days, options) {
+            return getJson<MemoryActivityDay[]>(memoryActivityPath(days), options?.signal);
+        },
+
+        getMemoryTools(options) {
+            return getJson<MemoryToolStat[]>(ENDPOINTS.memoryTools, options?.signal);
+        },
+
+        getMemoryUpcoming(days, options) {
+            return getJson<MemoryUpcomingItem[]>(memoryUpcomingPath(days), options?.signal);
         },
 
         getMemoryStats(options) {
