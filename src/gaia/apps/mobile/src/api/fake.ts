@@ -10,6 +10,7 @@ import type {
     AgentMcpServer,
     ChatPerformance,
     ConnectorListEntry,
+    DisconnectOutcome,
     ContextUsageResult,
     ConsolidateMemoryResult,
     CreateSessionRequest,
@@ -155,6 +156,8 @@ export interface FakeClientData {
     linkPreview?: (url: string) => LinkPreview;
     resources?: ResourceUsage;
     start?: StartScreen;
+    /** What a disconnect reports about the provider-side revoke; `{}` when unset. */
+    disconnectOutcome?: DisconnectOutcome | null;
     /** What watchSessionEvents streams before it ends; the real stream never ends on its own. */
     sessionEvents?: unknown[];
     /** Most chats a search returns before it says `truncated`. */
@@ -675,6 +678,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             data.connectors = (data.connectors ?? []).map((c) =>
                 c.id === connectorId && !('error' in c) ? { ...c, configured: false, enabled: true, account_id: null } : c,
             );
+            return data.disconnectOutcome ?? {};
         },
         async listAgents() {
             return { agents: [...(data.agents ?? [])] };

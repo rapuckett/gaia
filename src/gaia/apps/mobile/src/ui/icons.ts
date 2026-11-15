@@ -63,6 +63,7 @@ export {
   Smartphone,
   Sparkles,
   Square,
+  Terminal,
   Trash2,
   TrendingUp,
   TriangleAlert,
