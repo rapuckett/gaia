@@ -52,8 +52,24 @@ import type { DiscordStatus } from '@webui/services/messagingApi';
 import type { AgentCapabilities, SessionEnvironment } from '@webui/types/sessionPanel';
 import type { DiscoveryFinding, Goal, GoalStats, InferenceInsight, KnowledgeCreateBody, KnowledgeListParams, KnowledgeSaveResult, KnowledgeUpdateBody, MemoryCleared, MemoryReinitializeResult, MemorySettings, MemorySettingsUpdateResponse, Priority as GoalPriority } from '@webui/services/memoryApi';
 import type { SpeechModel, SpeechSettings } from '@webui/services/speechApi';
-import type { ActivityDay, ConvSession, ConvTurn, EntityInfo, KnowledgeEntry, TemporalItem, ToolStat } from '@webui/utils/memoryFormat.core';
-import type { CreateSessionRequest, DocumentListResponse, DocumentResponse, ModelServerInfo, ProviderSummaryList, SessionSearchResponse, ToolConfirmRequest, UserInputRequest as ApiUserInputRequest, FilePreviewResponse } from '@webui/types/api.gen';
+import type { AboutYouItem, ActivityDay, ConvSession, ConvTurn, EntityInfo, KnowledgeEntry, TemporalItem, ToolStat } from '@webui/utils/memoryFormat.core';
+import type {
+    AgentUiHealthResponse,
+    CancelStreamResponse,
+    ConfirmToolResponse,
+    CreateSessionRequest,
+    DocumentListResponse,
+    DocumentResponse,
+    FilePreviewResponse,
+    MessagesDeleteResponse,
+    ModelServerInfo,
+    ProviderSummaryList,
+    SessionDeleteResponse,
+    SessionSearchResponse,
+    ToolConfirmRequest,
+    UserInputRequest as ApiUserInputRequest,
+    UserInputResponse,
+} from '@webui/types/api.gen';
 
 export type { AgentInstallStatus } from '@webui/services/api';
 export type {
@@ -296,38 +312,12 @@ export interface SessionUpdate {
     title_is_custom?: boolean;
 }
 
-export interface HealthResponse {
-    status: string;
-    service: string;
-    stats?: Record<string, unknown>;
-}
-
-// These routes declare no response model, so api.gen.ts has none; the shapes are what they return.
-export interface CancelChatResult {
-    status: string;
-    cancelled: boolean;
-}
-
-export interface ConfirmToolResult {
-    status: string;
-    approved: boolean;
-    /** What "always allow" granted, or null. */
-    granted: string | null;
-}
-
-export interface DeleteMessagesResult {
-    deleted: boolean;
-    count: number;
-}
-
-export interface DeleteSessionResult {
-    deleted: boolean;
-}
-
-export interface UserInputResult {
-    status: string;
-    request_id: string;
-}
+export type HealthResponse = AgentUiHealthResponse;
+export type CancelChatResult = CancelStreamResponse;
+export type ConfirmToolResult = ConfirmToolResponse;
+export type DeleteMessagesResult = MessagesDeleteResponse;
+export type DeleteSessionResult = SessionDeleteResponse;
+export type UserInputResult = UserInputResponse;
 
 export interface DeleteDocumentResult {
     deleted: boolean;
