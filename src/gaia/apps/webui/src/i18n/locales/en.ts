@@ -465,7 +465,6 @@ export const enMessages = {
     'code.copy': 'Copy',
     'citation.open': 'Open {name}',
     'citation.openPage': 'Open page {page}',
-    'citation.openFailed': 'Couldn\'t open {name}: {error}',
     'code.copied': 'Copied',
     'code.expand': 'Expand ({size})',
     'code.collapse': 'Collapse',

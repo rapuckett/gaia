@@ -465,7 +465,6 @@ const messages: Messages = {
     'code.copy': 'نسخ',
     'citation.open': 'فتح {name}',
     'citation.openPage': 'فتح الصفحة {page}',
-    'citation.openFailed': 'تعذّر فتح {name}: {error}',
     'code.copied': 'تم النسخ',
     'code.expand': 'توسيع ({size})',
     'code.collapse': 'طيّ',
