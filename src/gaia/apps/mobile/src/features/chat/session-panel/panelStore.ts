@@ -22,10 +22,10 @@ interface PanelState {
     /** Which numbers Context & performance shows under the hood. */
     contextScope: 'turn' | 'chat';
     setContextScope(scope: 'turn' | 'chat'): void;
-    /** The Environment confirmation showing: removing a folder, or turning on full access. */
     /** Dev gallery only: where the Changes section starts, so its confirm, conflict and review states can be shot. */
     changesSeed: { phase: 'confirm' | 'conflict'; message?: string } | { review: true } | null;
     setChangesSeed(seed: PanelState['changesSeed']): void;
+    /** The Environment confirmation showing: removing a folder, or turning on full access. */
     envConfirm: { kind: 'remove'; path: string } | { kind: 'full' } | null;
     setEnvConfirm(confirm: PanelState['envConfirm']): void;
 }
