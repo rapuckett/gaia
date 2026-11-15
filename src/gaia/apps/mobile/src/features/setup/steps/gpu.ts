@@ -21,7 +21,7 @@ export function unlockNames(preset: GpuMemoryPreset, names: Record<string, strin
 }
 
 /** Catalog id to model name. */
-export function modelNames(catalog: ReadonlyArray<{ id: string; name: string }> | undefined): Record<string, string> {
+export function modelNames(catalog: readonly { id: string; name: string }[] | undefined): Record<string, string> {
     const out: Record<string, string> = {};
     for (const e of catalog ?? []) out[e.id] = e.name;
     return out;
