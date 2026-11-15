@@ -46,6 +46,7 @@ export const ENDPOINTS = {
     session: '/api/sessions/{session_id}',
     sessionCapabilities: '/api/sessions/{session_id}/capabilities',
     sessionDocument: '/api/sessions/{session_id}/documents/{doc_id}',
+    sessionDocuments: '/api/sessions/{session_id}/documents',
     sessionEvents: '/api/sessions/events',
     sessionMessage: '/api/sessions/{session_id}/messages/{message_id}',
     sessionMessages: '/api/sessions/{session_id}/messages',
@@ -69,6 +70,8 @@ export const ENDPOINTS = {
     setupStatus: '/api/setup/status',
     setupVisionModel: '/api/setup/vision-model',
     skills: '/api/skills',
+    skillsFeatured: '/api/skills/featured',
+    skillsLinkPreview: '/api/skills/link/preview',
     chatSend: '/api/chat/send',
     chatAttach: '/api/chat/attach',
     chatCancel: '/api/chat/cancel',
@@ -94,6 +97,7 @@ export const ENDPOINTS = {
     documentFile: '/api/documents/{doc_id}/file',
     documentReindex: '/api/documents/{doc_id}/reindex',
     documentStatus: '/api/documents/{doc_id}/status',
+    documentUpload: '/api/documents/upload',
     documents: '/api/documents',
     filesUpload: '/api/files/upload',
     filesUploadMedia: '/api/files/upload-media',
@@ -199,6 +203,10 @@ export function sessionDocumentPath(sessionId: string, docId: string): string {
     return ENDPOINTS.sessionDocument
         .replace('{session_id}', encodeURIComponent(sessionId))
         .replace('{doc_id}', encodeURIComponent(docId));
+}
+
+export function sessionDocumentsPath(sessionId: string): string {
+    return ENDPOINTS.sessionDocuments.replace('{session_id}', encodeURIComponent(sessionId));
 }
 
 export function sessionCapabilitiesPath(sessionId: string): string {
