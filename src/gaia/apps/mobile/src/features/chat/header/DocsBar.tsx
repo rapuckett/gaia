@@ -4,12 +4,13 @@
 import { useState } from 'react';
 
 import { pluralKey } from '@webui/i18n/registry';
+import { indexLimitHit, PASSAGES_AT_ONCE, SEARCHED_AT_ONCE } from '@webui/utils/docsLimits.core';
 import { middleTruncate } from '@webui/utils/format';
 
 import type { DocumentListResponse } from '@/api/client.types';
 import { useDetachDocument, useDocuments, useSession } from '@/data';
 import { useT } from '@/i18n/useT';
-import { Icon, IconButton, Ltr, Pressable, Row, Stack, Surface, Text } from '@/ui';
+import { Icon, IconButton, Ltr, Notice, Pressable, Row, Stack, Surface, Text } from '@/ui';
 import { CircleAlert, CircleCheck, FileText, X } from '@/ui/icons';
 
 import { failureReasonWith } from './failureText';
@@ -42,6 +43,12 @@ export function DocsBar({ sessionId, onFailed, onManage }: { sessionId: string; 
             .filter(Boolean)
             .join(' · '),
     );
+    const byId = new Map(docs.map((d) => [d.id, d]));
+    const loadOrder = (session.data?.document_ids ?? []).flatMap((id) => {
+        const d = byId.get(id);
+        return d && d.indexing_status !== 'failed' ? [d] : [];
+    });
+    const limitHit = indexLimitHit(loadOrder);
     const visible = expanded ? docs : docs.slice(0, COLLAPSED_PILLS);
     const hidden = docs.length - COLLAPSED_PILLS;
 
@@ -109,6 +116,17 @@ export function DocsBar({ sessionId, onFailed, onManage }: { sessionId: string; 
                     </Pressable>
                 ) : null}
             </Row>
+            {limitHit ? (
+                <Notice
+                    tone="warning"
+                    testID="docs-past-limit"
+                    message={
+                        limitHit === 'size'
+                            ? t('docsBar.pastSize', { passages: PASSAGES_AT_ONCE.toLocaleString(), n: readable })
+                            : t('docsBar.pastCap', { limit: SEARCHED_AT_ONCE, n: readable })
+                    }
+                />
+            ) : null}
         </Stack>
     );
 }
