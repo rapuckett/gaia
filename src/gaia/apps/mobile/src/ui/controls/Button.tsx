@@ -8,6 +8,7 @@ import { Icon } from './Icon';
 import { Pressable } from './Pressable';
 import { Spinner } from './Spinner';
 import { Row } from '../layout/layout';
+import { useLargeText } from '../theme/a11y';
 import { useTheme } from '../theme/ThemeProvider';
 import type { Tone } from '../theme/tone';
 
@@ -43,6 +44,7 @@ export function Button({
     testID,
 }: ButtonProps) {
     const { colors, radius } = useTheme();
+    const largeText = useLargeText();
     const look: Record<NonNullable<ButtonProps['variant']>, { bg: string; border: string; tone: Tone }> = {
         primary: { bg: colors.accentFill, border: 'transparent', tone: 'onAccent' },
         secondary: { bg: colors.bgCard, border: colors.borderLight, tone: 'primary' },
@@ -77,7 +79,7 @@ export function Button({
                         ) : icon ? (
                             <Icon icon={icon} size="sm" tone={v.tone} />
                         ) : null}
-                        {wrap ? (
+                        {wrap || largeText ? (
                             <View style={{ flexShrink: 1, paddingVertical: 10 }}>
                                 <Text role="ui" weight="medium" tone={v.tone} align="center">
                                     {label}

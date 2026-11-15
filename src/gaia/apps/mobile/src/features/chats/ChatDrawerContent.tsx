@@ -24,7 +24,6 @@ import {
     Screen,
     SectionHeader,
     SectionList,
-    Spacer,
     Stack,
     StatusDot,
     Text,
@@ -155,7 +154,7 @@ export function ChatDrawerContent({ activeId, onSelect, onClose, onNewChat, onPc
                 <TextField
                     value={text}
                     onChangeText={setText}
-                    placeholder={t('sidebar.search')}
+                    placeholder={t.bare('sidebar.search')}
                     accessibilityLabel={t('sidebar.search')}
                     returnKeyType="search"
                 />
@@ -228,8 +227,9 @@ function Header({ onClose, onNewChat, onPcs }: { onClose: () => void; onNewChat?
     return (
         <Stack paddingX="lg" paddingY="sm">
             <Row gap="sm" accessibilityRole="header">
-                <Text role="title" weight="semibold">{APP_NAME}</Text>
-                <Spacer />
+                <Stack flex={1}>
+                    <Text role="title" weight="semibold">{APP_NAME}</Text>
+                </Stack>
                 {onPcs ? <IconButton icon={Monitor} label={t('mobileApp.pairing.pcs.title')} onPress={onPcs} testID="pcs-drawer-button" /> : null}
                 {onNewChat ? <IconButton icon={Plus} label={t('sidebar.newChat')} onPress={onNewChat} /> : null}
                 <IconButton icon={X} label={t('sidebar.collapse')} onPress={onClose} />

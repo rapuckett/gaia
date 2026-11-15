@@ -10,7 +10,9 @@ import { Stack } from '@/ui';
 import { AudioCard } from './AudioCard';
 import { CardErrorBoundary } from './CardErrorBoundary';
 import { CalculatorCard } from './CalculatorCard';
+import { ConnectAccountCard } from './ConnectAccountCard';
 import { DiffCard } from './DiffCard';
+import { EmailPreScanCard } from './EmailPreScanCard';
 import { GuideCard } from './GuideCard';
 import { ImageCard } from './ImageCard';
 import { KeyValueCard } from './KeyValueCard';
@@ -22,7 +24,9 @@ import { UnsupportedCard } from './UnsupportedCard';
 const CARD_REGISTRY: Record<string, ComponentType<{ data: unknown }>> = {
     audio: AudioCard,
     calculator: CalculatorCard,
+    connect_account: ConnectAccountCard,
     diff: DiffCard,
+    email_pre_scan: EmailPreScanCard,
     guide: GuideCard,
     image: ImageCard,
     key_value: KeyValueCard,
