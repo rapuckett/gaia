@@ -48,7 +48,7 @@ export interface PermissionPromptProps {
 // Width where the buttons may sit side by side.
 const SIDE_BY_SIDE_MIN_WIDTH = 600;
 
-// The body scrolls inside this share of the window, less the keyboard, so Allow, Deny and the composer stay on screen.
+// The body scrolls inside this share of the window, so Allow, Deny and the composer stay on screen.
 const BODY_HEIGHT_SHARE = 0.35;
 const MIN_BODY_HEIGHT = 96;
 
@@ -278,7 +278,8 @@ export function PermissionPrompt({
 }: PermissionPromptProps) {
     const t = useT();
     const { width, height } = useWindowDimensions();
-    const keyboardHeight = useKeyboardState((k) => (k.isVisible ? k.height : 0));
+    // While the person types a queued message, only the question and its answers fit above the keyboard.
+    const typing = useKeyboardState((k) => k.isVisible);
     const reduced = useReducedMotion();
     const left = useCountdown(prompt.expiresAt, prompt.timeoutSeconds);
     const expired = left !== null && left <= 0;
@@ -307,7 +308,7 @@ export function PermissionPrompt({
         prompt.tool === PROJECT_TRUST_TOOL ? 'prompt.trust.allow' : prompt.tool === PATH_ACCESS_TOOL ? 'prompt.allowForChat' : 'prompt.allowOnce',
     );
     const wide = width >= SIDE_BY_SIDE_MIN_WIDTH;
-    const bodyMax = Math.max(MIN_BODY_HEIGHT, Math.round(height * BODY_HEIGHT_SHARE - keyboardHeight));
+    const bodyMax = Math.max(MIN_BODY_HEIGHT, Math.round(height * BODY_HEIGHT_SHARE));
 
     const buttons = (
         <>
@@ -350,20 +351,22 @@ export function PermissionPrompt({
                             </Text>
                         </Stack>
                     </Row>
-                    <ScrollBox maxHeight={bodyMax} testID="perm-details-scroll">
-                        <Stack gap="md">
-                            <CallDetails prompt={prompt} />
-                            {fullAccessPending ? <Notice tone="info" message={t('perm.fullPendingNote')} testID="perm-full-pending" /> : null}
-                            {suggestAlways && !expired ? (
-                                <Text role="caption" tone="secondary">
-                                    {t.compose(
-                                        (say) =>
-                                            `${say(pluralKey('prompt.repeated', repeats), { n: repeats })} ${say('prompt.alwaysHint', { scope: scopeIn(say) })}`,
-                                    )}
-                                </Text>
-                            ) : null}
-                        </Stack>
-                    </ScrollBox>
+                    {typing ? null : (
+                        <ScrollBox maxHeight={bodyMax} testID="perm-details-scroll">
+                            <Stack gap="md">
+                                <CallDetails prompt={prompt} />
+                                {fullAccessPending ? <Notice tone="info" message={t('perm.fullPendingNote')} testID="perm-full-pending" /> : null}
+                                {suggestAlways && !expired ? (
+                                    <Text role="caption" tone="secondary">
+                                        {t.compose(
+                                            (say) =>
+                                                `${say(pluralKey('prompt.repeated', repeats), { n: repeats })} ${say('prompt.alwaysHint', { scope: scopeIn(say) })}`,
+                                        )}
+                                    </Text>
+                                ) : null}
+                            </Stack>
+                        </ScrollBox>
+                    )}
                     {expired ? (
                         <Text role="label" tone="secondary" testID="perm-expired">
                             {t('prompt.expired')}
@@ -377,7 +380,7 @@ export function PermissionPrompt({
                             ) : (
                                 <Stack gap="sm">{buttons}</Stack>
                             )}
-                            {left !== null ? (
+                            {left !== null && !typing ? (
                                 <Text role="caption" tone="muted" testID="perm-timer">
                                     {isolate(formatCountdown(left), 'ltr')} {'·'} {t('prompt.timer')}
                                 </Text>
