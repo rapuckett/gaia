@@ -2908,5 +2908,5 @@ def test_local_only_names_a_next_step_when_the_model_list_errors(
     assert resp.status_code == 503
     detail = resp.json()["detail"]
     assert "model list" in detail
-    assert "Check that it is running" in detail
+    assert "Check that the model server is running" in detail
     assert db.get_setting("custom_model") is None

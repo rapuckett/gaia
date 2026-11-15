@@ -215,7 +215,9 @@ def _unreadable(what: str, endpoint: str, status: int) -> str:
     advice = (
         APP_RESTART_HINT if gaia_runs_lemonade() else describe_start_hint().instruction
     )
-    return f"GAIA couldn't read {what} from the model server. Check that it is running. {advice}"
+    return (
+        f"GAIA couldn't read {what}. Check that the model server is running. {advice}"
+    )
 
 
 def _cloud_entry(provider: str) -> Optional[Dict[str, Any]]:

@@ -742,9 +742,7 @@ def test_corrupt_config_is_reported_not_a_500(client, lemonade):
 
 def test_active_survives_a_lemonade_error(client, lemonade, monkeypatch):
     def broken(*_a, **_k):
-        raise providers.ProviderError(
-            "GAIA couldn't read the model list from the model server.", 502
-        )
+        raise providers.ProviderError("GAIA couldn't read the model list.", 502)
 
     monkeypatch.setattr(providers, "_list_models", broken)
     resp = client.get("/api/providers/active")
