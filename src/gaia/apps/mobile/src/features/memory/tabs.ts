@@ -20,6 +20,8 @@ export interface MemoryPaneProps {
     memoryEnabled: boolean | undefined;
     /** Opens the Advanced tab, where memory is switched on. */
     onOpenAdvanced: () => void;
+    /** Opens a chat; absent where the screen can't navigate (the dev gallery). */
+    onOpenChat?: (sessionId: string) => void;
 }
 
 export interface MemoryTab {
