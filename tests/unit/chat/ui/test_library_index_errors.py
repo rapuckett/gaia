@@ -32,7 +32,7 @@ def home(tmp_path, monkeypatch):
 def client(home):
     from gaia.ui.server import create_app
 
-    return TestClient(create_app(db_path=":memory:"))
+    return TestClient(create_app(db_path=":memory:"), client=("127.0.0.1", 50000))
 
 
 def _upload(client, path):

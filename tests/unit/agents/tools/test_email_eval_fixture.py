@@ -228,7 +228,7 @@ def test_eval_mailbox_route(monkeypatch):
 
     from gaia.ui.server import create_app
 
-    client = TestClient(create_app(db_path=":memory:"))
+    client = TestClient(create_app(db_path=":memory:"), client=("127.0.0.1", 50000))
     monkeypatch.delenv(fixture.EVAL_MAILBOX_ENV, raising=False)
     assert client.get("/api/connectors/eval-mailbox").status_code == 403
 

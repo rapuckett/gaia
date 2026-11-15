@@ -21,6 +21,7 @@ import { FlagshipAgentNotice } from './components/FlagshipAgentNotice';
 import { useChatStore } from './stores/chatStore';
 import { useModelStore } from './stores/modelStore';
 import { useNotificationStore } from './stores/notificationStore';
+import { handleDeviceEvent, useDeviceStore } from './stores/deviceStore';
 import { useScheduleStore } from './stores/scheduleStore';
 import { useGoalHealthStore } from './stores/goalHealthStore';
 import { useTrayBridge } from './hooks/useTrayBridge';
@@ -484,6 +485,9 @@ function App() {
         };
     }, [setCurrentSession, setMessages]);
 
+    // Whether paired devices exist for this window: their section and indicator show only on the PC with pairing on.
+    useEffect(() => { void useDeviceStore.getState().refresh(); }, []);
+
     // Another client (MCP bridge) can ask this window to show a chat.
     useEffect(() => {
         let es: EventSource | null = null;
@@ -502,6 +506,7 @@ function App() {
                     log.api.warn('Malformed session event', err);
                     return;
                 }
+                if (handleDeviceEvent(data)) return;
                 if (data.type === 'set_active_session' && data.session_id
                     && data.session_id !== useChatStore.getState().currentSessionId) {
                     setCurrentSession(data.session_id);

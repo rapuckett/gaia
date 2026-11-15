@@ -457,6 +457,62 @@ class AttachDocumentRequest(BaseModel):
     document_id: str
 ```
 
+### Paired devices
+
+```python
+class DevicePairingOffer(BaseModel):
+    """POST /api/devices/pairing: what the PC's QR code carries, as compact JSON."""
+    v: int              # format version, 1
+    name: str           # the PC's name, to show on the device
+    pc_id: str          # stays the same for this PC, across resets
+    origins: List[str]  # https://<home-network IPv4>:<port>, one per address
+    pin: str            # SHA-256 of the listener's certificate (DER), hex
+    invite: str         # the single-use invitation
+    exp: int            # when the invitation dies, Unix seconds
+
+class DevicePairRequest(BaseModel):
+    """POST /api/devices/pair"""
+    invitation: str
+    device_name: str    # control and bidi characters removed, 64 at most
+    platform: Literal["ios", "ipados", "android"]
+
+class DevicePairResponse(BaseModel):
+    device_id: str
+    token: str          # returned here only; GAIA keeps its SHA-256
+    pc_name: str
+    pc_id: str
+    status: Literal["pending", "allowed"]
+    expires_at: str     # when a pending device stops working
+
+class PairedDevice(BaseModel):
+    id: str
+    name: str
+    platform: Literal["ios", "ipados", "android"]
+    status: Literal["pending", "allowed"]
+    created_at: str
+    last_seen_at: Optional[str] = None
+    expires_at: Optional[str] = None  # while pending
+
+class PairedDeviceList(BaseModel):
+    devices: List[PairedDevice]
+
+class FailedRedemption(BaseModel):
+    at: str
+    address: str        # the device's home-network IPv4 address
+    reason: Literal["expired", "used", "wrong", "closed", "rate_limited"]
+
+class DeviceAccessStatus(BaseModel):
+    listening: bool
+    port: int
+    error_code: Optional[Literal["port_in_use", "unsafe_folder", "certificate", "start_failed"]] = None
+    error_detail: Optional[str] = None
+    pairing_open: bool
+    pairing_expires_at: Optional[str] = None
+    idle_expiry_days: int
+    pending_expiry_minutes: int
+    failed_redemptions: List[FailedRedemption]  # the last 20
+```
+
 ---
 
 ## REST API Endpoints
@@ -1366,6 +1422,11 @@ Deleting a chat deletes its copies.
     (index it with `index-folder`); 400 for a file type GAIA doesn't index; 404
     for a missing file inside an allowed root; 403 for any path outside the
     allowed roots, whether or not it exists.
+
+    Away from the PC (mobile access, or a paired device), the request names a
+    chat with the `session_id` query parameter, and the file must be in that
+    chat's folders and not hold credentials, as for [file reads](#files);
+    otherwise **403**.
   </Accordion>
 
   <Accordion title="DELETE /api/documents/{doc_id}">
@@ -1389,6 +1450,13 @@ Deleting a chat deletes its copies.
 </AccordionGroup>
 
 ### Files
+
+Away from the PC (mobile access, or a paired device), browse, search, preview and
+image reads name a chat with `session_id` and see only the folders and files
+that chat may touch, as its session panel lists them. GAIA's secret-file policy
+still applies inside them: keys, certificates, `.env` files and credential
+folders such as `~/.ssh` are refused (**403**), and so is anything outside the
+chat or a read that names no chat. The PC reads its home folder as before.
 
 <AccordionGroup>
   <Accordion title="POST /api/files/open">
@@ -1483,7 +1551,10 @@ Deleting a chat deletes its copies.
 
   <Accordion title="GET /api/files/browse">
     Browse filesystem contents. Returns entries under a directory with size,
-    mtime, and type metadata.
+    mtime, and type metadata. Away from the PC, `path` must be one of the
+    chat's folders or inside one, and with no `path` the listing opens the
+    chat's first folder; `quick_links` lists the chat's folders and
+    `parent_path` never leaves them.
   </Accordion>
 
   <Accordion title="GET /api/files/search">
@@ -1492,11 +1563,14 @@ Deleting a chat deletes its copies.
     `~/Desktop`, `~/OneDrive`, then the rest of the home directory. The walk is bounded: it
     stops at `max_results` matches, after 20,000 directory entries, or after
     about 10 seconds. `truncated: true` in the response means a bound cut the walk
-    short and more matches may exist.
+    short and more matches may exist. `folder` searches that one folder only.
+    Away from the PC, the walk covers the chat's folders alone and never
+    returns a file holding secrets.
   </Accordion>
 
   <Accordion title="GET /api/files/preview">
-    Return a preview (first N bytes / first N lines) of a text file.
+    Return a preview (first N bytes / first N lines) of a text file. `lines`
+    defaults to 50 and is at most 200, or 50 away from the PC.
   </Accordion>
 
   <Accordion title="GET /api/files/image">
@@ -1735,6 +1809,132 @@ Used to reach the UI from a phone.
   </Accordion>
 </AccordionGroup>
 
+### Paired devices
+
+A phone or tablet can pair with the PC once and then reach GAIA's API on the
+home network, over TLS with GAIA's own certificate, which the device pins. It is
+still in development: every route here answers **403** while `device_pairing`
+is off in `~/.gaia/config.json`, and nothing listens until the PC turns the
+listener on. No response is cached (`Cache-Control: no-store`). The invitation
+appears only in the response that opens a pairing window, and a token only in
+the response that pairs a device; neither the device list nor the status ever
+carries one.
+
+How a device pairs:
+
+1. The PC turns the listener on and opens a pairing window. It shows the
+   window's `DevicePairingOffer` as a QR code, in compact JSON. The window
+   closes after 10 minutes, or at the first pairing.
+2. The device connects to one of `origins` and, during the TLS handshake and
+   before it sends anything, checks that the SHA-256 of the certificate it was
+   served equals `pin`. Nothing else is checked: no CA, hostname or date. A
+   mismatch fails hard, and redirects are refused.
+3. The device redeems `invite` with `POST /api/devices/pair` and keeps the
+   token in the Keychain (a `…ThisDeviceOnly` item) or the Android Keystore,
+   out of backups.
+4. The device is pending: every request is a **403** (`code: device_pending`)
+   until someone allows it on the PC. One not allowed within 10 minutes stops
+   working, and an allowed device unused for 90 days is unpaired.
+
+On the listener a device sends `Authorization: Bearer <token>` with every
+request and `X-Gaia-UI: 1` with every write. Nothing else authenticates there:
+not a cookie, a query parameter or the mobile access token. Only home-network
+IPv4 addresses are answered, paths outside `/api/` and `/v1/` are a **404**, a
+request body over 8 MB is a **413** (uploads keep their own limits), an unknown
+or unpaired token is a **401** (`code: device_unknown`), and a device token sent
+over plain http to the main server is a **401** too. What a device may call is
+in [Who may call a route](#who-may-call-a-route).
+
+A file the device opens, such as a cited document
+(`GET /api/documents/{doc_id}/file`), comes over the listener like any other
+call, with the token. The device fetches it itself and shows or shares it; a
+browser it handed the link to couldn't send the token, so it would get a
+**401**.
+
+Two events reach the PC's own windows on `GET /api/sessions/events`, and no one
+else's:
+
+- `{"type": "device_paired", "device": PairedDevice, "actions": ["review", "deny"]}`
+  when a device pairs. Review opens the device in the list; Deny unpairs it.
+  Allowing happens only in the list.
+- `{"type": "security_alert", "kind": "pairing_locked_out", "address", "at"}`
+  when an address fails to pair 5 times in a minute and is locked out for 5
+  minutes.
+
+<AccordionGroup>
+  <Accordion title="GET /api/devices/status">
+    `DeviceAccessStatus`: whether GAIA is listening and on which port, why it
+    isn't when it failed (`error_code` `port_in_use`, `unsafe_folder`,
+    `certificate` or `start_failed`, with `error_detail`), whether a pairing
+    window is open and when it closes, the expiry settings, and the last 20
+    failed redemptions with their `reason`: `expired` (the code timed out),
+    `used` (it was already redeemed, or the window closed after the first
+    pairing), `wrong` (it matches no open window), `closed` (no window is
+    open) or `rate_limited`. PC-only.
+  </Accordion>
+
+  <Accordion title="GET /api/devices">
+    `PairedDeviceList`: every paired device, pending ones with `expires_at`.
+    PC-only.
+  </Accordion>
+
+  <Accordion title="POST /api/devices/listener">
+    Start listening for devices, making the key and certificate the first time.
+    GAIA listens on IPv4 on port 4243 unless `GAIA_DEVICE_PORT` names another,
+    and starts listening again after a restart until the PC turns it off.
+    Returns the status. **409** with `detail` `{"code", "message"}` when it
+    can't: `port_in_use`, `unsafe_folder` (someone else can reach
+    `~/.gaia/devices`; use Reset pairing), `certificate` or `start_failed`.
+    PC-only.
+  </Accordion>
+
+  <Accordion title="DELETE /api/devices/listener">
+    Stop listening, and stay off after a restart. Pairing closes. PC-only.
+  </Accordion>
+
+  <Accordion title="POST /api/devices/pairing">
+    Open the pairing window: a `DevicePairingOffer` with a new invitation,
+    replacing any open one. **409** with `code` `listener_off` while the
+    listener is off, or `no_home_network` when the PC has no home-network
+    address. PC-only.
+  </Accordion>
+
+  <Accordion title="DELETE /api/devices/pairing">
+    Close the pairing window; its invitation stops working. Returns the status.
+    PC-only.
+  </Accordion>
+
+  <Accordion title="POST /api/devices/pairing/reset">
+    Reset pairing: a new key and so a new pin, and every device unpaired, which
+    must pair again. The PC keeps its `pc_id`. It works when the listener
+    refuses an unsafe folder, since it is the remedy, and leaves the listener on
+    or off as it was. PC-only.
+  </Accordion>
+
+  <Accordion title="POST /api/devices/pair">
+    Redeem an invitation: `DevicePairRequest` in, `DevicePairResponse` out, with
+    the device pending. Served only on the device listener (**404** anywhere
+    else) and the one route there without a token. Every bad invitation gets
+    the same **403**; only the PC sees why. **429** with `Retry-After` while the
+    address is locked out; **422** for a name with nothing printable left.
+  </Accordion>
+
+  <Accordion title="DELETE /api/devices/me">
+    A device unpairs itself with its own token, pending or allowed: **204**.
+  </Accordion>
+
+  <Accordion title="POST /api/devices/{device_id}/allow">
+    Let a pending device in; returns its `PairedDevice` and records who allowed
+    it in the audit log. **404** for an unknown id, or a pending device whose 10
+    minutes ran out. PC-only.
+  </Accordion>
+
+  <Accordion title="DELETE /api/devices/{device_id}">
+    Unpair a device: **204**. Its next request is a **401** and its open
+    streams end. **404** for an unknown id. PC-only.
+  </Accordion>
+</AccordionGroup>
+
 ### Chat (advanced)
 
 <AccordionGroup>
@@ -1828,7 +2028,7 @@ Used to reach the UI from a phone.
     Scripts a user who declines the shell commands in `decline_commands` and
     answers no questions, so `gaia eval agent` can score what the agent does
     after a "no". An empty list turns it off. The runner sets it from a
-    scenario's `setup.decline_commands` and clears it afterwards.
+    scenario's `setup.decline_commands` and clears it afterwards. PC-only.
   </Accordion>
 </AccordionGroup>
 
@@ -1855,7 +2055,9 @@ Used to reach the UI from a phone.
   <Accordion title="GET /api/documents/{doc_id}/file">
     The document's original file, served inline so the browser can show it.
     A citation link opens a PDF at its page with `#page=N`. Only files in the
-    document library are served; a file deleted from disk returns 404.
+    document library are served; a file deleted from disk returns 404. Away
+    from the PC, a file holding credentials is a **403**, however it got into
+    the library.
   </Accordion>
 
   <Accordion title="POST /api/documents/{doc_id}/cancel">
@@ -1869,7 +2071,9 @@ Used to reach the UI from a phone.
     `skipped_images`: images, which GAIA reads only when each is added on its
     own. A file that fails, or yields no text, gets a `failed` library row with
     its `last_error`, so it can be retried with `reindex`; it is not in
-    `documents`.
+    `documents`. Away from the PC, the folder must be in the chat named by
+    `session_id` (else **403**), and files holding credentials are skipped and
+    counted in `skipped`.
   </Accordion>
 
   <Accordion title="POST /api/documents/{doc_id}/reindex">
@@ -2245,13 +2449,13 @@ The Memory endpoints expose the agent's persistent knowledge system. See the [Me
   <Accordion title="POST /api/memory/admin/clear">
     **Eval-only**, gated by `GAIA_MEMORY_ADMIN=1` (403 otherwise). Wipes
     memory for a scenario reset — `scope` is `all` / `knowledge` /
-    `conversations`.
+    `conversations`. PC-only, as every eval route is.
   </Accordion>
 
   <Accordion title="POST /api/memory/admin/seed">
     **Eval-only**, gated by `GAIA_MEMORY_ADMIN=1`. Bulk-inserts knowledge
     items verbatim, bypassing dedup, to plant a known state for stress
-    scenarios.
+    scenarios. PC-only.
   </Accordion>
 </AccordionGroup>
 
@@ -2279,7 +2483,7 @@ OAuth and MCP-server connections for the Settings page and per-agent grants
   <Accordion title="GET /api/connectors/eval-mailbox">
     **Eval-only**, gated by `GAIA_EVAL_MAILBOX` (403 otherwise). Reports the
     offline fixture mailbox the `gaia_email` scenarios read: its path, whether
-    the file exists, and whether it is attached.
+    the file exists, and whether it is attached. PC-only.
   </Accordion>
 
   <Accordion title="POST /api/connectors/eval-mailbox">
@@ -2287,11 +2491,11 @@ OAuth and MCP-server connections for the Settings page and per-agent grants
     `{"attached": false}` makes the mail tools answer as if no mailbox were
     connected, for sessions that start reading mail afterwards; `true` restores
     the fixture. The eval runner calls it from each scenario's
-    `setup.mailbox_fixture`.
+    `setup.mailbox_fixture`. PC-only.
   </Accordion>
 
   <Accordion title="GET /api/connectors/_debug">
-    Diagnostics dump, gated by `GAIA_DEBUG=1` (404 otherwise).
+    Diagnostics dump, gated by `GAIA_DEBUG=1` (404 otherwise). PC-only.
   </Accordion>
 
   <Accordion title="GET /api/connectors/{connector_id}">
@@ -2352,7 +2556,7 @@ OAuth and MCP-server connections for the Settings page and per-agent grants
   <Accordion title="PUT /api/connectors/{connector_id}/grants/{agent_id}">
     Write the per-agent grant ledger — the scope ceiling an activation may
     request. Rejects an id the catalog doesn't publish (404) or scopes
-    outside the connector's ceiling (400).
+    outside the connector's ceiling (400). PC-only (**403** from mobile access, a paired device or another computer).
   </Accordion>
 
   <Accordion title="DELETE /api/connectors/{connector_id}/grants/{agent_id}">
@@ -2362,13 +2566,13 @@ OAuth and MCP-server connections for the Settings page and per-agent grants
   <Accordion title="PUT /api/connectors/{connector_id}/activations/{agent_id}">
     Activate `agent_id` for `connector_id` (`mcp_server` only — OAuth
     connectors 400). Auto-grants when no grant exists and the body supplies
-    scopes; 400 if it doesn't.
+    scopes; 400 if it doesn't. PC-only, like the grant.
   </Accordion>
 
   <Accordion title="DELETE /api/connectors/{connector_id}/activations/{agent_id}">
     Deactivate `agent_id` for `connector_id`. Idempotent, and non-destructive
     — the grant is preserved so re-activating is one call; delete the grant
-    separately to wipe it.
+    separately to wipe it. PC-only, like activating.
   </Accordion>
 </AccordionGroup>
 
@@ -3032,7 +3236,7 @@ credential store (the slot the TUI uses). A key is never echoed back or logged.
   <Accordion title="DELETE /api/providers/{provider}/key">
     Clear the key from Lemonade and from the OS credential store. Returns
     `{"removed": bool}`. On the user's own Lemonade only GAIA's stored copy is
-    removed; the server keeps its key.
+    removed; the server keeps its key. PC-only (**403** from mobile access, a paired device or another computer).
   </Accordion>
 
   <Accordion title="POST /api/providers/key-store/retry">
@@ -3346,9 +3550,11 @@ Every route is in one class, pinned by `tests/unit/chat/ui/test_route_access.py`
 
 | Class | Who | Routes |
 |---|---|---|
-| PC-only | `pc` | Tunnel start and stop, provider keys, the model-server target, logs, messaging, GPU memory apply and revert, the default full-access setting, connector configure and authorize, `POST /v1/connections/{provider}`, skill and agent installs, `POST /api/files/open`, `POST /api/setup/npu/memlock-fix`, the troubleshooting report |
+| PC-only | `pc` | Tunnel start and stop, provider keys, the model-server target, logs, messaging, GPU memory apply and revert, the default full-access setting, connector configure and authorize, an agent's connector grant and activations, deleting a provider key, `POST /v1/connections/{provider}`, skill and agent installs, `POST /api/files/open`, `POST /api/setup/npu/memlock-fix`, the troubleshooting report, the eval-only routes, `GET /api/connectors/_debug`, and every other [paired devices](#paired-devices) route |
 | Setup | `pc`, or an allowed device | Setup's changes (see [Setup](#setup)), `POST /api/system/download-model`, `PUT /api/system/model-server/backend` |
 | Not from a device | `pc`, `tunnel` | `GET /api/providers`, which can register a provider |
+| Pairing | a device on the listener, with no token | `POST /api/devices/pair` |
+| Unpairing itself | a device, pending or allowed | `DELETE /api/devices/me` |
 | Everything else | `pc`, `tunnel`, an allowed device | Chats, documents, memory, goals, schedules and the rest |
 
 A refused request is a **403** that says to do it on the PC.
