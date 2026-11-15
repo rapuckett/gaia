@@ -3564,6 +3564,7 @@ const messages: Messages = {
     'mobileApp.skills.yoursEmpty': 'لا شيء بعد. أضف مجلدًا فيه ملف SKILL.md إلى {path} على الكمبيوتر وسيظهر هنا.',
     'mobileApp.banner.openOnPc': 'افتح GAIA على جهاز الكمبيوتر لتشغيل خادم النماذج.',
     'mobileApp.settings.comingSoon': 'هذا القسم قادم إلى الهاتف قريبًا. في الوقت الحالي، غيّره من الكمبيوتر الذي يشغّل GAIA.',
+    'mobileApp.settings.colors.invalidHex': 'أدخل لونًا بهذا الشكل: #1F5FA8.',
 };
 
 export const ar: Locale = {
