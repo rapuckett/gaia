@@ -1,10 +1,20 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
+import { scopeLabel } from '@webui/utils/connectorScopes';
+import { ref } from '@webui/i18n/registry';
+import { useRouter } from 'expo-router';
 import { useMemo, useState, type ReactNode } from 'react';
 
 import type { AgentMcpServer, ConnectorRow, UnavailableConnectorRow } from '@/api/client.types';
-import { useAgentMcps, useConnectors } from '@/data';
+import {
+    useAgentMcps,
+    useAgents,
+    useChangeConnectorAccess,
+    useConnectorActivations,
+    useConnectorGrants,
+    useConnectors,
+} from '@/data';
 import { ScreenHeader } from '@/features/nav/ScreenHeader';
 import { describeError, useT } from '@/i18n/useT';
 import {
@@ -20,12 +30,24 @@ import {
     Row,
     Screen,
     Stack,
+    Switch,
     Text,
     TextField,
     Ltr,
 } from '@/ui';
 import { ChevronDown, ChevronRight } from '@/ui/icons';
 
+import {
+    activatableAgents,
+    flagshipAgentId,
+    grantAgents,
+    MCP_DEFAULT_GRANT_SCOPES,
+    nextScopes,
+    personalizeRoute,
+    personalizeSourceKind,
+    scopesForActivation,
+    soleMcpAgent,
+} from './connectorAccess';
 import {
     agentMcpKey,
     connectorDescription,
@@ -217,9 +239,158 @@ function ConnectorTile({ connector, expanded, onToggle }: { connector: Connector
                                 {asked ? <Notice tone="info" message={t('mobileApp.connectors.comingLater')} /> : null}
                             </>
                         )
-                    ) : null}
+                    ) : (
+                        <ConnectorAccess connector={connector} />
+                    )}
                 </Stack>
             ) : null}
+        </Stack>
+    );
+}
+
+function ConnectorAccess({ connector }: { connector: ConnectorRow }) {
+    const t = useT();
+    const agents = useAgents();
+    const grants = useConnectorGrants(connector.id, true);
+    const activations = useConnectorActivations(connector.id, true);
+    const change = useChangeConnectorAccess(connector.id);
+
+    const failure = agents.error ?? grants.error ?? activations.error;
+    if (failure) return <Notice tone="danger" message={describeError(failure, t)} />;
+    if (!agents.data || !grants.data || !activations.data) return null;
+
+    const list = agents.data.agents;
+    const granted = grants.data.grants;
+    const active = activations.data.activations;
+    const busy = change.isPending;
+    const sole = soleMcpAgent(list, connector);
+    const perScope = sole ? [] : grantAgents(list, connector.id);
+    const perAgent = sole ? [] : activatableAgents(list, connector);
+
+    return (
+        <Stack gap="sm">
+            {connector.enabled !== false ? <PersonalizeOffer connector={connector} /> : null}
+            {sole ? (
+                <Switch
+                    label={t('settings.connectors.agentCanUse', { agent: sole.name, name: connector.display_name })}
+                    description={connector.enabled === false ? t('settings.connectors.disabledHelp') : undefined}
+                    value={connector.enabled !== false && !!active[sole.namespaced_agent_id]}
+                    disabled={busy || connector.enabled === false}
+                    onValueChange={(on) =>
+                        change.mutate(
+                            on
+                                ? {
+                                      kind: 'activate',
+                                      agentId: sole.namespaced_agent_id,
+                                      scopes: granted[sole.namespaced_agent_id]?.length ? undefined : [...MCP_DEFAULT_GRANT_SCOPES],
+                                  }
+                                : { kind: 'deactivate', agentId: sole.namespaced_agent_id },
+                        )
+                    }
+                />
+            ) : null}
+            {perScope.length > 0 ? (
+                <Stack gap="xs">
+                    <Text role="ui" weight="medium">{t('settings.connectors.grants')}</Text>
+                    {perScope.map((agent) => {
+                        const held = granted[agent.namespaced_agent_id] ?? [];
+                        const scopes = agent.required_connections?.find((rc) => rc.connector_id === connector.id)?.scopes ?? [];
+                        return (
+                            <Stack key={agent.namespaced_agent_id} gap="xs">
+                                <Text role="caption" tone="secondary">{agent.name}</Text>
+                                {scopes.map((scope) => (
+                                    <Switch
+                                        key={scope}
+                                        label={scopeLabel(scope, t)}
+                                        value={held.includes(scope)}
+                                        disabled={busy}
+                                        onValueChange={(on) =>
+                                            change.mutate({
+                                                kind: 'grant',
+                                                agentId: agent.namespaced_agent_id,
+                                                scopes: nextScopes(held, scope, on),
+                                            })
+                                        }
+                                    />
+                                ))}
+                            </Stack>
+                        );
+                    })}
+                </Stack>
+            ) : null}
+            {perAgent.length > 0 ? (
+                <Stack gap="xs">
+                    <Text role="ui" weight="medium">{t('settings.connectors.activeFor')}</Text>
+                    {perAgent.map((agent) => {
+                        const on = !!active[agent.namespaced_agent_id];
+                        return (
+                            <Switch
+                                key={agent.namespaced_agent_id}
+                                label={agent.name}
+                                description={t(on ? 'settings.connectors.toolsVisible' : 'settings.connectors.toolsHidden', {
+                                    name: connector.display_name,
+                                })}
+                                value={on}
+                                disabled={busy}
+                                onValueChange={(next) =>
+                                    change.mutate(
+                                        next
+                                            ? {
+                                                  kind: 'activate',
+                                                  agentId: agent.namespaced_agent_id,
+                                                  scopes: scopesForActivation(agent, connector.id, granted[agent.namespaced_agent_id] ?? []),
+                                              }
+                                            : { kind: 'deactivate', agentId: agent.namespaced_agent_id },
+                                    )
+                                }
+                            />
+                        );
+                    })}
+                </Stack>
+            ) : null}
+            {change.error ? <Notice tone="danger" message={describeError(change.error, t)} /> : null}
+        </Stack>
+    );
+}
+
+function PersonalizeOffer({ connector }: { connector: ConnectorRow }) {
+    const t = useT();
+    const router = useRouter();
+    const agents = useAgents();
+    const change = useChangeConnectorAccess(connector.id);
+    const [busy, setBusy] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const kind = personalizeSourceKind(connector.id);
+    const source = kind
+        ? ref(`settings.connectors.personalize.source.${kind}`)
+        : ref('settings.connectors.personalize.source.other', { name: connector.display_name });
+
+    async function start() {
+        setBusy(true);
+        setError(null);
+        try {
+            if (connector.type === 'mcp_server') {
+                const flagship = flagshipAgentId(agents.data?.agents ?? []);
+                if (!flagship) throw new Error(t('settings.connectors.personalize.noAgent', { name: connector.display_name }));
+                if (!connector.activations?.[flagship]) {
+                    await change.mutateAsync({ kind: 'activate', agentId: flagship, scopes: [...MCP_DEFAULT_GRANT_SCOPES] });
+                }
+            }
+            router.push(personalizeRoute(connector));
+        } catch (e) {
+            setError(t('settings.connectors.personalize.failed', { error: describeError(e, t) }));
+        } finally {
+            setBusy(false);
+        }
+    }
+
+    return (
+        <Stack gap="xs">
+            <Text role="caption" tone="secondary">
+                {t('settings.connectors.personalize.tile', { source, name: connector.display_name })}
+            </Text>
+            <Button label={t('settings.connectors.personalize.button')} onPress={() => void start()} variant="secondary" size="sm" disabled={busy} />
+            {error ? <Notice tone="danger" message={error} /> : null}
         </Stack>
     );
 }
