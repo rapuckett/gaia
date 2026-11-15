@@ -3609,6 +3609,7 @@ export const enMessages = {
     'mobileApp.error.photosDenied': "GAIA can't open your photos. Allow photo access for GAIA in your phone's Settings, then try again.",
     'mobileApp.error.noConnection': 'No PC is connected. Pair this phone with your PC first.',
     'mobileApp.pcOnly.logs': 'Read GAIA’s logs on the PC running GAIA. They can’t be read from a phone.',
+    'mobileApp.pcOnly.refusal': "Do this on your PC. GAIA doesn't allow it from a paired phone.",
     'mobileApp.pcOnly.report': 'GAIA saved a problem report for this on the PC. Create the troubleshooting report there to attach to a bug report.',
     'mobileApp.connectCard.onPc': 'Connect your account on your PC, in Settings under Connectors. Then ask again here.',
     'mobileApp.connectorRetry.connected': '{name} connected since this reply. Ask again to run it now.',

@@ -3609,6 +3609,7 @@ const messages: Messages = {
     'mobileApp.error.photosDenied': 'لا يستطيع GAIA فتح صورك. اسمح لـ GAIA بالوصول إلى الصور من إعدادات هاتفك، ثم حاول مجددًا.',
     'mobileApp.error.noConnection': 'لا يوجد كمبيوتر متصل. اقرن هذا الهاتف بالكمبيوتر أولًا.',
     'mobileApp.pcOnly.logs': 'اقرأ سجلات GAIA على الكمبيوتر الذي يشغّل GAIA. لا يمكن قراءتها من الهاتف.',
+    'mobileApp.pcOnly.refusal': 'نفّذ هذا على الكمبيوتر لديك. لا يسمح GAIA بذلك من هاتف مقترن.',
     'mobileApp.pcOnly.report': 'حفظ GAIA تقريرًا عن هذه المشكلة على الكمبيوتر. أنشئ تقرير استكشاف الأخطاء هناك لإرفاقه ببلاغ عن خطأ.',
     'mobileApp.connectCard.onPc': 'اربط حسابك على جهاز الكمبيوتر لديك، من «الموصلات» في الإعدادات. ثم اسأل مرة أخرى هنا.',
     'mobileApp.connectorRetry.connected': 'تم ربط {name} منذ هذا الرد. اسأل مرة أخرى لتشغيله الآن.',

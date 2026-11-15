@@ -137,7 +137,7 @@ export function ModelList({ provider, remote, models, activeModel, switching, on
                 <SearchField
                     value={query}
                     onChangeText={setQuery}
-                    placeholder={t('settings.model.search')}
+                    placeholder={t.bare('settings.model.search')}
                     accessibilityLabel={t('settings.model.search')}
                     testID="model-search"
                 />

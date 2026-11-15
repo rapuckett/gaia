@@ -88,7 +88,7 @@ export function KnowledgeBrowser({ contexts, notify }: KnowledgeBrowserProps) {
             <SearchField
                 value={search}
                 onChangeText={refilter(setSearch)}
-                placeholder={t('mem.knowledge.searchPlaceholder')}
+                placeholder={t.bare('mem.knowledge.searchPlaceholder')}
                 accessibilityLabel={t('mem.knowledge.search')}
                 debounceMs={KNOWLEDGE_SEARCH_DEBOUNCE_MS}
                 testID="memory-knowledge-search"
@@ -98,13 +98,14 @@ export function KnowledgeBrowser({ contexts, notify }: KnowledgeBrowserProps) {
                     <Chip
                         key={category}
                         label={categoryLabel(category, undefined, t, true)}
+                        accessibilityLabel={categoryLabel(category, undefined, t, false)}
                         selected={categories.includes(category)}
                         onPress={() => toggleCategory(category)}
                         testID={`memory-knowledge-filter-${category}`}
                     />
                 ))}
                 {categories.length > 0 ? (
-                    <Chip label={t.bare('mem.knowledge.clear')} icon={X} onPress={() => refilter(setCategories)([])} testID="memory-knowledge-filter-clear" />
+                    <Chip label={t.bare('mem.knowledge.clear')} accessibilityLabel={t('mem.knowledge.clear')} icon={X} onPress={() => refilter(setCategories)([])} testID="memory-knowledge-filter-clear" />
                 ) : null}
             </Row>
             <Select
