@@ -25,7 +25,7 @@ export function ModelChip({ turnRunning = false }: { turnRunning?: boolean }) {
         mutate(queued, { onSettled: () => setQueued(null) });
     }, [turnRunning, queued, mutate]);
     const pill = pillText(data, t);
-    const label = pill.name ?? pill.text;
+    const label = pill.name ?? t.bare('modelStatus.fallbackName');
     return (
         <>
             <ControlChip

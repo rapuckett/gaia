@@ -57,6 +57,8 @@ from .agent_loop import agent_loop
 
 # pylint: enable=unused-import
 from .database import ChatDatabase
+from .devices import DEVICE_TOKEN_PREFIX
+from .devices.access import DeviceAccess
 from .document_monitor import DocumentMonitor
 from .memory_settings import memory_enabled
 from .restart_recovery import recover_interrupted_work, sweep_interrupted_work
@@ -65,6 +67,7 @@ from .routers import automations as automations_router_mod
 from .routers import changes as changes_router_mod
 from .routers import chat as chat_router_mod
 from .routers import connectors as connectors_router_mod
+from .routers import devices as devices_router_mod
 from .routers import documents as documents_router_mod
 from .routers import environment as environment_router_mod
 from .routers import files as files_router_mod
@@ -188,12 +191,7 @@ class TunnelAuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         path = request.url.path
 
-        # Gate /api/* routes and the /v1/connections forwarded-grant surface
-        # (#1292) — the latter carries OAuth secrets, so remote/tunnel access
-        # must present a valid token just like /api/*.
-        if not (path.startswith("/api/") or path.startswith("/v1/")):
-            return await call_next(request)
-
+        # Whatever the path: the web UI, the docs and the ?token= bootstrap too.
         if on_device_listener(request):
             if request.scope.get(DEVICE_AUTH_SCOPE_KEY) is not True:
                 logger.error(
@@ -206,6 +204,29 @@ class TunnelAuthMiddleware(BaseHTTPMiddleware):
                     content={"detail": "This request skipped device auth."},
                 )
             return await call_next(request)
+
+        # Gate /api/* routes and the /v1/connections forwarded-grant surface
+        # (#1292) — the latter carries OAuth secrets, so remote/tunnel access
+        # must present a valid token just like /api/*.
+        if not (path.startswith("/api/") or path.startswith("/v1/")):
+            return await call_next(request)
+
+        scheme, _, presented = request.headers.get("authorization", "").partition(" ")
+        if scheme.lower() == "bearer" and presented.strip().startswith(
+            DEVICE_TOKEN_PREFIX
+        ):
+            logger.warning(
+                "Refused %s %s: a paired device's token over plain http",
+                request.method,
+                path,
+            )
+            return JSONResponse(
+                status_code=401,
+                content={
+                    "detail": "A paired device's token works only on GAIA's TLS "
+                    "listener for devices, never over plain http."
+                },
+            )
 
         # Always allow exempt paths (health check, etc.)
         if path in _AUTH_EXEMPT_PATHS:
@@ -863,9 +884,13 @@ def create_app(db_path: str = None, webui_dist: str = None) -> FastAPI:
                 e,
             )
 
+        # The listener for paired devices, if the PC left it on.
+        await app.state.devices.resume()
+
         yield
 
         # Shutdown
+        await app.state.devices.shutdown()
         remove_local_work(active_turns_in_flight)
         await scheduler.shutdown()
         logger.info("Task scheduler stopped")
@@ -942,6 +967,8 @@ def create_app(db_path: str = None, webui_dist: str = None) -> FastAPI:
     # Initialize tunnel manager for mobile access
     tunnel = TunnelManager(port=DEFAULT_PORT)
     app.state.tunnel = tunnel
+    # Paired devices on the home network; touches no file until it is used.
+    app.state.devices = DeviceAccess(app)
 
     # Per-session locks prevent the same session from having multiple
     # concurrent requests, which would corrupt conversation state.
@@ -999,6 +1026,7 @@ def create_app(db_path: str = None, webui_dist: str = None) -> FastAPI:
     app.include_router(documents_router_mod.router)
     app.include_router(files_router_mod.router)
     app.include_router(tunnel_router_mod.router)
+    app.include_router(devices_router_mod.router)
     app.include_router(goals_router_mod.router)
     app.include_router(memory_router_mod.router)
     app.include_router(schedules_router_mod.router)
@@ -1255,7 +1283,7 @@ def uvicorn_options(host: str, port: int, *, debug: bool = False) -> dict:
     """The uvicorn settings every Agent UI runner uses.
 
     Forwarded headers are never trusted: ngrok connects from loopback, so
-    uvicorn's default of honouring ``X-Forwarded-For`` from 127.0.0.1 would
+    uvicorn's default of honoring ``X-Forwarded-For`` from 127.0.0.1 would
     let a tunnelled request set its own peer address and pass as the PC.
     Access logs are on only with *debug*.
     """

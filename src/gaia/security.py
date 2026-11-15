@@ -198,6 +198,8 @@ def _secret_directories() -> Set[str]:
         and key files, ``~/.aws/credentials`` is the key itself, and neither has
         a name the extension/name denylists would catch.
     """
+    from gaia.home import default_gaia_home, devices_dir
+
     home = Path.home()
     candidates = [
         home / ".ssh",
@@ -208,6 +210,12 @@ def _secret_directories() -> Set[str]:
         home / ".docker",
         home / ".config" / "gcloud",
         home / "AppData" / "Roaming" / "gcloud",
+        # The GitHub CLI's OAuth tokens (hosts.yml).
+        home / ".config" / "gh",
+        home / "AppData" / "Roaming" / "GitHub CLI",
+        # The paired-device listener's private key and the device table.
+        devices_dir(),
+        devices_dir(default_gaia_home()),
     ]
     return {os.path.normpath(str(c)) for c in candidates}
 
@@ -398,6 +406,43 @@ def _real_path(path: Any) -> str:
     same path — not a literal ``<cwd>/~`` that happens to sit inside the CWD.
     """
     return os.path.realpath(os.path.expanduser(os.fspath(path)))
+
+
+def secret_read_refusal(path: Any) -> str:
+    """Why *path* holds secrets GAIA never reads back, or "" when it doesn't.
+
+    The one copy of the read policy: a credential's file name, a certificate
+    or key extension, or a place inside a credential folder.
+
+    Raises:
+        OSError: When the path can't be resolved; callers fail closed.
+    """
+    real_path = Path(_real_path(path))
+    file_name = real_path.name.lower()
+    file_ext = real_path.suffix.lower()
+
+    if file_name in {s.lower() for s in SENSITIVE_FILE_NAMES}:
+        return (
+            f"Read blocked: '{real_path.name}' holds credentials, keys or "
+            f"secrets. Open it yourself if you need its contents — the "
+            f"agent is not allowed to read it into the conversation."
+        )
+
+    if file_ext in SENSITIVE_EXTENSIONS:
+        return (
+            f"Read blocked: files with extension '{file_ext}' are "
+            f"certificates or private keys. The agent is not allowed to "
+            f"read them into the conversation."
+        )
+
+    for secret_dir in SECRET_DIRECTORIES:
+        if _path_is_within(real_path, Path(secret_dir)):
+            return (
+                f"Read blocked: '{real_path}' is inside '{secret_dir}', "
+                f"which holds credentials. The agent is not allowed to "
+                f"read from it."
+            )
+    return ""
 
 
 def is_credential_file_name(name: str) -> bool:
@@ -1580,37 +1625,8 @@ class PathValidator:
             Tuple of (is_blocked, reason). If blocked, reason explains why.
         """
         try:
-            real_path = Path(_real_path(path))
-            file_name = real_path.name.lower()
-            file_ext = real_path.suffix.lower()
-
-            if file_name in {s.lower() for s in SENSITIVE_FILE_NAMES}:
-                return (
-                    True,
-                    f"Read blocked: '{real_path.name}' holds credentials, keys or "
-                    f"secrets. Open it yourself if you need its contents — the "
-                    f"agent is not allowed to read it into the conversation.",
-                )
-
-            if file_ext in SENSITIVE_EXTENSIONS:
-                return (
-                    True,
-                    f"Read blocked: files with extension '{file_ext}' are "
-                    f"certificates or private keys. The agent is not allowed to "
-                    f"read them into the conversation.",
-                )
-
-            for secret_dir in SECRET_DIRECTORIES:
-                if _path_is_within(real_path, Path(secret_dir)):
-                    return (
-                        True,
-                        f"Read blocked: '{real_path}' is inside '{secret_dir}', "
-                        f"which holds credentials. The agent is not allowed to "
-                        f"read from it.",
-                    )
-
-            return (False, "")
-
+            reason = secret_read_refusal(path)
+            return (bool(reason), reason)
         except Exception as e:
             logger.error(f"Error checking read block for {path}: {e}")
             # Fail-closed: refuse if we can't determine safety.
