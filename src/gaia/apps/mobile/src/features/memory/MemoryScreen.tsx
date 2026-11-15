@@ -6,7 +6,7 @@ import { useState } from 'react';
 import { useMemoryMaintenance, useMemorySettings, useRefreshMemory, type MemoryMaintenanceAction } from '@/data';
 import { useT } from '@/i18n/useT';
 import { ActionSheet, Badge, IconButton, Notice, Row, Screen, Stack, Text, type SheetAction } from '@/ui';
-import { ArrowLeft, Ellipsis, RefreshCw } from '@/ui/icons';
+import { ArrowLeft, Ellipsis } from '@/ui/icons';
 
 import { failureNotice, MAINTENANCE_ACTIONS, MAINTENANCE_LABELS, outcomeNotice } from './maintenance';
 import { MemoryTabs } from './MemoryTabs';
@@ -47,7 +47,7 @@ export function MemoryScreen({ onBack }: MemoryScreenProps) {
     };
 
     const actions: SheetAction[] = [
-        { label: t('mem.refresh'), icon: RefreshCw, onPress: () => void pullToRefresh() },
+        { label: t('mem.refresh'), onPress: () => void pullToRefresh() },
         ...MAINTENANCE_ACTIONS.map((action) => ({
             label: t(MAINTENANCE_LABELS[action][running === action ? 'busy' : 'idle']),
             onPress: () => run(action),
@@ -61,8 +61,8 @@ export function MemoryScreen({ onBack }: MemoryScreenProps) {
                 <Row gap="sm" accessibilityRole="header">
                     <IconButton icon={ArrowLeft} label={t('mem.back')} onPress={onBack} />
                     <Stack flex={1}>
-                        <Row gap="sm">
-                            <Text role="title" weight="semibold" numberOfLines={1}>
+                        <Row gap="sm" wrap>
+                            <Text role="title" weight="semibold">
                                 {t('mem.title')}
                             </Text>
                             <Badge label={t('mem.beta')} tone="warning" />

@@ -8,7 +8,7 @@ import { useState } from 'react';
 import { GaiaClientProvider } from '@/data';
 import { MemoryScreen } from '@/features/memory';
 import { memoryScene, type MemoryScene } from '@/features/memory/devScenes';
-import { UIProvider } from '@/ui';
+import { ScreenBannerProvider, UIProvider } from '@/ui';
 
 const SCENES: readonly MemoryScene[] = ['on', 'off', 'loading', 'failed', 'actionFails'];
 
@@ -24,7 +24,9 @@ export default function MemoryGalleryRoute() {
         <QueryClientProvider client={queryClient}>
             <GaiaClientProvider client={client}>
                 <UIProvider>
-                    <MemoryScreen onBack={() => router.replace('/')} />
+                    <ScreenBannerProvider banner={null}>
+                        <MemoryScreen onBack={() => router.replace('/')} />
+                    </ScreenBannerProvider>
                 </UIProvider>
             </GaiaClientProvider>
         </QueryClientProvider>
