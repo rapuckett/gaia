@@ -311,10 +311,14 @@ export function documentPath(docId: string, endpoint: 'document' | 'documentCanc
     return ENDPOINTS[endpoint].replace('{doc_id}', encodeURIComponent(docId));
 }
 
+/** A library document's file, named with the chat that may read it away from the PC. */
+export function documentFilePath(docId: string, sessionId: string): string {
+    return `${documentPath(docId, 'documentFile')}?session_id=${encodeURIComponent(sessionId)}`;
+}
+
 /** The library file's URL, as the web UI's `documentFileUrl` builds it: the page rides in the fragment. */
-export function documentFileUrl(baseUrl: string, docId: string, page?: number): string {
-    const path = ENDPOINTS.documentFile.replace('{doc_id}', encodeURIComponent(docId));
-    return `${baseUrl.replace(/\/+$/, '')}${path}${page ? `#page=${page}` : ''}`;
+export function documentFileUrl(baseUrl: string, docId: string, sessionId: string, page?: number): string {
+    return `${baseUrl.replace(/\/+$/, '')}${documentFilePath(docId, sessionId)}${page ? `#page=${page}` : ''}`;
 }
 
 /** A PC file's preview or image, named by its path on the PC; the chat's id is what lets a phone read it. */

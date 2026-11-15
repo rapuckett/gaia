@@ -612,8 +612,8 @@ export interface GaiaClient {
     getFilePreview(path: string, sessionId: string, options?: RequestOptions): Promise<FilePreviewResponse>;
     /** An image on the PC, as bytes; the chat's id is what lets a phone read it. */
     getImageBytes(path: string, sessionId: string, options?: RequestOptions): Promise<Uint8Array>;
-    /** A library document's file, as bytes. */
-    getDocumentBytes(docId: string, options?: RequestOptions): Promise<Uint8Array>;
+    /** A library document's file, as bytes; the chat's id is what lets a phone read it. */
+    getDocumentBytes(docId: string, sessionId: string, options?: RequestOptions): Promise<Uint8Array>;
     getSystemStatus(options?: RequestOptions): Promise<SystemStatus>;
     /** Starts a model's download on the PC (`force` downloads it again); follow it in `getSystemStatus().download_progress`. */
     downloadModel(model: string, options?: { force?: boolean; loadAfter?: boolean } & RequestOptions): Promise<{ status: string; model: string }>;
