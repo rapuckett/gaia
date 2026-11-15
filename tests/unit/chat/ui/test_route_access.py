@@ -61,6 +61,8 @@ PC_ONLY = {
     "GET /api/devices/status",
     "GET /api/logs",
     "GET /api/logs/{source}",
+    "GET /api/memory/stream-discovery",
+    "GET /api/memory/stream-inference",
     "GET /api/messaging/discord",
     "GET /api/setup/report/{name}",
     "POST /api/agents/install",
@@ -82,6 +84,8 @@ PC_ONLY = {
     "POST /api/lemonade/target",
     "POST /api/memory/admin/clear",
     "POST /api/memory/admin/seed",
+    "POST /api/memory/commit-discovery",
+    "POST /api/memory/commit-inference",
     "POST /api/messaging/discord/connect",
     "POST /api/messaging/discord/disconnect",
     "POST /api/messaging/discord/forget-always",
@@ -204,8 +208,6 @@ REMOTE = {
     "GET /api/memory/knowledge/{knowledge_id}",
     "GET /api/memory/settings",
     "GET /api/memory/stats",
-    "GET /api/memory/stream-discovery",
-    "GET /api/memory/stream-inference",
     "GET /api/memory/tools",
     "GET /api/memory/upcoming",
     "GET /api/onboarding/preflight",
@@ -281,8 +283,6 @@ REMOTE = {
     "POST /api/goals",
     "POST /api/goals/{goal_id}/tasks",
     "POST /api/gpu-memory/pending",
-    "POST /api/memory/commit-discovery",
-    "POST /api/memory/commit-inference",
     "POST /api/memory/consolidate",
     "POST /api/memory/knowledge",
     "POST /api/memory/prune",
@@ -647,3 +647,44 @@ def test_troubleshooting_report_is_pc_only(setup):
         assert pc.content == b"logs that quote a conversation"
     finally:
         report.unlink()
+
+
+@pytest.mark.parametrize(
+    "method,path,body",
+    [
+        ("GET", "/api/memory/stream-discovery", None),
+        ("GET", "/api/memory/stream-inference?include_browser=true", None),
+        ("POST", "/api/memory/commit-discovery", {"items": [{"content": "x"}]}),
+        ("POST", "/api/memory/commit-inference", {"insights": [{"content": "x"}]}),
+    ],
+)
+def test_memory_profile_scan_is_pc_only(setup, monkeypatch, method, path, body):
+    """The scan reads the PC's files and browsing; only the PC may run or save it."""
+    from gaia.agents.base import discovery
+    from gaia.ui.routers import memory
+
+    app, clients, _ = setup
+    touched = []
+
+    class _Discovery:
+        def __init__(self):
+            touched.append("scan")
+            raise RuntimeError("scanned")
+
+    class _Store:
+        def store(self, **kwargs):
+            touched.append("store")
+
+        def replace_by_source(self, *args, **kwargs):
+            touched.append("store")
+            return []
+
+    monkeypatch.setattr(discovery, "SystemDiscovery", _Discovery)
+    monkeypatch.setattr(memory, "_get_store", _Store)
+    ui = {"X-Gaia-UI": "1"}
+    for caller in ("tunnel", "device"):
+        resp = clients[caller].request(method, path, json=body, headers=ui)
+        assert resp.status_code == 403, (caller, resp.text)
+    assert touched == []
+    assert clients["pc"].request(method, path, json=body, headers=ui).status_code == 200
+    assert touched

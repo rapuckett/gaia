@@ -312,7 +312,9 @@ def dashboard(store):
     memory_router._store = store
     try:
         with patch.object(memory_router, "_embed_row", return_value={}):
-            with TestClient(app, headers={"X-Gaia-UI": "1"}) as client:
+            with TestClient(
+                app, client=("127.0.0.1", 50000), headers={"X-Gaia-UI": "1"}
+            ) as client:
                 yield client
     finally:
         memory_router._store = previous

@@ -1279,7 +1279,7 @@ def _downloaded_on_this_pc(model_id: str) -> bool:
     )
 
 
-@router.get("/api/memory/stream-discovery")
+@router.get("/api/memory/stream-discovery", dependencies=[Depends(require_local_pc)])
 def stream_discovery():
     """Stream system discovery findings as SSE.
 
@@ -1388,7 +1388,7 @@ def stream_discovery():
     )
 
 
-@router.get("/api/memory/stream-inference")
+@router.get("/api/memory/stream-inference", dependencies=[Depends(require_local_pc)])
 def stream_inference(include_browser: bool = Query(False)):
     """Stream LLM-assisted profile inference as SSE.
 
@@ -1725,7 +1725,7 @@ class InferenceCommit(BaseModel):
     insights: List[InferenceCommitItem]
 
 
-@router.post("/api/memory/commit-discovery")
+@router.post("/api/memory/commit-discovery", dependencies=[Depends(require_local_pc)])
 def commit_discovery(body: DiscoveryCommit) -> Dict:
     """Store approved discovery findings. Returns ``{stored: int}``.
 
@@ -1765,7 +1765,7 @@ def commit_discovery(body: DiscoveryCommit) -> Dict:
     return {"stored": stored}
 
 
-@router.post("/api/memory/commit-inference")
+@router.post("/api/memory/commit-inference", dependencies=[Depends(require_local_pc)])
 def commit_inference(body: InferenceCommit) -> Dict:
     """Store approved inference insights, replacing old inferred entries.
 

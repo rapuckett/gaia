@@ -2417,6 +2417,8 @@ The Memory endpoints expose the agent's persistent knowledge system. See the [Me
   <Accordion title="GET /api/memory/stream-discovery">
     SSE stream of the local system-discovery scan (git identity, installed
     apps, recent file types, shell config, …) that seeds first-run memory.
+    PC-only: the scan reads the PC's files and browser history, so a request
+    from mobile access, a paired device or another computer is a `403`.
   </Accordion>
 
   <Accordion title="GET /api/memory/stream-inference">
@@ -2425,19 +2427,22 @@ The Memory endpoints expose the agent's persistent knowledge system. See the [Me
     the machine's default local chat model (`default_model` in
     `~/.gaia/config.json`), never the chat's cloud model; a cloud
     `default_model`, or a local one that isn't downloaded yet, ends the stream
-    with an `error` event rather than a download.
+    with an `error` event rather than a download. PC-only, like
+    `stream-discovery`.
   </Accordion>
 
   <Accordion title="POST /api/memory/commit-discovery">
     Store the discovery findings a user approved in the memory dashboard's
     discovery review. Items are validated as knowledge creates, so a disallowed
-    category 422s the whole batch before anything is written.
+    category 422s the whole batch before anything is written. PC-only, like
+    `stream-discovery`.
   </Accordion>
 
   <Accordion title="POST /api/memory/commit-inference">
     Store approved inference insights, replacing the prior inferred profile
     (old `source="inferred"` rows are deleted first — a failure here leaves
-    the old profile in place rather than partially wiped).
+    the old profile in place rather than partially wiped). PC-only, like
+    `stream-discovery`.
   </Accordion>
 
   <Accordion title="GET /api/memory/settings">
@@ -3569,7 +3574,7 @@ Every route is in one class, pinned by `tests/unit/chat/ui/test_route_access.py`
 
 | Class | Who | Routes |
 |---|---|---|
-| PC-only | `pc` | Tunnel start and stop, provider keys, the model-server target, logs, messaging, GPU memory apply and revert, the default full-access setting, connector configure and authorize, an agent's connector grant and activations, deleting a provider key, `POST /v1/connections/{provider}`, skill and agent installs, `POST /api/files/open`, `POST /api/setup/npu/memlock-fix`, the troubleshooting report, the eval-only routes, `GET /api/connectors/_debug`, and every other [paired devices](#paired-devices) route |
+| PC-only | `pc` | Tunnel start and stop, provider keys, the model-server target, logs, messaging, GPU memory apply and revert, the default full-access setting, connector configure and authorize, an agent's connector grant and activations, deleting a provider key, `POST /v1/connections/{provider}`, skill and agent installs, `POST /api/files/open`, `POST /api/setup/npu/memlock-fix`, the troubleshooting report, the memory profile scan and its commits, the eval-only routes, `GET /api/connectors/_debug`, and every other [paired devices](#paired-devices) route |
 | Setup | `pc`, or an allowed device | Setup's changes (see [Setup](#setup)), `POST /api/system/download-model`, `PUT /api/system/model-server/backend` |
 | Not from a device | `pc`, `tunnel` | `GET /api/providers`, which can register a provider |
 | Pairing | a device on the listener, with no token | `POST /api/devices/pair` |
