@@ -3,6 +3,7 @@
 
 import type { Message, ResourceUsage, Session, StartScreen, StreamEvent, SystemStatus } from '@webui/types';
 import { fromApiMessages } from '@webui/utils/chatStream';
+import { isMediaFile } from '@webui/utils/mediaFiles';
 
 import type { FetchLike, FetchRequestInit, FetchResponseLike } from '@/platform/fetch.types';
 
@@ -19,6 +20,7 @@ import {
     type StreamEndpoint,
 } from './errors';
 import type {
+    ActiveModel,
     AgentCapabilities,
     AgentList,
     AgentMcpList,
@@ -45,15 +47,18 @@ import type {
     RestartModelResult,
     RequestOptions,
     ParsedSchedule,
+    ProviderModelsResponse,
     Schedule,
     ScheduleList,
     ScheduleResults,
     SessionList,
+    SessionPermissions,
     SessionSearchResponse,
     SetupCheck,
     SetupPlan,
     SetupRunStatus,
     SkillList,
+    UploadedFile,
     UserInputResult,
 } from './client.types';
 import {
@@ -64,6 +69,8 @@ import {
     connectorGrantsPath,
     ENDPOINTS,
     chatContextPath,
+    chatPermissionsPath,
+    providerModelsPath,
     followupOutcomePath,
     MESSAGE_PAGE_SIZE,
     QUEUED_IDLE_MS,
@@ -87,6 +94,11 @@ import {
     UI_HEADERS,
 } from './constants';
 import { parseSseStream } from './sse';
+
+/** A body sent as it is, not as JSON: a file, or a multipart form. */
+class RawBody {
+    constructor(readonly body: Blob | FormData) {}
+}
 
 export interface HttpClientConfig {
     baseUrl: string;
@@ -157,8 +169,8 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
         const url = `${base}${path}`;
         const init: FetchRequestInit = {
             method,
-            headers: headers(body !== undefined),
-            ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+            headers: headers(body !== undefined && !(body instanceof RawBody)),
+            ...(body === undefined ? {} : { body: body instanceof RawBody ? body.body : JSON.stringify(body) }),
             ...(signal ? { signal } : {}),
         };
         let res: FetchResponseLike;
@@ -283,6 +295,17 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             return postJson<Session>(ENDPOINTS.sessions, request, options?.signal);
         },
 
+        async uploadFile(file, name, options) {
+            const media = isMediaFile(name);
+            const path = media ? `${ENDPOINTS.filesUploadMedia}?name=${encodeURIComponent(name)}` : ENDPOINTS.filesUpload;
+            let body: Blob | FormData = file;
+            if (!media) {
+                body = new FormData();
+                body.append('file', file, name);
+            }
+            return readJson<UploadedFile>(await request('POST', path, new RawBody(body), options?.signal), path);
+        },
+
         setSessionPinned(sessionId, pinned, options) {
             return putJson<Session>(sessionPinPath(sessionId), { pinned }, options?.signal);
         },
@@ -293,6 +316,26 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         markSessionRead(sessionId, options) {
             return postJson<Session>(sessionReadPath(sessionId), undefined, options?.signal);
+        },
+
+        getActiveModel(options) {
+            return getJson<ActiveModel>(ENDPOINTS.providersActive, options?.signal);
+        },
+
+        listProviderModels(provider, options) {
+            return getJson<ProviderModelsResponse>(providerModelsPath(provider), options?.signal);
+        },
+
+        selectModel(model, options) {
+            return postJson<ActiveModel>(ENDPOINTS.providersSelect, { model }, options?.signal);
+        },
+
+        getPermissions(sessionId, options) {
+            return getJson<SessionPermissions>(chatPermissionsPath(sessionId), options?.signal);
+        },
+
+        setPermissionMode(sessionId, mode, options) {
+            return putJson<SessionPermissions>(chatPermissionsPath(sessionId), { mode }, options?.signal);
         },
 
         getContextUsage(sessionId, options) {

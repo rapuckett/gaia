@@ -15,6 +15,9 @@ export const ENDPOINTS = {
     lemonadeTarget: '/api/lemonade/target',
     localModelRestart: '/api/providers/local/restart',
     localModelStatus: '/api/providers/local/status',
+    providerModels: '/api/providers/{provider}/models',
+    providersActive: '/api/providers/active',
+    providersSelect: '/api/providers/select',
     schedule: '/api/schedules/{name:path}',
     scheduleResults: '/api/schedules/{name:path}/results',
     scheduleRun: '/api/schedules/{name:path}/run',
@@ -45,6 +48,7 @@ export const ENDPOINTS = {
     chatCancel: '/api/chat/cancel',
     chatConfirmTool: '/api/chat/confirm-tool',
     chatContext: '/api/chat/context/{session_id}',
+    chatPermissions: '/api/chat/permissions/{session_id}',
     chatFollowup: '/api/chat/followup',
     chatFollowupOutcome: '/api/chat/followup/{session_id}',
     chatUserInput: '/api/chat/user-input',
@@ -58,6 +62,8 @@ export const ENDPOINTS = {
     systemStatus: '/api/system/status',
     documentFile: '/api/documents/{doc_id}/file',
     documents: '/api/documents',
+    filesUpload: '/api/files/upload',
+    filesUploadMedia: '/api/files/upload-media',
     onboardingPreflight: '/api/onboarding/preflight',
     onboardingStart: '/api/onboarding/start',
 } as const;
@@ -100,6 +106,14 @@ export function setupNeedsPath(job: string): string {
 
 export function sessionPath(sessionId: string): string {
     return ENDPOINTS.session.replace('{session_id}', encodeURIComponent(sessionId));
+}
+
+export function chatPermissionsPath(sessionId: string): string {
+    return ENDPOINTS.chatPermissions.replace('{session_id}', encodeURIComponent(sessionId));
+}
+
+export function providerModelsPath(provider: string): string {
+    return ENDPOINTS.providerModels.replace('{provider}', encodeURIComponent(provider));
 }
 
 export function chatContextPath(sessionId: string): string {
@@ -170,6 +184,9 @@ export const SEND_HEADER_TIMEOUT_MS = 90_000;
 export const SESSION_EVENTS_IDLE_MS = 90_000;
 /** An attach replays at once; a slower answer means the backend is stuck or unreachable. */
 export const ATTACH_HEADER_TIMEOUT_MS = 30_000;
+/** How often to re-read the PC's connectors while a reply waits on an account being connected (webui's ConnectorRetryBanner). */
+export const CONNECTOR_POLL_MS = 4_000;
+
 /** How many past runs a schedule's history shows; the web UI asks for the same 20. */
 export const SCHEDULE_RESULTS_LIMIT = 20;
 
