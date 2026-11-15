@@ -38,6 +38,7 @@ import type {
     SetupRunStatus,
     Settings,
     SkillInfo,
+    SpendingReport,
     StartScreen,
     StreamEvent,
     SystemStatus,
@@ -90,6 +91,7 @@ export type {
     Settings,
     SkillInfo,
     SkillSource,
+    SpendingReport,
     StartScreen,
     StreamEvent,
     SystemStatus,
@@ -580,6 +582,12 @@ export interface GaiaClient {
     retryKeyStore(options?: RequestOptions): Promise<{ retrying: boolean }>;
     /** A cloud provider's list prices, ranked; the first row is the model GAIA uses unless another is picked. */
     getCloudPrices(provider: string, options?: RequestOptions): Promise<CloudPriceList>;
+    /** This month's cloud spending at list price, the monthly limit and where it stands. */
+    getSpending(options?: RequestOptions): Promise<SpendingReport>;
+    /** Sets the monthly limit in dollars; null removes it. Answers with the new report. */
+    setSpendingLimit(limitUsd: number | null, options?: RequestOptions): Promise<SpendingReport>;
+    /** Lets cloud chats go on past the limit until the month ends. */
+    allowSpendingThisMonth(options?: RequestOptions): Promise<SpendingReport>;
     /** Reads the NPU's setup afresh after a fix on the PC; answers the plan. */
     recheckSetupNpu(options?: RequestOptions): Promise<SetupPlan>;
     /** What setup will use and download, before it starts; `catalog` marks partial downloads. */

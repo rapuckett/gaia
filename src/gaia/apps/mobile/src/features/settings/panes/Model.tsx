@@ -19,6 +19,7 @@ import { Disclosure, Notice, Row, SegmentedControl, Spinner, Stack, StatusDot, T
 
 import { SettingsAnchor } from '../targets';
 import { CloudPrices } from './model/CloudPrices';
+import { CloudSpending } from './model/CloudSpending';
 import { ModelInUse } from './model/ModelInUse';
 import { ModelList } from './model/ModelList';
 import { ProviderKey } from './model/ProviderKey';
@@ -173,6 +174,7 @@ export default function Model({ provider: requested }: { provider?: string }) {
                             />
                         </SettingsAnchor>
                     ) : null}
+                    {provider.remote ? <CloudSpending /> : null}
                 </Stack>
             ) : null}
         </Stack>
