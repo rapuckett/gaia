@@ -201,3 +201,18 @@ def launch(
         except BaseException:
             kill_tree(proc, seen, spare)
             raise
+
+
+def readable_processes(attrs: Sequence[str]) -> Iterable[psutil.Process]:
+    """``psutil.process_iter(attrs)``, where one unreadable process doesn't end the walk.
+
+    On macOS psutil can raise ``SystemError`` reading the command line of a
+    process as it exits; that process is skipped, like one that has gone.
+    """
+    for proc in psutil.process_iter():
+        try:
+            info = proc.as_dict(list(attrs))
+        except (psutil.NoSuchProcess, SystemError):
+            continue
+        proc.info = info
+        yield proc

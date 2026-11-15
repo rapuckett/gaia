@@ -42,6 +42,8 @@ export interface TextFieldProps {
     disabled?: boolean;
     inputRef?: Ref<ComponentRef<typeof TextInput>>;
     accessibilityLabel?: string;
+    onFocus?: () => void;
+    onBlur?: () => void;
     testID?: string;
 }
 
@@ -67,6 +69,8 @@ export function TextField({
     disabled,
     inputRef,
     accessibilityLabel,
+    onFocus,
+    onBlur,
     testID,
 }: TextFieldProps) {
     const { colors, radius, type } = useTheme();
@@ -113,8 +117,14 @@ export function TextField({
                 autoCapitalize={url ? 'none' : undefined}
                 autoCorrect={url ? false : undefined}
                 accessibilityLabel={accessibilityLabel ?? label}
-                onFocus={() => setFocused(true)}
-                onBlur={() => setFocused(false)}
+                onFocus={() => {
+                    setFocused(true);
+                    onFocus?.();
+                }}
+                onBlur={() => {
+                    setFocused(false);
+                    onBlur?.();
+                }}
                 selectionColor={colors.accentSolid}
                 testID={testID}
                 style={{

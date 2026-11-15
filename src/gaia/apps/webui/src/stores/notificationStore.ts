@@ -14,6 +14,14 @@ import type { GaiaNotification, NotificationType } from '../types/agent';
 import { confirmTool } from '../services/api';
 import { useChatStore } from './chatStore';
 import { requiresFreshConsent } from '../utils/permissionPrompts.core';
+import {
+  ALERT_SETTINGS_KEY,
+  DEFAULT_ALERT_SETTINGS,
+  parseAlertSettings,
+  type AlertEvent,
+  type AlertMode,
+  type AlertSettings,
+} from '../utils/alertSettings.core';
 
 export {
   PATH_ACCESS_TOOL,
@@ -203,34 +211,13 @@ export const selectPromptingSessionIds = (state: NotificationState): string[] =>
 
 // ── Chat alert settings (#5226) ──────────────────────────────────────────
 
-/** The chat events that can alert the user. */
-export type AlertEvent = 'needs_approval' | 'question' | 'finished';
-/** banner: OS notification plus badge; badge: counted on the tray/dock badge only. */
-export type AlertMode = 'banner' | 'badge' | 'off';
-
-export interface AlertSettings {
-  modes: Record<AlertEvent, AlertMode>;
-  /** A short chime with each alert. */
-  sound: boolean;
-  /** Flash the taskbar button when an alert fires and GAIA isn't focused. */
-  flash: boolean;
-  /** Hold off idle sleep while a chat turn runs (desktop app). */
-  keepAwake: boolean;
-  /** On battery, stop holding off sleep below this percent; 0 never stops. */
-  batteryFloor: number;
-}
-
-export const ALERT_SETTINGS_KEY = 'gaia_alert_settings';
-
-export const DEFAULT_ALERT_SETTINGS: AlertSettings = {
-  modes: { needs_approval: 'banner', question: 'banner', finished: 'banner' },
-  sound: false,
-  flash: true,
-  keepAwake: true,
-  batteryFloor: 20,
-};
-
-const ALERT_MODES: readonly AlertMode[] = ['banner', 'badge', 'off'];
+export {
+  ALERT_SETTINGS_KEY,
+  DEFAULT_ALERT_SETTINGS,
+  type AlertEvent,
+  type AlertMode,
+  type AlertSettings,
+} from '../utils/alertSettings.core';
 
 /** Saved settings over the defaults; an unreadable or invalid value is reported and replaced. */
 export function loadAlertSettings(): AlertSettings {
@@ -241,30 +228,7 @@ export function loadAlertSettings(): AlertSettings {
     console.warn('[alerts] Notification settings unreadable (site data blocked); using defaults.', err);
     return DEFAULT_ALERT_SETTINGS;
   }
-  if (!raw) return DEFAULT_ALERT_SETTINGS;
-  let saved: Partial<AlertSettings>;
-  try {
-    saved = JSON.parse(raw);
-  } catch (err) {
-    console.warn('[alerts] Saved notification settings are corrupt; using defaults.', err);
-    return DEFAULT_ALERT_SETTINGS;
-  }
-  const modes = { ...DEFAULT_ALERT_SETTINGS.modes };
-  for (const event of Object.keys(modes) as AlertEvent[]) {
-    const m = saved.modes?.[event];
-    if (m !== undefined && ALERT_MODES.includes(m)) modes[event] = m;
-    else if (m !== undefined) console.warn(`[alerts] Ignored unknown mode ${String(m)} for ${event}.`);
-  }
-  const bool = (v: unknown, d: boolean) => (typeof v === 'boolean' ? v : d);
-  const floor = saved.batteryFloor;
-  return {
-    modes,
-    sound: bool(saved.sound, DEFAULT_ALERT_SETTINGS.sound),
-    flash: bool(saved.flash, DEFAULT_ALERT_SETTINGS.flash),
-    keepAwake: bool(saved.keepAwake, DEFAULT_ALERT_SETTINGS.keepAwake),
-    batteryFloor: typeof floor === 'number' && floor >= 0 && floor <= 100
-      ? floor : DEFAULT_ALERT_SETTINGS.batteryFloor,
-  };
+  return parseAlertSettings(raw);
 }
 
 interface AlertSettingsState extends AlertSettings {

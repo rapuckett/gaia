@@ -4,7 +4,7 @@
 import { isMessageKey, isolate } from '@webui/i18n/registry';
 import { tEn, type Translate } from '@webui/i18n/translator';
 
-import type { AgentMcpServer, ConnectorListEntry, ConnectorRow, UnavailableConnectorRow } from '@/api/client.types';
+import type { AgentMcpServer, ConnectorListEntry, DisconnectOutcome, ConnectorRow, UnavailableConnectorRow } from '@/api/client.types';
 
 /** The search box appears once there are more connectors than this, as on the web. */
 export const SEARCH_ABOVE = 6;
@@ -82,4 +82,26 @@ export function tileStatus(c: ConnectorRow): TileStatus {
     if (!c.configured) return c.configurable === false ? { kind: 'setupRequired' } : { kind: 'none' };
     if (c.type === 'mcp_server' && c.enabled === false) return { kind: 'paused' };
     return { kind: 'connected', accountId: c.account_id };
+}
+
+/** What a disconnect tells the person about the provider-side revoke, or null when nothing needs saying. */
+export function disconnectNotice(outcome: DisconnectOutcome | null, connector: ConnectorRow, t: Translate): string | null {
+    if (outcome === null) return connector.type === 'oauth_pkce' ? t('mobileApp.connectors.revokeUnreported') : null;
+    if (!('revoke_supported' in outcome)) return null;
+    if (outcome.revoke_supported) {
+        return outcome.revoked_remotely
+            ? null
+            : t('settings.connectors.notRevoked', { reason: String(outcome.revoke_error ?? t('settings.advanced.unknown')) });
+    }
+    if (outcome.revoke_error) return t('settings.connectors.localOnly', { reason: String(outcome.revoke_error) });
+    return t('settings.connectors.noRevokeApi');
+}
+
+/** The saved OAuth client's status line, as the desktop's OAuth client editor words it. */
+export function oauthClientStatus(connector: ConnectorRow, t: Translate): string | null {
+    const client = connector.oauth_client;
+    if (!client) return null;
+    if (client.source === 'keyring') return t('settings.connectors.savedClient', { id: client.client_id ?? '' });
+    if (client.source === 'env') return t('settings.connectors.envClient', { id: client.client_id ?? '' });
+    return t('settings.connectors.noClient');
 }

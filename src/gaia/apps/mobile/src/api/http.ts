@@ -35,18 +35,25 @@ import type {
     AllPermissions,
     ConnectorGrants,
     ConnectorList,
+    DisconnectOutcome,
     ContextUsageResult,
+    CustomModelRemoved,
+    CustomModelReport,
     ConsolidateMemoryResult,
     DeleteDocumentResult,
     DeleteMessagesResult,
     DeleteScheduleResult,
+    Goal,
+    GoalStats,
     DocumentListResponse,
     DocumentResponse,
     DocumentStatus,
     EmbeddingCoverage,
+    FilePreviewResponse,
     FollowUpOutcome,
     FollowUpResult,
     DeleteSessionResult,
+    DiscordStatus,
     FeaturedLibraries,
     GaiaClient,
     GpuMemoryStatus,
@@ -57,15 +64,24 @@ import type {
     LocalModelStatus,
     KnowledgeSaveResult,
     MemoryActivityDay,
+    MemoryCleared,
+    MemoryConversation,
+    MemoryEntity,
     MemoryKnowledgePage,
+    MemoryReinitializeResult,
     MemorySettings,
+    MemorySettingsUpdateResponse,
     MemoryStats,
     MemoryToolStat,
+    MCPServerStatus,
+    MemoryTurn,
     MemoryUpcomingItem,
+    ProfileStreamEvent,
     MessageList,
     ModelNeed,
     ModelServerInfo,
     PreflightReport,
+    ProviderConnected,
     ProvidersResponse,
     RestartModelResult,
     RequestOptions,
@@ -86,6 +102,7 @@ import type {
     SetupRunStatus,
     Settings,
     SkillList,
+    SpendingReport,
     UndoSettings,
     UploadedFile,
     UserInputResult,
@@ -94,24 +111,35 @@ import {
     ATTACH_HEADER_TIMEOUT_MS,
     connectorActivationPath,
     connectorActivationsPath,
+    connectorDisablePath,
     connectorGrantPath,
     connectorGrantsPath,
+    CONNECTOR_REVOKE_OUTCOME_MS,
+    connectorPath,
     cloudPricesPath,
     documentPath,
+    goalPath,
     ENDPOINTS,
+    filePath,
     chatContextPath,
     chatPermissionGrantsPath,
     chatPerformancePath,
     chatPermissionsPath,
     providerConnectPath,
+    localCustomModelPath,
     providerModelsPath,
     followupOutcomePath,
     MESSAGE_PAGE_SIZE,
     QUEUED_IDLE_MS,
     memoryActivityPath,
+    memoryConversationPath,
+    memoryConversationsPath,
+    memoryConversationsSearchPath,
     memoryKnowledgeItemPath,
     memoryKnowledgePath,
+    memoryStreamInferencePath,
     memoryUpcomingPath,
+    PROFILE_STREAM_IDLE_MS,
     schedulePath,
     scheduleResultsPath,
     scheduleRunPath,
@@ -228,6 +256,36 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
         return res;
     }
 
+    /** The PC's connector events, or null when the stream can't be opened. */
+    async function openConnectorEvents(signal: AbortSignal): Promise<AsyncGenerator<StreamEvent> | null> {
+        try {
+            const res = await request('GET', ENDPOINTS.connectorsEvents, undefined, signal);
+            return res.body ? parseSseStream(res.body) : null;
+        } catch {
+            return null;
+        }
+    }
+
+    /** The disconnect event's payload for this connector, or null when none arrives in time. */
+    async function readDisconnectOutcome(events: AsyncGenerator<StreamEvent>, connectorId: string): Promise<DisconnectOutcome | null> {
+        const read = (async () => {
+            for await (const event of events) {
+                const { type, payload } = event as unknown as { type: string; payload?: Record<string, unknown> };
+                if (type === 'connector.disconnected' && payload?.connector_id === connectorId) return payload as DisconnectOutcome;
+            }
+            return null;
+        })().catch(() => null);
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        const late = new Promise<null>((resolve) => {
+            timer = setTimeout(() => resolve(null), CONNECTOR_REVOKE_OUTCOME_MS);
+        });
+        try {
+            return await Promise.race([read, late]);
+        } finally {
+            clearTimeout(timer);
+        }
+    }
+
     async function readJson<T>(res: FetchResponseLike, path: string): Promise<T> {
         const text = await res.text();
         try {
@@ -255,6 +313,28 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
     async function putJson<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
         return readJson<T>(await request('PUT', path, body, signal), path);
+    }
+
+    // The whole body, drained from the stream: a file on the PC is read by this client only, never by a URL handed to the system.
+    async function readBytes(path: string, signal?: AbortSignal): Promise<Uint8Array> {
+        const res = await request('GET', path, undefined, signal);
+        if (!res.body) throw new GaiaStreamError('mobileApp.error.noBody');
+        const reader = res.body.getReader();
+        const parts: Uint8Array[] = [];
+        let size = 0;
+        for (;;) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            parts.push(value);
+            size += value.length;
+        }
+        const out = new Uint8Array(size);
+        let at = 0;
+        for (const part of parts) {
+            out.set(part, at);
+            at += part.length;
+        }
+        return out;
     }
 
     async function* streamTurn(
@@ -301,6 +381,26 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
         } finally {
             signal?.removeEventListener('abort', drop);
             // Closes a connection left open; after a body read to its end this does nothing.
+            drop();
+        }
+    }
+
+    /** A profile-setup stream, to its `done` event; one that closes before it is an error, as the web's onerror treats it. */
+    async function* streamProfile(path: string, signal?: AbortSignal): AsyncGenerator<ProfileStreamEvent> {
+        const connection = new AbortController();
+        const drop = () => connection.abort();
+        if (signal?.aborted) drop();
+        else signal?.addEventListener('abort', drop);
+        try {
+            const res = await request('GET', path, undefined, connection.signal, { endpoint: 'attach', ms: ATTACH_HEADER_TIMEOUT_MS, abort: drop });
+            if (!res.body) throw new GaiaStreamError('mobileApp.error.noBody');
+            for await (const event of parseSseStream(res.body, () => PROFILE_STREAM_IDLE_MS)) {
+                yield event as unknown as ProfileStreamEvent;
+                if (event.type === 'done') return;
+            }
+            throw new GaiaStreamError('mobileApp.error.streamClosed');
+        } finally {
+            signal?.removeEventListener('abort', drop);
             drop();
         }
     }
@@ -361,8 +461,16 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             return getJson<Settings>(ENDPOINTS.settings, options?.signal);
         },
 
+        updateSettings(patch, options) {
+            return putJson<Settings>(ENDPOINTS.settings, patch, options?.signal);
+        },
+
         setNetworkPolicy(policy, options) {
             return putJson<Settings>(ENDPOINTS.settings, { network_policy: policy }, options?.signal);
+        },
+
+        getDiscordStatus(options) {
+            return getJson<DiscordStatus>(ENDPOINTS.messagingDiscord, options?.signal);
         },
 
         getUndoSettings(options) {
@@ -385,12 +493,36 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             return getJson<CloudPriceList>(cloudPricesPath(provider), options?.signal);
         },
 
+        getSpending(options) {
+            return getJson<SpendingReport>(ENDPOINTS.spending, options?.signal);
+        },
+
+        setSpendingLimit(limitUsd, options) {
+            return putJson<SpendingReport>(ENDPOINTS.spendingLimit, { limit_usd: limitUsd }, options?.signal);
+        },
+
+        allowSpendingThisMonth(options) {
+            return postJson<SpendingReport>(ENDPOINTS.spendingAllowMonth, undefined, options?.signal);
+        },
+
         getActiveModel(options) {
             return getJson<ActiveModel>(ENDPOINTS.providersActive, options?.signal);
         },
 
         listProviderModels(provider, options) {
             return getJson<ProviderModelsResponse>(providerModelsPath(provider), options?.signal);
+        },
+
+        checkCustomModel(url, quant, options) {
+            return postJson<CustomModelReport>(ENDPOINTS.localCustomModelCheck, { url, quant: quant || null }, options?.signal);
+        },
+
+        addCustomModel(url, quant, options) {
+            return postJson<{ report: CustomModelReport }>(ENDPOINTS.localCustomModel, { url, quant: quant || null }, options?.signal);
+        },
+
+        removeCustomModel(model, options) {
+            return deleteJson<CustomModelRemoved>(localCustomModelPath(model), options?.signal);
         },
 
         selectModel(model, options) {
@@ -484,6 +616,22 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             return streamTurn('GET', path, undefined, 'attach', ATTACH_HEADER_TIMEOUT_MS, options?.signal);
         },
 
+        streamMemoryDiscovery(options) {
+            return streamProfile(ENDPOINTS.memoryStreamDiscovery, options?.signal);
+        },
+
+        streamMemoryInference(includeBrowser, options) {
+            return streamProfile(memoryStreamInferencePath(includeBrowser), options?.signal);
+        },
+
+        commitMemoryDiscovery(items, options) {
+            return postJson<{ stored: number }>(ENDPOINTS.memoryCommitDiscovery, { items }, options?.signal);
+        },
+
+        commitMemoryInference(insights, options) {
+            return postJson<{ stored: number }>(ENDPOINTS.memoryCommitInference, { insights }, options?.signal);
+        },
+
         async *watchSessionEvents(options) {
             const connection = new AbortController();
             const drop = () => connection.abort();
@@ -563,6 +711,25 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             await request('DELETE', connectorActivationPath(connectorId, agentId), undefined, options?.signal);
         },
 
+        async disableConnector(connectorId, options) {
+            await request('POST', connectorDisablePath(connectorId), {}, options?.signal);
+        },
+
+        async disconnectConnector(connectorId, options) {
+            // The revoke outcome only travels on the events stream, so listen before deleting.
+            const listen = new AbortController();
+            const stop = () => listen.abort();
+            options?.signal?.addEventListener('abort', stop);
+            try {
+                const events = await openConnectorEvents(listen.signal);
+                await request('DELETE', connectorPath(connectorId), undefined, options?.signal);
+                return events ? await readDisconnectOutcome(events, connectorId) : null;
+            } finally {
+                options?.signal?.removeEventListener('abort', stop);
+                stop();
+            }
+        },
+
         listAgentMcps(options) {
             return getJson<AgentMcpList>(ENDPOINTS.connectorsAgentMcps, options?.signal);
         },
@@ -611,6 +778,22 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             return getJson<MemoryToolStat[]>(ENDPOINTS.memoryTools, options?.signal);
         },
 
+        listMemoryEntities(options) {
+            return getJson<MemoryEntity[]>(ENDPOINTS.memoryEntities, options?.signal);
+        },
+
+        listMemoryConversations(limit, options) {
+            return getJson<MemoryConversation[]>(memoryConversationsPath(limit), options?.signal);
+        },
+
+        searchMemoryConversations(query, limit, options) {
+            return getJson<MemoryTurn[]>(memoryConversationsSearchPath(query, limit), options?.signal);
+        },
+
+        getMemoryConversation(sessionId, options) {
+            return getJson<MemoryTurn[]>(memoryConversationPath(sessionId), options?.signal);
+        },
+
         getMemoryUpcoming(days, options) {
             return getJson<MemoryUpcomingItem[]>(memoryUpcomingPath(days), options?.signal);
         },
@@ -631,6 +814,39 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             return deleteJson<unknown>(memoryKnowledgeItemPath(knowledgeId), options?.signal);
         },
 
+        listGoals(options) {
+            return getJson<{ goals: Goal[]; total: number }>(ENDPOINTS.goals, options?.signal);
+        },
+
+        getGoalStats(options) {
+            return getJson<GoalStats>(ENDPOINTS.goalsStats, options?.signal);
+        },
+
+        getGoalStoreHealth(options) {
+            return getJson<{ error: string | null }>(ENDPOINTS.goalsHealth, options?.signal);
+        },
+
+        createGoal(body, options) {
+            return postJson<Goal>(ENDPOINTS.goals, body, options?.signal);
+        },
+
+        approveGoal(goalId, options) {
+            return putJson<Goal>(goalPath(goalId, 'approve'), undefined, options?.signal);
+        },
+
+        rejectGoal(goalId, options) {
+            return putJson<Goal>(goalPath(goalId, 'reject'), undefined, options?.signal);
+        },
+
+        cancelGoal(goalId, options) {
+            return putJson<Goal>(goalPath(goalId, 'cancel'), undefined, options?.signal);
+        },
+
+        async deleteGoal(goalId, options) {
+            // The PC answers 204 with no body.
+            await request('DELETE', goalPath(goalId), undefined, options?.signal);
+        },
+
         getMemoryStats(options) {
             return getJson<MemoryStats>(ENDPOINTS.memoryStats, options?.signal);
         },
@@ -640,7 +856,15 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
         },
 
         updateMemorySettings(settings, options) {
-            return putJson<MemorySettings>(ENDPOINTS.memorySettings, settings, options?.signal);
+            return putJson<MemorySettingsUpdateResponse>(ENDPOINTS.memorySettings, settings, options?.signal);
+        },
+
+        clearAllMemory(options) {
+            return deleteJson<MemoryCleared>(ENDPOINTS.memoryAll, options?.signal);
+        },
+
+        reinitializeMemory(options) {
+            return postJson<MemoryReinitializeResult>(ENDPOINTS.memoryReinitialize, undefined, options?.signal);
         },
 
         getEmbeddingCoverage(options) {
@@ -695,6 +919,18 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             return deleteJson<DeleteDocumentResult>(documentPath(docId), options?.signal);
         },
 
+        getFilePreview(path, sessionId, options) {
+            return getJson<FilePreviewResponse>(filePath('filesPreview', path, sessionId), options?.signal);
+        },
+
+        getImageBytes(path, sessionId, options) {
+            return readBytes(filePath('filesImage', path, sessionId), options?.signal);
+        },
+
+        getDocumentBytes(docId, options) {
+            return readBytes(documentPath(docId, 'documentFile'), options?.signal);
+        },
+
         getDocumentStatus(docId, options) {
             return getJson<DocumentStatus>(documentPath(docId, 'documentStatus'), options?.signal);
         },
@@ -705,6 +941,22 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         getSystemStatus(options) {
             return getJson<SystemStatus>(ENDPOINTS.systemStatus, options?.signal);
+        },
+
+        downloadModel(model, options) {
+            return postJson<{ status: string; model: string }>(
+                ENDPOINTS.systemDownloadModel,
+                { model_name: model, force: options?.force ?? false, load_after: options?.loadAfter ?? false },
+                options?.signal,
+            );
+        },
+
+        loadModel(modelName, force, options) {
+            return postJson<{ status: string; model: string; ctx_size: number }>(
+                ENDPOINTS.systemLoadModel,
+                { model_name: modelName, force },
+                options?.signal,
+            );
         },
 
         getLocalModelStatus(options) {
@@ -772,13 +1024,25 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             return getJson<LemonadeTarget>(ENDPOINTS.lemonadeTarget, options?.signal);
         },
 
+        setLemonadeTarget(body, options) {
+            return postJson<LemonadeTarget & { daemon: unknown }>(ENDPOINTS.lemonadeTarget, body, options?.signal);
+        },
+
+        getMcpStatus(options) {
+            return getJson<{ servers: MCPServerStatus[] }>(ENDPOINTS.mcpStatus, options?.signal);
+        },
+
         detectLemonade(options) {
             return getJson<{ found: LemonadeFound | null; unchecked?: string[] }>(ENDPOINTS.lemonadeDetect, options?.signal);
         },
 
         connectProvider(provider, options) {
             // No key travels from the phone: a blank body keeps the key the PC already holds.
-            return postJson<{ remembered: boolean }>(providerConnectPath(provider), {}, options?.signal);
+            return postJson<ProviderConnected>(providerConnectPath(provider), {}, options?.signal);
+        },
+
+        retryKeyStore(options) {
+            return postJson<{ retrying: boolean }>(ENDPOINTS.providersKeyStoreRetry, undefined, options?.signal);
         },
 
         recheckSetupNpu(options) {

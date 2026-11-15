@@ -5,15 +5,20 @@ import type {
     ActiveModel,
     CloudPriceList,
     ContextChoice,
+    CustomModelReport,
     AgentCapabilities,
     AgentInfo,
     AgentMcpServer,
+    MCPServerStatus,
     ChatPerformance,
     ConnectorListEntry,
+    DisconnectOutcome,
     ContextUsageResult,
     ConsolidateMemoryResult,
     CreateSessionRequest,
+    DiscordStatus,
     EmbeddingCoverage,
+    FilePreviewResponse,
     FollowUpOutcome,
     DocumentListResponse,
     DocumentResponse,
@@ -23,21 +28,31 @@ import type {
     HealthResponse,
     LemonadeFound,
     LemonadeTarget,
+    LemonadeTargetBody,
     LocalModelStatus,
     KnowledgeCreateBody,
     KnowledgeUpdateBody,
+    KnowledgeListParams,
     MemoryActivityDay,
+    MemoryCleared,
+    MemoryConversation,
+    MemoryKnowledgeEntry,
     MemoryKnowledgeItem,
+    MemoryReinitializeResult,
+    MemoryTurn,
     MemorySettings,
     MemoryStats,
     MemoryToolStat,
     MemoryUpcomingItem,
+    ProfileStreamEvent,
     Message,
     MessageList,
     ModelNeed,
     ModelServerInfo,
     PreflightReport,
     ProvidersResponse,
+    Goal,
+    GoalStats,
     ParsedSchedule,
     AllPermissions,
     PermissionMode,
@@ -61,6 +76,7 @@ import type {
     SkillList,
     FeaturedLibraries,
     LinkPreview,
+    SpendingReport,
     StartScreen,
     StreamEvent,
     SystemStatus,
@@ -121,6 +137,10 @@ export interface FakeClientData {
     providerModels?: Record<string, ProviderModelsResponse>;
     /** What getContextChoice answers, by model; setContextChoice updates it. */
     contexts?: Record<string, ContextChoice>;
+    /** Makes downloadModel fail with this, as the PC's 403 does for a phone. */
+    modelDownloadError?: GaiaApiError;
+    /** What checkCustomModel answers, by link. */
+    customReports?: Record<string, CustomModelReport>;
     /** Makes selectModel fail with this. */
     selectError?: GaiaApiError;
     /** What getPermissions answers, by chat; a chat not listed asks first. */
@@ -131,6 +151,8 @@ export interface FakeClientData {
     defaultPermissionMode?: PermissionMode;
     /** Answers the default-mode PUT with the 403 the PC gives a phone. */
     defaultModePcOnly?: boolean;
+    /** Answers downloadModel and loadModel with that error, as a PC that refuses the phone does. */
+    modelActionError?: GaiaApiError;
     /** What getContextUsage answers. */
     contextUsage?: ContextUsageResult;
     /** What getChatPerformance answers. */
@@ -153,6 +175,8 @@ export interface FakeClientData {
     linkPreview?: (url: string) => LinkPreview;
     resources?: ResourceUsage;
     start?: StartScreen;
+    /** What a disconnect reports about the provider-side revoke; `{}` when unset. */
+    disconnectOutcome?: DisconnectOutcome | null;
     /** What watchSessionEvents streams before it ends; the real stream never ends on its own. */
     sessionEvents?: unknown[];
     /** Most chats a search returns before it says `truncated`. */
@@ -166,6 +190,8 @@ export interface FakeClientData {
     setupPlan?: SetupPlan;
     modelServer?: ModelServerInfo;
     providers?: ProvidersResponse;
+    /** What getSpending answers; setting the limit or allowing the month changes it. */
+    spending?: SpendingReport;
     /** What getCloudPrices answers, by provider. */
     cloudPrices?: Record<string, CloudPriceList>;
     /** What recheckSetupNpu answers; an Error is thrown. */
@@ -174,6 +200,10 @@ export interface FakeClientData {
     preflight?: PreflightReport | Error;
     /** What getLemonadeTarget answers; an Error is thrown. */
     lemonadeTarget?: LemonadeTarget | Error;
+    /** Thrown by setModelServerBackend and setLemonadeTarget, as the PC's 403 is. */
+    serverChangeError?: Error;
+    /** What getMcpStatus answers. */
+    mcpServers?: MCPServerStatus[];
     /** What detectLemonade answers; an Error is thrown. */
     lemonadeDetect?: { found: LemonadeFound | null; unchecked?: string[] } | Error;
     documents?: DocumentListResponse;
@@ -185,15 +215,25 @@ export interface FakeClientData {
     documentStatuses?: Record<string, Partial<DocumentStatus>>;
     /** Makes a library action on a document reject with this message, by action. */
     documentFailures?: Partial<Record<DocumentAction, string>>;
+    /** What getFilePreview answers, by path; a path not listed is a 404. */
+    filePreviews?: Record<string, FilePreviewResponse>;
+    /** What getImageBytes and getDocumentBytes answer, by path or document id; one not listed is a 404. */
+    fileBytes?: Record<string, Uint8Array>;
     /** What getCapabilities answers, by chat; a chat not listed has no agent running (409). */
     capabilities?: Record<string, AgentCapabilities>;
     memorySettings?: MemorySettings;
+    /** What listGoals answers; approve, reject, cancel and delete change it. */
+    goals?: Goal[] | Error;
+    /** What getGoalStoreHealth answers. */
+    goalStoreError?: string | null;
     /** What getSettings answers; setNetworkPolicy changes it. */
     settings?: Settings;
     /** Thrown by setNetworkPolicy, as the PC's 403 is. */
     networkPolicyError?: Error;
     /** What getUndoSettings answers; updateUndoSettings changes it. */
     undoSettings?: UndoSettings;
+    /** What getDiscordStatus answers; an Error is thrown (a phone gets the PC's 403). */
+    discordStatus?: DiscordStatus | Error;
     /** Thrown by deleteSession for these chat ids. */
     deleteSessionErrors?: Record<string, Error>;
     /** Thrown by updateMemorySettings. */
@@ -204,9 +244,15 @@ export interface FakeClientData {
     /** What the activity read answers for a range in days; an Error is thrown. */
     memoryActivity?: (days: number) => MemoryActivityDay[] | Error;
     memoryTools?: MemoryToolStat[] | Error;
-    /** The memories the About you tab lists; an Error makes the list fail. Adds, edits and forgets change it. */
-    memoryKnowledge?: MemoryKnowledgeItem[] | Error;
+    /** The memories the browsers list; an Error makes the list fail. Adds, edits and forgets change it. Fields a row leaves out read as a fresh, unused memory. */
+    memoryKnowledge?: (MemoryKnowledgeItem & Partial<MemoryKnowledgeEntry>)[] | Error;
+    /** The conversations in memory, newest first, with each one's turns; an Error makes the reads fail. */
+    memoryConversations?: { sessions: MemoryConversation[]; turns: Record<string, MemoryTurn[]> } | Error;
     memoryUpcoming?: MemoryUpcomingItem[] | Error;
+    /** What each profile-setup stream sends; `hang` leaves it open after its events until the caller stops it, `error` throws once they are read. */
+    profileStreams?: { discovery?: ProfileScript; inference?: ProfileScript };
+    /** Thrown by both profile commits. */
+    profileCommitError?: Error;
     /** What each maintenance POST answers; an Error makes it fail. Unlisted ones answer a zero result. */
     memoryActionResults?: {
         consolidate?: ConsolidateMemoryResult | Error;
@@ -217,6 +263,12 @@ export interface FakeClientData {
     };
 }
 
+export interface ProfileScript {
+    events: ProfileStreamEvent[];
+    hang?: boolean;
+    error?: Error;
+}
+
 export type DocumentAction = 'cancel' | 'delete' | 'reindex';
 
 export type KnowledgeCall =
@@ -224,7 +276,13 @@ export type KnowledgeCall =
     | { action: 'update'; id: string; body: KnowledgeUpdateBody }
     | { action: 'delete'; id: string };
 
+export type GoalCall =
+    | { action: 'create'; title: string; description: string; priority: string }
+    | { action: 'approve' | 'reject' | 'cancel' | 'delete'; id: string };
+
 export interface FakeGaiaClient extends GaiaClient {
+    /** Each goal create, approve, reject, cancel and delete, in order. */
+    readonly goalCalls: GoalCall[];
     readonly sent: { sessionId: string; message: string }[];
     readonly created: CreateSessionRequest[];
     readonly cancelled: string[];
@@ -239,18 +297,30 @@ export interface FakeGaiaClient extends GaiaClient {
     readonly followUps: { sessionId: string; text: string }[];
     readonly restarts: { confirm: boolean }[];
     readonly selected: string[];
+    readonly customAdds: { url: string; quant?: string }[];
+    readonly customRemoved: string[];
     readonly contextSets: { model: string; ctxSize: number | null }[];
+    /** How often memory was wiped (clears) and wiped then re-collected (reinitializes). */
+    readonly memoryWipes: { clears: number; reinitializes: number };
+    /** The monthly limits saved (null removes it), and how often the month was allowed. */
+    readonly spendingLimitSets: (number | null)[];
+    readonly spendingAllows: { count: number };
     /** The files uploadFile took, in order. */
     readonly uploads: { name: string; size: number }[];
     readonly downloads: { modelId: string; acknowledgeLowDisk: boolean }[];
+    readonly modelDownloads: { modelName: string; force: boolean; loadAfter: boolean }[];
+    readonly modelLoads: { modelName: string; force: boolean }[];
     readonly removals: string[];
     readonly backendSets: string[];
+    readonly targetSets: LemonadeTargetBody[];
     /** The setup model choices saved, in order. */
     readonly setupChoices: { kind: 'chat' | 'vision' | 'skip'; modelId: string | null; flag?: boolean }[];
     /** The providers connectProvider was asked for, in order. */
     readonly connects: string[];
     /** How many times recheckSetupNpu was asked. */
     readonly npuRechecks: number;
+    /** How many times retryKeyStore was asked. */
+    readonly keyStoreRetries: number;
     readonly documentActions: { action: DocumentAction; docId: string }[];
     readonly setupStarts: { skipChatModel: boolean; gaiaLemonade: boolean; upgradeEmbedded: boolean; serverOnly: boolean }[];
     readonly detached: { sessionId: string; docId: string }[];
@@ -261,8 +331,16 @@ export interface FakeGaiaClient extends GaiaClient {
     readonly memoryActions: string[];
     /** Each memory add, edit and forget, in order. */
     readonly knowledgeCalls: KnowledgeCall[];
+    /** The params of each knowledge list read, in order. */
+    readonly knowledgeReads: KnowledgeListParams[];
+    /** Each conversation search's query, in order. */
+    readonly conversationSearches: string[];
     /** The range of each activity read, in order. */
     readonly memoryActivityReads: number[];
+    /** Each profile stream opened (with the browser-history choice for inference), and whether the caller has since stopped it. */
+    readonly profileStreamOpens: { kind: 'discovery' | 'inference'; includeBrowser?: boolean; stopped: boolean }[];
+    /** Each profile commit, in order. */
+    readonly profileCommits: { kind: 'discovery' | 'inference'; items: unknown[] }[];
     /** How many times the stats were read. */
     readonly memoryStatsReads: number;
 }
@@ -286,9 +364,16 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
     const activations: Record<string, Record<string, boolean>> = cloneNested(data.activations);
     const restarts: FakeGaiaClient['restarts'] = [];
     const selected: string[] = [];
+    const customAdds: FakeGaiaClient['customAdds'] = [];
+    const customRemoved: string[] = [];
     const contextSets: FakeGaiaClient['contextSets'] = [];
+    const memoryWipes = { clears: 0, reinitializes: 0 };
+    const spendingLimitSets: FakeGaiaClient['spendingLimitSets'] = [];
+    const spendingAllows = { count: 0 };
     const uploads: FakeGaiaClient['uploads'] = [];
     const downloads: FakeGaiaClient['downloads'] = [];
+    const modelDownloads: FakeGaiaClient['modelDownloads'] = [];
+    const modelLoads: FakeGaiaClient['modelLoads'] = [];
     const removals: FakeGaiaClient['removals'] = [];
     const schedules = [...(data.schedules ?? [])];
     const scheduleActions: FakeGaiaClient['scheduleActions'] = [];
@@ -316,9 +401,11 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
     const followUps: FakeGaiaClient['followUps'] = [];
     const setupStarts: FakeGaiaClient['setupStarts'] = [];
     const backendSets: string[] = [];
+    const targetSets: LemonadeTargetBody[] = [];
     const setupChoices: FakeGaiaClient['setupChoices'] = [];
     const connects: string[] = [];
     let npuRechecks = 0;
+    let keyStoreRetries = 0;
     let checkAt = 0;
     let statusAt = 0;
     const nextOf = <T,>(list: (T | Error)[], at: number): T => {
@@ -334,6 +421,33 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
     let memoryStatsReads = 0;
     const memoryActivityReads: number[] = [];
     const knowledgeCalls: KnowledgeCall[] = [];
+    const knowledgeReads: KnowledgeListParams[] = [];
+    const conversationSearches: string[] = [];
+    const profileStreamOpens: FakeGaiaClient['profileStreamOpens'] = [];
+    const profileCommits: FakeGaiaClient['profileCommits'] = [];
+    async function* profileStream(kind: 'discovery' | 'inference', includeBrowser: boolean | undefined, signal?: AbortSignal): AsyncGenerator<ProfileStreamEvent> {
+        const open = { kind, ...(includeBrowser === undefined ? {} : { includeBrowser }), stopped: false };
+        profileStreamOpens.push(open);
+        signal?.addEventListener('abort', () => (open.stopped = true));
+        const script = data.profileStreams?.[kind];
+        if (!script) throw new GaiaApiError(503, 'This fake client was given no profile stream.');
+        yield* script.events;
+        if (script.error) throw script.error;
+        if (script.hang) await new Promise<void>((resolve) => (signal?.aborted ? resolve() : signal?.addEventListener('abort', () => resolve())));
+    }
+    const goalCalls: GoalCall[] = [];
+    let goals = data.goals instanceof Error ? [] : [...(data.goals ?? [])];
+    const goalById = (id: string): Goal => {
+        const goal = goals.find((g) => g.id === id);
+        if (!goal) throw new GaiaApiError(404, 'Goal not found');
+        return goal;
+    };
+    const setGoal = (id: string, status: Goal['status']): Goal => {
+        const goal = goalById(id);
+        const next = { ...goal, status };
+        goals = goals.map((g) => (g.id === id ? next : g));
+        return next;
+    };
     let knowledge = data.memoryKnowledge instanceof Error ? [] : [...(data.memoryKnowledge ?? [])];
     let knowledgeAdds = 0;
     function memoryAction<T>(name: string, result: T | Error): T {
@@ -372,16 +486,27 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         followUps,
         restarts,
         selected,
+        customAdds,
+        customRemoved,
         contextSets,
+        memoryWipes,
+        spendingLimitSets,
+        spendingAllows,
         uploads,
         downloads,
+        modelDownloads,
+        modelLoads,
         removals,
         setupStarts,
         backendSets,
+        targetSets,
         setupChoices,
         connects,
         get npuRechecks() {
             return npuRechecks;
+        },
+        get keyStoreRetries() {
+            return keyStoreRetries;
         },
         detached,
         uploaded,
@@ -389,7 +514,60 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         capabilityReads,
         memoryActions,
         memoryActivityReads,
+        profileStreamOpens,
+        profileCommits,
         knowledgeCalls,
+        knowledgeReads,
+        conversationSearches,
+        goalCalls,
+        async listGoals() {
+            if (data.goals instanceof Error) throw data.goals;
+            return { goals, total: goals.length };
+        },
+        async getGoalStats(): Promise<GoalStats> {
+            if (data.goals instanceof Error) throw data.goals;
+            const count: GoalStats = { goals: {}, tasks: {} };
+            for (const goal of goals) count.goals[goal.status] = (count.goals[goal.status] ?? 0) + 1;
+            return count;
+        },
+        async getGoalStoreHealth() {
+            return { error: data.goalStoreError ?? null };
+        },
+        async createGoal(body) {
+            goalCalls.push({ action: 'create', ...body });
+            const now = new Date().toISOString();
+            const goal: Goal = {
+                id: `goal-${goals.length + 1}`,
+                ...body,
+                status: 'queued',
+                source: 'user',
+                mode_required: 'goal_driven',
+                approved_for_auto: true,
+                progress_notes: '',
+                created_at: now,
+                updated_at: now,
+                tasks: [],
+            };
+            goals = [goal, ...goals];
+            return goal;
+        },
+        async approveGoal(id) {
+            goalCalls.push({ action: 'approve', id });
+            return setGoal(id, 'queued');
+        },
+        async rejectGoal(id) {
+            goalCalls.push({ action: 'reject', id });
+            return setGoal(id, 'rejected');
+        },
+        async cancelGoal(id) {
+            goalCalls.push({ action: 'cancel', id });
+            return setGoal(id, 'cancelled');
+        },
+        async deleteGoal(id) {
+            goalCalls.push({ action: 'delete', id });
+            goalById(id);
+            goals = goals.filter((g) => g.id !== id);
+        },
         get memoryStatsReads() {
             return memoryStatsReads;
         },
@@ -441,12 +619,44 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             if (!list) throw new GaiaApiError(503, `This fake client was given no prices for ${provider}.`);
             return list;
         },
+        async getSpending() {
+            if (!data.spending) throw new GaiaApiError(503, 'This fake client was given no spending report.');
+            return data.spending;
+        },
+        async setSpendingLimit(limitUsd) {
+            if (!data.spending) throw new GaiaApiError(503, 'This fake client was given no spending report.');
+            if (limitUsd !== null && !(limitUsd > 0)) throw new GaiaApiError(422, 'The limit must be above zero.');
+            spendingLimitSets.push(limitUsd);
+            data.spending = { ...data.spending, limit_usd: limitUsd, state: limitUsd === null ? 'no_limit' : 'ok' };
+            return data.spending;
+        },
+        async allowSpendingThisMonth() {
+            if (!data.spending) throw new GaiaApiError(503, 'This fake client was given no spending report.');
+            spendingAllows.count += 1;
+            data.spending = { ...data.spending, state: 'allowed_over' };
+            return data.spending;
+        },
         async getActiveModel() {
             if (!data.activeModel) throw new GaiaApiError(503, 'This fake client was given no active model.');
             return data.activeModel;
         },
         async listProviderModels(provider) {
             return data.providerModels?.[provider] ?? { provider, models: [] };
+        },
+        async checkCustomModel(url) {
+            const report = data.customReports?.[url];
+            if (!report) throw new GaiaApiError(422, 'This fake client was given no report for that link.');
+            return report;
+        },
+        async addCustomModel(url, quant) {
+            const report = data.customReports?.[url];
+            if (!report) throw new GaiaApiError(422, 'This fake client was given no report for that link.');
+            customAdds.push({ url, quant });
+            return { report };
+        },
+        async removeCustomModel(model) {
+            customRemoved.push(model);
+            return { removed: model, display_name: model, cleared: [] };
         },
         async selectModel(model) {
             if (data.selectError) throw data.selectError;
@@ -594,6 +804,15 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         async listConnectors() {
             return { connectors: [...(data.connectors ?? [])] };
         },
+        async disableConnector(connectorId) {
+            data.connectors = (data.connectors ?? []).map((c) => (c.id === connectorId && !('error' in c) ? { ...c, enabled: false } : c));
+        },
+        async disconnectConnector(connectorId) {
+            data.connectors = (data.connectors ?? []).map((c) =>
+                c.id === connectorId && !('error' in c) ? { ...c, configured: false, enabled: true, account_id: null } : c,
+            );
+            return data.disconnectOutcome ?? {};
+        },
         async listAgents() {
             return { agents: [...(data.agents ?? [])] };
         },
@@ -652,11 +871,54 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         },
         async listMemoryKnowledge(params) {
             if (data.memoryKnowledge instanceof Error) throw data.memoryKnowledge;
+            knowledgeReads.push(params);
+            const categories = ([] as string[]).concat(params.category ?? []);
+            const needle = params.search?.toLowerCase();
             const rows = knowledge
                 .filter((item) => params.include_sensitive || !item.sensitive)
+                .filter((item) => params.include_superseded || !item.superseded_by)
+                .filter((item) => categories.length === 0 || categories.includes(item.category))
+                .filter((item) => !params.context || item.context === params.context)
+                .filter((item) => !params.entity || item.entity === params.entity)
+                .filter((item) => !needle || item.content.toLowerCase().includes(needle))
                 .sort((a, b) => b.updated_at.localeCompare(a.updated_at));
             const offset = params.offset ?? 0;
-            return { items: rows.slice(offset, offset + (params.limit ?? rows.length)), total: rows.length };
+            const items = rows.slice(offset, offset + (params.limit ?? rows.length)).map(
+                (item): MemoryKnowledgeEntry => ({
+                    confidence: 0.8, metadata: null, use_count: 0, last_used: null, reminded_at: null, superseded_by: null, has_embedding: true, ...item,
+                }),
+            );
+            return { items, total: rows.length };
+        },
+        async listMemoryEntities() {
+            if (data.memoryKnowledge instanceof Error) throw data.memoryKnowledge;
+            const counts = new Map<string, { count: number; last: string }>();
+            for (const item of knowledge) {
+                if (!item.entity) continue;
+                const seen = counts.get(item.entity);
+                counts.set(item.entity, { count: (seen?.count ?? 0) + 1, last: seen && seen.last > item.updated_at ? seen.last : item.updated_at });
+            }
+            return [...counts].map(([entity, { count, last }]) => ({ entity, count, last_updated: last }));
+        },
+        async listMemoryConversations(limit) {
+            const conversations = data.memoryConversations;
+            if (conversations instanceof Error) throw conversations;
+            return (conversations?.sessions ?? []).slice(0, limit);
+        },
+        async searchMemoryConversations(query, limit) {
+            conversationSearches.push(query);
+            const conversations = data.memoryConversations;
+            if (conversations instanceof Error) throw conversations;
+            const needle = query.toLowerCase();
+            return Object.values(conversations?.turns ?? {})
+                .flat()
+                .filter((turn) => turn.content.toLowerCase().includes(needle))
+                .slice(0, limit);
+        },
+        async getMemoryConversation(sessionId) {
+            const conversations = data.memoryConversations;
+            if (conversations instanceof Error) throw conversations;
+            return conversations?.turns[sessionId] ?? [];
         },
         async addMemoryKnowledge(body) {
             knowledgeCalls.push({ action: 'add', body });
@@ -698,11 +960,25 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             if (!data.settings) throw new GaiaApiError(503, 'This fake client was given no settings.');
             return data.settings;
         },
+        async updateSettings(patch) {
+            if (!data.settings) throw new GaiaApiError(503, 'This fake client was given no settings.');
+            data.settings = {
+                ...data.settings,
+                ...(patch.custom_model !== undefined ? { custom_model: patch.custom_model || null } : {}),
+                ...(patch.dynamic_tools !== undefined ? { dynamic_tools: patch.dynamic_tools } : {}),
+            };
+            return data.settings;
+        },
         async setNetworkPolicy(policy) {
             if (!data.settings) throw new GaiaApiError(503, 'This fake client was given no settings.');
             if (data.networkPolicyError) throw data.networkPolicyError;
             data.settings = { ...data.settings, network_policy: policy };
             return data.settings;
+        },
+        async getDiscordStatus() {
+            if (!data.discordStatus) throw new GaiaApiError(503, 'This fake client was given no Discord status.');
+            if (data.discordStatus instanceof Error) throw data.discordStatus;
+            return data.discordStatus;
         },
         async getUndoSettings() {
             if (!data.undoSettings) throw new GaiaApiError(503, 'This fake client was given no undo settings.');
@@ -722,6 +998,18 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             if (data.memorySettingsError) throw data.memorySettingsError;
             data.memorySettings = { ...data.memorySettings, ...settings };
             return data.memorySettings;
+        },
+        async clearAllMemory(): Promise<MemoryCleared> {
+            memoryWipes.clears += 1;
+            const cleared = { knowledge: knowledge.length, tool_history: 0, conversations: 0 };
+            knowledge = [];
+            return cleared;
+        },
+        async reinitializeMemory(): Promise<MemoryReinitializeResult> {
+            memoryWipes.reinitializes += 1;
+            const cleared = { knowledge: knowledge.length, tool_history: 0, conversations: 0 };
+            knowledge = [];
+            return { cleared, system_context: { stored: 0 } };
         },
         async getEmbeddingCoverage() {
             if (!data.embeddingCoverage) throw new GaiaApiError(503, 'This fake client was given no embedding coverage.');
@@ -744,6 +1032,22 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         },
         async refreshSystemContext() {
             return memoryAction('refreshSystemContext', data.memoryActionResults?.refreshSystemContext ?? { stored: 0, skipped: false });
+        },
+        streamMemoryDiscovery(options) {
+            return profileStream('discovery', undefined, options?.signal);
+        },
+        streamMemoryInference(includeBrowser, options) {
+            return profileStream('inference', includeBrowser, options?.signal);
+        },
+        async commitMemoryDiscovery(items) {
+            if (data.profileCommitError) throw data.profileCommitError;
+            profileCommits.push({ kind: 'discovery', items });
+            return { stored: items.length };
+        },
+        async commitMemoryInference(insights) {
+            if (data.profileCommitError) throw data.profileCommitError;
+            profileCommits.push({ kind: 'inference', items: insights });
+            return { stored: insights.length };
         },
         async listSchedules() {
             return { schedules: [...schedules], total: schedules.length };
@@ -842,6 +1146,21 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             library.documents.splice(library.documents.indexOf(doc), 1);
             return { deleted: true };
         },
+        async getFilePreview(path) {
+            const preview = data.filePreviews?.[path];
+            if (!preview) throw new GaiaApiError(404, 'File not found');
+            return preview;
+        },
+        async getImageBytes(path) {
+            const bytes = data.fileBytes?.[path];
+            if (!bytes) throw new GaiaApiError(404, 'Image file not found');
+            return bytes;
+        },
+        async getDocumentBytes(docId) {
+            const bytes = data.fileBytes?.[docId];
+            if (!bytes) throw new GaiaApiError(404, 'Document not found');
+            return bytes;
+        },
         async getDocumentStatus(docId) {
             const doc = library.documents.find((d) => d.id === docId);
             if (!doc) throw new GaiaApiError(404, 'Document not found');
@@ -870,6 +1189,17 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         async getSystemStatus() {
             if (!data.status) throw new GaiaApiError(503, 'This fake client was given no system status.');
             return data.status;
+        },
+        async downloadModel(model, options) {
+            if (data.modelActionError) throw data.modelActionError;
+            if (data.modelDownloadError) throw data.modelDownloadError;
+            modelDownloads.push({ modelName: model, force: options?.force ?? false, loadAfter: options?.loadAfter ?? false });
+            return { status: 'downloading', model };
+        },
+        async loadModel(modelName, force) {
+            if (data.modelActionError) throw data.modelActionError;
+            modelLoads.push({ modelName, force });
+            return { status: 'loading', model: modelName, ctx_size: 65536 };
         },
         async getLocalModelStatus() {
             if (!data.localModel) throw new GaiaApiError(503, 'This fake client was given no model status.');
@@ -919,6 +1249,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             return data.modelServer;
         },
         async setModelServerBackend(backend) {
+            if (data.serverChangeError) throw data.serverChangeError;
             backendSets.push(backend);
             return { ...(data.modelServer as ModelServerInfo), preferred_backend: backend };
         },
@@ -932,6 +1263,16 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             if (data.lemonadeTarget instanceof Error) throw data.lemonadeTarget;
             return data.lemonadeTarget;
         },
+        async setLemonadeTarget(body) {
+            if (data.serverChangeError) throw data.serverChangeError;
+            if (!data.lemonadeTarget || data.lemonadeTarget instanceof Error) throw new GaiaApiError(503, 'This fake client was given no model server target.');
+            targetSets.push(body);
+            data.lemonadeTarget = { ...data.lemonadeTarget, mode: body.mode, base_url: body.base_url ?? data.lemonadeTarget.base_url, saved_base_url: body.base_url ?? data.lemonadeTarget.saved_base_url };
+            return { ...data.lemonadeTarget, daemon: null };
+        },
+        async getMcpStatus() {
+            return { servers: [...(data.mcpServers ?? [])] };
+        },
         async detectLemonade() {
             if (!data.lemonadeDetect) return { found: null };
             if (data.lemonadeDetect instanceof Error) throw data.lemonadeDetect;
@@ -940,6 +1281,10 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         async connectProvider(provider) {
             connects.push(provider);
             return { remembered: true };
+        },
+        async retryKeyStore() {
+            keyStoreRetries += 1;
+            return { retrying: true };
         },
         async recheckSetupNpu() {
             npuRechecks += 1;
