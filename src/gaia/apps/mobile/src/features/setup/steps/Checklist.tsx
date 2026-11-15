@@ -165,7 +165,7 @@ export function ModelChecklist({ plan, selection, onToggle, onDefaultChat, disab
             {installed.length > 0 ? (
                 <Disclosure title={t('setup.models.installed', { n: String(installed.length) })} open={installedOpen} onToggle={() => setInstalledOpen(!installedOpen)}>
                     <Stack gap="md">
-                        {installed.length > SEARCH_ABOVE ? <SearchField value={query} onChangeText={setQuery} placeholder={t('setup.models.search')} /> : null}
+                        {installed.length > SEARCH_ABOVE ? <SearchField value={query} onChangeText={setQuery} placeholder={t.bare('setup.models.search')} accessibilityLabel={t('setup.models.search')} /> : null}
                         {shownInstalled.map((e) => (
                             <MarkedRow
                                 key={e.id}

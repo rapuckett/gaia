@@ -140,6 +140,7 @@ export function NewScheduleSheet({ open, onClose }: NewScheduleSheetProps) {
                         if (nameTaken) create.reset();
                     }}
                     placeholder={t.bare('schedules.namePlaceholder')}
+                    accessibilityLabel={t('schedules.namePlaceholder')}
                     error={nameTaken ? t('schedules.nameTaken') : undefined}
                 />
                 <TextField
@@ -147,6 +148,7 @@ export function NewScheduleSheet({ open, onClose }: NewScheduleSheetProps) {
                     value={prompt}
                     onChangeText={setPrompt}
                     placeholder={t.bare('schedules.promptPlaceholder')}
+                    accessibilityLabel={t('schedules.promptPlaceholder')}
                     multiline
                 />
                 {formError ? <Notice tone="danger" message={formError} /> : null}

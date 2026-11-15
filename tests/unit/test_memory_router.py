@@ -86,7 +86,7 @@ def client(test_store, fake_embedder):
     db = ChatDatabase(":memory:")
     app.dependency_overrides[get_db] = lambda: db
 
-    with TestClient(app, headers={"X-Gaia-UI": "1"}) as c:
+    with TestClient(app, client=("127.0.0.1", 50000), headers={"X-Gaia-UI": "1"}) as c:
         yield c
 
     # Reset singleton so other tests get a fresh one
