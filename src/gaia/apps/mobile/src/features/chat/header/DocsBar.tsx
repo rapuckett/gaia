@@ -95,14 +95,14 @@ export function DocsBar({ sessionId, onFailed, onManage }: { sessionId: string; 
                     );
                 })}
                 {!expanded && hidden > 0 ? (
-                    <Pressable onPress={() => setExpanded(true)}>
+                    <Pressable onPress={() => setExpanded(true)} accessibilityState={{ expanded: false }}>
                         <Text role="label" tone="accent">
                             {t('docsBar.more', { n: hidden })}
                         </Text>
                     </Pressable>
                 ) : null}
                 {expanded && hidden > 0 ? (
-                    <Pressable onPress={() => setExpanded(false)}>
+                    <Pressable onPress={() => setExpanded(false)} accessibilityState={{ expanded: true }}>
                         <Text role="label" tone="accent">
                             {t('docsBar.less')}
                         </Text>

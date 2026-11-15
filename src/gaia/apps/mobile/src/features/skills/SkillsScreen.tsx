@@ -84,7 +84,7 @@ export function SkillsBody({ onTry }: { onTry: (name: string, prompt: string) =>
                             <SearchField
                                 value={query}
                                 onChangeText={setQuery}
-                                placeholder={t('settings.skills.search')}
+                                placeholder={t.bare('settings.skills.search')}
                                 accessibilityLabel={t('settings.skills.search')}
                             />
                         ) : null}
