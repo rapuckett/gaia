@@ -13,6 +13,7 @@ import { ThemeProvider } from '@/ui';
 
 import { fileBrowserScene, FILE_BROWSER_START } from './devScenes';
 import { FileBrowserScreen } from './FileBrowserScreen';
+import { Platform } from 'react-native';
 
 const t = translator('en');
 
@@ -34,7 +35,9 @@ function mount(onAsk: (prompt: string) => boolean) {
     return render(<FileBrowserScreen chatId="chat-1" onClose={() => {}} onAsk={onAsk} initial={FILE_BROWSER_START.folder} />, { wrapper: wrap });
 }
 
-describe('FileBrowserScreen selection bar', () => {
+const describeNative = Platform.OS === 'web' ? describe.skip : describe;
+
+describeNative('FileBrowserScreen selection bar', () => {
     it('stays disabled until a file is picked, then asks GAIA with the localized prompt naming the file', async () => {
         const onAsk = jest.fn(() => true);
         await mount(onAsk);

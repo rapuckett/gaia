@@ -12,6 +12,7 @@ import { GaiaClientProvider } from '@/data/GaiaClientProvider';
 import { ThemeProvider } from '@/ui';
 
 import { FilePreviewScreen } from './FilePreviewScreen';
+import { Platform } from 'react-native';
 
 jest.mock('expo-file-system', () => ({
     Paths: { cache: 'file:///cache/' },
@@ -51,7 +52,9 @@ function mount(path: string, client = createFakeClient({ filePreviews: previews 
     );
 }
 
-describe('FilePreviewScreen', () => {
+const describeNative = Platform.OS === 'web' ? describe.skip : describe;
+
+describeNative('FilePreviewScreen', () => {
     it('shows a table with its counts', async () => {
         await mount('/table.csv');
         expect(await screen.findByText(t('fileBrowser.columnsLabel'))).toBeTruthy();
