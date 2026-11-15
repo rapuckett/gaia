@@ -4,6 +4,7 @@
 // The same icon set as the web UI (lucide). Add a line here to use another icon.
 export {
   Activity,
+  Archive,
   ArrowDown,
   ArrowLeft,
   ArrowRight,
