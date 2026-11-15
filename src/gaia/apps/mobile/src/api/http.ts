@@ -57,10 +57,13 @@ import type {
     LocalModelStatus,
     KnowledgeSaveResult,
     MemoryActivityDay,
+    MemoryCleared,
     MemoryConversation,
     MemoryEntity,
     MemoryKnowledgePage,
+    MemoryReinitializeResult,
     MemorySettings,
+    MemorySettingsUpdateResponse,
     MemoryStats,
     MemoryToolStat,
     MemoryTurn,
@@ -662,7 +665,15 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
         },
 
         updateMemorySettings(settings, options) {
-            return putJson<MemorySettings>(ENDPOINTS.memorySettings, settings, options?.signal);
+            return putJson<MemorySettingsUpdateResponse>(ENDPOINTS.memorySettings, settings, options?.signal);
+        },
+
+        clearAllMemory(options) {
+            return deleteJson<MemoryCleared>(ENDPOINTS.memoryAll, options?.signal);
+        },
+
+        reinitializeMemory(options) {
+            return postJson<MemoryReinitializeResult>(ENDPOINTS.memoryReinitialize, undefined, options?.signal);
         },
 
         getEmbeddingCoverage(options) {

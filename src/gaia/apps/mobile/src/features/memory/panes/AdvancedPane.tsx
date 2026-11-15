@@ -7,6 +7,7 @@ import { EmptyState, ErrorState, LoadingState, Stack } from '@/ui';
 import { Brain } from '@/ui/icons';
 
 import { AdvancedBody } from '../advanced/AdvancedBody';
+import { MemoryAdmin } from '../advanced/MemoryAdmin';
 import { CoveragePill } from '../CoveragePill';
 import type { MemoryPaneProps } from '../tabs';
 
@@ -39,6 +40,11 @@ export function AdvancedPane({ notify, onOpenChat }: MemoryPaneProps) {
             ) : (
                 stats.data ? <AdvancedBody stats={stats.data} notify={notify} onOpenChat={onOpenChat} /> : null
             )}
+            {!loading && !failed && settings.data ? (
+                <Stack paddingX="lg" paddingY="md">
+                    <MemoryAdmin settings={settings.data} notify={notify} />
+                </Stack>
+            ) : null}
         </Stack>
     );
 }

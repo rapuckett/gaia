@@ -28,9 +28,11 @@ import type {
     KnowledgeUpdateBody,
     KnowledgeListParams,
     MemoryActivityDay,
+    MemoryCleared,
     MemoryConversation,
     MemoryKnowledgeEntry,
     MemoryKnowledgeItem,
+    MemoryReinitializeResult,
     MemoryTurn,
     MemorySettings,
     MemoryStats,
@@ -248,6 +250,8 @@ export interface FakeGaiaClient extends GaiaClient {
     readonly restarts: { confirm: boolean }[];
     readonly selected: string[];
     readonly contextSets: { model: string; ctxSize: number | null }[];
+    /** How often memory was wiped (clears) and wiped then re-collected (reinitializes). */
+    readonly memoryWipes: { clears: number; reinitializes: number };
     /** The files uploadFile took, in order. */
     readonly uploads: { name: string; size: number }[];
     readonly downloads: { modelId: string; acknowledgeLowDisk: boolean }[];
@@ -301,6 +305,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
     const restarts: FakeGaiaClient['restarts'] = [];
     const selected: string[] = [];
     const contextSets: FakeGaiaClient['contextSets'] = [];
+    const memoryWipes = { clears: 0, reinitializes: 0 };
     const uploads: FakeGaiaClient['uploads'] = [];
     const downloads: FakeGaiaClient['downloads'] = [];
     const modelDownloads: FakeGaiaClient['modelDownloads'] = [];
@@ -391,6 +396,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         restarts,
         selected,
         contextSets,
+        memoryWipes,
         uploads,
         downloads,
         modelDownloads,
@@ -787,6 +793,18 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             if (data.memorySettingsError) throw data.memorySettingsError;
             data.memorySettings = { ...data.memorySettings, ...settings };
             return data.memorySettings;
+        },
+        async clearAllMemory(): Promise<MemoryCleared> {
+            memoryWipes.clears += 1;
+            const cleared = { knowledge: knowledge.length, tool_history: 0, conversations: 0 };
+            knowledge = [];
+            return cleared;
+        },
+        async reinitializeMemory(): Promise<MemoryReinitializeResult> {
+            memoryWipes.reinitializes += 1;
+            const cleared = { knowledge: knowledge.length, tool_history: 0, conversations: 0 };
+            knowledge = [];
+            return { cleared, system_context: { stored: 0 } };
         },
         async getEmbeddingCoverage() {
             if (!data.embeddingCoverage) throw new GaiaApiError(503, 'This fake client was given no embedding coverage.');

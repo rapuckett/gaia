@@ -15,7 +15,10 @@ import type {
     MemoryEntity,
     MemoryKnowledgeEntry,
     MemoryKnowledgeItem,
+    MemoryCleared,
+    MemoryReinitializeResult,
     MemorySettings,
+    MemorySettingsUpdateResponse,
     MemoryStats,
     MemoryToolStat,
     MemoryTurn,
@@ -70,8 +73,28 @@ export function useMemorySettings() {
 export function useUpdateMemorySettings() {
     const client = useGaiaClient();
     const queryClient = useQueryClient();
-    return useMutation<MemorySettings, Error, Partial<MemorySettings>>({
+    return useMutation<MemorySettingsUpdateResponse, Error, Partial<MemorySettings>>({
         mutationFn: (settings) => requireClient(client).updateMemorySettings(settings),
+        onSettled: () => queryClient.invalidateQueries({ queryKey: memoryKeys.all }),
+    });
+}
+
+/** Deletes every memory: `mutate()`. Re-reads the memory queries afterwards. */
+export function useClearAllMemory() {
+    const client = useGaiaClient();
+    const queryClient = useQueryClient();
+    return useMutation<MemoryCleared, Error, void>({
+        mutationFn: () => requireClient(client).clearAllMemory(),
+        onSettled: () => queryClient.invalidateQueries({ queryKey: memoryKeys.all }),
+    });
+}
+
+/** Deletes every memory, then re-collects this PC's facts: `mutate()`. */
+export function useReinitializeMemory() {
+    const client = useGaiaClient();
+    const queryClient = useQueryClient();
+    return useMutation<MemoryReinitializeResult, Error, void>({
+        mutationFn: () => requireClient(client).reinitializeMemory(),
         onSettled: () => queryClient.invalidateQueries({ queryKey: memoryKeys.all }),
     });
 }
