@@ -6,9 +6,9 @@ import { useEffect, useRef, useState } from 'react';
 import { needsOutcome, nextToSend } from '@webui/utils/messageQueue';
 import { FLAGSHIP_AGENT_ID } from '@webui/utils/newTask';
 
-import { useAnswerQuestion, useChatStream, useMessages, useSession } from '@/data';
+import { useAnswerQuestion, useChatStream, useContextUsage, useMessages, useSession } from '@/data';
 import { FlagshipAgentBanner } from '@/features/banners/FlagshipAgentBanner';
-import { Composer, useComposerQueue, useFollowUpEvents } from '@/features/composer';
+import { Composer, ContextMeter, ContextWarning, ModelChip, useComposerQueue, useFollowUpEvents } from '@/features/composer';
 import { QueuedMessages } from '@/features/composer/QueuedMessages';
 import { describeError, useT } from '@/i18n/useT';
 import { isQuestionGone, questionCardData, resolveTypedAnswer } from '@/features/questions/questionLogic';
@@ -38,6 +38,7 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
     const stopped = useRef(false);
     const [actionError, setActionError] = useState<unknown>(null);
     const busy = stream.status !== 'idle';
+    const context = useContextUsage(sessionId, stream.events, busy);
     const saved = messages.data?.messages ?? NO_MESSAGES;
 
     // A chat made by a retired agent can be read but not continued.
@@ -143,6 +144,7 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
                         onRetry={queue.retry}
                         onSteer={steerable ? queue.steer : undefined}
                     />
+                    <ContextWarning usage={context.usage} />
                     <Composer
                         value={queue.draft}
                         onChange={queue.setDraft}
@@ -152,6 +154,12 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
                         answering={!!question}
                         placeholder={placeholder}
                         disabledReason={disabledReason}
+                        rightControls={
+                            <>
+                                <ContextMeter usage={context.usage} unavailable={context.unavailable} />
+                                <ModelChip />
+                            </>
+                        }
                     />
                 </>
             }

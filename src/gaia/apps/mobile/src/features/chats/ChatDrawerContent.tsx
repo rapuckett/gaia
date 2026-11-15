@@ -1,11 +1,12 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
+import { useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 
 import { APP_NAME } from '@webui/utils/constants';
 
-import { useSessions, useSessionSearch } from '@/data';
+import { useDeleteSession, useMarkRead, useRenameSession, useSessions, useSessionSearch, useSetPinned } from '@/data';
 import { ModelStatusPill } from '@/features/model';
 import { describeError, useT } from '@/i18n/useT';
 import {
@@ -26,9 +27,11 @@ import {
     Text,
     TextField,
 } from '@/ui';
-import { EyeOff, Plus, X } from '@/ui/icons';
+import { Ellipsis, EyeOff, Plus, X } from '@/ui/icons';
 
+import { ChatRowSheets, type RowSheet } from './ChatRowSheets';
 import { SearchResultRow } from './SearchResultRow';
+import { useMarkReadWhenSeen } from './useMarkReadWhenSeen';
 import { useNow } from './useNow';
 import {
     buildChatSections,
@@ -99,6 +102,22 @@ export function ChatDrawerContent({ activeId, onSelect, onClose, onNewChat, live
     const settled = search.settled || searchFailed;
     const rowCount = sections.reduce((n, s) => n + s.data.length, 0);
 
+    const [failure, setFailure] = useState<ChatListError | null>(null);
+    const [target, setTarget] = useState<RowSheet | null>(null);
+    const outcome = (kind: RowErrorKind) => ({
+        onSuccess: () => setFailure(null),
+        onError: (e: unknown) => setFailure({ kind, error: e }),
+    });
+    const router = useRouter();
+    const rename = useRenameSession();
+    const setPinned = useSetPinned();
+    const remove = useDeleteSession(activeId, () => router.replace('/'));
+    const markRead = useMarkRead();
+    const mutateRead = markRead.mutate;
+    const markSeen = useCallback((id: string) => mutateRead(id, { onError: (e) => setFailure({ kind: 'markRead', error: e }) }), [mutateRead]);
+    useMarkReadWhenSeen(activeId, sessions.data?.sessions.find((s) => s.id === activeId)?.unread, markSeen);
+    const alert = failure ?? error;
+
     return (
         <Screen
             edges={['top', 'bottom', 'start']}
@@ -114,8 +133,8 @@ export function ChatDrawerContent({ activeId, onSelect, onClose, onNewChat, live
                     returnKeyType="search"
                 />
             </Stack>
-            {error ? (
-                <Notice tone="danger" message={rowErrorMessage(error.kind, error.error, t)} />
+            {alert ? (
+                <Notice tone="danger" message={rowErrorMessage(alert.kind, alert.error, t)} />
             ) : null}
             {state === 'loading' ? <ListSkeleton rows={8} /> : null}
             {state === 'error' ? <ErrorState title={describeError(sessions.error, t)} onRetry={() => void sessions.refetch()} /> : null}
@@ -149,11 +168,18 @@ export function ChatDrawerContent({ activeId, onSelect, onClose, onNewChat, live
                                 onSelect={select}
                             />
                         ) : (
-                            <ChatListRow row={item} onSelect={select} />
+                            <ChatListRow row={item} onSelect={select} onMore={(row) => setTarget({ row, mode: 'menu' })} />
                         )
                     }
                 />
             ) : null}
+            <ChatRowSheets
+                target={target}
+                onTarget={setTarget}
+                onRename={(id, title) => rename.mutate({ sessionId: id, title }, outcome('rename'))}
+                onSetPinned={(id, pinned) => setPinned.mutate({ id, pinned }, outcome(pinned ? 'pin' : 'unpin'))}
+                onDelete={(id) => remove.mutate(id, outcome('delete'))}
+            />
         </Screen>
     );
 }
@@ -172,7 +198,7 @@ function Header({ onClose, onNewChat }: { onClose: () => void; onNewChat?: () =>
     );
 }
 
-function ChatListRow({ row, onSelect }: { row: ChatRow; onSelect: (sessionId: string) => void }) {
+function ChatListRow({ row, onSelect, onMore }: { row: ChatRow; onSelect: (sessionId: string) => void; onMore: (row: ChatRow) => void }) {
     const t = useT();
     const text = rowText(row, t);
     return (
@@ -182,6 +208,8 @@ function ChatListRow({ row, onSelect }: { row: ChatRow; onSelect: (sessionId: st
             selected={row.active}
             accessibilityLabel={text.aria}
             onPress={() => onSelect(row.id)}
+            onLongPress={() => onMore(row)}
+            trailing={<IconButton icon={Ellipsis} size="sm" label={t('row.moreActions', { title: row.title })} onPress={() => onMore(row)} />}
             leading={
                 <Row gap="xs">
                     {row.dot && text.status ? <StatusDot tone={statusTone(row.dot)} label={text.status} /> : null}
