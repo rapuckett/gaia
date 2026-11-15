@@ -3688,6 +3688,7 @@ const messages: Messages = {
     'mobileApp.settings.messaging.howTo': 'كيفية إعداده على الكمبيوتر لديك',
     'mobileApp.settings.messaging.pitch': 'راسل GAIA من ديسكورد على هاتفك، ويجيبك من الكمبيوتر لديك.',
     'mobileApp.settings.pcOnly': 'غيّر هذا من الكمبيوتر الذي يشغّل GAIA.',
+    'mobileApp.settings.appearanceSystem': 'مطابقة النظام',
     'mobileApp.settings.model.removeDownloadBody': 'تُحذف الملفات التي نزّلتها من الكمبيوتر الذي يشغّل GAIA. يمكنك إضافته مرة أخرى لاحقًا.',
     'mobileApp.settings.comingSoon': 'هذا القسم قادم إلى الهاتف قريبًا. في الوقت الحالي، غيّره من الكمبيوتر الذي يشغّل GAIA.',
     'mobileApp.settings.alerts.bannersHint': 'تظهر اللافتات أعلى التطبيق أثناء فتح GAIA على هذا الهاتف.',
