@@ -11,7 +11,7 @@ export const PERMANENT_DRAWER_MIN_WIDTH = 768;
 export const INITIAL_ROUTE = 'index';
 
 export interface Navigator {
-    replace(href: { pathname: '/chat/[id]'; params: { id: string } } | '/new'): void;
+    replace(href: { pathname: '/chat/[id]'; params: { id: string } } | '/new' | '/'): void;
 }
 
 /** Replaces, so back from a chat never walks through every chat visited. */

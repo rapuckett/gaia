@@ -2,8 +2,11 @@
 // SPDX-License-Identifier: MIT
 
 import type {
+    AgentCapabilities,
+    AgentInfo,
     AgentMcpServer,
     ConnectorListEntry,
+    ContextUsageResult,
     ConsolidateMemoryResult,
     CreateSessionRequest,
     EmbeddingCoverage,
@@ -11,17 +14,21 @@ import type {
     DocumentListResponse,
     GaiaClient,
     HealthResponse,
+    LemonadeFound,
+    LemonadeTarget,
     LocalModelStatus,
     MemorySettings,
     MemoryStats,
     Message,
     MessageList,
     ModelNeed,
+    PreflightReport,
     ParsedSchedule,
     RebuildEmbeddingsResult,
     ReconcileMemoryResult,
     RefreshSystemContextResult,
     Schedule,
+    ScheduleResult,
     ResourceUsage,
     Session,
     SessionList,
@@ -41,16 +48,29 @@ import { foldText, splitMatch } from '@webui/utils/chatSearch';
 
 import { GaiaApiError } from './errors';
 
+function cloneNested<T>(source: Record<string, Record<string, T>> | undefined): Record<string, Record<string, T>> {
+    return Object.fromEntries(Object.entries(source ?? {}).map(([key, inner]) => [key, { ...inner }]));
+}
+
 export interface FakeClientData {
     sessions?: Session[];
     schedules?: Schedule[];
+    /** Past runs by schedule name, newest first. */
+    scheduleResults?: Record<string, ScheduleResult[]>;
     messages?: Record<string, Message[]>;
     /** What every send streams back; a function takes the sent text and streams what a test scripts. */
     replies?: StreamEvent[] | ((message: string) => AsyncIterable<StreamEvent>);
     /** What attachToRun replays, by chat; a chat not listed has no turn running. */
     running?: Record<string, StreamEvent[]>;
     connectors?: ConnectorListEntry[];
+    agents?: AgentInfo[];
+    /** Grants by connector id, then namespaced agent id. */
+    grants?: Record<string, Record<string, string[]>>;
+    /** Activations by connector id, then namespaced agent id. */
+    activations?: Record<string, Record<string, boolean>>;
     agentMcps?: AgentMcpServer[];
+    /** What getContextUsage answers. */
+    contextUsage?: ContextUsageResult;
     /** What getFollowUpOutcome answers; a function may throw to script a 409. */
     followUpOutcome?: FollowUpOutcome | (() => FollowUpOutcome);
     /** Makes sendFollowUp reject, as a turn that can't take the message does. */
@@ -65,6 +85,8 @@ export interface FakeClientData {
     skills?: SkillList;
     resources?: ResourceUsage;
     start?: StartScreen;
+    /** What watchSessionEvents streams before it ends; the real stream never ends on its own. */
+    sessionEvents?: unknown[];
     /** Most chats a search returns before it says `truncated`. */
     searchLimit?: number;
     /** Makes every search fail with this message. */
@@ -74,7 +96,15 @@ export interface FakeClientData {
     /** Each status read answers the next entry (the last one repeats); defaults to idle. */
     setupStatuses?: (SetupRunStatus | Error)[];
     setupPlan?: SetupPlan;
+    /** What getPreflight answers; an Error is thrown. */
+    preflight?: PreflightReport | Error;
+    /** What getLemonadeTarget answers; an Error is thrown. */
+    lemonadeTarget?: LemonadeTarget | Error;
+    /** What detectLemonade answers; an Error is thrown. */
+    lemonadeDetect?: { found: LemonadeFound | null; unchecked?: string[] } | Error;
     documents?: DocumentListResponse;
+    /** What getCapabilities answers, by chat; a chat not listed has no agent running (409). */
+    capabilities?: Record<string, AgentCapabilities>;
     memorySettings?: MemorySettings;
     /** Each stats read answers the next entry (the last one repeats); an Error entry is thrown. */
     memoryStats?: (MemoryStats | Error)[];
@@ -94,6 +124,9 @@ export interface FakeGaiaClient extends GaiaClient {
     readonly created: CreateSessionRequest[];
     readonly cancelled: string[];
     readonly deleted: { sessionId: string; messageId: number }[];
+    readonly pinned: { sessionId: string; pinned: boolean }[];
+    readonly deletedSessions: string[];
+    readonly read: string[];
     readonly deletedOne: { sessionId: string; messageId: number }[];
     readonly confirmations: ToolConfirmRequest[];
     readonly answers: UserInputRequest[];
@@ -101,8 +134,9 @@ export interface FakeGaiaClient extends GaiaClient {
     readonly followUps: { sessionId: string; text: string }[];
     readonly restarts: { confirm: boolean }[];
     readonly downloads: { modelId: string; acknowledgeLowDisk: boolean }[];
-    readonly setupStarts: { skipChatModel: boolean; gaiaLemonade: boolean; upgradeEmbedded: boolean }[];
+    readonly setupStarts: { skipChatModel: boolean; gaiaLemonade: boolean; upgradeEmbedded: boolean; serverOnly: boolean }[];
     readonly detached: { sessionId: string; docId: string }[];
+    readonly capabilityReads: string[];
     /** Each memory maintenance POST, in order. */
     readonly memoryActions: string[];
     /** How many times the stats were read. */
@@ -118,9 +152,14 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
     const created: CreateSessionRequest[] = [];
     const cancelled: string[] = [];
     const deleted: FakeGaiaClient['deleted'] = [];
+    const pinned: FakeGaiaClient['pinned'] = [];
+    const deletedSessions: string[] = [];
+    const read: string[] = [];
     const deletedOne: FakeGaiaClient['deletedOne'] = [];
     const confirmations: ToolConfirmRequest[] = [];
     const answers: UserInputRequest[] = [];
+    const grants: Record<string, Record<string, string[]>> = cloneNested(data.grants);
+    const activations: Record<string, Record<string, boolean>> = cloneNested(data.activations);
     const restarts: FakeGaiaClient['restarts'] = [];
     const downloads: FakeGaiaClient['downloads'] = [];
     const schedules = [...(data.schedules ?? [])];
@@ -141,6 +180,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         return item;
     };
     const detached: FakeGaiaClient['detached'] = [];
+    const capabilityReads: string[] = [];
     const memoryActions: string[] = [];
     let memoryStatsReads = 0;
     function memoryAction<T>(name: string, result: T | Error): T {
@@ -155,11 +195,22 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         return session;
     }
 
+    // Replaces the object, so a refetch sees a changed row.
+    function patch(sessionId: string, changes: Partial<Session>): Session {
+        const at = sessions.findIndex((s) => s.id === sessionId);
+        if (at < 0) throw new GaiaApiError(404, 'Session not found');
+        sessions[at] = { ...sessions[at]!, ...changes };
+        return sessions[at]!;
+    }
+
     return {
         sent,
         created,
         cancelled,
         deleted,
+        pinned,
+        deletedSessions,
+        read,
         deletedOne,
         confirmations,
         answers,
@@ -169,6 +220,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         downloads,
         setupStarts,
         detached,
+        capabilityReads,
         memoryActions,
         get memoryStatsReads() {
             return memoryStatsReads;
@@ -198,6 +250,9 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             sessions.unshift(session);
             return session;
         },
+        async getContextUsage() {
+            return data.contextUsage ?? { available: false, reason: 'Measured once GAIA has answered in this chat.' };
+        },
         async getFollowUpOutcome() {
             const outcome = data.followUpOutcome ?? { taken: [], returned: [] };
             return typeof outcome === 'function' ? outcome() : outcome;
@@ -221,6 +276,22 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             }
             const limit = data.searchLimit ?? Infinity;
             return { query, results: results.slice(0, limit), truncated: results.length > limit };
+        },
+        async setSessionPinned(sessionId, value) {
+            findSession(sessionId);
+            pinned.push({ sessionId, pinned: value });
+            return patch(sessionId, { pinned: value });
+        },
+        async deleteSession(sessionId) {
+            findSession(sessionId);
+            deletedSessions.push(sessionId);
+            sessions.splice(sessions.findIndex((s) => s.id === sessionId), 1);
+            return { deleted: true };
+        },
+        async markSessionRead(sessionId) {
+            findSession(sessionId);
+            read.push(sessionId);
+            return patch(sessionId, { unread: false });
         },
         async getMessages(sessionId): Promise<MessageList> {
             const list = messages[sessionId] ?? [];
@@ -285,8 +356,37 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             answers.push(request);
             return { status: 'ok', request_id: request.request_id };
         },
+        async *watchSessionEvents() {
+            yield* (data.sessionEvents ?? []) as StreamEvent[];
+        },
         async listConnectors() {
             return { connectors: [...(data.connectors ?? [])] };
+        },
+        async listAgents() {
+            return { agents: [...(data.agents ?? [])] };
+        },
+        async listConnectorGrants(connectorId) {
+            return { grants: { ...grants[connectorId] } };
+        },
+        async listConnectorActivations(connectorId) {
+            return { activations: { ...activations[connectorId] } };
+        },
+        async grantConnectorAgent(connectorId, agentId, scopes) {
+            grants[connectorId] = { ...grants[connectorId], [agentId]: [...scopes] };
+        },
+        async revokeConnectorAgentGrant(connectorId, agentId) {
+            const { [agentId]: _gone, ...rest } = grants[connectorId] ?? {};
+            grants[connectorId] = rest;
+        },
+        async activateConnectorAgent(connectorId, agentId, scopes) {
+            if (scopes && !grants[connectorId]?.[agentId]) {
+                grants[connectorId] = { ...grants[connectorId], [agentId]: [...scopes] };
+            }
+            activations[connectorId] = { ...activations[connectorId], [agentId]: true };
+        },
+        async deactivateConnectorAgent(connectorId, agentId) {
+            const { [agentId]: _gone, ...rest } = activations[connectorId] ?? {};
+            activations[connectorId] = rest;
         },
         async listAgentMcps() {
             return { agent_mcps: [...(data.agentMcps ?? [])] };
@@ -377,6 +477,11 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             Object.assign(schedule, { running: true, run_count: schedule.run_count + 1 });
             return { ...schedule };
         },
+        async listScheduleResults(name, limit) {
+            findSchedule(name);
+            const all = data.scheduleResults?.[name] ?? [];
+            return { results: all.slice(0, limit), total: all.length };
+        },
         async deleteSchedule(name) {
             const schedule = findSchedule(name);
             scheduleActions.push({ action: 'delete', name });
@@ -385,6 +490,12 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         },
         async listDocuments() {
             return data.documents ?? { documents: [], total: 0, total_chunks: 0, total_size_bytes: 0 };
+        },
+        async getCapabilities(sessionId) {
+            capabilityReads.push(sessionId);
+            const found = data.capabilities?.[sessionId];
+            if (!found) throw new GaiaApiError(409, "This chat's agent isn't running yet.");
+            return found;
         },
         async getSystemStatus() {
             if (!data.status) throw new GaiaApiError(503, 'This fake client was given no system status.');
@@ -420,12 +531,27 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             if (!data.setupChecks?.length) throw new GaiaApiError(503, 'This fake client was given no setup checks.');
             return nextOf(data.setupChecks, checkAt++);
         },
+        async getPreflight() {
+            if (!data.preflight) throw new GaiaApiError(503, 'This fake client was given no preflight.');
+            if (data.preflight instanceof Error) throw data.preflight;
+            return data.preflight;
+        },
+        async getLemonadeTarget() {
+            if (!data.lemonadeTarget) throw new GaiaApiError(503, 'This fake client was given no model server target.');
+            if (data.lemonadeTarget instanceof Error) throw data.lemonadeTarget;
+            return data.lemonadeTarget;
+        },
+        async detectLemonade() {
+            if (!data.lemonadeDetect) return { found: null };
+            if (data.lemonadeDetect instanceof Error) throw data.lemonadeDetect;
+            return data.lemonadeDetect;
+        },
         async getSetupPlan() {
             if (!data.setupPlan) throw new GaiaApiError(503, 'This fake client was given no setup plan.');
             return data.setupPlan;
         },
         async startSetup(skipChatModel, gaiaLemonade = false, options = {}) {
-            setupStarts.push({ skipChatModel, gaiaLemonade, upgradeEmbedded: !!options.upgradeEmbedded });
+            setupStarts.push({ skipChatModel, gaiaLemonade, upgradeEmbedded: !!options.upgradeEmbedded, serverOnly: !!options.serverOnly });
             return { state: 'running', upgrade_embedded: !!options.upgradeEmbedded };
         },
     };

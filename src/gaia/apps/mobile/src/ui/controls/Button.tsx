@@ -23,6 +23,8 @@ export interface ButtonProps {
     full?: boolean;
     /** Let a long label take more lines instead of truncating. */
     wrap?: boolean;
+    /** What a screen reader says instead of the visible label. */
+    accessibilityLabel?: string;
     testID?: string;
 }
 
@@ -37,6 +39,7 @@ export function Button({
     disabled,
     full,
     wrap,
+    accessibilityLabel,
     testID,
 }: ButtonProps) {
     const { colors, radius } = useTheme();
@@ -52,7 +55,7 @@ export function Button({
             <Pressable
                 onPress={busy ? undefined : onPress}
                 disabled={disabled}
-                accessibilityLabel={label}
+                accessibilityLabel={accessibilityLabel ?? label}
                 accessibilityState={{ busy: !!busy }}
                 testID={testID}
             >

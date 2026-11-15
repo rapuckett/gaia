@@ -9,6 +9,8 @@ import { Composer, useComposerQueue } from '@/features/composer';
 import { QueuedMessages } from '@/features/composer/QueuedMessages';
 import { ScreenHeader } from '@/features/nav/ScreenHeader';
 import { useT } from '@/i18n/useT';
+import { useLastChatStore } from '@/state/lastChat';
+import { useRouteNoticeStore } from '@/state/routeNotice';
 import { Disclosure, Notice, ProgressLine, Screen, Stack, Text } from '@/ui';
 
 import { LibraryDocuments } from './LibraryDocuments';
@@ -46,7 +48,15 @@ export function NewChatScreen({ onOpen, initialText = '', prompt }: NewChatScree
         initialText,
     );
     const assistant = useAssistantNotice();
+    const routeNotice = useRouteNoticeStore((s) => s.notice);
+    const dismissRouteNotice = useRouteNoticeStore((s) => s.dismiss);
     const [detailsOpen, setDetailsOpen] = useState(false);
+
+    // Text in the box means the person started here, so the launch restore must not move them.
+    const hasText = state.text !== '';
+    useEffect(() => {
+        if (hasText) useLastChatStore.getState().markNewChatChosen();
+    }, [hasText]);
 
     useEffect(() => {
         if (state.open) onOpen(state.open);
@@ -118,6 +128,13 @@ export function NewChatScreen({ onOpen, initialText = '', prompt }: NewChatScree
                 )}
                 {warming !== null && showWarmUp(status) && (
                     <ProgressLine label={warmUpLine(warming, t, shortModelName)} />
+                )}
+                {routeNotice !== null && (
+                    <Notice
+                        tone="info"
+                        message={t(routeNotice)}
+                        action={{ label: t('banner.dismiss'), onPress: dismissRouteNotice }}
+                    />
                 )}
                 {state.error !== null && <Notice tone="danger" message={state.error} />}
                 {!state.sending && startingReason(status, t) === null && <TryChips onPick={fillExample} />}

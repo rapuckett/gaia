@@ -19,18 +19,20 @@ export interface DisclosureProps {
     leading?: ReactNode;
     trailing?: ReactNode;
     testID?: string;
+    /** Goes on the header press target, so a device flow can tap the toggle. */
+    headerTestID?: string;
 }
 
-export function Disclosure({ title, open, onToggle, children, leading, trailing, testID }: DisclosureProps) {
+export function Disclosure({ title, open, onToggle, children, leading, trailing, testID, headerTestID }: DisclosureProps) {
     const { space } = useTheme();
     return (
         <View testID={testID}>
-            <Pressable onPress={onToggle} accessibilityLabel={title} accessibilityState={{ expanded: open }}>
+            <Pressable onPress={onToggle} accessibilityLabel={title} accessibilityState={{ expanded: open }} testID={headerTestID}>
                 <Row gap="sm">
                     <Icon icon={open ? ChevronDown : ChevronRight} size="sm" tone="muted" />
                     {leading}
                     <View style={{ flex: 1, minWidth: 0 }}>
-                        <Text role="label" weight="medium" tone="secondary" numberOfLines={1}>
+                        <Text role="label" weight="medium" dir="auto" tone="secondary" numberOfLines={1}>
                             {title}
                         </Text>
                     </View>
