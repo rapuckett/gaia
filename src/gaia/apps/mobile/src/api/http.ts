@@ -32,6 +32,7 @@ import type {
     DocumentListResponse,
     FollowUpOutcome,
     FollowUpResult,
+    DeleteSessionResult,
     GaiaClient,
     HealthResponse,
     LocalModelStatus,
@@ -72,7 +73,9 @@ import {
     sessionMessagesAndBelowPath,
     sessionMessagesPath,
     sessionPath,
+    sessionPinPath,
     sessionPrivatePath,
+    sessionReadPath,
     setupNeedsPath,
     STREAM_IDLE_MS,
     UI_HEADERS,
@@ -272,6 +275,18 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         createSession(request = {}, options) {
             return postJson<Session>(ENDPOINTS.sessions, request, options?.signal);
+        },
+
+        setSessionPinned(sessionId, pinned, options) {
+            return putJson<Session>(sessionPinPath(sessionId), { pinned }, options?.signal);
+        },
+
+        deleteSession(sessionId, options) {
+            return deleteJson<DeleteSessionResult>(sessionPath(sessionId), options?.signal);
+        },
+
+        markSessionRead(sessionId, options) {
+            return postJson<Session>(sessionReadPath(sessionId), undefined, options?.signal);
         },
 
         getContextUsage(sessionId, options) {

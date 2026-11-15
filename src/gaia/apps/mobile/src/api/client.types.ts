@@ -129,6 +129,10 @@ export interface DeleteMessagesResult {
     count: number;
 }
 
+export interface DeleteSessionResult {
+    deleted: boolean;
+}
+
 export interface UserInputResult {
     status: string;
     request_id: string;
@@ -182,6 +186,11 @@ export interface GaiaClient {
     listSessions(options?: RequestOptions): Promise<SessionList>;
     getSession(sessionId: string, options?: RequestOptions): Promise<Session>;
     createSession(request?: CreateSessionRequest, options?: RequestOptions): Promise<Session>;
+    setSessionPinned(sessionId: string, pinned: boolean, options?: RequestOptions): Promise<Session>;
+    /** Deletes the chat and its messages; a turn still running on it is stopped first. */
+    deleteSession(sessionId: string, options?: RequestOptions): Promise<DeleteSessionResult>;
+    /** Clears the chat's unread mark. */
+    markSessionRead(sessionId: string, options?: RequestOptions): Promise<Session>;
     /** How full the model's context window is for the chat's next message, or why there is no reading yet. */
     getContextUsage(sessionId: string, options?: RequestOptions): Promise<ContextUsageResult>;
     /** What the chat's last finished turn did with the messages added to it; rejects with 409 while a turn still runs. */
