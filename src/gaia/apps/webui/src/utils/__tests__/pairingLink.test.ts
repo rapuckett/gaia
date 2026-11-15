@@ -10,17 +10,24 @@ import { PAIRING_LINK_SCHEME, pairingLink } from '../pairingLink';
 
 const MOBILE = resolve(__dirname, '../../../../mobile');
 
+async function compile(file: string): Promise<string> {
+    const source = readFileSync(resolve(MOBILE, 'src/features/pairing', file), 'utf8');
+    const { code } = await transformWithOxc(source, file, { lang: 'ts', tsconfig: false, target: 'es2020' });
+    return code.replace(/^export /gm, '');
+}
+
 /** The phone app's real parseInvite, compiled here: its tsconfig extends Expo's, which webui doesn't install. */
 async function loadParseInvite(): Promise<(text: string, nowSeconds: number) => unknown> {
-    const source = readFileSync(resolve(MOBILE, 'src/features/pairing/invite.ts'), 'utf8');
-    const { code } = await transformWithOxc(source, 'invite.ts', { lang: 'ts', tsconfig: false, target: 'es2020' });
-    const stubbed = code.replace(/^import \{ GaiaError \} from ['"]@\/api\/errors['"];$/m, 'class GaiaError extends Error {}').replace(/^export /gm, '');
+    const homeNetwork = await compile('homeNetwork.ts');
+    const stubbed = (await compile('invite.ts'))
+        .replace(/^import \{ GaiaError \} from ['"]@\/api\/errors['"];$/m, 'class GaiaError extends Error {}')
+        .replace(/^import \{ homeNetworkOrigin \} from ['"]\.\/homeNetwork['"];$/m, () => homeNetwork);
     if (stubbed.includes('import ')) throw new Error('invite.ts gained an import; load it in this test');
     return new Function(`${stubbed}\nreturn parseInvite;`)();
 }
 
 const OFFER: DevicePairingOffer = {
-    v: 1, name: 'مكتب Zoë 🖥', pc_id: 'pc-1', origins: ['https://192.168.1.10:4243'],
+    v: 1, name: 'مكتب Zoë 🖥', pc_id: '0123456789abcdef'.repeat(2), origins: ['https://192.168.1.10:4243'],
     pin: 'ab'.repeat(32), invite: 'invitation', exp: 2_000_000_000,
 };
 
