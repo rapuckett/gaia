@@ -160,7 +160,8 @@ export const KeyScreen: PlanScreen = ({ ctx, close }) => {
                         label={t('setup.key.labelFor', { provider: PROVIDERS.find((p) => p.id === choice)?.title ?? '' })}
                         value=""
                         onChangeText={() => undefined}
-                        placeholder={connected ? t('setup.key.placeholder') : t('setup.key.placeholderNew')}
+                        placeholder={connected ? t.bare('setup.key.placeholder') : t.bare('setup.key.placeholderNew')}
+                        accessibilityLabel={connected ? t('setup.key.placeholder') : t('setup.key.placeholderNew')}
                         secureTextEntry
                         disabled
                     />
