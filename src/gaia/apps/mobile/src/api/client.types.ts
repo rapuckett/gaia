@@ -411,6 +411,8 @@ export interface GaiaClient {
     createSession(request?: CreateSessionRequest, options?: RequestOptions): Promise<Session>;
     /** Sends a file to the PC; recordings go to the transcription folder. Rejects with the PC's refusal (type, size, empty). */
     uploadFile(file: Blob, name: string, options?: RequestOptions): Promise<UploadedFile>;
+    /** The chat as Markdown, the same text the desktop's Export saves. */
+    exportSessionMarkdown(sessionId: string, options?: RequestOptions): Promise<{ content: string }>;
     setSessionPinned(sessionId: string, pinned: boolean, options?: RequestOptions): Promise<Session>;
     /** The file changes each turn of the chat made. */
     listTurnChanges(sessionId: string, options?: RequestOptions): Promise<{ turns: TurnChanges[] }>;

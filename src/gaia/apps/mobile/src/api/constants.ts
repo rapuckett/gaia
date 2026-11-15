@@ -85,6 +85,7 @@ export const ENDPOINTS = {
     sessionEnvironmentFolderRemove: '/api/sessions/{session_id}/environment/folders/remove',
     sessionEnvironmentInternet: '/api/sessions/{session_id}/environment/internet',
     sessionEvents: '/api/sessions/events',
+    sessionExport: '/api/sessions/{session_id}/export',
     sessionMessage: '/api/sessions/{session_id}/messages/{message_id}',
     sessionMessages: '/api/sessions/{session_id}/messages',
     sessionMessagesAndBelow: '/api/sessions/{session_id}/messages/{message_id}/and-below',
@@ -320,6 +321,10 @@ export function sessionChangesDiffPath(sessionId: string, turnId: string): strin
 
 export function sessionChangesUndoPath(sessionId: string, turnId: string): string {
     return ENDPOINTS.sessionChangesUndo.replace('{session_id}', encodeURIComponent(sessionId)).replace('{turn_id}', encodeURIComponent(turnId));
+}
+
+export function sessionExportPath(sessionId: string): string {
+    return ENDPOINTS.sessionExport.replace('{session_id}', encodeURIComponent(sessionId));
 }
 
 export function sessionPinPath(sessionId: string): string {
