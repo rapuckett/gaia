@@ -9,6 +9,7 @@ import { GaiaApiError } from '@/api/errors';
 import { describeError, useT } from '@/i18n/useT';
 import { Button, Disclosure, Ltr, Notice, Sheet, Stack, Text } from '@/ui';
 import { isolate } from '@webui/i18n/registry';
+import { tEn } from '@webui/i18n/translator';
 
 /** A raw error or log line, one tap away and kept left to right. */
 export function RawDetails({ text }: { text: string }) {
@@ -27,7 +28,7 @@ export function ActionError({ error, title }: { error: unknown; title?: string }
     if (error instanceof GaiaApiError && error.status === 403) {
         return <Notice tone="info" message={t('mobileApp.settings.pcOnly')} testID="advanced-pc-only" />;
     }
-    const raw = describeError(error, t);
+    const raw = describeError(error, tEn);
     return (
         <Stack gap="sm">
             <Notice tone="danger" title={title} message={isServerDown(raw) ? t('settings.errors.serverDown') : t('mobileApp.settings.modelActionFailed')} />

@@ -8,11 +8,10 @@ import { ref, type MessageKey } from '@webui/i18n/registry';
 import type { Goal } from '@/api/client.types';
 import { useGoalAction, useGoals, useGoalStats, useGoalStoreError, type GoalAction } from '@/data';
 import { isPcRefusal, PcOnlyNotice } from '@/features/settings/PcOnlyNotice';
-import { useT } from '@/i18n/useT';
+import { describeFailureWith, useT } from '@/i18n/useT';
 import { Badge, Button, LoadingState, Notice, Row, Stack, Text } from '@/ui';
 import { Plus } from '@/ui/icons';
 
-import { errorText } from '../about/errorText';
 import { GoalCard } from '../goals/GoalCard';
 import { STAT_STATUSES, STAT_TONES, STATUS_KEYS } from '../goals/goalText';
 import { NewGoalSheet } from '../goals/NewGoalSheet';
@@ -38,7 +37,7 @@ export function GoalsPane({ notify }: MemoryPaneProps) {
     const run = (goal: Goal, action: GoalAction) =>
         act.mutate(
             { id: goal.id, action },
-            { onError: (error) => notify({ tone: 'danger', text: t('mem.goals.failed', { what: ref(FAILURES[action]), error: errorText(error, t) }) }) },
+            { onError: (error) => notify({ tone: 'danger', text: t.compose((say) => say('mem.goals.failed', { what: ref(FAILURES[action]), error: describeFailureWith(error, say) })) }) },
         );
 
     const goals = list.data;

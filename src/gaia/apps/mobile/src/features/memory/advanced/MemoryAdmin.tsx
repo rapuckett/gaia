@@ -7,11 +7,10 @@ import type { MessageKey } from '@webui/i18n/registry';
 
 import type { MemorySettings } from '@/api/client.types';
 import { useClearAllMemory, useReinitializeMemory, useUpdateMemorySettings } from '@/data';
-import { useT } from '@/i18n/useT';
+import { describeFailureWith, useT } from '@/i18n/useT';
 import { Badge, Button, Card, Row, Sheet, Stack, Switch, Text } from '@/ui';
 import { Shield } from '@/ui/icons';
 
-import { errorText } from '../about/errorText';
 import type { MemoryNotice } from '../useMemoryNotice';
 import { SectionTitle } from './SectionTitle';
 
@@ -57,7 +56,7 @@ export function MemoryAdmin({ settings, notify }: { settings: MemorySettings; no
     const [danger, setDanger] = useState<Danger | null>(null);
     const busy = update.isPending || clear.isPending || reinit.isPending;
 
-    const fail = (key: MessageKey, error: unknown) => notify({ tone: 'danger', text: t(key, { error: errorText(error, t) }) });
+    const fail = (key: MessageKey, error: unknown) => notify({ tone: 'danger', text: t.compose((say) => say(key, { error: describeFailureWith(error, say) })) });
 
     const turnOff = (kind: Beta) => update.mutate({ [BETA[kind].setting]: false }, { onError: (e) => fail('mem.toast.settingFailed', e) });
 

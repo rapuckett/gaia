@@ -13,7 +13,7 @@ import { IconButton, Notice, Pressable, Row, Stack, Text, TextField } from '@/ui
 import { Activity, Check, Eye, EyeOff, PanelRight, X } from '@/ui/icons';
 
 import { DocsBar } from './DocsBar';
-import { failureReason } from './failureText';
+import { failureReasonWith } from './failureText';
 import { ResourceStrip } from './ResourceStrip';
 
 export interface ChatHeaderProps {
@@ -48,13 +48,13 @@ export function ChatHeader({ sessionId, onOpenSessionPanel }: ChatHeaderProps) {
         setError(null);
         rename.mutate(
             { sessionId, title: next },
-            { onError: (err) => setError(t('chat.renameFailed', { error: failureReason(err, t) })) },
+            { onError: (err) => setError(t.compose((say) => say('chat.renameFailed', { error: failureReasonWith(err, say) }))) },
         );
     };
     const flipPrivate = () => {
         setError(null);
         togglePrivate.mutate(sessionId, {
-            onError: (err) => setError(t('chat.privateFailed', { error: failureReason(err, t) })),
+            onError: (err) => setError(t.compose((say) => say('chat.privateFailed', { error: failureReasonWith(err, say) }))),
         });
     };
 

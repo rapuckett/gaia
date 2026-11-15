@@ -48,9 +48,9 @@ function ToolList({ tools, error }: { tools: AgentTool[] | undefined; error: unk
     const t = useT();
     if (isPcRefusal(error)) return <PcOnlyNotice testID="tools-pc-only" />;
     if (error) {
-        const failure = capabilityFailure(error, t);
+        const failure = capabilityFailure(error, t, 'tools.listError');
         if (failure.notRunning) return <Text tone="secondary">{t('tools.notRunning')}</Text>;
-        return <Notice tone="danger" message={t('tools.listError', { error: failure.text })} />;
+        return <Notice tone="danger" message={failure.text} />;
     }
     if (!tools) return <Text tone="muted">{t('sp.checking')}</Text>;
     if (tools.length === 0) return <Text tone="secondary">{t('tools.empty')}</Text>;

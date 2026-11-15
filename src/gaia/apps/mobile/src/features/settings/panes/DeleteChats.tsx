@@ -4,10 +4,9 @@
 import { useState } from 'react';
 
 import { useDeleteAllChats, useSessions } from '@/data';
-import { describeError, useT } from '@/i18n/useT';
+import { describeError, describeFailureWith, useT } from '@/i18n/useT';
 import { Button, Card, Notice, Sheet, Stack, Text } from '@/ui';
 
-import { reasonOf } from './reason';
 
 /** Deletes every chat after a confirmation sheet; one failing chat doesn't stop the rest. */
 export function DeleteChats() {
@@ -25,7 +24,7 @@ export function DeleteChats() {
             const { failed } = await deleteAll.mutateAsync(sessions.map((s) => ({ id: s.id, title: s.title })));
             setResult(
                 failed.length
-                    ? { ok: false, text: t('settings.privacy.deleteFailed', { n: failed.length, reason: failed.map((f) => `${f.title}: ${reasonOf(f.error, t)}`).join('; ') }) }
+                    ? { ok: false, text: t.compose((say) => say('settings.privacy.deleteFailed', { n: failed.length, reason: failed.map((f) => `${f.title}: ${describeFailureWith(f.error, say)}`).join('; ') })) }
                     : { ok: true, text: t('settings.privacy.deleted') },
             );
         } catch (error) {
