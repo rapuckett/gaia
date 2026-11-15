@@ -89,8 +89,10 @@ export function Card({ children, padding = 'lg', variant = 'flat', onPress, acce
     );
 }
 
-export function Divider({ inset = false, vertical = false }: { inset?: boolean; vertical?: boolean }) {
+/** `accent` and `clear` are the 2 px underline of a tab strip: drawn in the accent color, or kept as empty space. */
+export function Divider({ inset = false, vertical = false, line }: { inset?: boolean; vertical?: boolean; line?: 'accent' | 'clear' }) {
     const { colors, space } = useTheme();
+    if (line) return <View style={{ height: 2, backgroundColor: line === 'accent' ? colors.accent : 'transparent' }} />;
     if (vertical) return <View style={{ width: 3, alignSelf: 'stretch', borderRadius: 2, backgroundColor: colors.border }} />;
     return <View style={{ height: 1, backgroundColor: colors.borderLight, marginStart: inset ? space.lg : 0 }} />;
 }
