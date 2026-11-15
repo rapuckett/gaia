@@ -4,6 +4,7 @@
 import { useCallback, useMemo, useState, type ReactNode } from 'react';
 import { View, type ViewStyle } from 'react-native';
 
+import { bracketParts } from '@webui/i18n/registry';
 import { MAX_MESSAGE_CHARS } from '@webui/utils/messageLimits';
 
 import { useT } from '@/i18n/useT';
@@ -104,7 +105,9 @@ export function Composer({
     };
 
     const sendLabel = answering ? t('composer.sendAnswer') : running && message ? t('composer.queue') : t('composer.send');
-    const placeholder = disabledReason ?? placeholderText ?? (running ? t('composer.queueNext') : t('composer.placeholder'));
+    const spoken = disabledReason ?? placeholderText ?? (running ? t('composer.queueNext') : t('composer.placeholder'));
+    // A placeholder can't draw the muted English half, so it shows the Arabic alone; screen readers get both.
+    const [placeholder] = bracketParts(spoken);
 
     return (
         <Stack gap="sm" padding="md">
@@ -126,6 +129,7 @@ export function Composer({
                         value={text}
                         onChangeText={setText}
                         placeholder={placeholder}
+                        accessibilityHint={spoken}
                         hint={disabledReason}
                         accessibilityLabel={t('composer.message')}
                         multiline
