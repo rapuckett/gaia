@@ -99,6 +99,7 @@ export const ENDPOINTS = {
     connectorGrants: '/api/connectors/{connector_id}/grants',
     connectors: '/api/connectors',
     connectorsAgentMcps: '/api/connectors/agent-mcps',
+    connectorsEvents: '/api/connectors/events',
     systemResources: '/api/system/resources',
     systemStatus: '/api/system/status',
     document: '/api/documents/{doc_id}',
@@ -286,6 +287,8 @@ export const QUEUED_IDLE_MS = 10 * 60_000;
 /** The backend may hold a send for 60 s while another chat has the model, then answers 429. */
 export const SEND_HEADER_TIMEOUT_MS = 90_000;
 /** The chat-list event stream sends a keepalive every 30 s. */
+/** How long a disconnect waits for the PC to report whether the provider confirmed the revoke. */
+export const CONNECTOR_REVOKE_OUTCOME_MS = 3_000;
 export const SESSION_EVENTS_IDLE_MS = 90_000;
 /** An attach replays at once; a slower answer means the backend is stuck or unreachable. */
 export const ATTACH_HEADER_TIMEOUT_MS = 30_000;
