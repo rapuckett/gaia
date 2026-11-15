@@ -104,6 +104,8 @@ export const ENDPOINTS = {
     chatFollowup: '/api/chat/followup',
     chatFollowupOutcome: '/api/chat/followup/{session_id}',
     chatPerformance: '/api/chat/performance/{session_id}',
+    chatRetryWith: '/api/chat/retry-with',
+    chatRetryWithChoose: '/api/chat/retry-with/choose',
     chatUserInput: '/api/chat/user-input',
     connector: '/api/connectors/{connector_id}',
     connectorActivation: '/api/connectors/{connector_id}/activations/{agent_id:path}',

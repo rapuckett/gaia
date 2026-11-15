@@ -15,6 +15,7 @@ import { describeError, describeErrorWith, useT } from '@/i18n/useT';
 import { isQuestionGone, questionCardData, resolveTypedAnswer } from '@/features/questions/questionLogic';
 import { ErrorState, Notice, Screen, Stack } from '@/ui';
 
+import { useAnswerComparison } from './compare/useAnswerComparison';
 import { ChatPrompts } from './ChatPrompts';
 import { ConnectorRetry } from './ConnectorRetry';
 import { ChatHeader } from './header';
@@ -44,6 +45,9 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
     const [actionError, setActionError] = useState<unknown>(null);
     const [panelOpen, setPanelOpen] = useState(false);
     const busy = stream.status !== 'idle';
+    // A comparison waiting on its model holds new messages like a running reply does.
+    const { comparing } = useAnswerComparison(sessionId);
+    const hold = busy || comparing;
     const context = useContextUsage(sessionId, stream.events, busy);
     const saved = messages.data?.messages ?? NO_MESSAGES;
 
@@ -65,14 +69,14 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
     const sendable = nextToSend(queue.held) !== undefined || needsOutcome(queue.held);
     const { flush, giveBack } = queue;
     useEffect(() => {
-        if (busy) return;
+        if (hold) return;
         if (stopped.current) {
             stopped.current = false;
             giveBack();
             return;
         }
         if (sendable) void flush(sessionId);
-    }, [busy, sendable, flush, giveBack, sessionId]);
+    }, [hold, sendable, flush, giveBack, sessionId]);
 
     const stop = () => {
         stopped.current = true;
@@ -99,7 +103,7 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
     const send = (message: string): boolean | void => {
         setActionError(null);
         if (question) return answerQuestion(message, question);
-        if (busy) queue.hold(message);
+        if (hold) queue.hold(message);
         else stream.send(message);
     };
     const tryAgain = (replyId: number | null) => {

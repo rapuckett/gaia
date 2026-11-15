@@ -60,6 +60,7 @@ export {
   ShieldCheck,
   ShieldOff,
   ShieldQuestion,
+  Shuffle,
   SlidersHorizontal,
   Smartphone,
   Sparkles,

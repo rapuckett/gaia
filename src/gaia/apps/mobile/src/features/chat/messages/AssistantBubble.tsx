@@ -18,6 +18,8 @@ import { AnswerCards } from '../cards/RenderCard';
 import { CutOffNote, StoppedNote } from '../EndingNotes';
 import { Markdown } from '../markdown/Markdown';
 import { SavedReplyErrors } from '../ReplyErrors';
+import { AnswerComparison } from '../compare/AnswerComparison';
+import { useAnswerComparison } from '../compare/useAnswerComparison';
 import { useMessageActions, type MessageContext } from './useMessageActions';
 
 export interface AssistantBubbleProps {
@@ -35,6 +37,7 @@ export function AssistantBubble({ message, streaming = false, latencyMs, context
     const cancelled = message.content.trim() === SERVER_CANCELLED_TEXT;
     const text = cancelled ? '' : cutOff ? cutOff.body : message.content;
     const actions = useMessageActions(message, text, context);
+    const compare = useAnswerComparison(message.session_id);
     const activity = useMemo(() => savedActivity(message), [message]);
     const cards = message.cards ?? cardsFromSteps(message.agentSteps);
     return (
@@ -61,6 +64,16 @@ export function AssistantBubble({ message, streaming = false, latencyMs, context
             ) : null}
             {actions.notice}
             {actions.sheet}
+            {compare.comparison?.messageId === message.id ? (
+                <AnswerComparison
+                    original={message}
+                    originalModel={message.stats?.model}
+                    originalLatencyMs={latencyMs}
+                    comparison={compare.comparison}
+                    onKeep={(which) => void compare.keep(which)}
+                    onClose={compare.close}
+                />
+            ) : null}
         </Stack>
     );
 }

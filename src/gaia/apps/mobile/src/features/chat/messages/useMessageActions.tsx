@@ -7,11 +7,15 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 
 import type { Message } from '@/api/client.types';
 import { GaiaConfigError } from '@/api/errors';
+import { isErrorContent } from '@webui/utils/answerErrors.core';
+
 import { queryKeys, useGaiaClient } from '@/data';
 import { describeError, useT } from '@/i18n/useT';
 import { ActionSheet, Button, Notice, Sheet, Stack, Text, type SheetAction } from '@/ui';
-import { Copy, Pencil, RefreshCw, Trash2 } from '@/ui/icons';
+import { Copy, Pencil, RefreshCw, Shuffle, Trash2 } from '@/ui/icons';
 
+import { RetrySheet } from '../compare/RetrySheet';
+import { useAnswerComparison } from '../compare/useAnswerComparison';
 import { useMessageActionsContext } from './MessageActionsContext';
 import { MessageEditor } from './MessageEditor';
 import { formatFullTimestamp } from './time';
@@ -22,6 +26,8 @@ const COPIED_MS = 2000;
 export interface MessageContext {
     /** Messages from the next question on; Resend and Edit remove them. */
     laterTurns: number;
+    /** The newest message in the chat. */
+    latest?: boolean;
 }
 
 /** What a bubble starts with open; for the dev gallery. */
@@ -51,7 +57,9 @@ export function useMessageActions(message: Message, copyText: string, context: M
     const t = useT();
     const client = useGaiaClient();
     const queryClient = useQueryClient();
-    const { send, busy } = useMessageActionsContext();
+    const { send, busy, readOnly } = useMessageActionsContext();
+    const { comparison, retryWith } = useAnswerComparison(message.session_id);
+    const [retryOpen, setRetryOpen] = useState(false);
     const [open, setOpen] = useState(startOpen === 'actions');
     const [copied, setCopied] = useState(false);
     const [failure, setFailure] = useState<string | null>(null);
@@ -117,13 +125,15 @@ export function useMessageActions(message: Message, copyText: string, context: M
     const openSheet = () => setOpen(true);
     const canChange = saved && !busy;
     const isUser = message.role === 'user';
+    const canRetry = !isUser && canChange && !readOnly && !!context.latest && !comparison && !isErrorContent(message.content);
     const actions: SheetAction[] = [
-        ...(isUser && canChange
+        ...(isUser && canChange && !readOnly
             ? [
                   { label: t('msg.edit'), icon: Pencil, onPress: () => setEditing(true) },
                   { label: t('msg.resend'), icon: RefreshCw, onPress: () => askThenSend(message.content) },
               ]
             : []),
+        ...(canRetry ? [{ label: t('retry.button'), icon: Shuffle, onPress: () => setRetryOpen(true) }] : []),
         ...(copyText ? [{ label: t('msg.copy'), icon: Copy, onPress: copy }] : []),
         ...(canChange ? [{ label: t('msg.delete'), icon: Trash2, destructive: true, onPress: () => setConfirmDelete(true) }] : []),
     ];
@@ -154,6 +164,14 @@ export function useMessageActions(message: Message, copyText: string, context: M
         sheet: (
             <>
                 <ActionSheet open={open} onClose={() => setOpen(false)} actions={actions} title={title} />
+                {canRetry ? (
+                    <RetrySheet
+                        open={retryOpen}
+                        onClose={() => setRetryOpen(false)}
+                        answeredBy={message.stats?.model}
+                        onPick={(model) => retryWith(message, model)}
+                    />
+                ) : null}
                 {confirmDelete
                     ? confirm(
                           t('msg.confirmDeleteAria'),
