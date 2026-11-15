@@ -62,6 +62,8 @@ export const ENDPOINTS = {
     documentReindex: '/api/documents/{doc_id}/reindex',
     documentStatus: '/api/documents/{doc_id}/status',
     documents: '/api/documents',
+    filesUpload: '/api/files/upload',
+    filesUploadMedia: '/api/files/upload-media',
     onboardingPreflight: '/api/onboarding/preflight',
     onboardingStart: '/api/onboarding/start',
 } as const;

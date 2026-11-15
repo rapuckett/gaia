@@ -148,6 +148,8 @@ describe('endpoints', () => {
         documentReindex: ['POST'],
         documentStatus: ['GET'],
         documents: ['GET'],
+        filesUpload: ['POST'],
+        filesUploadMedia: ['POST'],
         onboardingPreflight: ['GET'],
         onboardingStart: ['GET'],
     };

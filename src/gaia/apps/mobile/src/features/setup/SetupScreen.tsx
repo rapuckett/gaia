@@ -5,6 +5,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 
 import type { SetupPlan, SetupRunStatus } from '@/api/client.types';
 import { useSetupPlan, useSetupStatus } from '@/data';
+import { DirectionNotice } from '@/features/language/DirectionNotice';
 import { useT } from '@/i18n/useT';
 import { Button, IconButton, Notice, Row, Screen, Stack, Text } from '@/ui';
 import { ChevronLeft, ChevronRight } from '@/ui/icons';
@@ -114,6 +115,7 @@ export function SetupScreen({ onReady, onClose, renderStep }: SetupScreenProps) 
         <SetupFooterProvider>
             <Screen scroll footer={<SetupFooterBar />}>
                 <Stack gap="lg" padding="lg">
+                    <DirectionNotice />
                     <SetupRail steps={steps} onOpen={goTo} />
 
                     <Row gap="sm" wrap>
