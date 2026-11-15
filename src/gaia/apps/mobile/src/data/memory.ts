@@ -5,7 +5,9 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tansta
 
 import type {
     ConsolidateMemoryResult,
+    DiscoveryFinding,
     EmbeddingCoverage,
+    InferenceInsight,
     KnowledgeCreateBody,
     KnowledgeListParams,
     KnowledgeSaveResult,
@@ -133,6 +135,17 @@ export function useMemoryUpcoming(days: number) {
         queryKey: memoryKeys.upcoming(days),
         enabled: client !== null,
         queryFn: ({ signal }) => requireClient(client).getMemoryUpcoming(days, { signal }),
+    });
+}
+
+/** Saves the findings or insights the person kept, then re-reads every memory query. */
+export function useCommitProfile() {
+    const client = useGaiaClient();
+    const queryClient = useQueryClient();
+    return useMutation<{ stored: number }, Error, { kind: 'discovery'; items: DiscoveryFinding[] } | { kind: 'inference'; items: InferenceInsight[] }>({
+        mutationFn: (commit) =>
+            commit.kind === 'discovery' ? requireClient(client).commitMemoryDiscovery(commit.items) : requireClient(client).commitMemoryInference(commit.items),
+        onSuccess: () => queryClient.invalidateQueries({ queryKey: memoryKeys.all }),
     });
 }
 

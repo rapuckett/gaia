@@ -141,3 +141,87 @@ export function unsupportedView(variant: 'unknown' | 'invalid', data: unknown): 
     }
     return { variant, pretty, bytes: rawJson.length };
 }
+
+/** Inline base64 raster images only; SVG can carry script, and remote or other schemes are refused. */
+export const DATA_IMAGE_RE = /^data:image\/(png|jpe?g|gif|webp);base64,/;
+
+/** A file GAIA generated, as the backend's card names it: one encoded file name. */
+const MEDIA_SRC_RE = /^\/api\/media\/(image|audio)\/([A-Za-z0-9%._~-]+)$/;
+
+/** The encoded file name of a `/api/media/<kind>/<name>` reference, or null when `src` is anything else. */
+export function parseMediaSrc(kind: 'image' | 'audio', src: string): string | null {
+    const match = MEDIA_SRC_RE.exec(src);
+    if (!match || match[1] !== kind) return null;
+    let name: string;
+    try {
+        name = decodeURIComponent(match[2]);
+    } catch {
+        return null;
+    }
+    if (name === '.' || name === '..' || /[/\\:\0]/.test(name)) return null;
+    return match[2];
+}
+
+export interface ImagePayload {
+    src: string;
+    alt?: string;
+    caption?: string;
+}
+
+export function isImagePayload(value: unknown): value is ImagePayload {
+    if (!value || typeof value !== 'object') return false;
+    const v = value as Record<string, unknown>;
+    return (
+        typeof v.src === 'string' &&
+        (DATA_IMAGE_RE.test(v.src) || parseMediaSrc('image', v.src) !== null) &&
+        isOptionalString(v.alt) &&
+        isOptionalString(v.caption)
+    );
+}
+
+export interface DiffPayload {
+    title?: string;
+    /** File the diff is of; its name is the title when there is none. */
+    path?: string;
+    /** Short label next to the title, e.g. "Edited". */
+    badge?: string;
+    /** Shown instead of the body when there is no text diff to draw. */
+    note?: string;
+    unified: string;
+}
+
+export function isDiffPayload(value: unknown): value is DiffPayload {
+    if (!value || typeof value !== 'object') return false;
+    const v = value as Record<string, unknown>;
+    return (
+        isOptionalString(v.title) &&
+        isOptionalString(v.path) &&
+        isOptionalString(v.badge) &&
+        isOptionalString(v.note) &&
+        typeof v.unified === 'string'
+    );
+}
+
+export const DIFF_HUNK_GAP = '\u22ef';
+
+/** The changed lines: no file headers, and a gap mark between hunks instead of their line ranges. */
+export function diffBodyLines(unified: string): string[] {
+    // A CRLF file's diff lines end in \r; drawn as-is it shows as a stray glyph.
+    const lines = unified.replace(/\n$/, '').split('\n').map((l) => l.replace(/\r$/, ''));
+    const firstHunk = lines.findIndex((l) => l.startsWith('@@'));
+    if (firstHunk === -1) return lines;
+    return lines.slice(firstHunk + 1).map((l) => (l.startsWith('@@') ? DIFF_HUNK_GAP : l));
+}
+
+/** A diff line's kind, from its first character only; line content is untrusted. */
+export function diffLineKind(line: string): 'added' | 'removed' | 'hunk' | 'context' {
+    if (line === DIFF_HUNK_GAP) return 'hunk';
+    if (line.startsWith('+')) return 'added';
+    if (line.startsWith('-')) return 'removed';
+    return 'context';
+}
+
+/** The title shown for a diff: its own, else the file name from its path. */
+export function diffTitle(data: DiffPayload): string | undefined {
+    return data.title ?? (data.path ? data.path.split(/[\\/]/).filter(Boolean).pop() : undefined);
+}
