@@ -3729,7 +3729,6 @@ export const enMessages = {
     'mobileApp.settings.pcOnly': 'Change this on the PC running GAIA.',
     'mobileApp.settings.on': 'On',
     'mobileApp.settings.off': 'Off',
-    'mobileApp.settings.appearanceSystem': 'System',
     'mobileApp.settings.model.removeDownloadBody': 'Its downloaded files are deleted from your PC. You can add it again later.',
     'mobileApp.settings.comingSoon': 'This section is coming to the phone soon. For now, change it on the PC running GAIA.',
     'mobileApp.settings.automations.body': 'The phone app can’t list or change automations. Review them on your PC.',

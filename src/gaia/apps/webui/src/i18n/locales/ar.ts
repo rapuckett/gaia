@@ -3729,7 +3729,6 @@ const messages: Messages = {
     'mobileApp.settings.pcOnly': 'غيّر هذا من الكمبيوتر الذي يشغّل GAIA.',
     'mobileApp.settings.on': 'مفعّل',
     'mobileApp.settings.off': 'متوقف',
-    'mobileApp.settings.appearanceSystem': 'مطابقة النظام',
     'mobileApp.settings.model.removeDownloadBody': 'تُحذف الملفات التي نزّلتها من الكمبيوتر الذي يشغّل GAIA. يمكنك إضافته مرة أخرى لاحقًا.',
     'mobileApp.settings.comingSoon': 'هذا القسم قادم إلى الهاتف قريبًا. في الوقت الحالي، غيّره من الكمبيوتر الذي يشغّل GAIA.',
     'mobileApp.settings.automations.body': 'لا يعرض تطبيق الهاتف الأتمتة ولا يغيّرها. راجعها على الكمبيوتر لديك.',
