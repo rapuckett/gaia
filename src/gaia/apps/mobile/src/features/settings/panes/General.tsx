@@ -62,7 +62,7 @@ function PaletteTile({ id, scheme, selected, onPress }: { id: AppearancePaletteI
                 >
                     <View style={{ width: 20, height: 20, borderRadius: radius.full, backgroundColor: own.accentSolid }} />
                     <View style={{ flex: 1, minWidth: 0 }}>
-                        <Text role="label" weight="medium" numberOfLines={2}>
+                        <Text role="label" weight="medium">
                             {label}
                         </Text>
                     </View>
@@ -132,7 +132,7 @@ export default function General() {
     const [colorsOpen, setColorsOpen] = useState(palette === 'custom');
 
     return (
-        <Stack gap="lg">
+        <Stack gap="lg" padding="lg">
             <SettingsAnchor name="ui-language">
                 <Stack gap="xs">
                     <Select
