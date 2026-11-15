@@ -141,6 +141,7 @@ export const ENDPOINTS = {
     connector: '/api/connectors/{connector_id}',
     connectorActivation: '/api/connectors/{connector_id}/activations/{agent_id:path}',
     connectorActivations: '/api/connectors/{connector_id}/activations',
+    connectorAuthorizeDevice: '/api/connectors/{connector_id}/authorize-device',
     connectorDisable: '/api/connectors/{connector_id}/disable',
     connectorGrant: '/api/connectors/{connector_id}/grants/{agent_id:path}',
     connectorGrants: '/api/connectors/{connector_id}/grants',
@@ -182,6 +183,10 @@ export function connectorActivationPath(connectorId: string, agentId: string): s
 
 export function connectorActivationsPath(connectorId: string): string {
     return ENDPOINTS.connectorActivations.replace('{connector_id}', encodeURIComponent(connectorId));
+}
+
+export function connectorAuthorizeDevicePath(connectorId: string): string {
+    return ENDPOINTS.connectorAuthorizeDevice.replace('{connector_id}', encodeURIComponent(connectorId));
 }
 
 export function connectorDisablePath(connectorId: string): string {

@@ -2,8 +2,19 @@
 // SPDX-License-Identifier: MIT
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useCallback, useEffect, useState } from 'react';
 
-import type { AgentList, AgentMcpList, ConnectorActivations, ConnectorGrants, ConnectorList, DisconnectOutcome, GaiaClient } from '@/api/client.types';
+import type {
+    AgentList,
+    AgentMcpList,
+    ConnectorActivations,
+    ConnectorDeviceAuthResponse,
+    ConnectorGrants,
+    ConnectorList,
+    ConnectorRow,
+    DisconnectOutcome,
+    GaiaClient,
+} from '@/api/client.types';
 
 import { useGaiaClient } from './GaiaClientProvider';
 import { queryKeys, requireClient } from './queries';
@@ -106,4 +117,50 @@ export function useConnectorServerAction(connectorId: string, onDisconnected?: (
         },
         onSettled: () => queryClient.invalidateQueries({ queryKey: queryKeys.connectors }),
     });
+}
+
+export type DeviceSignIn =
+    | { state: 'idle' }
+    | { state: 'starting' }
+    | { state: 'waiting'; code: ConnectorDeviceAuthResponse; expiresAt: number }
+    | { state: 'done' }
+    | { state: 'expired' }
+    | { state: 'failed'; error: Error };
+
+/**
+ * A sign-in with a code, started on the PC: the PC polls the provider and keeps the account, and
+ * the phone re-reads the connector list at the interval the PC gave until it shows connected.
+ */
+export function useDeviceSignIn(connector: ConnectorRow) {
+    const client = useGaiaClient();
+    const queryClient = useQueryClient();
+    const [signIn, setSignIn] = useState<DeviceSignIn>({ state: 'idle' });
+    const scopes = connector.available_scopes?.length ? connector.available_scopes : connector.default_scopes;
+
+    const start = useCallback(() => {
+        setSignIn({ state: 'starting' });
+        let c: GaiaClient;
+        try {
+            c = requireClient(client);
+        } catch (error) {
+            setSignIn({ state: 'failed', error: error as Error });
+            return;
+        }
+        c.startConnectorDeviceSignIn(connector.id, scopes).then(
+            (code) => setSignIn({ state: 'waiting', code, expiresAt: Date.now() + code.expires_in * 1000 }),
+            (error: Error) => setSignIn({ state: 'failed', error }),
+        );
+    }, [client, connector.id, scopes]);
+
+    const connected = signIn.state === 'waiting' && connector.configured;
+    useEffect(() => {
+        if (signIn.state !== 'waiting' || connected) return;
+        const timer = setInterval(() => {
+            if (Date.now() >= signIn.expiresAt) setSignIn({ state: 'expired' });
+            else void queryClient.invalidateQueries({ queryKey: queryKeys.connectors });
+        }, Math.max(1, signIn.code.interval) * 1000);
+        return () => clearInterval(timer);
+    }, [signIn, connected, queryClient]);
+
+    return { signIn: connected ? ({ state: 'done' } as const) : signIn, start };
 }

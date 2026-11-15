@@ -34,6 +34,7 @@ import type {
     ConfirmToolResult,
     ContextChoice,
     ConnectorActivations,
+    ConnectorDeviceAuthResponse,
     AllPermissions,
     ConnectorGrants,
     ConnectorList,
@@ -131,6 +132,7 @@ import {
     ATTACH_HEADER_TIMEOUT_MS,
     connectorActivationPath,
     connectorActivationsPath,
+    connectorAuthorizeDevicePath,
     connectorDisablePath,
     connectorGrantPath,
     connectorGrantsPath,
@@ -823,6 +825,10 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         async deactivateConnectorAgent(connectorId, agentId, options) {
             await request('DELETE', connectorActivationPath(connectorId, agentId), undefined, options?.signal);
+        },
+
+        startConnectorDeviceSignIn(connectorId, scopes, options) {
+            return postJson<ConnectorDeviceAuthResponse>(connectorAuthorizeDevicePath(connectorId), { scopes }, options?.signal);
         },
 
         async disableConnector(connectorId, options) {

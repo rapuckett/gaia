@@ -59,6 +59,7 @@ import type {
     BrowseResponse,
     CancelStreamResponse,
     ConfirmToolResponse,
+    ConnectorDeviceAuthResponse,
     CreateSessionRequest,
     DocumentListResponse,
     DocumentResponse,
@@ -129,7 +130,7 @@ export type {
 } from '@webui/types';
 export type { FileDiff, TurnChanges, UndoResult, UndoSettings } from '@webui/types/changes';
 export type { ActiveSkill, AgentCapabilities, AgentTool, ChatFileChange, GitRepo, OutputItem, OutputKind, ScopeEntry, SessionChanges, SessionEnvironment, SessionGit, SessionOutputs, SkillOrigin, UndoAllResult } from '@webui/types/sessionPanel';
-export type { BrowseResponse, CreateSessionRequest, DocumentListResponse, DocumentResponse, FileEntry, FileSearchResponse, FileSearchResult, ModelServerInfo, QuickLink, ProviderSummary, ProviderSummaryList, SessionSearchResponse, SessionSearchResult, ToolConfirmRequest, FilePreviewResponse } from '@webui/types/api.gen';
+export type { BrowseResponse, ConnectorDeviceAuthResponse, CreateSessionRequest, DocumentListResponse, DocumentResponse, FileEntry, FileSearchResponse, FileSearchResult, ModelServerInfo, QuickLink, ProviderSummary, ProviderSummaryList, SessionSearchResponse, SessionSearchResult, ToolConfirmRequest, FilePreviewResponse } from '@webui/types/api.gen';
 
 /** A photo or file chosen on this phone: where it is, and what it is called. */
 export interface PickedFile {
@@ -544,6 +545,8 @@ export interface GaiaClient {
     activateConnectorAgent(connectorId: string, agentId: string, scopes?: string[], options?: RequestOptions): Promise<void>;
     /** Hides an MCP server's tools from an agent; its grant stays. */
     deactivateConnectorAgent(connectorId: string, agentId: string, options?: RequestOptions): Promise<void>;
+    /** Starts a sign-in with a code on the PC; only for a connector with `supports_device_code`. The PC polls the provider and keeps the account. */
+    startConnectorDeviceSignIn(connectorId: string, scopes: string[], options?: RequestOptions): Promise<ConnectorDeviceAuthResponse>;
     /** Pauses an MCP server; its credentials and grants stay. Turning it back on is PC-only. */
     disableConnector(connectorId: string, options?: RequestOptions): Promise<void>;
     /**
