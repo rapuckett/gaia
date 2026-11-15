@@ -15,6 +15,7 @@ export const ENDPOINTS = {
     lemonadeTarget: '/api/lemonade/target',
     localModelRestart: '/api/providers/local/restart',
     localModelStatus: '/api/providers/local/status',
+    memoryActivity: '/api/memory/activity',
     memoryConsolidate: '/api/memory/consolidate',
     memoryEmbeddingCoverage: '/api/memory/embedding-coverage',
     memoryRebuildEmbeddings: '/api/memory/rebuild-embeddings',
@@ -23,6 +24,8 @@ export const ENDPOINTS = {
     memoryRefreshSystemContext: '/api/memory/refresh-system-context',
     memorySettings: '/api/memory/settings',
     memoryStats: '/api/memory/stats',
+    memoryTools: '/api/memory/tools',
+    memoryUpcoming: '/api/memory/upcoming',
     providerModels: '/api/providers/{provider}/models',
     providersActive: '/api/providers/active',
     providersSelect: '/api/providers/select',
@@ -94,6 +97,14 @@ export function connectorGrantPath(connectorId: string, agentId: string): string
 
 export function connectorGrantsPath(connectorId: string): string {
     return ENDPOINTS.connectorGrants.replace('{connector_id}', encodeURIComponent(connectorId));
+}
+
+export function memoryActivityPath(days: number): string {
+    return `${ENDPOINTS.memoryActivity}?days=${days}`;
+}
+
+export function memoryUpcomingPath(days: number): string {
+    return `${ENDPOINTS.memoryUpcoming}?days=${days}`;
 }
 
 export function schedulePath(name: string): string {
