@@ -68,7 +68,9 @@ function Folders({ sessionId, env, error }: { sessionId: string; env: SessionEnv
     const session = useSession(sessionId).data;
     const { removeFolder } = useEnvironmentActions(sessionId);
     const refused = useDeviceRefused('POST', sessionEnvironmentPath(sessionId, 'folderRemove'));
-    const [confirming, setConfirming] = useState<string | null>(null);
+    const envConfirm = useSessionPanelStore((s) => s.envConfirm);
+    const setEnvConfirm = useSessionPanelStore((s) => s.setEnvConfirm);
+    const confirming = envConfirm?.kind === 'remove' ? envConfirm.path : null;
     const [allFiles, setAllFiles] = useState(false);
 
     const locked = !env || !env.enforced;
@@ -84,7 +86,7 @@ function Folders({ sessionId, env, error }: { sessionId: string; env: SessionEnv
     const files = env?.folders.filter((f) => f.kind === 'file') ?? [];
     const shownFiles = allFiles ? files : files.slice(0, FILES_SHOWN);
     const confirm = (path: string) => {
-        setConfirming(null);
+        setEnvConfirm(null);
         removeFolder.mutate(path);
     };
     const row = (entry: ScopeEntry) => (
@@ -95,8 +97,8 @@ function Folders({ sessionId, env, error }: { sessionId: string; env: SessionEnv
             canRemove={entry.removable && !locked && !refused}
             busy={removeFolder.isPending}
             confirming={confirming === entry.path}
-            onAsk={() => setConfirming(entry.path)}
-            onCancel={() => setConfirming(null)}
+            onAsk={() => setEnvConfirm({ kind: 'remove', path: entry.path })}
+            onCancel={() => setEnvConfirm(null)}
             onConfirm={() => confirm(entry.path)}
         />
     );
@@ -224,10 +226,11 @@ const MODE_NOTE: Record<PermissionMode, MessageKey> = {
 function Permission({ sessionId }: { sessionId: string }) {
     const t = useT();
     const { mode, set } = usePermissionMode(sessionId);
-    const [confirming, setConfirming] = useState(false);
+    const confirming = useSessionPanelStore((s) => s.envConfirm?.kind === 'full');
+    const setEnvConfirm = useSessionPanelStore((s) => s.setEnvConfirm);
     const choose = (next: PermissionMode) => {
         // Full access turns on only from "Turn it on", so a stray tap can't grant it.
-        if (next === 'full_access') setConfirming(true);
+        if (next === 'full_access') setEnvConfirm({ kind: 'full' });
         else set.mutate(next);
     };
     return (
@@ -257,12 +260,12 @@ function Permission({ sessionId }: { sessionId: string }) {
                             size="sm"
                             variant="danger"
                             onPress={() => {
-                                setConfirming(false);
+                                setEnvConfirm(null);
                                 set.mutate('full_access');
                             }}
                             testID="environment-full-access-confirm"
                         />
-                        <Button label={t('sp.cancel')} size="sm" variant="ghost" onPress={() => setConfirming(false)} />
+                        <Button label={t('sp.cancel')} size="sm" variant="ghost" onPress={() => setEnvConfirm(null)} />
                     </Row>
                 </Stack>
             ) : null}
