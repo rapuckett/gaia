@@ -3,7 +3,8 @@
 
 export type Direction = 'ltr' | 'rtl';
 
-export type ApplyDirection = (dir: Direction, lang: string) => void;
+/** `picked` is true when the language was chosen explicitly rather than following the phone. */
+export type ApplyDirection = (dir: Direction, lang: string, picked: boolean) => void;
 
 /** The direction the screen is laid out in right now (native layout only changes on restart). */
 export type LayoutDirection = () => Direction;

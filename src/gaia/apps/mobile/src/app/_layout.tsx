@@ -51,11 +51,12 @@ export default function RootLayout() {
     }, []);
 
     const localeLoaded = useLocaleStore((s) => s.hydrated);
+    const picked = useLocaleStore((s) => s.locale !== null);
 
     // Before the saved pick loads, dir is the phone's and would overwrite the pick's flags.
     useEffect(() => {
-        if (localeLoaded) applyDirection(dir, lang);
-    }, [dir, lang, localeLoaded]);
+        if (localeLoaded) applyDirection(dir, lang, picked);
+    }, [dir, lang, picked, localeLoaded]);
 
     if (!localeLoaded) return null;
 
