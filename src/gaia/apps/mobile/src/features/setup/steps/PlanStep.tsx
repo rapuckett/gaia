@@ -247,7 +247,7 @@ export function PlanStep({ ctx }: { ctx: SetupStepContext }) {
     const proceed = (acknowledgeLowDisk: boolean) => goLocal(startOptions(plan, selection, acknowledgeLowDisk));
     const onContinue = () => {
         if (cloud) openers.openKey?.();
-        else if (short) (openers.confirmLowDisk ?? ((go) => go(false)))(proceed);
+        else if (short && openers.confirmLowDisk) openers.confirmLowDisk(short, proceed);
         else proceed(false);
     };
 
