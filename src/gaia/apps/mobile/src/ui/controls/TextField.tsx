@@ -32,6 +32,8 @@ export interface TextFieldProps {
     leading?: ReactNode;
     /** Content inside the field's end edge (a clear button). */
     trailing?: ReactNode;
+    /** No border, fill or focus ring, for a field inside a card that draws its own (the message box). */
+    bare?: boolean;
     autoFocus?: boolean;
     disabled?: boolean;
     inputRef?: Ref<ComponentRef<typeof TextInput>>;
@@ -54,6 +56,7 @@ export function TextField({
     revealable,
     leading,
     trailing,
+    bare,
     autoFocus,
     disabled,
     inputRef,
@@ -106,23 +109,23 @@ export function TextField({
                 selectionColor={colors.accentSolid}
                 testID={testID}
                 style={{
-                    minHeight: 48,
+                    minHeight: bare ? 40 : 48,
                     ...(multiline
                         ? { maxHeight: lineHeight * maxLines + 24, textAlignVertical: 'top' as const }
                         : null),
-                    paddingStart: leading ? 40 : 12,
-                    paddingEnd: end ? 48 : 12,
-                    paddingVertical: 12,
+                    paddingStart: leading ? 40 : bare ? 4 : 12,
+                    paddingEnd: end ? 48 : bare ? 4 : 12,
+                    paddingVertical: bare ? 8 : 12,
                     borderRadius: radius.md,
-                    borderWidth: 1,
+                    borderWidth: bare ? 0 : 1,
                     borderColor,
-                    backgroundColor: colors.bgInput,
+                    backgroundColor: bare ? 'transparent' : colors.bgInput,
                     color: colors.textPrimary,
                     fontFamily: fontFamily({ weight: 'regular', mono: false, display: false }),
                     fontSize: size,
                     lineHeight,
                     textAlign: 'auto',
-                    ...(focused && !error ? { boxShadow: `0 0 0 3px ${colors.accentRing}` } : null),
+                    ...(focused && !error && !bare ? { boxShadow: `0 0 0 3px ${colors.accentRing}` } : null),
                 }}
             />
             {leading ? (
