@@ -24,6 +24,7 @@ jest.mock('@/ui', () => {
         TextField: host('TextField'),
         Row: host('Row'),
         Stack: host('Stack'),
+        Surface: host('Surface'),
     };
 });
 

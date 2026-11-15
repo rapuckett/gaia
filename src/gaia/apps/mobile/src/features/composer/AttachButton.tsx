@@ -15,7 +15,13 @@ export function AttachButton({ onPick, disabled }: { onPick(files: PickedFile[])
     const [open, setOpen] = useState(false);
     return (
         <>
-            <IconButton icon={Plus} label={t('composer.attach')} onPress={() => setOpen(true)} disabled={disabled} testID="composer-attach" />
+            <IconButton
+                icon={Plus}
+                label={t('composer.attach')}
+                onPress={() => setOpen(true)}
+                disabled={disabled}
+                testID="composer-attach"
+            />
             <ActionSheet
                 open={open}
                 onClose={() => setOpen(false)}

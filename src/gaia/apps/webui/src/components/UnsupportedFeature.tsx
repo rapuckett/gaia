@@ -4,12 +4,12 @@
 import { useEffect, useRef } from 'react';
 import { AlertTriangle, X, AlertCircle, Bug } from 'lucide-react';
 import { describeUploadError } from '../utils/uploadErrors.core';
+import { GITHUB_NEW_ISSUE_URL, buildBugReportUrl } from '../utils/bugReport.core';
 import { useT } from '../i18n/useT';
 import './UnsupportedFeature.css';
 
 export { getUnsupportedCategory, isExtensionSupported, PERMANENT_FAILURE_HINTS, SUPPORTED_EXTENSIONS } from '../utils/uploadErrors.core';
 
-const GITHUB_NEW_ISSUE_URL = 'https://github.com/amd/gaia/issues/new';
 const GITHUB_FEATURE_REQUEST_URL = `${GITHUB_NEW_ISSUE_URL}?template=feature_request.md`;
 const GITHUB_BUG_REPORT_URL = `${GITHUB_NEW_ISSUE_URL}?template=bug_report.md`;
 
@@ -54,37 +54,7 @@ export function featureRequestUrl(title: string, context?: string): string {
 
 /** Create a GitHub bug report URL with pre-filled title and body. */
 export function bugReportUrl(title: string, errorDetail?: string): string {
-    const body = [
-        '## Bug Description',
-        '',
-        errorDetail || title,
-        '',
-        '## Steps to Reproduce',
-        '',
-        '1. Open GAIA Agent UI',
-        '2. _Describe what you did:_',
-        '3. ',
-        '',
-        '## Expected Behavior',
-        '',
-        '_What did you expect to happen?_',
-        '',
-        '## Actual Behavior',
-        '',
-        '_What happened instead?_',
-        '',
-        '---',
-        getEnvironmentInfo(),
-        '',
-        '_Submitted from GAIA Agent UI_',
-    ].join('\n');
-
-    const params = new URLSearchParams({
-        title: `[Bug] ${title}`,
-        body,
-        labels: 'bug,agent-ui',
-    });
-    return `${GITHUB_NEW_ISSUE_URL}?${params.toString()}`;
+    return buildBugReportUrl(title, errorDetail, getEnvironmentInfo());
 }
 
 

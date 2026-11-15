@@ -15,6 +15,7 @@ import { AnswerFooter } from '../activity/AnswerFooter';
 import { savedActivity } from '../activity/savedActivity';
 import { CutOffNote, StoppedNote } from '../EndingNotes';
 import { Markdown } from '../markdown/Markdown';
+import { SavedReplyErrors } from '../ReplyErrors';
 import { useMessageActions, type MessageContext } from './useMessageActions';
 
 export interface AssistantBubbleProps {
@@ -42,6 +43,7 @@ export function AssistantBubble({ message, streaming = false, latencyMs, context
             {!streaming && !cancelled ? <AnswerFooter latencyMs={latencyMs} stats={message.stats} ended={activity.ended} /> : null}
             {cutOff ? <CutOffNote cutOff={cutOff} /> : null}
             {cancelled ? <StoppedNote stop={{ state: 'stopped' }} /> : null}
+            {!streaming && !cancelled ? <SavedReplyErrors message={message} /> : null}
             {!streaming && !cancelled ? (
                 <Row>
                     <IconButton

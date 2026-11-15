@@ -3,6 +3,7 @@
 
 import type { FollowUpOutcome } from '@webui/utils/messageQueue';
 import type {
+    ActiveModel,
     AgentInfo,
     AgentMcpServer,
     ConnectorListEntry,
@@ -13,12 +14,15 @@ import type {
     Message,
     ModelNeed,
     ModelNeedJob,
+    PermissionMode,
     PreflightReport,
     ParsedSchedule,
+    ProviderModelsResponse,
     ResourceUsage,
     Schedule,
     ScheduleResult,
     Session,
+    SessionPermissions,
     SetupCheck,
     SetupPlan,
     SetupRunStatus,
@@ -31,6 +35,7 @@ import type { AgentCapabilities } from '@webui/types/sessionPanel';
 import type { CreateSessionRequest, DocumentListResponse, DocumentResponse, SessionSearchResponse, ToolConfirmRequest, UserInputRequest as ApiUserInputRequest } from '@webui/types/api.gen';
 
 export type {
+    ActiveModel,
     AgentInfo,
     AgentMcpServer,
     ConnectorListEntry,
@@ -43,12 +48,15 @@ export type {
     Message,
     ModelNeed,
     ModelNeedJob,
+    PermissionMode,
     PreflightReport,
     ParsedSchedule,
+    ProviderModelsResponse,
     ResourceUsage,
     Schedule,
     ScheduleResult,
     Session,
+    SessionPermissions,
     SetupCheck,
     SetupPlan,
     SetupRunStatus,
@@ -219,6 +227,15 @@ export interface GaiaClient {
     deleteSession(sessionId: string, options?: RequestOptions): Promise<DeleteSessionResult>;
     /** Clears the chat's unread mark. */
     markSessionRead(sessionId: string, options?: RequestOptions): Promise<Session>;
+    /** The model new chats run on and where it runs. */
+    getActiveModel(options?: RequestOptions): Promise<ActiveModel>;
+    /** One provider's chat models; `local` also carries each one's state, size and download. */
+    listProviderModels(provider: string, options?: RequestOptions): Promise<ProviderModelsResponse>;
+    /** Makes `model` the one new messages use; a cloud model is picked after the person agrees to what leaves the PC. */
+    selectModel(model: string, options?: RequestOptions): Promise<ActiveModel>;
+    /** The chat's permission mode and the tools it always allows. */
+    getPermissions(sessionId: string, options?: RequestOptions): Promise<SessionPermissions>;
+    setPermissionMode(sessionId: string, mode: PermissionMode, options?: RequestOptions): Promise<SessionPermissions>;
     /** How full the model's context window is for the chat's next message, or why there is no reading yet. */
     getContextUsage(sessionId: string, options?: RequestOptions): Promise<ContextUsageResult>;
     /** What the chat's last finished turn did with the messages added to it; rejects with 409 while a turn still runs. */
