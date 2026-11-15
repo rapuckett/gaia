@@ -17,19 +17,21 @@ import { useT } from '@/i18n/useT';
 import { Badge, Button, Card, Disclosure, Ltr, Notice, Row, Spinner, Stack, StatusDot, Surface, Text } from '@/ui';
 import { Check, Copy, ExternalLink, Link2, Play, Plug, RefreshCw, RotateCw, Square, Trash2, Zap, type LucideIcon } from '@/ui/icons';
 
+import { isolate } from './model/modelText';
+
 // Every /api/messaging route is PC-only (the status carries the pairing code, the POSTs the bot
 // token), so the phone reads what it is allowed to and offers no action the PC would refuse.
 
-/** Discord's own button names, as webui's MessagingSettings quotes them. */
+/** Discord's own button names, as webui's MessagingSettings quotes them; isolated so the quotes and period stay in order in Arabic. */
 const PORTAL = {
-    newApp: 'New Application',
-    create: 'Create',
-    bot: 'Bot',
-    reset: 'Reset Token',
-    copy: 'Copy',
-    message: 'Message',
-    createOwn: 'Create My Own',
-    forFriends: 'For me and my friends',
+    newApp: isolate('New Application'),
+    create: isolate('Create'),
+    bot: isolate('Bot'),
+    reset: isolate('Reset Token'),
+    copy: isolate('Copy'),
+    message: isolate('Message'),
+    createOwn: isolate('Create My Own'),
+    forFriends: isolate('For me and my friends'),
 };
 
 const PROBLEMS = new Set<DiscordState>(['error', 'taken_over', 'token_invalid', 'credentials_unavailable', 'conflict']);

@@ -6,7 +6,7 @@ import { useRef, useState } from 'react';
 import type { CustomModelReport } from '@/api/client.types';
 import { useAddCustomModel, useCheckCustomModel } from '@/data';
 import { useT } from '@/i18n/useT';
-import { Button, ChoiceList, Disclosure, Icon, Notice, Row, Sheet, Stack, Text, TextField } from '@/ui';
+import { Button, ChoiceList, Disclosure, Icon, Notice, Row, SettingsGroup, Stack, Text, TextField } from '@/ui';
 import { Check, TriangleAlert, X } from '@/ui/icons';
 
 import { errorText, isolate, refusedOnPhone } from './modelText';
@@ -15,13 +15,14 @@ const EXAMPLE_LINK = 'https://huggingface.co/unsloth/Qwen3-4B-Instruct-2507-GGUF
 
 export interface AddCustomModelProps {
     open: boolean;
+    onToggle: () => void;
     onClose: () => void;
     /** Called with the new model's name once it is on the list. */
     onAdded: (name: string) => void;
 }
 
 /** Paste a Hugging Face link, see what GAIA checked, and add the model to the list. */
-export function AddCustomModel({ open, onClose, onAdded }: AddCustomModelProps) {
+export function AddCustomModel({ open, onToggle, onClose, onAdded }: AddCustomModelProps) {
     const t = useT();
     const check = useCheckCustomModel();
     const add = useAddCustomModel();
@@ -84,8 +85,8 @@ export function AddCustomModel({ open, onClose, onAdded }: AddCustomModelProps) 
     ) : null;
 
     return (
-        <Sheet open={open} onClose={onClose} title={t('settings.custom.title')}>
-            <Stack gap="md" padding="lg">
+        <SettingsGroup title={t('settings.custom.title')} open={open} onToggle={onToggle}>
+            <Stack gap="md" paddingY="sm">
                 <Text role="caption" tone="muted">{t('mobileApp.settings.custom.hint')}</Text>
                 <TextField
                     value={url}
@@ -152,6 +153,6 @@ export function AddCustomModel({ open, onClose, onAdded }: AddCustomModelProps) 
                 ) : null}
                 {error ? <Notice tone={error === t('mobileApp.settings.pcOnly') ? 'info' : 'danger'} message={error} /> : null}
             </Stack>
-        </Sheet>
+        </SettingsGroup>
     );
 }

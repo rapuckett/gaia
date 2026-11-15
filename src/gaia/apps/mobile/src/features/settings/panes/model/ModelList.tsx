@@ -1,7 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { useMemo, useState, type ReactNode } from 'react';
+import { Children, useMemo, useState, type ReactNode } from 'react';
 
 import { isDownloading } from '@webui/components/modelMeta';
 import { distinctLabels, groupModels } from '@webui/utils/modelList.core';
@@ -9,8 +9,7 @@ import { distinctLabels, groupModels } from '@webui/utils/modelList.core';
 import type { ProviderModel } from '@/api/client.types';
 import { useRemoveCustomModel, useStartModelDownload } from '@/data';
 import { useT } from '@/i18n/useT';
-import { Badge, Button, Disclosure, Notice, Row, SearchField, Sheet, Spinner, Stack, Text } from '@/ui';
-import { Plus } from '@/ui/icons';
+import { Button, Divider, Notice, Row, SearchField, SettingsGroup, Sheet, Spinner, Stack, Text } from '@/ui';
 
 import { AddCustomModel } from './AddCustomModel';
 import { ModelRow } from './ModelRow';
@@ -43,15 +42,13 @@ function Group({ id, title, count, defaultOpen, force, children }: {
     const [picked, setPicked] = useState<boolean | null>(null);
     const open = force || (picked ?? defaultOpen);
     return (
-        <Disclosure
-            title={title}
-            open={open}
-            onToggle={() => setPicked(!open)}
-            trailing={<Badge shape="pill" label={String(count)} />}
-            testID={`model-group-${id}`}
-        >
-            <Stack gap="sm">{children}</Stack>
-        </Disclosure>
+        <Stack testID={`model-group-${id}`}>
+            <SettingsGroup title={title} count={count} open={open} onToggle={() => setPicked(!open)}>
+                <Stack gap="xs">
+                    {Children.toArray(children).flatMap((c, i) => (i === 0 ? [c] : [<Divider key={`d${i}`} />, c]))}
+                </Stack>
+            </SettingsGroup>
+        </Stack>
     );
 }
 
@@ -189,16 +186,9 @@ export function ModelList({ provider, remote, models, activeModel, switching, on
             ) : null}
             {local ? (
                 <>
-                    <Button
-                        variant="secondary"
-                        icon={Plus}
-                        label={t('settings.custom.title')}
-                        onPress={() => setAdding(true)}
-                        wrap
-                        testID="model-add"
-                    />
                     <AddCustomModel
                         open={adding}
+                        onToggle={() => setAdding((o) => !o)}
                         onClose={() => setAdding(false)}
                         onAdded={(name) => {
                             setNotice({ ok: true, text: t('settings.model.added', { name: isolate(name) }) });

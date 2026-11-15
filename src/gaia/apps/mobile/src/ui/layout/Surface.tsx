@@ -7,7 +7,7 @@ import { useTheme, type Theme } from '../theme/ThemeProvider';
 import type { Space } from '../tokens/space';
 import { Pressable } from '../controls/Pressable';
 
-export type SurfaceTone = 'primary' | 'secondary' | 'card' | 'recessed' | 'userMsg';
+export type SurfaceTone = 'primary' | 'secondary' | 'card' | 'recessed' | 'userMsg' | 'accent';
 export type Elevation = 'none' | 'sm' | 'md' | 'lg';
 
 export interface SurfaceProps {
@@ -32,6 +32,7 @@ export function useSurfaceStyle({ tone = 'primary', radius, padding, border, ele
         card: colors.bgCard,
         recessed: colors.bgRecessed,
         userMsg: colors.bgUserMsg,
+        accent: colors.accentDim,
     }[tone];
     return {
         backgroundColor: bg,
