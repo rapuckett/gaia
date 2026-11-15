@@ -34,6 +34,7 @@ export {
   FileText,
   Folder,
   FolderOpen,
+  FolderPlus,
   HardDrive,
   House,
   Image,
