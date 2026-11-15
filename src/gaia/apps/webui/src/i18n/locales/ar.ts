@@ -3779,6 +3779,7 @@ const messages: Messages = {
     'mobileApp.settings.privacy.local': 'تُنشأ الإجابات الآن على الكمبيوتر لديك أيضًا.',
     'mobileApp.readAloud.unsupported': 'تحتاج القراءة بصوت عالٍ إلى إصدار أحدث من GAIA على الكمبيوتر لديك. حدّثه ثم حاول مرة أخرى.',
     'mobileApp.answer.place.thisPc': 'على الكمبيوتر لديك',
+    'mobileApp.rail.preview': 'معاينة',
     'mobileApp.answer.duration.sec': '{n} ث',
     'mobileApp.answer.duration.min': '{n} د',
     'mobileApp.answer.duration.minSec': '{m} د {s} ث',

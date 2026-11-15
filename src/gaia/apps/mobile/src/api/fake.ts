@@ -70,9 +70,11 @@ import type {
     ScheduleResult,
     ResourceUsage,
     Session,
+    FileStatusList,
     SessionChanges,
     SessionEnvironment,
     SessionGit,
+    SessionOutputs,
     SessionList,
     SessionPermissions,
     SessionSearchResponse,
@@ -246,6 +248,10 @@ export interface FakeClientData {
     fileBytes?: Record<string, Uint8Array>;
     /** What getCapabilities answers, by chat; a chat not listed has no agent running (409). */
     capabilities?: Record<string, AgentCapabilities>;
+    /** What getOutputs answers, by chat; a chat not listed has produced nothing. */
+    outputs?: Record<string, SessionOutputs>;
+    /** What getFileStatus answers, by path; a path not listed is reported as unchecked. */
+    fileStatus?: Record<string, FileStatusList['files'][number]>;
     /** What getEnvironment answers, by chat; removing a folder and the internet switch change it. A chat not listed is a 404. */
     environments?: Record<string, SessionEnvironment>;
     memorySettings?: MemorySettings;
@@ -1384,6 +1390,12 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             const found = data.capabilities?.[sessionId];
             if (!found) throw new GaiaApiError(409, "This chat's agent isn't running yet.");
             return found;
+        },
+        async getOutputs(sessionId) {
+            return data.outputs?.[sessionId] ?? { session_id: sessionId, items: [] };
+        },
+        async getFileStatus(paths) {
+            return { files: paths.map((path) => data.fileStatus?.[path] ?? { path }) };
         },
         async getEnvironment(sessionId) {
             const found = data.environments?.[sessionId];

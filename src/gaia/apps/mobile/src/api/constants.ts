@@ -93,6 +93,7 @@ export const ENDPOINTS = {
     sessionMessage: '/api/sessions/{session_id}/messages/{message_id}',
     sessionMessages: '/api/sessions/{session_id}/messages',
     sessionMessagesAndBelow: '/api/sessions/{session_id}/messages/{message_id}/and-below',
+    sessionOutputs: '/api/sessions/{session_id}/outputs',
     sessionPin: '/api/sessions/{session_id}/pin',
     sessionPrivate: '/api/sessions/{session_id}/private',
     sessionRead: '/api/sessions/{session_id}/read',
@@ -159,6 +160,7 @@ export const ENDPOINTS = {
     filesImage: '/api/files/image',
     filesPreview: '/api/files/preview',
     filesSearch: '/api/files/search',
+    filesStatus: '/api/files/status',
     filesUpload: '/api/files/upload',
     filesUploadMedia: '/api/files/upload-media',
     onboardingPreflight: '/api/onboarding/preflight',
@@ -303,6 +305,10 @@ export function sessionDocumentPath(sessionId: string, docId: string): string {
 
 export function sessionDocumentsPath(sessionId: string): string {
     return ENDPOINTS.sessionDocuments.replace('{session_id}', encodeURIComponent(sessionId));
+}
+
+export function sessionOutputsPath(sessionId: string): string {
+    return ENDPOINTS.sessionOutputs.replace('{session_id}', encodeURIComponent(sessionId));
 }
 
 export function sessionCapabilitiesPath(sessionId: string): string {

@@ -49,7 +49,7 @@ import type {
 } from '@webui/types';
 import type { FileDiff, TurnChanges, UndoResult, UndoSettings } from '@webui/types/changes';
 import type { DiscordStatus } from '@webui/services/messagingApi';
-import type { AgentCapabilities, SessionChanges, SessionEnvironment, SessionGit, UndoAllResult } from '@webui/types/sessionPanel';
+import type { AgentCapabilities, SessionChanges, SessionEnvironment, SessionGit, SessionOutputs, UndoAllResult } from '@webui/types/sessionPanel';
 import type { DiscoveryFinding, Goal, GoalStats, InferenceInsight, KnowledgeCreateBody, KnowledgeListParams, KnowledgeSaveResult, KnowledgeUpdateBody, MemoryCleared, MemoryReinitializeResult, MemorySettings, MemorySettingsUpdateResponse, Priority as GoalPriority } from '@webui/services/memoryApi';
 import type { SpeechModel, SpeechSettings } from '@webui/services/speechApi';
 import type { AboutYouItem, ActivityDay, ConvSession, ConvTurn, EntityInfo, KnowledgeEntry, TemporalItem, ToolStat } from '@webui/utils/memoryFormat.core';
@@ -126,7 +126,7 @@ export type {
     UnavailableConnectorRow,
 } from '@webui/types';
 export type { FileDiff, TurnChanges, UndoResult, UndoSettings } from '@webui/types/changes';
-export type { ActiveSkill, AgentCapabilities, AgentTool, ChatFileChange, GitRepo, ScopeEntry, SessionChanges, SessionEnvironment, SessionGit, SkillOrigin, UndoAllResult } from '@webui/types/sessionPanel';
+export type { ActiveSkill, AgentCapabilities, AgentTool, ChatFileChange, GitRepo, OutputItem, OutputKind, ScopeEntry, SessionChanges, SessionEnvironment, SessionGit, SessionOutputs, SkillOrigin, UndoAllResult } from '@webui/types/sessionPanel';
 export type { BrowseResponse, CreateSessionRequest, DocumentListResponse, DocumentResponse, FileEntry, FileSearchResponse, FileSearchResult, ModelServerInfo, QuickLink, ProviderSummary, ProviderSummaryList, SessionSearchResponse, SessionSearchResult, ToolConfirmRequest, FilePreviewResponse } from '@webui/types/api.gen';
 
 /** A photo or file chosen on this phone: where it is, and what it is called. */
@@ -143,6 +143,10 @@ export type UserInputRequest = ApiUserInputRequest & { display?: string };
 export interface SessionList {
     sessions: Session[];
     total: number;
+}
+
+export interface FileStatusList {
+    files: { path: string; exists?: boolean | null; mtime?: number | null }[];
 }
 
 export interface MessageList {
@@ -492,6 +496,8 @@ export interface GaiaClient {
     getCapabilities(sessionId: string, options?: RequestOptions): Promise<AgentCapabilities>;
     /** The folders this chat may touch and whether its web tools are on. */
     getEnvironment(sessionId: string, options?: RequestOptions): Promise<SessionEnvironment>;
+    /** Everything the chat produced, newest first. */
+    getOutputs(sessionId: string, options?: RequestOptions): Promise<SessionOutputs>;
     /** Takes a folder or file away from the chat; rejects with 409 when the PC refuses. */
     removeEnvironmentFolder(sessionId: string, path: string, options?: RequestOptions): Promise<SessionEnvironment>;
     /** Turns the chat's web tools on or off; rejects with 409 or 502 when the PC can't apply it. */
@@ -663,6 +669,8 @@ export interface GaiaClient {
     reindexDocument(docId: string, options?: RequestOptions): Promise<DocumentResponse>;
     /** A PC file's first lines (or its columns, or just its details) as the chat's folders allow; rejects with 403 for a file this chat may not read. */
     getFilePreview(path: string, sessionId: string, options?: RequestOptions): Promise<FilePreviewResponse>;
+    /** Whether each path still exists on the PC and when it last changed; unchecked outside the PC user's home folder. */
+    getFileStatus(paths: string[], options?: RequestOptions): Promise<FileStatusList>;
     /** An image on the PC, as bytes; the chat's id is what lets a phone read it. */
     getImageBytes(path: string, sessionId: string, options?: RequestOptions): Promise<Uint8Array>;
     /** A library document's file, as bytes; the chat's id is what lets a phone read it. */

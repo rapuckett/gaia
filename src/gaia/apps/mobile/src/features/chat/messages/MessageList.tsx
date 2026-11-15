@@ -1,7 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { useCallback, useMemo, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, type ReactNode } from 'react';
 
 import { latencyByMessage } from '@webui/utils/answerStats.core';
 
@@ -13,6 +13,7 @@ import { ErrorState, List, ListSkeleton, Stack } from '@/ui';
 import { useAnswerComparison } from '../compare/useAnswerComparison';
 import { AssistantBubble } from './AssistantBubble';
 import { JumpButton } from './JumpButton';
+import { registerJumpToMessage } from './jumpToMessage';
 import { MessageActionsContext } from './MessageActionsContext';
 import { UserBubble } from './UserBubble';
 import { useFollowScroll } from './useFollowScroll';
@@ -48,6 +49,17 @@ export function MessageListView({ messages, loading = false, error, onRetry, liv
     const bringIntoView = useCallback(
         (index: number) => listRef.current?.scrollToIndex({ index, viewPosition: 0.5, animated: true }),
         [listRef],
+    );
+
+    useEffect(
+        () =>
+            registerJumpToMessage((messageId) => {
+                const index = shown.findIndex((m) => m.id === messageId);
+                if (index < 0) return false;
+                bringIntoView(index);
+                return true;
+            }),
+        [shown, bringIntoView],
     );
 
     if (loading) return <ListSkeleton rows={6} label={t('chat.loadingMessages')} />;
