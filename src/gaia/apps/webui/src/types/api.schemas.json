@@ -21,7 +21,7 @@
     "type": "object"
   },
   "ActivationSaved": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "The agent is active on the connector; ``auto_granted`` when a grant was made too.",
     "properties": {
       "active": {
@@ -52,7 +52,7 @@
     "type": "object"
   },
   "ActiveModelResponse": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "The active model, whether it is downloaded, and the restore notice.",
     "properties": {
       "config_error": {
@@ -180,7 +180,7 @@
     "type": "object"
   },
   "ActiveRunsResponse": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "Chats with a turn in flight, those waiting in line, and those paused on the user.",
     "properties": {
       "awaiting_user": {
@@ -218,7 +218,7 @@
     "type": "object"
   },
   "ActiveSkill": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "A skill loaded in the chat, and how it came to be.",
     "properties": {
       "how": {
@@ -343,7 +343,7 @@
     "type": "object"
   },
   "AgentCapabilities": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "The chat's agent, its tools, and its loaded skills (null when it runs elsewhere).",
     "properties": {
       "agent_type": {
@@ -529,7 +529,7 @@
     "type": "object"
   },
   "AgentMcpServer": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "An MCP server a custom agent declares in its own ``mcp_servers.json``.",
     "properties": {
       "agent_id": {
@@ -577,7 +577,7 @@
     "type": "object"
   },
   "AgentMcpsResponse": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "Result of ``GET /api/connectors/agent-mcps``.",
     "properties": {
       "agent_mcps": {
@@ -897,7 +897,7 @@
     "type": "object"
   },
   "AgentTool": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "One tool the chat's agent can call.",
     "properties": {
       "category": {
@@ -922,7 +922,7 @@
     "type": "object"
   },
   "AgentUiHealthResponse": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "The server is up.",
     "properties": {
       "service": {
@@ -948,7 +948,7 @@
     "type": "object"
   },
   "AgentUiHealthStats": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "Row counts and indexed size in the chat database.",
     "properties": {
       "documents": {
@@ -1017,7 +1017,7 @@
     "type": "object"
   },
   "AutomationList": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "Every automation; ``delivers`` is null when Discord's state can't be read.",
     "properties": {
       "automations": {
@@ -1047,7 +1047,7 @@
     "type": "object"
   },
   "AutomationRow": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "One automation, in raw values the app words and formats itself.",
     "properties": {
       "check": {
@@ -1260,7 +1260,7 @@
     "type": "object"
   },
   "CancelStreamResponse": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "The running or queued turn was told to stop.",
     "properties": {
       "cancelled": {
@@ -1282,7 +1282,7 @@
     "type": "object"
   },
   "ChangeTotals": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "properties": {
       "additions": {
         "title": "Additions",
@@ -1311,7 +1311,7 @@
     "type": "object"
   },
   "ChatFileChange": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "A file from before the chat's first turn to after its last.",
     "properties": {
       "additions": {
@@ -1521,7 +1521,7 @@
     "type": "object"
   },
   "ChatSpendChat": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "This chat's cloud answers.",
     "properties": {
       "answers": {
@@ -1561,7 +1561,7 @@
     "type": "object"
   },
   "ChatSpendItem": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "One answer's cost in a chat.",
     "properties": {
       "created_at": {
@@ -1620,7 +1620,7 @@
     "type": "object"
   },
   "ChatSpendReport": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "What this chat's cloud answers cost, and today's across chats.",
     "properties": {
       "chat": {
@@ -1660,7 +1660,7 @@
     "type": "object"
   },
   "ChatSpendToday": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "Every chat's cloud answers since the start of the viewer's day.",
     "properties": {
       "answers": {
@@ -1791,7 +1791,7 @@
     "type": "object"
   },
   "ConfirmToolResponse": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "The answer reached the waiting prompt; ``granted`` is what \"always\" allowed.",
     "properties": {
       "approved": {
@@ -1875,7 +1875,7 @@
     "type": "object"
   },
   "ConnectorActivationsResponse": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "Result of ``GET /api/connectors/{id}/activations``: on/off per agent id.",
     "properties": {
       "activations": {
@@ -1893,7 +1893,7 @@
     "type": "object"
   },
   "ConnectorAuthorizeResponse": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "Result of ``POST /api/connectors/{id}/authorize``.",
     "properties": {
       "authorization_url": {
@@ -1913,7 +1913,7 @@
     "type": "object"
   },
   "ConnectorConfigureResponse": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "Result of ``POST /api/connectors/{id}/configure``; the keys set depend on the step.\n\n``status``/``connector_id``: OAuth client saved. ``flow_id``/\n``authorization_url``: browser sign-in started. ``provider`` through\n``connected_at``: sign-in finished. ``configured``/``connector_id``/\n``command``/``args``: MCP server written.",
     "properties": {
       "account_email": {
@@ -2048,7 +2048,7 @@
     "type": "object"
   },
   "ConnectorDeviceAuthResponse": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "Result of ``POST /api/connectors/{id}/authorize-device``.",
     "properties": {
       "expires_in": {
@@ -2083,7 +2083,7 @@
     "type": "object"
   },
   "ConnectorFieldSummary": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "One field of a connector's setup or configure form.",
     "properties": {
       "help_md": {
@@ -2137,7 +2137,7 @@
     "type": "object"
   },
   "ConnectorGrantsResponse": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "Result of ``GET /api/connectors/{id}/grants``: scopes per agent id.",
     "properties": {
       "grants": {
@@ -2158,7 +2158,7 @@
     "type": "object"
   },
   "ConnectorListResponse": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "Result of ``GET /api/connectors``.",
     "properties": {
       "connectors": {
@@ -2183,7 +2183,7 @@
     "type": "object"
   },
   "ConnectorOAuthClient": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "Which OAuth client a provider would use; the secret is never included.",
     "properties": {
       "client_id": {
@@ -2226,7 +2226,7 @@
     "type": "object"
   },
   "ConnectorSummary": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "A catalog connector merged with its live state.",
     "properties": {
       "account_id": {
@@ -2422,7 +2422,7 @@
     "type": "object"
   },
   "ConnectorTestResponse": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "Result of ``POST /api/connectors/{id}/test``.",
     "properties": {
       "detail": {
@@ -2457,7 +2457,7 @@
     "type": "object"
   },
   "ConnectorUnavailable": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "A catalog connector whose live state could not be read.",
     "properties": {
       "display_name": {
@@ -2506,7 +2506,7 @@
     "type": "object"
   },
   "ContextCategory": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "properties": {
       "key": {
         "title": "Key",
@@ -2530,7 +2530,7 @@
     "type": "object"
   },
   "ContextMeasured": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "How full the model's context is for the chat's next message, by kind.",
     "properties": {
       "at_risk": {
@@ -2758,7 +2758,7 @@
     "type": "object"
   },
   "ContextState": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "What the agent moved out of the window to keep going.",
     "properties": {
       "put_away": {
@@ -2790,7 +2790,7 @@
     "type": "object"
   },
   "ContextUnavailable": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "Why the chat's context can't be measured now.",
     "properties": {
       "available": {
@@ -2981,7 +2981,7 @@
     "type": "object"
   },
   "CustomModelAdded": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "The saved model and the check that passed it.",
     "properties": {
       "model": {
@@ -2999,7 +2999,7 @@
     "type": "object"
   },
   "CustomModelCheck": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "One thing verified about a pasted link.",
     "properties": {
       "detail": {
@@ -3029,7 +3029,7 @@
     "type": "object"
   },
   "CustomModelEntry": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "A model the user added from a link, as saved in config.json.",
     "properties": {
       "added_at": {
@@ -3135,7 +3135,7 @@
     "type": "object"
   },
   "CustomModelRemoved": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "The removed model, and the config keys that pointed at it and were cleared.",
     "properties": {
       "cleared": {
@@ -3167,7 +3167,7 @@
     "type": "object"
   },
   "CustomModelReport": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "What checking a pasted link found; the model fields are set once it is read.",
     "properties": {
       "architecture": {
@@ -3427,7 +3427,7 @@
     "type": "object"
   },
   "CustomModelVariant": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "One quantization of a pasted model and whether it fits.",
     "properties": {
       "file": {
@@ -3469,7 +3469,7 @@
     "type": "object"
   },
   "DefaultPermissionModeResponse": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "The mode new chats start in.",
     "properties": {
       "default_mode": {
@@ -3567,7 +3567,7 @@
     "type": "object"
   },
   "DiscordConnectResponse": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "The stored token's bot, and the bridge's state once it started.",
     "properties": {
       "connect": {
@@ -3585,7 +3585,7 @@
     "type": "object"
   },
   "DiscordConnectResult": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "What a stored bot token gives the apps to show next.",
     "properties": {
       "application_id": {
@@ -3647,7 +3647,7 @@
     "type": "object"
   },
   "DiscordStatus": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "Connection, pairing and bridge state, plus every link setup opens.",
     "properties": {
       "always_allowed": {
@@ -3851,7 +3851,7 @@
     "type": "object"
   },
   "DocumentCancelResponse": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "Confirmation that a document's indexing was cancelled.",
     "properties": {
       "cancelled": {
@@ -3871,7 +3871,7 @@
     "type": "object"
   },
   "DocumentDeleteResponse": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "Confirmation that a document was removed from the library.",
     "properties": {
       "deleted": {
@@ -4000,7 +4000,7 @@
     "type": "object"
   },
   "DocumentStatusResponse": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "A document's indexing status.",
     "properties": {
       "chunk_count": {
@@ -4055,7 +4055,7 @@
     "type": "object"
   },
   "DownloadModelResponse": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "The download started in the background.",
     "properties": {
       "model": {
@@ -4142,7 +4142,7 @@
     "type": "object"
   },
   "EstimatedTokenizer": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "properties": {
       "exact": {
         "const": false,
@@ -4175,7 +4175,7 @@
     "type": "object"
   },
   "ExactTokenizer": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "properties": {
       "exact": {
         "const": true,
@@ -4195,7 +4195,7 @@
     "type": "object"
   },
   "FileDiff": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "properties": {
       "after_size": {
         "title": "After Size",
@@ -4614,7 +4614,7 @@
     "type": "object"
   },
   "FolderCheckResponse": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "Why a chat can't be given the folder, or null when it can.",
     "properties": {
       "refusal": {
@@ -4651,7 +4651,7 @@
     "type": "object"
   },
   "FollowUpDelivered": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "The running turn took the message.",
     "properties": {
       "delivered": {
@@ -4667,7 +4667,7 @@
     "type": "object"
   },
   "FollowUpOutcome": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "What the last finished turn did with the messages added to it.",
     "properties": {
       "returned": {
@@ -4756,7 +4756,7 @@
     "type": "object"
   },
   "GitCommitResult": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "properties": {
       "commit": {
         "title": "Commit",
@@ -4791,7 +4791,7 @@
     "type": "object"
   },
   "GitDraft": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "properties": {
       "body": {
         "title": "Body",
@@ -4810,7 +4810,7 @@
     "type": "object"
   },
   "GitPullRequestResult": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "properties": {
       "root": {
         "title": "Root",
@@ -4829,7 +4829,7 @@
     "type": "object"
   },
   "GitRepo": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "A repository holding the chat's changes, with a drafted message.",
     "properties": {
       "branch": {
@@ -4946,7 +4946,7 @@
     "type": "object"
   },
   "GoalListResponse": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "Goals matching a listing, with their count.",
     "properties": {
       "goals": {
@@ -4969,7 +4969,7 @@
     "type": "object"
   },
   "GoalResponse": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "A goal with its tasks.",
     "properties": {
       "approved_for_auto": {
@@ -5066,7 +5066,7 @@
     "type": "object"
   },
   "GoalStatsResponse": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "How many goals and tasks are in each status.",
     "properties": {
       "goals": {
@@ -5116,7 +5116,7 @@
     "type": "object"
   },
   "GoalStoreHealthResponse": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "Why the background loop could not read the goal store, or null.",
     "properties": {
       "error": {
@@ -5138,7 +5138,7 @@
     "type": "object"
   },
   "GoalTaskResponse": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "One task of a goal.",
     "properties": {
       "created_at": {
@@ -5222,7 +5222,7 @@
     "type": "object"
   },
   "GpuMemoryModel": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "A model GAIA could run, and the share it needs.",
     "properties": {
       "default": {
@@ -5276,7 +5276,7 @@
     "type": "object"
   },
   "GpuMemoryPending": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "A change waiting for a restart, or checked after one.",
     "properties": {
       "previous_setting_gb": {
@@ -5366,7 +5366,7 @@
     "type": "object"
   },
   "GpuMemoryPreset": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "A share of memory to offer, and the models it unlocks.",
     "properties": {
       "gpu_gb": {
@@ -5394,7 +5394,7 @@
     "type": "object"
   },
   "GpuMemoryRevert": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "Whether GAIA can undo its own change.",
     "properties": {
       "available": {
@@ -5435,7 +5435,7 @@
     "type": "object"
   },
   "GpuMemorySetting": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "The knob the user changes, in decimal GB.",
     "properties": {
       "current_gb": {
@@ -5465,7 +5465,7 @@
     "type": "object"
   },
   "GpuMemoryStatusResponse": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "The GPU memory split. A PC the step doesn't apply to sends only the first six fields.",
     "properties": {
       "applies": {
@@ -5690,7 +5690,7 @@
     "type": "object"
   },
   "GrantSaved": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "The agent's grant on the connector, as saved.",
     "properties": {
       "agent_id": {
@@ -5791,7 +5791,7 @@
     "type": "object"
   },
   "IndexProgressResponse": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "How far a running index has got.",
     "properties": {
       "done": {
@@ -6056,7 +6056,7 @@
     "type": "object"
   },
   "JsonExportResponse": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "The session's row and messages as the database stores them.",
     "properties": {
       "format": {
@@ -6087,7 +6087,7 @@
     "type": "object"
   },
   "KeptOriginal": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "properties": {
       "kept": {
         "const": "original",
@@ -6102,7 +6102,7 @@
     "type": "object"
   },
   "KeptRetry": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "The retried answer replaced the original.",
     "properties": {
       "content": {
@@ -6284,7 +6284,7 @@
     "type": "object"
   },
   "LemonadeDetection": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "A Lemonade found on the default ports, and the ports that didn't answer in time.",
     "properties": {
       "found": {
@@ -6313,7 +6313,7 @@
     "type": "object"
   },
   "LemonadeProbe": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "What answered at a URL, and whether GAIA can use it.",
     "properties": {
       "message": {
@@ -6370,7 +6370,7 @@
     "type": "object"
   },
   "LemonadeTarget": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "The Lemonade GAIA uses now, who chose it, and whether to offer a switch.",
     "properties": {
       "api_key_stored": {
@@ -6479,7 +6479,7 @@
     "type": "object"
   },
   "LemonadeTargetSwitched": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "The new target, and what the daemon did (None when none runs).",
     "properties": {
       "api_key_stored": {
@@ -6649,7 +6649,7 @@
     "type": "object"
   },
   "LoadModelResponse": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "The load started in the background.",
     "properties": {
       "ctx_size": {
@@ -6759,7 +6759,7 @@
     "type": "object"
   },
   "LocalContextReload": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "Whether saving a size reloaded the loaded model, and why not.",
     "properties": {
       "reason": {
@@ -6793,7 +6793,7 @@
     "type": "object"
   },
   "LocalContextResponse": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "The saved context view; ``reload`` is None when the model isn't loaded.",
     "properties": {
       "automatic": {
@@ -6902,7 +6902,7 @@
     "type": "object"
   },
   "LocalContextView": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "The context sizes a model may use on this PC, and the one in force.",
     "properties": {
       "automatic": {
@@ -7000,7 +7000,7 @@
     "type": "object"
   },
   "LocalMemoryView": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "Total and free memory of the pool models load into, and this model's share.",
     "properties": {
       "free_gb": {
@@ -7044,7 +7044,7 @@
     "type": "object"
   },
   "LocalRestartResponse": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "A restart was started, and whether it also starts the stopped server.",
     "properties": {
       "model": {
@@ -7070,7 +7070,7 @@
     "type": "object"
   },
   "LocalStatusResponse": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "Live state of the local model server and its chat model.",
     "properties": {
       "active_display_name": {
@@ -7551,7 +7551,7 @@
     "type": "object"
   },
   "MCPServerList": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "properties": {
       "servers": {
         "items": {
@@ -7602,7 +7602,7 @@
     "type": "object"
   },
   "MCPServerTools": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "The tools an MCP server offers.",
     "properties": {
       "name": {
@@ -7625,7 +7625,7 @@
     "type": "object"
   },
   "MCPStatusResponse": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "Result of ``GET /api/mcp/status``.",
     "properties": {
       "servers": {
@@ -7643,7 +7643,7 @@
     "type": "object"
   },
   "MCPToolInfo": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "properties": {
       "description": {
         "title": "Description",
@@ -7662,7 +7662,7 @@
     "type": "object"
   },
   "MarkdownExportResponse": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "The session as one markdown document.",
     "properties": {
       "content": {
@@ -7700,7 +7700,7 @@
     "type": "object"
   },
   "MemoryActivityDay": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "One day of the activity chart.",
     "properties": {
       "conversations": {
@@ -7735,7 +7735,7 @@
     "type": "object"
   },
   "MemoryClearCounts": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "Rows deleted per table.",
     "properties": {
       "conversations": {
@@ -7760,7 +7760,7 @@
     "type": "object"
   },
   "MemoryCommitResponse": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "How many approved items were stored.",
     "properties": {
       "stored": {
@@ -7775,7 +7775,7 @@
     "type": "object"
   },
   "MemoryConsolidateResponse": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "Counts from a consolidation run.",
     "properties": {
       "consolidated": {
@@ -7800,7 +7800,7 @@
     "type": "object"
   },
   "MemoryConversationStats": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "Conversation-table aggregates.",
     "properties": {
       "first_session": {
@@ -7844,7 +7844,7 @@
     "type": "object"
   },
   "MemoryConversationTurn": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "One stored conversation turn.",
     "properties": {
       "content": {
@@ -7891,7 +7891,7 @@
     "type": "object"
   },
   "MemoryEmbeddingCoverage": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "Share of active knowledge rows that have an embedding.",
     "properties": {
       "coverage_pct": {
@@ -7921,7 +7921,7 @@
     "type": "object"
   },
   "MemoryEntity": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "An entity with how many rows mention it.",
     "properties": {
       "count": {
@@ -7946,7 +7946,7 @@
     "type": "object"
   },
   "MemoryKnowledgeItem": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "One knowledge row (the embedding BLOB is never sent).",
     "properties": {
       "category": {
@@ -8082,7 +8082,7 @@
     "type": "object"
   },
   "MemoryKnowledgePage": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "A page of knowledge rows.",
     "properties": {
       "items": {
@@ -8115,7 +8115,7 @@
     "type": "object"
   },
   "MemoryKnowledgeStats": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "Knowledge-table aggregates for the dashboard header.",
     "properties": {
       "avg_confidence": {
@@ -8190,7 +8190,7 @@
     "type": "object"
   },
   "MemoryKnowledgeWriteResponse": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "Result of creating, editing or deleting a knowledge row.",
     "properties": {
       "embed_error": {
@@ -8251,7 +8251,7 @@
     "type": "object"
   },
   "MemoryProcedureStats": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "Procedural-memory aggregates.",
     "properties": {
       "active": {
@@ -8283,7 +8283,7 @@
     "type": "object"
   },
   "MemoryPruneResponse": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "Rows pruned per table, and conversation turns kept for pending summaries.",
     "properties": {
       "conversations_deleted": {
@@ -8313,7 +8313,7 @@
     "type": "object"
   },
   "MemoryRebuildEmbeddingsResponse": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "Counts from an embedding backfill.",
     "properties": {
       "backfilled": {
@@ -8333,7 +8333,7 @@
     "type": "object"
   },
   "MemoryRebuildFtsResponse": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "Result of an FTS rebuild.",
     "properties": {
       "status": {
@@ -8349,7 +8349,7 @@
     "type": "object"
   },
   "MemoryReconcileResponse": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "Counts from a reconciliation run.",
     "properties": {
       "contradicted": {
@@ -8384,7 +8384,7 @@
     "type": "object"
   },
   "MemoryReinitializeResponse": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "Result of wiping memory and re-running discovery.",
     "properties": {
       "cleared": {
@@ -8402,7 +8402,7 @@
     "type": "object"
   },
   "MemorySession": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "A conversation session summary.",
     "properties": {
       "first_message": {
@@ -8477,7 +8477,7 @@
     "type": "object"
   },
   "MemorySettingsResponse": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "Memory feature settings.",
     "properties": {
       "mcp_memory_enabled": {
@@ -8502,7 +8502,7 @@
     "type": "object"
   },
   "MemorySettingsUpdateResponse": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "Settings after an update, plus the consent-triggered refresh outcome.",
     "properties": {
       "mcp_memory_enabled": {
@@ -8548,7 +8548,7 @@
     "type": "object"
   },
   "MemoryStatsResponse": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "Memory dashboard header stats.",
     "properties": {
       "conversations": {
@@ -8605,7 +8605,7 @@
     "type": "object"
   },
   "MemorySystemContextRefresh": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "Result of a system-context refresh; ``error`` only when discovery failed.",
     "properties": {
       "error": {
@@ -8653,7 +8653,7 @@
     "type": "object"
   },
   "MemoryTemporalStats": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "Counts of time-sensitive knowledge rows.",
     "properties": {
       "overdue_count": {
@@ -8673,7 +8673,7 @@
     "type": "object"
   },
   "MemoryToolStats": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "Tool-history aggregates.",
     "properties": {
       "denied_calls": {
@@ -8708,7 +8708,7 @@
     "type": "object"
   },
   "MemoryToolSummary": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "Per-tool performance stats.",
     "properties": {
       "avg_duration_ms": {
@@ -8809,7 +8809,7 @@
     "type": "object"
   },
   "MessageDeleteResponse": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "Confirmation that a message was deleted.",
     "properties": {
       "deleted": {
@@ -8948,7 +8948,7 @@
     "type": "object"
   },
   "MessagesDeleteResponse": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "Confirmation that a message and every later one were deleted.",
     "properties": {
       "count": {
@@ -9234,7 +9234,7 @@
     "type": "object"
   },
   "OpenFileResponse": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "The resolved path that was opened.",
     "properties": {
       "path": {
@@ -9255,7 +9255,7 @@
     "type": "object"
   },
   "OutputItem": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "Something the chat produced, tied to the answer that made it.",
     "properties": {
       "change": {
@@ -9503,7 +9503,7 @@
     "type": "object"
   },
   "PermissionGrantResponse": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "One \"always allow\" grant: its key and the label shown for it.",
     "properties": {
       "key": {
@@ -9537,7 +9537,7 @@
     "type": "object"
   },
   "PermissionsListResponse": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "The default mode for new chats and every chat with non-default permissions.",
     "properties": {
       "default_mode": {
@@ -9753,7 +9753,7 @@
     "type": "object"
   },
   "PriceCard": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "List price in dollars per million tokens, with where it comes from.",
     "properties": {
       "cached_input_per_million": {
@@ -9783,7 +9783,7 @@
     "type": "object"
   },
   "PriceListEntry": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "A model's list price before the provider is connected.",
     "properties": {
       "model": {
@@ -9838,7 +9838,7 @@
     "type": "object"
   },
   "PriceListResponse": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "Every priced model a provider offers; ``source`` and ``note`` explain a gap.",
     "properties": {
       "models": {
@@ -9885,7 +9885,7 @@
     "type": "object"
   },
   "ProviderActiveView": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "The model new turns run, and where a new chat would be answered.",
     "properties": {
       "config_error": {
@@ -9997,7 +9997,7 @@
     "type": "object"
   },
   "ProviderConnectResponse": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "The connected provider, and whether its key was kept.",
     "properties": {
       "base_url": {
@@ -10212,7 +10212,7 @@
     "type": "object"
   },
   "ProviderKeyForgotten": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "Whether a stored key was removed.",
     "properties": {
       "removed": {
@@ -10227,7 +10227,7 @@
     "type": "object"
   },
   "ProviderKeyStoreRetry": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "Acknowledges that the next key read may ask the OS again.",
     "properties": {
       "retrying": {
@@ -10242,7 +10242,7 @@
     "type": "object"
   },
   "ProviderListResponse": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "Every provider with its connection state, and the active model.",
     "properties": {
       "active": {
@@ -10276,7 +10276,7 @@
     "type": "object"
   },
   "ProviderModelEntry": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "A chat model; the local-only fields are absent from cloud lists.",
     "properties": {
       "available": {
@@ -10512,7 +10512,7 @@
     "type": "object"
   },
   "ProviderModelsResponse": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "A provider's chat models; ``blocked`` marks cloud under Local only, and the\nmemory fields come with the local list.",
     "properties": {
       "blocked": {
@@ -10595,7 +10595,7 @@
     "type": "object"
   },
   "ProviderNetwork": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "Whether the AMD gateway's host can be reached; None when not checked.",
     "properties": {
       "detail": {
@@ -10629,7 +10629,7 @@
     "type": "object"
   },
   "ProviderNpuProblem": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "Something that keeps the NPU from running a model, and its fix.",
     "properties": {
       "code": {
@@ -10662,7 +10662,7 @@
     "type": "object"
   },
   "ProviderPlacement": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "Device and backend a model runs on, reported or expected.",
     "properties": {
       "backend": {
@@ -10736,7 +10736,7 @@
     "type": "object"
   },
   "ProviderRestoreNotice": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "Whether last run's model was restored; ``retry`` is set only on a failure.",
     "properties": {
       "message": {
@@ -10780,7 +10780,7 @@
     "type": "object"
   },
   "ProviderView": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "A provider and its connection state; Local carries only the first four fields.",
     "properties": {
       "base_url": {
@@ -11007,7 +11007,7 @@
     "type": "object"
   },
   "PutAwayContext": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "properties": {
       "results": {
         "title": "Results",
@@ -11191,7 +11191,7 @@
     "type": "object"
   },
   "RetryStats": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "The retried answer's numbers; zero tokens means the server did not report them.",
     "properties": {
       "input_tokens": {
@@ -11265,7 +11265,7 @@
     "type": "object"
   },
   "RetryWithResponse": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "The retried answer, held until ``/api/chat/retry-with/choose`` keeps one.",
     "properties": {
       "content": {
@@ -11344,7 +11344,7 @@
     "type": "object"
   },
   "ScheduleDeleteResponse": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "Confirmation that a schedule was deleted.",
     "properties": {
       "deleted": {
@@ -11632,7 +11632,7 @@
     "type": "object"
   },
   "ScopeEntry": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "A folder or file the chat may touch, and why.",
     "properties": {
       "kind": {
@@ -11739,7 +11739,7 @@
     "type": "object"
   },
   "SessionActivateResponse": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "The Agent UI was told to switch to this session.",
     "properties": {
       "activated": {
@@ -11760,7 +11760,7 @@
     "type": "object"
   },
   "SessionAttachResponse": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "Confirmation that a document was attached to a session.",
     "properties": {
       "attached": {
@@ -11775,7 +11775,7 @@
     "type": "object"
   },
   "SessionChanges": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "Every file the chat changed; ``pending`` while a turn still runs.",
     "properties": {
       "files": {
@@ -11820,7 +11820,7 @@
     "type": "object"
   },
   "SessionDeleteResponse": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "Confirmation that a session was deleted.",
     "properties": {
       "deleted": {
@@ -11835,7 +11835,7 @@
     "type": "object"
   },
   "SessionDetachResponse": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "Confirmation that a document was detached from a session.",
     "properties": {
       "detached": {
@@ -11850,7 +11850,7 @@
     "type": "object"
   },
   "SessionEnvironment": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "The folders this chat may touch and whether it may use the internet.",
     "properties": {
       "enforced": {
@@ -11896,7 +11896,7 @@
     "type": "object"
   },
   "SessionGit": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "The chat's repositories; ``reason`` says why git is unavailable.",
     "properties": {
       "available": {
@@ -11952,7 +11952,7 @@
     "type": "object"
   },
   "SessionOutputs": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "Everything the chat produced, newest first.",
     "properties": {
       "items": {
@@ -11975,7 +11975,7 @@
     "type": "object"
   },
   "SessionPermissionsResponse": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "A chat's permission mode and its \"always allow\" grants.",
     "properties": {
       "grants": {
@@ -12398,7 +12398,7 @@
     "type": "object"
   },
   "SetupBackend": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "A backend Lemonade reports for this PC.",
     "properties": {
       "backend": {
@@ -12447,7 +12447,7 @@
     "type": "object"
   },
   "SetupCancelResponse": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "Whether anything was stopped.",
     "properties": {
       "cancelled": {
@@ -12462,7 +12462,7 @@
     "type": "object"
   },
   "SetupCatalogEntry": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "One model setup can pull or use. Every ``*_gb`` is decimal GB.",
     "properties": {
       "capacity_gb": {
@@ -12734,7 +12734,7 @@
     "type": "object"
   },
   "SetupChatModel": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "The chat model setup starts from.",
     "properties": {
       "downloaded": {
@@ -12781,7 +12781,7 @@
     "type": "object"
   },
   "SetupCheckResponse": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "``gaia init --check --json`` plus the step lists the screen shows.",
     "properties": {
       "agent_missing": {
@@ -12868,7 +12868,7 @@
     "type": "object"
   },
   "SetupComponent": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "Something setup fetches besides the models.",
     "properties": {
       "bundled": {
@@ -12943,7 +12943,7 @@
     "type": "object"
   },
   "SetupDevice": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "A processor Lemonade found.",
     "properties": {
       "available": {
@@ -13022,7 +13022,7 @@
     "type": "object"
   },
   "SetupDisk": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "The drive models download to.",
     "properties": {
       "free_gb": {
@@ -13075,7 +13075,7 @@
     "type": "object"
   },
   "SetupGaiaBuild": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "Which GAIA is running.",
     "properties": {
       "commit": {
@@ -13125,7 +13125,7 @@
     "type": "object"
   },
   "SetupLemonade": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "The model server setup will use.",
     "properties": {
       "mode": {
@@ -13161,7 +13161,7 @@
     "type": "object"
   },
   "SetupModelLoad": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "One model the load check tried.",
     "properties": {
       "downloaded": {
@@ -13237,7 +13237,7 @@
     "type": "object"
   },
   "SetupModelNeedResponse": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "Whether a job needs a model that isn't on this PC; ``off`` says why none is offered.",
     "properties": {
       "disk_free_gb": {
@@ -13303,7 +13303,7 @@
     "type": "object"
   },
   "SetupModelProgress": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "One model's download. Sizes in bytes; speed in bytes per second.",
     "properties": {
       "bytes_done": {
@@ -13464,7 +13464,7 @@
     "type": "object"
   },
   "SetupNeedModel": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "The model a job is missing.",
     "properties": {
       "id": {
@@ -13511,7 +13511,7 @@
     "type": "object"
   },
   "SetupNpuProblem": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "One thing between this PC and running a model on its NPU.",
     "properties": {
       "code": {
@@ -13552,7 +13552,7 @@
     "type": "object"
   },
   "SetupNpuStatus": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "Whether this PC has an NPU and what stops a model running on it.",
     "properties": {
       "present": {
@@ -13580,7 +13580,7 @@
     "type": "object"
   },
   "SetupOption": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "One default chat model and whether this PC can run it.",
     "properties": {
       "fits": {
@@ -13634,7 +13634,7 @@
     "type": "object"
   },
   "SetupOverall": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "Bytes-weighted progress across the models being set up.",
     "properties": {
       "bytes_done": {
@@ -13709,7 +13709,7 @@
     "type": "object"
   },
   "SetupPlanModel": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "A catalog entry setup will download, with its role in the plan.",
     "properties": {
       "capacity_gb": {
@@ -13990,7 +13990,7 @@
     "type": "object"
   },
   "SetupPlanResponse": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "What setup will use and download, before it starts.",
     "properties": {
       "backends": {
@@ -14168,7 +14168,7 @@
     "type": "object"
   },
   "SetupProblemView": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "A failed setup with a known fix: the user's model server.",
     "properties": {
       "env_url": {
@@ -14221,7 +14221,7 @@
     "type": "object"
   },
   "SetupRemoveModelResponse": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "The new plan after a model is removed, and the space it freed.",
     "properties": {
       "backends": {
@@ -14411,7 +14411,7 @@
     "type": "object"
   },
   "SetupReportResponse": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "The troubleshooting bundle just written.",
     "properties": {
       "name": {
@@ -14481,7 +14481,7 @@
     "type": "object"
   },
   "SetupRunStatus": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "The running (or last) setup. ``idle`` carries only ``state`` and, after a\nsingle model download, ``models``, ``overall`` and ``logs``.",
     "properties": {
       "chat_model": {
@@ -14746,7 +14746,7 @@
     "type": "object"
   },
   "SetupStepView": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "One step of setup as the user reads it; ``status`` only while a run is on.",
     "properties": {
       "detail": {
@@ -14794,7 +14794,7 @@
     "type": "object"
   },
   "SetupSystem": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "What setup found across GAIA, the model server and this PC.",
     "properties": {
       "agent_version": {
@@ -14886,7 +14886,7 @@
     "type": "object"
   },
   "SetupTestRow": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "One row of the Test step; the fields come from ``gaia init``'s events.",
     "properties": {
       "error": {
@@ -14971,7 +14971,7 @@
     "type": "object"
   },
   "SkillFeaturedLibrary": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "A skills library offered as a one-click add.",
     "properties": {
       "description": {
@@ -15001,7 +15001,7 @@
     "type": "object"
   },
   "SkillFeaturedResponse": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "Result of ``GET /api/skills/featured``.",
     "properties": {
       "libraries": {
@@ -15061,7 +15061,7 @@
     "type": "object"
   },
   "SkillLinkAddResponse": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "Result of ``POST /api/skills/link/add``; ``failed`` maps name to reason.",
     "properties": {
       "added": {
@@ -15087,7 +15087,7 @@
     "type": "object"
   },
   "SkillLinkAdded": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "One skill the add wrote to ``~/.gaia/skills``.",
     "properties": {
       "code_trusted": {
@@ -15135,7 +15135,7 @@
     "type": "object"
   },
   "SkillLinkEntry": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "One skill found behind a pasted link, and what its audit said.",
     "properties": {
       "description": {
@@ -15213,7 +15213,7 @@
     "type": "object"
   },
   "SkillLinkPermission": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "One permission a linked skill declares, raw grant plus a sentence.",
     "properties": {
       "grant": {
@@ -15233,7 +15233,7 @@
     "type": "object"
   },
   "SkillLinkPreviewResponse": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "Result of ``POST /api/skills/link/preview``; ``pin`` goes back on add.",
     "properties": {
       "link": {
@@ -15284,7 +15284,7 @@
     "type": "object"
   },
   "SkillListEntry": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "One installed skill in the Skills settings list.",
     "properties": {
       "always_on": {
@@ -15367,7 +15367,7 @@
     "type": "object"
   },
   "SkillPreferences": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "A skill's saved preferences, keyed as its preferences schema names them.",
     "properties": {
       "preferences": {
@@ -15388,7 +15388,7 @@
     "type": "object"
   },
   "SkillPreferencesList": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "Every skill with saved preferences.",
     "properties": {
       "skills": {
@@ -15406,7 +15406,7 @@
     "type": "object"
   },
   "SkillPreferencesReset": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "``reset`` is false when the skill had nothing saved.",
     "properties": {
       "reset": {
@@ -15426,7 +15426,7 @@
     "type": "object"
   },
   "SkillRemoved": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "properties": {
       "removed": {
         "title": "Removed",
@@ -15440,7 +15440,7 @@
     "type": "object"
   },
   "SkillsListResponse": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "Installed skills, and any folder that failed to parse (path to message).",
     "properties": {
       "invalid": {
@@ -15666,7 +15666,7 @@
     "type": "object"
   },
   "SpendingModelRow": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "One model's share of this month's cloud spending.",
     "properties": {
       "model": {
@@ -15706,7 +15706,7 @@
     "type": "object"
   },
   "SpendingReport": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "This month's cloud spending, the limit, and where it stands.",
     "properties": {
       "by_model": {
@@ -15785,7 +15785,7 @@
     "type": "object"
   },
   "StartCardView": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "A task a new chat offers.",
     "properties": {
       "needs_input": {
@@ -15820,7 +15820,7 @@
     "type": "object"
   },
   "StartScreenResponse": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "A new chat's task cards and working folder; ``skills_error`` says why there are no cards.",
     "properties": {
       "cards": {
@@ -15854,7 +15854,7 @@
     "type": "object"
   },
   "StartWorkingFolder": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "The folder a new chat's agent works in.",
     "properties": {
       "choosable": {
@@ -15884,7 +15884,7 @@
     "type": "object"
   },
   "SummarizedContext": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "properties": {
       "summary_tokens": {
         "title": "Summary Tokens",
@@ -16381,7 +16381,7 @@
     "type": "object"
   },
   "ToolLoading": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "Tools sent with every request, and those loaded only when needed.",
     "properties": {
       "loaded": {
@@ -16407,7 +16407,7 @@
     "type": "object"
   },
   "TunnelDevice": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "The device behind the latest authenticated remote request.",
     "properties": {
       "lastSeen": {
@@ -16427,7 +16427,7 @@
     "type": "object"
   },
   "TunnelStatus": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "The tunnel's state; ``token`` is null for any caller but the PC.",
     "properties": {
       "active": {
@@ -16534,7 +16534,7 @@
     "type": "object"
   },
   "TunnelStopped": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "properties": {
       "active": {
         "const": false,
@@ -16549,7 +16549,7 @@
     "type": "object"
   },
   "TurnChanges": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "One turn's file changes.",
     "properties": {
       "files": {
@@ -16631,7 +16631,7 @@
     "type": "object"
   },
   "TurnChangesList": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "Every turn in the session that changed files, oldest first.",
     "properties": {
       "turns": {
@@ -16649,7 +16649,7 @@
     "type": "object"
   },
   "TurnDiff": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "What the turn did to each file, as unified diffs.",
     "properties": {
       "files": {
@@ -16672,7 +16672,7 @@
     "type": "object"
   },
   "TurnFileChange": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "properties": {
       "change": {
         "enum": [
@@ -17000,7 +17000,7 @@
     "type": "object"
   },
   "UndoAllResult": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "What undoing every turn of the chat put back, removed, and could not account for.",
     "properties": {
       "incomplete": {
@@ -17067,7 +17067,7 @@
     "type": "object"
   },
   "UndoResult": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "What undoing the turn put back, removed, and could not account for.",
     "properties": {
       "incomplete": {
@@ -17141,7 +17141,7 @@
     "type": "object"
   },
   "UndoSettingsResponse": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "The undo history limits and how much of it is used.",
     "properties": {
       "max_mb": {
@@ -17204,7 +17204,7 @@
     "type": "object"
   },
   "UntrackedWork": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "Work that may have changed files without GAIA keeping a copy.",
     "properties": {
       "detail": {
@@ -17388,7 +17388,7 @@
     "type": "object"
   },
   "UserInputResponse": {
-    "additionalProperties": false,
+    "additionalProperties": true,
     "description": "The answer reached the waiting question.",
     "properties": {
       "request_id": {

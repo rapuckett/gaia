@@ -389,6 +389,7 @@ export interface ActivationSaved {
   agent_id: string;
   auto_granted: boolean;
   connector_id: string;
+  [k: string]: unknown | undefined;
 }
 /**
  * The active model, whether it is downloaded, and the restore notice.
@@ -406,6 +407,7 @@ export interface ActiveModelResponse {
   provider_name: string | null;
   remote: boolean;
   restore: ProviderRestoreNotice;
+  [k: string]: unknown | undefined;
 }
 /**
  * Whether last run's model was restored; ``retry`` is set only on a failure.
@@ -414,6 +416,7 @@ export interface ProviderRestoreNotice {
   message: string | null;
   retry?: boolean | null;
   status: "failed" | "none" | "restored" | "pending";
+  [k: string]: unknown | undefined;
 }
 /**
  * Chats with a turn in flight, those waiting in line, and those paused on the user.
@@ -424,6 +427,7 @@ export interface ActiveRunsResponse {
   };
   queued: string[];
   session_ids: string[];
+  [k: string]: unknown | undefined;
 }
 /**
  * A skill loaded in the chat, and how it came to be.
@@ -431,6 +435,7 @@ export interface ActiveRunsResponse {
 export interface ActiveSkill {
   how: "model" | "auto" | "always";
   name: string;
+  [k: string]: unknown | undefined;
 }
 /**
  * Request body for the eval-only :func:`admin_clear` endpoint.
@@ -470,6 +475,7 @@ export interface AgentCapabilities {
   session_id: string;
   skills: ActiveSkill[] | null;
   tools: AgentTool[];
+  [k: string]: unknown | undefined;
 }
 /**
  * One tool the chat's agent can call.
@@ -478,6 +484,7 @@ export interface AgentTool {
   category: string;
   description: string;
   name: string;
+  [k: string]: unknown | undefined;
 }
 /**
  * Information about a registered agent.
@@ -525,12 +532,14 @@ export interface AgentMcpServer {
   config_path: string;
   disabled: boolean;
   server_name: string;
+  [k: string]: unknown | undefined;
 }
 /**
  * Result of ``GET /api/connectors/agent-mcps``.
  */
 export interface AgentMcpsResponse {
   agent_mcps: AgentMcpServer[];
+  [k: string]: unknown | undefined;
 }
 /**
  * A single step in the agent's execution (persisted).
@@ -601,6 +610,7 @@ export interface AgentUiHealthResponse {
   service: "gaia-agent-ui";
   stats: AgentUiHealthStats;
   status: "ok";
+  [k: string]: unknown | undefined;
 }
 /**
  * Row counts and indexed size in the chat database.
@@ -611,6 +621,7 @@ export interface AgentUiHealthStats {
   sessions: number;
   total_chunks: number;
   total_size_bytes: number;
+  [k: string]: unknown | undefined;
 }
 /**
  * Request to attach a document to a session.
@@ -628,6 +639,7 @@ export interface AuthorizeRequest {
 export interface AutomationList {
   automations: AutomationRow[];
   delivers: boolean | null;
+  [k: string]: unknown | undefined;
 }
 /**
  * One automation, in raw values the app words and formats itself.
@@ -648,6 +660,7 @@ export interface AutomationRow {
   quiet: string;
   runs: number;
   say: string;
+  [k: string]: unknown | undefined;
 }
 /**
  * A llama.cpp backend this machine can run, with Lemonade's state for it.
@@ -706,12 +719,14 @@ export interface CancelStreamRequest {
 export interface CancelStreamResponse {
   cancelled: true;
   status: "ok";
+  [k: string]: unknown | undefined;
 }
 export interface ChangeTotals {
   additions: number;
   deletions: number;
   files: number;
   uncounted: number;
+  [k: string]: unknown | undefined;
 }
 /**
  * A file from before the chat's first turn to after its last.
@@ -729,6 +744,7 @@ export interface ChatFileChange {
   too_large: boolean;
   truncated: boolean;
   unified: string;
+  [k: string]: unknown | undefined;
 }
 /**
  * A chat model GAIA knows, or one already downloaded in Lemonade.
@@ -776,6 +792,7 @@ export interface ChatSpendChat {
   items: ChatSpendItem[];
   unpriced_answers: number;
   usd: number;
+  [k: string]: unknown | undefined;
 }
 /**
  * One answer's cost in a chat.
@@ -786,6 +803,7 @@ export interface ChatSpendItem {
   message_id: number;
   model: string | null;
   usd: number | null;
+  [k: string]: unknown | undefined;
 }
 /**
  * What this chat's cloud answers cost, and today's across chats.
@@ -796,6 +814,7 @@ export interface ChatSpendReport {
   paid: boolean;
   price_source: string;
   today: ChatSpendToday;
+  [k: string]: unknown | undefined;
 }
 /**
  * Every chat's cloud answers since the start of the viewer's day.
@@ -806,6 +825,7 @@ export interface ChatSpendToday {
   since: string;
   unpriced_answers: number;
   usd: number;
+  [k: string]: unknown | undefined;
 }
 export interface CommitRequest {
   /**
@@ -827,6 +847,7 @@ export interface ConfirmToolResponse {
   approved: boolean;
   granted: string | null;
   status: "ok";
+  [k: string]: unknown | undefined;
 }
 /**
  * Register a cloud provider in Lemonade; ``api_key`` blank keeps the current key.
@@ -844,6 +865,7 @@ export interface ConnectorActivationsResponse {
   activations: {
     [k: string]: boolean | undefined;
   };
+  [k: string]: unknown | undefined;
 }
 /**
  * Result of ``POST /api/connectors/{id}/authorize``.
@@ -851,6 +873,7 @@ export interface ConnectorActivationsResponse {
 export interface ConnectorAuthorizeResponse {
   authorization_url: string;
   flow_id: string;
+  [k: string]: unknown | undefined;
 }
 /**
  * Result of ``POST /api/connectors/{id}/configure``; the keys set depend on the step.
@@ -872,6 +895,7 @@ export interface ConnectorConfigureResponse {
   provider?: string | null;
   scopes?: string[] | null;
   status?: string | null;
+  [k: string]: unknown | undefined;
 }
 /**
  * Result of ``POST /api/connectors/{id}/authorize-device``.
@@ -882,6 +906,7 @@ export interface ConnectorDeviceAuthResponse {
   message: string;
   user_code: string;
   verification_uri: string;
+  [k: string]: unknown | undefined;
 }
 /**
  * One field of a connector's setup or configure form.
@@ -894,6 +919,7 @@ export interface ConnectorFieldSummary {
   placeholder: string;
   prefix: string;
   required: boolean;
+  [k: string]: unknown | undefined;
 }
 /**
  * Result of ``GET /api/connectors/{id}/grants``: scopes per agent id.
@@ -902,12 +928,14 @@ export interface ConnectorGrantsResponse {
   grants: {
     [k: string]: string[] | undefined;
   };
+  [k: string]: unknown | undefined;
 }
 /**
  * Result of ``GET /api/connectors``.
  */
 export interface ConnectorListResponse {
   connectors: (ConnectorSummary | ConnectorUnavailable)[];
+  [k: string]: unknown | undefined;
 }
 /**
  * A catalog connector merged with its live state.
@@ -939,6 +967,7 @@ export interface ConnectorSummary {
   supports_device_code: boolean;
   tier: number;
   type: "oauth_pkce" | "mcp_server";
+  [k: string]: unknown | undefined;
 }
 /**
  * Which OAuth client a provider would use; the secret is never included.
@@ -947,6 +976,7 @@ export interface ConnectorOAuthClient {
   client_id: string | null;
   has_secret: boolean;
   source: ("keyring" | "env") | null;
+  [k: string]: unknown | undefined;
 }
 /**
  * A catalog connector whose live state could not be read.
@@ -957,6 +987,7 @@ export interface ConnectorUnavailable {
   id: string;
   path?: string | null;
   reason?: "activations_unreadable" | null;
+  [k: string]: unknown | undefined;
 }
 /**
  * Result of ``POST /api/connectors/{id}/test``.
@@ -965,11 +996,13 @@ export interface ConnectorTestResponse {
   detail: string;
   ok: boolean;
   reason?: ("timeout" | "disabled") | null;
+  [k: string]: unknown | undefined;
 }
 export interface ContextCategory {
   key: string;
   label: string;
   tokens: number;
+  [k: string]: unknown | undefined;
 }
 /**
  * How full the model's context is for the chat's next message, by kind.
@@ -999,6 +1032,7 @@ export interface ContextMeasured {
   turns_in_view: number;
   used: number;
   window: number;
+  [k: string]: unknown | undefined;
 }
 /**
  * What the agent moved out of the window to keep going.
@@ -1006,23 +1040,28 @@ export interface ContextMeasured {
 export interface ContextState {
   put_away: PutAwayContext | null;
   summarized: SummarizedContext | null;
+  [k: string]: unknown | undefined;
 }
 export interface PutAwayContext {
   results: number;
   tokens: number;
+  [k: string]: unknown | undefined;
 }
 export interface SummarizedContext {
   summary_tokens: number;
   tokens: number;
   turns: number;
+  [k: string]: unknown | undefined;
 }
 export interface ExactTokenizer {
   exact: true;
   model: string;
+  [k: string]: unknown | undefined;
 }
 export interface EstimatedTokenizer {
   exact: false;
   reason: string;
+  [k: string]: unknown | undefined;
 }
 /**
  * Tools sent with every request, and those loaded only when needed.
@@ -1030,6 +1069,7 @@ export interface EstimatedTokenizer {
 export interface ToolLoading {
   loaded: string[];
   on_demand: string[];
+  [k: string]: unknown | undefined;
 }
 /**
  * ``ctx_size`` None returns the model to GAIA's automatic size.
@@ -1044,6 +1084,7 @@ export interface ContextRequest {
 export interface ContextUnavailable {
   available: false;
   reason: string;
+  [k: string]: unknown | undefined;
 }
 export interface CpuUsage {
   /**
@@ -1097,6 +1138,7 @@ export interface CreateSessionRequest {
 export interface CustomModelAdded {
   model: CustomModelEntry;
   report: CustomModelReport;
+  [k: string]: unknown | undefined;
 }
 /**
  * A model the user added from a link, as saved in config.json.
@@ -1115,6 +1157,7 @@ export interface CustomModelEntry {
   source_url: string;
   tool_calling: boolean;
   vision: boolean;
+  [k: string]: unknown | undefined;
 }
 /**
  * What checking a pasted link found; the model fields are set once it is read.
@@ -1142,6 +1185,7 @@ export interface CustomModelReport {
   variants: CustomModelVariant[];
   vision?: boolean | null;
   warnings: string[];
+  [k: string]: unknown | undefined;
 }
 /**
  * One thing verified about a pasted link.
@@ -1151,6 +1195,7 @@ export interface CustomModelCheck {
   id: string;
   label: string;
   ok: boolean;
+  [k: string]: unknown | undefined;
 }
 /**
  * One quantization of a pasted model and whether it fits.
@@ -1161,6 +1206,7 @@ export interface CustomModelVariant {
   quant: string;
   reason: string | null;
   size_gb: number;
+  [k: string]: unknown | undefined;
 }
 /**
  * The removed model, and the config keys that pointed at it and were cleared.
@@ -1169,6 +1215,7 @@ export interface CustomModelRemoved {
   cleared: ("default_model" | "last_model")[];
   display_name: string;
   removed: string;
+  [k: string]: unknown | undefined;
 }
 /**
  * ``quant`` picks a quantization; None lets GAIA choose one that fits.
@@ -1182,6 +1229,7 @@ export interface CustomModelRequest {
  */
 export interface DefaultPermissionModeResponse {
   default_mode: "ask" | "full_access";
+  [k: string]: unknown | undefined;
 }
 export interface DeviceUsage {
   /**
@@ -1210,6 +1258,7 @@ export interface DiscordConnectRequest {
 export interface DiscordConnectResponse {
   connect: DiscordConnectResult;
   status: DiscordStatus;
+  [k: string]: unknown | undefined;
 }
 /**
  * What a stored bot token gives the apps to show next.
@@ -1221,6 +1270,7 @@ export interface DiscordConnectResult {
   bot_public: boolean;
   connected: boolean;
   invite_url: string;
+  [k: string]: unknown | undefined;
 }
 /**
  * Connection, pairing and bridge state, plus every link setup opens.
@@ -1253,6 +1303,7 @@ export interface DiscordStatus {
     | "credentials_unavailable"
     | "conflict"
     | "error";
+  [k: string]: unknown | undefined;
 }
 export interface DiscordStartRequest {
   model?: string | null;
@@ -1280,12 +1331,14 @@ export interface DiscoveryCommitItem {
 export interface DocumentCancelResponse {
   cancelled: boolean;
   id: string;
+  [k: string]: unknown | undefined;
 }
 /**
  * Confirmation that a document was removed from the library.
  */
 export interface DocumentDeleteResponse {
   deleted: boolean;
+  [k: string]: unknown | undefined;
 }
 /**
  * List of documents.
@@ -1321,6 +1374,7 @@ export interface DocumentStatusResponse {
   indexing_status: string;
   is_active: boolean;
   progress: IndexProgressResponse | null;
+  [k: string]: unknown | undefined;
 }
 /**
  * How far a running index has got.
@@ -1329,6 +1383,7 @@ export interface IndexProgressResponse {
   done: number;
   phase: "reading" | "embedding";
   total: number | null;
+  [k: string]: unknown | undefined;
 }
 /**
  * Request to index a document by path.
@@ -1342,6 +1397,7 @@ export interface DocumentUploadRequest {
 export interface DownloadModelResponse {
   model: string;
   status: "downloading";
+  [k: string]: unknown | undefined;
 }
 /**
  * Progress of an in-flight Lemonade model download.
@@ -1379,6 +1435,7 @@ export interface FileDiff {
   too_large: boolean;
   truncated: boolean;
   unified: string;
+  [k: string]: unknown | undefined;
 }
 /**
  * Response with file content preview.
@@ -1458,6 +1515,7 @@ export interface FileUploadResponse {
  */
 export interface FolderCheckResponse {
   refusal: string | null;
+  [k: string]: unknown | undefined;
 }
 export interface FolderRequest {
   /**
@@ -1470,6 +1528,7 @@ export interface FolderRequest {
  */
 export interface FollowUpDelivered {
   delivered: true;
+  [k: string]: unknown | undefined;
 }
 /**
  * What the last finished turn did with the messages added to it.
@@ -1477,6 +1536,7 @@ export interface FollowUpDelivered {
 export interface FollowUpOutcome {
   returned: string[];
   taken: string[];
+  [k: string]: unknown | undefined;
 }
 export interface FollowUpRequest {
   session_id: string;
@@ -1509,14 +1569,17 @@ export interface GitCommitResult {
   files: string[];
   ignored: string[];
   root: string;
+  [k: string]: unknown | undefined;
 }
 export interface GitDraft {
   body: string;
   title: string;
+  [k: string]: unknown | undefined;
 }
 export interface GitPullRequestResult {
   root: string;
   url: string;
+  [k: string]: unknown | undefined;
 }
 /**
  * A repository holding the chat's changes, with a drafted message.
@@ -1532,6 +1595,7 @@ export interface GitRepo {
   remote: string | null;
   root: string;
   uncommitted: string[];
+  [k: string]: unknown | undefined;
 }
 export interface GoalCreate {
   description: string;
@@ -1545,6 +1609,7 @@ export interface GoalCreate {
 export interface GoalListResponse {
   goals: GoalResponse[];
   total: number;
+  [k: string]: unknown | undefined;
 }
 /**
  * A goal with its tasks.
@@ -1562,6 +1627,7 @@ export interface GoalResponse {
   tasks: GoalTaskResponse[];
   title: string;
   updated_at: string;
+  [k: string]: unknown | undefined;
 }
 /**
  * One task of a goal.
@@ -1575,6 +1641,7 @@ export interface GoalTaskResponse {
   result: string | null;
   status: "queued" | "in_progress" | "completed" | "failed" | "blocked" | "cancelled";
   updated_at: string;
+  [k: string]: unknown | undefined;
 }
 /**
  * How many goals and tasks are in each status.
@@ -1586,6 +1653,7 @@ export interface GoalStatsResponse {
   tasks: {
     [k: string]: number | undefined;
   };
+  [k: string]: unknown | undefined;
 }
 export interface GoalStatusUpdate {
   progress_notes?: string | null;
@@ -1596,6 +1664,7 @@ export interface GoalStatusUpdate {
  */
 export interface GoalStoreHealthResponse {
   error: string | null;
+  [k: string]: unknown | undefined;
 }
 export interface GpuMemoryApplyRequest {
   confirm?: boolean;
@@ -1614,6 +1683,7 @@ export interface GpuMemoryModel {
   id: string;
   need_gb: number;
   size_gb: number;
+  [k: string]: unknown | undefined;
 }
 /**
  * A change waiting for a restart, or checked after one.
@@ -1624,6 +1694,7 @@ export interface GpuMemoryPending {
   setting_gb: number;
   source: ("apply" | "revert" | "guided") | null;
   state: "restart_required" | "took_effect" | "not_applied";
+  [k: string]: unknown | undefined;
 }
 export interface GpuMemoryPendingRequest {
   /**
@@ -1638,6 +1709,7 @@ export interface GpuMemoryPreset {
   gpu_gb: number;
   setting_gb: number;
   unlocks: string[];
+  [k: string]: unknown | undefined;
 }
 /**
  * Whether GAIA can undo its own change.
@@ -1645,6 +1717,7 @@ export interface GpuMemoryPreset {
 export interface GpuMemoryRevert {
   available: boolean;
   previous_setting_gb: number | null;
+  [k: string]: unknown | undefined;
 }
 export interface GpuMemoryRevertRequest {
   confirm?: boolean;
@@ -1657,6 +1730,7 @@ export interface GpuMemorySetting {
   max_gb: number;
   min_gb: number;
   name: string;
+  [k: string]: unknown | undefined;
 }
 /**
  * The GPU memory split. A PC the step doesn't apply to sends only the first six fields.
@@ -1682,6 +1756,7 @@ export interface GpuMemoryStatusResponse {
   setting?: GpuMemorySetting | null;
   show_in_setup: boolean;
   total_gb?: number | null;
+  [k: string]: unknown | undefined;
 }
 export interface GrantRequest {
   scopes?: string[];
@@ -1693,6 +1768,7 @@ export interface GrantSaved {
   agent_id: string;
   connector_id: string;
   scopes: string[];
+  [k: string]: unknown | undefined;
 }
 export interface HTTPValidationError {
   detail?: ValidationError[];
@@ -1781,9 +1857,11 @@ export interface JsonExportResponse {
   session: {
     [k: string]: unknown | undefined;
   };
+  [k: string]: unknown | undefined;
 }
 export interface KeptOriginal {
   kept: "original";
+  [k: string]: unknown | undefined;
 }
 /**
  * The retried answer replaced the original.
@@ -1794,6 +1872,7 @@ export interface KeptRetry {
   stats: {
     [k: string]: unknown | undefined;
   };
+  [k: string]: unknown | undefined;
 }
 export interface KnowledgeCreate {
   category?: string;
@@ -1820,6 +1899,7 @@ export interface KnowledgeUpdate {
 export interface LemonadeDetection {
   found: LemonadeProbe | null;
   unchecked: string[];
+  [k: string]: unknown | undefined;
 }
 /**
  * What answered at a URL, and whether GAIA can use it.
@@ -1830,6 +1910,7 @@ export interface LemonadeProbe {
   status: "ok" | "needs_key" | "bad_key" | "too_old" | "not_lemonade" | "unreachable";
   url: string;
   version: string | null;
+  [k: string]: unknown | undefined;
 }
 /**
  * The Lemonade GAIA uses now, who chose it, and whether to offer a switch.
@@ -1846,6 +1927,7 @@ export interface LemonadeTarget {
   saved_mode: string | null;
   source: "env" | "config" | "gaia";
   what_gaia_does: string;
+  [k: string]: unknown | undefined;
 }
 /**
  * The new target, and what the daemon did (None when none runs).
@@ -1865,6 +1947,7 @@ export interface LemonadeTargetSwitched {
   saved_mode: string | null;
   source: "env" | "config" | "gaia";
   what_gaia_does: string;
+  [k: string]: unknown | undefined;
 }
 /**
  * ``limit_usd`` None removes the limit.
@@ -1884,6 +1967,7 @@ export interface LoadModelResponse {
   ctx_size: number;
   model: string;
   status: "loading";
+  [k: string]: unknown | undefined;
 }
 /**
  * One model Lemonade has loaded, as the Model server panel shows it.
@@ -1903,6 +1987,7 @@ export interface LoadedModelInfo {
 export interface LocalContextReload {
   reason: ("already_loaded" | "not_gaias_server" | "warm_up" | "busy" | "restarting") | null;
   started: boolean;
+  [k: string]: unknown | undefined;
 }
 /**
  * The saved context view; ``reload`` is None when the model isn't loaded.
@@ -1919,6 +2004,7 @@ export interface LocalContextResponse {
   note: string | null;
   options: number[];
   reload: LocalContextReload | null;
+  [k: string]: unknown | undefined;
 }
 /**
  * The context sizes a model may use on this PC, and the one in force.
@@ -1934,6 +2020,7 @@ export interface LocalContextView {
   model: string;
   note: string | null;
   options: number[];
+  [k: string]: unknown | undefined;
 }
 /**
  * Total and free memory of the pool models load into, and this model's share.
@@ -1943,6 +2030,7 @@ export interface LocalMemoryView {
   model_gb: number | null;
   source: string;
   total_gb: number;
+  [k: string]: unknown | undefined;
 }
 /**
  * A restart was started, and whether it also starts the stopped server.
@@ -1951,6 +2039,7 @@ export interface LocalRestartResponse {
   model: string;
   starting_server: boolean;
   status: "restarting";
+  [k: string]: unknown | undefined;
 }
 /**
  * Live state of the local model server and its chat model.
@@ -1974,6 +2063,7 @@ export interface LocalStatusResponse {
   restart_error: string | null;
   restarting: boolean;
   state: "stopped" | "idle" | "warming" | "loaded";
+  [k: string]: unknown | undefined;
 }
 /**
  * Device and backend a model runs on, reported or expected.
@@ -1984,6 +2074,7 @@ export interface ProviderPlacement {
   label: string | null;
   source: ("reported" | "expected") | null;
   warning: string | null;
+  [k: string]: unknown | undefined;
 }
 /**
  * One log file a source offers.
@@ -2040,6 +2131,7 @@ export interface MCPServerInfo {
 }
 export interface MCPServerList {
   servers: MCPServerInfo[];
+  [k: string]: unknown | undefined;
 }
 export interface MCPServerStatus {
   connected: boolean;
@@ -2053,16 +2145,19 @@ export interface MCPServerStatus {
 export interface MCPServerTools {
   name: string;
   tools: MCPToolInfo[];
+  [k: string]: unknown | undefined;
 }
 export interface MCPToolInfo {
   description: string;
   name: string;
+  [k: string]: unknown | undefined;
 }
 /**
  * Result of ``GET /api/mcp/status``.
  */
 export interface MCPStatusResponse {
   servers: MCPServerStatus[];
+  [k: string]: unknown | undefined;
 }
 /**
  * The session as one markdown document.
@@ -2070,6 +2165,7 @@ export interface MCPStatusResponse {
 export interface MarkdownExportResponse {
   content: string;
   format: "markdown";
+  [k: string]: unknown | undefined;
 }
 /**
  * One day of the activity chart.
@@ -2080,6 +2176,7 @@ export interface MemoryActivityDay {
   errors: number;
   knowledge_added: number;
   tool_calls: number;
+  [k: string]: unknown | undefined;
 }
 /**
  * Rows deleted per table.
@@ -2088,12 +2185,14 @@ export interface MemoryClearCounts {
   conversations: number;
   knowledge: number;
   tool_history: number;
+  [k: string]: unknown | undefined;
 }
 /**
  * How many approved items were stored.
  */
 export interface MemoryCommitResponse {
   stored: number;
+  [k: string]: unknown | undefined;
 }
 /**
  * Counts from a consolidation run.
@@ -2102,6 +2201,7 @@ export interface MemoryConsolidateResponse {
   consolidated: number;
   extracted_items: number;
   windows: number;
+  [k: string]: unknown | undefined;
 }
 /**
  * Conversation-table aggregates.
@@ -2111,6 +2211,7 @@ export interface MemoryConversationStats {
   last_session: string | null;
   total_sessions: number;
   total_turns: number;
+  [k: string]: unknown | undefined;
 }
 /**
  * One stored conversation turn.
@@ -2122,6 +2223,7 @@ export interface MemoryConversationTurn {
   role: string;
   session_id: string;
   timestamp: string;
+  [k: string]: unknown | undefined;
 }
 /**
  * Share of active knowledge rows that have an embedding.
@@ -2131,6 +2233,7 @@ export interface MemoryEmbeddingCoverage {
   total_items: number;
   with_embedding: number;
   without_embedding: number;
+  [k: string]: unknown | undefined;
 }
 /**
  * An entity with how many rows mention it.
@@ -2139,6 +2242,7 @@ export interface MemoryEntity {
   count: number;
   entity: string;
   last_updated: string;
+  [k: string]: unknown | undefined;
 }
 /**
  * One knowledge row (the embedding BLOB is never sent).
@@ -2161,6 +2265,7 @@ export interface MemoryKnowledgeItem {
   superseded_by: string | null;
   updated_at: string;
   use_count: number;
+  [k: string]: unknown | undefined;
 }
 /**
  * A page of knowledge rows.
@@ -2170,6 +2275,7 @@ export interface MemoryKnowledgePage {
   limit: number;
   offset: number;
   total: number;
+  [k: string]: unknown | undefined;
 }
 /**
  * Knowledge-table aggregates for the dashboard header.
@@ -2188,6 +2294,7 @@ export interface MemoryKnowledgeStats {
   sensitive_count: number;
   total: number;
   total_retrievals: number;
+  [k: string]: unknown | undefined;
 }
 /**
  * Result of creating, editing or deleting a knowledge row.
@@ -2198,6 +2305,7 @@ export interface MemoryKnowledgeWriteResponse {
   knowledge_id: string;
   knowledge_ids?: string[] | null;
   status: "created" | "updated" | "deleted";
+  [k: string]: unknown | undefined;
 }
 /**
  * Procedural-memory aggregates.
@@ -2206,6 +2314,7 @@ export interface MemoryProcedureStats {
   active: number;
   last_recalled: string | null;
   total: number;
+  [k: string]: unknown | undefined;
 }
 /**
  * Rows pruned per table, and conversation turns kept for pending summaries.
@@ -2215,6 +2324,7 @@ export interface MemoryPruneResponse {
   conversations_retained: number;
   knowledge_deleted: number;
   tool_history_deleted: number;
+  [k: string]: unknown | undefined;
 }
 /**
  * Counts from an embedding backfill.
@@ -2222,12 +2332,14 @@ export interface MemoryPruneResponse {
 export interface MemoryRebuildEmbeddingsResponse {
   backfilled: number;
   total_without: number;
+  [k: string]: unknown | undefined;
 }
 /**
  * Result of an FTS rebuild.
  */
 export interface MemoryRebuildFtsResponse {
   status: "rebuilt";
+  [k: string]: unknown | undefined;
 }
 /**
  * Counts from a reconciliation run.
@@ -2238,6 +2350,7 @@ export interface MemoryReconcileResponse {
   pairs_checked: number;
   reinforced: number;
   weakened: number;
+  [k: string]: unknown | undefined;
 }
 /**
  * Result of wiping memory and re-running discovery.
@@ -2245,6 +2358,7 @@ export interface MemoryReconcileResponse {
 export interface MemoryReinitializeResponse {
   cleared: MemoryClearCounts;
   system_context: MemorySystemContextRefresh;
+  [k: string]: unknown | undefined;
 }
 /**
  * Result of a system-context refresh; ``error`` only when discovery failed.
@@ -2254,6 +2368,7 @@ export interface MemorySystemContextRefresh {
   reason?: string | null;
   skipped?: boolean | null;
   stored: number;
+  [k: string]: unknown | undefined;
 }
 /**
  * A conversation session summary.
@@ -2264,6 +2379,7 @@ export interface MemorySession {
   session_id: string;
   started_at: string;
   turn_count: number;
+  [k: string]: unknown | undefined;
 }
 /**
  * Typed request body for PUT /api/memory/settings.
@@ -2280,6 +2396,7 @@ export interface MemorySettingsResponse {
   mcp_memory_enabled: boolean;
   memory_enabled: boolean;
   system_discovery_consent: boolean;
+  [k: string]: unknown | undefined;
 }
 /**
  * Settings after an update, plus the consent-triggered refresh outcome.
@@ -2290,6 +2407,7 @@ export interface MemorySettingsUpdateResponse {
   system_context_error?: string | null;
   system_context_refresh?: MemorySystemContextRefresh | null;
   system_discovery_consent: boolean;
+  [k: string]: unknown | undefined;
 }
 /**
  * Memory dashboard header stats.
@@ -2303,6 +2421,7 @@ export interface MemoryStatsResponse {
   procedures: MemoryProcedureStats;
   temporal: MemoryTemporalStats;
   tools: MemoryToolStats;
+  [k: string]: unknown | undefined;
 }
 /**
  * Counts of time-sensitive knowledge rows.
@@ -2310,6 +2429,7 @@ export interface MemoryStatsResponse {
 export interface MemoryTemporalStats {
   overdue_count: number;
   upcoming_count: number;
+  [k: string]: unknown | undefined;
 }
 /**
  * Tool-history aggregates.
@@ -2320,6 +2440,7 @@ export interface MemoryToolStats {
   total_calls: number;
   total_errors: number;
   unique_tools: number;
+  [k: string]: unknown | undefined;
 }
 /**
  * Per-tool performance stats.
@@ -2334,6 +2455,7 @@ export interface MemoryToolSummary {
   success_rate: number;
   tool_name: string;
   total_calls: number;
+  [k: string]: unknown | undefined;
 }
 export interface MemoryUsage {
   /**
@@ -2349,6 +2471,7 @@ export interface MemoryUsage {
  */
 export interface MessageDeleteResponse {
   deleted: true;
+  [k: string]: unknown | undefined;
 }
 /**
  * List of messages for a session.
@@ -2453,6 +2576,7 @@ export interface TurnSummaryPage {
 export interface MessagesDeleteResponse {
   count: number;
   deleted: true;
+  [k: string]: unknown | undefined;
 }
 /**
  * Choose the llama.cpp backend for chat models: ``auto`` or a backend name.
@@ -2530,6 +2654,7 @@ export interface OpenFileRequest {
 export interface OpenFileResponse {
   path: string;
   status: "ok";
+  [k: string]: unknown | undefined;
 }
 /**
  * Something the chat produced, tied to the answer that made it.
@@ -2546,6 +2671,7 @@ export interface OutputItem {
   path: string | null;
   revealable: boolean;
   state: "present" | "undone" | "gone";
+  [k: string]: unknown | undefined;
 }
 /**
  * Request to parse a natural language schedule description.
@@ -2602,6 +2728,7 @@ export interface ScheduleDescription {
 export interface PermissionGrantResponse {
   key: string;
   label: string;
+  [k: string]: unknown | undefined;
 }
 /**
  * ``ask`` prompts for every gated tool; ``full_access`` runs them unasked.
@@ -2615,6 +2742,7 @@ export interface PermissionModeRequest {
 export interface PermissionsListResponse {
   default_mode: "ask" | "full_access";
   sessions: SessionPermissionsResponse[];
+  [k: string]: unknown | undefined;
 }
 /**
  * A chat's permission mode and its "always allow" grants.
@@ -2623,6 +2751,7 @@ export interface SessionPermissionsResponse {
   grants: PermissionGrantResponse[];
   mode: "ask" | "full_access";
   session_id: string;
+  [k: string]: unknown | undefined;
 }
 /**
  * Structured Local only notice translated by the Agent UI.
@@ -2663,6 +2792,7 @@ export interface PriceCard {
   input_per_million: number;
   output_per_million: number;
   source: string;
+  [k: string]: unknown | undefined;
 }
 /**
  * A model's list price before the provider is connected.
@@ -2673,6 +2803,7 @@ export interface PriceListEntry {
   note: string | null;
   price: PriceCard | null;
   rank: number | null;
+  [k: string]: unknown | undefined;
 }
 /**
  * Every priced model a provider offers; ``source`` and ``note`` explain a gap.
@@ -2682,6 +2813,7 @@ export interface PriceListResponse {
   note: string | null;
   provider: string;
   source: string | null;
+  [k: string]: unknown | undefined;
 }
 /**
  * The model new turns run, and where a new chat would be answered.
@@ -2697,6 +2829,7 @@ export interface ProviderActiveView {
   provider: "local" | "fireworks" | "amd";
   provider_name: string | null;
   remote: boolean;
+  [k: string]: unknown | undefined;
 }
 /**
  * The connected provider, and whether its key was kept.
@@ -2722,6 +2855,7 @@ export interface ProviderConnectResponse {
   remember_error: string | null;
   remembered: boolean;
   remote: boolean;
+  [k: string]: unknown | undefined;
 }
 /**
  * Whether the AMD gateway's host can be reached; None when not checked.
@@ -2729,18 +2863,21 @@ export interface ProviderConnectResponse {
 export interface ProviderNetwork {
   detail: string | null;
   reachable: boolean | null;
+  [k: string]: unknown | undefined;
 }
 /**
  * Whether a stored key was removed.
  */
 export interface ProviderKeyForgotten {
   removed: boolean;
+  [k: string]: unknown | undefined;
 }
 /**
  * Acknowledges that the next key read may ask the OS again.
  */
 export interface ProviderKeyStoreRetry {
   retrying: boolean;
+  [k: string]: unknown | undefined;
 }
 /**
  * Every provider with its connection state, and the active model.
@@ -2749,6 +2886,7 @@ export interface ProviderListResponse {
   active: ProviderActiveView;
   lemonade_error: string | null;
   providers: ProviderView[];
+  [k: string]: unknown | undefined;
 }
 /**
  * A provider and its connection state; Local carries only the first four fields.
@@ -2772,6 +2910,7 @@ export interface ProviderView {
   privacy_notice: string;
   registered?: boolean | null;
   remote: boolean;
+  [k: string]: unknown | undefined;
 }
 /**
  * A chat model; the local-only fields are absent from cloud lists.
@@ -2798,6 +2937,7 @@ export interface ProviderModelEntry {
   state?: ("loaded" | "downloaded" | "not_downloaded") | null;
   tokens_per_second?: number | null;
   unavailable_reason?: string | null;
+  [k: string]: unknown | undefined;
 }
 /**
  * Something that keeps the NPU from running a model, and its fix.
@@ -2809,6 +2949,7 @@ export interface ProviderNpuProblem {
     [k: string]: string | undefined;
   };
   title: string;
+  [k: string]: unknown | undefined;
 }
 /**
  * A provider's chat models; ``blocked`` marks cloud under Local only, and the
@@ -2822,6 +2963,7 @@ export interface ProviderModelsResponse {
   memory_source?: string | null;
   models: ProviderModelEntry[];
   provider: "local" | "fireworks" | "amd";
+  [k: string]: unknown | undefined;
 }
 export interface PullRequestRequest {
   body?: string;
@@ -2881,6 +3023,7 @@ export interface RetryStats {
   seconds: number;
   time_to_first_token: number;
   tokens_per_second: number;
+  [k: string]: unknown | undefined;
 }
 export interface RetryWithRequest {
   message_id: number;
@@ -2895,6 +3038,7 @@ export interface RetryWithResponse {
   message_id: number;
   model: string;
   stats: RetryStats;
+  [k: string]: unknown | undefined;
 }
 /**
  * A chat whose answer is still being written.
@@ -2915,6 +3059,7 @@ export interface RunningIndexJob {
  */
 export interface ScheduleDeleteResponse {
   deleted: boolean;
+  [k: string]: unknown | undefined;
 }
 /**
  * List of scheduled tasks.
@@ -2961,6 +3106,7 @@ export interface ScopeEntry {
   path: string;
   removable: boolean;
   source: "added" | "gaia_documents" | "scratch" | "document" | "working_folder" | "approved" | "allowed_paths";
+  [k: string]: unknown | undefined;
 }
 /**
  * Commands the eval's scripted user declines; empty turns it off.
@@ -2985,12 +3131,14 @@ export interface SelectModelRequest {
 export interface SessionActivateResponse {
   activated: true;
   session_id: string;
+  [k: string]: unknown | undefined;
 }
 /**
  * Confirmation that a document was attached to a session.
  */
 export interface SessionAttachResponse {
   attached: boolean;
+  [k: string]: unknown | undefined;
 }
 /**
  * Every file the chat changed; ``pending`` while a turn still runs.
@@ -3002,6 +3150,7 @@ export interface SessionChanges {
   totals: ChangeTotals;
   turns: number;
   untracked: UntrackedWork[];
+  [k: string]: unknown | undefined;
 }
 /**
  * Work that may have changed files without GAIA keeping a copy.
@@ -3011,18 +3160,21 @@ export interface UntrackedWork {
   kind: string;
   may_write?: boolean | null;
   paths: string[];
+  [k: string]: unknown | undefined;
 }
 /**
  * Confirmation that a session was deleted.
  */
 export interface SessionDeleteResponse {
   deleted: boolean;
+  [k: string]: unknown | undefined;
 }
 /**
  * Confirmation that a document was detached from a session.
  */
 export interface SessionDetachResponse {
   detached: boolean;
+  [k: string]: unknown | undefined;
 }
 /**
  * The folders this chat may touch and whether it may use the internet.
@@ -3034,6 +3186,7 @@ export interface SessionEnvironment {
   internet_enforced: boolean;
   removed: string[];
   session_id: string;
+  [k: string]: unknown | undefined;
 }
 /**
  * The chat's repositories; ``reason`` says why git is unavailable.
@@ -3042,6 +3195,7 @@ export interface SessionGit {
   available: boolean;
   reason?: string | null;
   repos: GitRepo[];
+  [k: string]: unknown | undefined;
 }
 /**
  * List of sessions.
@@ -3083,6 +3237,7 @@ export interface SessionResponse {
 export interface SessionOutputs {
   items: OutputItem[];
   session_id: string;
+  [k: string]: unknown | undefined;
 }
 /**
  * Pin or unpin a chat.
@@ -3155,12 +3310,14 @@ export interface SetupBackend {
   recipe: string;
   state: string | null;
   version: string | null;
+  [k: string]: unknown | undefined;
 }
 /**
  * Whether anything was stopped.
  */
 export interface SetupCancelResponse {
   cancelled: boolean;
+  [k: string]: unknown | undefined;
 }
 /**
  * One model setup can pull or use. Every ``*_gb`` is decimal GB.
@@ -3193,6 +3350,7 @@ export interface SetupCatalogEntry {
   skipped: boolean;
   source: string | null;
   support: ("verified" | "untested") | null;
+  [k: string]: unknown | undefined;
 }
 /**
  * The chat model setup starts from.
@@ -3202,6 +3360,7 @@ export interface SetupChatModel {
   id: string;
   size_gb: number | null;
   user_set: boolean;
+  [k: string]: unknown | undefined;
 }
 /**
  * ``gaia init --check --json`` plus the step lists the screen shows.
@@ -3218,6 +3377,7 @@ export interface SetupCheckResponse {
   stage: string | null;
   steps: SetupStepView[];
   warnings: string[];
+  [k: string]: unknown | undefined;
 }
 /**
  * One step of setup as the user reads it; ``status`` only while a run is on.
@@ -3227,6 +3387,7 @@ export interface SetupStepView {
   key: "server" | "models" | "finish";
   label: string;
   status?: ("pending" | "active" | "done" | "failed" | "cancelled") | null;
+  [k: string]: unknown | undefined;
 }
 /**
  * One model the load check tried.
@@ -3239,6 +3400,7 @@ export interface SetupModelLoad {
   loaded: boolean;
   role: string;
   size_gb: number | null;
+  [k: string]: unknown | undefined;
 }
 /**
  * Something setup fetches besides the models.
@@ -3250,6 +3412,7 @@ export interface SetupComponent {
   size_gb: number | null;
   source: string;
   version: string | null;
+  [k: string]: unknown | undefined;
 }
 /**
  * A processor Lemonade found.
@@ -3262,6 +3425,7 @@ export interface SetupDevice {
   kind: string;
   name: string;
   threads: number | null;
+  [k: string]: unknown | undefined;
 }
 /**
  * The drive models download to.
@@ -3270,6 +3434,7 @@ export interface SetupDisk {
   free_gb: number | null;
   path: string | null;
   source: ("lemonade" | "local") | null;
+  [k: string]: unknown | undefined;
 }
 /**
  * Which GAIA is running.
@@ -3279,6 +3444,7 @@ export interface SetupGaiaBuild {
   kind: "release" | "release_candidate" | "local" | "source";
   rc: string | null;
   version: string;
+  [k: string]: unknown | undefined;
 }
 /**
  * The model server setup will use.
@@ -3287,6 +3453,7 @@ export interface SetupLemonade {
   mode: "gaia" | "external";
   reachable: boolean;
   url: string | null;
+  [k: string]: unknown | undefined;
 }
 /**
  * Whether a job needs a model that isn't on this PC; ``off`` says why none is offered.
@@ -3297,6 +3464,7 @@ export interface SetupModelNeedResponse {
   model: SetupNeedModel | null;
   needed: boolean;
   off?: "npu" | null;
+  [k: string]: unknown | undefined;
 }
 /**
  * The model a job is missing.
@@ -3306,6 +3474,7 @@ export interface SetupNeedModel {
   name: string;
   size_gb: number | null;
   source: string | null;
+  [k: string]: unknown | undefined;
 }
 /**
  * One model's download. Sizes in bytes; speed in bytes per second.
@@ -3324,6 +3493,7 @@ export interface SetupModelProgress {
   roles: ("chat" | "vision" | "embedding" | "speech" | "voice" | "image_creation")[];
   speed_bps: number;
   state: "queued" | "downloading" | "verifying" | "ready" | "failed" | "skipped" | "cancelled" | "unchecked";
+  [k: string]: unknown | undefined;
 }
 /**
  * One thing between this PC and running a model on its NPU.
@@ -3335,6 +3505,7 @@ export interface SetupNpuProblem {
     [k: string]: string | undefined;
   };
   title: string;
+  [k: string]: unknown | undefined;
 }
 /**
  * Whether this PC has an NPU and what stops a model running on it.
@@ -3343,6 +3514,7 @@ export interface SetupNpuStatus {
   present: boolean;
   problems: SetupNpuProblem[];
   ready: boolean;
+  [k: string]: unknown | undefined;
 }
 /**
  * One default chat model and whether this PC can run it.
@@ -3352,6 +3524,7 @@ export interface SetupOption {
   id: string;
   reason: string | null;
   size_gb: number | null;
+  [k: string]: unknown | undefined;
 }
 /**
  * Bytes-weighted progress across the models being set up.
@@ -3363,6 +3536,7 @@ export interface SetupOverall {
   failed: number;
   percent: number | null;
   speed_bps: number;
+  [k: string]: unknown | undefined;
 }
 /**
  * A catalog entry setup will download, with its role in the plan.
@@ -3396,6 +3570,7 @@ export interface SetupPlanModel {
   skipped: boolean;
   source: string | null;
   support: ("verified" | "untested") | null;
+  [k: string]: unknown | undefined;
 }
 /**
  * What setup will use and download, before it starts.
@@ -3421,6 +3596,7 @@ export interface SetupPlanResponse {
   skipped_models: string[];
   system: SetupSystem;
   vision_model: string | null;
+  [k: string]: unknown | undefined;
 }
 /**
  * What setup found across GAIA, the model server and this PC.
@@ -3435,6 +3611,7 @@ export interface SetupSystem {
   os: string | null;
   physical_memory: string | null;
   processor: string | null;
+  [k: string]: unknown | undefined;
 }
 /**
  * A failed setup with a known fix: the user's model server.
@@ -3445,6 +3622,7 @@ export interface SetupProblemView {
   message: string;
   start: string | null;
   use_gaia: boolean;
+  [k: string]: unknown | undefined;
 }
 /**
  * The new plan after a model is removed, and the space it freed.
@@ -3471,6 +3649,7 @@ export interface SetupRemoveModelResponse {
   skipped_models: string[];
   system: SetupSystem;
   vision_model: string | null;
+  [k: string]: unknown | undefined;
 }
 /**
  * The troubleshooting bundle just written.
@@ -3479,6 +3658,7 @@ export interface SetupReportResponse {
   name: string;
   path: string;
   size_bytes: number;
+  [k: string]: unknown | undefined;
 }
 /**
  * ``skip_chat_model`` when the chat runs on a cloud provider;
@@ -3532,6 +3712,7 @@ export interface SetupRunStatus {
   tests?: SetupTestRow[] | null;
   text?: string | null;
   upgrade_embedded?: boolean | null;
+  [k: string]: unknown | undefined;
 }
 /**
  * One row of the Test step; the fields come from ``gaia init``'s events.
@@ -3543,6 +3724,7 @@ export interface SetupTestRow {
   seconds: number | null;
   state: string | null;
   subject: string | null;
+  [k: string]: unknown | undefined;
 }
 /**
  * A skills library offered as a one-click add.
@@ -3552,12 +3734,14 @@ export interface SkillFeaturedLibrary {
   id: string;
   name: string;
   url: string;
+  [k: string]: unknown | undefined;
 }
 /**
  * Result of ``GET /api/skills/featured``.
  */
 export interface SkillFeaturedResponse {
   libraries: SkillFeaturedLibrary[];
+  [k: string]: unknown | undefined;
 }
 export interface SkillLinkAddRequest {
   allow_code?: boolean;
@@ -3574,6 +3758,7 @@ export interface SkillLinkAddResponse {
   failed: {
     [k: string]: string | undefined;
   };
+  [k: string]: unknown | undefined;
 }
 /**
  * One skill the add wrote to ``~/.gaia/skills``.
@@ -3586,6 +3771,7 @@ export interface SkillLinkAdded {
   path: string;
   updated: boolean;
   verdict: string;
+  [k: string]: unknown | undefined;
 }
 /**
  * One skill found behind a pasted link, and what its audit said.
@@ -3602,6 +3788,7 @@ export interface SkillLinkEntry {
   permissions_unreadable: boolean;
   update: boolean;
   verdict: string;
+  [k: string]: unknown | undefined;
 }
 /**
  * One permission a linked skill declares, raw grant plus a sentence.
@@ -3609,6 +3796,7 @@ export interface SkillLinkEntry {
 export interface SkillLinkPermission {
   grant: string;
   text: string;
+  [k: string]: unknown | undefined;
 }
 /**
  * Result of ``POST /api/skills/link/preview``; ``pin`` goes back on add.
@@ -3619,6 +3807,7 @@ export interface SkillLinkPreviewResponse {
   skills: SkillLinkEntry[];
   source: string;
   warning: string;
+  [k: string]: unknown | undefined;
 }
 export interface SkillLinkRequest {
   url: string;
@@ -3635,6 +3824,7 @@ export interface SkillListEntry {
   tier: "verified" | "community" | "experimental";
   tools: string[];
   version: string | null;
+  [k: string]: unknown | undefined;
 }
 /**
  * A skill's saved preferences, keyed as its preferences schema names them.
@@ -3644,12 +3834,14 @@ export interface SkillPreferences {
     [k: string]: unknown | undefined;
   };
   skill: string;
+  [k: string]: unknown | undefined;
 }
 /**
  * Every skill with saved preferences.
  */
 export interface SkillPreferencesList {
   skills: SkillPreferences[];
+  [k: string]: unknown | undefined;
 }
 /**
  * ``reset`` is false when the skill had nothing saved.
@@ -3657,9 +3849,11 @@ export interface SkillPreferencesList {
 export interface SkillPreferencesReset {
   reset: boolean;
   skill: string;
+  [k: string]: unknown | undefined;
 }
 export interface SkillRemoved {
   removed: string;
+  [k: string]: unknown | undefined;
 }
 /**
  * Installed skills, and any folder that failed to parse (path to message).
@@ -3669,6 +3863,7 @@ export interface SkillsListResponse {
     [k: string]: string | undefined;
   };
   skills: SkillListEntry[];
+  [k: string]: unknown | undefined;
 }
 export interface SkipModelRequest {
   model_id: string;
@@ -3716,6 +3911,7 @@ export interface SpendingModelRow {
   unpriced_turns: number;
   unreported_turns: number;
   usd: number;
+  [k: string]: unknown | undefined;
 }
 /**
  * This month's cloud spending, the limit, and where it stands.
@@ -3730,6 +3926,7 @@ export interface SpendingReport {
   turns: number;
   unpriced_turns: number;
   unreported_turns: number;
+  [k: string]: unknown | undefined;
 }
 /**
  * A task a new chat offers.
@@ -3740,6 +3937,7 @@ export interface StartCardView {
   prompt: string;
   skill: string;
   title: string;
+  [k: string]: unknown | undefined;
 }
 /**
  * A new chat's task cards and working folder; ``skills_error`` says why there are no cards.
@@ -3748,6 +3946,7 @@ export interface StartScreenResponse {
   cards: StartCardView[];
   skills_error: string | null;
   working_folder: StartWorkingFolder;
+  [k: string]: unknown | undefined;
 }
 /**
  * The folder a new chat's agent works in.
@@ -3757,6 +3956,7 @@ export interface StartWorkingFolder {
   gaia_folder: boolean;
   name: string;
   path: string;
+  [k: string]: unknown | undefined;
 }
 /**
  * System readiness status.
@@ -3848,6 +4048,7 @@ export interface ToolConfirmRequest {
 export interface TunnelDevice {
   lastSeen: string;
   name: string;
+  [k: string]: unknown | undefined;
 }
 /**
  * The tunnel's state; ``token`` is null for any caller but the PC.
@@ -3862,9 +4063,11 @@ export interface TunnelStatus {
   startedAt: string | null;
   token: string | null;
   url: string | null;
+  [k: string]: unknown | undefined;
 }
 export interface TunnelStopped {
   active: false;
+  [k: string]: unknown | undefined;
 }
 /**
  * One turn's file changes.
@@ -3879,17 +4082,20 @@ export interface TurnChanges {
   started_at: string;
   turn_id: string;
   untracked: UntrackedWork[];
+  [k: string]: unknown | undefined;
 }
 export interface TurnFileChange {
   change: "edited" | "created" | "deleted" | "pending";
   path: string;
   tool: string | null;
+  [k: string]: unknown | undefined;
 }
 /**
  * Every turn in the session that changed files, oldest first.
  */
 export interface TurnChangesList {
   turns: TurnChanges[];
+  [k: string]: unknown | undefined;
 }
 /**
  * What the turn did to each file, as unified diffs.
@@ -3897,6 +4103,7 @@ export interface TurnChangesList {
 export interface TurnDiff {
   files: FileDiff[];
   turn_id: string;
+  [k: string]: unknown | undefined;
 }
 /**
  * What undoing every turn of the chat put back, removed, and could not account for.
@@ -3908,6 +4115,7 @@ export interface UndoAllResult {
   restored: string[];
   turn_ids: string[];
   untracked: UntrackedWork[];
+  [k: string]: unknown | undefined;
 }
 export interface UndoRequest {
   /**
@@ -3925,6 +4133,7 @@ export interface UndoResult {
   restored: string[];
   turn_id: string;
   untracked: UntrackedWork[];
+  [k: string]: unknown | undefined;
 }
 export interface UndoSettings {
   max_mb: number;
@@ -3939,6 +4148,7 @@ export interface UndoSettingsResponse {
   retention_days: number;
   turns: number;
   used_bytes: number;
+  [k: string]: unknown | undefined;
 }
 export interface UnloadModelRequest {
   model_name: string;
@@ -3985,6 +4195,7 @@ export interface UserInputRequest {
 export interface UserInputResponse {
   request_id: string;
   status: "ok";
+  [k: string]: unknown | undefined;
 }
 /**
  * A model that reads images, or null to go back to GAIA's choice.

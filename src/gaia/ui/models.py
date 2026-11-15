@@ -13,11 +13,11 @@ from gaia.version import __version__ as _gaia_version
 class WireModel(BaseModel):
     """Base for a model that types a route's existing dict response.
 
-    An undeclared key fails response validation instead of being dropped, so
-    the model can't quietly drift from what the route sends.
+    An undeclared key is passed through, not dropped or refused, so a newer
+    sidecar or producer never turns a reply into a 500.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="allow")
 
 
 # ── System ──────────────────────────────────────────────────────────────────
