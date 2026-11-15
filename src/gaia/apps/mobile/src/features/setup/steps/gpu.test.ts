@@ -20,6 +20,11 @@ describe('GPU memory presets', () => {
         expect(defaultTarget(status({ gpu_gb: undefined }))).toBe(32);
     });
 
+    it('keeps the split when chat runs in the cloud, whatever is recommended', () => {
+        expect(defaultTarget(status({ recommended_setting_gb: 32 }), true)).toBeNull();
+        expect(defaultTarget(status({ gpu_gb: undefined }), true)).toBe(32);
+    });
+
     it('marks only a top preset that reaches the setting maximum as Max', () => {
         expect(maxSetting(status({}))).toBe(48);
         expect(maxSetting(status({ setting: { name: 'x', current_gb: 16, min_gb: 0, max_gb: 64 } }))).toBeNull();

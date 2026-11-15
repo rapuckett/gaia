@@ -65,7 +65,7 @@ export function SegmentedControl({ options, value, onChange, accessibilityLabel,
                             setLabelWidths((prev) => (prev[i] === w ? prev : Object.assign([], prev, { [i]: w })));
                         }}
                     >
-                        <Text role="ui" weight="semibold">
+                        <Text role="ui" weight="semibold" compact>
                             {o.label}
                         </Text>
                     </View>
@@ -112,7 +112,7 @@ export function SegmentedControl({ options, value, onChange, accessibilityLabel,
                                     minSize={HEIGHT - PAD * 2}
                                 >
                                     <View style={{ alignItems: 'center', justifyContent: 'center', height: HEIGHT - PAD * 2 }}>
-                                        <Text role="ui" weight={on ? 'semibold' : 'medium'} tone={on ? 'primary' : 'secondary'} numberOfLines={1}>
+                                        <Text role="ui" weight={on ? 'semibold' : 'medium'} tone={on ? 'primary' : 'secondary'} numberOfLines={1} compact>
                                             {o.label}
                                         </Text>
                                     </View>

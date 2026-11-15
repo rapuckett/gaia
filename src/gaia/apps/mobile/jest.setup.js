@@ -29,3 +29,9 @@ jest.mock('lucide-react-native', () => new Proxy({ __esModule: true }, { get: (t
 // Its player is a native shared object; playPcAudio.test.ts mocks the behavior it checks.
 jest.mock('expo-audio', () => ({ createAudioPlayer: jest.fn(), setAudioModeAsync: jest.fn(() => Promise.resolve()) }));
 jest.mock('@react-native-async-storage/async-storage', () => require('@react-native-async-storage/async-storage/jest/async-storage-mock'));
+
+// RN's Jest mock reports a 2x text size; tests run at the default size unless one sets its own. (The web build has no such mock.)
+const { Dimensions, Platform } = require('react-native');
+if (Platform.OS !== 'web') {
+    Dimensions.set({ window: { ...Dimensions.get('window'), fontScale: 1 }, screen: { ...Dimensions.get('screen'), fontScale: 1 } });
+}

@@ -25,7 +25,7 @@ export function FolderChip({ folder }: { folder: StartScreen['working_folder'] |
         <Row gap="xs">
             <Icon icon={Folder} size="sm" tone="secondary" label={compact ? where : undefined} />
             {compact ? null : (
-                <Text role="label" tone="secondary" numberOfLines={1} dir="auto">
+                <Text role="label" tone="secondary" numberOfLines={1} compact dir="auto">
                     {name}
                 </Text>
             )}

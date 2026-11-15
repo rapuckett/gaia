@@ -5,6 +5,9 @@ import { chatAlertEvents, chatPhases, type ChatAlert, type ChatPhases } from '@w
 
 import type { ChatTurn } from '@/state/chatStreams';
 
+/** How long a finished-chat banner stays; the web raises no in-app banner (its alerts are OS notifications), so this is the phone's own. */
+export const FINISHED_ALERT_MS = 8000;
+
 export type TurnOutcome = 'done' | 'failed' | 'stopped';
 
 export interface ChatAlertWithOutcome extends ChatAlert {

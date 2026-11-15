@@ -7,6 +7,7 @@ import { useEffect } from 'react';
 import { useGoalStoreError, useQueryFailure, useSystemStatus } from '@/data';
 import { useT } from '@/i18n/useT';
 import { openChat } from '@/features/nav/navigation';
+import { useAnnounce } from '@/platform/useAnnounce';
 import { useBannerDismissedStore } from '@/state/bannerDismissed';
 import { useChatAlertBannerStore, type ChatAlertBanner } from '@/state/chatAlertBanner';
 import { Notice, ProgressLine, Stack } from '@/ui';
@@ -47,6 +48,7 @@ export function ConnectionBanner() {
     useEffect(() => reconcile(picked), [picked?.id, picked?.dismissible, reconcile]); // eslint-disable-line react-hooks/exhaustive-deps
     const banner = picked && picked.id === dismissed ? null : picked;
     const alert = useChatAlertBannerStore((s) => s.alert);
+    useAnnounce([alert?.title, alert?.message, banner?.title, banner?.message].filter(Boolean).join('. '));
     if (!banner && !alert) return null;
     return (
         <Stack gap="sm">

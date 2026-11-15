@@ -20,6 +20,7 @@ import type { SetupStepContext } from '../SetupScreen';
 import { useConfirmSheet } from '../sheets/ConfirmSheet';
 import { serverConfirmRequest, setupConfirmFrom } from '../sheets/setupConfirm';
 import { ModelChecklist, SelectionSummary } from './Checklist';
+import { MarkedRow } from './ModelRows';
 import { JobModels } from './JobSections';
 import { backendView, chooseBackend } from './modelsView';
 import { usePlanOpeners } from './planOpeners';
@@ -80,7 +81,7 @@ export function ModelsScreen({ ctx, close }: { ctx: SetupStepContext; close: () 
     const locale = useLocaleCode();
     const planQuery = useSetupPlan();
     const plan = ctx.plan ?? planQuery.data;
-    const { selection, setSelection } = usePlanSelection();
+    const { selection, setSelection, keepTrying, setKeepTrying } = usePlanSelection();
     const gpu = useGpuMemory().data;
     const { openGpu } = usePlanOpeners();
     const save = useSaveModelChoices();
@@ -163,6 +164,14 @@ export function ModelsScreen({ ctx, close }: { ctx: SetupStepContext; close: () 
             </Stack>
 
             <SelectionSummary plan={plan} selection={selection} />
+            <MarkedRow
+                kind="checkbox"
+                checked={keepTrying}
+                disabled={locked}
+                label={t('setup.keepTrying')}
+                onPress={() => setKeepTrying(!keepTrying)}
+                name={<Text role="ui">{t('setup.keepTrying')}</Text>}
+            />
             {noChat ? <Notice tone="danger" message={t('setup.models.noChatReason')} /> : null}
             {saveError ? <SaveError error={saveError} /> : null}
 

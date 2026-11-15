@@ -8,6 +8,8 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { item, type QueuedMessage } from '@webui/utils/messageQueue';
 
+import type { ConnectorListEntry } from '@webui/types';
+
 import type { Message, StreamEvent } from '@/api/client.types';
 import { createFakeClient } from '@/api/fake';
 import { GaiaClientProvider } from '@/data';
@@ -173,6 +175,16 @@ describe('ChatScreen', () => {
 
         await fireEvent.press(screen.getByTestId(`queued-retry-${failed.id}`));
         await waitFor(() => expect(client.sent.map((s) => s.message)).toEqual(['first', 'second']));
+    });
+
+    it('offers Ask again for a Connect card once its account is connected, and tells the person to connect on the PC', async () => {
+        const card = { render: 'connect_account', data: { kind: 'connect_account', providers: ['google'] } };
+        const reply = { ...message(2, 'assistant', 'I need access to your mailbox first.'), cards: [card] };
+        const connected = { id: 'google', display_name: 'Google', configured: true } as ConnectorListEntry;
+        await mount(createFakeClient({ sessions: [SESSION], messages: { [CHAT]: [message(1, 'user', 'Check my mail'), reply] }, connectors: [connected] }));
+
+        expect(await screen.findByTestId('card-connect-account')).toBeTruthy();
+        expect(await screen.findByText(t('mobileApp.connectorRetry.askAgain'))).toBeTruthy();
     });
 
     it('sends a typed answer to the waiting question as its value, shown as typed', async () => {
