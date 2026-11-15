@@ -113,7 +113,7 @@ export function Text({
     if (strike) style.textDecorationLine = 'line-through';
     if (dir) style.writingDirection = dir;
     // textAlign left/right are physical on native too (not swapped under forceRTL), so the start side is picked by direction.
-    const startsRight = (dir && dir !== 'auto' ? dir : rtl ? 'rtl' : 'ltr') === 'rtl';
+    const startsRight = (dir ?? (rtl ? 'rtl' : 'ltr')) === 'rtl';
     if (align === 'center') style.textAlign = 'center';
     else if (align === 'end') style.textAlign = startsRight ? 'left' : 'right';
     else if (align === 'start' || !nested) style.textAlign = startsRight ? 'right' : 'left';
