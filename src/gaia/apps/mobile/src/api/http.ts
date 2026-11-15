@@ -35,6 +35,7 @@ import type {
     AllPermissions,
     ConnectorGrants,
     ConnectorList,
+    DisconnectOutcome,
     ContextUsageResult,
     ConsolidateMemoryResult,
     DeleteDocumentResult,
@@ -97,6 +98,7 @@ import {
     connectorDisablePath,
     connectorGrantPath,
     connectorGrantsPath,
+    CONNECTOR_REVOKE_OUTCOME_MS,
     connectorPath,
     cloudPricesPath,
     documentPath,
@@ -228,6 +230,36 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             throw res.status === 401 ? new GaiaAuthError(detail) : new GaiaApiError(res.status, detail, undefined, undefined, parseErrorBody(errorText));
         }
         return res;
+    }
+
+    /** The PC's connector events, or null when the stream can't be opened. */
+    async function openConnectorEvents(signal: AbortSignal): Promise<AsyncGenerator<StreamEvent> | null> {
+        try {
+            const res = await request('GET', ENDPOINTS.connectorsEvents, undefined, signal);
+            return res.body ? parseSseStream(res.body) : null;
+        } catch {
+            return null;
+        }
+    }
+
+    /** The disconnect event's payload for this connector, or null when none arrives in time. */
+    async function readDisconnectOutcome(events: AsyncGenerator<StreamEvent>, connectorId: string): Promise<DisconnectOutcome | null> {
+        const read = (async () => {
+            for await (const event of events) {
+                const { type, payload } = event as unknown as { type: string; payload?: Record<string, unknown> };
+                if (type === 'connector.disconnected' && payload?.connector_id === connectorId) return payload as DisconnectOutcome;
+            }
+            return null;
+        })().catch(() => null);
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        const late = new Promise<null>((resolve) => {
+            timer = setTimeout(() => resolve(null), CONNECTOR_REVOKE_OUTCOME_MS);
+        });
+        try {
+            return await Promise.race([read, late]);
+        } finally {
+            clearTimeout(timer);
+        }
     }
 
     async function readJson<T>(res: FetchResponseLike, path: string): Promise<T> {
@@ -570,7 +602,18 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
         },
 
         async disconnectConnector(connectorId, options) {
-            await request('DELETE', connectorPath(connectorId), undefined, options?.signal);
+            // The revoke outcome only travels on the events stream, so listen before deleting.
+            const listen = new AbortController();
+            const stop = () => listen.abort();
+            options?.signal?.addEventListener('abort', stop);
+            try {
+                const events = await openConnectorEvents(listen.signal);
+                await request('DELETE', connectorPath(connectorId), undefined, options?.signal);
+                return events ? await readDisconnectOutcome(events, connectorId) : null;
+            } finally {
+                options?.signal?.removeEventListener('abort', stop);
+                stop();
+            }
         },
 
         listAgentMcps(options) {
