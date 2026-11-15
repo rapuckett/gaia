@@ -20,6 +20,9 @@ import { Disclosure, Notice, Row, SegmentedControl, Spinner, Stack, StatusDot, T
 import { SettingsAnchor } from '../targets';
 import { CloudPrices } from './model/CloudPrices';
 import { CloudSpending } from './model/CloudSpending';
+import { GpuMemory } from './model/GpuMemory';
+import { LocalDownloads } from './model/LocalDownloads';
+import { LocalModels } from './model/LocalModels';
 import { ModelInUse } from './model/ModelInUse';
 import { ModelList } from './model/ModelList';
 import { ProviderKey } from './model/ProviderKey';
@@ -161,6 +164,7 @@ export default function Model({ provider: requested }: { provider?: string }) {
                         </SettingsAnchor>
                     ) : null}
                     {modelsQuery.error ? <Notice tone="danger" message={errorText(modelsQuery.error, t)} /> : null}
+                    {local && connected ? <LocalDownloads /> : null}
                     {connected ? (
                         <SettingsAnchor name="models-on-pc">
                             <ModelList
@@ -174,6 +178,8 @@ export default function Model({ provider: requested }: { provider?: string }) {
                             />
                         </SettingsAnchor>
                     ) : null}
+                    {local && connected ? <LocalModels /> : null}
+                    {local && connected ? <GpuMemory /> : null}
                     {provider.remote ? <CloudSpending /> : null}
                 </Stack>
             ) : null}
