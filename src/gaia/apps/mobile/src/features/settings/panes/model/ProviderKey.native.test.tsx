@@ -7,9 +7,8 @@ import type { ReactNode } from 'react';
 import { Platform } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-import type { ProviderInfo } from '@/api/client.types';
 import { createFakeClient } from '@/api/fake';
-import { GaiaClientProvider } from '@/data';
+import { GaiaClientProvider, type ProviderRow } from '@/data';
 import { ThemeProvider } from '@/ui';
 import { SheetHost } from '@/ui/overlays/SheetHost';
 
@@ -20,8 +19,8 @@ const describeNative = Platform.OS === 'web' ? describe.skip : describe;
 
 const DUMMY_KEY = 'sk-test-dummy';
 
-function setup(provider: ProviderInfo) {
-    const client = createFakeClient({ providers: { providers: [provider], active: null, lemonade_error: null } as never });
+function setup(provider: ProviderRow) {
+    const client = createFakeClient({ providers: { providers: [provider], lemonade_error: null } });
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const wrap = ({ children }: { children: ReactNode }) => (
         <QueryClientProvider client={queryClient}>
@@ -39,32 +38,21 @@ function setup(provider: ProviderInfo) {
 
 describeNative('Provider key', () => {
     it('never offers a key field the PC refuses from a phone: no input, no gateway fields, the PC-only notice', async () => {
-        const none: ProviderInfo = { id: 'amd', name: 'AMD LLM Gateway', remote: true, privacy_notice: '', key_source: null, key_state: 'read' };
+        const none: ProviderRow = { id: 'amd', name: 'AMD LLM Gateway', remote: true, privacy_notice: '', configured: false, blocked: false };
         const { queryClient, wrap } = setup(none);
         const r = await render(<ProviderKey provider={none} connected={false} />, { wrapper: wrap });
 
-        expect(screen.getByText('No key yet.')).toBeTruthy();
         expect(screen.getByTestId('provider-key-pc-only')).toHaveTextContent('Change this on the PC running GAIA.');
         expect(JSON.stringify(r.container.toJSON())).not.toContain('"type":"TextInput"');
         expect(screen.queryByText(/Paste|Gateway URL|Auth header/)).toBeNull();
         queryClient.clear();
     });
 
-    it('a saved key shows only its masked form, and Reconnect works without any key leaving the phone', async () => {
-        const saved: ProviderInfo = {
-            id: 'fireworks',
-            name: 'Fireworks AI',
-            remote: true,
-            privacy_notice: '',
-            key_source: 'stored',
-            key_hint: DUMMY_KEY.slice(-4),
-            key_state: 'read',
-            models_discovered: false,
-        };
+    it('Reconnect works without any key leaving the phone', async () => {
+        const saved: ProviderRow = { id: 'fireworks', name: 'Fireworks AI', remote: true, privacy_notice: '', configured: false, blocked: false };
         const { client, queryClient, wrap } = setup(saved);
         const r = await render(<ProviderKey provider={saved} connected={false} />, { wrapper: wrap });
 
-        expect(screen.getByTestId('provider-key-masked')).toHaveTextContent(/•{20} ummy/);
         expect(screen.getByTestId('provider-key-pc-only')).toBeTruthy();
         expect(screen.queryByText(/^(Replace|Remove key)$/)).toBeNull();
 

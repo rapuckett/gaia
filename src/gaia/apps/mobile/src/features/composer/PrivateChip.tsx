@@ -13,6 +13,7 @@ export function PrivateChip({ on, onChange, disabled }: { on: boolean; onChange:
         <ControlChip
             label={t.bare(on ? 'composer.private' : 'composer.memoryOn')}
             icon={on ? EyeOff : Eye}
+            chip="private"
             warning={false}
             disabled={disabled}
             onPress={() => onChange(!on)}
