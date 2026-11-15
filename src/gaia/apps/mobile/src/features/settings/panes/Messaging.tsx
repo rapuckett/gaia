@@ -11,7 +11,7 @@ import type { DiscordState, DiscordStatus } from '@/api/client.types';
 import { GaiaApiError, GaiaError, GaiaNetworkError } from '@/api/errors';
 import { useDiscordStatus } from '@/data';
 import { useT } from '@/i18n/useT';
-import { Badge, Button, Card, Disclosure, Ltr, Notice, Row, Spinner, Stack, StatusDot, Text } from '@/ui';
+import { Badge, Button, Card, Disclosure, Ltr, Notice, Row, Spinner, Stack, StatusDot, Surface, Text } from '@/ui';
 import { Check, Copy, ExternalLink } from '@/ui/icons';
 
 // Every /api/messaging route is PC-only (the status carries the pairing code, the POSTs the bot
@@ -117,9 +117,13 @@ function PairingCode({ code }: { code: string }) {
     const copy = () => Clipboard.setStringAsync(code).then(() => setCopied('ok'), () => setCopied('failed'));
     return (
         <Stack gap="sm">
-            <Text role="display" mono weight="semibold" selectable testID="messaging-pairing-code">
-                <Ltr>{formatCode(code)}</Ltr>
-            </Text>
+            <Row>
+                <Surface tone="recessed" border radius="md" padding="md">
+                    <Text role="title" mono weight="semibold" selectable testID="messaging-pairing-code">
+                        <Ltr>{formatCode(code)}</Ltr>
+                    </Text>
+                </Surface>
+            </Row>
             <Row>
                 <Button
                     size="sm"
@@ -158,19 +162,19 @@ function DmStep({ s }: { s?: DiscordStatus }) {
 /** The PC refused the read: the pitch, the refusal, and the steps to follow at the PC. */
 function Refused() {
     const t = useT();
-    const [howTo, setHowTo] = useState(false);
     return (
         <Stack gap="md">
             <Pitch />
             <PcOnly />
-            <Disclosure title={t('mobileApp.settings.messaging.howTo')} open={howTo} onToggle={() => setHowTo((o) => !o)} testID="messaging-how-to">
-                <Stack gap="lg">
-                    <CreateBotStep />
-                    <Step n={2} title={t('settings.messaging.step2.title')} />
-                    <AddBotStep />
-                    <DmStep />
-                </Stack>
-            </Disclosure>
+            <Text role="label" weight="semibold" tone="secondary" accessibilityRole="header">
+                {t('mobileApp.settings.messaging.howTo')}
+            </Text>
+            <Stack gap="lg">
+                <CreateBotStep />
+                <Step n={2} title={t('settings.messaging.step2.title')} />
+                <AddBotStep />
+                <DmStep />
+            </Stack>
         </Stack>
     );
 }
@@ -178,7 +182,7 @@ function Refused() {
 function explainKey(s: DiscordStatus) {
     switch (s.state) {
         case 'stopped':
-            return s.autostart ? 'settings.messaging.state.crashed' : 'settings.messaging.state.stopped';
+            return s.autostart ? 'mobileApp.settings.messaging.crashed' : 'settings.messaging.state.stopped';
         case 'error':
             return 'settings.messaging.state.error';
         case 'taken_over':

@@ -3663,6 +3663,7 @@ const messages: Messages = {
     'mobileApp.banner.openOnPc': 'افتح GAIA على جهاز الكمبيوتر لتشغيل خادم النماذج.',
     'mobileApp.settings.memory.lede': 'يتذكر GAIA الحقائق والتفضيلات والمحادثات السابقة عبر المحادثات، على جهاز الكمبيوتر لديك فقط. لا يتذكّر GAIA المحادثات الخاصة (أيقونة العين في المحادثة) أبدًا.',
     'mobileApp.settings.messaging.answeringHint': 'راسل البوت من أي جهاز. يجيب GAIA ما دام يعمل على الكمبيوتر لديك.',
+    'mobileApp.settings.messaging.crashed': 'توقف GAIA عن الرد على ديسكورد بشكل غير متوقع. شغّله مجددًا من الكمبيوتر لديك.',
     'mobileApp.settings.messaging.credentials': 'تعذّر على GAIA قراءة رمز البوت المحفوظ على الكمبيوتر لديك.',
     'mobileApp.settings.messaging.howTo': 'كيفية إعداده على الكمبيوتر لديك',
     'mobileApp.settings.messaging.pitch': 'راسل GAIA من ديسكورد على هاتفك، ويجيبك من الكمبيوتر لديك.',

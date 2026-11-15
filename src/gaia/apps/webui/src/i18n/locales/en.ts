@@ -3663,6 +3663,7 @@ export const enMessages = {
     'mobileApp.banner.openOnPc': 'Open GAIA on your PC to start the model server.',
     'mobileApp.settings.memory.lede': 'GAIA remembers facts, preferences and past conversations across chats, on your PC only. Private chats (the eye icon in a chat) are never remembered.',
     'mobileApp.settings.messaging.answeringHint': "DM the bot from any device. GAIA answers while it's running on your PC.",
+    'mobileApp.settings.messaging.crashed': 'GAIA stopped answering on Discord unexpectedly. Start it again on your PC.',
     'mobileApp.settings.messaging.credentials': "GAIA couldn't read the saved bot token on your PC.",
     'mobileApp.settings.messaging.howTo': 'How to set it up on your PC',
     'mobileApp.settings.messaging.pitch': 'Message GAIA from Discord on your phone. It answers from your PC.',
