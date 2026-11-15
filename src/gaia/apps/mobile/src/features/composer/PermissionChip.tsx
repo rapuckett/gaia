@@ -29,7 +29,7 @@ export function PermissionChip({ mode, onChange, disabled }: PermissionChipProps
     return (
         <>
             <ControlChip
-                label={full ? t('perm.full') : t('env.ask')}
+                label={t.bare(full ? 'perm.full' : 'env.ask')}
                 icon={full ? ShieldAlert : ShieldCheck}
                 menu
                 warning={full}
