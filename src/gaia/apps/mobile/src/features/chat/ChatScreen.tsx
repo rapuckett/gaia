@@ -33,7 +33,7 @@ import { TurnTail } from './TurnTail';
 
 const NO_MESSAGES: never[] = [];
 
-export function ChatScreen({ sessionId }: { sessionId: string }) {
+export function ChatScreen({ sessionId, onManageDocuments }: { sessionId: string; onManageDocuments?: () => void }) {
     const t = useT();
     const session = useSession(sessionId);
     const messages = useMessages(sessionId);
@@ -143,7 +143,7 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
         <FileScope sessionId={sessionId}>
         <Screen
             keyboard="avoid"
-            header={<ChatHeader sessionId={sessionId} onOpenSessionPanel={() => setPanelOpen(true)} />}
+            header={<ChatHeader sessionId={sessionId} onOpenSessionPanel={() => setPanelOpen(true)} onManageDocuments={onManageDocuments} />}
             footer={
                 <>
                     <FlagshipAgentBanner />

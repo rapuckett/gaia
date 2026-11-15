@@ -20,10 +20,12 @@ export interface ChatHeaderProps {
     sessionId: string;
     /** Shows the session-panel button when set; with none, the header has no such control. */
     onOpenSessionPanel?: () => void;
+    /** Opens the document library for this chat; with none, the documents bar has no Manage link. */
+    onManageDocuments?: () => void;
 }
 
 /** The chat's header: the title (tap to rename), the resource and private toggles, and the documents bar. */
-export function ChatHeader({ sessionId, onOpenSessionPanel }: ChatHeaderProps) {
+export function ChatHeader({ sessionId, onOpenSessionPanel, onManageDocuments }: ChatHeaderProps) {
     const t = useT();
     const session = useSession(sessionId);
     const rename = useRenameSession();
@@ -120,7 +122,7 @@ export function ChatHeader({ sessionId, onOpenSessionPanel }: ChatHeaderProps) {
                 </Stack>
             ) : null}
             {resources ? <ResourceStrip onClose={() => setResources(false)} /> : null}
-            <DocsBar sessionId={sessionId} onFailed={setError} />
+            <DocsBar sessionId={sessionId} onFailed={setError} onManage={onManageDocuments} />
         </>
     );
 }
