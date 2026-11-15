@@ -25,15 +25,23 @@ import type {
     AgentList,
     AgentMcpList,
     CancelChatResult,
+    CancelIndexingResult,
+    ChatPerformance,
+    CloudPriceList,
     ConfirmToolResult,
+    ContextChoice,
     ConnectorActivations,
+    AllPermissions,
     ConnectorGrants,
     ConnectorList,
     ContextUsageResult,
     ConsolidateMemoryResult,
+    DeleteDocumentResult,
     DeleteMessagesResult,
     DeleteScheduleResult,
     DocumentListResponse,
+    DocumentResponse,
+    DocumentStatus,
     EmbeddingCoverage,
     FollowUpOutcome,
     FollowUpResult,
@@ -43,14 +51,20 @@ import type {
     LemonadeFound,
     LemonadeTarget,
     LocalModelStatus,
+    MemoryActivityDay,
     MemorySettings,
     MemoryStats,
+    MemoryToolStat,
+    MemoryUpcomingItem,
     MessageList,
     ModelNeed,
+    ModelServerInfo,
     PreflightReport,
+    ProvidersResponse,
     RestartModelResult,
     RequestOptions,
     ParsedSchedule,
+    PermissionMode,
     ProviderModelsResponse,
     RebuildEmbeddingsResult,
     ReconcileMemoryResult,
@@ -74,13 +88,19 @@ import {
     connectorActivationsPath,
     connectorGrantPath,
     connectorGrantsPath,
+    cloudPricesPath,
+    documentPath,
     ENDPOINTS,
     chatContextPath,
+    chatPermissionGrantsPath,
+    chatPerformancePath,
     chatPermissionsPath,
     providerModelsPath,
     followupOutcomePath,
     MESSAGE_PAGE_SIZE,
     QUEUED_IDLE_MS,
+    memoryActivityPath,
+    memoryUpcomingPath,
     schedulePath,
     scheduleResultsPath,
     scheduleRunPath,
@@ -325,6 +345,18 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             return postJson<Session>(sessionReadPath(sessionId), undefined, options?.signal);
         },
 
+        getContextChoice(model, options) {
+            return getJson<ContextChoice>(`${ENDPOINTS.localModelContext}?model=${encodeURIComponent(model)}`, options?.signal);
+        },
+
+        setContextChoice(model, ctxSize, options) {
+            return putJson<ContextChoice>(ENDPOINTS.localModelContext, { model, ctx_size: ctxSize }, options?.signal);
+        },
+
+        getCloudPrices(provider, options) {
+            return getJson<CloudPriceList>(cloudPricesPath(provider), options?.signal);
+        },
+
         getActiveModel(options) {
             return getJson<ActiveModel>(ENDPOINTS.providersActive, options?.signal);
         },
@@ -341,12 +373,28 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             return getJson<SessionPermissions>(chatPermissionsPath(sessionId), options?.signal);
         },
 
+        listAllPermissions(options) {
+            return getJson<AllPermissions>(ENDPOINTS.chatPermissionsDefault, options?.signal);
+        },
+
+        setDefaultPermissionMode(mode, options) {
+            return putJson<{ default_mode: PermissionMode }>(ENDPOINTS.chatPermissionsDefault, { mode }, options?.signal);
+        },
+
+        revokeGrants(sessionId, key, options) {
+            return deleteJson<SessionPermissions>(chatPermissionGrantsPath(sessionId, key), options?.signal);
+        },
+
         setPermissionMode(sessionId, mode, options) {
             return putJson<SessionPermissions>(chatPermissionsPath(sessionId), { mode }, options?.signal);
         },
 
         getContextUsage(sessionId, options) {
             return getJson<ContextUsageResult>(chatContextPath(sessionId), options?.signal);
+        },
+
+        getChatPerformance(sessionId, options) {
+            return getJson<ChatPerformance>(chatPerformancePath(sessionId), options?.signal);
         },
 
         getFollowUpOutcome(sessionId, options) {
@@ -519,6 +567,18 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             return getJson<ScheduleResults>(scheduleResultsPath(name, limit), options?.signal);
         },
 
+        getMemoryActivity(days, options) {
+            return getJson<MemoryActivityDay[]>(memoryActivityPath(days), options?.signal);
+        },
+
+        getMemoryTools(options) {
+            return getJson<MemoryToolStat[]>(ENDPOINTS.memoryTools, options?.signal);
+        },
+
+        getMemoryUpcoming(days, options) {
+            return getJson<MemoryUpcomingItem[]>(memoryUpcomingPath(days), options?.signal);
+        },
+
         getMemoryStats(options) {
             return getJson<MemoryStats>(ENDPOINTS.memoryStats, options?.signal);
         },
@@ -559,6 +619,22 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             return getJson<DocumentListResponse>(ENDPOINTS.documents, options?.signal);
         },
 
+        cancelDocumentIndexing(docId, options) {
+            return postJson<CancelIndexingResult>(documentPath(docId, 'documentCancel'), undefined, options?.signal);
+        },
+
+        deleteDocument(docId, options) {
+            return deleteJson<DeleteDocumentResult>(documentPath(docId), options?.signal);
+        },
+
+        getDocumentStatus(docId, options) {
+            return getJson<DocumentStatus>(documentPath(docId, 'documentStatus'), options?.signal);
+        },
+
+        reindexDocument(docId, options) {
+            return postJson<DocumentResponse>(documentPath(docId, 'documentReindex'), undefined, options?.signal);
+        },
+
         getSystemStatus(options) {
             return getJson<SystemStatus>(ENDPOINTS.systemStatus, options?.signal);
         },
@@ -597,6 +673,18 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         checkSetup(skipChatModel, options) {
             return getJson<SetupCheck>(`${ENDPOINTS.setupCheck}?skip_chat_model=${skipChatModel}`, options?.signal);
+        },
+
+        listProviders(options) {
+            return getJson<ProvidersResponse>(ENDPOINTS.providers, options?.signal);
+        },
+
+        getModelServer(options) {
+            return getJson<ModelServerInfo>(ENDPOINTS.modelServer, options?.signal);
+        },
+
+        setModelServerBackend(backend, options) {
+            return putJson<ModelServerInfo>(ENDPOINTS.modelServerBackend, { backend }, options?.signal);
         },
 
         getPreflight(options) {

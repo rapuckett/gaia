@@ -22,23 +22,25 @@ export interface ControlChipProps {
 /** A flat control in the message box's bottom row, as the desktop's composer chips: an icon, a short label and a chevron. */
 export function ControlChip({ label, icon, onPress, menu, warning, disabled, accessibilityLabel, testID }: ControlChipProps) {
     return (
-        <Pressable
-            onPress={onPress}
-            disabled={disabled}
-            accessibilityLabel={accessibilityLabel ?? label}
-            accessibilityState={menu ? { expanded: false } : undefined}
-            minSize={44}
-            testID={testID}
-        >
-            <Row gap="xs">
-                <Icon icon={icon} size="sm" tone={warning ? 'warning' : 'secondary'} />
-                <View style={{ flexShrink: 1 }}>
-                    <Text role="label" tone={warning ? 'warning' : 'secondary'} numberOfLines={1}>
-                        {label}
-                    </Text>
-                </View>
-                {menu ? <Icon icon={ChevronDown} size="sm" tone="muted" /> : null}
-            </Row>
-        </Pressable>
+        <View style={{ flexShrink: 1, minWidth: 0 }}>
+            <Pressable
+                onPress={onPress}
+                disabled={disabled}
+                accessibilityLabel={accessibilityLabel ?? label}
+                accessibilityState={menu ? { expanded: false } : undefined}
+                minSize={44}
+                testID={testID}
+            >
+                <Row gap="xs">
+                    <Icon icon={icon} size="sm" tone={warning ? 'warning' : 'secondary'} />
+                    <View style={{ flexShrink: 1 }}>
+                        <Text role="label" tone={warning ? 'warning' : 'secondary'} numberOfLines={1}>
+                            {label}
+                        </Text>
+                    </View>
+                    {menu ? <Icon icon={ChevronDown} size="sm" tone="muted" /> : null}
+                </Row>
+            </Pressable>
+        </View>
     );
 }

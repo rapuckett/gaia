@@ -461,6 +461,29 @@ class TestSlowButAliveSupervisedServer:
         finally:
             sock.close()
 
+    def test_a_process_whose_files_change_mid_read_is_skipped(self, monkeypatch):
+        """On macOS psutil raises RuntimeError when a process's open files change
+        while it reads them; one busy process must not hide the server."""
+
+        def racing(*args, **kwargs):
+            raise RuntimeError("proc_pidinfo(PROC_PIDLISTFDS) 2/2 syscall failed")
+
+        class Racing:
+            pid = -1
+            net_connections = staticmethod(racing)
+
+        monkeypatch.setattr(psutil, "net_connections", racing)
+        monkeypatch.setattr(
+            psutil, "process_iter", lambda: iter([Racing(), psutil.Process()])
+        )
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.bind(("127.0.0.1", 0))
+        sock.listen(1)
+        try:
+            assert sup._listener_pid(sock.getsockname()[1]) == os.getpid()
+        finally:
+            sock.close()
+
     def test_a_quiet_busy_system_server_is_an_error(
         self, supervisor, slow_health, monkeypatch
     ):
