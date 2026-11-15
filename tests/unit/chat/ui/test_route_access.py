@@ -565,6 +565,20 @@ def test_provider_key_refused_away_from_the_pc(setup, monkeypatch):
     assert handed == []
 
 
+def test_refused_network_policy_saves_nothing(setup):
+    """A settings change that includes the policy is all or nothing away from the PC."""
+    app, clients, _ = setup
+    before = clients["pc"].get("/api/settings").json()["agent_mode"]
+    other = "manual" if before != "manual" else "goal_driven"
+    for caller in ("tunnel", "device"):
+        resp = clients[caller].put(
+            "/api/settings",
+            json={"agent_mode": other, "network_policy": "local_ai_only"},
+        )
+        assert resp.status_code == 403, caller
+    assert clients["pc"].get("/api/settings").json()["agent_mode"] == before
+
+
 def test_troubleshooting_report_is_pc_only(setup):
     """The report bundles every log, so it is no side door around them."""
     from gaia.home import gaia_home
