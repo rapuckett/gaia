@@ -60,6 +60,7 @@ export const ENDPOINTS = {
     setupChatModel: '/api/setup/chat-model',
     setupCheck: '/api/setup/check',
     setupModelDownload: '/api/setup/models/download',
+    setupModelRemove: '/api/setup/models/remove',
     setupModelSkip: '/api/setup/models/skip',
     setupNeeds: '/api/setup/needs/{job}',
     setupNpuRecheck: '/api/setup/npu/recheck',
