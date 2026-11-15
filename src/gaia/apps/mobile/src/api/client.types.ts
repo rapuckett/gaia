@@ -42,7 +42,7 @@ import type {
 } from '@webui/types';
 import type { UndoSettings } from '@webui/types/changes';
 import type { AgentCapabilities } from '@webui/types/sessionPanel';
-import type { KnowledgeCreateBody, KnowledgeListParams, KnowledgeSaveResult, KnowledgeUpdateBody, MemorySettings } from '@webui/services/memoryApi';
+import type { Goal, GoalStats, KnowledgeCreateBody, KnowledgeListParams, KnowledgeSaveResult, KnowledgeUpdateBody, MemorySettings, Priority as GoalPriority } from '@webui/services/memoryApi';
 import type { AboutYouItem, ActivityDay, TemporalItem, ToolStat } from '@webui/utils/memoryFormat.core';
 import type { CreateSessionRequest, DocumentListResponse, DocumentResponse, ModelServerInfo, SessionSearchResponse, ToolConfirmRequest, UserInputRequest as ApiUserInputRequest } from '@webui/types/api.gen';
 
@@ -162,8 +162,17 @@ export type { MemorySettings } from '@webui/services/memoryApi';
 /** One day of GET /api/memory/activity, one tool of GET /api/memory/tools, one item of GET /api/memory/upcoming; typed as the web's `MemoryDashboard` types them. */
 export type { ActivityDay as MemoryActivityDay, TemporalItem as MemoryUpcomingItem, ToolStat as MemoryToolStat } from '@webui/utils/memoryFormat.core';
 
+export type { Goal, GoalStats, GoalStatus, GoalTask, Priority as GoalPriority } from '@webui/services/memoryApi';
+
 export type { KnowledgeCreateBody, KnowledgeListParams, KnowledgeSaveResult, KnowledgeUpdateBody } from '@webui/services/memoryApi';
 export type { AboutYouItem as MemoryKnowledgeItem } from '@webui/utils/memoryFormat.core';
+
+/** The body of POST /api/goals. */
+export interface CreateGoalBody {
+    title: string;
+    description: string;
+    priority: GoalPriority;
+}
 
 /** One page of GET /api/memory/knowledge; `total` counts every match, not just this page. */
 export interface MemoryKnowledgePage {
@@ -456,6 +465,22 @@ export interface GaiaClient {
     /** Memories due within `days` days, plus the overdue ones. */
     getMemoryUpcoming(days: number, options?: RequestOptions): Promise<TemporalItem[]>;
     getMemoryStats(options?: RequestOptions): Promise<MemoryStats>;
+    /** Every goal with its tasks, newest first. */
+    listGoals(options?: RequestOptions): Promise<{ goals: Goal[]; total: number }>;
+    /** Goal and task counts by status. */
+    getGoalStats(options?: RequestOptions): Promise<GoalStats>;
+    /** Why GAIA can't run approved goals (the goal list can't be read); null when it can. */
+    getGoalStoreHealth(options?: RequestOptions): Promise<{ error: string | null }>;
+    /** Makes a goal GAIA will work on; it starts queued. */
+    createGoal(body: CreateGoalBody, options?: RequestOptions): Promise<Goal>;
+    /** Accepts a goal GAIA suggested. A paired device's approval is audit-logged on the PC with the device's id. */
+    approveGoal(goalId: string, options?: RequestOptions): Promise<Goal>;
+    /** Turns down a goal GAIA suggested; also audit-logged. */
+    rejectGoal(goalId: string, options?: RequestOptions): Promise<Goal>;
+    /** Stops a queued or running goal. */
+    cancelGoal(goalId: string, options?: RequestOptions): Promise<Goal>;
+    /** Deletes a goal and its tasks. */
+    deleteGoal(goalId: string, options?: RequestOptions): Promise<void>;
     /** One page of stored memories; the About you tab asks `about_user` so GAIA's own notes stay out. */
     listMemoryKnowledge(params: KnowledgeListParams, options?: RequestOptions): Promise<MemoryKnowledgePage>;
     /** Saves a memory and embeds it. */
