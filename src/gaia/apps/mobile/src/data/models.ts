@@ -9,7 +9,7 @@ import { MODEL_STATUS_OPEN_POLL_MS, MODEL_STATUS_POLL_MS } from '@/api/constants
 import { useModelNeededStore } from '@/state/modelNeeded';
 
 import { useGaiaClient } from './GaiaClientProvider';
-import { requireClient } from './queries';
+import { failedWithoutData, requireClient } from './queries';
 
 export const modelKeys = {
     local: ['localModelStatus'] as const,
@@ -22,7 +22,9 @@ export function useLocalModelStatus(watching = false) {
         queryKey: modelKeys.local,
         enabled: client !== null,
         queryFn: ({ signal }) => requireClient(client).getLocalModelStatus({ signal }),
-        refetchInterval: watching ? MODEL_STATUS_OPEN_POLL_MS : MODEL_STATUS_POLL_MS,
+        // Keep polling after a failure, slowly: it is how the "server is down" notice sees recovery.
+        refetchInterval: (query) =>
+            watching && !failedWithoutData(query) ? MODEL_STATUS_OPEN_POLL_MS : MODEL_STATUS_POLL_MS,
     });
 }
 

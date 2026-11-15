@@ -4,7 +4,7 @@
 import { useRouter } from 'expo-router';
 import { useEffect } from 'react';
 
-import { useGoalStoreError, useSystemStatus } from '@/data';
+import { useGoalStoreError, useQueryFailure, useSystemStatus } from '@/data';
 import { useT } from '@/i18n/useT';
 import { openChat } from '@/features/nav/navigation';
 import { useBannerDismissedStore } from '@/state/bannerDismissed';
@@ -38,7 +38,9 @@ function ChatAlertNotice({ alert }: { alert: ChatAlertBanner }) {
 /** The banner for the top of a `Screen`: a chat alert, then connection trouble; nothing while all is well or no PC is connected. */
 export function ConnectionBanner() {
     const t = useT();
-    const { data, error, refetch } = useSystemStatus();
+    const status = useSystemStatus();
+    const { data, refetch } = status;
+    const { error } = useQueryFailure(status);
     const goalStoreError = useGoalStoreError().data;
     const picked = pickBanner(data, error, t, goalStoreError);
     const { dismissed, dismiss, reconcile } = useBannerDismissedStore();

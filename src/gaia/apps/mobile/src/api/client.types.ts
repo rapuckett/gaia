@@ -31,6 +31,8 @@ import type {
     ParsedSchedule,
     ProviderModelsResponse,
     ResourceUsage,
+    RetryChoice,
+    RetryResult,
     Schedule,
     ScheduleResult,
     Session,
@@ -87,6 +89,8 @@ export type {
     ProviderModel,
     ProviderModelsResponse,
     ResourceUsage,
+    RetryChoice,
+    RetryResult,
     Schedule,
     ScheduleResult,
     Session,
@@ -463,6 +467,10 @@ export interface GaiaClient {
     setPermissionMode(sessionId: string, mode: PermissionMode, options?: RequestOptions): Promise<SessionPermissions>;
     /** How full the model's context window is for the chat's next message, or why there is no reading yet. */
     getContextUsage(sessionId: string, options?: RequestOptions): Promise<ContextUsageResult>;
+    /** Answers the message again with another model, without touching the chat; keeping it is chooseRetry. A local model loads first, which can take a minute. */
+    retryWith(sessionId: string, messageId: number, model: string, options?: RequestOptions): Promise<RetryResult>;
+    /** Keeps the original answer or the retry's; the PC saves the retry over the original only for 'retry'. */
+    chooseRetry(sessionId: string, messageId: number, keep: 'original' | 'retry', options?: RequestOptions): Promise<RetryChoice>;
     /** Where each answer's time and tokens went, and the model as Lemonade reports it now. */
     getChatPerformance(sessionId: string, options?: RequestOptions): Promise<ChatPerformance>;
     /** What the chat's last finished turn did with the messages added to it; rejects with 409 while a turn still runs. */

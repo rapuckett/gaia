@@ -10,6 +10,7 @@ import { useChatStream, useMessages } from '@/data';
 import { describeError, useT } from '@/i18n/useT';
 import { ErrorState, List, ListSkeleton, Stack } from '@/ui';
 
+import { useAnswerComparison } from '../compare/useAnswerComparison';
 import { AssistantBubble } from './AssistantBubble';
 import { JumpButton } from './JumpButton';
 import { MessageActionsContext } from './MessageActionsContext';
@@ -32,9 +33,9 @@ export interface MessageListViewProps {
 /** `shown` is newest first, so the messages after `index` are the ones before it. */
 function contextOf(shown: readonly Message[], index: number): MessageContext {
     for (let i = index - 1; i >= 0; i--) {
-        if (shown[i].role === 'user') return { laterTurns: i + 1 };
+        if (shown[i].role === 'user') return { laterTurns: i + 1, latest: index === 0 };
     }
-    return { laterTurns: 0 };
+    return { laterTurns: 0, latest: index === 0 };
 }
 
 export function MessageListView({ messages, loading = false, error, onRetry, live, sessionId }: MessageListViewProps) {
@@ -90,7 +91,8 @@ export function MessageListView({ messages, loading = false, error, onRetry, liv
 export function MessageList({ sessionId, live, readOnly = false }: { sessionId: string; live?: ReactNode; readOnly?: boolean }) {
     const query = useMessages(sessionId);
     const { send, status } = useChatStream(sessionId);
-    const actions = useMemo(() => ({ send, busy: status !== 'idle', readOnly }), [send, status, readOnly]);
+    const { comparing } = useAnswerComparison(sessionId);
+    const actions = useMemo(() => ({ send, busy: status !== 'idle' || comparing, readOnly }), [send, status, comparing, readOnly]);
     return (
         <MessageActionsContext.Provider value={actions}>
             <MessageListView
