@@ -5,7 +5,7 @@ import type { ExpoConfig } from 'expo/config';
 
 import { LOCALES } from '@webui/i18n/registry';
 
-import appConfig, { readAppEnv, type AppEnv } from '../app.config';
+import appConfig, { readApsEnvironment, readAppEnv, type AppEnv } from '../app.config';
 
 function configFor(env: AppEnv): ExpoConfig {
     const saved = process.env.APP_ENV;
@@ -26,6 +26,24 @@ function pluginOptions(config: ExpoConfig, name: string): Record<string, unknown
 }
 
 describe('app config', () => {
+    it('takes the push entitlement from GAIA_APS_ENVIRONMENT, and leaves push out for a sideload', () => {
+        expect(readApsEnvironment(undefined, 'production')).toBe('production');
+        expect(readApsEnvironment('', 'development')).toBe('development');
+        expect(readApsEnvironment('none', 'production')).toBe('none');
+        expect(() => readApsEnvironment('prod', 'production')).toThrow(/GAIA_APS_ENVIRONMENT .* "prod"/);
+
+        const saved = process.env.GAIA_APS_ENVIRONMENT;
+        process.env.GAIA_APS_ENVIRONMENT = 'none';
+        try {
+            const plugins = (configFor('production').plugins ?? []).map((p) => (Array.isArray(p) ? p[0] : p));
+            expect(plugins).not.toContain('expo-notifications');
+        } finally {
+            if (saved === undefined) delete process.env.GAIA_APS_ENVIRONMENT;
+            else process.env.GAIA_APS_ENVIRONMENT = saved;
+        }
+        expect(pluginOptions(configFor('production'), 'expo-notifications').mode).toBe('production');
+    });
+
     it('refuses to load without a known APP_ENV', () => {
         expect(() => readAppEnv(undefined)).toThrow(/APP_ENV .* not set/);
         expect(() => readAppEnv('staging')).toThrow(/"staging"/);

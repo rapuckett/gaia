@@ -58,6 +58,15 @@ export class GaiaPinMismatchError extends GaiaError {
     }
 }
 
+/** A file upload to a paired PC: the pinned transport sends text bodies only for now. */
+export class GaiaUploadUnsupportedError extends GaiaError {
+    readonly code = 'unsupported_body';
+
+    constructor() {
+        super('mobileApp.pairing.uploadUnsupported', {});
+    }
+}
+
 export class GaiaStreamError extends GaiaError {}
 
 export type StreamEndpoint = 'send' | 'attach';
