@@ -72,7 +72,7 @@ export function useFlagshipAgent() {
     const setup = useQuery<SetupCheck>({
         queryKey: setupCheckKey,
         enabled: client !== null && missing,
-        queryFn: ({ signal }) => requireClient(client).checkSetup({ signal }),
+        queryFn: ({ signal }) => requireClient(client).checkSetup(false, { signal }),
     });
     const [state, setState] = useState<FlagshipInstallState>({ kind: 'idle' });
     const cancelled = useRef(false);

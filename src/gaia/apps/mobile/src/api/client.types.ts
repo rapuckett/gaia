@@ -23,11 +23,9 @@ import type {
     StreamEvent,
     SystemStatus,
 } from '@webui/types';
-import type { SetupCheck } from '@webui/types/setup';
 import type { CreateSessionRequest, DocumentListResponse, SessionSearchResponse, ToolConfirmRequest, UserInputRequest as ApiUserInputRequest } from '@webui/types/api.gen';
 
 export type { AgentInstallStatus } from '@webui/services/api';
-export type { SetupCheck } from '@webui/types/setup';
 export type {
     AgentInfo,
     AgentMcpServer,
@@ -208,8 +206,6 @@ export interface GaiaClient {
     /** Starts installing an agent on the PC (202); follow it with `getAgentInstallStatus`. PC-only: a phone gets the refusal. */
     installAgent(id: string, options?: RequestOptions): Promise<{ id: string; status: string }>;
     getAgentInstallStatus(id: string, options?: RequestOptions): Promise<AgentInstallStatus>;
-    /** Whether setup is done and, when it isn't, why; `no_agent_build` says the hub has no agent for this PC. */
-    checkSetup(options?: RequestOptions): Promise<SetupCheck>;
     listSchedules(options?: RequestOptions): Promise<ScheduleList>;
     /** Every skill GAIA can load, plus the folders it skipped. */
     listSkills(options?: RequestOptions): Promise<SkillList>;

@@ -367,10 +367,6 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             return getJson<AgentInstallStatus>(agentInstallStatusPath(id), options?.signal);
         },
 
-        checkSetup(options) {
-            return getJson<SetupCheck>(ENDPOINTS.setupCheck, options?.signal);
-        },
-
         listSkills(options) {
             return getJson<SkillList>(ENDPOINTS.skills, options?.signal);
         },

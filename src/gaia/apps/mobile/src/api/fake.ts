@@ -51,8 +51,6 @@ export interface FakeClientData {
     agents?: AgentInfo[];
     /** What each poll of getAgentInstallStatus answers, in turn; the last one repeats. */
     installStatuses?: AgentInstallStatus[];
-    /** What checkSetup answers. */
-    setupCheck?: SetupCheck;
     /** What getFollowUpOutcome answers; a function may throw to script a 409. */
     followUpOutcome?: FollowUpOutcome | (() => FollowUpOutcome);
     /** Makes sendFollowUp reject, as a turn that can't take the message does. */
@@ -284,9 +282,6 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             const statuses = data.installStatuses;
             if (!statuses?.length) throw new GaiaApiError(404, `No install status for '${id}'.`);
             return statuses[Math.min(polls++, statuses.length - 1)]!;
-        },
-        async checkSetup() {
-            return data.setupCheck ?? { ready: true, steps: [] };
         },
         async listSkills() {
             return { skills: [...(data.skills?.skills ?? [])], invalid: { ...(data.skills?.invalid ?? {}) } };

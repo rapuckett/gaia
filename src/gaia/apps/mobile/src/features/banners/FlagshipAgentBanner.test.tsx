@@ -54,7 +54,7 @@ describe('FlagshipAgentBanner', () => {
     });
 
     it('says there is no build for this PC and offers no install', async () => {
-        await mount({ setupCheck: { ready: false, no_agent_build: true, steps: [] } });
+        await mount({ setupChecks: [{ ready: false, no_agent_build: true, steps: [] }] });
         await waitFor(() => expect(screen.getByText(t('agentNotice.noBuild'))).toBeTruthy());
         expect(screen.queryByText(t('agentNotice.install'))).toBeNull();
     });
