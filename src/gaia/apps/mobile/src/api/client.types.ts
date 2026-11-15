@@ -12,9 +12,11 @@ import type {
     ConnectorListEntry,
     ContextChoice,
     ContextUsageResult,
+    FeaturedLibrary,
     GpuMemoryStatus,
     LemonadeFound,
     LemonadeTarget,
+    LinkPreview,
     LocalModelStatus,
     Message,
     ModelNeed,
@@ -55,9 +57,12 @@ export type {
     ContextChoice,
     ContextUsage,
     ContextUsageResult,
+    FeaturedLibrary,
     GpuMemoryStatus,
     LemonadeFound,
     LemonadeTarget,
+    LinkPreview,
+    LinkSkill,
     LocalModelStatus,
     Message,
     ModelNeed,
@@ -138,6 +143,10 @@ export interface ConnectorActivations {
 export interface SkillList {
     skills: SkillInfo[];
     invalid: Record<string, string>;
+}
+
+export interface FeaturedLibraries {
+    libraries: FeaturedLibrary[];
 }
 
 export interface AgentMcpList {
@@ -474,6 +483,10 @@ export interface GaiaClient {
     refreshSystemContext(options?: RequestOptions): Promise<RefreshSystemContextResult>;
     /** Every skill GAIA can load, plus the folders it skipped. */
     listSkills(options?: RequestOptions): Promise<SkillList>;
+    /** Skill libraries GAIA suggests adding from a link. */
+    listFeaturedSkillLibraries(options?: RequestOptions): Promise<FeaturedLibraries>;
+    /** Reads and audits the skills behind a link; writes nothing. Adding them is PC-only. */
+    previewSkillLink(url: string, options?: RequestOptions): Promise<LinkPreview>;
     /** Creates a schedule; `interval` is the plain-words "when to run", parsed by the PC. 409 when the name is taken. */
     createSchedule(request: CreateScheduleRequest, options?: RequestOptions): Promise<Schedule>;
     /** Reads a plain-words "when to run" without saving it, for the form's live preview. */
