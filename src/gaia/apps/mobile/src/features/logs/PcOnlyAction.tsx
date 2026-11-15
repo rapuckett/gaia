@@ -20,7 +20,7 @@ export function PcOnlyAction({ label, icon, note, detail, testID }: {
     const [pressed, setPressed] = useState(false);
     return (
         <Stack gap="sm">
-            <Button label={label} icon={icon} onPress={() => setPressed(true)} testID={testID} />
+            <Button full wrap label={label} icon={icon} onPress={() => setPressed(true)} testID={testID} />
             {note ? <Text role="caption" tone="muted">{note}</Text> : null}
             {pressed ? (
                 <Notice tone="info" message={`${PC_ONLY_REFUSAL} ${detail}`} testID={`${testID}-refusal`} />
