@@ -50,7 +50,7 @@ export default function Setup() {
             ],
         },
         {
-            title: t('setup.pc.step'),
+            title: t('mobileApp.setup.pc.step'),
             lines: [
                 { label: t('settings.setup.detected'), value: detectedLine(t, plan.data, hardware.data), testID: 'setup-detected' },
                 {
@@ -65,7 +65,7 @@ export default function Setup() {
             title: t('setup.models.step'),
             lines: [
                 {
-                    label: t('settings.setup.models'),
+                    label: t('mobileApp.settings.setup.models'),
                     value: catalog ? t('settings.setup.modelsValue', { n: String(installed.length), size: ltrIn(t.locale, formatSize(installedGb)) }) : null,
                     to: { section: 'model', target: 'models-on-pc', provider: 'local' },
                     testID: 'setup-models',
@@ -104,7 +104,7 @@ export default function Setup() {
                 {error ? <Notice tone="danger" message={describeError(error, t)} testID="setup-error" /> : null}
                 {groups.map((g) => (
                     <Stack key={g.title} gap="xs">
-                        <Text role="label" weight="medium" tone="secondary">{g.title}</Text>
+                        <Text role="label" weight="medium" tone="secondary" accessibilityRole="header">{g.title}</Text>
                         {g.lines.map((l) => {
                             const to = l.to;
                             return (
