@@ -6,6 +6,7 @@ import { View } from 'react-native';
 
 import { useT } from '@/i18n/useT';
 
+import { SetupFooterMuted } from '../SetupFooter';
 import type { SetupStepContext } from '../SetupScreen';
 import { lowDiskRequest } from '../sheets/setupConfirm';
 import { useConfirmSheet } from '../sheets/ConfirmSheet';
@@ -41,7 +42,9 @@ export function PlanWithScreens({ ctx }: { ctx: SetupStepContext }) {
     return (
         <PlanOpenersContext.Provider value={openers}>
             <View style={Screen ? { display: 'none' } : undefined}>
-                <PlanStep ctx={ctx} />
+                <SetupFooterMuted muted={Screen != null}>
+                    <PlanStep ctx={ctx} />
+                </SetupFooterMuted>
             </View>
             {Screen ? <Screen key={top} ctx={ctx} close={close} /> : null}
             {sheet}
