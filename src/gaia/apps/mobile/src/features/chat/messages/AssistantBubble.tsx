@@ -37,9 +37,11 @@ export interface AssistantBubbleProps {
     sessionId?: string;
     /** The newest answer, which alone reports a failed read of the chat's file changes. */
     newest?: boolean;
+    /** The model-server fix under the chat explains this reply's failure. */
+    fixShownBelow?: boolean;
 }
 
-export function AssistantBubble({ message, streaming = false, latencyMs, context, sessionId, newest = false }: AssistantBubbleProps) {
+export function AssistantBubble({ message, streaming = false, latencyMs, context, sessionId, newest = false, fixShownBelow = false }: AssistantBubbleProps) {
     const t = useT();
     const cutOff = streaming ? null : splitCutOff(message.content);
     const cancelled = message.content.trim() === SERVER_CANCELLED_TEXT;
@@ -71,7 +73,7 @@ export function AssistantBubble({ message, streaming = false, latencyMs, context
             ) : null}
             {cutOff ? <CutOffNote cutOff={cutOff} /> : null}
             {cancelled ? <StoppedNote stop={{ state: 'stopped' }} /> : null}
-            {!streaming && !cancelled ? <SavedReplyErrors message={message} /> : null}
+            {!streaming && !cancelled ? <SavedReplyErrors message={message} fixShownBelow={fixShownBelow} /> : null}
             {!streaming && !cancelled ? (
                 <Row>
                     {readable ? <ReadAloudButton control={readAloud} /> : null}
