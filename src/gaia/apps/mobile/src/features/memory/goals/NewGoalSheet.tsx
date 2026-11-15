@@ -3,12 +3,13 @@
 
 import { useState } from 'react';
 
+import { ref } from '@webui/i18n/registry';
+
 import type { GoalPriority } from '@/api/client.types';
 import { useCreateGoal } from '@/data';
-import { useT } from '@/i18n/useT';
+import { describeFailureWith, useT } from '@/i18n/useT';
 import { Button, Notice, Row, SegmentedControl, Sheet, Stack, TextField } from '@/ui';
 
-import { errorText } from '../about/errorText';
 import { PRIORITY_CHOICES, PRIORITY_KEYS } from './goalText';
 
 export interface NewGoalSheetProps {
@@ -95,7 +96,7 @@ export function NewGoalSheet({ open, onClose }: NewGoalSheetProps) {
                     testID="goals-create-priority"
                 />
                 {create.isError ? (
-                    <Notice tone="danger" message={t('mem.goals.failed', { what: t.bare('mem.goals.createFailed'), error: errorText(create.error, t) })} />
+                    <Notice tone="danger" message={t.compose((say) => say('mem.goals.failed', { what: ref('mem.goals.createFailed'), error: describeFailureWith(create.error, say) }))} />
                 ) : null}
             </Stack>
         </Sheet>

@@ -13,8 +13,8 @@ import type { MemoryPaneProps } from '../tabs';
 import { useProfileRun, type LogLine, type ProfileKind } from './useProfileRun';
 
 const COPY = {
-    discovery: { title: 'mem.disc.title', desc: 'mem.disc.desc', run: 'mem.disc.run', saved: 'mem.disc.saved', empty: 'mem.disc.empty', icon: Cpu },
-    inference: { title: 'mem.inf.title', desc: 'mem.inf.desc', run: 'mem.inf.run', saved: 'mem.inf.saved', empty: 'mem.inf.empty', icon: Sparkles },
+    discovery: { title: 'mobileApp.mem.disc.title', desc: 'mem.disc.desc', run: 'mem.disc.run', saved: 'mem.disc.saved', empty: 'mem.disc.empty', icon: Cpu },
+    inference: { title: 'mem.inf.title', desc: 'mobileApp.mem.inf.desc', run: 'mem.inf.run', saved: 'mem.inf.saved', empty: 'mem.inf.empty', icon: Sparkles },
 } as const;
 
 const LIVE_LINES = 8;
@@ -80,7 +80,7 @@ export function ProfileCard({ kind, notify }: { kind: ProfileKind; notify: Memor
                 {kind === 'inference' ? (
                     <>
                         <Text role="caption" tone="muted">
-                            {t('mem.inf.note')}
+                            {t('mobileApp.mem.inf.note')}
                         </Text>
                         <Switch label={t('mem.inf.browser')} value={includeBrowser} onValueChange={setIncludeBrowser} disabled={busy} testID="profile-browser" />
                     </>

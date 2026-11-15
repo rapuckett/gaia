@@ -16,8 +16,8 @@ export default function Memory() {
     const router = useRouter();
     const settings = useMemorySettings();
     const update = useUpdateMemorySettings();
-    const refused = update.error instanceof GaiaApiError && update.error.status === 403;
     const error = update.error ?? settings.error;
+    const refused = error instanceof GaiaApiError && error.status === 403;
 
     return (
         <Stack gap="lg" padding="lg">
