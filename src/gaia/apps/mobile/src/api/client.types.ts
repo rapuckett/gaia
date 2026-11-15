@@ -6,6 +6,7 @@ import type {
     AgentInfo,
     AgentMcpServer,
     ConnectorListEntry,
+    ContextUsageResult,
     LocalModelStatus,
     Message,
     ModelNeed,
@@ -30,6 +31,8 @@ export type {
     AgentMcpServer,
     ConnectorListEntry,
     ConnectorRow,
+    ContextUsage,
+    ContextUsageResult,
     LocalModelStatus,
     Message,
     ModelNeed,
@@ -179,6 +182,8 @@ export interface GaiaClient {
     listSessions(options?: RequestOptions): Promise<SessionList>;
     getSession(sessionId: string, options?: RequestOptions): Promise<Session>;
     createSession(request?: CreateSessionRequest, options?: RequestOptions): Promise<Session>;
+    /** How full the model's context window is for the chat's next message, or why there is no reading yet. */
+    getContextUsage(sessionId: string, options?: RequestOptions): Promise<ContextUsageResult>;
     /** What the chat's last finished turn did with the messages added to it; rejects with 409 while a turn still runs. */
     getFollowUpOutcome(sessionId: string, options?: RequestOptions): Promise<FollowUpOutcome>;
     /** Chats whose title or messages match `query`, newest first; `truncated` says the backend capped the list. */
