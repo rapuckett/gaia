@@ -14,6 +14,8 @@ PC. The PC's own reads are unchanged.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -239,6 +241,30 @@ def test_remote_folder_index_skips_secrets(device, chat, home, indexed):
     names = {d["filename"] for d in resp.json()["documents"]}
     assert "notes.md" in names and "credentials.json" not in names
     assert "notes.md" in indexed and "credentials.json" not in indexed
+
+
+def test_remote_folder_index_skips_items_outside_the_chat(
+    device, chat, home, indexed, monkeypatch
+):
+    # A walk that reached through a linked folder, as a swap mid-walk would.
+    project = home / "project"
+    (project / "linked").symlink_to(home)
+    real_rglob = Path.rglob
+
+    def rglob(self, pattern):
+        yield from real_rglob(self, pattern)
+        if self == project:
+            yield project / "linked" / "elsewhere.md"
+
+    monkeypatch.setattr(Path, "rglob", rglob)
+    resp = device.post(
+        "/api/documents/index-folder",
+        json={"folder_path": str(project)},
+        params={"session_id": chat},
+        headers=UI,
+    )
+    assert resp.status_code == 200
+    assert "notes.md" in indexed and "elsewhere.md" not in indexed
 
 
 @pytest.mark.parametrize("caller", ["device", "tunnel"])
