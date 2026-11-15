@@ -228,7 +228,7 @@ function Header({ onClose, onNewChat, onPcs }: { onClose: () => void; onNewChat?
             <Row gap="sm" accessibilityRole="header">
                 <Text role="title" weight="semibold">{APP_NAME}</Text>
                 <Spacer />
-                {onPcs ? <IconButton icon={Monitor} label={t('mobileApp.pairing.pcs.title')} onPress={onPcs} /> : null}
+                {onPcs ? <IconButton icon={Monitor} label={t('mobileApp.pairing.pcs.title')} onPress={onPcs} testID="pcs-drawer-button" /> : null}
                 {onNewChat ? <IconButton icon={Plus} label={t('sidebar.newChat')} onPress={onNewChat} /> : null}
                 <IconButton icon={X} label={t('sidebar.collapse')} onPress={onClose} />
             </Row>
