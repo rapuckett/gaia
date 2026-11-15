@@ -4,6 +4,7 @@
 export * from './chatStream';
 export * from './connectors';
 export * from './GaiaClientProvider';
+export * from './memory';
 export * from './models';
 export * from './mutations';
 export * from './queries';

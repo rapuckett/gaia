@@ -4,16 +4,23 @@
 import type {
     AgentMcpServer,
     ConnectorListEntry,
+    ConsolidateMemoryResult,
     CreateSessionRequest,
+    EmbeddingCoverage,
     FollowUpOutcome,
     DocumentListResponse,
     GaiaClient,
     HealthResponse,
     LocalModelStatus,
+    MemorySettings,
+    MemoryStats,
     Message,
     MessageList,
     ModelNeed,
     ParsedSchedule,
+    RebuildEmbeddingsResult,
+    ReconcileMemoryResult,
+    RefreshSystemContextResult,
     Schedule,
     ResourceUsage,
     Session,
@@ -68,6 +75,18 @@ export interface FakeClientData {
     setupStatuses?: (SetupRunStatus | Error)[];
     setupPlan?: SetupPlan;
     documents?: DocumentListResponse;
+    memorySettings?: MemorySettings;
+    /** Each stats read answers the next entry (the last one repeats); an Error entry is thrown. */
+    memoryStats?: (MemoryStats | Error)[];
+    embeddingCoverage?: EmbeddingCoverage;
+    /** What each maintenance POST answers; an Error makes it fail. Unlisted ones answer a zero result. */
+    memoryActionResults?: {
+        consolidate?: ConsolidateMemoryResult | Error;
+        rebuildEmbeddings?: RebuildEmbeddingsResult | Error;
+        reconcile?: ReconcileMemoryResult | Error;
+        rebuildFts?: Error;
+        refreshSystemContext?: RefreshSystemContextResult | Error;
+    };
 }
 
 export interface FakeGaiaClient extends GaiaClient {
@@ -84,6 +103,10 @@ export interface FakeGaiaClient extends GaiaClient {
     readonly downloads: { modelId: string; acknowledgeLowDisk: boolean }[];
     readonly setupStarts: { skipChatModel: boolean; gaiaLemonade: boolean; upgradeEmbedded: boolean }[];
     readonly detached: { sessionId: string; docId: string }[];
+    /** Each memory maintenance POST, in order. */
+    readonly memoryActions: string[];
+    /** How many times the stats were read. */
+    readonly memoryStatsReads: number;
 }
 
 export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
@@ -118,6 +141,13 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         return item;
     };
     const detached: FakeGaiaClient['detached'] = [];
+    const memoryActions: string[] = [];
+    let memoryStatsReads = 0;
+    function memoryAction<T>(name: string, result: T | Error): T {
+        memoryActions.push(name);
+        if (result instanceof Error) throw result;
+        return result;
+    }
 
     function findSession(sessionId: string): Session {
         const session = sessions.find((s) => s.id === sessionId);
@@ -139,6 +169,10 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         downloads,
         setupStarts,
         detached,
+        memoryActions,
+        get memoryStatsReads() {
+            return memoryStatsReads;
+        },
         async health(): Promise<HealthResponse> {
             return { status: 'ok', service: 'gaia-agent-ui' };
         },
@@ -259,6 +293,36 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         },
         async listSkills() {
             return { skills: [...(data.skills?.skills ?? [])], invalid: { ...(data.skills?.invalid ?? {}) } };
+        },
+        async getMemoryStats() {
+            if (!data.memoryStats?.length) throw new GaiaApiError(503, 'This fake client was given no memory stats.');
+            return nextOf(data.memoryStats, memoryStatsReads++);
+        },
+        async getMemorySettings() {
+            if (!data.memorySettings) throw new GaiaApiError(503, 'This fake client was given no memory settings.');
+            return data.memorySettings;
+        },
+        async getEmbeddingCoverage() {
+            if (!data.embeddingCoverage) throw new GaiaApiError(503, 'This fake client was given no embedding coverage.');
+            return data.embeddingCoverage;
+        },
+        async consolidateMemory() {
+            return memoryAction('consolidate', data.memoryActionResults?.consolidate ?? { status: 'ok', consolidated: 0, extracted_items: 0 });
+        },
+        async rebuildEmbeddings() {
+            return memoryAction('rebuildEmbeddings', data.memoryActionResults?.rebuildEmbeddings ?? { backfilled: 0, total_without: 0 });
+        },
+        async reconcileMemory() {
+            return memoryAction(
+                'reconcile',
+                data.memoryActionResults?.reconcile ?? { pairs_checked: 0, reinforced: 0, contradicted: 0, weakened: 0, neutral: 0 },
+            );
+        },
+        async rebuildMemoryFts() {
+            return memoryAction('rebuildFts', data.memoryActionResults?.rebuildFts ?? { status: 'ok' });
+        },
+        async refreshSystemContext() {
+            return memoryAction('refreshSystemContext', data.memoryActionResults?.refreshSystemContext ?? { stored: 0, skipped: false });
         },
         async listSchedules() {
             return { schedules: [...schedules], total: schedules.length };
