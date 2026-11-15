@@ -146,6 +146,7 @@ describe('endpoints', () => {
         modelServerBackend: ['PUT'],
         onboardingPreflight: ['GET'],
         onboardingStart: ['GET'],
+        providers: ['GET'],
     };
     const calls = Object.entries(ENDPOINTS).flatMap(([name, path]) =>
         methods[name as keyof typeof ENDPOINTS].map((method) => `${method} ${path}`),
