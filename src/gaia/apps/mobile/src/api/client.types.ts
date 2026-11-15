@@ -44,7 +44,7 @@ import type {
     StreamEvent,
     SystemStatus,
 } from '@webui/types';
-import type { UndoSettings } from '@webui/types/changes';
+import type { FileDiff, TurnChanges, UndoResult, UndoSettings } from '@webui/types/changes';
 import type { DiscordStatus } from '@webui/services/messagingApi';
 import type { AgentCapabilities } from '@webui/types/sessionPanel';
 import type { DiscoveryFinding, Goal, GoalStats, InferenceInsight, KnowledgeCreateBody, KnowledgeListParams, KnowledgeSaveResult, KnowledgeUpdateBody, MemoryCleared, MemoryReinitializeResult, MemorySettings, MemorySettingsUpdateResponse, Priority as GoalPriority } from '@webui/services/memoryApi';
@@ -101,7 +101,7 @@ export type {
     SystemStatus,
     UnavailableConnectorRow,
 } from '@webui/types';
-export type { UndoSettings } from '@webui/types/changes';
+export type { FileDiff, TurnChanges, UndoResult, UndoSettings } from '@webui/types/changes';
 export type { ActiveSkill, AgentCapabilities, AgentTool, SkillOrigin } from '@webui/types/sessionPanel';
 export type { CreateSessionRequest, DocumentListResponse, DocumentResponse, ModelServerInfo, ProviderSummary, ProviderSummaryList, SessionSearchResponse, SessionSearchResult, ToolConfirmRequest, FilePreviewResponse } from '@webui/types/api.gen';
 
@@ -414,6 +414,12 @@ export interface GaiaClient {
     /** Sends a file to the PC; recordings go to the transcription folder. Rejects with the PC's refusal (type, size, empty). */
     uploadFile(file: Blob, name: string, options?: RequestOptions): Promise<UploadedFile>;
     setSessionPinned(sessionId: string, pinned: boolean, options?: RequestOptions): Promise<Session>;
+    /** The file changes each turn of the chat made. */
+    listTurnChanges(sessionId: string, options?: RequestOptions): Promise<{ turns: TurnChanges[] }>;
+    /** What one turn did to each file. */
+    getTurnDiff(sessionId: string, turnId: string, options?: RequestOptions): Promise<{ turn_id: string; files: FileDiff[] }>;
+    /** Puts the turn's files back; rejects with a 409 naming a file changed since, unless `force`. */
+    undoTurn(sessionId: string, turnId: string, force?: boolean, options?: RequestOptions): Promise<UndoResult>;
     /** Deletes the chat and its messages; a turn still running on it is stopped first. */
     deleteSession(sessionId: string, options?: RequestOptions): Promise<DeleteSessionResult>;
     /** Clears the chat's unread mark. */

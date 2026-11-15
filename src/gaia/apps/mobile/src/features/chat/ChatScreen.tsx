@@ -8,7 +8,7 @@ import { needsOutcome, nextToSend } from '@webui/utils/messageQueue';
 import { MAX_STREAM_RECONNECTS } from '@webui/utils/streamErrors.core';
 
 import { useChatReadAloud } from '@/features/audio/useChatReadAloud';
-import { useAnswerQuestion, useChatStream, useContextUsage, usePermissionMode, useMessages, useSession } from '@/data';
+import { useAnswerQuestion, useChatStream, useContextUsage, usePermissionMode, useMessages, useRefreshTurnChanges, useSession } from '@/data';
 import { Composer, ContextMeter, ContextWarning, ModelChip, PermissionChip, useAttachments, useComposerQueue, useFollowUpEvents } from '@/features/composer';
 import { QueuedMessages } from '@/features/composer/QueuedMessages';
 import { FileScope } from '@/features/files';
@@ -27,6 +27,7 @@ import { TailIssues } from './ReplyErrors';
 import { SessionPanel } from './session-panel';
 import { buildTail } from './tailState';
 import { TurnTail } from './TurnTail';
+import { useTurnAnnouncer, useTurnEnd } from './useTurnAnnouncer';
 
 const NO_MESSAGES: never[] = [];
 
@@ -48,6 +49,9 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
     const context = useContextUsage(sessionId, stream.events, busy);
     const saved = messages.data?.messages ?? NO_MESSAGES;
     useChatReadAloud(sessionId, stream, saved);
+    useTurnAnnouncer(stream, saved);
+    const refreshChanges = useRefreshTurnChanges(sessionId);
+    useTurnEnd(busy, () => void refreshChanges());
 
     const tail = buildTail(saved, stream);
     const lastReply = saved.filter((m) => m.role !== 'system').at(-1);
