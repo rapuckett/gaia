@@ -149,6 +149,7 @@ export const KeyScreen: PlanScreen = ({ ctx, close }) => {
             ) : (
                 <>
                     {usersServer ? null : <GetAKey provider={choice} />}
+                    <Text role="caption" tone="muted">{t('setup.models.cloudNote')}</Text>
                     <Prices provider={choice} picked={picked} onPick={setPicked} disabled={connect.isPending} inUse={inUse} />
                 </>
             )}
