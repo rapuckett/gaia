@@ -164,6 +164,7 @@ export function ChatScreen({ sessionId, onManageDocuments }: { sessionId: string
         <FileScope sessionId={sessionId}>
         <Screen
             keyboard="avoid"
+            footerBleed
             header={<ChatHeader sessionId={sessionId} onOpenSessionPanel={() => setPanelOpen(true)} onManageDocuments={onManageDocuments} />}
             footer={
                 <>
