@@ -76,7 +76,7 @@ export default function Model() {
     const row = listedInUse ?? (sameModelId(inUseRow?.id, active?.model) ? inUseRow : null);
 
     return (
-        <Stack gap="lg">
+        <Stack gap="lg" paddingX="lg" paddingY="md">
             <ModelInUse
                 active={active}
                 readFailed={!!activeQuery.error}
@@ -128,6 +128,14 @@ export default function Model() {
                         </Row>
                     ) : null}
                     {provider.remote ? <Notice tone="info" role="note" message={providerNotice(t, provider)} /> : null}
+                    {blocked ? <Notice tone="danger" message={t('settings.privacy.localOnlyBlocked')} /> : null}
+                    {offline ? (
+                        <Notice
+                            tone="danger"
+                            message={provider.network?.detail ?? undefined}
+                            action={{ label: t('settings.key.checkAgain'), onPress: () => void providersQuery.refetch() }}
+                        />
+                    ) : null}
                     <Disclosure title={t('settings.model.howItWorks')} open={howOpen} onToggle={() => setHowOpen((o) => !o)}>
                         <Stack gap="sm">
                             <Text role="caption" tone="muted">{t('settings.model.lede')}</Text>
@@ -141,14 +149,6 @@ export default function Model() {
                             <Text role="label" weight="medium" tone="secondary">{t('settings.model.prices')}</Text>
                             <CloudPrices provider={provider.id} />
                         </Stack>
-                    ) : null}
-                    {blocked ? <Notice tone="danger" message={t('settings.privacy.localOnlyBlocked')} /> : null}
-                    {offline ? (
-                        <Notice
-                            tone="danger"
-                            message={provider.network?.detail ?? undefined}
-                            action={{ label: t('settings.key.checkAgain'), onPress: () => void providersQuery.refetch() }}
-                        />
                     ) : null}
                     {modelsQuery.error ? <Notice tone="danger" message={errorText(modelsQuery.error, t)} /> : null}
                 </Stack>
