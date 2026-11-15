@@ -35,6 +35,8 @@ import type {
     ConnectorGrants,
     ConnectorList,
     ContextUsageResult,
+    CustomModelRemoved,
+    CustomModelReport,
     ConsolidateMemoryResult,
     DeleteDocumentResult,
     DeleteMessagesResult,
@@ -97,6 +99,7 @@ import {
     chatPerformancePath,
     chatPermissionsPath,
     providerConnectPath,
+    localCustomModelPath,
     providerModelsPath,
     followupOutcomePath,
     MESSAGE_PAGE_SIZE,
@@ -365,6 +368,26 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         listProviderModels(provider, options) {
             return getJson<ProviderModelsResponse>(providerModelsPath(provider), options?.signal);
+        },
+
+        downloadModel(model, options) {
+            return postJson<{ status: string; model: string }>(
+                ENDPOINTS.systemDownloadModel,
+                { model_name: model, force: options?.force ?? false, load_after: false },
+                options?.signal,
+            );
+        },
+
+        checkCustomModel(url, quant, options) {
+            return postJson<CustomModelReport>(ENDPOINTS.localCustomModelCheck, { url, quant: quant || null }, options?.signal);
+        },
+
+        addCustomModel(url, quant, options) {
+            return postJson<{ report: CustomModelReport }>(ENDPOINTS.localCustomModel, { url, quant: quant || null }, options?.signal);
+        },
+
+        removeCustomModel(model, options) {
+            return deleteJson<CustomModelRemoved>(localCustomModelPath(model), options?.signal);
         },
 
         selectModel(model, options) {

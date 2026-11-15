@@ -5,6 +5,7 @@ import type {
     ActiveModel,
     CloudPriceList,
     ContextChoice,
+    CustomModelReport,
     AgentCapabilities,
     AgentInfo,
     AgentMcpServer,
@@ -113,6 +114,10 @@ export interface FakeClientData {
     providerModels?: Record<string, ProviderModelsResponse>;
     /** What getContextChoice answers, by model; setContextChoice updates it. */
     contexts?: Record<string, ContextChoice>;
+    /** Makes downloadModel fail with this, as the PC's 403 does for a phone. */
+    modelDownloadError?: GaiaApiError;
+    /** What checkCustomModel answers, by link. */
+    customReports?: Record<string, CustomModelReport>;
     /** Makes selectModel fail with this. */
     selectError?: GaiaApiError;
     /** What getPermissions answers, by chat; a chat not listed asks first. */
@@ -210,6 +215,9 @@ export interface FakeGaiaClient extends GaiaClient {
     readonly followUps: { sessionId: string; text: string }[];
     readonly restarts: { confirm: boolean }[];
     readonly selected: string[];
+    readonly modelDownloads: { model: string; force: boolean }[];
+    readonly customAdds: { url: string; quant?: string }[];
+    readonly customRemoved: string[];
     readonly contextSets: { model: string; ctxSize: number | null }[];
     /** The files uploadFile took, in order. */
     readonly uploads: { name: string; size: number }[];
@@ -252,6 +260,9 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
     const activations: Record<string, Record<string, boolean>> = cloneNested(data.activations);
     const restarts: FakeGaiaClient['restarts'] = [];
     const selected: string[] = [];
+    const modelDownloads: FakeGaiaClient['modelDownloads'] = [];
+    const customAdds: FakeGaiaClient['customAdds'] = [];
+    const customRemoved: string[] = [];
     const contextSets: FakeGaiaClient['contextSets'] = [];
     const uploads: FakeGaiaClient['uploads'] = [];
     const downloads: FakeGaiaClient['downloads'] = [];
@@ -332,6 +343,9 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         followUps,
         restarts,
         selected,
+        modelDownloads,
+        customAdds,
+        customRemoved,
         contextSets,
         uploads,
         downloads,
@@ -403,6 +417,26 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         },
         async listProviderModels(provider) {
             return data.providerModels?.[provider] ?? { provider, models: [] };
+        },
+        async downloadModel(model, options) {
+            if (data.modelDownloadError) throw data.modelDownloadError;
+            modelDownloads.push({ model, force: options?.force ?? false });
+            return { status: 'downloading', model };
+        },
+        async checkCustomModel(url) {
+            const report = data.customReports?.[url];
+            if (!report) throw new GaiaApiError(422, 'This fake client was given no report for that link.');
+            return report;
+        },
+        async addCustomModel(url, quant) {
+            const report = data.customReports?.[url];
+            if (!report) throw new GaiaApiError(422, 'This fake client was given no report for that link.');
+            customAdds.push({ url, quant });
+            return { report };
+        },
+        async removeCustomModel(model) {
+            customRemoved.push(model);
+            return { removed: model, display_name: model, cleared: [] };
         },
         async selectModel(model) {
             if (data.selectError) throw data.selectError;

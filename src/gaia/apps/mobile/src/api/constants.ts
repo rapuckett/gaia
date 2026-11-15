@@ -15,6 +15,9 @@ export const ENDPOINTS = {
     cloudPrices: '/api/spending/prices/{provider}',
     lemonadeDetect: '/api/lemonade/detect',
     lemonadeTarget: '/api/lemonade/target',
+    localCustomModel: '/api/providers/local/custom',
+    localCustomModelCheck: '/api/providers/local/custom/check',
+    localCustomModelItem: '/api/providers/local/custom/{model_id}',
     localModelContext: '/api/providers/local/context',
     localModelRestart: '/api/providers/local/restart',
     localModelStatus: '/api/providers/local/status',
@@ -82,6 +85,7 @@ export const ENDPOINTS = {
     connectorGrants: '/api/connectors/{connector_id}/grants',
     connectors: '/api/connectors',
     connectorsAgentMcps: '/api/connectors/agent-mcps',
+    systemDownloadModel: '/api/system/download-model',
     systemResources: '/api/system/resources',
     systemStatus: '/api/system/status',
     document: '/api/documents/{doc_id}',
@@ -168,6 +172,10 @@ export function cloudPricesPath(provider: string): string {
 
 export function providerModelsPath(provider: string): string {
     return ENDPOINTS.providerModels.replace('{provider}', encodeURIComponent(provider));
+}
+
+export function localCustomModelPath(model: string): string {
+    return ENDPOINTS.localCustomModelItem.replace('{model_id}', encodeURIComponent(model));
 }
 
 export function chatContextPath(sessionId: string): string {

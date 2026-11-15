@@ -12,6 +12,8 @@ import type {
     ConnectorListEntry,
     ContextChoice,
     ContextUsageResult,
+    CustomModelRemoved,
+    CustomModelReport,
     GpuMemoryStatus,
     LemonadeFound,
     LemonadeTarget,
@@ -53,6 +55,8 @@ export type {
     ContextChoice,
     ContextUsage,
     ContextUsageResult,
+    CustomModelRemoved,
+    CustomModelReport,
     GpuMemoryStatus,
     LemonadeFound,
     LemonadeTarget,
@@ -341,6 +345,14 @@ export interface GaiaClient {
     /** A cloud provider's list prices, readable before it is connected. */
     /** One provider's chat models; `local` also carries each one's state, size and download. */
     listProviderModels(provider: string, options?: RequestOptions): Promise<ProviderModelsResponse>;
+    /** Starts a model's download on the PC; its progress is on the model's row in `listProviderModels`. */
+    downloadModel(model: string, options?: { force?: boolean } & RequestOptions): Promise<{ status: string; model: string }>;
+    /** Checks a pasted Hugging Face link; nothing is saved or downloaded. `quant` is a quantization or one of its file names. */
+    checkCustomModel(url: string, quant?: string, options?: RequestOptions): Promise<CustomModelReport>;
+    /** Adds the model a link names to the list; it downloads on request. */
+    addCustomModel(url: string, quant?: string, options?: RequestOptions): Promise<{ report: CustomModelReport }>;
+    /** Removes a model the person added, and its download. */
+    removeCustomModel(model: string, options?: RequestOptions): Promise<CustomModelRemoved>;
     /** Makes `model` the one new messages use; a cloud model is picked after the person agrees to what leaves the PC. */
     selectModel(model: string, options?: RequestOptions): Promise<ActiveModel>;
     /** The chat's permission mode and the tools it always allows. */

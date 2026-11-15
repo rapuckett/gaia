@@ -8,6 +8,7 @@ export * from './context';
 export * from './documents';
 export * from './GaiaClientProvider';
 export * from './memory';
+export * from './modelList';
 export * from './modelMenu';
 export * from './models';
 export * from './mutations';
