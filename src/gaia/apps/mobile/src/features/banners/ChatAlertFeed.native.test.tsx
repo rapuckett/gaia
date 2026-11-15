@@ -11,6 +11,7 @@ import { useChatAlertBannerStore } from '@/state/chatAlertBanner';
 import { IDLE_TURN, useChatStreamStore, type ChatTurn, type PermissionRequest } from '@/state/chatStreams';
 
 import { ChatAlertFeed } from './ChatAlertFeed';
+import { FINISHED_ALERT_MS } from './chatAlerts';
 
 let mockPathname = '/chat/b';
 const mockSound = jest.fn();
@@ -50,5 +51,21 @@ describeNative('ChatAlertFeed', () => {
         await act(async () => useChatStreamStore.setState({ turns: { b: asking } }));
         expect(useChatAlertBannerStore.getState().alert).toBeNull();
         expect(mockSound).not.toHaveBeenCalled();
+    });
+
+    it('lets a finished banner go on its own but keeps an approval until it is answered', async () => {
+        jest.useFakeTimers();
+        try {
+            await render(<ChatAlertFeed />);
+            await act(async () => useChatAlertBannerStore.getState().show({ sessionId: 'a', event: 'finished', tone: 'success', title: 'Done', message: 'Trip' }));
+            await act(async () => jest.advanceTimersByTime(FINISHED_ALERT_MS));
+            expect(useChatAlertBannerStore.getState().alert).toBeNull();
+
+            await act(async () => useChatAlertBannerStore.getState().show({ sessionId: 'a', event: 'needs_approval', tone: 'warning', title: 'Approve', message: 'Trip' }));
+            await act(async () => jest.advanceTimersByTime(FINISHED_ALERT_MS * 5));
+            expect(useChatAlertBannerStore.getState().alert).not.toBeNull();
+        } finally {
+            jest.useRealTimers();
+        }
     });
 });

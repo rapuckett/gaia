@@ -72,7 +72,9 @@ describeNative('Messaging pane', () => {
         expect(screen.getByText('Change this on the PC running GAIA.')).toBeTruthy();
         expect(secretFields()).toHaveLength(0);
         expect(screen.queryByPlaceholderText('Paste the bot token')).toBeNull();
-        expect(screen.queryByText('Connect')).toBeNull();
+        fireEvent.press(screen.getByTestId('messaging-connect'));
+        expect(await screen.findByTestId('messaging-connect-refusal')).toBeTruthy();
+        expect(secretFields()).toHaveLength(0);
         queryClient.clear();
     });
 

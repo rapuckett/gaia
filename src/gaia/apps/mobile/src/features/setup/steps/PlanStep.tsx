@@ -202,7 +202,7 @@ export function PlanStep({ ctx }: { ctx: SetupStepContext }) {
     const cloudBlocked = cloudIsBlocked(useCloudProviders().data?.providers);
     const start = useStartSetup();
     const backend = useApplyTestedBackend();
-    const { selection, setSelection } = usePlanSelection();
+    const { selection, setSelection, keepTrying } = usePlanSelection();
     const [where, setWhere] = useState<Where>('local');
     const [listOpen, setListOpen] = useState(false);
     const [detailsOpen, setDetailsOpen] = useState(false);
@@ -222,7 +222,7 @@ export function PlanStep({ ctx }: { ctx: SetupStepContext }) {
             <Stack gap="md">
                 <Notice tone="danger" message={describeError(planQuery.error, t)} />
                 <SetupFooter>
-                    <Button variant="secondary" label={t('setup.models.useRecommended')} disabled={start.isPending} onPress={() => goStart({ keepTrying: false })} />
+                    <Button variant="secondary" label={t('setup.models.useRecommended')} disabled={start.isPending} onPress={() => goStart({ keepTrying })} />
                     <Button variant="primary" label={t('setup.tryAgain')} onPress={() => void planQuery.refetch()} />
                 </SetupFooter>
                 <Text role="caption" tone="secondary">{t('setup.models.useRecommendedNote')}</Text>
@@ -244,7 +244,7 @@ export function PlanStep({ ctx }: { ctx: SetupStepContext }) {
     const picked: Where = cloudBlocked ? 'local' : where;
     const cloud = picked === 'cloud';
     const busy = start.isPending || backend.isPending;
-    const proceed = (acknowledgeLowDisk: boolean) => goLocal(startOptions(plan, selection, acknowledgeLowDisk));
+    const proceed = (acknowledgeLowDisk: boolean) => goLocal(startOptions(plan, selection, acknowledgeLowDisk, keepTrying));
     const onContinue = () => {
         if (cloud) openers.openKey?.();
         else if (short && openers.confirmLowDisk) openers.confirmLowDisk(short, proceed);

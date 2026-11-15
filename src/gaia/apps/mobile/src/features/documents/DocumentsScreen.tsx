@@ -20,6 +20,8 @@ import { TargetChooser, type LibraryTarget } from './TargetChooser';
 export interface DocumentsScreenProps {
     // The chat the library was opened from, if any.
     chatId?: string;
+    // Opens the PC's file browser for a chat.
+    onBrowseFiles?: (chatId: string) => void;
 }
 
 // A failed library action (remove, cancel) shows here until dismissed; only one shows at a time.
@@ -36,18 +38,18 @@ interface OpenChat {
     documentIds: readonly string[];
 }
 
-export function DocumentsScreen({ chatId }: DocumentsScreenProps) {
-    return chatId ? <ChatLibrary chatId={chatId} /> : <Library chat={null} />;
+export function DocumentsScreen({ chatId, onBrowseFiles }: DocumentsScreenProps) {
+    return chatId ? <ChatLibrary chatId={chatId} onBrowseFiles={onBrowseFiles} /> : <Library chat={null} />;
 }
 
-function ChatLibrary({ chatId }: { chatId: string }) {
+function ChatLibrary({ chatId, onBrowseFiles }: { chatId: string; onBrowseFiles?: (chatId: string) => void }) {
     const t = useT();
     const session = useSession(chatId);
     const title = session.data?.title || t.bare('docs.untitledChat');
-    return <Library chat={{ id: chatId, title, name: `“${title}”`, documentIds: session.data?.document_ids ?? [] }} />;
+    return <Library chat={{ id: chatId, title, name: `“${title}”`, documentIds: session.data?.document_ids ?? [] }} onBrowseFiles={onBrowseFiles} />;
 }
 
-function Library({ chat }: { chat: OpenChat | null }) {
+function Library({ chat, onBrowseFiles }: { chat: OpenChat | null; onBrowseFiles?: (chatId: string) => void }) {
     const t = useT();
     const { space } = useTheme();
     const query = useDocuments();
@@ -97,7 +99,7 @@ function Library({ chat }: { chat: OpenChat | null }) {
     };
     const attachedIds = targetChat ? targetChat.documentIds : nextIds;
     const loadFailed = query.isError ? t.compose((say) => say('docs.loadFailed', { error: describeErrorWith(query.error, say) })) : null;
-    const adder = <AddDocuments chatId={targetChat?.id ?? null} chatName={chat?.name ?? null} onStart={action.dismiss} />;
+    const adder = <AddDocuments chatId={targetChat?.id ?? null} chatName={chat?.name ?? null} onStart={action.dismiss} onBrowse={onBrowseFiles} />;
     const retry = { label: t('docs.loadRetry'), onPress: () => void query.refetch() };
 
     return (
