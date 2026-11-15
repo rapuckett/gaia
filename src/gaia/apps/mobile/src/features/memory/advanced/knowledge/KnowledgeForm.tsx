@@ -95,7 +95,7 @@ export function KnowledgeForm({ item, add, edit, notify, onSaved, onCancel }: Kn
                 value={values.content}
                 onChangeText={(text) => set('content', text)}
                 label={t('mem.col.content')}
-                placeholder={t('mem.form.contentPlaceholder')}
+                placeholder={t.bare('mem.form.contentPlaceholder')}
                 multiline
                 maxLines={6}
                 testID="memory-knowledge-form-content"
@@ -109,6 +109,7 @@ export function KnowledgeForm({ item, add, edit, notify, onSaved, onCancel }: Kn
                         <Chip
                             key={category}
                             label={categoryLabel(category, undefined, t, true)}
+                            accessibilityLabel={categoryLabel(category, undefined, t, false)}
                             selected={values.category === category}
                             onPress={() => set('category', category)}
                             testID={`memory-knowledge-form-category-${category}`}
@@ -117,8 +118,8 @@ export function KnowledgeForm({ item, add, edit, notify, onSaved, onCancel }: Kn
                 </Row>
             </Stack>
             <TextField value={values.context} onChangeText={(text) => set('context', text)} label={t('mem.col.context')} placeholder="global" />
-            <TextField value={values.domain} onChangeText={(text) => set('domain', text)} label={t('mem.detail.domain')} placeholder={t('mem.form.domainPlaceholder')} />
-            <TextField value={values.entity} onChangeText={(text) => set('entity', text)} label={t('mem.col.entity')} placeholder={t('mem.form.entityPlaceholder')} />
+            <TextField value={values.domain} onChangeText={(text) => set('domain', text)} label={t('mem.detail.domain')} placeholder={t.bare('mem.form.domainPlaceholder')} />
+            <TextField value={values.entity} onChangeText={(text) => set('entity', text)} label={t('mem.col.entity')} placeholder={t.bare('mem.form.entityPlaceholder')} />
             <TextField
                 value={values.when}
                 onChangeText={(text) => set('when', text)}

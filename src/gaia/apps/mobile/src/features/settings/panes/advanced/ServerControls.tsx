@@ -141,7 +141,7 @@ function McpCard() {
     return (
         <SettingCard
             title={t('settings.advanced.mcp')}
-            trailing={<Badge label={String(servers.length)} />}
+            trailing={<Badge shape="pill" label={String(servers.length)} />}
             open={open}
             onToggle={() => setPicked(!open)}
             testID="advanced-mcp"

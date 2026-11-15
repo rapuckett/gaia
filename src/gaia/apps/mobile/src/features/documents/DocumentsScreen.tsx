@@ -22,6 +22,8 @@ export interface DocumentsScreenProps {
     chatId?: string;
     // Opens the PC's file browser for a chat.
     onBrowseFiles?: (chatId: string) => void;
+    // Opens a library document's preview and share screen, from the chat the library was opened from.
+    onPreview?: (chatId: string, docId: string, name: string) => void;
 }
 
 // A failed library action (remove, cancel) shows here until dismissed; only one shows at a time.
@@ -38,18 +40,18 @@ interface OpenChat {
     documentIds: readonly string[];
 }
 
-export function DocumentsScreen({ chatId, onBrowseFiles }: DocumentsScreenProps) {
-    return chatId ? <ChatLibrary chatId={chatId} onBrowseFiles={onBrowseFiles} /> : <Library chat={null} />;
+export function DocumentsScreen({ chatId, onBrowseFiles, onPreview }: DocumentsScreenProps) {
+    return chatId ? <ChatLibrary chatId={chatId} onBrowseFiles={onBrowseFiles} onPreview={onPreview} /> : <Library chat={null} />;
 }
 
-function ChatLibrary({ chatId, onBrowseFiles }: { chatId: string; onBrowseFiles?: (chatId: string) => void }) {
+function ChatLibrary({ chatId, onBrowseFiles, onPreview }: { chatId: string; onBrowseFiles?: (chatId: string) => void; onPreview?: DocumentsScreenProps['onPreview'] }) {
     const t = useT();
     const session = useSession(chatId);
     const title = session.data?.title || t.bare('docs.untitledChat');
-    return <Library chat={{ id: chatId, title, name: `“${title}”`, documentIds: session.data?.document_ids ?? [] }} onBrowseFiles={onBrowseFiles} />;
+    return <Library chat={{ id: chatId, title, name: `“${title}”`, documentIds: session.data?.document_ids ?? [] }} onBrowseFiles={onBrowseFiles} onPreview={onPreview} />;
 }
 
-function Library({ chat, onBrowseFiles }: { chat: OpenChat | null; onBrowseFiles?: (chatId: string) => void }) {
+function Library({ chat, onBrowseFiles, onPreview }: { chat: OpenChat | null; onBrowseFiles?: (chatId: string) => void; onPreview?: DocumentsScreenProps['onPreview'] }) {
     const t = useT();
     const { space } = useTheme();
     const query = useDocuments();
@@ -166,6 +168,7 @@ function Library({ chat, onBrowseFiles }: { chat: OpenChat | null; onBrowseFiles
                             now={view.now}
                             retrying={reindex.isPending && reindex.variables === item.id}
                             attach={attachedIds.includes(item.id) ? undefined : { chatName: targetChat?.name ?? null, onAttach }}
+                            onPreview={chat && onPreview ? (docId, name) => onPreview(chat.id, docId, name) : undefined}
                             onCancel={onCancel}
                             onRetry={onRetry}
                             onRemove={onRemove}

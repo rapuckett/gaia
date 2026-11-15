@@ -15,6 +15,7 @@ import { useT } from '@/i18n/useT';
 import { useLastChatStore } from '@/state/lastChat';
 import { useRouteNoticeStore } from '@/state/routeNotice';
 import { Disclosure, IconButton, Notice, ProgressLine, Row, Screen, Stack, Surface, Text } from '@/ui';
+import { DotGrid } from '@/ui/controls/DotGrid';
 import { X } from '@/ui/icons';
 
 import { DocumentBriefCard } from './DocumentBriefCard';
@@ -132,6 +133,7 @@ export function NewChatScreen({ onOpen, onChooseDocuments, initialText = '', pro
         <Screen
             keyboard="avoid"
             scroll
+            backdrop={<DotGrid />}
             header={<ScreenHeader />}
             footer={
                 <>

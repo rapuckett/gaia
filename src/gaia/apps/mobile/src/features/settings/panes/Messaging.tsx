@@ -3,7 +3,6 @@
 
 import * as Clipboard from 'expo-clipboard';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { Linking } from 'react-native';
 
 import type { Translate } from '@webui/i18n/translator';
 
@@ -14,22 +13,25 @@ import { useDeviceRefused } from '@/api/routeAccess';
 import { useDiscordStatus } from '@/data';
 import { PcOnlyAction } from '@/features/logs/PcOnlyAction';
 import { useT } from '@/i18n/useT';
+import { openLinkFromPress } from '@/platform/openLink';
 import { Badge, Button, Card, Disclosure, Ltr, Notice, Row, Spinner, Stack, StatusDot, Surface, Text } from '@/ui';
 import { Check, Copy, ExternalLink, Link2, Play, Plug, RefreshCw, RotateCw, Square, Trash2, Zap, type LucideIcon } from '@/ui/icons';
+
+import { isolate } from './model/modelText';
 
 // Every /api/messaging route is PC-only (the status carries the pairing code, the POSTs the bot
 // token), so the phone reads what it is allowed to and offers no action the PC would refuse.
 
-/** Discord's own button names, as webui's MessagingSettings quotes them. */
+/** Discord's own button names, as webui's MessagingSettings quotes them; isolated so the quotes and period stay in order in Arabic. */
 const PORTAL = {
-    newApp: 'New Application',
-    create: 'Create',
-    bot: 'Bot',
-    reset: 'Reset Token',
-    copy: 'Copy',
-    message: 'Message',
-    createOwn: 'Create My Own',
-    forFriends: 'For me and my friends',
+    newApp: isolate('New Application'),
+    create: isolate('Create'),
+    bot: isolate('Bot'),
+    reset: isolate('Reset Token'),
+    copy: isolate('Copy'),
+    message: isolate('Message'),
+    createOwn: isolate('Create My Own'),
+    forFriends: isolate('For me and my friends'),
 };
 
 const PROBLEMS = new Set<DiscordState>(['error', 'taken_over', 'token_invalid', 'credentials_unavailable', 'conflict']);
@@ -41,7 +43,7 @@ function formatCode(code: string): string {
 }
 
 function open(url: string) {
-    Linking.openURL(url).catch((error: unknown) => console.error(`Opening ${url} failed`, error));
+    openLinkFromPress(url);
 }
 
 function LinkButton({ url, label, primary }: { url: string; label: string; primary?: boolean }) {
@@ -51,7 +53,7 @@ function LinkButton({ url, label, primary }: { url: string; label: string; prima
 function Step({ n, title, children }: { n: number; title: string; children?: ReactNode }) {
     return (
         <Row gap="md" align="start">
-            <Badge label={String(n)} />
+            <Badge shape="pill" label={String(n)} />
             <Stack gap="sm" flex={1}>
                 <Text role="label" weight="semibold" accessibilityRole="header">
                     {title}

@@ -43,13 +43,14 @@ import type {
     Settings,
     SkillInfo,
     SpendingReport,
+    ChatSpending,
     StartScreen,
     StreamEvent,
     SystemStatus,
 } from '@webui/types';
 import type { FileDiff, TurnChanges, UndoResult, UndoSettings } from '@webui/types/changes';
 import type { DiscordStatus } from '@webui/services/messagingApi';
-import type { AgentCapabilities, SessionEnvironment } from '@webui/types/sessionPanel';
+import type { AgentCapabilities, SessionChanges, SessionEnvironment, SessionGit, SessionOutputs, UndoAllResult } from '@webui/types/sessionPanel';
 import type { DiscoveryFinding, Goal, GoalStats, InferenceInsight, KnowledgeCreateBody, KnowledgeListParams, KnowledgeSaveResult, KnowledgeUpdateBody, MemoryCleared, MemoryReinitializeResult, MemorySettings, MemorySettingsUpdateResponse, Priority as GoalPriority } from '@webui/services/memoryApi';
 import type { SpeechModel, SpeechSettings } from '@webui/services/speechApi';
 import type { AboutYouItem, ActivityDay, ConvSession, ConvTurn, EntityInfo, KnowledgeEntry, TemporalItem, ToolStat } from '@webui/utils/memoryFormat.core';
@@ -120,13 +121,14 @@ export type {
     SkillInfo,
     SkillSource,
     SpendingReport,
+    ChatSpending,
     StartScreen,
     StreamEvent,
     SystemStatus,
     UnavailableConnectorRow,
 } from '@webui/types';
 export type { FileDiff, TurnChanges, UndoResult, UndoSettings } from '@webui/types/changes';
-export type { ActiveSkill, AgentCapabilities, AgentTool, ScopeEntry, SessionEnvironment, SkillOrigin } from '@webui/types/sessionPanel';
+export type { ActiveSkill, AgentCapabilities, AgentTool, ChatFileChange, GitRepo, OutputItem, OutputKind, ScopeEntry, SessionChanges, SessionEnvironment, SessionGit, SessionOutputs, SkillOrigin, UndoAllResult } from '@webui/types/sessionPanel';
 export type { BrowseResponse, CreateSessionRequest, DocumentListResponse, DocumentResponse, FileEntry, FileSearchResponse, FileSearchResult, ModelServerInfo, QuickLink, ProviderSummary, ProviderSummaryList, SessionSearchResponse, SessionSearchResult, ToolConfirmRequest, FilePreviewResponse } from '@webui/types/api.gen';
 
 /** A photo or file chosen on this phone: where it is, and what it is called. */
@@ -143,6 +145,10 @@ export type UserInputRequest = ApiUserInputRequest & { display?: string };
 export interface SessionList {
     sessions: Session[];
     total: number;
+}
+
+export interface FileStatusList {
+    files: { path: string; exists?: boolean | null; mtime?: number | null }[];
 }
 
 export interface MessageList {
@@ -411,6 +417,8 @@ export interface GaiaClient {
     createSession(request?: CreateSessionRequest, options?: RequestOptions): Promise<Session>;
     /** Sends a file to the PC; recordings go to the transcription folder. Rejects with the PC's refusal (type, size, empty). */
     uploadFile(file: Blob, name: string, options?: RequestOptions): Promise<UploadedFile>;
+    /** The chat as Markdown, the same text the desktop's Export saves. */
+    exportSessionMarkdown(sessionId: string, options?: RequestOptions): Promise<{ content: string }>;
     setSessionPinned(sessionId: string, pinned: boolean, options?: RequestOptions): Promise<Session>;
     /** The file changes each turn of the chat made. */
     listTurnChanges(sessionId: string, options?: RequestOptions): Promise<{ turns: TurnChanges[] }>;
@@ -418,6 +426,16 @@ export interface GaiaClient {
     getTurnDiff(sessionId: string, turnId: string, options?: RequestOptions): Promise<{ turn_id: string; files: FileDiff[] }>;
     /** Puts the turn's files back; rejects with a 409 naming a file changed since, unless `force`. */
     undoTurn(sessionId: string, turnId: string, force?: boolean, options?: RequestOptions): Promise<UndoResult>;
+    /** Every file the chat changed, across turns, with totals and diffs. */
+    getSessionChanges(sessionId: string, options?: RequestOptions): Promise<SessionChanges>;
+    /** Puts every file the chat changed back; rejects with 409 `conflict` when one changed since, unless `force`. */
+    undoAllChanges(sessionId: string, force?: boolean, options?: RequestOptions): Promise<UndoAllResult>;
+    /** The git repositories the chat's files are in, with a drafted message for each. */
+    getSessionGit(sessionId: string, options?: RequestOptions): Promise<SessionGit>;
+    /** Commits the chat's files in a repo on the PC; runs only when the person confirmed it. */
+    commitChanges(sessionId: string, root: string, message: string, options?: RequestOptions): Promise<{ root: string; commit: string; files: string[]; ignored: string[] }>;
+    /** Pushes the repo's branch and opens a pull request with `gh` on the PC; runs only when the person confirmed it. */
+    createPullRequest(sessionId: string, root: string, title: string, body: string, options?: RequestOptions): Promise<{ root: string; url: string }>;
     /** Deletes the chat and its messages; a turn still running on it is stopped first. */
     deleteSession(sessionId: string, options?: RequestOptions): Promise<DeleteSessionResult>;
     /** Clears the chat's unread mark. */
@@ -482,6 +500,10 @@ export interface GaiaClient {
     getCapabilities(sessionId: string, options?: RequestOptions): Promise<AgentCapabilities>;
     /** The folders this chat may touch and whether its web tools are on. */
     getEnvironment(sessionId: string, options?: RequestOptions): Promise<SessionEnvironment>;
+    /** Everything the chat produced, newest first. */
+    getOutputs(sessionId: string, options?: RequestOptions): Promise<SessionOutputs>;
+    /** Gives the chat a folder on the PC; rejects with 400 when the PC refuses it (too broad, missing). */
+    addEnvironmentFolder(sessionId: string, path: string, options?: RequestOptions): Promise<SessionEnvironment>;
     /** Takes a folder or file away from the chat; rejects with 409 when the PC refuses. */
     removeEnvironmentFolder(sessionId: string, path: string, options?: RequestOptions): Promise<SessionEnvironment>;
     /** Turns the chat's web tools on or off; rejects with 409 or 502 when the PC can't apply it. */
@@ -653,6 +675,8 @@ export interface GaiaClient {
     reindexDocument(docId: string, options?: RequestOptions): Promise<DocumentResponse>;
     /** A PC file's first lines (or its columns, or just its details) as the chat's folders allow; rejects with 403 for a file this chat may not read. */
     getFilePreview(path: string, sessionId: string, options?: RequestOptions): Promise<FilePreviewResponse>;
+    /** Whether each path still exists on the PC and when it last changed; unchecked outside the PC user's home folder. */
+    getFileStatus(paths: string[], options?: RequestOptions): Promise<FileStatusList>;
     /** An image on the PC, as bytes; the chat's id is what lets a phone read it. */
     getImageBytes(path: string, sessionId: string, options?: RequestOptions): Promise<Uint8Array>;
     /** A library document's file, as bytes; the chat's id is what lets a phone read it. */
@@ -709,6 +733,8 @@ export interface GaiaClient {
     getCloudPrices(provider: string, options?: RequestOptions): Promise<CloudPriceList>;
     /** This month's cloud spending at list price, the monthly limit and where it stands. */
     getSpending(options?: RequestOptions): Promise<SpendingReport>;
+    /** This chat's cloud spending and every chat's since `since` (the local day's start), for `model`. */
+    getChatSpending(sessionId: string, since: string, model: string | null, options?: RequestOptions): Promise<ChatSpending>;
     /** Sets the monthly limit in dollars; null removes it. Answers with the new report. */
     setSpendingLimit(limitUsd: number | null, options?: RequestOptions): Promise<SpendingReport>;
     /** Lets cloud chats go on past the limit until the month ends. */

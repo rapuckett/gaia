@@ -35,10 +35,10 @@ import {
     Text,
     useTheme,
 } from '@/ui';
-import { ArrowUp, Check, ChevronDown, ChevronRight, Code, File, FileText, Folder, House, Monitor, Download, Table, X } from '@/ui/icons';
+import { ArrowUp, Brain, Check, ChevronDown, ChevronRight, Code, Eye, File, FileText, Folder, House, Monitor, Download, Table, X } from '@/ui/icons';
 import type { LucideIcon } from '@/ui/icons';
 
-import { breadcrumbs, emptyKey, FILE_TYPE_FILTERS, folderName, QUICK_LINK_LABELS, visibleEntries } from './fileBrowserModel';
+import { askPrompt, breadcrumbs, canAct, emptyKey, FILE_TYPE_FILTERS, folderName, QUICK_LINK_LABELS, visibleEntries } from './fileBrowserModel';
 
 const QUICK_LINK_ICONS: Record<string, LucideIcon> = { home: House, desktop: Monitor, documents: FileText, download: Download };
 
@@ -89,11 +89,15 @@ export interface FileBrowserScreenProps {
     // The chat the files are added to; away from the PC it also names the folders the PC shows.
     chatId: string;
     onClose: () => void;
+    // Opens a file's preview screen.
+    onPreview?: (path: string) => void;
+    // Sends the question into the chat the files were added to; false when that chat isn't open.
+    onAsk?: (prompt: string) => boolean;
     // Where the browser opens, for the dev gallery's scenes.
-    initial?: { path?: string; search?: string };
+    initial?: { path?: string; search?: string; selected?: string[] };
 }
 
-export function FileBrowserScreen({ chatId, onClose, initial }: FileBrowserScreenProps) {
+export function FileBrowserScreen({ chatId, onClose, onPreview, onAsk, initial }: FileBrowserScreenProps) {
     const t = useT();
     const preflight = useSetupPreflight();
     const pcIsMac = /^(mac|darwin)/i.test(preflight.data?.os ?? '');
@@ -104,7 +108,7 @@ export function FileBrowserScreen({ chatId, onClose, initial }: FileBrowserScree
     const [typeFilter, setTypeFilter] = useState('');
     const [filterOpen, setFilterOpen] = useState(false);
     const [showHidden, setShowHidden] = useState(false);
-    const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
+    const [selected, setSelected] = useState<ReadonlySet<string>>(new Set(initial?.selected));
     const [quickLinks, setQuickLinks] = useState<QuickLink[]>([]);
     const [result, setResult] = useState<{ tone: 'success' | 'danger'; message: string } | null>(null);
 
@@ -153,14 +157,23 @@ export function FileBrowserScreen({ chatId, onClose, initial }: FileBrowserScree
             return next;
         });
 
-    const addSelected = () => {
+    const addSelected = (ask: boolean) => {
         setResult(null);
         add.mutate(
             { paths: chosen, chatId },
             {
                 onSuccess: ({ added, unreadable, failures }) => {
                     const bad = unreadable.length + failures.length;
-                    if (bad > 0) {
+                    if (ask) {
+                        if (added.length === 0) {
+                            setResult({ tone: 'danger', message: t('fileBrowser.addedWithFailures', { added: 0, failed: bad }) });
+                            return;
+                        }
+                        if (bad > 0) setResult({ tone: 'danger', message: t.plural('fileBrowser.someFailed', bad) });
+                        const names = added.map((d) => d.filename);
+                        if (onAsk?.(askPrompt(names, t))) setSelected(new Set());
+                        else setResult({ tone: 'danger', message: t('mobileApp.files.askNoChat') });
+                    } else if (bad > 0) {
                         setResult({ tone: 'danger', message: t('fileBrowser.addedWithFailures', { added: added.length, failed: bad }) });
                     } else {
                         setResult({ tone: 'success', message: t.plural('fileBrowser.added', added.length) });
@@ -197,7 +210,8 @@ export function FileBrowserScreen({ chatId, onClose, initial }: FileBrowserScree
                     <Text role="caption" tone="secondary">
                         {add.isPending ? t.plural('fileBrowser.adding', chosen.length) : chosen.length > 0 ? t.plural('fileBrowser.selected', chosen.length) : t('fileBrowser.selectHint')}
                     </Text>
-                    <Button label={t('fileBrowser.addToLibrary')} full disabled={chosen.length === 0 || add.isPending} onPress={addSelected} />
+                    <Button label={t('fileBrowser.askGaia')} icon={Brain} variant="primary" full disabled={!canAct(chosen.length, add.isPending)} onPress={() => addSelected(true)} />
+                    <Button label={t('fileBrowser.addToLibrary')} variant="secondary" full disabled={!canAct(chosen.length, add.isPending)} onPress={() => addSelected(false)} />
                 </Stack>
             }
         >
@@ -260,7 +274,7 @@ export function FileBrowserScreen({ chatId, onClose, initial }: FileBrowserScree
                                         {crumbs.map((crumb, i) => (
                                             <Row key={crumb.path} gap="xs">
                                                 {i > 0 ? <Icon icon={ChevronRight} size="sm" tone="muted" /> : null}
-                                                <Pressable accessibilityLabel={crumb.label} onPress={() => open(crumb.path)}>
+                                                <Pressable inline accessibilityLabel={crumb.label} onPress={() => open(crumb.path)}>
                                                     <Text role="label" tone={i === crumbs.length - 1 ? 'primary' : 'secondary'}>
                                                         {crumb.label}
                                                     </Text>
@@ -310,7 +324,14 @@ export function FileBrowserScreen({ chatId, onClose, initial }: FileBrowserScree
                                     )
                                 }
                                 trailing={
-                                    isFolder ? <Icon icon={ChevronRight} size="sm" tone="muted" /> : unsupported ? <Badge label={t('fileBrowser.notIndexable')} tone="warning" /> : undefined
+                                    isFolder ? (
+                                        <Icon icon={ChevronRight} size="sm" tone="muted" />
+                                    ) : (
+                                        <Row gap="xs">
+                                            {unsupported ? <Badge label={t('fileBrowser.notIndexable')} tone="warning" /> : null}
+                                            {onPreview ? <IconButton icon={Eye} label={t('fileBrowser.previewAria', { name: item.name })} onPress={() => onPreview(item.path)} /> : null}
+                                        </Row>
+                                    )
                                 }
                             />
                         );

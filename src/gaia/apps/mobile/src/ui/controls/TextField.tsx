@@ -94,7 +94,7 @@ export function TextField({
         trailing
     );
     const size = Math.max(type.body, metrics.inputFontSize);
-    const lineHeight = Math.round(size * 1.4);
+    const lineHeight = Math.round(size * (rtl ? metrics.lineHeightAr : 1.4));
     const { fontScale } = useWindowDimensions();
     const borderColor = error ? colors.danger : focused ? colors.accent : colors.border;
     return (
