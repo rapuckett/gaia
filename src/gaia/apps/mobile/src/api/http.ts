@@ -52,6 +52,7 @@ import type {
     DocumentStatus,
     EmbeddingCoverage,
     FilePreviewResponse,
+    FileStatusList,
     FollowUpOutcome,
     FollowUpResult,
     DeleteSessionResult,
@@ -101,6 +102,7 @@ import type {
     ScheduleResults,
     SessionEnvironment,
     SessionList,
+    SessionOutputs,
     SessionPermissions,
     SessionSearchResponse,
     SetupCheck,
@@ -163,6 +165,7 @@ import {
     SESSION_EVENTS_IDLE_MS,
     SESSION_PAGE_SIZE,
     sessionCapabilitiesPath,
+    sessionOutputsPath,
     sessionDocumentPath,
     sessionDocumentsPath,
     sessionEnvironmentPath,
@@ -649,6 +652,10 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             return getJson<AgentCapabilities>(sessionCapabilitiesPath(sessionId), options?.signal);
         },
 
+        getOutputs(sessionId, options) {
+            return getJson<SessionOutputs>(sessionOutputsPath(sessionId), options?.signal);
+        },
+
         getEnvironment(sessionId, options) {
             return getJson<SessionEnvironment>(sessionEnvironmentPath(sessionId), options?.signal);
         },
@@ -1014,6 +1021,10 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         deleteDocument(docId, options) {
             return deleteJson<DeleteDocumentResult>(documentPath(docId), options?.signal);
+        },
+
+        getFileStatus(paths, options) {
+            return postJson<FileStatusList>(ENDPOINTS.filesStatus, { paths }, options?.signal);
         },
 
         getFilePreview(path, sessionId, options) {

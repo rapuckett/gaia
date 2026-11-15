@@ -4,14 +4,15 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 
-import type { ChatPerformance, ContextUsage, LocalModelStatus, Session, SessionEnvironment } from '@/api/client.types';
+import type { ChatPerformance, ContextUsage, LocalModelStatus, Message, OutputItem, Session, SessionEnvironment } from '@/api/client.types';
 import { createFakeClient } from '@/api/fake';
 import { GaiaApiError } from '@/api/errors';
 import { GaiaClientProvider } from '@/data';
 import { FIXTURES } from '@/features/chat/messages/__fixtures__/messages';
 import { MessageListView } from '@/features/chat/messages/MessageList';
 import { Screen } from '@/ui';
-import type { TurnPerformance } from '@webui/types';
+import { IDLE_TURN, writeTurn } from '@/state/chatStreams';
+import type { TurnPerformance, TurnSummary } from '@webui/types';
 
 import { useSessionPanelStore } from './panelStore';
 import { SessionPanel } from './SessionPanel';
@@ -32,11 +33,69 @@ export type SessionPanelGalleryState =
     | 'envRemove'
     | 'envOffline'
     | 'envFull'
-    | 'envEmpty';
+    | 'envEmpty'
+    | 'ansFull'
+    | 'ansPending'
+    | 'ansNoLive'
+    | 'ansError'
+    | 'outItems'
+    | 'outEmpty';
 
 const CONTEXT_STATES: readonly SessionPanelGalleryState[] = ['ctxMeasuring', 'ctxNormal', 'ctxEstimated', 'ctxFilling', 'ctxChat', 'ctxNoTurn'];
 
 const ENV_STATES: readonly SessionPanelGalleryState[] = ['envFolders', 'envRemove', 'envOffline', 'envFull', 'envEmpty'];
+
+const ANSWER_STATES: readonly SessionPanelGalleryState[] = ['ansFull', 'ansPending', 'ansNoLive', 'ansError'];
+
+const OUTPUT_STATES: readonly SessionPanelGalleryState[] = ['outItems', 'outEmpty'];
+
+const SUMMARY: TurnSummary = {
+    cost: { kind: 'estimate', usd: 0.0016 },
+    model: { name: 'claude-sonnet-4-5', provider: 'claude', provider_name: 'Claude', remote: true },
+    pages: [
+        { kind: 'page', title: 'Mount Rainier weather forecast', url: 'https://www.weather.gov/rainier' },
+        { kind: 'search_result', title: null, url: 'https://www.nps.gov/mora/planyourvisit/conditions.htm' },
+    ],
+    documents: [
+        { name: 'trail-guide.pdf', path: '/Users/avery/Documents/trail-guide.pdf', pages: [5, 6, 8], passages: 6 },
+        { name: 'notes.md', path: '/Users/avery/Documents/notes.md', passages: 1 },
+    ],
+    files: [
+        { name: 'packing-list.md', path: '/Users/avery/Documents/packing-list.md', mtime: 100, openable: true },
+        { name: 'old-plan.md', path: '/Users/avery/Documents/old-plan.md', mtime: 100, openable: true },
+    ],
+    sites: ['weather.gov', 'nps.gov'],
+    live_data: { attempted: 2, failed: 0 },
+};
+
+const utc = (minutesAgo: number) => new Date(Date.now() - minutesAgo * 60_000).toISOString().slice(0, 19).replace('T', ' ');
+
+const OUTPUT = (id: string, kind: OutputItem['kind'], name: string, minutesAgo: number, extra: Partial<OutputItem> = {}): OutputItem => ({
+    id,
+    kind,
+    name,
+    path: kind === 'file' || kind === 'export' || kind === 'image' ? `/Users/avery/Documents/${name}` : null,
+    detail: null,
+    message_id: 2,
+    created_at: utc(minutesAgo),
+    change: kind === 'file' ? 'created' : null,
+    state: 'present',
+    openable: true,
+    revealable: true,
+    ...extra,
+});
+
+const OUTPUTS: OutputItem[] = [
+    OUTPUT('o1', 'file', 'packing-list.md', 2),
+    OUTPUT('o2', 'image', 'summit-sketch.png', 14),
+    OUTPUT('o3', 'file', 'itinerary.md', 95, { change: 'edited' }),
+    OUTPUT('o4', 'document', 'trail-guide.pdf', 180),
+    OUTPUT('o5', 'memory', 'Prefers early starts', 300),
+    OUTPUT('o6', 'file', 'old-plan.md', 600, { state: 'gone', change: 'deleted' }),
+    OUTPUT('o7', 'schedule', 'Weekly forecast check', 1500, { message_id: null }),
+];
+
+const withSummary = (m: Message, summary: TurnSummary): Message => ({ ...m, turn_summary: summary }) as Message;
 
 const FOLDER = (path: string, source: SessionEnvironment['folders'][number]['source'], removable = true) =>
     ({ path, name: path.split('/').pop(), kind: 'folder' as const, source, removable });
@@ -196,7 +255,18 @@ export function SessionPanelGallery({ state }: { state: SessionPanelGalleryState
                   : state === 'envFull'
                     ? { ...ENVIRONMENT, folders: ENVIRONMENT.folders.slice(1, 2) }
                     : ENVIRONMENT;
+        const answerState = ANSWER_STATES.includes(state);
+        const summary: TurnSummary =
+            state === 'ansNoLive'
+                ? { ...SUMMARY, live_data: { attempted: 2, failed: 2 }, pages: [], sites: [] }
+                : state === 'ansError'
+                  ? { cost: { kind: 'unreported' }, error: 'the PC ran out of memory' }
+                  : SUMMARY;
+        const reply = FIXTURES.short.messages[1]!;
         const base = createFakeClient({
+            messages: { dev: [FIXTURES.short.messages[0]!, withSummary(reply, summary)] },
+            outputs: state === 'outItems' ? { dev: { session_id: 'dev', items: OUTPUTS } } : undefined,
+            fileStatus: answerState ? { '/Users/avery/Documents/packing-list.md': { path: '/Users/avery/Documents/packing-list.md', exists: true, mtime: 200 }, '/Users/avery/Documents/old-plan.md': { path: '/Users/avery/Documents/old-plan.md', exists: false } } : undefined,
             sessions: env ? [SESSION] : undefined,
             environments: env ? { dev: environment } : undefined,
             permissions: state === 'envOffline' ? { dev: 'full_access' } : undefined,
@@ -251,12 +321,18 @@ export function SessionPanelGallery({ state }: { state: SessionPanelGalleryState
         const store = useSessionPanelStore.getState();
         const ctx = CONTEXT_STATES.includes(state);
         const env = ENV_STATES.includes(state);
+        const ans = ANSWER_STATES.includes(state);
+        const out = OUTPUT_STATES.includes(state);
+        store.setSection('answer', ans);
+        store.setSection('outputs', out);
         store.setSection('environment', env);
-        store.setSection('skills', !ctx && !env);
-        store.setSection('tools', !ctx && !env);
+        store.setSection('skills', !ctx && !env && !ans && !out);
+        store.setSection('tools', !ctx && !env && !ans && !out);
+        writeTurn('dev', state === 'ansPending' ? { ...IDLE_TURN, status: 'streaming' } : null);
         store.setSection('context', ctx);
         store.setEnvConfirm(state === 'envRemove' ? { kind: 'remove', path: ENVIRONMENT.folders[0]!.path } : state === 'envFull' ? { kind: 'full' } : null);
         store.setContextScope(state === 'ctxChat' ? 'chat' : 'turn');
+        return () => writeTurn('dev', null);
     }, [state]);
     return (
         <>

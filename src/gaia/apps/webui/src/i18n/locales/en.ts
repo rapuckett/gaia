@@ -3756,6 +3756,7 @@ export const enMessages = {
     'mobileApp.settings.privacy.local': 'Right now answers are generated on your PC too.',
     'mobileApp.readAloud.unsupported': 'Reading aloud needs a newer GAIA on your PC. Update it, then try again.',
     'mobileApp.answer.place.thisPc': 'on your PC',
+    'mobileApp.rail.preview': 'Preview',
     'mobileApp.answer.duration.sec': '{n} s',
     'mobileApp.answer.duration.min': '{n} min',
     'mobileApp.answer.duration.minSec': '{m} min {s} s',
