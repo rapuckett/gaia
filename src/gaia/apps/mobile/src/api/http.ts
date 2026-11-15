@@ -53,7 +53,9 @@ import type {
     LemonadeFound,
     LemonadeTarget,
     LocalModelStatus,
+    KnowledgeSaveResult,
     MemoryActivityDay,
+    MemoryKnowledgePage,
     MemorySettings,
     MemoryStats,
     MemoryToolStat,
@@ -80,7 +82,9 @@ import type {
     SetupCheck,
     SetupPlan,
     SetupRunStatus,
+    Settings,
     SkillList,
+    UndoSettings,
     UploadedFile,
     UserInputResult,
 } from './client.types';
@@ -103,6 +107,8 @@ import {
     MESSAGE_PAGE_SIZE,
     QUEUED_IDLE_MS,
     memoryActivityPath,
+    memoryKnowledgeItemPath,
+    memoryKnowledgePath,
     memoryUpcomingPath,
     schedulePath,
     scheduleResultsPath,
@@ -348,6 +354,22 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             return postJson<Session>(sessionReadPath(sessionId), undefined, options?.signal);
         },
 
+        getSettings(options) {
+            return getJson<Settings>(ENDPOINTS.settings, options?.signal);
+        },
+
+        setNetworkPolicy(policy, options) {
+            return putJson<Settings>(ENDPOINTS.settings, { network_policy: policy }, options?.signal);
+        },
+
+        getUndoSettings(options) {
+            return getJson<UndoSettings>(ENDPOINTS.settingsUndo, options?.signal);
+        },
+
+        updateUndoSettings(retentionDays, maxMb, options) {
+            return putJson<UndoSettings>(ENDPOINTS.settingsUndo, { retention_days: retentionDays, max_mb: maxMb }, options?.signal);
+        },
+
         getContextChoice(model, options) {
             return getJson<ContextChoice>(`${ENDPOINTS.localModelContext}?model=${encodeURIComponent(model)}`, options?.signal);
         },
@@ -582,6 +604,22 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             return getJson<MemoryUpcomingItem[]>(memoryUpcomingPath(days), options?.signal);
         },
 
+        listMemoryKnowledge(params, options) {
+            return getJson<MemoryKnowledgePage>(memoryKnowledgePath(params), options?.signal);
+        },
+
+        addMemoryKnowledge(body, options) {
+            return postJson<KnowledgeSaveResult>(ENDPOINTS.memoryKnowledge, body, options?.signal);
+        },
+
+        updateMemoryKnowledge(knowledgeId, body, options) {
+            return putJson<KnowledgeSaveResult>(memoryKnowledgeItemPath(knowledgeId), body, options?.signal);
+        },
+
+        deleteMemoryKnowledge(knowledgeId, options) {
+            return deleteJson<unknown>(memoryKnowledgeItemPath(knowledgeId), options?.signal);
+        },
+
         getMemoryStats(options) {
             return getJson<MemoryStats>(ENDPOINTS.memoryStats, options?.signal);
         },
@@ -669,6 +707,10 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
                 { model_id: modelId, acknowledge_low_disk: acknowledgeLowDisk, keep_trying: false },
                 options?.signal,
             );
+        },
+
+        removeSetupModel(modelId, options) {
+            return postJson<SetupPlan & { freed_gb: number }>(ENDPOINTS.setupModelRemove, { model_id: modelId }, options?.signal);
         },
 
         getSetupStatus(options) {

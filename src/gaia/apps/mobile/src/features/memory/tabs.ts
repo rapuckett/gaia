@@ -18,6 +18,8 @@ export interface MemoryPaneProps {
     notify: (notice: MemoryNotice) => void;
     /** Whether memory is on; undefined until the settings have loaded. */
     memoryEnabled: boolean | undefined;
+    /** Opens the Advanced tab, where memory is switched on. */
+    onOpenAdvanced: () => void;
 }
 
 export interface MemoryTab {
