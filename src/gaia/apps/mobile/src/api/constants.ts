@@ -22,7 +22,9 @@ export const ENDPOINTS = {
     schedules: '/api/schedules',
     sessions: '/api/sessions',
     session: '/api/sessions/{session_id}',
+    sessionCapabilities: '/api/sessions/{session_id}/capabilities',
     sessionDocument: '/api/sessions/{session_id}/documents/{doc_id}',
+    sessionEvents: '/api/sessions/events',
     sessionMessage: '/api/sessions/{session_id}/messages/{message_id}',
     sessionMessages: '/api/sessions/{session_id}/messages',
     sessionMessagesAndBelow: '/api/sessions/{session_id}/messages/{message_id}/and-below',
@@ -56,6 +58,8 @@ export const ENDPOINTS = {
     systemStatus: '/api/system/status',
     documentFile: '/api/documents/{doc_id}/file',
     documents: '/api/documents',
+    filesUpload: '/api/files/upload',
+    filesUploadMedia: '/api/files/upload-media',
     onboardingPreflight: '/api/onboarding/preflight',
     onboardingStart: '/api/onboarding/start',
 } as const;
@@ -114,6 +118,10 @@ export function sessionDocumentPath(sessionId: string, docId: string): string {
         .replace('{doc_id}', encodeURIComponent(docId));
 }
 
+export function sessionCapabilitiesPath(sessionId: string): string {
+    return ENDPOINTS.sessionCapabilities.replace('{session_id}', encodeURIComponent(sessionId));
+}
+
 export function sessionPinPath(sessionId: string): string {
     return ENDPOINTS.sessionPin.replace('{session_id}', encodeURIComponent(sessionId));
 }
@@ -160,6 +168,8 @@ export const STREAM_IDLE_MS = 30_000;
 export const QUEUED_IDLE_MS = 10 * 60_000;
 /** The backend may hold a send for 60 s while another chat has the model, then answers 429. */
 export const SEND_HEADER_TIMEOUT_MS = 90_000;
+/** The chat-list event stream sends a keepalive every 30 s. */
+export const SESSION_EVENTS_IDLE_MS = 90_000;
 /** An attach replays at once; a slower answer means the backend is stuck or unreachable. */
 export const ATTACH_HEADER_TIMEOUT_MS = 30_000;
 /** How many past runs a schedule's history shows; the web UI asks for the same 20. */
@@ -183,6 +193,8 @@ export const PC_ONLY_REFUSAL =
     "Do this on the PC running GAIA. It isn't allowed over mobile access, from a paired device or from another computer.";
 /** How long to wait after a failed resource read before trying again (webui's `RETRY_MS`). */
 export const RESOURCE_RETRY_MS = 5_000;
+/** How often a chat's tools and skills are re-read while its reply runs, so they show once its agent starts. */
+export const CAPABILITIES_POLL_MS = 2_000;
 /** How often to re-read the PC's status while it is still starting or warming up. */
 export const STATUS_POLL_MS = 5_000;
 

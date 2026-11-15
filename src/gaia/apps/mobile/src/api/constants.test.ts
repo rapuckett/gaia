@@ -108,7 +108,9 @@ describe('endpoints', () => {
         schedules: ['GET', 'POST'],
         sessions: ['GET', 'POST'],
         session: ['DELETE', 'GET', 'PUT'],
+        sessionCapabilities: ['GET'],
         sessionDocument: ['DELETE'],
+        sessionEvents: ['GET'],
         sessionMessage: ['DELETE'],
         sessionMessages: ['GET'],
         sessionMessagesAndBelow: ['DELETE'],
@@ -142,6 +144,8 @@ describe('endpoints', () => {
         systemStatus: ['GET'],
         documentFile: ['GET'],
         documents: ['GET'],
+        filesUpload: ['POST'],
+        filesUploadMedia: ['POST'],
         onboardingPreflight: ['GET'],
         onboardingStart: ['GET'],
     };

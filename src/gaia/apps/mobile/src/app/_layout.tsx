@@ -12,7 +12,9 @@ import { AppErrorBoundary } from '@/features/errors/AppErrorBoundary';
 import { ConnectionBanner } from '@/features/banners/ConnectionBanner';
 import { ModelNeededHost } from '@/features/model';
 import { AppDrawer } from '@/features/nav/AppDrawer';
+import { RoutingEffects } from '@/features/nav/RoutingEffects';
 import { INITIAL_ROUTE, PERMANENT_DRAWER_MIN_WIDTH } from '@/features/nav/navigation';
+import { PairingGate } from '@/features/pairing';
 import { SetupGate } from '@/features/setup/SetupGate';
 import { useDirection } from '@/i18n/useT';
 import { applyDirection } from '@/platform/direction';
@@ -24,7 +26,7 @@ import { ScreenBannerProvider, UIProvider } from '@/ui';
 export const unstable_settings = { anchor: INITIAL_ROUTE };
 
 // Expo Router renders only the screens a layout declares.
-const ROUTES = [INITIAL_ROUTE, 'new', 'connectors', 'schedules', 'documents', 'skills', 'chat/[id]', 'dev/ui', 'dev/ui-lists', 'dev/composer', 'dev/forms', 'dev/markdown', 'dev/messages', 'dev/permission'];
+const ROUTES = [INITIAL_ROUTE, 'new', 'connectors', 'schedules', 'documents', 'skills', 'pair', 'pair/manual', 'chat/[id]', 'dev/ui', 'dev/ui-lists', 'dev/composer', 'dev/forms', 'dev/markdown', 'dev/messages', 'dev/permission'];
 
 export default function RootLayout() {
     const [queryClient] = useState(() => new QueryClient());
@@ -44,7 +46,9 @@ export default function RootLayout() {
                 <UIProvider>
                     <AppErrorBoundary variant="window">
                     <ScreenBannerProvider banner={<ConnectionBanner />}>
+                        <PairingGate>
                         <SetupGate>
+                            <RoutingEffects />
                             <Drawer
                                 drawerContent={(props) => (
                                     <AppErrorBoundary variant="compact">
@@ -64,6 +68,7 @@ export default function RootLayout() {
                             </Drawer>
                             <ModelNeededHost />
                         </SetupGate>
+                        </PairingGate>
                     </ScreenBannerProvider>
                     </AppErrorBoundary>
                 </UIProvider>
