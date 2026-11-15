@@ -61,7 +61,7 @@ export function GuidedView({ open, doc, state, timers, onClose }: { open: boolea
                 </Stack>
                 <IconButton icon={X} label={t('cards.closeGuided')} size="sm" onPress={onClose} testID="guided-close" />
             </Row>
-            <Row gap="sm">
+            <Row gap="sm" stack>
                 <Stack flex={1}>
                     <Button
                         icon={ChevronLeft}

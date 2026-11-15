@@ -44,7 +44,10 @@ describeNative('Provider key', () => {
 
         expect(screen.getByTestId('provider-key-pc-only')).toHaveTextContent('Change this on the PC running GAIA.');
         expect(JSON.stringify(r.container.toJSON())).not.toContain('"type":"TextInput"');
-        expect(screen.queryByText(/Paste|Gateway URL|Auth header/)).toBeNull();
+        expect(screen.queryByText(/Gateway URL|Auth header/)).toBeNull();
+        await fireEvent.press(screen.getByTestId('provider-key-paste'));
+        expect(await screen.findByTestId('provider-key-paste-refusal')).toBeTruthy();
+        expect(JSON.stringify(r.container.toJSON())).not.toContain('"type":"TextInput"');
         queryClient.clear();
     });
 

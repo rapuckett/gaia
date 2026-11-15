@@ -29,7 +29,7 @@ function StatusTag({ label, tone }: { label: string; tone: 'success' | 'warning'
     const bg = { success: colors.accentGreenDim, warning: colors.accentYellowDim, muted: colors.bgTertiary }[tone];
     return (
         <View style={{ backgroundColor: bg, borderRadius: radius.sm, paddingHorizontal: 8, paddingVertical: 2 }}>
-            <Text role="caption" weight="semibold" tone={tone} numberOfLines={1}>
+            <Text role="caption" weight="semibold" tone={tone} numberOfLines={1} compact>
                 {label}
             </Text>
         </View>
