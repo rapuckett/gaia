@@ -8,7 +8,7 @@ import { useT } from '@/i18n/useT';
 import { Disclosure, Notice, Stack, Text, useTheme } from '@/ui';
 import type { SetupLogStage, SetupRunStatus } from '@webui/types';
 
-import { logsByStage } from './setupLogs';
+import { logsByStage } from './logLines';
 
 const LOG_HEIGHT = 220;
 

@@ -299,6 +299,24 @@ export function useApplyTestedBackend() {
     return useMutation<boolean, Error, void>({ mutationFn: () => applyTestedBackend(requireClient(client)) });
 }
 
+/** Deletes a model that downloaded but didn't load, then downloads it again; follow it with `useSetupStatus`. */
+export function useRedownloadSetupModel() {
+    const client = useGaiaClient();
+    const queryClient = useQueryClient();
+    return useMutation<SetupRunStatus, Error, string>({
+        mutationFn: async (modelId) => {
+            const c = requireClient(client);
+            await c.removeSetupModel(modelId);
+            return c.downloadSetupModel(modelId, false);
+        },
+        onSuccess: (run) => {
+            queryClient.setQueryData(queryKeys.setupStatus, run);
+            void queryClient.invalidateQueries({ queryKey: queryKeys.setupStatus });
+            void queryClient.invalidateQueries({ queryKey: queryKeys.setupPlan });
+        },
+    });
+}
+
 /** Reads the NPU again after a fix on the PC; the plan it answers replaces the one shown. */
 export function useRecheckNpu() {
     const client = useGaiaClient();
@@ -373,16 +391,6 @@ export function useConnectCloud() {
             void queryClient.invalidateQueries({ queryKey: queryKeys.setupStatus });
             void queryClient.invalidateQueries({ queryKey: ['cloudProviders'] });
         },
-    });
-}
-
-/** Deletes a model that downloaded but didn't load, before it downloads again. */
-export function useRemoveSetupModel() {
-    const client = useGaiaClient();
-    const queryClient = useQueryClient();
-    return useMutation<SetupPlan & { freed_gb: number }, Error, string>({
-        mutationFn: (modelId) => requireClient(client).removeSetupModel(modelId),
-        onSuccess: (plan) => queryClient.setQueryData(queryKeys.setupPlan, plan),
     });
 }
 

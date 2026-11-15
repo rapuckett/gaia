@@ -11,7 +11,7 @@ import { useT } from '@/i18n/useT';
 import { Button, Card, Disclosure, Icon, IconButton, Ltr, ProgressLine, Row, Spinner, Stack, Text } from '@/ui';
 import { Check, ChevronDown, ChevronUp, CircleAlert, Circle, Pause, RotateCw, X } from '@/ui/icons';
 
-import { collapseProgress } from '../sheets/setupLogs';
+import { collapseProgress } from '../sheets/logLines';
 
 type RunState = 'active' | 'done' | 'failed' | undefined;
 

@@ -12,7 +12,7 @@ import { AccessibilityInfo } from 'react-native';
 import {
     useCancelSetup,
     useDownloadSetupModel,
-    useRemoveSetupModel,
+    useRedownloadSetupModel,
     useSetupPlan,
     useSetupStatus,
     useSkipSetupModel,
@@ -26,7 +26,7 @@ import { SetupFooter } from '../SetupFooter';
 import type { SetupStepContext } from '../SetupScreen';
 import { useConfirmSheet } from '../sheets/ConfirmSheet';
 import { serverConfirmRequest, setupConfirmFrom } from '../sheets/setupConfirm';
-import { SetupLogs } from '../sheets/SetupLogsPanel';
+import { SetupLogs } from '../sheets/SetupLogs';
 import { Details, DownloadContents, ModelRow } from './DownloadRows';
 import { downloadView, milestones } from './downloadState';
 import { useDownloadEstimates } from './useDownloadEstimates';
@@ -39,7 +39,7 @@ export function DownloadStep({ ctx }: { ctx: SetupStepContext }) {
     const cancel = useCancelSetup();
     const download = useDownloadSetupModel();
     const skip = useSkipSetupModel();
-    const remove = useRemoveSetupModel();
+    const redownload = useRedownloadSetupModel();
     const start = useStartSetup();
     const { ask, sheet } = useConfirmSheet();
     const queued = useQueuedModels((s) => s.ids);
@@ -51,7 +51,7 @@ export function DownloadStep({ ctx }: { ctx: SetupStepContext }) {
     const [actionError, setActionError] = useState<unknown>(null);
     const [skipped, setSkipped] = useState<ReadonlySet<string>>(() => new Set());
     const lost = status.isError ? describeError(status.error, t) : null;
-    const busy = [cancel, download, skip, remove, start].some((m) => m.isPending) || lost != null;
+    const busy = [cancel, download, skip, redownload, start].some((m) => m.isPending) || lost != null;
 
     const rows = useMemo(() => (view?.rows ?? []).filter((m) => !skipped.has(m.id)), [view, skipped]);
     const checking = view?.run.state === 'verifying' || (view?.run.state !== 'running' && rows.some((m) => m.state === 'verifying'));
@@ -115,7 +115,14 @@ export function DownloadStep({ ctx }: { ctx: SetupStepContext }) {
                     danger: true,
                 });
                 if (!confirmed) return;
-                await remove.mutateAsync(m.id);
+                try {
+                    await redownload.mutateAsync(m.id);
+                } catch (err) {
+                    const detail = setupConfirmFrom(err);
+                    if (!detail) throw err;
+                    if (await ask(serverConfirmRequest(detail, t))) await downloadOne(m.id, true);
+                }
+                return;
             }
             if (m.error_kind === 'disk_full') void planQuery.refetch();
             await downloadOne(m.id);
