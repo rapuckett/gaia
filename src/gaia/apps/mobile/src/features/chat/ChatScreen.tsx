@@ -30,7 +30,7 @@ import { MessageList } from './messages/MessageList';
 import { TailIssues } from './ReplyErrors';
 import { registerOpenChat } from './sendToOpenChat';
 import { OfflineNotice, SessionPanel } from './session-panel';
-import { buildTail } from './tailState';
+import { buildTail, serverDownReplyId } from './tailState';
 import { TurnTail } from './TurnTail';
 import { useTurnAnnouncer, useTurnEnd } from './useTurnAnnouncer';
 
@@ -214,6 +214,7 @@ export function ChatScreen({ sessionId, onManageDocuments }: { sessionId: string
                 <MessageList
                     sessionId={sessionId}
                     readOnly={!!retiredAgent}
+                    fixShownBelowId={serverDownReplyId(tail)}
                     live={
                         <>
                             {tail ? (
