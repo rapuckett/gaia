@@ -5,10 +5,14 @@ import type { SectionId } from './sections';
 
 export interface SettingsHref {
     pathname: '/settings/[section]';
-    params: { section: SectionId; target?: string; from?: SectionId };
+    params: { section: SectionId; target?: string; from?: SectionId; provider?: string };
 }
 
-export function settingsHref(section: SectionId, target?: string, from?: SectionId): SettingsHref {
-    return { pathname: '/settings/[section]', params: { section, ...(target ? { target } : null), ...(from ? { from } : null) } };
+/** `provider` opens the Model pane on that provider's tab (`local`, `fireworks`), as the web's `?provider=` does. */
+export function settingsHref(section: SectionId, target?: string, from?: SectionId, provider?: string): SettingsHref {
+    return {
+        pathname: '/settings/[section]',
+        params: { section, ...(target ? { target } : null), ...(from ? { from } : null), ...(provider ? { provider } : null) },
+    };
 }
 

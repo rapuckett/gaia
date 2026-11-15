@@ -9,7 +9,8 @@ import { hiddenAutomatedCount } from '@webui/utils/sessionGrouping';
 
 import { useDeleteSession, useMarkRead, useRenameSession, useSessions, useSessionSearch, useSetPinned } from '@/data';
 import { ModelStatusPill } from '@/features/model';
-import { describeError, useT } from '@/i18n/useT';
+import { NotificationsEntry } from '@/features/notifications';
+import { describeError, describeErrorWith, useT } from '@/i18n/useT';
 import {
     Chip,
     EmptyState,
@@ -81,8 +82,8 @@ export function ChatDrawerContent({ activeId, onSelect, onClose, onNewChat, onPc
     const sessions = useSessions();
     const now = useNow();
     const [text, setText] = useState('');
-    const search = useSessionSearch(text);
     const [showAutomated, toggleAutomated] = useShowAutomated();
+    const search = useSessionSearch(text, showAutomated);
     const entries = useMemo(() => declaredNavEntries(routeNames), [routeNames]);
     const q = text.trim();
     const open = useCallback((route: string) => {
@@ -145,6 +146,7 @@ export function ChatDrawerContent({ activeId, onSelect, onClose, onNewChat, onPc
                     {entries.filter((e) => e.footer).map((e) => (
                         <NavRow key={e.key} entry={e} active={activeRoute === e.route} onOpen={open} />
                     ))}
+                    <NotificationsEntry active={activeRoute === 'notifications'} onOpen={() => open('notifications')} />
                     <ModelStatusPill />
                 </Stack>
             }
@@ -168,7 +170,7 @@ export function ChatDrawerContent({ activeId, onSelect, onClose, onNewChat, onPc
             {state === 'error' ? <ErrorState title={describeError(sessions.error, t)} onRetry={() => void sessions.refetch()} /> : null}
             {state === 'empty' && q === '' ? <EmptyState title={t('sidebar.empty')} /> : null}
             {q !== '' && searchFailed ? (
-                <Notice tone="danger" message={t('sidebar.searchFailed', { error: describeError(search.error, t) })} />
+                <Notice tone="danger" message={t.compose((say) => say('sidebar.searchFailed', { error: describeErrorWith(search.error, say) }))} />
             ) : null}
             {q !== '' && !searchFailed && settled && search.data?.truncated ? (
                 <Notice tone="info" role="note" message={t('sidebar.searchCapped', { n: search.data.results.length })} />
@@ -228,7 +230,7 @@ function Header({ onClose, onNewChat, onPcs }: { onClose: () => void; onNewChat?
             <Row gap="sm" accessibilityRole="header">
                 <Text role="title" weight="semibold">{APP_NAME}</Text>
                 <Spacer />
-                {onPcs ? <IconButton icon={Monitor} label={t('mobileApp.pairing.pcs.title')} onPress={onPcs} /> : null}
+                {onPcs ? <IconButton icon={Monitor} label={t('mobileApp.pairing.pcs.title')} onPress={onPcs} testID="pcs-drawer-button" /> : null}
                 {onNewChat ? <IconButton icon={Plus} label={t('sidebar.newChat')} onPress={onNewChat} /> : null}
                 <IconButton icon={X} label={t('sidebar.collapse')} onPress={onClose} />
             </Row>

@@ -4,7 +4,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 
-import type { ChatPerformance, ContextUsage } from '@/api/client.types';
+import type { ChatPerformance, ContextUsage, LocalModelStatus, Session, SessionEnvironment } from '@/api/client.types';
 import { createFakeClient } from '@/api/fake';
 import { GaiaApiError } from '@/api/errors';
 import { GaiaClientProvider } from '@/data';
@@ -27,9 +27,37 @@ export type SessionPanelGalleryState =
     | 'ctxEstimated'
     | 'ctxFilling'
     | 'ctxChat'
-    | 'ctxNoTurn';
+    | 'ctxNoTurn'
+    | 'envFolders'
+    | 'envRemove'
+    | 'envOffline'
+    | 'envFull'
+    | 'envEmpty';
 
 const CONTEXT_STATES: readonly SessionPanelGalleryState[] = ['ctxMeasuring', 'ctxNormal', 'ctxEstimated', 'ctxFilling', 'ctxChat', 'ctxNoTurn'];
+
+const ENV_STATES: readonly SessionPanelGalleryState[] = ['envFolders', 'envRemove', 'envOffline', 'envFull', 'envEmpty'];
+
+const FOLDER = (path: string, source: SessionEnvironment['folders'][number]['source'], removable = true) =>
+    ({ path, name: path.split('/').pop(), kind: 'folder' as const, source, removable });
+const FILE = (path: string) => ({ path, name: path.split('/').pop(), kind: 'file' as const, source: 'document' as const, removable: true });
+
+const ENVIRONMENT: SessionEnvironment = {
+    session_id: 'dev',
+    folders: [
+        FOLDER('/Users/avery/Documents/Quarterly reports', 'added'),
+        FOLDER('/Users/avery/.gaia/documents', 'gaia_documents', false),
+        FOLDER('/Users/avery/.gaia/scratch/dev', 'scratch', false),
+        FILE('/Users/avery/.gaia/documents/budget-2026.xlsx'),
+        FILE('/Users/avery/.gaia/documents/board-notes.pdf'),
+        FILE('/Users/avery/.gaia/documents/vendor-contract.pdf'),
+        FILE('/Users/avery/.gaia/documents/roadmap.md'),
+    ],
+    removed: [],
+    internet: true,
+    enforced: true,
+    internet_enforced: true,
+};
 
 const USAGE: ContextUsage = {
     window: 65536,
@@ -104,6 +132,38 @@ const PERFORMANCE: ChatPerformance = {
     now: { model: 'Gemma-4-E4B-it-GGUF', provider: 'local', loaded: true, device: 'gpu', backend: 'vulkan', ctx_size: 65536, weights_gb: 5.4, kv_cache_gb: 1.3, free_gb: 18.2, error: null },
 };
 
+const SESSION = {
+    id: 'dev',
+    title: 'Quarterly reports',
+    created_at: '2026-11-14T10:00:00Z',
+    updated_at: '2026-11-14T10:00:00Z',
+    model: 'Gemma-4-E4B-it-GGUF',
+    system_prompt: null,
+    message_count: 4,
+    document_ids: [],
+    agent_type: 'gaia',
+    inference_remote: false,
+} as Session;
+
+const LOCAL_MODEL = {
+    state: 'loaded',
+    active_model: 'Gemma-4-E4B-it-GGUF',
+    active_display_name: 'Gemma 4 E4B',
+    active_remote: false,
+    model: 'Gemma-4-E4B-it-GGUF',
+    display_name: 'Gemma 4 E4B',
+    placement: { device: 'gpu', backend: 'vulkan', label: 'GPU · Vulkan', source: 'reported', warning: null },
+    ctx_size: 65536,
+    memory: { source: 'gpu', total_gb: 32, free_gb: 18.2, model_gb: 5.4 },
+    memory_error: null,
+    error: null,
+    base_url: null,
+    owner: 'gaia',
+    busy: false,
+    restarting: false,
+    restart_error: null,
+} as LocalModelStatus;
+
 const TOOLS = [
     {
         name: 'search_web',
@@ -127,7 +187,21 @@ export function SessionPanelGallery({ state }: { state: SessionPanelGalleryState
     const [queryClient] = useState(() => new QueryClient({ defaultOptions: { queries: { retry: false } } }));
     const client = useMemo(() => {
         const ctx = CONTEXT_STATES.includes(state);
+        const env = ENV_STATES.includes(state);
+        const environment: SessionEnvironment =
+            state === 'envOffline'
+                ? { ...ENVIRONMENT, folders: ENVIRONMENT.folders.slice(0, 2), internet: false, removed: ['/Users/avery/Downloads/old-drafts'] }
+                : state === 'envEmpty'
+                  ? { ...ENVIRONMENT, folders: [], internet: false }
+                  : state === 'envFull'
+                    ? { ...ENVIRONMENT, folders: ENVIRONMENT.folders.slice(1, 2) }
+                    : ENVIRONMENT;
         const base = createFakeClient({
+            sessions: env ? [SESSION] : undefined,
+            environments: env ? { dev: environment } : undefined,
+            permissions: state === 'envOffline' ? { dev: 'full_access' } : undefined,
+            activeModel: env ? { provider: 'local', model: 'Gemma-4-E4B-it-GGUF', display_name: 'Gemma 4 E4B', label: null, remote: false, is_default: true, downloaded: true } : undefined,
+            localModel: env ? LOCAL_MODEL : undefined,
             contextUsage: ctx
                 ? {
                       available: true,
@@ -176,9 +250,12 @@ export function SessionPanelGallery({ state }: { state: SessionPanelGalleryState
     useEffect(() => {
         const store = useSessionPanelStore.getState();
         const ctx = CONTEXT_STATES.includes(state);
-        store.setSection('skills', !ctx);
-        store.setSection('tools', !ctx);
+        const env = ENV_STATES.includes(state);
+        store.setSection('environment', env);
+        store.setSection('skills', !ctx && !env);
+        store.setSection('tools', !ctx && !env);
         store.setSection('context', ctx);
+        store.setEnvConfirm(state === 'envRemove' ? { kind: 'remove', path: ENVIRONMENT.folders[0]!.path } : state === 'envFull' ? { kind: 'full' } : null);
         store.setContextScope(state === 'ctxChat' ? 'chat' : 'turn');
     }, [state]);
     return (

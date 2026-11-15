@@ -54,6 +54,7 @@ from ..utils import (
     unsupported_type_message,
 )
 from .files import (
+    _AWAY_FROM_PC,
     _refuse_remote_read,
     _refuse_remote_secret,
     _remote_read_roots,
@@ -628,6 +629,17 @@ _INLINE_MEDIA_TYPES = {
 }
 
 
+def _chat_may_open(db: ChatDatabase, session_id: str, doc_id: str, doc, roots) -> bool:
+    """Whether the chat has *doc* attached, or its real file lies in the chat's folders."""
+    if not doc:
+        return False
+    session = db.get_session(session_id)
+    if session is not None and doc_id in session["document_ids"]:
+        return True
+    filepath = doc.get("filepath")
+    return bool(filepath) and _within_roots(Path(os.path.realpath(filepath)), roots)
+
+
 @router.get(
     "/api/documents/{doc_id}/file",
     response_class=FileResponse,
@@ -639,10 +651,24 @@ _INLINE_MEDIA_TYPES = {
     },
 )
 async def get_document_file(
-    doc_id: str, request: Request, db: ChatDatabase = Depends(get_db)
+    doc_id: str,
+    request: Request,
+    session_id: Optional[str] = None,
+    db: ChatDatabase = Depends(get_db),
 ):
-    """Serve a library document's file inline, so a citation can open it at its page."""
+    """Serve a library document's file inline, so a citation can open it at its page.
+
+    Away from the PC the chat *session_id* names must have the document
+    attached, or hold its file in its folders.
+    """
+    roots = _remote_read_roots(request, session_id)
     doc = db.get_document(doc_id)
+    if roots is not None and not _chat_may_open(db, session_id, doc_id, doc, roots):
+        # One refusal whether or not the id exists, so ids can't be probed.
+        raise HTTPException(
+            status_code=403,
+            detail=f"{_AWAY_FROM_PC} This document isn't in this chat.",
+        )
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
     path = Path(doc.get("filepath") or "")

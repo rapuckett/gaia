@@ -8,11 +8,13 @@ import type { Translate } from '@webui/i18n/translator';
 
 import type { Settings } from '@/api/client.types';
 import { GaiaApiError } from '@/api/errors';
+import { usePinned } from '@/api/routeAccess';
 import { useActiveModel, useSessions, useSetNetworkPolicy, useSettings, useSystemStatus } from '@/data';
 import { describeError, useT } from '@/i18n/useT';
 import { Card, Disclosure, IconButton, Ltr, Notice, Row, Stack, Switch, Text } from '@/ui';
 import { Check, Copy } from '@/ui/icons';
 
+import { PcOnlyNotice } from '../PcOnlyNotice';
 import { SettingsAnchor } from '../targets';
 import { DeleteChats } from './DeleteChats';
 import { PrivacyUndo } from './PrivacyUndo';
@@ -36,7 +38,7 @@ function policyText(t: Translate, notices: PolicyNotices, on: boolean): { text: 
 
 function CardTitle({ children }: { children: string }) {
     return (
-        <Text role="ui" weight="semibold">
+        <Text role="ui" weight="semibold" accessibilityRole="header">
             {children}
         </Text>
     );
@@ -48,11 +50,13 @@ function LocalOnly() {
     const set = useSetNetworkPolicy();
     const [result, setResult] = useState<{ tone: 'success' | 'warning'; text: string; details: string[] } | null>(null);
     const [detailsOpen, setDetailsOpen] = useState(false);
-    const refused = set.error instanceof GaiaApiError && set.error.status === 403;
+    const pinned = usePinned();
     const error = set.error ?? settings.error;
+    const refused = error instanceof GaiaApiError && error.status === 403;
     const on = set.isPending ? set.variables === 'local_ai_only' : settings.data?.network_policy === 'local_ai_only';
 
     const toggle = (next: boolean) => {
+        if (pinned) return;
         setResult(null);
         set.mutate(next ? 'local_ai_only' : 'cloud_allowed', {
             onSuccess: (saved) => {
@@ -70,14 +74,33 @@ function LocalOnly() {
         <SettingsAnchor name="local-only">
             <Card>
                 <Stack gap="sm">
-                    <Switch
-                        label={t('settings.privacy.localOnlyTitle')}
-                        description={t('mobileApp.settings.privacy.localOnlyHint')}
-                        value={!!on}
-                        disabled={!settings.data || set.isPending}
-                        onValueChange={toggle}
-                        testID="privacy-local-only"
-                    />
+                    {pinned ? (
+                        <>
+                            <Row gap="sm" justify="between">
+                                <Stack gap="xs" flex={1}>
+                                    <Text role="label" weight="medium">
+                                        {t('settings.privacy.localOnlyTitle')}
+                                    </Text>
+                                    <Text role="caption" tone="secondary">
+                                        {t('mobileApp.settings.privacy.localOnlyHint')}
+                                    </Text>
+                                </Stack>
+                                <Text role="label" weight="medium" testID="privacy-local-only-state">
+                                    {t(on ? 'mobileApp.settings.on' : 'mobileApp.settings.off')}
+                                </Text>
+                            </Row>
+                            <PcOnlyNotice testID="privacy-pc-only" />
+                        </>
+                    ) : (
+                        <Switch
+                            label={t('settings.privacy.localOnlyTitle')}
+                            description={t('mobileApp.settings.privacy.localOnlyHint')}
+                            value={!!on}
+                            disabled={!settings.data || set.isPending}
+                            onValueChange={toggle}
+                            testID="privacy-local-only"
+                        />
+                    )}
                     {refused ? (
                         <Notice tone="info" message={t('mobileApp.settings.pcOnly')} testID="privacy-pc-only" />
                     ) : error ? (

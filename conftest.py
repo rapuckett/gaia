@@ -838,10 +838,11 @@ def _session_daemons():
     import psutil
 
     from gaia.daemon.strays import is_daemon_cmdline
+    from gaia.utils.process_tree import readable_processes
 
     mine = str(os.getpid())
     found = []
-    for proc in psutil.process_iter(["pid", "cmdline"]):
+    for proc in readable_processes(["pid", "cmdline"]):
         if not is_daemon_cmdline(proc.info["cmdline"] or []):
             continue
         try:

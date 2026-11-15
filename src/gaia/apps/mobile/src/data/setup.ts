@@ -10,7 +10,7 @@ import type {
     LemonadeFound,
     LemonadeTarget,
     PreflightReport,
-    ProvidersResponse,
+    ProviderSummaryList,
     SetupCheck,
     SetupPlan,
     SetupRunOptions,
@@ -257,13 +257,13 @@ export function useCancelSetup() {
     });
 }
 
-/** The cloud providers, each `blocked` while Local only is on. */
+/** Every provider, each `blocked` while Local only is on and `configured` once the PC has it ready. */
 export function useCloudProviders(enabled = true) {
     const client = useGaiaClient();
-    return useQuery<ProvidersResponse>({
+    return useQuery<ProviderSummaryList>({
         queryKey: ['cloudProviders'],
         enabled: enabled && client !== null,
-        queryFn: ({ signal }) => requireClient(client).listProviders({ signal }),
+        queryFn: ({ signal }) => requireClient(client).listProviderSummaries({ signal }),
     });
 }
 
@@ -403,6 +403,19 @@ export function useDownloadSetupModel() {
         onSuccess: (status) => {
             queryClient.setQueryData(queryKeys.setupStatus, status);
             void queryClient.invalidateQueries({ queryKey: queryKeys.setupStatus });
+        },
+    });
+}
+
+/** Deletes a downloaded model at the user's request; the plan it answers (with `freed_gb`) replaces the cached one. */
+export function useRemoveSetupModel() {
+    const client = useGaiaClient();
+    const queryClient = useQueryClient();
+    return useMutation<SetupPlan & { freed_gb: number }, Error, { modelId: string }>({
+        mutationFn: ({ modelId }) => requireClient(client).removeSetupModel(modelId),
+        onSuccess: (plan) => {
+            queryClient.setQueryData(queryKeys.setupPlan, plan);
+            void queryClient.invalidateQueries({ queryKey: ['providerModels'] });
         },
     });
 }

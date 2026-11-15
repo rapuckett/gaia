@@ -7,7 +7,7 @@ import { pluralKey, ref, type MessageKey, type Param, type Say } from '../i18n/r
 import { tEn, type Translate } from '../i18n/translator';
 import type { InferenceStats, Message } from '../types';
 import type { TurnEnding } from './turnEnding.core';
-import { spokenDuration, type Mark } from './spokenDuration.core';
+import { same, spokenDuration, type Mark, type Variant } from './spokenDuration.core';
 
 const plain: Mark = (text) => text;
 
@@ -21,8 +21,8 @@ const LEAD: Record<TurnEnding | 'answered', readonly [MessageKey, MessageKey]> =
 const CHIPS: Record<string, MessageKey> = { GPU: 'device.gpu', NPU: 'device.npu', CPU: 'device.cpu' };
 
 /** The backend's English place ("on your GPU", "via Fireworks AI") as a message each language words itself. */
-function placeParam(place: string): Param {
-    if (place === 'on this PC') return ref('answer.place.thisPc');
+function placeParam(place: string, variant: Variant): Param {
+    if (place === 'on this PC') return ref(variant('answer.place.thisPc'));
     const via = /^via (.+)$/.exec(place);
     if (via) return ref('answer.place.via', { provider: via[1] });
     const chips = /^on your (.+)$/.exec(place)?.[1].split(' and ').map((name) => CHIPS[name]);
@@ -45,18 +45,19 @@ function summaryLine(
     ended: TurnEnding | undefined,
     say: Say,
     mark: Mark,
+    variant: Variant,
 ): string | null {
     const parts: string[] = [];
-    const place = stats?.place ? placeParam(stats.place) : null;
+    const place = stats?.place ? placeParam(stats.place, variant) : null;
     if (latencyMs != null && latencyMs > 0) {
         const [bare, at] = LEAD[ended ?? 'answered'];
-        const time = spokenDuration(latencyMs, say, mark);
+        const time = spokenDuration(latencyMs, say, mark, variant);
         parts.push(place ? say(at, { time, place }) : say(bare, { time }));
     } else if (place) {
         parts.push(say(ended ? 'answer.ranPlace' : 'answer.answeredPlace', { place }));
     }
     if (wroteFirstWord(stats, ended)) {
-        const time = spokenDuration(stats.time_to_first_token * 1000, say, mark);
+        const time = spokenDuration(stats.time_to_first_token * 1000, say, mark, variant);
         parts.push(say(parts.length ? 'answer.firstWord' : 'answer.firstWordLead', { time }));
     }
     // The agent's own count, the figure the TUI and evals report.
@@ -72,9 +73,10 @@ export function composeSummary(
     ended: TurnEnding | undefined,
     t: Translate,
     mark: Mark,
+    variant: Variant = same,
 ): string | null {
-    if (summaryLine(latencyMs, stats, ended, tEn.bare, plain) === null) return null;
-    return t.compose((say) => summaryLine(latencyMs, stats, ended, say, mark) ?? '');
+    if (summaryLine(latencyMs, stats, ended, tEn.bare, plain, same) === null) return null;
+    return t.compose((say) => summaryLine(latencyMs, stats, ended, say, mark, variant) ?? '');
 }
 
 /** "Answered in 40 s on your GPU · first word in 1 s", or null with nothing to say.
@@ -95,16 +97,17 @@ export function exactStats(
     t: Translate = tEn,
     mark: Mark = plain,
     ended?: TurnEnding,
+    variant: Variant = same,
 ): string[] {
     const lines: string[] = [];
     if (latencyMs != null && latencyMs > 0) {
         lines.push(t.compose((say) => say('answer.exact.total', {
-            time: mark(say('answer.duration.sec', { n: (latencyMs / 1000).toFixed(1) })),
+            time: mark(say(variant('answer.duration.sec'), { n: (latencyMs / 1000).toFixed(1) })),
         })));
     }
     if (wroteFirstWord(stats, ended)) {
         const ms = (stats.time_to_first_token * 1000).toFixed(0);
-        lines.push(t.compose((say) => say('answer.exact.firstToken', { time: mark(say('answer.duration.ms', { n: ms })) })));
+        lines.push(t.compose((say) => say('answer.exact.firstToken', { time: mark(say(variant('answer.duration.ms'), { n: ms })) })));
     }
     if (stats?.output_tokens != null && stats.output_tokens > 0) {
         const flow = mark(`${(stats.input_tokens ?? 0).toLocaleString()} → ${stats.output_tokens.toLocaleString()}`);

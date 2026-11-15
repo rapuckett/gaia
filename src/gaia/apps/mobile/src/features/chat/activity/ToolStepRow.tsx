@@ -9,10 +9,13 @@ import { isolate } from '@webui/i18n/registry';
 import { useState } from 'react';
 
 import { useT } from '@/i18n/useT';
-import { Disclosure, Icon, Row, ScrollBox, Spinner, Stack, Text } from '@/ui';
+import { useEnsureModel } from '@/data';
+import { Disclosure, Icon, Notice, Row, ScrollBox, Spinner, Stack, Text } from '@/ui';
 import { Ban, CircleAlert } from '@/ui/icons';
 
 import { CodeBlock } from '../markdown/CodeBlock';
+import { ChunksView, FileListView } from './SourceLists';
+import { TerminalOutput } from './TerminalOutput';
 
 function Section({ label, children }: { label: string; children: React.ReactNode }) {
     return (
@@ -30,15 +33,7 @@ const OUTPUT_MAX_HEIGHT = 240;
 function Output({ step, t }: { step: AgentStep; t: ReturnType<typeof useT> }) {
     const cmd = step.commandOutput;
     if (cmd) {
-        const text = [cmd.stdout, cmd.stderr].filter(Boolean).join('\n');
-        return (
-            <Section label={t('activity.terminal')}>
-                <ScrollBox maxHeight={OUTPUT_MAX_HEIGHT}>
-                    <CodeBlock lang="" code={cmd.command ? `$ ${cmd.command}\n${text}` : text} streaming={false} />
-                </ScrollBox>
-                {cmd.truncated ? <Text role="caption" tone="muted">{t('activity.truncated')}</Text> : null}
-            </Section>
-        );
+        return <TerminalOutput output={cmd} />;
     }
     if (step.mcpOutput) {
         return (
@@ -50,7 +45,7 @@ function Output({ step, t }: { step: AgentStep; t: ReturnType<typeof useT> }) {
             </Section>
         );
     }
-    if (!step.result) return null;
+    if (!step.result || step.needsModel === 'vision') return null;
     return (
         <Section label={step.success === false ? t('activity.detail.error') : t('activity.detail.result')}>
             <ScrollBox maxHeight={OUTPUT_MAX_HEIGHT}>
@@ -74,12 +69,13 @@ export interface ToolStepRowProps {
 /** One tool call: a line that opens to its tool, arguments and output. */
 export function ToolStepRow({ step, awaitingUser = false, now, testID }: ToolStepRowProps) {
     const t = useT();
+    const ensureModel = useEnsureModel();
     const [open, setOpen] = useState(false);
     const waiting = !!step.active && awaitingUser;
     const line = waiting ? t('activity.waiting') : toolRowText(step, t);
     const count = step.count ?? 1;
     const notRun = (!!step.declined || !!step.timedOut) && !step.active;
-    const failure = step.success === false && step.result && !notRun ? failureText(step, t) : '';
+    const failure = step.success === false && step.result && !notRun && step.needsModel !== 'vision' ? failureText(step, t) : '';
     const timing = waiting
         ? ''
         : step.active
@@ -147,8 +143,18 @@ export function ToolStepRow({ step, awaitingUser = false, now, testID }: ToolSte
                     ) : null}
                     {failure ? <Text role="caption" dir="auto" tone="danger">{failure}</Text> : null}
                     <Output step={step} t={t} />
+                    {step.retrievalChunks && step.retrievalChunks.length > 0 ? <ChunksView chunks={step.retrievalChunks} /> : null}
+                    {step.fileList && step.fileList.files.length > 0 ? <FileListView fileList={step.fileList} /> : null}
                 </Stack>
             </Disclosure>
+            {step.needsModel === 'vision' && !step.active ? (
+                <Notice
+                    tone="info"
+                    message={t('activity.visionNeeded')}
+                    action={{ label: t('activity.getVisionModel'), onPress: () => void ensureModel('vision') }}
+                    testID="vision-offer"
+                />
+            ) : null}
         </Stack>
     );
 }

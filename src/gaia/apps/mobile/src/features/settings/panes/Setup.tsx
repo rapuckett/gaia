@@ -2,10 +2,12 @@
 // SPDX-License-Identifier: MIT
 
 import { formatSize, ltrIn } from '@webui/components/setup/format';
+import { tEn } from '@webui/i18n/translator';
+import { isServerDown } from '@webui/utils/serverDown';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 
-import { useActiveModel, useSetupPlan, useSetupPreflight } from '@/data';
+import { useActiveModel, useGpuMemory, useSetupPlan, useSetupPreflight } from '@/data';
 import { describeError, useT } from '@/i18n/useT';
 import { reopenSetup } from '@/features/setup/SetupGate';
 import { Button, Icon, ListRow, Notice, Sheet, Stack, Text } from '@/ui';
@@ -20,7 +22,7 @@ interface Line {
     label: string;
     value: string | null;
     /** Where the row's setting lives; a row without one only reports. */
-    to?: { section: SectionId; target?: string };
+    to?: { section: SectionId; target?: string; provider?: 'local' | 'fireworks' };
     testID: string;
 }
 
@@ -40,30 +42,39 @@ export default function Setup() {
     const error = plan.error ?? hardware.error;
     const local = !!active.data?.model && !active.data.remote && active.data.downloaded !== false;
 
-    // Rows whose setting has no anchor in this app yet (cloud keys, GPU memory, models on this PC,
-    // model server) are plain lines until the section that owns them registers one.
+    // As on the web: where the split can change, or where reading it failed for a reason Model explains.
+    const gpuRead = useGpuMemory();
+    const gpuShown = !!gpuRead.data?.applies || (gpuRead.error != null && !isServerDown(describeError(gpuRead.error, tEn)));
     const groups: { title: string; lines: Line[] }[] = [
         {
             title: t('settings.setup.where'),
-            lines: [{ label: t('settings.setup.chatRuns'), value: chatName, to: { section: 'model', target: 'model-in-use' }, testID: 'setup-chat-model' }],
+            lines: [
+                { label: t('settings.setup.chatRuns'), value: chatName, to: { section: 'model', target: 'model-in-use' }, testID: 'setup-chat-model' },
+                { label: t('settings.setup.cloudKeys'), value: null, to: { section: 'model', target: 'cloud-key', provider: 'fireworks' }, testID: 'setup-cloud-keys' },
+            ],
         },
         {
-            title: t('setup.pc.step'),
+            title: t('mobileApp.setup.pc.step'),
             lines: [
                 { label: t('settings.setup.detected'), value: detectedLine(t, plan.data, hardware.data), testID: 'setup-detected' },
                 {
                     label: t('settings.setup.server'),
                     value: plan.data ? t(plan.data.lemonade.mode === 'external' ? 'settings.setup.serverYours' : 'settings.setup.serverOwn') : null,
+                    to: { section: 'advanced', target: 'model-server' },
                     testID: 'setup-server',
                 },
+                ...(gpuShown
+                    ? [{ label: t('setup.gpu.title'), value: null, to: { section: 'model' as const, target: 'gpu-memory', provider: 'local' as const }, testID: 'setup-gpu' }]
+                    : []),
             ],
         },
         {
             title: t('setup.models.step'),
             lines: [
                 {
-                    label: t('settings.setup.models'),
+                    label: t('mobileApp.settings.setup.models'),
                     value: catalog ? t('settings.setup.modelsValue', { n: String(installed.length), size: ltrIn(t.locale, formatSize(installedGb)) }) : null,
+                    to: { section: 'model', target: 'models-on-pc', provider: 'local' },
                     testID: 'setup-models',
                 },
                 ...(local ? [{ label: t('settings.setup.context'), value: null, to: { section: 'model' as const, target: 'ctx-size' }, testID: 'setup-context' }] : []),
@@ -100,7 +111,7 @@ export default function Setup() {
                 {error ? <Notice tone="danger" message={describeError(error, t)} testID="setup-error" /> : null}
                 {groups.map((g) => (
                     <Stack key={g.title} gap="xs">
-                        <Text role="label" weight="medium" tone="secondary">{g.title}</Text>
+                        <Text role="label" weight="medium" tone="secondary" accessibilityRole="header">{g.title}</Text>
                         {g.lines.map((l) => {
                             const to = l.to;
                             return (
@@ -109,7 +120,7 @@ export default function Setup() {
                                     title={l.label}
                                     subtitle={l.value ?? undefined}
                                     trailing={to ? <Icon icon={ChevronRight} size="sm" tone="muted" /> : undefined}
-                                    onPress={to ? () => openSettings(to.section, to.target, 'setup') : undefined}
+                                    onPress={to ? () => openSettings(to.section, to.target, 'setup', router, to.provider) : undefined}
                                     testID={l.testID}
                                 />
                             );

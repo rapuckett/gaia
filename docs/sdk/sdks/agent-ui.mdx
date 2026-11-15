@@ -1846,8 +1846,8 @@ over plain http to the main server is a **401** too. What a device may call is
 in [Who may call a route](#who-may-call-a-route).
 
 A file the device opens, such as a cited document
-(`GET /api/documents/{doc_id}/file`), comes over the listener like any other
-call, with the token. The device fetches it itself and shows or shares it; a
+(`GET /api/documents/{doc_id}/file?session_id=…`, naming the chat it was cited
+in), comes over the listener like any other call, with the token. The device fetches it itself and shows or shares it; a
 browser it handed the link to couldn't send the token, so it would get a
 **401**.
 
@@ -2056,9 +2056,14 @@ else's:
   <Accordion title="GET /api/documents/{doc_id}/file">
     The document's original file, served inline so the browser can show it.
     A citation link opens a PDF at its page with `#page=N`. Only files in the
-    document library are served; a file deleted from disk returns 404. Away
-    from the PC, a file holding credentials is a **403**, however it got into
-    the library.
+    document library are served; a file deleted from disk returns 404.
+
+    Away from the PC (mobile access, or a paired device), the request names a
+    chat with the `session_id` query parameter, and the document must be
+    attached to that chat or its file must be in the chat's folders, as for
+    [file reads](#files). Otherwise it is a **403**, the same whether or not
+    the document exists, and so is a request that names no chat. A file
+    holding credentials is a **403** too, however it got into the library.
   </Accordion>
 
   <Accordion title="POST /api/documents/{doc_id}/cancel">
@@ -3201,6 +3206,15 @@ credential store (the slot the TUI uses). A key is never echoed back or logged.
     and hand Lemonade a key, a paired device is refused (**403**).
   </Accordion>
 
+  <Accordion title="GET /api/providers/list">
+    Every provider and whether it is set up, for a paired device: `providers`,
+    each with `id`, `name`, `remote`, `privacy_notice`, `configured` (Lemonade
+    has it and it lists models; always `true` for `local`) and `blocked` (Local
+    only is on), plus `lemonade_error` when Lemonade could not be read. It only
+    reads: it registers nothing, hands no key over, and never carries a key, a
+    key hint or a gateway address. Requires `X-Gaia-UI: 1` (**403** without it).
+  </Accordion>
+
   <Accordion title="GET /api/providers/active">
     The model new turns run — the one a new chat starts on: the picked model,
     else `default_model` from `~/.gaia/config.json`, else Gemma. Carries
@@ -3222,7 +3236,9 @@ credential store (the slot the TUI uses). A key is never echoed back or logged.
     Register a cloud provider (`fireworks` or `amd`) in Lemonade and give it
     the key. Body: `{"api_key", "base_url", "auth_header_name",
     "auth_header_prefix"}`; the last three apply to `amd` only. A blank
-    `api_key` keeps the current key.
+    `api_key` keeps the current key, and a gateway field left out keeps the
+    one `amd` is registered with. Only the PC may send a key or a gateway
+    field, since they decide where the saved key goes.
 
     While GAIA uses the user's own Lemonade (`lemonade_mode` `external`) it
     sends that server nothing: it succeeds only when the server already has
@@ -3230,7 +3246,7 @@ credential store (the slot the TUI uses). A key is never echoed back or logged.
 
     **Errors:** **401** when the provider rejects the key or discovers no
     models (a key that discovers nothing is removed from Lemonade again);
-    **403** when a key comes from mobile access, a paired device or another computer; **409** when an
+    **403** when a key or a gateway field comes from mobile access, a paired device or another computer; **409** when an
     environment key takes precedence, Lemonade is not on this PC, or the
     user's own server has no working provider.
   </Accordion>

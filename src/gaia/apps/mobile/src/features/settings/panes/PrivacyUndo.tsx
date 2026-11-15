@@ -5,11 +5,11 @@ import { useState } from 'react';
 
 import { GaiaApiError } from '@/api/errors';
 import { useUndoSettings, useUpdateUndoSettings } from '@/data';
-import { describeError, useT } from '@/i18n/useT';
+import { describeError, describeFailureWith, useT } from '@/i18n/useT';
 import { Button, Disclosure, Ltr, Notice, Stack, Text, TextField } from '@/ui';
 
+import { isPcRefusal, PcOnlyNotice } from '../PcOnlyNotice';
 import { SettingsAnchor } from '../targets';
-import { reasonOf } from './reason';
 
 function isWholeInRange(value: string, min: number, max: number): boolean {
     if (!/^\d+$/.test(value.trim())) return false;
@@ -63,8 +63,10 @@ export function PrivacyUndo() {
                     <Text role="label" tone="muted">
                         {t('settings.undo.hint')}
                     </Text>
-                    {undo.error ? (
-                        <Notice tone="danger" message={t('settings.undo.readFailed', { reason: reasonOf(undo.error, t) })} testID="undo-read-error" />
+                    {isPcRefusal(undo.error) || isPcRefusal(save.error) ? (
+                        <PcOnlyNotice testID="undo-pc-only" />
+                    ) : undo.error ? (
+                        <Notice tone="danger" message={t.compose((say) => say('settings.undo.readFailed', { reason: describeFailureWith(undo.error, say) }))} testID="undo-read-error" />
                     ) : null}
                     {settings ? (
                         <>
@@ -109,7 +111,7 @@ export function PrivacyUndo() {
                             />
                             {saved ? <Notice tone="success" message={t('settings.undo.saved')} testID="undo-saved" /> : null}
                             {rejected ? <Notice tone="danger" message={t('settings.undo.fix')} testID="undo-rejected" /> : null}
-                            {save.error && !rejected ? <Notice tone="danger" message={describeError(save.error, t)} testID="undo-error" /> : null}
+                            {save.error && !rejected && !isPcRefusal(save.error) ? <Notice tone="danger" message={describeError(save.error, t)} testID="undo-error" /> : null}
                         </>
                     ) : null}
                 </Stack>

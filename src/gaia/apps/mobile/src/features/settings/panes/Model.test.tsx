@@ -5,7 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act } from 'react';
 import { createRoot } from 'test-renderer';
 
-import type { ProviderInfo, ProviderModel, ProvidersResponse } from '@/api/client.types';
+import type { ActiveModel, ProviderModel, ProviderSummary, ProviderSummaryList } from '@/api/client.types';
 import { GaiaApiError } from '@/api/errors';
 import { createFakeClient } from '@/api/fake';
 import { GaiaClientProvider } from '@/data/GaiaClientProvider';
@@ -38,9 +38,10 @@ jest.mock('@/ui', () => {
         Text: RNText,
     };
 });
+jest.mock('./model/ModelList', () => ({ ModelList: () => null }));
 jest.mock('../targets', () => ({ SettingsAnchor: ({ children }: { children?: unknown }) => children ?? null }));
 
-const local: ProviderInfo = { id: 'local', name: 'Local', remote: false, privacy_notice: 'Runs on this PC. Nothing leaves your machine.' };
+const local: ProviderSummary = { id: 'local', name: 'Local', remote: false, privacy_notice: 'Runs on this PC. Nothing leaves your machine.', configured: true, blocked: false };
 const model = (id: string, display_name: string): ProviderModel => ({
     id,
     display_name,
@@ -52,17 +53,14 @@ const model = (id: string, display_name: string): ProviderModel => ({
     evidence: null,
     available: true,
 });
-const providers: ProvidersResponse = {
-    providers: [local],
-    active: { provider: 'local', model: 'Gemma-4-E4B-it-GGUF', display_name: 'Gemma 4 E4B', label: null, remote: false, is_default: true, downloaded: true },
-    lemonade_error: null,
-};
+const providers: ProviderSummaryList = { providers: [local], lemonade_error: null };
+const active: ActiveModel = { provider: 'local', model: 'Gemma-4-E4B-it-GGUF', display_name: 'Gemma 4 E4B', label: null, remote: false, is_default: true, downloaded: true };
 
 async function switchTo(failWith?: GaiaApiError) {
     delete selects['Switch model'];
     const client = createFakeClient({
         providers,
-        activeModel: providers.active,
+        activeModel: active,
         providerModels: {
             local: { provider: 'local', models: [model('Gemma-4-E4B-it-GGUF', 'Gemma 4 E4B'), model('Qwen3.6-35B-A3B-GGUF', 'Qwen 3.6 35B')] },
         },

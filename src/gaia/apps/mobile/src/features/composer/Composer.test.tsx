@@ -12,7 +12,7 @@ import type { Attachments } from './useAttachments';
 jest.mock('./AttachButton', () => ({ AttachButton: 'AttachButton' }));
 jest.mock('./AttachmentChips', () => ({ AttachmentChips: 'AttachmentChips' }));
 
-jest.mock('@/i18n/useT', () => ({ useT: () => (key: string) => key }));
+jest.mock('@/i18n/useT', () => ({ useT: () => Object.assign((key: string) => key, { bare: (key: string) => key }) }));
 jest.mock('@/ui/icons', () => ({ ArrowUp: 'ArrowUp', Square: 'Square' }));
 jest.mock('@/ui', () => {
     const { createElement: mockElement } = jest.requireActual('react');

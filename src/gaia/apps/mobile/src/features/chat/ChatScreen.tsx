@@ -5,15 +5,20 @@ import { isAuthRequiredMessage } from '@webui/utils/connectorRetry.core';
 import { useEffect, useRef, useState } from 'react';
 
 import { needsOutcome, nextToSend } from '@webui/utils/messageQueue';
+import { FLAGSHIP_AGENT_ID } from '@webui/utils/newTask';
 import { MAX_STREAM_RECONNECTS } from '@webui/utils/streamErrors.core';
 
-import { useAnswerQuestion, useChatStream, useContextUsage, usePermissionMode, useMessages, useSession } from '@/data';
+import { useChatReadAloud } from '@/features/audio/useChatReadAloud';
+import { useAnswerQuestion, useChatStream, useContextUsage, usePermissionMode, useMessages, useRefreshTurnChanges, useSession } from '@/data';
+import { FlagshipAgentBanner } from '@/features/banners/FlagshipAgentBanner';
 import { Composer, ContextMeter, ContextWarning, ModelChip, PermissionChip, useAttachments, useComposerQueue, useFollowUpEvents } from '@/features/composer';
 import { QueuedMessages } from '@/features/composer/QueuedMessages';
-import { describeError, useT } from '@/i18n/useT';
+import { FileScope } from '@/features/files';
+import { describeError, describeErrorWith, useT } from '@/i18n/useT';
 import { isQuestionGone, questionCardData, resolveTypedAnswer } from '@/features/questions/questionLogic';
 import { ErrorState, Notice, Screen, Stack } from '@/ui';
 
+import { useAnswerComparison } from './compare/useAnswerComparison';
 import { ChatPrompts } from './ChatPrompts';
 import { ConnectorRetry } from './ConnectorRetry';
 import { ChatHeader } from './header';
@@ -22,13 +27,15 @@ import { usePermissionPrompt } from './permission/usePermissionPrompt';
 import { liveStatusLine } from './liveStatus';
 import { MessageList } from './messages/MessageList';
 import { TailIssues } from './ReplyErrors';
-import { SessionPanel } from './session-panel';
+import { registerOpenChat } from './sendToOpenChat';
+import { OfflineNotice, SessionPanel } from './session-panel';
 import { buildTail } from './tailState';
 import { TurnTail } from './TurnTail';
+import { useTurnAnnouncer, useTurnEnd } from './useTurnAnnouncer';
 
 const NO_MESSAGES: never[] = [];
 
-export function ChatScreen({ sessionId }: { sessionId: string }) {
+export function ChatScreen({ sessionId, onManageDocuments }: { sessionId: string; onManageDocuments?: () => void }) {
     const t = useT();
     const session = useSession(sessionId);
     const messages = useMessages(sessionId);
@@ -43,12 +50,23 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
     const [actionError, setActionError] = useState<unknown>(null);
     const [panelOpen, setPanelOpen] = useState(false);
     const busy = stream.status !== 'idle';
+    // A comparison waiting on its model holds new messages like a running reply does.
+    const { comparing } = useAnswerComparison(sessionId);
+    const hold = busy || comparing;
     const context = useContextUsage(sessionId, stream.events, busy);
     const saved = messages.data?.messages ?? NO_MESSAGES;
+    useChatReadAloud(sessionId, stream, saved);
+    useTurnAnnouncer(stream, saved);
+    const refreshChanges = useRefreshTurnChanges(sessionId);
+    useTurnEnd(busy, () => void refreshChanges());
 
-    const tail = buildTail(saved, stream);
+    // A chat made by a retired agent can be read but not continued.
+    const retiredAgent = session.data?.agent_type && session.data.agent_type !== FLAGSHIP_AGENT_ID ? session.data.agent_type : null;
+
+    const builtTail = buildTail(saved, stream);
+    const tail = builtTail && retiredAgent ? { ...builtTail, canTryAgain: false, canContinue: false } : builtTail;
     const lastReply = saved.filter((m) => m.role !== 'system').at(-1);
-    const connectorError = !busy && lastReply?.role === 'assistant' && isAuthRequiredMessage(lastReply.content) ? lastReply : null;
+    const connectorError = !busy && !retiredAgent && lastReply?.role === 'assistant' && isAuthRequiredMessage(lastReply.content) ? lastReply : null;
     const line = stream.reconnecting
         ? t('live.reconnectingStream', { attempt: stream.reconnecting, max: MAX_STREAM_RECONNECTS })
         : liveStatusLine(
@@ -64,14 +82,14 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
     const sendable = nextToSend(queue.held) !== undefined || needsOutcome(queue.held);
     const { flush, giveBack } = queue;
     useEffect(() => {
-        if (busy) return;
+        if (hold) return;
         if (stopped.current) {
             stopped.current = false;
             giveBack();
             return;
         }
         if (sendable) void flush(sessionId);
-    }, [busy, sendable, flush, giveBack, sessionId]);
+    }, [hold, sendable, flush, giveBack, sessionId]);
 
     const stop = () => {
         stopped.current = true;
@@ -90,17 +108,27 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
             .catch((err: unknown) => {
                 // Back in the box, so nothing typed is lost; an expired question says so in its card.
                 queue.setDraft((prev) => (prev.trim() ? `${message}\n\n${prev}` : message));
-                if (!isQuestionGone(err)) setActionError(t('composer.answerFailed', { error: describeError(err, t) }));
+                if (!isQuestionGone(err)) setActionError(t.compose((say) => say('composer.answerFailed', { error: describeErrorWith(err, say) })));
             });
         return true;
     };
 
     const send = (message: string): boolean | void => {
         setActionError(null);
+        if (retiredAgent) {
+            setActionError(t('chat.retiredSend', { agent: retiredAgent }));
+            return false;
+        }
         if (question) return answerQuestion(message, question);
-        if (busy) queue.hold(message);
+        if (hold) queue.hold(message);
         else stream.send(message);
     };
+    const sendRef = useRef(send);
+    useEffect(() => {
+        sendRef.current = send;
+    });
+    useEffect(() => registerOpenChat((text) => void sendRef.current(text)), []);
+
     const tryAgain = (replyId: number | null) => {
         setActionError(null);
         stream.retry(replyId).catch((err: unknown) => setActionError(err));
@@ -117,13 +145,16 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
           : saved.length > 0 || tail
             ? t('composer.reply')
             : undefined;
+    const disabledReason = retiredAgent ? t('chat.retiredReadOnly', { agent: retiredAgent }) : undefined;
 
     return (
+        <FileScope sessionId={sessionId}>
         <Screen
             keyboard="avoid"
-            header={<ChatHeader sessionId={sessionId} onOpenSessionPanel={() => setPanelOpen(true)} />}
+            header={<ChatHeader sessionId={sessionId} onOpenSessionPanel={() => setPanelOpen(true)} onManageDocuments={onManageDocuments} />}
             footer={
                 <>
+                    <FlagshipAgentBanner />
                     {actionError ? (
                         <Stack paddingX="lg">
                             <Notice
@@ -143,6 +174,7 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
                         onRetry={queue.retry}
                         onSteer={steerable ? queue.steer : undefined}
                     />
+                    <OfflineNotice sessionId={sessionId} live={busy} />
                     <ContextWarning usage={context.usage} />
                     <Composer
                         value={queue.draft}
@@ -156,6 +188,7 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
                         }
                         answering={!!question}
                         placeholder={placeholder}
+                        disabledReason={disabledReason}
                         rightControls={
                             <>
                                 <ContextMeter usage={context.usage} unavailable={context.unavailable} />
@@ -171,6 +204,7 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
             ) : (
                 <MessageList
                     sessionId={sessionId}
+                    readOnly={!!retiredAgent}
                     live={
                         <>
                             {tail ? (
@@ -190,5 +224,6 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
             )}
             <SessionPanel sessionId={sessionId} open={panelOpen} onClose={() => setPanelOpen(false)} />
         </Screen>
+        </FileScope>
     );
 }

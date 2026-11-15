@@ -32,10 +32,13 @@ jest.mock('@/ui', () => {
             buttons[p.label] = p;
             return null;
         },
+        Disclosure: ({ children }: { children?: unknown }) => children ?? null,
+        HScroll: Pass,
         Icon: () => null,
         Notice: ({ message }: { message: string }) => <RNText>{message}</RNText>,
         Pressable: Pass,
         Row: Pass,
+        ScrollBox: Pass,
         Stack: Pass,
         Surface: Pass,
         Text: RNText,
@@ -102,5 +105,26 @@ describe('PermissionPrompt', () => {
             jest.advanceTimersByTime(5000);
         });
         expect(onExpired).toHaveBeenCalledTimes(1);
+    });
+
+    it('picks the preview by tool: a saved file, a changed file, a calendar event', async () => {
+        const write = await mount(prompt({ toolArgs: { file_path: 'a.txt', content: 'hello' } }));
+        expect(write.shown()).toContain('What will be saved');
+        expect(write.shown()).toContain('hello');
+
+        const edit = await mount(prompt({ toolArgs: { file_path: 'a.txt', old_content: 'one\n', new_content: 'two\n' } }));
+        expect(edit.shown()).toContain('What will change');
+        expect(edit.shown()).toContain('-one');
+        expect(edit.shown()).toContain('+two');
+
+        const event = await mount(
+            prompt({
+                tool: 'calendar/create_calendar_event',
+                toolArgs: { title: 'Lunch', start: '2026-11-20', end: '2026-11-20', notify_attendees: [] },
+            }),
+        );
+        expect(event.shown()).toContain('Lunch');
+        expect(event.shown()).toContain('Nobody is notified');
+        expect(event.shown()).not.toContain('What will be saved');
     });
 });

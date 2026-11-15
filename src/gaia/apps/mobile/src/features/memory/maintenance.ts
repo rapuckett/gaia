@@ -3,10 +3,9 @@
 
 import type { MessageKey } from '@webui/i18n/registry';
 
-import { GaiaApiError } from '@/api/errors';
 import type { MemoryMaintenanceAction, MemoryMaintenanceOutcome } from '@/data';
 import type { Translate } from '@/i18n/useT';
-import { describeError } from '@/i18n/useT';
+import { describeFailureWith } from '@/i18n/useT';
 
 import type { MemoryNotice } from './useMemoryNotice';
 
@@ -63,6 +62,5 @@ export function outcomeNotice(outcome: MemoryMaintenanceOutcome, t: Translate): 
 }
 
 export function failureNotice(action: MemoryMaintenanceAction, error: Error, t: Translate): MemoryNotice {
-    const detail = error instanceof GaiaApiError ? error.detail : describeError(error, t);
-    return { tone: 'danger', text: t(MAINTENANCE_LABELS[action].failed, { error: detail }) };
+    return { tone: 'danger', text: t.compose((say) => say(MAINTENANCE_LABELS[action].failed, { error: describeFailureWith(error, say) })) };
 }

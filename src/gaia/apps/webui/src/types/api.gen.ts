@@ -242,6 +242,8 @@ export interface ApiSchemas {
   ProviderNpuProblem: ProviderNpuProblem;
   ProviderPlacement: ProviderPlacement;
   ProviderRestoreNotice: ProviderRestoreNotice;
+  ProviderSummary: ProviderSummary;
+  ProviderSummaryList: ProviderSummaryList;
   ProviderView: ProviderView;
   PullRequestRequest: PullRequestRequest;
   PutAwayContext: PutAwayContext;
@@ -3066,6 +3068,21 @@ export interface ProviderModelsResponse {
   models: ProviderModelEntry[];
   provider: "local" | "fireworks" | "amd";
   [k: string]: unknown | undefined;
+}
+/**
+ * A provider as a paired device may see it: no key, key hint or address.
+ */
+export interface ProviderSummary {
+  blocked: boolean;
+  configured: boolean;
+  id: string;
+  name: string;
+  privacy_notice: string;
+  remote: boolean;
+}
+export interface ProviderSummaryList {
+  lemonade_error?: string | null;
+  providers: ProviderSummary[];
 }
 export interface PullRequestRequest {
   body?: string;

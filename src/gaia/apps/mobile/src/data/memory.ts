@@ -5,15 +5,25 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tansta
 
 import type {
     ConsolidateMemoryResult,
+    DiscoveryFinding,
     EmbeddingCoverage,
+    InferenceInsight,
     KnowledgeCreateBody,
+    KnowledgeListParams,
     KnowledgeSaveResult,
     KnowledgeUpdateBody,
     MemoryActivityDay,
+    MemoryConversation,
+    MemoryEntity,
+    MemoryKnowledgeEntry,
     MemoryKnowledgeItem,
+    MemoryCleared,
+    MemoryReinitializeResult,
     MemorySettings,
+    MemorySettingsUpdateResponse,
     MemoryStats,
     MemoryToolStat,
+    MemoryTurn,
     MemoryUpcomingItem,
     RebuildEmbeddingsResult,
     ReconcileMemoryResult,
@@ -34,6 +44,11 @@ export const memoryKeys = {
     activity: (days: number) => ['memory', 'activity', days] as const,
     tools: ['memory', 'tools'] as const,
     knowledge: (want: number) => ['memory', 'knowledge', want] as const,
+    browse: (params: KnowledgeListParams) => ['memory', 'browse', params] as const,
+    entities: ['memory', 'entities'] as const,
+    conversations: (limit: number) => ['memory', 'conversations', limit] as const,
+    conversationSearch: (query: string) => ['memory', 'conversation-search', query] as const,
+    conversation: (sessionId: string) => ['memory', 'conversation', sessionId] as const,
     upcoming: (days: number) => ['memory', 'upcoming', days] as const,
 };
 
@@ -60,8 +75,28 @@ export function useMemorySettings() {
 export function useUpdateMemorySettings() {
     const client = useGaiaClient();
     const queryClient = useQueryClient();
-    return useMutation<MemorySettings, Error, Partial<MemorySettings>>({
+    return useMutation<MemorySettingsUpdateResponse, Error, Partial<MemorySettings>>({
         mutationFn: (settings) => requireClient(client).updateMemorySettings(settings),
+        onSettled: () => queryClient.invalidateQueries({ queryKey: memoryKeys.all }),
+    });
+}
+
+/** Deletes every memory: `mutate()`. Re-reads the memory queries afterwards. */
+export function useClearAllMemory() {
+    const client = useGaiaClient();
+    const queryClient = useQueryClient();
+    return useMutation<MemoryCleared, Error, void>({
+        mutationFn: () => requireClient(client).clearAllMemory(),
+        onSettled: () => queryClient.invalidateQueries({ queryKey: memoryKeys.all }),
+    });
+}
+
+/** Deletes every memory, then re-collects this PC's facts: `mutate()`. */
+export function useReinitializeMemory() {
+    const client = useGaiaClient();
+    const queryClient = useQueryClient();
+    return useMutation<MemoryReinitializeResult, Error, void>({
+        mutationFn: () => requireClient(client).reinitializeMemory(),
         onSettled: () => queryClient.invalidateQueries({ queryKey: memoryKeys.all }),
     });
 }
@@ -100,6 +135,17 @@ export function useMemoryUpcoming(days: number) {
         queryKey: memoryKeys.upcoming(days),
         enabled: client !== null,
         queryFn: ({ signal }) => requireClient(client).getMemoryUpcoming(days, { signal }),
+    });
+}
+
+/** Saves the findings or insights the person kept, then re-reads every memory query. */
+export function useCommitProfile() {
+    const client = useGaiaClient();
+    const queryClient = useQueryClient();
+    return useMutation<{ stored: number }, Error, { kind: 'discovery'; items: DiscoveryFinding[] } | { kind: 'inference'; items: InferenceInsight[] }>({
+        mutationFn: (commit) =>
+            commit.kind === 'discovery' ? requireClient(client).commitMemoryDiscovery(commit.items) : requireClient(client).commitMemoryInference(commit.items),
+        onSuccess: () => queryClient.invalidateQueries({ queryKey: memoryKeys.all }),
     });
 }
 
@@ -208,5 +254,59 @@ export function useForgetMemory() {
     return useMutation<unknown, Error, string>({
         mutationFn: (id) => requireClient(client).deleteMemoryKnowledge(id),
         onSuccess: () => queryClient.invalidateQueries({ queryKey: memoryKeys.all }),
+    });
+}
+
+/** One page of the Advanced tab's knowledge browser, filtered as `params` say. */
+export function useKnowledgeBrowse(params: KnowledgeListParams) {
+    const client = useGaiaClient();
+    return useQuery<{ items: MemoryKnowledgeEntry[]; total: number }>({
+        queryKey: memoryKeys.browse(params),
+        enabled: client !== null,
+        placeholderData: keepPreviousData,
+        queryFn: async ({ signal }) => {
+            const page = await requireClient(client).listMemoryKnowledge(params, { signal });
+            return { items: page.items, total: typeof page.total === 'number' ? page.total : page.items.length };
+        },
+    });
+}
+
+export function useMemoryEntities() {
+    const client = useGaiaClient();
+    return useQuery<MemoryEntity[]>({
+        queryKey: memoryKeys.entities,
+        enabled: client !== null,
+        queryFn: ({ signal }) => requireClient(client).listMemoryEntities({ signal }),
+    });
+}
+
+/** The most recent `limit` conversations in memory. */
+export function useMemoryConversations(limit: number) {
+    const client = useGaiaClient();
+    return useQuery<MemoryConversation[]>({
+        queryKey: memoryKeys.conversations(limit),
+        enabled: client !== null,
+        queryFn: ({ signal }) => requireClient(client).listMemoryConversations(limit, { signal }),
+    });
+}
+
+/** Turns matching `query`; idle while it is blank. */
+export function useConversationSearch(query: string, limit: number) {
+    const client = useGaiaClient();
+    const q = query.trim();
+    return useQuery<MemoryTurn[]>({
+        queryKey: memoryKeys.conversationSearch(q),
+        enabled: client !== null && q !== '',
+        queryFn: ({ signal }) => requireClient(client).searchMemoryConversations(q, limit, { signal }),
+    });
+}
+
+/** One conversation's turns; idle until a conversation is chosen. */
+export function useMemoryConversation(sessionId: string | null) {
+    const client = useGaiaClient();
+    return useQuery<MemoryTurn[]>({
+        queryKey: memoryKeys.conversation(sessionId ?? ''),
+        enabled: client !== null && sessionId !== null,
+        queryFn: ({ signal }) => requireClient(client).getMemoryConversation(sessionId!, { signal }),
     });
 }

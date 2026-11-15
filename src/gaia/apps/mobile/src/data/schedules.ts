@@ -7,7 +7,7 @@ import type { CreateScheduleRequest, DeleteScheduleResult, Schedule, ScheduleLis
 import { SCHEDULE_RESULTS_LIMIT, SCHEDULES_POLL_MS } from '@/api/constants';
 
 import { useGaiaClient } from './GaiaClientProvider';
-import { requireClient } from './queries';
+import { failedWithoutData, requireClient } from './queries';
 
 export const scheduleKeys = {
     list: ['schedules'] as const,
@@ -21,7 +21,8 @@ export function useSchedules() {
         queryKey: scheduleKeys.list,
         enabled: client !== null,
         queryFn: ({ signal }) => requireClient(client).listSchedules({ signal }),
-        refetchInterval: SCHEDULES_POLL_MS,
+        // Each poll would put a failed query with no data back to pending, showing a skeleton for good.
+        refetchInterval: (query) => (failedWithoutData(query) ? false : SCHEDULES_POLL_MS),
     });
 }
 
