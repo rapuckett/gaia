@@ -23,6 +23,7 @@ export * from './privacy';
 export * from './providers';
 export * from './queries';
 export * from './schedules';
+export * from './sessionChanges';
 export * from './sessionEvents';
 export * from './setup';
 export * from './skills';

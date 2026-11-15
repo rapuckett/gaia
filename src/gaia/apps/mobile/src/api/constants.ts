@@ -76,7 +76,12 @@ export const ENDPOINTS = {
     sessionCapabilities: '/api/sessions/{session_id}/capabilities',
     sessionChanges: '/api/sessions/{session_id}/changes',
     sessionChangesDiff: '/api/sessions/{session_id}/changes/{turn_id}/diff',
+    sessionChangesGit: '/api/sessions/{session_id}/changes/git',
+    sessionChangesGitCommit: '/api/sessions/{session_id}/changes/git/commit',
+    sessionChangesGitPr: '/api/sessions/{session_id}/changes/git/pr',
+    sessionChangesTotal: '/api/sessions/{session_id}/changes/total',
     sessionChangesUndo: '/api/sessions/{session_id}/changes/{turn_id}/undo',
+    sessionChangesUndoAll: '/api/sessions/{session_id}/changes/undo',
     sessionDocument: '/api/sessions/{session_id}/documents/{doc_id}',
     sessionDocuments: '/api/sessions/{session_id}/documents',
     sessionEnvironment: '/api/sessions/{session_id}/environment',
@@ -307,6 +312,19 @@ export function sessionEnvironmentPath(sessionId: string, part?: 'folderRemove' 
 
 export function sessionChangesPath(sessionId: string): string {
     return ENDPOINTS.sessionChanges.replace('{session_id}', encodeURIComponent(sessionId));
+}
+
+const CHANGES_PARTS = {
+    git: ENDPOINTS.sessionChangesGit,
+    gitCommit: ENDPOINTS.sessionChangesGitCommit,
+    gitPr: ENDPOINTS.sessionChangesGitPr,
+    total: ENDPOINTS.sessionChangesTotal,
+    undoAll: ENDPOINTS.sessionChangesUndoAll,
+};
+
+/** The chat-wide Changes calls: the running total, Undo all and the git actions. */
+export function sessionChangesPartPath(sessionId: string, part: keyof typeof CHANGES_PARTS): string {
+    return CHANGES_PARTS[part].replace('{session_id}', encodeURIComponent(sessionId));
 }
 
 export function sessionChangesDiffPath(sessionId: string, turnId: string): string {

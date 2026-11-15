@@ -99,7 +99,9 @@ import type {
     Schedule,
     ScheduleList,
     ScheduleResults,
+    SessionChanges,
     SessionEnvironment,
+    SessionGit,
     SessionList,
     SessionPermissions,
     SessionSearchResponse,
@@ -113,6 +115,7 @@ import type {
     SpendingReport,
     FileDiff,
     TurnChanges,
+    UndoAllResult,
     UndoResult,
     UndoSettings,
     UploadedFile,
@@ -171,6 +174,7 @@ import {
     sessionMessagesPath,
     sessionPath,
     sessionChangesDiffPath,
+    sessionChangesPartPath,
     sessionChangesPath,
     sessionChangesUndoPath,
     sessionPinPath,
@@ -486,6 +490,30 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         undoTurn(sessionId, turnId, force = false, options) {
             return postJson<UndoResult>(sessionChangesUndoPath(sessionId, turnId), { force }, options?.signal);
+        },
+
+        getSessionChanges(sessionId, options) {
+            return getJson<SessionChanges>(sessionChangesPartPath(sessionId, 'total'), options?.signal);
+        },
+
+        undoAllChanges(sessionId, force = false, options) {
+            return postJson<UndoAllResult>(sessionChangesPartPath(sessionId, 'undoAll'), { force }, options?.signal);
+        },
+
+        getSessionGit(sessionId, options) {
+            return getJson<SessionGit>(sessionChangesPartPath(sessionId, 'git'), options?.signal);
+        },
+
+        commitChanges(sessionId, root, message, options) {
+            return postJson<{ root: string; commit: string; files: string[]; ignored: string[] }>(
+                sessionChangesPartPath(sessionId, 'gitCommit'),
+                { root, message, confirmed: true },
+                options?.signal,
+            );
+        },
+
+        createPullRequest(sessionId, root, title, body, options) {
+            return postJson<{ root: string; url: string }>(sessionChangesPartPath(sessionId, 'gitPr'), { root, title, body, confirmed: true }, options?.signal);
         },
 
         deleteSession(sessionId, options) {

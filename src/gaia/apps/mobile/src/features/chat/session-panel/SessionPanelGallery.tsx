@@ -4,7 +4,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 
-import type { ChatPerformance, ContextUsage, LocalModelStatus, Session, SessionEnvironment } from '@/api/client.types';
+import type { ChatPerformance, ContextUsage, LocalModelStatus, Session, SessionChanges, SessionEnvironment, SessionGit } from '@/api/client.types';
 import { createFakeClient } from '@/api/fake';
 import { GaiaApiError } from '@/api/errors';
 import { GaiaClientProvider } from '@/data';
@@ -32,11 +32,68 @@ export type SessionPanelGalleryState =
     | 'envRemove'
     | 'envOffline'
     | 'envFull'
-    | 'envEmpty';
+    | 'envEmpty'
+    | 'chgList'
+    | 'chgConfirm'
+    | 'chgConflict'
+    | 'chgGit'
+    | 'chgPending'
+    | 'chgError'
+    | 'chgReview';
 
 const CONTEXT_STATES: readonly SessionPanelGalleryState[] = ['ctxMeasuring', 'ctxNormal', 'ctxEstimated', 'ctxFilling', 'ctxChat', 'ctxNoTurn'];
 
 const ENV_STATES: readonly SessionPanelGalleryState[] = ['envFolders', 'envRemove', 'envOffline', 'envFull', 'envEmpty'];
+
+const CHANGES_STATES: readonly SessionPanelGalleryState[] = ['chgList', 'chgConfirm', 'chgConflict', 'chgGit', 'chgPending', 'chgError', 'chgReview'];
+
+const DIFF = '@@ -1,3 +1,3 @@\n # Q3 summary\n-Revenue was flat.\n+Revenue grew 4%.\n Costs held steady.\n';
+const CHANGE = (path: string, change: 'edited' | 'created' | 'deleted', additions: number | null, deletions: number | null, turns = 1): SessionChanges['files'][number] => ({
+    path,
+    change,
+    unified: additions === null ? '' : DIFF,
+    binary: additions === null,
+    too_large: false,
+    truncated: false,
+    additions,
+    deletions,
+    before_size: 120,
+    after_size: 140,
+    message_ids: Array.from({ length: turns }, (_, i) => i + 1),
+    changed_since: null,
+});
+
+const CHANGES: SessionChanges = {
+    files: [
+        CHANGE('/Users/avery/Documents/Quarterly reports/q3-summary.md', 'edited', 12, 4, 2),
+        CHANGE('/Users/avery/Documents/Quarterly reports/forecast.csv', 'created', 40, 0),
+        CHANGE('/Users/avery/Documents/Quarterly reports/old-draft.txt', 'deleted', 0, 18),
+        CHANGE('/Users/avery/Documents/Quarterly reports/chart.png', 'created', null, null),
+    ],
+    totals: { files: 4, additions: 52, deletions: 22, uncounted: 1 },
+    turns: 3,
+    pending: false,
+    untracked: [],
+    incomplete: false,
+};
+
+const GIT: SessionGit = {
+    available: true,
+    repos: [
+        {
+            root: '/Users/avery/Documents/Quarterly reports',
+            branch: 'main',
+            remote: 'origin',
+            default_branch: 'main',
+            gh: true,
+            files: CHANGES.files.map((f) => f.path),
+            uncommitted: CHANGES.files.slice(0, 3).map((f) => f.path),
+            ignored: [],
+            draft: { title: 'Update the Q3 summary and add a forecast', body: 'Revenue grew 4%.' },
+            pr_blocked: 'You are on the default branch (main). Switch to a feature branch first.',
+        },
+    ],
+};
 
 const FOLDER = (path: string, source: SessionEnvironment['folders'][number]['source'], removable = true) =>
     ({ path, name: path.split('/').pop(), kind: 'folder' as const, source, removable });
@@ -188,6 +245,7 @@ export function SessionPanelGallery({ state }: { state: SessionPanelGalleryState
     const client = useMemo(() => {
         const ctx = CONTEXT_STATES.includes(state);
         const env = ENV_STATES.includes(state);
+        const chg = CHANGES_STATES.includes(state);
         const environment: SessionEnvironment =
             state === 'envOffline'
                 ? { ...ENVIRONMENT, folders: ENVIRONMENT.folders.slice(0, 2), internet: false, removed: ['/Users/avery/Downloads/old-drafts'] }
@@ -197,7 +255,10 @@ export function SessionPanelGallery({ state }: { state: SessionPanelGalleryState
                     ? { ...ENVIRONMENT, folders: ENVIRONMENT.folders.slice(1, 2) }
                     : ENVIRONMENT;
         const base = createFakeClient({
-            sessions: env ? [SESSION] : undefined,
+            sessions: env || chg ? [SESSION] : undefined,
+            sessionChanges: chg && state !== 'chgError' ? { dev: { ...CHANGES, pending: state === 'chgPending' } } : undefined,
+            sessionGit: state === 'chgGit' || state === 'chgConfirm' ? { dev: GIT } : undefined,
+            undoConflict: state === 'chgConflict' ? new GaiaApiError(409, 'a file changed since', undefined, undefined, { status: 'conflict' }) : undefined,
             environments: env ? { dev: environment } : undefined,
             permissions: state === 'envOffline' ? { dev: 'full_access' } : undefined,
             activeModel: env ? { provider: 'local', model: 'Gemma-4-E4B-it-GGUF', display_name: 'Gemma 4 E4B', label: null, remote: false, is_default: true, downloaded: true } : undefined,
@@ -240,6 +301,11 @@ export function SessionPanelGallery({ state }: { state: SessionPanelGalleryState
             base.getContextUsage = () => new Promise(() => undefined);
             base.getChatPerformance = () => new Promise(() => undefined);
         }
+        if (state === 'chgError') {
+            base.getSessionChanges = async () => {
+                throw new GaiaApiError(500, 'The PC could not read its saved copies');
+            };
+        }
         if (state === 'error') {
             base.getCapabilities = async () => {
                 throw new GaiaApiError(500, 'The agent stopped responding');
@@ -251,9 +317,20 @@ export function SessionPanelGallery({ state }: { state: SessionPanelGalleryState
         const store = useSessionPanelStore.getState();
         const ctx = CONTEXT_STATES.includes(state);
         const env = ENV_STATES.includes(state);
+        const chg = CHANGES_STATES.includes(state);
         store.setSection('environment', env);
-        store.setSection('skills', !ctx && !env);
-        store.setSection('tools', !ctx && !env);
+        store.setSection('changes', chg);
+        store.setSection('skills', !ctx && !env && !chg);
+        store.setSection('tools', !ctx && !env && !chg);
+        store.setChangesSeed(
+            state === 'chgConfirm'
+                ? { phase: 'confirm' }
+                : state === 'chgConflict'
+                  ? { phase: 'conflict', message: 'a file changed since' }
+                  : state === 'chgReview'
+                    ? { review: true }
+                    : null,
+        );
         store.setSection('context', ctx);
         store.setEnvConfirm(state === 'envRemove' ? { kind: 'remove', path: ENVIRONMENT.folders[0]!.path } : state === 'envFull' ? { kind: 'full' } : null);
         store.setContextScope(state === 'ctxChat' ? 'chat' : 'turn');

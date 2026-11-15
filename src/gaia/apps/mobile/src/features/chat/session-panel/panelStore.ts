@@ -23,6 +23,9 @@ interface PanelState {
     contextScope: 'turn' | 'chat';
     setContextScope(scope: 'turn' | 'chat'): void;
     /** The Environment confirmation showing: removing a folder, or turning on full access. */
+    /** Dev gallery only: where the Changes section starts, so its confirm, conflict and review states can be shot. */
+    changesSeed: { phase: 'confirm' | 'conflict'; message?: string } | { review: true } | null;
+    setChangesSeed(seed: PanelState['changesSeed']): void;
     envConfirm: { kind: 'remove'; path: string } | { kind: 'full' } | null;
     setEnvConfirm(confirm: PanelState['envConfirm']): void;
 }
@@ -32,6 +35,8 @@ export const useSessionPanelStore = create<PanelState>((set) => ({
     setSection: (id, open) => set((state) => ({ sections: { ...state.sections, [id]: open } })),
     contextScope: 'turn',
     setContextScope: (contextScope) => set({ contextScope }),
+    changesSeed: null,
+    setChangesSeed: (changesSeed) => set({ changesSeed }),
     envConfirm: null,
     setEnvConfirm: (envConfirm) => set({ envConfirm }),
 }));

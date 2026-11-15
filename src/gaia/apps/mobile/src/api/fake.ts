@@ -68,7 +68,9 @@ import type {
     ScheduleResult,
     ResourceUsage,
     Session,
+    SessionChanges,
     SessionEnvironment,
+    SessionGit,
     SessionList,
     SessionPermissions,
     SessionSearchResponse,
@@ -257,6 +259,10 @@ export interface FakeClientData {
     networkPolicyError?: Error;
     /** What listTurnChanges answers, by chat. */
     turnChanges?: Record<string, TurnChanges[]>;
+    /** What getSessionChanges answers, by chat; a chat not listed has changed nothing. Undo all empties it. */
+    sessionChanges?: Record<string, SessionChanges>;
+    /** What getSessionGit answers, by chat; a chat not listed is in no repository. */
+    sessionGit?: Record<string, SessionGit>;
     /** What getTurnDiff answers, by turn. */
     turnDiffs?: Record<string, FileDiff[]>;
     /** Answers undoTurn with this unless forced, as the PC does for a file changed since. */
@@ -368,6 +374,8 @@ export interface FakeGaiaClient extends GaiaClient {
     readonly attached: { sessionId: string; docId: string }[];
     readonly capabilityReads: string[];
     /** Each folder removal and internet switch, in order. */
+    /** Each commit and pull request the phone confirmed, in order. */
+    readonly gitActions: { sessionId: string; kind: 'commit' | 'pr'; root: string; text: string }[];
     readonly environmentChanges: ({ sessionId: string; remove: string } | { sessionId: string; internet: boolean })[];
     /** Each memory maintenance POST, in order. */
     readonly memoryActions: string[];
@@ -466,6 +474,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
     const attached: FakeGaiaClient['attached'] = [];
     const capabilityReads: string[] = [];
     const environmentChanges: FakeGaiaClient['environmentChanges'] = [];
+    const gitActions: FakeGaiaClient['gitActions'] = [];
     const memoryActions: string[] = [];
     let memoryStatsReads = 0;
     const memoryActivityReads: number[] = [];
@@ -567,6 +576,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         attached,
         capabilityReads,
         environmentChanges,
+        gitActions,
         memoryActions,
         memoryActivityReads,
         profileStreamOpens,
@@ -790,6 +800,37 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         },
         async listTurnChanges(sessionId) {
             return { turns: data.turnChanges?.[sessionId] ?? [] };
+        },
+        async getSessionChanges(sessionId) {
+            return data.sessionChanges?.[sessionId] ?? { files: [], totals: { files: 0, additions: 0, deletions: 0, uncounted: 0 }, turns: 0, pending: false, untracked: [], incomplete: false };
+        },
+        async undoAllChanges(sessionId, force = false) {
+            undone.push({ sessionId, turnId: '*', force });
+            if (data.undoConflict && !force) throw data.undoConflict;
+            const found = data.sessionChanges?.[sessionId];
+            if (!found) throw new GaiaApiError(404, 'Nothing to undo in this chat.');
+            data.sessionChanges = { ...data.sessionChanges, [sessionId]: { ...found, files: [], totals: { files: 0, additions: 0, deletions: 0, uncounted: 0 } } };
+            return {
+                turn_ids: [],
+                restored: found.files.filter((f) => f.change !== 'created').map((f) => f.path),
+                removed: found.files.filter((f) => f.change === 'created').map((f) => f.path),
+                kept_folders: [],
+                untracked: [],
+                incomplete: false,
+            };
+        },
+        async getSessionGit(sessionId) {
+            return data.sessionGit?.[sessionId] ?? { available: false, repos: [] };
+        },
+        async commitChanges(sessionId, root, message) {
+            gitActions.push({ sessionId, kind: 'commit', root, text: message });
+            const repo = data.sessionGit?.[sessionId]?.repos.find((r) => r.root === root);
+            if (!repo) throw new GaiaApiError(404, 'No such repository.');
+            return { root, commit: 'a1b2c3d', files: repo.uncommitted, ignored: repo.ignored };
+        },
+        async createPullRequest(sessionId, root, title) {
+            gitActions.push({ sessionId, kind: 'pr', root, text: title });
+            return { root, url: 'https://github.com/example/repo/pull/7' };
         },
         async getTurnDiff(_sessionId, turnId) {
             return { turn_id: turnId, files: data.turnDiffs?.[turnId] ?? [] };

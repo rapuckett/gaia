@@ -49,7 +49,7 @@ import type {
 } from '@webui/types';
 import type { FileDiff, TurnChanges, UndoResult, UndoSettings } from '@webui/types/changes';
 import type { DiscordStatus } from '@webui/services/messagingApi';
-import type { AgentCapabilities, SessionEnvironment } from '@webui/types/sessionPanel';
+import type { AgentCapabilities, SessionChanges, SessionEnvironment, SessionGit, UndoAllResult } from '@webui/types/sessionPanel';
 import type { DiscoveryFinding, Goal, GoalStats, InferenceInsight, KnowledgeCreateBody, KnowledgeListParams, KnowledgeSaveResult, KnowledgeUpdateBody, MemoryCleared, MemoryReinitializeResult, MemorySettings, MemorySettingsUpdateResponse, Priority as GoalPriority } from '@webui/services/memoryApi';
 import type { SpeechModel, SpeechSettings } from '@webui/services/speechApi';
 import type { ActivityDay, ConvSession, ConvTurn, EntityInfo, KnowledgeEntry, TemporalItem, ToolStat } from '@webui/utils/memoryFormat.core';
@@ -108,7 +108,7 @@ export type {
     UnavailableConnectorRow,
 } from '@webui/types';
 export type { FileDiff, TurnChanges, UndoResult, UndoSettings } from '@webui/types/changes';
-export type { ActiveSkill, AgentCapabilities, AgentTool, ScopeEntry, SessionEnvironment, SkillOrigin } from '@webui/types/sessionPanel';
+export type { ActiveSkill, AgentCapabilities, AgentTool, ChatFileChange, GitRepo, ScopeEntry, SessionChanges, SessionEnvironment, SessionGit, SkillOrigin, UndoAllResult } from '@webui/types/sessionPanel';
 export type { CreateSessionRequest, DocumentListResponse, DocumentResponse, ModelServerInfo, ProviderSummary, ProviderSummaryList, SessionSearchResponse, SessionSearchResult, ToolConfirmRequest, FilePreviewResponse } from '@webui/types/api.gen';
 
 /** A photo or file chosen on this phone: where it is, and what it is called. */
@@ -426,6 +426,16 @@ export interface GaiaClient {
     getTurnDiff(sessionId: string, turnId: string, options?: RequestOptions): Promise<{ turn_id: string; files: FileDiff[] }>;
     /** Puts the turn's files back; rejects with a 409 naming a file changed since, unless `force`. */
     undoTurn(sessionId: string, turnId: string, force?: boolean, options?: RequestOptions): Promise<UndoResult>;
+    /** Every file the chat changed, across turns, with totals and diffs. */
+    getSessionChanges(sessionId: string, options?: RequestOptions): Promise<SessionChanges>;
+    /** Puts every file the chat changed back; rejects with 409 `conflict` when one changed since, unless `force`. */
+    undoAllChanges(sessionId: string, force?: boolean, options?: RequestOptions): Promise<UndoAllResult>;
+    /** The git repositories the chat's files are in, with a drafted message for each. */
+    getSessionGit(sessionId: string, options?: RequestOptions): Promise<SessionGit>;
+    /** Commits the chat's files in a repo on the PC; runs only when the person confirmed it. */
+    commitChanges(sessionId: string, root: string, message: string, options?: RequestOptions): Promise<{ root: string; commit: string; files: string[]; ignored: string[] }>;
+    /** Pushes the repo's branch and opens a pull request with `gh` on the PC; runs only when the person confirmed it. */
+    createPullRequest(sessionId: string, root: string, title: string, body: string, options?: RequestOptions): Promise<{ root: string; url: string }>;
     /** Deletes the chat and its messages; a turn still running on it is stopped first. */
     deleteSession(sessionId: string, options?: RequestOptions): Promise<DeleteSessionResult>;
     /** Clears the chat's unread mark. */
