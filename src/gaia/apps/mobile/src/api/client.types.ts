@@ -6,6 +6,7 @@ import type {
     ActiveModel,
     AgentInfo,
     AgentMcpServer,
+    CloudPriceList,
     ConnectorListEntry,
     ContextUsageResult,
     LemonadeFound,
@@ -40,6 +41,7 @@ export type {
     ActiveModel,
     AgentInfo,
     AgentMcpServer,
+    CloudPriceList,
     ConnectorListEntry,
     ConnectorRow,
     ContextUsage,
@@ -414,6 +416,12 @@ export interface GaiaClient {
     getLemonadeTarget(options?: RequestOptions): Promise<LemonadeTarget>;
     /** A model server the PC already runs; `unchecked` lists addresses that took the connection but didn't answer. */
     detectLemonade(options?: RequestOptions): Promise<{ found: LemonadeFound | null; unchecked?: string[] }>;
+    /** Registers the provider with the key the PC already holds; the phone never sends a key. */
+    connectProvider(provider: string, options?: RequestOptions): Promise<{ remembered: boolean }>;
+    /** A cloud provider's list prices, ranked; the first row is the model GAIA uses unless another is picked. */
+    getCloudPrices(provider: string, options?: RequestOptions): Promise<CloudPriceList>;
+    /** Reads the NPU's setup afresh after a fix on the PC; answers the plan. */
+    recheckSetupNpu(options?: RequestOptions): Promise<SetupPlan>;
     /** What setup will use and download, before it starts; `catalog` marks partial downloads. */
     getSetupPlan(options?: RequestOptions): Promise<SetupPlan>;
     startSetup(

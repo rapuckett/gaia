@@ -25,6 +25,7 @@ import type {
     AgentList,
     AgentMcpList,
     CancelChatResult,
+    CloudPriceList,
     ConfirmToolResult,
     ConnectorActivations,
     ConnectorGrants,
@@ -79,7 +80,9 @@ import {
     ENDPOINTS,
     chatContextPath,
     chatPermissionsPath,
+    providerConnectPath,
     providerModelsPath,
+    spendingPricesPath,
     followupOutcomePath,
     MESSAGE_PAGE_SIZE,
     QUEUED_IDLE_MS,
@@ -623,6 +626,19 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         detectLemonade(options) {
             return getJson<{ found: LemonadeFound | null; unchecked?: string[] }>(ENDPOINTS.lemonadeDetect, options?.signal);
+        },
+
+        connectProvider(provider, options) {
+            // No key travels from the phone: a blank body keeps the key the PC already holds.
+            return postJson<{ remembered: boolean }>(providerConnectPath(provider), {}, options?.signal);
+        },
+
+        getCloudPrices(provider, options) {
+            return getJson<CloudPriceList>(spendingPricesPath(provider), options?.signal);
+        },
+
+        recheckSetupNpu(options) {
+            return postJson<SetupPlan>(ENDPOINTS.setupNpuRecheck, undefined, options?.signal);
         },
 
         getSetupPlan(options) {

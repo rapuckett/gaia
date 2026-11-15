@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type {
+    CloudPriceList,
     GaiaClient,
     LemonadeFound,
     LemonadeTarget,
@@ -284,4 +285,57 @@ export async function applyTestedBackend(client: GaiaClient): Promise<boolean> {
 export function useApplyTestedBackend() {
     const client = useGaiaClient();
     return useMutation<boolean, Error, void>({ mutationFn: () => applyTestedBackend(requireClient(client)) });
+}
+
+/** Reads the NPU again after a fix on the PC; the plan it answers replaces the one shown. */
+export function useRecheckNpu() {
+    const client = useGaiaClient();
+    const queryClient = useQueryClient();
+    return useMutation<SetupPlan, Error, void>({
+        mutationFn: () => requireClient(client).recheckSetupNpu(),
+        onSuccess: (plan) => {
+            queryClient.setQueryData(queryKeys.setupPlan, plan);
+            void queryClient.invalidateQueries({ queryKey: ['setupPreflight'] });
+        },
+    });
+}
+
+/** A cloud provider's list prices, ranked. */
+export function useCloudPrices(provider: string, enabled = true) {
+    const client = useGaiaClient();
+    return useQuery<CloudPriceList>({
+        queryKey: ['cloudPrices', provider],
+        enabled: enabled && client !== null,
+        queryFn: ({ signal }) => requireClient(client).getCloudPrices(provider, { signal }),
+    });
+}
+
+/**
+ * Connects a provider that already holds a key on the PC, selects the model and starts the cloud
+ * setup run, as webui's SetupScreen `connect` does. No key is sent: `wanted` is the picked model id,
+ * and `wantedName` the name an error says.
+ */
+export function useConnectCloud() {
+    const client = useGaiaClient();
+    const queryClient = useQueryClient();
+    return useMutation<SetupRunStatus, Error, { provider: string; wanted: string | null; wantedName?: string }>({
+        mutationFn: async ({ provider, wanted, wantedName }) => {
+            const api = requireClient(client);
+            await api.connectProvider(provider);
+            const { models } = await api.listProviderModels(provider);
+            const pick = wanted ? models.find((m) => m.id === wanted) : (models.find((m) => m.rank === 1) ?? models[0]);
+            if (!pick) {
+                throw wanted
+                    ? new GaiaError('setup.key.modelNotOffered', { model: wantedName ?? wanted })
+                    : new GaiaError('setup.key.noModels');
+            }
+            await api.selectModel(pick.id);
+            return api.startSetup(true, false, {});
+        },
+        onSuccess: (status) => {
+            queryClient.setQueryData(queryKeys.setupStatus, status);
+            void queryClient.invalidateQueries({ queryKey: queryKeys.setupStatus });
+            void queryClient.invalidateQueries({ queryKey: ['cloudProviders'] });
+        },
+    });
 }
