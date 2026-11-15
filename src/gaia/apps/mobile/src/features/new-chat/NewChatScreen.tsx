@@ -102,12 +102,6 @@ export function NewChatScreen({ onOpen, initialText = '', prompt }: NewChatScree
         if (briefCard.needs_input) setText(briefCard.prompt);
         else void submit(briefCard.prompt, queue.hold);
     };
-
-    const folder = startScreen?.working_folder ? (
-        <Stack paddingX="lg">
-            <FolderChip folder={startScreen.working_folder} />
-        </Stack>
-    ) : null;
     const failedSetup = setupError(status);
     const warming = warmUpProgress(status?.warm_up);
     const [greeting, gloss] = bracketParts(t(greetingKey(new Date())));
@@ -128,13 +122,13 @@ export function NewChatScreen({ onOpen, initialText = '', prompt }: NewChatScree
                         attachments={attachments}
                         leftControls={
                             <>
+                                <FolderChip folder={startScreen?.working_folder} />
                                 <PermissionChip mode={mode} onChange={setMode} />
                                 <PrivateChip on={isPrivate} onChange={setPrivate} />
                             </>
                         }
                         rightControls={<ModelChip />}
                     />
-                    {folder}
                 </>
             }
         >

@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from 'react';
 import { needsOutcome, nextToSend } from '@webui/utils/messageQueue';
 import { MAX_STREAM_RECONNECTS } from '@webui/utils/streamErrors.core';
 
+import { useChatReadAloud } from '@/features/audio/useChatReadAloud';
 import { useAnswerQuestion, useChatStream, useContextUsage, usePermissionMode, useMessages, useSession } from '@/data';
 import { Composer, ContextMeter, ContextWarning, ModelChip, PermissionChip, useAttachments, useComposerQueue, useFollowUpEvents } from '@/features/composer';
 import { QueuedMessages } from '@/features/composer/QueuedMessages';
@@ -46,6 +47,7 @@ export function ChatScreen({ sessionId, onManageDocuments }: { sessionId: string
     const busy = stream.status !== 'idle';
     const context = useContextUsage(sessionId, stream.events, busy);
     const saved = messages.data?.messages ?? NO_MESSAGES;
+    useChatReadAloud(sessionId, stream, saved);
 
     const tail = buildTail(saved, stream);
     const lastReply = saved.filter((m) => m.role !== 'system').at(-1);

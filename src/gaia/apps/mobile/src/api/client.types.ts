@@ -27,7 +27,6 @@ import type {
     ModelNeedJob,
     PermissionMode,
     PreflightReport,
-    ProvidersResponse,
     ParsedSchedule,
     ProviderModelsResponse,
     ResourceUsage,
@@ -46,10 +45,12 @@ import type {
     SystemStatus,
 } from '@webui/types';
 import type { UndoSettings } from '@webui/types/changes';
+import type { DiscordStatus } from '@webui/services/messagingApi';
 import type { AgentCapabilities } from '@webui/types/sessionPanel';
-import type { Goal, GoalStats, KnowledgeCreateBody, KnowledgeListParams, KnowledgeSaveResult, KnowledgeUpdateBody, MemoryCleared, MemoryReinitializeResult, MemorySettings, MemorySettingsUpdateResponse, Priority as GoalPriority } from '@webui/services/memoryApi';
+import type { DiscoveryFinding, Goal, GoalStats, InferenceInsight, KnowledgeCreateBody, KnowledgeListParams, KnowledgeSaveResult, KnowledgeUpdateBody, MemoryCleared, MemoryReinitializeResult, MemorySettings, MemorySettingsUpdateResponse, Priority as GoalPriority } from '@webui/services/memoryApi';
+import type { SpeechModel, SpeechSettings } from '@webui/services/speechApi';
 import type { ActivityDay, ConvSession, ConvTurn, EntityInfo, KnowledgeEntry, TemporalItem, ToolStat } from '@webui/utils/memoryFormat.core';
-import type { CreateSessionRequest, DocumentListResponse, DocumentResponse, FilePreviewResponse, ModelServerInfo, SessionSearchResponse, ToolConfirmRequest, UserInputRequest as ApiUserInputRequest } from '@webui/types/api.gen';
+import type { CreateSessionRequest, DocumentListResponse, DocumentResponse, ModelServerInfo, ProviderSummaryList, SessionSearchResponse, ToolConfirmRequest, UserInputRequest as ApiUserInputRequest, FilePreviewResponse } from '@webui/types/api.gen';
 
 export type {
     ActiveModel,
@@ -78,7 +79,6 @@ export type {
     ModelNeedJob,
     PermissionMode,
     PreflightReport,
-    ProvidersResponse,
     ParsedSchedule,
     ProviderId,
     ProviderInfo,
@@ -103,7 +103,7 @@ export type {
 } from '@webui/types';
 export type { UndoSettings } from '@webui/types/changes';
 export type { ActiveSkill, AgentCapabilities, AgentTool, SkillOrigin } from '@webui/types/sessionPanel';
-export type { CreateSessionRequest, DocumentListResponse, FilePreviewResponse, DocumentResponse, ModelServerInfo, SessionSearchResponse, SessionSearchResult, ToolConfirmRequest } from '@webui/types/api.gen';
+export type { CreateSessionRequest, DocumentListResponse, DocumentResponse, ModelServerInfo, ProviderSummary, ProviderSummaryList, SessionSearchResponse, SessionSearchResult, ToolConfirmRequest, FilePreviewResponse } from '@webui/types/api.gen';
 
 /** A photo or file chosen on this phone: where it is, and what it is called. */
 export interface PickedFile {
@@ -183,6 +183,17 @@ export interface ProviderConnected {
 }
 
 export type { MemoryCleared, MemoryReinitializeResult, MemorySettings, MemorySettingsUpdateResponse } from '@webui/services/memoryApi';
+/** GET /api/messaging/discord, typed as Settings > Messaging on the web types it. */
+export type { DiscordState, DiscordStatus } from '@webui/services/messagingApi';
+export type { DiscoveryFinding, InferenceInsight } from '@webui/services/memoryApi';
+
+/** One event of the profile-setup streams (`stream-discovery`, `stream-inference`), as ui/routers/memory.py documents them. */
+export type ProfileStreamEvent =
+    | { type: 'log'; message: string }
+    | { type: 'finding'; source: string; item: DiscoveryFinding }
+    | { type: 'insight'; item: InferenceInsight }
+    | { type: 'error'; message: string; source?: string }
+    | { type: 'done'; total: number };
 /** One day of GET /api/memory/activity, one tool of GET /api/memory/tools, one item of GET /api/memory/upcoming; typed as the web's `MemoryDashboard` types them. */
 export type { ActivityDay as MemoryActivityDay, TemporalItem as MemoryUpcomingItem, ToolStat as MemoryToolStat } from '@webui/utils/memoryFormat.core';
 
@@ -385,6 +396,16 @@ export interface RequestOptions {
     signal?: AbortSignal;
 }
 
+export type { SpeechModel, SpeechSettings, Voice } from '@webui/services/speechApi';
+/** The read-aloud settings `PUT /api/speech/settings` changes; the rest stay as saved. */
+export type SpeechSettingsUpdate = Partial<Pick<SpeechSettings, 'voice' | 'speed' | 'auto'>>;
+
+/** Audio the PC made, as bytes; `contentType` is the response's media type. */
+export interface PcAudioBytes {
+    bytes: Uint8Array<ArrayBuffer>;
+    contentType: string;
+}
+
 export interface GaiaClient {
     health(options?: RequestOptions): Promise<HealthResponse>;
     listSessions(options?: RequestOptions): Promise<SessionList>;
@@ -506,6 +527,8 @@ export interface GaiaClient {
     /** Memories due within `days` days, plus the overdue ones. */
     getMemoryUpcoming(days: number, options?: RequestOptions): Promise<TemporalItem[]>;
     getMemoryStats(options?: RequestOptions): Promise<MemoryStats>;
+    /** The Discord bridge's state, pairing code and links. The PC answers only itself: a phone gets the 403 PC-only refusal. */
+    getDiscordStatus(options?: RequestOptions): Promise<DiscordStatus>;
     /** Every goal with its tasks, newest first. */
     listGoals(options?: RequestOptions): Promise<{ goals: Goal[]; total: number }>;
     /** Goal and task counts by status. */
@@ -538,6 +561,14 @@ export interface GaiaClient {
     updateMemoryKnowledge(knowledgeId: string, body: KnowledgeUpdateBody, options?: RequestOptions): Promise<KnowledgeSaveResult>;
     /** Forgets a memory. */
     deleteMemoryKnowledge(knowledgeId: string, options?: RequestOptions): Promise<unknown>;
+    /** The voice and speed replies are read in, whether every reply is read, and the voices offered. */
+    getSpeechSettings(options?: RequestOptions): Promise<SpeechSettings>;
+    /** Saves the fields given; answers with all the settings. Shared with the terminal app. */
+    updateSpeechSettings(change: SpeechSettingsUpdate, options?: RequestOptions): Promise<SpeechSettings>;
+    /** Whether the voice model is on the PC; the first speech request downloads it if not. */
+    getSpeechModel(options?: RequestOptions): Promise<SpeechModel>;
+    /** Speaks `text` (at most MAX_SPEECH_CHARS) as audio, in the saved voice unless one is given. */
+    speak(text: string, voice?: { voice?: string; speed?: number }, options?: RequestOptions): Promise<PcAudioBytes>;
     getMemorySettings(options?: RequestOptions): Promise<MemorySettings>;
     /** Changes the memory switches named in `settings`; answers with all of them, and what the system scan did when discovery was switched on. */
     updateMemorySettings(settings: Partial<MemorySettings>, options?: RequestOptions): Promise<MemorySettingsUpdateResponse>;
@@ -555,6 +586,14 @@ export interface GaiaClient {
     rebuildMemoryFts(options?: RequestOptions): Promise<{ status: string }>;
     /** Re-reads this PC's facts into memory; `skipped` when system context collection is off. */
     refreshSystemContext(options?: RequestOptions): Promise<RefreshSystemContextResult>;
+    /** Scans the PC and streams what it finds, ending at `done`; nothing is saved until commitMemoryDiscovery. */
+    streamMemoryDiscovery(options?: RequestOptions): AsyncIterable<ProfileStreamEvent>;
+    /** Asks a model on the PC to describe the person, streamed to `done`; `includeBrowser` adds 30 days of browser history. */
+    streamMemoryInference(includeBrowser: boolean, options?: RequestOptions): AsyncIterable<ProfileStreamEvent>;
+    /** Saves the findings the person kept. */
+    commitMemoryDiscovery(items: DiscoveryFinding[], options?: RequestOptions): Promise<{ stored: number }>;
+    /** Saves the insights the person kept, replacing the earlier inferred profile. */
+    commitMemoryInference(insights: InferenceInsight[], options?: RequestOptions): Promise<{ stored: number }>;
     /** Every skill GAIA can load, plus the folders it skipped. */
     listSkills(options?: RequestOptions): Promise<SkillList>;
     /** Skill libraries GAIA suggests adding from a link. */
@@ -618,8 +657,8 @@ export interface GaiaClient {
     checkSetup(skipChatModel: boolean, options?: RequestOptions): Promise<SetupCheck>;
     /** This PC's memory, disk, GPU and NPU as setup reads them. */
     getPreflight(options?: RequestOptions): Promise<PreflightReport>;
-    /** The cloud providers; `blocked` is set on each while Local only is on. */
-    listProviders(options?: RequestOptions): Promise<ProvidersResponse>;
+    /** Every provider and whether it is set up (`configured`) or held off by Local only (`blocked`); reads only, so a paired phone may. */
+    listProviderSummaries(options?: RequestOptions): Promise<ProviderSummaryList>;
     /** The model server GAIA uses: whether it answers, and the llama.cpp backends it lists and prefers. */
     getModelServer(options?: RequestOptions): Promise<ModelServerInfo>;
     /** Saves the llama.cpp backend for chat models (`auto` or a backend name); PC-only. */

@@ -8,6 +8,8 @@ import {
     AGENT_EVENT_TYPES,
     ATTACH_HEADER_TIMEOUT_MS,
     CONFIRM_DELETE_MS,
+    DISCORD_LIVE_STATES,
+    DISCORD_POLL_MS,
     DOWNLOAD_MISS_LIMIT,
     DOWNLOAD_NO_ROW_LIMIT,
     DOWNLOAD_POLL_MS,
@@ -117,6 +119,8 @@ describe('endpoints', () => {
         mcpStatus: ['GET'],
         memoryActivity: ['GET'],
         memoryAll: ['DELETE'],
+        memoryCommitDiscovery: ['POST'],
+        memoryCommitInference: ['POST'],
         memoryConsolidate: ['POST'],
         memoryConversation: ['GET'],
         memoryConversations: ['GET'],
@@ -132,12 +136,16 @@ describe('endpoints', () => {
         memoryReinitialize: ['POST'],
         memorySettings: ['GET', 'PUT'],
         memoryStats: ['GET'],
+        memoryStreamDiscovery: ['GET'],
+        memoryStreamInference: ['GET'],
         memoryTools: ['GET'],
         memoryUpcoming: ['GET'],
+        messagingDiscord: ['GET'],
         providerConnect: ['POST'],
         providerModels: ['GET'],
         providersActive: ['GET'],
         providersKeyStoreRetry: ['POST'],
+        providersList: ['GET'],
         providersSelect: ['POST'],
         schedule: ['DELETE', 'PUT'],
         scheduleResults: ['GET'],
@@ -174,6 +182,9 @@ describe('endpoints', () => {
         skills: ['GET'],
         skillsFeatured: ['GET'],
         skillsLinkPreview: ['POST'],
+        speech: ['POST'],
+        speechModel: ['GET'],
+        speechSettings: ['GET', 'PUT'],
         spending: ['GET'],
         spendingAllowMonth: ['POST'],
         spendingLimit: ['PUT'],
@@ -217,7 +228,6 @@ describe('endpoints', () => {
         modelServerBackend: ['PUT'],
         onboardingPreflight: ['GET'],
         onboardingStart: ['GET'],
-        providers: ['GET'],
     };
     const calls = Object.entries(ENDPOINTS).flatMap(([name, path]) =>
         methods[name as keyof typeof ENDPOINTS].map((method) => `${method} ${path}`),
@@ -257,6 +267,7 @@ describe("webui's stream rules", () => {
         ['services/statusPoll.ts', 'STATUS_POLL_MS', STATUS_POLL_MS],
         ['components/ScheduleManager.tsx', 'CONFIRM_DELETE_MS', CONFIRM_DELETE_MS],
         ['components/ModelStatusPill.tsx', 'POLL_MS', MODEL_STATUS_OPEN_POLL_MS],
+        ['components/settings/MessagingSettings.tsx', 'POLL_MS', DISCORD_POLL_MS],
         ['components/ModelNeededDialog.tsx', 'POLL_MS', DOWNLOAD_POLL_MS],
         ['components/ModelNeededDialog.tsx', 'NO_ROW_LIMIT', DOWNLOAD_NO_ROW_LIMIT],
         ['components/ModelNeededDialog.tsx', 'MISS_LIMIT', DOWNLOAD_MISS_LIMIT],
@@ -269,6 +280,7 @@ describe("webui's stream rules", () => {
     it.each([
         ['services/api.ts', 'AGENT_EVENT_TYPES', AGENT_EVENT_TYPES],
         ['components/ChatView.tsx', 'RESOLVES_PROMPTS', RESOLVES_PROMPTS],
+        ['components/settings/MessagingSettings.tsx', 'LIVE', DISCORD_LIVE_STATES],
     ])('%s %s', (file, name, ours) => {
         expect([...ours].sort()).toEqual(tsStringSet(file, name));
     });
