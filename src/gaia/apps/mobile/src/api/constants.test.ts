@@ -146,6 +146,8 @@ describe('endpoints', () => {
         documentFile: ['GET'],
         documentUpload: ['POST'],
         documents: ['GET'],
+        filesUpload: ['POST'],
+        filesUploadMedia: ['POST'],
         onboardingPreflight: ['GET'],
         onboardingStart: ['GET'],
     };

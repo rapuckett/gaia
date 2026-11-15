@@ -8,7 +8,7 @@ import { useAddDocument, useSession } from '@/data';
 import { describeError, useT } from '@/i18n/useT';
 import { pickDocuments, pickPhotos, type PickedFile } from '@/platform/pickers';
 import { Button, Notice, ProgressLine, Row, Stack, Text } from '@/ui';
-import { FileText, ImageIcon } from '@/ui/icons';
+import { FileText, Image as ImageIcon } from '@/ui/icons';
 import { describeUploadError, unsupportedTypeMessage, type UploadErrorView } from '@webui/utils/uploadErrors.core';
 
 import type { LibraryTarget } from './TargetChooser';

@@ -1,7 +1,8 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
+import { View } from 'react-native';
 
 import type { MessageKey, Say } from '@webui/i18n/registry';
 import { dateLocale, translator } from '@webui/i18n/translator';
@@ -10,16 +11,40 @@ import type { Schedule } from '@/api/client.types';
 import { CONFIRM_DELETE_MS } from '@/api/constants';
 import { useScheduleResults } from '@/data';
 import { describeError, useT } from '@/i18n/useT';
-import { Badge, Button, Card, Disclosure, Icon, Notice, Row, Stack, Text, type BadgeTone } from '@/ui';
+import { Disclosure, Icon, Notice, Row, Stack, Surface, Text, useTheme } from '@/ui';
 import { Clock, MessageSquare, Pause, Play, Trash2, Zap } from '@/ui/icons';
 
+import { ChipButton } from './ChipButton';
 import { describeSchedule, formatNextRun, formatTime } from './scheduleText';
 
-const STATUS: Record<Schedule['status'], { label: MessageKey; tone: BadgeTone }> = {
+const STATUS: Record<Schedule['status'], { label: MessageKey; tone: 'success' | 'warning' | 'muted' }> = {
     active: { label: 'schedules.status.active', tone: 'success' },
     paused: { label: 'schedules.status.paused', tone: 'warning' },
-    cancelled: { label: 'schedules.status.cancelled', tone: 'neutral' },
+    cancelled: { label: 'schedules.status.cancelled', tone: 'muted' },
 };
+
+/** The desktop's `.schedule-card-status`: a small tinted tag with square-ish corners, not a pill. */
+function StatusTag({ label, tone }: { label: string; tone: 'success' | 'warning' | 'muted' }) {
+    const { colors, radius } = useTheme();
+    const bg = { success: colors.accentGreenDim, warning: colors.accentYellowDim, muted: colors.bgTertiary }[tone];
+    return (
+        <View style={{ backgroundColor: bg, borderRadius: radius.sm, paddingHorizontal: 8, paddingVertical: 2 }}>
+            <Text role="caption" weight="semibold" tone={tone} numberOfLines={1}>
+                {label}
+            </Text>
+        </View>
+    );
+}
+
+/** The desktop's `.schedule-card-error`: a tinted strip with a danger rule on the reading-start edge. */
+function ErrorStrip({ children }: { children: ReactNode }) {
+    const { colors } = useTheme();
+    return (
+        <View style={{ borderStartWidth: 2, borderStartColor: colors.danger, backgroundColor: colors.dangerDim, paddingHorizontal: 8, paddingVertical: 6 }}>
+            {children}
+        </View>
+    );
+}
 
 export interface ScheduleCardProps {
     schedule: Schedule;
@@ -52,40 +77,40 @@ export function ScheduleCard({ schedule, now, runPending, onOpenChat, onRunNow, 
         t.compose((say, code) => fmt(say, dateLocale(translator(code))));
 
     return (
-        <Card>
+        <Surface tone="secondary" radius="sm" border padding="md">
             <Stack gap="sm">
                 <Row gap="sm" justify="between">
                     <Stack flex={1}>
-                        <Text weight="semibold" numberOfLines={1}>
+                        <Text role="ui" weight="semibold" numberOfLines={1}>
                             {schedule.name}
                         </Text>
                     </Stack>
-                    <Badge label={t(status.label)} tone={status.tone} />
+                    <StatusTag label={t(status.label)} tone={status.tone} />
                 </Row>
-                <Text tone="secondary" numberOfLines={3}>
+                <Text role="label" tone="secondary" numberOfLines={3}>
                     {schedule.prompt}
                 </Text>
                 <Row gap="xs">
                     <Icon icon={Clock} size="sm" tone="muted" />
                     <Stack flex={1}>
-                        <Text role="caption" tone="muted">
+                        <Text role="label" tone="muted">
                             {described ?? schedule.description}
                         </Text>
                     </Stack>
                 </Row>
                 <Row gap="md" wrap>
-                    <Text role="caption" tone="muted">
+                    <Text role="label" tone="muted">
                         {t('schedules.card.runs', { n: schedule.run_count })}
                     </Text>
                     {schedule.error_count > 0 ? (
-                        <Text role="caption" tone="muted">
+                        <Text role="label" tone="muted">
                             {t('schedules.card.errors', { n: schedule.error_count })}
                         </Text>
                     ) : null}
-                    <Text role="caption" tone="muted">
+                    <Text role="label" tone="muted">
                         {when((say, locale) => say('schedules.card.last', { when: formatTime(schedule.last_run_at, say, now, locale) }))}
                     </Text>
-                    <Text role="caption" tone="muted">
+                    <Text role="label" tone="muted">
                         {when((say, locale) =>
                             say('schedules.card.next', {
                                 when: schedule.status === 'paused' ? say('schedules.status.paused') : formatNextRun(schedule.next_run_at, say, now, locale),
@@ -94,34 +119,30 @@ export function ScheduleCard({ schedule, now, runPending, onOpenChat, onRunNow, 
                     </Text>
                 </Row>
                 {schedule.last_error && !historyShowsFailure ? (
-                    <Text role="caption" tone="danger">
-                        {t('schedules.card.lastFailed', { error: schedule.last_error })}
-                    </Text>
+                    <ErrorStrip>
+                        <Text role="label">{t('schedules.card.lastFailed', { error: schedule.last_error })}</Text>
+                    </ErrorStrip>
                 ) : null}
-                <Row gap="sm" wrap>
+                <Row gap="xs" wrap>
                     {schedule.session_id ? (
-                        <Button
-                            size="sm"
+                        <ChipButton
                             icon={MessageSquare}
                             label={t('schedules.card.openChat')}
                             onPress={() => onOpenChat(schedule.session_id!)}
                         />
                     ) : null}
-                    <Button
-                        size="sm"
+                    <ChipButton
                         icon={Zap}
                         label={t(running ? 'schedules.card.running' : 'schedules.card.runNow')}
                         disabled={running}
                         onPress={onRunNow}
                     />
-                    <Button
-                        size="sm"
+                    <ChipButton
                         icon={schedule.status === 'active' ? Pause : Play}
                         label={t(schedule.status === 'active' ? 'schedules.card.pause' : 'schedules.card.resume')}
                         onPress={onToggleStatus}
                     />
-                    <Button
-                        size="sm"
+                    <ChipButton
                         variant="danger"
                         icon={Trash2}
                         label={t(confirmDelete ? 'schedules.card.confirmDelete' : 'schedules.card.delete')}
@@ -135,15 +156,15 @@ export function ScheduleCard({ schedule, now, runPending, onOpenChat, onRunNow, 
                         {history.data && runs.length === 0 ? <Text tone="muted">{t('schedules.historyEmpty')}</Text> : null}
                         {runs.map((run) => (
                             <Stack key={run.id} gap="xs">
-                                <Text role="caption" tone="muted">
+                                <Text role="label" tone="muted">
                                     {when((say, locale) => formatTime(run.executed_at, say, now, locale))}
                                 </Text>
                                 {run.error ? (
-                                    <Text role="caption" tone="danger">
+                                    <Text role="label" tone="danger">
                                         {run.error}
                                     </Text>
                                 ) : (
-                                    <Text role="caption" tone="secondary" numberOfLines={6}>
+                                    <Text role="label" tone="secondary" numberOfLines={6}>
                                         {run.result || t('schedules.noOutput')}
                                     </Text>
                                 )}
@@ -152,6 +173,6 @@ export function ScheduleCard({ schedule, now, runPending, onOpenChat, onRunNow, 
                     </Stack>
                 </Disclosure>
             </Stack>
-        </Card>
+        </Surface>
     );
 }

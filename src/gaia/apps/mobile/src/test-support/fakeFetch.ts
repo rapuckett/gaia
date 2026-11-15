@@ -11,6 +11,8 @@ export interface RecordedCall {
     method: string | undefined;
     headers: Record<string, string>;
     body: string | undefined;
+    /** A file or form body, which is not JSON text. */
+    rawBody: Blob | FormData | undefined;
     signal: AbortSignal | undefined;
 }
 
@@ -24,6 +26,7 @@ export function createRecordingFetch(responder: Responder): { fetch: FetchLike; 
             method: init?.method,
             headers: init?.headers ?? {},
             body: typeof init?.body === 'string' ? init.body : undefined,
+            rawBody: typeof init?.body === 'string' ? undefined : init?.body,
             signal: init?.signal,
         };
         calls.push(call);

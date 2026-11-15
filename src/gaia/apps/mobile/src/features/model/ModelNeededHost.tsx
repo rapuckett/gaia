@@ -11,7 +11,8 @@ import { GaiaApiError } from '@/api/errors';
 import { requireClient, useGaiaClient } from '@/data';
 import { describeError, useT } from '@/i18n/useT';
 import { useModelNeededStore } from '@/state/modelNeeded';
-import { Button, Notice, ProgressLine, Row, Sheet, Spinner, Stack, Text } from '@/ui';
+import { ChipButton } from '@/features/schedules/ChipButton';
+import { Notice, ProgressLine, Row, Sheet, Spinner, Stack, Text } from '@/ui';
 
 /**
  * The prompt for a job whose model isn't on the PC: names the model, its size and source, and downloads it
@@ -123,9 +124,9 @@ function NeedPrompt({ need }: { need: ModelNeed }) {
                 onClose={close}
                 title={t(`modelNeeded.off.${need.off}.title`)}
                 footer={
-                    <Row gap="sm">
-                        <Button label={t('modelNeeded.notNow')} onPress={close} />
-                        <Button label={t('modelNeeded.off.send')} variant="primary" onPress={() => settle(true)} />
+                    <Row gap="sm" wrap justify="end">
+                        <ChipButton variant="plain" label={t('modelNeeded.notNow')} onPress={close} />
+                        <ChipButton variant="primary" label={t('modelNeeded.off.send')} onPress={() => settle(true)} />
                     </Row>
                 }
             >
@@ -144,9 +145,10 @@ function NeedPrompt({ need }: { need: ModelNeed }) {
             onClose={close}
             title={t(`modelNeeded.title.${job}`)}
             footer={
-                <Row gap="sm">
-                    <Button label={t('modelNeeded.notNow')} onPress={close} />
-                    <Button
+                <Row gap="sm" wrap justify="end">
+                    <ChipButton variant="plain" label={t('modelNeeded.notNow')} onPress={close} />
+                    <ChipButton
+                        variant="primary"
                         label={
                             short
                                 ? t('setup.confirm.downloadAnyway')
@@ -154,7 +156,6 @@ function NeedPrompt({ need }: { need: ModelNeed }) {
                                   ? t('setup.tryAgain')
                                   : t('modelNeeded.download')
                         }
-                        variant="primary"
                         disabled={downloading}
                         onPress={() => void download(short)}
                     />

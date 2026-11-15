@@ -60,6 +60,8 @@ export const ENDPOINTS = {
     documentFile: '/api/documents/{doc_id}/file',
     documentUpload: '/api/documents/upload',
     documents: '/api/documents',
+    filesUpload: '/api/files/upload',
+    filesUploadMedia: '/api/files/upload-media',
     onboardingPreflight: '/api/onboarding/preflight',
     onboardingStart: '/api/onboarding/start',
 } as const;
