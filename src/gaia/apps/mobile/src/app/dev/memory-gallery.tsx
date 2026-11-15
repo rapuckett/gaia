@@ -12,9 +12,9 @@ import { MEMORY_TABS } from '@/features/memory/tabs';
 import { memoryScene, type MemoryScene } from '@/features/memory/devScenes';
 import { ScreenBannerProvider, UIProvider } from '@/ui';
 
-const SCENES: readonly MemoryScene[] = ['on', 'off', 'loading', 'failed', 'actionFails', 'statsEmpty', 'statsManyTools', 'aboutEmpty', 'aboutFailed', 'aboutMany'];
+const SCENES: readonly MemoryScene[] = ['on', 'off', 'loading', 'failed', 'actionFails', 'statsEmpty', 'statsManyTools', 'aboutEmpty', 'aboutFailed', 'aboutMany', 'goalsEmpty', 'goalsFailed', 'goalsStoreError'];
 
-/** The Memory screen on a fake PC; `?scene=on|off|loading|failed|actionFails|statsEmpty|statsManyTools|aboutEmpty|aboutFailed|aboutMany`, and `&tab=about|goals|profile|advanced`. */
+/** The Memory screen on a fake PC; `?scene=on|off|loading|failed|actionFails|statsEmpty|statsManyTools|aboutEmpty|aboutFailed|aboutMany|goalsEmpty|goalsFailed|goalsStoreError`, and `&tab=about|goals|profile|advanced`. */
 export default function MemoryGalleryRoute() {
     const { scene, tab } = useLocalSearchParams<{ scene?: string; tab?: string }>();
     const router = useRouter();

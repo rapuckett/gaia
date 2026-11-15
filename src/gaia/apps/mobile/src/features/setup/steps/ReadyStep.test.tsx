@@ -37,7 +37,7 @@ async function mount(finish: () => void) {
             </GaiaClientProvider>
         </QueryClientProvider>
     );
-    const ctx: SetupStepContext = { stage: 'ready', run, plan: undefined, locked: false, goTo: () => undefined, startedRun: () => undefined, finish };
+    const ctx: SetupStepContext = { stage: 'ready', run, plan: undefined, locked: false, again: false, goTo: () => undefined, startedRun: () => undefined, finish };
     await render(<ReadyStep ctx={ctx} />, { wrapper: wrap });
     return client;
 }
