@@ -3656,6 +3656,8 @@ const messages: Messages = {
     'mobileApp.pairing.pcs.forgetConfirm': 'نسيان {name}',
     'mobileApp.pairing.unreachable.body': 'صِل هذا الهاتف بشبكة Wi-Fi نفسها التي يتصل بها جهاز الكمبيوتر، وتأكد من أن GAIA مفتوح عليه.',
     'mobileApp.pairing.pinMismatch': 'تغيّرت شهادة الأمان على جهاز الكمبيوتر، لذا توقّف هذا الهاتف عن الاتصال به. إذا أعدت ضبط الاقتران على الكمبيوتر، فاقرن هذا الهاتف مرة أخرى.',
+    'mobileApp.composer.attachCamera': 'الكاميرا',
+    'mobileApp.composer.cameraOff': 'الوصول إلى الكاميرا متوقف لـ GAIA. شغّله من الإعدادات لالتقاط صورة.',
     'mobileApp.pairing.uploadUnsupported': 'لا يستطيع هذا الهاتف إرسال الملفات إلى الكمبيوتر بعد. أضفها من الكمبيوتر.',
     'mobileApp.pairing.pinMismatch.title': 'أعد الاقتران',
     'mobileApp.pairing.pinMismatch.action': 'أعد الاقتران',

@@ -87,6 +87,7 @@ describe('Composer', () => {
         const attachments: Attachments = {
             items: [],
             add: jest.fn(),
+            addFailed: jest.fn(),
             remove: jest.fn(),
             clear: jest.fn(),
             uploading: false,

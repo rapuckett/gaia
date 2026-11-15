@@ -12,6 +12,7 @@ export {
   Ban,
   Bell,
   Brain,
+  Camera,
   Check,
   ChevronDown,
   ChevronLeft,

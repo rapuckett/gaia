@@ -3656,6 +3656,8 @@ export const enMessages = {
     'mobileApp.pairing.pcs.forgetConfirm': 'Forget {name}',
     'mobileApp.pairing.unreachable.body': 'Connect this phone to the same Wi-Fi as your PC, and check that GAIA is open on it.',
     'mobileApp.pairing.pinMismatch': "Your PC's security certificate has changed, so this phone stopped connecting to it. If you reset pairing on the PC, pair this phone again.",
+    'mobileApp.composer.attachCamera': 'Camera',
+    'mobileApp.composer.cameraOff': 'Camera access is off for GAIA. Turn it on in Settings to take a photo.',
     'mobileApp.pairing.uploadUnsupported': "This phone can't send files to your PC yet. Add them on the PC.",
     'mobileApp.pairing.pinMismatch.title': 'Pair again',
     'mobileApp.pairing.pinMismatch.action': 'Pair again',
