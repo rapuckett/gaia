@@ -18,6 +18,7 @@ import { safeUrlTransform } from '@webui/utils/markdown';
 import { WIN_PATH_ONLY_RE, findFilePaths } from '@webui/utils/windowsPaths';
 import type { Translate } from '@/i18n/useT';
 import { isFileLink, openPcFile } from '@/features/files/openPcFile';
+import { openLinkFromPress } from '@/platform/openLink';
 import { Icon, Text } from '@/ui';
 import { FileText } from '@/ui/icons';
 
@@ -30,6 +31,7 @@ export interface InlineContext {
 }
 
 const OPENABLE_URL = /^(https?|mailto):/i;
+const SCHEME_URL = /^\s*[a-z][a-z0-9+.-]*:/i;
 const CARET_BLINK_MS = 530;
 
 /** A path names a file on the PC: a link to the app's preview when a chat is in scope, else plain text; left to right, in mono. */
@@ -166,8 +168,15 @@ function link(url: string, children: ReactNode, key: string, ctx: InlineContext)
         );
     }
     const safe = safeUrlTransform(url);
-    // An unsafe URL, and one that only means something inside the web UI, shows as plain text.
-    if (!OPENABLE_URL.test(safe)) return <Fragment key={key}>{children}</Fragment>;
+    // A scheme the policy refuses stays tappable, so the tap explains the refusal; a link with no scheme shows as plain text.
+    if (!OPENABLE_URL.test(safe)) {
+        if (!SCHEME_URL.test(url)) return <Fragment key={key}>{children}</Fragment>;
+        return (
+            <Text key={key} tone="accent" accessibilityRole="link" onPress={() => openLinkFromPress(url)}>
+                {children}
+            </Text>
+        );
+    }
     return (
         <Text key={key} tone="accent" accessibilityRole="link" onPress={() => openPcFile(safe, ctx.sessionId ?? null)}>
             {children}

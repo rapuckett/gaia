@@ -5,11 +5,11 @@ import { ltrIn } from '@webui/components/setup/format';
 import { FIREWORKS_KEYS_URL, GATEWAY_GUIDE_URL } from '@webui/components/setup/keyLinks';
 import type { CloudPriceList } from '@webui/types';
 import { useState } from 'react';
-import { Linking } from 'react-native';
 
 import { GaiaApiError } from '@/api/errors';
 import { useActiveModel, useCloudPrices, useCloudProviders, useConnectCloud, useLemonadeTarget } from '@/data';
 import { describeError, useLocaleCode, useT, type Translate } from '@/i18n/useT';
+import { openLinkFromPress } from '@/platform/openLink';
 import { Button, Card, ChoiceList, Notice, Spinner, Stack, Row, Text, TextField, type ChoiceOption } from '@/ui';
 
 import { shortModelName } from '../../new-chat/warmUp';
@@ -32,7 +32,7 @@ function shownRows(list: CloudPriceList, inUse: string | null) {
 }
 
 function openLink(url: string) {
-    Linking.openURL(url).catch((error: unknown) => console.error(`Opening ${url} failed`, error));
+    openLinkFromPress(url);
 }
 
 function Prices({ provider, picked, onPick, disabled, inUse }: {
@@ -117,15 +117,19 @@ export const KeyScreen: PlanScreen = ({ ctx, close }) => {
     const choice: Provider = chosen ?? (active?.provider === 'amd' ? 'amd' : 'fireworks');
     const info = infoOf(choice);
     const blocked = (id: Provider) => !!infoOf(id)?.blocked;
+    const gatewayDown = infoOf('amd')?.network?.reachable === false;
+    // The gateway is for AMD's network: hidden once it is known not to answer, unless already chosen.
+    const gatewayShown = !gatewayDown || choice === 'amd';
+    const unavailable = (id: Provider) => blocked(id) || (id === 'amd' && gatewayDown);
     const connected = !!info?.configured;
-    const canConnect = (connected || usersServer) && !blocked(choice);
+    const canConnect = (connected || usersServer) && !unavailable(choice);
     const inUse = active?.provider === choice ? active.model : null;
     const shownPick = picked ?? inUse;
 
-    const options: ChoiceOption[] = PROVIDERS.map((p) => ({
+    const options: ChoiceOption[] = PROVIDERS.filter((p) => p.id !== 'amd' || gatewayShown).map((p) => ({
         value: p.id,
         label: p.title,
-        description: blocked(p.id) ? t('settings.privacy.localOnlyBlocked') : t(p.note),
+        description: blocked(p.id) ? t('settings.privacy.localOnlyBlocked') : unavailable(p.id) ? t('setup.key.gatewayOff') : t(p.note),
     }));
 
     const go = () => connect.mutate({ provider: choice, wanted: shownPick, wantedName: shownPick ? shortModelName(shownPick) : undefined }, { onSuccess: () => ctx.startedRun() });
@@ -139,12 +143,15 @@ export const KeyScreen: PlanScreen = ({ ctx, close }) => {
                 value={choice}
                 accessibilityLabel={t('setup.key.provider')}
                 onChange={(v) => {
-                    if (connect.isPending) return;
+                    if (connect.isPending || unavailable(v as Provider)) return;
                     setChosen(v as Provider);
                     setPicked(null);
                     connect.reset();
                 }}
             />
+            {gatewayDown && gatewayShown ? (
+                <Button variant="ghost" label={t('setup.key.checkAgain')} disabled={providers.isFetching} onPress={() => void providers.refetch()} />
+            ) : null}
             {blocked(choice) ? (
                 <Notice tone="warning" message={t('settings.privacy.localOnlyBlocked')} />
             ) : (

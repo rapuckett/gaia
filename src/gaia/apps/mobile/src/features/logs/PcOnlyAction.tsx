@@ -23,7 +23,7 @@ export function PcOnlyAction({ label, icon, note, detail, testID }: {
     const generic = t('mobileApp.settings.pcOnly');
     return (
         <Stack gap="sm">
-            <Button label={label} icon={icon} onPress={() => setPressed(true)} testID={testID} />
+            <Button full wrap label={label} icon={icon} onPress={() => setPressed(true)} testID={testID} />
             {note ? <Text role="caption" tone="muted">{note}</Text> : null}
             {pressed ? (
                 <Notice tone="info" message={detail === generic ? refusal : `${refusal} ${detail}`} testID={`${testID}-refusal`} />
