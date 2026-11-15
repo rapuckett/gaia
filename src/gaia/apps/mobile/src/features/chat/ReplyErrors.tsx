@@ -5,7 +5,7 @@ import * as WebBrowser from 'expo-web-browser';
 import { useState } from 'react';
 
 import { failureRecordId } from '@webui/utils/streamErrors.core';
-import { isErrorContent, isModelFailure } from '@webui/utils/answerErrors.core';
+import { isErrorContent } from '@webui/utils/answerErrors.core';
 
 import type { Message } from '@/api/client.types';
 import { useSession } from '@/data';
@@ -51,9 +51,9 @@ function PcOnlyFailureLines({ showLog, showReport }: { showLog: boolean; showRep
 
 /** What a saved reply that looks like an error needs beside it, decided as the web UI's message bubble does. */
 export function SavedReplyErrors({ message }: { message: Message }) {
-    const isError = isErrorContent(message.content);
+    const isError = message.failed === true || isErrorContent(message.content);
     const local = useSession(message.session_id).data?.inference_remote === false;
-    const showLog = local && (isError || isModelFailure(message.content));
+    const showLog = local && isError;
     const showReport = failureRecordId(message.content) !== null;
     if (!isError && !showLog && !showReport) return null;
     return (
@@ -110,7 +110,7 @@ export function TailIssues({ tail, local }: { tail: TurnTail; local: boolean }) 
     const ended = !tail.live;
     const serverDown = ended && tail.failure === 'model_server_down';
     const report = !!error && chatErrorInfo(error, t).kind !== 'stream';
-    const showLog = ended && local && !!tail.failedReply;
+    const showLog = ended && local && !!tail.failedReply && !tail.shownOnReply;
     const showReportNote = ended && !!error && namesFailureRecord(error);
     if (!tail.errorBanner && !serverDown && !policyAlert && !report && !showLog && !showReportNote) return null;
     return (
