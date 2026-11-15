@@ -9,6 +9,7 @@ import { metrics } from '../tokens/generated';
 import { fontFamily, type Weight } from '../theme/fonts';
 import { useTheme } from '../theme/ThemeProvider';
 import { toneColor, type Tone } from '../theme/tone';
+import { contentDir } from './direction';
 import type { TypeRole } from '../tokens/type';
 
 export interface TextProps {
@@ -24,7 +25,7 @@ export interface TextProps {
     strike?: boolean;
     /** Inline code: mono on the code surface. */
     code?: boolean;
-    /** Writing direction of this run, for content whose language differs from the UI's. */
+    /** Writing direction of this run, for content whose language differs from the UI's. `auto` follows the first strong letter of a string child. */
     dir?: 'ltr' | 'rtl' | 'auto';
     onPress?: () => void;
     accessibilityLabel?: string;
@@ -72,14 +73,16 @@ export function Text({
     selectable,
     strike,
     code,
-    dir,
+    dir: dirProp,
     onPress,
     accessibilityLabel,
     accessibilityRole,
     testID,
 }: TextProps) {
     const { colors, type } = useTheme();
-    const rtl = useDirection() === 'rtl';
+    const uiDir = useDirection();
+    const rtl = uiDir === 'rtl';
+    const dir = dirProp === 'auto' ? (typeof children === 'string' ? contentDir(children, uiDir) : uiDir) : dirProp;
     const nested = useContext(InsideText);
 
     // A nested Text is a span: it inherits everything it isn't given.

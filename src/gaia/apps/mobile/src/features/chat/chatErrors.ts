@@ -42,3 +42,8 @@ export function requestFailureText(error: GaiaError, t: Translate): string {
 export function mayStillFinish(error: GaiaError): boolean {
     return error instanceof GaiaStreamError;
 }
+
+/** The turn failed because the model server took no connection. */
+export function isModelServerDown(error: GaiaError, t: Translate): boolean {
+    return classifyChatError(webError(error), t).kind === 'model_server';
+}

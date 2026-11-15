@@ -9,10 +9,12 @@ export const UI_HEADERS = {
 } as const;
 
 export const ENDPOINTS = {
+    agents: '/api/agents',
     health: '/api/health',
     localModelRestart: '/api/providers/local/restart',
     localModelStatus: '/api/providers/local/status',
     schedule: '/api/schedules/{name:path}',
+    scheduleResults: '/api/schedules/{name:path}/results',
     scheduleRun: '/api/schedules/{name:path}/run',
     scheduleParse: '/api/schedules/parse',
     schedules: '/api/schedules',
@@ -23,7 +25,9 @@ export const ENDPOINTS = {
     sessionMessage: '/api/sessions/{session_id}/messages/{message_id}',
     sessionMessages: '/api/sessions/{session_id}/messages',
     sessionMessagesAndBelow: '/api/sessions/{session_id}/messages/{message_id}/and-below',
+    sessionPin: '/api/sessions/{session_id}/pin',
     sessionPrivate: '/api/sessions/{session_id}/private',
+    sessionRead: '/api/sessions/{session_id}/read',
     sessionSearch: '/api/sessions/search',
     setupCancel: '/api/setup/cancel',
     setupCheck: '/api/setup/check',
@@ -32,13 +36,19 @@ export const ENDPOINTS = {
     setupPlan: '/api/setup/plan',
     setupRun: '/api/setup/run',
     setupStatus: '/api/setup/status',
+    skills: '/api/skills',
     chatSend: '/api/chat/send',
     chatAttach: '/api/chat/attach',
     chatCancel: '/api/chat/cancel',
     chatConfirmTool: '/api/chat/confirm-tool',
+    chatContext: '/api/chat/context/{session_id}',
     chatFollowup: '/api/chat/followup',
     chatFollowupOutcome: '/api/chat/followup/{session_id}',
     chatUserInput: '/api/chat/user-input',
+    connectorActivation: '/api/connectors/{connector_id}/activations/{agent_id:path}',
+    connectorActivations: '/api/connectors/{connector_id}/activations',
+    connectorGrant: '/api/connectors/{connector_id}/grants/{agent_id:path}',
+    connectorGrants: '/api/connectors/{connector_id}/grants',
     connectors: '/api/connectors',
     connectorsAgentMcps: '/api/connectors/agent-mcps',
     systemResources: '/api/system/resources',
@@ -48,8 +58,32 @@ export const ENDPOINTS = {
     onboardingStart: '/api/onboarding/start',
 } as const;
 
+export function connectorActivationPath(connectorId: string, agentId: string): string {
+    return ENDPOINTS.connectorActivation
+        .replace('{connector_id}', encodeURIComponent(connectorId))
+        .replace('{agent_id:path}', encodeURIComponent(agentId));
+}
+
+export function connectorActivationsPath(connectorId: string): string {
+    return ENDPOINTS.connectorActivations.replace('{connector_id}', encodeURIComponent(connectorId));
+}
+
+export function connectorGrantPath(connectorId: string, agentId: string): string {
+    return ENDPOINTS.connectorGrant
+        .replace('{connector_id}', encodeURIComponent(connectorId))
+        .replace('{agent_id:path}', encodeURIComponent(agentId));
+}
+
+export function connectorGrantsPath(connectorId: string): string {
+    return ENDPOINTS.connectorGrants.replace('{connector_id}', encodeURIComponent(connectorId));
+}
+
 export function schedulePath(name: string): string {
     return ENDPOINTS.schedule.replace('{name:path}', encodeURIComponent(name));
+}
+
+export function scheduleResultsPath(name: string, limit: number): string {
+    return `${ENDPOINTS.scheduleResults.replace('{name:path}', encodeURIComponent(name))}?limit=${limit}`;
 }
 
 export function scheduleRunPath(name: string): string {
@@ -62,6 +96,10 @@ export function setupNeedsPath(job: string): string {
 
 export function sessionPath(sessionId: string): string {
     return ENDPOINTS.session.replace('{session_id}', encodeURIComponent(sessionId));
+}
+
+export function chatContextPath(sessionId: string): string {
+    return ENDPOINTS.chatContext.replace('{session_id}', encodeURIComponent(sessionId));
 }
 
 export function followupOutcomePath(sessionId: string): string {
@@ -78,8 +116,16 @@ export function sessionCapabilitiesPath(sessionId: string): string {
     return ENDPOINTS.sessionCapabilities.replace('{session_id}', encodeURIComponent(sessionId));
 }
 
+export function sessionPinPath(sessionId: string): string {
+    return ENDPOINTS.sessionPin.replace('{session_id}', encodeURIComponent(sessionId));
+}
+
 export function sessionPrivatePath(sessionId: string): string {
     return ENDPOINTS.sessionPrivate.replace('{session_id}', encodeURIComponent(sessionId));
+}
+
+export function sessionReadPath(sessionId: string): string {
+    return ENDPOINTS.sessionRead.replace('{session_id}', encodeURIComponent(sessionId));
 }
 
 export function sessionMessagesPath(sessionId: string): string {
@@ -118,6 +164,9 @@ export const QUEUED_IDLE_MS = 10 * 60_000;
 export const SEND_HEADER_TIMEOUT_MS = 90_000;
 /** An attach replays at once; a slower answer means the backend is stuck or unreachable. */
 export const ATTACH_HEADER_TIMEOUT_MS = 30_000;
+/** How many past runs a schedule's history shows; the web UI asks for the same 20. */
+export const SCHEDULE_RESULTS_LIMIT = 20;
+
 /** How often to re-read the schedules while their screen is open, so counts and times follow the PC. */
 export const SCHEDULES_POLL_MS = 10_000;
 /** How long a Delete button waits for its "Confirm?" press; the web UI's CONFIRM_DELETE_MS. */

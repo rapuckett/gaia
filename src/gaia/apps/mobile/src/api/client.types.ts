@@ -3,8 +3,10 @@
 
 import type { FollowUpOutcome } from '@webui/utils/messageQueue';
 import type {
+    AgentInfo,
     AgentMcpServer,
     ConnectorListEntry,
+    ContextUsageResult,
     LocalModelStatus,
     Message,
     ModelNeed,
@@ -12,10 +14,12 @@ import type {
     ParsedSchedule,
     ResourceUsage,
     Schedule,
+    ScheduleResult,
     Session,
     SetupCheck,
     SetupPlan,
     SetupRunStatus,
+    SkillInfo,
     StartScreen,
     StreamEvent,
     SystemStatus,
@@ -24,9 +28,12 @@ import type { AgentCapabilities } from '@webui/types/sessionPanel';
 import type { CreateSessionRequest, DocumentListResponse, SessionSearchResponse, ToolConfirmRequest, UserInputRequest as ApiUserInputRequest } from '@webui/types/api.gen';
 
 export type {
+    AgentInfo,
     AgentMcpServer,
     ConnectorListEntry,
     ConnectorRow,
+    ContextUsage,
+    ContextUsageResult,
     LocalModelStatus,
     Message,
     ModelNeed,
@@ -34,10 +41,13 @@ export type {
     ParsedSchedule,
     ResourceUsage,
     Schedule,
+    ScheduleResult,
     Session,
     SetupCheck,
     SetupPlan,
     SetupRunStatus,
+    SkillInfo,
+    SkillSource,
     StartScreen,
     StreamEvent,
     SystemStatus,
@@ -61,6 +71,26 @@ export interface MessageList {
 
 export interface ConnectorList {
     connectors: ConnectorListEntry[];
+}
+
+export interface AgentList {
+    agents: AgentInfo[];
+}
+
+/** Namespaced agent ids to the scopes granted to them. */
+export interface ConnectorGrants {
+    grants: Record<string, string[]>;
+}
+
+/** Namespaced agent ids to whether the agent may use the connector's tools. */
+export interface ConnectorActivations {
+    activations: Record<string, boolean>;
+}
+
+/** `invalid` maps each unreadable skill's path to why GAIA skipped it. */
+export interface SkillList {
+    skills: SkillInfo[];
+    invalid: Record<string, string>;
 }
 
 export interface AgentMcpList {
@@ -101,6 +131,10 @@ export interface DeleteMessagesResult {
     count: number;
 }
 
+export interface DeleteSessionResult {
+    deleted: boolean;
+}
+
 export interface UserInputResult {
     status: string;
     request_id: string;
@@ -122,6 +156,11 @@ export interface CreateScheduleRequest {
     prompt: string;
     /** IANA zone the times are in; the device's. */
     timezone?: string;
+}
+
+export interface ScheduleResults {
+    results: ScheduleResult[];
+    total: number;
 }
 
 export interface DeleteScheduleResult {
@@ -149,6 +188,13 @@ export interface GaiaClient {
     listSessions(options?: RequestOptions): Promise<SessionList>;
     getSession(sessionId: string, options?: RequestOptions): Promise<Session>;
     createSession(request?: CreateSessionRequest, options?: RequestOptions): Promise<Session>;
+    setSessionPinned(sessionId: string, pinned: boolean, options?: RequestOptions): Promise<Session>;
+    /** Deletes the chat and its messages; a turn still running on it is stopped first. */
+    deleteSession(sessionId: string, options?: RequestOptions): Promise<DeleteSessionResult>;
+    /** Clears the chat's unread mark. */
+    markSessionRead(sessionId: string, options?: RequestOptions): Promise<Session>;
+    /** How full the model's context window is for the chat's next message, or why there is no reading yet. */
+    getContextUsage(sessionId: string, options?: RequestOptions): Promise<ContextUsageResult>;
     /** What the chat's last finished turn did with the messages added to it; rejects with 409 while a turn still runs. */
     getFollowUpOutcome(sessionId: string, options?: RequestOptions): Promise<FollowUpOutcome>;
     /** Chats whose title or messages match `query`, newest first; `truncated` says the backend capped the list. */
@@ -184,10 +230,23 @@ export interface GaiaClient {
     confirmTool(request: ToolConfirmRequest, options?: RequestOptions): Promise<ConfirmToolResult>;
     /** Answers a `needs_input` question; the turn continues once GAIA has it. */
     sendUserInput(request: UserInputRequest, options?: RequestOptions): Promise<UserInputResult>;
+    listAgents(options?: RequestOptions): Promise<AgentList>;
     listConnectors(options?: RequestOptions): Promise<ConnectorList>;
+    listConnectorGrants(connectorId: string, options?: RequestOptions): Promise<ConnectorGrants>;
+    listConnectorActivations(connectorId: string, options?: RequestOptions): Promise<ConnectorActivations>;
+    /** Sets the scopes an agent holds on a connector; the PC answers 400 for a scope past what the connector allows. */
+    grantConnectorAgent(connectorId: string, agentId: string, scopes: string[], options?: RequestOptions): Promise<void>;
+    /** Removes an agent's grant on a connector. */
+    revokeConnectorAgentGrant(connectorId: string, agentId: string, options?: RequestOptions): Promise<void>;
+    /** Lets an agent use an MCP server's tools; `scopes` creates the grant when the agent has none. */
+    activateConnectorAgent(connectorId: string, agentId: string, scopes?: string[], options?: RequestOptions): Promise<void>;
+    /** Hides an MCP server's tools from an agent; its grant stays. */
+    deactivateConnectorAgent(connectorId: string, agentId: string, options?: RequestOptions): Promise<void>;
     /** Servers that custom agents declare in their own mcp_servers.json; read-only. */
     listAgentMcps(options?: RequestOptions): Promise<AgentMcpList>;
     listSchedules(options?: RequestOptions): Promise<ScheduleList>;
+    /** Every skill GAIA can load, plus the folders it skipped. */
+    listSkills(options?: RequestOptions): Promise<SkillList>;
     /** Creates a schedule; `interval` is the plain-words "when to run", parsed by the PC. 409 when the name is taken. */
     createSchedule(request: CreateScheduleRequest, options?: RequestOptions): Promise<Schedule>;
     /** Reads a plain-words "when to run" without saving it, for the form's live preview. */
@@ -197,6 +256,8 @@ export interface GaiaClient {
     /** Runs a schedule once now (409 while a run is in flight); its next scheduled run stays as it was. */
     runSchedule(name: string, options?: RequestOptions): Promise<Schedule>;
     deleteSchedule(name: string, options?: RequestOptions): Promise<DeleteScheduleResult>;
+    /** A schedule's most recent runs, newest first. */
+    listScheduleResults(name: string, limit: number, options?: RequestOptions): Promise<ScheduleResults>;
     /** The library's documents; a chat searches only the ones attached to it. */
     listDocuments(options?: RequestOptions): Promise<DocumentListResponse>;
     getSystemStatus(options?: RequestOptions): Promise<SystemStatus>;
