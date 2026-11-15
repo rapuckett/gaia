@@ -5,14 +5,14 @@ import { useState, type ReactNode } from 'react';
 
 import { isolate } from '@webui/i18n/registry';
 import type { SystemStatus } from '@webui/types';
-import { isServerDown } from '@webui/utils/serverDown';
 
-import { GaiaApiError } from '@/api/errors';
 import { useModelActions, useSystemStatus } from '@/data';
 import { describeError, useT } from '@/i18n/useT';
-import { Button, Card, Disclosure, Divider, Ltr, Notice, ProgressLine, Row, Sheet, Spinner, Stack, Text } from '@/ui';
+import { Button, Card, Disclosure, Divider, Ltr, Notice, ProgressLine, Row, Spinner, Stack, Text } from '@/ui';
 
 import { SettingsAnchor } from '../targets';
+import { ActionError, LoadAnywaySheet, RawDetails } from './advanced/errors';
+import { ServerControlsSlot } from './advanced/ServerControls';
 import { capabilitiesText, needsLocalSetup, needText, statusFlags } from './advanced/statusText';
 
 /** Settings > Advanced: the PC's status and model actions, then the logs card; the server controls go in the slot. */
@@ -28,11 +28,6 @@ export default function Advanced() {
     );
 }
 
-/** Where set-adv-server (the model server's controls) goes. */
-export function ServerControlsSlot(): ReactNode {
-    return null;
-}
-
 function StatusRow({ label, value, ok, hint }: { label: string; value: ReactNode; ok: boolean; hint?: string }) {
     return (
         <Stack gap="xs">
@@ -45,32 +40,6 @@ function StatusRow({ label, value, ok, hint }: { label: string; value: ReactNode
                 </Stack>
             </Row>
             {hint ? <Text role="caption" tone="muted">{hint}</Text> : null}
-        </Stack>
-    );
-}
-
-/** A raw error or log line, one tap away and kept left to right. */
-function RawDetails({ text }: { text: string }) {
-    const t = useT();
-    const [open, setOpen] = useState(false);
-    return (
-        <Disclosure title={t('settings.errors.details')} open={open} onToggle={() => setOpen((v) => !v)}>
-            <Text role="caption" tone="muted" selectable><Ltr>{text}</Ltr></Text>
-        </Disclosure>
-    );
-}
-
-/** An action's failure in plain words; a refusal from the PC says to do it there, and the raw text stays behind Details. */
-function ActionError({ error }: { error: unknown }) {
-    const t = useT();
-    if (error instanceof GaiaApiError && error.status === 403) {
-        return <Notice tone="info" message={t('mobileApp.settings.pcOnly')} testID="advanced-pc-only" />;
-    }
-    const raw = describeError(error, t);
-    return (
-        <Stack gap="sm">
-            <Notice tone="danger" message={isServerDown(raw) ? t('settings.errors.serverDown') : t('mobileApp.settings.modelActionFailed')} />
-            <RawDetails text={raw} />
         </Stack>
     );
 }
@@ -281,27 +250,15 @@ function StatusBody({ status, modelName, actions, detailsOpen, onToggleDetails }
                 </Stack>
             </Disclosure>
 
-            <Sheet
+            <LoadAnywaySheet
                 open={actions.loadBlocked !== null}
+                name={name}
                 onClose={actions.dismissLoadBlocked}
-                title={t('settings.advanced.load')}
-                footer={
-                    <Stack gap="sm">
-                        <Button
-                            label={t('mobileApp.settings.loadAnywayButton')}
-                            variant="danger"
-                            full
-                            onPress={() => {
-                                actions.dismissLoadBlocked();
-                                void actions.load(true);
-                            }}
-                        />
-                        <Button label={t('settings.key.cancel')} variant="secondary" full onPress={actions.dismissLoadBlocked} />
-                    </Stack>
-                }
-            >
-                <Text role="body">{t('mobileApp.settings.loadAnyway', { name: isolate(name, 'ltr') })}</Text>
-            </Sheet>
+                onConfirm={() => {
+                    actions.dismissLoadBlocked();
+                    void actions.load(true);
+                }}
+            />
         </Stack>
     );
 }

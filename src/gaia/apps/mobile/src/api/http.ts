@@ -59,6 +59,7 @@ import type {
     MemorySettings,
     MemoryStats,
     MemoryToolStat,
+    MCPServerStatus,
     MemoryUpcomingItem,
     MessageList,
     ModelNeed,
@@ -356,6 +357,10 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         getSettings(options) {
             return getJson<Settings>(ENDPOINTS.settings, options?.signal);
+        },
+
+        updateSettings(patch, options) {
+            return putJson<Settings>(ENDPOINTS.settings, patch, options?.signal);
         },
 
         setNetworkPolicy(policy, options) {
@@ -763,6 +768,14 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         getLemonadeTarget(options) {
             return getJson<LemonadeTarget>(ENDPOINTS.lemonadeTarget, options?.signal);
+        },
+
+        setLemonadeTarget(body, options) {
+            return postJson<LemonadeTarget & { daemon: unknown }>(ENDPOINTS.lemonadeTarget, body, options?.signal);
+        },
+
+        getMcpStatus(options) {
+            return getJson<{ servers: MCPServerStatus[] }>(ENDPOINTS.mcpStatus, options?.signal);
         },
 
         detectLemonade(options) {

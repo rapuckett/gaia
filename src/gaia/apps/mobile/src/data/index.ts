@@ -10,6 +10,7 @@ export * from './GaiaClientProvider';
 export * from './memory';
 export * from './modelActions';
 export * from './modelMenu';
+export * from './modelServer';
 export * from './models';
 export * from './mutations';
 export * from './permissions';

@@ -15,7 +15,9 @@ import type {
     GpuMemoryStatus,
     LemonadeFound,
     LemonadeTarget,
+    LemonadeTargetBody,
     LocalModelStatus,
+    MCPServerStatus,
     Message,
     ModelNeed,
     ModelNeedJob,
@@ -58,7 +60,9 @@ export type {
     GpuMemoryStatus,
     LemonadeFound,
     LemonadeTarget,
+    LemonadeTargetBody,
     LocalModelStatus,
+    MCPServerStatus,
     Message,
     ModelNeed,
     ModelNeedJob,
@@ -348,6 +352,8 @@ export interface GaiaClient {
     markSessionRead(sessionId: string, options?: RequestOptions): Promise<Session>;
     /** The PC's settings, among them `network_policy` (Local only). */
     getSettings(options?: RequestOptions): Promise<Settings>;
+    /** Saves the custom model ID (`''` clears it) or the dynamic-tools switch; answers the settings as now saved, with the custom ID's `model_status`. */
+    updateSettings(patch: { custom_model?: string; dynamic_tools?: boolean }, options?: RequestOptions): Promise<Settings>;
     /** Turns Local only on or off. The PC alone may change it: 403 from a phone. */
     setNetworkPolicy(policy: Settings['network_policy'], options?: RequestOptions): Promise<Settings>;
     /** How long and how much undo history is kept, and how much is in use. */
@@ -517,6 +523,10 @@ export interface GaiaClient {
     setModelServerBackend(backend: string, options?: RequestOptions): Promise<ModelServerInfo>;
     /** Which model server GAIA uses, and whether the PC still has to choose one. */
     getLemonadeTarget(options?: RequestOptions): Promise<LemonadeTarget>;
+    /** Switches GAIA to its own model server or to the one at `base_url`; PC-only (403 from a phone). A 422 body carries `status` (`needs_key`, `bad_key`, ...). */
+    setLemonadeTarget(body: LemonadeTargetBody, options?: RequestOptions): Promise<LemonadeTarget & { daemon: unknown }>;
+    /** Each MCP server GAIA runs: whether it connected and how many tools it offers. */
+    getMcpStatus(options?: RequestOptions): Promise<{ servers: MCPServerStatus[] }>;
     /** A model server the PC already runs; `unchecked` lists addresses that took the connection but didn't answer. */
     detectLemonade(options?: RequestOptions): Promise<{ found: LemonadeFound | null; unchecked?: string[] }>;
     /** Registers the provider with the key the PC already holds; the phone never sends a key. */

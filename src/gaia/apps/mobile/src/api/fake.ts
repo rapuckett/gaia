@@ -8,6 +8,7 @@ import type {
     AgentCapabilities,
     AgentInfo,
     AgentMcpServer,
+    MCPServerStatus,
     ChatPerformance,
     ConnectorListEntry,
     ContextUsageResult,
@@ -23,6 +24,7 @@ import type {
     HealthResponse,
     LemonadeFound,
     LemonadeTarget,
+    LemonadeTargetBody,
     LocalModelStatus,
     KnowledgeCreateBody,
     KnowledgeUpdateBody,
@@ -171,6 +173,10 @@ export interface FakeClientData {
     preflight?: PreflightReport | Error;
     /** What getLemonadeTarget answers; an Error is thrown. */
     lemonadeTarget?: LemonadeTarget | Error;
+    /** Thrown by setModelServerBackend and setLemonadeTarget, as the PC's 403 is. */
+    serverChangeError?: Error;
+    /** What getMcpStatus answers. */
+    mcpServers?: MCPServerStatus[];
     /** What detectLemonade answers; an Error is thrown. */
     lemonadeDetect?: { found: LemonadeFound | null; unchecked?: string[] } | Error;
     documents?: DocumentListResponse;
@@ -240,6 +246,7 @@ export interface FakeGaiaClient extends GaiaClient {
     readonly modelLoads: { modelName: string; force: boolean }[];
     readonly removals: string[];
     readonly backendSets: string[];
+    readonly targetSets: LemonadeTargetBody[];
     /** The setup model choices saved, in order. */
     readonly setupChoices: { kind: 'chat' | 'vision' | 'skip'; modelId: string | null; flag?: boolean }[];
     /** The providers connectProvider was asked for, in order. */
@@ -311,6 +318,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
     const followUps: FakeGaiaClient['followUps'] = [];
     const setupStarts: FakeGaiaClient['setupStarts'] = [];
     const backendSets: string[] = [];
+    const targetSets: LemonadeTargetBody[] = [];
     const setupChoices: FakeGaiaClient['setupChoices'] = [];
     const connects: string[] = [];
     let npuRechecks = 0;
@@ -373,6 +381,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         removals,
         setupStarts,
         backendSets,
+        targetSets,
         setupChoices,
         connects,
         get npuRechecks() {
@@ -684,6 +693,15 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             if (!data.settings) throw new GaiaApiError(503, 'This fake client was given no settings.');
             return data.settings;
         },
+        async updateSettings(patch) {
+            if (!data.settings) throw new GaiaApiError(503, 'This fake client was given no settings.');
+            data.settings = {
+                ...data.settings,
+                ...(patch.custom_model !== undefined ? { custom_model: patch.custom_model || null } : {}),
+                ...(patch.dynamic_tools !== undefined ? { dynamic_tools: patch.dynamic_tools } : {}),
+            };
+            return data.settings;
+        },
         async setNetworkPolicy(policy) {
             if (!data.settings) throw new GaiaApiError(503, 'This fake client was given no settings.');
             if (data.networkPolicyError) throw data.networkPolicyError;
@@ -895,6 +913,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             return data.modelServer;
         },
         async setModelServerBackend(backend) {
+            if (data.serverChangeError) throw data.serverChangeError;
             backendSets.push(backend);
             return { ...(data.modelServer as ModelServerInfo), preferred_backend: backend };
         },
@@ -907,6 +926,16 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             if (!data.lemonadeTarget) throw new GaiaApiError(503, 'This fake client was given no model server target.');
             if (data.lemonadeTarget instanceof Error) throw data.lemonadeTarget;
             return data.lemonadeTarget;
+        },
+        async setLemonadeTarget(body) {
+            if (data.serverChangeError) throw data.serverChangeError;
+            if (!data.lemonadeTarget || data.lemonadeTarget instanceof Error) throw new GaiaApiError(503, 'This fake client was given no model server target.');
+            targetSets.push(body);
+            data.lemonadeTarget = { ...data.lemonadeTarget, mode: body.mode, base_url: body.base_url ?? data.lemonadeTarget.base_url, saved_base_url: body.base_url ?? data.lemonadeTarget.saved_base_url };
+            return { ...data.lemonadeTarget, daemon: null };
+        },
+        async getMcpStatus() {
+            return { servers: [...(data.mcpServers ?? [])] };
         },
         async detectLemonade() {
             if (!data.lemonadeDetect) return { found: null };
