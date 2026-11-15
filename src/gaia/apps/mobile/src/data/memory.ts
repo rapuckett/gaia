@@ -7,13 +7,18 @@ import type {
     ConsolidateMemoryResult,
     EmbeddingCoverage,
     KnowledgeCreateBody,
+    KnowledgeListParams,
     KnowledgeSaveResult,
     KnowledgeUpdateBody,
     MemoryActivityDay,
+    MemoryConversation,
+    MemoryEntity,
+    MemoryKnowledgeEntry,
     MemoryKnowledgeItem,
     MemorySettings,
     MemoryStats,
     MemoryToolStat,
+    MemoryTurn,
     MemoryUpcomingItem,
     RebuildEmbeddingsResult,
     ReconcileMemoryResult,
@@ -34,6 +39,11 @@ export const memoryKeys = {
     activity: (days: number) => ['memory', 'activity', days] as const,
     tools: ['memory', 'tools'] as const,
     knowledge: (want: number) => ['memory', 'knowledge', want] as const,
+    browse: (params: KnowledgeListParams) => ['memory', 'browse', params] as const,
+    entities: ['memory', 'entities'] as const,
+    conversations: (limit: number) => ['memory', 'conversations', limit] as const,
+    conversationSearch: (query: string) => ['memory', 'conversation-search', query] as const,
+    conversation: (sessionId: string) => ['memory', 'conversation', sessionId] as const,
     upcoming: (days: number) => ['memory', 'upcoming', days] as const,
 };
 
@@ -198,5 +208,59 @@ export function useForgetMemory() {
     return useMutation<unknown, Error, string>({
         mutationFn: (id) => requireClient(client).deleteMemoryKnowledge(id),
         onSuccess: () => queryClient.invalidateQueries({ queryKey: memoryKeys.all }),
+    });
+}
+
+/** One page of the Advanced tab's knowledge browser, filtered as `params` say. */
+export function useKnowledgeBrowse(params: KnowledgeListParams) {
+    const client = useGaiaClient();
+    return useQuery<{ items: MemoryKnowledgeEntry[]; total: number }>({
+        queryKey: memoryKeys.browse(params),
+        enabled: client !== null,
+        placeholderData: keepPreviousData,
+        queryFn: async ({ signal }) => {
+            const page = await requireClient(client).listMemoryKnowledge(params, { signal });
+            return { items: page.items, total: typeof page.total === 'number' ? page.total : page.items.length };
+        },
+    });
+}
+
+export function useMemoryEntities() {
+    const client = useGaiaClient();
+    return useQuery<MemoryEntity[]>({
+        queryKey: memoryKeys.entities,
+        enabled: client !== null,
+        queryFn: ({ signal }) => requireClient(client).listMemoryEntities({ signal }),
+    });
+}
+
+/** The most recent `limit` conversations in memory. */
+export function useMemoryConversations(limit: number) {
+    const client = useGaiaClient();
+    return useQuery<MemoryConversation[]>({
+        queryKey: memoryKeys.conversations(limit),
+        enabled: client !== null,
+        queryFn: ({ signal }) => requireClient(client).listMemoryConversations(limit, { signal }),
+    });
+}
+
+/** Turns matching `query`; idle while it is blank. */
+export function useConversationSearch(query: string, limit: number) {
+    const client = useGaiaClient();
+    const q = query.trim();
+    return useQuery<MemoryTurn[]>({
+        queryKey: memoryKeys.conversationSearch(q),
+        enabled: client !== null && q !== '',
+        queryFn: ({ signal }) => requireClient(client).searchMemoryConversations(q, limit, { signal }),
+    });
+}
+
+/** One conversation's turns; idle until a conversation is chosen. */
+export function useMemoryConversation(sessionId: string | null) {
+    const client = useGaiaClient();
+    return useQuery<MemoryTurn[]>({
+        queryKey: memoryKeys.conversation(sessionId ?? ''),
+        enabled: client !== null && sessionId !== null,
+        queryFn: ({ signal }) => requireClient(client).getMemoryConversation(sessionId!, { signal }),
     });
 }

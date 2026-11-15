@@ -23,8 +23,12 @@ import type {
     LocalModelStatus,
     KnowledgeCreateBody,
     KnowledgeUpdateBody,
+    KnowledgeListParams,
     MemoryActivityDay,
+    MemoryConversation,
+    MemoryKnowledgeEntry,
     MemoryKnowledgeItem,
+    MemoryTurn,
     MemorySettings,
     MemoryStats,
     MemoryToolStat,
@@ -172,8 +176,10 @@ export interface FakeClientData {
     /** What the activity read answers for a range in days; an Error is thrown. */
     memoryActivity?: (days: number) => MemoryActivityDay[] | Error;
     memoryTools?: MemoryToolStat[] | Error;
-    /** The memories the About you tab lists; an Error makes the list fail. Adds, edits and forgets change it. */
-    memoryKnowledge?: MemoryKnowledgeItem[] | Error;
+    /** The memories the browsers list; an Error makes the list fail. Adds, edits and forgets change it. Fields a row leaves out read as a fresh, unused memory. */
+    memoryKnowledge?: (MemoryKnowledgeItem & Partial<MemoryKnowledgeEntry>)[] | Error;
+    /** The conversations in memory, newest first, with each one's turns; an Error makes the reads fail. */
+    memoryConversations?: { sessions: MemoryConversation[]; turns: Record<string, MemoryTurn[]> } | Error;
     memoryUpcoming?: MemoryUpcomingItem[] | Error;
     /** What each maintenance POST answers; an Error makes it fail. Unlisted ones answer a zero result. */
     memoryActionResults?: {
@@ -217,6 +223,10 @@ export interface FakeGaiaClient extends GaiaClient {
     readonly memoryActions: string[];
     /** Each memory add, edit and forget, in order. */
     readonly knowledgeCalls: KnowledgeCall[];
+    /** The params of each knowledge list read, in order. */
+    readonly knowledgeReads: KnowledgeListParams[];
+    /** Each conversation search's query, in order. */
+    readonly conversationSearches: string[];
     /** The range of each activity read, in order. */
     readonly memoryActivityReads: number[];
     /** How many times the stats were read. */
@@ -273,6 +283,8 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
     let memoryStatsReads = 0;
     const memoryActivityReads: number[] = [];
     const knowledgeCalls: KnowledgeCall[] = [];
+    const knowledgeReads: KnowledgeListParams[] = [];
+    const conversationSearches: string[] = [];
     let knowledge = data.memoryKnowledge instanceof Error ? [] : [...(data.memoryKnowledge ?? [])];
     let knowledgeAdds = 0;
     function memoryAction<T>(name: string, result: T | Error): T {
@@ -320,6 +332,8 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         memoryActions,
         memoryActivityReads,
         knowledgeCalls,
+        knowledgeReads,
+        conversationSearches,
         get memoryStatsReads() {
             return memoryStatsReads;
         },
@@ -574,11 +588,54 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         },
         async listMemoryKnowledge(params) {
             if (data.memoryKnowledge instanceof Error) throw data.memoryKnowledge;
+            knowledgeReads.push(params);
+            const categories = ([] as string[]).concat(params.category ?? []);
+            const needle = params.search?.toLowerCase();
             const rows = knowledge
                 .filter((item) => params.include_sensitive || !item.sensitive)
+                .filter((item) => params.include_superseded || !item.superseded_by)
+                .filter((item) => categories.length === 0 || categories.includes(item.category))
+                .filter((item) => !params.context || item.context === params.context)
+                .filter((item) => !params.entity || item.entity === params.entity)
+                .filter((item) => !needle || item.content.toLowerCase().includes(needle))
                 .sort((a, b) => b.updated_at.localeCompare(a.updated_at));
             const offset = params.offset ?? 0;
-            return { items: rows.slice(offset, offset + (params.limit ?? rows.length)), total: rows.length };
+            const items = rows.slice(offset, offset + (params.limit ?? rows.length)).map(
+                (item): MemoryKnowledgeEntry => ({
+                    confidence: 0.8, metadata: null, use_count: 0, last_used: null, reminded_at: null, superseded_by: null, has_embedding: true, ...item,
+                }),
+            );
+            return { items, total: rows.length };
+        },
+        async listMemoryEntities() {
+            if (data.memoryKnowledge instanceof Error) throw data.memoryKnowledge;
+            const counts = new Map<string, { count: number; last: string }>();
+            for (const item of knowledge) {
+                if (!item.entity) continue;
+                const seen = counts.get(item.entity);
+                counts.set(item.entity, { count: (seen?.count ?? 0) + 1, last: seen && seen.last > item.updated_at ? seen.last : item.updated_at });
+            }
+            return [...counts].map(([entity, { count, last }]) => ({ entity, count, last_updated: last }));
+        },
+        async listMemoryConversations(limit) {
+            const conversations = data.memoryConversations;
+            if (conversations instanceof Error) throw conversations;
+            return (conversations?.sessions ?? []).slice(0, limit);
+        },
+        async searchMemoryConversations(query, limit) {
+            conversationSearches.push(query);
+            const conversations = data.memoryConversations;
+            if (conversations instanceof Error) throw conversations;
+            const needle = query.toLowerCase();
+            return Object.values(conversations?.turns ?? {})
+                .flat()
+                .filter((turn) => turn.content.toLowerCase().includes(needle))
+                .slice(0, limit);
+        },
+        async getMemoryConversation(sessionId) {
+            const conversations = data.memoryConversations;
+            if (conversations instanceof Error) throw conversations;
+            return conversations?.turns[sessionId] ?? [];
         },
         async addMemoryKnowledge(body) {
             knowledgeCalls.push({ action: 'add', body });

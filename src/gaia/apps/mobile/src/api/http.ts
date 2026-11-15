@@ -49,10 +49,13 @@ import type {
     LocalModelStatus,
     KnowledgeSaveResult,
     MemoryActivityDay,
+    MemoryConversation,
+    MemoryEntity,
     MemoryKnowledgePage,
     MemorySettings,
     MemoryStats,
     MemoryToolStat,
+    MemoryTurn,
     MemoryUpcomingItem,
     MessageList,
     ModelNeed,
@@ -97,6 +100,9 @@ import {
     MESSAGE_PAGE_SIZE,
     QUEUED_IDLE_MS,
     memoryActivityPath,
+    memoryConversationPath,
+    memoryConversationsPath,
+    memoryConversationsSearchPath,
     memoryKnowledgeItemPath,
     memoryKnowledgePath,
     memoryUpcomingPath,
@@ -572,6 +578,22 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         getMemoryTools(options) {
             return getJson<MemoryToolStat[]>(ENDPOINTS.memoryTools, options?.signal);
+        },
+
+        listMemoryEntities(options) {
+            return getJson<MemoryEntity[]>(ENDPOINTS.memoryEntities, options?.signal);
+        },
+
+        listMemoryConversations(limit, options) {
+            return getJson<MemoryConversation[]>(memoryConversationsPath(limit), options?.signal);
+        },
+
+        searchMemoryConversations(query, limit, options) {
+            return getJson<MemoryTurn[]>(memoryConversationsSearchPath(query, limit), options?.signal);
+        },
+
+        getMemoryConversation(sessionId, options) {
+            return getJson<MemoryTurn[]>(memoryConversationPath(sessionId), options?.signal);
         },
 
         getMemoryUpcoming(days, options) {

@@ -19,7 +19,11 @@ export const ENDPOINTS = {
     localModelStatus: '/api/providers/local/status',
     memoryActivity: '/api/memory/activity',
     memoryConsolidate: '/api/memory/consolidate',
+    memoryConversation: '/api/memory/conversations/{session_id}',
+    memoryConversations: '/api/memory/conversations',
+    memoryConversationsSearch: '/api/memory/conversations/search',
     memoryEmbeddingCoverage: '/api/memory/embedding-coverage',
+    memoryEntities: '/api/memory/entities',
     memoryKnowledge: '/api/memory/knowledge',
     memoryKnowledgeItem: '/api/memory/knowledge/{knowledge_id}',
     memoryRebuildEmbeddings: '/api/memory/rebuild-embeddings',
@@ -111,6 +115,18 @@ export function connectorGrantsPath(connectorId: string): string {
 
 export function memoryActivityPath(days: number): string {
     return `${ENDPOINTS.memoryActivity}?days=${days}`;
+}
+
+export function memoryConversationPath(sessionId: string): string {
+    return ENDPOINTS.memoryConversation.replace('{session_id}', encodeURIComponent(sessionId));
+}
+
+export function memoryConversationsPath(limit: number): string {
+    return `${ENDPOINTS.memoryConversations}?limit=${limit}`;
+}
+
+export function memoryConversationsSearchPath(query: string, limit: number): string {
+    return `${ENDPOINTS.memoryConversationsSearch}?query=${encodeURIComponent(query)}&limit=${limit}`;
 }
 
 export function memoryKnowledgeItemPath(knowledgeId: string): string {

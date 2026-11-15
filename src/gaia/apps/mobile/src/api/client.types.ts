@@ -37,7 +37,7 @@ import type {
 } from '@webui/types';
 import type { AgentCapabilities } from '@webui/types/sessionPanel';
 import type { KnowledgeCreateBody, KnowledgeListParams, KnowledgeSaveResult, KnowledgeUpdateBody, MemorySettings } from '@webui/services/memoryApi';
-import type { AboutYouItem, ActivityDay, TemporalItem, ToolStat } from '@webui/utils/memoryFormat.core';
+import type { ActivityDay, ConvSession, ConvTurn, EntityInfo, KnowledgeEntry, TemporalItem, ToolStat } from '@webui/utils/memoryFormat.core';
 import type { CreateSessionRequest, DocumentListResponse, ModelServerInfo, SessionSearchResponse, ToolConfirmRequest, UserInputRequest as ApiUserInputRequest } from '@webui/types/api.gen';
 
 export type {
@@ -140,10 +140,11 @@ export type { ActivityDay as MemoryActivityDay, TemporalItem as MemoryUpcomingIt
 
 export type { KnowledgeCreateBody, KnowledgeListParams, KnowledgeSaveResult, KnowledgeUpdateBody } from '@webui/services/memoryApi';
 export type { AboutYouItem as MemoryKnowledgeItem } from '@webui/utils/memoryFormat.core';
+export type { ConvSession as MemoryConversation, ConvTurn as MemoryTurn, EntityInfo as MemoryEntity, KnowledgeEntry as MemoryKnowledgeEntry } from '@webui/utils/memoryFormat.core';
 
 /** One page of GET /api/memory/knowledge; `total` counts every match, not just this page. */
 export interface MemoryKnowledgePage {
-    items: AboutYouItem[];
+    items: KnowledgeEntry[];
     total?: number;
 }
 
@@ -407,6 +408,14 @@ export interface GaiaClient {
     getMemoryStats(options?: RequestOptions): Promise<MemoryStats>;
     /** One page of stored memories; the About you tab asks `about_user` so GAIA's own notes stay out. */
     listMemoryKnowledge(params: KnowledgeListParams, options?: RequestOptions): Promise<MemoryKnowledgePage>;
+    /** Every entity with a memory, with its count. */
+    listMemoryEntities(options?: RequestOptions): Promise<EntityInfo[]>;
+    /** The most recent conversations in memory, newest first. */
+    listMemoryConversations(limit: number, options?: RequestOptions): Promise<ConvSession[]>;
+    /** Turns that match `query`, across every conversation. */
+    searchMemoryConversations(query: string, limit: number, options?: RequestOptions): Promise<ConvTurn[]>;
+    /** One conversation's turns, oldest first. */
+    getMemoryConversation(sessionId: string, options?: RequestOptions): Promise<ConvTurn[]>;
     /** Saves a memory and embeds it. */
     addMemoryKnowledge(body: KnowledgeCreateBody, options?: RequestOptions): Promise<KnowledgeSaveResult>;
     /** Changes a memory's text or due date; only the fields given are sent. */
