@@ -280,7 +280,6 @@ const messages: Messages = {
     'composer.remove': 'إزالة {name}',
     'composer.tooLong': 'الرسالة أطول من أن تُرسل: عدد الأحرف {sent} والحد الأقصى {max}.',
     'composer.tooLongHint': 'احفظها في ملف وأرفقه بزر +، وسيتمكن GAIA من قراءتها كاملة.',
-    'composer.removeRefused': 'أزل {names} قبل الإرسال: لا يستطيع GAIA قراءته، لذا سيُترك خارج الرسالة.',
     'composer.attach': 'إرفاق ملفات',
     'composer.attachFile': 'ملف',
     'composer.attachPhoto': 'صورة',
