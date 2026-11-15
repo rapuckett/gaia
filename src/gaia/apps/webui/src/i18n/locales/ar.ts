@@ -3796,6 +3796,8 @@ const messages: Messages = {
     'mobileApp.changes.done.join': '، ',
     'mobileApp.changes.done.kept.one': 'أُبقي على مجلد واحد أنشأه، لأنه يحوي الآن ملفات أخرى.',
     'mobileApp.changes.done.kept.other': 'أُبقي على {n} مجلدات أنشأها، لأنها تحوي الآن ملفات أخرى.',
+    'mobileApp.changes.chat.total': '{files} تغيّرت، {counts}',
+    'mobileApp.changes.chat.summary': '{files} · {counts}',
     'mobileApp.changes.chat.reviewTitle': 'مراجعة تغييرات هذه المحادثة',
     'mobileApp.changes.chat.reviewHeading': 'التغييرات في هذه المحادثة · {total}',
     'mobileApp.changes.git.commit': 'إجراء commit…',

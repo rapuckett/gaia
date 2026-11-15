@@ -13,7 +13,7 @@ import { describeErrorWith, useT, type Translate } from '@/i18n/useT';
 import { Button, Notice, Row, Stack, Text } from '@/ui';
 
 import { ChatChangesReview } from '../changes/ChatChangesReview';
-import { filesRef, totalText } from '../changes/changesText';
+import { countsText, filesRef, summaryText, totalText } from '../changes/changesText';
 import { GitSheet, repoName, type GitKind } from '../changes/GitSheet';
 import { failureReason, failureReasonWith } from '../header/failureText';
 import { PanelSection } from './PanelSection';
@@ -49,7 +49,7 @@ export function ChangesSection({ sessionId, live }: SectionProps) {
             title={t('chg.title')}
             summary={
                 changes && !empty
-                    ? t('chg.summary', { files: filesRef(changes.totals.files), add: changes.totals.additions, del: changes.totals.deletions })
+                    ? summaryText(changes, t)
                     : undefined
             }
         >
@@ -103,7 +103,7 @@ function ChangesBody({ sessionId, live, changes, onUndone }: { sessionId: string
                         <Text weight="medium">{isolate(baseName(file.path), 'ltr')}</Text>
                         <Text role="caption" tone="muted" dir="auto">
                             {t(`chg.${file.change}`)}
-                            {file.additions != null ? ` · +${file.additions} −${file.deletions}` : ''}
+                            {file.additions != null ? ` · ${countsText(file.additions, file.deletions ?? 0)}` : ''}
                             {file.message_ids.length > 1 ? ` · ${t('chg.turns', { n: file.message_ids.length })}` : ''}
                         </Text>
                         {file.changed_since ? <Text role="caption" tone="warning" dir="auto">{t('chg.outside', { when: file.changed_since })}</Text> : null}

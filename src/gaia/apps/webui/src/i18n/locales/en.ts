@@ -3796,6 +3796,8 @@ export const enMessages = {
     'mobileApp.changes.done.join': ', ',
     'mobileApp.changes.done.kept.one': 'Kept {n} folder it created, because they now hold other files.',
     'mobileApp.changes.done.kept.other': 'Kept {n} folders it created, because they now hold other files.',
+    'mobileApp.changes.chat.total': '{files} changed, {counts}',
+    'mobileApp.changes.chat.summary': '{files} · {counts}',
     'mobileApp.changes.chat.reviewTitle': "Review this chat's changes",
     'mobileApp.changes.chat.reviewHeading': 'Changes in this chat · {total}',
     'mobileApp.changes.git.commit': 'Commit…',
