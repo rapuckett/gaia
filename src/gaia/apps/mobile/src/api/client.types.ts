@@ -14,6 +14,7 @@ import type {
     ParsedSchedule,
     ResourceUsage,
     Schedule,
+    ScheduleResult,
     Session,
     SetupCheck,
     SetupPlan,
@@ -39,6 +40,7 @@ export type {
     ParsedSchedule,
     ResourceUsage,
     Schedule,
+    ScheduleResult,
     Session,
     SetupCheck,
     SetupPlan,
@@ -127,6 +129,10 @@ export interface DeleteMessagesResult {
     count: number;
 }
 
+export interface DeleteSessionResult {
+    deleted: boolean;
+}
+
 export interface UserInputResult {
     status: string;
     request_id: string;
@@ -148,6 +154,11 @@ export interface CreateScheduleRequest {
     prompt: string;
     /** IANA zone the times are in; the device's. */
     timezone?: string;
+}
+
+export interface ScheduleResults {
+    results: ScheduleResult[];
+    total: number;
 }
 
 export interface DeleteScheduleResult {
@@ -175,6 +186,11 @@ export interface GaiaClient {
     listSessions(options?: RequestOptions): Promise<SessionList>;
     getSession(sessionId: string, options?: RequestOptions): Promise<Session>;
     createSession(request?: CreateSessionRequest, options?: RequestOptions): Promise<Session>;
+    setSessionPinned(sessionId: string, pinned: boolean, options?: RequestOptions): Promise<Session>;
+    /** Deletes the chat and its messages; a turn still running on it is stopped first. */
+    deleteSession(sessionId: string, options?: RequestOptions): Promise<DeleteSessionResult>;
+    /** Clears the chat's unread mark. */
+    markSessionRead(sessionId: string, options?: RequestOptions): Promise<Session>;
     /** How full the model's context window is for the chat's next message, or why there is no reading yet. */
     getContextUsage(sessionId: string, options?: RequestOptions): Promise<ContextUsageResult>;
     /** What the chat's last finished turn did with the messages added to it; rejects with 409 while a turn still runs. */
@@ -236,6 +252,8 @@ export interface GaiaClient {
     /** Runs a schedule once now (409 while a run is in flight); its next scheduled run stays as it was. */
     runSchedule(name: string, options?: RequestOptions): Promise<Schedule>;
     deleteSchedule(name: string, options?: RequestOptions): Promise<DeleteScheduleResult>;
+    /** A schedule's most recent runs, newest first. */
+    listScheduleResults(name: string, limit: number, options?: RequestOptions): Promise<ScheduleResults>;
     /** The library's documents; a chat searches only the ones attached to it. */
     listDocuments(options?: RequestOptions): Promise<DocumentListResponse>;
     getSystemStatus(options?: RequestOptions): Promise<SystemStatus>;

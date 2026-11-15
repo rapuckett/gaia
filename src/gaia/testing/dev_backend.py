@@ -124,8 +124,11 @@ def validate_home(home: Optional[str]) -> Path:
     return resolved
 
 
-def isolate_environment(home: Path, llm_url: str) -> None:
+def isolate_environment(home: Path, llm_url: str, memory: bool = False) -> None:
     """Point every GAIA state variable at *home* and Lemonade at the fake LLM.
+
+    Memory is off unless *memory*: the fake LLM serves no embedder, and with
+    memory on every chat would warn that it is unavailable.
 
     Must run before anything imports ``gaia.config`` / ``gaia.logger``, which
     read these at import.
@@ -141,6 +144,10 @@ def isolate_environment(home: Path, llm_url: str) -> None:
     for name in _CLEARED_ENV:
         os.environ.pop(name, None)
     os.environ["LEMONADE_BASE_URL"] = llm_url
+    if memory:
+        os.environ.pop("GAIA_MEMORY_DISABLED", None)
+    else:
+        os.environ["GAIA_MEMORY_DISABLED"] = "1"
 
 
 # ── Fake LLM ────────────────────────────────────────────────────────────────
@@ -387,13 +394,17 @@ def _wait_for(url: str, what: str, server: _Server, stop: threading.Event) -> No
 
 
 def run(
-    port: int, home: Path, llm_port: Optional[int], script: List[Dict[str, Any]]
+    port: int,
+    home: Path,
+    llm_port: Optional[int],
+    script: List[Dict[str, Any]],
+    memory: bool = False,
 ) -> int:
     llm_port = llm_port if llm_port is not None else port + 1
     if llm_port == port:
         raise DevBackendError("--llm-port must differ from --port.")
     llm_url = f"http://{HOST}:{llm_port}/api/v1"
-    isolate_environment(home, llm_url)
+    isolate_environment(home, llm_url, memory)
 
     from gaia.config import UnsafeGaiaHomeError
     from gaia.llm.lemonade_client import DEFAULT_MODEL_NAME
@@ -445,11 +456,16 @@ def main(argv: Optional[List[str]] = None) -> int:
         "--llm-port", type=int, help="Fake LLM port (default: --port + 1)"
     )
     parser.add_argument("--script", help="JSON list of replies / tool calls")
+    parser.add_argument(
+        "--memory",
+        action="store_true",
+        help="keep memory on (it needs an embedder, which the fake LLM lacks)",
+    )
     args = parser.parse_args(argv)
     try:
         home = validate_home(args.home)
         script = load_script(args.script)
-        return run(args.port, home, args.llm_port, script)
+        return run(args.port, home, args.llm_port, script, args.memory)
     except DevBackendError as e:
         print(f"Error: {e}", file=sys.stderr)
         return EX_USAGE
