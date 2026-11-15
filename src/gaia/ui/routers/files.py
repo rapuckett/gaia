@@ -133,6 +133,16 @@ def _remote_read_roots(request: Request, session_id: Optional[str]):
     return [entry["path"] for entry in described["folders"]]
 
 
+def _refuse_remote_secret(resolved: Path) -> None:
+    """403 when *resolved* holds credentials; only for callers away from the PC."""
+    if secret_read_refusal(resolved):
+        raise HTTPException(
+            status_code=403,
+            detail="GAIA doesn't show this away from the PC: it holds "
+            "credentials or keys.",
+        )
+
+
 def _refuse_remote_read(resolved: Path, roots) -> None:
     """403 unless a caller away from the PC may read *resolved*.
 
@@ -141,12 +151,7 @@ def _refuse_remote_read(resolved: Path, roots) -> None:
     """
     if roots is None:
         return
-    if secret_read_refusal(resolved):
-        raise HTTPException(
-            status_code=403,
-            detail="GAIA doesn't show this away from the PC: it holds "
-            "credentials or keys.",
-        )
+    _refuse_remote_secret(resolved)
     if not any(session_environment.within(str(resolved), root) for root in roots):
         raise HTTPException(
             status_code=403,

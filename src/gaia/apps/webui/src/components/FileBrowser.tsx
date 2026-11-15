@@ -137,7 +137,7 @@ async function indexAndAttachFiles(
     for (const filepath of supported) {
         try {
             if (folderPaths.has(filepath)) {
-                const result = await api.indexFolder(filepath);
+                const result = await api.indexFolder(filepath, true, sessionId);
                 const newIds: string[] = [];
                 result.documents.forEach(d => { if (d.id) newIds.push(d.id); });
                 skippedImages += result.skipped_images ?? 0;
@@ -152,7 +152,7 @@ async function indexAndAttachFiles(
                 }
             } else {
                 if (!(await ensureModel('embedding'))) break;
-                const doc = await api.uploadDocumentByPath(filepath);
+                const doc = await api.uploadDocumentByPath(filepath, sessionId);
                 if (doc?.indexing_status === 'failed') {
                     // Neither attached nor held for the next chat: GAIA can't search it.
                     failed++;

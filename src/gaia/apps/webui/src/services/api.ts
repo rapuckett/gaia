@@ -868,8 +868,10 @@ export async function listDocuments(): Promise<{ documents: Document[]; total: n
     return apiFetch('GET', '/documents');
 }
 
-export async function uploadDocumentByPath(filepath: string): Promise<Document> {
-    return apiFetch('POST', '/documents/upload-path', { filepath });
+/** Away from the PC, the file must be in the folders of the chat `sessionId` names. */
+export async function uploadDocumentByPath(filepath: string, sessionId?: string | null): Promise<Document> {
+    const params = withChat(new URLSearchParams(), sessionId).toString();
+    return apiFetch('POST', `/documents/upload-path${params ? `?${params}` : ''}`, { filepath });
 }
 
 function uploadError(status: number, errorText: string): ApiError {
@@ -979,8 +981,10 @@ export async function browseFiles(path?: string, sessionId?: string | null): Pro
     return apiFetch('GET', `/files/browse${params ? `?${params}` : ''}`);
 }
 
-export async function indexFolder(folderPath: string, recursive: boolean = true): Promise<IndexFolderResponse> {
-    return apiFetch('POST', '/documents/index-folder', { folder_path: folderPath, recursive });
+/** Away from the PC, the folder must be in the folders of the chat `sessionId` names. */
+export async function indexFolder(folderPath: string, recursive: boolean = true, sessionId?: string | null): Promise<IndexFolderResponse> {
+    const params = withChat(new URLSearchParams(), sessionId).toString();
+    return apiFetch('POST', `/documents/index-folder${params ? `?${params}` : ''}`, { folder_path: folderPath, recursive });
 }
 
 export async function openFileOrFolder(path: string, reveal: boolean = true): Promise<{ status: string; path: string }> {

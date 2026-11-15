@@ -210,6 +210,9 @@ def _secret_directories() -> Set[str]:
         home / ".docker",
         home / ".config" / "gcloud",
         home / "AppData" / "Roaming" / "gcloud",
+        # The GitHub CLI's OAuth tokens (hosts.yml).
+        home / ".config" / "gh",
+        home / "AppData" / "Roaming" / "GitHub CLI",
         # The paired-device listener's private key and the device table.
         devices_dir(),
         devices_dir(default_gaia_home()),

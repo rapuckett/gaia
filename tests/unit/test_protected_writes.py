@@ -22,6 +22,7 @@ CREDENTIAL_DIRS = [
     ".azure",
     ".config/gcloud",
     "AppData/Roaming/gcloud",
+    ".config/gh",
     ".ssh",
     ".gnupg",
 ]

@@ -1422,6 +1422,11 @@ Deleting a chat deletes its copies.
     (index it with `index-folder`); 400 for a file type GAIA doesn't index; 404
     for a missing file inside an allowed root; 403 for any path outside the
     allowed roots, whether or not it exists.
+
+    Away from the PC (mobile access, or a paired device), the request names a
+    chat with the `session_id` query parameter, and the file must be in that
+    chat's folders and not hold credentials, as for [file reads](#files);
+    otherwise **403**.
   </Accordion>
 
   <Accordion title="DELETE /api/documents/{doc_id}">
@@ -2050,7 +2055,9 @@ else's:
   <Accordion title="GET /api/documents/{doc_id}/file">
     The document's original file, served inline so the browser can show it.
     A citation link opens a PDF at its page with `#page=N`. Only files in the
-    document library are served; a file deleted from disk returns 404.
+    document library are served; a file deleted from disk returns 404. Away
+    from the PC, a file holding credentials is a **403**, however it got into
+    the library.
   </Accordion>
 
   <Accordion title="POST /api/documents/{doc_id}/cancel">
@@ -2064,7 +2071,9 @@ else's:
     `skipped_images`: images, which GAIA reads only when each is added on its
     own. A file that fails, or yields no text, gets a `failed` library row with
     its `last_error`, so it can be retried with `reindex`; it is not in
-    `documents`.
+    `documents`. Away from the PC, the folder must be in the chat named by
+    `session_id` (else **403**), and files holding credentials are skipped and
+    counted in `skipped`.
   </Accordion>
 
   <Accordion title="POST /api/documents/{doc_id}/reindex">
