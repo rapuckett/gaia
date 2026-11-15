@@ -25,6 +25,7 @@ export function SettingsListScreen() {
                 return (
                     <ListRow
                         key={id}
+                        testID={`settings-section-${id}`}
                         title={t(titleKey)}
                         leading={<Icon icon={icon} tone="secondary" />}
                         trailing={<Icon icon={ChevronRight} size="sm" tone="muted" />}

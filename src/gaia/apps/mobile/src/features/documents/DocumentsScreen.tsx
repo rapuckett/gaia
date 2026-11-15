@@ -11,6 +11,7 @@ import { describeError, useT } from '@/i18n/useT';
 import { EmptyState, ErrorState, IconButton, List, ListSkeleton, Notice, Row, Screen, Stack, Text, useTheme } from '@/ui';
 import { X } from '@/ui/icons';
 
+import { AddDocuments, ChatAddDocuments } from './AddDocuments';
 import { DocumentRow } from './DocumentRow';
 import { libraryStats } from './libraryStats';
 import { ChatTargetChooser, TargetChooser, type LibraryTarget } from './TargetChooser';
@@ -53,10 +54,20 @@ export function DocumentsScreen({ chatId }: DocumentsScreenProps) {
         removal.remove({ id, name: nameOf(id) });
     };
     const loadFailed = query.isError ? t('docs.loadFailed', { error: describeError(query.error, t) }) : null;
+    const adder = chatId ? (
+        <ChatAddDocuments chatId={chatId} target={target} onStart={action.dismiss} />
+    ) : (
+        <AddDocuments chatId={null} chatName={null} onStart={action.dismiss} />
+    );
     const retry = { label: t('docs.loadRetry'), onPress: () => void query.refetch() };
 
     return (
         <Screen header={<ScreenHeader title={t('docs.title')} />}>
+            {query.data ? (
+                <Stack paddingX="lg" paddingY="sm">
+                    {adder}
+                </Stack>
+            ) : null}
             {query.isPending ? <ListSkeleton rows={4} /> : null}
             {loadFailed && documents.length === 0 ? <ErrorState title={loadFailed} action={retry} /> : null}
             {query.data && documents.length === 0 ? <EmptyState title={t('docs.empty')} message={t('docs.emptyHintPhone')} /> : null}

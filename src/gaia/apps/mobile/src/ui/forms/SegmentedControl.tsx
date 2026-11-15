@@ -14,7 +14,8 @@ import { motion } from '../tokens/generated';
 import { segmentsFit } from './segments';
 
 export interface SegmentedControlProps {
-    options: { value: string; label: string }[];
+    /** `accessibilityLabel` is the full label a screen reader says when `label` is the bare one. */
+    options: { value: string; label: string; accessibilityLabel?: string }[];
     value: string;
     onChange: (value: string) => void;
     accessibilityLabel?: string;
@@ -103,7 +104,7 @@ export function SegmentedControl({ options, value, onChange, accessibilityLabel,
                                 <Pressable
                                     onPress={() => onChange(o.value)}
                                     accessibilityRole="radio"
-                                    accessibilityLabel={o.label}
+                                    accessibilityLabel={o.accessibilityLabel ?? o.label}
                                     accessibilityState={{ checked: on }}
                                     minSize={HEIGHT - PAD * 2}
                                 >
