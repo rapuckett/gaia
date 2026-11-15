@@ -17,6 +17,7 @@ export const ENDPOINTS = {
     localModelContext: '/api/providers/local/context',
     localModelRestart: '/api/providers/local/restart',
     localModelStatus: '/api/providers/local/status',
+    memoryActivity: '/api/memory/activity',
     memoryConsolidate: '/api/memory/consolidate',
     memoryEmbeddingCoverage: '/api/memory/embedding-coverage',
     memoryRebuildEmbeddings: '/api/memory/rebuild-embeddings',
@@ -25,6 +26,8 @@ export const ENDPOINTS = {
     memoryRefreshSystemContext: '/api/memory/refresh-system-context',
     memorySettings: '/api/memory/settings',
     memoryStats: '/api/memory/stats',
+    memoryTools: '/api/memory/tools',
+    memoryUpcoming: '/api/memory/upcoming',
     modelServer: '/api/system/model-server',
     modelServerBackend: '/api/system/model-server/backend',
     providerModels: '/api/providers/{provider}/models',
@@ -60,7 +63,9 @@ export const ENDPOINTS = {
     chatCancel: '/api/chat/cancel',
     chatConfirmTool: '/api/chat/confirm-tool',
     chatContext: '/api/chat/context/{session_id}',
+    chatPermissionGrants: '/api/chat/permissions/{session_id}/grants',
     chatPermissions: '/api/chat/permissions/{session_id}',
+    chatPermissionsDefault: '/api/chat/permissions',
     chatFollowup: '/api/chat/followup',
     chatFollowupOutcome: '/api/chat/followup/{session_id}',
     chatPerformance: '/api/chat/performance/{session_id}',
@@ -73,7 +78,11 @@ export const ENDPOINTS = {
     connectorsAgentMcps: '/api/connectors/agent-mcps',
     systemResources: '/api/system/resources',
     systemStatus: '/api/system/status',
+    document: '/api/documents/{doc_id}',
+    documentCancel: '/api/documents/{doc_id}/cancel',
     documentFile: '/api/documents/{doc_id}/file',
+    documentReindex: '/api/documents/{doc_id}/reindex',
+    documentStatus: '/api/documents/{doc_id}/status',
     documents: '/api/documents',
     filesUpload: '/api/files/upload',
     filesUploadMedia: '/api/files/upload-media',
@@ -102,6 +111,14 @@ export function connectorGrantsPath(connectorId: string): string {
     return ENDPOINTS.connectorGrants.replace('{connector_id}', encodeURIComponent(connectorId));
 }
 
+export function memoryActivityPath(days: number): string {
+    return `${ENDPOINTS.memoryActivity}?days=${days}`;
+}
+
+export function memoryUpcomingPath(days: number): string {
+    return `${ENDPOINTS.memoryUpcoming}?days=${days}`;
+}
+
 export function schedulePath(name: string): string {
     return ENDPOINTS.schedule.replace('{name:path}', encodeURIComponent(name));
 }
@@ -128,6 +145,11 @@ export function chatPerformancePath(sessionId: string): string {
 
 export function chatPermissionsPath(sessionId: string): string {
     return ENDPOINTS.chatPermissions.replace('{session_id}', encodeURIComponent(sessionId));
+}
+
+export function chatPermissionGrantsPath(sessionId: string, key?: string): string {
+    const path = ENDPOINTS.chatPermissionGrants.replace('{session_id}', encodeURIComponent(sessionId));
+    return key === undefined ? path : `${path}?key=${encodeURIComponent(key)}`;
 }
 
 export function cloudPricesPath(provider: string): string {
@@ -182,6 +204,10 @@ export function sessionMessagesAndBelowPath(sessionId: string, messageId: number
     return ENDPOINTS.sessionMessagesAndBelow
         .replace('{session_id}', encodeURIComponent(sessionId))
         .replace('{message_id}', String(messageId));
+}
+
+export function documentPath(docId: string, endpoint: 'document' | 'documentCancel' | 'documentReindex' | 'documentStatus' = 'document'): string {
+    return ENDPOINTS[endpoint].replace('{doc_id}', encodeURIComponent(docId));
 }
 
 /** The library file's URL, as the web UI's `documentFileUrl` builds it: the page rides in the fragment. */
