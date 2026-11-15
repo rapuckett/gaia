@@ -47,14 +47,8 @@ export const selectVisible = (state: NotificationsState): GaiaNotification[] => 
 
 export const selectUnreadCount = (state: NotificationsState): number => state.items.filter((n) => !n.read && !n.dismissed).length;
 
-/** Filter tabs for the kinds in the list, plus the active one, in the web's order. */
+/** The filter row's kinds, always all of them, in the web's order. */
 export const FILTER_ORDER: readonly NotificationType[] = ['permission_request', 'policy_alert', 'error', 'security_alert', 'status_change', 'info'];
-
-export function filterKinds(items: readonly GaiaNotification[], active: NotificationType | null): NotificationType[] {
-    const present = new Set(items.filter((n) => !n.dismissed).map((n) => n.type));
-    if (active) present.add(active);
-    return FILTER_ORDER.filter((kind) => present.has(kind));
-}
 
 /** Files what a chat's live turn raised: its approval request and its newest policy block. */
 export function noteTurn(sessionId: string, turn: ChatTurn | undefined, previous: ChatTurn | undefined): void {

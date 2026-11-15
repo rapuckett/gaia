@@ -38,7 +38,7 @@ export function ChipButton({ label, accessibilityLabel, icon, variant = 'default
             >
                 <Row gap="xs" justify="center">
                     {icon ? <Icon icon={icon} size="sm" tone={tone} /> : null}
-                    <Text role={accent ? 'ui' : 'caption'} weight={accent ? 'semibold' : 'medium'} tone={tone} numberOfLines={1}>
+                    <Text role={accent ? 'ui' : 'caption'} weight={accent ? 'semibold' : 'medium'} tone={tone} numberOfLines={1} compact>
                         {label}
                     </Text>
                 </Row>

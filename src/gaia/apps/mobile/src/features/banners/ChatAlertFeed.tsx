@@ -16,7 +16,7 @@ import { useAlertSettings } from '@/state/alertSettings';
 import { useChatAlertBannerStore } from '@/state/chatAlertBanner';
 import { useChatStreamStore } from '@/state/chatStreams';
 
-import { alertsBetween, turnPhases } from './chatAlerts';
+import { alertsBetween, FINISHED_ALERT_MS, turnPhases } from './chatAlerts';
 
 /** Raises a banner in the app's one banner slot when a chat you aren't looking at finishes or needs you, as the Notifications settings say. */
 export function ChatAlertFeed() {
@@ -34,6 +34,16 @@ export function ChatAlertFeed() {
         const { alert, dismiss } = useChatAlertBannerStore.getState();
         if (alert && alert.sessionId === openId) dismiss();
     }, [openId]);
+
+    // A finished chat needs no answer, so its banner leaves on its own; approvals and questions stay until acted on.
+    const shownAlert = useChatAlertBannerStore((s) => s.alert);
+    useEffect(() => {
+        if (!shownAlert || shownAlert.event !== 'finished') return;
+        const timer = setTimeout(() => {
+            if (useChatAlertBannerStore.getState().alert === shownAlert) useChatAlertBannerStore.getState().dismiss();
+        }, FINISHED_ALERT_MS);
+        return () => clearTimeout(timer);
+    }, [shownAlert]);
 
     useEffect(
         () =>

@@ -39,7 +39,7 @@ export function Chip({ label, selected, onPress, icon, testID }: ChipProps) {
                 <Row gap="xs">
                     {selected ? <Icon icon={Check} size="sm" tone="accent" /> : icon ? <Icon icon={icon} size="sm" tone="secondary" /> : null}
                     <View style={{ flexShrink: 1 }}>
-                        <Text role="label" weight="medium" tone={selected ? 'accent' : 'primary'} numberOfLines={1}>
+                        <Text role="label" weight="medium" tone={selected ? 'accent' : 'primary'} numberOfLines={1} compact>
                             {label}
                         </Text>
                     </View>

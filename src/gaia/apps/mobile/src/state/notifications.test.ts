@@ -4,7 +4,7 @@
 import type { StreamEvent } from '@webui/types';
 
 import { IDLE_TURN, type ChatTurn, type PermissionRequest } from './chatStreams';
-import { clearNotifications, filterKinds, noteTurn, selectUnreadCount, useNotificationStore } from './notifications';
+import { clearNotifications, noteTurn, selectUnreadCount, useNotificationStore } from './notifications';
 
 const ask = { type: 'permission_request', tool: 'run_python', confirm_id: 'c1' } as PermissionRequest;
 const blocked = { type: 'policy_alert', tool: 'run_shell_command', receipt_id: 'r7', reason: 'no shell' } as StreamEvent;
@@ -24,6 +24,5 @@ describe('noteTurn', () => {
             ['c1', 'permission_request', 's1'],
         ]);
         expect(selectUnreadCount(useNotificationStore.getState())).toBe(2);
-        expect(filterKinds(items, 'error')).toEqual(['permission_request', 'policy_alert', 'error']);
     });
 });
