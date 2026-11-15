@@ -3641,6 +3641,7 @@ export const enMessages = {
     'mobileApp.chat.notFound': 'That chat is no longer on your PC.',
     'mobileApp.mem.activitySummary': '{total} total, peak {peak} on {date}',
     'mobileApp.mem.activityTapHint': 'Tap a bar to see that day.',
+    'mobileApp.mem.goalTasksDone': '{done} of {total} tasks done',
     'mobileApp.mem.metric': '{label}: {value}',
     'mobileApp.mem.sectionFailed': "Couldn't load this section.",
     'mobileApp.mem.whenHint': 'Year-month-day and time, like 2026-11-20 09:00',

@@ -3641,6 +3641,7 @@ const messages: Messages = {
     'mobileApp.chat.notFound': 'هذه المحادثة لم تعد موجودة على جهاز الكمبيوتر.',
     'mobileApp.mem.activitySummary': 'الإجمالي {total}، الذروة {peak} في {date}',
     'mobileApp.mem.activityTapHint': 'اضغط على عمود لعرض ذلك اليوم.',
+    'mobileApp.mem.goalTasksDone': 'اكتملت {done} من {total} مهام',
     'mobileApp.mem.metric': '{label}: {value}',
     'mobileApp.mem.sectionFailed': 'تعذّر تحميل هذا القسم.',
     'mobileApp.mem.whenHint': 'السنة-الشهر-اليوم والوقت، مثل 2026-11-20 09:00',
