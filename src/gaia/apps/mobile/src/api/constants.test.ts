@@ -183,6 +183,7 @@ describe('endpoints', () => {
         connectorGrants: ['GET'],
         connectors: ['GET'],
         connectorsAgentMcps: ['GET'],
+        connectorsEvents: ['GET'],
         systemResources: ['GET'],
         systemStatus: ['GET'],
         document: ['DELETE'],

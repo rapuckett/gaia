@@ -3,7 +3,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import type { AgentList, AgentMcpList, ConnectorActivations, ConnectorGrants, ConnectorList, GaiaClient } from '@/api/client.types';
+import type { AgentList, AgentMcpList, ConnectorActivations, ConnectorGrants, ConnectorList, DisconnectOutcome, GaiaClient } from '@/api/client.types';
 
 import { useGaiaClient } from './GaiaClientProvider';
 import { queryKeys, requireClient } from './queries';
@@ -91,14 +91,18 @@ export function useChangeConnectorAccess(connectorId: string) {
     });
 }
 
-/** Pauses an MCP server, or removes its credentials, then reloads the connector list. */
-export function useConnectorServerAction(connectorId: string) {
+/** Pauses an MCP server, or removes its credentials (resolving with the revoke outcome), then reloads the connector list. */
+export function useConnectorServerAction(connectorId: string, onDisconnected?: (outcome: DisconnectOutcome | null) => void) {
     const client = useGaiaClient();
     const queryClient = useQueryClient();
-    return useMutation<void, Error, 'disable' | 'disconnect'>({
+    return useMutation<DisconnectOutcome | null | undefined, Error, 'disable' | 'disconnect'>({
         mutationFn: (action) => {
             const c = requireClient(client);
-            return action === 'disable' ? c.disableConnector(connectorId) : c.disconnectConnector(connectorId);
+            return action === 'disable' ? c.disableConnector(connectorId).then(() => undefined) : c.disconnectConnector(connectorId);
+        },
+        // Runs even after the tile moved to another group and remounted.
+        onSuccess: (outcome, action) => {
+            if (action === 'disconnect') onDisconnected?.(outcome ?? null);
         },
         onSettled: () => queryClient.invalidateQueries({ queryKey: queryKeys.connectors }),
     });
