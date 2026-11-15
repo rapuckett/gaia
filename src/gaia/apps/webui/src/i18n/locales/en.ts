@@ -1299,6 +1299,7 @@ export const enMessages = {
     'prompt.title.python': 'Run this Python script?',
     'prompt.title.pythonFile': 'Run this Python file?',
     'prompt.title.command': 'Run this command?',
+    'prompt.outsideFolders': "{path} is outside this chat's folders. Allowing this also lets GAIA use that file for the rest of the chat.",
     'prompt.needsOk': 'GAIA needs your OK before {tool}.',
     'prompt.trust.title': "Trust this folder's instructions and skills?",
     'prompt.trust.ask': "GAIA would put this folder's CLAUDE.md, AGENTS.md and skills in the model's prompt, now and every time you work in it.",

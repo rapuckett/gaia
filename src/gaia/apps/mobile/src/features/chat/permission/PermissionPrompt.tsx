@@ -2,16 +2,18 @@
 // SPDX-License-Identifier: MIT
 
 import { useEffect, useRef, useState } from 'react';
-import { AccessibilityInfo, useWindowDimensions } from 'react-native';
+import { AccessibilityInfo, Keyboard, useWindowDimensions, View } from 'react-native';
+import { useKeyboardState } from 'react-native-keyboard-controller';
 import Animated, { FadeIn, FadeInDown, FadeOut, FadeOutDown, useReducedMotion } from 'react-native-reanimated';
 
-import { isolate, pluralKey } from '@webui/i18n/registry';
+import { isolate, pluralKey, type Say } from '@webui/i18n/registry';
 import type { GaiaNotification } from '@webui/types/agent';
 import {
-    alwaysScopeText,
+    alwaysScopeWith,
     COMMAND_SUMMARY_TOOLS,
     EXACT_SUMMARY_TOOLS,
     formatCountdown,
+    outsideFolderPath,
     PATH_ACCESS_TOOL,
     permissionPromptText,
     PROJECT_TRUST_TOOL,
@@ -25,7 +27,7 @@ import { calendarFacts, CALENDAR_WRITE_TOOLS } from '@webui/utils/calendarApprov
 import { CHANGE_PREVIEW_LINES, fileChange, fileText, fileUnseen } from '@webui/utils/permissionChange.core';
 
 import { useT } from '@/i18n/useT';
-import { Button, Disclosure, Icon, Notice, Pressable, Row, ScrollBox, Stack, Surface, Text } from '@/ui';
+import { Button, Disclosure, HScroll, Icon, Notice, Pressable, Row, ScrollBox, Stack, Surface, Text } from '@/ui';
 import { ShieldQuestion } from '@/ui/icons';
 
 import { useCountdown } from './useCountdown';
@@ -46,9 +48,32 @@ export interface PermissionPromptProps {
 // Width where the buttons may sit side by side.
 const SIDE_BY_SIDE_MIN_WIDTH = 600;
 
+// The body scrolls inside this share of the window, less the keyboard, so Allow and Deny stay on screen.
+const BODY_HEIGHT_SHARE = 0.55;
+const MIN_BODY_HEIGHT = 96;
+
 const mark = (text: string): string => isolate(text, 'ltr');
 
-/** Code or JSON, left to right and collapsed past the web's line count. */
+type CodeTone = 'primary' | 'secondary' | 'success' | 'danger';
+
+/** Code, a path or a diff: left to right and left-aligned in any UI language; a long line scrolls sideways inside the box. */
+function CodeBox({ lines, testID }: { lines: { text: string; tone?: CodeTone }[]; testID?: string }) {
+    return (
+        <Surface tone="recessed" radius="sm" padding="sm" border>
+            <HScroll dir="ltr" hint testID={testID}>
+                <View style={{ minWidth: '100%', direction: 'ltr' }}>
+                    {lines.map((line, i) => (
+                        <Text key={i} role="caption" mono dir="ltr" selectable tone={line.tone}>
+                            {line.text}
+                        </Text>
+                    ))}
+                </View>
+            </HScroll>
+        </Surface>
+    );
+}
+
+/** Code or JSON, collapsed past the web's line count. */
 function Collapsible({ text, limit = PROMPT_CODE_PREVIEW_LINES }: { text: string; limit?: number }) {
     const t = useT();
     const [expanded, setExpanded] = useState(false);
@@ -57,11 +82,7 @@ function Collapsible({ text, limit = PROMPT_CODE_PREVIEW_LINES }: { text: string
     const shown = long && !expanded ? lines.slice(0, limit) : lines;
     return (
         <Stack gap="xs">
-            <Surface tone="recessed" radius="sm" padding="sm" border>
-                <Text role="caption" mono dir="ltr" selectable>
-                    {shown.join('\n')}
-                </Text>
-            </Surface>
+            <CodeBox lines={shown.map((text) => ({ text }))} />
             {long ? (
                 <Pressable
                     onPress={() => setExpanded((v) => !v)}
@@ -94,20 +115,13 @@ function ChangePreview({ args }: { args: Record<string, unknown> }) {
             </Text>
             {change.kind === 'edit' ? (
                 <Stack gap="xs">
-                    <Surface tone="recessed" radius="sm" padding="sm" border>
-                        {lines.map((line, i) => (
-                            <Text
-                                key={i}
-                                role="caption"
-                                mono
-                                dir="ltr"
-                                selectable
-                                tone={line.startsWith('+') ? 'success' : line.startsWith('-') ? 'danger' : 'secondary'}
-                            >
-                                {fileText(line, true)}
-                            </Text>
-                        ))}
-                    </Surface>
+                    <CodeBox
+                        testID="perm-change-scroll"
+                        lines={lines.map((line) => ({
+                            text: fileText(line, true),
+                            tone: line.startsWith('+') ? 'success' : line.startsWith('-') ? 'danger' : 'secondary',
+                        }))}
+                    />
                     {long ? (
                         <Pressable onPress={() => setExpanded((v) => !v)} accessibilityState={{ expanded }} accessibilityLabel={expanded ? t('prompt.showLess') : more}>
                             <Text role="label" tone="accent" weight="medium">
@@ -174,6 +188,7 @@ function CallDetails({ prompt }: { prompt: GaiaNotification }) {
     const args = prompt.toolArgs ?? {};
     const detail = summarize(prompt);
     const riskNote = typeof args._risk_note === 'string' ? args._risk_note : '';
+    const outsidePath = outsideFolderPath(riskNote);
     const folder = riskNote && typeof args.working_directory === 'string' ? args.working_directory : '';
     const code = typeof args.code === 'string' && args.code.trim() ? args.code : '';
     const exactText =
@@ -199,14 +214,16 @@ function CallDetails({ prompt }: { prompt: GaiaNotification }) {
         <Stack gap="sm">
             {shownDetail && riskNote ? <Collapsible text={shownDetail} /> : null}
             {shownDetail && !riskNote ? (
-                <Text role="label" tone="secondary" mono dir="ltr">
-                    {shownDetail}
-                </Text>
+                <View style={{ direction: 'ltr' }}>
+                    <Text role="label" tone="secondary" mono dir="ltr">
+                        {shownDetail}
+                    </Text>
+                </View>
             ) : null}
             {folder ? inFolder(folder) : null}
             {riskNote ? (
                 <Text role="caption" tone="warning" accessibilityRole="text">
-                    {riskNote}
+                    {outsidePath ? t('prompt.outsideFolders', { path: mark(outsidePath) }) : riskNote}
                 </Text>
             ) : null}
             {code ? <Collapsible text={code} /> : null}
@@ -261,6 +278,7 @@ export function PermissionPrompt({
 }: PermissionPromptProps) {
     const t = useT();
     const { width, height } = useWindowDimensions();
+    const keyboardHeight = useKeyboardState((k) => (k.isVisible ? k.height : 0));
     const reduced = useReducedMotion();
     const left = useCountdown(prompt.expiresAt, prompt.timeoutSeconds);
     const expired = left !== null && left <= 0;
@@ -272,18 +290,23 @@ export function PermissionPrompt({
         onExpired?.();
     }, [expired, onExpired]);
 
+    useEffect(() => {
+        Keyboard.dismiss();
+    }, [prompt.id]);
+
     const { heading, question } = permissionPromptText(prompt, t, mark);
     useEffect(() => {
         AccessibilityInfo.announceForAccessibility(heading);
     }, [heading]);
 
     const scope = requiresFreshConsent(prompt.tool) ? undefined : prompt.alwaysScope;
-    const scopeText = alwaysScopeText(prompt, t) ?? prompt.alwaysLabel ?? scope ?? '';
+    const scopeIn = (say: Say) => alwaysScopeWith(prompt, say) ?? prompt.alwaysLabel ?? scope ?? '';
     const suggestAlways = !!scope && repeats > 0;
     const allowLabel = t(
         prompt.tool === PROJECT_TRUST_TOOL ? 'prompt.trust.allow' : prompt.tool === PATH_ACCESS_TOOL ? 'prompt.allowForChat' : 'prompt.allowOnce',
     );
     const wide = width >= SIDE_BY_SIDE_MIN_WIDTH;
+    const bodyMax = Math.max(MIN_BODY_HEIGHT, Math.round(height * BODY_HEIGHT_SHARE - keyboardHeight));
 
     const buttons = (
         <>
@@ -298,7 +321,7 @@ export function PermissionPrompt({
             />
             {scope ? (
                 <Button
-                    label={t('prompt.alwaysAllow', { scope: shortScope(scopeText) })}
+                    label={t.compose((say) => say('prompt.alwaysAllow', { scope: shortScope(scopeIn(say)) }))}
                     variant={suggestAlways ? 'primary' : 'secondary'}
                     full={!wide}
                     wrap
@@ -326,18 +349,20 @@ export function PermissionPrompt({
                             </Text>
                         </Stack>
                     </Row>
-                    <ScrollBox maxHeight={Math.round(height * 0.4)} testID="perm-details-scroll">
-                        <CallDetails prompt={prompt} />
+                    <ScrollBox maxHeight={bodyMax} testID="perm-details-scroll">
+                        <Stack gap="md">
+                            <CallDetails prompt={prompt} />
+                            {fullAccessPending ? <Notice tone="info" message={t('perm.fullPendingNote')} testID="perm-full-pending" /> : null}
+                            {suggestAlways && !expired ? (
+                                <Text role="caption" tone="secondary">
+                                    {t.compose(
+                                        (say) =>
+                                            `${say(pluralKey('prompt.repeated', repeats), { n: repeats })} ${say('prompt.alwaysHint', { scope: scopeIn(say) })}`,
+                                    )}
+                                </Text>
+                            ) : null}
+                        </Stack>
                     </ScrollBox>
-                    {fullAccessPending ? <Notice tone="info" message={t('perm.fullPendingNote')} testID="perm-full-pending" /> : null}
-                    {suggestAlways && !expired ? (
-                        <Text role="caption" tone="secondary">
-                            {t.compose(
-                                (say) =>
-                                    `${say(pluralKey('prompt.repeated', repeats), { n: repeats })} ${say('prompt.alwaysHint', { scope: scopeText })}`,
-                            )}
-                        </Text>
-                    ) : null}
                     {expired ? (
                         <Text role="label" tone="secondary" testID="perm-expired">
                             {t('prompt.expired')}
