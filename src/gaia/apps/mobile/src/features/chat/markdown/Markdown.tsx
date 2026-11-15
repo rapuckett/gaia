@@ -10,11 +10,10 @@ import { isolate } from '@webui/i18n/registry';
 import { useDirection, useT } from '@/i18n/useT';
 import { documentFileUrl } from '@/api/constants';
 import { useConnectionStore } from '@/state/connection';
-import { Divider, HScroll, Icon, Notice, Row, Stack, Surface, Text } from '@/ui';
+import { contentDir, Divider, HScroll, Icon, Notice, Row, Stack, Surface, Text } from '@/ui';
 import { Check, Square } from '@/ui/icons';
 
 import { CodeBlock } from './CodeBlock';
-import { contentDir } from './direction';
 import { Caret, plainText, renderInline, type InlineContext } from './inline';
 import { parseAnswer, parseFormatting } from './parse';
 import { useThrottledText } from './useStreamingText';

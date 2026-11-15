@@ -8,7 +8,7 @@ import sqlite3
 import threading
 from typing import Dict, List, Optional, get_args
 
-from fastapi import APIRouter, HTTPException, Response
+from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel, field_validator
 
 from gaia.agents.base.goal_store import (
@@ -20,6 +20,8 @@ from gaia.agents.base.goal_store import (
     TaskStatus,
 )
 from gaia.ui.models import WireModel
+
+from ..security import audit_approval
 
 logger = logging.getLogger(__name__)
 
@@ -311,7 +313,7 @@ def get_goal(goal_id: str):
     response_model=GoalResponse,
     response_model_exclude_unset=True,
 )
-def approve_goal(goal_id: str):
+def approve_goal(goal_id: str, http_request: Request):
     """Approve an agent-inferred goal for autonomous execution."""
     try:
         goal = _get_store().approve_goal(goal_id)
@@ -319,6 +321,7 @@ def approve_goal(goal_id: str):
         raise HTTPException(status_code=409, detail=str(e)) from e
     if goal is None:
         raise HTTPException(status_code=404, detail="Goal not found")
+    audit_approval(http_request, f"goal {goal_id} approved")
     return _goal_to_dict(goal)
 
 
@@ -327,7 +330,7 @@ def approve_goal(goal_id: str):
     response_model=GoalResponse,
     response_model_exclude_unset=True,
 )
-def reject_goal(goal_id: str):
+def reject_goal(goal_id: str, http_request: Request):
     """Reject an agent-inferred goal."""
     try:
         goal = _get_store().reject_goal(goal_id)
@@ -335,6 +338,7 @@ def reject_goal(goal_id: str):
         raise HTTPException(status_code=409, detail=str(e)) from e
     if goal is None:
         raise HTTPException(status_code=404, detail="Goal not found")
+    audit_approval(http_request, f"goal {goal_id} rejected")
     return _goal_to_dict(goal)
 
 

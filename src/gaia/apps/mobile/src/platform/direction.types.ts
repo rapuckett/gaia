@@ -4,3 +4,6 @@
 export type Direction = 'ltr' | 'rtl';
 
 export type ApplyDirection = (dir: Direction) => void;
+
+/** The direction the screen is laid out in right now (native layout only changes on restart). */
+export type LayoutDirection = () => Direction;

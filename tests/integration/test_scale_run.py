@@ -59,7 +59,9 @@ def indexed(tmp_path_factory):
         patch.delenv("GAIA_DOCUMENT_ROOTS", raising=False)
         with FakeLemonade(downloaded=(EMBEDDER, "Gemma-4-E4B-it-GGUF")) as server:
             patch.setenv("LEMONADE_BASE_URL", server.base_url)
-            client = TestClient(create_app(db_path=":memory:"))
+            client = TestClient(
+                create_app(db_path=":memory:"), client=("127.0.0.1", 50000)
+            )
             started = time.monotonic()
             response = client.post(
                 "/api/documents/index-folder", json={"folder_path": str(folder)}

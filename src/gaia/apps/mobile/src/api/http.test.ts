@@ -25,6 +25,19 @@ async function collect(events: AsyncIterable<StreamEvent>): Promise<StreamEvent[
 }
 
 describe('createHttpClient requests', () => {
+    it('uploadFile: a document goes as a multipart form, a recording as the raw file named in the query', async () => {
+        const reply = { filename: 'f', original_name: 'f', url: '/api/files/uploads/f', size: 3, content_type: 'x', is_image: false };
+        const { fetch, calls } = createRecordingFetch(() => jsonResponse(reply));
+        const client = createHttpClient({ baseUrl: BASE, token: null, fetch });
+        const blob = new Blob(['abc']);
+        await client.uploadFile(blob, 'notes.pdf');
+        await client.uploadFile(blob, 'talk 1.mp3');
+        expect(calls[0]).toMatchObject({ url: `${BASE}/api/files/upload`, method: 'POST', headers: UI_HEADERS });
+        expect(calls[0]!.rawBody).toBeInstanceOf(FormData);
+        expect(calls[1]).toMatchObject({ url: `${BASE}/api/files/upload-media?name=talk%201.mp3`, headers: UI_HEADERS });
+        expect(calls[1]!.rawBody).toBe(blob);
+    });
+
     it('health: GET /api/health with the UI headers and no body', async () => {
         const { fetch, calls } = createRecordingFetch(() => jsonResponse({ status: 'ok', service: 'gaia-agent-ui' }));
         const result = await createHttpClient({ baseUrl: BASE, token: null, fetch }).health();
@@ -119,6 +132,13 @@ describe('createHttpClient requests', () => {
         ['getSession', (c) => c.getSession('a b'), 'GET', '/api/sessions/a%20b', UI_HEADERS, undefined],
         ['createSession', (c) => c.createSession({ title: 'Trip' }), 'POST', '/api/sessions', JSON_HEADERS, { title: 'Trip' }],
         ['createSession with no fields', (c) => c.createSession(), 'POST', '/api/sessions', JSON_HEADERS, {}],
+        ['getCapabilities', (c) => c.getCapabilities('a b'), 'GET', '/api/sessions/a%20b/capabilities', UI_HEADERS, undefined],
+        ['getChatPerformance', (c) => c.getChatPerformance('a b'), 'GET', '/api/chat/performance/a%20b', UI_HEADERS, undefined],
+        ['listDocuments', (c) => c.listDocuments(), 'GET', '/api/documents', UI_HEADERS, undefined],
+        ['cancelDocumentIndexing', (c) => c.cancelDocumentIndexing('d 1'), 'POST', '/api/documents/d%201/cancel', UI_HEADERS, undefined],
+        ['deleteDocument', (c) => c.deleteDocument('d 1'), 'DELETE', '/api/documents/d%201', UI_HEADERS, undefined],
+        ['getDocumentStatus', (c) => c.getDocumentStatus('d 1'), 'GET', '/api/documents/d%201/status', UI_HEADERS, undefined],
+        ['reindexDocument', (c) => c.reindexDocument('d 1'), 'POST', '/api/documents/d%201/reindex', UI_HEADERS, undefined],
         ['cancelChat', (c) => c.cancelChat('s1'), 'POST', '/api/chat/cancel', JSON_HEADERS, { session_id: 's1' }],
         [
             'confirmTool, allow once',
@@ -145,6 +165,7 @@ describe('createHttpClient requests', () => {
             { session_id: 's1', request_id: 'r1', value: 'Paris' },
         ],
         ['getSystemStatus', (c) => c.getSystemStatus(), 'GET', '/api/system/status', UI_HEADERS, undefined],
+        ['listConnectors', (c) => c.listConnectors(), 'GET', '/api/connectors', UI_HEADERS, undefined],
     ])('%s: %s', async (_name, call, method, path, headers, body) => {
         const { fetch, calls } = createRecordingFetch(() => jsonResponse({ status: 'ok' }));
         await call(createHttpClient({ baseUrl: BASE, fetch }));

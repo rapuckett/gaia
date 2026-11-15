@@ -12,7 +12,7 @@
 
 import { expect, test, type Page } from '@playwright/test';
 
-import { ANSWER_SESSION, AUTOMATIONS, DISCORD_STATES, MESSAGES, MODEL_LIST, NOW, RESOURCES, SESSIONS, SYSTEM_STATUS, TOOL_STATUS, holdOnToolStatus, mockApi, shownText, useLocale, useTheme, withAutomations, withConnectors, withCrashedBackend, withDesktopBridges, withDiscord, withMemory, withModelPage, withSettingsPanes, withoutFlagship, type MemoryState } from './fixtures';
+import { ANSWER_SESSION, AUTOMATIONS, DEVICE_STATES, DISCORD_STATES, MESSAGES, MODEL_LIST, NOW, RESOURCES, SESSIONS, SYSTEM_STATUS, TOOL_STATUS, holdOnToolStatus, mockApi, shownText, useLocale, useTheme, withAutomations, withConnectors, withCrashedBackend, withDesktopBridges, withDevices, withDiscord, withMemory, withModelPage, withSettingsPanes, withoutFlagship, type MemoryState } from './fixtures';
 import { NARROW_SCENES, SETUP_SCENES, scene, withSetup } from './setup-scenes';
 
 test.use({ viewport: { width: 1400, height: 900 } });
@@ -2295,6 +2295,63 @@ for (const locale of ['ar', 'en']) {
     });
 }
 
+const openDevices = async (page: Page) => {
+    await page.getByRole('button', { name: /Settings/ }).first().click();
+    await page.getByRole('dialog').locator('[data-section="devices"]').click();
+    await expect(page.locator('.devices-pane')).toBeVisible();
+};
+
+for (const locale of ['ar', 'en']) {
+    for (const [state, answers] of Object.entries(DEVICE_STATES)) {
+        test(`settings devices: ${state} (${locale})`, async ({ page }) => {
+            await open(page, '', locale, (p) => withDevices(p, answers));
+            await openDevices(page);
+            // A row's words wrap as one line of text, not as flex items in columns.
+            for (const row of await page.locator('.devices-failed').all()) await expect(row.locator('> *')).toHaveCount(2);
+            await shot(page, `devices-${locale}-${state}`);
+            await scrollPane(page, 'bottom');
+            await shot(page, `devices-${locale}-${state}-end`);
+            expect(await audit(page)).toEqual([]);
+            if (locale === 'ar') expect(await untranslated(page, '.settings-scroll', 'bdi')).toEqual([]);
+        });
+    }
+
+    test(`settings devices: pairing code shown (${locale})`, async ({ page }) => {
+        await open(page, '', locale, (p) => withDevices(p, DEVICE_STATES.empty));
+        await openDevices(page);
+        await page.locator('.devices-pane .btn-primary').first().click();
+        await expect(page.locator('.devices-qr img')).toBeVisible();
+        await shot(page, `devices-${locale}-pairing`);
+        expect(await audit(page)).toEqual([]);
+    });
+
+    test(`settings devices: remove and reset confirmations (${locale})`, async ({ page }) => {
+        await open(page, '', locale, (p) => withDevices(p, DEVICE_STATES.waiting));
+        await openDevices(page);
+        await page.locator('.devices-row[data-device-id="dev-ipad"] .btn-secondary').click();
+        await expect(page.getByRole('alertdialog')).toBeVisible();
+        await shot(page, `devices-${locale}-remove`);
+        expect(await audit(page)).toEqual([]);
+        await page.keyboard.press('Escape');
+        await page.locator('.devices-pane .btn-danger').click();
+        await expect(page.getByRole('alertdialog')).toBeVisible();
+        await shot(page, `devices-${locale}-reset`);
+        expect(await audit(page)).toEqual([]);
+    });
+
+    for (const width of [390, 768]) {
+        test(`settings devices: ${width} px with a device waiting (${locale})`, async ({ page }) => {
+            await page.setViewportSize({ width, height: 844 });
+            await open(page, '', locale, (p) => withDevices(p, DEVICE_STATES.waiting));
+            await page.getByRole('button', { name: /Open sidebar/ }).click();
+            await openDevices(page);
+            await page.locator('.devices-row').first().scrollIntoViewIfNeeded();
+            await shot(page, `devices-${locale}-${width}`);
+            expect(await audit(page)).toEqual([]);
+        });
+    }
+}
+
 const openAutomations = async (page: Page) => {
     await page.getByRole('button', { name: /Settings/ }).first().click();
     await page.getByRole('dialog').locator('[data-section="automations"]').click();
@@ -2695,6 +2752,31 @@ for (const locale of ['ar', 'en']) {
             await expect(page.locator('.schedule-result-item')).toHaveCount(2);
             await check(page, 'list');
         });
+
+        for (const width of [390, 1280]) {
+            test(`a failed Run now says why in the interface language, at ${width} wide`, async ({ page }) => {
+                // A rejection that is not an Error is the case the catalog's own wording covers.
+                await page.addInitScript(() => {
+                    const real = window.fetch.bind(window);
+                    window.fetch = (input, init) =>
+                        /\/api\/schedules\/[^/]+\/run/.test(String(input instanceof Request ? input.url : input))
+                            ? Promise.reject('offline')
+                            : real(input, init);
+                });
+                await page.setViewportSize({ width, height: 844 });
+                await open(page, '', locale, (p) => withSchedules(p));
+                if (width < 600) await page.getByRole('button', { name: locale === 'ar' ? /فتح الشريط الجانبي/ : 'Open sidebar' }).click();
+                await page.locator('.sb').getByRole('button', { name: locale === 'ar' ? /المهام المجدولة/ : /Scheduled tasks/ }).click();
+                await expect(page.locator('.schedule-modal')).toBeVisible();
+                await page.locator('.schedule-card').first().getByRole('button', { name: locale === 'ar' ? /تشغيل الآن/ : /Run now/ }).click();
+                const error = page.locator('.schedule-action-error');
+                await expect(error).toContainText(locale === 'ar' ? 'تعذّر تشغيل المهمة المجدولة الآن' : 'Could not run the schedule now');
+                // The sidebar drawer waits behind the dialog at phone width; judge the dialog.
+                await shot(page, `schedules-${locale}-run-failed-${width}`);
+                expect((await audit(page)).filter((p) => p.includes('schedule') || p.includes('scrolls sideways'))).toEqual([]);
+                if (locale === 'ar') expect(await untranslated(page, '.schedule-modal', '[dir="auto"], textarea')).toEqual([]);
+            });
+        }
 
         test('a long prompt stops at three lines inside its card', async ({ page }) => {
             await openSchedules(page);

@@ -47,7 +47,12 @@ from ..database import ChatDatabase
 from ..dependencies import get_db
 from ..local_models import DOWNLOADED, LOADED, NOT_DOWNLOADED
 from ..models import DownloadProgress, WireModel
-from ..security import is_local_pc, refuse_on_device_listener, require_ui_header
+from ..security import (
+    is_local_pc,
+    refuse_on_device_listener,
+    require_local_pc,
+    require_ui_header,
+)
 from .spending import PriceCard
 
 logger = get_logger(__name__)
@@ -1665,6 +1670,7 @@ def _connect_on_users_server(provider: str) -> Dict[str, Any]:
 
 @router.delete(
     "/api/providers/{provider}/key",
+    dependencies=[Depends(require_local_pc)],
     response_model=ProviderKeyForgotten,
     response_model_exclude_unset=True,
 )

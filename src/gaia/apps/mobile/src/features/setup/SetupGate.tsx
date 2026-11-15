@@ -1,0 +1,78 @@
+// Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
+// SPDX-License-Identifier: MIT
+
+import type { ReactNode } from 'react';
+
+import { GaiaNetworkError, GaiaPinMismatchError } from '@/api/errors';
+import { useGaiaClient, useSetupGate } from '@/data';
+import { PinMismatchScreen, usePairAgain } from '@/features/pairing';
+import { describeError, useT } from '@/i18n/useT';
+import { Button, Notice, Screen, Stack } from '@/ui';
+
+import { SetupScreen, type SetupScreenProps } from './SetupScreen';
+import { StartupScreen } from './StartupScreen';
+
+/**
+ * The first-run gate around the app: "Starting GAIA…" until the check answers, the setup screen in
+ * place of the app when setup is needed, and the app, with a notice above it, when the PC's model
+ * server is down or the check couldn't be answered. With no PC connected the app shows its own state.
+ */
+export function SetupGate({ children, renderStep }: { children: ReactNode; renderStep?: SetupScreenProps['renderStep'] }) {
+    const client = useGaiaClient();
+    const t = useT();
+    const { gate, recheck, finish, open } = useSetupGate();
+    const pairAgain = usePairAgain();
+
+    if (!client) return <>{children}</>;
+    if (gate.state === 'checking') return <StartupScreen />;
+    if (gate.state === 'upgrading') return <StartupScreen upgrading />;
+    if (gate.state === 'needed') return <SetupScreen onReady={finish} renderStep={renderStep} />;
+    if (gate.state === 'addingLocal') return <SetupScreen onReady={finish} onClose={finish} renderStep={renderStep} />;
+    if (gate.state === 'ready') return <>{children}</>;
+
+    // A PC whose certificate changed is a hard stop: the only way on is to pair again.
+    if (gate.state === 'unknown' && gate.error instanceof GaiaPinMismatchError) {
+        return <PinMismatchScreen onPairAgain={() => pairAgain.mutate()} busy={pairAgain.isPending} />;
+    }
+    const unreachable = gate.state === 'unknown' && !gate.upgradeFailed && gate.error instanceof GaiaNetworkError;
+
+    const notice = unreachable ? (
+        <Notice
+            tone="warning"
+            title={t('mobileApp.pairing.off.title')}
+            message={t('mobileApp.pairing.unreachable.body')}
+            action={{ label: t('mobileApp.pairing.off.retry'), onPress: () => void recheck() }}
+        />
+    ) :
+        gate.state === 'serverDown' ? (
+            <Notice
+                tone="warning"
+                message={t(gate.modelListUnread ? 'setup.modelListUnread.notice' : 'setup.serverDown.notice')}
+                action={{ label: t('setup.unknown.retry'), onPress: () => void recheck({ quiet: true }) }}
+            />
+        ) : (
+            <Notice
+                tone="danger"
+                message={
+                    gate.upgradeFailed
+                        ? t('setup.upgrading.failed', { error: describeError(gate.error, t) })
+                        : t('setup.unknown.failed', { error: describeError(gate.error, t) })
+                }
+                action={{
+                    label: t(gate.upgradeFailed ? 'setup.upgrading.retry' : 'setup.unknown.retry'),
+                    onPress: () => void recheck(),
+                }}
+            />
+        );
+    return (
+        <Screen edges={['top', 'start', 'end']}>
+            <Stack gap="md" padding="md">
+                {notice}
+                {gate.state === 'serverDown' && !gate.modelListUnread ? (
+                    <Button variant="secondary" label={t('setup.serverDown.setup')} onPress={open} />
+                ) : null}
+            </Stack>
+            <Stack flex={1}>{children}</Stack>
+        </Screen>
+    );
+}

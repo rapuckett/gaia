@@ -7,10 +7,19 @@ import { join, resolve } from 'node:path';
 import {
     AGENT_EVENT_TYPES,
     ATTACH_HEADER_TIMEOUT_MS,
+    CONFIRM_DELETE_MS,
+    DOWNLOAD_MISS_LIMIT,
+    DOWNLOAD_NO_ROW_LIMIT,
+    DOWNLOAD_POLL_MS,
     ENDPOINTS,
     MESSAGE_PAGE_SIZE,
+    MODEL_NEED_CHECK_LIMIT_MS,
+    MODEL_STATUS_OPEN_POLL_MS,
+    PC_ONLY_REFUSAL,
     QUEUED_IDLE_MS,
     RESOLVES_PROMPTS,
+    RESOURCE_RETRY_MS,
+    SEARCH_DEBOUNCE_MS,
     SEND_HEADER_TIMEOUT_MS,
     SESSION_PAGE_SIZE,
     STATUS_POLL_MS,
@@ -41,7 +50,7 @@ function webuiSource(file: string): string {
 
 // `export const NAME = 10 * 60_000;` -> 600000; anything but a product of literals fails the test.
 function tsNumber(file: string, name: string): number {
-    const match = new RegExp(`export const ${name} = ([^;]+);`).exec(webuiSource(file));
+    const match = new RegExp(`(?:export )?const ${name} = ([^;]+);`).exec(webuiSource(file));
     if (!match) throw new Error(`${name} not found in webui ${file}; update api/constants.test.ts`);
     return match[1]!.split('*').reduce((product, factor) => product * Number(factor.trim().replace(/_/g, '')), 1);
 }
@@ -76,25 +85,102 @@ describe('request headers', () => {
 });
 
 describe('endpoints', () => {
-    const decorators = pythonFiles(UI_DIR).flatMap((file) =>
-        [...readFileSync(file, 'utf-8').matchAll(/@(?:router|app)\.(get|post|put|patch|delete)\(\s*"([^"]+)"/g)].map(
-            (m) => `${m[1]!.toUpperCase()} ${m[2]!}`,
-        ),
-    );
+    // A router mounted with `APIRouter(prefix=...)` declares its routes relative to it.
+    const decorators = pythonFiles(UI_DIR).flatMap((file) => {
+        const source = readFileSync(file, 'utf-8');
+        const prefix = /APIRouter\([^)]*prefix="([^"]*)"/.exec(source)?.[1] ?? '';
+        return [...source.matchAll(/@(?:router|app)\.(get|post|put|patch|delete)\(\s*"([^"]*)"/g)].flatMap((m) => [
+            `${m[1]!.toUpperCase()} ${m[2]!}`,
+            `${m[1]!.toUpperCase()} ${prefix}${m[2]!}`,
+        ]);
+    });
     const methods: Record<keyof typeof ENDPOINTS, string[]> = {
+        agents: ['GET'],
+        gpuMemory: ['GET'],
         health: ['GET'],
+        cloudPrices: ['GET'],
+        lemonadeDetect: ['GET'],
+        lemonadeTarget: ['GET'],
+        localModelContext: ['GET', 'PUT'],
+        localModelRestart: ['POST'],
+        localModelStatus: ['GET'],
+        memoryActivity: ['GET'],
+        memoryConsolidate: ['POST'],
+        memoryEmbeddingCoverage: ['GET'],
+        memoryRebuildEmbeddings: ['POST'],
+        memoryRebuildFts: ['POST'],
+        memoryReconcile: ['POST'],
+        memoryRefreshSystemContext: ['POST'],
+        memorySettings: ['GET', 'PUT'],
+        memoryStats: ['GET'],
+        memoryTools: ['GET'],
+        memoryUpcoming: ['GET'],
+        providerConnect: ['POST'],
+        providerModels: ['GET'],
+        providersActive: ['GET'],
+        providersSelect: ['POST'],
+        schedule: ['DELETE', 'PUT'],
+        scheduleResults: ['GET'],
+        scheduleRun: ['POST'],
+        scheduleParse: ['POST'],
+        schedules: ['GET', 'POST'],
         sessions: ['GET', 'POST'],
-        session: ['GET'],
+        session: ['DELETE', 'GET', 'PUT'],
+        sessionCapabilities: ['GET'],
+        sessionDocument: ['DELETE'],
+        sessionEvents: ['GET'],
+        sessionMessage: ['DELETE'],
         sessionMessages: ['GET'],
         sessionMessagesAndBelow: ['DELETE'],
+        sessionPin: ['PUT'],
+        sessionPrivate: ['PATCH'],
+        sessionRead: ['POST'],
+        sessionSearch: ['GET'],
+        setupCancel: ['POST'],
+        setupChatModel: ['POST'],
+        setupCheck: ['GET'],
+        setupModelDownload: ['POST'],
+        setupModelSkip: ['POST'],
+        setupNeeds: ['GET'],
+        setupNpuRecheck: ['POST'],
+        setupPlan: ['GET'],
+        setupRun: ['POST'],
+        setupStatus: ['GET'],
+        setupVisionModel: ['POST'],
+        skills: ['GET'],
         chatSend: ['POST'],
         chatAttach: ['GET'],
         chatCancel: ['POST'],
         chatConfirmTool: ['POST'],
+        chatContext: ['GET'],
+        chatPermissionGrants: ['DELETE'],
+        chatPermissions: ['GET', 'PUT'],
+        chatPermissionsDefault: ['GET', 'PUT'],
+        chatFollowup: ['POST'],
+        chatFollowupOutcome: ['GET'],
+        chatPerformance: ['GET'],
         chatUserInput: ['POST'],
+        connectorActivation: ['DELETE', 'PUT'],
+        connectorActivations: ['GET'],
+        connectorGrant: ['DELETE', 'PUT'],
+        connectorGrants: ['GET'],
+        connectors: ['GET'],
+        connectorsAgentMcps: ['GET'],
+        systemResources: ['GET'],
         systemStatus: ['GET'],
+        document: ['DELETE'],
+        documentCancel: ['POST'],
         documentFile: ['GET'],
+        documentReindex: ['POST'],
+        documentStatus: ['GET'],
+        documents: ['GET'],
+        filesUpload: ['POST'],
+        filesUploadMedia: ['POST'],
+        modelServer: ['GET'],
+        modelServerBackend: ['PUT'],
+        onboardingPreflight: ['GET'],
         onboardingStart: ['GET'],
+        providers: ['GET'],
     };
     const calls = Object.entries(ENDPOINTS).flatMap(([name, path]) =>
         methods[name as keyof typeof ENDPOINTS].map((method) => `${method} ${path}`),
@@ -102,6 +188,13 @@ describe('endpoints', () => {
 
     it.each(calls)('%s has a route under src/gaia/ui', (call) => {
         expect(decorators).toContain(call);
+    });
+});
+
+describe('log refusal', () => {
+    it("is the PC's refusal in ui/security.py", () => {
+        const security = readFileSync(join(UI_DIR, 'security.py'), 'utf-8').replace(/"\s*\n\s*"/g, '');
+        expect(security).toContain(PC_ONLY_REFUSAL);
     });
 });
 
@@ -123,7 +216,15 @@ describe("webui's stream rules", () => {
         ['services/api.ts', 'QUEUED_IDLE_MS', QUEUED_IDLE_MS],
         ['services/api.ts', 'SEND_HEADER_TIMEOUT_MS', SEND_HEADER_TIMEOUT_MS],
         ['services/api.ts', 'ATTACH_HEADER_TIMEOUT_MS', ATTACH_HEADER_TIMEOUT_MS],
+        ['components/Sidebar.tsx', 'SEARCH_DEBOUNCE_MS', SEARCH_DEBOUNCE_MS],
         ['services/statusPoll.ts', 'STATUS_POLL_MS', STATUS_POLL_MS],
+        ['components/ScheduleManager.tsx', 'CONFIRM_DELETE_MS', CONFIRM_DELETE_MS],
+        ['components/ModelStatusPill.tsx', 'POLL_MS', MODEL_STATUS_OPEN_POLL_MS],
+        ['components/ModelNeededDialog.tsx', 'POLL_MS', DOWNLOAD_POLL_MS],
+        ['components/ModelNeededDialog.tsx', 'NO_ROW_LIMIT', DOWNLOAD_NO_ROW_LIMIT],
+        ['components/ModelNeededDialog.tsx', 'MISS_LIMIT', DOWNLOAD_MISS_LIMIT],
+        ['stores/modelNeededStore.ts', 'CHECK_LIMIT_MS', MODEL_NEED_CHECK_LIMIT_MS],
+        ['hooks/useResourceUsage.ts', 'RETRY_MS', RESOURCE_RETRY_MS],
     ])('%s %s', (file, name, ours) => {
         expect(ours).toBe(tsNumber(file, name));
     });
