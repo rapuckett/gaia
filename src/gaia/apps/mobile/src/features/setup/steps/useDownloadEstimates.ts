@@ -3,7 +3,7 @@
 
 import { DownloadMeter, type Estimate } from '@webui/components/setup/format';
 import type { SetupModelProgress, SetupOverall } from '@webui/types';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 /** Speed and time left per row and overall, from the byte counts each poll brings; the web UI's DownloadProgress, as a hook. */
 export function useDownloadEstimates(rows: SetupModelProgress[], overall: SetupOverall | undefined, checking: boolean) {
@@ -22,7 +22,8 @@ export function useDownloadEstimates(rows: SetupModelProgress[], overall: SetupO
         return () => clearInterval(tick);
     }, [ticking]);
 
-    const { estimates, overallEstimate } = useMemo(() => {
+    const [estimates, setEstimates] = useState<{ rows: Record<string, Estimate>; overall: Estimate | undefined; checks: Record<string, number> }>({ rows: {}, overall: undefined, checks: {} });
+    useEffect(() => {
         const at = Date.now();
         const out: Record<string, Estimate> = {};
         for (const m of rows) {
@@ -48,18 +49,20 @@ export function useDownloadEstimates(rows: SetupModelProgress[], overall: SetupO
             .filter((m) => m.state === 'downloading' || m.state === 'queued')
             .reduce((sum, m) => sum + Math.max(0, m.bytes_total - m.bytes_done), 0);
         const total = moving && overall ? overallMeter.current.update(overall.bytes_done, overall.bytes_done + coming, at) : undefined;
-        return { estimates: out, overallEstimate: total };
-    }, [rows, overall]);
-
-    const checkingSeconds = (id: string): number => {
-        if (!checking) {
-            checkStarted.current.delete(id);
-            return 0;
+        // Seconds each row has been checked, from when it first showed as checking.
+        const checks: Record<string, number> = {};
+        for (const m of rows) {
+            if (checking && m.state === 'verifying') {
+                const started = checkStarted.current.get(m.id) ?? at;
+                checkStarted.current.set(m.id, started);
+                checks[m.id] = Math.floor((at - started) / 1000);
+            } else checkStarted.current.delete(m.id);
         }
-        const started = checkStarted.current.get(id) ?? now;
-        checkStarted.current.set(id, started);
-        return Math.floor((now - started) / 1000);
-    };
+        setEstimates({ rows: out, overall: total, checks });
+    }, [rows, overall, checking, now]);
 
-    return { estimates, overallEstimate, now, checkingSeconds };
+    const checkingSeconds = (id: string): number => estimates.checks[id] ?? 0;
+
+    const { rows: rowEstimates, overall: overallEstimate } = estimates;
+    return { estimates: rowEstimates, overallEstimate, now, checkingSeconds };
 }

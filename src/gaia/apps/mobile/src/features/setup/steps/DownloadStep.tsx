@@ -6,7 +6,7 @@ import { formatBytes, formatEta, formatSize, formatSpeed, ltrIn } from '@webui/c
 import { canCreateImages, catalogOf, isOptional, overallFromPlan } from '@webui/components/setup/selection';
 import type { MessageKey } from '@webui/i18n/registry';
 import type { SetupModelProgress } from '@webui/types';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { AccessibilityInfo } from 'react-native';
 
 import {
@@ -26,7 +26,7 @@ import { SetupFooter } from '../SetupFooter';
 import type { SetupStepContext } from '../SetupScreen';
 import { useConfirmSheet } from '../sheets/ConfirmSheet';
 import { serverConfirmRequest, setupConfirmFrom } from '../sheets/setupConfirm';
-import { SetupLogs } from '../sheets/SetupLogs';
+import { SetupLogs } from '../sheets/SetupLogsPanel';
 import { Details, DownloadContents, ModelRow } from './DownloadRows';
 import { downloadView, milestones } from './downloadState';
 import { useDownloadEstimates } from './useDownloadEstimates';
@@ -47,15 +47,15 @@ export function DownloadStep({ ctx }: { ctx: SetupStepContext }) {
     const flushError = useFlushQueuedModels(ctx.run);
 
     const plan = ctx.plan;
-    const view = downloadView(ctx.run, plan);
+    const view = useMemo(() => downloadView(ctx.run, plan), [ctx.run, plan]);
     const [actionError, setActionError] = useState<unknown>(null);
     const [skipped, setSkipped] = useState<ReadonlySet<string>>(() => new Set());
     const lost = status.isError ? describeError(status.error, t) : null;
     const busy = [cancel, download, skip, remove, start].some((m) => m.isPending) || lost != null;
 
-    const rows = (view?.rows ?? []).filter((m) => !skipped.has(m.id));
+    const rows = useMemo(() => (view?.rows ?? []).filter((m) => !skipped.has(m.id)), [view, skipped]);
     const checking = view?.run.state === 'verifying' || (view?.run.state !== 'running' && rows.some((m) => m.state === 'verifying'));
-    const overall = view ? overallFromPlan(view.run, plan ?? null) : undefined;
+    const overall = useMemo(() => (view ? overallFromPlan(view.run, plan ?? null) : undefined), [view, plan]);
     const { estimates, overallEstimate, now, checkingSeconds } = useDownloadEstimates(rows, overall, checking);
 
     const names: Record<string, string> = {};
