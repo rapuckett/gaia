@@ -1,9 +1,10 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
+import { shortModelName } from '@webui/utils/modelList.core';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import type { ActiveModel, PermissionMode, ProviderModelsResponse, SessionPermissions } from '@/api/client.types';
+import type { ActiveModel, PermissionMode, ProviderModel, ProviderModelsResponse, SessionPermissions } from '@/api/client.types';
 import { DOWNLOAD_POLL_MS } from '@/api/constants';
 
 import { useGaiaClient } from './GaiaClientProvider';
@@ -14,6 +15,7 @@ export const modelMenuKeys = {
     active: ['activeModel'] as const,
     models: (provider: string) => ['providerModels', provider] as const,
     permissions: (sessionId: string) => ['permissions', sessionId] as const,
+    retry: (cloud: string | null) => ['retryChoices', cloud] as const,
 };
 
 /** The model new messages use and whether it runs on this PC. */
@@ -80,4 +82,44 @@ export function usePermissionMode(sessionId: string | null) {
         onSuccess: (saved) => queryClient.setQueryData(modelMenuKeys.permissions(sessionId!), saved),
     });
     return { mode: query.data?.mode, set };
+}
+
+export interface RetryModel {
+    id: string;
+    name: string;
+    sizeGb: number | null;
+}
+
+export interface RetryChoices {
+    /** The other models of the cloud service in use; empty on a local chat. */
+    cloud: RetryModel[];
+    /** Downloaded models on this PC, from every local provider. */
+    local: RetryModel[];
+}
+
+const toRetryModel = (m: ProviderModel): RetryModel => ({ id: m.id, name: m.display_name || shortModelName(m.id), sizeGb: m.size_gb ?? null });
+
+/** The models "Retry with another model" offers: the cloud service this chat runs on, then what is downloaded on this PC. */
+export function useRetryChoices(open: boolean, cloudProvider: string | null) {
+    const client = useGaiaClient();
+    return useQuery<RetryChoices>({
+        queryKey: modelMenuKeys.retry(cloudProvider),
+        enabled: client !== null && open,
+        gcTime: 0,
+        queryFn: async ({ signal }) => {
+            const c = requireClient(client);
+            const { providers: listed, lemonade_error } = await c.listProviderSummaries({ signal });
+            if (lemonade_error) throw new Error(lemonade_error);
+            const providers = listed.filter((p) => p.configured && !p.blocked);
+            const inUse = cloudProvider ? providers.find((p) => p.remote && p.id === cloudProvider) : undefined;
+            const [cloudList, ...lists] = await Promise.all([
+                inUse ? c.listProviderModels(inUse.id, { signal }) : Promise.resolve(null),
+                ...providers.filter((p) => !p.remote).map((p) => c.listProviderModels(p.id, { signal })),
+            ]);
+            return {
+                cloud: cloudList && !cloudList.blocked ? cloudList.models.filter((m) => m.available !== false).map((m) => ({ ...toRetryModel(m), sizeGb: null })) : [],
+                local: lists.flatMap((l) => l.models.filter((m) => m.downloaded).map(toRetryModel)),
+            };
+        },
+    });
 }

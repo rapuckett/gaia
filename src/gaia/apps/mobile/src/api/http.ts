@@ -86,6 +86,8 @@ import type {
     PreflightReport,
     ProviderConnected,
     ProviderSummaryList,
+    RetryChoice,
+    RetryResult,
     RestartModelResult,
     RequestOptions,
     ParsedSchedule,
@@ -109,6 +111,9 @@ import type {
     SpeechModel,
     SpeechSettings,
     SpendingReport,
+    FileDiff,
+    TurnChanges,
+    UndoResult,
     UndoSettings,
     UploadedFile,
     UserInputResult,
@@ -165,6 +170,9 @@ import {
     sessionMessagesAndBelowPath,
     sessionMessagesPath,
     sessionPath,
+    sessionChangesDiffPath,
+    sessionChangesPath,
+    sessionChangesUndoPath,
     sessionPinPath,
     sessionPrivatePath,
     sessionReadPath,
@@ -468,6 +476,18 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             return putJson<Session>(sessionPinPath(sessionId), { pinned }, options?.signal);
         },
 
+        listTurnChanges(sessionId, options) {
+            return getJson<{ turns: TurnChanges[] }>(sessionChangesPath(sessionId), options?.signal);
+        },
+
+        getTurnDiff(sessionId, turnId, options) {
+            return getJson<{ turn_id: string; files: FileDiff[] }>(sessionChangesDiffPath(sessionId, turnId), options?.signal);
+        },
+
+        undoTurn(sessionId, turnId, force = false, options) {
+            return postJson<UndoResult>(sessionChangesUndoPath(sessionId, turnId), { force }, options?.signal);
+        },
+
         deleteSession(sessionId, options) {
             return deleteJson<DeleteSessionResult>(sessionPath(sessionId), options?.signal);
         },
@@ -570,6 +590,14 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         getContextUsage(sessionId, options) {
             return getJson<ContextUsageResult>(chatContextPath(sessionId), options?.signal);
+        },
+
+        retryWith(sessionId, messageId, model, options) {
+            return postJson<RetryResult>(ENDPOINTS.chatRetryWith, { session_id: sessionId, message_id: messageId, model }, options?.signal);
+        },
+
+        chooseRetry(sessionId, messageId, keep, options) {
+            return postJson<RetryChoice>(ENDPOINTS.chatRetryWithChoose, { session_id: sessionId, message_id: messageId, keep }, options?.signal);
         },
 
         getChatPerformance(sessionId, options) {
