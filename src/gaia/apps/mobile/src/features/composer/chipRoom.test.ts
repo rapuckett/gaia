@@ -20,4 +20,9 @@ describe('collapsedChips', () => {
         expect(collapsedChips({ private: 100, model: 300 }, 150)).toEqual(['private']);
         expect(collapsedChips(FULL, 0)).toEqual([]);
     });
+
+    it('counts the context meter, then shrinks its bar only after every chip is icon-only', () => {
+        expect(collapsedChips({ ...FULL, meter: 80 }, 480)).toEqual(['folder']);
+        expect(collapsedChips({ ...FULL, meter: 80 }, 190)).toEqual(['folder', 'private', 'permission', 'meter']);
+    });
 });
