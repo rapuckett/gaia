@@ -46,7 +46,8 @@ export default function appConfig(): ExpoConfig {
             bundleIdentifier: id,
             supportsTablet: true,
             infoPlist: {
-                NSAppTransportSecurity: { NSAllowsArbitraryLoads: false, NSAllowsLocalNetworking: dev },
+                // Every build reaches the paired PC at its home-network address; the native transport pins its certificate.
+                NSAppTransportSecurity: { NSAllowsArbitraryLoads: false, NSAllowsLocalNetworking: true },
                 NSLocalNetworkUsageDescription: LOCAL_NETWORK_USE,
                 NSPhotoLibraryAddUsageDescription: PHOTOS_ADD_USE,
             },
