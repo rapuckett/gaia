@@ -3724,7 +3724,7 @@ const messages: Messages = {
     'mobileApp.settings.appearanceSystem': 'مطابقة النظام',
     'mobileApp.settings.model.removeDownloadBody': 'تُحذف الملفات التي نزّلتها من الكمبيوتر الذي يشغّل GAIA. يمكنك إضافته مرة أخرى لاحقًا.',
     'mobileApp.settings.comingSoon': 'هذا القسم قادم إلى الهاتف قريبًا. في الوقت الحالي، غيّره من الكمبيوتر الذي يشغّل GAIA.',
-    'mobileApp.settings.automations.body': 'تطبيق الهاتف لا يدير الأتمتة. اطلب من GAIA في المحادثة إعداد واحدة، وراجعها من الكمبيوتر الذي يشغّل GAIA.',
+    'mobileApp.settings.automations.body': 'لا يعرض تطبيق الهاتف الأتمتة ولا يغيّرها. راجعها على الكمبيوتر لديك.',
     'mobileApp.about.links': 'الروابط',
     'mobileApp.about.whatsNew': 'ما الجديد',
     'mobileApp.about.docs': 'التوثيق',
