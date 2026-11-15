@@ -28,6 +28,7 @@ export const ENDPOINTS = {
     localModelContext: '/api/providers/local/context',
     localModelRestart: '/api/providers/local/restart',
     localModelStatus: '/api/providers/local/status',
+    mcpStatus: '/api/mcp/status',
     memoryActivity: '/api/memory/activity',
     memoryAll: '/api/memory/all',
     memoryConsolidate: '/api/memory/consolidate',
