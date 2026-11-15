@@ -20,6 +20,7 @@ import {
     type StreamEndpoint,
 } from './errors';
 import type {
+    AgentCapabilities,
     AgentList,
     AgentMcpList,
     CancelChatResult,
@@ -74,6 +75,7 @@ import {
     SEND_HEADER_TIMEOUT_MS,
     SESSION_EVENTS_IDLE_MS,
     SESSION_PAGE_SIZE,
+    sessionCapabilitiesPath,
     sessionDocumentPath,
     sessionMessagePath,
     sessionMessagesAndBelowPath,
@@ -354,6 +356,10 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         async detachDocument(sessionId, docId, options) {
             await request('DELETE', sessionDocumentPath(sessionId, docId), undefined, options?.signal);
+        },
+
+        getCapabilities(sessionId, options) {
+            return getJson<AgentCapabilities>(sessionCapabilitiesPath(sessionId), options?.signal);
         },
 
         getResourceUsage(options) {

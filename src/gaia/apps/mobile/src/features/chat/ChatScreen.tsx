@@ -18,6 +18,7 @@ import { PermissionPrompt } from './permission/PermissionPrompt';
 import { usePermissionPrompt } from './permission/usePermissionPrompt';
 import { liveStatusLine } from './liveStatus';
 import { MessageList } from './messages/MessageList';
+import { SessionPanel } from './session-panel';
 import { buildTail } from './tailState';
 import { TurnTail } from './TurnTail';
 
@@ -35,6 +36,7 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
     const followUps = useFollowUpEvents(sessionId, stream.events);
     const stopped = useRef(false);
     const [actionError, setActionError] = useState<unknown>(null);
+    const [panelOpen, setPanelOpen] = useState(false);
     const busy = stream.status !== 'idle';
     const context = useContextUsage(sessionId, stream.events, busy);
     const saved = messages.data?.messages ?? NO_MESSAGES;
@@ -110,7 +112,7 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
     return (
         <Screen
             keyboard="avoid"
-            header={<ChatHeader sessionId={sessionId} />}
+            header={<ChatHeader sessionId={sessionId} onOpenSessionPanel={() => setPanelOpen(true)} />}
             footer={
                 <>
                     {actionError ? (
@@ -167,6 +169,7 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
                     }
                 />
             )}
+            <SessionPanel sessionId={sessionId} open={panelOpen} onClose={() => setPanelOpen(false)} />
         </Screen>
     );
 }
