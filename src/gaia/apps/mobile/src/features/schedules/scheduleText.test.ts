@@ -1,9 +1,9 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { tEn } from '@webui/i18n/translator';
+import { tEn, translator } from '@webui/i18n/translator';
 
-import { describeSchedule, formatNextRun, formatTime, isCountdownRange } from './scheduleText';
+import { composeDateLocale, describeSchedule, formatNextRun, formatTime, isCountdownRange } from './scheduleText';
 
 const NOW = new Date('2026-11-14T12:00:00Z');
 const at = (seconds: number) => new Date(NOW.getTime() + seconds * 1000).toISOString();
@@ -62,5 +62,13 @@ describe('describeSchedule', () => {
     it('returns null for a shape it cannot word, so the English description shows', () => {
         expect(describeSchedule({ ...none, kind: 'window' }, tEn)).toBeNull();
         expect(describeSchedule(null, tEn)).toBeNull();
+    });
+});
+
+describe('composeDateLocale', () => {
+    it('writes the English half of an Arabic line in English, not the phone region', () => {
+        expect(composeDateLocale('en', translator('ar'))).toBe('en');
+        expect(composeDateLocale('ar', translator('ar'))).toBe('ar-u-nu-latn');
+        expect(composeDateLocale('en', tEn)).toBeUndefined();
     });
 });

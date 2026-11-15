@@ -6,7 +6,7 @@ import { useRouter } from 'expo-router';
 import { GaiaApiError } from '@/api/errors';
 import { useMemorySettings, useUpdateMemorySettings } from '@/data';
 import { describeError, useT } from '@/i18n/useT';
-import { Button, Card, Notice, Stack, Switch, Text } from '@/ui';
+import { Card, Notice, SmallButton, Stack, Switch, Text } from '@/ui';
 
 import { SettingsAnchor } from '../targets';
 
@@ -43,7 +43,7 @@ export default function Memory() {
                             <Text role="label" tone="muted">
                                 {t('settings.memory.dashboardHint')}
                             </Text>
-                            <Button variant="secondary" full label={t('settings.memory.dashboard')} onPress={() => router.push('/memory')} />
+                            <SmallButton variant="plain" label={t.bare('settings.memory.dashboard')} accessibilityLabel={t('settings.memory.dashboard')} onPress={() => router.push('/memory')} testID="memory-open-dashboard" />
                         </Stack>
                     </Stack>
                 </Card>

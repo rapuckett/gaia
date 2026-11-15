@@ -26,6 +26,8 @@ export interface ScreenProps {
     banner?: ReactNode | null;
     footer?: ReactNode;
     background?: 'primary' | 'secondary' | 'recessed';
+    /** Drawn behind everything else, edge to edge. */
+    backdrop?: ReactNode;
     testID?: string;
 }
 
@@ -43,6 +45,7 @@ export function Screen({
     banner,
     footer,
     background = 'primary',
+    backdrop,
     testID,
 }: ScreenProps) {
     const { colors } = useTheme();
@@ -110,6 +113,7 @@ export function Screen({
                 paddingEnd: has('end') ? endInset : 0,
             }}
         >
+            {backdrop}
             {avoid ? (
                 <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
                     {content}

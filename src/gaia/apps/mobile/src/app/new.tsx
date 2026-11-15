@@ -13,5 +13,5 @@ export default function NewChat() {
         (id: string) => router.replace({ pathname: '/chat/[id]', params: { id } }),
         [router],
     );
-    return <NewChatScreen onOpen={open} prompt={prompt ? { id: promptId ?? prompt, text: prompt } : undefined} />;
+    return <NewChatScreen onOpen={open} onChooseDocuments={() => router.push('/documents')} prompt={prompt ? { id: promptId ?? prompt, text: prompt } : undefined} />;
 }
