@@ -3691,6 +3691,7 @@ export const enMessages = {
     'mobileApp.settings.messaging.howTo': 'How to set it up on your PC',
     'mobileApp.settings.messaging.pitch': 'Message GAIA from Discord on your phone. It answers from your PC.',
     'mobileApp.settings.pcOnly': 'Change this on the PC running GAIA.',
+    'mobileApp.settings.appearanceSystem': 'System',
     'mobileApp.settings.model.removeDownloadBody': 'Its downloaded files are deleted from your PC. You can add it again later.',
     'mobileApp.settings.comingSoon': 'This section is coming to the phone soon. For now, change it on the PC running GAIA.',
     'mobileApp.settings.alerts.bannersHint': 'Banners appear at the top of the app while GAIA is open on this phone.',
