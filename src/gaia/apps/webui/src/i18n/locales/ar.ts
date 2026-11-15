@@ -1780,6 +1780,7 @@ const messages: Messages = {
     'settings.messaging.state.credentials': 'تعذّر على GAIA قراءة رمز البوت المحفوظ على هذا الجهاز.',
     'settings.messaging.state.conflict': 'يستخدم موصل ديسكورد في GAIA هذا البوت بالفعل. أنشئ تطبيقًا ثانيًا للمراسلة والصق رمزه.',
     'settings.section.automations': 'المهام التلقائية',
+    'settings.section.about': 'حول',
     'settings.automations.lede': 'التذكيرات والملخصات والتنبيهات والمشغّلات التي ينفّذها GAIA بنفسه ويرسلها إلى رسائلك المباشرة في Discord. لإضافة واحدة أو تغيير ما تفعله، اطلب ذلك من GAIA في المحادثة.',
     'settings.automations.loadFailed': 'تعذّر تحميل مهامك التلقائية: {error}',
     'settings.automations.retry': 'إعادة المحاولة',
@@ -3563,6 +3564,7 @@ const messages: Messages = {
     'mobileApp.serverDown.title': 'خادم النماذج على الكمبيوتر لا يستجيب',
     'mobileApp.skills.yoursEmpty': 'لا شيء بعد. أضف مجلدًا فيه ملف SKILL.md إلى {path} على الكمبيوتر وسيظهر هنا.',
     'mobileApp.banner.openOnPc': 'افتح GAIA على جهاز الكمبيوتر لتشغيل خادم النماذج.',
+    'mobileApp.settings.comingSoon': 'هذا القسم قادم إلى الهاتف قريبًا. في الوقت الحالي، غيّره من الكمبيوتر الذي يشغّل GAIA.',
 };
 
 export const ar: Locale = {
