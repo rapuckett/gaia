@@ -1779,6 +1779,7 @@ export const enMessages = {
     'settings.messaging.state.credentials': "GAIA couldn't read the saved bot token on this PC.",
     'settings.messaging.state.conflict': "GAIA's Discord connector already uses this bot. Create a second application for messaging and paste its token.",
     'settings.section.automations': 'Automations',
+    'settings.section.about': 'About',
     'settings.automations.lede': 'Reminders, summaries, alerts and triggers that GAIA runs on its own and sends to your Discord DM. To add one or change what it does, ask GAIA in chat.',
     'settings.automations.loadFailed': 'Could not load your automations: {error}',
     'settings.automations.retry': 'Try again',
@@ -3576,6 +3577,7 @@ export const enMessages = {
     'mobileApp.serverDown.title': 'The model server on your PC isn’t answering',
     'mobileApp.skills.yoursEmpty': 'None yet. Add a folder with a SKILL.md file to {path} on your PC and it shows up here.',
     'mobileApp.banner.openOnPc': 'Open GAIA on your PC to start the model server.',
+    'mobileApp.settings.comingSoon': 'This section is coming to the phone soon. For now, change it on the PC running GAIA.',
 } as const;
 
 export const en: Locale = {
