@@ -36,9 +36,12 @@ import type {
     DeleteSessionResult,
     GaiaClient,
     HealthResponse,
+    LemonadeFound,
+    LemonadeTarget,
     LocalModelStatus,
     MessageList,
     ModelNeed,
+    PreflightReport,
     RestartModelResult,
     RequestOptions,
     ParsedSchedule,
@@ -69,6 +72,7 @@ import {
     scheduleResultsPath,
     scheduleRunPath,
     SEND_HEADER_TIMEOUT_MS,
+    SESSION_EVENTS_IDLE_MS,
     SESSION_PAGE_SIZE,
     sessionDocumentPath,
     sessionMessagePath,
@@ -366,6 +370,26 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             return streamTurn('GET', path, undefined, 'attach', ATTACH_HEADER_TIMEOUT_MS, options?.signal);
         },
 
+        async *watchSessionEvents(options) {
+            const connection = new AbortController();
+            const drop = () => connection.abort();
+            if (options?.signal?.aborted) drop();
+            else options?.signal?.addEventListener('abort', drop);
+            try {
+                const res = await request('GET', ENDPOINTS.sessionEvents, undefined, connection.signal, {
+                    endpoint: 'attach',
+                    ms: ATTACH_HEADER_TIMEOUT_MS,
+                    abort: drop,
+                });
+                if (!res.body) throw new GaiaStreamError('mobileApp.error.noBody');
+                yield* parseSseStream(res.body, () => SESSION_EVENTS_IDLE_MS);
+                throw new GaiaStreamError('mobileApp.error.streamClosed');
+            } finally {
+                options?.signal?.removeEventListener('abort', drop);
+                drop();
+            }
+        },
+
         deleteMessage(sessionId, messageId, options) {
             return deleteJson<{ deleted: boolean }>(sessionMessagePath(sessionId, messageId), options?.signal);
         },
@@ -494,7 +518,7 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
         },
 
         cancelSetup(modelId, options) {
-            return postJson<{ cancelled: boolean }>(ENDPOINTS.setupCancel, { model_id: modelId }, options?.signal);
+            return postJson<{ cancelled: boolean }>(ENDPOINTS.setupCancel, { model_id: modelId ?? null }, options?.signal);
         },
 
         getStartScreen(options) {
@@ -503,6 +527,18 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         checkSetup(skipChatModel, options) {
             return getJson<SetupCheck>(`${ENDPOINTS.setupCheck}?skip_chat_model=${skipChatModel}`, options?.signal);
+        },
+
+        getPreflight(options) {
+            return getJson<PreflightReport>(ENDPOINTS.onboardingPreflight, options?.signal);
+        },
+
+        getLemonadeTarget(options) {
+            return getJson<LemonadeTarget>(ENDPOINTS.lemonadeTarget, options?.signal);
+        },
+
+        detectLemonade(options) {
+            return getJson<{ found: LemonadeFound | null; unchecked?: string[] }>(ENDPOINTS.lemonadeDetect, options?.signal);
         },
 
         getSetupPlan(options) {
