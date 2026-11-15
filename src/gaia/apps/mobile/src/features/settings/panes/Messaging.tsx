@@ -3,7 +3,6 @@
 
 import * as Clipboard from 'expo-clipboard';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { Linking } from 'react-native';
 
 import type { Translate } from '@webui/i18n/translator';
 
@@ -14,6 +13,7 @@ import { useDeviceRefused } from '@/api/routeAccess';
 import { useDiscordStatus } from '@/data';
 import { PcOnlyAction } from '@/features/logs/PcOnlyAction';
 import { useT } from '@/i18n/useT';
+import { openLinkFromPress } from '@/platform/openLink';
 import { Badge, Button, Card, Disclosure, Ltr, Notice, Row, Spinner, Stack, StatusDot, Surface, Text } from '@/ui';
 import { Check, Copy, ExternalLink, Link2, Play, Plug, RefreshCw, RotateCw, Square, Trash2, Zap, type LucideIcon } from '@/ui/icons';
 
@@ -43,7 +43,7 @@ function formatCode(code: string): string {
 }
 
 function open(url: string) {
-    Linking.openURL(url).catch((error: unknown) => console.error(`Opening ${url} failed`, error));
+    openLinkFromPress(url);
 }
 
 function LinkButton({ url, label, primary }: { url: string; label: string; primary?: boolean }) {
