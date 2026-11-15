@@ -3,9 +3,12 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import type { CloudPriceList, ContextChoice, ProviderId, ProviderSummary, ProviderSummaryList } from '@/api/client.types';
+import type { CloudPriceList, ContextChoice, ProviderConnected, ProviderId, ProviderSummary, ProviderSummaryList } from '@/api/client.types';
+import { CONNECT_RETRY_MS } from '@/api/constants';
+import { GaiaApiError } from '@/api/errors';
 
 import { useGaiaClient } from './GaiaClientProvider';
+import { modelMenuKeys } from './modelMenu';
 import { modelKeys } from './models';
 import { requireClient } from './queries';
 
@@ -66,5 +69,52 @@ export function useCloudPrices(provider: string, enabled: boolean) {
         queryKey: providerKeys.prices(provider),
         enabled: client !== null && enabled,
         queryFn: ({ signal }) => requireClient(client).getCloudPrices(provider, { signal }),
+    });
+}
+
+function useRefreshProviders() {
+    const queryClient = useQueryClient();
+    return () => {
+        void queryClient.invalidateQueries({ queryKey: providerKeys.all });
+        void queryClient.invalidateQueries({ queryKey: modelMenuKeys.active });
+        void queryClient.invalidateQueries({ queryKey: ['providerModels'] });
+    };
+}
+
+/**
+ * Reconnects a provider with the key the PC already holds; no key leaves the phone. While the PC's OS
+ * holds the key read for permission (409) it asks again, telling `onWaiting`, until `stopped()`.
+ */
+export function useReconnectProvider() {
+    const client = useGaiaClient();
+    const refresh = useRefreshProviders();
+    return useMutation<
+        ProviderConnected,
+        Error,
+        { provider: string; onWaiting: (detail: string) => void; stopped: () => boolean }
+    >({
+        mutationFn: async ({ provider, onWaiting, stopped }) => {
+            const api = requireClient(client);
+            for (;;) {
+                try {
+                    return await api.connectProvider(provider);
+                } catch (err) {
+                    if (!(err instanceof GaiaApiError) || err.status !== 409 || stopped()) throw err;
+                    onWaiting(err.detail);
+                    await new Promise((resolve) => setTimeout(resolve, CONNECT_RETRY_MS));
+                }
+            }
+        },
+        onSettled: refresh,
+    });
+}
+
+/** After the PC's key-store unlock prompt was closed: GAIA asks once more on the PC, then the list is read again. */
+export function useRetryKeyStore() {
+    const client = useGaiaClient();
+    const refresh = useRefreshProviders();
+    return useMutation<{ retrying: boolean }, Error, void>({
+        mutationFn: () => requireClient(client).retryKeyStore(),
+        onSettled: refresh,
     });
 }

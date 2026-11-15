@@ -165,6 +165,15 @@ describe('createHttpClient requests', () => {
             { session_id: 's1', request_id: 'r1', value: 'Paris' },
         ],
         ['getSystemStatus', (c) => c.getSystemStatus(), 'GET', '/api/system/status', UI_HEADERS, undefined],
+        [
+            'downloadModel',
+            (c) => c.downloadModel('m', { force: true }),
+            'POST',
+            '/api/system/download-model',
+            JSON_HEADERS,
+            { model_name: 'm', force: true, load_after: false },
+        ],
+        ['loadModel', (c) => c.loadModel('m', false), 'POST', '/api/system/load-model', JSON_HEADERS, { model_name: 'm', force: false }],
         ['listConnectors', (c) => c.listConnectors(), 'GET', '/api/connectors', UI_HEADERS, undefined],
         ['disableConnector', (c) => c.disableConnector('slack'), 'POST', '/api/connectors/slack/disable', JSON_HEADERS, {}],
     ])('%s: %s', async (_name, call, method, path, headers, body) => {

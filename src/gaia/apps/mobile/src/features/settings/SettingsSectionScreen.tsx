@@ -28,7 +28,7 @@ export function SettingsSectionScreen() {
     const router = useRouter();
     const queryClient = useQueryClient();
     const scrollRef = useRef<ComponentRef<typeof ScrollView>>(null);
-    const params = useLocalSearchParams<{ section: string; target?: string; from?: string; crash?: string }>();
+    const params = useLocalSearchParams<{ section: string; target?: string; from?: string; provider?: string; crash?: string }>();
 
     const goBack = () => (router.canGoBack() ? router.back() : router.replace('/settings'));
     if (!isSectionId(params.section)) {
@@ -66,7 +66,7 @@ export function SettingsSectionScreen() {
         >
             <SettingsTargets key={`${section}:${params.target ?? ''}`} section={section} target={params.target} scrollRef={scrollRef}>
                 <SectionErrorBoundary key={section} area={`settings.${section}`} onReload={() => void queryClient.resetQueries()}>
-                    <Pane />
+                    <Pane provider={params.provider} />
                 </SectionErrorBoundary>
             </SettingsTargets>
         </Screen>
