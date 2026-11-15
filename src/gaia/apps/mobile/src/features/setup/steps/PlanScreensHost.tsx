@@ -1,7 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { View } from 'react-native';
 
 import { useT } from '@/i18n/useT';
@@ -11,13 +11,16 @@ import type { SetupStepContext } from '../SetupScreen';
 import { lowDiskRequest } from '../sheets/setupConfirm';
 import { useConfirmSheet } from '../sheets/ConfirmSheet';
 import { PlanOpenersContext, type PlanOpeners } from './planOpeners';
+import { usePlanScreenRequest } from './planScreenRequest';
 import { PLAN_SCREENS, type PlanScreenName } from './planScreens';
 import { PlanStep } from './PlanStep';
 
 /** The plan step and the screens it opens. The plan stays mounted under them, so its choices survive a visit. */
 export function PlanWithScreens({ ctx }: { ctx: SetupStepContext }) {
     const t = useT();
-    const [stack, setStack] = useState<PlanScreenName[]>([]);
+    const [asked] = useState(() => usePlanScreenRequest.getState().pending);
+    const [stack, setStack] = useState<PlanScreenName[]>(() => (asked && PLAN_SCREENS[asked.screen] ? [asked.screen] : []));
+    useEffect(() => usePlanScreenRequest.getState().clear(), []);
     const { ask, sheet } = useConfirmSheet();
 
     const openers = useMemo<PlanOpeners>(() => {
@@ -37,7 +40,11 @@ export function PlanWithScreens({ ctx }: { ctx: SetupStepContext }) {
 
     const top: PlanScreenName | undefined = stack[stack.length - 1];
     const Screen = top ? PLAN_SCREENS[top] : undefined;
-    const close = () => setStack((s) => s.slice(0, -1));
+    // A screen another step asked for goes back to that step when it closes.
+    const close = () => {
+        if (asked && stack.length === 1 && stack[0] === asked.screen) ctx.goTo(asked.from);
+        else setStack((s) => s.slice(0, -1));
+    };
 
     return (
         <PlanOpenersContext.Provider value={openers}>
