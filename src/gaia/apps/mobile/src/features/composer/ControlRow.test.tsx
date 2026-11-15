@@ -11,7 +11,7 @@ import { PrivateChip } from './PrivateChip';
 
 let mockLocale: 'ar' | 'en' = 'ar';
 jest.mock('@/i18n/useT', () => ({ useT: () => jest.requireActual('@webui/i18n/translator').translator(mockLocale) }));
-jest.mock('react-native', () => ({ View: 'View' }));
+jest.mock('react-native', () => ({ View: 'View', Platform: { OS: 'ios' } }));
 jest.mock('@/ui/icons', () => ({ ArrowUp: 'ArrowUp', Square: 'Square', ChevronDown: 'ChevronDown', Eye: 'Eye', EyeOff: 'EyeOff' }));
 jest.mock('./AttachButton', () => ({ AttachButton: 'AttachButton' }));
 jest.mock('./AttachmentChips', () => ({ AttachmentChips: 'AttachmentChips' }));
@@ -58,7 +58,8 @@ describe('composer control row in Arabic', () => {
     });
 
     // Same as above: the web project renders View as a DOM node.
-    (typeof document === 'undefined' ? it.each : it.skip.each)(['en', 'ar'] as const)('shows the chip as its icon alone in a 230 pt row, never a stub, keeping the label for screen readers (%s)', async (locale) => {
+    // Each chip keeps an off-screen full-width copy (one Text) beside the shown one.
+    (typeof document === 'undefined' ? it.each : it.skip.each)(['en', 'ar'] as const)('shows the chip as its icon alone when its measured label does not fit, keeping the label for screen readers (%s)', async (locale) => {
         mockLocale = locale;
         const r = createRoot();
         await act(async () =>
@@ -66,10 +67,12 @@ describe('composer control row in Arabic', () => {
         );
         const labels = () => r.container.queryAll((i) => i.type === 'Text');
         const layout = (width: number) => find(r, 'composer-controls').props.onLayout({ nativeEvent: { layout: { width } } });
+        const measure = r.container.queryAll((i) => typeof i.props.onLayout === 'function' && i.props.testID !== 'composer-controls')[0];
+        await act(async () => measure.props.onLayout({ nativeEvent: { layout: { width: 120 } } }));
         await act(async () => layout(340));
+        expect(labels()).toHaveLength(2);
+        await act(async () => layout(60));
         expect(labels()).toHaveLength(1);
-        await act(async () => layout(230));
-        expect(labels()).toHaveLength(0);
         expect(String(find(r, 'private-chip').props.accessibilityLabel).length).toBeGreaterThan(3);
         mockLocale = 'ar';
     });
