@@ -37,9 +37,14 @@ export interface AssistantBubbleProps {
     sessionId?: string;
     /** The newest answer, which alone reports a failed read of the chat's file changes. */
     newest?: boolean;
+    /** The model-server fix under the chat explains this reply's failure. */
+    fixShownBelow?: boolean;
 }
 
-export function AssistantBubble({ message, streaming = false, latencyMs, context, sessionId, newest = false }: AssistantBubbleProps) {
+// A reply with links stays walkable by element; plain prose reads as one block with its actions.
+const hasLinks = (text: string) => /\]\(|https?:|`|\[/.test(text);
+
+export function AssistantBubble({ message, streaming = false, latencyMs, context, sessionId, newest = false, fixShownBelow = false }: AssistantBubbleProps) {
     const t = useT();
     const cutOff = streaming ? null : splitCutOff(message.content);
     const cancelled = message.content.trim() === SERVER_CANCELLED_TEXT;
@@ -62,7 +67,13 @@ export function AssistantBubble({ message, streaming = false, latencyMs, context
         <Stack paddingX="lg" paddingY="xs">
             {activity.steps.length > 0 ? <ActivityTimeline steps={activity.steps} answer={text} /> : null}
             <AnswerCards cards={cards} />
-            <Pressable onLongPress={cancelled ? undefined : actions.openSheet} accessible={false} minSize={0}>
+            <Pressable
+                onLongPress={cancelled ? undefined : actions.openSheet}
+                accessibilityRole="text"
+                accessible={!hasLinks(text)}
+                minSize={0}
+                {...(cancelled ? {} : actions.a11y)}
+            >
                 {text ? <Markdown text={text} streaming={streaming} /> : null}
             </Pressable>
             {!streaming && !cancelled ? <AnswerFooter latencyMs={latencyMs} stats={message.stats} ended={activity.ended} /> : null}
@@ -71,7 +82,7 @@ export function AssistantBubble({ message, streaming = false, latencyMs, context
             ) : null}
             {cutOff ? <CutOffNote cutOff={cutOff} /> : null}
             {cancelled ? <StoppedNote stop={{ state: 'stopped' }} /> : null}
-            {!streaming && !cancelled ? <SavedReplyErrors message={message} /> : null}
+            {!streaming && !cancelled ? <SavedReplyErrors message={message} fixShownBelow={fixShownBelow} /> : null}
             {!streaming && !cancelled ? (
                 <Row>
                     {readable ? <ReadAloudButton control={readAloud} /> : null}

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import { formatSize, ltrIn } from '@webui/components/setup/format';
+import { isolate } from '@webui/i18n/registry';
 import { tEn } from '@webui/i18n/translator';
 import { isServerDown } from '@webui/utils/serverDown';
 import { useRouter } from 'expo-router';
@@ -10,7 +11,7 @@ import { useState } from 'react';
 import { useActiveModel, useGpuMemory, useSetupPlan, useSetupPreflight } from '@/data';
 import { describeError, useT } from '@/i18n/useT';
 import { reopenSetup } from '@/features/setup/SetupGate';
-import { Button, Icon, ListRow, Notice, Sheet, Stack, Text } from '@/ui';
+import { Button, Icon, ListRow, Notice, Sheet, Stack, Surface, Text } from '@/ui';
 import { ChevronRight } from '@/ui/icons';
 
 import { openSettings } from '../openSettings';
@@ -101,13 +102,15 @@ export default function Setup() {
         <SettingsAnchor name="pane">
             <Stack gap="lg" paddingX="lg" paddingY="md">
                 <Text role="body" tone="secondary">{t('settings.setup.lede')}</Text>
-                <Stack gap="sm">
-                    <Text role="ui" weight="semibold">
-                        {t('settings.setup.ready')}
-                        {chatName ? <Text role="label" tone="muted">{` ${t('settings.setup.running', { name: chatName })}`}</Text> : null}
-                    </Text>
-                    <Button variant="secondary" full label={t('settings.setup.runAgain')} onPress={() => setAsking(true)} testID="setup-run-again" />
-                </Stack>
+                <Surface radius="lg" border padding="md">
+                    <Stack gap="sm">
+                        <Text role="ui" accessibilityRole="header">
+                            <Text role="ui" weight="semibold">{t('settings.setup.ready')}</Text>
+                            {chatName ? <Text role="label" tone="muted">{` ${t('settings.setup.running', { name: isolate(chatName, 'ltr') })}`}</Text> : null}
+                        </Text>
+                        <Button variant="secondary" size="sm" label={t('settings.setup.runAgain')} onPress={() => setAsking(true)} testID="setup-run-again" />
+                    </Stack>
+                </Surface>
                 {error ? <Notice tone="danger" message={describeError(error, t)} testID="setup-error" /> : null}
                 {groups.map((g) => (
                     <Stack key={g.title} gap="xs">
@@ -119,6 +122,7 @@ export default function Setup() {
                                     key={l.label}
                                     title={l.label}
                                     subtitle={l.value ?? undefined}
+                                    subtitleLines={3}
                                     trailing={to ? <Icon icon={ChevronRight} size="sm" tone="muted" /> : undefined}
                                     onPress={to ? () => openSettings(to.section, to.target, 'setup', router, to.provider) : undefined}
                                     testID={l.testID}

@@ -61,6 +61,8 @@ PC_ONLY = {
     "GET /api/devices/status",
     "GET /api/logs",
     "GET /api/logs/{source}",
+    "GET /api/memory/stream-discovery",
+    "GET /api/memory/stream-inference",
     "GET /api/messaging/discord",
     "GET /api/setup/report/{name}",
     "POST /api/agents/install",
@@ -82,6 +84,10 @@ PC_ONLY = {
     "POST /api/lemonade/target",
     "POST /api/memory/admin/clear",
     "POST /api/memory/admin/seed",
+    "POST /api/memory/commit-discovery",
+    "POST /api/memory/commit-inference",
+    "POST /api/memory/refresh-system-context",
+    "POST /api/memory/reinitialize",
     "POST /api/messaging/discord/connect",
     "POST /api/messaging/discord/disconnect",
     "POST /api/messaging/discord/forget-always",
@@ -204,8 +210,6 @@ REMOTE = {
     "GET /api/memory/knowledge/{knowledge_id}",
     "GET /api/memory/settings",
     "GET /api/memory/stats",
-    "GET /api/memory/stream-discovery",
-    "GET /api/memory/stream-inference",
     "GET /api/memory/tools",
     "GET /api/memory/upcoming",
     "GET /api/onboarding/preflight",
@@ -281,16 +285,12 @@ REMOTE = {
     "POST /api/goals",
     "POST /api/goals/{goal_id}/tasks",
     "POST /api/gpu-memory/pending",
-    "POST /api/memory/commit-discovery",
-    "POST /api/memory/commit-inference",
     "POST /api/memory/consolidate",
     "POST /api/memory/knowledge",
     "POST /api/memory/prune",
     "POST /api/memory/rebuild-embeddings",
     "POST /api/memory/rebuild-fts",
     "POST /api/memory/reconcile",
-    "POST /api/memory/refresh-system-context",
-    "POST /api/memory/reinitialize",
     "POST /api/providers/local/custom",
     "POST /api/providers/local/custom/check",
     "POST /api/providers/local/restart",
@@ -601,15 +601,27 @@ def test_a_paired_device_may_read_provider_summaries(setup, monkeypatch):
     monkeypatch.setattr(
         providers, "_install", lambda *a, **k: pytest.fail("registered a provider")
     )
+    monkeypatch.setattr(providers, "_gateway_check_applies", lambda: False)
     resp = clients["device"].get("/api/providers/list", headers={"X-Gaia-UI": "1"})
     assert resp.status_code == 200, resp.text
     listed = {p["id"]: p for p in resp.json()["providers"]}
     assert listed["amd"]["configured"] is True
     assert listed["fireworks"]["configured"] is False
     assert all(
-        set(p) == {"id", "name", "remote", "privacy_notice", "configured", "blocked"}
+        set(p)
+        == {
+            "id",
+            "name",
+            "remote",
+            "privacy_notice",
+            "configured",
+            "blocked",
+            "network",
+        }
         for p in listed.values()
     )
+    # Reachability only: the gateway's error text can name its address.
+    assert listed["amd"]["network"] == {"reachable": None}
     assert "gw.example" not in resp.text
 
 
@@ -647,3 +659,82 @@ def test_troubleshooting_report_is_pc_only(setup):
         assert pc.content == b"logs that quote a conversation"
     finally:
         report.unlink()
+
+
+@pytest.mark.parametrize(
+    "method,path,body",
+    [
+        ("GET", "/api/memory/stream-discovery", None),
+        ("GET", "/api/memory/stream-inference?include_browser=true", None),
+        ("POST", "/api/memory/commit-discovery", {"items": [{"content": "x"}]}),
+        ("POST", "/api/memory/commit-inference", {"insights": [{"content": "x"}]}),
+    ],
+)
+def test_memory_profile_scan_is_pc_only(setup, monkeypatch, method, path, body):
+    """The scan reads the PC's files and browsing; only the PC may run or save it."""
+    from gaia.agents.base import discovery
+    from gaia.ui.routers import memory
+
+    app, clients, _ = setup
+    touched = []
+
+    class _Discovery:
+        def __init__(self):
+            touched.append("scan")
+            raise RuntimeError("scanned")
+
+    class _Store:
+        def store(self, **kwargs):
+            touched.append("store")
+
+        def replace_by_source(self, *args, **kwargs):
+            touched.append("store")
+            return []
+
+    monkeypatch.setattr(discovery, "SystemDiscovery", _Discovery)
+    monkeypatch.setattr(memory, "_get_store", _Store)
+    ui = {"X-Gaia-UI": "1"}
+    for caller in ("tunnel", "device"):
+        resp = clients[caller].request(method, path, json=body, headers=ui)
+        assert resp.status_code == 403, (caller, resp.text)
+    assert touched == []
+    assert clients["pc"].request(method, path, json=body, headers=ui).status_code == 200
+    assert touched
+
+
+def test_system_context_collection_is_pc_only(setup, monkeypatch):
+    """Re-collecting system context, or consenting to it, happens on the PC only."""
+    from gaia.ui.routers import memory
+
+    app, clients, _ = setup
+    ran = []
+    monkeypatch.setattr(
+        memory,
+        "_do_system_context_refresh",
+        lambda: ran.append("refresh") or {"stored": 0, "skipped": False},
+    )
+    monkeypatch.setattr(
+        "gaia.agents.base.memory._save_memory_settings", lambda settings: None
+    )
+    ui = {"X-Gaia-UI": "1"}
+    on = {"system_discovery_consent": True}
+    for caller in ("tunnel", "device"):
+        for method, path, body in (
+            ("POST", "/api/memory/refresh-system-context", None),
+            ("POST", "/api/memory/reinitialize", None),
+            ("PUT", "/api/memory/settings", on),
+        ):
+            resp = clients[caller].request(method, path, json=body, headers=ui)
+            assert resp.status_code == 403, (caller, path, resp.text)
+        off = clients[caller].put(
+            "/api/memory/settings",
+            json={"system_discovery_consent": False},
+            headers=ui,
+        )
+        assert off.status_code == 200, (caller, off.text)
+    assert ran == []
+    assert (
+        clients["pc"].put("/api/memory/settings", json=on, headers=ui).status_code
+        == 200
+    )
+    assert ran == ["refresh"]

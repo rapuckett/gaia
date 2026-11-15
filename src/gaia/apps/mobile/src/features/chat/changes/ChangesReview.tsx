@@ -8,7 +8,7 @@ import { ErrorState, LoadingState, Sheet, Stack, Text } from '@/ui';
 
 import { DiffCard } from '../cards/DiffCard';
 
-function noteOf(file: FileDiff, t: Translate): string | undefined {
+export function noteOf(file: FileDiff, t: Translate): string | undefined {
     const sizes = { before: file.before_size, after: file.after_size };
     if (file.too_large) return t('mobileApp.changes.tooLarge', sizes);
     if (file.binary) return t('mobileApp.changes.binary', sizes);
