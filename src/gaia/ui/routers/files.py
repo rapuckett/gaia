@@ -143,6 +143,10 @@ def _refuse_remote_secret(resolved: Path) -> None:
         )
 
 
+def _within_roots(resolved: Path, roots) -> bool:
+    return any(session_environment.within(str(resolved), root) for root in roots)
+
+
 def _refuse_remote_read(resolved: Path, roots) -> None:
     """403 unless a caller away from the PC may read *resolved*.
 
@@ -152,7 +156,7 @@ def _refuse_remote_read(resolved: Path, roots) -> None:
     if roots is None:
         return
     _refuse_remote_secret(resolved)
-    if not any(session_environment.within(str(resolved), root) for root in roots):
+    if not _within_roots(resolved, roots):
         raise HTTPException(
             status_code=403,
             detail=f"{_AWAY_FROM_PC} {resolved.name or resolved} isn't in this "
