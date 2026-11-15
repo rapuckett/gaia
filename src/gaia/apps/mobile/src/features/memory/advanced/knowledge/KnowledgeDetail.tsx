@@ -5,6 +5,7 @@ import type { UseMutationResult } from '@tanstack/react-query';
 import * as Clipboard from 'expo-clipboard';
 import { useState } from 'react';
 
+import { isolate } from '@webui/i18n/registry';
 import { confidenceLevel, formatDateFull, isOverdue, type KnowledgeEntry } from '@webui/utils/memoryFormat.core';
 
 import type { KnowledgeSaveResult, KnowledgeUpdateBody } from '@/api/client.types';
@@ -150,8 +151,8 @@ export function KnowledgeDetail({ item, edit, forget, onEdit, onChanged, onFilte
                     <Stack gap="xs" align="start">
                         <Field label={t('mem.col.entity')}>{item.entity}</Field>
                         <Button
-                            label={t.bare('mem.knowledge.filterBy', { entity: item.entity })}
-                            accessibilityLabel={t('mem.knowledge.filterBy', { entity: item.entity })}
+                            label={t.bare('mem.knowledge.filterBy', { entity: isolate(item.entity, 'ltr') })}
+                            accessibilityLabel={t('mem.knowledge.filterBy', { entity: isolate(item.entity, 'ltr') })}
                             variant="ghost"
                             size="sm"
                             onPress={() => onFilterEntity(item.entity!)}

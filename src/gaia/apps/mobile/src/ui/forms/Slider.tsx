@@ -4,7 +4,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { View, type AccessibilityActionEvent } from 'react-native';
 import { GestureDetector, usePanGesture } from 'react-native-gesture-handler';
-import { useDirection } from '@/i18n/useT';
+import { layoutDirection } from '@/platform/direction';
 import { Row } from '../layout/layout';
 import { useTheme } from '../theme/ThemeProvider';
 import { Ltr } from '../text/Ltr';
@@ -32,7 +32,8 @@ const THUMB = 28;
 
 export function Slider({ value, onChange, onChangeEnd, min = 0, max = 100, step = 1, label, accessibilityLabel, formatValue, disabled, testID }: SliderProps) {
     const { colors, radius } = useTheme();
-    const rtl = useDirection() === 'rtl';
+    // The track is always laid out LTR and mirrored by hand: iOS swaps `left`/`start` in RTL, the web doesn't.
+    const rtl = layoutDirection() === 'rtl';
     const [width, setWidth] = useState(0);
     const latest = useRef(value);
     useEffect(() => {
@@ -97,15 +98,15 @@ export function Slider({ value, onChange, onChangeEnd, min = 0, max = 100, step 
                     }}
                     onLayout={(e) => setWidth(e.nativeEvent.layout.width)}
                     testID={testID}
-                    style={{ height: 48, justifyContent: 'center' }}
+                    style={{ height: 48, justifyContent: 'center', direction: 'ltr' }}
                 >
                     <View style={{ height: 4, borderRadius: radius.full, backgroundColor: colors.bgActive, marginHorizontal: THUMB / 2 }}>
-                        <View style={{ width: `${fraction * 100}%`, height: 4, borderRadius: radius.full, backgroundColor: colors.accentSolid }} />
+                        <View style={{ width: `${fraction * 100}%`, alignSelf: rtl ? 'flex-end' : 'flex-start', height: 4, borderRadius: radius.full, backgroundColor: colors.accentSolid }} />
                     </View>
                     <View
                         style={{
                             position: 'absolute',
-                            start: fraction * room,
+                            left: (rtl ? 1 - fraction : fraction) * room,
                             width: THUMB,
                             height: THUMB,
                             borderRadius: radius.full,

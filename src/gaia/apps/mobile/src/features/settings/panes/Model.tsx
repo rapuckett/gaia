@@ -27,14 +27,14 @@ import { LocalModels } from './model/LocalModels';
 import { ModelInUse } from './model/ModelInUse';
 import { ModelList } from './model/ModelList';
 import { ProviderKey } from './model/ProviderKey';
-import { errorText, modelLabel, sameModelId } from './model/modelText';
+import { errorText, isolate, modelLabel, sameModelId } from './model/modelText';
 
 /** Memory for models, read from the PC only while "How this works" is open. */
 function LocalMemory() {
     const t = useT();
     const status = useLocalModelStatus(false);
     const s = status.data;
-    const memory = s?.memory ? `${s.memory.total_gb} GB (${s.memory.source})` : s?.memory_error;
+    const memory = s?.memory ? isolate(`${s.memory.total_gb} GB (${s.memory.source})`) : s?.memory_error;
     if (!memory) return null;
     return <Text role="caption" tone="muted">{t('settings.model.memory', { memory })}</Text>;
 }
@@ -76,7 +76,7 @@ export default function Model({ provider: requested }: { provider?: string }) {
         select.mutate(model, {
             onSuccess: () => {
                 const m = models?.find((x) => x.id === model);
-                setSwitched(t('settings.model.switched', { name: m ? modelLabel(m) : modelLabel({ id: model }) }));
+                setSwitched(t('settings.model.switched', { name: isolate(m ? modelLabel(m) : modelLabel({ id: model })) }));
             },
         });
     };

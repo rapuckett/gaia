@@ -14,7 +14,7 @@ import { Plus } from '@/ui/icons';
 
 import { AddCustomModel } from './AddCustomModel';
 import { ModelRow } from './ModelRow';
-import { errorText, modelLabel, refusedOnPhone, sameModelId } from './modelText';
+import { errorText, isolate, modelLabel, refusedOnPhone, sameModelId } from './modelText';
 
 const SEARCHABLE_FROM = 6;
 
@@ -201,7 +201,7 @@ export function ModelList({ provider, remote, models, activeModel, switching, on
                         open={adding}
                         onClose={() => setAdding(false)}
                         onAdded={(name) => {
-                            setNotice({ ok: true, text: t('settings.model.added', { name }) });
+                            setNotice({ ok: true, text: t('settings.model.added', { name: isolate(name) }) });
                             setJustAdded(true);
                             onRefresh();
                         }}
@@ -211,7 +211,7 @@ export function ModelList({ provider, remote, models, activeModel, switching, on
             <Sheet
                 open={!!confirmRemove}
                 onClose={() => setConfirmRemove(null)}
-                title={confirmRemove ? t('settings.models.removeTitle', { name: labels[confirmRemove.id] ?? modelLabel(confirmRemove) }) : undefined}
+                title={confirmRemove ? t('settings.models.removeTitle', { name: isolate(labels[confirmRemove.id] ?? modelLabel(confirmRemove)) }) : undefined}
             >
                 <Stack gap="md" padding="lg">
                     {confirmRemove?.downloaded ? (

@@ -88,7 +88,7 @@ describe('Model pane switch', () => {
     it('posts the picked model once and confirms it', async () => {
         const { client, shown } = await switchTo();
         expect(client.selected).toEqual(['Qwen3.6-35B-A3B-GGUF']);
-        expect(shown).toContain('New messages use Qwen 3.6 35B. It is remembered across restarts.');
+        expect(shown).toContain('New messages use \u2066Qwen 3.6 35B\u2069. It is remembered across restarts.');
     });
 
     it("shows the PC's reason when the switch fails", async () => {
