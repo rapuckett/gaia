@@ -62,6 +62,7 @@ async function switchTo(failWith?: GaiaApiError) {
     delete selects['Switch model'];
     const client = createFakeClient({
         providers,
+        activeModel: providers.active,
         providerModels: {
             local: { provider: 'local', models: [model('Gemma-4-E4B-it-GGUF', 'Gemma 4 E4B'), model('Qwen3.6-35B-A3B-GGUF', 'Qwen 3.6 35B')] },
         },
