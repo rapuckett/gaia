@@ -1,7 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import type { ReactNode } from 'react';
+import type { ComponentRef, ReactNode, Ref } from 'react';
 import { ScrollView, View } from 'react-native';
 import { KeyboardAvoidingView, KeyboardAwareScrollView, useKeyboardState } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -15,6 +15,8 @@ export interface ScreenProps {
     edges?: ScreenEdge[];
     keyboard?: 'avoid' | 'none';
     scroll?: boolean;
+    /** The scrolling body, for a screen that scrolls a child into view. */
+    scrollRef?: Ref<ComponentRef<typeof ScrollView>>;
     header?: ReactNode;
     footer?: ReactNode;
     background?: 'primary' | 'secondary' | 'recessed';
@@ -28,6 +30,7 @@ export function Screen({
     edges = ALL,
     keyboard = 'none',
     scroll,
+    scrollRef,
     header,
     footer,
     background = 'primary',
@@ -49,6 +52,7 @@ export function Screen({
     const body = scroll ? (
         avoid ? (
             <KeyboardAwareScrollView
+                ref={scrollRef as never}
                 style={{ flex: 1 }}
                 contentContainerStyle={{ flexGrow: 1 }}
                 keyboardShouldPersistTaps="handled"
@@ -58,7 +62,7 @@ export function Screen({
                 {children}
             </KeyboardAwareScrollView>
         ) : (
-            <ScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled">
+            <ScrollView ref={scrollRef} style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled">
                 {children}
             </ScrollView>
         )
