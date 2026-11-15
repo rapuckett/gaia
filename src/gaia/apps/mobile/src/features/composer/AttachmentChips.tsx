@@ -32,7 +32,11 @@ export function AttachmentChips({ attachments }: { attachments: Attachments }) {
                     <Row gap="sm" justify="between">
                         <Row gap="sm" flex={1}>
                             {a.isImage ? (
-                                <NativeImage source={{ uri: a.uri }} style={{ width: 24, height: 24, borderRadius: radius.sm }} accessibilityIgnoresInvertColors />
+                                <NativeImage
+                                    source={{ uri: a.uri }}
+                                    style={{ width: 24, height: 24, borderRadius: radius.sm }}
+                                    accessibilityIgnoresInvertColors
+                                />
                             ) : (
                                 <Icon icon={FileText} size="sm" tone="secondary" />
                             )}
@@ -55,7 +59,12 @@ export function AttachmentChips({ attachments }: { attachments: Attachments }) {
                                 ) : null}
                             </View>
                         </Row>
-                        <IconButton icon={X} size="sm" label={t('composer.remove', { name: a.name })} onPress={() => attachments.remove(a.id)} />
+                        <IconButton
+                            icon={X}
+                            size="sm"
+                            label={t('composer.remove', { name: a.name })}
+                            onPress={() => attachments.remove(a.id)}
+                        />
                     </Row>
                 </View>
             ))}

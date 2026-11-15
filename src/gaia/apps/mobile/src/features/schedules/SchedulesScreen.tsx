@@ -8,12 +8,22 @@ import { GaiaApiError } from '@/api/errors';
 import { useDeleteSchedule, useRunSchedule, useSchedules, useUpdateScheduleStatus } from '@/data';
 import { ScreenHeader } from '@/features/nav/ScreenHeader';
 import { describeError, useT } from '@/i18n/useT';
-import { Button, EmptyState, ErrorState, IconButton, List, ListSkeleton, Notice, Row, Screen, SectionHeader, Stack, useTheme } from '@/ui';
+import { ErrorState, IconButton, List, ListSkeleton, Notice, Row, Screen, Stack, Text, useTheme } from '@/ui';
 import { Plus, X } from '@/ui/icons';
 
+import { ChipButton } from './ChipButton';
 import { NewScheduleSheet } from './NewScheduleSheet';
 import { ScheduleCard } from './ScheduleCard';
 import { isCountdownRange } from './scheduleText';
+
+/** The desktop's `.schedule-section h4`: a bold muted label above the list. */
+function ListHeading({ title }: { title: string }) {
+    return (
+        <Text role="label" weight="bold" tone="muted" accessibilityRole="header">
+            {title}
+        </Text>
+    );
+}
 
 const IDLE_TICK_MS = 30_000;
 
@@ -68,19 +78,30 @@ export function SchedulesScreen({ onOpenChat }: SchedulesScreenProps) {
         <Screen header={<ScreenHeader title={t('schedules.title')} />}>
             <NewScheduleSheet open={creating} onClose={() => setCreating(false)} />
             <Stack paddingX="lg" paddingY="sm" align="start">
-                <Button label={t('schedules.new')} icon={Plus} variant="primary" size="sm" onPress={() => setCreating(true)} />
+                <ChipButton label={t('schedules.new')} icon={Plus} variant="accent" onPress={() => setCreating(true)} />
             </Stack>
             {query.isPending ? <ListSkeleton rows={4} /> : null}
             {query.isError && !query.data ? (
                 <ErrorState title={t('schedules.loadFailed')} message={describeError(query.error, t)} onRetry={() => void query.refetch()} />
             ) : null}
-            {query.data && schedules.length === 0 ? <EmptyState title={t('schedules.empty')} /> : null}
+            {query.data && schedules.length === 0 ? (
+                <>
+                    <Stack paddingX="lg" paddingY="sm">
+                        <ListHeading title={t('schedules.list')} />
+                    </Stack>
+                    <Stack paddingX="lg" paddingY="xl" align="center">
+                        <Text role="ui" tone="muted" align="center">
+                            {t('schedules.empty')}
+                        </Text>
+                    </Stack>
+                </>
+            ) : null}
             {schedules.length > 0 ? (
                 <List<Schedule>
                     data={schedules}
                     keyExtractor={(s) => s.id}
                     accessibilityLabel={t('schedules.list')}
-                    contentContainerStyle={{ paddingHorizontal: space.lg, paddingBottom: space.xl, gap: space.md }}
+                    contentContainerStyle={{ paddingHorizontal: space.lg, paddingBottom: space.xl, gap: space.sm }}
                     ListHeaderComponent={
                         <Stack gap="sm">
                             {actionError ? (
@@ -91,7 +112,7 @@ export function SchedulesScreen({ onOpenChat }: SchedulesScreenProps) {
                                     <IconButton icon={X} label={t('schedules.dismissError')} onPress={() => setActionError(null)} />
                                 </Row>
                             ) : null}
-                            <SectionHeader title={t('schedules.list')} />
+                            <ListHeading title={t('schedules.list')} />
                         </Stack>
                     }
                     renderItem={({ item }) => (
