@@ -1,7 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 
 import { GaiaNetworkError, GaiaPinMismatchError } from '@/api/errors';
 import { useGaiaClient, useSetupGate } from '@/data';
@@ -11,6 +11,14 @@ import { Button, Disclosure, Ltr, Notice, Screen, Stack } from '@/ui';
 
 import { SetupScreen, type SetupScreenProps } from './SetupScreen';
 import { StartupScreen } from './StartupScreen';
+
+let reopen: (() => void) | null = null;
+
+/** Reopens setup in re-run mode from outside the gate (Settings > Setup > Run setup again). */
+export function reopenSetup(): void {
+    if (!reopen) throw new Error('Setup cannot reopen: the setup gate is not mounted.');
+    reopen();
+}
 
 /**
  * The first-run gate around the app: "Starting GAIA…" until the check answers, the setup screen in
@@ -22,6 +30,13 @@ export function SetupGate({ children, renderStep }: { children: ReactNode; rende
     const t = useT();
     const { gate, recheck, finish, open } = useSetupGate();
     const pairAgain = usePairAgain();
+
+    useEffect(() => {
+        reopen = open;
+        return () => {
+            if (reopen === open) reopen = null;
+        };
+    }, [open]);
 
     if (!client) return <>{children}</>;
     if (gate.state === 'checking') return <StartupScreen />;
