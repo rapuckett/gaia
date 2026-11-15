@@ -1,10 +1,10 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { Linking } from 'react-native';
-
 import { ENDPOINTS } from '@/api/constants';
 import { isPcUrl } from '@/platform/fetch';
+import { checkLink } from '@/platform/linkPolicy';
+import { openLinkFromPress } from '@/platform/openLink';
 
 import { usePreviewStore, type PreviewTarget } from './previewStore';
 
@@ -63,12 +63,17 @@ export function openPcFile(input: string | CitedDocument, sessionId: string | nu
     }
     const link = input.trim();
     if (/^https?:\/\//i.test(link) && !isPcUrl(link)) {
-        Linking.openURL(link).catch((error: unknown) => console.error('Opening a link failed', error));
+        openLinkFromPress(link);
         return 'browser';
     }
     if (/^mailto:/i.test(link)) {
-        Linking.openURL(link).catch((error: unknown) => console.error('Opening a link failed', error));
+        openLinkFromPress(link);
         return 'browser';
+    }
+    const verdict = checkLink(link);
+    if (!verdict.allowed && !isFileLink(link) && !link.startsWith('/api/') && (verdict.scheme !== null || link.startsWith('//'))) {
+        openLinkFromPress(link);
+        return 'ignored';
     }
     if (!sessionId) return 'ignored';
     const isUrl = /^https?:\/\//i.test(link) || link.startsWith('/api/');

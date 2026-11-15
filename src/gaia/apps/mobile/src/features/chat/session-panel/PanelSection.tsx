@@ -3,7 +3,7 @@
 
 import type { ReactNode } from 'react';
 
-import { Disclosure, Text } from '@/ui';
+import { Disclosure, Text, type Tone } from '@/ui';
 
 import { useSessionPanelStore, type PanelSectionId } from './panelStore';
 
@@ -12,11 +12,12 @@ export interface PanelSectionProps {
     title: string;
     /** One line shown beside the title while the section is collapsed. */
     summary?: string;
+    summaryTone?: Tone;
     children: ReactNode;
 }
 
 /** A collapsible section of the session panel. The body mounts only while open, so a collapsed section fetches nothing. */
-export function PanelSection({ id, title, summary, children }: PanelSectionProps) {
+export function PanelSection({ id, title, summary, summaryTone = 'muted', children }: PanelSectionProps) {
     const open = useSessionPanelStore((s) => s.sections[id]);
     const setSection = useSessionPanelStore((s) => s.setSection);
     return (
@@ -26,7 +27,7 @@ export function PanelSection({ id, title, summary, children }: PanelSectionProps
             onToggle={() => setSection(id, !open)}
             trailing={
                 !open && summary ? (
-                    <Text role="caption" tone="muted" numberOfLines={1}>
+                    <Text role="caption" tone={summaryTone} numberOfLines={1}>
                         {summary}
                     </Text>
                 ) : undefined

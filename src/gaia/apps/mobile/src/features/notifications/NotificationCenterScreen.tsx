@@ -55,7 +55,7 @@ export function NotificationCenterScreen({ onBack, onOpenChat }: { onBack: () =>
                     title={t('notifications.title')}
                     backLabel={t('setup.back')}
                     onBack={onBack}
-                    titleEnd={unread > 0 ? <Badge label={String(unread)} tone="accent" /> : undefined}
+                    titleEnd={unread > 0 ? <Badge shape="pill" label={String(unread)} tone="accent" /> : undefined}
                 />
             }
             footer={
@@ -63,7 +63,7 @@ export function NotificationCenterScreen({ onBack, onOpenChat }: { onBack: () =>
                     <Stack>
                         <Row gap="sm" stack>
                             <Stack flex={1}>
-                                <Button label={t('notifications.markAllRead')} icon={Check} variant="secondary" full disabled={unread === 0} onPress={markAllNotificationsRead} testID="ntf-mark-all" />
+                                <Button label={t.bare('notifications.markAllRead')} accessibilityLabel={t('notifications.markAllRead')} icon={Check} variant="secondary" full disabled={unread === 0} onPress={markAllNotificationsRead} testID="ntf-mark-all" />
                             </Stack>
                             <Stack flex={1}>
                                 <Button label={t('notifications.clear')} icon={Trash2} variant="secondary" full onPress={clearNotifications} testID="ntf-clear" />

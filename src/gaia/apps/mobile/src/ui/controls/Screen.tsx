@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import type { ComponentRef, ReactNode, Ref } from 'react';
-import { RefreshControl, ScrollView, View } from 'react-native';
+import { RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { KeyboardAvoidingView, KeyboardAwareScrollView, useKeyboardState } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useDirection } from '@/i18n/useT';
@@ -28,7 +28,11 @@ export interface ScreenProps {
     footer?: ReactNode;
     /** The footer spans the full width, with no gutter; its content pads itself. */
     footerBleed?: boolean;
+    /** A hairline above the footer, as the desktop setup bar has. */
+    footerDivider?: boolean;
     background?: 'primary' | 'secondary' | 'recessed';
+    /** Drawn behind everything else, edge to edge. */
+    backdrop?: ReactNode;
     testID?: string;
 }
 
@@ -46,7 +50,9 @@ export function Screen({
     banner,
     footer,
     footerBleed = false,
+    footerDivider = false,
     background = 'primary',
+    backdrop,
     testID,
 }: ScreenProps) {
     const { colors } = useTheme();
@@ -99,7 +105,10 @@ export function Screen({
             {header}
             {body}
             {footer ? (
-                <View testID="screen-footer" style={footerBleed ? undefined : { paddingHorizontal: space.gutter, paddingVertical: space.sm }}>
+                <View testID="screen-footer" style={[
+                        footerBleed ? undefined : { paddingHorizontal: space.gutter, paddingVertical: footerDivider ? space.md : space.sm },
+                        footerDivider ? { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border } : undefined,
+                    ]}>
                     {footer}
                 </View>
             ) : null}
@@ -118,6 +127,7 @@ export function Screen({
                 paddingEnd: has('end') ? endInset : 0,
             }}
         >
+            {backdrop}
             {avoid ? (
                 <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
                     {content}

@@ -29,4 +29,11 @@ describeNative('Screen footer', () => {
         const style = StyleSheet.flatten(screen.getByTestId('screen-footer').props.style);
         expect(style?.paddingHorizontal).toBeUndefined();
     });
+
+    it('draws a hairline above a footer with a divider', async () => {
+        await render(<Screen footerDivider footer={<Text>Actions</Text>} />, { wrapper: wrap });
+        const style = StyleSheet.flatten(screen.getByTestId('screen-footer').props.style);
+        expect(style.borderTopWidth).toBe(StyleSheet.hairlineWidth);
+        expect(style.paddingVertical).toBe(space.md);
+    });
 });

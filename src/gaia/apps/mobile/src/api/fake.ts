@@ -70,7 +70,11 @@ import type {
     ScheduleResult,
     ResourceUsage,
     Session,
+    FileStatusList,
+    SessionChanges,
     SessionEnvironment,
+    SessionGit,
+    SessionOutputs,
     SessionList,
     SessionPermissions,
     SessionSearchResponse,
@@ -85,6 +89,7 @@ import type {
     FeaturedLibraries,
     LinkPreview,
     SpendingReport,
+    ChatSpending,
     StartScreen,
     StreamEvent,
     SystemStatus,
@@ -211,6 +216,8 @@ export interface FakeClientData {
     providers?: ProviderSummaryList;
     /** What getSpending answers; setting the limit or allowing the month changes it. */
     spending?: SpendingReport;
+    /** What getChatSpending answers. */
+    chatSpending?: ChatSpending;
     /** What getCloudPrices answers, by provider. */
     cloudPrices?: Record<string, CloudPriceList>;
     /** What recheckSetupNpu answers; an Error is thrown. */
@@ -244,6 +251,10 @@ export interface FakeClientData {
     fileBytes?: Record<string, Uint8Array>;
     /** What getCapabilities answers, by chat; a chat not listed has no agent running (409). */
     capabilities?: Record<string, AgentCapabilities>;
+    /** What getOutputs answers, by chat; a chat not listed has produced nothing. */
+    outputs?: Record<string, SessionOutputs>;
+    /** What getFileStatus answers, by path; a path not listed is reported as unchecked. */
+    fileStatus?: Record<string, FileStatusList['files'][number]>;
     /** What getEnvironment answers, by chat; removing a folder and the internet switch change it. A chat not listed is a 404. */
     environments?: Record<string, SessionEnvironment>;
     memorySettings?: MemorySettings;
@@ -263,6 +274,10 @@ export interface FakeClientData {
     networkPolicyError?: Error;
     /** What listTurnChanges answers, by chat. */
     turnChanges?: Record<string, TurnChanges[]>;
+    /** What getSessionChanges answers, by chat; a chat not listed has changed nothing. Undo all empties it. */
+    sessionChanges?: Record<string, SessionChanges>;
+    /** What getSessionGit answers, by chat; a chat not listed is in no repository. */
+    sessionGit?: Record<string, SessionGit>;
     /** What getTurnDiff answers, by turn. */
     turnDiffs?: Record<string, FileDiff[]>;
     /** Answers undoTurn with this unless forced, as the PC does for a file changed since. */
@@ -376,7 +391,9 @@ export interface FakeGaiaClient extends GaiaClient {
     readonly attached: { sessionId: string; docId: string }[];
     readonly capabilityReads: string[];
     /** Each folder removal and internet switch, in order. */
-    readonly environmentChanges: ({ sessionId: string; remove: string } | { sessionId: string; internet: boolean })[];
+    /** Each commit and pull request the phone confirmed, in order. */
+    readonly gitActions: { sessionId: string; kind: 'commit' | 'pr'; root: string; text: string }[];
+    readonly environmentChanges: ({ sessionId: string; add: string } | { sessionId: string; remove: string } | { sessionId: string; internet: boolean })[];
     /** Each memory maintenance POST, in order. */
     readonly memoryActions: string[];
     /** Each memory add, edit and forget, in order. */
@@ -475,6 +492,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
     const attached: FakeGaiaClient['attached'] = [];
     const capabilityReads: string[] = [];
     const environmentChanges: FakeGaiaClient['environmentChanges'] = [];
+    const gitActions: FakeGaiaClient['gitActions'] = [];
     const memoryActions: string[] = [];
     let memoryStatsReads = 0;
     const memoryActivityReads: number[] = [];
@@ -577,6 +595,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         attached,
         capabilityReads,
         environmentChanges,
+        gitActions,
         memoryActions,
         memoryActivityReads,
         profileStreamOpens,
@@ -692,6 +711,10 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             if (!data.spending) throw new GaiaApiError(503, 'This fake client was given no spending report.');
             return data.spending;
         },
+        async getChatSpending() {
+            if (!data.chatSpending) throw new GaiaApiError(503, 'This fake client was given no chat spending.');
+            return data.chatSpending;
+        },
         async setSpendingLimit(limitUsd) {
             if (!data.spending) throw new GaiaApiError(503, 'This fake client was given no spending report.');
             if (limitUsd !== null && !(limitUsd > 0)) throw new GaiaApiError(422, 'The limit must be above zero.');
@@ -797,6 +820,10 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             const limit = data.searchLimit ?? Infinity;
             return { query, results: results.slice(0, limit), truncated: results.length > limit };
         },
+        async exportSessionMarkdown(sessionId) {
+            const session = findSession(sessionId);
+            return { content: `# ${session.title}\n` };
+        },
         async setSessionPinned(sessionId, value) {
             findSession(sessionId);
             pinned.push({ sessionId, pinned: value });
@@ -804,6 +831,37 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         },
         async listTurnChanges(sessionId) {
             return { turns: data.turnChanges?.[sessionId] ?? [] };
+        },
+        async getSessionChanges(sessionId) {
+            return data.sessionChanges?.[sessionId] ?? { files: [], totals: { files: 0, additions: 0, deletions: 0, uncounted: 0 }, turns: 0, pending: false, untracked: [], incomplete: false };
+        },
+        async undoAllChanges(sessionId, force = false) {
+            undone.push({ sessionId, turnId: '*', force });
+            if (data.undoConflict && !force) throw data.undoConflict;
+            const found = data.sessionChanges?.[sessionId];
+            if (!found) throw new GaiaApiError(404, 'Nothing to undo in this chat.');
+            data.sessionChanges = { ...data.sessionChanges, [sessionId]: { ...found, files: [], totals: { files: 0, additions: 0, deletions: 0, uncounted: 0 } } };
+            return {
+                turn_ids: [],
+                restored: found.files.filter((f) => f.change !== 'created').map((f) => f.path),
+                removed: found.files.filter((f) => f.change === 'created').map((f) => f.path),
+                kept_folders: [],
+                untracked: [],
+                incomplete: false,
+            };
+        },
+        async getSessionGit(sessionId) {
+            return data.sessionGit?.[sessionId] ?? { available: false, repos: [] };
+        },
+        async commitChanges(sessionId, root, message) {
+            gitActions.push({ sessionId, kind: 'commit', root, text: message });
+            const repo = data.sessionGit?.[sessionId]?.repos.find((r) => r.root === root);
+            if (!repo) throw new GaiaApiError(404, 'No such repository.');
+            return { root, commit: 'a1b2c3d', files: repo.uncommitted, ignored: repo.ignored };
+        },
+        async createPullRequest(sessionId, root, title) {
+            gitActions.push({ sessionId, kind: 'pr', root, text: title });
+            return { root, url: 'https://github.com/example/repo/pull/7' };
         },
         async getTurnDiff(_sessionId, turnId) {
             return { turn_id: turnId, files: data.turnDiffs?.[turnId] ?? [] };
@@ -1344,10 +1402,25 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             if (!found) throw new GaiaApiError(409, "This chat's agent isn't running yet.");
             return found;
         },
+        async getOutputs(sessionId) {
+            return data.outputs?.[sessionId] ?? { session_id: sessionId, items: [] };
+        },
+        async getFileStatus(paths) {
+            return { files: paths.map((path) => data.fileStatus?.[path] ?? { path }) };
+        },
         async getEnvironment(sessionId) {
             const found = data.environments?.[sessionId];
             if (!found) throw new GaiaApiError(404, 'Session not found');
             return found;
+        },
+        async addEnvironmentFolder(sessionId, path) {
+            const env = data.environments?.[sessionId];
+            if (!env) throw new GaiaApiError(404, 'Session not found');
+            environmentChanges.push({ sessionId, add: path });
+            const entry = { path, name: path.split('/').pop() ?? path, kind: 'folder' as const, source: 'added' as const, removable: true };
+            const next = { ...env, folders: [...env.folders, entry], removed: env.removed.filter((r) => r !== path) };
+            data.environments = { ...data.environments, [sessionId]: next };
+            return next;
         },
         async removeEnvironmentFolder(sessionId, path) {
             const env = data.environments?.[sessionId];

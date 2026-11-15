@@ -7,10 +7,9 @@ import type { ParsedSchedule } from '@/api/client.types';
 import { GaiaApiError } from '@/api/errors';
 import { useCreateSchedule, useGaiaClient } from '@/data';
 import { describeError, useT } from '@/i18n/useT';
-import { dateLocale, translator } from '@webui/i18n/translator';
 import { Button, Notice, Row, Sheet, Stack, Text, TextField } from '@/ui';
 
-import { describeSchedule, formatNextRun } from './scheduleText';
+import { composeDateLocale, describeSchedule, formatNextRun } from './scheduleText';
 
 const PARSE_DEBOUNCE_MS = 400;
 
@@ -118,7 +117,7 @@ export function NewScheduleSheet({ open, onClose }: NewScheduleSheetProps) {
                             <Text role="caption" tone="muted">
                                 {t.compose((say, code) =>
                                     say('schedules.nextRun', {
-                                        when: formatNextRun(parsed.next_run_at, say, new Date(), dateLocale(translator(code))),
+                                        when: formatNextRun(parsed.next_run_at, say, new Date(), composeDateLocale(code, t)),
                                     }),
                                 )}
                             </Text>
