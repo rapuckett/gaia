@@ -85,6 +85,18 @@ export const MCP_OUTPUT_PREVIEW_LINES = 5;
 /** Below this many call rows the list is short enough to scan without a filter. */
 export const FILTER_MIN_TOOL_ROWS = 6;
 
+export type StepStatusFilter = 'all' | 'success' | 'error';
+
+/** Whether a row survives the steps filter: only tool rows are sifted, by name (or row text) and by outcome. */
+export function matchesStepFilter(row: AgentStep, nameFilter: string, statusFilter: StepStatusFilter, t: Translate = tEn): boolean {
+    if (row.type !== 'tool' || (!nameFilter && statusFilter === 'all')) return true;
+    const needle = nameFilter.toLowerCase();
+    if (needle && !row.tool?.toLowerCase().includes(needle) && !toolRowText(row, t).toLowerCase().includes(needle)) return false;
+    if (statusFilter === 'success' && row.success !== true) return false;
+    if (statusFilter === 'error' && row.success !== false) return false;
+    return true;
+}
+
 const FETCH_ERROR = /^Error fetching page:\s*(\d{3})?/;
 
 /** What a failed page fetch shows on its row; the library's own error stays in the opened step. */
