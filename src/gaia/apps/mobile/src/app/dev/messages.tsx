@@ -2,13 +2,14 @@
 // SPDX-License-Identifier: MIT
 
 import { Redirect, useLocalSearchParams } from 'expo-router';
+import { devGalleryEnabled } from '@/features/dev/devGallery';
 
 import { MessagesGallery, type MessagesGalleryState } from '@/features/chat/messages/MessagesGallery';
 import { FIXTURES } from '@/features/chat/messages/__fixtures__/messages';
 import { SessionPanelGallery, type SessionPanelGalleryState } from '@/features/chat/session-panel/SessionPanelGallery';
 import { UIProvider } from '@/ui';
 
-const OPEN_STATES = ['actions', 'delete', 'edit'];
+const OPEN_STATES = ['actions', 'delete', 'edit', 'guided'];
 const PANEL_STATES = ['loaded', 'empty', 'error', 'notRunning', 'ctxMeasuring', 'ctxNormal', 'ctxEstimated', 'ctxFilling', 'ctxChat', 'ctxNoTurn'];
 
 function isState(state?: string): state is MessagesGalleryState {
@@ -17,7 +18,7 @@ function isState(state?: string): state is MessagesGalleryState {
 
 export default function MessagesGalleryRoute() {
     const { state } = useLocalSearchParams<{ state?: string }>();
-    if (!__DEV__) return <Redirect href="/" />;
+    if (!devGalleryEnabled()) return <Redirect href="/" />;
     const panel = state?.startsWith('panel-') ? state.slice('panel-'.length) : undefined;
     if (panel && PANEL_STATES.includes(panel)) {
         return (

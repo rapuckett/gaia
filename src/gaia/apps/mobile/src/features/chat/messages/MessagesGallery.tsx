@@ -5,11 +5,12 @@ import { AssistantBubble } from './AssistantBubble';
 import { MessageListView } from './MessageList';
 import { UserBubble } from './UserBubble';
 import type { StartOpen } from './useMessageActions';
-import { FIXTURES, type MessagesFixture } from './__fixtures__/messages';
+import { GuideCard } from '../cards/GuideCard';
+import { FIXTURES, GUIDE_WORKOUT, type MessagesFixture } from './__fixtures__/messages';
 import { Screen } from '@/ui';
 
 /** Developer gallery of the message list in each state; not part of the shipped screens. */
-export type MessagesGalleryState = MessagesFixture | StartOpen;
+export type MessagesGalleryState = MessagesFixture | StartOpen | 'guided';
 
 export function MessagesGallery({ state }: { state: MessagesGalleryState }) {
     if (state === 'actions' || state === 'delete' || state === 'edit') {
@@ -17,6 +18,13 @@ export function MessagesGallery({ state }: { state: MessagesGalleryState }) {
         return (
             <Screen>
                 <UserBubble message={question} context={{ laterTurns: 2 }} startOpen={state} />
+            </Screen>
+        );
+    }
+    if (state === 'guided') {
+        return (
+            <Screen>
+                <GuideCard data={GUIDE_WORKOUT} startGuided />
             </Screen>
         );
     }

@@ -17,10 +17,10 @@ import { themeColors, type AppearancePaletteId, type Scheme } from '@/ui/theme/a
 
 import { SettingsAnchor } from '../targets';
 
-const SCHEMES: { value: 'light' | 'dark' | 'system'; label: MessageKey }[] = [
+const SCHEMES: { value: 'light' | 'dark' | 'system'; label: MessageKey; shortLabel?: MessageKey }[] = [
     { value: 'light', label: 'settings.theme.light' },
     { value: 'dark', label: 'settings.theme.dark' },
-    { value: 'system', label: 'settings.theme.system' },
+    { value: 'system', label: 'settings.theme.system', shortLabel: 'mobileApp.settings.appearanceSystem' },
 ];
 
 const PALETTE_NAME: Record<string, MessageKey> = {
@@ -157,7 +157,7 @@ export default function General() {
                     {t('settings.appearance')}
                 </Text>
                 <SegmentedControl
-                    options={SCHEMES.map((s) => ({ value: s.value, label: t(s.label) }))}
+                    options={SCHEMES.map((s) => ({ value: s.value, label: t.bare(s.shortLabel ?? s.label), accessibilityLabel: t(s.label) }))}
                     value={preference}
                     onChange={(v) => setScheme(v as typeof preference)}
                     accessibilityLabel={t('settings.appearance')}

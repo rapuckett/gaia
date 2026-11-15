@@ -1094,6 +1094,11 @@ class TestOrphanedBackends:
             self._kill_denied = kill_denied
             self.killed = False
 
+        def as_dict(self, attrs):
+            if isinstance(self.info, Exception):
+                raise self.info
+            return {name: self.info[name] for name in attrs}
+
         def exe(self):
             return self._exe
 
@@ -1119,7 +1124,7 @@ class TestOrphanedBackends:
         (manager.cache_dir / "bin" / "llamacpp").mkdir(parents=True)
         for name in ("llama-server", "llama-bench"):
             (manager.cache_dir / "bin" / "llamacpp" / name).touch()
-        monkeypatch.setattr(psutil, "process_iter", lambda attrs: iter(procs))
+        monkeypatch.setattr(psutil, "process_iter", lambda: iter(procs))
         monkeypatch.setattr(psutil, "wait_procs", lambda procs, timeout: (procs, []))
 
         class Anchor:
@@ -1153,11 +1158,16 @@ class TestOrphanedBackends:
         served = self._Proc(11, 2, self._bin(manager))
         bench = self._Proc(12, 3, self._bin(manager, "llama-bench"))
         theirs = self._Proc(13, 1, str(manager.root.parent / "x" / "llama-server"))
+        # psutil on macOS fails to read a process as it exits.
+        exiting = self._Proc(14, 1, self._bin(manager))
+        exiting.info = SystemError(
+            "proc_cmdline returned a result with an exception set"
+        )
         # 2 is a live lemond, 3 the user's shell: both older than the backends.
         self._world(
             manager,
             monkeypatch,
-            [orphan, served, bench, theirs],
+            [exiting, orphan, served, bench, theirs],
             alive={2: self.BORN - 5, 3: self.BORN - 60},
         )
 
@@ -1217,7 +1227,7 @@ class TestOrphanedBackends:
         import psutil
 
         monkeypatch.setattr(
-            psutil, "process_iter", lambda attrs: pytest.fail("scanned for nothing")
+            psutil, "process_iter", lambda: pytest.fail("scanned for nothing")
         )
         assert manager._reap_orphaned_backends() == []
 

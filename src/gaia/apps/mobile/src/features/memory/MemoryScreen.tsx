@@ -15,11 +15,13 @@ import { useMemoryNotice } from './useMemoryNotice';
 
 export interface MemoryScreenProps {
     onBack: () => void;
+    /** Opens a chat from the conversation history. */
+    onOpenChat?: (sessionId: string) => void;
     /** The tab to open on; the dev gallery uses it. */
     initialTab?: MemoryTabKey;
 }
 
-export function MemoryScreen({ onBack, initialTab = 'about' }: MemoryScreenProps) {
+export function MemoryScreen({ onBack, onOpenChat, initialTab = 'about' }: MemoryScreenProps) {
     const t = useT();
     const [tab, setTab] = useState<MemoryTabKey>(initialTab);
     const [menuOpen, setMenuOpen] = useState(false);
@@ -67,7 +69,7 @@ export function MemoryScreen({ onBack, initialTab = 'about' }: MemoryScreenProps
                             <Text role="title" weight="semibold">
                                 {t('mem.title')}
                             </Text>
-                            <Badge label={t('mem.beta')} tone="warning" />
+                            <Badge label={t.bare('mem.beta')} accessibilityLabel={t('mem.beta')} tone="warning" />
                         </Row>
                     </Stack>
                     {tab === 'advanced' ? (
@@ -78,7 +80,7 @@ export function MemoryScreen({ onBack, initialTab = 'about' }: MemoryScreenProps
             <MemoryTabs value={tab} onChange={setTab} />
             {notice ? (
                 <Stack paddingX="lg">
-                    <Notice tone={notice.tone} message={notice.text} onDismiss={dismiss} testID="memory-notice" />
+                    <Notice tone={notice.tone} message={notice.text} action={notice.action} onDismiss={dismiss} testID="memory-notice" />
                 </Stack>
             ) : null}
         </Stack>
@@ -87,7 +89,7 @@ export function MemoryScreen({ onBack, initialTab = 'about' }: MemoryScreenProps
     return (
         <Screen scroll refreshing={refreshing} onRefresh={() => void pullToRefresh()} header={header}>
             <ActionSheet open={menuOpen} onClose={() => setMenuOpen(false)} title={t('mem.maint.label')} actions={actions} />
-            <Pane notify={notify} memoryEnabled={settings.data?.memory_enabled} />
+            <Pane notify={notify} memoryEnabled={settings.data?.memory_enabled} onOpenAdvanced={() => setTab('advanced')} onOpenChat={onOpenChat} />
         </Screen>
     );
 }

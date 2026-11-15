@@ -28,6 +28,7 @@ const PURE_MODULES = [
     'utils/palette.core',
     'utils/remarkSoftBreaks',
     'utils/remarkWindowsPaths',
+    'utils/renderCards.core',
     'utils/permissionPrompts.core',
     'utils/requestErrors.core',
     'utils/responseShape',

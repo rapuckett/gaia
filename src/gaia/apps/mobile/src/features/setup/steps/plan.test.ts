@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: MIT
 
 import { initialSelection } from '@webui/components/setup/selection';
-import type { PreflightReport, ProviderInfo, SetupCatalogEntry, SetupPlan } from '@webui/types';
+import type { PreflightReport, SetupCatalogEntry, SetupPlan } from '@webui/types';
+import type { ProviderSummary } from '@webui/types/api.gen';
 
 import { cloudIsBlocked, planView, startOptions } from './plan';
 
@@ -58,7 +59,7 @@ describe('planView', () => {
 });
 
 describe('cloudIsBlocked', () => {
-    const provider = (id: ProviderInfo['id'], blocked: boolean) => ({ id, blocked }) as ProviderInfo;
+    const provider = (id: string, blocked: boolean) => ({ id, blocked }) as ProviderSummary;
     it('blocks the cloud card only while Local only blocks every cloud provider', () => {
         expect(cloudIsBlocked([provider('local', false), provider('fireworks', true), provider('amd', true)])).toBe(true);
         expect(cloudIsBlocked([provider('fireworks', true), provider('amd', false)])).toBe(false);
