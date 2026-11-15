@@ -70,6 +70,8 @@ export const ENDPOINTS = {
     setupStatus: '/api/setup/status',
     setupVisionModel: '/api/setup/vision-model',
     skills: '/api/skills',
+    skillsFeatured: '/api/skills/featured',
+    skillsLinkPreview: '/api/skills/link/preview',
     chatSend: '/api/chat/send',
     chatAttach: '/api/chat/attach',
     chatCancel: '/api/chat/cancel',

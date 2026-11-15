@@ -47,11 +47,13 @@ import type {
     FollowUpOutcome,
     FollowUpResult,
     DeleteSessionResult,
+    FeaturedLibraries,
     GaiaClient,
     GpuMemoryStatus,
     HealthResponse,
     LemonadeFound,
     LemonadeTarget,
+    LinkPreview,
     LocalModelStatus,
     KnowledgeSaveResult,
     MemoryActivityDay,
@@ -567,6 +569,14 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         listSkills(options) {
             return getJson<SkillList>(ENDPOINTS.skills, options?.signal);
+        },
+
+        listFeaturedSkillLibraries(options) {
+            return getJson<FeaturedLibraries>(ENDPOINTS.skillsFeatured, options?.signal);
+        },
+
+        previewSkillLink(url, options) {
+            return postJson<LinkPreview>(ENDPOINTS.skillsLinkPreview, { url }, options?.signal);
         },
 
         listSchedules(options) {
