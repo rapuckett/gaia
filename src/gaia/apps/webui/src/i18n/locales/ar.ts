@@ -3590,6 +3590,9 @@ const messages: Messages = {
     'mobileApp.banner.openOnPc': 'افتح GAIA على جهاز الكمبيوتر لتشغيل خادم النماذج.',
     'mobileApp.settings.comingSoon': 'هذا القسم قادم إلى الهاتف قريبًا. في الوقت الحالي، غيّره من الكمبيوتر الذي يشغّل GAIA.',
     'mobileApp.settings.pcOnly': 'غيّر هذا من الكمبيوتر الذي يشغّل GAIA.',
+    'mobileApp.settings.loadAnyway': 'تجري إجابات في المحادثات الآن. قد يُبطئ تحميل {name} الآن هذه الإجابات أو يوقفها. هل تريد التحميل على أي حال؟',
+    'mobileApp.settings.loadAnywayButton': 'حمّل على أي حال',
+    'mobileApp.settings.modelActionFailed': 'لم تنجح العملية. التفاصيل أدناه.',
     'mobileApp.settings.permissionsWarning': 'يتيح الوصول الكامل لـ GAIA تغيير الملفات أو حذفها وتشغيل الأوامر على الكمبيوتر الذي يشغّله دون سؤالك أولًا، في كل محادثة جديدة، حتى توقفه. قد يُحدث خطأ أو تعليمات ضارة في مستند يقرأه ضررًا حقيقيًا.',
     'mobileApp.settings.colors.invalidHex': 'أدخل لونًا بهذا الشكل: #1F5FA8.',
 };

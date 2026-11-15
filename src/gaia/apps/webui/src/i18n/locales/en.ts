@@ -3590,6 +3590,9 @@ export const enMessages = {
     'mobileApp.banner.openOnPc': 'Open GAIA on your PC to start the model server.',
     'mobileApp.settings.comingSoon': 'This section is coming to the phone soon. For now, change it on the PC running GAIA.',
     'mobileApp.settings.pcOnly': 'Change this on the PC running GAIA.',
+    'mobileApp.settings.loadAnyway': 'Chats are answering right now. Loading {name} now can slow or stop their answers. Load it anyway?',
+    'mobileApp.settings.loadAnywayButton': 'Load anyway',
+    'mobileApp.settings.modelActionFailed': 'That didn’t work. The details are below.',
     'mobileApp.settings.permissionsWarning': 'Full access lets GAIA change or delete files and run commands on your PC without asking you first, in every new chat, until you turn this off. A mistake or a bad instruction in a document it reads can do real damage.',
     'mobileApp.settings.colors.invalidHex': 'Enter a color like #1F5FA8.',
 } as const;
