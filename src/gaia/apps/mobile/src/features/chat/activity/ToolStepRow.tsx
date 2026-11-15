@@ -14,6 +14,7 @@ import { Disclosure, Icon, Notice, Row, ScrollBox, Spinner, Stack, Text } from '
 import { Ban, CircleAlert } from '@/ui/icons';
 
 import { CodeBlock } from '../markdown/CodeBlock';
+import { ChunksView, FileListView } from './SourceLists';
 import { TerminalOutput } from './TerminalOutput';
 
 function Section({ label, children }: { label: string; children: React.ReactNode }) {
@@ -142,6 +143,8 @@ export function ToolStepRow({ step, awaitingUser = false, now, testID }: ToolSte
                     ) : null}
                     {failure ? <Text role="caption" dir="auto" tone="danger">{failure}</Text> : null}
                     <Output step={step} t={t} />
+                    {step.retrievalChunks && step.retrievalChunks.length > 0 ? <ChunksView chunks={step.retrievalChunks} /> : null}
+                    {step.fileList && step.fileList.files.length > 0 ? <FileListView fileList={step.fileList} /> : null}
                 </Stack>
             </Disclosure>
             {step.needsModel === 'vision' && !step.active ? (

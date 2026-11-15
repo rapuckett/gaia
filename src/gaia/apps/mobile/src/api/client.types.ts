@@ -50,7 +50,7 @@ import type { DiscordStatus } from '@webui/services/messagingApi';
 import type { AgentCapabilities } from '@webui/types/sessionPanel';
 import type { DiscoveryFinding, Goal, GoalStats, InferenceInsight, KnowledgeCreateBody, KnowledgeListParams, KnowledgeSaveResult, KnowledgeUpdateBody, MemoryCleared, MemoryReinitializeResult, MemorySettings, MemorySettingsUpdateResponse, Priority as GoalPriority } from '@webui/services/memoryApi';
 import type { ActivityDay, ConvSession, ConvTurn, EntityInfo, KnowledgeEntry, TemporalItem, ToolStat } from '@webui/utils/memoryFormat.core';
-import type { CreateSessionRequest, DocumentListResponse, DocumentResponse, ModelServerInfo, SessionSearchResponse, ToolConfirmRequest, UserInputRequest as ApiUserInputRequest } from '@webui/types/api.gen';
+import type { CreateSessionRequest, DocumentListResponse, DocumentResponse, FilePreviewResponse, ModelServerInfo, SessionSearchResponse, ToolConfirmRequest, UserInputRequest as ApiUserInputRequest } from '@webui/types/api.gen';
 
 export type {
     ActiveModel,
@@ -104,7 +104,7 @@ export type {
 } from '@webui/types';
 export type { UndoSettings } from '@webui/types/changes';
 export type { ActiveSkill, AgentCapabilities, AgentTool, SkillOrigin } from '@webui/types/sessionPanel';
-export type { CreateSessionRequest, DocumentListResponse, DocumentResponse, ModelServerInfo, SessionSearchResponse, SessionSearchResult, ToolConfirmRequest } from '@webui/types/api.gen';
+export type { CreateSessionRequest, DocumentListResponse, FilePreviewResponse, DocumentResponse, ModelServerInfo, SessionSearchResponse, SessionSearchResult, ToolConfirmRequest } from '@webui/types/api.gen';
 
 /** A photo or file chosen on this phone: where it is, and what it is called. */
 export interface PickedFile {
@@ -608,6 +608,12 @@ export interface GaiaClient {
     getDocumentStatus(docId: string, options?: RequestOptions): Promise<DocumentStatus>;
     /** Indexes a document again; rejects with the reason when it fails once more. */
     reindexDocument(docId: string, options?: RequestOptions): Promise<DocumentResponse>;
+    /** A PC file's first lines (or its columns, or just its details) as the chat's folders allow; rejects with 403 for a file this chat may not read. */
+    getFilePreview(path: string, sessionId: string, options?: RequestOptions): Promise<FilePreviewResponse>;
+    /** An image on the PC, as bytes; the chat's id is what lets a phone read it. */
+    getImageBytes(path: string, sessionId: string, options?: RequestOptions): Promise<Uint8Array>;
+    /** A library document's file, as bytes. */
+    getDocumentBytes(docId: string, options?: RequestOptions): Promise<Uint8Array>;
     getSystemStatus(options?: RequestOptions): Promise<SystemStatus>;
     /** Starts a model's download on the PC (`force` downloads it again); follow it in `getSystemStatus().download_progress`. */
     downloadModel(model: string, options?: { force?: boolean; loadAfter?: boolean } & RequestOptions): Promise<{ status: string; model: string }>;
