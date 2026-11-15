@@ -1493,7 +1493,7 @@ const messages: Messages = {
     'readAloud.settings.saveFailed': "تعذّر حفظ إعدادات القراءة بصوت عالٍ: {reason}",
     'settings.language': 'اللغة',
     'settings.languageHint': 'تغيّر تسميات التطبيق واتجاه تخطيطه، لا اللغة التي يجيب بها GAIA.',
-    'settings.layoutRestart': 'أعد تشغيل GAIA لتغيير التخطيط إلى {direction}.',
+    'settings.layoutRestart': 'أعد تشغيل GAIA ليُعرض التخطيط {direction}.',
     'settings.layoutRtl': 'من اليمين إلى اليسار',
     'settings.layoutLtr': 'من اليسار إلى اليمين',
     'settings.appearance': 'المظهر',

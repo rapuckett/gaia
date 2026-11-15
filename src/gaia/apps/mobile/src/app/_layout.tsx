@@ -20,6 +20,7 @@ import { useDirection } from '@/i18n/useT';
 import { applyDirection } from '@/platform/direction';
 import { platformFetch } from '@/platform/fetch';
 import { useConnectionStore } from '@/state/connection';
+import { useLocaleStore } from '@/state/locale';
 import { ScreenBannerProvider, UIProvider } from '@/ui';
 
 // A chat opened cold (deep link, notification) has the home screen beneath it.
@@ -38,7 +39,14 @@ export default function RootLayout() {
         [connection],
     );
 
-    useEffect(() => applyDirection(dir), [dir]);
+    const localeLoaded = useLocaleStore((s) => s.hydrated);
+
+    // Before the saved pick loads, dir is the phone's and would overwrite the pick's flags.
+    useEffect(() => {
+        if (localeLoaded) applyDirection(dir);
+    }, [dir, localeLoaded]);
+
+    if (!localeLoaded) return null;
 
     return (
         <QueryClientProvider client={queryClient}>
