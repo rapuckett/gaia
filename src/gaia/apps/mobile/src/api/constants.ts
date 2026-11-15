@@ -116,6 +116,7 @@ export const ENDPOINTS = {
     speechSettings: '/api/speech/settings',
     spending: '/api/spending',
     spendingAllowMonth: '/api/spending/allow-month',
+    spendingChat: '/api/spending/chat/{session_id}',
     spendingLimit: '/api/spending/limit',
     chatSend: '/api/chat/send',
     chatAttach: '/api/chat/attach',
@@ -270,6 +271,12 @@ export function providerConnectPath(provider: string): string {
 export function chatPermissionGrantsPath(sessionId: string, key?: string): string {
     const path = ENDPOINTS.chatPermissionGrants.replace('{session_id}', encodeURIComponent(sessionId));
     return key === undefined ? path : `${path}?key=${encodeURIComponent(key)}`;
+}
+
+export function chatSpendingPath(sessionId: string, since: string, model: string | null): string {
+    const query = new URLSearchParams({ since });
+    if (model) query.set('model', model);
+    return `${ENDPOINTS.spendingChat.replace('{session_id}', encodeURIComponent(sessionId))}?${query}`;
 }
 
 export function cloudPricesPath(provider: string): string {

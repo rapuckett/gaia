@@ -1,13 +1,14 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { Redirect } from 'expo-router';
+import { Redirect, useLocalSearchParams } from 'expo-router';
 
 import { devGalleryEnabled } from '@/features/dev/devGallery';
 import { useState } from 'react';
 
 import { MAX_MESSAGE_CHARS } from '@webui/utils/messageLimits';
 
+import { COMPOSER_MENU_STATES, ComposerMenusGallery, type ComposerMenuState } from '@/features/composer/ComposerMenusGallery';
 import { Composer, FolderChip, PermissionChip, PrivateChip } from '@/features/composer';
 import { ControlChip } from '@/features/composer/ControlChip';
 import { useT } from '@/i18n/useT';
@@ -16,8 +17,10 @@ import { Cpu } from '@/ui/icons';
 
 export default function ComposerGalleryRoute() {
     const t = useT();
+    const { state } = useLocalSearchParams<{ state?: string }>();
     const [text, setText] = useState('');
     if (!devGalleryEnabled()) return <Redirect href="/" />;
+    if (state && (COMPOSER_MENU_STATES as readonly string[]).includes(state)) return <ComposerMenusGallery state={state as ComposerMenuState} />;
     const noop = () => {};
     const folder = { path: '/Users/rich/Projects/gaia', name: 'gaia-notes', gaia_folder: false, choosable: false };
     const chipRow = (running = false, value?: string) => (

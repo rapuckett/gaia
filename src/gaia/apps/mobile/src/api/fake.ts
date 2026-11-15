@@ -85,6 +85,7 @@ import type {
     FeaturedLibraries,
     LinkPreview,
     SpendingReport,
+    ChatSpending,
     StartScreen,
     StreamEvent,
     SystemStatus,
@@ -211,6 +212,8 @@ export interface FakeClientData {
     providers?: ProviderSummaryList;
     /** What getSpending answers; setting the limit or allowing the month changes it. */
     spending?: SpendingReport;
+    /** What getChatSpending answers. */
+    chatSpending?: ChatSpending;
     /** What getCloudPrices answers, by provider. */
     cloudPrices?: Record<string, CloudPriceList>;
     /** What recheckSetupNpu answers; an Error is thrown. */
@@ -691,6 +694,10 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         async getSpending() {
             if (!data.spending) throw new GaiaApiError(503, 'This fake client was given no spending report.');
             return data.spending;
+        },
+        async getChatSpending() {
+            if (!data.chatSpending) throw new GaiaApiError(503, 'This fake client was given no chat spending.');
+            return data.chatSpending;
         },
         async setSpendingLimit(limitUsd) {
             if (!data.spending) throw new GaiaApiError(503, 'This fake client was given no spending report.');

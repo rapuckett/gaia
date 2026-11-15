@@ -7,6 +7,7 @@ import { join, resolve } from 'node:path';
 import {
     AGENT_EVENT_TYPES,
     ATTACH_HEADER_TIMEOUT_MS,
+    chatSpendingPath,
     CONFIRM_DELETE_MS,
     DISCORD_LIVE_STATES,
     DISCORD_POLL_MS,
@@ -200,6 +201,7 @@ describe('endpoints', () => {
         speechSettings: ['GET', 'PUT'],
         spending: ['GET'],
         spendingAllowMonth: ['POST'],
+        spendingChat: ['GET'],
         spendingLimit: ['PUT'],
         chatSend: ['POST'],
         chatAttach: ['GET'],
@@ -301,5 +303,12 @@ describe("webui's stream rules", () => {
         ['components/settings/MessagingSettings.tsx', 'LIVE', DISCORD_LIVE_STATES],
     ])('%s %s', (file, name, ours) => {
         expect([...ours].sort()).toEqual(tsStringSet(file, name));
+    });
+});
+
+describe('chatSpendingPath', () => {
+    it('sends the day start and, only when there is one, the model', () => {
+        expect(chatSpendingPath('s 1', '2026-11-15T08:00:00.000Z', null)).toBe('/api/spending/chat/s%201?since=2026-11-15T08%3A00%3A00.000Z');
+        expect(chatSpendingPath('s', 'x', 'a/b')).toBe('/api/spending/chat/s?since=x&model=a%2Fb');
     });
 });
