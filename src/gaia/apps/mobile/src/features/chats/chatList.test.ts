@@ -84,7 +84,7 @@ describe('buildChatSections', () => {
 });
 
 describe('rowText', () => {
-    const base: ChatRow = { id: 'a', title: 'Taxes', active: false, unread: false, dot: null, place: 0, private: false, unsent: 0, failed: 0 };
+    const base: ChatRow = { id: 'a', title: 'Taxes', active: false, unread: false, dot: null, place: 0, private: false, pinned: false, unsent: 0, failed: 0 };
 
     it('joins title, status, note and unread into the aria label', () => {
         const text = rowText({ ...base, dot: 'queued', place: 2, unsent: 3, unread: true }, t);

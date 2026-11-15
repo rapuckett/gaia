@@ -6,8 +6,8 @@ import { useEffect, useRef, useState } from 'react';
 import { needsOutcome, nextToSend } from '@webui/utils/messageQueue';
 import { MAX_STREAM_RECONNECTS } from '@webui/utils/streamErrors.core';
 
-import { useAnswerQuestion, useChatStream, useMessages, useSession } from '@/data';
-import { Composer, useComposerQueue, useFollowUpEvents } from '@/features/composer';
+import { useAnswerQuestion, useChatStream, useContextUsage, useMessages, useSession } from '@/data';
+import { Composer, ContextMeter, ContextWarning, ModelChip, useComposerQueue, useFollowUpEvents } from '@/features/composer';
 import { QueuedMessages } from '@/features/composer/QueuedMessages';
 import { describeError, useT } from '@/i18n/useT';
 import { isQuestionGone, questionCardData, resolveTypedAnswer } from '@/features/questions/questionLogic';
@@ -19,6 +19,7 @@ import { PermissionPrompt } from './permission/PermissionPrompt';
 import { usePermissionPrompt } from './permission/usePermissionPrompt';
 import { liveStatusLine } from './liveStatus';
 import { MessageList } from './messages/MessageList';
+import { SessionPanel } from './session-panel';
 import { buildTail } from './tailState';
 import { TurnTail } from './TurnTail';
 
@@ -35,7 +36,9 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
     const followUps = useFollowUpEvents(sessionId, stream.events);
     const stopped = useRef(false);
     const [actionError, setActionError] = useState<unknown>(null);
+    const [panelOpen, setPanelOpen] = useState(false);
     const busy = stream.status !== 'idle';
+    const context = useContextUsage(sessionId, stream.events, busy);
     const saved = messages.data?.messages ?? NO_MESSAGES;
 
     const tail = buildTail(saved, stream);
@@ -111,7 +114,7 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
     return (
         <Screen
             keyboard="avoid"
-            header={<ChatHeader sessionId={sessionId} />}
+            header={<ChatHeader sessionId={sessionId} onOpenSessionPanel={() => setPanelOpen(true)} />}
             footer={
                 <>
                     {actionError ? (
@@ -127,6 +130,7 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
                         onRetry={queue.retry}
                         onSteer={steerable ? queue.steer : undefined}
                     />
+                    <ContextWarning usage={context.usage} />
                     <Composer
                         value={queue.draft}
                         onChange={queue.setDraft}
@@ -135,6 +139,12 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
                         running={busy}
                         answering={!!question}
                         placeholder={placeholder}
+                        rightControls={
+                            <>
+                                <ContextMeter usage={context.usage} unavailable={context.unavailable} />
+                                <ModelChip />
+                            </>
+                        }
                     />
                 </>
             }
@@ -160,6 +170,7 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
                     }
                 />
             )}
+            <SessionPanel sessionId={sessionId} open={panelOpen} onClose={() => setPanelOpen(false)} />
         </Screen>
     );
 }

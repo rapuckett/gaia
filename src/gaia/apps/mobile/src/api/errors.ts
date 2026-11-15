@@ -21,11 +21,20 @@ export class GaiaConfigError extends GaiaError {}
 export class GaiaApiError extends GaiaError {
     readonly status: number;
     readonly detail: string;
+    /** The error's `detail` when GAIA sent an object, such as a 409 asking to be confirmed. */
+    readonly body: Record<string, unknown> | null;
 
-    constructor(status: number, detail: string, messageKey: MessageKey = 'mobileApp.error.http', params?: Params) {
+    constructor(
+        status: number,
+        detail: string,
+        messageKey: MessageKey = 'mobileApp.error.http',
+        params?: Params,
+        body: Record<string, unknown> | null = null,
+    ) {
         super(messageKey, params ?? { status, detail });
         this.status = status;
         this.detail = detail;
+        this.body = body;
     }
 }
 
@@ -119,5 +128,15 @@ export function parseErrorDetail(errorText: string): string {
     } catch {
         // Not JSON (proxy HTML, empty body): the raw text is the useful part.
         return errorText;
+    }
+}
+
+/** `detail` when GAIA sent an object (a 409 asking to be confirmed), else null. */
+export function parseErrorBody(errorText: string): Record<string, unknown> | null {
+    try {
+        const parsed: unknown = JSON.parse(errorText).detail;
+        return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : null;
+    } catch {
+        return null;
     }
 }

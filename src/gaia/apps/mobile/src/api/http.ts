@@ -14,29 +14,40 @@ import {
     GaiaStreamDroppedError,
     GaiaStreamError,
     GaiaStreamTimeoutError,
+    parseErrorBody,
     parseErrorDetail,
     type StreamEndpoint,
 } from './errors';
 import type {
+    AgentCapabilities,
+    AgentList,
     AgentMcpList,
     CancelChatResult,
     ConfirmToolResult,
+    ConnectorActivations,
+    ConnectorGrants,
     ConnectorList,
+    ContextUsageResult,
     DeleteMessagesResult,
     DeleteScheduleResult,
     DocumentListResponse,
     FollowUpOutcome,
     FollowUpResult,
+    DeleteSessionResult,
     GaiaClient,
     HealthResponse,
+    LemonadeFound,
+    LemonadeTarget,
     LocalModelStatus,
     MessageList,
     ModelNeed,
+    PreflightReport,
     RestartModelResult,
     RequestOptions,
     ParsedSchedule,
     Schedule,
     ScheduleList,
+    ScheduleResults,
     SessionList,
     SessionSearchResponse,
     SetupCheck,
@@ -47,20 +58,30 @@ import type {
 } from './client.types';
 import {
     ATTACH_HEADER_TIMEOUT_MS,
+    connectorActivationPath,
+    connectorActivationsPath,
+    connectorGrantPath,
+    connectorGrantsPath,
     ENDPOINTS,
+    chatContextPath,
     followupOutcomePath,
     MESSAGE_PAGE_SIZE,
     QUEUED_IDLE_MS,
     schedulePath,
+    scheduleResultsPath,
     scheduleRunPath,
     SEND_HEADER_TIMEOUT_MS,
+    SESSION_EVENTS_IDLE_MS,
     SESSION_PAGE_SIZE,
+    sessionCapabilitiesPath,
     sessionDocumentPath,
     sessionMessagePath,
     sessionMessagesAndBelowPath,
     sessionMessagesPath,
     sessionPath,
+    sessionPinPath,
     sessionPrivatePath,
+    sessionReadPath,
     setupNeedsPath,
     STREAM_IDLE_MS,
     UI_HEADERS,
@@ -151,7 +172,7 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
         if (!res.ok) {
             const errorText = await res.text().catch(() => '');
             const detail = parseErrorDetail(errorText);
-            throw res.status === 401 ? new GaiaAuthError(detail) : new GaiaApiError(res.status, detail);
+            throw res.status === 401 ? new GaiaAuthError(detail) : new GaiaApiError(res.status, detail, undefined, undefined, parseErrorBody(errorText));
         }
         return res;
     }
@@ -262,6 +283,22 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             return postJson<Session>(ENDPOINTS.sessions, request, options?.signal);
         },
 
+        setSessionPinned(sessionId, pinned, options) {
+            return putJson<Session>(sessionPinPath(sessionId), { pinned }, options?.signal);
+        },
+
+        deleteSession(sessionId, options) {
+            return deleteJson<DeleteSessionResult>(sessionPath(sessionId), options?.signal);
+        },
+
+        markSessionRead(sessionId, options) {
+            return postJson<Session>(sessionReadPath(sessionId), undefined, options?.signal);
+        },
+
+        getContextUsage(sessionId, options) {
+            return getJson<ContextUsageResult>(chatContextPath(sessionId), options?.signal);
+        },
+
         getFollowUpOutcome(sessionId, options) {
             return getJson<FollowUpOutcome>(followupOutcomePath(sessionId), options?.signal);
         },
@@ -303,6 +340,10 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             await request('DELETE', sessionDocumentPath(sessionId, docId), undefined, options?.signal);
         },
 
+        getCapabilities(sessionId, options) {
+            return getJson<AgentCapabilities>(sessionCapabilitiesPath(sessionId), options?.signal);
+        },
+
         getResourceUsage(options) {
             return getJson<ResourceUsage>(ENDPOINTS.systemResources, options?.signal);
         },
@@ -315,6 +356,26 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
         attachToRun(sessionId, options) {
             const path = `${ENDPOINTS.chatAttach}?session_id=${encodeURIComponent(sessionId)}`;
             return streamTurn('GET', path, undefined, 'attach', ATTACH_HEADER_TIMEOUT_MS, options?.signal);
+        },
+
+        async *watchSessionEvents(options) {
+            const connection = new AbortController();
+            const drop = () => connection.abort();
+            if (options?.signal?.aborted) drop();
+            else options?.signal?.addEventListener('abort', drop);
+            try {
+                const res = await request('GET', ENDPOINTS.sessionEvents, undefined, connection.signal, {
+                    endpoint: 'attach',
+                    ms: ATTACH_HEADER_TIMEOUT_MS,
+                    abort: drop,
+                });
+                if (!res.body) throw new GaiaStreamError('mobileApp.error.noBody');
+                yield* parseSseStream(res.body, () => SESSION_EVENTS_IDLE_MS);
+                throw new GaiaStreamError('mobileApp.error.streamClosed');
+            } finally {
+                options?.signal?.removeEventListener('abort', drop);
+                drop();
+            }
         },
 
         deleteMessage(sessionId, messageId, options) {
@@ -344,8 +405,36 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             return postJson<UserInputResult>(ENDPOINTS.chatUserInput, body, options?.signal);
         },
 
+        listAgents(options) {
+            return getJson<AgentList>(ENDPOINTS.agents, options?.signal);
+        },
+
         listConnectors(options) {
             return getJson<ConnectorList>(ENDPOINTS.connectors, options?.signal);
+        },
+
+        listConnectorGrants(connectorId, options) {
+            return getJson<ConnectorGrants>(connectorGrantsPath(connectorId), options?.signal);
+        },
+
+        listConnectorActivations(connectorId, options) {
+            return getJson<ConnectorActivations>(connectorActivationsPath(connectorId), options?.signal);
+        },
+
+        async grantConnectorAgent(connectorId, agentId, scopes, options) {
+            await request('PUT', connectorGrantPath(connectorId, agentId), { scopes }, options?.signal);
+        },
+
+        async revokeConnectorAgentGrant(connectorId, agentId, options) {
+            await request('DELETE', connectorGrantPath(connectorId, agentId), undefined, options?.signal);
+        },
+
+        async activateConnectorAgent(connectorId, agentId, scopes, options) {
+            await request('PUT', connectorActivationPath(connectorId, agentId), scopes ? { scopes } : {}, options?.signal);
+        },
+
+        async deactivateConnectorAgent(connectorId, agentId, options) {
+            await request('DELETE', connectorActivationPath(connectorId, agentId), undefined, options?.signal);
         },
 
         listAgentMcps(options) {
@@ -374,6 +463,10 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         runSchedule(name, options) {
             return postJson<Schedule>(scheduleRunPath(name), undefined, options?.signal);
+        },
+
+        listScheduleResults(name, limit, options) {
+            return getJson<ScheduleResults>(scheduleResultsPath(name, limit), options?.signal);
         },
 
         deleteSchedule(name, options) {
@@ -413,7 +506,7 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
         },
 
         cancelSetup(modelId, options) {
-            return postJson<{ cancelled: boolean }>(ENDPOINTS.setupCancel, { model_id: modelId }, options?.signal);
+            return postJson<{ cancelled: boolean }>(ENDPOINTS.setupCancel, { model_id: modelId ?? null }, options?.signal);
         },
 
         getStartScreen(options) {
@@ -422,6 +515,18 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         checkSetup(skipChatModel, options) {
             return getJson<SetupCheck>(`${ENDPOINTS.setupCheck}?skip_chat_model=${skipChatModel}`, options?.signal);
+        },
+
+        getPreflight(options) {
+            return getJson<PreflightReport>(ENDPOINTS.onboardingPreflight, options?.signal);
+        },
+
+        getLemonadeTarget(options) {
+            return getJson<LemonadeTarget>(ENDPOINTS.lemonadeTarget, options?.signal);
+        },
+
+        detectLemonade(options) {
+            return getJson<{ found: LemonadeFound | null; unchecked?: string[] }>(ENDPOINTS.lemonadeDetect, options?.signal);
         },
 
         getSetupPlan(options) {
