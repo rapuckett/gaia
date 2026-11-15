@@ -37,7 +37,9 @@ export function ControlChip({ label, icon, onPress, menu, warning, chip, disable
     const iconOnly = collapsed || belowFloor;
     const content = (compact: boolean) => (
         <Row gap="xs">
-            <Icon icon={icon} size="sm" tone={warning ? 'warning' : 'secondary'} />
+            <View style={{ flexShrink: 0 }}>
+                <Icon icon={icon} size="sm" tone={warning ? 'warning' : 'secondary'} />
+            </View>
             {compact ? null : (
                 <View style={{ flexShrink: chip === 'model' ? 1 : 0 }}>
                     <Text role="label" tone={warning ? 'warning' : 'secondary'} numberOfLines={1}>
@@ -45,7 +47,11 @@ export function ControlChip({ label, icon, onPress, menu, warning, chip, disable
                     </Text>
                 </View>
             )}
-            {menu && !(compact && !belowFloor) ? <Icon icon={ChevronDown} size="sm" tone="muted" /> : null}
+            {menu && !(compact && !belowFloor) ? (
+                <View style={{ flexShrink: 0 }}>
+                    <Icon icon={ChevronDown} size="sm" tone="muted" />
+                </View>
+            ) : null}
         </Row>
     );
     return (

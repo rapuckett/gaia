@@ -48,6 +48,8 @@ const MAX_LINES = 9;
 const FIXED: ViewStyle = { flexDirection: 'row', alignItems: 'center', flexShrink: 0, gap: 8 };
 const CHIPS: ViewStyle = { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexGrow: 1, flexShrink: 1, minWidth: 0, gap: CHIP_GAP };
 const GROUP: ViewStyle = { flexDirection: 'row', alignItems: 'center', flexShrink: 1, minWidth: 0, gap: CHIP_GAP };
+// The left chips collapse to icons in chipRoom; only the right group (the model) gives up width, so none draw over another.
+const LEFT: ViewStyle = { ...GROUP, flexShrink: 0 };
 
 export function Composer({
     value,
@@ -144,7 +146,7 @@ export function Composer({
                         <View style={FIXED}>{attachments ? <AttachButton onPick={attachments.add} disabled={!!disabledReason} /> : null}</View>
                         <View style={CHIPS} testID="composer-controls" onLayout={(e) => setChipsWidth(e.nativeEvent.layout.width)}>
                             <ChipFitContext.Provider value={chipFit}>
-                                <View style={GROUP}>{leftControls}</View>
+                                <View style={LEFT}>{leftControls}</View>
                                 <View style={GROUP}>{rightControls}</View>
                             </ChipFitContext.Provider>
                         </View>

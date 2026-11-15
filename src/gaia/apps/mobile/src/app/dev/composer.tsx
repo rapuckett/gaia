@@ -55,6 +55,10 @@ export default function ComposerGalleryRoute() {
                     <Divider />
                     {chipRow(true, 'Summarize it')}
                     <Divider />
+                    <Stack maxWidth={360}>{chipRow(true, 'Summarize it')}</Stack>
+                    <Divider />
+                    <Stack maxWidth={340}>{chipRow(true, 'Summarize it')}</Stack>
+                    <Divider />
                     <Composer onSend={noop} disabledReason={t('composer.starting')} />
                     <Divider />
                     <Composer value={'x'.repeat(MAX_MESSAGE_CHARS + 1)} onChange={noop} onSend={noop} />
