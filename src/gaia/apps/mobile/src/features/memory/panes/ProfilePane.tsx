@@ -20,7 +20,7 @@ export function ProfilePane({ notify, memoryEnabled, onOpenAdvanced }: MemoryPan
     }
     return (
         <Stack gap="lg" paddingX="lg" paddingY="md" testID="memory-pane-profile">
-            <Text tone="secondary">{t('mem.profile.intro')}</Text>
+            <Text tone="secondary">{t('mobileApp.mem.profile.intro')}</Text>
             <ProfileCard kind="discovery" notify={notify} />
             <ProfileCard kind="inference" notify={notify} />
         </Stack>

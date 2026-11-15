@@ -11,6 +11,7 @@ import {
     GaiaApiError,
     GaiaAuthError,
     GaiaConfigError,
+    GaiaError,
     GaiaNetworkError,
     GaiaPinMismatchError,
     GaiaStreamDroppedError,
@@ -120,10 +121,13 @@ import {
     CONNECTOR_REVOKE_OUTCOME_MS,
     connectorPath,
     cloudPricesPath,
+    documentFilePath,
     documentPath,
     goalPath,
     ENDPOINTS,
     filePath,
+    generatedAudioPath,
+    GENERATED_AUDIO_TYPES,
     chatContextPath,
     chatPermissionGrantsPath,
     chatPerformancePath,
@@ -132,6 +136,7 @@ import {
     localCustomModelPath,
     providerModelsPath,
     followupOutcomePath,
+    MAX_GENERATED_AUDIO_BYTES,
     MESSAGE_PAGE_SIZE,
     QUEUED_IDLE_MS,
     memoryActivityPath,
@@ -298,7 +303,7 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
         }
     }
 
-    async function drainBytes(res: FetchResponseLike): Promise<Uint8Array<ArrayBuffer>> {
+    async function drainBytes(res: FetchResponseLike, limit?: { bytes: number; tooLarge: () => GaiaError }): Promise<Uint8Array<ArrayBuffer>> {
         if (!res.body) throw new GaiaStreamError('mobileApp.error.noBody');
         const reader = res.body.getReader();
         const chunks: Uint8Array[] = [];
@@ -308,6 +313,10 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             if (done) break;
             chunks.push(value);
             size += value.length;
+            if (limit && size > limit.bytes) {
+                await reader.cancel();
+                throw limit.tooLarge();
+            }
         }
         const out = new Uint8Array(size);
         let at = 0;
@@ -874,6 +883,19 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             return { bytes: await drainBytes(res), contentType: res.headers.get('content-type') ?? '' };
         },
 
+        async getGeneratedAudio(src, options): Promise<PcAudioBytes> {
+            const path = generatedAudioPath(src);
+            if (path === null) throw new GaiaConfigError('render.invalidPayload', { render: 'audio' });
+            const res = await request('GET', path, undefined, options?.signal);
+            const contentType = (res.headers.get('content-type') ?? '').split(';')[0]!.trim().toLowerCase();
+            if (!GENERATED_AUDIO_TYPES.includes(contentType)) {
+                await res.body?.cancel();
+                throw new GaiaStreamError('mobileApp.error.notAudio', { type: contentType || '-' });
+            }
+            const limit = { bytes: MAX_GENERATED_AUDIO_BYTES, tooLarge: () => new GaiaStreamError('mobileApp.error.audioTooLarge', { size: `${MAX_GENERATED_AUDIO_BYTES / (1024 * 1024)} MB` }) };
+            return { bytes: await drainBytes(res, limit), contentType };
+        },
+
         getMemorySettings(options) {
             return getJson<MemorySettings>(ENDPOINTS.memorySettings, options?.signal);
         },
@@ -950,8 +972,8 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             return readBytes(filePath('filesImage', path, sessionId), options?.signal);
         },
 
-        getDocumentBytes(docId, options) {
-            return readBytes(documentPath(docId, 'documentFile'), options?.signal);
+        getDocumentBytes(docId, sessionId, options) {
+            return readBytes(documentFilePath(docId, sessionId), options?.signal);
         },
 
         getDocumentStatus(docId, options) {

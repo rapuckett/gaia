@@ -569,6 +569,8 @@ export interface GaiaClient {
     getSpeechModel(options?: RequestOptions): Promise<SpeechModel>;
     /** Speaks `text` (at most MAX_SPEECH_CHARS) as audio, in the saved voice unless one is given. */
     speak(text: string, voice?: { voice?: string; speed?: number }, options?: RequestOptions): Promise<PcAudioBytes>;
+    /** A generated audio card's file, by its `/api/media/audio/<name>` `src`; refuses any other `src`, a reply that isn't audio, and an oversized file. */
+    getGeneratedAudio(src: string, options?: RequestOptions): Promise<PcAudioBytes>;
     getMemorySettings(options?: RequestOptions): Promise<MemorySettings>;
     /** Changes the memory switches named in `settings`; answers with all of them, and what the system scan did when discovery was switched on. */
     updateMemorySettings(settings: Partial<MemorySettings>, options?: RequestOptions): Promise<MemorySettingsUpdateResponse>;
@@ -629,8 +631,8 @@ export interface GaiaClient {
     getFilePreview(path: string, sessionId: string, options?: RequestOptions): Promise<FilePreviewResponse>;
     /** An image on the PC, as bytes; the chat's id is what lets a phone read it. */
     getImageBytes(path: string, sessionId: string, options?: RequestOptions): Promise<Uint8Array>;
-    /** A library document's file, as bytes. */
-    getDocumentBytes(docId: string, options?: RequestOptions): Promise<Uint8Array>;
+    /** A library document's file, as bytes; the chat's id is what lets a phone read it. */
+    getDocumentBytes(docId: string, sessionId: string, options?: RequestOptions): Promise<Uint8Array>;
     getSystemStatus(options?: RequestOptions): Promise<SystemStatus>;
     /** Starts a model's download on the PC (`force` downloads it again); follow it in `getSystemStatus().download_progress`. */
     downloadModel(model: string, options?: { force?: boolean; loadAfter?: boolean } & RequestOptions): Promise<{ status: string; model: string }>;
