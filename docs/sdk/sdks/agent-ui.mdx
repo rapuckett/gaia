@@ -2073,8 +2073,8 @@ else's:
     own. A file that fails, or yields no text, gets a `failed` library row with
     its `last_error`, so it can be retried with `reindex`; it is not in
     `documents`. Away from the PC, the folder must be in the chat named by
-    `session_id` (else **403**), and files holding credentials are skipped and
-    counted in `skipped`.
+    `session_id` (else **403**), and files holding credentials, or whose real
+    path leads out of that chat's folders, are skipped and counted in `skipped`.
   </Accordion>
 
   <Accordion title="POST /api/documents/{doc_id}/reindex">
