@@ -26,14 +26,19 @@ export function useActiveModel() {
     });
 }
 
-/** One provider's models; polled while `watching` so a download shows its progress. */
+/**
+ * One provider's models; polled while `watching` so a download shows its progress.
+ * A failure with no list yet stops the poll, so the error stays shown; reopening tries again.
+ */
 export function useProviderModels(provider: string | undefined, watching: boolean) {
     const client = useGaiaClient();
     return useQuery<ProviderModelsResponse>({
         queryKey: modelMenuKeys.models(provider ?? ''),
         enabled: client !== null && !!provider && watching,
         queryFn: ({ signal }) => requireClient(client).listProviderModels(provider!, { signal }),
-        refetchInterval: watching ? DOWNLOAD_POLL_MS : false,
+        // Each poll would put a failed query with no data back to pending, showing "Loading" for good.
+        refetchInterval: (query) =>
+            watching && !(query.state.status === 'error' && query.state.data === undefined) ? DOWNLOAD_POLL_MS : false,
     });
 }
 
