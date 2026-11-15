@@ -782,7 +782,7 @@ Every other path serves the Agent UI page, except paths under `/api`: an unknown
   </Accordion>
 
   <Accordion title="PUT /api/settings">
-    Update user settings. Set `custom_model` to a model ID to override the default, or to an empty string to clear the override and go back to the model picked under Model (`POST /api/providers/select`); omitting it or sending `null` leaves it unchanged. With no pick on record, clearing reverts to the default model, except for a cloud model whose user has not downloaded the local default, which stays in use. The model left running is also saved as `last_model` in `~/.gaia/config.json`, so the flagship's start-up warm-up and the next launch use the same model. A cloud model is refused with `409` while Local only is on, including one from a provider GAIA knows only from the model server's list; when that list can't be read to tell, the save is refused with `503`.
+    Update user settings. Set `custom_model` to a model ID to override the default, or to an empty string to clear the override and go back to the model picked under Model (`POST /api/providers/select`); omitting it or sending `null` leaves it unchanged. With no pick on record, clearing reverts to the default model, except for a cloud model whose user has not downloaded the local default, which stays in use. The model left running is also saved as `last_model` in `~/.gaia/config.json`, so the flagship's start-up warm-up and the next launch use the same model. A cloud model is refused with `409` while Local only is on, including one from a provider GAIA knows only from the model server's list; when that list can't be read to tell, the save is refused with `503`. `network_policy` changes only on the PC: a request that carries it from mobile access or a paired device is a `403` and saves none of its fields.
 
     **Request:**
     ```json
@@ -1883,7 +1883,8 @@ else's:
     GAIA listens on IPv4 on port 4243 unless `GAIA_DEVICE_PORT` names another,
     and starts listening again after a restart until the PC turns it off.
     Returns the status. **409** with `detail` `{"code", "message"}` when it
-    can't: `port_in_use`, `unsafe_folder` (someone else can reach
+    can't: `port_in_use` (on macOS also when another program holds the port on
+    just one of the PC's addresses), `unsafe_folder` (someone else can reach
     `~/.gaia/devices`; use Reset pairing), `certificate` or `start_failed`.
     PC-only.
   </Accordion>
@@ -2072,8 +2073,8 @@ else's:
     own. A file that fails, or yields no text, gets a `failed` library row with
     its `last_error`, so it can be retried with `reindex`; it is not in
     `documents`. Away from the PC, the folder must be in the chat named by
-    `session_id` (else **403**), and files holding credentials are skipped and
-    counted in `skipped`.
+    `session_id` (else **403**), and files holding credentials, or whose real
+    path leads out of that chat's folders, are skipped and counted in `skipped`.
   </Accordion>
 
   <Accordion title="POST /api/documents/{doc_id}/reindex">
@@ -2521,7 +2522,8 @@ OAuth and MCP-server connections for the Settings page and per-agent grants
     Run the connector's health check and return `{"ok": bool, "detail": str}`.
     An OAuth connector refreshes its token. An `mcp_server` connector starts
     the server once and reports whether it started; a server that only checks
-    its key on a tool call still passes with a bad key.
+    its key on a tool call still passes with a bad key. PC-only: the check can
+    raise an OS key-store prompt on the PC.
   </Accordion>
 
   <Accordion title="DELETE /api/connectors/{connector_id}">
@@ -2531,7 +2533,7 @@ OAuth and MCP-server connections for the Settings page and per-agent grants
 
   <Accordion title="POST /api/connectors/{connector_id}/enable">
     Re-enable a previously-disabled `mcp_server` connector. Its tools
-    materialize live.
+    materialize live. PC-only, like `configure`.
   </Accordion>
 
   <Accordion title="POST /api/connectors/{connector_id}/disable">
@@ -3243,7 +3245,8 @@ credential store (the slot the TUI uses). A key is never echoed back or logged.
     Let the next key read ask the OS to unlock the credential store again. After
     a dismissed or refused unlock prompt GAIA stops reading the store for five
     minutes, and providers report `key_state: "store_locked"`; the Try again
-    button calls this. Returns `{"retrying": true}`.
+    button calls this. Returns `{"retrying": true}`. PC-only: the prompt it
+    allows shows on the PC.
   </Accordion>
 
   <Accordion title="GET /api/providers/{provider}/models">

@@ -8,7 +8,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 
 import type { PreflightReport, SetupPlan } from '@/api/client.types';
 import { useT } from '@/i18n/useT';
-import { Badge, Card, Disclosure, Icon, IconButton, Ltr, Row, Stack, Text } from '@/ui';
+import { Badge, Button, Card, Disclosure, Icon, IconButton, Ltr, Row, Stack, Text } from '@/ui';
 import { Check, Copy, TriangleAlert } from '@/ui/icons';
 
 import { findingWarnings } from './checkRows';
@@ -23,7 +23,12 @@ function Fact({ label, children }: { label: string; children: ReactNode }) {
 }
 
 /** What setup found on this PC: the facts that decide setup, and the rest behind "All details". */
-export function CheckFound({ plan, hardware }: { plan: SetupPlan; hardware: PreflightReport | null }) {
+export function CheckFound({ plan, hardware, onChangeMemory }: {
+    plan: SetupPlan;
+    hardware: PreflightReport | null;
+    /** Set when this PC's GPU memory split can be changed: opens the GPU memory screen. */
+    onChangeMemory?: () => void;
+}) {
     const t = useT();
     const f = facts(plan, hardware);
     const [open, setOpen] = useState(false);
@@ -69,6 +74,7 @@ export function CheckFound({ plan, hardware }: { plan: SetupPlan; hardware: Pref
                         ? <Text>{t('setup.found.memoryOf', { size: formatSize(plan.capacity_gb), total: f.totalMemory })}</Text>
                         : plan.capacity_gb != null ? <Ltr>{formatSize(plan.capacity_gb)}</Ltr>
                             : f.totalMemory ? <Ltr>{f.totalMemory}</Ltr> : unknown}
+                    {onChangeMemory ? <Button variant="ghost" size="sm" label={t('setup.found.changeMemory')} onPress={onChangeMemory} /> : null}
                 </Fact>
                 <Fact label={t('setup.found.space')}>{f.freeGb != null ? <Ltr>{formatSize(f.freeGb)}</Ltr> : unknown}</Fact>
                 <Fact label={t('setup.found.software')}>

@@ -14,13 +14,14 @@ import { useGpuMemory, useSaveModelChoices, useSetupPlan } from '@/data';
 import { describeError, useLocaleCode, useT } from '@/i18n/useT';
 import { Button, Notice, Pressable, Row, Spinner, Stack, Text } from '@/ui';
 
+import { NpuNotReady } from '../npu/NpuNotReady';
 import { SetupFooter } from '../SetupFooter';
 import type { SetupStepContext } from '../SetupScreen';
 import { useConfirmSheet } from '../sheets/ConfirmSheet';
 import { serverConfirmRequest, setupConfirmFrom } from '../sheets/setupConfirm';
 import { ModelChecklist, SelectionSummary } from './Checklist';
 import { JobModels } from './JobSections';
-import { backendView, chooseBackend, npuProblemText } from './modelsView';
+import { backendView, chooseBackend } from './modelsView';
 import { usePlanOpeners } from './planOpeners';
 import { usePlanSelection } from './planSelection';
 
@@ -63,10 +64,7 @@ function BackendChoice({ view, onPick, disabled }: {
                 })}
             </Row>
             {npuProblems.length > 0 ? (
-                <Stack gap="xs">
-                    <Text role="caption" tone="secondary">{t('setup.npu.notReady')}</Text>
-                    {npuProblems.map((p) => <Text key={p.code} role="caption" tone="secondary">{npuProblemText(p, t)}</Text>)}
-                </Stack>
+                <NpuNotReady problems={npuProblems} disabled={disabled} />
             ) : (
                 <Text role="caption" tone="secondary">
                     {t(npuModel ? 'setup.backend.hint' : npuUnusable ? 'setup.backend.hintNpuUnusable' : 'setup.backend.hintNoNpu')}

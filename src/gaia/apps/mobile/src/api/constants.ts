@@ -21,6 +21,8 @@ export const ENDPOINTS = {
     memoryActivity: '/api/memory/activity',
     memoryConsolidate: '/api/memory/consolidate',
     memoryEmbeddingCoverage: '/api/memory/embedding-coverage',
+    memoryKnowledge: '/api/memory/knowledge',
+    memoryKnowledgeItem: '/api/memory/knowledge/{knowledge_id}',
     memoryRebuildEmbeddings: '/api/memory/rebuild-embeddings',
     memoryRebuildFts: '/api/memory/rebuild-fts',
     memoryReconcile: '/api/memory/reconcile',
@@ -44,6 +46,7 @@ export const ENDPOINTS = {
     session: '/api/sessions/{session_id}',
     sessionCapabilities: '/api/sessions/{session_id}/capabilities',
     sessionDocument: '/api/sessions/{session_id}/documents/{doc_id}',
+    sessionDocuments: '/api/sessions/{session_id}/documents',
     sessionEvents: '/api/sessions/events',
     sessionMessage: '/api/sessions/{session_id}/messages/{message_id}',
     sessionMessages: '/api/sessions/{session_id}/messages',
@@ -52,6 +55,8 @@ export const ENDPOINTS = {
     sessionPrivate: '/api/sessions/{session_id}/private',
     sessionRead: '/api/sessions/{session_id}/read',
     sessionSearch: '/api/sessions/search',
+    settings: '/api/settings',
+    settingsUndo: '/api/settings/undo',
     setupCancel: '/api/setup/cancel',
     setupChatModel: '/api/setup/chat-model',
     setupCheck: '/api/setup/check',
@@ -90,6 +95,7 @@ export const ENDPOINTS = {
     documentFile: '/api/documents/{doc_id}/file',
     documentReindex: '/api/documents/{doc_id}/reindex',
     documentStatus: '/api/documents/{doc_id}/status',
+    documentUpload: '/api/documents/upload',
     documents: '/api/documents',
     filesUpload: '/api/files/upload',
     filesUploadMedia: '/api/files/upload-media',
@@ -120,6 +126,18 @@ export function connectorGrantsPath(connectorId: string): string {
 
 export function memoryActivityPath(days: number): string {
     return `${ENDPOINTS.memoryActivity}?days=${days}`;
+}
+
+export function memoryKnowledgeItemPath(knowledgeId: string): string {
+    return ENDPOINTS.memoryKnowledgeItem.replace('{knowledge_id}', encodeURIComponent(knowledgeId));
+}
+
+/** The knowledge list's query, built as the web's `toQuery` does: empty values dropped, the rest encoded. */
+export function memoryKnowledgePath(params: object): string {
+    const parts = Object.entries(params as Record<string, unknown>)
+        .filter(([, value]) => value !== undefined && value !== null && value !== '')
+        .flatMap(([key, value]) => (Array.isArray(value) ? value : [value]).map((one) => `${encodeURIComponent(key)}=${encodeURIComponent(String(one))}`));
+    return parts.length ? `${ENDPOINTS.memoryKnowledge}?${parts.join('&')}` : ENDPOINTS.memoryKnowledge;
 }
 
 export function memoryUpcomingPath(days: number): string {
@@ -183,6 +201,10 @@ export function sessionDocumentPath(sessionId: string, docId: string): string {
     return ENDPOINTS.sessionDocument
         .replace('{session_id}', encodeURIComponent(sessionId))
         .replace('{doc_id}', encodeURIComponent(docId));
+}
+
+export function sessionDocumentsPath(sessionId: string): string {
+    return ENDPOINTS.sessionDocuments.replace('{session_id}', encodeURIComponent(sessionId));
 }
 
 export function sessionCapabilitiesPath(sessionId: string): string {

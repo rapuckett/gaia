@@ -69,7 +69,7 @@ export function ActivityChart({ days, onDaysChange, activity, failure }: Activit
         <Stack gap="md" testID="memory-activity">
             <SectionTitle icon={TrendingUp} title={t('mem.activity.title')} />
             <SegmentedControl
-                options={ACTIVITY_RANGES.map((d) => ({ value: String(d), label: t(ACTIVITY_RANGE_LABELS[d]) }))}
+                options={ACTIVITY_RANGES.map((d) => ({ value: String(d), label: t.bare(ACTIVITY_RANGE_LABELS[d]), accessibilityLabel: t(ACTIVITY_RANGE_LABELS[d]) }))}
                 value={String(days)}
                 onChange={(v) => onDaysChange(Number(v))}
                 accessibilityLabel={t('mem.activity.range')}

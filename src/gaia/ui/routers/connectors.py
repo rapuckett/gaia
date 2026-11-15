@@ -875,7 +875,11 @@ async def configure_connector(
     return result
 
 
-@router.post("/{connector_id}/test", dependencies=[Depends(_require_ui_header)])
+# The health check reads the key store, which can prompt on the PC.
+@router.post(
+    "/{connector_id}/test",
+    dependencies=[Depends(_require_ui_header), Depends(require_local_pc)],
+)
 async def test_connector(connector_id: str) -> Dict[str, Any]:
     """Run the health check for a connector."""
     retry_keyring()
@@ -973,7 +977,10 @@ async def _set_connector_enabled(connector_id: str, enabled: bool) -> Dict[str, 
     return _connector_summary(connector_id)
 
 
-@router.post("/{connector_id}/enable", dependencies=[Depends(_require_ui_header)])
+@router.post(
+    "/{connector_id}/enable",
+    dependencies=[Depends(_require_ui_header), Depends(require_local_pc)],
+)
 async def enable_connector(connector_id: str) -> Dict[str, Any]:
     """Enable a previously-disabled MCP connector. Tools materialize live."""
     return await _set_connector_enabled(connector_id, True)
