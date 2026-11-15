@@ -11,9 +11,12 @@ export const UI_HEADERS = {
 export const ENDPOINTS = {
     agents: '/api/agents',
     health: '/api/health',
+    lemonadeDetect: '/api/lemonade/detect',
+    lemonadeTarget: '/api/lemonade/target',
     localModelRestart: '/api/providers/local/restart',
     localModelStatus: '/api/providers/local/status',
     schedule: '/api/schedules/{name:path}',
+    scheduleResults: '/api/schedules/{name:path}/results',
     scheduleRun: '/api/schedules/{name:path}/run',
     scheduleParse: '/api/schedules/parse',
     schedules: '/api/schedules',
@@ -24,7 +27,9 @@ export const ENDPOINTS = {
     sessionMessage: '/api/sessions/{session_id}/messages/{message_id}',
     sessionMessages: '/api/sessions/{session_id}/messages',
     sessionMessagesAndBelow: '/api/sessions/{session_id}/messages/{message_id}/and-below',
+    sessionPin: '/api/sessions/{session_id}/pin',
     sessionPrivate: '/api/sessions/{session_id}/private',
+    sessionRead: '/api/sessions/{session_id}/read',
     sessionSearch: '/api/sessions/search',
     setupCancel: '/api/setup/cancel',
     setupCheck: '/api/setup/check',
@@ -52,6 +57,7 @@ export const ENDPOINTS = {
     systemStatus: '/api/system/status',
     documentFile: '/api/documents/{doc_id}/file',
     documents: '/api/documents',
+    onboardingPreflight: '/api/onboarding/preflight',
     onboardingStart: '/api/onboarding/start',
 } as const;
 
@@ -77,6 +83,10 @@ export function connectorGrantsPath(connectorId: string): string {
 
 export function schedulePath(name: string): string {
     return ENDPOINTS.schedule.replace('{name:path}', encodeURIComponent(name));
+}
+
+export function scheduleResultsPath(name: string, limit: number): string {
+    return `${ENDPOINTS.scheduleResults.replace('{name:path}', encodeURIComponent(name))}?limit=${limit}`;
 }
 
 export function scheduleRunPath(name: string): string {
@@ -105,8 +115,16 @@ export function sessionDocumentPath(sessionId: string, docId: string): string {
         .replace('{doc_id}', encodeURIComponent(docId));
 }
 
+export function sessionPinPath(sessionId: string): string {
+    return ENDPOINTS.sessionPin.replace('{session_id}', encodeURIComponent(sessionId));
+}
+
 export function sessionPrivatePath(sessionId: string): string {
     return ENDPOINTS.sessionPrivate.replace('{session_id}', encodeURIComponent(sessionId));
+}
+
+export function sessionReadPath(sessionId: string): string {
+    return ENDPOINTS.sessionRead.replace('{session_id}', encodeURIComponent(sessionId));
 }
 
 export function sessionMessagesPath(sessionId: string): string {
@@ -147,6 +165,9 @@ export const SEND_HEADER_TIMEOUT_MS = 90_000;
 export const SESSION_EVENTS_IDLE_MS = 90_000;
 /** An attach replays at once; a slower answer means the backend is stuck or unreachable. */
 export const ATTACH_HEADER_TIMEOUT_MS = 30_000;
+/** How many past runs a schedule's history shows; the web UI asks for the same 20. */
+export const SCHEDULE_RESULTS_LIMIT = 20;
+
 /** How often to re-read the schedules while their screen is open, so counts and times follow the PC. */
 export const SCHEDULES_POLL_MS = 10_000;
 /** How long a Delete button waits for its "Confirm?" press; the web UI's CONFIRM_DELETE_MS. */

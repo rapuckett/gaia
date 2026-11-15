@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import type { MessageKey } from '@webui/i18n/registry';
+import { MAX_SESSION_TITLE_CHARS } from '@webui/utils/constants';
 import {
     groupSessionsForList,
     sessionRowStatus,
@@ -62,6 +63,7 @@ export interface ChatRow {
     /** 1-based place in line for the GPU while queued; 0 otherwise. */
     place: number;
     private: boolean;
+    pinned: boolean;
     unsent: number;
     failed: number;
 }
@@ -104,6 +106,7 @@ export function buildChatSections({
                 dot: status === 'done' && !unread ? null : status,
                 place: live.queued.indexOf(s.id) + 1,
                 private: !!s.private,
+                pinned: !!s.pinned,
                 unsent: queue.length,
                 failed: queue.filter((m) => m.state === 'failed').length,
             };
@@ -171,4 +174,17 @@ export function searchedSessions(
 ): Session[] {
     const needle = foldText(query.trim());
     return sessions.filter((s) => foldText(s.title).includes(needle) || hits.has(s.id));
+}
+
+export type RowAction = 'rename' | 'pin' | 'unpin' | 'delete';
+
+/** The "⋯" menu's items, in the web menu's order; a pinned chat offers Unpin. */
+export function rowActions(row: Pick<ChatRow, 'pinned'>): RowAction[] {
+    return ['rename', row.pinned ? 'unpin' : 'pin', 'delete'];
+}
+
+/** What a rename saves: the trimmed, capped title, or null when there is nothing to change. */
+export function renamedTitle(draft: string, previous: string): string | null {
+    const title = draft.trim().slice(0, MAX_SESSION_TITLE_CHARS).trim();
+    return !title || draft === previous || title === previous ? null : title;
 }

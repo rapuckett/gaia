@@ -32,16 +32,21 @@ import type {
     DocumentListResponse,
     FollowUpOutcome,
     FollowUpResult,
+    DeleteSessionResult,
     GaiaClient,
     HealthResponse,
+    LemonadeFound,
+    LemonadeTarget,
     LocalModelStatus,
     MessageList,
     ModelNeed,
+    PreflightReport,
     RestartModelResult,
     RequestOptions,
     ParsedSchedule,
     Schedule,
     ScheduleList,
+    ScheduleResults,
     SessionList,
     SessionSearchResponse,
     SetupCheck,
@@ -62,6 +67,7 @@ import {
     MESSAGE_PAGE_SIZE,
     QUEUED_IDLE_MS,
     schedulePath,
+    scheduleResultsPath,
     scheduleRunPath,
     SEND_HEADER_TIMEOUT_MS,
     SESSION_EVENTS_IDLE_MS,
@@ -71,7 +77,9 @@ import {
     sessionMessagesAndBelowPath,
     sessionMessagesPath,
     sessionPath,
+    sessionPinPath,
     sessionPrivatePath,
+    sessionReadPath,
     setupNeedsPath,
     STREAM_IDLE_MS,
     UI_HEADERS,
@@ -273,6 +281,18 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             return postJson<Session>(ENDPOINTS.sessions, request, options?.signal);
         },
 
+        setSessionPinned(sessionId, pinned, options) {
+            return putJson<Session>(sessionPinPath(sessionId), { pinned }, options?.signal);
+        },
+
+        deleteSession(sessionId, options) {
+            return deleteJson<DeleteSessionResult>(sessionPath(sessionId), options?.signal);
+        },
+
+        markSessionRead(sessionId, options) {
+            return postJson<Session>(sessionReadPath(sessionId), undefined, options?.signal);
+        },
+
         getContextUsage(sessionId, options) {
             return getJson<ContextUsageResult>(chatContextPath(sessionId), options?.signal);
         },
@@ -439,6 +459,10 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             return postJson<Schedule>(scheduleRunPath(name), undefined, options?.signal);
         },
 
+        listScheduleResults(name, limit, options) {
+            return getJson<ScheduleResults>(scheduleResultsPath(name, limit), options?.signal);
+        },
+
         deleteSchedule(name, options) {
             return deleteJson<DeleteScheduleResult>(schedulePath(name), options?.signal);
         },
@@ -476,7 +500,7 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
         },
 
         cancelSetup(modelId, options) {
-            return postJson<{ cancelled: boolean }>(ENDPOINTS.setupCancel, { model_id: modelId }, options?.signal);
+            return postJson<{ cancelled: boolean }>(ENDPOINTS.setupCancel, { model_id: modelId ?? null }, options?.signal);
         },
 
         getStartScreen(options) {
@@ -485,6 +509,18 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         checkSetup(skipChatModel, options) {
             return getJson<SetupCheck>(`${ENDPOINTS.setupCheck}?skip_chat_model=${skipChatModel}`, options?.signal);
+        },
+
+        getPreflight(options) {
+            return getJson<PreflightReport>(ENDPOINTS.onboardingPreflight, options?.signal);
+        },
+
+        getLemonadeTarget(options) {
+            return getJson<LemonadeTarget>(ENDPOINTS.lemonadeTarget, options?.signal);
+        },
+
+        detectLemonade(options) {
+            return getJson<{ found: LemonadeFound | null; unchecked?: string[] }>(ENDPOINTS.lemonadeDetect, options?.signal);
         },
 
         getSetupPlan(options) {
