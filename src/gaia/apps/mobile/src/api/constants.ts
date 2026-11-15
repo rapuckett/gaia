@@ -11,7 +11,9 @@ export const UI_HEADERS = {
 } as const;
 
 export const ENDPOINTS = {
+    agentInstallStatus: '/api/agents/{agent_id}/install-status',
     agents: '/api/agents',
+    agentsInstall: '/api/agents/install',
     goal: '/api/goals/{goal_id}',
     goalApprove: '/api/goals/{goal_id}/approve',
     goalCancel: '/api/goals/{goal_id}/cancel',
@@ -144,6 +146,10 @@ export const ENDPOINTS = {
     onboardingPreflight: '/api/onboarding/preflight',
     onboardingStart: '/api/onboarding/start',
 } as const;
+
+export function agentInstallStatusPath(agentId: string): string {
+    return ENDPOINTS.agentInstallStatus.replace('{agent_id}', encodeURIComponent(agentId));
+}
 
 export function connectorActivationPath(connectorId: string, agentId: string): string {
     return ENDPOINTS.connectorActivation

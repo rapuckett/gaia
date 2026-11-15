@@ -8,6 +8,7 @@ import type {
     CustomModelReport,
     AgentCapabilities,
     AgentInfo,
+    AgentInstallStatus,
     AgentMcpServer,
     MCPServerStatus,
     ChatPerformance,
@@ -87,6 +88,7 @@ import type {
     UserInputRequest,
 } from './client.types';
 import { foldText, splitMatch } from '@webui/utils/chatSearch';
+import { FLAGSHIP_AGENT_ID } from '@webui/utils/newTask';
 
 import { generatedAudioPath } from './constants';
 import { GaiaApiError, GaiaConfigError } from './errors';
@@ -132,6 +134,8 @@ export interface FakeClientData {
     /** Activations by connector id, then namespaced agent id. */
     activations?: Record<string, Record<string, boolean>>;
     agentMcps?: AgentMcpServer[];
+    /** What each poll of getAgentInstallStatus answers, in turn; the last one repeats. */
+    installStatuses?: AgentInstallStatus[];
     /** Makes uploadFile reject, as a refused file does. */
     uploadError?: GaiaApiError;
     /** What getActiveModel answers, and what selectModel last picked. */
@@ -335,6 +339,7 @@ export interface FakeGaiaClient extends GaiaClient {
     readonly documentActions: { action: DocumentAction; docId: string }[];
     readonly setupStarts: { skipChatModel: boolean; gaiaLemonade: boolean; upgradeEmbedded: boolean; serverOnly: boolean }[];
     readonly detached: { sessionId: string; docId: string }[];
+    readonly installs: string[];
     readonly uploaded: PickedFile[];
     readonly attached: { sessionId: string; docId: string }[];
     readonly capabilityReads: string[];
@@ -426,6 +431,8 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         return item;
     };
     const detached: FakeGaiaClient['detached'] = [];
+    const installs: string[] = [];
+    let polls = 0;
     const uploaded: PickedFile[] = [];
     const attached: FakeGaiaClient['attached'] = [];
     const capabilityReads: string[] = [];
@@ -522,6 +529,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             return keyStoreRetries;
         },
         detached,
+        installs,
         uploaded,
         attached,
         capabilityReads,
@@ -826,9 +834,6 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             );
             return data.disconnectOutcome ?? {};
         },
-        async listAgents() {
-            return { agents: [...(data.agents ?? [])] };
-        },
         async listConnectorGrants(connectorId) {
             return { grants: { ...grants[connectorId] } };
         },
@@ -854,6 +859,21 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         },
         async listAgentMcps() {
             return { agent_mcps: [...(data.agentMcps ?? [])] };
+        },
+        async listAgents() {
+            const agents = data.agents ?? [
+                { id: FLAGSHIP_AGENT_ID, name: 'GAIA', description: '', source: 'builtin', conversation_starters: [], models: [] },
+            ];
+            return { agents: [...agents] };
+        },
+        async installAgent(id) {
+            installs.push(id);
+            return { id, status: 'queued' };
+        },
+        async getAgentInstallStatus(id) {
+            const statuses = data.installStatuses;
+            if (!statuses?.length) throw new GaiaApiError(404, `No install status for '${id}'.`);
+            return statuses[Math.min(polls++, statuses.length - 1)]!;
         },
         async listSkills() {
             return { skills: [...(data.skills?.skills ?? [])], invalid: { ...(data.skills?.invalid ?? {}) } };

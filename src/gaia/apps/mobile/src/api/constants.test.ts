@@ -97,7 +97,9 @@ describe('endpoints', () => {
         ]);
     });
     const methods: Record<keyof typeof ENDPOINTS, string[]> = {
+        agentInstallStatus: ['GET'],
         agents: ['GET'],
+        agentsInstall: ['POST'],
         goal: ['DELETE'],
         goalApprove: ['PUT'],
         goalCancel: ['PUT'],

@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type { PermissionMode } from '@/api/client.types';
 import { useCreateSession, useDocuments, useGaiaClient, useStartScreen, useSystemStatus } from '@/data';
+import { FlagshipAgentBanner } from '@/features/banners/FlagshipAgentBanner';
 import { Composer, FolderChip, ModelChip, PermissionChip, PrivateChip, useAttachments, useComposerQueue } from '@/features/composer';
 import { QueuedMessages } from '@/features/composer/QueuedMessages';
 import { ScreenHeader } from '@/features/nav/ScreenHeader';
@@ -131,6 +132,7 @@ export function NewChatScreen({ onOpen, initialText = '', prompt }: NewChatScree
                         )}
                     </Stack>
                 )}
+                <FlagshipAgentBanner />
                 {failedSetup !== null && (
                     <Notice
                         tone="danger"

@@ -82,10 +82,10 @@ export function MessageListView({ messages, loading = false, error, onRetry, liv
 }
 
 /** A chat's transcript, from the PC. `live` is the answer still being written. */
-export function MessageList({ sessionId, live }: { sessionId: string; live?: ReactNode }) {
+export function MessageList({ sessionId, live, readOnly = false }: { sessionId: string; live?: ReactNode; readOnly?: boolean }) {
     const query = useMessages(sessionId);
     const { send, status } = useChatStream(sessionId);
-    const actions = useMemo(() => ({ send, busy: status !== 'idle' }), [send, status]);
+    const actions = useMemo(() => ({ send, busy: status !== 'idle', readOnly }), [send, status, readOnly]);
     return (
         <MessageActionsContext.Provider value={actions}>
             <MessageListView

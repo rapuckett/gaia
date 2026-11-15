@@ -24,6 +24,7 @@ import {
 import type {
     ActiveModel,
     AgentCapabilities,
+    AgentInstallStatus,
     AgentList,
     AgentMcpList,
     CancelChatResult,
@@ -112,6 +113,7 @@ import type {
     UserInputResult,
 } from './client.types';
 import {
+    agentInstallStatusPath,
     ATTACH_HEADER_TIMEOUT_MS,
     connectorActivationPath,
     connectorActivationsPath,
@@ -747,6 +749,14 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         listAgentMcps(options) {
             return getJson<AgentMcpList>(ENDPOINTS.connectorsAgentMcps, options?.signal);
+        },
+
+        installAgent(id, options) {
+            return postJson<{ id: string; status: string }>(ENDPOINTS.agentsInstall, { id }, options?.signal);
+        },
+
+        getAgentInstallStatus(id, options) {
+            return getJson<AgentInstallStatus>(agentInstallStatusPath(id), options?.signal);
         },
 
         listSkills(options) {
