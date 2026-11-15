@@ -28,6 +28,7 @@ export interface ApiSchemas {
   AuthorizeRequest: AuthorizeRequest;
   AutomationList: AutomationList;
   AutomationRow: AutomationRow;
+  AwayRouteStatus: AwayRouteStatus;
   BackendOption: BackendOption;
   Body_upload_document_blob_api_documents_upload_post: BodyUploadDocumentBlobApiDocumentsUploadPost;
   Body_upload_file_api_files_upload_post: BodyUploadFileApiFilesUploadPost;
@@ -77,9 +78,11 @@ export interface ApiSchemas {
   CustomModelVariant: CustomModelVariant;
   DefaultPermissionModeResponse: DefaultPermissionModeResponse;
   DeviceAccessStatus: DeviceAccessStatus;
+  DeviceOrigin: DeviceOrigin;
   DevicePairRequest: DevicePairRequest;
   DevicePairResponse: DevicePairResponse;
   DevicePairingOffer: DevicePairingOffer;
+  DeviceRoutes: DeviceRoutes;
   DeviceUsage: DeviceUsage;
   DiscordConnectRequest: DiscordConnectRequest;
   DiscordConnectResponse: DiscordConnectResponse;
@@ -672,6 +675,15 @@ export interface AutomationRow {
   [k: string]: unknown | undefined;
 }
 /**
+ * An away route as the PC sees it: on or off, and why it failed.
+ */
+export interface AwayRouteStatus {
+  error_code?: string | null;
+  kind: "tailnet" | "relay";
+  on: boolean;
+  origin?: string | null;
+}
+/**
  * A llama.cpp backend this machine can run, with Lemonade's state for it.
  */
 export interface BackendOption {
@@ -1253,6 +1265,7 @@ export interface DeviceAccessStatus {
   pairing_open: boolean;
   pending_expiry_minutes: number;
   port: number;
+  routes?: AwayRouteStatus[];
 }
 /**
  * A pairing attempt that failed, and why; the device saw one refusal.
@@ -1261,6 +1274,13 @@ export interface FailedRedemption {
   address: string;
   at: string;
   reason: "expired" | "used" | "wrong" | "closed" | "rate_limited";
+}
+/**
+ * One origin a paired device may reach this PC at.
+ */
+export interface DeviceOrigin {
+  kind: "home" | "tailnet" | "relay";
+  origin: string;
 }
 /**
  * A device redeeming the invitation it scanned.
@@ -1316,6 +1336,12 @@ export interface DevicePairingOffer {
    * Format version
    */
   v: number;
+}
+/**
+ * Every origin a paired device may reach this PC at now.
+ */
+export interface DeviceRoutes {
+  origins: DeviceOrigin[];
 }
 export interface DeviceUsage {
   /**

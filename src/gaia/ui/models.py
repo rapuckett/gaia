@@ -10,10 +10,12 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from gaia.version import __version__ as _gaia_version
 
 from .devices import (
+    AwayRouteKind,
     DevicePlatform,
     DeviceStatus,
     ListenerErrorCode,
     PairFailureReason,
+    RouteKind,
 )
 
 
@@ -1063,6 +1065,15 @@ class FailedRedemption(BaseModel):
     reason: PairFailureReason
 
 
+class AwayRouteStatus(BaseModel):
+    """An away route as the PC sees it: on or off, and why it failed."""
+
+    kind: AwayRouteKind
+    on: bool
+    origin: Optional[str] = None
+    error_code: Optional[str] = None
+
+
 class DeviceAccessStatus(BaseModel):
     """What the PC shows about access from the home network. Carries no secret."""
 
@@ -1075,3 +1086,17 @@ class DeviceAccessStatus(BaseModel):
     idle_expiry_days: int
     pending_expiry_minutes: int
     failed_redemptions: List[FailedRedemption] = Field(default_factory=list)
+    routes: List[AwayRouteStatus] = Field(default_factory=list)
+
+
+class DeviceOrigin(BaseModel):
+    """One origin a paired device may reach this PC at."""
+
+    kind: RouteKind
+    origin: str
+
+
+class DeviceRoutes(BaseModel):
+    """Every origin a paired device may reach this PC at now."""
+
+    origins: List[DeviceOrigin]

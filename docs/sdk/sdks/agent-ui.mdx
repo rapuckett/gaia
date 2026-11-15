@@ -511,6 +511,20 @@ class DeviceAccessStatus(BaseModel):
     idle_expiry_days: int
     pending_expiry_minutes: int
     failed_redemptions: List[FailedRedemption]  # the last 20
+    routes: List[AwayRouteStatus]  # empty until an away route exists
+
+class AwayRouteStatus(BaseModel):
+    kind: Literal["tailnet", "relay"]
+    on: bool
+    origin: Optional[str] = None
+    error_code: Optional[str] = None
+
+class DeviceRoutes(BaseModel):
+    origins: List[DeviceOrigin]  # home first, then each away route that is on
+
+class DeviceOrigin(BaseModel):
+    kind: Literal["home", "tailnet", "relay"]
+    origin: str  # https://address:port
 ```
 
 ---
@@ -1871,7 +1885,8 @@ else's:
     failed redemptions with their `reason`: `expired` (the code timed out),
     `used` (it was already redeemed, or the window closed after the first
     pairing), `wrong` (it matches no open window), `closed` (no window is
-    open) or `rate_limited`. PC-only.
+    open) or `rate_limited`. PC-only. `routes` lists each away route (a way
+    off the home network) with whether it is on; there are none yet.
   </Accordion>
 
   <Accordion title="GET /api/devices">
@@ -1915,10 +1930,17 @@ else's:
 
   <Accordion title="POST /api/devices/pair">
     Redeem an invitation: `DevicePairRequest` in, `DevicePairResponse` out, with
-    the device pending. Served only on the device listener (**404** anywhere
-    else) and the one route there without a token. Every bad invitation gets
+    the device pending. Served only on the device listener to a home-network
+    peer (**404** anywhere else, an away route included) and the one route
+    there without a token. Every bad invitation gets
     the same **403**; only the PC sees why. **429** with `Retry-After` while the
     address is locked out; **422** for a name with nothing printable left.
+  </Accordion>
+
+  <Accordion title="GET /api/devices/me/routes">
+    `DeviceRoutes`: every origin this device may reach the PC at now, its
+    home-network addresses first, then each away route that is on. Only an
+    allowed device, with its own token; a pending one gets **403**.
   </Accordion>
 
   <Accordion title="DELETE /api/devices/me">
@@ -3582,6 +3604,7 @@ Every route is in one class, pinned by `tests/unit/chat/ui/test_route_access.py`
 | Setup | `pc`, or an allowed device | Setup's changes (see [Setup](#setup)), `POST /api/system/download-model`, `PUT /api/system/model-server/backend` |
 | Not from a device | `pc`, `tunnel` | `GET /api/providers`, which can register a provider |
 | Pairing | a device on the listener, with no token | `POST /api/devices/pair` |
+| Its own routes | an allowed device | `GET /api/devices/me/routes` |
 | Unpairing itself | a device, pending or allowed | `DELETE /api/devices/me` |
 | Everything else | `pc`, `tunnel`, an allowed device | Chats, documents, memory, goals, schedules and the rest |
 
