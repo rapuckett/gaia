@@ -214,7 +214,7 @@ def build_fake_llm(
         KOKORO_VOICES,
         TTS_SAMPLE_RATE,
     )
-    from gaia.llm.lemonade_client import GPU_CTX_SIZE
+    from gaia.llm.lemonade_client import EMBEDDER_MODELS, GPU_CTX_SIZE
     from gaia.version import LEMONADE_VERSION
 
     app = FastAPI()
@@ -262,7 +262,11 @@ def build_fake_llm(
                     "object": "model",
                     "downloaded": True,
                     "recipe": "llamacpp",
-                    "labels": ["tts"] if model_id == DEFAULT_TTS_MODEL else [],
+                    "labels": (
+                        ["tts"]
+                        if model_id == DEFAULT_TTS_MODEL
+                        else ["embeddings"] if model_id in EMBEDDER_MODELS else []
+                    ),
                 }
                 for model_id in dict.fromkeys([model, *(downloaded or [])])
             ],
