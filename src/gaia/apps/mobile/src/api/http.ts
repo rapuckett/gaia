@@ -178,6 +178,7 @@ import {
     sessionChangesDiffPath,
     sessionChangesPath,
     sessionChangesUndoPath,
+    sessionExportPath,
     sessionPinPath,
     sessionPrivatePath,
     sessionReadPath,
@@ -475,6 +476,10 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
                 body.append('file', file, name);
             }
             return readJson<UploadedFile>(await request('POST', path, new RawBody(body), options?.signal), path);
+        },
+
+        exportSessionMarkdown(sessionId, options) {
+            return getJson<{ content: string }>(`${sessionExportPath(sessionId)}?format=markdown`, options?.signal);
         },
 
         setSessionPinned(sessionId, pinned, options) {

@@ -797,6 +797,10 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             const limit = data.searchLimit ?? Infinity;
             return { query, results: results.slice(0, limit), truncated: results.length > limit };
         },
+        async exportSessionMarkdown(sessionId) {
+            const session = findSession(sessionId);
+            return { content: `# ${session.title}\n` };
+        },
         async setSessionPinned(sessionId, value) {
             findSession(sessionId);
             pinned.push({ sessionId, pinned: value });

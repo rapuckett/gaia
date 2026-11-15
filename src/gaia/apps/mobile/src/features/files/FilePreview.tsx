@@ -2,13 +2,13 @@
 // SPDX-License-Identifier: MIT
 
 import { Image } from 'expo-image';
-import * as Sharing from 'expo-sharing';
 import { useCallback, useEffect, useState } from 'react';
 
 import { isolate } from '@webui/i18n/registry';
 import type { FilePreviewResponse } from '@/api/client.types';
 import { useGaiaClient } from '@/data/GaiaClientProvider';
 import { Markdown } from '@/features/chat/markdown/Markdown';
+import { shareFile } from '@/features/share/shareFile';
 import { describeError, useT } from '@/i18n/useT';
 import { Button, Ltr, Notice, ScrollBox, Row, Sheet, Spinner, Stack, Text } from '@/ui';
 
@@ -148,7 +148,7 @@ function OpenPreview({ target, onClose }: { target: PreviewTarget; onClose: () =
         if (!cached) return;
         setShareError(null);
         try {
-            await Sharing.shareAsync(cached.uri);
+            await shareFile(cached.uri);
         } catch (error) {
             setShareError(error);
         }
