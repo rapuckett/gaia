@@ -363,6 +363,8 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         updateUndoSettings(retentionDays, maxMb, options) {
             return putJson<UndoSettings>(ENDPOINTS.settingsUndo, { retention_days: retentionDays, max_mb: maxMb }, options?.signal);
+        },
+
         getContextChoice(model, options) {
             return getJson<ContextChoice>(`${ENDPOINTS.localModelContext}?model=${encodeURIComponent(model)}`, options?.signal);
         },
