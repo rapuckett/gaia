@@ -37,6 +37,7 @@ describe('app config', () => {
         try {
             const plugins = (configFor('production').plugins ?? []).map((p) => (Array.isArray(p) ? p[0] : p));
             expect(plugins).not.toContain('expo-notifications');
+            expect(plugins.at(-1)).toBe('./plugins/withoutPushEntitlement');
         } finally {
             if (saved === undefined) delete process.env.GAIA_APS_ENVIRONMENT;
             else process.env.GAIA_APS_ENVIRONMENT = saved;

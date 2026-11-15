@@ -10,6 +10,7 @@ import Advanced from './panes/Advanced';
 import General from './panes/General';
 import Memory from './panes/Memory';
 import Model from './panes/Model';
+import Notifications from './panes/Notifications';
 import Permissions from './panes/Permissions';
 import Placeholder from './panes/Placeholder';
 import Privacy from './panes/Privacy';
@@ -49,7 +50,7 @@ export const SETTINGS_SECTIONS: Record<SectionId, SettingsSectionEntry> = {
     messaging: { titleKey: 'settings.section.messaging', icon: MessageSquare, pane: Placeholder },
     automations: { titleKey: 'settings.section.automations', icon: Clock, pane: Placeholder },
     memory: { titleKey: 'settings.section.memory', icon: Brain, pane: Memory },
-    notifications: { titleKey: 'settings.section.notifications', icon: Bell, pane: Placeholder },
+    notifications: { titleKey: 'settings.section.notifications', icon: Bell, pane: Notifications },
     voice: { titleKey: 'settings.section.voice', icon: Volume2, pane: Placeholder },
     privacy: { titleKey: 'settings.section.privacy', icon: Lock, pane: Privacy },
     advanced: { titleKey: 'settings.section.advanced', icon: Wrench, pane: Advanced },

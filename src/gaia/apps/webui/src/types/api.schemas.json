@@ -4053,6 +4053,72 @@
     "title": "PreflightReport",
     "type": "object"
   },
+  "ProviderSummary": {
+    "description": "A provider as a paired device may see it: no key, key hint or address.",
+    "properties": {
+      "blocked": {
+        "title": "Blocked",
+        "type": "boolean"
+      },
+      "configured": {
+        "title": "Configured",
+        "type": "boolean"
+      },
+      "id": {
+        "title": "Id",
+        "type": "string"
+      },
+      "name": {
+        "title": "Name",
+        "type": "string"
+      },
+      "privacy_notice": {
+        "title": "Privacy Notice",
+        "type": "string"
+      },
+      "remote": {
+        "title": "Remote",
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "id",
+      "name",
+      "remote",
+      "privacy_notice",
+      "configured",
+      "blocked"
+    ],
+    "title": "ProviderSummary",
+    "type": "object"
+  },
+  "ProviderSummaryList": {
+    "properties": {
+      "lemonade_error": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Lemonade Error"
+      },
+      "providers": {
+        "items": {
+          "$ref": "#/components/schemas/ProviderSummary"
+        },
+        "title": "Providers",
+        "type": "array"
+      }
+    },
+    "required": [
+      "providers"
+    ],
+    "title": "ProviderSummaryList",
+    "type": "object"
+  },
   "PullRequestRequest": {
     "properties": {
       "body": {
