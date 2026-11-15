@@ -6,7 +6,9 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type { PermissionMode } from '@/api/client.types';
 import { useCreateSession, useDocuments, useGaiaClient, useStartScreen, useSystemStatus } from '@/data';
+import { FlagshipAgentBanner } from '@/features/banners/FlagshipAgentBanner';
 import { Composer, FolderChip, ModelChip, PermissionChip, PrivateChip, useAttachments, useComposerQueue } from '@/features/composer';
+import { useNextChatDocs } from '@/features/documents';
 import { QueuedMessages } from '@/features/composer/QueuedMessages';
 import { ScreenHeader } from '@/features/nav/ScreenHeader';
 import { useT } from '@/i18n/useT';
@@ -14,6 +16,7 @@ import { useLastChatStore } from '@/state/lastChat';
 import { useRouteNoticeStore } from '@/state/routeNotice';
 import { Disclosure, Notice, ProgressLine, Screen, Stack, Text } from '@/ui';
 
+import { DocumentBriefCard } from './DocumentBriefCard';
 import { LibraryDocuments } from './LibraryDocuments';
 import { greetingKey } from './greeting';
 import { setupError } from './setupFailed';
@@ -42,12 +45,15 @@ export function NewChatScreen({ onOpen, initialText = '', prompt }: NewChatScree
     const [isPrivate, setPrivate] = useState(false);
     const [mode, setMode] = useState<PermissionMode>('ask');
     const documents = useDocuments().data?.documents;
-    const [attachedIds, setAttachedIds] = useState<string[]>([]);
+    const attachedIds = useNextChatDocs((s) => s.ids);
+    const holdDocuments = useNextChatDocs((s) => s.add);
+    const dropDocument = useNextChatDocs((s) => s.remove);
     const queue = useComposerQueue(null);
     const { state, setText, submit } = useFirstSend(
         {
             createSession: async () => {
-                const session = await createSession.mutateAsync({ document_ids: attachedIds, private: isPrivate });
+                const session = await createSession.mutateAsync({ document_ids: useNextChatDocs.getState().ids, private: isPrivate });
+                useNextChatDocs.getState().clear();
                 if (mode !== 'ask') await client?.setPermissionMode(session.id, mode);
                 return session;
             },
@@ -88,6 +94,15 @@ export function NewChatScreen({ onOpen, initialText = '', prompt }: NewChatScree
         [setText],
     );
 
+    const briefCard = startScreen?.cards.find((c) => c.skill === 'document-brief');
+    const indexed = (documents ?? []).filter((d) => d.indexing_status === 'complete');
+    // Same as the web UI's first-task pick: the prompt goes out at once, or waits in the box when it needs a subject.
+    const askAboutDocuments = () => {
+        if (!briefCard) return;
+        holdDocuments(indexed.map((d) => d.id));
+        if (briefCard.needs_input) setText(briefCard.prompt);
+        else void submit(briefCard.prompt, queue.hold);
+    };
     const failedSetup = setupError(status);
     const warming = warmUpProgress(status?.warm_up);
     const [greeting, gloss] = bracketParts(t(greetingKey(new Date())));
@@ -131,6 +146,7 @@ export function NewChatScreen({ onOpen, initialText = '', prompt }: NewChatScree
                         )}
                     </Stack>
                 )}
+                <FlagshipAgentBanner />
                 {failedSetup !== null && (
                     <Notice
                         tone="danger"
@@ -142,9 +158,12 @@ export function NewChatScreen({ onOpen, initialText = '', prompt }: NewChatScree
                     <LibraryDocuments
                         documents={documents}
                         attachedIds={attachedIds}
-                        onAttach={(ids) => setAttachedIds((cur) => [...cur, ...ids.filter((id) => !cur.includes(id))])}
-                        onRemove={(id) => setAttachedIds((cur) => cur.filter((x) => x !== id))}
+                        onAttach={holdDocuments}
+                        onRemove={dropDocument}
                     />
+                )}
+                {briefCard && indexed.length > 0 && !state.sending && (
+                    <DocumentBriefCard count={indexed.length} onPress={askAboutDocuments} />
                 )}
                 {warming !== null && showWarmUp(status) && (
                     <ProgressLine label={warmUpLine(warming, t, shortModelName)} />

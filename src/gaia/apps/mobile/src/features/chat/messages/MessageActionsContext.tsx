@@ -7,6 +7,8 @@ import { createContext, useContext } from 'react';
 export interface MessageActionsValue {
     send(text: string): boolean;
     busy: boolean;
+    /** A chat made by a retired agent: Edit and Resend are withheld. */
+    readOnly?: boolean;
 }
 
 const IDLE: MessageActionsValue = { send: () => false, busy: false };

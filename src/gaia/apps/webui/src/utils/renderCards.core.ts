@@ -179,6 +179,35 @@ export function isImagePayload(value: unknown): value is ImagePayload {
     );
 }
 
+/** Audio GAIA generated, played from `/api/media/audio/<name>` only. */
+export interface AudioPayload {
+    src: string;
+    caption?: string;
+    path?: string;
+    duration_seconds?: number;
+}
+
+export function isAudioPayload(value: unknown): value is AudioPayload {
+    if (!value || typeof value !== 'object') return false;
+    const v = value as Record<string, unknown>;
+    return (
+        typeof v.src === 'string' &&
+        parseMediaSrc('audio', v.src) !== null &&
+        isOptionalString(v.caption) &&
+        isOptionalString(v.path) &&
+        (v.duration_seconds === undefined ||
+            (typeof v.duration_seconds === 'number' && Number.isFinite(v.duration_seconds) && v.duration_seconds >= 0))
+    );
+}
+
+/** A length as "m:ss". */
+export function formatDuration(seconds: number): string {
+    const total = Math.round(seconds);
+    const m = Math.floor(total / 60);
+    const s = total % 60;
+    return `${m}:${String(s).padStart(2, '0')}`;
+}
+
 export interface DiffPayload {
     title?: string;
     /** File the diff is of; its name is the title when there is none. */
