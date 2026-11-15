@@ -11,10 +11,13 @@ export const UI_HEADERS = {
 export const ENDPOINTS = {
     agents: '/api/agents',
     health: '/api/health',
+    cloudPrices: '/api/spending/prices/{provider}',
     lemonadeDetect: '/api/lemonade/detect',
     lemonadeTarget: '/api/lemonade/target',
+    localModelContext: '/api/providers/local/context',
     localModelRestart: '/api/providers/local/restart',
     localModelStatus: '/api/providers/local/status',
+    memoryActivity: '/api/memory/activity',
     memoryConsolidate: '/api/memory/consolidate',
     memoryEmbeddingCoverage: '/api/memory/embedding-coverage',
     memoryRebuildEmbeddings: '/api/memory/rebuild-embeddings',
@@ -23,6 +26,8 @@ export const ENDPOINTS = {
     memoryRefreshSystemContext: '/api/memory/refresh-system-context',
     memorySettings: '/api/memory/settings',
     memoryStats: '/api/memory/stats',
+    memoryTools: '/api/memory/tools',
+    memoryUpcoming: '/api/memory/upcoming',
     modelServer: '/api/system/model-server',
     modelServerBackend: '/api/system/model-server/backend',
     providerModels: '/api/providers/{provider}/models',
@@ -100,6 +105,14 @@ export function connectorGrantsPath(connectorId: string): string {
     return ENDPOINTS.connectorGrants.replace('{connector_id}', encodeURIComponent(connectorId));
 }
 
+export function memoryActivityPath(days: number): string {
+    return `${ENDPOINTS.memoryActivity}?days=${days}`;
+}
+
+export function memoryUpcomingPath(days: number): string {
+    return `${ENDPOINTS.memoryUpcoming}?days=${days}`;
+}
+
 export function schedulePath(name: string): string {
     return ENDPOINTS.schedule.replace('{name:path}', encodeURIComponent(name));
 }
@@ -126,6 +139,10 @@ export function chatPerformancePath(sessionId: string): string {
 
 export function chatPermissionsPath(sessionId: string): string {
     return ENDPOINTS.chatPermissions.replace('{session_id}', encodeURIComponent(sessionId));
+}
+
+export function cloudPricesPath(provider: string): string {
+    return ENDPOINTS.cloudPrices.replace('{provider}', encodeURIComponent(provider));
 }
 
 export function providerModelsPath(provider: string): string {

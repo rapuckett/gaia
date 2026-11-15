@@ -3,6 +3,8 @@
 
 import type {
     ActiveModel,
+    CloudPriceList,
+    ContextChoice,
     AgentCapabilities,
     AgentInfo,
     AgentMcpServer,
@@ -19,8 +21,11 @@ import type {
     LemonadeFound,
     LemonadeTarget,
     LocalModelStatus,
+    MemoryActivityDay,
     MemorySettings,
     MemoryStats,
+    MemoryToolStat,
+    MemoryUpcomingItem,
     Message,
     MessageList,
     ModelNeed,
@@ -102,6 +107,12 @@ export interface FakeClientData {
     activeModel?: ActiveModel;
     /** What listProviderModels answers, by provider. */
     providerModels?: Record<string, ProviderModelsResponse>;
+    /** What getContextChoice answers, by model; setContextChoice updates it. */
+    contexts?: Record<string, ContextChoice>;
+    /** What getCloudPrices answers, by provider. */
+    cloudPrices?: Record<string, CloudPriceList>;
+    /** Makes selectModel fail with this. */
+    selectError?: GaiaApiError;
     /** What getPermissions answers, by chat; a chat not listed asks first. */
     permissions?: Record<string, PermissionMode>;
     /** What getContextUsage answers. */
@@ -148,6 +159,10 @@ export interface FakeClientData {
     /** Each stats read answers the next entry (the last one repeats); an Error entry is thrown. */
     memoryStats?: (MemoryStats | Error)[];
     embeddingCoverage?: EmbeddingCoverage;
+    /** What the activity read answers for a range in days; an Error is thrown. */
+    memoryActivity?: (days: number) => MemoryActivityDay[] | Error;
+    memoryTools?: MemoryToolStat[] | Error;
+    memoryUpcoming?: MemoryUpcomingItem[] | Error;
     /** What each maintenance POST answers; an Error makes it fail. Unlisted ones answer a zero result. */
     memoryActionResults?: {
         consolidate?: ConsolidateMemoryResult | Error;
@@ -172,6 +187,8 @@ export interface FakeGaiaClient extends GaiaClient {
     readonly scheduleActions: { action: 'pause' | 'resume' | 'run' | 'delete'; name: string }[];
     readonly followUps: { sessionId: string; text: string }[];
     readonly restarts: { confirm: boolean }[];
+    readonly selected: string[];
+    readonly contextSets: { model: string; ctxSize: number | null }[];
     /** The files uploadFile took, in order. */
     readonly uploads: { name: string; size: number }[];
     readonly downloads: { modelId: string; acknowledgeLowDisk: boolean }[];
@@ -181,6 +198,8 @@ export interface FakeGaiaClient extends GaiaClient {
     readonly capabilityReads: string[];
     /** Each memory maintenance POST, in order. */
     readonly memoryActions: string[];
+    /** The range of each activity read, in order. */
+    readonly memoryActivityReads: number[];
     /** How many times the stats were read. */
     readonly memoryStatsReads: number;
 }
@@ -203,6 +222,8 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
     const grants: Record<string, Record<string, string[]>> = cloneNested(data.grants);
     const activations: Record<string, Record<string, boolean>> = cloneNested(data.activations);
     const restarts: FakeGaiaClient['restarts'] = [];
+    const selected: string[] = [];
+    const contextSets: FakeGaiaClient['contextSets'] = [];
     const uploads: FakeGaiaClient['uploads'] = [];
     const downloads: FakeGaiaClient['downloads'] = [];
     const schedules = [...(data.schedules ?? [])];
@@ -227,6 +248,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
     const capabilityReads: string[] = [];
     const memoryActions: string[] = [];
     let memoryStatsReads = 0;
+    const memoryActivityReads: number[] = [];
     function memoryAction<T>(name: string, result: T | Error): T {
         memoryActions.push(name);
         if (result instanceof Error) throw result;
@@ -261,6 +283,8 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         scheduleActions,
         followUps,
         restarts,
+        selected,
+        contextSets,
         uploads,
         downloads,
         setupStarts,
@@ -268,6 +292,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         detached,
         capabilityReads,
         memoryActions,
+        memoryActivityReads,
         get memoryStatsReads() {
             return memoryStatsReads;
         },
@@ -301,6 +326,24 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             uploads.push({ name, size: file.size });
             return { filename: name, original_name: name, url: `/api/files/uploads/${name}`, size: file.size, content_type: file.type, is_image: file.type.startsWith('image/') };
         },
+        async getContextChoice(model) {
+            const choice = data.contexts?.[model];
+            if (!choice) throw new GaiaApiError(503, `This fake client was given no context sizes for ${model}.`);
+            return choice;
+        },
+        async setContextChoice(model, ctxSize) {
+            const choice = data.contexts?.[model];
+            if (!choice) throw new GaiaApiError(503, `This fake client was given no context sizes for ${model}.`);
+            contextSets.push({ model, ctxSize });
+            const next = { ...choice, chosen: ctxSize, reload: { started: false, reason: 'already_loaded' as const } };
+            data.contexts![model] = next;
+            return next;
+        },
+        async getCloudPrices(provider) {
+            const list = data.cloudPrices?.[provider];
+            if (!list) throw new GaiaApiError(503, `This fake client was given no prices for ${provider}.`);
+            return list;
+        },
         async getActiveModel() {
             if (!data.activeModel) throw new GaiaApiError(503, 'This fake client was given no active model.');
             return data.activeModel;
@@ -309,6 +352,8 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             return data.providerModels?.[provider] ?? { provider, models: [] };
         },
         async selectModel(model) {
+            if (data.selectError) throw data.selectError;
+            selected.push(model);
             if (!data.activeModel) throw new GaiaApiError(503, 'This fake client was given no active model.');
             data.activeModel = { ...data.activeModel, model };
             return data.activeModel;
@@ -466,6 +511,23 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         },
         async listSkills() {
             return { skills: [...(data.skills?.skills ?? [])], invalid: { ...(data.skills?.invalid ?? {}) } };
+        },
+        async getMemoryActivity(days) {
+            memoryActivityReads.push(days);
+            if (!data.memoryActivity) throw new GaiaApiError(503, 'This fake client was given no memory activity.');
+            const rows = data.memoryActivity(days);
+            if (rows instanceof Error) throw rows;
+            return rows;
+        },
+        async getMemoryTools() {
+            if (!data.memoryTools) throw new GaiaApiError(503, 'This fake client was given no memory tool stats.');
+            if (data.memoryTools instanceof Error) throw data.memoryTools;
+            return data.memoryTools;
+        },
+        async getMemoryUpcoming() {
+            if (!data.memoryUpcoming) throw new GaiaApiError(503, 'This fake client was given no upcoming items.');
+            if (data.memoryUpcoming instanceof Error) throw data.memoryUpcoming;
+            return data.memoryUpcoming;
         },
         async getMemoryStats() {
             if (!data.memoryStats?.length) throw new GaiaApiError(503, 'This fake client was given no memory stats.');

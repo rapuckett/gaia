@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: MIT
 
 import { createFakeClient } from '@/api/fake';
-import type { GaiaClient, MemoryStats } from '@/api/client.types';
+import type { GaiaClient, MemoryActivityDay, MemoryStats, MemoryToolStat, MemoryUpcomingItem } from '@/api/client.types';
 import { GaiaApiError } from '@/api/errors';
 
-export type MemoryScene = 'on' | 'off' | 'loading' | 'failed' | 'actionFails';
+export type MemoryScene = 'on' | 'off' | 'loading' | 'failed' | 'actionFails' | 'statsEmpty' | 'statsManyTools';
 
 export const SAMPLE_MEMORY_STATS: MemoryStats = {
     knowledge: {
@@ -18,11 +18,53 @@ export const SAMPLE_MEMORY_STATS: MemoryStats = {
     db_size_bytes: 1_800_000,
 };
 
+const EMPTY_MEMORY_STATS: MemoryStats = {
+    knowledge: {
+        total: 0, total_retrievals: 0, by_category: {}, by_context: {}, sensitive_count: 0, entity_count: 0, avg_confidence: 0, oldest: null, newest: null,
+    },
+    conversations: { total_turns: 0, total_sessions: 0, first_session: null, last_session: null },
+    tools: { total_calls: 0, unique_tools: 0, overall_success_rate: 0, total_errors: 0 },
+    temporal: { upcoming_count: 0, overdue_count: 0 },
+    db_size_bytes: 0,
+};
+
+/** `days` days ending today, with counts that rise and fall. */
+function sampleActivity(days: number): MemoryActivityDay[] {
+    return Array.from({ length: days }, (_, i) => {
+        const date = new Date(Date.now() - (days - 1 - i) * 86_400_000).toISOString().slice(0, 10);
+        return { date, conversations: (i * 3) % 5, tool_calls: (i * 7) % 11, knowledge_added: i % 4 === 0 ? 2 : 0, errors: i % 9 === 0 ? 1 : 0 };
+    });
+}
+
+const hoursFromNow = (h: number) => new Date(Date.now() + h * 3_600_000).toISOString();
+
+const SAMPLE_TOOLS: MemoryToolStat[] = [
+    { tool_name: 'read_file', total_calls: 48, success_count: 47, failure_count: 1, denied_count: 0, success_rate: 0.98, avg_duration_ms: 42, last_used: hoursFromNow(-2), last_error: null },
+    { tool_name: 'web_search', total_calls: 21, success_count: 17, failure_count: 4, denied_count: 1, success_rate: 0.81, avg_duration_ms: 1840, last_used: hoursFromNow(-30), last_error: 'Search provider timed out after 10 s' },
+    { tool_name: 'run_shell_command', total_calls: 9, success_count: 5, failure_count: 4, denied_count: 3, success_rate: 0.56, avg_duration_ms: 310, last_used: hoursFromNow(-200), last_error: null },
+];
+
+const MANY_TOOLS: MemoryToolStat[] = Array.from({ length: 12 }, (_, i) => ({
+    tool_name: `${['search_files', 'read_document', 'summarize_text', 'list_folder'][i % 4]}_${i + 1}`,
+    total_calls: 5 + i * 3, success_count: 5 + i * 3, failure_count: 0, denied_count: i % 3, success_rate: 1 - (i % 5) * 0.08, avg_duration_ms: 90 + i * 140,
+    last_used: hoursFromNow(-i * 9), last_error: i % 4 === 0 ? 'File not found: C:\\Users\\dana\\Documents\\reports\\q3-final.docx' : null,
+}));
+
+const SAMPLE_UPCOMING: MemoryUpcomingItem[] = [
+    { id: 'u1', content: 'Send the quarterly report to Dana', category: 'reminder', due_at: hoursFromNow(-26), reminded_at: null, context: 'work', created_at: hoursFromNow(-300) },
+    { id: 'u2', content: 'Dentist appointment', category: 'reminder', due_at: hoursFromNow(30), reminded_at: null, context: 'global', created_at: hoursFromNow(-100) },
+    { id: 'u3', content: 'Renew the domain name', category: 'reminder', due_at: hoursFromNow(120), reminded_at: null, context: 'global', created_at: hoursFromNow(-50) },
+];
+
 /** A fake PC for the dev gallery route, one per state the screen has to show. */
 export function memoryScene(scene: MemoryScene): GaiaClient {
+    const empty = scene === 'statsEmpty';
     const client = createFakeClient({
         memorySettings: { memory_enabled: scene !== 'off', mcp_memory_enabled: false, system_discovery_consent: true },
-        memoryStats: scene === 'failed' ? [new GaiaApiError(503, 'The backend is not running')] : [SAMPLE_MEMORY_STATS],
+        memoryStats: scene === 'failed' ? [new GaiaApiError(503, 'The backend is not running')] : [empty ? EMPTY_MEMORY_STATS : SAMPLE_MEMORY_STATS],
+        memoryActivity: (days) => (empty ? [] : sampleActivity(days)),
+        memoryTools: empty ? [] : scene === 'statsManyTools' ? MANY_TOOLS : SAMPLE_TOOLS,
+        memoryUpcoming: empty ? [] : SAMPLE_UPCOMING,
         embeddingCoverage: { total_items: 42, with_embedding: 36, without_embedding: 6, coverage_pct: 85.7 },
         memoryActionResults: {
             consolidate: scene === 'actionFails' ? new GaiaApiError(500, 'Database is locked') : { status: 'ok', consolidated: 3, extracted_items: 12 },

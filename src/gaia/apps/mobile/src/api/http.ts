@@ -26,7 +26,9 @@ import type {
     AgentMcpList,
     CancelChatResult,
     ChatPerformance,
+    CloudPriceList,
     ConfirmToolResult,
+    ContextChoice,
     ConnectorActivations,
     ConnectorGrants,
     ConnectorList,
@@ -44,8 +46,11 @@ import type {
     LemonadeFound,
     LemonadeTarget,
     LocalModelStatus,
+    MemoryActivityDay,
     MemorySettings,
     MemoryStats,
+    MemoryToolStat,
+    MemoryUpcomingItem,
     MessageList,
     ModelNeed,
     ModelServerInfo,
@@ -77,6 +82,7 @@ import {
     connectorActivationsPath,
     connectorGrantPath,
     connectorGrantsPath,
+    cloudPricesPath,
     ENDPOINTS,
     chatContextPath,
     chatPerformancePath,
@@ -85,6 +91,8 @@ import {
     followupOutcomePath,
     MESSAGE_PAGE_SIZE,
     QUEUED_IDLE_MS,
+    memoryActivityPath,
+    memoryUpcomingPath,
     schedulePath,
     scheduleResultsPath,
     scheduleRunPath,
@@ -329,6 +337,18 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             return postJson<Session>(sessionReadPath(sessionId), undefined, options?.signal);
         },
 
+        getContextChoice(model, options) {
+            return getJson<ContextChoice>(`${ENDPOINTS.localModelContext}?model=${encodeURIComponent(model)}`, options?.signal);
+        },
+
+        setContextChoice(model, ctxSize, options) {
+            return putJson<ContextChoice>(ENDPOINTS.localModelContext, { model, ctx_size: ctxSize }, options?.signal);
+        },
+
+        getCloudPrices(provider, options) {
+            return getJson<CloudPriceList>(cloudPricesPath(provider), options?.signal);
+        },
+
         getActiveModel(options) {
             return getJson<ActiveModel>(ENDPOINTS.providersActive, options?.signal);
         },
@@ -525,6 +545,18 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         listScheduleResults(name, limit, options) {
             return getJson<ScheduleResults>(scheduleResultsPath(name, limit), options?.signal);
+        },
+
+        getMemoryActivity(days, options) {
+            return getJson<MemoryActivityDay[]>(memoryActivityPath(days), options?.signal);
+        },
+
+        getMemoryTools(options) {
+            return getJson<MemoryToolStat[]>(ENDPOINTS.memoryTools, options?.signal);
+        },
+
+        getMemoryUpcoming(days, options) {
+            return getJson<MemoryUpcomingItem[]>(memoryUpcomingPath(days), options?.signal);
         },
 
         getMemoryStats(options) {
