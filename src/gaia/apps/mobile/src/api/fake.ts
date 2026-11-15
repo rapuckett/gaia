@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import type {
+    ActiveModel,
     AgentCapabilities,
     AgentInfo,
     AgentMcpServer,
@@ -20,11 +21,14 @@ import type {
     ModelNeed,
     PreflightReport,
     ParsedSchedule,
+    PermissionMode,
+    ProviderModelsResponse,
     Schedule,
     ScheduleResult,
     ResourceUsage,
     Session,
     SessionList,
+    SessionPermissions,
     SessionSearchResponse,
     SessionSearchResult,
     SetupCheck,
@@ -64,6 +68,12 @@ export interface FakeClientData {
     agentMcps?: AgentMcpServer[];
     /** Makes uploadFile reject, as a refused file does. */
     uploadError?: GaiaApiError;
+    /** What getActiveModel answers, and what selectModel last picked. */
+    activeModel?: ActiveModel;
+    /** What listProviderModels answers, by provider. */
+    providerModels?: Record<string, ProviderModelsResponse>;
+    /** What getPermissions answers, by chat; a chat not listed asks first. */
+    permissions?: Record<string, PermissionMode>;
     /** What getContextUsage answers. */
     contextUsage?: ContextUsageResult;
     /** What getFollowUpOutcome answers; a function may throw to script a 409. */
@@ -226,6 +236,25 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             if (data.uploadError) throw data.uploadError;
             uploads.push({ name, size: file.size });
             return { filename: name, original_name: name, url: `/api/files/uploads/${name}`, size: file.size, content_type: file.type, is_image: file.type.startsWith('image/') };
+        },
+        async getActiveModel() {
+            if (!data.activeModel) throw new GaiaApiError(503, 'This fake client was given no active model.');
+            return data.activeModel;
+        },
+        async listProviderModels(provider) {
+            return data.providerModels?.[provider] ?? { provider, models: [] };
+        },
+        async selectModel(model) {
+            if (!data.activeModel) throw new GaiaApiError(503, 'This fake client was given no active model.');
+            data.activeModel = { ...data.activeModel, model };
+            return data.activeModel;
+        },
+        async getPermissions(sessionId): Promise<SessionPermissions> {
+            return { session_id: sessionId, mode: data.permissions?.[sessionId] ?? 'ask', grants: [] };
+        },
+        async setPermissionMode(sessionId, mode): Promise<SessionPermissions> {
+            data.permissions = { ...data.permissions, [sessionId]: mode };
+            return { session_id: sessionId, mode, grants: [] };
         },
         async getContextUsage() {
             return data.contextUsage ?? { available: false, reason: 'Measured once GAIA has answered in this chat.' };
