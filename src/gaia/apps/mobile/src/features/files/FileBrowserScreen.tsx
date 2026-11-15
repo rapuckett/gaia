@@ -222,7 +222,7 @@ export function FileBrowserScreen({ chatId, onClose, initial }: FileBrowserScree
                         setText(v);
                         if (!v) setSubmitted(null);
                     }}
-                    placeholder={t('fileBrowser.searchPlaceholder')}
+                    placeholder={t.bare('fileBrowser.searchPlaceholder')}
                     accessibilityLabel={t('fileBrowser.searchAria')}
                     onSubmitEditing={runSearch}
                 />

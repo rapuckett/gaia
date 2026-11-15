@@ -105,7 +105,8 @@ function Library({ chat, onBrowseFiles }: { chat: OpenChat | null; onBrowseFiles
     return (
         <Screen header={<ScreenHeader title={t('docs.title')} />}>
             {query.data ? (
-                <Stack paddingX="lg" paddingY="sm">
+                <Stack gap="md" paddingX="lg" paddingY="sm">
+                    <TargetChooser chatTitle={chat?.title ?? null} target={target} onChange={setTarget} />
                     {adder}
                 </Stack>
             ) : null}
@@ -130,7 +131,6 @@ function Library({ chat, onBrowseFiles }: { chat: OpenChat | null; onBrowseFiles
                     contentContainerStyle={{ paddingBottom: space.xl }}
                     ListHeaderComponent={
                         <Stack gap="sm" paddingX="lg" paddingY="sm">
-                            <TargetChooser chatTitle={chat?.title ?? null} target={target} onChange={setTarget} />
                             {note ? <Notice tone="success" role="note" message={note} onDismiss={() => setNote(null)} /> : null}
                             {loadFailed ? <Notice tone="danger" message={loadFailed} action={retry} /> : null}
                             {action.error ? (

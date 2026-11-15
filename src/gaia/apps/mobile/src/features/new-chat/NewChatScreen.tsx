@@ -30,12 +30,14 @@ import { shortModelName, warmUpLine, warmUpProgress } from './warmUp';
 export interface NewChatScreenProps {
     // Opens the chat once its first message is under way.
     onOpen: (sessionId: string) => void;
+    // Opens the document library, to choose what the new chat searches.
+    onChooseDocuments: () => void;
     initialText?: string;
     // A skill's prompt goes in the box under any unsent draft; a new `id` adds it again.
     prompt?: { id: string; text: string };
 }
 
-export function NewChatScreen({ onOpen, initialText = '', prompt }: NewChatScreenProps) {
+export function NewChatScreen({ onOpen, onChooseDocuments, initialText = '', prompt }: NewChatScreenProps) {
     const t = useT();
     const status = useSystemStatus().data;
     const createSession = useCreateSession();
@@ -167,7 +169,6 @@ export function NewChatScreen({ onOpen, initialText = '', prompt }: NewChatScree
                         attachments={attachments}
                         leftControls={
                             <>
-                                <FolderChip folder={startScreen?.working_folder} />
                                 <PermissionChip mode={mode} onChange={setMode} />
                                 <PrivateChip on={isPrivate} onChange={setPrivate} />
                             </>
@@ -198,12 +199,14 @@ export function NewChatScreen({ onOpen, initialText = '', prompt }: NewChatScree
                         message={`${failedSetup}\n\n${t('newChat.setupFailed.hint')}`}
                     />
                 )}
+                {!state.sending && <FolderChip folder={startScreen?.working_folder} />}
                 {documents && !state.sending && (
                     <LibraryDocuments
                         documents={documents}
                         attachedIds={attachedIds}
                         onAttach={holdDocuments}
                         onRemove={dropDocument}
+                        onChoose={onChooseDocuments}
                     />
                 )}
                 {briefCard && indexed.length > 0 && !state.sending && (
