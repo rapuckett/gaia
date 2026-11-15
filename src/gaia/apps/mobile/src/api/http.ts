@@ -12,6 +12,7 @@ import {
     GaiaAuthError,
     GaiaConfigError,
     GaiaNetworkError,
+    GaiaPinMismatchError,
     GaiaStreamDroppedError,
     GaiaStreamError,
     GaiaStreamTimeoutError,
@@ -213,7 +214,7 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             const pending = fetch(url, init);
             res = await (headerLimit ? within(headerLimit, pending) : pending);
         } catch (err) {
-            if (err instanceof GaiaStreamTimeoutError || signal?.aborted) throw err;
+            if (err instanceof GaiaStreamTimeoutError || err instanceof GaiaPinMismatchError || signal?.aborted) throw err;
             throw new GaiaNetworkError(url, err);
         }
         if (!res.ok) {

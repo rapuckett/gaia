@@ -2,17 +2,19 @@
 // SPDX-License-Identifier: MIT
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Platform } from 'react-native';
 
 import { describeError, useT } from '@/i18n/useT';
 import { useConnectionStore } from '@/state/connection';
-import { Button, Card, Icon, Row, Screen, Spinner, Stack, Text, TextField } from '@/ui';
+import { Button, Card, Icon, Notice, Row, Screen, Spinner, Stack, Text, TextField } from '@/ui';
 import { CircleAlert, Clock, Smartphone } from '@/ui/icons';
 
 import { parseInvite } from './invite';
+import { PairingScanner } from './PairingScanner';
 import { getPairingService } from './registry';
 import type { PairingStatus, RedeemResult } from './service';
 
-export type PairingStep = 'welcome' | 'how' | 'manual';
+export type PairingStep = 'welcome' | 'how' | 'manual' | 'scan';
 
 type View = PairingStep | { at: 'waiting'; pcName: string } | { at: 'refused'; rateLimited: boolean } | { at: 'unreachable' };
 
@@ -22,7 +24,7 @@ export interface PairingFlowProps {
     initialStep?: PairingStep;
     /** Called once a PC has allowed this phone, after the connection is set. */
     onPaired?: () => void;
-    /** Shows a "Scan the code" button; the camera scanner is Mobile's. */
+    /** Replaces the built-in camera step behind "Scan the code". */
     onScan?: () => void;
 }
 
@@ -30,6 +32,7 @@ export interface PairingFlowProps {
 export function PairingFlow({ initialStep = 'welcome', onPaired, onScan }: PairingFlowProps) {
     const t = useT();
     const setConnection = useConnectionStore((s) => s.setConnection);
+    const removedFrom = useConnectionStore((s) => s.removedFrom);
     const [view, setView] = useState<View>(initialStep);
     const [text, setText] = useState('');
     const [error, setError] = useState<string | null>(null);
@@ -75,6 +78,8 @@ export function PairingFlow({ initialStep = 'welcome', onPaired, onScan }: Pairi
             .catch((e) => alive.current && setError(describeError(e, t)));
     }, [settle, t]);
 
+    // The camera exists on a phone build only; the web build pastes.
+    const canScan = onScan !== undefined || Platform.OS !== 'web';
     const waiting = typeof view === 'object' && view.at === 'waiting';
     useEffect(() => {
         if (!waiting) return;
@@ -87,11 +92,11 @@ export function PairingFlow({ initialStep = 'welcome', onPaired, onScan }: Pairi
         return () => clearInterval(timer);
     }, [waiting, settle, t]);
 
-    const submit = async () => {
+    const submit = async (code: string = text) => {
         setError(null);
         let invite;
         try {
-            invite = parseInvite(text);
+            invite = parseInvite(code);
         } catch (e) {
             setError(describeError(e, t));
             return;
@@ -144,7 +149,19 @@ export function PairingFlow({ initialStep = 'welcome', onPaired, onScan }: Pairi
     if (view === 'welcome') {
         return (
             <Page icon={Smartphone} title={t('mobileApp.pairing.welcome.title')} body={t('mobileApp.pairing.welcome.body')}>
+                {removedFrom ? <Notice tone="warning" message={t('mobileApp.pairing.removed', { pc: removedFrom })} testID="pairing-removed" /> : null}
                 <Button variant="primary" label={t('mobileApp.pairing.welcome.start')} onPress={() => setView('how')} full />
+            </Page>
+        );
+    }
+    if (view === 'scan') {
+        return (
+            <Page title={t('mobileApp.pairing.how.scan')}>
+                <PairingScanner onCode={(code) => void submit(code)} testID="pairing-scanner" />
+                {busy ? <Spinner /> : null}
+                {error ? <Notice tone="danger" message={error} /> : null}
+                <Button variant="secondary" label={t('mobileApp.pairing.how.paste')} onPress={() => setView('manual')} full />
+                <Button variant="ghost" label={t('mobileApp.pairing.manual.back')} onPress={() => setView('how')} full />
             </Page>
         );
     }
@@ -166,8 +183,8 @@ export function PairingFlow({ initialStep = 'welcome', onPaired, onScan }: Pairi
                         ))}
                     </Stack>
                 </Card>
-                {onScan ? <Button variant="primary" label={t('mobileApp.pairing.how.scan')} onPress={onScan} full /> : null}
-                <Button variant={onScan ? 'secondary' : 'primary'} label={t('mobileApp.pairing.how.paste')} onPress={() => setView('manual')} full />
+                {canScan ? <Button variant="primary" label={t('mobileApp.pairing.how.scan')} onPress={onScan ?? (() => setView('scan'))} full /> : null}
+                <Button variant={canScan ? 'secondary' : 'primary'} label={t('mobileApp.pairing.how.paste')} onPress={() => setView('manual')} full />
             </Page>
         );
     }
