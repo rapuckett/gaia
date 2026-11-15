@@ -184,7 +184,7 @@ class TestUploadIndexingFailure:
 
     @pytest.fixture
     def client(self, app):
-        return TestClient(app)
+        return TestClient(app, client=("127.0.0.1", 50000))
 
     @pytest.fixture
     def db(self, app):
@@ -276,7 +276,9 @@ class TestUploadIndexingFailure:
         async def mock_index_zero(path, display_name=None):
             return 0
 
-        error_client = TestClient(app, raise_server_exceptions=False)
+        error_client = TestClient(
+            app, raise_server_exceptions=False, client=("127.0.0.1", 50000)
+        )
         with patch("gaia.ui.server._index_document", mock_index_zero):
             resp = error_client.post(
                 "/api/documents/upload-path",

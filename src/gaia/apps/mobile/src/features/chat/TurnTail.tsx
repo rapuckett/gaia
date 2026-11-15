@@ -44,7 +44,7 @@ export function TurnTail({ tail, line, awaitingUser = false, onTryAgain, onConti
                     </Text>
                 </Row>
             ) : null}
-            {tail.error ? <Notice tone="danger" message={chatErrorText(tail.error, t)} testID="reply-error" /> : null}
+            {tail.error ? <Notice tone="danger" title={t('msg.error')} message={chatErrorText(tail.error, t)} testID="reply-error" /> : null}
             {tail.error && !tail.live && isModelServerDown(tail.error, t) ? <ModelServerDownNotice /> : null}
             {tail.stop ? <StoppedNote stop={tail.stop} /> : null}
             {tail.canContinue || tail.canTryAgain ? (

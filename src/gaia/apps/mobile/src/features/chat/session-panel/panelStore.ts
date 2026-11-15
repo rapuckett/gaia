@@ -1,0 +1,32 @@
+// Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
+// SPDX-License-Identifier: MIT
+
+import { create } from 'zustand';
+
+export type PanelSectionId = 'answer' | 'outputs' | 'changes' | 'environment' | 'skills' | 'context' | 'tools';
+
+// The web UI's defaults (stores/sessionPanelStore.ts); remembered for the app session only.
+const DEFAULT_OPEN: Record<PanelSectionId, boolean> = {
+    answer: true,
+    outputs: true,
+    changes: true,
+    environment: true,
+    skills: true,
+    context: false,
+    tools: false,
+};
+
+interface PanelState {
+    sections: Record<PanelSectionId, boolean>;
+    setSection(id: PanelSectionId, open: boolean): void;
+    /** Which numbers Context & performance shows under the hood. */
+    contextScope: 'turn' | 'chat';
+    setContextScope(scope: 'turn' | 'chat'): void;
+}
+
+export const useSessionPanelStore = create<PanelState>((set) => ({
+    sections: DEFAULT_OPEN,
+    setSection: (id, open) => set((state) => ({ sections: { ...state.sections, [id]: open } })),
+    contextScope: 'turn',
+    setContextScope: (contextScope) => set({ contextScope }),
+}));

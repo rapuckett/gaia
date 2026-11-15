@@ -51,6 +51,13 @@ export class GaiaNetworkError extends GaiaError {
     }
 }
 
+/** A paired PC's certificate doesn't match the pin this phone paired with: a hard failure, never "trust anyway". */
+export class GaiaPinMismatchError extends GaiaError {
+    constructor(options?: { cause?: unknown }) {
+        super('mobileApp.pairing.pinMismatch', {}, options);
+    }
+}
+
 export class GaiaStreamError extends GaiaError {}
 
 export type StreamEndpoint = 'send' | 'attach';
@@ -82,6 +89,13 @@ export class GaiaStreamStalledError extends GaiaStreamError {
 export class GaiaStreamDroppedError extends GaiaStreamError {
     constructor(cause: unknown) {
         super('mobileApp.error.streamBroke', {}, { cause });
+    }
+}
+
+/** The last re-attach never reached GAIA, so nothing there is still answering. */
+export class GaiaUnreachableError extends GaiaError {
+    constructor(cause: unknown) {
+        super('chatError.gaiaStopped', {}, { cause });
     }
 }
 

@@ -6,14 +6,18 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type {
     GaiaClient,
+    GpuMemoryStatus,
     LemonadeFound,
     LemonadeTarget,
     PreflightReport,
+    ProvidersResponse,
     SetupCheck,
     SetupPlan,
+    SetupRunOptions,
     SetupRunStatus,
 } from '@/api/client.types';
 import { GaiaError, GaiaNetworkError } from '@/api/errors';
+import { catalogOf, savedVision, skipChanges, type Selection } from '@webui/components/setup/selection';
 
 import { useGaiaClient } from './GaiaClientProvider';
 import { queryKeys, requireClient } from './queries';
@@ -194,6 +198,17 @@ export function useSetupPreflight() {
     });
 }
 
+/** The GPU memory split and what each size unlocks; `settingGb` also reads the manual steps for that size. Read only. */
+export function useGpuMemory(settingGb: number | null = null, enabled = true) {
+    const client = useGaiaClient();
+    return useQuery<GpuMemoryStatus>({
+        queryKey: ['gpuMemory', settingGb],
+        enabled: enabled && client !== null,
+        retry: false,
+        queryFn: ({ signal }) => requireClient(client).getGpuMemory(settingGb ?? undefined, { signal }),
+    });
+}
+
 /** Which model server GAIA uses; `offer` stays true until someone on the PC chooses, so it is re-read while waiting. */
 export function useLemonadeTarget() {
     const client = useGaiaClient();
@@ -239,5 +254,142 @@ export function useCancelSetup() {
     return useMutation<{ cancelled: boolean }, Error, void>({
         mutationFn: () => requireClient(client).cancelSetup(),
         onSettled: () => void queryClient.invalidateQueries({ queryKey: queryKeys.setupStatus }),
+    });
+}
+
+/** The cloud providers, each `blocked` while Local only is on. */
+export function useCloudProviders(enabled = true) {
+    const client = useGaiaClient();
+    return useQuery<ProvidersResponse>({
+        queryKey: ['cloudProviders'],
+        enabled: enabled && client !== null,
+        queryFn: ({ signal }) => requireClient(client).listProviders({ signal }),
+    });
+}
+
+/** `mutate({ options })` starts the setup run; the status poll then follows it. */
+export function useStartSetup() {
+    const client = useGaiaClient();
+    const queryClient = useQueryClient();
+    return useMutation<SetupRunStatus, Error, { options?: SetupRunOptions }>({
+        mutationFn: ({ options }) => requireClient(client).startSetup(false, false, options),
+        onSuccess: (status) => {
+            queryClient.setQueryData(queryKeys.setupStatus, status);
+            void queryClient.invalidateQueries({ queryKey: queryKeys.setupStatus });
+        },
+    });
+}
+
+/**
+ * llama.cpp runs on Vulkan, the GPU backend GAIA has tested, where the server's own pick or an earlier
+ * saved one is another and this PC lists Vulkan. Returns whether it set it; an unreachable server is left alone.
+ */
+export async function applyTestedBackend(client: GaiaClient): Promise<boolean> {
+    const server = await client.getModelServer();
+    if (!server.reachable) return false;
+    const vulkan = (server.available_backends ?? []).some((b) => b.name === 'vulkan');
+    if (!vulkan || (server.preferred_backend ?? server.default_backend) === 'vulkan') return false;
+    await client.setModelServerBackend('vulkan');
+    return true;
+}
+
+/** `mutate()` puts llama.cpp on the tested backend before a local setup starts. */
+export function useApplyTestedBackend() {
+    const client = useGaiaClient();
+    return useMutation<boolean, Error, void>({ mutationFn: () => applyTestedBackend(requireClient(client)) });
+}
+
+/** Deletes a model that downloaded but didn't load, then downloads it again; follow it with `useSetupStatus`. */
+export function useRedownloadSetupModel() {
+    const client = useGaiaClient();
+    const queryClient = useQueryClient();
+    return useMutation<SetupRunStatus, Error, string>({
+        mutationFn: async (modelId) => {
+            const c = requireClient(client);
+            await c.removeSetupModel(modelId);
+            return c.downloadSetupModel(modelId, false);
+        },
+        onSuccess: (run) => {
+            queryClient.setQueryData(queryKeys.setupStatus, run);
+            void queryClient.invalidateQueries({ queryKey: queryKeys.setupStatus });
+            void queryClient.invalidateQueries({ queryKey: queryKeys.setupPlan });
+        },
+    });
+}
+
+/** Reads the NPU again after a fix on the PC; the plan it answers replaces the one shown. */
+export function useRecheckNpu() {
+    const client = useGaiaClient();
+    const queryClient = useQueryClient();
+    return useMutation<SetupPlan, Error, void>({
+        mutationFn: () => requireClient(client).recheckSetupNpu(),
+        onSuccess: (plan) => {
+            queryClient.setQueryData(queryKeys.setupPlan, plan);
+            void queryClient.invalidateQueries({ queryKey: ['setupPreflight'] });
+        },
+    });
+}
+
+/**
+ * Saves what the Customize screen ticked, in the order the web UI's setup does before it downloads:
+ * the chat model (a 409 `no_fit` asks to be sent again with `acknowledgeNoFit`), the image reader, then the skip list.
+ * Resolves to the plan the PC now holds.
+ */
+export async function saveModelChoices(
+    client: GaiaClient,
+    plan: SetupPlan,
+    selection: Selection,
+    acknowledgeNoFit: boolean,
+): Promise<SetupPlan> {
+    let latest = plan;
+    if (selection.defaultChat && selection.defaultChat !== latest.chat_model.id) {
+        latest = await client.chooseSetupChatModel(selection.defaultChat, acknowledgeNoFit);
+    }
+    const vision = savedVision(catalogOf(latest), selection);
+    if (vision !== (latest.vision_model ?? null)) latest = await client.chooseSetupVisionModel(vision);
+    for (const change of skipChanges(latest, selection)) {
+        latest = await client.skipSetupModel(change.id, change.skipped);
+    }
+    return latest;
+}
+
+/** `mutate({ plan, selection, acknowledgeNoFit })` saves the choices on the PC and refreshes the plan. */
+export function useSaveModelChoices() {
+    const client = useGaiaClient();
+    const queryClient = useQueryClient();
+    return useMutation<SetupPlan, Error, { plan: SetupPlan; selection: Selection; acknowledgeNoFit: boolean }>({
+        mutationFn: ({ plan, selection, acknowledgeNoFit }) =>
+            saveModelChoices(requireClient(client), plan, selection, acknowledgeNoFit),
+        onSuccess: (plan) => queryClient.setQueryData(queryKeys.setupPlan, plan),
+    });
+}
+
+/**
+ * Connects a provider that already holds a key on the PC, selects the model and starts the cloud
+ * setup run, as webui's SetupScreen `connect` does. No key is sent: `wanted` is the picked model id,
+ * and `wantedName` the name an error says.
+ */
+export function useConnectCloud() {
+    const client = useGaiaClient();
+    const queryClient = useQueryClient();
+    return useMutation<SetupRunStatus, Error, { provider: string; wanted: string | null; wantedName?: string }>({
+        mutationFn: async ({ provider, wanted, wantedName }) => {
+            const api = requireClient(client);
+            await api.connectProvider(provider);
+            const { models } = await api.listProviderModels(provider);
+            const pick = wanted ? models.find((m) => m.id === wanted) : (models.find((m) => m.rank === 1) ?? models[0]);
+            if (!pick) {
+                throw wanted
+                    ? new GaiaError('setup.key.modelNotOffered', { model: wantedName ?? wanted })
+                    : new GaiaError('setup.key.noModels');
+            }
+            await api.selectModel(pick.id);
+            return api.startSetup(true, false, {});
+        },
+        onSuccess: (status) => {
+            queryClient.setQueryData(queryKeys.setupStatus, status);
+            void queryClient.invalidateQueries({ queryKey: queryKeys.setupStatus });
+            void queryClient.invalidateQueries({ queryKey: ['cloudProviders'] });
+        },
     });
 }

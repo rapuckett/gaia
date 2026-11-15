@@ -14,19 +14,15 @@ import { requestErrorParam } from '../utils/requestErrors';
 import { formatSize, middleTruncate } from '../utils/format';
 import { examplePath } from '../utils/platform';
 import { cleanPastedPath } from '../utils/pastedPath';
-import { PERMANENT_FAILURE_HINTS, UploadErrorToast, getUnsupportedCategory, isExtensionSupported } from './UnsupportedFeature';
+import { INDEX_POLL_MS, REMOVE_UNDO_MS, countText, elapsed, failureHint, formatFullTimestamp, formatTimestamp, isIndexing, splitFailureReason } from '../utils/documentLibrary.core';
+
+export { INDEX_POLL_MS, REMOVE_UNDO_MS };
+import { UploadErrorToast, getUnsupportedCategory, isExtensionSupported } from './UnsupportedFeature';
 import type { Document, IndexFolderResponse } from '../types';
-import { dateLocale, useT, type Translate } from '../i18n/useT';
+import { useT, type Translate } from '../i18n/useT';
 import { pluralKey } from '../i18n/registry';
 import { IndexingProgress } from './IndexingProgress';
 import './DocumentLibrary.css';
-
-/** Split a stored indexing error into a one-line summary and the rest. */
-function splitFailureReason(lastError: string): { summary: string; more: string } {
-    const text = lastError.replace(/^RAG indexing failed for [^:]+:\s*/, '').trim();
-    const [first, ...rest] = text.split('\n');
-    return { summary: first.trim(), more: rest.join('\n').trim() };
-}
 
 /** One sentence on what folder indexing added, skipped and couldn't read. */
 function describeFolderResult(t: Translate, folderName: string, result: IndexFolderResponse): string {
@@ -54,12 +50,6 @@ function describeFolderResult(t: Translate, folderName: string, result: IndexFol
     });
 }
 
-/** How often an indexing document's status (and progress) is asked for. */
-export const INDEX_POLL_MS = 1000;
-
-/** How long a removed document can be put back before it is deleted. */
-export const REMOVE_UNDO_MS = 6000;
-
 interface PendingRemoval { id: string; name: string }
 
 /** The progress map with `id` set to `progress`, or dropped once there is none. */
@@ -68,63 +58,6 @@ function withProgress(map: Record<string, api.IndexProgress>, id: string, progre
     if (!(id in map)) return map;
     const { [id]: _gone, ...rest } = map;
     return rest;
-}
-
-/** Compute elapsed time as human-readable string. */
-function elapsed(startMs: number): string {
-    const sec = Math.floor((Date.now() - startMs) / 1000);
-    if (sec < 60) return `${sec}s`;
-    const min = Math.floor(sec / 60);
-    const rem = sec % 60;
-    return `${min}m ${rem}s`;
-}
-
-/** Format an ISO timestamp as a relative or absolute local time string. */
-function formatTimestamp(isoString: string, t: Translate): string {
-    try {
-        const date = new Date(isoString);
-        if (isNaN(date.getTime())) return '';
-        const now = new Date();
-        const diffMs = now.getTime() - date.getTime();
-        const diffSec = Math.floor(diffMs / 1000);
-        const diffMin = Math.floor(diffSec / 60);
-        const diffHour = Math.floor(diffMin / 60);
-        const diffDay = Math.floor(diffHour / 24);
-
-        if (diffSec < 60) return t('time.justNow');
-        if (diffMin < 60) return t('time.minutesAgo', { n: diffMin });
-        if (diffHour < 24) return t('time.hoursAgo', { n: diffHour });
-        if (diffDay === 1) return t('time.yesterday');
-        if (diffDay < 7) return t('time.daysAgo', { n: diffDay });
-
-        // Older than a week: show date + time
-        return date.toLocaleDateString(dateLocale(t), {
-            month: 'short',
-            day: 'numeric',
-            hour: 'numeric',
-            minute: '2-digit',
-        });
-    } catch {
-        return '';
-    }
-}
-
-/** Format an ISO timestamp as a full local date/time for tooltips. */
-function formatFullTimestamp(isoString: string, t: Translate): string {
-    try {
-        const date = new Date(isoString);
-        if (isNaN(date.getTime())) return '';
-        return date.toLocaleString(dateLocale(t), {
-            year: 'numeric',
-            month: 'short',
-            day: 'numeric',
-            hour: 'numeric',
-            minute: '2-digit',
-            second: '2-digit',
-        });
-    } catch {
-        return '';
-    }
 }
 
 export function DocumentLibrary() {
@@ -192,7 +125,7 @@ export function DocumentLibrary() {
 
     // Poll for indexing status on documents that are still 'indexing'
     const hasIndexingDocs = documents.some(
-        (d) => d.indexing_status === 'indexing' || d.indexing_status === 'pending'
+        (d) => isIndexing(d.indexing_status)
     );
 
     useEffect(() => {
@@ -219,7 +152,7 @@ export function DocumentLibrary() {
                 // Read fresh state inside callback to avoid stale closure
                 const freshDocs = useChatStore.getState().documents;
                 const indexingDocs = freshDocs.filter(
-                    (d) => d.indexing_status === 'indexing' || d.indexing_status === 'pending'
+                    (d) => isIndexing(d.indexing_status)
                 );
 
                 for (const doc of indexingDocs) {
@@ -249,7 +182,7 @@ export function DocumentLibrary() {
     useEffect(() => {
         const activeIds = new Set(
             documents
-                .filter((d) => d.indexing_status === 'indexing' || d.indexing_status === 'pending')
+                .filter((d) => isIndexing(d.indexing_status))
                 .map((d) => d.id)
         );
         for (const id of indexingStartTimes.current.keys()) {
@@ -418,7 +351,7 @@ export function DocumentLibrary() {
         setUploadStatus(t('docs.indexingFolder', { name: folderName }));
         try {
             // Top level only: a typed path like a home folder would otherwise index everything below it.
-            const result = await api.indexFolder(folder, false);
+            const result = await api.indexFolder(folder, false, currentSessionId);
             await attachIndexed(result.documents.map((d) => d.id).filter(Boolean), folderName);
             setFolderNotice(describeFolderResult(t, folderName, result));
             const data = await api.listDocuments();
@@ -433,16 +366,16 @@ export function DocumentLibrary() {
         } finally {
             setUploadStatus('');
         }
-    }, [attachIndexed, setDocuments, t]);
+    }, [attachIndexed, currentSessionId, setDocuments, t]);
 
     /** Index a document by a server-side filesystem path (used by the file browser and path input). */
     const uploadFile = useCallback(async (filepath: string, filename: string) => {
         return runUpload(
             filename,
-            () => api.uploadDocumentByPath(filepath),
+            () => api.uploadDocumentByPath(filepath, currentSessionId),
             () => indexFolderPath(filepath, filename),
         );
-    }, [runUpload, indexFolderPath]);
+    }, [runUpload, indexFolderPath, currentSessionId]);
 
     /**
      * Index a document by uploading its bytes directly (used by drag-and-drop).
@@ -645,7 +578,7 @@ export function DocumentLibrary() {
                 );
             }
             case 'failed': {
-                const hint = doc.error_kind ? PERMANENT_FAILURE_HINTS[doc.error_kind] : undefined;
+                const hint = failureHint(t, doc.error_kind);
                 const reason = doc.last_error ? splitFailureReason(doc.last_error) : null;
                 return (
                     <div className="doc-failure">
@@ -855,9 +788,9 @@ export function DocumentLibrary() {
                     {/* Stats */}
                     {documents.length > 0 && !pendingRemoval && (
                         <div className="doc-stats">
-                            <span>{t.plural('docs.count', documents.length - unreadableCount)}</span>
+                            <span>{countText(t, 'docs.count', documents.length - unreadableCount)}</span>
                             {unreadableCount > 0 && (
-                                <span className="doc-stats-failed">{t.plural('docs.unreadable', unreadableCount)}</span>
+                                <span className="doc-stats-failed">{countText(t, 'docs.unreadable', unreadableCount)}</span>
                             )}
                             <span>&middot;</span>
                             <bdi dir="ltr">{formatSize(totalSize)}</bdi>
