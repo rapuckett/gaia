@@ -3719,6 +3719,7 @@ const messages: Messages = {
     'mobileApp.settings.spend.reached': 'بلغت حدك، لذا توقفت المحادثات السحابية حتى الشهر القادم. ما زالت النماذج على الكمبيوتر لديك تعمل.',
     'mobileApp.setup.models.fit.unknown': 'تعذّر على GAIA قراءة ذاكرة الكمبيوتر لديك، لذا لا يستطيع معرفة ما إذا كان هذا النموذج مناسبًا.',
     'mobileApp.setup.models.loading': 'جارٍ قراءة النماذج على الكمبيوتر لديك…',
+    'mobileApp.setup.check.title': 'فحص الكمبيوتر لديك',
     'mobileApp.setup.pc.step': 'الكمبيوتر لديك',
     'mobileApp.settings.pcOnly': 'غيّر هذا من الكمبيوتر الذي يشغّل GAIA.',
     'mobileApp.settings.appearanceSystem': 'مطابقة النظام',
