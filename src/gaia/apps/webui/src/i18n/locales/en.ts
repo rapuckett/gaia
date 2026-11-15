@@ -278,6 +278,7 @@ export const enMessages = {
     'composer.tooLong': 'Too long to send: {sent} of {max} characters.',
     'composer.tooLongHint': 'Save it as a file and attach it with +, and GAIA can read all of it.',
     'composer.removeRefused': "Remove {names} before sending: GAIA can't read it, so it would be left out.",
+    'composer.refusedJoin': ', ',
     'composer.attach': 'Attach files',
     'composer.attachFile': 'File',
     'composer.attachPhoto': 'Photo',
