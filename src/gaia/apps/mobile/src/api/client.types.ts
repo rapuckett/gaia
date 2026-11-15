@@ -23,7 +23,6 @@ import type {
     ModelNeedJob,
     PermissionMode,
     PreflightReport,
-    ProvidersResponse,
     ParsedSchedule,
     ProviderModelsResponse,
     ResourceUsage,
@@ -44,7 +43,7 @@ import type { UndoSettings } from '@webui/types/changes';
 import type { AgentCapabilities } from '@webui/types/sessionPanel';
 import type { Goal, GoalStats, KnowledgeCreateBody, KnowledgeListParams, KnowledgeSaveResult, KnowledgeUpdateBody, MemorySettings, Priority as GoalPriority } from '@webui/services/memoryApi';
 import type { AboutYouItem, ActivityDay, TemporalItem, ToolStat } from '@webui/utils/memoryFormat.core';
-import type { CreateSessionRequest, DocumentListResponse, DocumentResponse, ModelServerInfo, SessionSearchResponse, ToolConfirmRequest, UserInputRequest as ApiUserInputRequest } from '@webui/types/api.gen';
+import type { CreateSessionRequest, DocumentListResponse, DocumentResponse, ModelServerInfo, ProviderSummaryList, SessionSearchResponse, ToolConfirmRequest, UserInputRequest as ApiUserInputRequest } from '@webui/types/api.gen';
 
 export type {
     ActiveModel,
@@ -69,7 +68,6 @@ export type {
     ModelNeedJob,
     PermissionMode,
     PreflightReport,
-    ProvidersResponse,
     ParsedSchedule,
     ProviderId,
     ProviderInfo,
@@ -93,7 +91,7 @@ export type {
 } from '@webui/types';
 export type { UndoSettings } from '@webui/types/changes';
 export type { ActiveSkill, AgentCapabilities, AgentTool, SkillOrigin } from '@webui/types/sessionPanel';
-export type { CreateSessionRequest, DocumentListResponse, DocumentResponse, ModelServerInfo, SessionSearchResponse, SessionSearchResult, ToolConfirmRequest } from '@webui/types/api.gen';
+export type { CreateSessionRequest, DocumentListResponse, DocumentResponse, ModelServerInfo, ProviderSummary, ProviderSummaryList, SessionSearchResponse, SessionSearchResult, ToolConfirmRequest } from '@webui/types/api.gen';
 
 /** A photo or file chosen on this phone: where it is, and what it is called. */
 export interface PickedFile {
@@ -570,8 +568,8 @@ export interface GaiaClient {
     checkSetup(skipChatModel: boolean, options?: RequestOptions): Promise<SetupCheck>;
     /** This PC's memory, disk, GPU and NPU as setup reads them. */
     getPreflight(options?: RequestOptions): Promise<PreflightReport>;
-    /** The cloud providers; `blocked` is set on each while Local only is on. */
-    listProviders(options?: RequestOptions): Promise<ProvidersResponse>;
+    /** Every provider and whether it is set up (`configured`) or held off by Local only (`blocked`); reads only, so a paired phone may. */
+    listProviderSummaries(options?: RequestOptions): Promise<ProviderSummaryList>;
     /** The model server GAIA uses: whether it answers, and the llama.cpp backends it lists and prefers. */
     getModelServer(options?: RequestOptions): Promise<ModelServerInfo>;
     /** Saves the llama.cpp backend for chat models (`auto` or a backend name); PC-only. */

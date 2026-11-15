@@ -69,7 +69,7 @@ import type {
     ModelNeed,
     ModelServerInfo,
     PreflightReport,
-    ProvidersResponse,
+    ProviderSummaryList,
     RestartModelResult,
     RequestOptions,
     ParsedSchedule,
@@ -841,8 +841,8 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             return getJson<SetupCheck>(`${ENDPOINTS.setupCheck}?skip_chat_model=${skipChatModel}`, options?.signal);
         },
 
-        listProviders(options) {
-            return getJson<ProvidersResponse>(ENDPOINTS.providers, options?.signal);
+        listProviderSummaries(options) {
+            return getJson<ProviderSummaryList>(ENDPOINTS.providersList, options?.signal);
         },
 
         getModelServer(options) {

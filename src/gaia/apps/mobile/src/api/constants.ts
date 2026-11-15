@@ -43,6 +43,7 @@ export const ENDPOINTS = {
     providerConnect: '/api/providers/{provider}/connect',
     providerModels: '/api/providers/{provider}/models',
     providersActive: '/api/providers/active',
+    providersList: '/api/providers/list',
     providersSelect: '/api/providers/select',
     schedule: '/api/schedules/{name:path}',
     scheduleResults: '/api/schedules/{name:path}/results',
@@ -113,7 +114,6 @@ export const ENDPOINTS = {
     filesUploadMedia: '/api/files/upload-media',
     onboardingPreflight: '/api/onboarding/preflight',
     onboardingStart: '/api/onboarding/start',
-    providers: '/api/providers',
 } as const;
 
 export function connectorActivationPath(connectorId: string, agentId: string): string {
