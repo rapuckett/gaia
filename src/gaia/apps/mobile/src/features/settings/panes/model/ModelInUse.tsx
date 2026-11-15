@@ -29,10 +29,10 @@ export function ModelInUse({ active, readFailed, row, waitingServer, choices, bu
     const remote = !!active?.remote;
     const offered = choices.some((m) => sameModelId(model, m.id));
     const downloaded = active?.downloaded ?? row?.downloaded;
-    const state = remote ? null
-        : row?.state === 'loaded' ? t('settings.model.loaded')
-        : downloaded === true ? t('settings.model.downloaded')
-        : downloaded === false ? t('settings.model.notDownloaded')
+    const stateKey = remote ? null
+        : row?.state === 'loaded' ? 'settings.model.loaded'
+        : downloaded === true ? 'settings.model.downloaded'
+        : downloaded === false ? 'settings.model.notDownloaded'
         : null;
     const device = row?.placement?.device;
     const labels = choices.map((m) => modelLabel(m));
@@ -70,14 +70,17 @@ export function ModelInUse({ active, readFailed, row, waitingServer, choices, bu
                     ) : null}
                     {model ? (
                         <Row gap="sm" wrap>
-                            {remote ? <Badge label={t('settings.model.cloud')} /> : null}
+                            {remote ? <Badge label={t.bare('settings.model.cloud')} accessibilityLabel={t('settings.model.cloud')} /> : null}
                             {remote && active?.provider_name ? <Badge label={active.provider_name} /> : null}
                             {device ? <Badge label={device.toUpperCase()} /> : null}
-                            {state ? <Badge label={state} tone={row?.state === 'loaded' ? 'success' : 'neutral'} /> : null}
-                            {row?.fits === true ? <Badge label={t('settings.model.fits')} tone="success" /> : null}
+                            {stateKey ? <Badge label={t.bare(stateKey)} accessibilityLabel={t(stateKey)} tone={row?.state === 'loaded' ? 'success' : 'neutral'} /> : null}
+                            {row?.fits === true ? <Badge label={t.bare('settings.model.fits')} accessibilityLabel={t('settings.model.fits')} tone="success" /> : null}
                             {row?.size_gb ? <Badge label={isolate(`${row.size_gb} GB`)} /> : null}
                             {remote && row?.context_length ? (
-                                <Badge label={t('settings.model.contextChip', { size: isolate(ctxLabel(row.context_length)) })} />
+                                <Badge
+                                    label={t.bare('settings.model.contextChip', { size: isolate(ctxLabel(row.context_length)) })}
+                                    accessibilityLabel={t('settings.model.contextChip', { size: isolate(ctxLabel(row.context_length)) })}
+                                />
                             ) : null}
                         </Row>
                     ) : null}

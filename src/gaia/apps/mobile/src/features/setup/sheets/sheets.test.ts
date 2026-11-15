@@ -5,7 +5,7 @@ import { GaiaApiError } from '@/api/errors';
 import type { Translate } from '@/i18n/useT';
 
 import { createConfirmBroker } from './ConfirmSheet';
-import { logsByStage } from './setupLogs';
+import { logsByStage } from './logLines';
 import { lowDiskRequest, noFitRequest, serverConfirmRequest, setupConfirmFrom, type ConfirmRequest } from './setupConfirm';
 
 const t = ((key: string, params?: Record<string, string>) => `${key}${params ? JSON.stringify(params) : ''}`) as unknown as Translate;

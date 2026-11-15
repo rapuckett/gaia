@@ -116,7 +116,7 @@ def test_index_folder_indexes_on_one_embedder_load(fake_rag, tmp_path, monkeypat
     monkeypatch.setattr(Path, "home", staticmethod(lambda: home))
     folder = home / "lib"
     _files(folder, 6)
-    client = TestClient(create_app(db_path=":memory:"))
+    client = TestClient(create_app(db_path=":memory:"), client=("127.0.0.1", 50000))
 
     resp = client.post("/api/documents/index-folder", json={"folder_path": str(folder)})
 

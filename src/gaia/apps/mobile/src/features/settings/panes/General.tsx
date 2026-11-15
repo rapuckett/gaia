@@ -157,7 +157,7 @@ export default function General() {
                     {t('settings.appearance')}
                 </Text>
                 <SegmentedControl
-                    options={SCHEMES.map((s) => ({ value: s.value, label: t(s.label) }))}
+                    options={SCHEMES.map((s) => ({ value: s.value, label: t.bare(s.label), accessibilityLabel: t(s.label) }))}
                     value={preference}
                     onChange={(v) => setScheme(v as typeof preference)}
                     accessibilityLabel={t('settings.appearance')}

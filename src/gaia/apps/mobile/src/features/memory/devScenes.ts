@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: MIT
 
 import { createFakeClient } from '@/api/fake';
-import type { GaiaClient, MemoryActivityDay, MemoryStats, MemoryToolStat, MemoryUpcomingItem } from '@/api/client.types';
+import type { GaiaClient, MemoryActivityDay, MemoryKnowledgeItem, MemoryStats, MemoryToolStat, MemoryUpcomingItem } from '@/api/client.types';
 import { GaiaApiError } from '@/api/errors';
 
-export type MemoryScene = 'on' | 'off' | 'loading' | 'failed' | 'actionFails' | 'statsEmpty' | 'statsManyTools';
+export type MemoryScene = 'on' | 'off' | 'loading' | 'failed' | 'actionFails' | 'statsEmpty' | 'statsManyTools' | 'aboutEmpty' | 'aboutFailed' | 'aboutMany';
 
 export const SAMPLE_MEMORY_STATS: MemoryStats = {
     knowledge: {
@@ -56,6 +56,25 @@ const SAMPLE_UPCOMING: MemoryUpcomingItem[] = [
     { id: 'u3', content: 'Renew the domain name', category: 'reminder', due_at: hoursFromNow(120), reminded_at: null, context: 'global', created_at: hoursFromNow(-50) },
 ];
 
+const daysAgo = (d: number) => new Date(Date.now() - d * 86_400_000).toISOString();
+
+function knowledge(id: string, category: string, content: string, source: string, ageDays: number, extra: Partial<MemoryKnowledgeItem> = {}): MemoryKnowledgeItem {
+    return { id, category, content, domain: null, source, context: 'global', entity: null, sensitive: false, created_at: daysAgo(ageDays + 1), updated_at: daysAgo(ageDays), due_at: null, ...extra };
+}
+
+export const SAMPLE_KNOWLEDGE: MemoryKnowledgeItem[] = [
+    knowledge('k1', 'fact', 'I live in Calgary and work from home on Tuesdays and Thursdays.', 'tool', 0),
+    knowledge('k2', 'preference', 'Keep answers short, and use metric units. If I ask for a long explanation, give it in steps I can follow one at a time.', 'llm_extract', 1),
+    knowledge('k3', 'reminder', 'Send the quarterly report to Dana', 'user', 2, { due_at: hoursFromNow(-26) }),
+    knowledge('k4', 'reminder', 'Dentist appointment', 'user', 3, { due_at: hoursFromNow(30) }),
+    knowledge('k5', 'fact', 'My passport number is 123456789', 'user', 5, { sensitive: true }),
+    knowledge('k6', 'note', 'The garage door code changed in October.', 'consolidation', 12),
+    knowledge('k7', 'fact', 'I use a Ryzen AI laptop.', 'discovery', 40),
+    knowledge('k8', 'preference', 'Call me Sam.', 'inferred', 90),
+];
+
+const MANY_KNOWLEDGE: MemoryKnowledgeItem[] = Array.from({ length: 230 }, (_, i) => knowledge(`m${i}`, ['fact', 'preference', 'note'][i % 3]!, `Memory number ${i + 1}`, 'llm_extract', i % 60));
+
 /** A fake PC for the dev gallery route, one per state the screen has to show. */
 export function memoryScene(scene: MemoryScene): GaiaClient {
     const empty = scene === 'statsEmpty';
@@ -65,6 +84,7 @@ export function memoryScene(scene: MemoryScene): GaiaClient {
         memoryActivity: (days) => (empty ? [] : sampleActivity(days)),
         memoryTools: empty ? [] : scene === 'statsManyTools' ? MANY_TOOLS : SAMPLE_TOOLS,
         memoryUpcoming: empty ? [] : SAMPLE_UPCOMING,
+        memoryKnowledge: scene === 'aboutFailed' ? new GaiaApiError(503, 'The backend is not running') : scene === 'aboutEmpty' ? [] : scene === 'aboutMany' ? MANY_KNOWLEDGE : SAMPLE_KNOWLEDGE,
         embeddingCoverage: { total_items: 42, with_embedding: 36, without_embedding: 6, coverage_pct: 85.7 },
         memoryActionResults: {
             consolidate: scene === 'actionFails' ? new GaiaApiError(500, 'Database is locked') : { status: 'ok', consolidated: 3, extracted_items: 12 },

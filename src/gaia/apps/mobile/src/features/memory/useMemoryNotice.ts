@@ -10,6 +10,8 @@ export interface MemoryNotice {
     text: string;
     /** Stays until replaced or dismissed, e.g. while an operation runs. */
     sticky?: boolean;
+    /** A button on the notice, e.g. Undo. */
+    action?: { label: string; onPress: () => void };
 }
 
 /** The screen's one notice slot: a new notice replaces the last, and clears itself like the web's toasts. */
