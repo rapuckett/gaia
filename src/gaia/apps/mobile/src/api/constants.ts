@@ -23,6 +23,8 @@ export const ENDPOINTS = {
     memoryRefreshSystemContext: '/api/memory/refresh-system-context',
     memorySettings: '/api/memory/settings',
     memoryStats: '/api/memory/stats',
+    modelServer: '/api/system/model-server',
+    modelServerBackend: '/api/system/model-server/backend',
     providerModels: '/api/providers/{provider}/models',
     providersActive: '/api/providers/active',
     providersSelect: '/api/providers/select',
@@ -75,6 +77,7 @@ export const ENDPOINTS = {
     filesUploadMedia: '/api/files/upload-media',
     onboardingPreflight: '/api/onboarding/preflight',
     onboardingStart: '/api/onboarding/start',
+    providers: '/api/providers',
 } as const;
 
 export function connectorActivationPath(connectorId: string, agentId: string): string {

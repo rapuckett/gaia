@@ -24,7 +24,9 @@ import type {
     Message,
     MessageList,
     ModelNeed,
+    ModelServerInfo,
     PreflightReport,
+    ProvidersResponse,
     ParsedSchedule,
     PermissionMode,
     ProviderModelsResponse,
@@ -131,6 +133,8 @@ export interface FakeClientData {
     /** Each status read answers the next entry (the last one repeats); defaults to idle. */
     setupStatuses?: (SetupRunStatus | Error)[];
     setupPlan?: SetupPlan;
+    modelServer?: ModelServerInfo;
+    providers?: ProvidersResponse;
     /** What getPreflight answers; an Error is thrown. */
     preflight?: PreflightReport | Error;
     /** What getLemonadeTarget answers; an Error is thrown. */
@@ -171,6 +175,7 @@ export interface FakeGaiaClient extends GaiaClient {
     /** The files uploadFile took, in order. */
     readonly uploads: { name: string; size: number }[];
     readonly downloads: { modelId: string; acknowledgeLowDisk: boolean }[];
+    readonly backendSets: string[];
     readonly setupStarts: { skipChatModel: boolean; gaiaLemonade: boolean; upgradeEmbedded: boolean; serverOnly: boolean }[];
     readonly detached: { sessionId: string; docId: string }[];
     readonly capabilityReads: string[];
@@ -210,6 +215,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
     }
     const followUps: FakeGaiaClient['followUps'] = [];
     const setupStarts: FakeGaiaClient['setupStarts'] = [];
+    const backendSets: string[] = [];
     let checkAt = 0;
     let statusAt = 0;
     const nextOf = <T,>(list: (T | Error)[], at: number): T => {
@@ -258,6 +264,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         uploads,
         downloads,
         setupStarts,
+        backendSets,
         detached,
         capabilityReads,
         memoryActions,
@@ -596,6 +603,18 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         async checkSetup() {
             if (!data.setupChecks?.length) throw new GaiaApiError(503, 'This fake client was given no setup checks.');
             return nextOf(data.setupChecks, checkAt++);
+        },
+        async listProviders() {
+            if (!data.providers) throw new GaiaApiError(503, 'This fake client was given no providers.');
+            return data.providers;
+        },
+        async getModelServer() {
+            if (!data.modelServer) throw new GaiaApiError(503, 'This fake client was given no model server.');
+            return data.modelServer;
+        },
+        async setModelServerBackend(backend) {
+            backendSets.push(backend);
+            return { ...(data.modelServer as ModelServerInfo), preferred_backend: backend };
         },
         async getPreflight() {
             if (!data.preflight) throw new GaiaApiError(503, 'This fake client was given no preflight.');

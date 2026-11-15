@@ -48,7 +48,9 @@ import type {
     MemoryStats,
     MessageList,
     ModelNeed,
+    ModelServerInfo,
     PreflightReport,
+    ProvidersResponse,
     RestartModelResult,
     RequestOptions,
     ParsedSchedule,
@@ -603,6 +605,18 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         checkSetup(skipChatModel, options) {
             return getJson<SetupCheck>(`${ENDPOINTS.setupCheck}?skip_chat_model=${skipChatModel}`, options?.signal);
+        },
+
+        listProviders(options) {
+            return getJson<ProvidersResponse>(ENDPOINTS.providers, options?.signal);
+        },
+
+        getModelServer(options) {
+            return getJson<ModelServerInfo>(ENDPOINTS.modelServer, options?.signal);
+        },
+
+        setModelServerBackend(backend, options) {
+            return putJson<ModelServerInfo>(ENDPOINTS.modelServerBackend, { backend }, options?.signal);
         },
 
         getPreflight(options) {
