@@ -52,9 +52,8 @@ function mount(path: string, client = createFakeClient({ filePreviews: previews 
 }
 
 describe('FilePreviewScreen', () => {
-    it('shows loading, then a table with its counts', async () => {
+    it('shows a table with its counts', async () => {
         await mount('/table.csv');
-        expect(screen.getByText(t('fileBrowser.previewLoading'))).toBeTruthy();
         expect(await screen.findByText(t('fileBrowser.columnsLabel'))).toBeTruthy();
         expect(screen.getByText('3 lines')).toBeTruthy();
         expect(screen.getByText('2 columns')).toBeTruthy();

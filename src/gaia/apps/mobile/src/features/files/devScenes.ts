@@ -43,6 +43,7 @@ const folder: BrowseResponse = {
 /** The file browser on a fake PC: `root`, `folder`, `search`, `searchStopped` or `denied`. */
 export function fileBrowserScene(scene: FileBrowserScene) {
     return createFakeClient({
+        sessions: [{ id: 'chat-1', title: 'Board prep', created_at: ago(60), updated_at: ago(5), model: '', system_prompt: null, message_count: 1, document_ids: [] }],
         preflight: { os: 'mac-arm64', detected_platform: 'mac-arm64', ram_gb: 32, disk_free_gb: 200, npu_detected: false, gpu_name: null, gpu_vram_gb: null, lemonade_running: true, compatible: true } as PreflightReport,
         fileFolders: { '': root, [DOCS]: folder, [`${HOME}/Desktop`]: 'denied' },
         fileSearch: {
