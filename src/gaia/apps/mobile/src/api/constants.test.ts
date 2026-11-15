@@ -106,6 +106,7 @@ describe('endpoints', () => {
         sessions: ['GET', 'POST'],
         session: ['GET', 'PUT'],
         sessionDocument: ['DELETE'],
+        sessionDocuments: ['POST'],
         sessionMessage: ['DELETE'],
         sessionMessages: ['GET'],
         sessionMessagesAndBelow: ['DELETE'],
@@ -136,6 +137,7 @@ describe('endpoints', () => {
         systemResources: ['GET'],
         systemStatus: ['GET'],
         documentFile: ['GET'],
+        documentUpload: ['POST'],
         documents: ['GET'],
         onboardingStart: ['GET'],
     };

@@ -9,6 +9,7 @@ import type {
     CreateSessionRequest,
     FollowUpOutcome,
     DocumentListResponse,
+    DocumentResponse,
     GaiaClient,
     HealthResponse,
     LocalModelStatus,
@@ -16,6 +17,7 @@ import type {
     MessageList,
     ModelNeed,
     ParsedSchedule,
+    PickedFile,
     Schedule,
     ResourceUsage,
     Session,
@@ -81,6 +83,10 @@ export interface FakeClientData {
     setupStatuses?: (SetupRunStatus | Error)[];
     setupPlan?: SetupPlan;
     documents?: DocumentListResponse;
+    /** Makes every upload fail with this error. */
+    uploadError?: Error;
+    /** The state an uploaded document comes back in; defaults to complete. */
+    uploadStatus?: DocumentResponse['indexing_status'];
 }
 
 export interface FakeGaiaClient extends GaiaClient {
@@ -97,6 +103,8 @@ export interface FakeGaiaClient extends GaiaClient {
     readonly downloads: { modelId: string; acknowledgeLowDisk: boolean }[];
     readonly setupStarts: { skipChatModel: boolean; gaiaLemonade: boolean; upgradeEmbedded: boolean }[];
     readonly detached: { sessionId: string; docId: string }[];
+    readonly uploaded: PickedFile[];
+    readonly attached: { sessionId: string; docId: string }[];
 }
 
 export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
@@ -133,6 +141,8 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         return item;
     };
     const detached: FakeGaiaClient['detached'] = [];
+    const uploaded: PickedFile[] = [];
+    const attached: FakeGaiaClient['attached'] = [];
 
     function findSession(sessionId: string): Session {
         const session = sessions.find((s) => s.id === sessionId);
@@ -154,6 +164,8 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         downloads,
         setupStarts,
         detached,
+        uploaded,
+        attached,
         async health(): Promise<HealthResponse> {
             return { status: 'ok', service: 'gaia-agent-ui' };
         },
@@ -362,6 +374,26 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             scheduleActions.push({ action: 'delete', name });
             schedules.splice(schedules.indexOf(schedule), 1);
             return { deleted: true };
+        },
+        async uploadDocument(file) {
+            if (data.uploadError) throw data.uploadError;
+            uploaded.push(file);
+            const doc = {
+                id: `doc-${uploaded.length}`,
+                filename: file.name,
+                filepath: `/managed/${file.name}`,
+                file_size: file.size ?? 0,
+                chunk_count: 1,
+                indexed_at: new Date().toISOString(),
+                indexing_status: data.uploadStatus ?? 'complete',
+            } as DocumentResponse;
+            const library = data.documents ?? { documents: [], total: 0, total_chunks: 0, total_size_bytes: 0 };
+            data.documents = { ...library, documents: [...library.documents, doc], total: library.total + 1 };
+            return doc;
+        },
+        async attachDocument(sessionId, docId) {
+            findSession(sessionId);
+            attached.push({ sessionId, docId });
         },
         async listDocuments() {
             return data.documents ?? { documents: [], total: 0, total_chunks: 0, total_size_bytes: 0 };

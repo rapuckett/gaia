@@ -23,7 +23,7 @@ import type {
     StreamEvent,
     SystemStatus,
 } from '@webui/types';
-import type { CreateSessionRequest, DocumentListResponse, SessionSearchResponse, ToolConfirmRequest, UserInputRequest as ApiUserInputRequest } from '@webui/types/api.gen';
+import type { CreateSessionRequest, DocumentListResponse, DocumentResponse, SessionSearchResponse, ToolConfirmRequest, UserInputRequest as ApiUserInputRequest } from '@webui/types/api.gen';
 
 export type {
     AgentInfo,
@@ -50,7 +50,15 @@ export type {
     SystemStatus,
     UnavailableConnectorRow,
 } from '@webui/types';
-export type { CreateSessionRequest, DocumentListResponse, SessionSearchResponse, SessionSearchResult, ToolConfirmRequest } from '@webui/types/api.gen';
+export type { CreateSessionRequest, DocumentListResponse, DocumentResponse, SessionSearchResponse, SessionSearchResult, ToolConfirmRequest } from '@webui/types/api.gen';
+
+/** A photo or file chosen on this phone: where it is, and what it is called. */
+export interface PickedFile {
+    uri: string;
+    name: string;
+    mimeType: string | null;
+    size: number | null;
+}
 
 /** `display` is what the phone shows as the answer; it is never sent to GAIA. */
 export type UserInputRequest = ApiUserInputRequest & { display?: string };
@@ -236,6 +244,10 @@ export interface GaiaClient {
     /** Runs a schedule once now (409 while a run is in flight); its next scheduled run stays as it was. */
     runSchedule(name: string, options?: RequestOptions): Promise<Schedule>;
     deleteSchedule(name: string, options?: RequestOptions): Promise<DeleteScheduleResult>;
+    /** Puts a file from this phone in the library and indexes it; resolves once GAIA has read it or failed to. */
+    uploadDocument(file: PickedFile, options?: RequestOptions): Promise<DocumentResponse>;
+    /** Attaches a library document to a chat, so the chat searches it. */
+    attachDocument(sessionId: string, docId: string, options?: RequestOptions): Promise<void>;
     /** The library's documents; a chat searches only the ones attached to it. */
     listDocuments(options?: RequestOptions): Promise<DocumentListResponse>;
     getSystemStatus(options?: RequestOptions): Promise<SystemStatus>;

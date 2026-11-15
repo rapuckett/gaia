@@ -8,9 +8,10 @@ import { isolate } from '@webui/i18n/registry';
 import { useDocuments } from '@/data';
 import { ScreenHeader } from '@/features/nav/ScreenHeader';
 import { describeError, useT } from '@/i18n/useT';
-import { Button, EmptyState, ErrorState, IconButton, List, ListSkeleton, Notice, Row, Screen, Stack, Text, useTheme } from '@/ui';
+import { EmptyState, ErrorState, IconButton, List, ListSkeleton, Notice, Row, Screen, Stack, Text, useTheme } from '@/ui';
 import { X } from '@/ui/icons';
 
+import { AddDocuments, ChatAddDocuments } from './AddDocuments';
 import { DocumentRow } from './DocumentRow';
 import { libraryStats } from './libraryStats';
 import { ChatTargetChooser, TargetChooser, type LibraryTarget } from './TargetChooser';
@@ -35,6 +36,11 @@ export function DocumentsScreen({ chatId }: DocumentsScreenProps) {
     const documents = query.data?.documents ?? [];
     const stats = libraryStats(documents, t);
     const loadFailed = query.isError ? t('docs.loadFailed', { error: describeError(query.error, t) }) : null;
+    const adder = chatId ? (
+        <ChatAddDocuments chatId={chatId} target={target} onStart={action.dismiss} />
+    ) : (
+        <AddDocuments chatId={null} chatName={null} onStart={action.dismiss} />
+    );
     const retry = { label: t('docs.loadRetry'), onPress: () => void query.refetch() };
 
     return (
@@ -42,6 +48,11 @@ export function DocumentsScreen({ chatId }: DocumentsScreenProps) {
             {query.isPending ? <ListSkeleton rows={4} /> : null}
             {loadFailed && documents.length === 0 ? <ErrorState title={loadFailed} action={retry} /> : null}
             {query.data && documents.length === 0 ? <EmptyState title={t('docs.empty')} message={t('docs.emptyHintPhone')} /> : null}
+            {query.data && documents.length === 0 ? (
+                <Stack paddingX="lg" paddingY="sm">
+                    {adder}
+                </Stack>
+            ) : null}
             {documents.length > 0 ? (
                 <List
                     data={documents}
@@ -55,6 +66,7 @@ export function DocumentsScreen({ chatId }: DocumentsScreenProps) {
                             ) : (
                                 <TargetChooser chatTitle={null} target={target} onChange={setTarget} />
                             )}
+                            {adder}
                             {loadFailed ? <Notice tone="danger" message={loadFailed} action={retry} /> : null}
                             {action.error ? (
                                 <Row gap="sm" align="start">

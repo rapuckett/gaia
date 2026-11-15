@@ -1,0 +1,113 @@
+// Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
+// SPDX-License-Identifier: MIT
+
+import { useState } from 'react';
+
+import { GaiaApiError } from '@/api/errors';
+import { useAddDocument, useSession } from '@/data';
+import { describeError, useT } from '@/i18n/useT';
+import { pickDocuments, pickPhotos, type PickedFile } from '@/platform/pickers';
+import { Button, Notice, ProgressLine, Row, Stack, Text } from '@/ui';
+import { FileText, ImageIcon } from '@/ui/icons';
+import { describeUploadError, unsupportedTypeMessage, type UploadErrorView } from '@webui/utils/uploadErrors.core';
+
+import type { LibraryTarget } from './TargetChooser';
+
+// One line at a time: the indexing status, the result of the last add, or why it failed.
+type AddLine =
+    | { kind: 'busy'; name: string }
+    | { kind: 'done'; message: string }
+    | { kind: 'unreadable'; message: string }
+    | { kind: 'failed'; error: UploadErrorView }
+    | { kind: 'picker'; message: string };
+
+interface AddDocumentsProps {
+    // The chat documents are attached to; null leaves them for the next new chat.
+    chatId: string | null;
+    chatName: string | null;
+    // Called when an add starts, so the screen can clear its own library line.
+    onStart?: () => void;
+}
+
+export function AddDocuments({ chatId, chatName, onStart }: AddDocumentsProps) {
+    const t = useT();
+    const add = useAddDocument();
+    const [line, setLine] = useState<AddLine | null>(null);
+    const busy = line?.kind === 'busy';
+
+    async function addOne(file: PickedFile): Promise<AddLine> {
+        const unsupported = unsupportedTypeMessage(file.name);
+        if (unsupported) return { kind: 'failed', error: describeUploadError(t, { filename: file.name, error: unsupported }) };
+        setLine({ kind: 'busy', name: file.name });
+        try {
+            const { document, attachError } = await add.mutateAsync({ file, chatId });
+            const name = document.filename || file.name;
+            if (document.indexing_status === 'failed') return { kind: 'unreadable', message: t('docs.notAdded', { name }) };
+            if (attachError) {
+                const error = `Indexed, but not attached to ${chatName}: ${describeError(attachError, t)}`;
+                return { kind: 'failed', error: describeUploadError(t, { filename: file.name, error }) };
+            }
+            return { kind: 'done', message: chatId ? t('docs.attached', { name, chat: chatName ?? '' }) : t('docs.willAttach', { name }) };
+        } catch (err) {
+            const api = err instanceof GaiaApiError ? err : null;
+            const kind = typeof api?.body?.status === 'string' ? api.body.status : null;
+            const error = kind === 'too_large' ? t('docs.tooLargeDetail', { max: String(api?.body?.max_mb) }) : describeError(err, t);
+            return { kind: 'failed', error: describeUploadError(t, { filename: file.name, error, status: api?.status, kind }) };
+        }
+    }
+
+    async function run(pick: () => Promise<PickedFile[]>) {
+        let files: PickedFile[];
+        try {
+            files = await pick();
+        } catch (err) {
+            setLine({ kind: 'picker', message: describeError(err, t) });
+            return;
+        }
+        if (files.length === 0) return;
+        onStart?.();
+        let result: AddLine | null = null;
+        for (const file of files) {
+            const next = await addOne(file);
+            // The first failure stays on screen; later successes don't hide it.
+            if (!result || result.kind === 'done') result = next;
+        }
+        setLine(result);
+    }
+
+    return (
+        <Stack gap="sm">
+            <Row gap="sm" wrap>
+                <Button label={t('docs.addPhotos')} icon={ImageIcon} variant="secondary" disabled={busy} onPress={() => void run(pickPhotos)} />
+                <Button label={t('docs.addFile')} icon={FileText} variant="secondary" disabled={busy} onPress={() => void run(pickDocuments)} />
+            </Row>
+            {line?.kind === 'busy' ? (
+                <Stack gap="xs">
+                    <Text role="caption" tone="secondary">
+                        {t('docs.indexingFile', { name: line.name })}
+                    </Text>
+                    <ProgressLine />
+                </Stack>
+            ) : null}
+            {line?.kind === 'done' ? <Notice tone="success" role="note" message={line.message} onDismiss={() => setLine(null)} /> : null}
+            {line?.kind === 'unreadable' || line?.kind === 'picker' ? (
+                <Notice tone="danger" message={line.message} onDismiss={() => setLine(null)} />
+            ) : null}
+            {line?.kind === 'failed' ? (
+                <Notice
+                    tone={line.error.icon === 'warning' ? 'warning' : 'danger'}
+                    title={line.error.title}
+                    message={line.error.detail}
+                    onDismiss={() => setLine(null)}
+                />
+            ) : null}
+        </Stack>
+    );
+}
+
+export function ChatAddDocuments({ chatId, target, onStart }: { chatId: string; target: LibraryTarget; onStart?: () => void }) {
+    const t = useT();
+    const session = useSession(chatId);
+    const chatName = `“${session.data?.title || t('docs.untitledChat')}”`;
+    return <AddDocuments chatId={target === 'chat' ? chatId : null} chatName={chatName} onStart={onStart} />;
+}

@@ -30,6 +30,7 @@ import type {
     DeleteMessagesResult,
     DeleteScheduleResult,
     DocumentListResponse,
+    DocumentResponse,
     FollowUpOutcome,
     FollowUpResult,
     GaiaClient,
@@ -66,6 +67,7 @@ import {
     SEND_HEADER_TIMEOUT_MS,
     SESSION_PAGE_SIZE,
     sessionDocumentPath,
+    sessionDocumentsPath,
     sessionMessagePath,
     sessionMessagesAndBelowPath,
     sessionMessagesPath,
@@ -144,10 +146,11 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
         headerLimit?: HeaderLimit,
     ): Promise<FetchResponseLike> {
         const url = `${base}${path}`;
+        const isForm = body instanceof FormData;
         const init: FetchRequestInit = {
             method,
-            headers: headers(body !== undefined),
-            ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+            headers: headers(body !== undefined && !isForm),
+            ...(body !== undefined ? { body: isForm ? body : JSON.stringify(body) } : {}),
             ...(signal ? { signal } : {}),
         };
         let res: FetchResponseLike;
@@ -420,6 +423,18 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         deleteSchedule(name, options) {
             return deleteJson<DeleteScheduleResult>(schedulePath(name), options?.signal);
+        },
+
+        async uploadDocument(file, options) {
+            // The multipart boundary header is the fetch's to set.
+            const bytes = await (await globalThis.fetch(file.uri)).blob();
+            const form = new FormData();
+            form.append('file', bytes, file.name);
+            return readJson<DocumentResponse>(await request('POST', ENDPOINTS.documentUpload, form, options?.signal), ENDPOINTS.documentUpload);
+        },
+
+        async attachDocument(sessionId, docId, options) {
+            await postJson<unknown>(sessionDocumentsPath(sessionId), { document_id: docId }, options?.signal);
         },
 
         listDocuments(options) {

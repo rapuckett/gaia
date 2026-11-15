@@ -23,7 +23,7 @@ export function createRecordingFetch(responder: Responder): { fetch: FetchLike; 
             url,
             method: init?.method,
             headers: init?.headers ?? {},
-            body: init?.body,
+            body: typeof init?.body === 'string' ? init.body : undefined,
             signal: init?.signal,
         };
         calls.push(call);

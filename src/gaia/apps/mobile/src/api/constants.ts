@@ -20,6 +20,7 @@ export const ENDPOINTS = {
     sessions: '/api/sessions',
     session: '/api/sessions/{session_id}',
     sessionDocument: '/api/sessions/{session_id}/documents/{doc_id}',
+    sessionDocuments: '/api/sessions/{session_id}/documents',
     sessionMessage: '/api/sessions/{session_id}/messages/{message_id}',
     sessionMessages: '/api/sessions/{session_id}/messages',
     sessionMessagesAndBelow: '/api/sessions/{session_id}/messages/{message_id}/and-below',
@@ -50,6 +51,7 @@ export const ENDPOINTS = {
     systemResources: '/api/system/resources',
     systemStatus: '/api/system/status',
     documentFile: '/api/documents/{doc_id}/file',
+    documentUpload: '/api/documents/upload',
     documents: '/api/documents',
     onboardingStart: '/api/onboarding/start',
 } as const;
@@ -102,6 +104,10 @@ export function sessionDocumentPath(sessionId: string, docId: string): string {
     return ENDPOINTS.sessionDocument
         .replace('{session_id}', encodeURIComponent(sessionId))
         .replace('{doc_id}', encodeURIComponent(docId));
+}
+
+export function sessionDocumentsPath(sessionId: string): string {
+    return ENDPOINTS.sessionDocuments.replace('{session_id}', encodeURIComponent(sessionId));
 }
 
 export function sessionPrivatePath(sessionId: string): string {
