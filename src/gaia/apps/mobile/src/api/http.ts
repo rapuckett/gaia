@@ -37,6 +37,8 @@ import type {
     ConnectorList,
     DisconnectOutcome,
     ContextUsageResult,
+    CustomModelRemoved,
+    CustomModelReport,
     ConsolidateMemoryResult,
     DeleteDocumentResult,
     DeleteMessagesResult,
@@ -61,15 +63,23 @@ import type {
     LocalModelStatus,
     KnowledgeSaveResult,
     MemoryActivityDay,
+    MemoryCleared,
+    MemoryConversation,
+    MemoryEntity,
     MemoryKnowledgePage,
+    MemoryReinitializeResult,
     MemorySettings,
+    MemorySettingsUpdateResponse,
     MemoryStats,
     MemoryToolStat,
+    MCPServerStatus,
+    MemoryTurn,
     MemoryUpcomingItem,
     MessageList,
     ModelNeed,
     ModelServerInfo,
     PreflightReport,
+    ProviderConnected,
     ProvidersResponse,
     RestartModelResult,
     RequestOptions,
@@ -90,6 +100,7 @@ import type {
     SetupRunStatus,
     Settings,
     SkillList,
+    SpendingReport,
     UndoSettings,
     UploadedFile,
     UserInputResult,
@@ -113,11 +124,15 @@ import {
     chatPerformancePath,
     chatPermissionsPath,
     providerConnectPath,
+    localCustomModelPath,
     providerModelsPath,
     followupOutcomePath,
     MESSAGE_PAGE_SIZE,
     QUEUED_IDLE_MS,
     memoryActivityPath,
+    memoryConversationPath,
+    memoryConversationsPath,
+    memoryConversationsSearchPath,
     memoryKnowledgeItemPath,
     memoryKnowledgePath,
     memoryUpcomingPath,
@@ -422,6 +437,10 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             return getJson<Settings>(ENDPOINTS.settings, options?.signal);
         },
 
+        updateSettings(patch, options) {
+            return putJson<Settings>(ENDPOINTS.settings, patch, options?.signal);
+        },
+
         setNetworkPolicy(policy, options) {
             return putJson<Settings>(ENDPOINTS.settings, { network_policy: policy }, options?.signal);
         },
@@ -446,12 +465,36 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             return getJson<CloudPriceList>(cloudPricesPath(provider), options?.signal);
         },
 
+        getSpending(options) {
+            return getJson<SpendingReport>(ENDPOINTS.spending, options?.signal);
+        },
+
+        setSpendingLimit(limitUsd, options) {
+            return putJson<SpendingReport>(ENDPOINTS.spendingLimit, { limit_usd: limitUsd }, options?.signal);
+        },
+
+        allowSpendingThisMonth(options) {
+            return postJson<SpendingReport>(ENDPOINTS.spendingAllowMonth, undefined, options?.signal);
+        },
+
         getActiveModel(options) {
             return getJson<ActiveModel>(ENDPOINTS.providersActive, options?.signal);
         },
 
         listProviderModels(provider, options) {
             return getJson<ProviderModelsResponse>(providerModelsPath(provider), options?.signal);
+        },
+
+        checkCustomModel(url, quant, options) {
+            return postJson<CustomModelReport>(ENDPOINTS.localCustomModelCheck, { url, quant: quant || null }, options?.signal);
+        },
+
+        addCustomModel(url, quant, options) {
+            return postJson<{ report: CustomModelReport }>(ENDPOINTS.localCustomModel, { url, quant: quant || null }, options?.signal);
+        },
+
+        removeCustomModel(model, options) {
+            return deleteJson<CustomModelRemoved>(localCustomModelPath(model), options?.signal);
         },
 
         selectModel(model, options) {
@@ -691,6 +734,22 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             return getJson<MemoryToolStat[]>(ENDPOINTS.memoryTools, options?.signal);
         },
 
+        listMemoryEntities(options) {
+            return getJson<MemoryEntity[]>(ENDPOINTS.memoryEntities, options?.signal);
+        },
+
+        listMemoryConversations(limit, options) {
+            return getJson<MemoryConversation[]>(memoryConversationsPath(limit), options?.signal);
+        },
+
+        searchMemoryConversations(query, limit, options) {
+            return getJson<MemoryTurn[]>(memoryConversationsSearchPath(query, limit), options?.signal);
+        },
+
+        getMemoryConversation(sessionId, options) {
+            return getJson<MemoryTurn[]>(memoryConversationPath(sessionId), options?.signal);
+        },
+
         getMemoryUpcoming(days, options) {
             return getJson<MemoryUpcomingItem[]>(memoryUpcomingPath(days), options?.signal);
         },
@@ -753,7 +812,15 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
         },
 
         updateMemorySettings(settings, options) {
-            return putJson<MemorySettings>(ENDPOINTS.memorySettings, settings, options?.signal);
+            return putJson<MemorySettingsUpdateResponse>(ENDPOINTS.memorySettings, settings, options?.signal);
+        },
+
+        clearAllMemory(options) {
+            return deleteJson<MemoryCleared>(ENDPOINTS.memoryAll, options?.signal);
+        },
+
+        reinitializeMemory(options) {
+            return postJson<MemoryReinitializeResult>(ENDPOINTS.memoryReinitialize, undefined, options?.signal);
         },
 
         getEmbeddingCoverage(options) {
@@ -832,6 +899,22 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             return getJson<SystemStatus>(ENDPOINTS.systemStatus, options?.signal);
         },
 
+        downloadModel(model, options) {
+            return postJson<{ status: string; model: string }>(
+                ENDPOINTS.systemDownloadModel,
+                { model_name: model, force: options?.force ?? false, load_after: options?.loadAfter ?? false },
+                options?.signal,
+            );
+        },
+
+        loadModel(modelName, force, options) {
+            return postJson<{ status: string; model: string; ctx_size: number }>(
+                ENDPOINTS.systemLoadModel,
+                { model_name: modelName, force },
+                options?.signal,
+            );
+        },
+
         getLocalModelStatus(options) {
             return getJson<LocalModelStatus>(ENDPOINTS.localModelStatus, options?.signal);
         },
@@ -897,13 +980,25 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             return getJson<LemonadeTarget>(ENDPOINTS.lemonadeTarget, options?.signal);
         },
 
+        setLemonadeTarget(body, options) {
+            return postJson<LemonadeTarget & { daemon: unknown }>(ENDPOINTS.lemonadeTarget, body, options?.signal);
+        },
+
+        getMcpStatus(options) {
+            return getJson<{ servers: MCPServerStatus[] }>(ENDPOINTS.mcpStatus, options?.signal);
+        },
+
         detectLemonade(options) {
             return getJson<{ found: LemonadeFound | null; unchecked?: string[] }>(ENDPOINTS.lemonadeDetect, options?.signal);
         },
 
         connectProvider(provider, options) {
             // No key travels from the phone: a blank body keeps the key the PC already holds.
-            return postJson<{ remembered: boolean }>(providerConnectPath(provider), {}, options?.signal);
+            return postJson<ProviderConnected>(providerConnectPath(provider), {}, options?.signal);
+        },
+
+        retryKeyStore(options) {
+            return postJson<{ retrying: boolean }>(ENDPOINTS.providersKeyStoreRetry, undefined, options?.signal);
         },
 
         recheckSetupNpu(options) {

@@ -58,6 +58,7 @@ export {
   Shield,
   ShieldAlert,
   ShieldCheck,
+  ShieldOff,
   ShieldQuestion,
   SlidersHorizontal,
   Smartphone,
