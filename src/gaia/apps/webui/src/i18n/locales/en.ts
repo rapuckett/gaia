@@ -278,6 +278,8 @@ export const enMessages = {
     'composer.tooLong': 'Too long to send: {sent} of {max} characters.',
     'composer.tooLongHint': 'Save it as a file and attach it with +, and GAIA can read all of it.',
     'composer.attach': 'Attach files',
+    'composer.attachFile': 'File',
+    'composer.attachPhoto': 'Photo',
     'composer.queue': 'Queue message',
     'composer.queueTitle': 'Queue it to send when this reply ends (Enter)',
     'queue.listAria': 'Messages waiting to send',

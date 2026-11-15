@@ -26,6 +26,7 @@ export {
   Eye,
   EyeOff,
   FileText,
+  Image,
   Info,
   ListChecks,
   Lock,

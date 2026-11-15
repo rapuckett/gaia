@@ -7,6 +7,10 @@ import { createRoot } from 'test-renderer';
 import { MAX_MESSAGE_CHARS } from '@webui/utils/messageLimits';
 
 import { Composer } from './Composer';
+import type { Attachments } from './useAttachments';
+
+jest.mock('./AttachButton', () => ({ AttachButton: 'AttachButton' }));
+jest.mock('./AttachmentChips', () => ({ AttachmentChips: 'AttachmentChips' }));
 
 jest.mock('@/i18n/useT', () => ({ useT: () => (key: string) => key }));
 jest.mock('@/ui/icons', () => ({ ArrowUp: 'ArrowUp', Square: 'Square' }));
@@ -75,6 +79,24 @@ describe('Composer', () => {
         expect(find(r, 'composer-send').props.disabled).toBe(true);
         await act(async () => r.render(<Composer onSend={jest.fn()} disabledReason="GAIA is starting…" />));
         expect(find(r, 'composer-input').props.disabled).toBe(true);
+        expect(find(r, 'composer-send').props.disabled).toBe(true);
+    });
+
+    it('sends the text with its file links, lets a file go with no words, and waits for uploads', async () => {
+        const attachments: Attachments = {
+            items: [],
+            add: jest.fn(),
+            remove: jest.fn(),
+            clear: jest.fn(),
+            uploading: false,
+            hasUploaded: true,
+            compose: (text) => (text ? `${text}\n\n[a.pdf](/u/a.pdf)` : '[a.pdf](/u/a.pdf)'),
+        };
+        const { r, onSend } = await mount({ attachments });
+        await act(async () => find(r, 'composer-send').props.onPress());
+        expect(onSend).toHaveBeenCalledWith('[a.pdf](/u/a.pdf)');
+        expect(attachments.clear).toHaveBeenCalledTimes(1);
+        await act(async () => r.render(<Composer onSend={onSend} attachments={{ ...attachments, uploading: true }} />));
         expect(find(r, 'composer-send').props.disabled).toBe(true);
     });
 });
