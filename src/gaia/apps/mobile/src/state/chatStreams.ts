@@ -45,6 +45,8 @@ export interface ChatTurn {
     stopState?: 'stopped' | 'unconfirmed';
     /** What GAIA reported while stopping. */
     stopError?: GaiaError;
+    /** Re-attach attempt under way after the live view dropped; cleared when the replay starts. */
+    reconnecting?: number;
     /** GAIA closed the turn as failed, or its answer only echoes a tool's error. */
     failed?: boolean;
     /** The cause a failed turn named (`done.failure`), for its fix. */

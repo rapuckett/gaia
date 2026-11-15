@@ -12,6 +12,7 @@ import {
     GaiaNetworkError,
     GaiaStreamError,
     GaiaTurnError,
+    GaiaUnreachableError,
     type GaiaError,
 } from '@/api/errors';
 import { describeError, type Translate } from '@/i18n/useT';
@@ -27,7 +28,7 @@ function webError(error: GaiaError): Error {
 /** A failed turn in plain words with a next step: the web UI's `chatError.*` text, and what kind of failure it is. */
 export function chatErrorInfo(error: GaiaError, t: Translate): { kind: ChatErrorKind; text: string } {
     // These carry their own text: pairing, setup, and a lost view of a turn that may still finish on the PC.
-    if (error instanceof GaiaStreamError || error instanceof GaiaConfigError || error instanceof GaiaAuthError) {
+    if (error instanceof GaiaStreamError || error instanceof GaiaUnreachableError || error instanceof GaiaConfigError || error instanceof GaiaAuthError) {
         return { kind: 'stream', text: describeError(error, t) };
     }
     return classifyChatError(webError(error), t);

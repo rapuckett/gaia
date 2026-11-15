@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import { isMessageKey } from '../i18n/registry';
-import { tEn, type Translate } from '../i18n/useT';
+import { tEn, type Translate } from '../i18n/translator';
 import type { ProviderInfo } from '../types';
 
 /**

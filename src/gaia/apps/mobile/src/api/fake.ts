@@ -3,9 +3,12 @@
 
 import type {
     ActiveModel,
+    CloudPriceList,
+    ContextChoice,
     AgentCapabilities,
     AgentInfo,
     AgentMcpServer,
+    ChatPerformance,
     ConnectorListEntry,
     ContextUsageResult,
     ConsolidateMemoryResult,
@@ -26,7 +29,9 @@ import type {
     Message,
     MessageList,
     ModelNeed,
+    ModelServerInfo,
     PreflightReport,
+    ProvidersResponse,
     ParsedSchedule,
     PermissionMode,
     ProviderModelsResponse,
@@ -59,6 +64,26 @@ function cloneNested<T>(source: Record<string, Record<string, T>> | undefined): 
     return Object.fromEntries(Object.entries(source ?? {}).map(([key, inner]) => [key, { ...inner }]));
 }
 
+const EMPTY_PERFORMANCE: ChatPerformance = {
+    latest_message_id: null,
+    turns: [],
+    totals: {
+        turns: 0,
+        wall_seconds: null,
+        model_seconds: null,
+        gaia_seconds: null,
+        tokens_in: null,
+        tokens_cached: null,
+        tokens_out: null,
+        tool_calls: null,
+        loads: 0,
+        load_seconds: null,
+        usd: null,
+        unpriced_turns: 0,
+    },
+    now: { model: null, provider: 'unknown', loaded: null, device: null, backend: null, ctx_size: null, weights_gb: null, kv_cache_gb: null, free_gb: null, error: null },
+};
+
 export interface FakeClientData {
     sessions?: Session[];
     schedules?: Schedule[];
@@ -82,10 +107,18 @@ export interface FakeClientData {
     activeModel?: ActiveModel;
     /** What listProviderModels answers, by provider. */
     providerModels?: Record<string, ProviderModelsResponse>;
+    /** What getContextChoice answers, by model; setContextChoice updates it. */
+    contexts?: Record<string, ContextChoice>;
+    /** What getCloudPrices answers, by provider. */
+    cloudPrices?: Record<string, CloudPriceList>;
+    /** Makes selectModel fail with this. */
+    selectError?: GaiaApiError;
     /** What getPermissions answers, by chat; a chat not listed asks first. */
     permissions?: Record<string, PermissionMode>;
     /** What getContextUsage answers. */
     contextUsage?: ContextUsageResult;
+    /** What getChatPerformance answers. */
+    chatPerformance?: ChatPerformance;
     /** What getFollowUpOutcome answers; a function may throw to script a 409. */
     followUpOutcome?: FollowUpOutcome | (() => FollowUpOutcome);
     /** Makes sendFollowUp reject, as a turn that can't take the message does. */
@@ -111,6 +144,8 @@ export interface FakeClientData {
     /** Each status read answers the next entry (the last one repeats); defaults to idle. */
     setupStatuses?: (SetupRunStatus | Error)[];
     setupPlan?: SetupPlan;
+    modelServer?: ModelServerInfo;
+    providers?: ProvidersResponse;
     /** What getPreflight answers; an Error is thrown. */
     preflight?: PreflightReport | Error;
     /** What getLemonadeTarget answers; an Error is thrown. */
@@ -152,9 +187,12 @@ export interface FakeGaiaClient extends GaiaClient {
     readonly scheduleActions: { action: 'pause' | 'resume' | 'run' | 'delete'; name: string }[];
     readonly followUps: { sessionId: string; text: string }[];
     readonly restarts: { confirm: boolean }[];
+    readonly selected: string[];
+    readonly contextSets: { model: string; ctxSize: number | null }[];
     /** The files uploadFile took, in order. */
     readonly uploads: { name: string; size: number }[];
     readonly downloads: { modelId: string; acknowledgeLowDisk: boolean }[];
+    readonly backendSets: string[];
     readonly setupStarts: { skipChatModel: boolean; gaiaLemonade: boolean; upgradeEmbedded: boolean; serverOnly: boolean }[];
     readonly detached: { sessionId: string; docId: string }[];
     readonly capabilityReads: string[];
@@ -184,6 +222,8 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
     const grants: Record<string, Record<string, string[]>> = cloneNested(data.grants);
     const activations: Record<string, Record<string, boolean>> = cloneNested(data.activations);
     const restarts: FakeGaiaClient['restarts'] = [];
+    const selected: string[] = [];
+    const contextSets: FakeGaiaClient['contextSets'] = [];
     const uploads: FakeGaiaClient['uploads'] = [];
     const downloads: FakeGaiaClient['downloads'] = [];
     const schedules = [...(data.schedules ?? [])];
@@ -196,6 +236,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
     }
     const followUps: FakeGaiaClient['followUps'] = [];
     const setupStarts: FakeGaiaClient['setupStarts'] = [];
+    const backendSets: string[] = [];
     let checkAt = 0;
     let statusAt = 0;
     const nextOf = <T,>(list: (T | Error)[], at: number): T => {
@@ -242,9 +283,12 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         scheduleActions,
         followUps,
         restarts,
+        selected,
+        contextSets,
         uploads,
         downloads,
         setupStarts,
+        backendSets,
         detached,
         capabilityReads,
         memoryActions,
@@ -282,6 +326,24 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             uploads.push({ name, size: file.size });
             return { filename: name, original_name: name, url: `/api/files/uploads/${name}`, size: file.size, content_type: file.type, is_image: file.type.startsWith('image/') };
         },
+        async getContextChoice(model) {
+            const choice = data.contexts?.[model];
+            if (!choice) throw new GaiaApiError(503, `This fake client was given no context sizes for ${model}.`);
+            return choice;
+        },
+        async setContextChoice(model, ctxSize) {
+            const choice = data.contexts?.[model];
+            if (!choice) throw new GaiaApiError(503, `This fake client was given no context sizes for ${model}.`);
+            contextSets.push({ model, ctxSize });
+            const next = { ...choice, chosen: ctxSize, reload: { started: false, reason: 'already_loaded' as const } };
+            data.contexts![model] = next;
+            return next;
+        },
+        async getCloudPrices(provider) {
+            const list = data.cloudPrices?.[provider];
+            if (!list) throw new GaiaApiError(503, `This fake client was given no prices for ${provider}.`);
+            return list;
+        },
         async getActiveModel() {
             if (!data.activeModel) throw new GaiaApiError(503, 'This fake client was given no active model.');
             return data.activeModel;
@@ -290,6 +352,8 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             return data.providerModels?.[provider] ?? { provider, models: [] };
         },
         async selectModel(model) {
+            if (data.selectError) throw data.selectError;
+            selected.push(model);
             if (!data.activeModel) throw new GaiaApiError(503, 'This fake client was given no active model.');
             data.activeModel = { ...data.activeModel, model };
             return data.activeModel;
@@ -303,6 +367,9 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         },
         async getContextUsage() {
             return data.contextUsage ?? { available: false, reason: 'Measured once GAIA has answered in this chat.' };
+        },
+        async getChatPerformance() {
+            return data.chatPerformance ?? EMPTY_PERFORMANCE;
         },
         async getFollowUpOutcome() {
             const outcome = data.followUpOutcome ?? { taken: [], returned: [] };
@@ -598,6 +665,18 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         async checkSetup() {
             if (!data.setupChecks?.length) throw new GaiaApiError(503, 'This fake client was given no setup checks.');
             return nextOf(data.setupChecks, checkAt++);
+        },
+        async listProviders() {
+            if (!data.providers) throw new GaiaApiError(503, 'This fake client was given no providers.');
+            return data.providers;
+        },
+        async getModelServer() {
+            if (!data.modelServer) throw new GaiaApiError(503, 'This fake client was given no model server.');
+            return data.modelServer;
+        },
+        async setModelServerBackend(backend) {
+            backendSets.push(backend);
+            return { ...(data.modelServer as ModelServerInfo), preferred_backend: backend };
         },
         async getPreflight() {
             if (!data.preflight) throw new GaiaApiError(503, 'This fake client was given no preflight.');

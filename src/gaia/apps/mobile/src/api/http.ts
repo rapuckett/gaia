@@ -25,7 +25,10 @@ import type {
     AgentList,
     AgentMcpList,
     CancelChatResult,
+    ChatPerformance,
+    CloudPriceList,
     ConfirmToolResult,
+    ContextChoice,
     ConnectorActivations,
     ConnectorGrants,
     ConnectorList,
@@ -50,7 +53,9 @@ import type {
     MemoryUpcomingItem,
     MessageList,
     ModelNeed,
+    ModelServerInfo,
     PreflightReport,
+    ProvidersResponse,
     RestartModelResult,
     RequestOptions,
     ParsedSchedule,
@@ -77,8 +82,10 @@ import {
     connectorActivationsPath,
     connectorGrantPath,
     connectorGrantsPath,
+    cloudPricesPath,
     ENDPOINTS,
     chatContextPath,
+    chatPerformancePath,
     chatPermissionsPath,
     providerModelsPath,
     followupOutcomePath,
@@ -330,6 +337,18 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             return postJson<Session>(sessionReadPath(sessionId), undefined, options?.signal);
         },
 
+        getContextChoice(model, options) {
+            return getJson<ContextChoice>(`${ENDPOINTS.localModelContext}?model=${encodeURIComponent(model)}`, options?.signal);
+        },
+
+        setContextChoice(model, ctxSize, options) {
+            return putJson<ContextChoice>(ENDPOINTS.localModelContext, { model, ctx_size: ctxSize }, options?.signal);
+        },
+
+        getCloudPrices(provider, options) {
+            return getJson<CloudPriceList>(cloudPricesPath(provider), options?.signal);
+        },
+
         getActiveModel(options) {
             return getJson<ActiveModel>(ENDPOINTS.providersActive, options?.signal);
         },
@@ -352,6 +371,10 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         getContextUsage(sessionId, options) {
             return getJson<ContextUsageResult>(chatContextPath(sessionId), options?.signal);
+        },
+
+        getChatPerformance(sessionId, options) {
+            return getJson<ChatPerformance>(chatPerformancePath(sessionId), options?.signal);
         },
 
         getFollowUpOutcome(sessionId, options) {
@@ -614,6 +637,18 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         checkSetup(skipChatModel, options) {
             return getJson<SetupCheck>(`${ENDPOINTS.setupCheck}?skip_chat_model=${skipChatModel}`, options?.signal);
+        },
+
+        listProviders(options) {
+            return getJson<ProvidersResponse>(ENDPOINTS.providers, options?.signal);
+        },
+
+        getModelServer(options) {
+            return getJson<ModelServerInfo>(ENDPOINTS.modelServer, options?.signal);
+        },
+
+        setModelServerBackend(backend, options) {
+            return putJson<ModelServerInfo>(ENDPOINTS.modelServerBackend, { backend }, options?.signal);
         },
 
         getPreflight(options) {

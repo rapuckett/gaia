@@ -11,8 +11,10 @@ export const UI_HEADERS = {
 export const ENDPOINTS = {
     agents: '/api/agents',
     health: '/api/health',
+    cloudPrices: '/api/spending/prices/{provider}',
     lemonadeDetect: '/api/lemonade/detect',
     lemonadeTarget: '/api/lemonade/target',
+    localModelContext: '/api/providers/local/context',
     localModelRestart: '/api/providers/local/restart',
     localModelStatus: '/api/providers/local/status',
     memoryActivity: '/api/memory/activity',
@@ -26,6 +28,8 @@ export const ENDPOINTS = {
     memoryStats: '/api/memory/stats',
     memoryTools: '/api/memory/tools',
     memoryUpcoming: '/api/memory/upcoming',
+    modelServer: '/api/system/model-server',
+    modelServerBackend: '/api/system/model-server/backend',
     providerModels: '/api/providers/{provider}/models',
     providersActive: '/api/providers/active',
     providersSelect: '/api/providers/select',
@@ -62,6 +66,7 @@ export const ENDPOINTS = {
     chatPermissions: '/api/chat/permissions/{session_id}',
     chatFollowup: '/api/chat/followup',
     chatFollowupOutcome: '/api/chat/followup/{session_id}',
+    chatPerformance: '/api/chat/performance/{session_id}',
     chatUserInput: '/api/chat/user-input',
     connectorActivation: '/api/connectors/{connector_id}/activations/{agent_id:path}',
     connectorActivations: '/api/connectors/{connector_id}/activations',
@@ -77,6 +82,7 @@ export const ENDPOINTS = {
     filesUploadMedia: '/api/files/upload-media',
     onboardingPreflight: '/api/onboarding/preflight',
     onboardingStart: '/api/onboarding/start',
+    providers: '/api/providers',
 } as const;
 
 export function connectorActivationPath(connectorId: string, agentId: string): string {
@@ -127,8 +133,16 @@ export function sessionPath(sessionId: string): string {
     return ENDPOINTS.session.replace('{session_id}', encodeURIComponent(sessionId));
 }
 
+export function chatPerformancePath(sessionId: string): string {
+    return ENDPOINTS.chatPerformance.replace('{session_id}', encodeURIComponent(sessionId));
+}
+
 export function chatPermissionsPath(sessionId: string): string {
     return ENDPOINTS.chatPermissions.replace('{session_id}', encodeURIComponent(sessionId));
+}
+
+export function cloudPricesPath(provider: string): string {
+    return ENDPOINTS.cloudPrices.replace('{provider}', encodeURIComponent(provider));
 }
 
 export function providerModelsPath(provider: string): string {
