@@ -16,6 +16,9 @@ import { SheetHost } from '@/ui/overlays/SheetHost';
 
 import Advanced from './Advanced';
 
+// Some Expo modules read Expo's config, which needs APP_ENV; jest doesn't set it.
+jest.mock('expo-constants', () => ({ __esModule: true, default: { expoConfig: { version: 'test' } } }));
+
 // The Logs card has its own tests, and reading Expo's config needs APP_ENV, which jest doesn't set.
 jest.mock('@/features/logs', () => ({ LogsCard: () => null }));
 

@@ -16,6 +16,9 @@ import { SheetHost } from '@/ui/overlays/SheetHost';
 
 import { ServerControlsSlot } from './ServerControls';
 
+// Some Expo modules read Expo's config, which needs APP_ENV; jest doesn't set it.
+jest.mock('expo-constants', () => ({ __esModule: true, default: { expoConfig: { version: 'test' } } }));
+
 // The web project's renderer can't mount react-native-web's DOM or the sheet host.
 const describeNative = Platform.OS === 'web' ? describe.skip : describe;
 
