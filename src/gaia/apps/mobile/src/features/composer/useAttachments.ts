@@ -73,7 +73,7 @@ export function useAttachments(): Attachments {
                 if (controller.signal.aborted) return;
                 const body = err instanceof GaiaApiError ? err.body : null;
                 const reason = typeof body?.status === 'string' ? body.status : null;
-                patch(a.id, { status: 'failed', error: uploadRefusalText(reason, body, describeError(err, t, { bare: true }), t) });
+                patch(a.id, { status: 'failed', error: uploadRefusalText(reason, body, describeError(err, t), t) });
             } finally {
                 controllers.current.delete(a.id);
             }

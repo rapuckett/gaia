@@ -3,7 +3,7 @@
 
 import { getLocales } from 'expo-localization';
 
-import { DEFAULT_LOCALE, getLocale, isLocaleCode } from '@webui/i18n/registry';
+import { DEFAULT_LOCALE, getLocale, isLocaleCode, type Say } from '@webui/i18n/registry';
 import { translator, type Translate } from '@webui/i18n/translator';
 
 import { GaiaError, GaiaNetworkError } from '@/api/errors';
@@ -16,13 +16,14 @@ export function deviceLocaleCode(): string {
     return isLocaleCode(code) ? code : DEFAULT_LOCALE;
 }
 
-export interface DescribeOptions {
-    /** Never nest: a message filled into another message's `{param}` is bare, so the outer one adds the one bracket. */
-    bare?: boolean;
+export function describeError(error: unknown, t: Translate): string {
+    if (error instanceof GaiaError) return t(error.messageKey, error.params);
+    return error instanceof Error ? error.message : String(error);
 }
 
-export function describeError(error: unknown, t: Translate, { bare }: DescribeOptions = {}): string {
-    if (error instanceof GaiaError) return bare ? t.bare(error.messageKey, error.params) : t(error.messageKey, error.params);
+/** For an error filled into another message: use inside `t.compose`, so each language half carries its own wording and the line is bracketed once. */
+export function describeErrorWith(error: unknown, say: Say): string {
+    if (error instanceof GaiaError) return say(error.messageKey, error.params);
     return error instanceof Error ? error.message : String(error);
 }
 

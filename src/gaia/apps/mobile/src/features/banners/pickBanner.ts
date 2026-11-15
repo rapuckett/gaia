@@ -4,7 +4,7 @@
 import { GaiaApiError } from '@/api/errors';
 import type { SystemStatus } from '@/api/client.types';
 import { isStarting } from '@/data';
-import { describeError, type Translate } from '@/i18n/useT';
+import { describeErrorWith, type Translate } from '@/i18n/useT';
 import type { NoticeTone } from '@/ui';
 import { GB_UNIT, MIN_CONTEXT_SIZE } from '@webui/utils/constants';
 
@@ -49,7 +49,7 @@ export function pickBanner(status: SystemStatus | undefined, fetchError: unknown
             return {
                 id: 'backendError',
                 tone: 'danger',
-                title: t('banner.backendError', { error: describeError(fetchError, t, { bare: true }) }),
+                title: t.compose((say) => say('banner.backendError', { error: describeErrorWith(fetchError, say) })),
                 message: t('banner.backendErrorHint'),
                 retry: true,
             };
