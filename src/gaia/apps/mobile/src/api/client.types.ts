@@ -126,6 +126,13 @@ export interface MessageList {
     total: number;
 }
 
+/** The `connector.disconnected` event's payload: the provider-side revoke outcome (#2591). */
+export interface DisconnectOutcome {
+    revoke_supported?: boolean;
+    revoked_remotely?: boolean;
+    revoke_error?: string | null;
+}
+
 export interface ConnectorList {
     connectors: ConnectorListEntry[];
 }
@@ -483,8 +490,12 @@ export interface GaiaClient {
     deactivateConnectorAgent(connectorId: string, agentId: string, options?: RequestOptions): Promise<void>;
     /** Pauses an MCP server; its credentials and grants stay. Turning it back on is PC-only. */
     disableConnector(connectorId: string, options?: RequestOptions): Promise<void>;
-    /** Removes a connector's credentials from the PC. */
-    disconnectConnector(connectorId: string, options?: RequestOptions): Promise<void>;
+    /**
+     * Removes a connector's credentials from the PC. Resolves with what the PC reported about the
+     * provider-side revoke, `{}` for a connector with no revoke concept, or null when the PC's
+     * event stream could not be read in time.
+     */
+    disconnectConnector(connectorId: string, options?: RequestOptions): Promise<DisconnectOutcome | null>;
     /** Servers that custom agents declare in their own mcp_servers.json; read-only. */
     listAgentMcps(options?: RequestOptions): Promise<AgentMcpList>;
     listSchedules(options?: RequestOptions): Promise<ScheduleList>;

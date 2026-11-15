@@ -199,6 +199,7 @@ describe('endpoints', () => {
         connectorsAgentMcps: ['GET'],
         systemDownloadModel: ['POST'],
         systemLoadModel: ['POST'],
+        connectorsEvents: ['GET'],
         systemResources: ['GET'],
         systemStatus: ['GET'],
         document: ['DELETE'],
