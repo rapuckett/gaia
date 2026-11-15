@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: MIT
 
 import { reloadAppAsync } from 'expo';
+import { View } from 'react-native';
 import { Component, type ReactNode } from 'react';
 
 import { useT } from '@/i18n/useT';
-import { ChipButton } from '@/features/schedules/ChipButton';
-import { Row, Stack, Text } from '@/ui';
+import { Button, Stack, Text } from '@/ui';
 
 export type BoundaryVariant = 'window' | 'fill' | 'compact';
 
@@ -18,10 +18,10 @@ function Fallback({ variant, onRetry }: { variant: BoundaryVariant; onRetry: () 
             <Text role="ui" tone="secondary" align="center">
                 {t(variant === 'window' ? 'errorBoundary.bodyWindow' : 'errorBoundary.body')}
             </Text>
-            <Row gap="sm" wrap justify="center">
-                <ChipButton variant="primary" label={t('errorBoundary.retry')} onPress={onRetry} testID="error-boundary-retry" />
-                <ChipButton variant="plain" label={t('errorBoundary.reload')} onPress={() => void reloadAppAsync()} testID="error-boundary-reload" />
-            </Row>
+            <View style={{ alignSelf: 'stretch', gap: 8 }}>
+                <Button full variant="primary" label={t('errorBoundary.retry')} onPress={onRetry} testID="error-boundary-retry" />
+                <Button full label={t('errorBoundary.reload')} onPress={() => void reloadAppAsync()} testID="error-boundary-reload" />
+            </View>
         </Stack>
     );
 }

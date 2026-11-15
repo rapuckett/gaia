@@ -20,6 +20,7 @@ import {
     type StreamEndpoint,
 } from './errors';
 import type {
+    ActiveModel,
     AgentCapabilities,
     AgentList,
     AgentMcpList,
@@ -50,6 +51,7 @@ import type {
     RestartModelResult,
     RequestOptions,
     ParsedSchedule,
+    ProviderModelsResponse,
     RebuildEmbeddingsResult,
     ReconcileMemoryResult,
     RefreshSystemContextResult,
@@ -57,6 +59,7 @@ import type {
     ScheduleList,
     ScheduleResults,
     SessionList,
+    SessionPermissions,
     SessionSearchResponse,
     SetupCheck,
     SetupPlan,
@@ -73,6 +76,8 @@ import {
     connectorGrantsPath,
     ENDPOINTS,
     chatContextPath,
+    chatPermissionsPath,
+    providerModelsPath,
     followupOutcomePath,
     MESSAGE_PAGE_SIZE,
     QUEUED_IDLE_MS,
@@ -318,6 +323,26 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         markSessionRead(sessionId, options) {
             return postJson<Session>(sessionReadPath(sessionId), undefined, options?.signal);
+        },
+
+        getActiveModel(options) {
+            return getJson<ActiveModel>(ENDPOINTS.providersActive, options?.signal);
+        },
+
+        listProviderModels(provider, options) {
+            return getJson<ProviderModelsResponse>(providerModelsPath(provider), options?.signal);
+        },
+
+        selectModel(model, options) {
+            return postJson<ActiveModel>(ENDPOINTS.providersSelect, { model }, options?.signal);
+        },
+
+        getPermissions(sessionId, options) {
+            return getJson<SessionPermissions>(chatPermissionsPath(sessionId), options?.signal);
+        },
+
+        setPermissionMode(sessionId, mode, options) {
+            return putJson<SessionPermissions>(chatPermissionsPath(sessionId), { mode }, options?.signal);
         },
 
         getContextUsage(sessionId, options) {

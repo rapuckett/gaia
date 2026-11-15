@@ -34,8 +34,8 @@ function status(over: Partial<LocalModelStatus> = {}): LocalModelStatus {
 describe('pillText', () => {
     it('names the place and model, and says the state for a local one', () => {
         const pill = pillText(status(), t);
-        expect(pill.text).toBe('Local · Gemma 4 E4B');
-        expect(pill.aria).toBe('Local · Gemma 4 E4B, model loaded');
+        expect(pill.text).toBe('On your PC · Gemma 4 E4B');
+        expect(pill.aria).toBe('On your PC · Gemma 4 E4B, model loaded');
     });
 
     it('names only the cloud model for a remote one', () => {

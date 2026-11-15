@@ -24,7 +24,7 @@ export const SKILLS_HOW_PARAMS = SKILLS_DIR;
 
 export const GROUPS: SkillGroupSpec[] = [
     { source: 'agent-bundled', title: 'settings.skills.bundled', note: 'settings.skills.bundledNote' },
-    { source: 'user', title: 'settings.skills.yours', note: 'settings.skills.yoursNote', empty: 'settings.skills.yoursEmpty', params: SKILLS_DIR },
+    { source: 'user', title: 'settings.skills.yours', note: 'settings.skills.yoursNote', empty: 'mobileApp.skills.yoursEmpty', params: SKILLS_DIR },
     { source: 'claude-project', title: 'settings.skills.project', note: 'settings.skills.projectNote', params: PROJECT_SKILLS_DIR },
     { source: 'claude-import', title: 'settings.skills.import', note: 'settings.skills.importNote' },
 ];

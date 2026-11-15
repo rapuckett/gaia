@@ -6,7 +6,7 @@ import { useState, type ReactNode } from 'react';
 import { MAX_MESSAGE_CHARS } from '@webui/utils/messageLimits';
 
 import { useT } from '@/i18n/useT';
-import { Button, IconButton, Notice, Row, Stack, TextField } from '@/ui';
+import { Button, IconButton, Notice, Row, Stack, Surface, TextField } from '@/ui';
 import { ArrowUp, Square } from '@/ui/icons';
 
 import { AttachButton } from './AttachButton';
@@ -103,46 +103,51 @@ export function Composer({
                     testID="composer-too-long"
                 />
             ) : null}
-            {attachments ? <AttachmentChips attachments={attachments} /> : null}
-            <TextField
-                value={text}
-                onChangeText={setText}
-                placeholder={placeholder}
-                hint={disabledReason}
-                accessibilityLabel={t('composer.message')}
-                multiline
-                maxLines={MAX_LINES}
-                disabled={!!disabledReason}
-                testID="composer-input"
-            />
-            <Row gap="sm" align="center" justify="between">
-                <Row gap="sm" align="center" flex={1}>
-                    {attachments ? <AttachButton onPick={attachments.add} disabled={!!disabledReason} /> : null}
-                    {leftControls}
-                </Row>
-                <Row gap="sm" align="center">
-                    {rightControls}
-                    {running ? (
-                        <Button
-                            variant="danger"
-                            icon={Square}
-                            label={stopping ? t('composer.stopping') : t('composer.stop')}
-                            onPress={stop}
-                            disabled={stopping}
-                            testID="composer-stop"
-                        />
-                    ) : null}
-                    <IconButton
-                        variant="primary"
-                        icon={ArrowUp}
-                        label={sendLabel}
-                        onPress={send}
-                        busy={starting}
-                        disabled={!canSend}
-                        testID="composer-send"
+            <Surface tone="card" border radius="xl" padding="sm">
+                <Stack gap="xs">
+                    {attachments ? <AttachmentChips attachments={attachments} /> : null}
+                    <TextField
+                        value={text}
+                        onChangeText={setText}
+                        placeholder={placeholder}
+                        hint={disabledReason}
+                        accessibilityLabel={t('composer.message')}
+                        multiline
+                        maxLines={MAX_LINES}
+                        disabled={!!disabledReason}
+                        bare
+                        testID="composer-input"
                     />
-                </Row>
-            </Row>
+                    <Row gap="sm" align="center" justify="between">
+                        <Row gap="sm" align="center" flex={1}>
+                            {attachments ? <AttachButton onPick={attachments.add} disabled={!!disabledReason} /> : null}
+                            {leftControls}
+                        </Row>
+                        <Row gap="sm" align="center">
+                            {rightControls}
+                            {running ? (
+                                <Button
+                                    variant="danger"
+                                    icon={Square}
+                                    label={stopping ? t('composer.stopping') : t('composer.stop')}
+                                    onPress={stop}
+                                    disabled={stopping}
+                                    testID="composer-stop"
+                                />
+                            ) : null}
+                            <IconButton
+                                variant="primary"
+                                icon={ArrowUp}
+                                label={sendLabel}
+                                onPress={send}
+                                busy={starting}
+                                disabled={!canSend}
+                                testID="composer-send"
+                            />
+                        </Row>
+                    </Row>
+                </Stack>
+            </Surface>
         </Stack>
     );
 }
