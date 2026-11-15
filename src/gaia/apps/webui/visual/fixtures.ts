@@ -501,6 +501,7 @@ export const DISCORD_STATES: Record<string, Record<string, unknown>> = {
 const DEVICE_STATUS_BASE = {
     listening: true, port: 4243, error_code: null, error_detail: null, pairing_open: false, pairing_expires_at: null,
     idle_expiry_days: 90, pending_expiry_minutes: 10, failed_redemptions: [],
+    routes: [{ kind: 'tailnet', on: false, origin: null, error_code: null }],
 };
 const AT_ISO = (minutesAgo: number) => new Date(NOW.getTime() - minutesAgo * 60_000).toISOString();
 const IPAD = { id: 'dev-ipad', name: "Someone's iPad Pro with a rather long name", platform: 'ipados', status: 'allowed', created_at: AT_ISO(9000), last_seen_at: AT_ISO(1500), expires_at: null };
@@ -519,6 +520,8 @@ export const DEVICE_STATES: Record<string, { status: Record<string, unknown>; de
         devices: [IPAD],
     },
     portInUse: { status: { ...DEVICE_STATUS_BASE, listening: false, error_code: 'port_in_use', error_detail: 'Port 4243 is in use.' }, devices: [IPAD] },
+    tailnetOn: { status: { ...DEVICE_STATUS_BASE, routes: [{ kind: 'tailnet', on: true, origin: 'https://100.101.102.103:4243', error_code: null }] }, devices: [IPAD] },
+    tailnetMissing: { status: { ...DEVICE_STATUS_BASE, routes: [{ kind: 'tailnet', on: false, origin: null, error_code: 'no_tailscale_address' }] }, devices: [IPAD] },
 };
 
 /** A pairing code as the PC shows it; never a real invitation. */
