@@ -21,7 +21,7 @@ import {
 import { ScreenHeader } from '@/features/nav/ScreenHeader';
 import { ChipButton } from '@/features/schedules/ChipButton';
 import { SettingsGroup } from '@/features/skills/SettingsGroup';
-import { describeError, useT } from '@/i18n/useT';
+import { describeError, describeErrorWith, useT } from '@/i18n/useT';
 import {
     ActionSheet,
     EmptyState,
@@ -542,7 +542,7 @@ function PersonalizeOffer({ connector }: { connector: ConnectorRow }) {
             }
             router.push(personalizeRoute(connector));
         } catch (e) {
-            setError(t('settings.connectors.personalize.failed', { error: describeError(e, t) }));
+            setError(t.compose((say) => say('settings.connectors.personalize.failed', { error: describeErrorWith(e, say) })));
         } finally {
             setBusy(false);
         }

@@ -3572,7 +3572,7 @@ const messages: Messages = {
     'mobileApp.notConnected': 'غير متصل بجهاز كمبيوتر بعد',
     'mobileApp.error.badAddress': '"{address}" ليس عنوان GAIA صالحًا. استخدم العنوان الكامل لجهاز الكمبيوتر، مثل http://192.168.1.20:4200.',
     'mobileApp.error.badScheme': 'يجب أن يبدأ عنوان GAIA "{address}" بـ http:// أو https://.',
-    'mobileApp.error.network': 'تعذّر الوصول إلى GAIA على {url}: {reason}. تأكد من أن الكمبيوتر يعمل ويمكن الوصول إليه من هذا الهاتف.',
+    'mobileApp.error.network': 'تعذّر الوصول إلى GAIA على الكمبيوتر. تأكد من أن الكمبيوتر يعمل ويمكن الوصول إليه من هذا الهاتف.',
     'mobileApp.error.auth': 'لم يقبل GAIA اقتران هذا الهاتف: {detail}. اقرن هذا الهاتف بالكمبيوتر مرة أخرى.',
     'mobileApp.error.http': 'ردّ GAIA بخطأ ({status}): {detail}',
     'mobileApp.error.sendTimeout': 'لم يبدأ GAIA هذه الإجابة خلال {seconds} ثانية؛ ربما يكون مشغولًا أو عالقًا. أعد فتح هذه المحادثة بعد دقيقة لترى إن كان قد أجاب، أو أرسل الرسالة مرة أخرى.',

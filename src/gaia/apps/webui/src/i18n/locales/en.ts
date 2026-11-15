@@ -3572,7 +3572,7 @@ export const enMessages = {
     'mobileApp.notConnected': 'Not connected to a PC yet',
     'mobileApp.error.badAddress': '"{address}" is not a valid GAIA address. Use the full address of your PC, for example http://192.168.1.20:4200.',
     'mobileApp.error.badScheme': 'The GAIA address "{address}" must start with http:// or https://.',
-    'mobileApp.error.network': 'Could not reach GAIA at {url}: {reason}. Check that your PC is on and reachable from this phone.',
+    'mobileApp.error.network': 'Can\'t reach GAIA on your PC. Check that it\'s on and reachable from this phone.',
     'mobileApp.error.auth': 'GAIA did not accept this phone\'s pairing: {detail}. Pair this phone with your PC again.',
     'mobileApp.error.http': 'GAIA answered with an error ({status}): {detail}',
     'mobileApp.error.sendTimeout': 'GAIA did not start this answer within {seconds} seconds; it may be busy or stuck. Reopen this chat in a minute to see whether it answered, or send the message again.',
