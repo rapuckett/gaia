@@ -79,7 +79,7 @@ export default function Permissions() {
                                         <Row gap="sm">
                                             <Stack flex={1} gap="xs">
                                                 <Text role="label" weight="medium" dir="auto" numberOfLines={2}>{titleOf(r.session_id)}</Text>
-                                                <Row><Badge label={r.mode === 'full_access' ? t('perm.full') : t('perm.ask')} tone={r.mode === 'full_access' ? 'warning' : 'neutral'} /></Row>
+                                                <Row><Badge label={t.bare(r.mode === 'full_access' ? 'perm.full' : 'perm.ask')} accessibilityLabel={t(r.mode === 'full_access' ? 'perm.full' : 'perm.ask')} tone={r.mode === 'full_access' ? 'warning' : 'neutral'} /></Row>
                                             </Stack>
                                             {r.mode === 'full_access' || r.grants.length > 1 ? (
                                                 <IconButton
@@ -96,7 +96,7 @@ export default function Permissions() {
                                                 <Row gap="sm">
                                                     <Stack flex={1}><Text code numberOfLines={2}><Ltr>{g.label}</Ltr></Text></Stack>
                                                     <Button
-                                                        label={t('settings.permissions.revoke')}
+                                                        label={t.bare('settings.permissions.revoke')}
                                                         accessibilityLabel={t('settings.permissions.revokeAria', { name: g.label })}
                                                         variant="ghost"
                                                         size="sm"
