@@ -16,10 +16,10 @@ import * as api from '../services/api';
 import { log } from '../utils/logger';
 import { plainAnswerText } from '../utils/plainText';
 import { AnswerStats } from './AnswerStats';
-import { dropErrorsEchoedInAnswer, isErrorContent, isModelFailure } from '../utils/answerErrors.core';
+import { dropErrorsEchoedInAnswer, isErrorContent } from '../utils/answerErrors.core';
 import { SERVER_CANCELLED_TEXT, splitCutOff, turnEnding } from '../utils/turnEnding.core';
 
-export { dropErrorsEchoedInAnswer, isErrorContent, isModelFailure, splitCutOff, turnEnding };
+export { dropErrorsEchoedInAnswer, isErrorContent, splitCutOff, turnEnding };
 import { displayModelName, useInferencePlace, useModelNames } from '../stores/modelStore';
 import { MODEL_WAIT_HINT_S, isModelWaitLabel } from '../utils/modelWait';
 import { localizeLiveStatus } from '../utils/liveStatus';
@@ -535,7 +535,7 @@ export function MessageBubble({ message, isStreaming, agentSteps, agentStepsActi
                         </button>
                     )}
                     {/* A local model failed: what Lemonade and its backend wrote says why. */}
-                    {(isError || (message.role === 'assistant' && isModelFailure(message.content))) && !isStreaming && place?.remote === false && (
+                    {isError && !isStreaming && place?.remote === false && (
                         <button type="button" className="msg-try-again" onClick={() => showServerLog('model_server')}>
                             <ScrollText size={12} aria-hidden="true" />
                             {t('logs.serverLog')}

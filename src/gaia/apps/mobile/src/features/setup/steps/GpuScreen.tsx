@@ -8,7 +8,7 @@ import { formatSize, ltrIn } from '@webui/components/setup/format';
 import { copyableCommand, gpuGbAtSetting, osName, splitFigures } from '@webui/components/setup/gpuMemory';
 import type { GpuMemoryStatus } from '@webui/types';
 
-import { useGpuMemory, useGpuMemoryPending } from '@/data';
+import { useActiveModel, useGpuMemory, useGpuMemoryPending } from '@/data';
 import { describeError, useLocaleCode, useT } from '@/i18n/useT';
 import { Button, ChoiceList, Ltr, Notice, Row, Spinner, Stack, Surface, Text } from '@/ui';
 import { Check, Copy } from '@/ui/icons';
@@ -64,7 +64,8 @@ export const GpuScreen: PlanScreen = ({ ctx, close }) => {
     const [copied, setCopied] = useState<string | null>(null);
     const [copyError, setCopyError] = useState<string | null>(null);
 
-    const target = chosen !== undefined ? chosen : status ? defaultTarget(status) : null;
+    const chatInCloud = !!useActiveModel().data?.remote;
+    const target = chosen !== undefined ? chosen : status ? defaultTarget(status, chatInCloud) : null;
     const steps = useGpuMemory(target, guided && target != null);
     const pendingChange = useGpuMemoryPending();
 
@@ -96,9 +97,9 @@ export const GpuScreen: PlanScreen = ({ ctx, close }) => {
     const presets = status.presets ?? [];
     const preset = presets.find((p) => p.setting_gb === target) ?? null;
     const max = maxSetting(status);
-    const recommended = status.recommended_setting_gb ?? null;
+    const recommended = chatInCloud ? null : status.recommended_setting_gb ?? null;
     const cpuLeft = preset && status.total_gb != null ? Math.max(0, status.total_gb - preset.gpu_gb) : null;
-    const fitsNow = recommended == null ? (status.models ?? []).find((m) => m.default && m.fits_now) : undefined;
+    const fitsNow = recommended == null && !chatInCloud ? (status.models ?? []).find((m) => m.default && m.fits_now) : undefined;
     const unlocks = preset ? unlockNames(preset, names) : [];
     const pending = status.pending ?? null;
     const restartPending = pending?.state === 'restart_required';

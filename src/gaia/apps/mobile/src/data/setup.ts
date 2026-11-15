@@ -21,6 +21,7 @@ import { downloadsActive } from '@webui/components/setup/downloadModel';
 import { catalogOf, savedVision, skipChanges, type Selection } from '@webui/components/setup/selection';
 
 import { useGaiaClient } from './GaiaClientProvider';
+import { modelMenuKeys } from './modelMenu';
 import { queryKeys, requireClient } from './queries';
 
 /** How often to re-read a running setup, as the web UI's setup screen does. */
@@ -403,6 +404,7 @@ export function useConnectCloud() {
             queryClient.setQueryData(queryKeys.setupStatus, status);
             void queryClient.invalidateQueries({ queryKey: queryKeys.setupStatus });
             void queryClient.invalidateQueries({ queryKey: ['cloudProviders'] });
+            void queryClient.invalidateQueries({ queryKey: modelMenuKeys.active });
         },
     });
 }
