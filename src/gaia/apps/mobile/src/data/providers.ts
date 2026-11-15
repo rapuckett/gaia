@@ -3,7 +3,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import type { CloudPriceList, ContextChoice, ProviderConnected, ProvidersResponse } from '@/api/client.types';
+import type { CloudPriceList, ContextChoice, ProviderConnected, ProviderId, ProviderSummary, ProviderSummaryList } from '@/api/client.types';
 import { CONNECT_RETRY_MS } from '@/api/constants';
 import { GaiaApiError } from '@/api/errors';
 
@@ -19,13 +19,25 @@ export const providerKeys = {
     prices: (provider: string) => ['cloudPrices', provider] as const,
 };
 
-/** Every provider with its connection, network and Local-only state. */
-export function useProviders(enabled = true) {
+export interface ProviderRow extends Omit<ProviderSummary, 'id'> {
+    id: ProviderId;
+}
+
+/** The PC's provider list as rows; an id this app has no row for is left out. */
+export function providerRows(list: ProviderSummaryList): { providers: ProviderRow[]; lemonadeError: string | null } {
+    const known: readonly string[] = ['local', 'fireworks', 'amd'];
+    const providers = list.providers.filter((p): p is ProviderRow => known.includes(p.id));
+    return { providers, lemonadeError: list.lemonade_error ?? null };
+}
+
+/** Every provider with whether it is set up and whether Local only holds it off. */
+export function useProviders() {
     const client = useGaiaClient();
-    return useQuery<ProvidersResponse>({
+    return useQuery({
         queryKey: providerKeys.all,
-        enabled: client !== null && enabled,
-        queryFn: ({ signal }) => requireClient(client).listProviders({ signal }),
+        enabled: client !== null,
+        queryFn: ({ signal }) => requireClient(client).listProviderSummaries({ signal }),
+        select: providerRows,
     });
 }
 

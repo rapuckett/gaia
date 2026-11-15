@@ -6,8 +6,6 @@ import { useState } from 'react';
 import { providerName, providerNameFull, providerNotice } from '@webui/utils/providerText';
 
 import type { ProviderId, ProviderModel } from '@/api/client.types';
-import { ENDPOINTS } from '@/api/constants';
-import { useDeviceRefused } from '@/api/routeAccess';
 import {
     useActiveModel,
     useLocalModelStatus,
@@ -41,8 +39,7 @@ function LocalMemory() {
 export default function Model({ provider: requested }: { provider?: string }) {
     const t = useT();
     // The PC serves its provider list (with key details) only to itself; a paired phone isn't asked.
-    const providersRefused = useDeviceRefused('GET', ENDPOINTS.providers);
-    const providersQuery = useProviders(!providersRefused);
+    const providersQuery = useProviders();
     const activeQuery = useActiveModel();
     const systemStatus = useSystemStatus();
     const select = useSelectModel();
@@ -52,13 +49,12 @@ export default function Model({ provider: requested }: { provider?: string }) {
     const [inUseRow, setInUseRow] = useState<ProviderModel | null>(null);
 
     const providers = providersQuery.data?.providers;
-    const active = activeQuery.data ?? providersQuery.data?.active;
+    const active = activeQuery.data;
     const asked = providers?.find((p) => p.id === requested)?.id;
     const chosen: ProviderId = picked ?? asked ?? active?.provider ?? 'local';
     const provider = providers?.find((p) => p.id === chosen) ?? null;
-    const offline = provider?.network?.reachable === false;
     const blocked = !!provider?.blocked;
-    const connected = !!provider && !blocked && (!provider.remote || !!provider.models_discovered);
+    const connected = !!provider && !blocked && provider.configured;
     const local = provider?.id === 'local';
     const serverHung = !!systemStatus.data && !systemStatus.data.lemonade_running && !!systemStatus.data.lemonade_error;
 
@@ -82,8 +78,8 @@ export default function Model({ provider: requested }: { provider?: string }) {
         });
     };
 
-    const pcOnly = providersRefused || isPcRefusal(providersQuery.error);
-    const loadError = pcOnly ? null : providersQuery.error ? errorText(providersQuery.error, t) : providersQuery.data?.lemonade_error;
+    const pcOnly = isPcRefusal(providersQuery.error);
+    const loadError = pcOnly ? null : providersQuery.error ? errorText(providersQuery.error, t) : providersQuery.data?.lemonadeError;
     const row = listedInUse ?? (sameModelId(inUseRow?.id, active?.model) ? inUseRow : null);
 
     return (
@@ -135,19 +131,12 @@ export default function Model({ provider: requested }: { provider?: string }) {
                 <Stack gap="md">
                     {provider.remote ? (
                         <Row gap="sm">
-                            {provider.models_discovered ? <StatusDot tone="success" label={t('settings.key.connectedDot')} /> : null}
+                            {provider.configured ? <StatusDot tone="success" label={t('settings.key.connectedDot')} /> : null}
                             <Text role="ui" weight="semibold">{providerName(t, provider)}</Text>
                         </Row>
                     ) : null}
                     {provider.remote ? <Notice tone="info" role="note" message={providerNotice(t, provider)} /> : null}
                     {blocked ? <Notice tone="danger" message={t('settings.privacy.localOnlyBlocked')} /> : null}
-                    {offline ? (
-                        <Notice
-                            tone="danger"
-                            message={provider.network?.detail ?? undefined}
-                            action={{ label: t('settings.key.checkAgain'), onPress: () => void providersQuery.refetch() }}
-                        />
-                    ) : null}
                     <Disclosure title={t('settings.model.howItWorks')} open={howOpen} onToggle={() => setHowOpen((o) => !o)}>
                         <Stack gap="sm">
                             <Text role="caption" tone="muted">{t('settings.model.lede')}</Text>
@@ -162,7 +151,7 @@ export default function Model({ provider: requested }: { provider?: string }) {
                             <CloudPrices provider={provider.id} />
                         </Stack>
                     ) : null}
-                    {provider.remote && !offline && !blocked ? (
+                    {provider.remote && !blocked ? (
                         <SettingsAnchor name="cloud-key">
                             <ProviderKey key={provider.id} provider={provider} connected={connected} />
                         </SettingsAnchor>
