@@ -511,13 +511,13 @@ class DeviceAccessStatus(BaseModel):
     idle_expiry_days: int
     pending_expiry_minutes: int
     failed_redemptions: List[FailedRedemption]  # the last 20
-    routes: List[AwayRouteStatus]  # empty until an away route exists
+    routes: List[AwayRouteStatus]  # each away route: today, tailnet
 
 class AwayRouteStatus(BaseModel):
     kind: Literal["tailnet", "relay"]
     on: bool
     origin: Optional[str] = None
-    error_code: Optional[str] = None
+    error_code: Optional[str] = None  # listener_off, no_tailscale_address, start_failed
 
 class DeviceRoutes(BaseModel):
     origins: List[DeviceOrigin]  # home first, then each away route that is on
@@ -1886,7 +1886,9 @@ else's:
     `used` (it was already redeemed, or the window closed after the first
     pairing), `wrong` (it matches no open window), `closed` (no window is
     open) or `rate_limited`. PC-only. `routes` lists each away route (a way
-    off the home network) with whether it is on; there are none yet.
+    off the home network) with whether it is on. The one route is `tailnet`
+    (Tailscale): `on` only while the PC has a Tailscale address, else
+    `error_code` `no_tailscale_address`.
   </Accordion>
 
   <Accordion title="GET /api/devices">
@@ -1907,6 +1909,18 @@ else's:
 
   <Accordion title="DELETE /api/devices/listener">
     Stop listening, and stay off after a restart. Pairing closes. PC-only.
+  </Accordion>
+
+  <Accordion title="POST /api/devices/routes/{kind}">
+    Also let paired devices reach the PC over an away route (`tailnet`), and
+    keep it on after a restart: `DeviceAccessStatus` out. **409** with `code`
+    `listener_off` while the listener is off, or `no_tailscale_address` when
+    Tailscale isn't running on the PC. Pairing still happens on the home
+    network only. PC-only.
+  </Accordion>
+
+  <Accordion title="DELETE /api/devices/routes/{kind}">
+    Turn the away route off, and keep it off after a restart. PC-only.
   </Accordion>
 
   <Accordion title="POST /api/devices/pairing">
