@@ -106,6 +106,8 @@ describe('endpoints', () => {
         memoryActivity: ['GET'],
         memoryConsolidate: ['POST'],
         memoryEmbeddingCoverage: ['GET'],
+        memoryKnowledge: ['GET', 'POST'],
+        memoryKnowledgeItem: ['DELETE', 'PUT'],
         memoryRebuildEmbeddings: ['POST'],
         memoryRebuildFts: ['POST'],
         memoryReconcile: ['POST'],

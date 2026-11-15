@@ -1,12 +1,16 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import type {
     ConsolidateMemoryResult,
     EmbeddingCoverage,
+    KnowledgeCreateBody,
+    KnowledgeSaveResult,
+    KnowledgeUpdateBody,
     MemoryActivityDay,
+    MemoryKnowledgeItem,
     MemorySettings,
     MemoryStats,
     MemoryToolStat,
@@ -15,6 +19,8 @@ import type {
     ReconcileMemoryResult,
     RefreshSystemContextResult,
 } from '@/api/client.types';
+
+import { ABOUT_PAGE_SIZE } from '@webui/utils/memoryFormat.core';
 
 import { useGaiaClient } from './GaiaClientProvider';
 import { requireClient } from './queries';
@@ -27,6 +33,7 @@ export const memoryKeys = {
     coverage: ['memory', 'coverage'] as const,
     activity: (days: number) => ['memory', 'activity', days] as const,
     tools: ['memory', 'tools'] as const,
+    knowledge: (want: number) => ['memory', 'knowledge', want] as const,
     upcoming: (days: number) => ['memory', 'upcoming', days] as const,
 };
 
@@ -123,5 +130,73 @@ export function useMemoryMaintenance() {
         },
         onSuccess: (outcome) =>
             queryClient.invalidateQueries({ queryKey: outcome.action === 'rebuildEmbeddings' ? memoryKeys.coverage : memoryKeys.all }),
+    });
+}
+
+export interface MemoryKnowledgeResult {
+    items: MemoryKnowledgeItem[];
+    /** Every memory the PC holds for this tab, past the rows read. */
+    total: number;
+}
+
+/** The first `want` memories about the person, newest first, read page by page as the web does. */
+export function useMemoryKnowledge(want: number) {
+    const client = useGaiaClient();
+    return useQuery<MemoryKnowledgeResult>({
+        queryKey: memoryKeys.knowledge(want),
+        enabled: client !== null,
+        placeholderData: keepPreviousData,
+        queryFn: async ({ signal }) => {
+            const c = requireClient(client);
+            const rows: MemoryKnowledgeItem[] = [];
+            const seen = new Set<string>();
+            let offset = 0;
+            let found = 0;
+            for (;;) {
+                const limit = Math.min(ABOUT_PAGE_SIZE, want - rows.length);
+                const page = await c.listMemoryKnowledge(
+                    { about_user: true, include_sensitive: true, sort_by: 'updated_at', order: 'desc', offset, limit },
+                    { signal },
+                );
+                offset += page.items.length;
+                // A memory saved between two pages shifts the rows, repeating one at the page edge.
+                for (const item of page.items) {
+                    if (seen.has(item.id)) continue;
+                    seen.add(item.id);
+                    rows.push(item);
+                }
+                found = typeof page.total === 'number' ? page.total : rows.length;
+                if (page.items.length < limit || rows.length >= Math.min(want, found)) break;
+            }
+            return { items: rows, total: found };
+        },
+    });
+}
+
+/** Saves a memory (also what Undo does after a forget). */
+export function useAddMemory() {
+    const client = useGaiaClient();
+    const queryClient = useQueryClient();
+    return useMutation<KnowledgeSaveResult, Error, KnowledgeCreateBody>({
+        mutationFn: (body) => requireClient(client).addMemoryKnowledge(body),
+        onSuccess: () => queryClient.invalidateQueries({ queryKey: memoryKeys.all }),
+    });
+}
+
+export function useEditMemory() {
+    const client = useGaiaClient();
+    const queryClient = useQueryClient();
+    return useMutation<KnowledgeSaveResult, Error, { id: string; body: KnowledgeUpdateBody }>({
+        mutationFn: ({ id, body }) => requireClient(client).updateMemoryKnowledge(id, body),
+        onSuccess: () => queryClient.invalidateQueries({ queryKey: memoryKeys.all }),
+    });
+}
+
+export function useForgetMemory() {
+    const client = useGaiaClient();
+    const queryClient = useQueryClient();
+    return useMutation<unknown, Error, string>({
+        mutationFn: (id) => requireClient(client).deleteMemoryKnowledge(id),
+        onSuccess: () => queryClient.invalidateQueries({ queryKey: memoryKeys.all }),
     });
 }

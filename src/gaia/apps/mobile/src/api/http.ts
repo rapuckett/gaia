@@ -47,7 +47,9 @@ import type {
     LemonadeFound,
     LemonadeTarget,
     LocalModelStatus,
+    KnowledgeSaveResult,
     MemoryActivityDay,
+    MemoryKnowledgePage,
     MemorySettings,
     MemoryStats,
     MemoryToolStat,
@@ -95,6 +97,8 @@ import {
     MESSAGE_PAGE_SIZE,
     QUEUED_IDLE_MS,
     memoryActivityPath,
+    memoryKnowledgeItemPath,
+    memoryKnowledgePath,
     memoryUpcomingPath,
     schedulePath,
     scheduleResultsPath,
@@ -572,6 +576,22 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         getMemoryUpcoming(days, options) {
             return getJson<MemoryUpcomingItem[]>(memoryUpcomingPath(days), options?.signal);
+        },
+
+        listMemoryKnowledge(params, options) {
+            return getJson<MemoryKnowledgePage>(memoryKnowledgePath(params), options?.signal);
+        },
+
+        addMemoryKnowledge(body, options) {
+            return postJson<KnowledgeSaveResult>(ENDPOINTS.memoryKnowledge, body, options?.signal);
+        },
+
+        updateMemoryKnowledge(knowledgeId, body, options) {
+            return putJson<KnowledgeSaveResult>(memoryKnowledgeItemPath(knowledgeId), body, options?.signal);
+        },
+
+        deleteMemoryKnowledge(knowledgeId, options) {
+            return deleteJson<unknown>(memoryKnowledgeItemPath(knowledgeId), options?.signal);
         },
 
         getMemoryStats(options) {

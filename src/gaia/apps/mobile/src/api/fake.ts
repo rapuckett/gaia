@@ -21,7 +21,10 @@ import type {
     LemonadeFound,
     LemonadeTarget,
     LocalModelStatus,
+    KnowledgeCreateBody,
+    KnowledgeUpdateBody,
     MemoryActivityDay,
+    MemoryKnowledgeItem,
     MemorySettings,
     MemoryStats,
     MemoryToolStat,
@@ -169,6 +172,8 @@ export interface FakeClientData {
     /** What the activity read answers for a range in days; an Error is thrown. */
     memoryActivity?: (days: number) => MemoryActivityDay[] | Error;
     memoryTools?: MemoryToolStat[] | Error;
+    /** The memories the About you tab lists; an Error makes the list fail. Adds, edits and forgets change it. */
+    memoryKnowledge?: MemoryKnowledgeItem[] | Error;
     memoryUpcoming?: MemoryUpcomingItem[] | Error;
     /** What each maintenance POST answers; an Error makes it fail. Unlisted ones answer a zero result. */
     memoryActionResults?: {
@@ -179,6 +184,11 @@ export interface FakeClientData {
         refreshSystemContext?: RefreshSystemContextResult | Error;
     };
 }
+
+export type KnowledgeCall =
+    | { action: 'add'; body: KnowledgeCreateBody }
+    | { action: 'update'; id: string; body: KnowledgeUpdateBody }
+    | { action: 'delete'; id: string };
 
 export interface FakeGaiaClient extends GaiaClient {
     readonly sent: { sessionId: string; message: string }[];
@@ -205,6 +215,8 @@ export interface FakeGaiaClient extends GaiaClient {
     readonly capabilityReads: string[];
     /** Each memory maintenance POST, in order. */
     readonly memoryActions: string[];
+    /** Each memory add, edit and forget, in order. */
+    readonly knowledgeCalls: KnowledgeCall[];
     /** The range of each activity read, in order. */
     readonly memoryActivityReads: number[];
     /** How many times the stats were read. */
@@ -260,6 +272,9 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
     const memoryActions: string[] = [];
     let memoryStatsReads = 0;
     const memoryActivityReads: number[] = [];
+    const knowledgeCalls: KnowledgeCall[] = [];
+    let knowledge = data.memoryKnowledge instanceof Error ? [] : [...(data.memoryKnowledge ?? [])];
+    let knowledgeAdds = 0;
     function memoryAction<T>(name: string, result: T | Error): T {
         memoryActions.push(name);
         if (result instanceof Error) throw result;
@@ -304,6 +319,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         capabilityReads,
         memoryActions,
         memoryActivityReads,
+        knowledgeCalls,
         get memoryStatsReads() {
             return memoryStatsReads;
         },
@@ -555,6 +571,46 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             if (!data.memoryUpcoming) throw new GaiaApiError(503, 'This fake client was given no upcoming items.');
             if (data.memoryUpcoming instanceof Error) throw data.memoryUpcoming;
             return data.memoryUpcoming;
+        },
+        async listMemoryKnowledge(params) {
+            if (data.memoryKnowledge instanceof Error) throw data.memoryKnowledge;
+            const rows = knowledge
+                .filter((item) => params.include_sensitive || !item.sensitive)
+                .sort((a, b) => b.updated_at.localeCompare(a.updated_at));
+            const offset = params.offset ?? 0;
+            return { items: rows.slice(offset, offset + (params.limit ?? rows.length)), total: rows.length };
+        },
+        async addMemoryKnowledge(body) {
+            knowledgeCalls.push({ action: 'add', body });
+            const now = new Date().toISOString();
+            const knowledgeId = `fake-knowledge-${++knowledgeAdds}`;
+            knowledge.push({
+                id: knowledgeId,
+                category: body.category ?? 'fact',
+                content: body.content,
+                domain: body.domain ?? null,
+                source: 'user',
+                context: body.context ?? 'global',
+                entity: body.entity ?? null,
+                sensitive: body.sensitive ?? false,
+                created_at: now,
+                updated_at: now,
+                due_at: body.due_at ?? null,
+            });
+            return { status: 'stored', knowledge_id: knowledgeId };
+        },
+        async updateMemoryKnowledge(id, body) {
+            knowledgeCalls.push({ action: 'update', id, body });
+            const at = knowledge.findIndex((item) => item.id === id);
+            if (at < 0) throw new GaiaApiError(404, `Knowledge entry ${id} not found`);
+            knowledge[at] = { ...knowledge[at]!, ...body, updated_at: new Date().toISOString() } as MemoryKnowledgeItem;
+            return { status: 'updated', knowledge_id: id };
+        },
+        async deleteMemoryKnowledge(id) {
+            knowledgeCalls.push({ action: 'delete', id });
+            if (!knowledge.some((item) => item.id === id)) throw new GaiaApiError(404, `Knowledge entry ${id} not found`);
+            knowledge = knowledge.filter((item) => item.id !== id);
+            return { status: 'deleted' };
         },
         async getMemoryStats() {
             if (!data.memoryStats?.length) throw new GaiaApiError(503, 'This fake client was given no memory stats.');
