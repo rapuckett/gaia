@@ -26,7 +26,7 @@ import { useGaiaClient } from './GaiaClientProvider';
 export const queryKeys = {
     sessions: ['sessions'] as const,
     session: (sessionId: string) => ['session', sessionId] as const,
-    sessionSearch: (query: string) => ['sessionSearch', query] as const,
+    sessionSearch: (query: string, includeAutomated: boolean) => ['sessionSearch', query, includeAutomated] as const,
     capabilities: (sessionId: string) => ['capabilities', sessionId] as const,
     skills: ['skills'] as const,
     messages: (sessionId: string) => ['messages', sessionId] as const,
@@ -77,7 +77,7 @@ export function useSessions() {
  * Chats whose title or messages match `q`, read 200 ms after the last keystroke.
  * `settled` is false while the typed text is ahead of the answer, and a superseded request is aborted.
  */
-export function useSessionSearch(q: string) {
+export function useSessionSearch(q: string, includeAutomated: boolean) {
     const client = useGaiaClient();
     const text = q.trim();
     const [typed, setDebounced] = useState(text);
@@ -88,9 +88,9 @@ export function useSessionSearch(q: string) {
         return () => clearTimeout(timer);
     }, [text]);
     const query = useQuery<SessionSearchResponse>({
-        queryKey: queryKeys.sessionSearch(debounced),
+        queryKey: queryKeys.sessionSearch(debounced, includeAutomated),
         enabled: client !== null && debounced !== '',
-        queryFn: ({ signal }) => requireClient(client).searchSessions(debounced, false, { signal }),
+        queryFn: ({ signal }) => requireClient(client).searchSessions(debounced, includeAutomated, { signal }),
         gcTime: 0,
         retry: false,
     });
