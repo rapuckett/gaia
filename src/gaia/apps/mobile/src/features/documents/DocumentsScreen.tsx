@@ -45,14 +45,14 @@ export function DocumentsScreen({ chatId }: DocumentsScreenProps) {
 
     return (
         <Screen header={<ScreenHeader title={t('docs.title')} />}>
-            {query.isPending ? <ListSkeleton rows={4} /> : null}
-            {loadFailed && documents.length === 0 ? <ErrorState title={loadFailed} action={retry} /> : null}
-            {query.data && documents.length === 0 ? <EmptyState title={t('docs.empty')} message={t('docs.emptyHintPhone')} /> : null}
-            {query.data && documents.length === 0 ? (
+            {query.data ? (
                 <Stack paddingX="lg" paddingY="sm">
                     {adder}
                 </Stack>
             ) : null}
+            {query.isPending ? <ListSkeleton rows={4} /> : null}
+            {loadFailed && documents.length === 0 ? <ErrorState title={loadFailed} action={retry} /> : null}
+            {query.data && documents.length === 0 ? <EmptyState title={t('docs.empty')} message={t('docs.emptyHintPhone')} /> : null}
             {documents.length > 0 ? (
                 <List
                     data={documents}
@@ -66,7 +66,6 @@ export function DocumentsScreen({ chatId }: DocumentsScreenProps) {
                             ) : (
                                 <TargetChooser chatTitle={null} target={target} onChange={setTarget} />
                             )}
-                            {adder}
                             {loadFailed ? <Notice tone="danger" message={loadFailed} action={retry} /> : null}
                             {action.error ? (
                                 <Row gap="sm" align="start">
