@@ -287,7 +287,7 @@ export function PlanStep({ ctx }: { ctx: SetupStepContext }) {
             )}
 
             <SetupFooter>
-                {cloud ? <Row /> : <Button variant="secondary" label={t('setup.plan.customize')} disabled={busy || ctx.locked} onPress={() => openers.openModels?.()} />}
+                {cloud || !openers.openModels ? <Row /> : <Button variant="secondary" label={t('setup.plan.customize')} disabled={busy || ctx.locked} onPress={openers.openModels} />}
                 <Button
                     variant="primary"
                     label={cloud ? t('setup.continue') : view.pending.length ? t('setup.plan.start') : t('setup.plan.startNoDownload')}
