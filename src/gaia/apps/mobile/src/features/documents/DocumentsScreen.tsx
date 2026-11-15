@@ -7,7 +7,7 @@ import { isolate } from '@webui/i18n/registry';
 
 import { useCancelIndexing, useDocumentRemoval, useDocuments, useIndexingView, useReindexDocument } from '@/data';
 import { ScreenHeader } from '@/features/nav/ScreenHeader';
-import { describeError, useT } from '@/i18n/useT';
+import { describeErrorWith, useT } from '@/i18n/useT';
 import { EmptyState, ErrorState, IconButton, List, ListSkeleton, Notice, Row, Screen, Stack, Text, useTheme } from '@/ui';
 import { X } from '@/ui/icons';
 
@@ -33,7 +33,7 @@ export function DocumentsScreen({ chatId }: DocumentsScreenProps) {
     const query = useDocuments();
     const [target, setTarget] = useState<LibraryTarget>('chat');
     const action = useActionError();
-    const removal = useDocumentRemoval((r, error) => action.report(t('docs.deleteFailed', { name: r.name, error: describeError(error, t) })));
+    const removal = useDocumentRemoval((r, error) => action.report(t.compose((say) => say('docs.deleteFailed', { name: r.name, error: describeErrorWith(error, say) }))));
     const cancel = useCancelIndexing();
     const reindex = useReindexDocument();
     const all = query.data?.documents ?? [];
@@ -43,17 +43,17 @@ export function DocumentsScreen({ chatId }: DocumentsScreenProps) {
     const nameOf = (id: string) => all.find((d) => d.id === id)?.filename ?? id;
     const onCancel = (id: string) => {
         action.dismiss();
-        cancel.mutate(id, { onError: (e) => action.report(t('docs.cancelFailed', { name: nameOf(id), error: describeError(e, t) })) });
+        cancel.mutate(id, { onError: (e) => action.report(t.compose((say) => say('docs.cancelFailed', { name: nameOf(id), error: describeErrorWith(e, say) }))) });
     };
     const onRetry = (id: string) => {
         action.dismiss();
-        reindex.mutate(id, { onError: (e) => action.report(t('docs.retryFailed', { name: nameOf(id), error: describeError(e, t) })) });
+        reindex.mutate(id, { onError: (e) => action.report(t.compose((say) => say('docs.retryFailed', { name: nameOf(id), error: describeErrorWith(e, say) }))) });
     };
     const onRemove = (id: string) => {
         action.dismiss();
         removal.remove({ id, name: nameOf(id) });
     };
-    const loadFailed = query.isError ? t('docs.loadFailed', { error: describeError(query.error, t) }) : null;
+    const loadFailed = query.isError ? t.compose((say) => say('docs.loadFailed', { error: describeErrorWith(query.error, say) })) : null;
     const adder = chatId ? (
         <ChatAddDocuments chatId={chatId} target={target} onStart={action.dismiss} />
     ) : (

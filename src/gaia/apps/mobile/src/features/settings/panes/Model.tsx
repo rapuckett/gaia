@@ -17,8 +17,12 @@ import {
 import { useT } from '@/i18n/useT';
 import { Disclosure, Notice, Row, SegmentedControl, Spinner, Stack, StatusDot, Text } from '@/ui';
 
+import { SettingsAnchor } from '../targets';
 import { CloudPrices } from './model/CloudPrices';
+import { CloudSpending } from './model/CloudSpending';
 import { ModelInUse } from './model/ModelInUse';
+import { ModelList } from './model/ModelList';
+import { ProviderKey } from './model/ProviderKey';
 import { errorText, modelLabel, sameModelId } from './model/modelText';
 
 /** Memory for models, read from the PC only while "How this works" is open. */
@@ -31,7 +35,7 @@ function LocalMemory() {
     return <Text role="caption" tone="muted">{t('settings.model.memory', { memory })}</Text>;
 }
 
-export default function Model() {
+export default function Model({ provider: requested }: { provider?: string }) {
     const t = useT();
     const providersQuery = useProviders();
     const activeQuery = useActiveModel();
@@ -44,7 +48,8 @@ export default function Model() {
 
     const providers = providersQuery.data?.providers;
     const active = activeQuery.data ?? providersQuery.data?.active;
-    const chosen: ProviderId = picked ?? active?.provider ?? 'local';
+    const asked = providers?.find((p) => p.id === requested)?.id;
+    const chosen: ProviderId = picked ?? asked ?? active?.provider ?? 'local';
     const provider = providers?.find((p) => p.id === chosen) ?? null;
     const offline = provider?.network?.reachable === false;
     const blocked = !!provider?.blocked;
@@ -150,7 +155,26 @@ export default function Model() {
                             <CloudPrices provider={provider.id} />
                         </Stack>
                     ) : null}
+                    {provider.remote && !offline && !blocked ? (
+                        <SettingsAnchor name="cloud-key">
+                            <ProviderKey key={provider.id} provider={provider} connected={connected} />
+                        </SettingsAnchor>
+                    ) : null}
                     {modelsQuery.error ? <Notice tone="danger" message={errorText(modelsQuery.error, t)} /> : null}
+                    {connected ? (
+                        <SettingsAnchor name="models-on-pc">
+                            <ModelList
+                                provider={provider.id}
+                                remote={!!provider.remote}
+                                models={models}
+                                activeModel={active?.model}
+                                switching={select.isPending ? (select.variables ?? null) : null}
+                                onUse={switchTo}
+                                onRefresh={() => void modelsQuery.refetch()}
+                            />
+                        </SettingsAnchor>
+                    ) : null}
+                    {provider.remote ? <CloudSpending /> : null}
                 </Stack>
             ) : null}
         </Stack>

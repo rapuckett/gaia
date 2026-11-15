@@ -3,7 +3,7 @@
 
 import { useEffect } from 'react';
 
-import { useSystemStatus } from '@/data';
+import { useGoalStoreError, useSystemStatus } from '@/data';
 import { useT } from '@/i18n/useT';
 import { useBannerDismissedStore } from '@/state/bannerDismissed';
 import { Notice, ProgressLine, Stack } from '@/ui';
@@ -14,7 +14,8 @@ import { pickBanner } from './pickBanner';
 export function ConnectionBanner() {
     const t = useT();
     const { data, error, refetch } = useSystemStatus();
-    const picked = pickBanner(data, error, t);
+    const goalStoreError = useGoalStoreError().data;
+    const picked = pickBanner(data, error, t, goalStoreError);
     const { dismissed, dismiss, reconcile } = useBannerDismissedStore();
     useEffect(() => reconcile(picked), [picked?.id, picked?.dismissible, reconcile]); // eslint-disable-line react-hooks/exhaustive-deps
     const banner = picked && picked.id === dismissed ? null : picked;

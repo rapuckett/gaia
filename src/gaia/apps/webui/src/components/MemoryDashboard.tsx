@@ -18,9 +18,9 @@ import { formatSize } from '../utils/format';
 import { ref, type MessageKey } from '../i18n/registry';
 import { dateLocale, useT, type Translate } from '../i18n/useT';
 import {
-    ACTIVITY_RANGES, ACTIVITY_RANGE_LABELS, CATEGORY_KEYS, DEFAULT_ACTIVITY_DAYS, UPCOMING_DAYS,
-    formatDate, formatDateFull, formatDateRange, formatDuration, formatRelativeDate, isOverdue, successRateClass, todayCount,
-    type ActivityDay, type TemporalItem, type ToolStat,
+    ACTIVITY_RANGES, ACTIVITY_RANGE_LABELS, CATEGORY_KEYS, DEFAULT_ACTIVITY_DAYS, KNOWLEDGE_CATEGORIES, KNOWLEDGE_PAGE_SIZE, ROLE_KEYS, UPCOMING_DAYS,
+    confidenceLevel, formatDate, formatDateFull, formatDateRange, formatDuration, formatRelativeDate, isOverdue, successRateClass, todayCount,
+    type ActivityDay, type ConvSession, type ConvTurn, type EntityInfo, type KnowledgeEntry, type TemporalItem, type ToolStat,
 } from '../utils/memoryFormat.core';
 import { MemoryDashboardAboutYou } from './MemoryDashboardAboutYou';
 import './MemoryDashboard.css';
@@ -67,50 +67,11 @@ interface MemoryStats {
     db_size_bytes: number;
 }
 
-interface KnowledgeEntry {
-    id: string;
-    category: string;
-    content: string;
-    domain: string | null;
-    source: string;
-    confidence: number;
-    metadata: Record<string, unknown> | string | null;
-    use_count: number;
-    context: string;
-    sensitive: boolean;
-    entity: string | null;
-    created_at: string;
-    updated_at: string;
-    last_used: string | null;
-    due_at: string | null;
-    reminded_at: string | null;
-    superseded_by: string | null;
-    has_embedding?: boolean;
-}
-
 interface KnowledgeResponse {
     items: KnowledgeEntry[];
     total: number;
     offset: number;
     limit: number;
-}
-
-interface ConvSession {
-    session_id: string;
-    turn_count: number;
-    started_at: string | null;
-    last_activity: string | null;
-    first_message: string | null;
-    consolidated?: boolean;
-}
-
-interface ConvTurn {
-    id: number;
-    session_id: string;
-    role: string;
-    content: string;
-    context: string;
-    timestamp: string;
 }
 
 // imported from memoryApi but we alias for local use
@@ -125,12 +86,6 @@ interface EmbeddingCoverage {
     coverage_pct: number;
 }
 
-interface EntityInfo {
-    entity: string;
-    count: number;
-    last_updated: string;
-}
-
 interface ToastMessage {
     id: number;
     text: string;
@@ -138,15 +93,6 @@ interface ToastMessage {
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────
-
-function confidenceLevel(c: number): 'high' | 'medium' | 'low' {
-    if (c >= 0.7) return 'high';
-    if (c >= 0.4) return 'medium';
-    return 'low';
-}
-
-const ALL_CATEGORIES = ['fact', 'preference', 'error', 'skill', 'note', 'reminder'] as const;
-
 
 const STATUS_KEYS: Record<string, MessageKey> = {
     pending_approval: 'mem.status.pending_approval', queued: 'mem.status.queued',
@@ -159,8 +105,6 @@ const PRIORITY_KEYS: Record<string, MessageKey> = { low: 'mem.priority.low', med
 const GOAL_SOURCE_KEYS: Record<string, MessageKey> = {
     agent_inferred: 'mem.goals.source.agent_inferred', agent_scheduled: 'mem.goals.source.agent_scheduled',
 };
-
-const ROLE_KEYS: Record<string, MessageKey> = { user: 'mem.role.user', assistant: 'mem.role.assistant' };
 
 const DOMAIN_KEYS: Record<string, MessageKey> = {
     work: 'mem.domain.work', technical: 'mem.domain.technical', personal: 'mem.domain.personal', general: 'mem.domain.general',
@@ -240,7 +184,7 @@ export function MemoryDashboard() {
     const [kOrder, setKOrder] = useState<'desc' | 'asc'>('desc');
     const [kOffset, setKOffset] = useState(0);
     const [includeSuperseded, setIncludeSuperseded] = useState(false);
-    const kLimit = 15;
+    const kLimit = KNOWLEDGE_PAGE_SIZE;
 
     // Conversation search
     const [convSearch, setConvSearch] = useState('');
@@ -1352,7 +1296,7 @@ export function MemoryDashboard() {
                                 {/* Filters */}
                                 <div className="mem-filters">
                                     <div className="mem-category-pills" role="group" aria-label={t('mem.knowledge.filterCategory')}>
-                                        {ALL_CATEGORIES.map(c => (
+                                        {KNOWLEDGE_CATEGORIES.map(c => (
                                             <button
                                                 key={c}
                                                 className={`mem-category-pill ${c}${kCategories.includes(c) ? ' active' : ''}`}
@@ -1425,7 +1369,7 @@ export function MemoryDashboard() {
                                             <label>{t('mem.col.category')}</label>
                                             <select value={formData.category}
                                                 onChange={e => setFormData(prev => ({ ...prev, category: e.target.value }))}>
-                                                {ALL_CATEGORIES.map(c => (
+                                                {KNOWLEDGE_CATEGORIES.map(c => (
                                                     <option key={c} value={c}>{t.bare(CATEGORY_KEYS[c])}</option>
                                                 ))}
                                             </select>

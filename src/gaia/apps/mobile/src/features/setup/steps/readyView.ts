@@ -23,7 +23,7 @@ export function readyView(run: SetupRunStatus | null, plan: SetupPlan | undefine
     };
 }
 
-/** A first run has no earlier chat to pick up, so "Check in" waits for one. */
-export function starterCards(cards: StartCard[] | undefined): StartCard[] {
-    return (cards ?? []).filter((c) => c.skill !== 'check-in');
+/** A first run has no earlier chat to pick up, so "Check in" shows only when setup is run again. */
+export function starterCards(cards: StartCard[] | undefined, again: boolean): StartCard[] {
+    return again ? (cards ?? []) : (cards ?? []).filter((c) => c.skill !== 'check-in');
 }
