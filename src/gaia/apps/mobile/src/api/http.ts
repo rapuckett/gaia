@@ -64,7 +64,9 @@ import type {
     SetupCheck,
     SetupPlan,
     SetupRunStatus,
+    Settings,
     SkillList,
+    UndoSettings,
     UploadedFile,
     UserInputResult,
 } from './client.types';
@@ -323,6 +325,22 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         markSessionRead(sessionId, options) {
             return postJson<Session>(sessionReadPath(sessionId), undefined, options?.signal);
+        },
+
+        getSettings(options) {
+            return getJson<Settings>(ENDPOINTS.settings, options?.signal);
+        },
+
+        setNetworkPolicy(policy, options) {
+            return putJson<Settings>(ENDPOINTS.settings, { network_policy: policy }, options?.signal);
+        },
+
+        getUndoSettings(options) {
+            return getJson<UndoSettings>(ENDPOINTS.settingsUndo, options?.signal);
+        },
+
+        updateUndoSettings(retentionDays, maxMb, options) {
+            return putJson<UndoSettings>(ENDPOINTS.settingsUndo, { retention_days: retentionDays, max_mb: maxMb }, options?.signal);
         },
 
         getActiveModel(options) {

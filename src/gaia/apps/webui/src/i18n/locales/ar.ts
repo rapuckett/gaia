@@ -3563,7 +3563,23 @@ const messages: Messages = {
     'mobileApp.serverDown.title': 'خادم النماذج على الكمبيوتر لا يستجيب',
     'mobileApp.skills.yoursEmpty': 'لا شيء بعد. أضف مجلدًا فيه ملف SKILL.md إلى {path} على الكمبيوتر وسيظهر هنا.',
     'mobileApp.banner.openOnPc': 'افتح GAIA على جهاز الكمبيوتر لتشغيل خادم النماذج.',
+    'mobileApp.settings.pcOnly': 'غيّر هذا من الكمبيوتر الذي يشغّل GAIA.',
     'mobileApp.settings.comingSoon': 'هذا القسم قادم إلى الهاتف قريبًا. في الوقت الحالي، غيّره من الكمبيوتر الذي يشغّل GAIA.',
+    'mobileApp.settings.privacy.localOnlyHint': 'أبقِ كل طلبات GAIA للذكاء الاصطناعي على الكمبيوتر لديك. يؤدي تفعيل هذا الخيار إلى مسح اختيارات النماذج السحابية المحفوظة وإزالة مفاتيح السحابة من خادم النماذج الذي يديره GAIA.',
+    'mobileApp.settings.privacy.stays': 'تبقى المحادثات والمستندات والذاكرة على الكمبيوتر لديك.',
+    'mobileApp.settings.privacy.local': 'تُنشأ الإجابات الآن على الكمبيوتر لديك أيضًا.',
+    'mobileApp.settings.privacy.unknown': 'لا يستطيع GAIA الآن معرفة ما إذا كانت الإجابات تُنشأ على الكمبيوتر لديك أو لدى مزوّد سحابي.',
+    'mobileApp.settings.privacy.usersServerKeepsKeys': 'خيار «محلي فقط» مفعّل. يحتفظ خادم Lemonade لديك بأي مفاتيح سحابية يحملها بالفعل، لكن GAIA لن ترسل إليه طلبات سحابية.',
+    'mobileApp.settings.privacy.runtimeKeysNotDropped': 'خيار «محلي فقط» مفعّل، لكن تعذّر على GAIA إزالة مفتاح سحابي من خادم النماذج لديها. أعد تشغيل Lemonade قبل استخدام النماذج السحابية مجددًا.',
+    'mobileApp.settings.privacy.savedModelsNotChecked': 'خيار «محلي فقط» مفعّل، لكن تعذّر على GAIA التحقق من اختيارات النماذج المحفوظة. راجع الإعدادات ← النموذج قبل المتابعة.',
+    'mobileApp.settings.privacy.details': 'التفاصيل',
+    'mobileApp.settings.privacy.cloudProvider': 'مزوّد سحابي',
+    'mobileApp.settings.privacy.copyPath': 'نسخ مسار مجلد البيانات',
+    'mobileApp.settings.privacy.deleteAsk.one': 'حذف محادثتك ({n})؟',
+    'mobileApp.settings.privacy.deleteAsk.other': 'حذف كل المحادثات ({n})؟',
+    'mobileApp.settings.privacy.deleteFinal': 'لا يمكن التراجع عن هذا.',
+    'mobileApp.settings.privacy.deleteYes.one': 'حذف المحادثة ({n})',
+    'mobileApp.settings.privacy.deleteYes.other': 'حذف المحادثات ({n})',
 };
 
 export const ar: Locale = {

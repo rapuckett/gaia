@@ -129,6 +129,8 @@ describe('endpoints', () => {
         sessionPrivate: ['PATCH'],
         sessionRead: ['POST'],
         sessionSearch: ['GET'],
+        settings: ['GET', 'PUT'],
+        settingsUndo: ['GET', 'PUT'],
         setupCancel: ['POST'],
         setupCheck: ['GET'],
         setupModelDownload: ['POST'],

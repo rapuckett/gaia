@@ -43,6 +43,8 @@ export const ENDPOINTS = {
     sessionPrivate: '/api/sessions/{session_id}/private',
     sessionRead: '/api/sessions/{session_id}/read',
     sessionSearch: '/api/sessions/search',
+    settings: '/api/settings',
+    settingsUndo: '/api/settings/undo',
     setupCancel: '/api/setup/cancel',
     setupCheck: '/api/setup/check',
     setupModelDownload: '/api/setup/models/download',

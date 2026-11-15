@@ -26,11 +26,13 @@ import type {
     SetupCheck,
     SetupPlan,
     SetupRunStatus,
+    Settings,
     SkillInfo,
     StartScreen,
     StreamEvent,
     SystemStatus,
 } from '@webui/types';
+import type { UndoSettings } from '@webui/types/changes';
 import type { AgentCapabilities } from '@webui/types/sessionPanel';
 import type { MemorySettings } from '@webui/services/memoryApi';
 import type { CreateSessionRequest, DocumentListResponse, SessionSearchResponse, ToolConfirmRequest, UserInputRequest as ApiUserInputRequest } from '@webui/types/api.gen';
@@ -61,6 +63,7 @@ export type {
     SetupCheck,
     SetupPlan,
     SetupRunStatus,
+    Settings,
     SkillInfo,
     SkillSource,
     StartScreen,
@@ -68,6 +71,7 @@ export type {
     SystemStatus,
     UnavailableConnectorRow,
 } from '@webui/types';
+export type { UndoSettings } from '@webui/types/changes';
 export type { ActiveSkill, AgentCapabilities, AgentTool, SkillOrigin } from '@webui/types/sessionPanel';
 export type { CreateSessionRequest, DocumentListResponse, SessionSearchResponse, SessionSearchResult, ToolConfirmRequest } from '@webui/types/api.gen';
 
@@ -291,6 +295,14 @@ export interface GaiaClient {
     deleteSession(sessionId: string, options?: RequestOptions): Promise<DeleteSessionResult>;
     /** Clears the chat's unread mark. */
     markSessionRead(sessionId: string, options?: RequestOptions): Promise<Session>;
+    /** The PC's settings, among them `network_policy` (Local only). */
+    getSettings(options?: RequestOptions): Promise<Settings>;
+    /** Turns Local only on or off. The PC alone may change it: 403 from a phone. */
+    setNetworkPolicy(policy: Settings['network_policy'], options?: RequestOptions): Promise<Settings>;
+    /** How long and how much undo history is kept, and how much is in use. */
+    getUndoSettings(options?: RequestOptions): Promise<UndoSettings>;
+    /** Saves the undo limits; the PC trims history to fit them at once. */
+    updateUndoSettings(retentionDays: number, maxMb: number, options?: RequestOptions): Promise<UndoSettings>;
     /** The model new chats run on and where it runs. */
     getActiveModel(options?: RequestOptions): Promise<ActiveModel>;
     /** One provider's chat models; `local` also carries each one's state, size and download. */

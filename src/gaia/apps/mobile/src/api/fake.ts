@@ -41,11 +41,13 @@ import type {
     SetupCheck,
     SetupPlan,
     SetupRunStatus,
+    Settings,
     SkillList,
     StartScreen,
     StreamEvent,
     SystemStatus,
     ToolConfirmRequest,
+    UndoSettings,
     UserInputRequest,
 } from './client.types';
 import { foldText, splitMatch } from '@webui/utils/chatSearch';
@@ -118,6 +120,14 @@ export interface FakeClientData {
     /** What getCapabilities answers, by chat; a chat not listed has no agent running (409). */
     capabilities?: Record<string, AgentCapabilities>;
     memorySettings?: MemorySettings;
+    /** What getSettings answers; setNetworkPolicy changes it. */
+    settings?: Settings;
+    /** Thrown by setNetworkPolicy, as the PC's 403 is. */
+    networkPolicyError?: Error;
+    /** What getUndoSettings answers; updateUndoSettings changes it. */
+    undoSettings?: UndoSettings;
+    /** Thrown by deleteSession for these chat ids. */
+    deleteSessionErrors?: Record<string, Error>;
     /** Each stats read answers the next entry (the last one repeats); an Error entry is thrown. */
     memoryStats?: (MemoryStats | Error)[];
     embeddingCoverage?: EmbeddingCoverage;
@@ -324,6 +334,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         },
         async deleteSession(sessionId) {
             findSession(sessionId);
+            if (data.deleteSessionErrors?.[sessionId]) throw data.deleteSessionErrors[sessionId];
             deletedSessions.push(sessionId);
             sessions.splice(sessions.findIndex((s) => s.id === sessionId), 1);
             return { deleted: true };
@@ -437,6 +448,25 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         async getMemoryStats() {
             if (!data.memoryStats?.length) throw new GaiaApiError(503, 'This fake client was given no memory stats.');
             return nextOf(data.memoryStats, memoryStatsReads++);
+        },
+        async getSettings() {
+            if (!data.settings) throw new GaiaApiError(503, 'This fake client was given no settings.');
+            return data.settings;
+        },
+        async setNetworkPolicy(policy) {
+            if (!data.settings) throw new GaiaApiError(503, 'This fake client was given no settings.');
+            if (data.networkPolicyError) throw data.networkPolicyError;
+            data.settings = { ...data.settings, network_policy: policy };
+            return data.settings;
+        },
+        async getUndoSettings() {
+            if (!data.undoSettings) throw new GaiaApiError(503, 'This fake client was given no undo settings.');
+            return data.undoSettings;
+        },
+        async updateUndoSettings(retentionDays, maxMb) {
+            if (!data.undoSettings) throw new GaiaApiError(503, 'This fake client was given no undo settings.');
+            data.undoSettings = { ...data.undoSettings, retention_days: retentionDays, max_mb: maxMb };
+            return data.undoSettings;
         },
         async getMemorySettings() {
             if (!data.memorySettings) throw new GaiaApiError(503, 'This fake client was given no memory settings.');

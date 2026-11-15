@@ -3563,7 +3563,23 @@ export const enMessages = {
     'mobileApp.serverDown.title': 'The model server on your PC isn’t answering',
     'mobileApp.skills.yoursEmpty': 'None yet. Add a folder with a SKILL.md file to {path} on your PC and it shows up here.',
     'mobileApp.banner.openOnPc': 'Open GAIA on your PC to start the model server.',
+    'mobileApp.settings.pcOnly': 'Change this on the PC running GAIA.',
     'mobileApp.settings.comingSoon': 'This section is coming to the phone soon. For now, change it on the PC running GAIA.',
+    'mobileApp.settings.privacy.localOnlyHint': 'Keep every GAIA AI request on your PC. Turning this on clears saved cloud model choices and removes cloud keys from GAIA’s running model server.',
+    'mobileApp.settings.privacy.stays': 'Chats, documents and memory stay on your PC.',
+    'mobileApp.settings.privacy.local': 'Right now answers are generated on your PC too.',
+    'mobileApp.settings.privacy.unknown': "GAIA can't tell right now whether answers are generated on your PC or by a cloud provider.",
+    'mobileApp.settings.privacy.usersServerKeepsKeys': 'Local only is on. Your Lemonade Server keeps any cloud keys it already holds, but GAIA will not send it cloud requests.',
+    'mobileApp.settings.privacy.runtimeKeysNotDropped': 'Local only is on, but GAIA could not remove a cloud key from its model server. Restart Lemonade before using cloud models again.',
+    'mobileApp.settings.privacy.savedModelsNotChecked': 'Local only is on, but GAIA could not check saved model choices. Review Settings → Model before continuing.',
+    'mobileApp.settings.privacy.details': 'Details',
+    'mobileApp.settings.privacy.cloudProvider': 'a cloud provider',
+    'mobileApp.settings.privacy.copyPath': 'Copy the data folder path',
+    'mobileApp.settings.privacy.deleteAsk.one': 'Delete your {n} chat?',
+    'mobileApp.settings.privacy.deleteAsk.other': 'Delete all {n} chats?',
+    'mobileApp.settings.privacy.deleteFinal': "This can't be undone.",
+    'mobileApp.settings.privacy.deleteYes.one': 'Delete {n} chat',
+    'mobileApp.settings.privacy.deleteYes.other': 'Delete {n} chats',
 } as const;
 
 export const en: Locale = {
