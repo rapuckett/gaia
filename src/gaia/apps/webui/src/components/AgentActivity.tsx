@@ -44,7 +44,7 @@ import { log } from '../utils/logger';
 import { StepResult } from './LongContent';
 import { isMessageKey, ref, type MessageKey } from '../i18n/registry';
 import {
-    FILTER_MIN_TOOL_ROWS, MCP_OUTPUT_PREVIEW_LINES, SKILL_USE_TOOLS, consolidateSteps, failureText, foldThoughts, thoughtLabel,
+    FILTER_MIN_TOOL_ROWS, matchesStepFilter, MCP_OUTPUT_PREVIEW_LINES, SKILL_USE_TOOLS, consolidateSteps, failureText, foldThoughts, thoughtLabel,
     formatElapsed, formatToolLatency, compactNarration, argRows, getToolLabels, isTurnError, isWarning, say, shownWhenDone, stepsSummary, thoughtDurations,
     toTimeline, toolRowText,
     type ActivityRow, type PlanItemStatus, type TimelineItem, type ToolLabels,
@@ -196,7 +196,6 @@ export function AgentActivity({ steps, isActive, running = isActive, awaitingUse
     const statusRowId = running && toolStatus
         ? [...displaySteps].reverse().find((s) => s.type === 'tool' && s.active)?.id
         : undefined;
-    const filtering = !!toolNameFilter || statusFilter !== 'all';
 
     const toggleTool = useCallback((id: number) => {
         setExpandedTools((prev) => {
@@ -207,15 +206,7 @@ export function AgentActivity({ steps, isActive, running = isActive, awaitingUse
         });
     }, []);
 
-    const keep = (row: ActivityRow): boolean => {
-        if (row.type !== 'tool' || !filtering) return true;
-        const needle = toolNameFilter.toLowerCase();
-        if (needle && !row.tool?.toLowerCase().includes(needle)
-            && !toolRowText(row, t).toLowerCase().includes(needle)) return false;
-        if (statusFilter === 'success' && row.success !== true) return false;
-        if (statusFilter === 'error' && row.success !== false) return false;
-        return true;
-    };
+    const keep = (row: ActivityRow): boolean => matchesStepFilter(row, toolNameFilter, statusFilter, t);
 
     const renderRow = (step: ActivityRow) => {
         if (step.type === 'thinking') {

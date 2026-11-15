@@ -33,21 +33,26 @@ const slack = {
     activations: {},
 } as unknown as ConnectorRow;
 
+function setup(connectors: ConnectorRow[]) {
+    const client = createFakeClient({ connectors });
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const wrap = ({ children }: { children: ReactNode }) => (
+        <QueryClientProvider client={queryClient}>
+            <GaiaClientProvider client={client}>
+                <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 800 }, insets: { top: 0, left: 0, right: 0, bottom: 0 } }}>
+                    <ThemeProvider>
+                        <SheetHost>{children}</SheetHost>
+                    </ThemeProvider>
+                </SafeAreaProvider>
+            </GaiaClientProvider>
+        </QueryClientProvider>
+    );
+    return { client, queryClient, wrap };
+}
+
 describeNative('ConnectorsScreen MCP server', () => {
     it('pauses a server from the phone, and refuses to turn it back on with the PC-only text', async () => {
-        const client = createFakeClient({ connectors: [slack] });
-        const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-        const wrap = ({ children }: { children: ReactNode }) => (
-            <QueryClientProvider client={queryClient}>
-                <GaiaClientProvider client={client}>
-                    <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 800 }, insets: { top: 0, left: 0, right: 0, bottom: 0 } }}>
-                        <ThemeProvider>
-                            <SheetHost>{children}</SheetHost>
-                        </ThemeProvider>
-                    </SafeAreaProvider>
-                </GaiaClientProvider>
-            </QueryClientProvider>
-        );
+        const { client, queryClient, wrap } = setup([slack]);
         await render(<ConnectorsScreen />, { wrapper: wrap });
         fireEvent.press(await screen.findByLabelText('Slack'));
         fireEvent.press(await screen.findByLabelText('Disable this MCP server'));
@@ -56,6 +61,19 @@ describeNative('ConnectorsScreen MCP server', () => {
         fireEvent.press(await screen.findByText('Enable this MCP server'));
         expect(await screen.findByText(new RegExp(`^${PC_ONLY_REFUSAL.slice(0, 30)}`))).toBeTruthy();
         expect(((await client.listConnectors()).connectors[0] as ConnectorRow).enabled).toBe(false);
+        queryClient.clear();
+    });
+
+    it('asks before Disconnect deletes the saved credentials', async () => {
+        const { client, queryClient, wrap } = setup([slack]);
+        await render(<ConnectorsScreen />, { wrapper: wrap });
+        fireEvent.press(await screen.findByLabelText('Slack'));
+        fireEvent.press(await screen.findByLabelText('Disconnect'));
+        expect(await screen.findByText(/^Disconnect Slack\?/)).toBeTruthy();
+        expect(((await client.listConnectors()).connectors[0] as ConnectorRow).configured).toBe(true);
+
+        fireEvent.press((await screen.findAllByLabelText('Disconnect')).at(-1)!);
+        await waitFor(async () => expect(((await client.listConnectors()).connectors[0] as ConnectorRow).configured).toBe(false));
         queryClient.clear();
     });
 });

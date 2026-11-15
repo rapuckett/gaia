@@ -3,6 +3,7 @@
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
+import { devGalleryEnabled } from '@/features/dev/devGallery';
 import { useState } from 'react';
 
 import { GaiaClientProvider } from '@/data';
@@ -20,7 +21,7 @@ export default function MemoryGalleryRoute() {
     const picked = SCENES.find((s) => s === scene) ?? 'on';
     const [queryClient] = useState(() => new QueryClient({ defaultOptions: { queries: { retry: false } } }));
     const [client] = useState(() => memoryScene(picked));
-    if (!__DEV__) return <Redirect href="/" />;
+    if (!devGalleryEnabled()) return <Redirect href="/" />;
     return (
         <QueryClientProvider client={queryClient}>
             <GaiaClientProvider client={client}>
