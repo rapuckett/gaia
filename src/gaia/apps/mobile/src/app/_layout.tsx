@@ -1,10 +1,10 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { focusManager, QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Drawer } from 'expo-router/drawer';
 import { useEffect, useMemo, useState } from 'react';
-import { useWindowDimensions } from 'react-native';
+import { AppState, useWindowDimensions } from 'react-native';
 
 import { createHttpClient } from '@/api/http';
 import { GaiaClientProvider } from '@/data/GaiaClientProvider';
@@ -41,6 +41,12 @@ export default function RootLayout() {
         () => (connection ? createHttpClient({ ...connection, fetch: platformFetch }) : null),
         [connection],
     );
+
+    // Coming back to the foreground re-reads what's stale, such as the PC's status.
+    useEffect(() => {
+        const sub = AppState.addEventListener('change', (state) => focusManager.setFocused(state === 'active'));
+        return () => sub.remove();
+    }, []);
 
     const localeLoaded = useLocaleStore((s) => s.hydrated);
 
