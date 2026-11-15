@@ -132,7 +132,7 @@ export function useMessageActions(
     const openSheet = () => setOpen(true);
     const canChange = saved && !busy;
     const isUser = message.role === 'user';
-    const canRetry = !isUser && canChange && !readOnly && !!context.latest && !comparison && !isErrorContent(message.content);
+    const canRetry = !isUser && canChange && !readOnly && !!context.latest && !comparison && message.failed !== true && !isErrorContent(message.content);
     const actions: SheetAction[] = [
         ...(isUser && canChange && !readOnly
             ? [

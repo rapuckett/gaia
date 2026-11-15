@@ -3,9 +3,9 @@
 
 import type { GpuMemoryPreset, GpuMemoryStatus } from '@webui/types';
 
-/** The size picked before anyone chooses: the recommended one, else keeping the split (or the first size when the GPU's share is unread). */
-export function defaultTarget(status: GpuMemoryStatus): number | null {
-    return status.recommended_setting_gb ?? (status.gpu_gb != null ? null : status.presets?.[0]?.setting_gb ?? null);
+/** The size picked before anyone chooses: the recommended one, else keeping the split (or the first size when the GPU's share is unread). Chat in the cloud has no local model to size for, so nothing is recommended. */
+export function defaultTarget(status: GpuMemoryStatus, chatInCloud = false): number | null {
+    return (chatInCloud ? null : status.recommended_setting_gb) ?? (status.gpu_gb != null ? null : status.presets?.[0]?.setting_gb ?? null);
 }
 
 /** The top preset is the most GAIA allows: the CPU keeps only its floor there. */

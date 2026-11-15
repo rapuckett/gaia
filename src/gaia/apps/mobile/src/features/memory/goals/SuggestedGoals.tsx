@@ -42,7 +42,7 @@ export function SuggestedGoals({ goals, busyId, onAccept, onReject }: SuggestedG
                                     </Text>
                                 ) : null}
                             </Stack>
-                            <Row gap="sm">
+                            <Row gap="sm" stack>
                                 <Stack flex={1}>
                                     <Button
                                         label={t.bare('mem.goals.reject')}
