@@ -36,7 +36,7 @@ function policyText(t: Translate, notices: PolicyNotices, on: boolean): { text: 
 
 function CardTitle({ children }: { children: string }) {
     return (
-        <Text role="ui" weight="semibold">
+        <Text role="ui" weight="semibold" accessibilityRole="header">
             {children}
         </Text>
     );
@@ -48,8 +48,8 @@ function LocalOnly() {
     const set = useSetNetworkPolicy();
     const [result, setResult] = useState<{ tone: 'success' | 'warning'; text: string; details: string[] } | null>(null);
     const [detailsOpen, setDetailsOpen] = useState(false);
-    const refused = set.error instanceof GaiaApiError && set.error.status === 403;
     const error = set.error ?? settings.error;
+    const refused = error instanceof GaiaApiError && error.status === 403;
     const on = set.isPending ? set.variables === 'local_ai_only' : settings.data?.network_policy === 'local_ai_only';
 
     const toggle = (next: boolean) => {

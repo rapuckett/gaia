@@ -7,12 +7,11 @@ import { ref } from '@webui/i18n/registry';
 import { dueInputValue, dueLabel, relativeDay, sourceKey, type AboutYouItem } from '@webui/utils/memoryFormat.core';
 
 import { useEditMemory } from '@/data';
-import { useT } from '@/i18n/useT';
+import { describeFailureWith, useT } from '@/i18n/useT';
 import { Button, Divider, IconButton, Row, Stack, Text, TextField } from '@/ui';
 import { Eye, Pencil, Trash2 } from '@/ui/icons';
 
 import type { MemoryPaneProps } from '../tabs';
-import { errorText } from './errorText';
 import { parseWhen, whenText } from './whenInput';
 
 interface MemoryRowProps extends Pick<MemoryPaneProps, 'notify'> {
@@ -61,7 +60,7 @@ export function MemoryRow({ item, forgetting, onForget, notify }: MemoryRowProps
                     setEditing(false);
                     notify({ tone: 'success', text: t('mem.about.updated') });
                 },
-                onError: (error) => notify({ tone: 'danger', text: t('mem.about.editFailed', { error: errorText(error, t) }) }),
+                onError: (error) => notify({ tone: 'danger', text: t.compose((say) => say('mem.about.editFailed', { error: describeFailureWith(error, say) })) }),
             },
         );
     };

@@ -1,6 +1,8 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
+import { parseMediaSrc } from '@webui/utils/renderCards.core';
+
 // Not importable from webui (they live in services/api.ts and ChatView.tsx, with
 // their logger and stores); api/constants.test.ts fails if any of these drifts.
 export const UI_HEADERS = {
@@ -9,7 +11,9 @@ export const UI_HEADERS = {
 } as const;
 
 export const ENDPOINTS = {
+    agentInstallStatus: '/api/agents/{agent_id}/install-status',
     agents: '/api/agents',
+    agentsInstall: '/api/agents/install',
     goal: '/api/goals/{goal_id}',
     goalApprove: '/api/goals/{goal_id}/approve',
     goalCancel: '/api/goals/{goal_id}/cancel',
@@ -29,6 +33,7 @@ export const ENDPOINTS = {
     localModelRestart: '/api/providers/local/restart',
     localModelStatus: '/api/providers/local/status',
     mcpStatus: '/api/mcp/status',
+    media: '/api/media/{kind}/{name}',
     memoryActivity: '/api/memory/activity',
     memoryAll: '/api/memory/all',
     memoryCommitDiscovery: '/api/memory/commit-discovery',
@@ -141,6 +146,10 @@ export const ENDPOINTS = {
     onboardingPreflight: '/api/onboarding/preflight',
     onboardingStart: '/api/onboarding/start',
 } as const;
+
+export function agentInstallStatusPath(agentId: string): string {
+    return ENDPOINTS.agentInstallStatus.replace('{agent_id}', encodeURIComponent(agentId));
+}
 
 export function connectorActivationPath(connectorId: string, agentId: string): string {
     return ENDPOINTS.connectorActivation
@@ -314,10 +323,14 @@ export function documentPath(docId: string, endpoint: 'document' | 'documentCanc
     return ENDPOINTS[endpoint].replace('{doc_id}', encodeURIComponent(docId));
 }
 
+/** A library document's file, named with the chat that may read it away from the PC. */
+export function documentFilePath(docId: string, sessionId: string): string {
+    return `${documentPath(docId, 'documentFile')}?session_id=${encodeURIComponent(sessionId)}`;
+}
+
 /** The library file's URL, as the web UI's `documentFileUrl` builds it: the page rides in the fragment. */
-export function documentFileUrl(baseUrl: string, docId: string, page?: number): string {
-    const path = ENDPOINTS.documentFile.replace('{doc_id}', encodeURIComponent(docId));
-    return `${baseUrl.replace(/\/+$/, '')}${path}${page ? `#page=${page}` : ''}`;
+export function documentFileUrl(baseUrl: string, docId: string, sessionId: string, page?: number): string {
+    return `${baseUrl.replace(/\/+$/, '')}${documentFilePath(docId, sessionId)}${page ? `#page=${page}` : ''}`;
 }
 
 /** A PC file's preview or image, named by its path on the PC; the chat's id is what lets a phone read it. */
@@ -325,6 +338,17 @@ export function filePath(endpoint: 'filesImage' | 'filesPreview', path: string, 
     const query = `path=${encodeURIComponent(path)}&session_id=${encodeURIComponent(sessionId)}`;
     return `${ENDPOINTS[endpoint]}?${query}${lines ? `&lines=${lines}` : ''}`;
 }
+
+/** A generated audio file's path, from its card's `/api/media/audio/<name>`; null for any other `src`, so a card never names its own URL. */
+export function generatedAudioPath(src: string): string | null {
+    const name = parseMediaSrc('audio', src);
+    return name === null ? null : ENDPOINTS.media.replace('{kind}', 'audio').replace('{name}', name);
+}
+
+/** The types an audio card accepts: the PC's media route serves WAV only (`generated_media.MEDIA_TYPES`). */
+export const GENERATED_AUDIO_TYPES: readonly string[] = ['audio/wav', 'audio/wave', 'audio/x-wav'];
+/** About six minutes of CD-quality WAV; the whole file is held in memory before it plays. */
+export const MAX_GENERATED_AUDIO_BYTES = 64 * 1024 * 1024;
 
 /** Typing pauses this long before a search goes out; the web UI's `SEARCH_DEBOUNCE_MS`. */
 export const SEARCH_DEBOUNCE_MS = 200;
