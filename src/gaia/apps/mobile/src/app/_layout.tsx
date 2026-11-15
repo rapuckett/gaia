@@ -12,6 +12,7 @@ import { AppErrorBoundary } from '@/features/errors/AppErrorBoundary';
 import { ConnectionBanner } from '@/features/banners/ConnectionBanner';
 import { ModelNeededHost } from '@/features/model';
 import { AppDrawer } from '@/features/nav/AppDrawer';
+import { RoutingEffects } from '@/features/nav/RoutingEffects';
 import { INITIAL_ROUTE, PERMANENT_DRAWER_MIN_WIDTH } from '@/features/nav/navigation';
 import { SetupGate } from '@/features/setup/SetupGate';
 import { useDirection } from '@/i18n/useT';
@@ -45,6 +46,7 @@ export default function RootLayout() {
                     <AppErrorBoundary variant="window">
                     <ScreenBannerProvider banner={<ConnectionBanner />}>
                         <SetupGate>
+                            <RoutingEffects />
                             <Drawer
                                 drawerContent={(props) => (
                                     <AppErrorBoundary variant="compact">

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import type {
+    AgentCapabilities,
     AgentInfo,
     AgentMcpServer,
     ConnectorListEntry,
@@ -79,6 +80,8 @@ export interface FakeClientData {
     skills?: SkillList;
     resources?: ResourceUsage;
     start?: StartScreen;
+    /** What watchSessionEvents streams before it ends; the real stream never ends on its own. */
+    sessionEvents?: unknown[];
     /** Most chats a search returns before it says `truncated`. */
     searchLimit?: number;
     /** Makes every search fail with this message. */
@@ -99,6 +102,8 @@ export interface FakeClientData {
     uploadError?: Error;
     /** The state an uploaded document comes back in; defaults to complete. */
     uploadStatus?: DocumentResponse['indexing_status'];
+    /** What getCapabilities answers, by chat; a chat not listed has no agent running (409). */
+    capabilities?: Record<string, AgentCapabilities>;
 }
 
 export interface FakeGaiaClient extends GaiaClient {
@@ -120,6 +125,7 @@ export interface FakeGaiaClient extends GaiaClient {
     readonly detached: { sessionId: string; docId: string }[];
     readonly uploaded: PickedFile[];
     readonly attached: { sessionId: string; docId: string }[];
+    readonly capabilityReads: string[];
 }
 
 export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
@@ -161,6 +167,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
     const detached: FakeGaiaClient['detached'] = [];
     const uploaded: PickedFile[] = [];
     const attached: FakeGaiaClient['attached'] = [];
+    const capabilityReads: string[] = [];
 
     function findSession(sessionId: string): Session {
         const session = sessions.find((s) => s.id === sessionId);
@@ -195,6 +202,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         detached,
         uploaded,
         attached,
+        capabilityReads,
         async health(): Promise<HealthResponse> {
             return { status: 'ok', service: 'gaia-agent-ui' };
         },
@@ -326,6 +334,9 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             answers.push(request);
             return { status: 'ok', request_id: request.request_id };
         },
+        async *watchSessionEvents() {
+            yield* (data.sessionEvents ?? []) as StreamEvent[];
+        },
         async listConnectors() {
             return { connectors: [...(data.connectors ?? [])] };
         },
@@ -447,6 +458,12 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         },
         async listDocuments() {
             return data.documents ?? { documents: [], total: 0, total_chunks: 0, total_size_bytes: 0 };
+        },
+        async getCapabilities(sessionId) {
+            capabilityReads.push(sessionId);
+            const found = data.capabilities?.[sessionId];
+            if (!found) throw new GaiaApiError(409, "This chat's agent isn't running yet.");
+            return found;
         },
         async getSystemStatus() {
             if (!data.status) throw new GaiaApiError(503, 'This fake client was given no system status.');

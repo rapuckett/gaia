@@ -27,6 +27,7 @@ import type {
     StreamEvent,
     SystemStatus,
 } from '@webui/types';
+import type { AgentCapabilities } from '@webui/types/sessionPanel';
 import type { CreateSessionRequest, DocumentListResponse, DocumentResponse, SessionSearchResponse, ToolConfirmRequest, UserInputRequest as ApiUserInputRequest } from '@webui/types/api.gen';
 
 export type {
@@ -58,6 +59,7 @@ export type {
     SystemStatus,
     UnavailableConnectorRow,
 } from '@webui/types';
+export type { ActiveSkill, AgentCapabilities, AgentTool, SkillOrigin } from '@webui/types/sessionPanel';
 export type { CreateSessionRequest, DocumentListResponse, DocumentResponse, SessionSearchResponse, SessionSearchResult, ToolConfirmRequest } from '@webui/types/api.gen';
 
 /** A photo or file chosen on this phone: where it is, and what it is called. */
@@ -220,6 +222,8 @@ export interface GaiaClient {
     toggleSessionPrivate(sessionId: string, options?: RequestOptions): Promise<Session>;
     /** Removes a document from this chat; the library keeps it. */
     detachDocument(sessionId: string, docId: string, options?: RequestOptions): Promise<void>;
+    /** The tools and skills of the chat's running agent; rejects with 409 until the agent has started. */
+    getCapabilities(sessionId: string, options?: RequestOptions): Promise<AgentCapabilities>;
     /** This PC's CPU, memory, GPU, NPU and network use. */
     getResourceUsage(options?: RequestOptions): Promise<ResourceUsage>;
     /** Deletes the message and everything after it, so the exchange can be asked again. */
@@ -241,6 +245,11 @@ export interface GaiaClient {
     /** Answers a `needs_input` question; the turn continues once GAIA has it. */
     sendUserInput(request: UserInputRequest, options?: RequestOptions): Promise<UserInputResult>;
     listAgents(options?: RequestOptions): Promise<AgentList>;
+    /**
+     * Streams events about the PC's chat list, such as `set_active_session`. Never ends on its own:
+     * it throws when the connection drops or goes silent, and the caller reconnects.
+     */
+    watchSessionEvents(options?: RequestOptions): AsyncIterable<StreamEvent>;
     listConnectors(options?: RequestOptions): Promise<ConnectorList>;
     listConnectorGrants(connectorId: string, options?: RequestOptions): Promise<ConnectorGrants>;
     listConnectorActivations(connectorId: string, options?: RequestOptions): Promise<ConnectorActivations>;
