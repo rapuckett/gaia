@@ -11,6 +11,7 @@ export * from './memory';
 export * from './modelMenu';
 export * from './models';
 export * from './mutations';
+export * from './providers';
 export * from './queries';
 export * from './schedules';
 export * from './sessionEvents';

@@ -9,7 +9,7 @@ import { SessionPanelGallery, type SessionPanelGalleryState } from '@/features/c
 import { UIProvider } from '@/ui';
 
 const OPEN_STATES = ['actions', 'delete', 'edit'];
-const PANEL_STATES = ['loaded', 'empty', 'error', 'notRunning'];
+const PANEL_STATES = ['loaded', 'empty', 'error', 'notRunning', 'ctxMeasuring', 'ctxNormal', 'ctxEstimated', 'ctxFilling', 'ctxChat', 'ctxNoTurn'];
 
 function isState(state?: string): state is MessagesGalleryState {
     return !!state && (state in FIXTURES || OPEN_STATES.includes(state));

@@ -19,9 +19,14 @@ const DEFAULT_OPEN: Record<PanelSectionId, boolean> = {
 interface PanelState {
     sections: Record<PanelSectionId, boolean>;
     setSection(id: PanelSectionId, open: boolean): void;
+    /** Which numbers Context & performance shows under the hood. */
+    contextScope: 'turn' | 'chat';
+    setContextScope(scope: 'turn' | 'chat'): void;
 }
 
 export const useSessionPanelStore = create<PanelState>((set) => ({
     sections: DEFAULT_OPEN,
     setSection: (id, open) => set((state) => ({ sections: { ...state.sections, [id]: open } })),
+    contextScope: 'turn',
+    setContextScope: (contextScope) => set({ contextScope }),
 }));

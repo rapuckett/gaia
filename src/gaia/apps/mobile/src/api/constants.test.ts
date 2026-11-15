@@ -97,8 +97,10 @@ describe('endpoints', () => {
     const methods: Record<keyof typeof ENDPOINTS, string[]> = {
         agents: ['GET'],
         health: ['GET'],
+        cloudPrices: ['GET'],
         lemonadeDetect: ['GET'],
         lemonadeTarget: ['GET'],
+        localModelContext: ['GET', 'PUT'],
         localModelRestart: ['POST'],
         localModelStatus: ['GET'],
         memoryConsolidate: ['POST'],
@@ -145,6 +147,7 @@ describe('endpoints', () => {
         chatPermissions: ['GET', 'PUT'],
         chatFollowup: ['POST'],
         chatFollowupOutcome: ['GET'],
+        chatPerformance: ['GET'],
         chatUserInput: ['POST'],
         connectorActivation: ['DELETE', 'PUT'],
         connectorActivations: ['GET'],
@@ -162,8 +165,11 @@ describe('endpoints', () => {
         documents: ['GET'],
         filesUpload: ['POST'],
         filesUploadMedia: ['POST'],
+        modelServer: ['GET'],
+        modelServerBackend: ['PUT'],
         onboardingPreflight: ['GET'],
         onboardingStart: ['GET'],
+        providers: ['GET'],
     };
     const calls = Object.entries(ENDPOINTS).flatMap(([name, path]) =>
         methods[name as keyof typeof ENDPOINTS].map((method) => `${method} ${path}`),
