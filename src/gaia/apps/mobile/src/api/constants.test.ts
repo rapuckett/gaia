@@ -140,6 +140,7 @@ describe('endpoints', () => {
         setupChatModel: ['POST'],
         setupCheck: ['GET'],
         setupModelDownload: ['POST'],
+        setupModelRemove: ['POST'],
         setupModelSkip: ['POST'],
         setupNeeds: ['GET'],
         setupNpuRecheck: ['POST'],

@@ -214,6 +214,7 @@ export interface FakeGaiaClient extends GaiaClient {
     /** The files uploadFile took, in order. */
     readonly uploads: { name: string; size: number }[];
     readonly downloads: { modelId: string; acknowledgeLowDisk: boolean }[];
+    readonly removals: string[];
     readonly backendSets: string[];
     /** The setup model choices saved, in order. */
     readonly setupChoices: { kind: 'chat' | 'vision' | 'skip'; modelId: string | null; flag?: boolean }[];
@@ -255,6 +256,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
     const contextSets: FakeGaiaClient['contextSets'] = [];
     const uploads: FakeGaiaClient['uploads'] = [];
     const downloads: FakeGaiaClient['downloads'] = [];
+    const removals: FakeGaiaClient['removals'] = [];
     const schedules = [...(data.schedules ?? [])];
     const scheduleActions: FakeGaiaClient['scheduleActions'] = [];
     const documentActions: FakeGaiaClient['documentActions'] = [];
@@ -335,6 +337,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         contextSets,
         uploads,
         downloads,
+        removals,
         setupStarts,
         backendSets,
         setupChoices,
@@ -759,6 +762,10 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         async downloadSetupModel(modelId, acknowledgeLowDisk) {
             downloads.push({ modelId, acknowledgeLowDisk });
             return data.setupStatus ?? { state: 'running' };
+        },
+        async removeSetupModel(modelId) {
+            removals.push(modelId);
+            return { ...(data.setupPlan as SetupPlan), freed_gb: 0 };
         },
         async getSetupStatus() {
             if (data.setupStatuses?.length) return nextOf(data.setupStatuses, statusAt++);
