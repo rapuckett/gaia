@@ -1,31 +1,55 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
+import { scopeLabel } from '@webui/utils/connectorScopes';
+import { ref } from '@webui/i18n/registry';
+import { useRouter } from 'expo-router';
 import { useMemo, useState, type ReactNode } from 'react';
+import { View } from 'react-native';
 
 import type { AgentMcpServer, ConnectorRow, UnavailableConnectorRow } from '@/api/client.types';
-import { useAgentMcps, useConnectors } from '@/data';
+import {
+    useAgentMcps,
+    useAgents,
+    useChangeConnectorAccess,
+    useConnectorActivations,
+    useConnectorGrants,
+    useConnectors,
+} from '@/data';
 import { ScreenHeader } from '@/features/nav/ScreenHeader';
+import { ChipButton } from '@/features/schedules/ChipButton';
+import { SettingsGroup } from '@/features/skills/SettingsGroup';
 import { describeError, useT } from '@/i18n/useT';
 import {
-    Badge,
-    Button,
-    Disclosure,
     EmptyState,
     ErrorState,
     Icon,
-    ListRow,
+    Pressable,
     ListSkeleton,
     Notice,
     Row,
     Screen,
     Stack,
+    Surface,
+    Switch,
     Text,
     TextField,
     Ltr,
+    useTheme,
 } from '@/ui';
-import { ChevronDown, ChevronRight } from '@/ui/icons';
+import { ChevronDown, ChevronRight, CircleCheck } from '@/ui/icons';
 
+import {
+    activatableAgents,
+    flagshipAgentId,
+    grantAgents,
+    MCP_DEFAULT_GRANT_SCOPES,
+    nextScopes,
+    personalizeRoute,
+    personalizeSourceKind,
+    scopesForActivation,
+    soleMcpAgent,
+} from './connectorAccess';
 import {
     agentMcpKey,
     connectorDescription,
@@ -62,18 +86,16 @@ export function ConnectorsScreen() {
     function renderGroup(id: string, title: string, count: number, byDefault: boolean, hint: string | null, body: ReactNode) {
         if (count === 0) return null;
         return (
-            <Disclosure
+            <SettingsGroup
                 key={id}
                 title={title}
+                hint={hint}
+                count={count}
                 open={groupOpen(id, byDefault)}
                 onToggle={setGroup(id, byDefault)}
-                trailing={<Badge label={String(count)} />}
             >
-                <Stack gap="xs">
-                    {hint ? <Text role="caption" tone="muted">{hint}</Text> : null}
-                    {body}
-                </Stack>
-            </Disclosure>
+                {body}
+            </SettingsGroup>
         );
     }
 
@@ -83,7 +105,7 @@ export function ConnectorsScreen() {
     return (
         <Screen scroll header={<ScreenHeader title={t('settings.section.connectors')} />}>
             <Stack gap="md" paddingX="lg" paddingY="md">
-                <Text tone="secondary">{t('settings.connectors.lede')}</Text>
+                <Text role="ui" tone="secondary">{t('settings.connectors.lede')}</Text>
                 {failure ? (
                     <ErrorState
                         title={describeError(failure, t)}
@@ -155,14 +177,65 @@ export function ConnectorsScreen() {
     );
 }
 
+/** The desktop's `.connector-tile`: a bordered row that opens a detail panel under a rule. */
+function Tile({ header, open, children }: { header: ReactNode; open?: boolean; children?: ReactNode }) {
+    const { colors, space } = useTheme();
+    return (
+        <Surface tone="secondary" radius="md" border>
+            {header}
+            {open ? (
+                <View style={{ borderTopWidth: 1, borderTopColor: colors.borderLight, paddingHorizontal: space.lg, paddingVertical: space.lg }}>
+                    {children}
+                </View>
+            ) : null}
+        </Surface>
+    );
+}
+
+function TileHeader({ name, trailing, onPress, open }: { name: string; trailing?: ReactNode; onPress?: () => void; open?: boolean }) {
+    const { space } = useTheme();
+    const body = (
+        <View style={{ paddingHorizontal: space.lg, paddingVertical: space.md }}>
+            <Row gap="sm" justify="between">
+                <Row gap="sm" wrap flex={1}>
+                    <Text role="ui" weight="semibold" dir="auto">{name}</Text>
+                    {trailing}
+                </Row>
+                {onPress ? <Chevron open={!!open} /> : null}
+            </Row>
+        </View>
+    );
+    return onPress ? (
+        <Pressable onPress={onPress} accessibilityLabel={name} accessibilityState={{ expanded: !!open }}>
+            {body}
+        </Pressable>
+    ) : (
+        body
+    );
+}
+
+/** An outlined pill: the type tag (`.connector-tile-type`) and the paused tag (`.connector-status.disabled`). */
+function Pill({ label, bordered = true }: { label: string; bordered?: boolean }) {
+    const { colors, radius } = useTheme();
+    return (
+        <View
+            style={{
+                backgroundColor: colors.bgTertiary,
+                borderColor: colors.borderLight,
+                borderWidth: bordered ? 1 : 0,
+                borderRadius: radius.full,
+                paddingHorizontal: 8,
+                paddingVertical: 1,
+            }}
+        >
+            <Text role="caption" tone="muted" numberOfLines={1}>{label}</Text>
+        </View>
+    );
+}
+
 function UnavailableTile({ connector }: { connector: UnavailableConnectorRow }) {
     const t = useT();
-    return (
-        <ListRow
-            title={connector.display_name}
-            trailing={<Text role="caption" tone="danger">{t('settings.connectors.unavailableStatus')}</Text>}
-        />
-    );
+    return <Tile header={<TileHeader name={connector.display_name} trailing={<Pill label={t('settings.connectors.unavailableStatus')} />} />} />;
 }
 
 function StatusText({ connector, t }: { connector: ConnectorRow; t: Translator }) {
@@ -170,14 +243,17 @@ function StatusText({ connector, t }: { connector: ConnectorRow; t: Translator }
     switch (status.kind) {
         case 'connected':
             return (
-                <Text role="caption" tone="success" numberOfLines={1}>
-                    {status.accountId ? <Ltr>{status.accountId}</Ltr> : t('settings.connectors.connected')}
-                </Text>
+                <Row gap="xs">
+                    <Icon icon={CircleCheck} size="sm" tone="success" />
+                    <Text role="label" tone="success" numberOfLines={1}>
+                        {status.accountId ? <Ltr>{status.accountId}</Ltr> : t('settings.connectors.connected')}
+                    </Text>
+                </Row>
             );
         case 'paused':
-            return <Text role="caption" tone="muted">{t('settings.connectors.paused')}</Text>;
+            return <Pill label={t('settings.connectors.paused')} />;
         case 'setupRequired':
-            return <Text role="caption" tone="muted">{t('settings.connectors.setupRequired')}</Text>;
+            return <Text role="label" tone="muted">{t('settings.connectors.setupRequired')}</Text>;
         default:
             return null;
     }
@@ -192,34 +268,186 @@ function ConnectorTile({ connector, expanded, onToggle }: { connector: Connector
     const [asked, setAsked] = useState(false);
     const google = connector.id === GOOGLE_CONNECTOR_ID;
     return (
-        <Stack>
-            <ListRow
-                title={connector.display_name}
-                onPress={onToggle}
-                accessibilityLabel={connector.display_name}
-                trailing={
-                    <Row gap="sm">
-                        {connector.configured ? <Badge label={connector.type === 'oauth_pkce' ? 'OAuth' : 'MCP'} /> : null}
-                        <StatusText connector={connector} t={t} />
-                        <Chevron open={expanded} />
-                    </Row>
-                }
-            />
-            {expanded ? (
-                <Stack gap="sm" paddingX="lg" paddingY="sm">
-                    <Text role="caption" tone="secondary">{connectorDescription(t, connector)}</Text>
-                    {!connector.configured ? (
-                        google ? (
-                            <Notice tone="info" message={t('mobileApp.connectors.googlePcOnly')} />
-                        ) : (
-                            <>
-                                <Button label={t('settings.key.connect')} onPress={() => setAsked(true)} variant="secondary" size="sm" />
-                                {asked ? <Notice tone="info" message={t('mobileApp.connectors.comingLater')} /> : null}
-                            </>
+        <Tile
+            open={expanded}
+            header={
+                <TileHeader
+                    name={connector.display_name}
+                    onPress={onToggle}
+                    open={expanded}
+                    trailing={
+                        <>
+                            {connector.configured ? <Pill label={connector.type === 'oauth_pkce' ? 'OAuth' : 'MCP'} /> : null}
+                            <StatusText connector={connector} t={t} />
+                        </>
+                    }
+                />
+            }
+        >
+            <Stack gap="sm">
+                <Text role="label" tone="secondary">{connectorDescription(t, connector)}</Text>
+                {!connector.configured ? (
+                    google ? (
+                        <Notice tone="info" message={t('mobileApp.connectors.googlePcOnly')} />
+                    ) : (
+                        <>
+                            <ChipButton label={t('settings.key.connect')} variant="accent" onPress={() => setAsked(true)} />
+                            {asked ? <Notice tone="info" message={t('mobileApp.connectors.comingLater')} /> : null}
+                        </>
+                    )
+                ) : (
+                    <ConnectorAccess connector={connector} />
+                )}
+            </Stack>
+        </Tile>
+    );
+}
+
+function ConnectorAccess({ connector }: { connector: ConnectorRow }) {
+    const t = useT();
+    const agents = useAgents();
+    const grants = useConnectorGrants(connector.id, true);
+    const activations = useConnectorActivations(connector.id, true);
+    const change = useChangeConnectorAccess(connector.id);
+
+    const failure = agents.error ?? grants.error ?? activations.error;
+    if (failure) return <Notice tone="danger" message={describeError(failure, t)} />;
+    if (!agents.data || !grants.data || !activations.data) return null;
+
+    const list = agents.data.agents;
+    const granted = grants.data.grants;
+    const active = activations.data.activations;
+    const busy = change.isPending;
+    const sole = soleMcpAgent(list, connector);
+    const perScope = sole ? [] : grantAgents(list, connector.id);
+    const perAgent = sole ? [] : activatableAgents(list, connector);
+
+    return (
+        <Stack gap="sm">
+            {connector.enabled !== false ? <PersonalizeOffer connector={connector} /> : null}
+            {sole ? (
+                <Switch
+                    label={t('settings.connectors.agentCanUse', { agent: sole.name, name: connector.display_name })}
+                    description={connector.enabled === false ? t('settings.connectors.disabledHelp') : undefined}
+                    value={connector.enabled !== false && !!active[sole.namespaced_agent_id]}
+                    disabled={busy || connector.enabled === false}
+                    onValueChange={(on) =>
+                        change.mutate(
+                            on
+                                ? {
+                                      kind: 'activate',
+                                      agentId: sole.namespaced_agent_id,
+                                      scopes: granted[sole.namespaced_agent_id]?.length ? undefined : [...MCP_DEFAULT_GRANT_SCOPES],
+                                  }
+                                : { kind: 'deactivate', agentId: sole.namespaced_agent_id },
                         )
-                    ) : null}
+                    }
+                />
+            ) : null}
+            {perScope.length > 0 ? (
+                <Stack gap="xs">
+                    <Text role="label" weight="semibold" tone="muted">{t('settings.connectors.grants')}</Text>
+                    {perScope.map((agent) => {
+                        const held = granted[agent.namespaced_agent_id] ?? [];
+                        const scopes = agent.required_connections?.find((rc) => rc.connector_id === connector.id)?.scopes ?? [];
+                        return (
+                            <Surface key={agent.namespaced_agent_id} tone="secondary" radius="sm" border padding="md">
+                              <Stack gap="xs">
+                                <Text role="label" weight="semibold">{agent.name}</Text>
+                                {scopes.map((scope) => (
+                                    <Switch
+                                        key={scope}
+                                        label={scopeLabel(scope, t)}
+                                        value={held.includes(scope)}
+                                        disabled={busy}
+                                        onValueChange={(on) =>
+                                            change.mutate({
+                                                kind: 'grant',
+                                                agentId: agent.namespaced_agent_id,
+                                                scopes: nextScopes(held, scope, on),
+                                            })
+                                        }
+                                    />
+                                ))}
+                              </Stack>
+                            </Surface>
+                        );
+                    })}
                 </Stack>
             ) : null}
+            {perAgent.length > 0 ? (
+                <Stack gap="xs">
+                    <Text role="label" weight="semibold" tone="muted">{t('settings.connectors.activeFor')}</Text>
+                    {perAgent.map((agent) => {
+                        const on = !!active[agent.namespaced_agent_id];
+                        return (
+                            <Switch
+                                key={agent.namespaced_agent_id}
+                                label={agent.name}
+                                description={t(on ? 'settings.connectors.toolsVisible' : 'settings.connectors.toolsHidden', {
+                                    name: connector.display_name,
+                                })}
+                                value={on}
+                                disabled={busy}
+                                onValueChange={(next) =>
+                                    change.mutate(
+                                        next
+                                            ? {
+                                                  kind: 'activate',
+                                                  agentId: agent.namespaced_agent_id,
+                                                  scopes: scopesForActivation(agent, connector.id, granted[agent.namespaced_agent_id] ?? []),
+                                              }
+                                            : { kind: 'deactivate', agentId: agent.namespaced_agent_id },
+                                    )
+                                }
+                            />
+                        );
+                    })}
+                </Stack>
+            ) : null}
+            {change.error ? <Notice tone="danger" message={describeError(change.error, t)} /> : null}
+        </Stack>
+    );
+}
+
+function PersonalizeOffer({ connector }: { connector: ConnectorRow }) {
+    const t = useT();
+    const router = useRouter();
+    const agents = useAgents();
+    const change = useChangeConnectorAccess(connector.id);
+    const [busy, setBusy] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const kind = personalizeSourceKind(connector.id);
+    const source = kind
+        ? ref(`settings.connectors.personalize.source.${kind}`)
+        : ref('settings.connectors.personalize.source.other', { name: connector.display_name });
+
+    async function start() {
+        setBusy(true);
+        setError(null);
+        try {
+            if (connector.type === 'mcp_server') {
+                const flagship = flagshipAgentId(agents.data?.agents ?? []);
+                if (!flagship) throw new Error(t('settings.connectors.personalize.noAgent', { name: connector.display_name }));
+                if (!connector.activations?.[flagship]) {
+                    await change.mutateAsync({ kind: 'activate', agentId: flagship, scopes: [...MCP_DEFAULT_GRANT_SCOPES] });
+                }
+            }
+            router.push(personalizeRoute(connector));
+        } catch (e) {
+            setError(t('settings.connectors.personalize.failed', { error: describeError(e, t) }));
+        } finally {
+            setBusy(false);
+        }
+    }
+
+    return (
+        <Stack gap="xs">
+            <Text role="label" tone="secondary">
+                {t('settings.connectors.personalize.tile', { source, name: connector.display_name })}
+            </Text>
+            <ChipButton label={t('settings.connectors.personalize.button')} onPress={() => void start()} disabled={busy} />
+            {error ? <Notice tone="danger" message={error} /> : null}
         </Stack>
     );
 }
@@ -228,29 +456,28 @@ function AgentMcpTile({ server, expanded, onToggle }: { server: AgentMcpServer; 
     const t = useT();
     const command = [server.command, ...server.args].join(' ');
     return (
-        <Stack>
-            <ListRow
-                title={server.server_name}
-                subtitle={t('settings.connectors.via', { name: server.agent_name })}
-                onPress={onToggle}
-                trailing={
-                    <Row gap="sm">
-                        <Badge
-                            label={server.disabled ? t('settings.connectors.paused') : t('settings.connectors.active')}
-                            tone={server.disabled ? 'neutral' : 'success'}
-                        />
-                        <Badge label={t('settings.connectors.readOnly')} />
-                        <Chevron open={expanded} />
-                    </Row>
-                }
-            />
-            {expanded ? (
-                <Stack gap="xs" paddingX="lg" paddingY="sm">
-                    {command ? <Ltr>{command}</Ltr> : null}
-                    <Ltr>{server.config_path}</Ltr>
-                    <Text role="caption" tone="muted">{t('settings.connectors.editConfig')}</Text>
-                </Stack>
-            ) : null}
-        </Stack>
+        <Tile
+            open={expanded}
+            header={
+                <TileHeader
+                    name={server.server_name}
+                    onPress={onToggle}
+                    open={expanded}
+                    trailing={
+                        <>
+                            <Pill label={server.disabled ? t('settings.connectors.paused') : t('settings.connectors.active')} />
+                            <Pill label={t('settings.connectors.readOnly')} />
+                        </>
+                    }
+                />
+            }
+        >
+            <Stack gap="xs">
+                <Text role="label" tone="secondary">{t('settings.connectors.via', { name: server.agent_name })}</Text>
+                {command ? <Ltr>{command}</Ltr> : null}
+                <Ltr>{server.config_path}</Ltr>
+                <Text role="label" tone="muted">{t('settings.connectors.editConfig')}</Text>
+            </Stack>
+        </Tile>
     );
 }

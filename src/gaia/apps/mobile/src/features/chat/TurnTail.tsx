@@ -3,13 +3,14 @@
 
 import { useMemo } from 'react';
 
+import { ModelServerDownNotice } from '@/features/model/ModelServerDownNotice';
 import { useT } from '@/i18n/useT';
 import { Button, Notice, Row, Spinner, Stack, Text } from '@/ui';
 import { RotateCcw } from '@/ui/icons';
 
 import { ActivityTimeline } from './activity/ActivityTimeline';
 import { stepsFromEvents } from './activity/stepsFromEvents';
-import { chatErrorText } from './chatErrors';
+import { chatErrorText, isModelServerDown } from './chatErrors';
 import { StoppedNote } from './EndingNotes';
 import { Markdown } from './markdown/Markdown';
 import type { TurnTail as Tail } from './tailState';
@@ -43,7 +44,8 @@ export function TurnTail({ tail, line, awaitingUser = false, onTryAgain, onConti
                     </Text>
                 </Row>
             ) : null}
-            {tail.error ? <Notice tone="danger" message={chatErrorText(tail.error, t)} testID="reply-error" /> : null}
+            {tail.error ? <Notice tone="danger" title={t('msg.error')} message={chatErrorText(tail.error, t)} testID="reply-error" /> : null}
+            {tail.error && !tail.live && isModelServerDown(tail.error, t) ? <ModelServerDownNotice /> : null}
             {tail.stop ? <StoppedNote stop={tail.stop} /> : null}
             {tail.canContinue || tail.canTryAgain ? (
                 <Row gap="sm" wrap>

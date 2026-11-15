@@ -1,23 +1,28 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
+import { isAuthRequiredMessage } from '@webui/utils/connectorRetry.core';
 import { useEffect, useRef, useState } from 'react';
 
 import { needsOutcome, nextToSend } from '@webui/utils/messageQueue';
+import { MAX_STREAM_RECONNECTS } from '@webui/utils/streamErrors.core';
 
-import { useAnswerQuestion, useChatStream, useMessages, useSession } from '@/data';
-import { Composer, useComposerQueue, useFollowUpEvents } from '@/features/composer';
+import { useAnswerQuestion, useChatStream, useContextUsage, usePermissionMode, useMessages, useSession } from '@/data';
+import { Composer, ContextMeter, ContextWarning, ModelChip, PermissionChip, useAttachments, useComposerQueue, useFollowUpEvents } from '@/features/composer';
 import { QueuedMessages } from '@/features/composer/QueuedMessages';
 import { describeError, useT } from '@/i18n/useT';
 import { isQuestionGone, questionCardData, resolveTypedAnswer } from '@/features/questions/questionLogic';
 import { ErrorState, Notice, Screen, Stack } from '@/ui';
 
 import { ChatPrompts } from './ChatPrompts';
+import { ConnectorRetry } from './ConnectorRetry';
 import { ChatHeader } from './header';
 import { PermissionPrompt } from './permission/PermissionPrompt';
 import { usePermissionPrompt } from './permission/usePermissionPrompt';
 import { liveStatusLine } from './liveStatus';
 import { MessageList } from './messages/MessageList';
+import { TailIssues } from './ReplyErrors';
+import { SessionPanel } from './session-panel';
 import { buildTail } from './tailState';
 import { TurnTail } from './TurnTail';
 
@@ -29,20 +34,28 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
     const messages = useMessages(sessionId);
     const stream = useChatStream(sessionId);
     const queue = useComposerQueue(sessionId);
+    const attachments = useAttachments();
+    const permissionMode = usePermissionMode(sessionId);
     const permission = usePermissionPrompt(sessionId);
     const answer = useAnswerQuestion();
     const followUps = useFollowUpEvents(sessionId, stream.events);
     const stopped = useRef(false);
     const [actionError, setActionError] = useState<unknown>(null);
+    const [panelOpen, setPanelOpen] = useState(false);
     const busy = stream.status !== 'idle';
+    const context = useContextUsage(sessionId, stream.events, busy);
     const saved = messages.data?.messages ?? NO_MESSAGES;
 
     const tail = buildTail(saved, stream);
-    const line = liveStatusLine(
-        stream.events,
-        { waitingOnPerson: !!stream.pendingPermission || !!stream.pendingQuestion, answering: stream.liveText !== '' },
-        t,
-    );
+    const lastReply = saved.filter((m) => m.role !== 'system').at(-1);
+    const connectorError = !busy && lastReply?.role === 'assistant' && isAuthRequiredMessage(lastReply.content) ? lastReply : null;
+    const line = stream.reconnecting
+        ? t('live.reconnectingStream', { attempt: stream.reconnecting, max: MAX_STREAM_RECONNECTS })
+        : liveStatusLine(
+              stream.events,
+              { waitingOnPerson: !!stream.pendingPermission || !!stream.pendingQuestion, answering: stream.liveText !== '' },
+              t,
+          );
 
     const question = stream.pendingQuestion && !stream.pendingQuestion.sensitive ? stream.pendingQuestion : null;
     const steerable = stream.status === 'streaming' && !followUps.unavailable;
@@ -108,14 +121,20 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
     return (
         <Screen
             keyboard="avoid"
-            header={<ChatHeader sessionId={sessionId} />}
+            header={<ChatHeader sessionId={sessionId} onOpenSessionPanel={() => setPanelOpen(true)} />}
             footer={
                 <>
                     {actionError ? (
                         <Stack paddingX="lg">
-                            <Notice tone="danger" message={describeError(actionError, t)} testID="action-error" />
+                            <Notice
+                                tone="danger"
+                                message={describeError(actionError, t)}
+                                action={{ label: t('chat.dismissError'), onPress: () => setActionError(null) }}
+                                testID="action-error"
+                            />
                         </Stack>
                     ) : null}
+                    {connectorError ? <ConnectorRetry content={connectorError.content} onRetry={() => tryAgain(connectorError.id)} /> : null}
                     {permission ? <PermissionPrompt key={permission.prompt.id} {...permission} /> : null}
                     <QueuedMessages
                         items={queue.held}
@@ -124,14 +143,25 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
                         onRetry={queue.retry}
                         onSteer={steerable ? queue.steer : undefined}
                     />
+                    <ContextWarning usage={context.usage} />
                     <Composer
                         value={queue.draft}
                         onChange={queue.setDraft}
                         onSend={send}
                         onStop={stop}
                         running={busy}
+                        attachments={attachments}
+                        leftControls={
+                            <PermissionChip mode={permissionMode.mode ?? 'ask'} onChange={(mode) => permissionMode.set.mutate(mode)} />
+                        }
                         answering={!!question}
                         placeholder={placeholder}
+                        rightControls={
+                            <>
+                                <ContextMeter usage={context.usage} unavailable={context.unavailable} />
+                                <ModelChip turnRunning={busy} />
+                            </>
+                        }
                     />
                 </>
             }
@@ -152,11 +182,13 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
                                     onContinue={continueReply}
                                 />
                             ) : null}
+                            {tail ? <TailIssues tail={tail} local={session.data?.inference_remote === false} /> : null}
                             <ChatPrompts sessionId={sessionId} question={stream.pendingQuestion} confirmation={stream.pendingConfirmation} />
                         </>
                     }
                 />
             )}
+            <SessionPanel sessionId={sessionId} open={panelOpen} onClose={() => setPanelOpen(false)} />
         </Screen>
     );
 }
