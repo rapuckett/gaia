@@ -6,7 +6,10 @@ import type {
     ActiveModel,
     AgentInfo,
     AgentMcpServer,
+    ChatPerformance,
+    CloudPriceList,
     ConnectorListEntry,
+    ContextChoice,
     ContextUsageResult,
     LemonadeFound,
     LemonadeTarget,
@@ -16,6 +19,7 @@ import type {
     ModelNeedJob,
     PermissionMode,
     PreflightReport,
+    ProvidersResponse,
     ParsedSchedule,
     ProviderModelsResponse,
     ResourceUsage,
@@ -33,14 +37,18 @@ import type {
 } from '@webui/types';
 import type { AgentCapabilities } from '@webui/types/sessionPanel';
 import type { MemorySettings } from '@webui/services/memoryApi';
-import type { CreateSessionRequest, DocumentListResponse, SessionSearchResponse, ToolConfirmRequest, UserInputRequest as ApiUserInputRequest } from '@webui/types/api.gen';
+import type { ActivityDay, TemporalItem, ToolStat } from '@webui/utils/memoryFormat.core';
+import type { CreateSessionRequest, DocumentListResponse, ModelServerInfo, SessionSearchResponse, ToolConfirmRequest, UserInputRequest as ApiUserInputRequest } from '@webui/types/api.gen';
 
 export type {
     ActiveModel,
     AgentInfo,
     AgentMcpServer,
+    ChatPerformance,
+    CloudPriceList,
     ConnectorListEntry,
     ConnectorRow,
+    ContextChoice,
     ContextUsage,
     ContextUsageResult,
     LemonadeFound,
@@ -51,7 +59,11 @@ export type {
     ModelNeedJob,
     PermissionMode,
     PreflightReport,
+    ProvidersResponse,
     ParsedSchedule,
+    ProviderId,
+    ProviderInfo,
+    ProviderModel,
     ProviderModelsResponse,
     ResourceUsage,
     Schedule,
@@ -69,7 +81,7 @@ export type {
     UnavailableConnectorRow,
 } from '@webui/types';
 export type { ActiveSkill, AgentCapabilities, AgentTool, SkillOrigin } from '@webui/types/sessionPanel';
-export type { CreateSessionRequest, DocumentListResponse, SessionSearchResponse, SessionSearchResult, ToolConfirmRequest } from '@webui/types/api.gen';
+export type { CreateSessionRequest, DocumentListResponse, ModelServerInfo, SessionSearchResponse, SessionSearchResult, ToolConfirmRequest } from '@webui/types/api.gen';
 
 /** `display` is what the phone shows as the answer; it is never sent to GAIA. */
 export type UserInputRequest = ApiUserInputRequest & { display?: string };
@@ -90,6 +102,11 @@ export interface ConnectorList {
 
 export interface AgentList {
     agents: AgentInfo[];
+}
+
+export interface AllPermissions {
+    default_mode: PermissionMode;
+    sessions: SessionPermissions[];
 }
 
 /** Namespaced agent ids to the scopes granted to them. */
@@ -118,6 +135,8 @@ export interface ScheduleList {
 }
 
 export type { MemorySettings } from '@webui/services/memoryApi';
+/** One day of GET /api/memory/activity, one tool of GET /api/memory/tools, one item of GET /api/memory/upcoming; typed as the web's `MemoryDashboard` types them. */
+export type { ActivityDay as MemoryActivityDay, TemporalItem as MemoryUpcomingItem, ToolStat as MemoryToolStat } from '@webui/utils/memoryFormat.core';
 
 /** GET /api/memory/embedding-coverage; typed as the web's `MemoryDashboard` types it. */
 export interface EmbeddingCoverage {
@@ -293,15 +312,28 @@ export interface GaiaClient {
     markSessionRead(sessionId: string, options?: RequestOptions): Promise<Session>;
     /** The model new chats run on and where it runs. */
     getActiveModel(options?: RequestOptions): Promise<ActiveModel>;
+    getContextChoice(model: string, options?: RequestOptions): Promise<ContextChoice>;
+    /** Remembers a context size for a local model; null returns it to Automatic. */
+    setContextChoice(model: string, ctxSize: number | null, options?: RequestOptions): Promise<ContextChoice>;
+    /** A cloud provider's list prices, readable before it is connected. */
+    getCloudPrices(provider: string, options?: RequestOptions): Promise<CloudPriceList>;
     /** One provider's chat models; `local` also carries each one's state, size and download. */
     listProviderModels(provider: string, options?: RequestOptions): Promise<ProviderModelsResponse>;
     /** Makes `model` the one new messages use; a cloud model is picked after the person agrees to what leaves the PC. */
     selectModel(model: string, options?: RequestOptions): Promise<ActiveModel>;
     /** The chat's permission mode and the tools it always allows. */
     getPermissions(sessionId: string, options?: RequestOptions): Promise<SessionPermissions>;
+    /** Every chat with full access or grants, and the mode new chats start in. */
+    listAllPermissions(options?: RequestOptions): Promise<AllPermissions>;
+    /** The mode new chats start in. The PC refuses it with a 403 from anywhere but the PC itself. */
+    setDefaultPermissionMode(mode: PermissionMode, options?: RequestOptions): Promise<{ default_mode: PermissionMode }>;
+    /** Revokes one "always allow" grant, or all of the chat's when `key` is omitted. */
+    revokeGrants(sessionId: string, key?: string, options?: RequestOptions): Promise<SessionPermissions>;
     setPermissionMode(sessionId: string, mode: PermissionMode, options?: RequestOptions): Promise<SessionPermissions>;
     /** How full the model's context window is for the chat's next message, or why there is no reading yet. */
     getContextUsage(sessionId: string, options?: RequestOptions): Promise<ContextUsageResult>;
+    /** Where each answer's time and tokens went, and the model as Lemonade reports it now. */
+    getChatPerformance(sessionId: string, options?: RequestOptions): Promise<ChatPerformance>;
     /** What the chat's last finished turn did with the messages added to it; rejects with 409 while a turn still runs. */
     getFollowUpOutcome(sessionId: string, options?: RequestOptions): Promise<FollowUpOutcome>;
     /** Chats whose title or messages match `query`, newest first; `truncated` says the backend capped the list. */
@@ -357,6 +389,12 @@ export interface GaiaClient {
     /** Servers that custom agents declare in their own mcp_servers.json; read-only. */
     listAgentMcps(options?: RequestOptions): Promise<AgentMcpList>;
     listSchedules(options?: RequestOptions): Promise<ScheduleList>;
+    /** The last `days` days of conversations, tool calls, learned entries and errors, oldest first. */
+    getMemoryActivity(days: number, options?: RequestOptions): Promise<ActivityDay[]>;
+    /** Per-tool call counts and timings; memory's own tools are not logged. */
+    getMemoryTools(options?: RequestOptions): Promise<ToolStat[]>;
+    /** Memories due within `days` days, plus the overdue ones. */
+    getMemoryUpcoming(days: number, options?: RequestOptions): Promise<TemporalItem[]>;
     getMemoryStats(options?: RequestOptions): Promise<MemoryStats>;
     getMemorySettings(options?: RequestOptions): Promise<MemorySettings>;
     /** Changes the memory switches named in `settings`; answers with all of them. */
@@ -404,6 +442,12 @@ export interface GaiaClient {
     checkSetup(skipChatModel: boolean, options?: RequestOptions): Promise<SetupCheck>;
     /** This PC's memory, disk, GPU and NPU as setup reads them. */
     getPreflight(options?: RequestOptions): Promise<PreflightReport>;
+    /** The cloud providers; `blocked` is set on each while Local only is on. */
+    listProviders(options?: RequestOptions): Promise<ProvidersResponse>;
+    /** The model server GAIA uses: whether it answers, and the llama.cpp backends it lists and prefers. */
+    getModelServer(options?: RequestOptions): Promise<ModelServerInfo>;
+    /** Saves the llama.cpp backend for chat models (`auto` or a backend name); PC-only. */
+    setModelServerBackend(backend: string, options?: RequestOptions): Promise<ModelServerInfo>;
     /** Which model server GAIA uses, and whether the PC still has to choose one. */
     getLemonadeTarget(options?: RequestOptions): Promise<LemonadeTarget>;
     /** A model server the PC already runs; `unchecked` lists addresses that took the connection but didn't answer. */

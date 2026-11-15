@@ -11,10 +11,13 @@ export const UI_HEADERS = {
 export const ENDPOINTS = {
     agents: '/api/agents',
     health: '/api/health',
+    cloudPrices: '/api/spending/prices/{provider}',
     lemonadeDetect: '/api/lemonade/detect',
     lemonadeTarget: '/api/lemonade/target',
+    localModelContext: '/api/providers/local/context',
     localModelRestart: '/api/providers/local/restart',
     localModelStatus: '/api/providers/local/status',
+    memoryActivity: '/api/memory/activity',
     memoryConsolidate: '/api/memory/consolidate',
     memoryEmbeddingCoverage: '/api/memory/embedding-coverage',
     memoryRebuildEmbeddings: '/api/memory/rebuild-embeddings',
@@ -23,6 +26,10 @@ export const ENDPOINTS = {
     memoryRefreshSystemContext: '/api/memory/refresh-system-context',
     memorySettings: '/api/memory/settings',
     memoryStats: '/api/memory/stats',
+    memoryTools: '/api/memory/tools',
+    memoryUpcoming: '/api/memory/upcoming',
+    modelServer: '/api/system/model-server',
+    modelServerBackend: '/api/system/model-server/backend',
     providerModels: '/api/providers/{provider}/models',
     providersActive: '/api/providers/active',
     providersSelect: '/api/providers/select',
@@ -56,9 +63,12 @@ export const ENDPOINTS = {
     chatCancel: '/api/chat/cancel',
     chatConfirmTool: '/api/chat/confirm-tool',
     chatContext: '/api/chat/context/{session_id}',
+    chatPermissionGrants: '/api/chat/permissions/{session_id}/grants',
     chatPermissions: '/api/chat/permissions/{session_id}',
+    chatPermissionsDefault: '/api/chat/permissions',
     chatFollowup: '/api/chat/followup',
     chatFollowupOutcome: '/api/chat/followup/{session_id}',
+    chatPerformance: '/api/chat/performance/{session_id}',
     chatUserInput: '/api/chat/user-input',
     connectorActivation: '/api/connectors/{connector_id}/activations/{agent_id:path}',
     connectorActivations: '/api/connectors/{connector_id}/activations',
@@ -74,6 +84,7 @@ export const ENDPOINTS = {
     filesUploadMedia: '/api/files/upload-media',
     onboardingPreflight: '/api/onboarding/preflight',
     onboardingStart: '/api/onboarding/start',
+    providers: '/api/providers',
 } as const;
 
 export function connectorActivationPath(connectorId: string, agentId: string): string {
@@ -96,6 +107,14 @@ export function connectorGrantsPath(connectorId: string): string {
     return ENDPOINTS.connectorGrants.replace('{connector_id}', encodeURIComponent(connectorId));
 }
 
+export function memoryActivityPath(days: number): string {
+    return `${ENDPOINTS.memoryActivity}?days=${days}`;
+}
+
+export function memoryUpcomingPath(days: number): string {
+    return `${ENDPOINTS.memoryUpcoming}?days=${days}`;
+}
+
 export function schedulePath(name: string): string {
     return ENDPOINTS.schedule.replace('{name:path}', encodeURIComponent(name));
 }
@@ -116,8 +135,21 @@ export function sessionPath(sessionId: string): string {
     return ENDPOINTS.session.replace('{session_id}', encodeURIComponent(sessionId));
 }
 
+export function chatPerformancePath(sessionId: string): string {
+    return ENDPOINTS.chatPerformance.replace('{session_id}', encodeURIComponent(sessionId));
+}
+
 export function chatPermissionsPath(sessionId: string): string {
     return ENDPOINTS.chatPermissions.replace('{session_id}', encodeURIComponent(sessionId));
+}
+
+export function chatPermissionGrantsPath(sessionId: string, key?: string): string {
+    const path = ENDPOINTS.chatPermissionGrants.replace('{session_id}', encodeURIComponent(sessionId));
+    return key === undefined ? path : `${path}?key=${encodeURIComponent(key)}`;
+}
+
+export function cloudPricesPath(provider: string): string {
+    return ENDPOINTS.cloudPrices.replace('{provider}', encodeURIComponent(provider));
 }
 
 export function providerModelsPath(provider: string): string {
