@@ -39,8 +39,14 @@ Metro; only a change that moves the native fingerprint needs a new build.
 - **Plain HTTP is for development only, and stays local:** iOS allows the local
   network, Android only `10.0.2.2` (the emulator's alias for this computer),
   `127.0.0.1` and `localhost`. On the Android emulator, reach Metro at `10.0.2.2`,
-  or at `localhost` through `adb reverse`; a LAN address is refused. Production
-  refuses plain HTTP.
+  or at `localhost` through `adb reverse`; a LAN address is refused. A production
+  phone build never sends plain HTTP: it reaches a PC only by pairing, over TLS
+  pinned to the PC's certificate, and ignores `EXPO_PUBLIC_GAIA_URL`. iOS keeps
+  App Transport Security's local-network exception in every build, because the
+  paired PC is a home-network address.
+- **`GAIA_APS_ENVIRONMENT`** sets the push entitlement: unset follows `APP_ENV`,
+  `development` or `production` forces one, and `none` leaves push out, for a
+  cable sideload whose development profile and App ID have no push capability.
 - **Android C++ compiles** run at most `AGENT_HOST_HEAVY_JOBS` (default 4) at a
   time in each module.
 - **iOS builds with fastlane:** `bundle exec fastlane ios check` (an unsigned
