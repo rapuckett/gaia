@@ -8,6 +8,7 @@ import { useWindowDimensions } from 'react-native';
 
 import { createHttpClient } from '@/api/http';
 import { GaiaClientProvider } from '@/data/GaiaClientProvider';
+import { AppErrorBoundary } from '@/features/errors/AppErrorBoundary';
 import { ConnectionBanner } from '@/features/banners/ConnectionBanner';
 import { ModelNeededHost } from '@/features/model';
 import { AppDrawer } from '@/features/nav/AppDrawer';
@@ -41,10 +42,15 @@ export default function RootLayout() {
         <QueryClientProvider client={queryClient}>
             <GaiaClientProvider client={client}>
                 <UIProvider>
+                    <AppErrorBoundary variant="window">
                     <ScreenBannerProvider banner={<ConnectionBanner />}>
                         <SetupGate>
                             <Drawer
-                                drawerContent={(props) => <AppDrawer {...props} />}
+                                drawerContent={(props) => (
+                                    <AppErrorBoundary variant="compact">
+                                        <AppDrawer {...props} />
+                                    </AppErrorBoundary>
+                                )}
                                 backBehavior="initialRoute"
                                 screenOptions={{
                                     headerShown: false,
@@ -59,6 +65,7 @@ export default function RootLayout() {
                             <ModelNeededHost />
                         </SetupGate>
                     </ScreenBannerProvider>
+                    </AppErrorBoundary>
                 </UIProvider>
             </GaiaClientProvider>
         </QueryClientProvider>
