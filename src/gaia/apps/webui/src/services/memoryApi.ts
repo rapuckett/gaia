@@ -247,18 +247,25 @@ export function updateMemorySettings(settings: Partial<MemorySettings>) {
     return memFetch<MemorySettingsUpdateResponse>('PUT', '/memory/settings', settings);
 }
 
+/** Rows deleted per table by DELETE /api/memory/all. */
+export interface MemoryCleared {
+    knowledge: number;
+    tool_history: number;
+    conversations: number;
+}
+
+export interface MemoryReinitializeResult {
+    cleared: MemoryCleared;
+    /** ``error`` is set when memory was cleared but system discovery failed. */
+    system_context: { stored: number; error?: string };
+}
+
 export function clearAllMemory() {
-    return memFetch<{ knowledge: number; tool_history: number; conversations: number }>(
-        'DELETE', '/memory/all'
-    );
+    return memFetch<MemoryCleared>('DELETE', '/memory/all');
 }
 
 export function reinitializeMemory() {
-    return memFetch<{
-        cleared: { knowledge: number; tool_history: number; conversations: number };
-        /** ``error`` is set when memory was cleared but system discovery failed. */
-        system_context: { stored: number; error?: string };
-    }>('POST', '/memory/reinitialize');
+    return memFetch<MemoryReinitializeResult>('POST', '/memory/reinitialize');
 }
 
 // ── Goals & Tasks ────────────────────────────────────────────────────────────

@@ -38,6 +38,7 @@ jest.mock('@/ui', () => {
         Text: RNText,
     };
 });
+jest.mock('./model/ModelList', () => ({ ModelList: () => null }));
 jest.mock('../targets', () => ({ SettingsAnchor: ({ children }: { children?: unknown }) => children ?? null }));
 
 const local: ProviderInfo = { id: 'local', name: 'Local', remote: false, privacy_notice: 'Runs on this PC. Nothing leaves your machine.' };

@@ -37,7 +37,7 @@ export interface SettingsSectionEntry {
     titleKey: `settings.section.${SectionId}`;
     icon: LucideIcon;
     /** The one place a pane is wired: a set-* task swaps in its pane's import. */
-    pane: ComponentType;
+    pane: ComponentType<{ provider?: string }>;
 }
 
 export const SETTINGS_SECTIONS: Record<SectionId, SettingsSectionEntry> = {

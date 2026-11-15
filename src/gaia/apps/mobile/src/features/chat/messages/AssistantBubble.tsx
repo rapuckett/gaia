@@ -1,6 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
+import { cardsFromSteps } from '@webui/utils/renderCards.core';
 import { SERVER_CANCELLED_TEXT, splitCutOff } from '@webui/utils/turnEnding.core';
 
 import type { Message } from '@/api/client.types';
@@ -13,6 +14,7 @@ import { Check, Copy, Ellipsis } from '@/ui/icons';
 import { ActivityTimeline } from '../activity/ActivityTimeline';
 import { AnswerFooter } from '../activity/AnswerFooter';
 import { savedActivity } from '../activity/savedActivity';
+import { AnswerCards } from '../cards/RenderCard';
 import { CutOffNote, StoppedNote } from '../EndingNotes';
 import { Markdown } from '../markdown/Markdown';
 import { SavedReplyErrors } from '../ReplyErrors';
@@ -34,9 +36,11 @@ export function AssistantBubble({ message, streaming = false, latencyMs, context
     const text = cancelled ? '' : cutOff ? cutOff.body : message.content;
     const actions = useMessageActions(message, text, context);
     const activity = useMemo(() => savedActivity(message), [message]);
+    const cards = message.cards ?? cardsFromSteps(message.agentSteps);
     return (
         <Stack paddingX="lg" paddingY="xs">
             {activity.steps.length > 0 ? <ActivityTimeline steps={activity.steps} answer={text} /> : null}
+            <AnswerCards cards={cards} />
             <Pressable onLongPress={cancelled ? undefined : actions.openSheet} accessible={false} minSize={0}>
                 {text ? <Markdown text={text} streaming={streaming} /> : null}
             </Pressable>
