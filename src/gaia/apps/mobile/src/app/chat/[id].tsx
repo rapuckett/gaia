@@ -5,6 +5,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect } from 'react';
 
 import { useSession } from '@/data';
+import { AppErrorBoundary } from '@/features/errors/AppErrorBoundary';
 import { ChatScreen } from '@/features/chat/ChatScreen';
 import { leaveMissingChat } from '@/features/nav/launch';
 
@@ -15,5 +16,9 @@ export default function ChatRoute() {
     useEffect(() => {
         if (error) leaveMissingChat(error, router);
     }, [error, router]);
-    return <ChatScreen sessionId={id} />;
+    return (
+        <AppErrorBoundary resetKey={id}>
+            <ChatScreen sessionId={id} />
+        </AppErrorBoundary>
+    );
 }

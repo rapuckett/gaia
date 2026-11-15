@@ -14,6 +14,7 @@ import {
     GaiaStreamDroppedError,
     GaiaStreamError,
     GaiaStreamTimeoutError,
+    parseErrorBody,
     parseErrorDetail,
     type StreamEndpoint,
 } from './errors';
@@ -25,6 +26,7 @@ import type {
     ConnectorActivations,
     ConnectorGrants,
     ConnectorList,
+    ContextUsageResult,
     DeleteMessagesResult,
     DeleteScheduleResult,
     DocumentListResponse,
@@ -55,6 +57,7 @@ import {
     connectorGrantPath,
     connectorGrantsPath,
     ENDPOINTS,
+    chatContextPath,
     followupOutcomePath,
     MESSAGE_PAGE_SIZE,
     QUEUED_IDLE_MS,
@@ -159,7 +162,7 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
         if (!res.ok) {
             const errorText = await res.text().catch(() => '');
             const detail = parseErrorDetail(errorText);
-            throw res.status === 401 ? new GaiaAuthError(detail) : new GaiaApiError(res.status, detail);
+            throw res.status === 401 ? new GaiaAuthError(detail) : new GaiaApiError(res.status, detail, undefined, undefined, parseErrorBody(errorText));
         }
         return res;
     }
@@ -268,6 +271,10 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         createSession(request = {}, options) {
             return postJson<Session>(ENDPOINTS.sessions, request, options?.signal);
+        },
+
+        getContextUsage(sessionId, options) {
+            return getJson<ContextUsageResult>(chatContextPath(sessionId), options?.signal);
         },
 
         getFollowUpOutcome(sessionId, options) {

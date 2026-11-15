@@ -2092,6 +2092,7 @@ export const enMessages = {
     'setup.logs.reportNote': "Setup's logs, GAIA's logs and this PC's details in one file. Keys and other secrets are removed, but a log can quote your chats, so look it over before you attach it to a report.",
     'setup.logs.reportSaved': 'Saved ({size}). A copy is also in',
     'setup.logs.reportFailed': "Couldn't save the report: {error}",
+    'setup.logs.reportOnPc': 'Save the troubleshooting report on the PC running GAIA.',
     'setup.progress.retry': 'Retry',
     'setup.progress.resume': 'Resume',
     'setup.progress.resumeAll': 'Resume all',
