@@ -52,7 +52,12 @@ from ..utils import (
     safe_open_document,
     unsupported_type_message,
 )
-from .files import _refuse_remote_read, _refuse_remote_secret, _remote_read_roots
+from .files import (
+    _refuse_remote_read,
+    _refuse_remote_secret,
+    _remote_read_roots,
+    _within_roots,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -831,7 +836,10 @@ async def index_folder(
         for item in pattern_iter:
             if item.is_symlink() or not item.is_file():
                 continue
-            if roots is not None and secret_read_refusal(item):
+            if roots is not None and (
+                secret_read_refusal(item)
+                or not _within_roots(Path(os.path.realpath(item)), roots)
+            ):
                 skipped += 1
             elif item.suffix.lower() in FOLDER_INDEX_EXTENSIONS:
                 candidate_files.append(item)
