@@ -86,6 +86,9 @@ import type {
     StreamEvent,
     SystemStatus,
     ToolConfirmRequest,
+    FileDiff,
+    TurnChanges,
+    UndoResult,
     UndoSettings,
     UserInputRequest,
 } from './client.types';
@@ -249,6 +252,12 @@ export interface FakeClientData {
     settings?: Settings;
     /** Thrown by setNetworkPolicy, as the PC's 403 is. */
     networkPolicyError?: Error;
+    /** What listTurnChanges answers, by chat. */
+    turnChanges?: Record<string, TurnChanges[]>;
+    /** What getTurnDiff answers, by turn. */
+    turnDiffs?: Record<string, FileDiff[]>;
+    /** Answers undoTurn with this unless forced, as the PC does for a file changed since. */
+    undoConflict?: GaiaApiError;
     /** What getUndoSettings answers; updateUndoSettings changes it. */
     undoSettings?: UndoSettings;
     /** What getDiscordStatus answers; an Error is thrown (a phone gets the PC's 403). */
@@ -307,6 +316,8 @@ export interface FakeGaiaClient extends GaiaClient {
     readonly cancelled: string[];
     readonly deleted: { sessionId: string; messageId: number }[];
     readonly pinned: { sessionId: string; pinned: boolean }[];
+    /** Each undoTurn call, in order. */
+    readonly undone: { sessionId: string; turnId: string; force: boolean }[];
     readonly deletedSessions: string[];
     readonly read: string[];
     readonly deletedOne: { sessionId: string; messageId: number }[];
@@ -381,6 +392,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
     const cancelled: string[] = [];
     const deleted: FakeGaiaClient['deleted'] = [];
     const pinned: FakeGaiaClient['pinned'] = [];
+    const undone: FakeGaiaClient['undone'] = [];
     const deletedSessions: string[] = [];
     const read: string[] = [];
     const deletedOne: FakeGaiaClient['deletedOne'] = [];
@@ -507,6 +519,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         cancelled,
         deleted,
         pinned,
+        undone,
         deletedSessions,
         read,
         deletedOne,
@@ -767,6 +780,25 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             findSession(sessionId);
             pinned.push({ sessionId, pinned: value });
             return patch(sessionId, { pinned: value });
+        },
+        async listTurnChanges(sessionId) {
+            return { turns: data.turnChanges?.[sessionId] ?? [] };
+        },
+        async getTurnDiff(_sessionId, turnId) {
+            return { turn_id: turnId, files: data.turnDiffs?.[turnId] ?? [] };
+        },
+        async undoTurn(sessionId, turnId, force = false): Promise<UndoResult> {
+            undone.push({ sessionId, turnId, force });
+            if (data.undoConflict && !force) throw data.undoConflict;
+            const turn = data.turnChanges?.[sessionId]?.find((t) => t.turn_id === turnId);
+            if (!turn) throw new GaiaApiError(404, `No turn '${turnId}' in this chat.`);
+            data.turnChanges = {
+                ...data.turnChanges,
+                [sessionId]: data.turnChanges![sessionId]!.map((t) => (t === turn ? { ...t, restored_at: new Date().toISOString() } : t)),
+            };
+            const restored = turn.files.filter((f) => f.change !== 'created').map((f) => f.path);
+            const removed = turn.files.filter((f) => f.change === 'created').map((f) => f.path);
+            return { turn_id: turnId, restored, removed, kept_folders: [], untracked: [], incomplete: false };
         },
         async deleteSession(sessionId) {
             findSession(sessionId);

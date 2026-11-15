@@ -14,6 +14,7 @@ import { Check, Copy, Ellipsis, Square, Volume2 } from '@/ui/icons';
 import { ReadAloudButton, ReadAloudErrorNotice, ReadAloudNote, useReadAloud } from '@/features/audio/ReadAloud';
 import { readAloudId } from '@/features/audio/useChatReadAloud';
 
+import { TurnChanges } from '../changes/TurnChanges';
 import { ActivityTimeline } from '../activity/ActivityTimeline';
 import { AnswerFooter } from '../activity/AnswerFooter';
 import { savedActivity } from '../activity/savedActivity';
@@ -32,9 +33,13 @@ export interface AssistantBubbleProps {
     /** How long the reply took, from the question before it. */
     latencyMs?: number;
     context?: MessageContext;
+    /** The chat the answer is in; without it the answer shows no file changes. */
+    sessionId?: string;
+    /** The newest answer, which alone reports a failed read of the chat's file changes. */
+    newest?: boolean;
 }
 
-export function AssistantBubble({ message, streaming = false, latencyMs, context }: AssistantBubbleProps) {
+export function AssistantBubble({ message, streaming = false, latencyMs, context, sessionId, newest = false }: AssistantBubbleProps) {
     const t = useT();
     const cutOff = streaming ? null : splitCutOff(message.content);
     const cancelled = message.content.trim() === SERVER_CANCELLED_TEXT;
@@ -61,6 +66,9 @@ export function AssistantBubble({ message, streaming = false, latencyMs, context
                 {text ? <Markdown text={text} streaming={streaming} /> : null}
             </Pressable>
             {!streaming && !cancelled ? <AnswerFooter latencyMs={latencyMs} stats={message.stats} ended={activity.ended} /> : null}
+            {sessionId && !streaming && !cancelled && message.id > 0 ? (
+                <TurnChanges sessionId={sessionId} messageId={message.id} reportError={newest} />
+            ) : null}
             {cutOff ? <CutOffNote cutOff={cutOff} /> : null}
             {cancelled ? <StoppedNote stop={{ state: 'stopped' }} /> : null}
             {!streaming && !cancelled ? <SavedReplyErrors message={message} /> : null}

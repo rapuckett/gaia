@@ -15,6 +15,7 @@ import {
     EmptyState,
     ErrorState,
     ListSkeleton,
+    Ltr,
     Notice,
     Pressable,
     Row,
@@ -145,7 +146,7 @@ function SkillRow({ skill, onTry }: { skill: SkillInfo; onTry: () => void }) {
             <Row gap="md" align="center">
                 <Stack flex={1} gap="xs">
                     <Text role="ui">
-                        {skill.name}
+                        <Ltr>{skill.name}</Ltr>
                         {skill.always_on ? <Text role="ui" tone="muted">{` · ${t('settings.skills.alwaysOn')}`}</Text> : null}
                     </Text>
                     <Text role="label" tone="secondary" numberOfLines={open ? undefined : 2}>{skill.description}</Text>
@@ -156,8 +157,10 @@ function SkillRow({ skill, onTry }: { skill: SkillInfo; onTry: () => void }) {
                             </Text>
                         </Pressable>
                     ) : null}
+                    {!skill.always_on ? (
+                        <ChipButton variant="plain" label={t.bare('settings.skills.try')} accessibilityLabel={t('settings.skills.try')} onPress={onTry} />
+                    ) : null}
                 </Stack>
-                {!skill.always_on ? <ChipButton variant="plain" label={t('settings.skills.try')} onPress={onTry} /> : null}
             </Row>
         </View>
     );
