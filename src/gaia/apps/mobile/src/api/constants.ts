@@ -15,8 +15,19 @@ export const ENDPOINTS = {
     lemonadeTarget: '/api/lemonade/target',
     localModelRestart: '/api/providers/local/restart',
     localModelStatus: '/api/providers/local/status',
+    memoryConsolidate: '/api/memory/consolidate',
+    memoryEmbeddingCoverage: '/api/memory/embedding-coverage',
+    memoryRebuildEmbeddings: '/api/memory/rebuild-embeddings',
+    memoryRebuildFts: '/api/memory/rebuild-fts',
+    memoryReconcile: '/api/memory/reconcile',
+    memoryRefreshSystemContext: '/api/memory/refresh-system-context',
+    memorySettings: '/api/memory/settings',
+    memoryStats: '/api/memory/stats',
     modelServer: '/api/system/model-server',
     modelServerBackend: '/api/system/model-server/backend',
+    providerModels: '/api/providers/{provider}/models',
+    providersActive: '/api/providers/active',
+    providersSelect: '/api/providers/select',
     schedule: '/api/schedules/{name:path}',
     scheduleResults: '/api/schedules/{name:path}/results',
     scheduleRun: '/api/schedules/{name:path}/run',
@@ -24,7 +35,9 @@ export const ENDPOINTS = {
     schedules: '/api/schedules',
     sessions: '/api/sessions',
     session: '/api/sessions/{session_id}',
+    sessionCapabilities: '/api/sessions/{session_id}/capabilities',
     sessionDocument: '/api/sessions/{session_id}/documents/{doc_id}',
+    sessionEvents: '/api/sessions/events',
     sessionMessage: '/api/sessions/{session_id}/messages/{message_id}',
     sessionMessages: '/api/sessions/{session_id}/messages',
     sessionMessagesAndBelow: '/api/sessions/{session_id}/messages/{message_id}/and-below',
@@ -45,6 +58,7 @@ export const ENDPOINTS = {
     chatCancel: '/api/chat/cancel',
     chatConfirmTool: '/api/chat/confirm-tool',
     chatContext: '/api/chat/context/{session_id}',
+    chatPermissions: '/api/chat/permissions/{session_id}',
     chatFollowup: '/api/chat/followup',
     chatFollowupOutcome: '/api/chat/followup/{session_id}',
     chatUserInput: '/api/chat/user-input',
@@ -58,6 +72,8 @@ export const ENDPOINTS = {
     systemStatus: '/api/system/status',
     documentFile: '/api/documents/{doc_id}/file',
     documents: '/api/documents',
+    filesUpload: '/api/files/upload',
+    filesUploadMedia: '/api/files/upload-media',
     onboardingPreflight: '/api/onboarding/preflight',
     onboardingStart: '/api/onboarding/start',
     providers: '/api/providers',
@@ -103,6 +119,14 @@ export function sessionPath(sessionId: string): string {
     return ENDPOINTS.session.replace('{session_id}', encodeURIComponent(sessionId));
 }
 
+export function chatPermissionsPath(sessionId: string): string {
+    return ENDPOINTS.chatPermissions.replace('{session_id}', encodeURIComponent(sessionId));
+}
+
+export function providerModelsPath(provider: string): string {
+    return ENDPOINTS.providerModels.replace('{provider}', encodeURIComponent(provider));
+}
+
 export function chatContextPath(sessionId: string): string {
     return ENDPOINTS.chatContext.replace('{session_id}', encodeURIComponent(sessionId));
 }
@@ -115,6 +139,10 @@ export function sessionDocumentPath(sessionId: string, docId: string): string {
     return ENDPOINTS.sessionDocument
         .replace('{session_id}', encodeURIComponent(sessionId))
         .replace('{doc_id}', encodeURIComponent(docId));
+}
+
+export function sessionCapabilitiesPath(sessionId: string): string {
+    return ENDPOINTS.sessionCapabilities.replace('{session_id}', encodeURIComponent(sessionId));
 }
 
 export function sessionPinPath(sessionId: string): string {
@@ -163,13 +191,21 @@ export const STREAM_IDLE_MS = 30_000;
 export const QUEUED_IDLE_MS = 10 * 60_000;
 /** The backend may hold a send for 60 s while another chat has the model, then answers 429. */
 export const SEND_HEADER_TIMEOUT_MS = 90_000;
+/** The chat-list event stream sends a keepalive every 30 s. */
+export const SESSION_EVENTS_IDLE_MS = 90_000;
 /** An attach replays at once; a slower answer means the backend is stuck or unreachable. */
 export const ATTACH_HEADER_TIMEOUT_MS = 30_000;
+/** How often to re-read the PC's connectors while a reply waits on an account being connected (webui's ConnectorRetryBanner). */
+export const CONNECTOR_POLL_MS = 4_000;
+
 /** How many past runs a schedule's history shows; the web UI asks for the same 20. */
 export const SCHEDULE_RESULTS_LIMIT = 20;
 
 /** How often to re-read the schedules while their screen is open, so counts and times follow the PC. */
 export const SCHEDULES_POLL_MS = 10_000;
+/** How long a memory result notice stays up, as the web's toasts do (4 s); a failure stays twice as long to be read. */
+export const MEMORY_NOTICE_MS = 4_000;
+export const MEMORY_ERROR_NOTICE_MS = 8_000;
 /** How long a Delete button waits for its "Confirm?" press; the web UI's CONFIRM_DELETE_MS. */
 export const CONFIRM_DELETE_MS = 8000;
 /** How often the model status pill re-reads the model server while its sheet is open, and while it is closed. */
@@ -186,6 +222,8 @@ export const PC_ONLY_REFUSAL =
     "Do this on the PC running GAIA. It isn't allowed over mobile access, from a paired device or from another computer.";
 /** How long to wait after a failed resource read before trying again (webui's `RETRY_MS`). */
 export const RESOURCE_RETRY_MS = 5_000;
+/** How often a chat's tools and skills are re-read while its reply runs, so they show once its agent starts. */
+export const CAPABILITIES_POLL_MS = 2_000;
 /** How often to re-read the PC's status while it is still starting or warming up. */
 export const STATUS_POLL_MS = 5_000;
 

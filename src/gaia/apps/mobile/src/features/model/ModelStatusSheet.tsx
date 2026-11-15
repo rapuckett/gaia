@@ -7,6 +7,7 @@ import { PC_ONLY_REFUSAL } from '@/api/constants';
 import { GaiaApiError } from '@/api/errors';
 import { useLocalModelStatus, useRestartLocalModel } from '@/data';
 import { describeError, useT } from '@/i18n/useT';
+import { ChipButton } from '@/features/schedules/ChipButton';
 import { Button, Notice, Row, Sheet, Spinner, Stack, StatusDot, Text, type StatusTone } from '@/ui';
 import { RotateCw, ScrollText, Settings } from '@/ui/icons';
 
@@ -145,12 +146,12 @@ export function ModelStatusSheet({ open, onClose, onOpenSettings }: ModelStatusS
                     </Stack>
                 ) : null}
                 {logRefused ? <Notice tone="info" message={PC_ONLY_REFUSAL} /> : null}
-                <Stack gap="sm">
+                <Row gap="xs" wrap justify="end">
                     {onOpenSettings ? (
-                        <Button
+                        <ChipButton
+                            variant="plain"
                             label={t('modelStatus.settings')}
                             icon={Settings}
-                            full
                             onPress={() => {
                                 close();
                                 onOpenSettings();
@@ -158,29 +159,23 @@ export function ModelStatusSheet({ open, onClose, onOpenSettings }: ModelStatusS
                         />
                     ) : null}
                     {!s?.active_remote ? (
-                        <Button
-                            label={t('logs.serverLog')}
-                            icon={ScrollText}
-                            full
-                            onPress={() => setLogRefused(true)}
-                        />
+                        <ChipButton variant="plain" label={t('logs.serverLog')} icon={ScrollText} onPress={() => setLogRefused(true)} />
                     ) : null}
                     {control?.shown ? (
-                        <Button
+                        <ChipButton
+                            variant="plain"
                             label={busy ? t('modelStatus.restarting') : t('modelStatus.restart')}
                             icon={RotateCw}
-                            busy={busy}
-                            disabled={control.disabled}
-                            full
+                            disabled={busy || control.disabled}
                             onPress={() => (control.confirms ? setConfirming(true) : reload(false))}
                         />
                     ) : null}
-                    {control?.disabled && !busy ? (
-                        <Text role="label" tone="secondary">
-                            {t(control.hint)}
-                        </Text>
-                    ) : null}
-                </Stack>
+                </Row>
+                {control?.disabled && !busy ? (
+                    <Text role="label" tone="secondary">
+                        {t(control.hint)}
+                    </Text>
+                ) : null}
             </Stack>
         </Sheet>
     );
