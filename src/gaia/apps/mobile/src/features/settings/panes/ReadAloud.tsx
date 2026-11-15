@@ -8,7 +8,7 @@ import { PREVIEW_ID, PREVIEW_TEXT, VOICE_GROUPS, speedChoices } from '@webui/uti
 
 import { useSpeechSettings, useUpdateSpeechSettings } from '@/data';
 import { ReadAloudErrorNotice, useReadAloud } from '@/features/audio/ReadAloud';
-import { useReadAloudStore } from '@/features/audio/readAloudStore';
+import { kindOf, useReadAloudStore } from '@/features/audio/readAloudStore';
 import type { SpeechSettingsUpdate } from '@/api/client.types';
 import { useT } from '@/i18n/useT';
 import { Button, Card, Notice, Row, Select, Spinner, Stack, Switch, Text } from '@/ui';
@@ -53,9 +53,14 @@ export default function ReadAloud() {
     };
 
     if (settings.error) {
+        const unsupported = kindOf(settings.error) === 'unsupported';
         return (
             <Stack gap="lg" padding="lg">
-                <Notice tone="danger" message={t('readAloud.settings.loadFailed', { reason: reasonOf(settings.error, t) })} testID="read-aloud-load-error" />
+                <Notice
+                    tone="danger"
+                    message={unsupported ? t('mobileApp.readAloud.unsupported') : t('readAloud.settings.loadFailed', { reason: reasonOf(settings.error, t) })}
+                    testID="read-aloud-load-error"
+                />
             </Stack>
         );
     }
