@@ -9,7 +9,8 @@ import { translator } from '@webui/i18n/translator';
 import { Composer } from './Composer';
 import { PrivateChip } from './PrivateChip';
 
-jest.mock('@/i18n/useT', () => ({ useT: () => jest.requireActual('@webui/i18n/translator').translator('ar') }));
+let mockLocale: 'ar' | 'en' = 'ar';
+jest.mock('@/i18n/useT', () => ({ useT: () => jest.requireActual('@webui/i18n/translator').translator(mockLocale) }));
 jest.mock('react-native', () => ({ View: 'View' }));
 jest.mock('@/ui/icons', () => ({ ArrowUp: 'ArrowUp', Square: 'Square', ChevronDown: 'ChevronDown', Eye: 'Eye', EyeOff: 'EyeOff' }));
 jest.mock('./AttachButton', () => ({ AttachButton: 'AttachButton' }));
@@ -54,5 +55,22 @@ describe('composer control row in Arabic', () => {
         expect(style(find(r, 'composer-controls'))).toMatchObject({ flexShrink: 1, minWidth: 0 });
         expect(style(find(r, 'composer-actions'))).toMatchObject({ flexShrink: 0 });
         expect(JSON.stringify(style(find(r, 'composer-controls')))).not.toMatch(/left|right/i);
+    });
+
+    // Same as above: the web project renders View as a DOM node.
+    (typeof document === 'undefined' ? it.each : it.skip.each)(['en', 'ar'] as const)('shows the chip as its icon alone in a 230 pt row, never a stub, keeping the label for screen readers (%s)', async (locale) => {
+        mockLocale = locale;
+        const r = createRoot();
+        await act(async () =>
+            r.render(<Composer onSend={() => undefined} leftControls={<PrivateChip on={false} onChange={() => undefined} />} />),
+        );
+        const labels = () => r.container.queryAll((i) => i.type === 'Text');
+        const layout = (width: number) => find(r, 'composer-controls').props.onLayout({ nativeEvent: { layout: { width } } });
+        await act(async () => layout(340));
+        expect(labels()).toHaveLength(1);
+        await act(async () => layout(230));
+        expect(labels()).toHaveLength(0);
+        expect(String(find(r, 'private-chip').props.accessibilityLabel).length).toBeGreaterThan(3);
+        mockLocale = 'ar';
     });
 });

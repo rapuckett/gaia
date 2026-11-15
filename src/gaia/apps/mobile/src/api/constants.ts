@@ -360,6 +360,8 @@ export const RESOURCE_RETRY_MS = 5_000;
 export const CAPABILITIES_POLL_MS = 2_000;
 /** How often to re-read the PC's status while it is still starting or warming up. */
 export const STATUS_POLL_MS = 5_000;
+/** How often a healthy PC's status is re-read, so an idle app notices the PC going away. */
+export const STATUS_IDLE_POLL_MS = 30_000;
 
 /** Stream events that report the agent's activity rather than the answer's text. */
 export const AGENT_EVENT_TYPES: ReadonlySet<string> = new Set([

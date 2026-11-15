@@ -18,8 +18,12 @@ export function liveStatusLine(
     t: Translate,
 ): string | null {
     if (state.waitingOnPerson) return t('activity.waiting');
+    let movedOn = false;
     for (let i = events.length - 1; i >= 0; i--) {
         const event = events[i]!;
+        // A retry notice is stale once anything but a status followed it; the latest one replaces the earlier.
+        if (event.type === 'status' && event.phase === 'model_retry') return movedOn || state.answering ? null : statusText(event, t);
+        if (event.type !== 'status' && event.type !== 'step') movedOn = true;
         if (event.type === 'tool_end' || event.type === 'tool_result') return null;
         if (event.type === 'tool_start') {
             const step = agentEventToStep(event, { current: 0 }, t);
