@@ -627,7 +627,11 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             return memoryStatsReads;
         },
         async health(): Promise<HealthResponse> {
-            return { status: 'ok', service: 'gaia-agent-ui' };
+            return {
+                status: 'ok',
+                service: 'gaia-agent-ui',
+                stats: { sessions: sessions.length, messages: 0, documents: 0, total_chunks: 0, total_size_bytes: 0 },
+            };
         },
         async listSessions(): Promise<SessionList> {
             return { sessions: [...sessions], total: sessions.length };
@@ -1350,6 +1354,14 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         async getGpuMemory() {
             if (!data.gpuMemory) throw new GaiaApiError(503, 'This fake client was given no GPU memory status.');
             if (data.gpuMemory instanceof Error) throw data.gpuMemory;
+            return data.gpuMemory;
+        },
+        async recordGpuMemoryPending() {
+            if (!data.gpuMemory || data.gpuMemory instanceof Error) throw new GaiaApiError(503, 'This fake client was given no GPU memory status.');
+            return data.gpuMemory;
+        },
+        async dismissGpuMemoryPending() {
+            if (!data.gpuMemory || data.gpuMemory instanceof Error) throw new GaiaApiError(503, 'This fake client was given no GPU memory status.');
             return data.gpuMemory;
         },
         async getModelNeed(job) {

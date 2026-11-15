@@ -52,8 +52,24 @@ import type { DiscordStatus } from '@webui/services/messagingApi';
 import type { AgentCapabilities, SessionEnvironment } from '@webui/types/sessionPanel';
 import type { DiscoveryFinding, Goal, GoalStats, InferenceInsight, KnowledgeCreateBody, KnowledgeListParams, KnowledgeSaveResult, KnowledgeUpdateBody, MemoryCleared, MemoryReinitializeResult, MemorySettings, MemorySettingsUpdateResponse, Priority as GoalPriority } from '@webui/services/memoryApi';
 import type { SpeechModel, SpeechSettings } from '@webui/services/speechApi';
-import type { ActivityDay, ConvSession, ConvTurn, EntityInfo, KnowledgeEntry, TemporalItem, ToolStat } from '@webui/utils/memoryFormat.core';
-import type { CreateSessionRequest, DocumentListResponse, DocumentResponse, ModelServerInfo, ProviderSummaryList, SessionSearchResponse, ToolConfirmRequest, UserInputRequest as ApiUserInputRequest, FilePreviewResponse } from '@webui/types/api.gen';
+import type { AboutYouItem, ActivityDay, ConvSession, ConvTurn, EntityInfo, KnowledgeEntry, TemporalItem, ToolStat } from '@webui/utils/memoryFormat.core';
+import type {
+    AgentUiHealthResponse,
+    CancelStreamResponse,
+    ConfirmToolResponse,
+    CreateSessionRequest,
+    DocumentListResponse,
+    DocumentResponse,
+    FilePreviewResponse,
+    MessagesDeleteResponse,
+    ModelServerInfo,
+    ProviderSummaryList,
+    SessionDeleteResponse,
+    SessionSearchResponse,
+    ToolConfirmRequest,
+    UserInputRequest as ApiUserInputRequest,
+    UserInputResponse,
+} from '@webui/types/api.gen';
 
 export type { AgentInstallStatus } from '@webui/services/api';
 export type {
@@ -296,38 +312,12 @@ export interface SessionUpdate {
     title_is_custom?: boolean;
 }
 
-export interface HealthResponse {
-    status: string;
-    service: string;
-    stats?: Record<string, unknown>;
-}
-
-// These routes declare no response model, so api.gen.ts has none; the shapes are what they return.
-export interface CancelChatResult {
-    status: string;
-    cancelled: boolean;
-}
-
-export interface ConfirmToolResult {
-    status: string;
-    approved: boolean;
-    /** What "always allow" granted, or null. */
-    granted: string | null;
-}
-
-export interface DeleteMessagesResult {
-    deleted: boolean;
-    count: number;
-}
-
-export interface DeleteSessionResult {
-    deleted: boolean;
-}
-
-export interface UserInputResult {
-    status: string;
-    request_id: string;
-}
+export type HealthResponse = AgentUiHealthResponse;
+export type CancelChatResult = CancelStreamResponse;
+export type ConfirmToolResult = ConfirmToolResponse;
+export type DeleteMessagesResult = MessagesDeleteResponse;
+export type DeleteSessionResult = SessionDeleteResponse;
+export type UserInputResult = UserInputResponse;
 
 export interface DeleteDocumentResult {
     deleted: boolean;
@@ -672,6 +662,10 @@ export interface GaiaClient {
     getModelNeed(job: ModelNeedJob, options?: RequestOptions): Promise<ModelNeed>;
     /** How this PC's memory is split, the presets and what each unlocks; `settingGb` also reads the manual steps for that size. Read only: changing it is done on the PC. */
     getGpuMemory(settingGb?: number, options?: RequestOptions): Promise<GpuMemoryStatus>;
+    /** "I've done this": records the size someone set by hand on the PC, so it reports a restart pending. Changes no setting. */
+    recordGpuMemoryPending(settingGb: number, options?: RequestOptions): Promise<GpuMemoryStatus>;
+    /** "Keep {gb}": stops reporting a pending GPU memory change. Changes no setting. */
+    dismissGpuMemoryPending(options?: RequestOptions): Promise<GpuMemoryStatus>;
     /** Starts one model's download on the PC; follow it with `getSetupStatus`. */
     downloadSetupModel(modelId: string, acknowledgeLowDisk: boolean, options?: RequestOptions): Promise<SetupRunStatus>;
     /** Deletes one downloaded model from the PC's model server; answers the new plan and the space freed. */

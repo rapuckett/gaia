@@ -209,6 +209,19 @@ export function useGpuMemory(settingGb: number | null = null, enabled = true) {
     });
 }
 
+/** "I've done this" with a size, or "Keep {gb}" with none: records or drops the pending GPU memory change, then rereads the split. */
+export function useGpuMemoryPending() {
+    const client = useGaiaClient();
+    const queryClient = useQueryClient();
+    return useMutation<GpuMemoryStatus, Error, number | null>({
+        mutationFn: (settingGb) => {
+            const api = requireClient(client);
+            return settingGb == null ? api.dismissGpuMemoryPending() : api.recordGpuMemoryPending(settingGb);
+        },
+        onSuccess: () => queryClient.invalidateQueries({ queryKey: ['gpuMemory'] }),
+    });
+}
+
 /** Which model server GAIA uses; `offer` stays true until someone on the PC chooses, so it is re-read while waiting. */
 export function useLemonadeTarget() {
     const client = useGaiaClient();
