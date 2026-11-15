@@ -50,7 +50,7 @@ import type {
     ModelNeed,
     ModelServerInfo,
     PreflightReport,
-    ProvidersResponse,
+    ProviderSummaryList,
     Goal,
     GoalStats,
     ParsedSchedule,
@@ -191,7 +191,7 @@ export interface FakeClientData {
     setupStatuses?: (SetupRunStatus | Error)[];
     setupPlan?: SetupPlan;
     modelServer?: ModelServerInfo;
-    providers?: ProvidersResponse;
+    providers?: ProviderSummaryList;
     /** What getSpending answers; setting the limit or allowing the month changes it. */
     spending?: SpendingReport;
     /** What getCloudPrices answers, by provider. */
@@ -1269,7 +1269,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             if (!data.setupChecks?.length) throw new GaiaApiError(503, 'This fake client was given no setup checks.');
             return nextOf(data.setupChecks, checkAt++);
         },
-        async listProviders() {
+        async listProviderSummaries() {
             if (!data.providers) throw new GaiaApiError(503, 'This fake client was given no providers.');
             return data.providers;
         },
