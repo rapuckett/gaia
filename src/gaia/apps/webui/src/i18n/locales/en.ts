@@ -3632,7 +3632,7 @@ export const enMessages = {
     'mobileApp.pairing.invite.unreadable': "This isn't a GAIA pairing link or code. Copy it again from “Pair a phone or tablet” on your PC.",
     'mobileApp.pairing.invite.version': 'This pairing code is from a different version of GAIA. Update this app and GAIA on your PC, then show a new code.',
     'mobileApp.pairing.invite.incomplete': 'This pairing code is missing “{field}”. Copy the whole code from your PC.',
-    'mobileApp.pairing.invite.badAddress': "This pairing code points to an address this phone can't use. Show a new code on your PC.",
+    'mobileApp.pairing.invite.notHomeNetwork': "This code isn't from a GAIA PC on your home network, so this phone won't pair with it. On your PC, open Settings, then Phones and tablets, and show a new code.",
     'mobileApp.pairing.invite.expired': 'This pairing code has expired. Show a new code on your PC.',
     'mobileApp.pairing.waiting.title': 'Waiting for your PC',
     'mobileApp.pairing.waiting.body': "On {pc}, choose Allow next to this phone. It can't reach your chats until you do.",

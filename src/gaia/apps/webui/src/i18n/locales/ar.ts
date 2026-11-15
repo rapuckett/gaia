@@ -3632,7 +3632,7 @@ const messages: Messages = {
     'mobileApp.pairing.invite.unreadable': 'هذا ليس رابط اقتران أو رمز GAIA. انسخه مرة أخرى من «اقتران هاتف أو جهاز لوحي» على الكمبيوتر.',
     'mobileApp.pairing.invite.version': 'رمز الاقتران هذا من إصدار مختلف من GAIA. حدّث هذا التطبيق وGAIA على الكمبيوتر ثم اعرض رمزًا جديدًا.',
     'mobileApp.pairing.invite.incomplete': 'رمز الاقتران هذا ينقصه «{field}». انسخ الرمز كاملًا من الكمبيوتر.',
-    'mobileApp.pairing.invite.badAddress': 'رمز الاقتران هذا يشير إلى عنوان لا يستطيع هذا الهاتف استخدامه. اعرض رمزًا جديدًا على الكمبيوتر.',
+    'mobileApp.pairing.invite.notHomeNetwork': 'هذا الرمز ليس من كمبيوتر GAIA على شبكتك المنزلية، لذا لن يقترن هذا الهاتف به. على الكمبيوتر، افتح الإعدادات ثم الهواتف والأجهزة اللوحية، واعرض رمزًا جديدًا.',
     'mobileApp.pairing.invite.expired': 'انتهت صلاحية رمز الاقتران هذا. اعرض رمزًا جديدًا على الكمبيوتر.',
     'mobileApp.pairing.waiting.title': 'في انتظار الكمبيوتر',
     'mobileApp.pairing.waiting.body': 'على {pc}، اختر السماح بجانب هذا الهاتف. لا يمكنه الوصول إلى محادثاتك قبل ذلك.',

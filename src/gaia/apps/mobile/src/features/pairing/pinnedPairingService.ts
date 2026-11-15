@@ -11,7 +11,7 @@ import { onDeviceGone, pinnedFetch, transportError } from '@/platform/pinnedFetc
 import { useConnectionStore, type ConnectionConfig } from '@/state/connection';
 
 import { GaiaTransport, transportAvailable } from '../../../modules/gaia-transport';
-import type { PairingInvite } from './invite';
+import { PairingInviteError, type PairingInvite } from './invite';
 import { setPairingService } from './registry';
 import type { PairedPc, PairingService, PairingStatus, RedeemResult } from './service';
 
@@ -130,7 +130,9 @@ export function createPinnedPairingService(): PairingService & { restore(): Prom
                 answer = await GaiaTransport.pair(invite.pc_id, invite.origins, invite.pin, { ...UI_HEADERS, 'Content-Type': 'application/json' }, body);
             } catch (err) {
                 const e = transportError(err);
-                if (NO_ANSWER.has(String((e as { code?: unknown }).code))) return { state: 'unreachable' };
+                const code = String((e as { code?: unknown }).code);
+                if (code === 'not_home_origin') throw new PairingInviteError('mobileApp.pairing.invite.notHomeNetwork', undefined, { cause: err });
+                if (NO_ANSWER.has(code)) return { state: 'unreachable' };
                 throw e;
             }
             if (answer.status === 403) return { state: 'refused' };

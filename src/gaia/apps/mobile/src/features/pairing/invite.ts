@@ -3,6 +3,8 @@
 
 import { GaiaError } from '@/api/errors';
 
+import { homeNetworkOrigin } from './homeNetwork';
+
 /** What the PC's pairing QR code carries (the PC's DevicePairingOffer). */
 export interface PairingInvite {
     v: number;
@@ -80,22 +82,15 @@ export function parseInvite(text: string, nowSeconds: number = Date.now() / 1000
     if (typeof raw.pin !== 'string' || !PIN_HEX.test(raw.pin)) throw incomplete('pin');
     if (typeof raw.invite !== 'string' || !raw.invite || raw.invite.length > INVITE_MAX) throw incomplete('invite');
     if (typeof raw.exp !== 'number' || !Number.isFinite(raw.exp)) throw incomplete('exp');
-    for (const origin of raw.origins as string[]) {
-        let url: URL;
-        try {
-            url = new URL(origin);
-        } catch {
-            throw new PairingInviteError('mobileApp.pairing.invite.badAddress');
-        }
-        // The pairing code always names an https origin: the phone pins that certificate.
-        if (url.protocol !== 'https:' || !url.hostname) throw new PairingInviteError('mobileApp.pairing.invite.badAddress');
-    }
+    // The phone pins whatever certificate the named address shows, so only a home-network address will do.
+    const origins = (raw.origins as string[]).map(homeNetworkOrigin);
+    if (origins.some((o) => o === null)) throw new PairingInviteError('mobileApp.pairing.invite.notHomeNetwork');
     if (raw.exp <= nowSeconds) throw new PairingInviteError('mobileApp.pairing.invite.expired');
     return {
         v: raw.v,
         name: raw.name,
         pc_id: raw.pc_id,
-        origins: raw.origins as string[],
+        origins: origins as string[],
         pin: raw.pin.toLowerCase(),
         invite: raw.invite,
         exp: raw.exp,

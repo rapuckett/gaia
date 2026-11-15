@@ -157,8 +157,17 @@ private final class Pairing: @unchecked Sendable {
       promise.reject(transportError("invalid_pin", "The pairing code's pin isn't 64 hex characters."))
       return
     }
-    let targets = origins.compactMap { origin -> (String, URL)? in
-      guard let url = URL(string: origin + probeRoute), url.scheme == "https" else { return nil }
+    let home = origins.map(homeNetworkOrigin)
+    guard home.allSatisfy({ $0 != nil }) else {
+      promise.reject(
+        transportError(
+          "not_home_origin",
+          "This code isn't from a GAIA PC on your home network, so this phone won't pair with it. On your PC, open Settings, then Phones and tablets, and show a new code."
+        ))
+      return
+    }
+    let targets = home.compactMap { origin -> (String, URL)? in
+      guard let origin, let url = URL(string: origin + probeRoute) else { return nil }
       return (origin, url)
     }
     guard !targets.isEmpty else {

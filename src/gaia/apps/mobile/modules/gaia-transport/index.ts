@@ -18,7 +18,7 @@ export interface NativePairAnswer {
     body: string;
 }
 
-/** Rejections carry `code`: pin_mismatch, unreachable, not_home_network, network, aborted, not_paired, origin_mismatch, keychain, invalid_pin, bad_response, unknown_request. */
+/** Rejections carry `code`: pin_mismatch, unreachable, not_home_network, not_home_origin, network, aborted, not_paired, origin_mismatch, keychain, invalid_pin, bad_response, unknown_request. */
 export interface GaiaTransportNative {
     pair(pcId: string, origins: string[], pin: string, headers: Record<string, string>, body: string): Promise<NativePairAnswer>;
     start(
