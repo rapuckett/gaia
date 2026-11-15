@@ -343,6 +343,11 @@ def local_ipv4_addresses() -> List[str]:
     return found
 
 
+# macOS answers a bind to an address that is gone (VPN utun, link-local,
+# an interface dropping mid-check) with EADDRNOTAVAIL.
+_ADDRESS_GONE = frozenset({errno.EADDRNOTAVAIL})
+
+
 def _refuse_shared_port(port: int) -> None:
     """macOS lets a wildcard bind share *port* with a program on one address.
 
@@ -351,8 +356,11 @@ def _refuse_shared_port(port: int) -> None:
     The probe sets SO_REUSEADDR too, so this listener's own TIME_WAIT
     connections from a restart don't count.
 
+    Addresses that vanished (``_ADDRESS_GONE``) are skipped.
+
     Raises:
-        OSError: ``EADDRINUSE`` naming the address another program holds.
+        OSError: ``EADDRINUSE`` naming the address another program holds, or
+            any other probe errno, named in the message.
     """
     for address in local_ipv4_addresses():
         probe = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -365,7 +373,14 @@ def _refuse_shared_port(port: int) -> None:
                     errno.EADDRINUSE,
                     f"another program holds {address}:{port}",
                 ) from e
-            raise
+            if e.errno in _ADDRESS_GONE:
+                logger.debug("Skipping %s: address is gone (%s)", address, e)
+                continue
+            raise OSError(
+                e.errno,
+                f"could not probe {address}:{port} "
+                f"(errno {e.errno} {errno.errorcode.get(e.errno, '?')}): {e.strerror}",
+            ) from e
         finally:
             probe.close()
 
