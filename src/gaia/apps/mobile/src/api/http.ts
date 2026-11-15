@@ -31,6 +31,7 @@ import type {
     ConfirmToolResult,
     ContextChoice,
     ConnectorActivations,
+    AllPermissions,
     ConnectorGrants,
     ConnectorList,
     ContextUsageResult,
@@ -63,6 +64,7 @@ import type {
     RestartModelResult,
     RequestOptions,
     ParsedSchedule,
+    PermissionMode,
     ProviderModelsResponse,
     RebuildEmbeddingsResult,
     ReconcileMemoryResult,
@@ -90,6 +92,7 @@ import {
     documentPath,
     ENDPOINTS,
     chatContextPath,
+    chatPermissionGrantsPath,
     chatPerformancePath,
     chatPermissionsPath,
     providerModelsPath,
@@ -368,6 +371,18 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         getPermissions(sessionId, options) {
             return getJson<SessionPermissions>(chatPermissionsPath(sessionId), options?.signal);
+        },
+
+        listAllPermissions(options) {
+            return getJson<AllPermissions>(ENDPOINTS.chatPermissionsDefault, options?.signal);
+        },
+
+        setDefaultPermissionMode(mode, options) {
+            return putJson<{ default_mode: PermissionMode }>(ENDPOINTS.chatPermissionsDefault, { mode }, options?.signal);
+        },
+
+        revokeGrants(sessionId, key, options) {
+            return deleteJson<SessionPermissions>(chatPermissionGrantsPath(sessionId, key), options?.signal);
         },
 
         setPermissionMode(sessionId, mode, options) {

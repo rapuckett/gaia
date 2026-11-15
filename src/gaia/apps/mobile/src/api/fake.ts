@@ -35,6 +35,7 @@ import type {
     PreflightReport,
     ProvidersResponse,
     ParsedSchedule,
+    AllPermissions,
     PermissionMode,
     ProviderModelsResponse,
     RebuildEmbeddingsResult,
@@ -117,6 +118,12 @@ export interface FakeClientData {
     selectError?: GaiaApiError;
     /** What getPermissions answers, by chat; a chat not listed asks first. */
     permissions?: Record<string, PermissionMode>;
+    /** The "always allow" grants by chat. */
+    permissionGrants?: Record<string, { key: string; label: string }[]>;
+    /** The mode new chats start in. */
+    defaultPermissionMode?: PermissionMode;
+    /** Answers the default-mode PUT with the 403 the PC gives a phone. */
+    defaultModePcOnly?: boolean;
     /** What getContextUsage answers. */
     contextUsage?: ContextUsageResult;
     /** What getChatPerformance answers. */
@@ -247,6 +254,10 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         const doc = library.documents.find((d) => d.id === docId);
         if (!doc) throw new GaiaApiError(404, 'Document not found');
         return doc;
+    }
+
+    function permissionsOf(sessionId: string): SessionPermissions {
+        return { session_id: sessionId, mode: data.permissions?.[sessionId] ?? 'ask', grants: [...(data.permissionGrants?.[sessionId] ?? [])] };
     }
 
     function findSchedule(name: string): Schedule {
@@ -380,11 +391,27 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             return data.activeModel;
         },
         async getPermissions(sessionId): Promise<SessionPermissions> {
-            return { session_id: sessionId, mode: data.permissions?.[sessionId] ?? 'ask', grants: [] };
+            return permissionsOf(sessionId);
+        },
+        async listAllPermissions(): Promise<AllPermissions> {
+            const ids = new Set([...Object.keys(data.permissions ?? {}), ...Object.keys(data.permissionGrants ?? {})]);
+            const sessions = [...ids].map(permissionsOf).filter((p) => p.mode !== 'ask' || p.grants.length > 0);
+            return { default_mode: data.defaultPermissionMode ?? 'ask', sessions };
+        },
+        async setDefaultPermissionMode(mode) {
+            if (data.defaultModePcOnly) throw new GaiaApiError(403, 'Change this on the PC running GAIA.');
+            data.defaultPermissionMode = mode;
+            return { default_mode: mode };
+        },
+        async revokeGrants(sessionId, key): Promise<SessionPermissions> {
+            const held = data.permissionGrants?.[sessionId] ?? [];
+            if (key !== undefined && !held.some((g) => g.key === key)) throw new GaiaApiError(404, `No grant '${key}' in this chat.`);
+            data.permissionGrants = { ...data.permissionGrants, [sessionId]: key === undefined ? [] : held.filter((g) => g.key !== key) };
+            return permissionsOf(sessionId);
         },
         async setPermissionMode(sessionId, mode): Promise<SessionPermissions> {
             data.permissions = { ...data.permissions, [sessionId]: mode };
-            return { session_id: sessionId, mode, grants: [] };
+            return permissionsOf(sessionId);
         },
         async getContextUsage() {
             return data.contextUsage ?? { available: false, reason: 'Measured once GAIA has answered in this chat.' };

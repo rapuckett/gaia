@@ -63,7 +63,9 @@ export const ENDPOINTS = {
     chatCancel: '/api/chat/cancel',
     chatConfirmTool: '/api/chat/confirm-tool',
     chatContext: '/api/chat/context/{session_id}',
+    chatPermissionGrants: '/api/chat/permissions/{session_id}/grants',
     chatPermissions: '/api/chat/permissions/{session_id}',
+    chatPermissionsDefault: '/api/chat/permissions',
     chatFollowup: '/api/chat/followup',
     chatFollowupOutcome: '/api/chat/followup/{session_id}',
     chatPerformance: '/api/chat/performance/{session_id}',
@@ -143,6 +145,11 @@ export function chatPerformancePath(sessionId: string): string {
 
 export function chatPermissionsPath(sessionId: string): string {
     return ENDPOINTS.chatPermissions.replace('{session_id}', encodeURIComponent(sessionId));
+}
+
+export function chatPermissionGrantsPath(sessionId: string, key?: string): string {
+    const path = ENDPOINTS.chatPermissionGrants.replace('{session_id}', encodeURIComponent(sessionId));
+    return key === undefined ? path : `${path}?key=${encodeURIComponent(key)}`;
 }
 
 export function cloudPricesPath(provider: string): string {
