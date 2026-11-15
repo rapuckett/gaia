@@ -16,6 +16,9 @@ import { SheetHost } from '@/ui/overlays/SheetHost';
 
 import Advanced from './Advanced';
 
+// The Logs card has its own tests, and reading Expo's config needs APP_ENV, which jest doesn't set.
+jest.mock('@/features/logs', () => ({ LogsCard: () => null }));
+
 // The web project's renderer can't mount react-native-web's DOM or the sheet host.
 const describeNative = Platform.OS === 'web' ? describe.skip : describe;
 
