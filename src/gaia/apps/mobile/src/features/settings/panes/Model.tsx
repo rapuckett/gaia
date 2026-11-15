@@ -142,7 +142,7 @@ export default function Model({ provider: requested }: { provider?: string }) {
                     {blocked ? <Notice tone="danger" message={t('settings.privacy.localOnlyBlocked')} /> : null}
                     <Disclosure title={t('settings.model.howItWorks')} open={howOpen} onToggle={() => setHowOpen((o) => !o)}>
                         <Stack gap="sm">
-                            <Text role="caption" tone="muted">{t('settings.model.lede')}</Text>
+                            <Text role="caption" tone="muted">{t('mobileApp.settings.model.lede')}</Text>
                             {local ? <Text role="caption" tone="muted">{providerNotice(t, provider)}</Text> : null}
                             {local ? <Text role="caption" tone="muted">{t('settings.model.devices')}</Text> : null}
                             {local ? <LocalMemory /> : null}

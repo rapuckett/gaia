@@ -32,7 +32,7 @@ export function GpuMemory() {
                     {failed ? <Notice tone="danger" message={errorText(failed, t)} /> : null}
                     {status?.applies && status.total_gb != null && status.gpu_gb != null ? (
                         <>
-                            <Text role="caption" tone="secondary">{t('gpu.body', { total: gb(status.total_gb), gpu: gb(status.gpu_gb) })}</Text>
+                            <Text role="caption" tone="secondary">{t('mobileApp.gpu.body', { total: gb(status.total_gb), gpu: gb(status.gpu_gb) })}</Text>
                             {status.cpu_gb != null ? (
                                 <Text role="caption" tone="muted">
                                     {`${t('gpu.split.gpu', { gb: gb(status.gpu_gb) })} · ${t('gpu.split.cpu', { gb: gb(status.cpu_gb) })}`}

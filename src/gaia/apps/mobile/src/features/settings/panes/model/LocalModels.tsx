@@ -41,7 +41,7 @@ function ChecklistRow({ entry: e, ticked, disabled, progress, imagesCovered, can
     const status = downloading
         ? t('setup.models.status.downloading', { done: ltrIn(locale, formatBytes(progress.bytes_done)), total: ltrIn(locale, formatBytes(progress.bytes_total)) })
         : statusText(e, t, locale);
-    const note = [purposeLine(e, t), fitLine(e, t, locale), e.fits === null ? t('setup.models.fit.unknown') : null].filter(Boolean).join(' ');
+    const note = [purposeLine(e, t), fitLine(e, t, locale), e.fits === null ? t('mobileApp.setup.models.fit.unknown') : null].filter(Boolean).join(' ');
     return (
         <Stack gap="xs">
             <MarkedRow
@@ -201,7 +201,7 @@ export function LocalModels() {
         <Stack gap="xs" testID="local-models">
             <Disclosure title={t.bare('settings.models.manage')} open={open} onToggle={() => setPicked(!open)} headerTestID="local-models-toggle">
                 <Stack gap="md">
-                    <Text role="caption" tone="muted">{t('settings.models.lede')}</Text>
+                    <Text role="caption" tone="muted">{t('mobileApp.settings.models.lede')}</Text>
                     {planQuery.error ? (
                         <Notice
                             tone="danger"
@@ -209,11 +209,11 @@ export function LocalModels() {
                             action={{ label: t('setup.tryAgain'), onPress: () => void planQuery.refetch() }}
                         />
                     ) : null}
-                    {plan && !plan.lemonade.reachable ? <Text role="caption" tone="muted">{t('settings.models.unavailable')}</Text> : null}
+                    {plan && !plan.lemonade.reachable ? <Text role="caption" tone="muted">{t('mobileApp.settings.models.unavailable')}</Text> : null}
                     {!plan && !planQuery.error ? (
                         <Row gap="sm">
                             <Spinner size="sm" />
-                            <Text role="caption" tone="muted">{t('setup.models.loading')}</Text>
+                            <Text role="caption" tone="muted">{t('mobileApp.setup.models.loading')}</Text>
                         </Row>
                     ) : null}
                     {plan && plan.lemonade.reachable && selection ? (
@@ -250,7 +250,7 @@ export function LocalModels() {
                     {notice && !notice.ok ? <LocalError error={notice.error} /> : null}
                 </Stack>
             </Disclosure>
-            {!open ? <Stack paddingX="xl"><Text role="caption" tone="muted">{t('settings.models.manageHint')}</Text></Stack> : null}
+            {!open ? <Stack paddingX="xl"><Text role="caption" tone="muted">{t('mobileApp.settings.models.manageHint')}</Text></Stack> : null}
             {sheet}
         </Stack>
     );

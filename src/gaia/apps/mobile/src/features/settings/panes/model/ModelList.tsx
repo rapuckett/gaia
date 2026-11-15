@@ -183,7 +183,7 @@ export function ModelList({ provider, remote, models, activeModel, switching, on
                 <Button label={t('settings.model.showRecommended')} onPress={() => setShowAll(false)} />
             ) : null}
             {groups.unavailable.length > 0 ? (
-                <Group id="unavailable" title={t('settings.model.groupUnavailable')} count={groups.unavailable.length} defaultOpen={false} force={searching}>
+                <Group id="unavailable" title={t('mobileApp.settings.model.groupUnavailable')} count={groups.unavailable.length} defaultOpen={false} force={searching}>
                     {groups.unavailable.map(renderRow)}
                 </Group>
             ) : null}

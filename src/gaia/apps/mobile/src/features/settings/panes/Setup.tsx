@@ -50,7 +50,7 @@ export default function Setup() {
             ],
         },
         {
-            title: t('setup.pc.step'),
+            title: t('mobileApp.setup.pc.step'),
             lines: [
                 { label: t('settings.setup.detected'), value: detectedLine(t, plan.data, hardware.data), testID: 'setup-detected' },
                 {
@@ -65,7 +65,7 @@ export default function Setup() {
             title: t('setup.models.step'),
             lines: [
                 {
-                    label: t('settings.setup.models'),
+                    label: t('mobileApp.settings.setup.models'),
                     value: catalog ? t('settings.setup.modelsValue', { n: String(installed.length), size: ltrIn(t.locale, formatSize(installedGb)) }) : null,
                     to: { section: 'model', target: 'models-on-pc', provider: 'local' },
                     testID: 'setup-models',

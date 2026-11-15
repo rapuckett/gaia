@@ -111,10 +111,10 @@ function StatusBody({ status, modelName, actions, detailsOpen, onToggleDetails }
     const serverHint = status.lemonade_running
         ? undefined
         : setupNeeded
-          ? t('settings.advanced.notInstalledHint')
+          ? t('mobileApp.settings.advanced.notInstalledHint')
           : status.start_instruction && !/gaia init/i.test(status.start_instruction)
             ? status.start_instruction
-            : t('settings.advanced.notRunningHint');
+            : t('mobileApp.settings.advanced.notRunningHint');
     const serverValue = status.lemonade_running
         ? status.lemonade_version
             ? t.bare('settings.advanced.runningAt', { version: isolate(status.lemonade_version, 'ltr') })

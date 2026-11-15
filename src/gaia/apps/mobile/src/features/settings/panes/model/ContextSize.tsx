@@ -77,7 +77,7 @@ export function ContextSize({ model }: { model: string }) {
                 {!view.note && view.max_fit ? (
                     <Disclosure title={t('settings.ctx.about')} open={aboutOpen} onToggle={() => setAboutOpen((o) => !o)}>
                         <Text role="caption" tone="muted">
-                            {t('settings.ctx.explain', {
+                            {t('mobileApp.settings.ctx.explain', {
                                 size: isolate(ctxLabel(view.max_fit)),
                                 name: view.display_name,
                                 memory: view.memory_source,

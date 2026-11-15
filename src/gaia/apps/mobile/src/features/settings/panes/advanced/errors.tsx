@@ -31,7 +31,7 @@ export function ActionError({ error, title }: { error: unknown; title?: string }
     const raw = describeError(error, tEn);
     return (
         <Stack gap="sm">
-            <Notice tone="danger" title={title} message={isServerDown(raw) ? t('settings.errors.serverDown') : t('mobileApp.settings.modelActionFailed')} />
+            <Notice tone="danger" title={title} message={isServerDown(raw) ? t('mobileApp.settings.errors.serverDown') : t('mobileApp.settings.modelActionFailed')} />
             <RawDetails text={raw} />
         </Stack>
     );

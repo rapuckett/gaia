@@ -21,7 +21,7 @@ const BETA: Record<Beta, { title: MessageKey; description: MessageKey; bullets: 
     memory: {
         title: 'mem.beta.memory.title',
         description: 'mem.beta.memory.desc',
-        bullets: ['mem.beta.memory.local', 'mem.beta.memory.lost', 'mem.beta.memory.disable'],
+        bullets: ['mobileApp.mem.beta.memory.local', 'mem.beta.memory.lost', 'mem.beta.memory.disable'],
         confirm: 'mem.beta.memory.confirm',
         setting: 'memory_enabled',
     },
@@ -35,7 +35,7 @@ const BETA: Record<Beta, { title: MessageKey; description: MessageKey; bullets: 
     discovery: {
         title: 'mem.beta.discovery.title',
         description: 'mem.beta.discovery.desc',
-        bullets: ['mem.beta.discovery.collects', 'mem.beta.discovery.scans', 'mem.beta.discovery.local'],
+        bullets: ['mem.beta.discovery.collects', 'mem.beta.discovery.scans', 'mobileApp.mem.beta.discovery.local'],
         confirm: 'mem.beta.discovery.confirm',
         setting: 'system_discovery_consent',
     },

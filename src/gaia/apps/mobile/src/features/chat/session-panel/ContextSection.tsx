@@ -225,7 +225,7 @@ function Usage({ usage, perf, t }: { usage: ContextUsage; perf: ChatPerformance 
 }
 
 function Cost({ cost, t }: { cost: TurnPerformance['cost']; t: Translate }) {
-    if (cost.kind === 'local') return <Reveal short={t('ctx.costLocal')} full={t('ctx.costLocalTitle')} />;
+    if (cost.kind === 'local') return <Reveal short={t('mobileApp.ctx.costLocal')} full={t('mobileApp.ctx.costLocalTitle')} />;
     if (cost.kind === 'unreported') return <Text tone="muted">{t('ctx.costUnreported')}</Text>;
     if (cost.kind === 'estimate' && cost.usd != null) {
         const usd = cost.usd < 0.01 ? cost.usd.toFixed(4) : cost.usd.toFixed(2);

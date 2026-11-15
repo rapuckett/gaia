@@ -70,7 +70,7 @@ export function CloudSpending() {
             {report.state === 'reached' ? (
                 <Notice
                     tone="danger"
-                    message={t('settings.spend.reached')}
+                    message={t('mobileApp.settings.spend.reached')}
                     action={{ label: t('settings.spend.allow'), onPress: () => { setLimit.reset(); allow.mutate(); } }}
                 />
             ) : null}
