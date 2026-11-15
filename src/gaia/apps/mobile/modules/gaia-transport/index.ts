@@ -34,6 +34,8 @@ export interface GaiaTransportNative {
     cancel(id: string): void;
     isPaired(pcId: string): boolean;
     drop(pcId: string): Promise<void>;
+    /** Deletes every paired-PC secret this app holds, whatever its id. */
+    dropAll(): Promise<void>;
     /** Moves the secret `pair` saved under `stagedId` to `pcId`, replacing what `pcId` had. */
     promote(stagedId: string, pcId: string): Promise<void>;
 }
@@ -54,6 +56,7 @@ const STUB: GaiaTransportNative = {
     cancel: () => unsupported(),
     isPaired: () => unsupported(),
     drop: async () => unsupported(),
+    dropAll: async () => unsupported(),
     promote: async () => unsupported(),
 };
 

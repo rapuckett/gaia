@@ -17,6 +17,7 @@ jest.mock('../../../modules/gaia-transport', () => ({
             mockVault.set(vaultId, `secret from ${origins[0]}`);
             return { status: 200, origin: origins[0], body: JSON.stringify({ device_id: 'dev-2', pc_name: 'Office PC' }) };
         },
+        dropAll: async () => void mockVault.clear(),
         drop: async (vaultId: string) => void mockVault.delete(vaultId),
         promote: async (from: string, to: string) => {
             mockVault.set(to, mockVault.get(from)!);
@@ -47,6 +48,7 @@ const invite: PairingInvite = {
 };
 
 beforeEach(async () => {
+    await AsyncStorage.removeItem('gaia:install-marker');
     mockVault.clear();
     mockVault.set(PC_ID, 'working secret');
     await AsyncStorage.setItem(
@@ -77,5 +79,23 @@ describe('re-pairing a PC this phone is already paired with', () => {
         expect((await service.status()).state).toBe('paired');
         expect([...mockVault.entries()]).toEqual([[PC_ID, 'secret from https://192.168.1.99:4243']]);
         expect((await service.list()).map((pc) => pc.connection.baseUrl)).toEqual(['https://192.168.1.99:4243']);
+    });
+});
+
+describe('a reinstalled app', () => {
+    it('wipes the old install\'s secrets once, and leaves them alone after that', async () => {
+        await AsyncStorage.removeItem('gaia:paired-pcs');
+        const service = createPinnedPairingService();
+        expect(await service.restore()).toBeNull();
+        expect(mockVault.size).toBe(0);
+
+        mockVault.set(PC_ID, 'paired after the reinstall');
+        await createPinnedPairingService().restore();
+        expect(mockVault.get(PC_ID)).toBe('paired after the reinstall');
+    });
+
+    it('keeps the secrets of an app updated from a build without the marker', async () => {
+        await createPinnedPairingService().restore();
+        expect(mockVault.get(PC_ID)).toBe('working secret');
     });
 });
