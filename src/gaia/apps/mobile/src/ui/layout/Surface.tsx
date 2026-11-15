@@ -62,13 +62,19 @@ export function Surface(props: SurfaceProps) {
 export interface CardProps {
     children?: ReactNode;
     padding?: Space;
+    /** `flat` is the desktop's bordered content card; `raised` keeps a soft shadow for a card that floats. */
+    variant?: 'flat' | 'raised';
     onPress?: () => void;
     accessibilityLabel?: string;
     testID?: string;
 }
 
-export function Card({ children, padding = 'lg', onPress, accessibilityLabel, testID }: CardProps) {
-    const style = useSurfaceStyle({ tone: 'card', radius: 'lg', padding, elevation: 'sm' });
+export function Card({ children, padding = 'lg', variant = 'flat', onPress, accessibilityLabel, testID }: CardProps) {
+    const style = useSurfaceStyle(
+        variant === 'raised'
+            ? { tone: 'card', radius: 'lg', padding, elevation: 'sm' }
+            : { tone: 'card', radius: 'lg', padding, border: true },
+    );
     if (!onPress) {
         return (
             <View style={style} testID={testID}>

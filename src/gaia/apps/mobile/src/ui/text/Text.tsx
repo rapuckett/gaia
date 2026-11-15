@@ -23,6 +23,7 @@ export interface TextProps {
     numberOfLines?: number;
     selectable?: boolean;
     strike?: boolean;
+    underline?: boolean;
     /** Inline code: mono on the code surface. */
     code?: boolean;
     /** Writing direction of this run, for content whose language differs from the UI's. `auto` follows the first strong letter of a string child. */
@@ -72,6 +73,7 @@ export function Text({
     numberOfLines,
     selectable,
     strike,
+    underline,
     code,
     dir: dirProp,
     onPress,
@@ -110,7 +112,7 @@ export function Text({
         style.backgroundColor = colors.bgCode;
         style.color = colors.textCode;
     }
-    if (strike) style.textDecorationLine = 'line-through';
+    if (strike || underline) style.textDecorationLine = strike && underline ? 'underline line-through' : strike ? 'line-through' : 'underline';
     if (dir) style.writingDirection = dir;
     // textAlign left/right are physical on native too (not swapped under forceRTL), so the start side is picked by direction.
     const startsRight = (dir ?? (rtl ? 'rtl' : 'ltr')) === 'rtl';

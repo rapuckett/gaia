@@ -50,7 +50,7 @@ function LinkButton({ url, label, primary }: { url: string; label: string; prima
 function Step({ n, title, children }: { n: number; title: string; children?: ReactNode }) {
     return (
         <Row gap="md" align="start">
-            <Badge label={String(n)} />
+            <Badge shape="pill" label={String(n)} />
             <Stack gap="sm" flex={1}>
                 <Text role="label" weight="semibold" accessibilityRole="header">
                     {title}
