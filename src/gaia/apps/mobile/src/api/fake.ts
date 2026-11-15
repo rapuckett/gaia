@@ -74,6 +74,8 @@ import type {
     SetupRunStatus,
     Settings,
     SkillList,
+    SpeechModel,
+    SpeechSettings,
     FeaturedLibraries,
     LinkPreview,
     SpendingReport,
@@ -222,6 +224,12 @@ export interface FakeClientData {
     /** What getCapabilities answers, by chat; a chat not listed has no agent running (409). */
     capabilities?: Record<string, AgentCapabilities>;
     memorySettings?: MemorySettings;
+    /** What getSpeechSettings answers; updateSpeechSettings changes it. */
+    speechSettings?: SpeechSettings;
+    /** What getSpeechModel answers; defaults to downloaded. */
+    speechModel?: SpeechModel;
+    /** Thrown by speak. */
+    speechError?: Error;
     /** What listGoals answers; approve, reject, cancel and delete change it. */
     goals?: Goal[] | Error;
     /** What getGoalStoreHealth answers. */
@@ -312,6 +320,8 @@ export interface FakeGaiaClient extends GaiaClient {
     readonly modelLoads: { modelName: string; force: boolean }[];
     readonly removals: string[];
     readonly backendSets: string[];
+    /** The text each speak call was given, in order. */
+    readonly spoken: string[];
     readonly targetSets: LemonadeTargetBody[];
     /** The setup model choices saved, in order. */
     readonly setupChoices: { kind: 'chat' | 'vision' | 'skip'; modelId: string | null; flag?: boolean }[];
@@ -401,6 +411,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
     const followUps: FakeGaiaClient['followUps'] = [];
     const setupStarts: FakeGaiaClient['setupStarts'] = [];
     const backendSets: string[] = [];
+    const spoken: string[] = [];
     const targetSets: LemonadeTargetBody[] = [];
     const setupChoices: FakeGaiaClient['setupChoices'] = [];
     const connects: string[] = [];
@@ -499,6 +510,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         removals,
         setupStarts,
         backendSets,
+        spoken,
         targetSets,
         setupChoices,
         connects,
@@ -988,6 +1000,23 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             if (!data.undoSettings) throw new GaiaApiError(503, 'This fake client was given no undo settings.');
             data.undoSettings = { ...data.undoSettings, retention_days: retentionDays, max_mb: maxMb };
             return data.undoSettings;
+        },
+        async getSpeechSettings() {
+            if (!data.speechSettings) throw new GaiaApiError(503, 'This fake client was given no speech settings.');
+            return data.speechSettings;
+        },
+        async updateSpeechSettings(change) {
+            if (!data.speechSettings) throw new GaiaApiError(503, 'This fake client was given no speech settings.');
+            data.speechSettings = { ...data.speechSettings, ...change };
+            return data.speechSettings;
+        },
+        async getSpeechModel() {
+            return data.speechModel ?? { downloaded: true, size_gb: null };
+        },
+        async speak(text) {
+            spoken.push(text);
+            if (data.speechError) throw data.speechError;
+            return { bytes: new TextEncoder().encode(text), contentType: 'audio/wav' };
         },
         async getMemorySettings() {
             if (!data.memorySettings) throw new GaiaApiError(503, 'This fake client was given no memory settings.');

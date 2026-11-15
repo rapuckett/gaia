@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import { cardsFromSteps } from '@webui/utils/renderCards.core';
+import { cleanToolCallContent } from '@webui/utils/toolCallContent';
 import { SERVER_CANCELLED_TEXT, splitCutOff } from '@webui/utils/turnEnding.core';
 
 import type { Message } from '@/api/client.types';
@@ -9,7 +10,9 @@ import { useMemo } from 'react';
 
 import { useT } from '@/i18n/useT';
 import { IconButton, Pressable, Row, Stack } from '@/ui';
-import { Check, Copy, Ellipsis } from '@/ui/icons';
+import { Check, Copy, Ellipsis, Square, Volume2 } from '@/ui/icons';
+import { ReadAloudButton, ReadAloudErrorNotice, ReadAloudNote, useReadAloud } from '@/features/audio/ReadAloud';
+import { readAloudId } from '@/features/audio/useChatReadAloud';
 
 import { ActivityTimeline } from '../activity/ActivityTimeline';
 import { AnswerFooter } from '../activity/AnswerFooter';
@@ -34,9 +37,19 @@ export function AssistantBubble({ message, streaming = false, latencyMs, context
     const cutOff = streaming ? null : splitCutOff(message.content);
     const cancelled = message.content.trim() === SERVER_CANCELLED_TEXT;
     const text = cancelled ? '' : cutOff ? cutOff.body : message.content;
-    const actions = useMessageActions(message, text, context);
     const activity = useMemo(() => savedActivity(message), [message]);
     const cards = message.cards ?? cardsFromSteps(message.agentSteps);
+    const spoken = useMemo(() => cleanToolCallContent(text, false), [text]);
+    const speakId = readAloudId(message);
+    const readAloud = useReadAloud(speakId, spoken);
+    const readable = !streaming && !cancelled && !activity.isError && spoken.trim() !== '';
+    const actions = useMessageActions(
+        message,
+        text,
+        context,
+        undefined,
+        readable ? [{ label: readAloud.label, icon: readAloud.active ? Square : Volume2, onPress: readAloud.toggle }] : undefined,
+    );
     return (
         <Stack paddingX="lg" paddingY="xs">
             {activity.steps.length > 0 ? <ActivityTimeline steps={activity.steps} answer={text} /> : null}
@@ -50,6 +63,7 @@ export function AssistantBubble({ message, streaming = false, latencyMs, context
             {!streaming && !cancelled ? <SavedReplyErrors message={message} /> : null}
             {!streaming && !cancelled ? (
                 <Row>
+                    {readable ? <ReadAloudButton control={readAloud} /> : null}
                     <IconButton
                         icon={actions.copied ? Check : Copy}
                         label={actions.copied ? t('msg.copiedAria') : t('msg.copy')}
@@ -59,6 +73,8 @@ export function AssistantBubble({ message, streaming = false, latencyMs, context
                     <IconButton icon={Ellipsis} label={t('msg.actions')} size="sm" onPress={actions.openSheet} />
                 </Row>
             ) : null}
+            <ReadAloudNote messageId={speakId} />
+            <ReadAloudErrorNotice messageId={speakId} />
             {actions.notice}
             {actions.sheet}
         </Stack>
