@@ -13,7 +13,7 @@ import uuid
 from datetime import datetime
 from typing import Any, Callable, Dict, List, Literal, Optional, Tuple
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, field_validator
 
 # Category sets come from the data layer. The dashboard may write the
@@ -1388,7 +1388,7 @@ def clear_all_memory() -> Dict:
 
 @router.post(
     "/api/memory/reinitialize",
-    dependencies=[Depends(_require_ui_header)],
+    dependencies=[Depends(_require_ui_header), Depends(require_local_pc)],
     response_model=MemoryReinitializeResponse,
     response_model_exclude_unset=True,
 )
@@ -1482,6 +1482,7 @@ def _do_system_context_refresh() -> Dict:
 
 @router.post(
     "/api/memory/refresh-system-context",
+    dependencies=[Depends(_require_ui_header), Depends(require_local_pc)],
     response_model=MemorySystemContextRefresh,
     response_model_exclude_unset=True,
 )
@@ -1624,7 +1625,7 @@ def _downloaded_on_this_pc(model_id: str) -> bool:
     )
 
 
-@router.get("/api/memory/stream-discovery")
+@router.get("/api/memory/stream-discovery", dependencies=[Depends(require_local_pc)])
 def stream_discovery():
     """Stream system discovery findings as SSE.
 
@@ -1733,7 +1734,7 @@ def stream_discovery():
     )
 
 
-@router.get("/api/memory/stream-inference")
+@router.get("/api/memory/stream-inference", dependencies=[Depends(require_local_pc)])
 def stream_inference(include_browser: bool = Query(False)):
     """Stream LLM-assisted profile inference as SSE.
 
@@ -2072,6 +2073,7 @@ class InferenceCommit(BaseModel):
 
 @router.post(
     "/api/memory/commit-discovery",
+    dependencies=[Depends(require_local_pc)],
     response_model=MemoryCommitResponse,
     response_model_exclude_unset=True,
 )
@@ -2116,6 +2118,7 @@ def commit_discovery(body: DiscoveryCommit) -> Dict:
 
 @router.post(
     "/api/memory/commit-inference",
+    dependencies=[Depends(require_local_pc)],
     response_model=MemoryCommitResponse,
     response_model_exclude_unset=True,
 )
@@ -2222,6 +2225,7 @@ def get_memory_settings(db: ChatDatabase = Depends(get_db)) -> Dict:
 )
 def update_memory_settings(
     body: MemorySettingsBody,
+    request: Request,
     db: ChatDatabase = Depends(get_db),
 ) -> Dict:
     """Update memory-related feature settings.
@@ -2234,8 +2238,11 @@ def update_memory_settings(
       for debug/troubleshooting. Default false.
     - ``system_discovery_consent`` (bool): allow system scanning. Default false.
       When toggled ON, also persists the consent to ``~/.gaia/memory_settings.json``
-      and triggers an immediate system context refresh.
+      and triggers an immediate system context refresh. Turning it on is
+      PC-only, like the scan; turning it off works from anywhere.
     """
+    if body.system_discovery_consent:
+        require_local_pc(request)
     if body.system_discovery_consent is not None:
         # The file is the source of truth; write it before any DB key so a
         # failed save leaves the whole request unapplied.
