@@ -10,6 +10,13 @@ export const UI_HEADERS = {
 
 export const ENDPOINTS = {
     agents: '/api/agents',
+    goal: '/api/goals/{goal_id}',
+    goalApprove: '/api/goals/{goal_id}/approve',
+    goalCancel: '/api/goals/{goal_id}/cancel',
+    goalReject: '/api/goals/{goal_id}/reject',
+    goals: '/api/goals',
+    goalsHealth: '/api/goals/health',
+    goalsStats: '/api/goals/stats',
     gpuMemory: '/api/gpu-memory',
     health: '/api/health',
     cloudPrices: '/api/spending/prices/{provider}',
@@ -97,8 +104,10 @@ export const ENDPOINTS = {
     chatFollowupOutcome: '/api/chat/followup/{session_id}',
     chatPerformance: '/api/chat/performance/{session_id}',
     chatUserInput: '/api/chat/user-input',
+    connector: '/api/connectors/{connector_id}',
     connectorActivation: '/api/connectors/{connector_id}/activations/{agent_id:path}',
     connectorActivations: '/api/connectors/{connector_id}/activations',
+    connectorDisable: '/api/connectors/{connector_id}/disable',
     connectorGrant: '/api/connectors/{connector_id}/grants/{agent_id:path}',
     connectorGrants: '/api/connectors/{connector_id}/grants',
     connectors: '/api/connectors',
@@ -131,6 +140,14 @@ export function connectorActivationsPath(connectorId: string): string {
     return ENDPOINTS.connectorActivations.replace('{connector_id}', encodeURIComponent(connectorId));
 }
 
+export function connectorDisablePath(connectorId: string): string {
+    return ENDPOINTS.connectorDisable.replace('{connector_id}', encodeURIComponent(connectorId));
+}
+
+export function connectorPath(connectorId: string): string {
+    return ENDPOINTS.connector.replace('{connector_id}', encodeURIComponent(connectorId));
+}
+
 export function connectorGrantPath(connectorId: string, agentId: string): string {
     return ENDPOINTS.connectorGrant
         .replace('{connector_id}', encodeURIComponent(connectorId))
@@ -139,6 +156,11 @@ export function connectorGrantPath(connectorId: string, agentId: string): string
 
 export function connectorGrantsPath(connectorId: string): string {
     return ENDPOINTS.connectorGrants.replace('{connector_id}', encodeURIComponent(connectorId));
+}
+
+export function goalPath(goalId: string, action?: 'approve' | 'cancel' | 'reject'): string {
+    const path = ENDPOINTS.goal.replace('{goal_id}', encodeURIComponent(goalId));
+    return action ? `${path}/${action}` : path;
 }
 
 export function memoryActivityPath(days: number): string {
@@ -306,6 +328,9 @@ export const SCHEDULE_RESULTS_LIMIT = 20;
 
 /** How often to re-read the schedules while their screen is open, so counts and times follow the PC. */
 export const SCHEDULES_POLL_MS = 10_000;
+/** How often the goal store's health is re-read, as the web's does (30 s). */
+export const GOAL_HEALTH_POLL_MS = 30_000;
+
 /** How long a memory result notice stays up, as the web's toasts do (4 s); a failure stays twice as long to be read. */
 export const MEMORY_NOTICE_MS = 4_000;
 export const MEMORY_ERROR_NOTICE_MS = 8_000;

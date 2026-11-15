@@ -42,6 +42,8 @@ import type {
     DeleteDocumentResult,
     DeleteMessagesResult,
     DeleteScheduleResult,
+    Goal,
+    GoalStats,
     DocumentListResponse,
     DocumentResponse,
     DocumentStatus,
@@ -104,10 +106,13 @@ import {
     ATTACH_HEADER_TIMEOUT_MS,
     connectorActivationPath,
     connectorActivationsPath,
+    connectorDisablePath,
     connectorGrantPath,
     connectorGrantsPath,
+    connectorPath,
     cloudPricesPath,
     documentPath,
+    goalPath,
     ENDPOINTS,
     chatContextPath,
     chatPermissionGrantsPath,
@@ -601,6 +606,14 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             await request('DELETE', connectorActivationPath(connectorId, agentId), undefined, options?.signal);
         },
 
+        async disableConnector(connectorId, options) {
+            await request('POST', connectorDisablePath(connectorId), {}, options?.signal);
+        },
+
+        async disconnectConnector(connectorId, options) {
+            await request('DELETE', connectorPath(connectorId), undefined, options?.signal);
+        },
+
         listAgentMcps(options) {
             return getJson<AgentMcpList>(ENDPOINTS.connectorsAgentMcps, options?.signal);
         },
@@ -683,6 +696,39 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         deleteMemoryKnowledge(knowledgeId, options) {
             return deleteJson<unknown>(memoryKnowledgeItemPath(knowledgeId), options?.signal);
+        },
+
+        listGoals(options) {
+            return getJson<{ goals: Goal[]; total: number }>(ENDPOINTS.goals, options?.signal);
+        },
+
+        getGoalStats(options) {
+            return getJson<GoalStats>(ENDPOINTS.goalsStats, options?.signal);
+        },
+
+        getGoalStoreHealth(options) {
+            return getJson<{ error: string | null }>(ENDPOINTS.goalsHealth, options?.signal);
+        },
+
+        createGoal(body, options) {
+            return postJson<Goal>(ENDPOINTS.goals, body, options?.signal);
+        },
+
+        approveGoal(goalId, options) {
+            return putJson<Goal>(goalPath(goalId, 'approve'), undefined, options?.signal);
+        },
+
+        rejectGoal(goalId, options) {
+            return putJson<Goal>(goalPath(goalId, 'reject'), undefined, options?.signal);
+        },
+
+        cancelGoal(goalId, options) {
+            return putJson<Goal>(goalPath(goalId, 'cancel'), undefined, options?.signal);
+        },
+
+        async deleteGoal(goalId, options) {
+            // The PC answers 204 with no body.
+            await request('DELETE', goalPath(goalId), undefined, options?.signal);
         },
 
         getMemoryStats(options) {

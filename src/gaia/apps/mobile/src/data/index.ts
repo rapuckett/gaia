@@ -7,6 +7,7 @@ export * from './connectors';
 export * from './context';
 export * from './documents';
 export * from './GaiaClientProvider';
+export * from './goals';
 export * from './memory';
 export * from './modelActions';
 export * from './modelList';
