@@ -31,6 +31,8 @@ export const ENDPOINTS = {
     mcpStatus: '/api/mcp/status',
     memoryActivity: '/api/memory/activity',
     memoryAll: '/api/memory/all',
+    memoryCommitDiscovery: '/api/memory/commit-discovery',
+    memoryCommitInference: '/api/memory/commit-inference',
     memoryConsolidate: '/api/memory/consolidate',
     memoryConversation: '/api/memory/conversations/{session_id}',
     memoryConversations: '/api/memory/conversations',
@@ -46,8 +48,11 @@ export const ENDPOINTS = {
     memoryReinitialize: '/api/memory/reinitialize',
     memorySettings: '/api/memory/settings',
     memoryStats: '/api/memory/stats',
+    memoryStreamDiscovery: '/api/memory/stream-discovery',
+    memoryStreamInference: '/api/memory/stream-inference',
     memoryTools: '/api/memory/tools',
     memoryUpcoming: '/api/memory/upcoming',
+    messagingDiscord: '/api/messaging/discord',
     modelServer: '/api/system/model-server',
     modelServerBackend: '/api/system/model-server/backend',
     providerConnect: '/api/providers/{provider}/connect',
@@ -128,6 +133,8 @@ export const ENDPOINTS = {
     documentStatus: '/api/documents/{doc_id}/status',
     documentUpload: '/api/documents/upload',
     documents: '/api/documents',
+    filesImage: '/api/files/image',
+    filesPreview: '/api/files/preview',
     filesUpload: '/api/files/upload',
     filesUploadMedia: '/api/files/upload-media',
     onboardingPreflight: '/api/onboarding/preflight',
@@ -194,6 +201,10 @@ export function memoryKnowledgePath(params: object): string {
         .filter(([, value]) => value !== undefined && value !== null && value !== '')
         .flatMap(([key, value]) => (Array.isArray(value) ? value : [value]).map((one) => `${encodeURIComponent(key)}=${encodeURIComponent(String(one))}`));
     return parts.length ? `${ENDPOINTS.memoryKnowledge}?${parts.join('&')}` : ENDPOINTS.memoryKnowledge;
+}
+
+export function memoryStreamInferencePath(includeBrowser: boolean): string {
+    return `${ENDPOINTS.memoryStreamInference}?include_browser=${includeBrowser}`;
 }
 
 export function memoryUpcomingPath(days: number): string {
@@ -299,7 +310,7 @@ export function sessionMessagesAndBelowPath(sessionId: string, messageId: number
         .replace('{message_id}', String(messageId));
 }
 
-export function documentPath(docId: string, endpoint: 'document' | 'documentCancel' | 'documentReindex' | 'documentStatus' = 'document'): string {
+export function documentPath(docId: string, endpoint: 'document' | 'documentCancel' | 'documentFile' | 'documentReindex' | 'documentStatus' = 'document'): string {
     return ENDPOINTS[endpoint].replace('{doc_id}', encodeURIComponent(docId));
 }
 
@@ -307,6 +318,12 @@ export function documentPath(docId: string, endpoint: 'document' | 'documentCanc
 export function documentFileUrl(baseUrl: string, docId: string, page?: number): string {
     const path = ENDPOINTS.documentFile.replace('{doc_id}', encodeURIComponent(docId));
     return `${baseUrl.replace(/\/+$/, '')}${path}${page ? `#page=${page}` : ''}`;
+}
+
+/** A PC file's preview or image, named by its path on the PC; the chat's id is what lets a phone read it. */
+export function filePath(endpoint: 'filesImage' | 'filesPreview', path: string, sessionId: string, lines?: number): string {
+    const query = `path=${encodeURIComponent(path)}&session_id=${encodeURIComponent(sessionId)}`;
+    return `${ENDPOINTS[endpoint]}?${query}${lines ? `&lines=${lines}` : ''}`;
 }
 
 /** Typing pauses this long before a search goes out; the web UI's `SEARCH_DEBOUNCE_MS`. */
@@ -338,7 +355,12 @@ export const SCHEDULES_POLL_MS = 10_000;
 /** How often the goal store's health is re-read, as the web's does (30 s). */
 export const GOAL_HEALTH_POLL_MS = 30_000;
 
+/** How often Settings > Messaging re-reads the Discord bridge while it is in one of the states it can leave by itself (webui's MessagingSettings). */
+export const DISCORD_POLL_MS = 3_000;
+export const DISCORD_LIVE_STATES: ReadonlySet<string> = new Set(['starting', 'pairing', 'connected']);
 /** How long a memory result notice stays up, as the web's toasts do (4 s); a failure stays twice as long to be read. */
+/** A profile scan or inference may go quiet for a while (a model call, a big home folder); the web's EventSource waits without limit, so this is only a dead-connection guard. */
+export const PROFILE_STREAM_IDLE_MS = 5 * 60_000;
 export const MEMORY_NOTICE_MS = 4_000;
 export const MEMORY_ERROR_NOTICE_MS = 8_000;
 /** How long a Delete button waits for its "Confirm?" press; the web UI's CONFIRM_DELETE_MS. */
