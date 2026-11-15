@@ -1086,6 +1086,14 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             return getJson<GpuMemoryStatus>(`${ENDPOINTS.gpuMemory}${query}`, options?.signal);
         },
 
+        recordGpuMemoryPending(settingGb, options) {
+            return postJson<GpuMemoryStatus>(ENDPOINTS.gpuMemoryPending, { setting_gb: settingGb }, options?.signal);
+        },
+
+        dismissGpuMemoryPending(options) {
+            return deleteJson<GpuMemoryStatus>(ENDPOINTS.gpuMemoryPending, options?.signal);
+        },
+
         getModelNeed(job, options) {
             return getJson<ModelNeed>(setupNeedsPath(job), options?.signal);
         },

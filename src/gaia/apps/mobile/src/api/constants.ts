@@ -22,6 +22,7 @@ export const ENDPOINTS = {
     goalsHealth: '/api/goals/health',
     goalsStats: '/api/goals/stats',
     gpuMemory: '/api/gpu-memory',
+    gpuMemoryPending: '/api/gpu-memory/pending',
     health: '/api/health',
     cloudPrices: '/api/spending/prices/{provider}',
     lemonadeDetect: '/api/lemonade/detect',
