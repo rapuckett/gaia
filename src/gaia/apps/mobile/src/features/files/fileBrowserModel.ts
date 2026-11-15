@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import type { MessageKey } from '@webui/i18n/registry';
+import type { Translate } from '@webui/i18n/translator';
 
 import type { FileEntry } from '@/api/client.types';
 
@@ -46,4 +47,13 @@ export function folderName(path: string): string {
 export function emptyKey(searching: boolean, hiddenCount: number): MessageKey {
     if (searching) return 'fileBrowser.noFiles';
     return hiddenCount > 0 ? 'fileBrowser.onlyHidden' : 'fileBrowser.empty';
+}
+
+/** Add to library and Ask GAIA need a selection and wait while files are being added. */
+export const canAct = (selected: number, adding: boolean) => selected > 0 && !adding;
+
+/** The question sent into the chat; the wording is localized, never hard-coded. */
+export function askPrompt(names: readonly string[], t: Translate): string {
+    if (names.length === 1) return t('mobileApp.files.askOne', { name: names[0]! });
+    return t('mobileApp.files.askMany', { list: names.map((n) => `- ${n}`).join('\n') });
 }
