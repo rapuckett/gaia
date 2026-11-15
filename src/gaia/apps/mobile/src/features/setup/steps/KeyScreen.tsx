@@ -44,7 +44,7 @@ function Prices({ provider, picked, onPick, disabled, inUse }: {
 }) {
     const t = useT();
     const locale = useLocaleCode();
-    const prices = useCloudPrices(provider);
+    const prices = useCloudPrices(provider, true);
     if (prices.error) {
         return <Notice tone="danger" message={t('settings.price.loadFailed', { reason: describeError(prices.error, t) })} />;
     }

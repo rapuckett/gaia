@@ -604,8 +604,8 @@ def _listener_pid(port: int) -> Optional[int]:
         return next(
             (c.pid for c in psutil.net_connections(kind="tcp") if listens(c)), None
         )
-    except psutil.AccessDenied:
-        pass
+    except (psutil.AccessDenied, RuntimeError):
+        pass  # refused, or a process's sockets changed while psutil read them
     for proc in psutil.process_iter():
         try:
             # net_connections is psutil 6+; setup.py allows 5.9.
@@ -614,6 +614,8 @@ def _listener_pid(port: int) -> Optional[int]:
                 return proc.pid
         except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
             continue  # another user's process, or gone: not inspectable
+        except RuntimeError:
+            continue  # its open files changed mid-read (psutil on macOS)
     return None
 
 

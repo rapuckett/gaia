@@ -5,7 +5,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type {
-    CloudPriceList,
     GaiaClient,
     GpuMemoryStatus,
     LemonadeFound,
@@ -310,16 +309,6 @@ export function useRecheckNpu() {
             queryClient.setQueryData(queryKeys.setupPlan, plan);
             void queryClient.invalidateQueries({ queryKey: ['setupPreflight'] });
         },
-    });
-}
-
-/** A cloud provider's list prices, ranked. */
-export function useCloudPrices(provider: string, enabled = true) {
-    const client = useGaiaClient();
-    return useQuery<CloudPriceList>({
-        queryKey: ['cloudPrices', provider],
-        enabled: enabled && client !== null,
-        queryFn: ({ signal }) => requireClient(client).getCloudPrices(provider, { signal }),
     });
 }
 
