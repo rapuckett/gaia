@@ -8,6 +8,7 @@ import type {
     AgentMcpServer,
     ConnectorListEntry,
     ContextUsageResult,
+    GpuMemoryStatus,
     LemonadeFound,
     LemonadeTarget,
     LocalModelStatus,
@@ -44,6 +45,7 @@ export type {
     ConnectorRow,
     ContextUsage,
     ContextUsageResult,
+    GpuMemoryStatus,
     LemonadeFound,
     LemonadeTarget,
     LocalModelStatus,
@@ -393,6 +395,8 @@ export interface GaiaClient {
     restartLocalModel(confirm: boolean, options?: RequestOptions): Promise<RestartModelResult>;
     /** Whether a job needs a model that isn't on the PC, and which. */
     getModelNeed(job: ModelNeedJob, options?: RequestOptions): Promise<ModelNeed>;
+    /** How this PC's memory is split, the presets and what each unlocks; `settingGb` also reads the manual steps for that size. Read only: changing it is done on the PC. */
+    getGpuMemory(settingGb?: number, options?: RequestOptions): Promise<GpuMemoryStatus>;
     /** Starts one model's download on the PC; follow it with `getSetupStatus`. */
     downloadSetupModel(modelId: string, acknowledgeLowDisk: boolean, options?: RequestOptions): Promise<SetupRunStatus>;
     getSetupStatus(options?: RequestOptions): Promise<SetupRunStatus>;

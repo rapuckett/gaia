@@ -39,6 +39,7 @@ import type {
     FollowUpResult,
     DeleteSessionResult,
     GaiaClient,
+    GpuMemoryStatus,
     HealthResponse,
     LemonadeFound,
     LemonadeTarget,
@@ -571,6 +572,11 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         restartLocalModel(confirm, options) {
             return postJson<RestartModelResult>(ENDPOINTS.localModelRestart, { confirm }, options?.signal);
+        },
+
+        getGpuMemory(settingGb, options) {
+            const query = settingGb == null ? '' : `?setting_gb=${encodeURIComponent(String(settingGb))}`;
+            return getJson<GpuMemoryStatus>(`${ENDPOINTS.gpuMemory}${query}`, options?.signal);
         },
 
         getModelNeed(job, options) {

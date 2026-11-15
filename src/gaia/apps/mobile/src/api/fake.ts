@@ -14,6 +14,7 @@ import type {
     FollowUpOutcome,
     DocumentListResponse,
     GaiaClient,
+    GpuMemoryStatus,
     HealthResponse,
     LemonadeFound,
     LemonadeTarget,
@@ -92,6 +93,8 @@ export interface FakeClientData {
     status?: SystemStatus;
     /** What getLocalModelStatus answers; restarting it records the call. */
     localModel?: LocalModelStatus;
+    /** What getGpuMemory answers (the same status whatever size is asked for); an Error is thrown. */
+    gpuMemory?: GpuMemoryStatus | Error;
     /** What getModelNeed answers, by job; a job not listed needs nothing. */
     modelNeeds?: Partial<Record<ModelNeed['job'], ModelNeed>>;
     /** What getSetupStatus answers. */
@@ -555,6 +558,11 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         async restartLocalModel(confirm) {
             restarts.push({ confirm });
             return { status: 'restarting', model: data.localModel?.model ?? '', starting_server: false };
+        },
+        async getGpuMemory() {
+            if (!data.gpuMemory) throw new GaiaApiError(503, 'This fake client was given no GPU memory status.');
+            if (data.gpuMemory instanceof Error) throw data.gpuMemory;
+            return data.gpuMemory;
         },
         async getModelNeed(job) {
             return data.modelNeeds?.[job] ?? { job, needed: false, model: null, disk_free_gb: null };

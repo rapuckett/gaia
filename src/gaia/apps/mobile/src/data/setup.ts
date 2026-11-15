@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type {
     GaiaClient,
+    GpuMemoryStatus,
     LemonadeFound,
     LemonadeTarget,
     PreflightReport,
@@ -193,6 +194,17 @@ export function useSetupPreflight() {
         enabled: client !== null,
         retry: false,
         queryFn: ({ signal }) => requireClient(client).getPreflight({ signal }),
+    });
+}
+
+/** The GPU memory split and what each size unlocks; `settingGb` also reads the manual steps for that size. Read only. */
+export function useGpuMemory(settingGb: number | null = null, enabled = true) {
+    const client = useGaiaClient();
+    return useQuery<GpuMemoryStatus>({
+        queryKey: ['gpuMemory', settingGb],
+        enabled: enabled && client !== null,
+        retry: false,
+        queryFn: ({ signal }) => requireClient(client).getGpuMemory(settingGb ?? undefined, { signal }),
     });
 }
 
