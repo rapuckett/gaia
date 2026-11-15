@@ -3507,7 +3507,7 @@ export const enMessages = {
 
     // Memory dashboard: Profile setup
     'mem.profile.intro': 'Help GAIA get to know you faster. Both scans run on this PC and send nothing anywhere. You see what they found and pick what to keep before anything is saved to memory.',
-    'mem.profile.pcOnly': 'The scans read this PC’s files, so only the PC running GAIA can run them. Open GAIA on that PC to scan and save. This window is on mobile access or another computer.',
+    'mem.profile.pcOnly': 'The scans read the files on the PC running GAIA, so only that PC can run them. Open GAIA on that PC to scan and save; this window is on mobile access or another computer.',
     'mem.disc.title': 'Scan this PC',
     'mem.disc.desc': 'Reads installed apps and how often you use them, recent file types, your home and project folders, Git repositories and identity, shell and SSH settings, and browser bookmarks and the last 30 days of history.',
     'mem.disc.run': 'Start scan',
@@ -3664,7 +3664,7 @@ export const enMessages = {
     'mobileApp.chat.notFound': 'That chat is no longer on your PC.',
     'mobileApp.mem.activitySummary': '{total} total, peak {peak} on {date}',
     'mobileApp.mem.activityTapHint': 'Tap a bar to see that day.',
-    'mobileApp.mem.admin.pcOnly': 'Turning this on or resetting memory scans the PC’s files, so do it on the PC running GAIA.',
+    'mobileApp.mem.admin.pcOnly': 'Turning this on or resetting memory reads your PC’s system details, so do it on the PC running GAIA.',
     'mobileApp.mem.goalTasksDone': '{done} of {total} tasks done',
     'mobileApp.mem.metric': '{label}: {value}',
     'mobileApp.mem.sectionFailed': "Couldn't load this section.",

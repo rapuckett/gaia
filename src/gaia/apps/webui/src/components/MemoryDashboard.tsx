@@ -786,6 +786,9 @@ export function MemoryDashboard() {
         setDiscSavedCount(null);
 
         const es = memoryApi.openDiscoveryStream();
+        // A refused stream never opens; only then is it worth asking why it failed.
+        let opened = false;
+        es.onopen = () => { opened = true; };
         discEsRef.current = es;
 
         es.onmessage = (event) => {
@@ -820,8 +823,9 @@ export function MemoryDashboard() {
                 setDiscPhase(prev.length > 0 ? 'review' : 'idle');
                 return prev;
             });
-            void memoryApi.streamRefusedAsPcOnly('discovery').then(refused => {
-                if (refused) setPcOnly(true);
+            const refused = opened ? Promise.resolve(false) : memoryApi.streamRefusedAsPcOnly('discovery');
+            void refused.then(isRefused => {
+                if (isRefused) setPcOnly(true);
                 else setDiscLogs(prev => [...prev, { text: t('mem.log.discoveryConnection'), kind: 'error' }]);
             });
         };
@@ -856,6 +860,9 @@ export function MemoryDashboard() {
         setInfSavedCount(null);
 
         const es = memoryApi.openInferenceStream(infIncludeBrowser);
+        // A refused stream never opens; only then is it worth asking why it failed.
+        let opened = false;
+        es.onopen = () => { opened = true; };
         infEsRef.current = es;
 
         es.onmessage = (event) => {
@@ -888,8 +895,9 @@ export function MemoryDashboard() {
                 setInfPhase(prev.length > 0 ? 'review' : 'idle');
                 return prev;
             });
-            void memoryApi.streamRefusedAsPcOnly('inference', infIncludeBrowser).then(refused => {
-                if (refused) setPcOnly(true);
+            const refused = opened ? Promise.resolve(false) : memoryApi.streamRefusedAsPcOnly('inference', infIncludeBrowser);
+            void refused.then(isRefused => {
+                if (isRefused) setPcOnly(true);
                 else setInfLogs(prev => [...prev, { text: t('mem.log.inferenceConnection'), kind: 'error' }]);
             });
         };

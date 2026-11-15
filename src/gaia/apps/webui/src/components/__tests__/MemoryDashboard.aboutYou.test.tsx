@@ -415,7 +415,7 @@ describe('Profile scan away from the PC', () => {
 
         act(() => es.onerror!());
 
-        expect(await screen.findByRole('alert')).toHaveTextContent(/only the PC running GAIA/);
+        expect(await screen.findByRole('alert')).toHaveTextContent(/only that PC can run them/);
         expect(screen.queryByText(/Connection error/)).not.toBeInTheDocument();
         expect(screen.getByRole('button', { name: 'Start scan' })).toBeDisabled();
     });
@@ -432,6 +432,21 @@ describe('Profile scan away from the PC', () => {
 
         expect(await screen.findByText(/Connection error/)).toBeInTheDocument();
         expect(screen.getByRole('button', { name: 'Start scan' })).toBeEnabled();
+    });
+
+    it("doesn't re-request a stream that had opened, so a dropped scan on the PC never restarts", async () => {
+        const es: { onopen?: () => void; onerror?: () => void; close: () => void } = { close: vi.fn() };
+        mockedApi.openDiscoveryStream.mockImplementation(() => es as unknown as EventSource);
+        mockedApi.streamRefusedAsPcOnly.mockClear();
+        await renderAbout();
+        fireEvent.click(screen.getByRole('tab', { name: /Profile setup/ }));
+        fireEvent.click(screen.getByRole('button', { name: 'Start scan' }));
+
+        act(() => es.onopen!());
+        act(() => es.onerror!());
+
+        expect(await screen.findByText(/Connection error/)).toBeInTheDocument();
+        expect(mockedApi.streamRefusedAsPcOnly).not.toHaveBeenCalled();
     });
 });
 
