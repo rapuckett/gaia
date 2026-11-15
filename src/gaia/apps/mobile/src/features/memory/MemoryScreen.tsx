@@ -66,7 +66,7 @@ export function MemoryScreen({ onBack, onOpenChat, initialTab = 'about' }: Memor
                     <IconButton icon={ArrowLeft} label={t('mem.back')} onPress={onBack} />
                     <Stack flex={1}>
                         <Row gap="sm" wrap>
-                            <Text role="title" weight="semibold">
+                            <Text role="title" weight="semibold" accessibilityRole="header">
                                 {t('mem.title')}
                             </Text>
                             <Badge label={t.bare('mem.beta')} accessibilityLabel={t('mem.beta')} tone="warning" />

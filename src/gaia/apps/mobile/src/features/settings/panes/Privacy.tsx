@@ -78,7 +78,7 @@ function LocalOnly() {
                         <>
                             <Row gap="sm" justify="between">
                                 <Stack gap="xs" flex={1}>
-                                    <Text role="label" weight="medium">
+                                    <Text role="label" weight="medium" accessibilityRole="header">
                                         {t('settings.privacy.localOnlyTitle')}
                                     </Text>
                                     <Text role="caption" tone="secondary">

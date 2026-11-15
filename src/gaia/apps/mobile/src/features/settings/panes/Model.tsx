@@ -135,7 +135,7 @@ export default function Model({ provider: requested }: { provider?: string }) {
                     {provider.remote ? (
                         <Row gap="sm">
                             {provider.configured ? <StatusDot tone="success" label={t('settings.key.connectedDot')} /> : null}
-                            <Text role="ui" weight="semibold">{providerName(t, provider)}</Text>
+                            <Text role="ui" weight="semibold" accessibilityRole="header">{providerName(t, provider)}</Text>
                         </Row>
                     ) : null}
                     {provider.remote ? <Notice tone="info" role="note" message={providerNotice(t, provider)} /> : null}
