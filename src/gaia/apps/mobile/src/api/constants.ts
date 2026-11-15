@@ -78,7 +78,12 @@ export const ENDPOINTS = {
     sessionCapabilities: '/api/sessions/{session_id}/capabilities',
     sessionChanges: '/api/sessions/{session_id}/changes',
     sessionChangesDiff: '/api/sessions/{session_id}/changes/{turn_id}/diff',
+    sessionChangesGit: '/api/sessions/{session_id}/changes/git',
+    sessionChangesGitCommit: '/api/sessions/{session_id}/changes/git/commit',
+    sessionChangesGitPr: '/api/sessions/{session_id}/changes/git/pr',
+    sessionChangesTotal: '/api/sessions/{session_id}/changes/total',
     sessionChangesUndo: '/api/sessions/{session_id}/changes/{turn_id}/undo',
+    sessionChangesUndoAll: '/api/sessions/{session_id}/changes/undo',
     sessionDocument: '/api/sessions/{session_id}/documents/{doc_id}',
     sessionDocuments: '/api/sessions/{session_id}/documents',
     sessionEnvironment: '/api/sessions/{session_id}/environment',
@@ -90,6 +95,7 @@ export const ENDPOINTS = {
     sessionMessage: '/api/sessions/{session_id}/messages/{message_id}',
     sessionMessages: '/api/sessions/{session_id}/messages',
     sessionMessagesAndBelow: '/api/sessions/{session_id}/messages/{message_id}/and-below',
+    sessionOutputs: '/api/sessions/{session_id}/outputs',
     sessionPin: '/api/sessions/{session_id}/pin',
     sessionPrivate: '/api/sessions/{session_id}/private',
     sessionRead: '/api/sessions/{session_id}/read',
@@ -157,6 +163,7 @@ export const ENDPOINTS = {
     filesImage: '/api/files/image',
     filesPreview: '/api/files/preview',
     filesSearch: '/api/files/search',
+    filesStatus: '/api/files/status',
     filesUpload: '/api/files/upload',
     filesUploadMedia: '/api/files/upload-media',
     onboardingPreflight: '/api/onboarding/preflight',
@@ -309,6 +316,10 @@ export function sessionDocumentsPath(sessionId: string): string {
     return ENDPOINTS.sessionDocuments.replace('{session_id}', encodeURIComponent(sessionId));
 }
 
+export function sessionOutputsPath(sessionId: string): string {
+    return ENDPOINTS.sessionOutputs.replace('{session_id}', encodeURIComponent(sessionId));
+}
+
 export function sessionCapabilitiesPath(sessionId: string): string {
     return ENDPOINTS.sessionCapabilities.replace('{session_id}', encodeURIComponent(sessionId));
 }
@@ -325,6 +336,19 @@ export function sessionEnvironmentPath(sessionId: string, part?: 'folderRemove' 
 
 export function sessionChangesPath(sessionId: string): string {
     return ENDPOINTS.sessionChanges.replace('{session_id}', encodeURIComponent(sessionId));
+}
+
+const CHANGES_PARTS = {
+    git: ENDPOINTS.sessionChangesGit,
+    gitCommit: ENDPOINTS.sessionChangesGitCommit,
+    gitPr: ENDPOINTS.sessionChangesGitPr,
+    total: ENDPOINTS.sessionChangesTotal,
+    undoAll: ENDPOINTS.sessionChangesUndoAll,
+};
+
+/** The chat-wide Changes calls: the running total, Undo all and the git actions. */
+export function sessionChangesPartPath(sessionId: string, part: keyof typeof CHANGES_PARTS): string {
+    return CHANGES_PARTS[part].replace('{session_id}', encodeURIComponent(sessionId));
 }
 
 export function sessionChangesDiffPath(sessionId: string, turnId: string): string {

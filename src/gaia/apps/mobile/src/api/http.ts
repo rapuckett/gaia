@@ -54,6 +54,7 @@ import type {
     EmbeddingCoverage,
     FilePreviewResponse,
     FileSearchResponse,
+    FileStatusList,
     FollowUpOutcome,
     FollowUpResult,
     DeleteSessionResult,
@@ -101,8 +102,11 @@ import type {
     Schedule,
     ScheduleList,
     ScheduleResults,
+    SessionChanges,
     SessionEnvironment,
+    SessionGit,
     SessionList,
+    SessionOutputs,
     SessionPermissions,
     SessionSearchResponse,
     SetupCheck,
@@ -116,6 +120,7 @@ import type {
     ChatSpending,
     FileDiff,
     TurnChanges,
+    UndoAllResult,
     UndoResult,
     UndoSettings,
     UploadedFile,
@@ -170,6 +175,7 @@ import {
     SESSION_EVENTS_IDLE_MS,
     SESSION_PAGE_SIZE,
     sessionCapabilitiesPath,
+    sessionOutputsPath,
     sessionDocumentPath,
     sessionDocumentsPath,
     sessionEnvironmentPath,
@@ -178,6 +184,7 @@ import {
     sessionMessagesPath,
     sessionPath,
     sessionChangesDiffPath,
+    sessionChangesPartPath,
     sessionChangesPath,
     sessionChangesUndoPath,
     sessionExportPath,
@@ -500,6 +507,30 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             return postJson<UndoResult>(sessionChangesUndoPath(sessionId, turnId), { force }, options?.signal);
         },
 
+        getSessionChanges(sessionId, options) {
+            return getJson<SessionChanges>(sessionChangesPartPath(sessionId, 'total'), options?.signal);
+        },
+
+        undoAllChanges(sessionId, force = false, options) {
+            return postJson<UndoAllResult>(sessionChangesPartPath(sessionId, 'undoAll'), { force }, options?.signal);
+        },
+
+        getSessionGit(sessionId, options) {
+            return getJson<SessionGit>(sessionChangesPartPath(sessionId, 'git'), options?.signal);
+        },
+
+        commitChanges(sessionId, root, message, options) {
+            return postJson<{ root: string; commit: string; files: string[]; ignored: string[] }>(
+                sessionChangesPartPath(sessionId, 'gitCommit'),
+                { root, message, confirmed: true },
+                options?.signal,
+            );
+        },
+
+        createPullRequest(sessionId, root, title, body, options) {
+            return postJson<{ root: string; url: string }>(sessionChangesPartPath(sessionId, 'gitPr'), { root, title, body, confirmed: true }, options?.signal);
+        },
+
         deleteSession(sessionId, options) {
             return deleteJson<DeleteSessionResult>(sessionPath(sessionId), options?.signal);
         },
@@ -663,6 +694,10 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         getCapabilities(sessionId, options) {
             return getJson<AgentCapabilities>(sessionCapabilitiesPath(sessionId), options?.signal);
+        },
+
+        getOutputs(sessionId, options) {
+            return getJson<SessionOutputs>(sessionOutputsPath(sessionId), options?.signal);
         },
 
         getEnvironment(sessionId, options) {
@@ -1046,6 +1081,10 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         deleteDocument(docId, options) {
             return deleteJson<DeleteDocumentResult>(documentPath(docId), options?.signal);
+        },
+
+        getFileStatus(paths, options) {
+            return postJson<FileStatusList>(ENDPOINTS.filesStatus, { paths }, options?.signal);
         },
 
         getFilePreview(path, sessionId, options) {
