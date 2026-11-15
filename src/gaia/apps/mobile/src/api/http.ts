@@ -26,7 +26,9 @@ import type {
     AgentMcpList,
     CancelChatResult,
     ChatPerformance,
+    CloudPriceList,
     ConfirmToolResult,
+    ContextChoice,
     ConnectorActivations,
     ConnectorGrants,
     ConnectorList,
@@ -77,6 +79,7 @@ import {
     connectorActivationsPath,
     connectorGrantPath,
     connectorGrantsPath,
+    cloudPricesPath,
     ENDPOINTS,
     chatContextPath,
     chatPerformancePath,
@@ -327,6 +330,18 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         markSessionRead(sessionId, options) {
             return postJson<Session>(sessionReadPath(sessionId), undefined, options?.signal);
+        },
+
+        getContextChoice(model, options) {
+            return getJson<ContextChoice>(`${ENDPOINTS.localModelContext}?model=${encodeURIComponent(model)}`, options?.signal);
+        },
+
+        setContextChoice(model, ctxSize, options) {
+            return putJson<ContextChoice>(ENDPOINTS.localModelContext, { model, ctx_size: ctxSize }, options?.signal);
+        },
+
+        getCloudPrices(provider, options) {
+            return getJson<CloudPriceList>(cloudPricesPath(provider), options?.signal);
         },
 
         getActiveModel(options) {

@@ -3,6 +3,8 @@
 
 import type {
     ActiveModel,
+    CloudPriceList,
+    ContextChoice,
     AgentCapabilities,
     AgentInfo,
     AgentMcpServer,
@@ -102,6 +104,12 @@ export interface FakeClientData {
     activeModel?: ActiveModel;
     /** What listProviderModels answers, by provider. */
     providerModels?: Record<string, ProviderModelsResponse>;
+    /** What getContextChoice answers, by model; setContextChoice updates it. */
+    contexts?: Record<string, ContextChoice>;
+    /** What getCloudPrices answers, by provider. */
+    cloudPrices?: Record<string, CloudPriceList>;
+    /** Makes selectModel fail with this. */
+    selectError?: GaiaApiError;
     /** What getPermissions answers, by chat; a chat not listed asks first. */
     permissions?: Record<string, PermissionMode>;
     /** What getContextUsage answers. */
@@ -172,6 +180,8 @@ export interface FakeGaiaClient extends GaiaClient {
     readonly scheduleActions: { action: 'pause' | 'resume' | 'run' | 'delete'; name: string }[];
     readonly followUps: { sessionId: string; text: string }[];
     readonly restarts: { confirm: boolean }[];
+    readonly selected: string[];
+    readonly contextSets: { model: string; ctxSize: number | null }[];
     /** The files uploadFile took, in order. */
     readonly uploads: { name: string; size: number }[];
     readonly downloads: { modelId: string; acknowledgeLowDisk: boolean }[];
@@ -203,6 +213,8 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
     const grants: Record<string, Record<string, string[]>> = cloneNested(data.grants);
     const activations: Record<string, Record<string, boolean>> = cloneNested(data.activations);
     const restarts: FakeGaiaClient['restarts'] = [];
+    const selected: string[] = [];
+    const contextSets: FakeGaiaClient['contextSets'] = [];
     const uploads: FakeGaiaClient['uploads'] = [];
     const downloads: FakeGaiaClient['downloads'] = [];
     const schedules = [...(data.schedules ?? [])];
@@ -261,6 +273,8 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         scheduleActions,
         followUps,
         restarts,
+        selected,
+        contextSets,
         uploads,
         downloads,
         setupStarts,
@@ -301,6 +315,24 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             uploads.push({ name, size: file.size });
             return { filename: name, original_name: name, url: `/api/files/uploads/${name}`, size: file.size, content_type: file.type, is_image: file.type.startsWith('image/') };
         },
+        async getContextChoice(model) {
+            const choice = data.contexts?.[model];
+            if (!choice) throw new GaiaApiError(503, `This fake client was given no context sizes for ${model}.`);
+            return choice;
+        },
+        async setContextChoice(model, ctxSize) {
+            const choice = data.contexts?.[model];
+            if (!choice) throw new GaiaApiError(503, `This fake client was given no context sizes for ${model}.`);
+            contextSets.push({ model, ctxSize });
+            const next = { ...choice, chosen: ctxSize, reload: { started: false, reason: 'already_loaded' as const } };
+            data.contexts![model] = next;
+            return next;
+        },
+        async getCloudPrices(provider) {
+            const list = data.cloudPrices?.[provider];
+            if (!list) throw new GaiaApiError(503, `This fake client was given no prices for ${provider}.`);
+            return list;
+        },
         async getActiveModel() {
             if (!data.activeModel) throw new GaiaApiError(503, 'This fake client was given no active model.');
             return data.activeModel;
@@ -309,6 +341,8 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             return data.providerModels?.[provider] ?? { provider, models: [] };
         },
         async selectModel(model) {
+            if (data.selectError) throw data.selectError;
+            selected.push(model);
             if (!data.activeModel) throw new GaiaApiError(503, 'This fake client was given no active model.');
             data.activeModel = { ...data.activeModel, model };
             return data.activeModel;
