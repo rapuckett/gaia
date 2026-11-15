@@ -519,6 +519,7 @@ const messages: Messages = {
     'media.showFull': 'عرض بالحجم الكامل',
     'media.showSmaller': 'عرض بحجم أصغر',
     'media.audioUnplayable': 'تعذّر تشغيل هذا الصوت. ربما نُقل الملف أو حُذف.',
+    'media.audioPlay': 'تشغيل',
     // Recipe, workout and calculator cards
     'cards.tryGroup': 'جرّب مثالًا',
     'cards.try': 'جرّب',
@@ -3597,6 +3598,8 @@ const messages: Messages = {
     'mobileApp.error.notJson': 'ردّ GAIA على {path} بشيء ليس JSON. تأكد من أن العنوان يشير إلى GAIA على الكمبيوتر.',
     'mobileApp.error.incompleteTranscript': 'أعاد GAIA محادثة غير مكتملة. أعد تحميلها.',
     'mobileApp.error.noBody': 'لم يرسل GAIA محتوى للرد، لذا لا يوجد ما يمكن قراءته.',
+    'mobileApp.error.notAudio': 'أرسل GAIA "{type}"، وهو ليس صوتًا يشغّله هذا الهاتف.',
+    'mobileApp.error.audioTooLarge': 'حجم الصوت أكبر من {mb} MB، لذا لن يحمّله هذا الهاتف.',
     'mobileApp.error.streamClosed': 'أغلق GAIA الاتصال قبل اكتمال الرد. أعد إرسال الرسالة، وإذا تكرر ذلك فافحص سجل GAIA على الكمبيوتر.',
     'mobileApp.error.streamBroke': 'انقطع الاتصال بـ GAIA أثناء وصول الرد. قد تكتمل الإجابة رغم ذلك على الكمبيوتر: أعد فتح هذه المحادثة بعد دقيقة لرؤيتها.',
     'mobileApp.error.badEvent': 'أرسل GAIA حدثًا في الرد لا يستطيع هذا الهاتف قراءته: {preview}',

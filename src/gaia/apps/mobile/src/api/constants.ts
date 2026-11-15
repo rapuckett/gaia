@@ -1,6 +1,8 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
+import { parseMediaSrc } from '@webui/utils/renderCards.core';
+
 // Not importable from webui (they live in services/api.ts and ChatView.tsx, with
 // their logger and stores); api/constants.test.ts fails if any of these drifts.
 export const UI_HEADERS = {
@@ -29,6 +31,7 @@ export const ENDPOINTS = {
     localModelRestart: '/api/providers/local/restart',
     localModelStatus: '/api/providers/local/status',
     mcpStatus: '/api/mcp/status',
+    media: '/api/media/{kind}/{name}',
     memoryActivity: '/api/memory/activity',
     memoryAll: '/api/memory/all',
     memoryCommitDiscovery: '/api/memory/commit-discovery',
@@ -322,6 +325,17 @@ export function filePath(endpoint: 'filesImage' | 'filesPreview', path: string, 
     const query = `path=${encodeURIComponent(path)}&session_id=${encodeURIComponent(sessionId)}`;
     return `${ENDPOINTS[endpoint]}?${query}${lines ? `&lines=${lines}` : ''}`;
 }
+
+/** A generated audio file's path, from its card's `/api/media/audio/<name>`; null for any other `src`, so a card never names its own URL. */
+export function generatedAudioPath(src: string): string | null {
+    const name = parseMediaSrc('audio', src);
+    return name === null ? null : ENDPOINTS.media.replace('{kind}', 'audio').replace('{name}', name);
+}
+
+/** The types an audio card accepts: the PC's media route serves WAV only (`generated_media.MEDIA_TYPES`). */
+export const GENERATED_AUDIO_TYPES: readonly string[] = ['audio/wav', 'audio/wave', 'audio/x-wav'];
+/** About six minutes of CD-quality WAV; the whole file is held in memory before it plays. */
+export const MAX_GENERATED_AUDIO_BYTES = 64 * 1024 * 1024;
 
 /** Typing pauses this long before a search goes out; the web UI's `SEARCH_DEBOUNCE_MS`. */
 export const SEARCH_DEBOUNCE_MS = 200;
