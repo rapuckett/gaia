@@ -33,6 +33,7 @@ export const ENDPOINTS = {
     localModelContext: '/api/providers/local/context',
     localModelRestart: '/api/providers/local/restart',
     localModelStatus: '/api/providers/local/status',
+    logs: '/api/logs',
     mcpStatus: '/api/mcp/status',
     media: '/api/media/{kind}/{name}',
     memoryActivity: '/api/memory/activity',
