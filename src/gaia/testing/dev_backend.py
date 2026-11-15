@@ -43,6 +43,8 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 DEFAULT_REPLY = "Hello from the dev backend."
+#: GB of GPU memory the fake machine has beyond what its models need to load.
+GPU_MEMORY_MARGIN_GB = 4.0
 HOST = "127.0.0.1"
 READY_TIMEOUT_SECONDS = 60.0
 #: Exit code for a bad invocation, as ``gaia uninstall`` uses.
@@ -159,6 +161,43 @@ def isolate_environment(home: Path, llm_url: str, memory: bool = False) -> None:
 # ── Fake LLM ────────────────────────────────────────────────────────────────
 
 
+def fake_system_info(model_ids: List[str]) -> Dict[str, Any]:
+    """Lemonade's ``/system-info`` for a PC whose GPU holds *model_ids* with room.
+
+    One GPU, no NPU, llama.cpp on GAIA's proven backend; its memory is what
+    ``model_fit`` needs for every listed model at once, plus the margin.
+    """
+    from gaia.config import GaiaConfig
+    from gaia.llm.lemonade_client import find_model_requirement
+    from gaia.llm.model_fit import kv_cache_gb, required_memory_gb
+
+    need_gb = 0.0
+    for model_id in dict.fromkeys(model_ids):
+        req = find_model_requirement(model_id)
+        if req is not None and req.size_gb:
+            kv = kv_cache_gb(req.kv_bytes_per_token, req.min_ctx_size)
+            need_gb += required_memory_gb(req.size_gb, kv)
+    backend = GaiaConfig.TESTED_LLAMACPP_BACKENDS[0]
+    return {
+        "devices": {
+            "amd_gpu": [
+                {
+                    "name": "Dev backend GPU",
+                    "available": True,
+                    "integrated": False,
+                    "vram_gb": round(need_gb + GPU_MEMORY_MARGIN_GB, 1),
+                }
+            ]
+        },
+        "recipes": {
+            "llamacpp": {
+                "default_backend": backend,
+                "backends": {backend: {"state": "installed"}},
+            }
+        },
+    }
+
+
 def build_fake_llm(
     script: List[Dict[str, Any]], model: str, downloaded: Optional[List[str]] = None
 ):
@@ -208,6 +247,10 @@ def build_fake_llm(
             "model_loaded": model,
             "all_models_loaded": [loaded],
         }
+
+    @app.get("/api/v1/system-info")
+    def system_info():
+        return fake_system_info([model, *(downloaded or [])])
 
     @app.get("/api/v1/models")
     def models():

@@ -193,3 +193,38 @@ def test_fake_speech_validates_the_request():
     assert len(ok.content) == 2 * int(1.5 * TTS_SAMPLE_RATE)
     assert client.post(url, json={**good, "model": "nope"}).status_code == 404
     assert client.post(url, json={**good, "voice": "nobody"}).status_code == 500
+
+
+def test_local_models_list_the_chat_model_as_fitting(tmp_path):
+    from gaia.llm.lemonade_client import DEFAULT_MODEL_NAME
+
+    port, llm_port = _free_port(), _free_port()
+    proc = _start(tmp_path, port, llm_port)
+    try:
+        resp = httpx.get(
+            f"http://127.0.0.1:{port}/api/providers/local/models",
+            headers=UI_HEADERS,
+            timeout=120,
+        )
+        assert resp.status_code == 200, resp.text
+        rows = {m["id"]: m for m in resp.json()["models"]}
+        assert rows[DEFAULT_MODEL_NAME]["fits"] is True
+        assert resp.json()["capacity_error"] is None
+    finally:
+        _stop(proc)
+
+
+def test_fake_system_info_is_what_model_fit_reads():
+    from fastapi.testclient import TestClient
+
+    from gaia.llm.lemonade_client import DEFAULT_MODEL_NAME
+    from gaia.llm.model_fit import capacity_from_system_info
+    from gaia.testing import dev_backend
+
+    client = TestClient(dev_backend.build_fake_llm([{"text": "x"}], DEFAULT_MODEL_NAME))
+    resp = client.get("/api/v1/system-info")
+
+    assert resp.status_code == 200
+    capacity = capacity_from_system_info(resp.json())
+    assert capacity.memory_gb > dev_backend.GPU_MEMORY_MARGIN_GB
+    assert not capacity.has_npu
