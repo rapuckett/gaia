@@ -3710,7 +3710,6 @@ export const enMessages = {
     'mobileApp.mem.inf.desc': 'Reads installed apps and how often you use them, recent file types, games and media, the kinds of personal files you keep, and your Git projects, then asks a model on your PC to write 5 to 10 short facts about you.',
     'mobileApp.mem.inf.note': 'Uses a model on your PC, never a cloud one, even when your chats use one.',
     'mobileApp.mem.profile.intro': 'Help GAIA get to know you faster. Both scans run on your PC and send nothing anywhere. You see what they found and pick what to keep before anything is saved to memory.',
-    'mobileApp.mem.profile.pcOnly': 'Run this on your PC. The scan reads the PC’s files, so only the PC running GAIA can start it.',
     'mobileApp.resources.settingsHint': 'CPU, memory, GPU, NPU and network use on your PC, updated every second.',
     'mobileApp.settings.advanced.notInstalledHint': 'Set it up to run models on your PC. Cloud providers still work.',
     'mobileApp.settings.advanced.notRunningHint': 'It normally starts on its own. Models on your PC work again once it is back.',

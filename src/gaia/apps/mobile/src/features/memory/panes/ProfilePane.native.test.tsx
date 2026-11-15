@@ -61,14 +61,14 @@ describeNative('ProfilePane', () => {
         await waitFor(() => expect(screen.queryByTestId('profile-inference-stop')).toBeNull());
     });
 
-    it('says the scan runs on the PC and disables Run on a paired phone', async () => {
+    it('says the scan runs on the PC and offers no Run on a paired phone', async () => {
         useConnectionStore.setState({ connection: { baseUrl: 'https://pc.local:4443', pcId: 'pc-1', pinned: true } });
         try {
             const client = await mount({});
             expect(screen.getByTestId('profile-discovery-pc-only')).toBeTruthy();
             expect(screen.getByTestId('profile-inference-pc-only')).toBeTruthy();
-            fireEvent.press(screen.getByTestId('profile-discovery-run'));
-            fireEvent.press(screen.getByTestId('profile-inference-run'));
+            expect(screen.queryByTestId('profile-discovery-run')).toBeNull();
+            expect(screen.queryByTestId('profile-inference-run')).toBeNull();
             expect(client.profileStreamOpens).toEqual([]);
         } finally {
             useConnectionStore.setState({ connection: null });
