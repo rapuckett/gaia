@@ -17,6 +17,7 @@ import type {
     ConsolidateMemoryResult,
     CreateSessionRequest,
     EmbeddingCoverage,
+    FilePreviewResponse,
     FollowUpOutcome,
     DocumentListResponse,
     DocumentResponse,
@@ -212,6 +213,10 @@ export interface FakeClientData {
     documentStatuses?: Record<string, Partial<DocumentStatus>>;
     /** Makes a library action on a document reject with this message, by action. */
     documentFailures?: Partial<Record<DocumentAction, string>>;
+    /** What getFilePreview answers, by path; a path not listed is a 404. */
+    filePreviews?: Record<string, FilePreviewResponse>;
+    /** What getImageBytes and getDocumentBytes answer, by path or document id; one not listed is a 404. */
+    fileBytes?: Record<string, Uint8Array>;
     /** What getCapabilities answers, by chat; a chat not listed has no agent running (409). */
     capabilities?: Record<string, AgentCapabilities>;
     memorySettings?: MemorySettings;
@@ -1087,6 +1092,21 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             const doc = findDocument(docId, 'delete');
             library.documents.splice(library.documents.indexOf(doc), 1);
             return { deleted: true };
+        },
+        async getFilePreview(path) {
+            const preview = data.filePreviews?.[path];
+            if (!preview) throw new GaiaApiError(404, 'File not found');
+            return preview;
+        },
+        async getImageBytes(path) {
+            const bytes = data.fileBytes?.[path];
+            if (!bytes) throw new GaiaApiError(404, 'Image file not found');
+            return bytes;
+        },
+        async getDocumentBytes(docId) {
+            const bytes = data.fileBytes?.[docId];
+            if (!bytes) throw new GaiaApiError(404, 'Document not found');
+            return bytes;
         },
         async getDocumentStatus(docId) {
             const doc = library.documents.find((d) => d.id === docId);
