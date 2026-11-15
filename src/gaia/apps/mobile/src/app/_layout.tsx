@@ -58,7 +58,7 @@ export default function RootLayout() {
                                 backBehavior="initialRoute"
                                 screenOptions={{
                                     headerShown: false,
-                                    drawerPosition: dir === 'rtl' ? 'right' : 'left',
+                                    freezeOnBlur: true,
                                     drawerType: width >= PERMANENT_DRAWER_MIN_WIDTH ? 'permanent' : 'front',
                                 }}
                             >
