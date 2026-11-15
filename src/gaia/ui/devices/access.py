@@ -35,7 +35,12 @@ from . import (
     PC_NAME_MAX,
     PENDING_DEVICE_SECONDS,
 )
-from .listener import DeviceListener, ListenerError, OpenRequests
+from .listener import (
+    DeviceListener,
+    ListenerError,
+    OpenRequests,
+    local_ipv4_addresses,
+)
 from .pairing import PairingWindow, sanitize_device_name
 from .storage import (
     TABLE_NAME,
@@ -95,22 +100,12 @@ def home_network_origins(host: str, port: int) -> List[str]:
     bound = ipaddress.ip_address(host)
     if not bound.is_unspecified:
         return [f"https://{bound}:{port}"]
-    import psutil
-
     offered = [ipaddress.ip_network(n) for n in OFFERED_NETWORKS]
-    stats = psutil.net_if_stats()
-    origins: List[str] = []
-    for nic, entries in psutil.net_if_addrs().items():
-        if nic in stats and not stats[nic].isup:
-            continue
-        for entry in entries:
-            if entry.family != socket.AF_INET:
-                continue
-            address = ipaddress.ip_address(entry.address)
-            origin = f"https://{address}:{port}"
-            if any(address in net for net in offered) and origin not in origins:
-                origins.append(origin)
-    return origins
+    return [
+        f"https://{address}:{port}"
+        for address in map(ipaddress.ip_address, local_ipv4_addresses())
+        if any(address in net for net in offered)
+    ]
 
 
 class PairingUnavailable(RuntimeError):
