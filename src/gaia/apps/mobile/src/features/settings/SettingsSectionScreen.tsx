@@ -3,29 +3,18 @@
 
 import { useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { createElement, lazy, Suspense, useRef } from 'react';
-import type { ComponentRef, ComponentType } from 'react';
+import { useRef } from 'react';
+import type { ComponentRef } from 'react';
 import type { ScrollView } from 'react-native';
 
 import { useT } from '@/i18n/useT';
-import { Button, ErrorState, LoadingState, Screen, Stack } from '@/ui';
+import { Button, ErrorState, Screen, Stack } from '@/ui';
 import { ArrowLeft } from '@/ui/icons';
 
-import { isSectionId, SETTINGS_SECTIONS, type SectionId } from './sections';
+import { isSectionId, SETTINGS_SECTIONS } from './sections';
 import { SectionErrorBoundary } from './SectionErrorBoundary';
 import { SettingsHeader } from './SettingsHeader';
 import { SettingsTargets } from './targets';
-
-const lazyPanes = new Map<SectionId, ComponentType>();
-
-function paneFor(id: SectionId): ComponentType {
-    let pane = lazyPanes.get(id);
-    if (!pane) {
-        pane = lazy(SETTINGS_SECTIONS[id].load);
-        lazyPanes.set(id, pane);
-    }
-    return pane;
-}
 
 // A static web export is not a dev bundle, so the crash demo is also switchable at build time.
 const CRASH_ENABLED = __DEV__ || process.env.EXPO_PUBLIC_SETTINGS_CRASH === '1';
@@ -51,7 +40,7 @@ export function SettingsSectionScreen() {
     }
 
     const section = params.section;
-    const pane = createElement(CRASH_ENABLED && params.crash === '1' ? Crash : paneFor(section));
+    const Pane = CRASH_ENABLED && params.crash === '1' ? Crash : SETTINGS_SECTIONS[section].pane;
     const from = isSectionId(params.from) && params.target ? params.from : null;
 
     return (
@@ -77,9 +66,7 @@ export function SettingsSectionScreen() {
         >
             <SettingsTargets key={`${section}:${params.target ?? ''}`} section={section} target={params.target} scrollRef={scrollRef}>
                 <SectionErrorBoundary key={section} area={`settings.${section}`} onReload={() => void queryClient.resetQueries()}>
-                    <Suspense fallback={<LoadingState title={t('settings.loading')} />}>
-                        {pane}
-                    </Suspense>
+                    <Pane />
                 </SectionErrorBoundary>
             </SettingsTargets>
         </Screen>
