@@ -1727,6 +1727,8 @@ export const enMessages = {
     'settings.setup.confirmTitle': 'Run setup again?',
     'settings.setup.confirmBody': 'Your downloaded models, keys and chats stay. Nothing changes until you choose something new.',
     'settings.setup.confirmYes': 'Start setup',
+    'settings.setup.memoryOf': '{size} of {total} for models',
+    'settings.setup.memoryFor': '{size} for models',
     'settings.section.messaging': 'Messaging',
     'settings.messaging.discord': 'Discord',
     'settings.messaging.pitch': 'Message GAIA from Discord on your phone. It answers from this PC.',
