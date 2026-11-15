@@ -17,6 +17,7 @@ import { NotificationFeed } from '@/features/notifications';
 import { AppDrawer } from '@/features/nav/AppDrawer';
 import { RoutingEffects } from '@/features/nav/RoutingEffects';
 import { INITIAL_ROUTE, PERMANENT_DRAWER_MIN_WIDTH } from '@/features/nav/navigation';
+import { sweepTempFiles } from '@/features/files/shareTemp';
 import { installPinnedPairing, PairingGate } from '@/features/pairing';
 import { SetupGate } from '@/features/setup/SetupGate';
 import { useDirection, useLocaleCode } from '@/i18n/useT';
@@ -29,11 +30,20 @@ import { ScreenBannerProvider, UIProvider } from '@/ui';
 // Before the first render, so the pairing screens and the saved PC use the pinned transport.
 installPinnedPairing();
 
+// Files a crash or a kill left in the cache (shared images, opened PC files, played audio).
+if (Platform.OS !== 'web') {
+    try {
+        sweepTempFiles();
+    } catch (error) {
+        console.error('Clearing leftover temporary files failed', error);
+    }
+}
+
 // A chat opened cold (deep link, notification) has the home screen beneath it.
 export const unstable_settings = { anchor: INITIAL_ROUTE };
 
 // Expo Router renders only the screens a layout declares.
-const ROUTES = [INITIAL_ROUTE, 'new', 'connectors', 'schedules', 'settings', 'documents', 'files', 'logs', 'notifications', 'skills', 'memory', 'pair', 'pair/manual', 'pair/pcs', 'chat/[id]', 'dev/ui', 'dev/ui-lists', 'dev/composer', 'dev/files', 'dev/forms', 'dev/markdown', 'dev/memory-gallery', 'dev/messages', 'dev/permission'];
+const ROUTES = [INITIAL_ROUTE, 'new', 'connectors', 'schedules', 'settings', 'documents', 'file-preview', 'files', 'logs', 'notifications', 'skills', 'memory', 'pair', 'pair/manual', 'pair/pcs', 'chat/[id]', 'dev/ui', 'dev/ui-lists', 'dev/composer', 'dev/file-preview', 'dev/files', 'dev/forms', 'dev/markdown', 'dev/memory-gallery', 'dev/messages', 'dev/permission', 'dev/setup'];
 
 export default function RootLayout() {
     const [queryClient] = useState(() => new QueryClient({ defaultOptions: { queries: { retry: shouldRetryQuery } } }));

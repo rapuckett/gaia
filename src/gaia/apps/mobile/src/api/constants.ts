@@ -83,8 +83,10 @@ export const ENDPOINTS = {
     sessionDocuments: '/api/sessions/{session_id}/documents',
     sessionEnvironment: '/api/sessions/{session_id}/environment',
     sessionEnvironmentFolderRemove: '/api/sessions/{session_id}/environment/folders/remove',
+    sessionEnvironmentFolders: '/api/sessions/{session_id}/environment/folders',
     sessionEnvironmentInternet: '/api/sessions/{session_id}/environment/internet',
     sessionEvents: '/api/sessions/events',
+    sessionExport: '/api/sessions/{session_id}/export',
     sessionMessage: '/api/sessions/{session_id}/messages/{message_id}',
     sessionMessages: '/api/sessions/{session_id}/messages',
     sessionMessagesAndBelow: '/api/sessions/{session_id}/messages/{message_id}/and-below',
@@ -304,9 +306,13 @@ export function sessionCapabilitiesPath(sessionId: string): string {
     return ENDPOINTS.sessionCapabilities.replace('{session_id}', encodeURIComponent(sessionId));
 }
 
-export function sessionEnvironmentPath(sessionId: string, part?: 'folderRemove' | 'internet'): string {
+export function sessionEnvironmentPath(sessionId: string, part?: 'folderRemove' | 'folders' | 'internet'): string {
     const template =
-        part === 'folderRemove' ? ENDPOINTS.sessionEnvironmentFolderRemove : part === 'internet' ? ENDPOINTS.sessionEnvironmentInternet : ENDPOINTS.sessionEnvironment;
+        part === 'folderRemove'
+            ? ENDPOINTS.sessionEnvironmentFolderRemove
+            : part === 'folders'
+              ? ENDPOINTS.sessionEnvironmentFolders
+              : part === 'internet' ? ENDPOINTS.sessionEnvironmentInternet : ENDPOINTS.sessionEnvironment;
     return template.replace('{session_id}', encodeURIComponent(sessionId));
 }
 
@@ -320,6 +326,10 @@ export function sessionChangesDiffPath(sessionId: string, turnId: string): strin
 
 export function sessionChangesUndoPath(sessionId: string, turnId: string): string {
     return ENDPOINTS.sessionChangesUndo.replace('{session_id}', encodeURIComponent(sessionId)).replace('{turn_id}', encodeURIComponent(turnId));
+}
+
+export function sessionExportPath(sessionId: string): string {
+    return ENDPOINTS.sessionExport.replace('{session_id}', encodeURIComponent(sessionId));
 }
 
 export function sessionPinPath(sessionId: string): string {

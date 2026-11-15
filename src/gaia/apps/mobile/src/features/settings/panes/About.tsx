@@ -31,11 +31,11 @@ export default function About() {
                 <Stack gap="xs">
                     <Row gap="sm" align="center">
                         {version ? (
-                            <Text role="title" weight="semibold">
+                            <Text role="title" weight="semibold" accessibilityRole="header">
                                 <Ltr>{`GAIA v${version}`}</Ltr>
                             </Text>
                         ) : null}
-                        <Badge label={t.bare('mem.beta')} />
+                        <Badge label={t.bare('mem.beta')} accessibilityLabel={t('mem.beta')} />
                     </Row>
                     <Text role="label" tone="secondary">{t('settings.advanced.about')}</Text>
                 </Stack>

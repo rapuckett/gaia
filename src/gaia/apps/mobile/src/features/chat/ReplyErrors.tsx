@@ -50,7 +50,7 @@ function PcOnlyFailureLines({ showLog, showReport }: { showLog: boolean; showRep
 }
 
 /** What a saved reply that looks like an error needs beside it, decided as the web UI's message bubble does. */
-export function SavedReplyErrors({ message }: { message: Message }) {
+export function SavedReplyErrors({ message, fixShownBelow = false }: { message: Message; fixShownBelow?: boolean }) {
     const isError = message.failed === true || isErrorContent(message.content);
     const local = useSession(message.session_id).data?.inference_remote === false;
     const showLog = local && isError;
@@ -58,7 +58,7 @@ export function SavedReplyErrors({ message }: { message: Message }) {
     if (!isError && !showLog && !showReport) return null;
     return (
         <Stack gap="sm">
-            {isError ? <ErrorBanner /> : null}
+            {isError && !fixShownBelow ? <ErrorBanner /> : null}
             <PcOnlyFailureLines showLog={showLog} showReport={showReport} />
         </Stack>
     );
@@ -109,13 +109,15 @@ export function TailIssues({ tail, local }: { tail: TurnTail; local: boolean }) 
     const { error, policyAlert } = tail;
     const ended = !tail.live;
     const serverDown = ended && tail.failure === 'model_server_down';
+    // The model-server fix names the failure; "Something went wrong" beside it would say it twice.
+    const banner = !!tail.errorBanner && !serverDown;
     const report = !!error && chatErrorInfo(error, t).kind !== 'stream';
     const showLog = ended && local && !!tail.failedReply && !tail.shownOnReply;
     const showReportNote = ended && !!error && namesFailureRecord(error);
-    if (!tail.errorBanner && !serverDown && !policyAlert && !report && !showLog && !showReportNote) return null;
+    if (!banner && !serverDown && !policyAlert && !report && !showLog && !showReportNote) return null;
     return (
         <Stack gap="sm" paddingX="lg" paddingY="xs">
-            {tail.errorBanner ? <ErrorBanner /> : null}
+            {banner ? <ErrorBanner /> : null}
             {serverDown ? <ModelServerDownNotice /> : null}
             {policyAlert ? <PolicyNotice alert={policyAlert} /> : null}
             {error && report ? <ReportLink title={reportTitle(error)} /> : null}

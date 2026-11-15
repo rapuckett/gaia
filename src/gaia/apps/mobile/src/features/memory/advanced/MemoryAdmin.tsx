@@ -6,6 +6,8 @@ import { useState } from 'react';
 import type { MessageKey } from '@webui/i18n/registry';
 
 import type { MemorySettings } from '@/api/client.types';
+import { ENDPOINTS } from '@/api/constants';
+import { useDeviceRefused } from '@/api/routeAccess';
 import { useClearAllMemory, useReinitializeMemory, useUpdateMemorySettings } from '@/data';
 import { describeFailureWith, useT } from '@/i18n/useT';
 import { Badge, Button, Card, Row, Sheet, Stack, Switch, Text } from '@/ui';
@@ -54,6 +56,9 @@ export function MemoryAdmin({ settings, notify }: { settings: MemorySettings; no
     const reinit = useReinitializeMemory();
     const [beta, setBeta] = useState<Beta | null>(null);
     const [danger, setDanger] = useState<Danger | null>(null);
+    // Turning discovery consent on runs the same PC scan as a refresh; turning it off works anywhere.
+    const scanRefused = useDeviceRefused('POST', ENDPOINTS.memoryRefreshSystemContext);
+    const reinitRefused = useDeviceRefused('POST', ENDPOINTS.memoryReinitialize);
     const busy = update.isPending || clear.isPending || reinit.isPending;
 
     const fail = (key: MessageKey, error: unknown) => notify({ tone: 'danger', text: t.compose((say) => say(key, { error: describeFailureWith(error, say) })) });
@@ -127,9 +132,12 @@ export function MemoryAdmin({ settings, notify }: { settings: MemorySettings; no
                         description={t('mem.settings.discoveryDesc')}
                         value={settings.system_discovery_consent}
                         onValueChange={() => toggle('discovery', settings.system_discovery_consent)}
-                        disabled={busy}
+                        disabled={busy || (scanRefused && !settings.system_discovery_consent)}
                         testID="memory-switch-discovery"
                     />
+                    {scanRefused && !settings.system_discovery_consent ? (
+                        <Text role="caption" tone="muted" testID="memory-discovery-pc-only">{t('mobileApp.mem.admin.pcOnly')}</Text>
+                    ) : null}
                 </Stack>
             </Card>
             {(['reinit', 'delete'] as const).map((kind) => (
@@ -137,11 +145,14 @@ export function MemoryAdmin({ settings, notify }: { settings: MemorySettings; no
                     <Stack gap="md">
                         <Text role="ui" weight="semibold" accessibilityRole="header">{t(DANGER[kind].title)}</Text>
                         <Text role="label" tone="muted">{t(DANGER[kind].description)}</Text>
+                        {kind === 'reinit' && reinitRefused ? (
+                            <Text role="caption" tone="muted" testID="memory-reinit-pc-only">{t('mobileApp.mem.admin.pcOnly')}</Text>
+                        ) : null}
                         <Button
                             variant="danger"
                             full
                             label={t(DANGER[kind].button)}
-                            disabled={busy}
+                            disabled={busy || (kind === 'reinit' && reinitRefused)}
                             onPress={() => setDanger(kind)}
                             testID={`memory-${kind}`}
                         />

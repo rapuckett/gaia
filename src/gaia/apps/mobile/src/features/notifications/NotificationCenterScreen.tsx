@@ -55,7 +55,7 @@ export function NotificationCenterScreen({ onBack, onOpenChat }: { onBack: () =>
                     title={t('notifications.title')}
                     backLabel={t('setup.back')}
                     onBack={onBack}
-                    titleEnd={unread > 0 ? <Badge label={String(unread)} tone="accent" /> : undefined}
+                    titleEnd={unread > 0 ? <Badge shape="pill" label={String(unread)} tone="accent" /> : undefined}
                 />
             }
             footer={

@@ -14,6 +14,7 @@ export interface SheetAction {
     label: string;
     icon?: LucideIcon;
     destructive?: boolean;
+    disabled?: boolean;
     onPress: () => void;
 }
 
@@ -34,6 +35,8 @@ export function ActionSheet({ open, onClose, actions, title }: ActionSheetProps)
                     <Pressable
                         key={a.label}
                         accessibilityLabel={a.label}
+                        accessibilityState={{ disabled: !!a.disabled }}
+                        disabled={a.disabled}
                         onPress={() => {
                             onClose();
                             a.onPress();
@@ -41,7 +44,7 @@ export function ActionSheet({ open, onClose, actions, title }: ActionSheetProps)
                     >
                         <Row gap="md">
                             {a.icon ? <Icon icon={a.icon} size="md" tone={a.destructive ? 'danger' : 'secondary'} /> : null}
-                            <Text role="body" tone={a.destructive ? 'danger' : 'primary'} numberOfLines={2}>
+                            <Text role="body" tone={a.disabled ? 'muted' : a.destructive ? 'danger' : 'primary'} numberOfLines={2}>
                                 {a.label}
                             </Text>
                         </Row>
