@@ -49,7 +49,7 @@ describe('first send', () => {
         const { fake, flushed, flow, submit } = setup();
         await submit('hello');
         expect(fake.sent).toEqual([{ sessionId: 's1', message: 'hello' }]);
-        expect(flow.getState()).toMatchObject({ text: '', sending: true, waiting: 's1', open: null });
+        expect(flow.getState()).toMatchObject({ text: '', sending: true, opening: 'hello', waiting: 's1', open: null });
         flow.observe(turn({ status: 'connecting' }));
         expect(flow.getState().open).toBeNull();
         flow.observe(turn({ status: 'streaming' }));

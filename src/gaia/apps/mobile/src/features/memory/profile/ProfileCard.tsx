@@ -5,12 +5,12 @@ import { createContext, useContext, useEffect, useRef, useState } from 'react';
 
 import { isolate } from '@webui/i18n/registry';
 
-import { ENDPOINTS } from '@/api/constants';
-import { useDeviceRefused } from '@/api/routeAccess';
+import { usePinned } from '@/api/routeAccess';
 import { useT } from '@/i18n/useT';
 import { Button, Card, ChoiceList, Disclosure, Icon, Ltr, Notice, Row, ScrollBox, Stack, Surface, Switch, Text } from '@/ui';
 import { CircleCheck, Cpu, Sparkles, Square } from '@/ui/icons';
 
+import { PcOnlyNotice } from '../../settings/PcOnlyNotice';
 import type { MemoryPaneProps } from '../tabs';
 import { useProfileRun, type LogLine, type ProfileKind } from './useProfileRun';
 
@@ -45,7 +45,8 @@ export function ProfileCard({ kind, notify }: { kind: ProfileKind; notify: Memor
     const t = useT();
     const copy = COPY[kind];
     const run = useProfileRun(kind, notify);
-    const pcOnly = useDeviceRefused('GET', kind === 'discovery' ? ENDPOINTS.memoryStreamDiscovery : ENDPOINTS.memoryStreamInference);
+    // The scan reads the PC's files and browser, so the PC refuses it from a paired phone.
+    const pinned = usePinned();
     const [includeBrowser, setIncludeBrowser] = useState(false);
     const [detailOpen, setDetailOpen] = useState(false);
     const { phase, logs, items, detail, savedCount } = run;
@@ -80,7 +81,7 @@ export function ProfileCard({ kind, notify }: { kind: ProfileKind; notify: Memor
                     </Stack>
                 </Row>
                 <Text tone="secondary">{t(copy.desc)}</Text>
-                {kind === 'inference' ? (
+                {kind === 'inference' && !pinned ? (
                     <>
                         <Text role="caption" tone="muted">
                             {t('mobileApp.mem.inf.note')}
@@ -88,21 +89,23 @@ export function ProfileCard({ kind, notify }: { kind: ProfileKind; notify: Memor
                         <Switch label={t('mem.inf.browser')} value={includeBrowser} onValueChange={setIncludeBrowser} disabled={busy} testID="profile-browser" />
                     </>
                 ) : null}
-                {pcOnly ? <Notice tone="info" message={t('mobileApp.mem.profile.pcOnly')} testID={`profile-${kind}-pc-only`} /> : null}
-                <Row gap="sm" wrap>
-                    <Button
-                        label={t.bare(phase === 'running' ? 'mem.running' : copy.run)}
-                        accessibilityLabel={t(phase === 'running' ? 'mem.running' : copy.run)}
-                        variant="secondary"
-                        busy={phase === 'running'}
-                        disabled={busy || pcOnly}
-                        onPress={() => void run.start(includeBrowser)}
-                        testID={`profile-${kind}-run`}
-                    />
-                    {phase === 'running' ? (
-                        <Button label={t.bare('composer.stop')} accessibilityLabel={t('composer.stop')} variant="ghost" icon={Square} onPress={run.stop} testID={`profile-${kind}-stop`} />
-                    ) : null}
-                </Row>
+                {pinned ? <PcOnlyNotice testID={`profile-${kind}-pc-only`} /> : null}
+                {pinned ? null : (
+                    <Row gap="sm" wrap>
+                        <Button
+                            label={t.bare(phase === 'running' ? 'mem.running' : copy.run)}
+                            accessibilityLabel={t(phase === 'running' ? 'mem.running' : copy.run)}
+                            variant="secondary"
+                            busy={phase === 'running'}
+                            disabled={busy}
+                            onPress={() => void run.start(includeBrowser)}
+                            testID={`profile-${kind}-run`}
+                        />
+                        {phase === 'running' ? (
+                            <Button label={t.bare('composer.stop')} accessibilityLabel={t('composer.stop')} variant="ghost" icon={Square} onPress={run.stop} testID={`profile-${kind}-stop`} />
+                        ) : null}
+                    </Row>
+                )}
 
                 {logs.length > 0 ? <Log lines={logs} running={phase === 'running'} /> : null}
                 {detail ? (
@@ -150,7 +153,7 @@ export function ProfileCard({ kind, notify }: { kind: ProfileKind; notify: Memor
                             variant="primary"
                             full
                             busy={phase === 'saving'}
-                            disabled={locked || pcOnly || kept === 0}
+                            disabled={locked || kept === 0}
                             onPress={() => void run.save()}
                             testID={`profile-${kind}-save`}
                         />

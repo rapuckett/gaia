@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import { useState, type ComponentRef, type ReactNode, type Ref } from 'react';
-import { TextInput, View, type KeyboardTypeOptions, type ReturnKeyTypeOptions } from 'react-native';
+import { TextInput, View, useWindowDimensions, type KeyboardTypeOptions, type ReturnKeyTypeOptions } from 'react-native';
 import { CircleAlert } from 'lucide-react-native';
 import { useDirection, useT } from '@/i18n/useT';
 import { Eye, EyeOff } from '../icons';
@@ -95,6 +95,7 @@ export function TextField({
     );
     const size = Math.max(type.body, metrics.inputFontSize);
     const lineHeight = Math.round(size * 1.4);
+    const { fontScale } = useWindowDimensions();
     const borderColor = error ? colors.danger : focused ? colors.accent : colors.border;
     return (
         <View style={{ gap: 6, opacity: disabled ? 0.45 : 1 }}>
@@ -135,7 +136,7 @@ export function TextField({
                 style={{
                     minHeight: bare ? 40 : 48,
                     ...(multiline
-                        ? { maxHeight: lineHeight * maxLines + 24, textAlignVertical: 'top' as const }
+                        ? { maxHeight: lineHeight * maxLines * fontScale + 24, textAlignVertical: 'top' as const }
                         : null),
                     paddingStart: leading ? 40 : bare ? 4 : 12,
                     paddingEnd: end ? 48 : bare ? 4 : 12,
