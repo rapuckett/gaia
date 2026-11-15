@@ -651,6 +651,7 @@ const messages: Messages = {
     'mobileApp.render.keyValue': '{key}، {value}',
     'mobileApp.render.table': 'جدول، الصفوف: {rows}، الأعمدة: {columns}',
     'mobileApp.render.tableTitled': '{title}. جدول، الصفوف: {rows}، الأعمدة: {columns}',
+    'mobileApp.render.imageFailed': "تعذّر تحميل هذه الصورة من الكمبيوتر.",
     'activity.files.more': '+{n} أخرى',
     'activity.files.showing': 'عرض {shown} من أصل {total} ملف',
     'activity.files.file': 'ملف {n}',

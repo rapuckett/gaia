@@ -8,6 +8,8 @@ import type { RenderCardData } from '@webui/types';
 import { Stack } from '@/ui';
 
 import { CardErrorBoundary } from './CardErrorBoundary';
+import { DiffCard } from './DiffCard';
+import { ImageCard } from './ImageCard';
 import { KeyValueCard } from './KeyValueCard';
 import { ListCard } from './ListCard';
 import { TableCard } from './TableCard';
@@ -15,6 +17,8 @@ import { UnsupportedCard } from './UnsupportedCard';
 
 /** The `tool_result.render` keys the phone draws; any other key shows the unsupported card. */
 const CARD_REGISTRY: Record<string, ComponentType<{ data: unknown }>> = {
+    diff: DiffCard,
+    image: ImageCard,
     key_value: KeyValueCard,
     list: ListCard,
     table: TableCard,

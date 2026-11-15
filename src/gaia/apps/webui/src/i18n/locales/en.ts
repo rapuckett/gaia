@@ -651,6 +651,7 @@ export const enMessages = {
     'mobileApp.render.keyValue': '{key}, {value}',
     'mobileApp.render.table': 'Table, rows: {rows}, columns: {columns}',
     'mobileApp.render.tableTitled': '{title}. Table, rows: {rows}, columns: {columns}',
+    'mobileApp.render.imageFailed': "Couldn't load this image from your PC.",
     'activity.files.more': '+{n} more',
     'activity.files.showing': 'Showing {shown} of {total} files',
     'activity.files.file': 'File {n}',

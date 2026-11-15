@@ -55,6 +55,7 @@ export {
   Search,
   Send,
   Settings,
+  Share2,
   Shield,
   ShieldAlert,
   ShieldCheck,
