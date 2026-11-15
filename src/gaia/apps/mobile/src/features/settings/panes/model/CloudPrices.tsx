@@ -1,13 +1,11 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { formatPrice } from '@webui/components/settings/cloudPrice';
-
 import { useCloudPrices } from '@/data';
 import { useT } from '@/i18n/useT';
 import { Divider, Notice, Row, Spinner, Stack, Text } from '@/ui';
 
-import { errorText } from './modelText';
+import { errorText, priceText } from './modelText';
 
 /** A provider's list prices, read only; shown before it is connected. */
 export function CloudPrices({ provider }: { provider: string }) {
@@ -40,7 +38,7 @@ export function CloudPrices({ provider }: { provider: string }) {
                     {i > 0 ? <Divider /> : null}
                     <Text role="ui" weight="medium">{m.name}</Text>
                     {m.note ? <Text role="caption" tone="muted">{m.note}</Text> : null}
-                    <Text role="caption" tone="secondary">{formatPrice(m.price, t)}</Text>
+                    <Text role="caption" tone="secondary">{priceText(m.price, t)}</Text>
                 </Stack>
             ))}
             <Text role="caption" tone="muted">

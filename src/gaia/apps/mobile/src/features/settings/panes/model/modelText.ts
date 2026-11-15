@@ -7,6 +7,8 @@ import { GaiaApiError } from '@/api/errors';
 import type { ContextChoice, ProviderModel } from '@/api/client.types';
 import { describeError, type Translate } from '@/i18n/useT';
 import { ctxLabel } from '@webui/components/modelMeta';
+import { usd } from '@webui/components/settings/cloudPrice';
+import type { ModelPrice } from '@webui/types';
 
 export { ctxLabel };
 
@@ -53,4 +55,13 @@ export function contextOutcome(next: ContextChoice, t: Translate): string {
         : reason === 'restarting' ? 'settings.ctx.restarting'
         : 'settings.ctx.nextLoad';
     return t(key, params);
+}
+
+/** "$0.15 in · $0.50 out per 1M tokens", each price kept whole inside right-to-left text. */
+export function priceText(price: ModelPrice | null | undefined, t: Translate): string {
+    if (!price) return t('settings.price.unknown');
+    return t('settings.price.perMillion', {
+        input: isolate(usd(price.input_per_million)),
+        output: isolate(usd(price.output_per_million)),
+    });
 }

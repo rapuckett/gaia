@@ -4,7 +4,7 @@
 import { tEn, type Translate } from '../../i18n/translator';
 import type { ModelPrice } from '../../types';
 
-function usd(n: number): string {
+export function usd(n: number): string {
     return n < 0.1 ? `$${n.toFixed(3)}` : `$${n.toFixed(2)}`;
 }
 
