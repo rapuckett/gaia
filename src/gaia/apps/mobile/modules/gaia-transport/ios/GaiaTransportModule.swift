@@ -74,6 +74,10 @@ public class GaiaTransportModule: Module {
       try DeviceVault.delete(pcId)
     }
 
+    AsyncFunction("dropAll") { () throws in
+      try DeviceVault.deleteAll()
+    }
+
     // Makes a secret saved by `pair` under a staging id the one for that PC, once the PC allows it.
     AsyncFunction("promote") { (stagedId: String, pcId: String) throws in
       guard let staged = try DeviceVault.load(stagedId) else {

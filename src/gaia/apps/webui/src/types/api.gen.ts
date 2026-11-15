@@ -244,6 +244,7 @@ export interface ApiSchemas {
   ProviderRestoreNotice: ProviderRestoreNotice;
   ProviderSummary: ProviderSummary;
   ProviderSummaryList: ProviderSummaryList;
+  ProviderSummaryNetwork: ProviderSummaryNetwork;
   ProviderView: ProviderView;
   PullRequestRequest: PullRequestRequest;
   PutAwayContext: PutAwayContext;
@@ -3078,8 +3079,15 @@ export interface ProviderSummary {
   configured: boolean;
   id: string;
   name: string;
+  network?: ProviderSummaryNetwork | null;
   privacy_notice: string;
   remote: boolean;
+}
+/**
+ * ``reachable`` is None when the check doesn't apply to this PC.
+ */
+export interface ProviderSummaryNetwork {
+  reachable: boolean | null;
 }
 export interface ProviderSummaryList {
   lemonade_error?: string | null;

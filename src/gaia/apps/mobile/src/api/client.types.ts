@@ -6,6 +6,7 @@ import type { IndexProgress } from '@webui/utils/documentLibrary.core';
 import type { FollowUpOutcome } from '@webui/utils/messageQueue';
 import type {
     ActiveModel,
+    ActiveRuns,
     AgentInfo,
     AgentMcpServer,
     ChatPerformance,
@@ -77,6 +78,7 @@ import type {
 export type { AgentInstallStatus } from '@webui/services/api';
 export type {
     ActiveModel,
+    ActiveRuns,
     AgentInfo,
     AgentMcpServer,
     ChatPerformance,
@@ -564,6 +566,8 @@ export interface GaiaClient {
     /** Starts installing an agent on the PC (202); follow it with `getAgentInstallStatus`. PC-only: a phone gets the refusal. */
     installAgent(id: string, options?: RequestOptions): Promise<{ id: string; status: string }>;
     getAgentInstallStatus(id: string, options?: RequestOptions): Promise<AgentInstallStatus>;
+    /** The chats with a turn in flight, those queued, and those paused on the user. */
+    getActiveRuns(options?: RequestOptions): Promise<ActiveRuns>;
     listSchedules(options?: RequestOptions): Promise<ScheduleList>;
     /** The last `days` days of conversations, tool calls, learned entries and errors, oldest first. */
     getMemoryActivity(days: number, options?: RequestOptions): Promise<ActivityDay[]>;

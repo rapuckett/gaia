@@ -90,7 +90,10 @@ export function Composer({
     const sent = attachments ? attachments.compose(message) : message;
     const tooLong = sent.length > MAX_MESSAGE_CHARS;
     const hasContent = message.length > 0 || !!attachments?.hasUploaded;
-    const canSend = !disabledReason && !starting && !attachments?.uploading && hasContent && !tooLong;
+    const refused = attachments?.items.filter((a) => a.error) ?? [];
+    // First-strong isolates keep a Latin file name in one piece inside Arabic text.
+    const refusedNames = refused.map((a) => `\u2068${a.name}\u2069`).join(t.bare('composer.refusedJoin'));
+    const canSend = !disabledReason && !starting && !attachments?.uploading && hasContent && !tooLong && !refusedNames;
 
     // Clears without blurring, so the keyboard stays up for the next message.
     const send = () => {
@@ -125,6 +128,9 @@ export function Composer({
                     message={t('composer.tooLongHint')}
                     testID="composer-too-long"
                 />
+            ) : null}
+            {refusedNames && hasContent ? (
+                <Notice tone="danger" message={t('composer.removeRefused', { names: refusedNames })} testID="composer-refused" />
             ) : null}
             <Surface tone="card" border radius="xl" padding="sm">
                 <Stack gap="xs">

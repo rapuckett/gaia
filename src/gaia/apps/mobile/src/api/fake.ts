@@ -1246,6 +1246,9 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             profileCommits.push({ kind: 'inference', items: insights });
             return { stored: insights.length };
         },
+        async getActiveRuns() {
+            return { session_ids: [], queued: [], awaiting_user: {} };
+        },
         async listSchedules() {
             return { schedules: [...schedules], total: schedules.length };
         },
