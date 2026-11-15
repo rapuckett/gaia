@@ -3644,6 +3644,7 @@ export const enMessages = {
     'mobileApp.model.onYourPc': 'On your PC',
     'mobileApp.serverDown.title': 'The model server on your PC isn’t answering',
     'mobileApp.skills.yoursEmpty': 'None yet. Add a folder with a SKILL.md file to {path} on your PC and it shows up here.',
+    'mobileApp.spend.limitInvalid': 'Enter an amount above zero, like 20.',
     'mobileApp.banner.openOnPc': 'Open GAIA on your PC to start the model server.',
     'mobileApp.settings.memory.lede': 'GAIA remembers facts, preferences and past conversations across chats, on your PC only. Private chats (the eye icon in a chat) are never remembered.',
     'mobileApp.settings.pcOnly': 'Change this on the PC running GAIA.',

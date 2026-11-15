@@ -58,6 +58,7 @@ import type {
     SetupRunStatus,
     Settings,
     SkillList,
+    SpendingReport,
     StartScreen,
     StreamEvent,
     SystemStatus,
@@ -161,6 +162,8 @@ export interface FakeClientData {
     setupPlan?: SetupPlan;
     modelServer?: ModelServerInfo;
     providers?: ProvidersResponse;
+    /** What getSpending answers; setting the limit or allowing the month changes it. */
+    spending?: SpendingReport;
     /** What getCloudPrices answers, by provider. */
     cloudPrices?: Record<string, CloudPriceList>;
     /** What recheckSetupNpu answers; an Error is thrown. */
@@ -231,6 +234,9 @@ export interface FakeGaiaClient extends GaiaClient {
     readonly restarts: { confirm: boolean }[];
     readonly selected: string[];
     readonly contextSets: { model: string; ctxSize: number | null }[];
+    /** The monthly limits saved (null removes it), and how often the month was allowed. */
+    readonly spendingLimitSets: (number | null)[];
+    readonly spendingAllows: { count: number };
     /** The files uploadFile took, in order. */
     readonly uploads: { name: string; size: number }[];
     readonly downloads: { modelId: string; acknowledgeLowDisk: boolean }[];
@@ -276,6 +282,8 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
     const restarts: FakeGaiaClient['restarts'] = [];
     const selected: string[] = [];
     const contextSets: FakeGaiaClient['contextSets'] = [];
+    const spendingLimitSets: FakeGaiaClient['spendingLimitSets'] = [];
+    const spendingAllows = { count: 0 };
     const uploads: FakeGaiaClient['uploads'] = [];
     const downloads: FakeGaiaClient['downloads'] = [];
     const removals: FakeGaiaClient['removals'] = [];
@@ -360,6 +368,8 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         restarts,
         selected,
         contextSets,
+        spendingLimitSets,
+        spendingAllows,
         uploads,
         downloads,
         removals,
@@ -425,6 +435,23 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             const list = data.cloudPrices?.[provider];
             if (!list) throw new GaiaApiError(503, `This fake client was given no prices for ${provider}.`);
             return list;
+        },
+        async getSpending() {
+            if (!data.spending) throw new GaiaApiError(503, 'This fake client was given no spending report.');
+            return data.spending;
+        },
+        async setSpendingLimit(limitUsd) {
+            if (!data.spending) throw new GaiaApiError(503, 'This fake client was given no spending report.');
+            if (limitUsd !== null && !(limitUsd > 0)) throw new GaiaApiError(422, 'The limit must be above zero.');
+            spendingLimitSets.push(limitUsd);
+            data.spending = { ...data.spending, limit_usd: limitUsd, state: limitUsd === null ? 'no_limit' : 'ok' };
+            return data.spending;
+        },
+        async allowSpendingThisMonth() {
+            if (!data.spending) throw new GaiaApiError(503, 'This fake client was given no spending report.');
+            spendingAllows.count += 1;
+            data.spending = { ...data.spending, state: 'allowed_over' };
+            return data.spending;
         },
         async getActiveModel() {
             if (!data.activeModel) throw new GaiaApiError(503, 'This fake client was given no active model.');

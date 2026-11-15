@@ -18,6 +18,7 @@ import { useT } from '@/i18n/useT';
 import { Disclosure, Notice, Row, SegmentedControl, Spinner, Stack, StatusDot, Text } from '@/ui';
 
 import { CloudPrices } from './model/CloudPrices';
+import { CloudSpending } from './model/CloudSpending';
 import { ModelInUse } from './model/ModelInUse';
 import { errorText, modelLabel, sameModelId } from './model/modelText';
 
@@ -151,6 +152,7 @@ export default function Model() {
                         </Stack>
                     ) : null}
                     {modelsQuery.error ? <Notice tone="danger" message={errorText(modelsQuery.error, t)} /> : null}
+                    {provider.remote ? <CloudSpending /> : null}
                 </Stack>
             ) : null}
         </Stack>

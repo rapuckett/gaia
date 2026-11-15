@@ -84,6 +84,7 @@ import type {
     SetupRunStatus,
     Settings,
     SkillList,
+    SpendingReport,
     UndoSettings,
     UploadedFile,
     UserInputResult,
@@ -380,6 +381,18 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         getCloudPrices(provider, options) {
             return getJson<CloudPriceList>(cloudPricesPath(provider), options?.signal);
+        },
+
+        getSpending(options) {
+            return getJson<SpendingReport>(ENDPOINTS.spending, options?.signal);
+        },
+
+        setSpendingLimit(limitUsd, options) {
+            return putJson<SpendingReport>(ENDPOINTS.spendingLimit, { limit_usd: limitUsd }, options?.signal);
+        },
+
+        allowSpendingThisMonth(options) {
+            return postJson<SpendingReport>(ENDPOINTS.spendingAllowMonth, undefined, options?.signal);
         },
 
         getActiveModel(options) {
