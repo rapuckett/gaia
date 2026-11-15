@@ -199,7 +199,7 @@ export function LocalModels() {
 
     return (
         <Stack gap="xs" testID="local-models">
-            <Disclosure title={t('settings.models.manage')} open={open} onToggle={() => setPicked(!open)} headerTestID="local-models-toggle">
+            <Disclosure title={t.bare('settings.models.manage')} open={open} onToggle={() => setPicked(!open)} headerTestID="local-models-toggle">
                 <Stack gap="md">
                     <Text role="caption" tone="muted">{t('settings.models.lede')}</Text>
                     {planQuery.error ? (
