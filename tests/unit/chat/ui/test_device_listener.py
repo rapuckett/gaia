@@ -434,6 +434,65 @@ def test_port_in_use_fails_loudly(tmp_path):
     assert access.status()["listening"] is False
 
 
+def test_port_held_on_one_address_fails_loudly(tmp_path):
+    # macOS lets a wildcard bind share a port another program holds on one
+    # address; phones dialing that address would reach it and see a pin mismatch.
+    GaiaConfig.save_key("device_pairing", True)
+    with socket.socket() as taken:
+        taken.bind(("127.0.0.1", 0))
+        taken.listen(1)
+        port = taken.getsockname()[1]
+        app = create_app(db_path=":memory:")
+        access = DeviceAccess(
+            app, folder=tmp_path / "devices", host="0.0.0.0", port=port
+        )
+
+        async def attempt():
+            try:
+                await access.start()
+            finally:
+                await access.shutdown()
+
+        with pytest.raises(ListenerError) as failed:
+            asyncio.run(attempt())
+    assert failed.value.code == "port_in_use" and str(port) in failed.value.detail
+    assert access.status()["listening"] is False
+
+
+def test_listener_restarts_on_its_own_port(tmp_path):
+    # Connections the listener closed linger in TIME_WAIT; a restart must not
+    # read them as another program.
+    GaiaConfig.save_key("device_pairing", True)
+    app = create_app(db_path=":memory:")
+    access = DeviceAccess(app, folder=tmp_path / "devices", host="0.0.0.0", port=0)
+    client = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    client.check_hostname = False
+    client.verify_mode = ssl.CERT_NONE
+
+    async def restart():
+        await access.start()
+        port = access.status()["port"]
+        try:
+            reader, writer = await asyncio.open_connection(
+                "127.0.0.1", port, ssl=client
+            )
+            writer.write(
+                b"GET /api/health HTTP/1.1\r\nHost: pc\r\nConnection: close\r\n\r\n"
+            )
+            assert (await reader.read()).startswith(b"HTTP/1.1 ")
+            writer.close()
+            await access.stop()
+            restarted = DeviceAccess(
+                app, folder=tmp_path / "devices", host="0.0.0.0", port=port
+            )
+            await restarted.start()
+            await restarted.shutdown()
+        finally:
+            await access.shutdown()
+
+    asyncio.run(restart())
+
+
 def test_no_token_or_invite_in_logs(served, caplog):
     caplog.set_level(logging.DEBUG)
     invite = served.access.open_pairing()["invite"]

@@ -1384,7 +1384,8 @@ def forget_provider_key(provider: str) -> Dict[str, Any]:
 
 
 @router.post(
-    "/api/providers/key-store/retry", dependencies=[Depends(require_ui_header)]
+    "/api/providers/key-store/retry",
+    dependencies=[Depends(require_ui_header), Depends(require_local_pc)],
 )
 def retry_key_store() -> Dict[str, Any]:
     """Let the next read ask the OS to unlock the key store again (Try again)."""
