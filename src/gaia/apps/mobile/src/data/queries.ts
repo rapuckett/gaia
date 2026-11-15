@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from 'react';
 
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 
 import type { StartScreen } from '@webui/types';
 
@@ -47,12 +47,28 @@ export function requireClient(client: GaiaClient | null): GaiaClient {
     return client;
 }
 
+/**
+ * Reads the chat list, but never swaps a populated list for an empty reply: the PC can answer
+ * empty while it restarts. The rule of webui's chat-list poll in App.tsx.
+ */
+export async function fetchSessions(
+    client: GaiaClient | null,
+    queryClient: QueryClient,
+    signal?: AbortSignal,
+): Promise<SessionList> {
+    const list = await requireClient(client).listSessions({ signal });
+    const shown = queryClient.getQueryData<SessionList>(queryKeys.sessions);
+    if (list.sessions.length === 0 && shown && shown.sessions.length > 0) return shown;
+    return list;
+}
+
 export function useSessions() {
     const client = useGaiaClient();
+    const queryClient = useQueryClient();
     return useQuery<SessionList>({
         queryKey: queryKeys.sessions,
         enabled: client !== null,
-        queryFn: ({ signal }) => requireClient(client).listSessions({ signal }),
+        queryFn: ({ signal }) => fetchSessions(client, queryClient, signal),
     });
 }
 

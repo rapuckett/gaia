@@ -11,6 +11,8 @@ export const UI_HEADERS = {
 export const ENDPOINTS = {
     agents: '/api/agents',
     health: '/api/health',
+    lemonadeDetect: '/api/lemonade/detect',
+    lemonadeTarget: '/api/lemonade/target',
     localModelRestart: '/api/providers/local/restart',
     localModelStatus: '/api/providers/local/status',
     schedule: '/api/schedules/{name:path}',
@@ -22,6 +24,7 @@ export const ENDPOINTS = {
     session: '/api/sessions/{session_id}',
     sessionCapabilities: '/api/sessions/{session_id}/capabilities',
     sessionDocument: '/api/sessions/{session_id}/documents/{doc_id}',
+    sessionEvents: '/api/sessions/events',
     sessionMessage: '/api/sessions/{session_id}/messages/{message_id}',
     sessionMessages: '/api/sessions/{session_id}/messages',
     sessionMessagesAndBelow: '/api/sessions/{session_id}/messages/{message_id}/and-below',
@@ -55,6 +58,7 @@ export const ENDPOINTS = {
     systemStatus: '/api/system/status',
     documentFile: '/api/documents/{doc_id}/file',
     documents: '/api/documents',
+    onboardingPreflight: '/api/onboarding/preflight',
     onboardingStart: '/api/onboarding/start',
 } as const;
 
@@ -162,6 +166,8 @@ export const STREAM_IDLE_MS = 30_000;
 export const QUEUED_IDLE_MS = 10 * 60_000;
 /** The backend may hold a send for 60 s while another chat has the model, then answers 429. */
 export const SEND_HEADER_TIMEOUT_MS = 90_000;
+/** The chat-list event stream sends a keepalive every 30 s. */
+export const SESSION_EVENTS_IDLE_MS = 90_000;
 /** An attach replays at once; a slower answer means the backend is stuck or unreachable. */
 export const ATTACH_HEADER_TIMEOUT_MS = 30_000;
 /** How many past runs a schedule's history shows; the web UI asks for the same 20. */

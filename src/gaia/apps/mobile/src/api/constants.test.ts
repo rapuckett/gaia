@@ -97,6 +97,8 @@ describe('endpoints', () => {
     const methods: Record<keyof typeof ENDPOINTS, string[]> = {
         agents: ['GET'],
         health: ['GET'],
+        lemonadeDetect: ['GET'],
+        lemonadeTarget: ['GET'],
         localModelRestart: ['POST'],
         localModelStatus: ['GET'],
         schedule: ['DELETE', 'PUT'],
@@ -108,6 +110,7 @@ describe('endpoints', () => {
         session: ['DELETE', 'GET', 'PUT'],
         sessionCapabilities: ['GET'],
         sessionDocument: ['DELETE'],
+        sessionEvents: ['GET'],
         sessionMessage: ['DELETE'],
         sessionMessages: ['GET'],
         sessionMessagesAndBelow: ['DELETE'],
@@ -141,6 +144,7 @@ describe('endpoints', () => {
         systemStatus: ['GET'],
         documentFile: ['GET'],
         documents: ['GET'],
+        onboardingPreflight: ['GET'],
         onboardingStart: ['GET'],
     };
     const calls = Object.entries(ENDPOINTS).flatMap(([name, path]) =>

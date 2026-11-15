@@ -52,7 +52,7 @@ describe('runSetupCheck', () => {
         const gate = await runSetupCheck(client, { sleep: instant, onUpgrading: () => { upgrading = true; } });
         expect(gate).toEqual({ state: 'ready' });
         expect(upgrading).toBe(true);
-        expect(client.setupStarts).toEqual([{ skipChatModel: false, gaiaLemonade: false, upgradeEmbedded: true }]);
+        expect(client.setupStarts).toEqual([{ skipChatModel: false, gaiaLemonade: false, upgradeEmbedded: true, serverOnly: false }]);
     });
 
     it('follows an update already running instead of starting another', async () => {
