@@ -1770,6 +1770,7 @@ const messages: Messages = {
     'settings.messaging.state.credentials': 'تعذّر على GAIA قراءة رمز البوت المحفوظ على هذا الجهاز.',
     'settings.messaging.state.conflict': 'يستخدم موصل ديسكورد في GAIA هذا البوت بالفعل. أنشئ تطبيقًا ثانيًا للمراسلة والصق رمزه.',
     'settings.section.automations': 'المهام التلقائية',
+    'settings.section.about': 'حول',
     'settings.automations.lede': 'التذكيرات والملخصات والتنبيهات والمشغّلات التي ينفّذها GAIA بنفسه ويرسلها إلى رسائلك المباشرة في Discord. لإضافة واحدة أو تغيير ما تفعله، اطلب ذلك من GAIA في المحادثة.',
     'settings.automations.loadFailed': 'تعذّر تحميل مهامك التلقائية: {error}',
     'settings.automations.retry': 'إعادة المحاولة',
@@ -3501,6 +3502,7 @@ const messages: Messages = {
     'mobileApp.connectors.comingLater': 'الربط من الهاتف قادم في إصدار لاحق. في الوقت الحالي، اربطه من الكمبيوتر الذي يشغّل GAIA.',
     'mobileApp.connectors.googlePcOnly': 'لا يستطيع هذا الهاتف ربط حسابات Google. اربط Google من الكمبيوتر الذي يشغّل GAIA.',
     'mobileApp.banner.openOnPc': 'افتح GAIA على جهاز الكمبيوتر لتشغيل خادم النماذج.',
+    'mobileApp.settings.comingSoon': 'هذا القسم قادم إلى الهاتف قريبًا. في الوقت الحالي، غيّره من الكمبيوتر الذي يشغّل GAIA.',
 };
 
 export const ar: Locale = {
