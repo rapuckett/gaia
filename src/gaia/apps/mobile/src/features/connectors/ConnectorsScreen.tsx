@@ -57,8 +57,10 @@ import {
 import {
     agentMcpKey,
     connectorDescription,
+    disconnectNotice,
     GOOGLE_CONNECTOR_ID,
     groupConnectors,
+    oauthClientStatus,
     SEARCH_ABOVE,
     tileStatus,
     unavailableHint,
@@ -73,6 +75,7 @@ export function ConnectorsScreen() {
     const [query, setQuery] = useState('');
     const [expanded, setExpanded] = useState<string | null>(null);
     const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
+    const [notice, setNotice] = useState<string | null>(null);
 
     const rows = connectors.data?.connectors ?? [];
     const servers = agentMcps.data?.agent_mcps ?? [];
@@ -104,12 +107,15 @@ export function ConnectorsScreen() {
     }
 
     const tiles = (list: ConnectorRow[]) =>
-        list.map((c) => <ConnectorTile key={c.id} connector={c} expanded={expanded === c.id} onToggle={() => toggle(c.id)} />);
+        list.map((c) => (
+            <ConnectorTile key={c.id} connector={c} expanded={expanded === c.id} onToggle={() => toggle(c.id)} onDisconnected={setNotice} />
+        ));
 
     return (
         <Screen scroll header={<ScreenHeader title={t('settings.section.connectors')} />}>
             <Stack gap="md" paddingX="lg" paddingY="md">
                 <Text role="ui" tone="secondary">{t('settings.connectors.lede')}</Text>
+                {notice ? <Notice tone="info" message={notice} /> : null}
                 {failure ? (
                     <ErrorState
                         title={describeError(failure, t)}
@@ -274,13 +280,22 @@ function Chevron({ open }: { open: boolean }) {
     return <Icon icon={open ? ChevronDown : ChevronRight} size="sm" tone="muted" />;
 }
 
-function ConnectorTile({ connector, expanded, onToggle }: { connector: ConnectorRow; expanded: boolean; onToggle: () => void }) {
+function ConnectorTile({
+    connector,
+    expanded,
+    onToggle,
+    onDisconnected,
+}: {
+    connector: ConnectorRow;
+    expanded: boolean;
+    onToggle: () => void;
+    onDisconnected: (notice: string | null) => void;
+}) {
     const t = useT();
-    const [asked, setAsked] = useState(false);
     const [menuOpen, setMenuOpen] = useState(false);
     const [confirmOpen, setConfirmOpen] = useState(false);
     const [message, setMessage] = useState<{ tone: 'info' | 'danger'; text: string } | null>(null);
-    const action = useConnectorServerAction(connector.id);
+    const action = useConnectorServerAction(connector.id, (outcome) => onDisconnected(disconnectNotice(outcome, connector, t)));
     const google = connector.id === GOOGLE_CONNECTOR_ID;
     const server = connector.type === 'mcp_server';
     const paused = connector.enabled === false;
@@ -290,11 +305,14 @@ function ConnectorTile({ connector, expanded, onToggle }: { connector: Connector
         setMessage(next);
         if (!expanded) onToggle();
     }
-    const refuse = (detailKey: 'checkPcOnly' | 'configurePcOnly' | 'enablePcOnly') =>
+    const refuse = (detailKey: 'checkPcOnly' | 'codePcOnly' | 'configurePcOnly' | 'connectPcOnly' | 'enablePcOnly') =>
         show({ tone: 'info', text: `${PC_ONLY_REFUSAL} ${t(`mobileApp.connectors.${detailKey}`)}` });
     function run(kind: 'disable' | 'disconnect') {
         setMessage(null);
-        action.mutate(kind, { onError: (e) => show({ tone: 'danger', text: describeError(e, t) }) });
+        if (kind === 'disconnect') onDisconnected(null);
+        action.mutate(kind, {
+            onError: (e) => show({ tone: 'danger', text: describeError(e, t) }),
+        });
     }
 
     return (
@@ -335,24 +353,36 @@ function ConnectorTile({ connector, expanded, onToggle }: { connector: Connector
                             <ChipButton label={t('settings.key.connect')} variant="accent" onPress={() => refuse('configurePcOnly')} />
                             {message ? <Notice tone={message.tone} message={message.text} /> : null}
                         </>
+                    ) : !connector.configurable && connector.oauth_setup_fields.length > 0 ? (
+                        <Notice tone="info" message={t('mobileApp.connectors.setupPcOnly', { name: connector.display_name })} />
                     ) : (
                         <>
-                            <ChipButton label={t('settings.key.connect')} variant="accent" onPress={() => setAsked(true)} />
-                            {asked ? <Notice tone="info" message={t('mobileApp.connectors.comingLater')} /> : null}
+                            <Row gap="sm" wrap>
+                                <ChipButton label={t('settings.key.connect')} variant="accent" onPress={() => refuse('connectPcOnly')} />
+                                {connector.supports_device_code ? (
+                                    <ChipButton label={t('settings.connectors.code')} onPress={() => refuse('codePcOnly')} />
+                                ) : null}
+                            </Row>
+                            {message ? <Notice tone={message.tone} message={message.text} /> : null}
                         </>
                     )
                 ) : (
                     <>
-                        {server ? (
-                            <Row gap="sm" wrap>
-                                <ChipButton label={t('settings.connectors.check')} onPress={() => refuse('checkPcOnly')} />
-                                <ChipButton
-                                    label={t('settings.connectors.disconnect')}
-                                    variant="danger"
-                                    disabled={action.isPending}
-                                    onPress={() => setConfirmOpen(true)}
-                                />
-                            </Row>
+                        <Row gap="sm" wrap>
+                            {server ? <ChipButton label={t('settings.connectors.check')} onPress={() => refuse('checkPcOnly')} /> : null}
+                            <ChipButton
+                                label={t('settings.connectors.disconnect')}
+                                variant="danger"
+                                disabled={action.isPending}
+                                onPress={() => setConfirmOpen(true)}
+                            />
+                        </Row>
+                        {oauthClientStatus(connector, t) ? (
+                            <Stack gap="xs">
+                                <Text role="label" weight="semibold" tone="muted">{t('settings.connectors.client')}</Text>
+                                <Text role="label" tone="secondary">{oauthClientStatus(connector, t)}</Text>
+                                <Text role="label" tone="muted">{t('mobileApp.connectors.clientPcOnly')}</Text>
+                            </Stack>
                         ) : null}
                         {message ? <Notice tone={message.tone} message={message.text} /> : null}
                         <ConnectorAccess

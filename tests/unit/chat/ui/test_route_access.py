@@ -134,9 +134,9 @@ WEB = {
     "HEAD /redoc",
 }
 
-# Some check one field on the PC inside the handler: a provider key in
-# ``POST /api/providers/{provider}/connect`` and ``network_policy`` in
-# ``PUT /api/settings``.
+# Some check fields on the PC inside the handler: a provider key and its
+# gateway fields in ``POST /api/providers/{provider}/connect``, and
+# ``network_policy`` in ``PUT /api/settings``.
 REMOTE = {
     "DELETE /api/chat/permissions/{session_id}/grants",
     "DELETE /api/connectors/_flows/{flow_id}",
@@ -211,6 +211,7 @@ REMOTE = {
     "GET /api/onboarding/preflight",
     "GET /api/onboarding/start",
     "GET /api/providers/active",
+    "GET /api/providers/list",
     "GET /api/providers/local/context",
     "GET /api/providers/local/status",
     "GET /api/providers/{provider}/models",
@@ -563,6 +564,53 @@ def test_provider_key_refused_away_from_the_pc(setup, monkeypatch):
         assert resp.status_code == 403, caller
         assert "fw-secret-key" not in resp.text
     assert handed == []
+
+
+def test_provider_key_routing_refused_away_from_the_pc(setup, monkeypatch):
+    """Moving the saved key's gateway or header is the PC's call, key or not."""
+    from gaia.ui.routers import providers
+
+    app, clients, _ = setup
+    handed = []
+    monkeypatch.setattr(providers, "_install", lambda *a, **k: handed.append(a))
+    monkeypatch.setattr(providers, "_cloud_entry", lambda *a: handed.append(a))
+    for caller in ("tunnel", "device"):
+        for fields in (
+            {"base_url": "https://attacker.example/v1"},
+            {"auth_header_name": "X-Leak"},
+            {"base_url": "https://attacker.example/v1", "auth_header_name": "X-Leak"},
+        ):
+            resp = clients[caller].post("/api/providers/amd/connect", json=fields)
+            assert resp.status_code == 403, (caller, fields)
+    assert handed == []
+
+
+def test_a_paired_device_may_read_provider_summaries(setup, monkeypatch):
+    from gaia.ui.routers import providers
+
+    app, clients, _ = setup
+    entry = {
+        "name": "amd",
+        "base_url": "https://gw.example/v1",
+        "runtime_key_set": True,
+        "models_discovered": True,
+    }
+    monkeypatch.setattr(
+        providers, "_cloud_entry", lambda p: entry if p == "amd" else None
+    )
+    monkeypatch.setattr(
+        providers, "_install", lambda *a, **k: pytest.fail("registered a provider")
+    )
+    resp = clients["device"].get("/api/providers/list", headers={"X-Gaia-UI": "1"})
+    assert resp.status_code == 200, resp.text
+    listed = {p["id"]: p for p in resp.json()["providers"]}
+    assert listed["amd"]["configured"] is True
+    assert listed["fireworks"]["configured"] is False
+    assert all(
+        set(p) == {"id", "name", "remote", "privacy_notice", "configured", "blocked"}
+        for p in listed.values()
+    )
+    assert "gw.example" not in resp.text
 
 
 def test_refused_network_policy_saves_nothing(setup):
