@@ -168,7 +168,7 @@ export function ChatDrawerContent({ activeId, onSelect, onClose, onNewChat, onPc
             {state === 'error' ? <ErrorState title={describeError(sessions.error, t)} onRetry={() => void sessions.refetch()} /> : null}
             {state === 'empty' && q === '' ? <EmptyState title={t('sidebar.empty')} /> : null}
             {q !== '' && searchFailed ? (
-                <Notice tone="danger" message={t('sidebar.searchFailed', { error: describeError(search.error, t) })} />
+                <Notice tone="danger" message={t('sidebar.searchFailed', { error: describeError(search.error, t, { bare: true }) })} />
             ) : null}
             {q !== '' && !searchFailed && settled && search.data?.truncated ? (
                 <Notice tone="info" role="note" message={t('sidebar.searchCapped', { n: search.data.results.length })} />

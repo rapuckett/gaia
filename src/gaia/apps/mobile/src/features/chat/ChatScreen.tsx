@@ -90,7 +90,7 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
             .catch((err: unknown) => {
                 // Back in the box, so nothing typed is lost; an expired question says so in its card.
                 queue.setDraft((prev) => (prev.trim() ? `${message}\n\n${prev}` : message));
-                if (!isQuestionGone(err)) setActionError(t('composer.answerFailed', { error: describeError(err, t) }));
+                if (!isQuestionGone(err)) setActionError(t('composer.answerFailed', { error: describeError(err, t, { bare: true }) }));
             });
         return true;
     };

@@ -435,7 +435,7 @@ function PersonalizeOffer({ connector }: { connector: ConnectorRow }) {
             }
             router.push(personalizeRoute(connector));
         } catch (e) {
-            setError(t('settings.connectors.personalize.failed', { error: describeError(e, t) }));
+            setError(t('settings.connectors.personalize.failed', { error: describeError(e, t, { bare: true }) }));
         } finally {
             setBusy(false);
         }

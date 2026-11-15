@@ -1,13 +1,13 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 
 import { GaiaNetworkError, GaiaPinMismatchError } from '@/api/errors';
 import { useGaiaClient, useSetupGate } from '@/data';
 import { PinMismatchScreen, usePairAgain } from '@/features/pairing';
-import { describeError, useT } from '@/i18n/useT';
-import { Button, Notice, Screen, Stack } from '@/ui';
+import { describeError, technicalDetail, useT } from '@/i18n/useT';
+import { Button, Disclosure, Ltr, Notice, Screen, Stack } from '@/ui';
 
 import { SetupScreen, type SetupScreenProps } from './SetupScreen';
 import { StartupScreen } from './StartupScreen';
@@ -55,8 +55,8 @@ export function SetupGate({ children, renderStep }: { children: ReactNode; rende
                 tone="danger"
                 message={
                     gate.upgradeFailed
-                        ? t('setup.upgrading.failed', { error: describeError(gate.error, t) })
-                        : t('setup.unknown.failed', { error: describeError(gate.error, t) })
+                        ? t('setup.upgrading.failed', { error: describeError(gate.error, t, { bare: true }) })
+                        : t('setup.unknown.failed', { error: describeError(gate.error, t, { bare: true }) })
                 }
                 action={{
                     label: t(gate.upgradeFailed ? 'setup.upgrading.retry' : 'setup.unknown.retry'),
@@ -68,11 +68,22 @@ export function SetupGate({ children, renderStep }: { children: ReactNode; rende
         <Screen edges={['top', 'start', 'end']}>
             <Stack gap="md" padding="md">
                 {notice}
+                {gate.state === 'unknown' && !unreachable ? <ErrorDetails error={gate.error} /> : null}
                 {gate.state === 'serverDown' && !gate.modelListUnread ? (
                     <Button variant="secondary" label={t('setup.serverDown.setup')} onPress={open} />
                 ) : null}
             </Stack>
             <Stack flex={1}>{children}</Stack>
         </Screen>
+    );
+}
+
+function ErrorDetails({ error }: { error: unknown }) {
+    const t = useT();
+    const [open, setOpen] = useState(false);
+    return (
+        <Disclosure title={t('setup.progress.details')} open={open} onToggle={() => setOpen((o) => !o)}>
+            <Ltr>{technicalDetail(error)}</Ltr>
+        </Disclosure>
     );
 }

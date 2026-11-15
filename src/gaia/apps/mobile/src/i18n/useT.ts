@@ -6,7 +6,7 @@ import { getLocales } from 'expo-localization';
 import { DEFAULT_LOCALE, getLocale, isLocaleCode } from '@webui/i18n/registry';
 import { translator, type Translate } from '@webui/i18n/translator';
 
-import { GaiaError } from '@/api/errors';
+import { GaiaError, GaiaNetworkError } from '@/api/errors';
 import { useLocaleStore } from '@/state/locale';
 
 export { translator, type Translate };
@@ -16,8 +16,19 @@ export function deviceLocaleCode(): string {
     return isLocaleCode(code) ? code : DEFAULT_LOCALE;
 }
 
-export function describeError(error: unknown, t: Translate): string {
-    if (error instanceof GaiaError) return t(error.messageKey, error.params);
+export interface DescribeOptions {
+    /** Never nest: a message filled into another message's `{param}` is bare, so the outer one adds the one bracket. */
+    bare?: boolean;
+}
+
+export function describeError(error: unknown, t: Translate, { bare }: DescribeOptions = {}): string {
+    if (error instanceof GaiaError) return bare ? t.bare(error.messageKey, error.params) : t(error.messageKey, error.params);
+    return error instanceof Error ? error.message : String(error);
+}
+
+/** The raw cause for a Details disclosure; never part of the sentence a person reads. */
+export function technicalDetail(error: unknown): string {
+    if (error instanceof GaiaNetworkError) return `${error.params.url}: ${error.params.reason}`;
     return error instanceof Error ? error.message : String(error);
 }
 

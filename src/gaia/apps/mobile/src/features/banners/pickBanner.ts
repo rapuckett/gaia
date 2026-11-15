@@ -49,7 +49,7 @@ export function pickBanner(status: SystemStatus | undefined, fetchError: unknown
             return {
                 id: 'backendError',
                 tone: 'danger',
-                title: t('banner.backendError', { error: describeError(fetchError, t) }),
+                title: t('banner.backendError', { error: describeError(fetchError, t, { bare: true }) }),
                 message: t('banner.backendErrorHint'),
                 retry: true,
             };

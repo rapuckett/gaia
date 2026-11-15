@@ -34,7 +34,7 @@ export function DocumentsScreen({ chatId }: DocumentsScreenProps) {
     const action = useActionError();
     const documents = query.data?.documents ?? [];
     const stats = libraryStats(documents, t);
-    const loadFailed = query.isError ? t('docs.loadFailed', { error: describeError(query.error, t) }) : null;
+    const loadFailed = query.isError ? t('docs.loadFailed', { error: describeError(query.error, t, { bare: true }) }) : null;
     const retry = { label: t('docs.loadRetry'), onPress: () => void query.refetch() };
 
     return (
