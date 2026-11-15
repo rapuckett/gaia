@@ -92,6 +92,11 @@ export interface AgentList {
     agents: AgentInfo[];
 }
 
+export interface AllPermissions {
+    default_mode: PermissionMode;
+    sessions: SessionPermissions[];
+}
+
 /** Namespaced agent ids to the scopes granted to them. */
 export interface ConnectorGrants {
     grants: Record<string, string[]>;
@@ -299,6 +304,12 @@ export interface GaiaClient {
     selectModel(model: string, options?: RequestOptions): Promise<ActiveModel>;
     /** The chat's permission mode and the tools it always allows. */
     getPermissions(sessionId: string, options?: RequestOptions): Promise<SessionPermissions>;
+    /** Every chat with full access or grants, and the mode new chats start in. */
+    listAllPermissions(options?: RequestOptions): Promise<AllPermissions>;
+    /** The mode new chats start in. The PC refuses it with a 403 from anywhere but the PC itself. */
+    setDefaultPermissionMode(mode: PermissionMode, options?: RequestOptions): Promise<{ default_mode: PermissionMode }>;
+    /** Revokes one "always allow" grant, or all of the chat's when `key` is omitted. */
+    revokeGrants(sessionId: string, key?: string, options?: RequestOptions): Promise<SessionPermissions>;
     setPermissionMode(sessionId: string, mode: PermissionMode, options?: RequestOptions): Promise<SessionPermissions>;
     /** How full the model's context window is for the chat's next message, or why there is no reading yet. */
     getContextUsage(sessionId: string, options?: RequestOptions): Promise<ContextUsageResult>;
