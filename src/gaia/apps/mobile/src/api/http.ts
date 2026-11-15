@@ -25,6 +25,7 @@ import type {
     AgentList,
     AgentMcpList,
     CancelChatResult,
+    ChatPerformance,
     ConfirmToolResult,
     ConnectorActivations,
     ConnectorGrants,
@@ -78,6 +79,7 @@ import {
     connectorGrantsPath,
     ENDPOINTS,
     chatContextPath,
+    chatPerformancePath,
     chatPermissionsPath,
     providerModelsPath,
     followupOutcomePath,
@@ -349,6 +351,10 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         getContextUsage(sessionId, options) {
             return getJson<ContextUsageResult>(chatContextPath(sessionId), options?.signal);
+        },
+
+        getChatPerformance(sessionId, options) {
+            return getJson<ChatPerformance>(chatPerformancePath(sessionId), options?.signal);
         },
 
         getFollowUpOutcome(sessionId, options) {

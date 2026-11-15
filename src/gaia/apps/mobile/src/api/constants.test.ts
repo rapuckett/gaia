@@ -145,6 +145,7 @@ describe('endpoints', () => {
         chatPermissions: ['GET', 'PUT'],
         chatFollowup: ['POST'],
         chatFollowupOutcome: ['GET'],
+        chatPerformance: ['GET'],
         chatUserInput: ['POST'],
         connectorActivation: ['DELETE', 'PUT'],
         connectorActivations: ['GET'],

@@ -61,6 +61,7 @@ export const ENDPOINTS = {
     chatPermissions: '/api/chat/permissions/{session_id}',
     chatFollowup: '/api/chat/followup',
     chatFollowupOutcome: '/api/chat/followup/{session_id}',
+    chatPerformance: '/api/chat/performance/{session_id}',
     chatUserInput: '/api/chat/user-input',
     connectorActivation: '/api/connectors/{connector_id}/activations/{agent_id:path}',
     connectorActivations: '/api/connectors/{connector_id}/activations',
@@ -117,6 +118,10 @@ export function setupNeedsPath(job: string): string {
 
 export function sessionPath(sessionId: string): string {
     return ENDPOINTS.session.replace('{session_id}', encodeURIComponent(sessionId));
+}
+
+export function chatPerformancePath(sessionId: string): string {
+    return ENDPOINTS.chatPerformance.replace('{session_id}', encodeURIComponent(sessionId));
 }
 
 export function chatPermissionsPath(sessionId: string): string {

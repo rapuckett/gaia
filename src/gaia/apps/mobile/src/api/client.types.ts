@@ -6,6 +6,7 @@ import type {
     ActiveModel,
     AgentInfo,
     AgentMcpServer,
+    ChatPerformance,
     ConnectorListEntry,
     ContextUsageResult,
     LemonadeFound,
@@ -40,6 +41,7 @@ export type {
     ActiveModel,
     AgentInfo,
     AgentMcpServer,
+    ChatPerformance,
     ConnectorListEntry,
     ConnectorRow,
     ContextUsage,
@@ -304,6 +306,8 @@ export interface GaiaClient {
     setPermissionMode(sessionId: string, mode: PermissionMode, options?: RequestOptions): Promise<SessionPermissions>;
     /** How full the model's context window is for the chat's next message, or why there is no reading yet. */
     getContextUsage(sessionId: string, options?: RequestOptions): Promise<ContextUsageResult>;
+    /** Where each answer's time and tokens went, and the model as Lemonade reports it now. */
+    getChatPerformance(sessionId: string, options?: RequestOptions): Promise<ChatPerformance>;
     /** What the chat's last finished turn did with the messages added to it; rejects with 409 while a turn still runs. */
     getFollowUpOutcome(sessionId: string, options?: RequestOptions): Promise<FollowUpOutcome>;
     /** Chats whose title or messages match `query`, newest first; `truncated` says the backend capped the list. */
