@@ -283,7 +283,7 @@ function Page({
             scroll
             footer={
                 footer ? (
-                    <Stack gap="sm" padding="xl">
+                    <Stack gap="sm">
                         {footer}
                     </Stack>
                 ) : undefined
