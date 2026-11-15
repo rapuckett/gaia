@@ -3511,7 +3511,6 @@ export const enMessages = {
     'mobileApp.error.streamBroke': 'The connection to GAIA broke while the reply was arriving. The answer may still finish on your PC: reopen this chat in a minute to see it.',
     'mobileApp.error.badEvent': 'GAIA sent a reply event this phone cannot read: {preview}',
     'mobileApp.error.noConnection': 'No PC is connected. Pair this phone with your PC first.',
-<<<<<<< HEAD
     'mobileApp.pairing.welcome.title': 'Use GAIA from your phone',
     'mobileApp.pairing.welcome.body': 'GAIA runs on your PC, and your chats stay there. Pair this phone with your PC to use GAIA here.',
     'mobileApp.pairing.welcome.start': 'Pair with my PC',
@@ -3543,9 +3542,7 @@ export const enMessages = {
     'mobileApp.pairing.off.title': "Can't reach your PC",
     'mobileApp.pairing.off.body': 'Pairing may be off on your PC, or this phone is on a different network. On your PC, open Settings, then Phones and tablets, turn on “Allow paired devices to connect”, and make sure both are on the same home network.',
     'mobileApp.pairing.off.retry': 'Try again',
-=======
     'mobileApp.chat.notFound': 'That chat is no longer on your PC.',
->>>>>>> origin/integration/rapuckett
     'mobileApp.connectors.comingLater': "Connecting from the phone is coming in a later build. For now, connect it on the PC running GAIA.",
     'mobileApp.connectors.googlePcOnly': "This phone can't connect Google accounts. Connect Google on the PC running GAIA.",
     'mobileApp.banner.openOnPc': 'Open GAIA on your PC to start the model server.',
