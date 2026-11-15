@@ -13,6 +13,8 @@ export interface SavedActivity {
     steps: AgentStep[];
     /** How the turn ended short of an answer, if it did. */
     ended: TurnEnding | undefined;
+    /** The reply stands for a failure (the web bubble's `isError`): it isn't read aloud. */
+    isError: boolean;
 }
 
 const NO_STEPS: AgentStep[] = [];
@@ -20,7 +22,8 @@ const NO_STEPS: AgentStep[] = [];
 /** What a saved assistant reply shows of its turn, read the way the Agent UI reads it. */
 export function savedActivity(message: Message): SavedActivity {
     const dropped = dropErrorsEchoedInAnswer(dropAnswerDrafts(message.agentSteps ?? NO_STEPS, message.content), message.content);
-    const failed = dropped.echoed || message.failed === true || isErrorContent(message.content) || dropped.endedBy !== null;
+    const isError = dropped.echoed || message.failed === true || isErrorContent(message.content);
+    const failed = isError || dropped.endedBy !== null;
     const stopState = message.stopState ?? (message.content.trim() === SERVER_CANCELLED_TEXT ? 'stopped' : undefined);
-    return { steps: dropped.steps, ended: turnEnding(message.content, stopState, failed) };
+    return { steps: dropped.steps, ended: turnEnding(message.content, stopState, failed), isError };
 }

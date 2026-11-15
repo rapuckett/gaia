@@ -59,6 +59,7 @@ export const ENDPOINTS = {
     providerModels: '/api/providers/{provider}/models',
     providersActive: '/api/providers/active',
     providersKeyStoreRetry: '/api/providers/key-store/retry',
+    providersList: '/api/providers/list',
     providersSelect: '/api/providers/select',
     schedule: '/api/schedules/{name:path}',
     scheduleResults: '/api/schedules/{name:path}/results',
@@ -95,6 +96,9 @@ export const ENDPOINTS = {
     skills: '/api/skills',
     skillsFeatured: '/api/skills/featured',
     skillsLinkPreview: '/api/skills/link/preview',
+    speech: '/api/speech',
+    speechModel: '/api/speech/model',
+    speechSettings: '/api/speech/settings',
     spending: '/api/spending',
     spendingAllowMonth: '/api/spending/allow-month',
     spendingLimit: '/api/spending/limit',
@@ -136,7 +140,6 @@ export const ENDPOINTS = {
     filesUploadMedia: '/api/files/upload-media',
     onboardingPreflight: '/api/onboarding/preflight',
     onboardingStart: '/api/onboarding/start',
-    providers: '/api/providers',
 } as const;
 
 export function connectorActivationPath(connectorId: string, agentId: string): string {

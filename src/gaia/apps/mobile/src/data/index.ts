@@ -24,4 +24,5 @@ export * from './schedules';
 export * from './sessionEvents';
 export * from './setup';
 export * from './skills';
+export * from './speech';
 export * from './spending';

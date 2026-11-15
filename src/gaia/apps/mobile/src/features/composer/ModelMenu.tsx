@@ -168,7 +168,7 @@ export function ModelMenu({ open, onClose, turnRunning, queued, onQueue }: Model
     ];
     const firstToDownload = ordered.find((m) => !sameModel(current, m.id) && modelState(m) === 'not_downloaded' && !isDownloading(m));
     const unavailable = (local.data?.models ?? []).filter((m) => m.available === false).length;
-    const needsKey = providers?.filter((p) => p.remote && !p.models_discovered) ?? [];
+    const needsKey = providers?.filter((p) => p.remote && !p.configured) ?? [];
     const toSettings = (target?: string) => {
         onClose();
         openSettings('model', target);
