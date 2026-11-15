@@ -77,7 +77,7 @@ function LocalOnly() {
                     {pinned ? (
                         <>
                             <Row gap="sm" justify="between">
-                                <Stack gap="xs">
+                                <Stack gap="xs" flex={1}>
                                     <Text role="label" weight="medium">
                                         {t('settings.privacy.localOnlyTitle')}
                                     </Text>
