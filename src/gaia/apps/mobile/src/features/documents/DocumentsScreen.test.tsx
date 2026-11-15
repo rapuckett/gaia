@@ -10,7 +10,7 @@ import { REMOVE_UNDO_MS } from '@webui/utils/documentLibrary.core';
 
 import type { DocumentListResponse } from '@/api/client.types';
 import { createFakeClient } from '@/api/fake';
-import { GaiaApiError, GaiaNetworkError } from '@/api/errors';
+import { GaiaApiError, GaiaError, GaiaNetworkError } from '@/api/errors';
 import { GaiaClientProvider } from '@/data';
 import { pickDocuments } from '@/platform/pickers';
 import { ThemeProvider } from '@/ui';
@@ -98,11 +98,11 @@ describe('DocumentsScreen', () => {
 
         it('shows a warning, and no spinner, when the paired connection cannot send files yet', async () => {
             (pickDocuments as jest.Mock).mockResolvedValue([file('notes.txt')]);
-            const refused = Object.assign(new Error('not sent'), { code: 'unsupported_body' });
+            const refused = Object.assign(new GaiaError('mobileApp.pairing.uploadUnsupported'), { code: 'unsupported_body' });
             const documentUploadError = new GaiaNetworkError('http://pc', refused);
             await mount(createFakeClient({ documentUploadError }));
             fireEvent.press(await screen.findByText('Add a file'));
-            expect(await screen.findByText(/isn't available over this connection yet/)).toBeTruthy();
+            expect(await screen.findByText(/can't send files to your PC yet/)).toBeTruthy();
             expect(screen.queryByText(/Indexing notes\.txt/)).toBeNull();
         });
 

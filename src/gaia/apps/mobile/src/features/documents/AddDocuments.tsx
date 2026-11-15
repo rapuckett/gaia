@@ -56,7 +56,7 @@ export function AddDocuments({ chatId, chatName, onStart }: AddDocumentsProps) {
         } catch (err) {
             // The pinned transport can't send a file yet; the request wraps its error, so look at the cause too.
             const refusal = [err, err instanceof Error ? err.cause : null].find((e) => (e as { code?: string } | null)?.code === 'unsupported_body');
-            if (refusal) return { kind: 'unsupported', message: refusal instanceof GaiaError ? describeError(refusal, t) : t('docs.uploadUnavailable') };
+            if (refusal) return { kind: 'unsupported', message: describeError(refusal, t) };
             const api = err instanceof GaiaApiError ? err : null;
             const kind = typeof api?.body?.status === 'string' ? api.body.status : null;
             const error = kind === 'too_large' ? t('docs.tooLargeDetail', { max: String(api?.body?.max_mb) }) : describeError(err, t);
