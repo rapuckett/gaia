@@ -44,6 +44,8 @@ export interface TextFieldProps {
     accessibilityLabel?: string;
     /** What a screen reader adds after the label; a placeholder that shows only one language puts the full text here. */
     accessibilityHint?: string;
+    onFocus?: () => void;
+    onBlur?: () => void;
     testID?: string;
 }
 
@@ -70,6 +72,8 @@ export function TextField({
     inputRef,
     accessibilityLabel,
     accessibilityHint,
+    onFocus,
+    onBlur,
     testID,
 }: TextFieldProps) {
     const { colors, radius, type } = useTheme();
@@ -118,8 +122,14 @@ export function TextField({
                 autoCorrect={url ? false : undefined}
                 accessibilityLabel={accessibilityLabel ?? label}
                 accessibilityHint={accessibilityHint}
-                onFocus={() => setFocused(true)}
-                onBlur={() => setFocused(false)}
+                onFocus={() => {
+                    setFocused(true);
+                    onFocus?.();
+                }}
+                onBlur={() => {
+                    setFocused(false);
+                    onBlur?.();
+                }}
                 selectionColor={colors.accentSolid}
                 testID={testID}
                 style={{

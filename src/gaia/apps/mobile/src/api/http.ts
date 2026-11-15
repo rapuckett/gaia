@@ -49,9 +49,11 @@ import type {
     DocumentResponse,
     DocumentStatus,
     EmbeddingCoverage,
+    FilePreviewResponse,
     FollowUpOutcome,
     FollowUpResult,
     DeleteSessionResult,
+    DiscordStatus,
     FeaturedLibraries,
     GaiaClient,
     GpuMemoryStatus,
@@ -74,6 +76,7 @@ import type {
     MCPServerStatus,
     MemoryTurn,
     MemoryUpcomingItem,
+    ProfileStreamEvent,
     MessageList,
     ModelNeed,
     ModelServerInfo,
@@ -117,6 +120,7 @@ import {
     documentPath,
     goalPath,
     ENDPOINTS,
+    filePath,
     chatContextPath,
     chatPermissionGrantsPath,
     chatPerformancePath,
@@ -133,7 +137,9 @@ import {
     memoryConversationsSearchPath,
     memoryKnowledgeItemPath,
     memoryKnowledgePath,
+    memoryStreamInferencePath,
     memoryUpcomingPath,
+    PROFILE_STREAM_IDLE_MS,
     schedulePath,
     scheduleResultsPath,
     scheduleRunPath,
@@ -309,6 +315,28 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
         return readJson<T>(await request('PUT', path, body, signal), path);
     }
 
+    // The whole body, drained from the stream: a file on the PC is read by this client only, never by a URL handed to the system.
+    async function readBytes(path: string, signal?: AbortSignal): Promise<Uint8Array> {
+        const res = await request('GET', path, undefined, signal);
+        if (!res.body) throw new GaiaStreamError('mobileApp.error.noBody');
+        const reader = res.body.getReader();
+        const parts: Uint8Array[] = [];
+        let size = 0;
+        for (;;) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            parts.push(value);
+            size += value.length;
+        }
+        const out = new Uint8Array(size);
+        let at = 0;
+        for (const part of parts) {
+            out.set(part, at);
+            at += part.length;
+        }
+        return out;
+    }
+
     async function* streamTurn(
         method: 'GET' | 'POST',
         path: string,
@@ -353,6 +381,26 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
         } finally {
             signal?.removeEventListener('abort', drop);
             // Closes a connection left open; after a body read to its end this does nothing.
+            drop();
+        }
+    }
+
+    /** A profile-setup stream, to its `done` event; one that closes before it is an error, as the web's onerror treats it. */
+    async function* streamProfile(path: string, signal?: AbortSignal): AsyncGenerator<ProfileStreamEvent> {
+        const connection = new AbortController();
+        const drop = () => connection.abort();
+        if (signal?.aborted) drop();
+        else signal?.addEventListener('abort', drop);
+        try {
+            const res = await request('GET', path, undefined, connection.signal, { endpoint: 'attach', ms: ATTACH_HEADER_TIMEOUT_MS, abort: drop });
+            if (!res.body) throw new GaiaStreamError('mobileApp.error.noBody');
+            for await (const event of parseSseStream(res.body, () => PROFILE_STREAM_IDLE_MS)) {
+                yield event as unknown as ProfileStreamEvent;
+                if (event.type === 'done') return;
+            }
+            throw new GaiaStreamError('mobileApp.error.streamClosed');
+        } finally {
+            signal?.removeEventListener('abort', drop);
             drop();
         }
     }
@@ -419,6 +467,10 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         setNetworkPolicy(policy, options) {
             return putJson<Settings>(ENDPOINTS.settings, { network_policy: policy }, options?.signal);
+        },
+
+        getDiscordStatus(options) {
+            return getJson<DiscordStatus>(ENDPOINTS.messagingDiscord, options?.signal);
         },
 
         getUndoSettings(options) {
@@ -562,6 +614,22 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
         attachToRun(sessionId, options) {
             const path = `${ENDPOINTS.chatAttach}?session_id=${encodeURIComponent(sessionId)}`;
             return streamTurn('GET', path, undefined, 'attach', ATTACH_HEADER_TIMEOUT_MS, options?.signal);
+        },
+
+        streamMemoryDiscovery(options) {
+            return streamProfile(ENDPOINTS.memoryStreamDiscovery, options?.signal);
+        },
+
+        streamMemoryInference(includeBrowser, options) {
+            return streamProfile(memoryStreamInferencePath(includeBrowser), options?.signal);
+        },
+
+        commitMemoryDiscovery(items, options) {
+            return postJson<{ stored: number }>(ENDPOINTS.memoryCommitDiscovery, { items }, options?.signal);
+        },
+
+        commitMemoryInference(insights, options) {
+            return postJson<{ stored: number }>(ENDPOINTS.memoryCommitInference, { insights }, options?.signal);
         },
 
         async *watchSessionEvents(options) {
@@ -849,6 +917,18 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         deleteDocument(docId, options) {
             return deleteJson<DeleteDocumentResult>(documentPath(docId), options?.signal);
+        },
+
+        getFilePreview(path, sessionId, options) {
+            return getJson<FilePreviewResponse>(filePath('filesPreview', path, sessionId), options?.signal);
+        },
+
+        getImageBytes(path, sessionId, options) {
+            return readBytes(filePath('filesImage', path, sessionId), options?.signal);
+        },
+
+        getDocumentBytes(docId, options) {
+            return readBytes(documentPath(docId, 'documentFile'), options?.signal);
         },
 
         getDocumentStatus(docId, options) {
