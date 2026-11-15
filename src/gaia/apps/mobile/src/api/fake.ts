@@ -5,6 +5,7 @@ import type {
     AgentCapabilities,
     AgentInfo,
     AgentMcpServer,
+    ChatPerformance,
     ConnectorListEntry,
     ContextUsageResult,
     CreateSessionRequest,
@@ -42,6 +43,26 @@ function cloneNested<T>(source: Record<string, Record<string, T>> | undefined): 
     return Object.fromEntries(Object.entries(source ?? {}).map(([key, inner]) => [key, { ...inner }]));
 }
 
+const EMPTY_PERFORMANCE: ChatPerformance = {
+    latest_message_id: null,
+    turns: [],
+    totals: {
+        turns: 0,
+        wall_seconds: null,
+        model_seconds: null,
+        gaia_seconds: null,
+        tokens_in: null,
+        tokens_cached: null,
+        tokens_out: null,
+        tool_calls: null,
+        loads: 0,
+        load_seconds: null,
+        usd: null,
+        unpriced_turns: 0,
+    },
+    now: { model: null, provider: 'unknown', loaded: null, device: null, backend: null, ctx_size: null, weights_gb: null, kv_cache_gb: null, free_gb: null, error: null },
+};
+
 export interface FakeClientData {
     sessions?: Session[];
     schedules?: Schedule[];
@@ -61,6 +82,8 @@ export interface FakeClientData {
     agentMcps?: AgentMcpServer[];
     /** What getContextUsage answers. */
     contextUsage?: ContextUsageResult;
+    /** What getChatPerformance answers. */
+    chatPerformance?: ChatPerformance;
     /** What getFollowUpOutcome answers; a function may throw to script a 409. */
     followUpOutcome?: FollowUpOutcome | (() => FollowUpOutcome);
     /** Makes sendFollowUp reject, as a turn that can't take the message does. */
@@ -207,6 +230,9 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         },
         async getContextUsage() {
             return data.contextUsage ?? { available: false, reason: 'Measured once GAIA has answered in this chat.' };
+        },
+        async getChatPerformance() {
+            return data.chatPerformance ?? EMPTY_PERFORMANCE;
         },
         async getFollowUpOutcome() {
             const outcome = data.followUpOutcome ?? { taken: [], returned: [] };

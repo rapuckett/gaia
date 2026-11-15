@@ -6,6 +6,7 @@ import type { ReactNode } from 'react';
 import type { MessageKey } from '@webui/i18n/registry';
 
 import { AgentInfoSection } from './AgentInfoSection';
+import { ContextSection } from './ContextSection';
 import type { PanelSectionId } from './panelStore';
 import { SkillsSection } from './SkillsSection';
 
@@ -31,5 +32,6 @@ export const DETAILS_HEADING: MessageKey = 'sp.details';
  */
 export const SECTIONS: readonly SectionEntry[] = [
     { id: 'skills', render: (p) => <SkillsSection {...p} /> },
+    { id: 'context', group: 'details', render: (p) => <ContextSection {...p} /> },
     { id: 'tools', group: 'details', render: (p) => <AgentInfoSection {...p} /> },
 ];

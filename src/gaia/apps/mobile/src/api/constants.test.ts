@@ -130,6 +130,7 @@ describe('endpoints', () => {
         chatContext: ['GET'],
         chatFollowup: ['POST'],
         chatFollowupOutcome: ['GET'],
+        chatPerformance: ['GET'],
         chatUserInput: ['POST'],
         connectorActivation: ['DELETE', 'PUT'],
         connectorActivations: ['GET'],

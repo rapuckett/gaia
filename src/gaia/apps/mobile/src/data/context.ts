@@ -1,16 +1,17 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
-import type { ContextUsage, StreamEvent } from "@/api/client.types";
+import type { ChatPerformance, ContextUsage, StreamEvent } from "@/api/client.types";
 
 import { useGaiaClient } from "./GaiaClientProvider";
 import { requireClient } from "./queries";
 
 export const contextKeys = {
   usage: (sessionId: string) => ["contextUsage", sessionId] as const,
+  performance: (sessionId: string) => ["chatPerformance", sessionId] as const,
 };
 
 export interface ContextReading {
@@ -51,4 +52,42 @@ export function useContextUsage(
   return data.available
     ? { usage: data, unavailable: null }
     : { usage: null, unavailable: data.reason };
+}
+
+/** The context reading for the session panel: read only while `enabled`, and again once a turn ends. */
+export function useContextSection(sessionId: string, { enabled, live }: { enabled: boolean; live: boolean }): ContextReading & { error: unknown } {
+  const client = useGaiaClient();
+  const queryClient = useQueryClient();
+  const key = contextKeys.usage(sessionId);
+  const wasLive = useRef(live);
+  useEffect(() => {
+    if (wasLive.current && !live && enabled) void queryClient.invalidateQueries({ queryKey: key });
+    wasLive.current = live;
+  }, [live, enabled, queryClient, key]);
+  const { data, error } = useQuery({
+    queryKey: key,
+    enabled: enabled && client !== null,
+    queryFn: ({ signal }) => requireClient(client).getContextUsage(sessionId, { signal }),
+    retry: false,
+  });
+  if (!data) return { usage: null, unavailable: null, error };
+  return data.available ? { usage: data, unavailable: null, error } : { usage: null, unavailable: data.reason, error };
+}
+
+/** Where each answer's time and tokens went; read only while `enabled`, and again once a turn ends. */
+export function useChatPerformance(sessionId: string, { enabled, live }: { enabled: boolean; live: boolean }) {
+  const client = useGaiaClient();
+  const queryClient = useQueryClient();
+  const key = contextKeys.performance(sessionId);
+  const wasLive = useRef(live);
+  useEffect(() => {
+    if (wasLive.current && !live && enabled) void queryClient.invalidateQueries({ queryKey: key });
+    wasLive.current = live;
+  }, [live, enabled, queryClient, key]);
+  return useQuery<ChatPerformance>({
+    queryKey: key,
+    enabled: enabled && client !== null,
+    queryFn: ({ signal }) => requireClient(client).getChatPerformance(sessionId, { signal }),
+    retry: false,
+  });
 }

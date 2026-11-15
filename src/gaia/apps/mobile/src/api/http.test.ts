@@ -120,6 +120,7 @@ describe('createHttpClient requests', () => {
         ['createSession', (c) => c.createSession({ title: 'Trip' }), 'POST', '/api/sessions', JSON_HEADERS, { title: 'Trip' }],
         ['createSession with no fields', (c) => c.createSession(), 'POST', '/api/sessions', JSON_HEADERS, {}],
         ['getCapabilities', (c) => c.getCapabilities('a b'), 'GET', '/api/sessions/a%20b/capabilities', UI_HEADERS, undefined],
+        ['getChatPerformance', (c) => c.getChatPerformance('a b'), 'GET', '/api/chat/performance/a%20b', UI_HEADERS, undefined],
         ['listDocuments', (c) => c.listDocuments(), 'GET', '/api/documents', UI_HEADERS, undefined],
         ['cancelChat', (c) => c.cancelChat('s1'), 'POST', '/api/chat/cancel', JSON_HEADERS, { session_id: 's1' }],
         [
