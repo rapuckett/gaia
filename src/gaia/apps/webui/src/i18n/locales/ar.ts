@@ -3599,7 +3599,7 @@ const messages: Messages = {
     'mobileApp.error.incompleteTranscript': 'أعاد GAIA محادثة غير مكتملة. أعد تحميلها.',
     'mobileApp.error.noBody': 'لم يرسل GAIA محتوى للرد، لذا لا يوجد ما يمكن قراءته.',
     'mobileApp.error.notAudio': 'أرسل GAIA "{type}"، وهو ليس صوتًا يشغّله هذا الهاتف.',
-    'mobileApp.error.audioTooLarge': 'حجم الصوت أكبر من {mb} MB، لذا لن يحمّله هذا الهاتف.',
+    'mobileApp.error.audioTooLarge': 'حجم الصوت أكبر من {size}، لذا لن يحمّله هذا الهاتف.',
     'mobileApp.error.streamClosed': 'أغلق GAIA الاتصال قبل اكتمال الرد. أعد إرسال الرسالة، وإذا تكرر ذلك فافحص سجل GAIA على الكمبيوتر.',
     'mobileApp.error.streamBroke': 'انقطع الاتصال بـ GAIA أثناء وصول الرد. قد تكتمل الإجابة رغم ذلك على الكمبيوتر: أعد فتح هذه المحادثة بعد دقيقة لرؤيتها.',
     'mobileApp.error.badEvent': 'أرسل GAIA حدثًا في الرد لا يستطيع هذا الهاتف قراءته: {preview}',

@@ -891,7 +891,7 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
                 await res.body?.cancel();
                 throw new GaiaStreamError('mobileApp.error.notAudio', { type: contentType || '-' });
             }
-            const limit = { bytes: MAX_GENERATED_AUDIO_BYTES, tooLarge: () => new GaiaStreamError('mobileApp.error.audioTooLarge', { mb: MAX_GENERATED_AUDIO_BYTES / (1024 * 1024) }) };
+            const limit = { bytes: MAX_GENERATED_AUDIO_BYTES, tooLarge: () => new GaiaStreamError('mobileApp.error.audioTooLarge', { size: `${MAX_GENERATED_AUDIO_BYTES / (1024 * 1024)} MB` }) };
             return { bytes: await drainBytes(res, limit), contentType };
         },
 
