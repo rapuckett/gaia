@@ -17,7 +17,9 @@ import type {
     ContextUsageResult,
     ConsolidateMemoryResult,
     CreateSessionRequest,
+    DiscordStatus,
     EmbeddingCoverage,
+    FilePreviewResponse,
     FollowUpOutcome,
     DocumentListResponse,
     DocumentResponse,
@@ -43,12 +45,13 @@ import type {
     MemoryStats,
     MemoryToolStat,
     MemoryUpcomingItem,
+    ProfileStreamEvent,
     Message,
     MessageList,
     ModelNeed,
     ModelServerInfo,
     PreflightReport,
-    ProvidersResponse,
+    ProviderSummaryList,
     Goal,
     GoalStats,
     ParsedSchedule,
@@ -72,6 +75,8 @@ import type {
     SetupRunStatus,
     Settings,
     SkillList,
+    SpeechModel,
+    SpeechSettings,
     FeaturedLibraries,
     LinkPreview,
     SpendingReport,
@@ -190,7 +195,7 @@ export interface FakeClientData {
     setupStatuses?: (SetupRunStatus | Error)[];
     setupPlan?: SetupPlan;
     modelServer?: ModelServerInfo;
-    providers?: ProvidersResponse;
+    providers?: ProviderSummaryList;
     /** What getSpending answers; setting the limit or allowing the month changes it. */
     spending?: SpendingReport;
     /** What getCloudPrices answers, by provider. */
@@ -216,9 +221,19 @@ export interface FakeClientData {
     documentStatuses?: Record<string, Partial<DocumentStatus>>;
     /** Makes a library action on a document reject with this message, by action. */
     documentFailures?: Partial<Record<DocumentAction, string>>;
+    /** What getFilePreview answers, by path; a path not listed is a 404. */
+    filePreviews?: Record<string, FilePreviewResponse>;
+    /** What getImageBytes and getDocumentBytes answer, by path or document id; one not listed is a 404. */
+    fileBytes?: Record<string, Uint8Array>;
     /** What getCapabilities answers, by chat; a chat not listed has no agent running (409). */
     capabilities?: Record<string, AgentCapabilities>;
     memorySettings?: MemorySettings;
+    /** What getSpeechSettings answers; updateSpeechSettings changes it. */
+    speechSettings?: SpeechSettings;
+    /** What getSpeechModel answers; defaults to downloaded. */
+    speechModel?: SpeechModel;
+    /** Thrown by speak. */
+    speechError?: Error;
     /** What listGoals answers; approve, reject, cancel and delete change it. */
     goals?: Goal[] | Error;
     /** What getGoalStoreHealth answers. */
@@ -229,6 +244,8 @@ export interface FakeClientData {
     networkPolicyError?: Error;
     /** What getUndoSettings answers; updateUndoSettings changes it. */
     undoSettings?: UndoSettings;
+    /** What getDiscordStatus answers; an Error is thrown (a phone gets the PC's 403). */
+    discordStatus?: DiscordStatus | Error;
     /** Thrown by deleteSession for these chat ids. */
     deleteSessionErrors?: Record<string, Error>;
     /** Thrown by updateMemorySettings. */
@@ -244,6 +261,10 @@ export interface FakeClientData {
     /** The conversations in memory, newest first, with each one's turns; an Error makes the reads fail. */
     memoryConversations?: { sessions: MemoryConversation[]; turns: Record<string, MemoryTurn[]> } | Error;
     memoryUpcoming?: MemoryUpcomingItem[] | Error;
+    /** What each profile-setup stream sends; `hang` leaves it open after its events until the caller stops it, `error` throws once they are read. */
+    profileStreams?: { discovery?: ProfileScript; inference?: ProfileScript };
+    /** Thrown by both profile commits. */
+    profileCommitError?: Error;
     /** What each maintenance POST answers; an Error makes it fail. Unlisted ones answer a zero result. */
     memoryActionResults?: {
         consolidate?: ConsolidateMemoryResult | Error;
@@ -252,6 +273,12 @@ export interface FakeClientData {
         rebuildFts?: Error;
         refreshSystemContext?: RefreshSystemContextResult | Error;
     };
+}
+
+export interface ProfileScript {
+    events: ProfileStreamEvent[];
+    hang?: boolean;
+    error?: Error;
 }
 
 export type DocumentAction = 'cancel' | 'delete' | 'reindex';
@@ -297,6 +324,8 @@ export interface FakeGaiaClient extends GaiaClient {
     readonly modelLoads: { modelName: string; force: boolean }[];
     readonly removals: string[];
     readonly backendSets: string[];
+    /** The text each speak call was given, in order. */
+    readonly spoken: string[];
     readonly targetSets: LemonadeTargetBody[];
     /** The setup model choices saved, in order. */
     readonly setupChoices: { kind: 'chat' | 'vision' | 'skip'; modelId: string | null; flag?: boolean }[];
@@ -323,6 +352,10 @@ export interface FakeGaiaClient extends GaiaClient {
     readonly conversationSearches: string[];
     /** The range of each activity read, in order. */
     readonly memoryActivityReads: number[];
+    /** Each profile stream opened (with the browser-history choice for inference), and whether the caller has since stopped it. */
+    readonly profileStreamOpens: { kind: 'discovery' | 'inference'; includeBrowser?: boolean; stopped: boolean }[];
+    /** Each profile commit, in order. */
+    readonly profileCommits: { kind: 'discovery' | 'inference'; items: unknown[] }[];
     /** How many times the stats were read. */
     readonly memoryStatsReads: number;
 }
@@ -383,6 +416,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
     const followUps: FakeGaiaClient['followUps'] = [];
     const setupStarts: FakeGaiaClient['setupStarts'] = [];
     const backendSets: string[] = [];
+    const spoken: string[] = [];
     const targetSets: LemonadeTargetBody[] = [];
     const setupChoices: FakeGaiaClient['setupChoices'] = [];
     const connects: string[] = [];
@@ -407,6 +441,18 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
     const knowledgeCalls: KnowledgeCall[] = [];
     const knowledgeReads: KnowledgeListParams[] = [];
     const conversationSearches: string[] = [];
+    const profileStreamOpens: FakeGaiaClient['profileStreamOpens'] = [];
+    const profileCommits: FakeGaiaClient['profileCommits'] = [];
+    async function* profileStream(kind: 'discovery' | 'inference', includeBrowser: boolean | undefined, signal?: AbortSignal): AsyncGenerator<ProfileStreamEvent> {
+        const open = { kind, ...(includeBrowser === undefined ? {} : { includeBrowser }), stopped: false };
+        profileStreamOpens.push(open);
+        signal?.addEventListener('abort', () => (open.stopped = true));
+        const script = data.profileStreams?.[kind];
+        if (!script) throw new GaiaApiError(503, 'This fake client was given no profile stream.');
+        yield* script.events;
+        if (script.error) throw script.error;
+        if (script.hang) await new Promise<void>((resolve) => (signal?.aborted ? resolve() : signal?.addEventListener('abort', () => resolve())));
+    }
     const goalCalls: GoalCall[] = [];
     let goals = data.goals instanceof Error ? [] : [...(data.goals ?? [])];
     const goalById = (id: string): Goal => {
@@ -471,6 +517,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         removals,
         setupStarts,
         backendSets,
+        spoken,
         targetSets,
         setupChoices,
         connects,
@@ -487,6 +534,8 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         capabilityReads,
         memoryActions,
         memoryActivityReads,
+        profileStreamOpens,
+        profileCommits,
         knowledgeCalls,
         knowledgeReads,
         conversationSearches,
@@ -958,6 +1007,11 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             data.settings = { ...data.settings, network_policy: policy };
             return data.settings;
         },
+        async getDiscordStatus() {
+            if (!data.discordStatus) throw new GaiaApiError(503, 'This fake client was given no Discord status.');
+            if (data.discordStatus instanceof Error) throw data.discordStatus;
+            return data.discordStatus;
+        },
         async getUndoSettings() {
             if (!data.undoSettings) throw new GaiaApiError(503, 'This fake client was given no undo settings.');
             return data.undoSettings;
@@ -966,6 +1020,23 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             if (!data.undoSettings) throw new GaiaApiError(503, 'This fake client was given no undo settings.');
             data.undoSettings = { ...data.undoSettings, retention_days: retentionDays, max_mb: maxMb };
             return data.undoSettings;
+        },
+        async getSpeechSettings() {
+            if (!data.speechSettings) throw new GaiaApiError(503, 'This fake client was given no speech settings.');
+            return data.speechSettings;
+        },
+        async updateSpeechSettings(change) {
+            if (!data.speechSettings) throw new GaiaApiError(503, 'This fake client was given no speech settings.');
+            data.speechSettings = { ...data.speechSettings, ...change };
+            return data.speechSettings;
+        },
+        async getSpeechModel() {
+            return data.speechModel ?? { downloaded: true, size_gb: null };
+        },
+        async speak(text) {
+            spoken.push(text);
+            if (data.speechError) throw data.speechError;
+            return { bytes: new TextEncoder().encode(text), contentType: 'audio/wav' };
         },
         async getMemorySettings() {
             if (!data.memorySettings) throw new GaiaApiError(503, 'This fake client was given no memory settings.');
@@ -1010,6 +1081,22 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         },
         async refreshSystemContext() {
             return memoryAction('refreshSystemContext', data.memoryActionResults?.refreshSystemContext ?? { stored: 0, skipped: false });
+        },
+        streamMemoryDiscovery(options) {
+            return profileStream('discovery', undefined, options?.signal);
+        },
+        streamMemoryInference(includeBrowser, options) {
+            return profileStream('inference', includeBrowser, options?.signal);
+        },
+        async commitMemoryDiscovery(items) {
+            if (data.profileCommitError) throw data.profileCommitError;
+            profileCommits.push({ kind: 'discovery', items });
+            return { stored: items.length };
+        },
+        async commitMemoryInference(insights) {
+            if (data.profileCommitError) throw data.profileCommitError;
+            profileCommits.push({ kind: 'inference', items: insights });
+            return { stored: insights.length };
         },
         async listSchedules() {
             return { schedules: [...schedules], total: schedules.length };
@@ -1108,6 +1195,21 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             library.documents.splice(library.documents.indexOf(doc), 1);
             return { deleted: true };
         },
+        async getFilePreview(path) {
+            const preview = data.filePreviews?.[path];
+            if (!preview) throw new GaiaApiError(404, 'File not found');
+            return preview;
+        },
+        async getImageBytes(path) {
+            const bytes = data.fileBytes?.[path];
+            if (!bytes) throw new GaiaApiError(404, 'Image file not found');
+            return bytes;
+        },
+        async getDocumentBytes(docId) {
+            const bytes = data.fileBytes?.[docId];
+            if (!bytes) throw new GaiaApiError(404, 'Document not found');
+            return bytes;
+        },
         async getDocumentStatus(docId) {
             const doc = library.documents.find((d) => d.id === docId);
             if (!doc) throw new GaiaApiError(404, 'Document not found');
@@ -1187,7 +1289,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             if (!data.setupChecks?.length) throw new GaiaApiError(503, 'This fake client was given no setup checks.');
             return nextOf(data.setupChecks, checkAt++);
         },
-        async listProviders() {
+        async listProviderSummaries() {
             if (!data.providers) throw new GaiaApiError(503, 'This fake client was given no providers.');
             return data.providers;
         },

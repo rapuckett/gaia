@@ -9,11 +9,13 @@ import { Bell, Brain, Clock, Cpu, Info, ListChecks, Lock, MessageSquare, Plug, S
 import Advanced from './panes/Advanced';
 import General from './panes/General';
 import Memory from './panes/Memory';
+import Messaging from './panes/Messaging';
 import Model from './panes/Model';
 import Notifications from './panes/Notifications';
 import Permissions from './panes/Permissions';
 import Placeholder from './panes/Placeholder';
 import Privacy from './panes/Privacy';
+import ReadAloud from './panes/ReadAloud';
 import Setup from './panes/Setup';
 
 /** The web's settings sections, in its nav order; `voice` is "Read aloud". */
@@ -47,11 +49,11 @@ export const SETTINGS_SECTIONS: Record<SectionId, SettingsSectionEntry> = {
     permissions: { titleKey: 'settings.section.permissions', icon: ShieldQuestion, pane: Permissions },
     skills: { titleKey: 'settings.section.skills', icon: Sparkles, pane: Placeholder },
     connectors: { titleKey: 'settings.section.connectors', icon: Plug, pane: Placeholder },
-    messaging: { titleKey: 'settings.section.messaging', icon: MessageSquare, pane: Placeholder },
+    messaging: { titleKey: 'settings.section.messaging', icon: MessageSquare, pane: Messaging },
     automations: { titleKey: 'settings.section.automations', icon: Clock, pane: Placeholder },
     memory: { titleKey: 'settings.section.memory', icon: Brain, pane: Memory },
     notifications: { titleKey: 'settings.section.notifications', icon: Bell, pane: Notifications },
-    voice: { titleKey: 'settings.section.voice', icon: Volume2, pane: Placeholder },
+    voice: { titleKey: 'settings.section.voice', icon: Volume2, pane: ReadAloud },
     privacy: { titleKey: 'settings.section.privacy', icon: Lock, pane: Privacy },
     advanced: { titleKey: 'settings.section.advanced', icon: Wrench, pane: Advanced },
     about: { titleKey: 'settings.section.about', icon: Info, pane: Placeholder },

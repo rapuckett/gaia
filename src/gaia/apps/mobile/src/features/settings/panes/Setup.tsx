@@ -20,7 +20,7 @@ interface Line {
     label: string;
     value: string | null;
     /** Where the row's setting lives; a row without one only reports. */
-    to?: { section: SectionId; target?: string };
+    to?: { section: SectionId; target?: string; provider?: 'local' | 'fireworks' };
     testID: string;
 }
 
@@ -40,12 +40,14 @@ export default function Setup() {
     const error = plan.error ?? hardware.error;
     const local = !!active.data?.model && !active.data.remote && active.data.downloaded !== false;
 
-    // Rows whose setting has no anchor in this app yet (cloud keys, GPU memory, models on this PC,
-    // model server) are plain lines until the section that owns them registers one.
+    // GPU memory has no anchor in this app yet, so it has no row until Model registers one.
     const groups: { title: string; lines: Line[] }[] = [
         {
             title: t('settings.setup.where'),
-            lines: [{ label: t('settings.setup.chatRuns'), value: chatName, to: { section: 'model', target: 'model-in-use' }, testID: 'setup-chat-model' }],
+            lines: [
+                { label: t('settings.setup.chatRuns'), value: chatName, to: { section: 'model', target: 'model-in-use' }, testID: 'setup-chat-model' },
+                { label: t('settings.setup.cloudKeys'), value: null, to: { section: 'model', target: 'cloud-key', provider: 'fireworks' }, testID: 'setup-cloud-keys' },
+            ],
         },
         {
             title: t('setup.pc.step'),
@@ -54,6 +56,7 @@ export default function Setup() {
                 {
                     label: t('settings.setup.server'),
                     value: plan.data ? t(plan.data.lemonade.mode === 'external' ? 'settings.setup.serverYours' : 'settings.setup.serverOwn') : null,
+                    to: { section: 'advanced', target: 'model-server' },
                     testID: 'setup-server',
                 },
             ],
@@ -64,6 +67,7 @@ export default function Setup() {
                 {
                     label: t('settings.setup.models'),
                     value: catalog ? t('settings.setup.modelsValue', { n: String(installed.length), size: ltrIn(t.locale, formatSize(installedGb)) }) : null,
+                    to: { section: 'model', target: 'models-on-pc', provider: 'local' },
                     testID: 'setup-models',
                 },
                 ...(local ? [{ label: t('settings.setup.context'), value: null, to: { section: 'model' as const, target: 'ctx-size' }, testID: 'setup-context' }] : []),
@@ -109,7 +113,7 @@ export default function Setup() {
                                     title={l.label}
                                     subtitle={l.value ?? undefined}
                                     trailing={to ? <Icon icon={ChevronRight} size="sm" tone="muted" /> : undefined}
-                                    onPress={to ? () => openSettings(to.section, to.target, 'setup') : undefined}
+                                    onPress={to ? () => openSettings(to.section, to.target, 'setup', router, to.provider) : undefined}
                                     testID={l.testID}
                                 />
                             );

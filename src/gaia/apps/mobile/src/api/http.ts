@@ -50,9 +50,11 @@ import type {
     DocumentResponse,
     DocumentStatus,
     EmbeddingCoverage,
+    FilePreviewResponse,
     FollowUpOutcome,
     FollowUpResult,
     DeleteSessionResult,
+    DiscordStatus,
     FeaturedLibraries,
     GaiaClient,
     GpuMemoryStatus,
@@ -71,16 +73,18 @@ import type {
     MemorySettings,
     MemorySettingsUpdateResponse,
     MemoryStats,
+    PcAudioBytes,
     MemoryToolStat,
     MCPServerStatus,
     MemoryTurn,
     MemoryUpcomingItem,
+    ProfileStreamEvent,
     MessageList,
     ModelNeed,
     ModelServerInfo,
     PreflightReport,
     ProviderConnected,
-    ProvidersResponse,
+    ProviderSummaryList,
     RestartModelResult,
     RequestOptions,
     ParsedSchedule,
@@ -100,6 +104,8 @@ import type {
     SetupRunStatus,
     Settings,
     SkillList,
+    SpeechModel,
+    SpeechSettings,
     SpendingReport,
     UndoSettings,
     UploadedFile,
@@ -119,6 +125,7 @@ import {
     documentPath,
     goalPath,
     ENDPOINTS,
+    filePath,
     chatContextPath,
     chatPermissionGrantsPath,
     chatPerformancePath,
@@ -135,7 +142,9 @@ import {
     memoryConversationsSearchPath,
     memoryKnowledgeItemPath,
     memoryKnowledgePath,
+    memoryStreamInferencePath,
     memoryUpcomingPath,
+    PROFILE_STREAM_IDLE_MS,
     schedulePath,
     scheduleResultsPath,
     scheduleRunPath,
@@ -291,6 +300,26 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
         }
     }
 
+    async function drainBytes(res: FetchResponseLike): Promise<Uint8Array<ArrayBuffer>> {
+        if (!res.body) throw new GaiaStreamError('mobileApp.error.noBody');
+        const reader = res.body.getReader();
+        const chunks: Uint8Array[] = [];
+        let size = 0;
+        for (;;) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            chunks.push(value);
+            size += value.length;
+        }
+        const out = new Uint8Array(size);
+        let at = 0;
+        for (const chunk of chunks) {
+            out.set(chunk, at);
+            at += chunk.length;
+        }
+        return out;
+    }
+
     async function getJson<T>(path: string, signal?: AbortSignal): Promise<T> {
         return readJson<T>(await request('GET', path, undefined, signal), path);
     }
@@ -309,6 +338,11 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
     async function putJson<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
         return readJson<T>(await request('PUT', path, body, signal), path);
+    }
+
+    // The whole body, drained from the stream: a file on the PC is read by this client only, never by a URL handed to the system.
+    async function readBytes(path: string, signal?: AbortSignal): Promise<Uint8Array> {
+        return drainBytes(await request('GET', path, undefined, signal));
     }
 
     async function* streamTurn(
@@ -355,6 +389,26 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
         } finally {
             signal?.removeEventListener('abort', drop);
             // Closes a connection left open; after a body read to its end this does nothing.
+            drop();
+        }
+    }
+
+    /** A profile-setup stream, to its `done` event; one that closes before it is an error, as the web's onerror treats it. */
+    async function* streamProfile(path: string, signal?: AbortSignal): AsyncGenerator<ProfileStreamEvent> {
+        const connection = new AbortController();
+        const drop = () => connection.abort();
+        if (signal?.aborted) drop();
+        else signal?.addEventListener('abort', drop);
+        try {
+            const res = await request('GET', path, undefined, connection.signal, { endpoint: 'attach', ms: ATTACH_HEADER_TIMEOUT_MS, abort: drop });
+            if (!res.body) throw new GaiaStreamError('mobileApp.error.noBody');
+            for await (const event of parseSseStream(res.body, () => PROFILE_STREAM_IDLE_MS)) {
+                yield event as unknown as ProfileStreamEvent;
+                if (event.type === 'done') return;
+            }
+            throw new GaiaStreamError('mobileApp.error.streamClosed');
+        } finally {
+            signal?.removeEventListener('abort', drop);
             drop();
         }
     }
@@ -421,6 +475,10 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         setNetworkPolicy(policy, options) {
             return putJson<Settings>(ENDPOINTS.settings, { network_policy: policy }, options?.signal);
+        },
+
+        getDiscordStatus(options) {
+            return getJson<DiscordStatus>(ENDPOINTS.messagingDiscord, options?.signal);
         },
 
         getUndoSettings(options) {
@@ -564,6 +622,22 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
         attachToRun(sessionId, options) {
             const path = `${ENDPOINTS.chatAttach}?session_id=${encodeURIComponent(sessionId)}`;
             return streamTurn('GET', path, undefined, 'attach', ATTACH_HEADER_TIMEOUT_MS, options?.signal);
+        },
+
+        streamMemoryDiscovery(options) {
+            return streamProfile(ENDPOINTS.memoryStreamDiscovery, options?.signal);
+        },
+
+        streamMemoryInference(includeBrowser, options) {
+            return streamProfile(memoryStreamInferencePath(includeBrowser), options?.signal);
+        },
+
+        commitMemoryDiscovery(items, options) {
+            return postJson<{ stored: number }>(ENDPOINTS.memoryCommitDiscovery, { items }, options?.signal);
+        },
+
+        commitMemoryInference(insights, options) {
+            return postJson<{ stored: number }>(ENDPOINTS.memoryCommitInference, { insights }, options?.signal);
         },
 
         async *watchSessionEvents(options) {
@@ -793,6 +867,23 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             return getJson<MemoryStats>(ENDPOINTS.memoryStats, options?.signal);
         },
 
+        getSpeechSettings(options) {
+            return getJson<SpeechSettings>(ENDPOINTS.speechSettings, options?.signal);
+        },
+
+        updateSpeechSettings(change, options) {
+            return putJson<SpeechSettings>(ENDPOINTS.speechSettings, change, options?.signal);
+        },
+
+        getSpeechModel(options) {
+            return getJson<SpeechModel>(ENDPOINTS.speechModel, options?.signal);
+        },
+
+        async speak(text, voice, options): Promise<PcAudioBytes> {
+            const res = await request('POST', ENDPOINTS.speech, { text, voice: voice?.voice, speed: voice?.speed }, options?.signal);
+            return { bytes: await drainBytes(res), contentType: res.headers.get('content-type') ?? '' };
+        },
+
         getMemorySettings(options) {
             return getJson<MemorySettings>(ENDPOINTS.memorySettings, options?.signal);
         },
@@ -859,6 +950,18 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         deleteDocument(docId, options) {
             return deleteJson<DeleteDocumentResult>(documentPath(docId), options?.signal);
+        },
+
+        getFilePreview(path, sessionId, options) {
+            return getJson<FilePreviewResponse>(filePath('filesPreview', path, sessionId), options?.signal);
+        },
+
+        getImageBytes(path, sessionId, options) {
+            return readBytes(filePath('filesImage', path, sessionId), options?.signal);
+        },
+
+        getDocumentBytes(docId, options) {
+            return readBytes(documentPath(docId, 'documentFile'), options?.signal);
         },
 
         getDocumentStatus(docId, options) {
@@ -934,8 +1037,8 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             return getJson<SetupCheck>(`${ENDPOINTS.setupCheck}?skip_chat_model=${skipChatModel}`, options?.signal);
         },
 
-        listProviders(options) {
-            return getJson<ProvidersResponse>(ENDPOINTS.providers, options?.signal);
+        listProviderSummaries(options) {
+            return getJson<ProviderSummaryList>(ENDPOINTS.providersList, options?.signal);
         },
 
         getModelServer(options) {

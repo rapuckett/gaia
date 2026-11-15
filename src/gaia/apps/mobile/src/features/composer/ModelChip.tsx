@@ -32,7 +32,7 @@ export function ModelChip({ turnRunning = false }: { turnRunning?: boolean }) {
                 label={queued ? `${label} → ${queued}` : label}
                 icon={pill.remote ? Cloud : Cpu}
                 menu
-                keepLabel
+                chip="model"
                 onPress={() => setOpen(true)}
                 accessibilityLabel={pill.aria}
                 testID="model-chip"

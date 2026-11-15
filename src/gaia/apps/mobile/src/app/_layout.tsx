@@ -9,6 +9,7 @@ import { AppState, Platform, useWindowDimensions } from 'react-native';
 import { createHttpClient } from '@/api/http';
 import { GaiaClientProvider } from '@/data/GaiaClientProvider';
 import { AppErrorBoundary } from '@/features/errors/AppErrorBoundary';
+import { ChatAlertFeed } from '@/features/banners/ChatAlertFeed';
 import { ConnectionBanner } from '@/features/banners/ConnectionBanner';
 import { ModelNeededHost } from '@/features/model';
 import { NotificationFeed } from '@/features/notifications';
@@ -51,11 +52,12 @@ export default function RootLayout() {
     }, []);
 
     const localeLoaded = useLocaleStore((s) => s.hydrated);
+    const picked = useLocaleStore((s) => s.locale !== null);
 
     // Before the saved pick loads, dir is the phone's and would overwrite the pick's flags.
     useEffect(() => {
-        if (localeLoaded) applyDirection(dir, lang);
-    }, [dir, lang, localeLoaded]);
+        if (localeLoaded) applyDirection(dir, lang, picked);
+    }, [dir, lang, picked, localeLoaded]);
 
     if (!localeLoaded) return null;
 
@@ -69,6 +71,7 @@ export default function RootLayout() {
                         <SetupGate>
                             <RoutingEffects />
                             <NotificationFeed />
+                            <ChatAlertFeed />
                             <Drawer
                                 drawerContent={(props) => (
                                     <AppErrorBoundary variant="compact">
