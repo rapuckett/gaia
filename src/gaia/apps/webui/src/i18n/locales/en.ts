@@ -3576,6 +3576,7 @@ export const enMessages = {
     'mobileApp.mem.activityTapHint': 'Tap a bar to see that day.',
     'mobileApp.mem.metric': '{label}: {value}',
     'mobileApp.mem.sectionFailed': "Couldn't load this section.",
+    'mobileApp.mem.whenHint': 'Year-month-day and time, like 2026-11-20 09:00',
     'mobileApp.connectors.comingLater': "Connecting from the phone is coming in a later build. For now, connect it on the PC running GAIA.",
     'mobileApp.connectors.googlePcOnly': "This phone can't connect Google accounts. Connect Google on the PC running GAIA.",
     'mobileApp.model.onYourPc': 'On your PC',
