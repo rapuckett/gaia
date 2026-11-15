@@ -142,7 +142,7 @@ export function ConnectorsBody() {
                             <TextField
                                 value={query}
                                 onChangeText={setQuery}
-                                placeholder={t('settings.connectors.search')}
+                                placeholder={t.bare('settings.connectors.search')}
                                 accessibilityLabel={t('settings.connectors.search')}
                             />
                         ) : null}
