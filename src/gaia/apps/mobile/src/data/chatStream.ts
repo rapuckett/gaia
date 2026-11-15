@@ -5,10 +5,21 @@ import { hashKey, notifyManager, useQueryClient, type QueryClient } from '@tanst
 import { useCallback, useEffect, useMemo } from 'react';
 import { AppState } from 'react-native';
 
+import { MAX_STREAM_RECONNECTS, RECONNECT_DELAYS_MS } from '@webui/utils/streamErrors.core';
 import { STOP_GRACE_MS } from '@webui/utils/turnEnding.core';
 
 import type { GaiaClient, Message, MessageList, StreamEvent } from '@/api/client.types';
-import { asGaiaError, GaiaApiError, GaiaConfigError, type GaiaError } from '@/api/errors';
+import {
+    asGaiaError,
+    GaiaApiError,
+    GaiaConfigError,
+    GaiaNetworkError,
+    GaiaStreamDroppedError,
+    GaiaStreamError,
+    GaiaStreamStalledError,
+    GaiaUnreachableError,
+    type GaiaError,
+} from '@/api/errors';
 import {
     applyEvent,
     beginTurn,
@@ -42,12 +53,17 @@ interface Run {
     /** An event arrived, so the turn exists on the PC and a stop can reach it. */
     sawEvent: boolean;
     stopRequested: boolean;
+    /** Re-attaches since the live view was last whole; 0 for a run the person started. */
+    reconnects: number;
+    /** Waits out the backoff before a re-attach. */
+    retryTimer?: ReturnType<typeof setTimeout>;
     /** Ends the turn here when GAIA never confirms a stop. */
     graceTimer?: ReturnType<typeof setTimeout>;
 }
 
 const runs = new Map<string, Run>();
 const subscribers = new Map<string, number>();
+const foregroundListeners = new Map<string, { remove(): void }>();
 
 function isCurrent(sessionId: string, run: Run): boolean {
     return runs.get(sessionId) === run;
@@ -60,11 +76,12 @@ function update(sessionId: string, run: Run, change: (turn: ChatTurn) => ChatTur
 /** The run is over: nothing of it is left running on this phone. */
 function finishRun(sessionId: string): void {
     clearTimeout(runs.get(sessionId)?.graceTimer);
+    clearTimeout(runs.get(sessionId)?.retryTimer);
     runs.delete(sessionId);
 }
 
-function newRun(kind: Run['kind']): Run {
-    return { kind, view: new AbortController(), sawEvent: false, stopRequested: false };
+function newRun(kind: Run['kind'], reconnects = 0): Run {
+    return { kind, view: new AbortController(), sawEvent: false, stopRequested: false, reconnects };
 }
 
 function refreshChat(queryClient: QueryClient, sessionId: string): Promise<void> {
@@ -132,6 +149,20 @@ function requestStop(deps: ChatStreamDeps, sessionId: string, run: Run): void {
     });
 }
 
+/** The live view dropped mid-turn: pick the turn up again after the web's backoff. */
+function reconnect(deps: ChatStreamDeps, sessionId: string, old: Run): void {
+    const attempt = old.reconnects + 1;
+    const run = newRun('attach', attempt);
+    runs.set(sessionId, run);
+    writeTurn(sessionId, { ...readTurn(sessionId), reconnecting: attempt });
+    const start = () => {
+        if (isCurrent(sessionId, run)) void follow(deps, sessionId, run, deps.client.attachToRun(sessionId, { signal: run.view.signal }));
+    };
+    const delay = RECONNECT_DELAYS_MS[attempt - 1] ?? 0;
+    if (delay > 0) run.retryTimer = setTimeout(start, delay);
+    else start();
+}
+
 async function follow(deps: ChatStreamDeps, sessionId: string, run: Run, stream: AsyncIterable<StreamEvent>) {
     try {
         for await (const event of stream) {
@@ -146,7 +177,19 @@ async function follow(deps: ChatStreamDeps, sessionId: string, run: Run, stream:
         }
     } catch (err) {
         if (!isCurrent(sessionId, run)) return;
-        const error = asGaiaError(err);
+        // A re-attach that can't reach GAIA is another lost view, not yet a failed turn.
+        const lostView =
+            err instanceof GaiaStreamDroppedError || err instanceof GaiaStreamStalledError || (run.reconnects > 0 && err instanceof GaiaNetworkError);
+        if (lostView && !run.stopRequested && run.reconnects < MAX_STREAM_RECONNECTS) {
+            reconnect(deps, sessionId, run);
+            return;
+        }
+        const error =
+            lostView && run.reconnects >= MAX_STREAM_RECONNECTS
+                ? err instanceof GaiaNetworkError
+                    ? new GaiaUnreachableError(err)
+                    : new GaiaStreamError('chatError.liveViewLost', { n: MAX_STREAM_RECONNECTS + 1 }, { cause: err })
+                : asGaiaError(err);
         expirePendingPrompts(sessionId);
         update(sessionId, run, (turn) => ({
             ...turn,
@@ -161,7 +204,8 @@ async function follow(deps: ChatStreamDeps, sessionId: string, run: Run, stream:
         return;
     }
     if (!isCurrent(sessionId, run)) return;
-    if (!run.sawEvent) {
+    // A re-attach that finds no turn means it ended while the phone was away; the transcript has its answer.
+    if (!run.sawEvent && run.reconnects === 0) {
         finishRun(sessionId);
         // No turn is running, but one that ended just now may be missing from a transcript read before it.
         void deps.queryClient.invalidateQueries({ queryKey: queryKeys.messages(sessionId) }, { cancelRefetch: false });
@@ -282,8 +326,23 @@ export function detachTurn(sessionId: string): void {
 }
 
 function subscribe(deps: ChatStreamDeps, sessionId: string): () => void {
+    const first = !subscribers.has(sessionId);
     subscribers.set(sessionId, (subscribers.get(sessionId) ?? 0) + 1);
     attachTurn(deps, sessionId);
+    // A phone that was backgrounded lost its connection while the turn went on, so pick it up again.
+    if (first) {
+        let wasBackgrounded = false;
+        foregroundListeners.set(
+            sessionId,
+            AppState.addEventListener('change', (state) => {
+                if (state === 'background') wasBackgrounded = true;
+                if (state !== 'active' || !wasBackgrounded) return;
+                wasBackgrounded = false;
+                detachTurn(sessionId);
+                attachTurn(deps, sessionId);
+            }),
+        );
+    }
     return () => {
         const left = (subscribers.get(sessionId) ?? 1) - 1;
         if (left > 0) {
@@ -291,6 +350,8 @@ function subscribe(deps: ChatStreamDeps, sessionId: string): () => void {
             return;
         }
         subscribers.delete(sessionId);
+        foregroundListeners.get(sessionId)?.remove();
+        foregroundListeners.delete(sessionId);
         detachTurn(sessionId);
     };
 }
@@ -325,6 +386,8 @@ export interface ChatStream {
     stopState: ChatTurn['stopState'];
     /** What GAIA reported while stopping. */
     stopError: GaiaError | undefined;
+    /** The live view dropped and this re-attach attempt (of `MAX_STREAM_RECONNECTS`) is under way; 0 when whole. */
+    reconnecting: number;
 }
 
 /**
@@ -339,20 +402,6 @@ export function useChatStream(sessionId: string): ChatStream {
     useEffect(() => {
         if (!client || !sessionId) return undefined;
         return subscribe({ client, queryClient }, sessionId);
-    }, [client, queryClient, sessionId]);
-
-    // A phone that was backgrounded lost its connection while the turn went on, so pick it up again.
-    useEffect(() => {
-        if (!client || !sessionId) return undefined;
-        let wasBackgrounded = false;
-        const subscription = AppState.addEventListener('change', (state) => {
-            if (state === 'background') wasBackgrounded = true;
-            if (state !== 'active' || !wasBackgrounded) return;
-            wasBackgrounded = false;
-            detachTurn(sessionId);
-            attachTurn({ client, queryClient }, sessionId);
-        });
-        return () => subscription.remove();
     }, [client, queryClient, sessionId]);
 
     const send = useCallback(
@@ -390,6 +439,7 @@ export function useChatStream(sessionId: string): ChatStream {
             error: turn.error,
             stopState: turn.stopState,
             stopError: turn.stopError,
+            reconnecting: turn.reconnecting ?? 0,
             failed: turn.failed,
             failure: turn.failure,
             policyAlert: turn.policyAlert,

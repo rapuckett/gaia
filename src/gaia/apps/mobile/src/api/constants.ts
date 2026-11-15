@@ -15,6 +15,14 @@ export const ENDPOINTS = {
     lemonadeTarget: '/api/lemonade/target',
     localModelRestart: '/api/providers/local/restart',
     localModelStatus: '/api/providers/local/status',
+    memoryConsolidate: '/api/memory/consolidate',
+    memoryEmbeddingCoverage: '/api/memory/embedding-coverage',
+    memoryRebuildEmbeddings: '/api/memory/rebuild-embeddings',
+    memoryRebuildFts: '/api/memory/rebuild-fts',
+    memoryReconcile: '/api/memory/reconcile',
+    memoryRefreshSystemContext: '/api/memory/refresh-system-context',
+    memorySettings: '/api/memory/settings',
+    memoryStats: '/api/memory/stats',
     providerModels: '/api/providers/{provider}/models',
     providersActive: '/api/providers/active',
     providersSelect: '/api/providers/select',
@@ -198,6 +206,9 @@ export const SCHEDULE_RESULTS_LIMIT = 20;
 
 /** How often to re-read the schedules while their screen is open, so counts and times follow the PC. */
 export const SCHEDULES_POLL_MS = 10_000;
+/** How long a memory result notice stays up, as the web's toasts do (4 s); a failure stays twice as long to be read. */
+export const MEMORY_NOTICE_MS = 4_000;
+export const MEMORY_ERROR_NOTICE_MS = 8_000;
 /** How long a Delete button waits for its "Confirm?" press; the web UI's CONFIRM_DELETE_MS. */
 export const CONFIRM_DELETE_MS = 8000;
 /** How often the model status pill re-reads the model server while its sheet is open, and while it is closed. */

@@ -85,6 +85,13 @@ export class GaiaStreamDroppedError extends GaiaStreamError {
     }
 }
 
+/** The last re-attach never reached GAIA, so nothing there is still answering. */
+export class GaiaUnreachableError extends GaiaError {
+    constructor(cause: unknown) {
+        super('chatError.gaiaStopped', {}, { cause });
+    }
+}
+
 /** The turn itself failed: GAIA sent an `error` event, with its own words. */
 export class GaiaTurnError extends GaiaError {
     readonly detail: string;
