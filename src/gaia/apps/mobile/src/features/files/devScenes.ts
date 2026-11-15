@@ -4,7 +4,7 @@
 import type { BrowseResponse, PreflightReport } from '@/api/client.types';
 import { createFakeClient } from '@/api/fake';
 
-export type FileBrowserScene = 'root' | 'folder' | 'search' | 'denied' | 'searchStopped';
+export type FileBrowserScene = 'root' | 'folder' | 'search' | 'denied' | 'searchStopped' | 'selected';
 
 const HOME = '/Users/me';
 const DOCS = `${HOME}/Documents`;
@@ -58,10 +58,35 @@ export function fileBrowserScene(scene: FileBrowserScene) {
     });
 }
 
-export const FILE_BROWSER_START: Record<FileBrowserScene, { path?: string; search?: string }> = {
+export const FILE_BROWSER_START: Record<FileBrowserScene, { path?: string; search?: string; selected?: string[] }> = {
     root: {},
     folder: { path: DOCS },
+    selected: { path: DOCS, selected: [`${DOCS}/q3-board.pdf`, `${DOCS}/budget.xlsx`] },
     search: { search: 'board' },
     searchStopped: { search: 'board' },
     denied: { path: `${HOME}/Desktop` },
+};
+
+export type FilePreviewScene = 'loading' | 'text' | 'table' | 'binary';
+
+const previewBase = { extension: '', modified: ago(60), is_text: true, encoding: 'utf-8' };
+
+/** The preview screen on a fake PC; `loading` never answers, so the spinner stays. */
+export function filePreviewScene(scene: FilePreviewScene) {
+    const client = createFakeClient({
+        filePreviews: {
+            [`${DOCS}/notes.txt`]: { ...previewBase, name: 'notes.txt', path: `${DOCS}/notes.txt`, extension: '.txt', size: 2048, size_display: '2 KB', total_lines: 84, preview_lines: ['Board prep', '', '- Confirm Q3 numbers with finance', '- Send the deck on Thursday', '- Ask legal about the vendor clause'] },
+            [`${DOCS}/budget.csv`]: { ...previewBase, name: 'budget.csv', path: `${DOCS}/budget.csv`, extension: '.csv', size: 9216, size_display: '9 KB', total_lines: 241, row_count: 240, columns: ['Region', 'Quarter', 'Revenue', 'Cost'], preview_lines: ['Region,Quarter,Revenue,Cost', 'EMEA,Q1,120400,88200', 'APAC,Q1,98100,70400', 'AMER,Q1,210900,150300'] },
+            [`${DOCS}/q3-board.pdf`]: { ...previewBase, name: 'q3-board.pdf', path: `${DOCS}/q3-board.pdf`, extension: '.pdf', is_text: false, size: 481_000, size_display: '470 KB', preview_lines: [] },
+        },
+    });
+    if (scene === 'loading') client.getFilePreview = () => new Promise(() => {});
+    return client;
+}
+
+export const FILE_PREVIEW_PATH: Record<FilePreviewScene, string> = {
+    loading: `${DOCS}/notes.txt`,
+    text: `${DOCS}/notes.txt`,
+    table: `${DOCS}/budget.csv`,
+    binary: `${DOCS}/q3-board.pdf`,
 };

@@ -13,7 +13,7 @@ import { ScreenBannerProvider, UIProvider } from '@/ui';
 
 const SCENES = Object.keys(FILE_BROWSER_START) as FileBrowserScene[];
 
-/** The PC file browser on a fake PC; `?scene=root|folder|search|searchStopped|denied`. */
+/** The PC file browser on a fake PC; `?scene=root|folder|selected|search|searchStopped|denied`. */
 export default function FilesGalleryRoute() {
     const { scene } = useLocalSearchParams<{ scene?: string }>();
     const router = useRouter();
