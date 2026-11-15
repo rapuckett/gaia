@@ -9,9 +9,15 @@ export const UI_HEADERS = {
 } as const;
 
 export const ENDPOINTS = {
+    activeModel: '/api/providers/active',
+    cloudPrices: '/api/spending/prices/{provider}',
     health: '/api/health',
+    localModelContext: '/api/providers/local/context',
     localModelRestart: '/api/providers/local/restart',
     localModelStatus: '/api/providers/local/status',
+    providerModels: '/api/providers/{provider}/models',
+    providers: '/api/providers',
+    providersSelect: '/api/providers/select',
     schedule: '/api/schedules/{name:path}',
     scheduleRun: '/api/schedules/{name:path}/run',
     scheduleParse: '/api/schedules/parse',
@@ -42,6 +48,14 @@ export const ENDPOINTS = {
     documents: '/api/documents',
     onboardingStart: '/api/onboarding/start',
 } as const;
+
+export function cloudPricesPath(provider: string): string {
+    return ENDPOINTS.cloudPrices.replace('{provider}', encodeURIComponent(provider));
+}
+
+export function providerModelsPath(provider: string): string {
+    return ENDPOINTS.providerModels.replace('{provider}', encodeURIComponent(provider));
+}
 
 export function schedulePath(name: string): string {
     return ENDPOINTS.schedule.replace('{name:path}', encodeURIComponent(name));

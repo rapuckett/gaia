@@ -6,5 +6,6 @@ export * from './connectors';
 export * from './GaiaClientProvider';
 export * from './models';
 export * from './mutations';
+export * from './providers';
 export * from './queries';
 export * from './schedules';

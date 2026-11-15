@@ -95,9 +95,15 @@ describe('endpoints', () => {
         ]);
     });
     const methods: Record<keyof typeof ENDPOINTS, string[]> = {
+        activeModel: ['GET'],
+        cloudPrices: ['GET'],
         health: ['GET'],
+        localModelContext: ['GET', 'PUT'],
         localModelRestart: ['POST'],
         localModelStatus: ['GET'],
+        providerModels: ['GET'],
+        providers: ['GET'],
+        providersSelect: ['POST'],
         schedule: ['DELETE', 'PUT'],
         scheduleRun: ['POST'],
         scheduleParse: ['POST'],

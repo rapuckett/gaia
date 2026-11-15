@@ -17,7 +17,10 @@ import {
     type StreamEndpoint,
 } from './errors';
 import type {
+    ActiveModel,
     AgentMcpList,
+    CloudPriceList,
+    ContextChoice,
     CancelChatResult,
     ConfirmToolResult,
     ConnectorList,
@@ -34,6 +37,8 @@ import type {
     RestartModelResult,
     RequestOptions,
     ParsedSchedule,
+    ProviderModelsResponse,
+    ProvidersResponse,
     Schedule,
     ScheduleList,
     SessionList,
@@ -43,9 +48,11 @@ import type {
 } from './client.types';
 import {
     ATTACH_HEADER_TIMEOUT_MS,
+    cloudPricesPath,
     ENDPOINTS,
     followupOutcomePath,
     MESSAGE_PAGE_SIZE,
+    providerModelsPath,
     QUEUED_IDLE_MS,
     schedulePath,
     scheduleRunPath,
@@ -381,6 +388,34 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         restartLocalModel(confirm, options) {
             return postJson<RestartModelResult>(ENDPOINTS.localModelRestart, { confirm }, options?.signal);
+        },
+
+        listProviders(options) {
+            return getJson<ProvidersResponse>(ENDPOINTS.providers, options?.signal);
+        },
+
+        getActiveModel(options) {
+            return getJson<ActiveModel>(ENDPOINTS.activeModel, options?.signal);
+        },
+
+        selectModel(model, options) {
+            return postJson<ActiveModel>(ENDPOINTS.providersSelect, { model }, options?.signal);
+        },
+
+        listProviderModels(provider, options) {
+            return getJson<ProviderModelsResponse>(providerModelsPath(provider), options?.signal);
+        },
+
+        getContextChoice(model, options) {
+            return getJson<ContextChoice>(`${ENDPOINTS.localModelContext}?model=${encodeURIComponent(model)}`, options?.signal);
+        },
+
+        setContextChoice(model, ctxSize, options) {
+            return putJson<ContextChoice>(ENDPOINTS.localModelContext, { model, ctx_size: ctxSize }, options?.signal);
+        },
+
+        getCloudPrices(provider, options) {
+            return getJson<CloudPriceList>(cloudPricesPath(provider), options?.signal);
         },
 
         getModelNeed(job, options) {

@@ -3,13 +3,18 @@
 
 import type { FollowUpOutcome } from '@webui/utils/messageQueue';
 import type {
+    ActiveModel,
     AgentMcpServer,
+    CloudPriceList,
     ConnectorListEntry,
+    ContextChoice,
     LocalModelStatus,
     Message,
     ModelNeed,
     ModelNeedJob,
     ParsedSchedule,
+    ProviderModelsResponse,
+    ProvidersResponse,
     ResourceUsage,
     Schedule,
     Session,
@@ -21,14 +26,22 @@ import type {
 import type { CreateSessionRequest, DocumentListResponse, SessionSearchResponse, ToolConfirmRequest, UserInputRequest as ApiUserInputRequest } from '@webui/types/api.gen';
 
 export type {
+    ActiveModel,
     AgentMcpServer,
+    CloudPriceList,
     ConnectorListEntry,
     ConnectorRow,
+    ContextChoice,
     LocalModelStatus,
     Message,
     ModelNeed,
     ModelNeedJob,
     ParsedSchedule,
+    ProviderId,
+    ProviderInfo,
+    ProviderModel,
+    ProviderModelsResponse,
+    ProvidersResponse,
     ResourceUsage,
     Schedule,
     Session,
@@ -191,6 +204,17 @@ export interface GaiaClient {
     getSetupStatus(options?: RequestOptions): Promise<SetupRunStatus>;
     /** Stops one model's download; finished and partial files are kept. */
     cancelSetup(modelId: string, options?: RequestOptions): Promise<{ cancelled: boolean }>;
+    /** Every provider with its state, and the model in use. */
+    listProviders(options?: RequestOptions): Promise<ProvidersResponse>;
+    getActiveModel(options?: RequestOptions): Promise<ActiveModel>;
+    /** Makes `model` the one new messages use; rejects with the PC's reason when it can't. */
+    selectModel(model: string, options?: RequestOptions): Promise<ActiveModel>;
+    listProviderModels(provider: string, options?: RequestOptions): Promise<ProviderModelsResponse>;
+    getContextChoice(model: string, options?: RequestOptions): Promise<ContextChoice>;
+    /** Remembers a context size for a local model; null returns it to Automatic. */
+    setContextChoice(model: string, ctxSize: number | null, options?: RequestOptions): Promise<ContextChoice>;
+    /** A cloud provider's list prices, readable before it is connected. */
+    getCloudPrices(provider: string, options?: RequestOptions): Promise<CloudPriceList>;
     /** The new-chat screen's cards and working folder; `skills_error` says why the assistant can't list its skills. */
     getStartScreen(options?: RequestOptions): Promise<StartScreen>;
 }

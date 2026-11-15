@@ -2,7 +2,10 @@
 // SPDX-License-Identifier: MIT
 
 import type {
+    ActiveModel,
     AgentMcpServer,
+    CloudPriceList,
+    ContextChoice,
     ConnectorListEntry,
     CreateSessionRequest,
     FollowUpOutcome,
@@ -14,6 +17,8 @@ import type {
     MessageList,
     ModelNeed,
     ParsedSchedule,
+    ProviderModelsResponse,
+    ProvidersResponse,
     Schedule,
     ResourceUsage,
     Session,
@@ -48,6 +53,16 @@ export interface FakeClientData {
     status?: SystemStatus;
     /** What getLocalModelStatus answers; restarting it records the call. */
     localModel?: LocalModelStatus;
+    /** What listProviders answers; its `active` is what getActiveModel answers until a selectModel. */
+    providers?: ProvidersResponse;
+    /** What listProviderModels answers, by provider. */
+    providerModels?: Record<string, ProviderModelsResponse>;
+    /** What getContextChoice answers, by model; setContextChoice updates it. */
+    contexts?: Record<string, ContextChoice>;
+    /** What getCloudPrices answers, by provider. */
+    cloudPrices?: Record<string, CloudPriceList>;
+    /** Makes selectModel fail with this. */
+    selectError?: GaiaApiError;
     /** What getModelNeed answers, by job; a job not listed needs nothing. */
     modelNeeds?: Partial<Record<ModelNeed['job'], ModelNeed>>;
     /** What getSetupStatus answers. */
@@ -71,6 +86,8 @@ export interface FakeGaiaClient extends GaiaClient {
     readonly scheduleActions: { action: 'pause' | 'resume' | 'run' | 'delete'; name: string }[];
     readonly followUps: { sessionId: string; text: string }[];
     readonly restarts: { confirm: boolean }[];
+    readonly selected: string[];
+    readonly contextSets: { model: string; ctxSize: number | null }[];
     readonly downloads: { modelId: string; acknowledgeLowDisk: boolean }[];
     readonly detached: { sessionId: string; docId: string }[];
 }
@@ -87,6 +104,9 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
     const confirmations: ToolConfirmRequest[] = [];
     const answers: UserInputRequest[] = [];
     const restarts: FakeGaiaClient['restarts'] = [];
+    const selected: string[] = [];
+    const contextSets: FakeGaiaClient['contextSets'] = [];
+    let active = data.providers?.active;
     const downloads: FakeGaiaClient['downloads'] = [];
     const schedules = [...(data.schedules ?? [])];
     const scheduleActions: FakeGaiaClient['scheduleActions'] = [];
@@ -115,6 +135,8 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         scheduleActions,
         followUps,
         restarts,
+        selected,
+        contextSets,
         downloads,
         detached,
         async health(): Promise<HealthResponse> {
@@ -301,6 +323,44 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         async restartLocalModel(confirm) {
             restarts.push({ confirm });
             return { status: 'restarting', model: data.localModel?.model ?? '', starting_server: false };
+        },
+        async listProviders() {
+            if (!data.providers) throw new GaiaApiError(503, 'This fake client was given no providers.');
+            return { ...data.providers, active: active ?? data.providers.active };
+        },
+        async getActiveModel() {
+            if (!active) throw new GaiaApiError(503, 'This fake client was given no providers.');
+            return active;
+        },
+        async selectModel(model) {
+            if (data.selectError) throw data.selectError;
+            selected.push(model);
+            const remote = model.includes('/') || model.startsWith('fireworks.') || model.startsWith('amd.');
+            active = { ...(active ?? { provider: 'local', label: null, is_default: false }), model, remote, display_name: null } as ActiveModel;
+            return active;
+        },
+        async listProviderModels(provider) {
+            const list = data.providerModels?.[provider];
+            if (!list) throw new GaiaApiError(503, `This fake client was given no models for ${provider}.`);
+            return list;
+        },
+        async getContextChoice(model) {
+            const choice = data.contexts?.[model];
+            if (!choice) throw new GaiaApiError(503, `This fake client was given no context sizes for ${model}.`);
+            return choice;
+        },
+        async setContextChoice(model, ctxSize) {
+            const choice = data.contexts?.[model];
+            if (!choice) throw new GaiaApiError(503, `This fake client was given no context sizes for ${model}.`);
+            contextSets.push({ model, ctxSize });
+            const next = { ...choice, chosen: ctxSize, reload: { started: false, reason: 'already_loaded' as const } };
+            data.contexts![model] = next;
+            return next;
+        },
+        async getCloudPrices(provider) {
+            const list = data.cloudPrices?.[provider];
+            if (!list) throw new GaiaApiError(503, `This fake client was given no prices for ${provider}.`);
+            return list;
         },
         async getModelNeed(job) {
             return data.modelNeeds?.[job] ?? { job, needed: false, model: null, disk_free_gb: null };
