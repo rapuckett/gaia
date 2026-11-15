@@ -11,6 +11,7 @@ import { GaiaClientProvider } from '@/data/GaiaClientProvider';
 import { AppErrorBoundary } from '@/features/errors/AppErrorBoundary';
 import { ConnectionBanner } from '@/features/banners/ConnectionBanner';
 import { ModelNeededHost } from '@/features/model';
+import { loadPairedPcs } from '@/features/pairing';
 import { AppDrawer } from '@/features/nav/AppDrawer';
 import { RoutingEffects } from '@/features/nav/RoutingEffects';
 import { INITIAL_ROUTE, PERMANENT_DRAWER_MIN_WIDTH } from '@/features/nav/navigation';
@@ -25,7 +26,7 @@ import { ScreenBannerProvider, UIProvider } from '@/ui';
 export const unstable_settings = { anchor: INITIAL_ROUTE };
 
 // Expo Router renders only the screens a layout declares.
-const ROUTES = [INITIAL_ROUTE, 'new', 'connectors', 'schedules', 'skills', 'chat/[id]', 'dev/ui', 'dev/ui-lists', 'dev/composer', 'dev/forms', 'dev/markdown', 'dev/messages', 'dev/permission'];
+const ROUTES = [INITIAL_ROUTE, 'new', 'connectors', 'schedules', 'skills', 'chat/[id]', 'dev/ui', 'dev/ui-lists', 'dev/composer', 'dev/forms', 'dev/markdown', 'dev/messages', 'dev/pair', 'dev/permission'];
 
 export default function RootLayout() {
     const [queryClient] = useState(() => new QueryClient());
@@ -38,6 +39,10 @@ export default function RootLayout() {
     );
 
     useEffect(() => applyDirection(dir), [dir]);
+    // The saved paired PC becomes the connection once it is read.
+    useEffect(() => {
+        loadPairedPcs().catch((err: unknown) => console.error('Could not read the paired PCs saved on this phone', err));
+    }, []);
 
     return (
         <QueryClientProvider client={queryClient}>

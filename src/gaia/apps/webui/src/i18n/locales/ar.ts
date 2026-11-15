@@ -3515,6 +3515,9 @@ const messages: Messages = {
     'mobileApp.connectors.comingLater': 'الربط من الهاتف قادم في إصدار لاحق. في الوقت الحالي، اربطه من الكمبيوتر الذي يشغّل GAIA.',
     'mobileApp.connectors.googlePcOnly': 'لا يستطيع هذا الهاتف ربط حسابات Google. اربط Google من الكمبيوتر الذي يشغّل GAIA.',
     'mobileApp.banner.openOnPc': 'افتح GAIA على جهاز الكمبيوتر لتشغيل خادم النماذج.',
+    'mobileApp.pairing.cameraAsk': 'يحتاج GAIA إلى الكاميرا لمسح رمز الاقتران الظاهر على جهاز الكمبيوتر.',
+    'mobileApp.pairing.cameraAllow': 'السماح بالكاميرا',
+    'mobileApp.pairing.cameraOff': 'الوصول إلى الكاميرا متوقف لـ GAIA. شغّله من الإعدادات، أو الصق الرمز بدلًا من ذلك.',
 };
 
 export const ar: Locale = {

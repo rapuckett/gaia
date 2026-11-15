@@ -3515,6 +3515,9 @@ export const enMessages = {
     'mobileApp.connectors.comingLater': "Connecting from the phone is coming in a later build. For now, connect it on the PC running GAIA.",
     'mobileApp.connectors.googlePcOnly': "This phone can't connect Google accounts. Connect Google on the PC running GAIA.",
     'mobileApp.banner.openOnPc': 'Open GAIA on your PC to start the model server.',
+    'mobileApp.pairing.cameraAsk': 'GAIA needs the camera to scan the pairing code on your PC.',
+    'mobileApp.pairing.cameraAllow': 'Allow camera',
+    'mobileApp.pairing.cameraOff': 'Camera access is off for GAIA. Turn it on in Settings, or paste the code instead.',
 } as const;
 
 export const en: Locale = {
