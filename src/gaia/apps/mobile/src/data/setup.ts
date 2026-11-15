@@ -285,3 +285,21 @@ export function useApplyTestedBackend() {
     const client = useGaiaClient();
     return useMutation<boolean, Error, void>({ mutationFn: () => applyTestedBackend(requireClient(client)) });
 }
+
+/** Deletes a model that downloaded but didn't load, then downloads it again; follow it with `useSetupStatus`. */
+export function useRedownloadSetupModel() {
+    const client = useGaiaClient();
+    const queryClient = useQueryClient();
+    return useMutation<SetupRunStatus, Error, string>({
+        mutationFn: async (modelId) => {
+            const c = requireClient(client);
+            await c.removeSetupModel(modelId);
+            return c.downloadSetupModel(modelId, false);
+        },
+        onSuccess: (run) => {
+            queryClient.setQueryData(queryKeys.setupStatus, run);
+            void queryClient.invalidateQueries({ queryKey: queryKeys.setupStatus });
+            void queryClient.invalidateQueries({ queryKey: queryKeys.setupPlan });
+        },
+    });
+}

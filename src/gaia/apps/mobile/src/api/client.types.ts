@@ -431,6 +431,8 @@ export interface GaiaClient {
     getModelNeed(job: ModelNeedJob, options?: RequestOptions): Promise<ModelNeed>;
     /** Starts one model's download on the PC; follow it with `getSetupStatus`. */
     downloadSetupModel(modelId: string, acknowledgeLowDisk: boolean, options?: RequestOptions): Promise<SetupRunStatus>;
+    /** Deletes one downloaded model from the PC's model server; answers the new plan and the space freed. */
+    removeSetupModel(modelId: string, options?: RequestOptions): Promise<SetupPlan & { freed_gb: number }>;
     getSetupStatus(options?: RequestOptions): Promise<SetupRunStatus>;
     /** Stops one model's download, or the whole run without a model; finished and partial files are kept. */
     cancelSetup(modelId?: string, options?: RequestOptions): Promise<{ cancelled: boolean }>;
