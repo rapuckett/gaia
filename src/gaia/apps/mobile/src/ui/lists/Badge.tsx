@@ -8,7 +8,14 @@ import type { Tone } from '../theme/tone';
 
 export type BadgeTone = 'neutral' | 'accent' | 'success' | 'warning' | 'danger';
 
-export function Badge({ label, tone = 'neutral' }: { label: string; tone?: BadgeTone }) {
+export interface BadgeProps {
+    label: string;
+    tone?: BadgeTone;
+    /** What a screen reader says instead of the visible label. */
+    accessibilityLabel?: string;
+}
+
+export function Badge({ label, tone = 'neutral', accessibilityLabel }: BadgeProps) {
     const { colors, radius } = useTheme();
     const look: Record<BadgeTone, { bg: string; text: Tone }> = {
         neutral: { bg: colors.bgTertiary, text: 'secondary' },
@@ -19,7 +26,11 @@ export function Badge({ label, tone = 'neutral' }: { label: string; tone?: Badge
     };
     const v = look[tone];
     return (
-        <View style={{ alignSelf: 'flex-start', backgroundColor: v.bg, borderRadius: radius.full, paddingHorizontal: 8, paddingVertical: 2, minWidth: 20 }}>
+        <View
+            accessible={accessibilityLabel !== undefined}
+            accessibilityLabel={accessibilityLabel}
+            style={{ alignSelf: 'flex-start', backgroundColor: v.bg, borderRadius: radius.full, paddingHorizontal: 8, paddingVertical: 2, minWidth: 20 }}
+        >
             <Text role="caption" weight="semibold" tone={v.text} numberOfLines={1} align="center">
                 {label}
             </Text>
