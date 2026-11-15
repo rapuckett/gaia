@@ -76,9 +76,9 @@ def app_env_from(options)
 end
 
 def xcode_jobs
-  jobs = ENV.fetch('AGENT_HOST_HEAVY_JOBS', '').strip
+  jobs = ENV.fetch('GAIA_BUILD_JOBS', '').strip
   return '' if jobs.empty?
-  UI.user_error!("AGENT_HOST_HEAVY_JOBS must be a whole number of 1 or more, not '#{jobs}'. Unset it to let Xcode decide.") unless jobs.match?(/\A[1-9][0-9]*\z/)
+  UI.user_error!("GAIA_BUILD_JOBS must be a whole number of 1 or more, not '#{jobs}'. Unset it to let Xcode decide.") unless jobs.match?(/\A[1-9][0-9]*\z/)
   "-jobs #{jobs}"
 end
 
