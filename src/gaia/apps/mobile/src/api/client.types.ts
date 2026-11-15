@@ -37,6 +37,7 @@ import type {
 } from '@webui/types';
 import type { AgentCapabilities } from '@webui/types/sessionPanel';
 import type { MemorySettings } from '@webui/services/memoryApi';
+import type { ActivityDay, TemporalItem, ToolStat } from '@webui/utils/memoryFormat.core';
 import type { CreateSessionRequest, DocumentListResponse, ModelServerInfo, SessionSearchResponse, ToolConfirmRequest, UserInputRequest as ApiUserInputRequest } from '@webui/types/api.gen';
 
 export type {
@@ -129,6 +130,8 @@ export interface ScheduleList {
 }
 
 export type { MemorySettings } from '@webui/services/memoryApi';
+/** One day of GET /api/memory/activity, one tool of GET /api/memory/tools, one item of GET /api/memory/upcoming; typed as the web's `MemoryDashboard` types them. */
+export type { ActivityDay as MemoryActivityDay, TemporalItem as MemoryUpcomingItem, ToolStat as MemoryToolStat } from '@webui/utils/memoryFormat.core';
 
 /** GET /api/memory/embedding-coverage; typed as the web's `MemoryDashboard` types it. */
 export interface EmbeddingCoverage {
@@ -375,6 +378,12 @@ export interface GaiaClient {
     /** Servers that custom agents declare in their own mcp_servers.json; read-only. */
     listAgentMcps(options?: RequestOptions): Promise<AgentMcpList>;
     listSchedules(options?: RequestOptions): Promise<ScheduleList>;
+    /** The last `days` days of conversations, tool calls, learned entries and errors, oldest first. */
+    getMemoryActivity(days: number, options?: RequestOptions): Promise<ActivityDay[]>;
+    /** Per-tool call counts and timings; memory's own tools are not logged. */
+    getMemoryTools(options?: RequestOptions): Promise<ToolStat[]>;
+    /** Memories due within `days` days, plus the overdue ones. */
+    getMemoryUpcoming(days: number, options?: RequestOptions): Promise<TemporalItem[]>;
     getMemoryStats(options?: RequestOptions): Promise<MemoryStats>;
     getMemorySettings(options?: RequestOptions): Promise<MemorySettings>;
     getEmbeddingCoverage(options?: RequestOptions): Promise<EmbeddingCoverage>;

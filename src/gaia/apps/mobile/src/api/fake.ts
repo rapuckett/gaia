@@ -21,8 +21,11 @@ import type {
     LemonadeFound,
     LemonadeTarget,
     LocalModelStatus,
+    MemoryActivityDay,
     MemorySettings,
     MemoryStats,
+    MemoryToolStat,
+    MemoryUpcomingItem,
     Message,
     MessageList,
     ModelNeed,
@@ -156,6 +159,10 @@ export interface FakeClientData {
     /** Each stats read answers the next entry (the last one repeats); an Error entry is thrown. */
     memoryStats?: (MemoryStats | Error)[];
     embeddingCoverage?: EmbeddingCoverage;
+    /** What the activity read answers for a range in days; an Error is thrown. */
+    memoryActivity?: (days: number) => MemoryActivityDay[] | Error;
+    memoryTools?: MemoryToolStat[] | Error;
+    memoryUpcoming?: MemoryUpcomingItem[] | Error;
     /** What each maintenance POST answers; an Error makes it fail. Unlisted ones answer a zero result. */
     memoryActionResults?: {
         consolidate?: ConsolidateMemoryResult | Error;
@@ -191,6 +198,8 @@ export interface FakeGaiaClient extends GaiaClient {
     readonly capabilityReads: string[];
     /** Each memory maintenance POST, in order. */
     readonly memoryActions: string[];
+    /** The range of each activity read, in order. */
+    readonly memoryActivityReads: number[];
     /** How many times the stats were read. */
     readonly memoryStatsReads: number;
 }
@@ -239,6 +248,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
     const capabilityReads: string[] = [];
     const memoryActions: string[] = [];
     let memoryStatsReads = 0;
+    const memoryActivityReads: number[] = [];
     function memoryAction<T>(name: string, result: T | Error): T {
         memoryActions.push(name);
         if (result instanceof Error) throw result;
@@ -282,6 +292,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         detached,
         capabilityReads,
         memoryActions,
+        memoryActivityReads,
         get memoryStatsReads() {
             return memoryStatsReads;
         },
@@ -500,6 +511,23 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         },
         async listSkills() {
             return { skills: [...(data.skills?.skills ?? [])], invalid: { ...(data.skills?.invalid ?? {}) } };
+        },
+        async getMemoryActivity(days) {
+            memoryActivityReads.push(days);
+            if (!data.memoryActivity) throw new GaiaApiError(503, 'This fake client was given no memory activity.');
+            const rows = data.memoryActivity(days);
+            if (rows instanceof Error) throw rows;
+            return rows;
+        },
+        async getMemoryTools() {
+            if (!data.memoryTools) throw new GaiaApiError(503, 'This fake client was given no memory tool stats.');
+            if (data.memoryTools instanceof Error) throw data.memoryTools;
+            return data.memoryTools;
+        },
+        async getMemoryUpcoming() {
+            if (!data.memoryUpcoming) throw new GaiaApiError(503, 'This fake client was given no upcoming items.');
+            if (data.memoryUpcoming instanceof Error) throw data.memoryUpcoming;
+            return data.memoryUpcoming;
         },
         async getMemoryStats() {
             if (!data.memoryStats?.length) throw new GaiaApiError(503, 'This fake client was given no memory stats.');
