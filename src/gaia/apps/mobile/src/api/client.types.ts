@@ -16,6 +16,7 @@ import type {
     ModelNeedJob,
     PermissionMode,
     PreflightReport,
+    ProvidersResponse,
     ParsedSchedule,
     ProviderModelsResponse,
     ResourceUsage,
@@ -33,7 +34,7 @@ import type {
 } from '@webui/types';
 import type { AgentCapabilities } from '@webui/types/sessionPanel';
 import type { MemorySettings } from '@webui/services/memoryApi';
-import type { CreateSessionRequest, DocumentListResponse, SessionSearchResponse, ToolConfirmRequest, UserInputRequest as ApiUserInputRequest } from '@webui/types/api.gen';
+import type { CreateSessionRequest, DocumentListResponse, ModelServerInfo, SessionSearchResponse, ToolConfirmRequest, UserInputRequest as ApiUserInputRequest } from '@webui/types/api.gen';
 
 export type {
     ActiveModel,
@@ -51,6 +52,7 @@ export type {
     ModelNeedJob,
     PermissionMode,
     PreflightReport,
+    ProvidersResponse,
     ParsedSchedule,
     ProviderModelsResponse,
     ResourceUsage,
@@ -69,7 +71,7 @@ export type {
     UnavailableConnectorRow,
 } from '@webui/types';
 export type { ActiveSkill, AgentCapabilities, AgentTool, SkillOrigin } from '@webui/types/sessionPanel';
-export type { CreateSessionRequest, DocumentListResponse, SessionSearchResponse, SessionSearchResult, ToolConfirmRequest } from '@webui/types/api.gen';
+export type { CreateSessionRequest, DocumentListResponse, ModelServerInfo, SessionSearchResponse, SessionSearchResult, ToolConfirmRequest } from '@webui/types/api.gen';
 
 /** `display` is what the phone shows as the answer; it is never sent to GAIA. */
 export type UserInputRequest = ApiUserInputRequest & { display?: string };
@@ -402,6 +404,12 @@ export interface GaiaClient {
     checkSetup(skipChatModel: boolean, options?: RequestOptions): Promise<SetupCheck>;
     /** This PC's memory, disk, GPU and NPU as setup reads them. */
     getPreflight(options?: RequestOptions): Promise<PreflightReport>;
+    /** The cloud providers; `blocked` is set on each while Local only is on. */
+    listProviders(options?: RequestOptions): Promise<ProvidersResponse>;
+    /** The model server GAIA uses: whether it answers, and the llama.cpp backends it lists and prefers. */
+    getModelServer(options?: RequestOptions): Promise<ModelServerInfo>;
+    /** Saves the llama.cpp backend for chat models (`auto` or a backend name); PC-only. */
+    setModelServerBackend(backend: string, options?: RequestOptions): Promise<ModelServerInfo>;
     /** Which model server GAIA uses, and whether the PC still has to choose one. */
     getLemonadeTarget(options?: RequestOptions): Promise<LemonadeTarget>;
     /** A model server the PC already runs; `unchecked` lists addresses that took the connection but didn't answer. */

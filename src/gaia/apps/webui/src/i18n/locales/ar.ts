@@ -1565,6 +1565,7 @@ const messages: Messages = {
     'setup.plan.start': 'تنزيل وبدء',
     'setup.plan.startNoDownload': 'اختبار وبدء',
     'setup.plan.customize': 'تخصيص',
+    'setup.plan.pcOnly': 'غيّر هذا على الكمبيوتر الذي يشغّل GAIA',
     'setup.plan.cloud': 'استخدام نموذج سحابي',
     'setup.plan.cloudLabel': 'نموذج سحابي',
     'setup.plan.cloudWhy.stillLocal': 'يعمل نموذج المحادثة على حواسيب المزوّد. ما زال GAIA يجهّز دعم الرسومات ونموذجًا صغيرًا على هذا الجهاز للبحث في ملفاتك وتذكّر الأشياء.',

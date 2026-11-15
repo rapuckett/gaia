@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: MIT
 
 import { createFakeClient } from '@/api/fake';
-import type { SetupCheck } from '@/api/client.types';
+import type { ModelServerInfo, SetupCheck } from '@/api/client.types';
 import { GaiaNetworkError } from '@/api/errors';
 
-import { gateFromCheck, runSetupCheck } from './setup';
+import { applyTestedBackend, gateFromCheck, runSetupCheck } from './setup';
 
 const check = (c: Partial<SetupCheck>): SetupCheck => ({ ready: false, steps: [], ...c });
 const instant = async () => {};
@@ -72,5 +72,27 @@ describe('runSetupCheck', () => {
         const gate = await runSetupCheck(client, { sleep: instant });
         expect(gate).toMatchObject({ state: 'unknown', upgradeFailed: true });
         expect((gate as { error: Error }).error.message).toBe('disk full');
+    });
+});
+
+describe('applyTestedBackend', () => {
+    const server = (s: Partial<ModelServerInfo>): ModelServerInfo => ({ base_url: 'http://x', owner: 'gaia', reachable: true, ...s });
+    const run = async (s: Partial<ModelServerInfo>) => {
+        const client = createFakeClient({ modelServer: server(s) });
+        const set = await applyTestedBackend(client);
+        return { set, saved: client.backendSets };
+    };
+    const vulkan = [{ name: 'vulkan' }, { name: 'cpu' }] as ModelServerInfo['available_backends'];
+
+    it('saves vulkan when the PC lists it and it is not already the pick', async () => {
+        expect(await run({ available_backends: vulkan, default_backend: 'rocm' })).toEqual({ set: true, saved: ['vulkan'] });
+        expect(await run({ available_backends: vulkan, preferred_backend: 'cpu', default_backend: 'vulkan' })).toEqual({ set: true, saved: ['vulkan'] });
+    });
+
+    it('leaves the backend alone when it is vulkan, vulkan is missing, or the server is down', async () => {
+        expect((await run({ available_backends: vulkan, preferred_backend: 'vulkan' })).saved).toEqual([]);
+        expect((await run({ available_backends: vulkan, default_backend: 'vulkan' })).saved).toEqual([]);
+        expect((await run({ available_backends: [{ name: 'cpu' }] as ModelServerInfo['available_backends'] })).saved).toEqual([]);
+        expect((await run({ available_backends: vulkan, reachable: false })).saved).toEqual([]);
     });
 });
