@@ -209,6 +209,8 @@ describe('endpoints', () => {
         documentStatus: ['GET'],
         documentUpload: ['POST'],
         documents: ['GET'],
+        filesImage: ['GET'],
+        filesPreview: ['GET'],
         filesUpload: ['POST'],
         filesUploadMedia: ['POST'],
         modelServer: ['GET'],

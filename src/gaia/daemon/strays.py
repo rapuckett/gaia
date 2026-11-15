@@ -80,8 +80,10 @@ def find_daemons() -> List[DaemonProcess]:
     """
     import psutil
 
+    from gaia.utils.process_tree import readable_processes
+
     found = {}
-    for proc in psutil.process_iter(["pid", "ppid", "cmdline", "create_time"]):
+    for proc in readable_processes(["pid", "ppid", "cmdline", "create_time"]):
         if not is_daemon_cmdline(proc.info["cmdline"] or []):
             continue
         try:
