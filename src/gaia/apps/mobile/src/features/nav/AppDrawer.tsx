@@ -38,6 +38,10 @@ export function AppDrawer({ navigation }: DrawerContentComponentProps) {
                 openNewChat(router);
                 navigation.closeDrawer();
             }}
+            onPcs={() => {
+                router.push('/pair/pcs');
+                navigation.closeDrawer();
+            }}
             onClose={() => navigation.closeDrawer()}
         />
     );

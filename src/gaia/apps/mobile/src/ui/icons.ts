@@ -35,6 +35,7 @@ export {
   Lock,
   Menu,
   MessageSquare,
+  Monitor,
   PanelRight,
   Paperclip,
   Pause,
