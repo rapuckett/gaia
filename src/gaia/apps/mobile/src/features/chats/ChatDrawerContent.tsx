@@ -139,6 +139,7 @@ export function ChatDrawerContent({ activeId, onSelect, onClose, onNewChat, onPc
     return (
         <Screen
             edges={['top', 'bottom', 'start']}
+            footerBleed
             header={<Header onClose={close} onNewChat={onNewChat ? newChat : undefined} onPcs={onPcs} />}
             footer={
                 <Stack>

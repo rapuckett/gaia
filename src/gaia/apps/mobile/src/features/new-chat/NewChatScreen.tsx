@@ -130,6 +130,7 @@ export function NewChatScreen({ onOpen, initialText = '', prompt }: NewChatScree
         <Screen
             keyboard="avoid"
             scroll
+            footerBleed
             header={<ScreenHeader />}
             footer={
                 <>
