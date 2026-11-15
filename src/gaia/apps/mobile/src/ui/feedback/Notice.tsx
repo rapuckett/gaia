@@ -21,8 +21,8 @@ export interface NoticeProps {
     action?: { label: string; onPress: () => void };
     /** Shows a close button at the end. */
     onDismiss?: () => void;
-    /** `note` marks a side remark that isn't an alert, e.g. a library notice. */
-    role?: 'note';
+    /** `note` or `status` marks advice that isn't an alert; a live region stays polite. */
+    role?: 'note' | 'status';
     /** `card` is the desktop's `.model-warning`: a tinted box with a 25% border in the tone's color, no start bar, and a toned title. */
     variant?: 'tint' | 'card';
     testID?: string;
@@ -50,7 +50,7 @@ export function Notice({ tone, title, message, action, onDismiss, role, variant 
         accessible: true,
         role,
         accessibilityRole: role ? undefined : tone === 'danger' || tone === 'warning' ? ('alert' as const) : undefined,
-        accessibilityLiveRegion: tone === 'danger' || tone === 'warning' ? ('assertive' as const) : ('polite' as const),
+        accessibilityLiveRegion: !role && (tone === 'danger' || tone === 'warning') ? ('assertive' as const) : ('polite' as const),
     };
     return (
         <View
