@@ -13,6 +13,7 @@ import Model from './panes/Model';
 import Permissions from './panes/Permissions';
 import Placeholder from './panes/Placeholder';
 import Privacy from './panes/Privacy';
+import ReadAloud from './panes/ReadAloud';
 import Setup from './panes/Setup';
 
 /** The web's settings sections, in its nav order; `voice` is "Read aloud". */
@@ -50,7 +51,7 @@ export const SETTINGS_SECTIONS: Record<SectionId, SettingsSectionEntry> = {
     automations: { titleKey: 'settings.section.automations', icon: Clock, pane: Placeholder },
     memory: { titleKey: 'settings.section.memory', icon: Brain, pane: Memory },
     notifications: { titleKey: 'settings.section.notifications', icon: Bell, pane: Placeholder },
-    voice: { titleKey: 'settings.section.voice', icon: Volume2, pane: Placeholder },
+    voice: { titleKey: 'settings.section.voice', icon: Volume2, pane: ReadAloud },
     privacy: { titleKey: 'settings.section.privacy', icon: Lock, pane: Privacy },
     advanced: { titleKey: 'settings.section.advanced', icon: Wrench, pane: Advanced },
     about: { titleKey: 'settings.section.about', icon: Info, pane: Placeholder },

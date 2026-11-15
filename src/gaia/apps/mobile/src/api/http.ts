@@ -62,6 +62,7 @@ import type {
     MemoryKnowledgePage,
     MemorySettings,
     MemoryStats,
+    PcAudioBytes,
     MemoryToolStat,
     MemoryUpcomingItem,
     MessageList,
@@ -88,6 +89,8 @@ import type {
     SetupRunStatus,
     Settings,
     SkillList,
+    SpeechModel,
+    SpeechSettings,
     UndoSettings,
     UploadedFile,
     UserInputResult,
@@ -240,6 +243,26 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
         } catch {
             throw new GaiaApiError(res.status, text.slice(0, 200), 'mobileApp.error.notJson', { path });
         }
+    }
+
+    async function readBytes(res: FetchResponseLike): Promise<Uint8Array<ArrayBuffer>> {
+        if (!res.body) throw new GaiaStreamError('mobileApp.error.noBody');
+        const reader = res.body.getReader();
+        const chunks: Uint8Array[] = [];
+        let size = 0;
+        for (;;) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            chunks.push(value);
+            size += value.length;
+        }
+        const out = new Uint8Array(size);
+        let at = 0;
+        for (const chunk of chunks) {
+            out.set(chunk, at);
+            at += chunk.length;
+        }
+        return out;
     }
 
     async function getJson<T>(path: string, signal?: AbortSignal): Promise<T> {
@@ -679,6 +702,23 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         getMemoryStats(options) {
             return getJson<MemoryStats>(ENDPOINTS.memoryStats, options?.signal);
+        },
+
+        getSpeechSettings(options) {
+            return getJson<SpeechSettings>(ENDPOINTS.speechSettings, options?.signal);
+        },
+
+        updateSpeechSettings(change, options) {
+            return putJson<SpeechSettings>(ENDPOINTS.speechSettings, change, options?.signal);
+        },
+
+        getSpeechModel(options) {
+            return getJson<SpeechModel>(ENDPOINTS.speechModel, options?.signal);
+        },
+
+        async speak(text, voice, options): Promise<PcAudioBytes> {
+            const res = await request('POST', ENDPOINTS.speech, { text, voice: voice?.voice, speed: voice?.speed }, options?.signal);
+            return { bytes: await readBytes(res), contentType: res.headers.get('content-type') ?? '' };
         },
 
         getMemorySettings(options) {
