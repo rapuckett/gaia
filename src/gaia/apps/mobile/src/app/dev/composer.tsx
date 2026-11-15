@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: MIT
 
 import { Redirect } from 'expo-router';
+
+import { devGalleryEnabled } from '@/features/dev/devGallery';
 import { useState } from 'react';
 
 import { MAX_MESSAGE_CHARS } from '@webui/utils/messageLimits';
@@ -13,7 +15,7 @@ import { Divider, Screen, Stack, UIProvider } from '@/ui';
 export default function ComposerGalleryRoute() {
     const t = useT();
     const [text, setText] = useState('');
-    if (!__DEV__) return <Redirect href="/" />;
+    if (!devGalleryEnabled()) return <Redirect href="/" />;
     const noop = () => {};
     return (
         <UIProvider>
