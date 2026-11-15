@@ -15,9 +15,9 @@ export function TryChips({ onPick }: { onPick: (prompt: string) => void }) {
                 {t('cards.try')}
             </Text>
             <Row gap="sm" wrap>
-                {TRY_EXAMPLES.map(({ label, prompt }) => (
+                {TRY_EXAMPLES.map(({ icon, label, prompt }) => (
                     // Plain text for the box: no English gloss in brackets.
-                    <Chip key={label} label={t(label)} onPress={() => onPick(t.bare(prompt))} />
+                    <Chip key={label} icon={icon} label={t(label)} onPress={() => onPick(t.bare(prompt))} />
                 ))}
             </Row>
         </Stack>

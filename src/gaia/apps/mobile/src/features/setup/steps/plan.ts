@@ -50,7 +50,7 @@ export function cloudIsBlocked(providers: readonly Pick<ProviderSummary, 'id' | 
     return cloud.length > 0 && cloud.every((p) => p.blocked);
 }
 
-/** What the plan's Continue starts the run with: the ticked models setup doesn't plan, and whether the low disk was confirmed. */
-export function startOptions(plan: SetupPlan, selection: Selection, acknowledgeLowDisk: boolean): SetupRunOptions {
-    return { acknowledgeLowDisk, keepTrying: false, extraModels: extraModels(plan, selection) };
+/** What the plan's Continue starts the run with: the ticked models setup doesn't plan, whether the low disk was confirmed, and whether to wait out a dropped connection. */
+export function startOptions(plan: SetupPlan, selection: Selection, acknowledgeLowDisk: boolean, keepTrying: boolean): SetupRunOptions {
+    return { acknowledgeLowDisk, keepTrying, extraModels: extraModels(plan, selection) };
 }

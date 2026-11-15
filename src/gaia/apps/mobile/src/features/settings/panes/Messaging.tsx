@@ -3,7 +3,6 @@
 
 import * as Clipboard from 'expo-clipboard';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { Linking } from 'react-native';
 
 import type { Translate } from '@webui/i18n/translator';
 
@@ -12,23 +11,27 @@ import { ENDPOINTS } from '@/api/constants';
 import { GaiaApiError, GaiaError, GaiaNetworkError } from '@/api/errors';
 import { useDeviceRefused } from '@/api/routeAccess';
 import { useDiscordStatus } from '@/data';
+import { PcOnlyAction } from '@/features/logs/PcOnlyAction';
 import { useT } from '@/i18n/useT';
+import { openLinkFromPress } from '@/platform/openLink';
 import { Badge, Button, Card, Disclosure, Ltr, Notice, Row, Spinner, Stack, StatusDot, Surface, Text } from '@/ui';
-import { Check, Copy, ExternalLink } from '@/ui/icons';
+import { Check, Copy, ExternalLink, Link2, Play, Plug, RefreshCw, RotateCw, Square, Trash2, Zap, type LucideIcon } from '@/ui/icons';
+
+import { isolate } from './model/modelText';
 
 // Every /api/messaging route is PC-only (the status carries the pairing code, the POSTs the bot
 // token), so the phone reads what it is allowed to and offers no action the PC would refuse.
 
-/** Discord's own button names, as webui's MessagingSettings quotes them. */
+/** Discord's own button names, as webui's MessagingSettings quotes them; isolated so the quotes and period stay in order in Arabic. */
 const PORTAL = {
-    newApp: 'New Application',
-    create: 'Create',
-    bot: 'Bot',
-    reset: 'Reset Token',
-    copy: 'Copy',
-    message: 'Message',
-    createOwn: 'Create My Own',
-    forFriends: 'For me and my friends',
+    newApp: isolate('New Application'),
+    create: isolate('Create'),
+    bot: isolate('Bot'),
+    reset: isolate('Reset Token'),
+    copy: isolate('Copy'),
+    message: isolate('Message'),
+    createOwn: isolate('Create My Own'),
+    forFriends: isolate('For me and my friends'),
 };
 
 const PROBLEMS = new Set<DiscordState>(['error', 'taken_over', 'token_invalid', 'credentials_unavailable', 'conflict']);
@@ -40,7 +43,7 @@ function formatCode(code: string): string {
 }
 
 function open(url: string) {
-    Linking.openURL(url).catch((error: unknown) => console.error(`Opening ${url} failed`, error));
+    openLinkFromPress(url);
 }
 
 function LinkButton({ url, label, primary }: { url: string; label: string; primary?: boolean }) {
@@ -50,7 +53,7 @@ function LinkButton({ url, label, primary }: { url: string; label: string; prima
 function Step({ n, title, children }: { n: number; title: string; children?: ReactNode }) {
     return (
         <Row gap="md" align="start">
-            <Badge label={String(n)} />
+            <Badge shape="pill" label={String(n)} />
             <Stack gap="sm" flex={1}>
                 <Text role="label" weight="semibold" accessibilityRole="header">
                     {title}
@@ -72,6 +75,12 @@ function Hint({ children, tone = 'secondary' }: { children: ReactNode; tone?: 's
 function PcOnly() {
     const t = useT();
     return <Notice tone="info" message={t('mobileApp.settings.pcOnly')} testID="messaging-pc-only" />;
+}
+
+/** A button the web shows here; the PC does it, so the phone explains on press. */
+function PcAction({ id, label, icon, note }: { id: string; label: string; icon: LucideIcon; note?: string }) {
+    const t = useT();
+    return <PcOnlyAction label={label} icon={icon} note={note} detail={t('mobileApp.settings.pcOnly')} testID={`messaging-${id}`} />;
 }
 
 function Pitch() {
@@ -173,7 +182,9 @@ function Refused() {
             </Text>
             <Stack gap="lg">
                 <CreateBotStep />
-                <Step n={2} title={t('settings.messaging.step2.title')} />
+                <Step n={2} title={t('settings.messaging.step2.title')}>
+                    <PcAction id="connect" label={t('settings.messaging.connect')} icon={Plug} note={t('settings.messaging.connectingHint')} />
+                </Step>
                 <AddBotStep />
                 <DmStep />
             </Stack>
@@ -200,6 +211,20 @@ function explainKey(s: DiscordStatus) {
     }
 }
 
+function fixKey(s: DiscordStatus) {
+    switch (s.state) {
+        case 'stopped':
+        case 'error':
+            return 'settings.messaging.start';
+        case 'credentials_unavailable':
+            return 'settings.messaging.retry';
+        case 'taken_over':
+            return 'settings.messaging.takeOver';
+        default:
+            return null;
+    }
+}
+
 /** What the PC answered, read-only: the web's states, links and pairing code, with the PC-only notice where its buttons are. */
 function StatusView({ s }: { s: DiscordStatus }) {
     const t = useT();
@@ -216,6 +241,7 @@ function StatusView({ s }: { s: DiscordStatus }) {
     const answering = s.connected && s.paired && s.state === 'connected';
     const starting = s.state === 'starting';
     const explain = explainKey(s);
+    const fix = fixKey(s);
     const problem = PROBLEMS.has(s.state) || (s.state === 'stopped' && s.autostart);
 
     return (
@@ -225,6 +251,7 @@ function StatusView({ s }: { s: DiscordStatus }) {
             {explain && s.connected && !starting ? (
                 <Stack gap="xs">
                     <Notice tone={problem ? 'warning' : 'info'} message={t(explain)} testID="messaging-state" />
+                    {fix ? <PcAction id="fix" label={t(fix)} icon={fix === 'settings.messaging.takeOver' ? Zap : fix === 'settings.messaging.retry' ? RefreshCw : Play} /> : null}
                     {SHOW_DETAIL.has(s.state) && s.detail ? (
                         <Disclosure title={t('mobileApp.settings.privacy.details')} open={detailOpen} onToggle={() => setDetailOpen((o) => !o)}>
                             <Text role="label" tone="secondary" dir="auto" selectable>
@@ -247,7 +274,7 @@ function StatusView({ s }: { s: DiscordStatus }) {
                 <Stack gap="lg">
                     <CreateBotStep portalUrl={s.portal_url} />
                     <Step n={2} title={t('settings.messaging.step2.title')}>
-                        <PcOnly />
+                        <PcAction id="connect" label={t('settings.messaging.connect')} icon={Plug} note={t('settings.messaging.connectingHint')} />
                     </Step>
                 </Stack>
             ) : null}
@@ -257,6 +284,7 @@ function StatusView({ s }: { s: DiscordStatus }) {
                     <Hint>{t('settings.messaging.pairingLede')}</Hint>
                     <AddBotStep inviteUrl={s.invite_url} />
                     <DmStep s={s} />
+                    {s.state === 'connected' && !s.paired ? <PcAction id="show-code" label={t('settings.messaging.showCode')} icon={Link2} /> : null}
                 </Stack>
             ) : null}
 
@@ -286,6 +314,9 @@ function StatusView({ s }: { s: DiscordStatus }) {
                             <LinkButton url={s.bot_profile_url} label={t('settings.messaging.openInDiscord')} primary />
                         </Row>
                     ) : null}
+                    <PcAction id="stop" label={t('settings.messaging.stop')} icon={Square} />
+                    <PcAction id="restart" label={t('settings.messaging.restart')} icon={RotateCw} />
+                    <PcAction id="pair-other" label={t('settings.messaging.pairOther')} icon={Link2} />
                 </Stack>
             ) : null}
 
@@ -297,7 +328,17 @@ function StatusView({ s }: { s: DiscordStatus }) {
                             {`• ${label}`}
                         </Text>
                     ))}
+                    <PcAction id="forget-always" label={t('settings.messaging.forgetAlways')} icon={RefreshCw} />
                 </Stack>
+            ) : null}
+
+            {s.connected ? (
+                <PcAction
+                    id="disconnect"
+                    label={t('settings.messaging.disconnect')}
+                    icon={Trash2}
+                    note={`${t('settings.messaging.disconnectTitle')} ${t('settings.messaging.disconnectBody')}`}
+                />
             ) : null}
 
             {needsToken ? null : <PcOnly />}

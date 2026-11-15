@@ -1,6 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
+import { connectCardProviders, hasConnectCard } from '@webui/utils/connectAccountCard.core';
 import { isAuthRequiredMessage } from '@webui/utils/connectorRetry.core';
 import { useEffect, useRef, useState } from 'react';
 
@@ -11,7 +12,7 @@ import { MAX_STREAM_RECONNECTS } from '@webui/utils/streamErrors.core';
 import { useChatReadAloud } from '@/features/audio/useChatReadAloud';
 import { useAnswerQuestion, useChatStream, useContextUsage, usePermissionMode, useMessages, useRefreshTurnChanges, useSession } from '@/data';
 import { FlagshipAgentBanner } from '@/features/banners/FlagshipAgentBanner';
-import { Composer, ContextMeter, ContextWarning, ModelChip, PermissionChip, useAttachments, useComposerQueue, useFollowUpEvents } from '@/features/composer';
+import { Composer, ContextMeter, ContextWarning, ModelChip, PermissionChip, SpendMeter, useAttachments, useComposerQueue, useFollowUpEvents } from '@/features/composer';
 import { QueuedMessages } from '@/features/composer/QueuedMessages';
 import { FileScope } from '@/features/files';
 import { describeError, describeErrorWith, useT } from '@/i18n/useT';
@@ -21,6 +22,7 @@ import { ErrorState, Notice, Screen, Stack } from '@/ui';
 import { useAnswerComparison } from './compare/useAnswerComparison';
 import { ChatPrompts } from './ChatPrompts';
 import { ConnectorRetry } from './ConnectorRetry';
+import { HistoryNotice, historyNoticeText } from './HistoryNotice';
 import { ChatHeader } from './header';
 import { PermissionPrompt } from './permission/PermissionPrompt';
 import { usePermissionPrompt } from './permission/usePermissionPrompt';
@@ -29,7 +31,7 @@ import { MessageList } from './messages/MessageList';
 import { TailIssues } from './ReplyErrors';
 import { registerOpenChat } from './sendToOpenChat';
 import { OfflineNotice, SessionPanel } from './session-panel';
-import { buildTail } from './tailState';
+import { buildTail, serverDownReplyId } from './tailState';
 import { TurnTail } from './TurnTail';
 import { useTurnAnnouncer, useTurnEnd } from './useTurnAnnouncer';
 
@@ -54,6 +56,7 @@ export function ChatScreen({ sessionId, onManageDocuments }: { sessionId: string
     const { comparing } = useAnswerComparison(sessionId);
     const hold = busy || comparing;
     const context = useContextUsage(sessionId, stream.events, busy);
+    const historyNotice = historyNoticeText(stream.events);
     const saved = messages.data?.messages ?? NO_MESSAGES;
     useChatReadAloud(sessionId, stream, saved);
     useTurnAnnouncer(stream, saved);
@@ -66,7 +69,15 @@ export function ChatScreen({ sessionId, onManageDocuments }: { sessionId: string
     const builtTail = buildTail(saved, stream);
     const tail = builtTail && retiredAgent ? { ...builtTail, canTryAgain: false, canContinue: false } : builtTail;
     const lastReply = saved.filter((m) => m.role !== 'system').at(-1);
-    const connectorError = !busy && !retiredAgent && lastReply?.role === 'assistant' && isAuthRequiredMessage(lastReply.content) ? lastReply : null;
+    const connectProviders = connectCardProviders(lastReply);
+    // A Connect card names its connectors outright; a reply with only its wording is read for them.
+    const connectorError =
+        !busy &&
+        !retiredAgent &&
+        lastReply?.role === 'assistant' &&
+        (hasConnectCard(lastReply) ? connectProviders.length > 0 : isAuthRequiredMessage(lastReply.content))
+            ? lastReply
+            : null;
     const line = stream.reconnecting
         ? t('live.reconnectingStream', { attempt: stream.reconnecting, max: MAX_STREAM_RECONNECTS })
         : liveStatusLine(
@@ -165,7 +176,7 @@ export function ChatScreen({ sessionId, onManageDocuments }: { sessionId: string
                             />
                         </Stack>
                     ) : null}
-                    {connectorError ? <ConnectorRetry content={connectorError.content} onRetry={() => tryAgain(connectorError.id)} /> : null}
+                    {connectorError ? <ConnectorRetry content={connectorError.content} providers={connectProviders} onRetry={() => tryAgain(connectorError.id)} /> : null}
                     {permission ? <PermissionPrompt key={permission.prompt.id} {...permission} /> : null}
                     <QueuedMessages
                         items={queue.held}
@@ -191,7 +202,8 @@ export function ChatScreen({ sessionId, onManageDocuments }: { sessionId: string
                         disabledReason={disabledReason}
                         rightControls={
                             <>
-                                <ContextMeter usage={context.usage} unavailable={context.unavailable} />
+                                <SpendMeter sessionId={sessionId} busy={busy} />
+                                <ContextMeter usage={context.usage} unavailable={context.unavailable} onDetails={() => setPanelOpen(true)} />
                                 <ModelChip turnRunning={busy} />
                             </>
                         }
@@ -205,8 +217,10 @@ export function ChatScreen({ sessionId, onManageDocuments }: { sessionId: string
                 <MessageList
                     sessionId={sessionId}
                     readOnly={!!retiredAgent}
+                    fixShownBelowId={serverDownReplyId(tail)}
                     live={
                         <>
+                            {historyNotice ? <HistoryNotice text={historyNotice} /> : null}
                             {tail ? (
                                 <TurnTail
                                     tail={tail}

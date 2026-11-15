@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import { useRouter } from 'expo-router';
+import { Image, type ImageSourcePropType } from 'react-native';
 import { useCallback, useMemo, useState } from 'react';
 
 import { APP_NAME } from '@webui/utils/constants';
@@ -22,13 +23,12 @@ import {
     Notice,
     Row,
     Screen,
+    SearchField,
     SectionHeader,
     SectionList,
-    Spacer,
     Stack,
     StatusDot,
     Text,
-    TextField,
 } from '@/ui';
 import { Ellipsis, EyeOff, Monitor, Plus, X } from '@/ui/icons';
 
@@ -152,13 +152,7 @@ export function ChatDrawerContent({ activeId, onSelect, onClose, onNewChat, onPc
             }
         >
             <Stack paddingX="lg" paddingY="sm">
-                <TextField
-                    value={text}
-                    onChangeText={setText}
-                    placeholder={t('sidebar.search')}
-                    accessibilityLabel={t('sidebar.search')}
-                    returnKeyType="search"
-                />
+                <SearchField value={text} onChangeText={setText} placeholder={t.bare('sidebar.search')} accessibilityLabel={t('sidebar.search')} />
             </Stack>
             {entries.filter((e) => !e.footer).map((e) => (
                 <NavRow key={e.key} entry={e} active={activeRoute === e.route} onOpen={open} />
@@ -223,13 +217,18 @@ export function ChatDrawerContent({ activeId, onSelect, onClose, onNewChat, onPc
     );
 }
 
+// The same mark as the web sidebar's brand.
+const gaiaRobot: ImageSourcePropType = require('@webui/assets/gaia-robot.png');
+
 function Header({ onClose, onNewChat, onPcs }: { onClose: () => void; onNewChat?: () => void; onPcs?: () => void }) {
     const t = useT();
     return (
         <Stack paddingX="lg" paddingY="sm">
             <Row gap="sm" accessibilityRole="header">
-                <Text role="title" weight="semibold">{APP_NAME}</Text>
-                <Spacer />
+                <Image source={gaiaRobot} accessible={false} style={{ width: 22, height: 22 }} />
+                <Stack flex={1}>
+                    <Text role="title" weight="semibold">{APP_NAME}</Text>
+                </Stack>
                 {onPcs ? <IconButton icon={Monitor} label={t('mobileApp.pairing.pcs.title')} onPress={onPcs} testID="pcs-drawer-button" /> : null}
                 {onNewChat ? <IconButton icon={Plus} label={t('sidebar.newChat')} onPress={onNewChat} /> : null}
                 <IconButton icon={X} label={t('sidebar.collapse')} onPress={onClose} />

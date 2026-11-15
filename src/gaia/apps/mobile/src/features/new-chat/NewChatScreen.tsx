@@ -14,7 +14,9 @@ import { ScreenHeader } from '@/features/nav/ScreenHeader';
 import { useT } from '@/i18n/useT';
 import { useLastChatStore } from '@/state/lastChat';
 import { useRouteNoticeStore } from '@/state/routeNotice';
-import { Disclosure, Notice, ProgressLine, Screen, Stack, Text } from '@/ui';
+import { Disclosure, IconButton, Notice, ProgressLine, Row, Screen, Stack, Surface, Text } from '@/ui';
+import { DotGrid } from '@/ui/controls/DotGrid';
+import { X } from '@/ui/icons';
 
 import { DocumentBriefCard } from './DocumentBriefCard';
 import { LibraryDocuments } from './LibraryDocuments';
@@ -29,12 +31,14 @@ import { shortModelName, warmUpLine, warmUpProgress } from './warmUp';
 export interface NewChatScreenProps {
     // Opens the chat once its first message is under way.
     onOpen: (sessionId: string) => void;
+    // Opens the document library, to choose what the new chat searches.
+    onChooseDocuments: () => void;
     initialText?: string;
     // A skill's prompt goes in the box under any unsent draft; a new `id` adds it again.
     prompt?: { id: string; text: string };
 }
 
-export function NewChatScreen({ onOpen, initialText = '', prompt }: NewChatScreenProps) {
+export function NewChatScreen({ onOpen, onChooseDocuments, initialText = '', prompt }: NewChatScreenProps) {
     const t = useT();
     const status = useSystemStatus().data;
     const createSession = useCreateSession();
@@ -69,6 +73,24 @@ export function NewChatScreen({ onOpen, initialText = '', prompt }: NewChatScree
     const dismissRouteNotice = useRouteNoticeStore((s) => s.dismiss);
     const [detailsOpen, setDetailsOpen] = useState(false);
 
+    // A message sent while GAIA is still starting waits here, then goes out on its own.
+    const starting = startingReason(status, t) !== null;
+    const [held, setHeld] = useState<{ text: string } | null>(null);
+    const sentHeld = useRef<{ text: string } | null>(null);
+    const heldOpening = starting ? (held?.text ?? null) : null;
+    const send = useCallback(
+        (message: string) => {
+            if (starting) setHeld({ text: message });
+            else void submit(message, queue.hold);
+        },
+        [starting, submit, queue.hold],
+    );
+    useEffect(() => {
+        if (starting || held === null || sentHeld.current === held) return;
+        sentHeld.current = held;
+        void submit(held.text, queue.hold);
+    }, [starting, held, submit, queue.hold]);
+
     // Text in the box means the person started here, so the launch restore must not move them.
     const hasText = state.text !== '';
     useEffect(() => {
@@ -101,7 +123,7 @@ export function NewChatScreen({ onOpen, initialText = '', prompt }: NewChatScree
         if (!briefCard) return;
         holdDocuments(indexed.map((d) => d.id));
         if (briefCard.needs_input) setText(briefCard.prompt);
-        else void submit(briefCard.prompt, queue.hold);
+        else send(briefCard.prompt);
     };
     const failedSetup = setupError(status);
     const warming = warmUpProgress(status?.warm_up);
@@ -111,19 +133,44 @@ export function NewChatScreen({ onOpen, initialText = '', prompt }: NewChatScree
         <Screen
             keyboard="avoid"
             scroll
+            backdrop={<DotGrid />}
             header={<ScreenHeader />}
             footer={
                 <>
+                    {heldOpening !== null && (
+                        <Stack paddingX="lg" testID="held-opening" accessibilityRole="list">
+                            <Surface tone="secondary" radius="md" padding="sm" border>
+                                <Stack gap="xs">
+                                    <Row gap="sm" align="center">
+                                        <Stack flex={1}>
+                                            <Text role="ui" numberOfLines={2} dir="auto">
+                                                {heldOpening}
+                                            </Text>
+                                        </Stack>
+                                        <IconButton
+                                            icon={X}
+                                            size="sm"
+                                            label={t('queue.removeAria', { text: heldOpening })}
+                                            onPress={() => setHeld(null)}
+                                            testID="held-opening-remove"
+                                        />
+                                    </Row>
+                                    <Text role="caption" tone="secondary" accessibilityLabel={t('composer.heldLabel')}>
+                                        {t('composer.heldUntilStarted')}
+                                    </Text>
+                                </Stack>
+                            </Surface>
+                        </Stack>
+                    )}
                     <QueuedMessages items={queue.held} replying={false} onRemove={queue.remove} onRetry={queue.retry} />
                     <Composer
                         value={state.text}
                         onChange={setText}
-                        onSend={(message) => void submit(message, queue.hold)}
+                        onSend={send}
                         disabledReason={startingReason(status, t) ?? undefined}
                         attachments={attachments}
                         leftControls={
                             <>
-                                <FolderChip folder={startScreen?.working_folder} />
                                 <PermissionChip mode={mode} onChange={setMode} />
                                 <PrivateChip on={isPrivate} onChange={setPrivate} />
                             </>
@@ -154,12 +201,14 @@ export function NewChatScreen({ onOpen, initialText = '', prompt }: NewChatScree
                         message={`${failedSetup}\n\n${t('newChat.setupFailed.hint')}`}
                     />
                 )}
+                {!state.sending && <FolderChip folder={startScreen?.working_folder} />}
                 {documents && !state.sending && (
                     <LibraryDocuments
                         documents={documents}
                         attachedIds={attachedIds}
                         onAttach={holdDocuments}
                         onRemove={dropDocument}
+                        onChoose={onChooseDocuments}
                     />
                 )}
                 {briefCard && indexed.length > 0 && !state.sending && (
@@ -174,6 +223,15 @@ export function NewChatScreen({ onOpen, initialText = '', prompt }: NewChatScree
                         message={t(routeNotice)}
                         action={{ label: t('banner.dismiss'), onPress: dismissRouteNotice }}
                     />
+                )}
+                {state.sending && state.opening !== null && (
+                    <Stack self="end" maxWidth="85%" testID="opening-message">
+                        <Surface tone="userMsg" radius="lg" padding="md">
+                            <Text role="body" dir="auto">
+                                {state.opening}
+                            </Text>
+                        </Surface>
+                    </Stack>
                 )}
                 {state.error !== null && <Notice tone="danger" message={state.error} />}
                 {!state.sending && startingReason(status, t) === null && <TryChips onPick={fillExample} />}

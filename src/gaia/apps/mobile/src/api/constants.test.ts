@@ -7,6 +7,7 @@ import { join, resolve } from 'node:path';
 import {
     AGENT_EVENT_TYPES,
     ATTACH_HEADER_TIMEOUT_MS,
+    chatSpendingPath,
     CONFIRM_DELETE_MS,
     DISCORD_LIVE_STATES,
     DISCORD_POLL_MS,
@@ -108,6 +109,7 @@ describe('endpoints', () => {
         goalsHealth: ['GET'],
         goalsStats: ['GET'],
         gpuMemory: ['GET'],
+        gpuMemoryPending: ['DELETE', 'POST'],
         health: ['GET'],
         cloudPrices: ['GET'],
         lemonadeDetect: ['GET'],
@@ -118,6 +120,7 @@ describe('endpoints', () => {
         localModelContext: ['GET', 'PUT'],
         localModelRestart: ['POST'],
         localModelStatus: ['GET'],
+        logs: ['GET'],
         mcpStatus: ['GET'],
         media: ['GET'],
         memoryActivity: ['GET'],
@@ -160,16 +163,24 @@ describe('endpoints', () => {
         sessionCapabilities: ['GET'],
         sessionChanges: ['GET'],
         sessionChangesDiff: ['GET'],
+        sessionChangesGit: ['GET'],
+        sessionChangesGitCommit: ['POST'],
+        sessionChangesGitPr: ['POST'],
+        sessionChangesTotal: ['GET'],
         sessionChangesUndo: ['POST'],
+        sessionChangesUndoAll: ['POST'],
         sessionDocument: ['DELETE'],
         sessionDocuments: ['POST'],
         sessionEnvironment: ['GET'],
         sessionEnvironmentFolderRemove: ['POST'],
+        sessionEnvironmentFolders: ['POST'],
         sessionEnvironmentInternet: ['PUT'],
         sessionEvents: ['GET'],
+        sessionExport: ['GET'],
         sessionMessage: ['DELETE'],
         sessionMessages: ['GET'],
         sessionMessagesAndBelow: ['DELETE'],
+        sessionOutputs: ['GET'],
         sessionPin: ['PUT'],
         sessionPrivate: ['PATCH'],
         sessionRead: ['POST'],
@@ -196,6 +207,7 @@ describe('endpoints', () => {
         speechSettings: ['GET', 'PUT'],
         spending: ['GET'],
         spendingAllowMonth: ['POST'],
+        spendingChat: ['GET'],
         spendingLimit: ['PUT'],
         chatSend: ['POST'],
         chatAttach: ['GET'],
@@ -230,9 +242,13 @@ describe('endpoints', () => {
         documentReindex: ['POST'],
         documentStatus: ['GET'],
         documentUpload: ['POST'],
+        documentUploadPath: ['POST'],
         documents: ['GET'],
+        filesBrowse: ['GET'],
         filesImage: ['GET'],
         filesPreview: ['GET'],
+        filesSearch: ['GET'],
+        filesStatus: ['POST'],
         filesUpload: ['POST'],
         filesUploadMedia: ['POST'],
         modelServer: ['GET'],
@@ -294,5 +310,12 @@ describe("webui's stream rules", () => {
         ['components/settings/MessagingSettings.tsx', 'LIVE', DISCORD_LIVE_STATES],
     ])('%s %s', (file, name, ours) => {
         expect([...ours].sort()).toEqual(tsStringSet(file, name));
+    });
+});
+
+describe('chatSpendingPath', () => {
+    it('sends the day start and, only when there is one, the model', () => {
+        expect(chatSpendingPath('s 1', '2026-11-15T08:00:00.000Z', null)).toBe('/api/spending/chat/s%201?since=2026-11-15T08%3A00%3A00.000Z');
+        expect(chatSpendingPath('s', 'x', 'a/b')).toBe('/api/spending/chat/s?since=x&model=a%2Fb');
     });
 });

@@ -8,7 +8,7 @@ import type { SystemStatus } from '@webui/types';
 
 import { useModelActions, useQueryFailure, useSystemStatus } from '@/data';
 import { describeError, useT } from '@/i18n/useT';
-import { Button, Card, Disclosure, Divider, Ltr, Notice, ProgressLine, Row, Spinner, Stack, Text } from '@/ui';
+import { Button, Card, Disclosure, Divider, Ltr, Notice, ProgressLine, Row, Spinner, Stack, Surface, Text } from '@/ui';
 
 import { LogsCard } from '@/features/logs';
 
@@ -33,19 +33,17 @@ export default function Advanced() {
     );
 }
 
-function StatusRow({ label, value, ok, hint }: { label: string; value: ReactNode; ok: boolean; hint?: string }) {
+function StatusRow({ label, value, ok, hint, oneLine }: { label: string; value: ReactNode; ok: boolean; hint?: string; oneLine?: boolean }) {
     return (
-        <Stack gap="xs">
-            <Row gap="md" align="start">
-                <Stack flex={1}>
-                    <Text role="label" tone="secondary">{label}</Text>
-                </Stack>
-                <Stack flex={1} align="end">
-                    <Text role="label" weight="medium" tone={ok ? 'success' : 'warning'} align="end">{value}</Text>
+        <Surface tone="secondary" border radius="md" padding="md">
+            <Row gap="md" align={hint ? 'start' : 'center'}>
+                <Text role="label">{label}</Text>
+                <Stack flex={1} align="end" gap="xs">
+                    <Text role="label" weight="semibold" mono tone={ok ? 'success' : 'warning'} align="end" numberOfLines={oneLine ? 1 : undefined}>{value}</Text>
+                    {hint ? <Text role="caption" tone="muted" align="end">{hint}</Text> : null}
                 </Stack>
             </Row>
-            {hint ? <Text role="caption" tone="muted">{hint}</Text> : null}
-        </Stack>
+        </Surface>
     );
 }
 
@@ -59,9 +57,8 @@ function StatusCard() {
     const [detailsOpen, setDetailsOpen] = useState(false);
 
     return (
-        <Card padding="lg" testID="advanced-status">
+        <Card padding="lg" testID="advanced-status" accessibilityLabel={t('settings.advanced.status')}>
             <Stack gap="md">
-                <Text role="title" accessibilityRole="header">{t('settings.advanced.status')}</Text>
                 {query.isPending && !failure.failed ? (
                     <Row gap="sm">
                         <Spinner />
@@ -131,15 +128,15 @@ function StatusBody({ status, modelName, actions, detailsOpen, onToggleDetails }
 
     return (
         <Stack gap="md">
-            <Stack gap="md">
+            <Stack gap="sm">
                 <StatusRow label={t('settings.advanced.modelServer')} value={serverValue} ok={status.lemonade_running} hint={serverHint} />
                 {!status.lemonade_running && status.lemonade_error ? (
                     <RawDetails text={status.lemonade_error} />
                 ) : null}
                 {setupNeeded ? <Notice tone="info" message={t('mobileApp.settings.pcOnly')} testID="advanced-setup-pc-only" /> : null}
-                <Divider />
                 <StatusRow
                     label={t('settings.section.model')}
+                    oneLine
                     value={status.model_loaded ? <Ltr>{status.model_loaded}</Ltr> : t.bare('settings.advanced.noneLoaded')}
                     ok={!!status.model_loaded && (cloud || status.expected_model_loaded !== false)}
                     hint={
@@ -150,7 +147,6 @@ function StatusBody({ status, modelName, actions, detailsOpen, onToggleDetails }
                               : undefined
                     }
                 />
-                <Divider />
                 <StatusRow
                     label={t('settings.advanced.disk')}
                     value={<Ltr>{`${disk} GB`}</Ltr>}
@@ -166,7 +162,7 @@ function StatusBody({ status, modelName, actions, detailsOpen, onToggleDetails }
             {notDownloaded ? (
                 <Stack gap="sm">
                     <Divider />
-                    <Text role="label" weight="semibold">{t('settings.advanced.notDownloaded')}</Text>
+                    <Text role="label" weight="semibold" accessibilityRole="header">{t('settings.advanced.notDownloaded')}</Text>
                     <Text role="caption" tone="muted">{t('settings.advanced.notDownloadedHint', { name: isolate(name, 'ltr'), need: needText(status) })}</Text>
                     <Button
                         label={downloading ? t('settings.advanced.downloading') : t('settings.model.download')}
@@ -186,7 +182,7 @@ function StatusBody({ status, modelName, actions, detailsOpen, onToggleDetails }
             {needsLoad ? (
                 <Stack gap="sm">
                     <Divider />
-                    <Text role="label" weight="semibold">{wrongModel ? t('settings.advanced.wrongModel') : t('settings.advanced.smallContext')}</Text>
+                    <Text role="label" weight="semibold" accessibilityRole="header">{wrongModel ? t('settings.advanced.wrongModel') : t('settings.advanced.smallContext')}</Text>
                     <Text role="caption" tone="muted">{t('settings.advanced.loadHint', { name: isolate(name, 'ltr') })}</Text>
                     <Button
                         label={actions.pending === 'load' ? t('settings.advanced.loading') : t('settings.advanced.load')}
@@ -203,7 +199,7 @@ function StatusBody({ status, modelName, actions, detailsOpen, onToggleDetails }
             {actions.error ? <ActionError error={actions.error} /> : null}
 
             <Disclosure title={t('settings.advanced.details')} open={detailsOpen} onToggle={onToggleDetails}>
-                <Stack gap="md">
+                <Stack gap="sm">
                     {status.model_size_gb != null ? (
                         <StatusRow label={t('settings.advanced.modelSize')} value={<Ltr>{`${status.model_size_gb} GB`}</Ltr>} ok />
                     ) : null}
@@ -227,7 +223,7 @@ function StatusBody({ status, modelName, actions, detailsOpen, onToggleDetails }
                     />
                     {status.gpu_name ? (
                         <StatusRow
-                            label={t.bare('resources.gpu')}
+                            label={t('resources.gpu')}
                             value={<Ltr>{`${status.gpu_name}${status.gpu_vram_gb ? ` (${status.gpu_vram_gb.toFixed(1)} GB)` : ''}`}</Ltr>}
                             ok
                         />

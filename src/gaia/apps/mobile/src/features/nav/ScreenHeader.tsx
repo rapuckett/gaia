@@ -27,11 +27,11 @@ export function ScreenHeader({ title, titleNode, end }: { title?: string; titleN
     return (
         <Stack paddingX="lg" paddingY="sm">
             <Row gap="sm" accessibilityRole="header">
-                {permanent ? null : <IconButton icon={Menu} label={t('sidebar.open')} onPress={() => navigation.openDrawer()} />}
+                {permanent ? null : <IconButton icon={Menu} variant="raised" label={t('sidebar.open')} onPress={() => navigation.openDrawer()} />}
                 {titleNode ? (
                     <Stack flex={1}>{titleNode}</Stack>
                 ) : title ? (
-                    <Stack flex={end ? 1 : undefined}>
+                    <Stack flex={1}>
                         <Text role="title" weight="semibold" numberOfLines={1}>{title}</Text>
                     </Stack>
                 ) : (

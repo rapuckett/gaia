@@ -12,7 +12,7 @@ import { useChatStreamStore } from '@/state/chatStreams';
 import {
     clearNotifications,
     dismissNotification,
-    filterKinds,
+    FILTER_ORDER,
     markAllNotificationsRead,
     markNotificationRead,
     recordNotificationResponse,
@@ -41,10 +41,8 @@ const ICONS: Record<NotificationType, { icon: LucideIcon; tone: 'accent' | 'warn
 export function NotificationCenterScreen({ onBack, onOpenChat }: { onBack: () => void; onOpenChat: (sessionId: string) => void }) {
     const t = useT();
     const items = useNotificationStore(useShallow(selectVisible));
-    const all = useNotificationStore((s) => s.items);
     const filter = useNotificationStore((s) => s.filter);
     const unread = useNotificationStore(selectUnreadCount);
-    const kinds = filterKinds(all, filter);
     const pending = useChatStreamStore(useShallow((s) => Object.values(s.turns).flatMap((turn) => turn.pendingPermission?.confirm_id ?? [])));
     const history = usePermissionPromptStore((s) => s.history);
     const now = useNow();
@@ -57,15 +55,15 @@ export function NotificationCenterScreen({ onBack, onOpenChat }: { onBack: () =>
                     title={t('notifications.title')}
                     backLabel={t('setup.back')}
                     onBack={onBack}
-                    end={unread > 0 ? <Badge label={String(unread)} tone="accent" /> : undefined}
+                    titleEnd={unread > 0 ? <Badge shape="pill" label={String(unread)} tone="accent" /> : undefined}
                 />
             }
             footer={
                 items.length > 0 ? (
                     <Stack paddingX="lg" paddingY="sm">
-                        <Row gap="sm">
+                        <Row gap="sm" stack>
                             <Stack flex={1}>
-                                <Button label={t('notifications.markAllRead')} icon={Check} variant="secondary" full disabled={unread === 0} onPress={markAllNotificationsRead} testID="ntf-mark-all" />
+                                <Button label={t.bare('notifications.markAllRead')} accessibilityLabel={t('notifications.markAllRead')} icon={Check} variant="secondary" full disabled={unread === 0} onPress={markAllNotificationsRead} testID="ntf-mark-all" />
                             </Stack>
                             <Stack flex={1}>
                                 <Button label={t('notifications.clear')} icon={Trash2} variant="secondary" full onPress={clearNotifications} testID="ntf-clear" />
@@ -76,20 +74,18 @@ export function NotificationCenterScreen({ onBack, onOpenChat }: { onBack: () =>
             }
             scroll
         >
-            {kinds.length > 1 || filter ? (
-                <HScroll>
+            <HScroll>
                     <Row gap="sm" accessibilityRole="tablist">
                         <Stack paddingX="lg" paddingY="sm">
                             <Row gap="sm">
                                 <Chip label={t('notifications.filter.all')} selected={filter === null} onPress={() => setNotificationFilter(null)} />
-                                {kinds.map((kind) => (
+                                {FILTER_ORDER.map((kind) => (
                                     <Chip key={kind} label={t(FILTER_LABELS[kind])} selected={filter === kind} onPress={() => setNotificationFilter(kind)} />
                                 ))}
                             </Row>
                         </Stack>
                     </Row>
-                </HScroll>
-            ) : null}
+            </HScroll>
             {items.length === 0 ? (
                 <EmptyState title={t('notifications.empty')} icon={Bell} />
             ) : (
@@ -166,7 +162,7 @@ function NotificationItem({ n, now, locale, waiting, answered, onOpenChat }: Ite
                     <Text role="ui" tone="secondary">{message}</Text>
                     {n.type === 'policy_alert' ? <PolicyDetails n={n} /> : null}
                     {approval && !answered && waiting ? (
-                        <Row gap="sm">
+                        <Row gap="sm" stack>
                             <Stack flex={1}>
                                 <Button label={t('notifications.approve')} icon={Check} full disabled={confirm.isPending} onPress={() => answer(true)} testID="ntf-approve" />
                             </Stack>

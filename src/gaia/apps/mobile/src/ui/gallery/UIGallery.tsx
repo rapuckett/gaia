@@ -13,6 +13,7 @@ import {
     Ltr,
     Row,
     Screen,
+    SmallButton,
     Spacer,
     Spinner,
     Stack,
@@ -55,6 +56,7 @@ export function UIGallery() {
                     <Row gap="sm">
                         <Text mono>{t('settings.messaging.copy')}</Text>
                         <Text italic>{t('settings.messaging.retry')}</Text>
+                        <Text underline tone="accent">{t('settings.messaging.retry')}</Text>
                         <Text weight="bold" selectable>
                             {t('settings.shortcut.newChat')}
                             <Text tone="accent"> {t('settings.shortcut.search')}</Text>
@@ -79,7 +81,13 @@ export function UIGallery() {
                         iconEnd={ChevronRight}
                     />
                     <Button variant="danger" label={t('settings.privacy.delete')} onPress={press} />
-                    <Button variant="primary" size="sm" label={t('settings.advanced.save')} onPress={press} />
+                    <Row gap="sm" wrap>
+                        <Button size="sm" label={t('settings.messaging.cancel')} onPress={press} />
+                        <Button variant="primary" size="sm" label={t('settings.advanced.save')} onPress={press} />
+                        <Button variant="danger" size="sm" label={t('settings.privacy.delete')} onPress={press} />
+                        <SmallButton variant="danger" label={t('settings.privacy.delete')} onPress={press} />
+                        <SmallButton variant="accent" label={t('settings.shortcut.newChat')} icon={Plus} onPress={press} />
+                    </Row>
                     <Button variant="primary" label={t('settings.advanced.loading')} busy onPress={press} />
                     <Button label={t('settings.messaging.cancel')} disabled onPress={press} />
                     <Button full variant="secondary" label={longLabel} onPress={press} icon={RotateCcw} />
@@ -102,6 +110,12 @@ export function UIGallery() {
                 </Row>
 
                 <Stack gap="md">
+                    <Card>
+                        <Text>{sample}</Text>
+                    </Card>
+                    <Card variant="raised">
+                        <Text>{sample}</Text>
+                    </Card>
                     <Surface tone="card" radius="lg" padding="lg" border elevation="sm">
                         <Text>{sample}</Text>
                     </Surface>

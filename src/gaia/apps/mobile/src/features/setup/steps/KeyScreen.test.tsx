@@ -19,14 +19,17 @@ import { KeyScreen } from './KeyScreen';
 const provider = (p: Partial<ProviderSummary>): ProviderSummary => ({ id: 'fireworks', name: 'Fireworks AI', remote: true, privacy_notice: '', configured: false, blocked: false, ...p });
 const prices: CloudPriceList = {
     provider: 'fireworks', source: 'fireworks.ai/pricing', note: null,
-    models: [{ model: 'fireworks.kimi', name: 'Kimi', rank: 1, note: null, price: { input_per_million: 0.6, output_per_million: 2.5 } as never }],
+    models: [
+        { model: 'fireworks.kimi', name: 'Kimi', rank: 1, note: null, price: { input_per_million: 0.6, output_per_million: 2.5 } as never },
+        { model: 'fireworks.glm', name: 'GLM', rank: 2, note: null, price: { input_per_million: 0.6, output_per_million: 2.5 } as never },
+    ],
 };
 
 async function mount(providers: ProviderSummary[], extra: FakeClientData = {}) {
     const client = createFakeClient({
         providers: { providers, lemonade_error: null },
         cloudPrices: { fireworks: prices },
-        providerModels: { fireworks: { provider: 'fireworks', models: [{ id: 'fireworks.kimi', rank: 1 } as never] } },
+        providerModels: { fireworks: { provider: 'fireworks', models: [{ id: 'fireworks.kimi', rank: 1 } as never, { id: 'fireworks.glm', rank: 2 } as never] } },
         activeModel: { provider: 'local', model: 'm', remote: false } as never,
         lemonadeTarget: { source: 'gaia', offer: false } as never,
         ...extra,
@@ -63,4 +66,23 @@ describe('KeyScreen', () => {
         expect(client.connects).toEqual(['fireworks']);
         expect(client.setupStarts).toMatchObject([{ skipChatModel: true }]);
     });
+
+    it('run again with a cloud model in use keeps that model and connects it, not the top-ranked one', async () => {
+        const { client, ctx } = await mount([provider({ configured: true })], {
+            activeModel: { provider: 'fireworks', model: 'fireworks.glm', remote: true } as never,
+        });
+        await screen.findByText('GLM', { exact: false });
+        fireEvent.press(screen.getByLabelText('Test and connect'));
+        await waitFor(() => expect(ctx.startedRun).toHaveBeenCalled());
+        expect(client.selected).toEqual(['fireworks.glm']);
+    });
+
+    it('with the AMD gateway unreachable and already chosen, says so and offers to check again', async () => {
+        const { client } = await mount([provider({ id: 'amd', name: 'AMD LLM Gateway', network: { reachable: false } })], { activeModel: { provider: 'amd', model: 'm', remote: true } as never });
+        await screen.findByText("Unavailable: needs AMD's network or VPN.");
+        const reads = jest.spyOn(client, 'listProviderSummaries');
+        fireEvent.press(screen.getByLabelText('Check the AMD gateway again'));
+        await waitFor(() => expect(reads).toHaveBeenCalled());
+    });
 });
+

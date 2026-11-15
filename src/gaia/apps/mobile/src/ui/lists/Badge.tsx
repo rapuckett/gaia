@@ -11,11 +11,13 @@ export type BadgeTone = 'neutral' | 'accent' | 'success' | 'warning' | 'danger';
 export interface BadgeProps {
     label: string;
     tone?: BadgeTone;
+    /** `tag` is the desktop's status tag (6 px corners); `pill` is for counts. */
+    shape?: 'tag' | 'pill';
     /** What a screen reader says instead of the visible label. */
     accessibilityLabel?: string;
 }
 
-export function Badge({ label, tone = 'neutral', accessibilityLabel }: BadgeProps) {
+export function Badge({ label, tone = 'neutral', shape = 'tag', accessibilityLabel }: BadgeProps) {
     const { colors, radius } = useTheme();
     const look: Record<BadgeTone, { bg: string; text: Tone }> = {
         neutral: { bg: colors.bgTertiary, text: 'secondary' },
@@ -29,9 +31,9 @@ export function Badge({ label, tone = 'neutral', accessibilityLabel }: BadgeProp
         <View
             accessible={accessibilityLabel !== undefined}
             accessibilityLabel={accessibilityLabel}
-            style={{ alignSelf: 'flex-start', backgroundColor: v.bg, borderRadius: radius.full, paddingHorizontal: 8, paddingVertical: 2, minWidth: 20 }}
+            style={{ alignSelf: 'flex-start', backgroundColor: v.bg, borderRadius: shape === 'pill' ? radius.full : radius.sm, paddingHorizontal: 8, paddingVertical: 2, minWidth: 20 }}
         >
-            <Text role="caption" weight="semibold" tone={v.text} numberOfLines={1} align="center">
+            <Text role="caption" weight="semibold" tone={v.text} numberOfLines={1} compact align="center">
                 {label}
             </Text>
         </View>

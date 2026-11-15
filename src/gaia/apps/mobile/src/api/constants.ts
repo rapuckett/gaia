@@ -22,6 +22,7 @@ export const ENDPOINTS = {
     goalsHealth: '/api/goals/health',
     goalsStats: '/api/goals/stats',
     gpuMemory: '/api/gpu-memory',
+    gpuMemoryPending: '/api/gpu-memory/pending',
     health: '/api/health',
     cloudPrices: '/api/spending/prices/{provider}',
     lemonadeDetect: '/api/lemonade/detect',
@@ -32,6 +33,7 @@ export const ENDPOINTS = {
     localModelContext: '/api/providers/local/context',
     localModelRestart: '/api/providers/local/restart',
     localModelStatus: '/api/providers/local/status',
+    logs: '/api/logs',
     mcpStatus: '/api/mcp/status',
     media: '/api/media/{kind}/{name}',
     memoryActivity: '/api/memory/activity',
@@ -76,16 +78,24 @@ export const ENDPOINTS = {
     sessionCapabilities: '/api/sessions/{session_id}/capabilities',
     sessionChanges: '/api/sessions/{session_id}/changes',
     sessionChangesDiff: '/api/sessions/{session_id}/changes/{turn_id}/diff',
+    sessionChangesGit: '/api/sessions/{session_id}/changes/git',
+    sessionChangesGitCommit: '/api/sessions/{session_id}/changes/git/commit',
+    sessionChangesGitPr: '/api/sessions/{session_id}/changes/git/pr',
+    sessionChangesTotal: '/api/sessions/{session_id}/changes/total',
     sessionChangesUndo: '/api/sessions/{session_id}/changes/{turn_id}/undo',
+    sessionChangesUndoAll: '/api/sessions/{session_id}/changes/undo',
     sessionDocument: '/api/sessions/{session_id}/documents/{doc_id}',
     sessionDocuments: '/api/sessions/{session_id}/documents',
     sessionEnvironment: '/api/sessions/{session_id}/environment',
     sessionEnvironmentFolderRemove: '/api/sessions/{session_id}/environment/folders/remove',
+    sessionEnvironmentFolders: '/api/sessions/{session_id}/environment/folders',
     sessionEnvironmentInternet: '/api/sessions/{session_id}/environment/internet',
     sessionEvents: '/api/sessions/events',
+    sessionExport: '/api/sessions/{session_id}/export',
     sessionMessage: '/api/sessions/{session_id}/messages/{message_id}',
     sessionMessages: '/api/sessions/{session_id}/messages',
     sessionMessagesAndBelow: '/api/sessions/{session_id}/messages/{message_id}/and-below',
+    sessionOutputs: '/api/sessions/{session_id}/outputs',
     sessionPin: '/api/sessions/{session_id}/pin',
     sessionPrivate: '/api/sessions/{session_id}/private',
     sessionRead: '/api/sessions/{session_id}/read',
@@ -112,6 +122,7 @@ export const ENDPOINTS = {
     speechSettings: '/api/speech/settings',
     spending: '/api/spending',
     spendingAllowMonth: '/api/spending/allow-month',
+    spendingChat: '/api/spending/chat/{session_id}',
     spendingLimit: '/api/spending/limit',
     chatSend: '/api/chat/send',
     chatAttach: '/api/chat/attach',
@@ -146,9 +157,13 @@ export const ENDPOINTS = {
     documentReindex: '/api/documents/{doc_id}/reindex',
     documentStatus: '/api/documents/{doc_id}/status',
     documentUpload: '/api/documents/upload',
+    documentUploadPath: '/api/documents/upload-path',
     documents: '/api/documents',
+    filesBrowse: '/api/files/browse',
     filesImage: '/api/files/image',
     filesPreview: '/api/files/preview',
+    filesSearch: '/api/files/search',
+    filesStatus: '/api/files/status',
     filesUpload: '/api/files/upload',
     filesUploadMedia: '/api/files/upload-media',
     onboardingPreflight: '/api/onboarding/preflight',
@@ -265,6 +280,12 @@ export function chatPermissionGrantsPath(sessionId: string, key?: string): strin
     return key === undefined ? path : `${path}?key=${encodeURIComponent(key)}`;
 }
 
+export function chatSpendingPath(sessionId: string, since: string, model: string | null): string {
+    const query = new URLSearchParams({ since });
+    if (model) query.set('model', model);
+    return `${ENDPOINTS.spendingChat.replace('{session_id}', encodeURIComponent(sessionId))}?${query}`;
+}
+
 export function cloudPricesPath(provider: string): string {
     return ENDPOINTS.cloudPrices.replace('{provider}', encodeURIComponent(provider));
 }
@@ -295,18 +316,39 @@ export function sessionDocumentsPath(sessionId: string): string {
     return ENDPOINTS.sessionDocuments.replace('{session_id}', encodeURIComponent(sessionId));
 }
 
+export function sessionOutputsPath(sessionId: string): string {
+    return ENDPOINTS.sessionOutputs.replace('{session_id}', encodeURIComponent(sessionId));
+}
+
 export function sessionCapabilitiesPath(sessionId: string): string {
     return ENDPOINTS.sessionCapabilities.replace('{session_id}', encodeURIComponent(sessionId));
 }
 
-export function sessionEnvironmentPath(sessionId: string, part?: 'folderRemove' | 'internet'): string {
+export function sessionEnvironmentPath(sessionId: string, part?: 'folderRemove' | 'folders' | 'internet'): string {
     const template =
-        part === 'folderRemove' ? ENDPOINTS.sessionEnvironmentFolderRemove : part === 'internet' ? ENDPOINTS.sessionEnvironmentInternet : ENDPOINTS.sessionEnvironment;
+        part === 'folderRemove'
+            ? ENDPOINTS.sessionEnvironmentFolderRemove
+            : part === 'folders'
+              ? ENDPOINTS.sessionEnvironmentFolders
+              : part === 'internet' ? ENDPOINTS.sessionEnvironmentInternet : ENDPOINTS.sessionEnvironment;
     return template.replace('{session_id}', encodeURIComponent(sessionId));
 }
 
 export function sessionChangesPath(sessionId: string): string {
     return ENDPOINTS.sessionChanges.replace('{session_id}', encodeURIComponent(sessionId));
+}
+
+const CHANGES_PARTS = {
+    git: ENDPOINTS.sessionChangesGit,
+    gitCommit: ENDPOINTS.sessionChangesGitCommit,
+    gitPr: ENDPOINTS.sessionChangesGitPr,
+    total: ENDPOINTS.sessionChangesTotal,
+    undoAll: ENDPOINTS.sessionChangesUndoAll,
+};
+
+/** The chat-wide Changes calls: the running total, Undo all and the git actions. */
+export function sessionChangesPartPath(sessionId: string, part: keyof typeof CHANGES_PARTS): string {
+    return CHANGES_PARTS[part].replace('{session_id}', encodeURIComponent(sessionId));
 }
 
 export function sessionChangesDiffPath(sessionId: string, turnId: string): string {
@@ -315,6 +357,10 @@ export function sessionChangesDiffPath(sessionId: string, turnId: string): strin
 
 export function sessionChangesUndoPath(sessionId: string, turnId: string): string {
     return ENDPOINTS.sessionChangesUndo.replace('{session_id}', encodeURIComponent(sessionId)).replace('{turn_id}', encodeURIComponent(turnId));
+}
+
+export function sessionExportPath(sessionId: string): string {
+    return ENDPOINTS.sessionExport.replace('{session_id}', encodeURIComponent(sessionId));
 }
 
 export function sessionPinPath(sessionId: string): string {
@@ -448,3 +494,22 @@ export const AGENT_EVENT_TYPES: ReadonlySet<string> = new Set([
 
 /** Once the run reaches one of these, a permission prompt or question before it is no longer waiting. */
 export const RESOLVES_PROMPTS: ReadonlySet<string> = new Set(['tool_start', 'tool_end', 'tool_result']);
+
+/** The PC's folder listing; a phone names the chat whose folders it may see. */
+export function filesBrowsePath(sessionId: string, path?: string): string {
+    const query = new URLSearchParams(path ? { path } : {});
+    query.set('session_id', sessionId);
+    return `${ENDPOINTS.filesBrowse}?${query}`;
+}
+
+/** A name search on the PC; `fileTypes` is a comma list of extensions. */
+export function filesSearchPath(sessionId: string, query: string, fileTypes: string | undefined, limit: number): string {
+    const params = new URLSearchParams({ query, max_results: String(limit), session_id: sessionId });
+    if (fileTypes) params.set('file_types', fileTypes);
+    return `${ENDPOINTS.filesSearch}?${params}`;
+}
+
+/** Indexes a file that is already on the PC, naming the chat that may read it. */
+export function documentUploadPathPath(sessionId: string): string {
+    return `${ENDPOINTS.documentUploadPath}?session_id=${encodeURIComponent(sessionId)}`;
+}

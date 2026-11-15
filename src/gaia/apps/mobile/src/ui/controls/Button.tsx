@@ -8,6 +8,7 @@ import { Icon } from './Icon';
 import { Pressable } from './Pressable';
 import { Spinner } from './Spinner';
 import { Row } from '../layout/layout';
+import { useLargeText } from '../theme/a11y';
 import { useTheme } from '../theme/ThemeProvider';
 import type { Tone } from '../theme/tone';
 
@@ -43,9 +44,10 @@ export function Button({
     testID,
 }: ButtonProps) {
     const { colors, radius } = useTheme();
+    const largeText = useLargeText();
     const look: Record<NonNullable<ButtonProps['variant']>, { bg: string; border: string; tone: Tone }> = {
         primary: { bg: colors.accentFill, border: 'transparent', tone: 'onAccent' },
-        secondary: { bg: colors.bgCard, border: colors.borderLight, tone: 'primary' },
+        secondary: { bg: colors.bgTertiary, border: size === 'sm' ? colors.border : colors.borderLight, tone: 'primary' },
         ghost: { bg: 'transparent', border: 'transparent', tone: 'accent' },
         danger: { bg: colors.dangerDim, border: 'transparent', tone: 'danger' },
     };
@@ -55,15 +57,16 @@ export function Button({
             <Pressable
                 onPress={busy ? undefined : onPress}
                 disabled={disabled}
+                minSize={size === 'sm' ? 44 : undefined}
                 accessibilityLabel={accessibilityLabel ?? label}
                 accessibilityState={{ busy: !!busy }}
                 testID={testID}
             >
                 <View
                     style={{
-                        minHeight: size === 'sm' ? 36 : 48,
-                        paddingHorizontal: size === 'sm' ? 12 : 16,
-                        borderRadius: radius.md,
+                        minHeight: size === 'sm' ? 28 : 48,
+                        paddingHorizontal: size === 'sm' ? 10 : 16,
+                        borderRadius: size === 'sm' ? radius.sm : radius.md,
                         borderWidth: 1,
                         borderColor: v.border,
                         backgroundColor: v.bg,
@@ -77,14 +80,14 @@ export function Button({
                         ) : icon ? (
                             <Icon icon={icon} size="sm" tone={v.tone} />
                         ) : null}
-                        {wrap ? (
+                        {wrap || largeText ? (
                             <View style={{ flexShrink: 1, paddingVertical: 10 }}>
-                                <Text role="ui" weight="medium" tone={v.tone} align="center">
+                                <Text role={size === 'sm' ? 'caption' : 'ui'} weight="medium" tone={v.tone} align="center">
                                     {label}
                                 </Text>
                             </View>
                         ) : (
-                            <Text role="ui" weight="medium" tone={v.tone} numberOfLines={1}>
+                            <Text role={size === 'sm' ? 'caption' : 'ui'} weight="medium" tone={v.tone} numberOfLines={1}>
                                 {label}
                             </Text>
                         )}
