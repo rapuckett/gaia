@@ -627,7 +627,11 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             return memoryStatsReads;
         },
         async health(): Promise<HealthResponse> {
-            return { status: 'ok', service: 'gaia-agent-ui' };
+            return {
+                status: 'ok',
+                service: 'gaia-agent-ui',
+                stats: { sessions: sessions.length, messages: 0, documents: 0, total_chunks: 0, total_size_bytes: 0 },
+            };
         },
         async listSessions(): Promise<SessionList> {
             return { sessions: [...sessions], total: sessions.length };

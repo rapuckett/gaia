@@ -6,18 +6,20 @@
 import logging
 import sqlite3
 import threading
-from typing import Optional, get_args
+from typing import Dict, List, Optional, get_args
 
 from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel, field_validator
 
 from gaia.agents.base.goal_store import (
     AgentMode,
+    GoalSource,
     GoalStatus,
     GoalTransitionError,
     Priority,
     TaskStatus,
 )
+from gaia.ui.models import WireModel
 
 from ..security import audit_approval
 
@@ -132,6 +134,49 @@ class GoalStatusUpdate(BaseModel):
         return v
 
 
+class GoalTaskResponse(WireModel):
+    """One task of a goal."""
+
+    id: str
+    goal_id: str
+    description: str
+    status: TaskStatus
+    order_index: int
+    result: Optional[str]
+    created_at: str
+    updated_at: str
+
+
+class GoalResponse(WireModel):
+    """A goal with its tasks."""
+
+    id: str
+    title: str
+    description: str
+    status: GoalStatus
+    source: GoalSource
+    mode_required: AgentMode
+    approved_for_auto: bool
+    priority: Priority
+    progress_notes: str
+    created_at: str
+    updated_at: str
+    tasks: List[GoalTaskResponse]
+
+
+class GoalListResponse(WireModel):
+    """Goals matching a listing, with their count."""
+
+    goals: List[GoalResponse]
+    total: int
+
+
+class GoalStoreHealthResponse(WireModel):
+    """Why the background loop could not read the goal store, or null."""
+
+    error: Optional[str]
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -172,13 +217,28 @@ def _task_to_dict(task) -> dict:
 # ---------------------------------------------------------------------------
 
 
-@router.get("/api/goals/stats")
+class GoalStatsResponse(WireModel):
+    """How many goals and tasks are in each status."""
+
+    goals: Dict[str, int]
+    tasks: Dict[str, int]
+
+
+@router.get(
+    "/api/goals/stats",
+    response_model=GoalStatsResponse,
+    response_model_exclude_unset=True,
+)
 def get_goal_stats():
     """Aggregate counts by status for dashboard header cards."""
     return _get_store().get_stats()
 
 
-@router.get("/api/goals/health")
+@router.get(
+    "/api/goals/health",
+    response_model=GoalStoreHealthResponse,
+    response_model_exclude_unset=True,
+)
 def get_goal_store_health():
     """Why the background loop could not read the goal store, or null."""
     from gaia.ui.agent_loop import agent_loop
@@ -186,7 +246,11 @@ def get_goal_store_health():
     return {"error": agent_loop.goal_store_error}
 
 
-@router.get("/api/goals/pending-approval")
+@router.get(
+    "/api/goals/pending-approval",
+    response_model=GoalListResponse,
+    response_model_exclude_unset=True,
+)
 def get_pending_approval():
     """Goals waiting for user approval (agent-inferred, not yet reviewed).
 
@@ -196,7 +260,9 @@ def get_pending_approval():
     return {"goals": [_goal_to_dict(g) for g in goals], "total": len(goals)}
 
 
-@router.get("/api/goals")
+@router.get(
+    "/api/goals", response_model=GoalListResponse, response_model_exclude_unset=True
+)
 def list_goals(
     status: Optional[str] = None,
     source: Optional[str] = None,
@@ -211,7 +277,12 @@ def list_goals(
     return {"goals": [_goal_to_dict(g) for g in goals], "total": len(goals)}
 
 
-@router.post("/api/goals", status_code=201)
+@router.post(
+    "/api/goals",
+    status_code=201,
+    response_model=GoalResponse,
+    response_model_exclude_unset=True,
+)
 def create_goal(body: GoalCreate):
     """Create a user goal (starts as queued, auto-approved)."""
     goal = _get_store().create_goal(
@@ -224,7 +295,11 @@ def create_goal(body: GoalCreate):
     return _goal_to_dict(goal)
 
 
-@router.get("/api/goals/{goal_id}")
+@router.get(
+    "/api/goals/{goal_id}",
+    response_model=GoalResponse,
+    response_model_exclude_unset=True,
+)
 def get_goal(goal_id: str):
     """Get a single goal with its tasks."""
     goal = _get_store().get_goal(goal_id)
@@ -233,7 +308,11 @@ def get_goal(goal_id: str):
     return _goal_to_dict(goal)
 
 
-@router.put("/api/goals/{goal_id}/approve")
+@router.put(
+    "/api/goals/{goal_id}/approve",
+    response_model=GoalResponse,
+    response_model_exclude_unset=True,
+)
 def approve_goal(goal_id: str, http_request: Request):
     """Approve an agent-inferred goal for autonomous execution."""
     try:
@@ -246,7 +325,11 @@ def approve_goal(goal_id: str, http_request: Request):
     return _goal_to_dict(goal)
 
 
-@router.put("/api/goals/{goal_id}/reject")
+@router.put(
+    "/api/goals/{goal_id}/reject",
+    response_model=GoalResponse,
+    response_model_exclude_unset=True,
+)
 def reject_goal(goal_id: str, http_request: Request):
     """Reject an agent-inferred goal."""
     try:
@@ -259,7 +342,11 @@ def reject_goal(goal_id: str, http_request: Request):
     return _goal_to_dict(goal)
 
 
-@router.put("/api/goals/{goal_id}/cancel")
+@router.put(
+    "/api/goals/{goal_id}/cancel",
+    response_model=GoalResponse,
+    response_model_exclude_unset=True,
+)
 def cancel_goal(goal_id: str):
     """Cancel a queued or in-progress goal."""
     try:
@@ -275,7 +362,11 @@ def cancel_goal(goal_id: str):
     return _goal_to_dict(goal)
 
 
-@router.put("/api/goals/{goal_id}/status")
+@router.put(
+    "/api/goals/{goal_id}/status",
+    response_model=GoalResponse,
+    response_model_exclude_unset=True,
+)
 def update_goal_status(goal_id: str, body: GoalStatusUpdate):
     """Update goal status and optionally append progress notes."""
     goal = _get_store().update_goal_status(
@@ -294,7 +385,12 @@ def delete_goal(goal_id: str):
     return Response(status_code=204)
 
 
-@router.post("/api/goals/{goal_id}/tasks", status_code=201)
+@router.post(
+    "/api/goals/{goal_id}/tasks",
+    status_code=201,
+    response_model=GoalTaskResponse,
+    response_model_exclude_unset=True,
+)
 def add_task(goal_id: str, body: TaskCreate):
     """Add a task to an existing goal."""
     store = _get_store()
@@ -304,7 +400,11 @@ def add_task(goal_id: str, body: TaskCreate):
     return _task_to_dict(task)
 
 
-@router.put("/api/goals/{goal_id}/tasks/{task_id}")
+@router.put(
+    "/api/goals/{goal_id}/tasks/{task_id}",
+    response_model=GoalTaskResponse,
+    response_model_exclude_unset=True,
+)
 def update_task(goal_id: str, task_id: str, body: TaskStatusUpdate):
     """Update a task's status and optionally record the result."""
     store = _get_store()
