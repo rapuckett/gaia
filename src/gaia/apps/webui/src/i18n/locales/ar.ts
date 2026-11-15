@@ -3657,6 +3657,7 @@ const messages: Messages = {
     'mobileApp.banner.openOnPc': 'افتح GAIA على جهاز الكمبيوتر لتشغيل خادم النماذج.',
     'mobileApp.settings.memory.lede': 'يتذكر GAIA الحقائق والتفضيلات والمحادثات السابقة عبر المحادثات، على جهاز الكمبيوتر لديك فقط. لا يتذكّر GAIA المحادثات الخاصة (أيقونة العين في المحادثة) أبدًا.',
     'mobileApp.settings.pcOnly': 'غيّر هذا من الكمبيوتر الذي يشغّل GAIA.',
+    'mobileApp.settings.model.removeDownloadBody': 'تُحذف الملفات التي نزّلتها من الكمبيوتر الذي يشغّل GAIA. يمكنك إضافته مرة أخرى لاحقًا.',
     'mobileApp.settings.comingSoon': 'هذا القسم قادم إلى الهاتف قريبًا. في الوقت الحالي، غيّره من الكمبيوتر الذي يشغّل GAIA.',
     'mobileApp.settings.loadAnyway': 'هناك محادثات تُكتب إجاباتها الآن. قد يؤدي تحميل {name} الآن إلى إبطاء هذه الإجابات أو إيقافها. هل تريد التحميل على أي حال؟',
     'mobileApp.settings.loadAnywayButton': 'حمّل على أي حال',

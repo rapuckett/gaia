@@ -3657,6 +3657,7 @@ export const enMessages = {
     'mobileApp.banner.openOnPc': 'Open GAIA on your PC to start the model server.',
     'mobileApp.settings.memory.lede': 'GAIA remembers facts, preferences and past conversations across chats, on your PC only. Private chats (the eye icon in a chat) are never remembered.',
     'mobileApp.settings.pcOnly': 'Change this on the PC running GAIA.',
+    'mobileApp.settings.model.removeDownloadBody': 'Its downloaded files are deleted from your PC. You can add it again later.',
     'mobileApp.settings.comingSoon': 'This section is coming to the phone soon. For now, change it on the PC running GAIA.',
     'mobileApp.settings.loadAnyway': 'Chats are answering right now. Loading {name} now can slow or stop their answers. Load it anyway?',
     'mobileApp.settings.loadAnywayButton': 'Load anyway',

@@ -5,6 +5,7 @@ import type {
     ActiveModel,
     CloudPriceList,
     ContextChoice,
+    CustomModelReport,
     AgentCapabilities,
     AgentInfo,
     AgentMcpServer,
@@ -127,6 +128,10 @@ export interface FakeClientData {
     providerModels?: Record<string, ProviderModelsResponse>;
     /** What getContextChoice answers, by model; setContextChoice updates it. */
     contexts?: Record<string, ContextChoice>;
+    /** Makes downloadModel fail with this, as the PC's 403 does for a phone. */
+    modelDownloadError?: GaiaApiError;
+    /** What checkCustomModel answers, by link. */
+    customReports?: Record<string, CustomModelReport>;
     /** Makes selectModel fail with this. */
     selectError?: GaiaApiError;
     /** What getPermissions answers, by chat; a chat not listed asks first. */
@@ -249,6 +254,8 @@ export interface FakeGaiaClient extends GaiaClient {
     readonly followUps: { sessionId: string; text: string }[];
     readonly restarts: { confirm: boolean }[];
     readonly selected: string[];
+    readonly customAdds: { url: string; quant?: string }[];
+    readonly customRemoved: string[];
     readonly contextSets: { model: string; ctxSize: number | null }[];
     /** How often memory was wiped (clears) and wiped then re-collected (reinitializes). */
     readonly memoryWipes: { clears: number; reinitializes: number };
@@ -265,6 +272,8 @@ export interface FakeGaiaClient extends GaiaClient {
     readonly connects: string[];
     /** How many times recheckSetupNpu was asked. */
     readonly npuRechecks: number;
+    /** How many times retryKeyStore was asked. */
+    readonly keyStoreRetries: number;
     readonly documentActions: { action: DocumentAction; docId: string }[];
     readonly setupStarts: { skipChatModel: boolean; gaiaLemonade: boolean; upgradeEmbedded: boolean; serverOnly: boolean }[];
     readonly detached: { sessionId: string; docId: string }[];
@@ -304,6 +313,8 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
     const activations: Record<string, Record<string, boolean>> = cloneNested(data.activations);
     const restarts: FakeGaiaClient['restarts'] = [];
     const selected: string[] = [];
+    const customAdds: FakeGaiaClient['customAdds'] = [];
+    const customRemoved: string[] = [];
     const contextSets: FakeGaiaClient['contextSets'] = [];
     const memoryWipes = { clears: 0, reinitializes: 0 };
     const uploads: FakeGaiaClient['uploads'] = [];
@@ -340,6 +351,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
     const setupChoices: FakeGaiaClient['setupChoices'] = [];
     const connects: string[] = [];
     let npuRechecks = 0;
+    let keyStoreRetries = 0;
     let checkAt = 0;
     let statusAt = 0;
     const nextOf = <T,>(list: (T | Error)[], at: number): T => {
@@ -395,6 +407,8 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         followUps,
         restarts,
         selected,
+        customAdds,
+        customRemoved,
         contextSets,
         memoryWipes,
         uploads,
@@ -408,6 +422,9 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         connects,
         get npuRechecks() {
             return npuRechecks;
+        },
+        get keyStoreRetries() {
+            return keyStoreRetries;
         },
         detached,
         uploaded,
@@ -475,6 +492,21 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         },
         async listProviderModels(provider) {
             return data.providerModels?.[provider] ?? { provider, models: [] };
+        },
+        async checkCustomModel(url) {
+            const report = data.customReports?.[url];
+            if (!report) throw new GaiaApiError(422, 'This fake client was given no report for that link.');
+            return report;
+        },
+        async addCustomModel(url, quant) {
+            const report = data.customReports?.[url];
+            if (!report) throw new GaiaApiError(422, 'This fake client was given no report for that link.');
+            customAdds.push({ url, quant });
+            return { report };
+        },
+        async removeCustomModel(model) {
+            customRemoved.push(model);
+            return { removed: model, display_name: model, cleared: [] };
         },
         async selectModel(model) {
             if (data.selectError) throw data.selectError;
@@ -956,6 +988,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         },
         async downloadModel(model, options) {
             if (data.modelActionError) throw data.modelActionError;
+            if (data.modelDownloadError) throw data.modelDownloadError;
             modelDownloads.push({ modelName: model, force: options?.force ?? false, loadAfter: options?.loadAfter ?? false });
             return { status: 'downloading', model };
         },
@@ -1033,6 +1066,10 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         async connectProvider(provider) {
             connects.push(provider);
             return { remembered: true };
+        },
+        async retryKeyStore() {
+            keyStoreRetries += 1;
+            return { retrying: true };
         },
         async recheckSetupNpu() {
             npuRechecks += 1;

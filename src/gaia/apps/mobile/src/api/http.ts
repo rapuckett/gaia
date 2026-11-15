@@ -36,6 +36,8 @@ import type {
     ConnectorGrants,
     ConnectorList,
     ContextUsageResult,
+    CustomModelRemoved,
+    CustomModelReport,
     ConsolidateMemoryResult,
     DeleteDocumentResult,
     DeleteMessagesResult,
@@ -72,6 +74,7 @@ import type {
     ModelNeed,
     ModelServerInfo,
     PreflightReport,
+    ProviderConnected,
     ProvidersResponse,
     RestartModelResult,
     RequestOptions,
@@ -110,6 +113,7 @@ import {
     chatPerformancePath,
     chatPermissionsPath,
     providerConnectPath,
+    localCustomModelPath,
     providerModelsPath,
     followupOutcomePath,
     MESSAGE_PAGE_SIZE,
@@ -400,6 +404,18 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         listProviderModels(provider, options) {
             return getJson<ProviderModelsResponse>(providerModelsPath(provider), options?.signal);
+        },
+
+        checkCustomModel(url, quant, options) {
+            return postJson<CustomModelReport>(ENDPOINTS.localCustomModelCheck, { url, quant: quant || null }, options?.signal);
+        },
+
+        addCustomModel(url, quant, options) {
+            return postJson<{ report: CustomModelReport }>(ENDPOINTS.localCustomModel, { url, quant: quant || null }, options?.signal);
+        },
+
+        removeCustomModel(model, options) {
+            return deleteJson<CustomModelRemoved>(localCustomModelPath(model), options?.signal);
         },
 
         selectModel(model, options) {
@@ -827,7 +843,11 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         connectProvider(provider, options) {
             // No key travels from the phone: a blank body keeps the key the PC already holds.
-            return postJson<{ remembered: boolean }>(providerConnectPath(provider), {}, options?.signal);
+            return postJson<ProviderConnected>(providerConnectPath(provider), {}, options?.signal);
+        },
+
+        retryKeyStore(options) {
+            return postJson<{ retrying: boolean }>(ENDPOINTS.providersKeyStoreRetry, undefined, options?.signal);
         },
 
         recheckSetupNpu(options) {

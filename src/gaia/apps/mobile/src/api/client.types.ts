@@ -12,6 +12,8 @@ import type {
     ConnectorListEntry,
     ContextChoice,
     ContextUsageResult,
+    CustomModelRemoved,
+    CustomModelReport,
     FeaturedLibrary,
     GpuMemoryStatus,
     LemonadeFound,
@@ -57,6 +59,8 @@ export type {
     ContextChoice,
     ContextUsage,
     ContextUsageResult,
+    CustomModelRemoved,
+    CustomModelReport,
     FeaturedLibrary,
     GpuMemoryStatus,
     LemonadeFound,
@@ -156,6 +160,13 @@ export interface AgentMcpList {
 export interface ScheduleList {
     schedules: Schedule[];
     total: number;
+}
+
+/** POST /api/providers/{id}/connect's answer, as the web's Model settings reads it. */
+export interface ProviderConnected {
+    remembered: boolean;
+    remember_error?: string | null;
+    known_models?: boolean;
 }
 
 export type { MemoryCleared, MemoryReinitializeResult, MemorySettings, MemorySettingsUpdateResponse } from '@webui/services/memoryApi';
@@ -380,6 +391,12 @@ export interface GaiaClient {
     /** A cloud provider's list prices, readable before it is connected. */
     /** One provider's chat models; `local` also carries each one's state, size and download. */
     listProviderModels(provider: string, options?: RequestOptions): Promise<ProviderModelsResponse>;
+    /** Checks a pasted Hugging Face link; nothing is saved or downloaded. `quant` is a quantization or one of its file names. */
+    checkCustomModel(url: string, quant?: string, options?: RequestOptions): Promise<CustomModelReport>;
+    /** Adds the model a link names to the list; it downloads on request. */
+    addCustomModel(url: string, quant?: string, options?: RequestOptions): Promise<{ report: CustomModelReport }>;
+    /** Removes a model the person added, and its download. */
+    removeCustomModel(model: string, options?: RequestOptions): Promise<CustomModelRemoved>;
     /** Makes `model` the one new messages use; a cloud model is picked after the person agrees to what leaves the PC. */
     selectModel(model: string, options?: RequestOptions): Promise<ActiveModel>;
     /** The chat's permission mode and the tools it always allows. */
@@ -558,7 +575,9 @@ export interface GaiaClient {
     /** A model server the PC already runs; `unchecked` lists addresses that took the connection but didn't answer. */
     detectLemonade(options?: RequestOptions): Promise<{ found: LemonadeFound | null; unchecked?: string[] }>;
     /** Registers the provider with the key the PC already holds; the phone never sends a key. */
-    connectProvider(provider: string, options?: RequestOptions): Promise<{ remembered: boolean }>;
+    connectProvider(provider: string, options?: RequestOptions): Promise<ProviderConnected>;
+    /** After the PC's OS key-store unlock prompt was closed: lets GAIA ask once more, on the PC. */
+    retryKeyStore(options?: RequestOptions): Promise<{ retrying: boolean }>;
     /** A cloud provider's list prices, ranked; the first row is the model GAIA uses unless another is picked. */
     getCloudPrices(provider: string, options?: RequestOptions): Promise<CloudPriceList>;
     /** Reads the NPU's setup afresh after a fix on the PC; answers the plan. */

@@ -15,6 +15,9 @@ export const ENDPOINTS = {
     cloudPrices: '/api/spending/prices/{provider}',
     lemonadeDetect: '/api/lemonade/detect',
     lemonadeTarget: '/api/lemonade/target',
+    localCustomModel: '/api/providers/local/custom',
+    localCustomModelCheck: '/api/providers/local/custom/check',
+    localCustomModelItem: '/api/providers/local/custom/{model_id}',
     localModelContext: '/api/providers/local/context',
     localModelRestart: '/api/providers/local/restart',
     localModelStatus: '/api/providers/local/status',
@@ -42,6 +45,7 @@ export const ENDPOINTS = {
     providerConnect: '/api/providers/{provider}/connect',
     providerModels: '/api/providers/{provider}/models',
     providersActive: '/api/providers/active',
+    providersKeyStoreRetry: '/api/providers/key-store/retry',
     providersSelect: '/api/providers/select',
     schedule: '/api/schedules/{name:path}',
     scheduleResults: '/api/schedules/{name:path}/results',
@@ -211,6 +215,10 @@ export function providerModelsPath(provider: string): string {
     return ENDPOINTS.providerModels.replace('{provider}', encodeURIComponent(provider));
 }
 
+export function localCustomModelPath(model: string): string {
+    return ENDPOINTS.localCustomModelItem.replace('{model_id}', encodeURIComponent(model));
+}
+
 export function chatContextPath(sessionId: string): string {
     return ENDPOINTS.chatContext.replace('{session_id}', encodeURIComponent(sessionId));
 }
@@ -307,6 +315,8 @@ export const MODEL_STATUS_POLL_MS = 15_000;
 export const DOWNLOAD_POLL_MS = 1_000;
 export const DOWNLOAD_NO_ROW_LIMIT = 15;
 export const DOWNLOAD_MISS_LIMIT = 5;
+/** How often a Reconnect waiting on the PC's OS key-store prompt asks again; the web UI's CONNECT_RETRY_MS. */
+export const CONNECT_RETRY_MS = 2_000;
 /** The longest the model-needed check may take before the job goes ahead without it. */
 export const MODEL_NEED_CHECK_LIMIT_MS = 8_000;
 /** What the PC answers a log request from a phone; the model server log opens only on the PC (security.py). */
