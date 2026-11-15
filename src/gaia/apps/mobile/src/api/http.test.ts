@@ -52,6 +52,20 @@ describe('createHttpClient requests', () => {
         expect(calls[1]).toMatchObject({ url: `${BASE}/api/documents/d%201/file`, method: 'GET', body: undefined });
     });
 
+    it('getGeneratedAudio reads only the fixed media path, and refuses a reply that is not audio', async () => {
+        const wav = { ...streamResponse([new Uint8Array([1, 2])]), headers: { get: () => 'audio/wav' } };
+        const { fetch, calls } = createRecordingFetch(() => wav);
+        const client = createHttpClient({ baseUrl: BASE, token: 'tok-1', fetch });
+        expect(await client.getGeneratedAudio('/api/media/audio/song%201.wav')).toEqual({ bytes: new Uint8Array([1, 2]), contentType: 'audio/wav' });
+        expect(calls[0]).toMatchObject({ url: `${BASE}/api/media/audio/song%201.wav`, method: 'GET', headers: { ...UI_HEADERS, Authorization: 'Bearer tok-1' } });
+        for (const src of ['https://evil.example/a.wav', '/api/media/image/a.png', '/api/media/audio/..%2Fsecret.wav']) {
+            await expect(client.getGeneratedAudio(src)).rejects.toBeInstanceOf(GaiaConfigError);
+        }
+        expect(calls).toHaveLength(1);
+        const html = createHttpClient({ baseUrl: BASE, fetch: createRecordingFetch(() => streamResponse(['<html>'])).fetch });
+        await expect(html.getGeneratedAudio('/api/media/audio/a.wav')).rejects.toMatchObject({ messageKey: 'mobileApp.error.notAudio' });
+    });
+
     it('a refused file read rejects with the PC status', async () => {
         const { fetch } = createRecordingFetch(() => jsonResponse({ detail: 'Access denied' }, 403));
         await expect(createHttpClient({ baseUrl: BASE, fetch }).getFilePreview('/x', 's1')).rejects.toMatchObject({ status: 403 });
