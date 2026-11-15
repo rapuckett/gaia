@@ -3,10 +3,10 @@
 
 import { getLocales } from 'expo-localization';
 
-import { DEFAULT_LOCALE, getLocale, isLocaleCode } from '@webui/i18n/registry';
+import { DEFAULT_LOCALE, getLocale, isLocaleCode, type Say } from '@webui/i18n/registry';
 import { dateLocale, translator, type Translate } from '@webui/i18n/translator';
 
-import { GaiaError } from '@/api/errors';
+import { GaiaError, GaiaNetworkError } from '@/api/errors';
 import { useLocaleStore } from '@/state/locale';
 
 export { dateLocale, translator, type Translate };
@@ -18,6 +18,18 @@ export function deviceLocaleCode(): string {
 
 export function describeError(error: unknown, t: Translate): string {
     if (error instanceof GaiaError) return t(error.messageKey, error.params);
+    return error instanceof Error ? error.message : String(error);
+}
+
+/** For an error filled into another message: use inside `t.compose`, so each language half carries its own wording and the line is bracketed once. */
+export function describeErrorWith(error: unknown, say: Say): string {
+    if (error instanceof GaiaError) return say(error.messageKey, error.params);
+    return error instanceof Error ? error.message : String(error);
+}
+
+/** The raw cause for a Details disclosure; never part of the sentence a person reads. */
+export function technicalDetail(error: unknown): string {
+    if (error instanceof GaiaNetworkError) return `${error.params.url}: ${error.params.reason}`;
     return error instanceof Error ? error.message : String(error);
 }
 
