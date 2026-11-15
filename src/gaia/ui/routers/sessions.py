@@ -19,6 +19,7 @@ from pydantic import Field
 
 from gaia.agents.base import file_snapshots
 from gaia.config import GaiaConfigError
+from gaia.llm.hybrid import is_hybrid_model
 from gaia.llm.lemonade_client import cloud_model_provider
 from gaia.llm.surface_hints import AGENT_UI_SETUP_HINT
 
@@ -474,8 +475,9 @@ async def update_session(
         existing = db.get_session(session_id)
         agent_type = request.agent_type or (existing or {}).get("agent_type") or "chat"
         resolved, _ = resolve_device_model(agent_type, request.device)
-        if resolved:
-            current_model = (existing or {}).get("model")
+        current_model = (existing or {}).get("model")
+        # A device only picks among local models; hybrid routes to its own.
+        if resolved and not is_hybrid_model(current_model):
             try:
                 configured_default = resolved_default_model()
             except Exception as e:

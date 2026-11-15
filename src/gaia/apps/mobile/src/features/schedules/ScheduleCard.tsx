@@ -145,7 +145,7 @@ export function ScheduleCard({ schedule, now, runPending, onOpenChat, onRunNow, 
                     <ChipButton
                         variant="danger"
                         icon={Trash2}
-                        label={t(confirmDelete ? 'schedules.card.confirmDelete' : 'schedules.card.delete')}
+                        label={t(confirmDelete ? 'mobileApp.schedules.card.confirmDelete' : 'schedules.card.delete')}
                         onPress={() => (confirmDelete ? onDelete() : setConfirmDelete(true))}
                     />
                 </Row>
