@@ -2,6 +2,9 @@
 // SPDX-License-Identifier: MIT
 
 export { PairingFlow, type PairingFlowProps, type PairingStep } from './PairingFlow';
+export { usePairAgain } from './pairedPcs';
+export { PairedPcsScreen } from './PairedPcsScreen';
+export { PinMismatchScreen } from './PinMismatchScreen';
 export { PairingGate } from './PairingGate';
 export { createFakePairingService } from './fakePairingService';
 export { parseInvite, PairingInviteError, type PairingInvite } from './invite';

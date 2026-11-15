@@ -26,6 +26,7 @@ import type {
     AgentList,
     AgentMcpList,
     CancelChatResult,
+    ChatPerformance,
     ConfirmToolResult,
     ConnectorActivations,
     ConnectorGrants,
@@ -48,7 +49,9 @@ import type {
     MemoryStats,
     MessageList,
     ModelNeed,
+    ModelServerInfo,
     PreflightReport,
+    ProvidersResponse,
     RestartModelResult,
     RequestOptions,
     ParsedSchedule,
@@ -77,6 +80,7 @@ import {
     connectorGrantsPath,
     ENDPOINTS,
     chatContextPath,
+    chatPerformancePath,
     chatPermissionsPath,
     providerModelsPath,
     followupOutcomePath,
@@ -350,6 +354,10 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             return getJson<ContextUsageResult>(chatContextPath(sessionId), options?.signal);
         },
 
+        getChatPerformance(sessionId, options) {
+            return getJson<ChatPerformance>(chatPerformancePath(sessionId), options?.signal);
+        },
+
         getFollowUpOutcome(sessionId, options) {
             return getJson<FollowUpOutcome>(followupOutcomePath(sessionId), options?.signal);
         },
@@ -598,6 +606,18 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         checkSetup(skipChatModel, options) {
             return getJson<SetupCheck>(`${ENDPOINTS.setupCheck}?skip_chat_model=${skipChatModel}`, options?.signal);
+        },
+
+        listProviders(options) {
+            return getJson<ProvidersResponse>(ENDPOINTS.providers, options?.signal);
+        },
+
+        getModelServer(options) {
+            return getJson<ModelServerInfo>(ENDPOINTS.modelServer, options?.signal);
+        },
+
+        setModelServerBackend(backend, options) {
+            return putJson<ModelServerInfo>(ENDPOINTS.modelServerBackend, { backend }, options?.signal);
         },
 
         getPreflight(options) {

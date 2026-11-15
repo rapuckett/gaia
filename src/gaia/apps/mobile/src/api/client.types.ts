@@ -6,6 +6,7 @@ import type {
     ActiveModel,
     AgentInfo,
     AgentMcpServer,
+    ChatPerformance,
     ConnectorListEntry,
     ContextUsageResult,
     LemonadeFound,
@@ -16,6 +17,7 @@ import type {
     ModelNeedJob,
     PermissionMode,
     PreflightReport,
+    ProvidersResponse,
     ParsedSchedule,
     ProviderModelsResponse,
     ResourceUsage,
@@ -33,12 +35,13 @@ import type {
 } from '@webui/types';
 import type { AgentCapabilities } from '@webui/types/sessionPanel';
 import type { MemorySettings } from '@webui/services/memoryApi';
-import type { CreateSessionRequest, DocumentListResponse, SessionSearchResponse, ToolConfirmRequest, UserInputRequest as ApiUserInputRequest } from '@webui/types/api.gen';
+import type { CreateSessionRequest, DocumentListResponse, ModelServerInfo, SessionSearchResponse, ToolConfirmRequest, UserInputRequest as ApiUserInputRequest } from '@webui/types/api.gen';
 
 export type {
     ActiveModel,
     AgentInfo,
     AgentMcpServer,
+    ChatPerformance,
     ConnectorListEntry,
     ConnectorRow,
     ContextUsage,
@@ -51,6 +54,7 @@ export type {
     ModelNeedJob,
     PermissionMode,
     PreflightReport,
+    ProvidersResponse,
     ParsedSchedule,
     ProviderModelsResponse,
     ResourceUsage,
@@ -69,7 +73,7 @@ export type {
     UnavailableConnectorRow,
 } from '@webui/types';
 export type { ActiveSkill, AgentCapabilities, AgentTool, SkillOrigin } from '@webui/types/sessionPanel';
-export type { CreateSessionRequest, DocumentListResponse, SessionSearchResponse, SessionSearchResult, ToolConfirmRequest } from '@webui/types/api.gen';
+export type { CreateSessionRequest, DocumentListResponse, ModelServerInfo, SessionSearchResponse, SessionSearchResult, ToolConfirmRequest } from '@webui/types/api.gen';
 
 /** `display` is what the phone shows as the answer; it is never sent to GAIA. */
 export type UserInputRequest = ApiUserInputRequest & { display?: string };
@@ -302,6 +306,8 @@ export interface GaiaClient {
     setPermissionMode(sessionId: string, mode: PermissionMode, options?: RequestOptions): Promise<SessionPermissions>;
     /** How full the model's context window is for the chat's next message, or why there is no reading yet. */
     getContextUsage(sessionId: string, options?: RequestOptions): Promise<ContextUsageResult>;
+    /** Where each answer's time and tokens went, and the model as Lemonade reports it now. */
+    getChatPerformance(sessionId: string, options?: RequestOptions): Promise<ChatPerformance>;
     /** What the chat's last finished turn did with the messages added to it; rejects with 409 while a turn still runs. */
     getFollowUpOutcome(sessionId: string, options?: RequestOptions): Promise<FollowUpOutcome>;
     /** Chats whose title or messages match `query`, newest first; `truncated` says the backend capped the list. */
@@ -402,6 +408,12 @@ export interface GaiaClient {
     checkSetup(skipChatModel: boolean, options?: RequestOptions): Promise<SetupCheck>;
     /** This PC's memory, disk, GPU and NPU as setup reads them. */
     getPreflight(options?: RequestOptions): Promise<PreflightReport>;
+    /** The cloud providers; `blocked` is set on each while Local only is on. */
+    listProviders(options?: RequestOptions): Promise<ProvidersResponse>;
+    /** The model server GAIA uses: whether it answers, and the llama.cpp backends it lists and prefers. */
+    getModelServer(options?: RequestOptions): Promise<ModelServerInfo>;
+    /** Saves the llama.cpp backend for chat models (`auto` or a backend name); PC-only. */
+    setModelServerBackend(backend: string, options?: RequestOptions): Promise<ModelServerInfo>;
     /** Which model server GAIA uses, and whether the PC still has to choose one. */
     getLemonadeTarget(options?: RequestOptions): Promise<LemonadeTarget>;
     /** A model server the PC already runs; `unchecked` lists addresses that took the connection but didn't answer. */

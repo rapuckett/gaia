@@ -3,7 +3,9 @@
 
 import type { ReactNode } from 'react';
 
+import { GaiaNetworkError, GaiaPinMismatchError } from '@/api/errors';
 import { useGaiaClient, useSetupGate } from '@/data';
+import { PinMismatchScreen, usePairAgain } from '@/features/pairing';
 import { describeError, useT } from '@/i18n/useT';
 import { Button, Notice, Screen, Stack } from '@/ui';
 
@@ -19,6 +21,7 @@ export function SetupGate({ children, renderStep }: { children: ReactNode; rende
     const client = useGaiaClient();
     const t = useT();
     const { gate, recheck, finish, open } = useSetupGate();
+    const pairAgain = usePairAgain();
 
     if (!client) return <>{children}</>;
     if (gate.state === 'checking') return <StartupScreen />;
@@ -27,7 +30,20 @@ export function SetupGate({ children, renderStep }: { children: ReactNode; rende
     if (gate.state === 'addingLocal') return <SetupScreen onReady={finish} onClose={finish} renderStep={renderStep} />;
     if (gate.state === 'ready') return <>{children}</>;
 
-    const notice =
+    // A PC whose certificate changed is a hard stop: the only way on is to pair again.
+    if (gate.state === 'unknown' && gate.error instanceof GaiaPinMismatchError) {
+        return <PinMismatchScreen onPairAgain={() => pairAgain.mutate()} busy={pairAgain.isPending} />;
+    }
+    const unreachable = gate.state === 'unknown' && !gate.upgradeFailed && gate.error instanceof GaiaNetworkError;
+
+    const notice = unreachable ? (
+        <Notice
+            tone="warning"
+            title={t('mobileApp.pairing.off.title')}
+            message={t('mobileApp.pairing.unreachable.body')}
+            action={{ label: t('mobileApp.pairing.off.retry'), onPress: () => void recheck() }}
+        />
+    ) :
         gate.state === 'serverDown' ? (
             <Notice
                 tone="warning"
