@@ -16,6 +16,14 @@ function isSilentStatus(event: StreamEvent, text: string): boolean {
     return event.status !== 'working' && event.status !== 'warning' && event.status !== 'info';
 }
 
+/** A model retry is said by the live line alone, whether as its own status or as the warning beside it. */
+function isRetryNotice(events: readonly StreamEvent[], i: number): boolean {
+    const event = events[i]!;
+    if (event.phase === 'model_retry') return true;
+    if (event.status !== 'warning') return false;
+    return [events[i - 1], events[i + 1]].some((e) => e?.phase === 'model_retry' && e.message === event.message);
+}
+
 /**
  * The turn's activity steps, from its events, the way the Agent UI's chat view
  * folds them into its step list while the turn runs.
@@ -42,7 +50,8 @@ export function stepsFromEvents(events: readonly StreamEvent[], t: Translate): A
         }
     };
 
-    for (const event of events) {
+    for (const [i, event] of events.entries()) {
+        if (event.type === 'status' && isRetryNotice(events, i)) continue;
         switch (event.type) {
             case 'tool_end':
                 updateLastTool({ active: false, success: event.success !== false });
