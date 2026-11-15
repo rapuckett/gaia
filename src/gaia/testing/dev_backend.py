@@ -18,7 +18,7 @@ beside an installed GAIA without touching its ports or ``~/.gaia``.
   lets a test drive a tool-approval prompt.
 
 The backend starts already set up: the fake Lemonade lists every model the
-flagship profile needs as downloaded, the flagship's install sentinel is written
+flagship profile needs, and its speech model, as downloaded, the flagship's install sentinel is written
 under ``--home``, and the setup marker is set, so ``/api/setup/check`` reports
 ``ready: true`` and a client goes straight to chat. ``--fresh`` leaves all three
 out, for flows that drive the first-run Setup wizard.
@@ -164,11 +164,17 @@ def build_fake_llm(
 ):
     """A FastAPI app speaking the slice of Lemonade's API a chat turn uses.
 
-    *downloaded* names further models listed as downloaded beside *model*.
+    *downloaded* names further models listed as downloaded beside *model*;
+    the speech model is served only when it is among them.
     """
     from fastapi import FastAPI
-    from fastapi.responses import JSONResponse, StreamingResponse
+    from fastapi.responses import JSONResponse, Response, StreamingResponse
 
+    from gaia.audio.lemonade_tts import (
+        DEFAULT_TTS_MODEL,
+        KOKORO_VOICES,
+        TTS_SAMPLE_RATE,
+    )
     from gaia.llm.lemonade_client import GPU_CTX_SIZE
     from gaia.version import LEMONADE_VERSION
 
@@ -213,11 +219,36 @@ def build_fake_llm(
                     "object": "model",
                     "downloaded": True,
                     "recipe": "llamacpp",
-                    "labels": [],
+                    "labels": ["tts"] if model_id == DEFAULT_TTS_MODEL else [],
                 }
                 for model_id in dict.fromkeys([model, *(downloaded or [])])
             ],
         }
+
+    @app.post("/api/v1/audio/speech")
+    def speech(body: Dict[str, Any]):
+        if body.get("model") != DEFAULT_TTS_MODEL or DEFAULT_TTS_MODEL not in (
+            downloaded or []
+        ):
+            return JSONResponse(
+                status_code=404,
+                content={"error": {"message": f"Model not found: {body.get('model')}"}},
+            )
+        if body.get("voice") not in KOKORO_VOICES:
+            return JSONResponse(
+                status_code=500,
+                content={"error": {"message": f"Unknown voice: {body.get('voice')}"}},
+            )
+        if not body.get("input"):
+            return JSONResponse(
+                status_code=400,
+                content={"error": {"message": "Missing 'input' for speech"}},
+            )
+        # 1.5 s of silence, long enough for a scripted run to tap Stop reading.
+        return Response(
+            content=bytes(2 * int(1.5 * TTS_SAMPLE_RATE)),
+            media_type=f"audio/l16;rate={TTS_SAMPLE_RATE}",
+        )
 
     @app.get("/api/v1/stats")
     def stats():
@@ -451,6 +482,7 @@ def run(
     if fresh:
         _refuse_set_up_home(home)
 
+    from gaia.audio.lemonade_tts import DEFAULT_TTS_MODEL
     from gaia.config import UnsafeGaiaHomeError
     from gaia.installer.init_command import INIT_PROFILES
     from gaia.llm.lemonade_client import DEFAULT_MODEL_NAME
@@ -463,7 +495,11 @@ def run(
     stop = threading.Event()
     signal.signal(signal.SIGTERM, lambda *_: stop.set())
     signal.signal(signal.SIGINT, lambda *_: stop.set())
-    downloaded = [] if fresh else list(INIT_PROFILES["gaia"]["models"])
+    downloaded = (
+        []
+        if fresh
+        else list(dict.fromkeys([*INIT_PROFILES["gaia"]["models"], DEFAULT_TTS_MODEL]))
+    )
     if not fresh:
         mark_set_up()
     llm = _Server(
