@@ -519,6 +519,7 @@ export const enMessages = {
     'media.showFull': 'Show full size',
     'media.showSmaller': 'Show smaller',
     'media.audioUnplayable': "This audio can't be played. The file may have been moved or deleted.",
+    'media.audioPlay': 'Play',
     // Recipe, workout and calculator cards
     'cards.tryGroup': 'Try an example',
     'cards.try': 'Try',
@@ -3597,6 +3598,8 @@ export const enMessages = {
     'mobileApp.error.notJson': 'GAIA answered {path} with something that is not JSON. Check that the address points at GAIA on your PC.',
     'mobileApp.error.incompleteTranscript': 'GAIA returned an incomplete conversation. Reload it.',
     'mobileApp.error.noBody': 'GAIA sent no reply body, so there is nothing to read.',
+    'mobileApp.error.notAudio': 'GAIA sent "{type}", which isn\'t audio this phone plays.',
+    'mobileApp.error.audioTooLarge': 'The audio is larger than {size}, so this phone won\'t load it.',
     'mobileApp.error.streamClosed': 'GAIA closed the connection before the reply finished. Send the message again; if it keeps happening, check the GAIA log on your PC.',
     'mobileApp.error.streamBroke': 'The connection to GAIA broke while the reply was arriving. The answer may still finish on your PC: reopen this chat in a minute to see it.',
     'mobileApp.error.badEvent': 'GAIA sent a reply event this phone cannot read: {preview}',

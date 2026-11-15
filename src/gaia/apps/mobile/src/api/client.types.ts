@@ -569,6 +569,8 @@ export interface GaiaClient {
     getSpeechModel(options?: RequestOptions): Promise<SpeechModel>;
     /** Speaks `text` (at most MAX_SPEECH_CHARS) as audio, in the saved voice unless one is given. */
     speak(text: string, voice?: { voice?: string; speed?: number }, options?: RequestOptions): Promise<PcAudioBytes>;
+    /** A generated audio card's file, by its `/api/media/audio/<name>` `src`; refuses any other `src`, a reply that isn't audio, and an oversized file. */
+    getGeneratedAudio(src: string, options?: RequestOptions): Promise<PcAudioBytes>;
     getMemorySettings(options?: RequestOptions): Promise<MemorySettings>;
     /** Changes the memory switches named in `settings`; answers with all of them, and what the system scan did when discovery was switched on. */
     updateMemorySettings(settings: Partial<MemorySettings>, options?: RequestOptions): Promise<MemorySettingsUpdateResponse>;
