@@ -16,12 +16,14 @@ export interface StatusDotProps {
     /** The accessible name; shown beside the dot with `showLabel`. */
     label: string;
     showLabel?: boolean;
+    /** Draw `success` as a plain green dot instead of a check, where a check already means something else. */
+    dot?: boolean;
 }
 
 const BOX = 16;
 
 // Each tone has its own shape, so none of them depends on color.
-export function StatusDot({ tone, label, showLabel }: StatusDotProps) {
+export function StatusDot({ tone, label, showLabel, dot }: StatusDotProps) {
     const { colors } = useTheme();
     let mark;
     if (tone === 'idle') {
@@ -32,6 +34,8 @@ export function StatusDot({ tone, label, showLabel }: StatusDotProps) {
                 <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: colors.accentBlue }} />
             </Pulse>
         );
+    } else if (tone === 'success' && dot) {
+        mark = <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors.accentGreen }} />;
     } else if (tone === 'success') {
         mark = <Icon icon={Check} size="sm" tone="success" />;
     } else if (tone === 'attention') {

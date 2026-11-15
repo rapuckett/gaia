@@ -16,7 +16,7 @@ import { ModelChip } from './ModelChip';
 import { SpendMeter } from './SpendMeter';
 
 /** Developer gallery (`/dev/composer?state=`): the context meter, spend meter and model menu in each state. */
-export const COMPOSER_MENU_STATES = ['context', 'warning', 'spend', 'menu', 'menuInfo', 'menuEmpty'] as const;
+export const COMPOSER_MENU_STATES = ['context', 'warning', 'spend', 'menu', 'menuInfo', 'menuEmpty', 'menuSwitching'] as const;
 export type ComposerMenuState = (typeof COMPOSER_MENU_STATES)[number];
 
 const USAGE: ContextUsage = {
@@ -64,6 +64,7 @@ const model = (id: string, extra: Partial<ProviderModel> = {}): ProviderModel =>
 
 const LOCAL = [
     model('Gemma-4-E4B-it-GGUF', { state: 'loaded', size_gb: 5.1, tokens_per_second: 31.6, placement: { label: 'GPU · Vulkan', source: 'reported', device: 'gpu', backend: 'vulkan', warning: null } as ProviderModel['placement'] }),
+    model('Qwen3-4B-Instruct-GGUF', { size_gb: 2.5 }),
     model('Qwen3.6-35B-A3B-GGUF', { downloaded: false, state: 'not_downloaded', size_gb: 23.3, placement: { label: 'GPU · Vulkan', source: 'expected', device: 'gpu', backend: 'vulkan', warning: 'Needs about 27 GB; this PC has less free right now.' } as ProviderModel['placement'] }),
     model('Qwen3-VL-4B-Instruct-GGUF', { downloaded: false, state: 'not_downloaded', size_gb: 3.3, download_progress: { state: 'downloading', percent: 42 } as ProviderModel['download_progress'] }),
 ];
@@ -84,7 +85,7 @@ export function ComposerMenusGallery({ state }: { state: ComposerMenuState }) {
             providerModels: { local: { provider: 'local', models: state === 'menuEmpty' ? [] : LOCAL } },
             providers: { providers: [
                 { id: 'local', name: 'Local', remote: false, configured: true, blocked: false, privacy_notice: '' },
-                { id: 'fireworks', name: 'Fireworks AI', remote: true, configured: state !== 'menu' && state !== 'menuInfo', blocked: false, privacy_notice: '' },
+                { id: 'fireworks', name: 'Fireworks AI', remote: true, configured: state !== 'menu' && state !== 'menuInfo' && state !== 'menuSwitching', blocked: false, privacy_notice: '' },
             ] },
         });
         return base;
@@ -107,7 +108,7 @@ export function ComposerMenusGallery({ state }: { state: ComposerMenuState }) {
                                     <>
                                         <SpendMeter sessionId="dev" busy={false} initialOpen={state === 'spend'} />
                                         <ContextMeter usage={usage} initialOpen={state === 'context'} onDetails={noop} />
-                                        <ModelChip initialOpen={state === 'menu' || state === 'menuInfo' || state === 'menuEmpty'} initialInfoRow={state === 'menuInfo' ? 'Qwen3.6-35B-A3B-GGUF' : undefined} />
+                                        <ModelChip initialOpen={state === 'menu' || state === 'menuInfo' || state === 'menuEmpty' || state === 'menuSwitching'} initialInfoRow={state === 'menuInfo' ? 'Qwen3.6-35B-A3B-GGUF' : undefined} forceSwitching={state === 'menuSwitching' ? 'Qwen3-4B-Instruct-GGUF' : undefined} />
                                     </>
                                 }
                             />

@@ -22,6 +22,8 @@ export function modelLabel(m: Pick<ProviderModel, 'id' | 'display_name'>): strin
     return m.display_name || m.id.slice(m.id.lastIndexOf('/') + 1);
 }
 
+const ICON_BOX = 16;
+
 const sameModel = (a: string | null | undefined, b: string | null | undefined) =>
     !!a && !!b && a.toLowerCase().replace(/^user\./, '') === b.toLowerCase().replace(/^user\./, '');
 
@@ -38,10 +40,12 @@ export interface ModelMenuProps {
     onSwitchError: (message: string | null) => void;
     /** Starts with this row's facts open (developer gallery). */
     initialInfoRow?: string;
+    /** Shows this row as being switched to (developer gallery). */
+    forceSwitching?: string;
 }
 
 /** Switch the model, download one that isn't on the PC, or see what only the PC can do. */
-export function ModelMenu({ open, onClose, turnRunning, queued, onQueue, switchError, onSwitchError, initialInfoRow }: ModelMenuProps) {
+export function ModelMenu({ open, onClose, turnRunning, queued, onQueue, switchError, onSwitchError, initialInfoRow, forceSwitching }: ModelMenuProps) {
     const t = useT();
     const active = useActiveModel().data;
     const local = useProviderModels('local', open);
@@ -56,6 +60,7 @@ export function ModelMenu({ open, onClose, turnRunning, queued, onQueue, switchE
     const pickAfterDownload = useRef<string | null>(null);
     const [wasOpen, setWasOpen] = useState(open);
     const current = queued ?? active?.model;
+    const switchingTo = select.isPending ? select.variables : forceSwitching;
 
     // A fresh open starts clean; reset while rendering, not in an effect.
     if (open !== wasOpen) {
@@ -121,6 +126,7 @@ export function ModelMenu({ open, onClose, turnRunning, queued, onQueue, switchE
         const downloading = isDownloading(m);
         const needsDownload = !remote && state === 'not_downloaded' && !sameModel(current, m.id);
         const name = modelLabel(m);
+        const switching = sameModel(switchingTo, m.id);
         let trailing;
         if (downloading) {
             trailing = (
@@ -132,7 +138,7 @@ export function ModelMenu({ open, onClose, turnRunning, queued, onQueue, switchE
         } else if (!remote && needsDownload) {
             trailing = <Icon icon={Download} size="sm" tone="secondary" label={t('modelMenu.downloadModel', { name })} />;
         } else if (!remote && state === 'loaded') {
-            trailing = <StatusDot tone="success" label={t('modelStatus.state.loaded')} />;
+            trailing = <StatusDot tone="success" dot label={t('modelStatus.state.loaded')} />;
         } else if (!remote) {
             trailing = (
                 <Text role="caption" tone="secondary">
@@ -148,11 +154,9 @@ export function ModelMenu({ open, onClose, turnRunning, queued, onQueue, switchE
                     title={name}
                     subtitle={!remote && m.size_gb ? `${m.size_gb} GB` : undefined}
                     leading={
-                        sameModel(current, m.id) ? (
-                            <Icon icon={Check} size="sm" tone="accent" />
-                        ) : (
-                            <Icon icon={Check} size="sm" tone="muted" />
-                        )
+                        <View style={{ width: ICON_BOX, height: ICON_BOX, alignItems: 'center', justifyContent: 'center' }}>
+                            {switching ? <Spinner size="sm" /> : sameModel(current, m.id) ? <Icon icon={Check} size="sm" tone="accent" /> : null}
+                        </View>
                     }
                     trailing={trailing}
                     selected={sameModel(current, m.id)}
