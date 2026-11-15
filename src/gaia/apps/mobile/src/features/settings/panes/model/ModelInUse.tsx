@@ -66,7 +66,7 @@ export function ModelInUse({ active, readFailed, row, waitingServer, choices, bu
                     )}
                     {active?.config_error ? <Notice tone="danger" message={active.config_error} /> : null}
                     {model && !remote && row?.available === false ? (
-                        <Notice tone="danger" message={t('settings.model.inUseCantRun')} />
+                        <Notice tone="danger" message={t('mobileApp.settings.model.inUseCantRun')} />
                     ) : null}
                     {model ? (
                         <Row gap="sm" wrap>
@@ -74,7 +74,7 @@ export function ModelInUse({ active, readFailed, row, waitingServer, choices, bu
                             {remote && active?.provider_name ? <Badge label={active.provider_name} /> : null}
                             {device ? <Badge label={device.toUpperCase()} /> : null}
                             {stateKey ? <Badge label={t.bare(stateKey)} accessibilityLabel={t(stateKey)} tone={row?.state === 'loaded' ? 'success' : 'neutral'} /> : null}
-                            {row?.fits === true ? <Badge label={t.bare('settings.model.fits')} accessibilityLabel={t('settings.model.fits')} tone="success" /> : null}
+                            {row?.fits === true ? <Badge label={t.bare('mobileApp.settings.model.fits')} accessibilityLabel={t('mobileApp.settings.model.fits')} tone="success" /> : null}
                             {row?.size_gb ? <Badge label={isolate(`${row.size_gb} GB`)} /> : null}
                             {remote && row?.context_length ? (
                                 <Badge

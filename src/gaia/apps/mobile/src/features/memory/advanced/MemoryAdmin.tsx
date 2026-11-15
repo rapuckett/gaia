@@ -7,11 +7,10 @@ import type { MessageKey } from '@webui/i18n/registry';
 
 import type { MemorySettings } from '@/api/client.types';
 import { useClearAllMemory, useReinitializeMemory, useUpdateMemorySettings } from '@/data';
-import { useT } from '@/i18n/useT';
+import { describeFailureWith, useT } from '@/i18n/useT';
 import { Badge, Button, Card, Row, Sheet, Stack, Switch, Text } from '@/ui';
 import { Shield } from '@/ui/icons';
 
-import { errorText } from '../about/errorText';
 import type { MemoryNotice } from '../useMemoryNotice';
 import { SectionTitle } from './SectionTitle';
 
@@ -22,7 +21,7 @@ const BETA: Record<Beta, { title: MessageKey; description: MessageKey; bullets: 
     memory: {
         title: 'mem.beta.memory.title',
         description: 'mem.beta.memory.desc',
-        bullets: ['mem.beta.memory.local', 'mem.beta.memory.lost', 'mem.beta.memory.disable'],
+        bullets: ['mobileApp.mem.beta.memory.local', 'mem.beta.memory.lost', 'mem.beta.memory.disable'],
         confirm: 'mem.beta.memory.confirm',
         setting: 'memory_enabled',
     },
@@ -36,7 +35,7 @@ const BETA: Record<Beta, { title: MessageKey; description: MessageKey; bullets: 
     discovery: {
         title: 'mem.beta.discovery.title',
         description: 'mem.beta.discovery.desc',
-        bullets: ['mem.beta.discovery.collects', 'mem.beta.discovery.scans', 'mem.beta.discovery.local'],
+        bullets: ['mem.beta.discovery.collects', 'mem.beta.discovery.scans', 'mobileApp.mem.beta.discovery.local'],
         confirm: 'mem.beta.discovery.confirm',
         setting: 'system_discovery_consent',
     },
@@ -57,7 +56,7 @@ export function MemoryAdmin({ settings, notify }: { settings: MemorySettings; no
     const [danger, setDanger] = useState<Danger | null>(null);
     const busy = update.isPending || clear.isPending || reinit.isPending;
 
-    const fail = (key: MessageKey, error: unknown) => notify({ tone: 'danger', text: t(key, { error: errorText(error, t) }) });
+    const fail = (key: MessageKey, error: unknown) => notify({ tone: 'danger', text: t.compose((say) => say(key, { error: describeFailureWith(error, say) })) });
 
     const turnOff = (kind: Beta) => update.mutate({ [BETA[kind].setting]: false }, { onError: (e) => fail('mem.toast.settingFailed', e) });
 
@@ -136,7 +135,7 @@ export function MemoryAdmin({ settings, notify }: { settings: MemorySettings; no
             {(['reinit', 'delete'] as const).map((kind) => (
                 <Card key={kind}>
                     <Stack gap="md">
-                        <Text role="ui" weight="semibold">{t(DANGER[kind].title)}</Text>
+                        <Text role="ui" weight="semibold" accessibilityRole="header">{t(DANGER[kind].title)}</Text>
                         <Text role="label" tone="muted">{t(DANGER[kind].description)}</Text>
                         <Button
                             variant="danger"

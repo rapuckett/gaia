@@ -58,7 +58,7 @@ export function ProviderKey({ provider, connected }: { provider: ProviderRow; co
     return (
         <Stack gap="sm" testID="provider-key">
             <Row gap="sm" justify="between">
-                <Text role="label" weight="medium" tone="secondary">{t('settings.key.title')}</Text>
+                <Text role="label" weight="medium" tone="secondary" accessibilityRole="header">{t('settings.key.title')}</Text>
                 <Badge
                     tone={connected ? 'success' : 'danger'}
                     label={t.bare(connected ? 'settings.key.connected' : 'settings.key.notConnected')}
