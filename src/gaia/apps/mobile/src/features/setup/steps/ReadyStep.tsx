@@ -19,7 +19,7 @@ import { readyView, starterCards } from './readyView';
 export function ReadyStep({ ctx }: { ctx: SetupStepContext }) {
     const t = useT();
     const select = useSelectModel();
-    const cards = starterCards(useStartScreen().data?.cards);
+    const cards = starterCards(useStartScreen().data?.cards, ctx.again);
     const [error, setError] = useState<string | null>(null);
     const view = readyView(ctx.run, ctx.plan);
     const names = new Map((ctx.plan?.catalog ?? []).map((e) => [e.id, e.name]));

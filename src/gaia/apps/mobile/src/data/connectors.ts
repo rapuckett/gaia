@@ -90,3 +90,16 @@ export function useChangeConnectorAccess(connectorId: string) {
             ]),
     });
 }
+
+/** Pauses an MCP server, or removes its credentials, then reloads the connector list. */
+export function useConnectorServerAction(connectorId: string) {
+    const client = useGaiaClient();
+    const queryClient = useQueryClient();
+    return useMutation<void, Error, 'disable' | 'disconnect'>({
+        mutationFn: (action) => {
+            const c = requireClient(client);
+            return action === 'disable' ? c.disableConnector(connectorId) : c.disconnectConnector(connectorId);
+        },
+        onSettled: () => queryClient.invalidateQueries({ queryKey: queryKeys.connectors }),
+    });
+}
