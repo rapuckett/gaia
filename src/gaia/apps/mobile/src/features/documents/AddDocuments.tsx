@@ -5,7 +5,7 @@ import { useState } from 'react';
 
 import { GaiaApiError, GaiaError } from '@/api/errors';
 import { useAddDocument } from '@/data';
-import { describeError, useT } from '@/i18n/useT';
+import { describeError, describeErrorWith, useT } from '@/i18n/useT';
 import { pickDocuments, pickPhotos, type PickedFile } from '@/platform/pickers';
 import { Button, Notice, ProgressLine, Row, Stack, Text } from '@/ui';
 import { FileText, Image as ImageIcon } from '@/ui/icons';
@@ -46,9 +46,7 @@ export function AddDocuments({ chatId, chatName, onStart }: AddDocumentsProps) {
             const name = document.filename || file.name;
             if (document.indexing_status === 'failed') return { kind: 'unreadable', message: t('docs.notAdded', { name }) };
             if (attachError) {
-                // Bare, so an Arabic gloss in the reason never nests inside this message's brackets.
-                const reason = attachError instanceof GaiaError ? t.bare(attachError.messageKey, attachError.params) : attachError.message;
-                const error = t('docs.attachFailedAfterIndex', { chat: chatName ?? '', error: reason });
+                const error = t.compose((say) => say('docs.attachFailedAfterIndex', { chat: chatName ?? '', error: describeErrorWith(attachError, say) }));
                 return { kind: 'failed', error: describeUploadError(t, { filename: file.name, error }) };
             }
             if (!chatId) holdForNextChat([document.id]);

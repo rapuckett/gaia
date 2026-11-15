@@ -6,7 +6,7 @@ import { useCallback, useMemo, useState, type ReactNode } from 'react';
 
 import { buildCitationIndex, type LibraryDoc } from '@webui/utils/citations';
 import { isolate } from '@webui/i18n/registry';
-import { describeError, useDirection, useT } from '@/i18n/useT';
+import { describeErrorWith, useDirection, useT } from '@/i18n/useT';
 import { GaiaError } from '@/api/errors';
 import { openDocument } from '@/platform/openDocument';
 import { useConnectionStore } from '@/state/connection';
@@ -163,7 +163,7 @@ function useOpenCitation() {
         (doc: LibraryDoc) => {
             setError(null);
             const opening = connection ? openDocument(connection.baseUrl, connection.token, doc) : Promise.reject(new GaiaError('mobileApp.error.noConnection'));
-            opening.catch((err: unknown) => setError(t('citation.openFailed', { name: doc.filename, error: describeError(err, t) })));
+            opening.catch((err: unknown) => setError(t.compose((say) => say('citation.openFailed', { name: doc.filename, error: describeErrorWith(err, say) }))));
         },
         [connection, t],
     );

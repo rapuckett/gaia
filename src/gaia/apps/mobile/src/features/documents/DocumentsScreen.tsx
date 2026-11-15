@@ -7,7 +7,7 @@ import { isolate } from '@webui/i18n/registry';
 
 import { useAttachDocument, useCancelIndexing, useDocumentRemoval, useDocuments, useIndexingView, useReindexDocument, useSession } from '@/data';
 import { ScreenHeader } from '@/features/nav/ScreenHeader';
-import { describeError, useT } from '@/i18n/useT';
+import { describeErrorWith, useT } from '@/i18n/useT';
 import { EmptyState, ErrorState, IconButton, List, ListSkeleton, Notice, Row, Screen, Stack, Text, useTheme } from '@/ui';
 import { X } from '@/ui/icons';
 
@@ -59,7 +59,7 @@ function Library({ chat }: { chat: OpenChat | null }) {
     const addNext = useNextChatDocs((s) => s.add);
     // The open chat when documents go there, else null: the next new chat.
     const targetChat = chat && target === 'chat' ? chat : null;
-    const removal = useDocumentRemoval((r, error) => action.report(t('docs.deleteFailed', { name: r.name, error: describeError(error, t) })));
+    const removal = useDocumentRemoval((r, error) => action.report(t.compose((say) => say('docs.deleteFailed', { name: r.name, error: describeErrorWith(error, say) }))));
     const cancel = useCancelIndexing();
     const reindex = useReindexDocument();
     const all = query.data?.documents ?? [];
@@ -69,11 +69,11 @@ function Library({ chat }: { chat: OpenChat | null }) {
     const nameOf = (id: string) => all.find((d) => d.id === id)?.filename ?? id;
     const onCancel = (id: string) => {
         action.dismiss();
-        cancel.mutate(id, { onError: (e) => action.report(t('docs.cancelFailed', { name: nameOf(id), error: describeError(e, t) })) });
+        cancel.mutate(id, { onError: (e) => action.report(t.compose((say) => say('docs.cancelFailed', { name: nameOf(id), error: describeErrorWith(e, say) }))) });
     };
     const onRetry = (id: string) => {
         action.dismiss();
-        reindex.mutate(id, { onError: (e) => action.report(t('docs.retryFailed', { name: nameOf(id), error: describeError(e, t) })) });
+        reindex.mutate(id, { onError: (e) => action.report(t.compose((say) => say('docs.retryFailed', { name: nameOf(id), error: describeErrorWith(e, say) }))) });
     };
     const onRemove = (id: string) => {
         action.dismiss();
@@ -91,12 +91,12 @@ function Library({ chat }: { chat: OpenChat | null }) {
             { sessionId: targetChat.id, docId: id },
             {
                 onSuccess: () => setNote(t('docs.attached', { name: nameOf(id), chat: targetChat.name })),
-                onError: (e) => action.report(t('docs.attachFailed', { name: nameOf(id), chat: targetChat.name, error: describeError(e, t) })),
+                onError: (e) => action.report(t.compose((say) => say('docs.attachFailed', { name: nameOf(id), chat: targetChat.name, error: describeErrorWith(e, say) }))),
             },
         );
     };
     const attachedIds = targetChat ? targetChat.documentIds : nextIds;
-    const loadFailed = query.isError ? t('docs.loadFailed', { error: describeError(query.error, t) }) : null;
+    const loadFailed = query.isError ? t.compose((say) => say('docs.loadFailed', { error: describeErrorWith(query.error, say) })) : null;
     const adder = <AddDocuments chatId={targetChat?.id ?? null} chatName={chat?.name ?? null} onStart={action.dismiss} />;
     const retry = { label: t('docs.loadRetry'), onPress: () => void query.refetch() };
 
