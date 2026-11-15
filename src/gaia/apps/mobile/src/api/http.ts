@@ -49,6 +49,7 @@ import type {
     DocumentResponse,
     DocumentStatus,
     EmbeddingCoverage,
+    FilePreviewResponse,
     FollowUpOutcome,
     FollowUpResult,
     DeleteSessionResult,
@@ -119,6 +120,7 @@ import {
     documentPath,
     goalPath,
     ENDPOINTS,
+    filePath,
     chatContextPath,
     chatPermissionGrantsPath,
     chatPerformancePath,
@@ -311,6 +313,28 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
     async function putJson<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
         return readJson<T>(await request('PUT', path, body, signal), path);
+    }
+
+    // The whole body, drained from the stream: a file on the PC is read by this client only, never by a URL handed to the system.
+    async function readBytes(path: string, signal?: AbortSignal): Promise<Uint8Array> {
+        const res = await request('GET', path, undefined, signal);
+        if (!res.body) throw new GaiaStreamError('mobileApp.error.noBody');
+        const reader = res.body.getReader();
+        const parts: Uint8Array[] = [];
+        let size = 0;
+        for (;;) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            parts.push(value);
+            size += value.length;
+        }
+        const out = new Uint8Array(size);
+        let at = 0;
+        for (const part of parts) {
+            out.set(part, at);
+            at += part.length;
+        }
+        return out;
     }
 
     async function* streamTurn(
@@ -893,6 +917,18 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         deleteDocument(docId, options) {
             return deleteJson<DeleteDocumentResult>(documentPath(docId), options?.signal);
+        },
+
+        getFilePreview(path, sessionId, options) {
+            return getJson<FilePreviewResponse>(filePath('filesPreview', path, sessionId), options?.signal);
+        },
+
+        getImageBytes(path, sessionId, options) {
+            return readBytes(filePath('filesImage', path, sessionId), options?.signal);
+        },
+
+        getDocumentBytes(docId, options) {
+            return readBytes(documentPath(docId, 'documentFile'), options?.signal);
         },
 
         getDocumentStatus(docId, options) {

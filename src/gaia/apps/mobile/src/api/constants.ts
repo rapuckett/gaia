@@ -130,6 +130,8 @@ export const ENDPOINTS = {
     documentStatus: '/api/documents/{doc_id}/status',
     documentUpload: '/api/documents/upload',
     documents: '/api/documents',
+    filesImage: '/api/files/image',
+    filesPreview: '/api/files/preview',
     filesUpload: '/api/files/upload',
     filesUploadMedia: '/api/files/upload-media',
     onboardingPreflight: '/api/onboarding/preflight',
@@ -305,7 +307,7 @@ export function sessionMessagesAndBelowPath(sessionId: string, messageId: number
         .replace('{message_id}', String(messageId));
 }
 
-export function documentPath(docId: string, endpoint: 'document' | 'documentCancel' | 'documentReindex' | 'documentStatus' = 'document'): string {
+export function documentPath(docId: string, endpoint: 'document' | 'documentCancel' | 'documentFile' | 'documentReindex' | 'documentStatus' = 'document'): string {
     return ENDPOINTS[endpoint].replace('{doc_id}', encodeURIComponent(docId));
 }
 
@@ -313,6 +315,12 @@ export function documentPath(docId: string, endpoint: 'document' | 'documentCanc
 export function documentFileUrl(baseUrl: string, docId: string, page?: number): string {
     const path = ENDPOINTS.documentFile.replace('{doc_id}', encodeURIComponent(docId));
     return `${baseUrl.replace(/\/+$/, '')}${path}${page ? `#page=${page}` : ''}`;
+}
+
+/** A PC file's preview or image, named by its path on the PC; the chat's id is what lets a phone read it. */
+export function filePath(endpoint: 'filesImage' | 'filesPreview', path: string, sessionId: string, lines?: number): string {
+    const query = `path=${encodeURIComponent(path)}&session_id=${encodeURIComponent(sessionId)}`;
+    return `${ENDPOINTS[endpoint]}?${query}${lines ? `&lines=${lines}` : ''}`;
 }
 
 /** Typing pauses this long before a search goes out; the web UI's `SEARCH_DEBOUNCE_MS`. */
