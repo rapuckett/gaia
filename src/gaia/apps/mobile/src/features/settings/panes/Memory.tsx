@@ -1,0 +1,53 @@
+// Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
+// SPDX-License-Identifier: MIT
+
+import { useRouter } from 'expo-router';
+
+import { GaiaApiError } from '@/api/errors';
+import { useMemorySettings, useUpdateMemorySettings } from '@/data';
+import { describeError, useT } from '@/i18n/useT';
+import { Button, Card, Notice, Stack, Switch, Text } from '@/ui';
+
+import { SettingsAnchor } from '../targets';
+
+/** Memory on or off, and the way into the Memory screen. */
+export default function Memory() {
+    const t = useT();
+    const router = useRouter();
+    const settings = useMemorySettings();
+    const update = useUpdateMemorySettings();
+    const refused = update.error instanceof GaiaApiError && update.error.status === 403;
+    const error = update.error ?? settings.error;
+
+    return (
+        <Stack gap="lg" padding="lg">
+            <Text role="body" tone="secondary">
+                {t('mobileApp.settings.memory.lede')}
+            </Text>
+            <SettingsAnchor name="remember">
+                <Card>
+                    <Stack gap="md">
+                        <Switch
+                            label={t('settings.memory.remember')}
+                            value={settings.data?.memory_enabled ?? false}
+                            disabled={!settings.data || update.isPending}
+                            onValueChange={(on) => update.mutate({ memory_enabled: on })}
+                            testID="memory-remember"
+                        />
+                        {refused ? (
+                            <Notice tone="info" message={t('mobileApp.settings.pcOnly')} testID="memory-pc-only" />
+                        ) : error ? (
+                            <Notice tone="danger" message={describeError(error, t)} testID="memory-error" />
+                        ) : null}
+                        <Stack gap="sm">
+                            <Text role="label" tone="muted">
+                                {t('settings.memory.dashboardHint')}
+                            </Text>
+                            <Button variant="secondary" full label={t('settings.memory.dashboard')} onPress={() => router.push('/memory')} />
+                        </Stack>
+                    </Stack>
+                </Card>
+            </SettingsAnchor>
+        </Stack>
+    );
+}
