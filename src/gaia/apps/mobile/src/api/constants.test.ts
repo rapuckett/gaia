@@ -121,6 +121,7 @@ describe('endpoints', () => {
         providerConnect: ['POST'],
         providerModels: ['GET'],
         providersActive: ['GET'],
+        providersKeyStoreRetry: ['POST'],
         providersSelect: ['POST'],
         schedule: ['DELETE', 'PUT'],
         scheduleResults: ['GET'],

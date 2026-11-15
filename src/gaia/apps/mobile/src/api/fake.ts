@@ -229,6 +229,8 @@ export interface FakeGaiaClient extends GaiaClient {
     readonly connects: string[];
     /** How many times recheckSetupNpu was asked. */
     readonly npuRechecks: number;
+    /** How many times retryKeyStore was asked. */
+    readonly keyStoreRetries: number;
     readonly documentActions: { action: DocumentAction; docId: string }[];
     readonly setupStarts: { skipChatModel: boolean; gaiaLemonade: boolean; upgradeEmbedded: boolean; serverOnly: boolean }[];
     readonly detached: { sessionId: string; docId: string }[];
@@ -295,6 +297,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
     const setupChoices: FakeGaiaClient['setupChoices'] = [];
     const connects: string[] = [];
     let npuRechecks = 0;
+    let keyStoreRetries = 0;
     let checkAt = 0;
     let statusAt = 0;
     const nextOf = <T,>(list: (T | Error)[], at: number): T => {
@@ -355,6 +358,9 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         connects,
         get npuRechecks() {
             return npuRechecks;
+        },
+        get keyStoreRetries() {
+            return keyStoreRetries;
         },
         detached,
         capabilityReads,
@@ -839,6 +845,10 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         async connectProvider(provider) {
             connects.push(provider);
             return { remembered: true };
+        },
+        async retryKeyStore() {
+            keyStoreRetries += 1;
+            return { retrying: true };
         },
         async recheckSetupNpu() {
             npuRechecks += 1;

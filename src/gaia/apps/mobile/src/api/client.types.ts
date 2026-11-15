@@ -141,6 +141,13 @@ export interface ScheduleList {
     total: number;
 }
 
+/** POST /api/providers/{id}/connect's answer, as the web's Model settings reads it. */
+export interface ProviderConnected {
+    remembered: boolean;
+    remember_error?: string | null;
+    known_models?: boolean;
+}
+
 export type { MemorySettings } from '@webui/services/memoryApi';
 /** One day of GET /api/memory/activity, one tool of GET /api/memory/tools, one item of GET /api/memory/upcoming; typed as the web's `MemoryDashboard` types them. */
 export type { ActivityDay as MemoryActivityDay, TemporalItem as MemoryUpcomingItem, ToolStat as MemoryToolStat } from '@webui/utils/memoryFormat.core';
@@ -497,7 +504,9 @@ export interface GaiaClient {
     /** A model server the PC already runs; `unchecked` lists addresses that took the connection but didn't answer. */
     detectLemonade(options?: RequestOptions): Promise<{ found: LemonadeFound | null; unchecked?: string[] }>;
     /** Registers the provider with the key the PC already holds; the phone never sends a key. */
-    connectProvider(provider: string, options?: RequestOptions): Promise<{ remembered: boolean }>;
+    connectProvider(provider: string, options?: RequestOptions): Promise<ProviderConnected>;
+    /** After the PC's OS key-store unlock prompt was closed: lets GAIA ask once more, on the PC. */
+    retryKeyStore(options?: RequestOptions): Promise<{ retrying: boolean }>;
     /** A cloud provider's list prices, ranked; the first row is the model GAIA uses unless another is picked. */
     getCloudPrices(provider: string, options?: RequestOptions): Promise<CloudPriceList>;
     /** Reads the NPU's setup afresh after a fix on the PC; answers the plan. */

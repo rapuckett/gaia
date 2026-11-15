@@ -21,6 +21,7 @@ import { SettingsAnchor } from '../targets';
 import { CloudPrices } from './model/CloudPrices';
 import { ModelInUse } from './model/ModelInUse';
 import { ModelList } from './model/ModelList';
+import { ProviderKey } from './model/ProviderKey';
 import { errorText, modelLabel, sameModelId } from './model/modelText';
 
 /** Memory for models, read from the PC only while "How this works" is open. */
@@ -152,6 +153,11 @@ export default function Model({ provider: requested }: { provider?: string }) {
                             <Text role="label" weight="medium" tone="secondary">{t('settings.model.prices')}</Text>
                             <CloudPrices provider={provider.id} />
                         </Stack>
+                    ) : null}
+                    {provider.remote && !offline && !blocked ? (
+                        <SettingsAnchor name="cloud-key">
+                            <ProviderKey key={provider.id} provider={provider} connected={connected} />
+                        </SettingsAnchor>
                     ) : null}
                     {modelsQuery.error ? <Notice tone="danger" message={errorText(modelsQuery.error, t)} /> : null}
                     {connected ? (

@@ -63,6 +63,7 @@ import type {
     ModelNeed,
     ModelServerInfo,
     PreflightReport,
+    ProviderConnected,
     ProvidersResponse,
     RestartModelResult,
     RequestOptions,
@@ -735,7 +736,11 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         connectProvider(provider, options) {
             // No key travels from the phone: a blank body keeps the key the PC already holds.
-            return postJson<{ remembered: boolean }>(providerConnectPath(provider), {}, options?.signal);
+            return postJson<ProviderConnected>(providerConnectPath(provider), {}, options?.signal);
+        },
+
+        retryKeyStore(options) {
+            return postJson<{ retrying: boolean }>(ENDPOINTS.providersKeyStoreRetry, undefined, options?.signal);
         },
 
         recheckSetupNpu(options) {
