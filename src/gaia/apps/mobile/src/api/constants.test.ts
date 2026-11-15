@@ -119,6 +119,7 @@ describe('endpoints', () => {
         localModelRestart: ['POST'],
         localModelStatus: ['GET'],
         mcpStatus: ['GET'],
+        media: ['GET'],
         memoryActivity: ['GET'],
         memoryAll: ['DELETE'],
         memoryCommitDiscovery: ['POST'],

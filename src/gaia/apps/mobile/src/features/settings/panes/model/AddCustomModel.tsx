@@ -85,7 +85,7 @@ export function AddCustomModel({ open, onClose, onAdded }: AddCustomModelProps) 
     return (
         <Sheet open={open} onClose={onClose} title={t('settings.custom.title')}>
             <Stack gap="md" padding="lg">
-                <Text role="caption" tone="muted">{t('settings.custom.hint')}</Text>
+                <Text role="caption" tone="muted">{t('mobileApp.settings.custom.hint')}</Text>
                 <TextField
                     value={url}
                     onChangeText={(v) => { setUrl(v); setReport(null); setFile(''); setError(null); asked.current = ''; }}
@@ -127,7 +127,7 @@ export function AddCustomModel({ open, onClose, onAdded }: AddCustomModelProps) 
                         accessibilityLabel={t('settings.custom.quantization')}
                         options={report.variants.map((v) => ({
                             value: v.file,
-                            label: `${v.quant} · ${isolate(`${v.size_gb} GB`)}${v.fits ? '' : ` · ${t.bare('settings.custom.tooLarge')}`}`,
+                            label: `${v.quant} · ${isolate(`${v.size_gb} GB`)}${v.fits ? '' : ` · ${t.bare('mobileApp.settings.custom.tooLarge')}`}`,
                         }))}
                         value={file}
                         onChange={(v) => { if (!busy) runCheck(v as string); }}

@@ -59,7 +59,7 @@ export default function Notifications() {
             <SettingsAnchor name="keep-awake">
                 <Card>
                     <Stack gap="sm">
-                        <Text role="ui" weight="semibold">
+                        <Text role="ui" weight="semibold" accessibilityRole="header">
                             {t('settings.alerts.keepAwakeTitle')}
                         </Text>
                         <Text role="label" tone="secondary">

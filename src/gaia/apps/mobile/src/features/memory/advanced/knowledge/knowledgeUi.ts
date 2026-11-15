@@ -5,8 +5,7 @@ import { CATEGORY_KEYS, type KnowledgeEntry } from '@webui/utils/memoryFormat.co
 
 import { compose, type MessageKey } from '@webui/i18n/registry';
 
-import { GaiaApiError, GaiaError } from '@/api/errors';
-import type { Translate } from '@/i18n/useT';
+import { describeFailureWith, type Translate } from '@/i18n/useT';
 import type { BadgeTone } from '@/ui';
 
 export const CATEGORY_TONE: Record<string, BadgeTone> = {
@@ -31,9 +30,5 @@ export type { KnowledgeEntry };
 
 /** A failure inside its message, bracketed once: a PC's reason goes in as sent, one of ours is filled in the same language. */
 export function failureText(code: string, key: MessageKey, error: unknown): string {
-    if (error instanceof GaiaError && !(error instanceof GaiaApiError)) {
-        return compose(code, (say) => say(key, { error: say(error.messageKey, error.params) }));
-    }
-    const reason = error instanceof GaiaApiError ? error.detail : error instanceof Error ? error.message : String(error);
-    return compose(code, (say) => say(key, { error: reason }));
+    return compose(code, (say) => say(key, { error: describeFailureWith(error, say) }));
 }

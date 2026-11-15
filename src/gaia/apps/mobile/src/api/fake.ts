@@ -90,7 +90,8 @@ import type {
 import { foldText, splitMatch } from '@webui/utils/chatSearch';
 import { FLAGSHIP_AGENT_ID } from '@webui/utils/newTask';
 
-import { GaiaApiError } from './errors';
+import { generatedAudioPath } from './constants';
+import { GaiaApiError, GaiaConfigError } from './errors';
 
 function cloneNested<T>(source: Record<string, Record<string, T>> | undefined): Record<string, Record<string, T>> {
     return Object.fromEntries(Object.entries(source ?? {}).map(([key, inner]) => [key, { ...inner }]));
@@ -1032,6 +1033,10 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         },
         async getSpeechModel() {
             return data.speechModel ?? { downloaded: true, size_gb: null };
+        },
+        async getGeneratedAudio(src) {
+            if (generatedAudioPath(src) === null) throw new GaiaConfigError('render.invalidPayload', { render: 'audio' });
+            return { bytes: new TextEncoder().encode(src), contentType: 'audio/wav' };
         },
         async speak(text) {
             spoken.push(text);

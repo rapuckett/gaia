@@ -24,10 +24,54 @@ def _free_port() -> int:
         return s.getsockname()[1]
 
 
-def test_scripted_reply_streams_through_real_chat_api(tmp_path):
+def _setup_ready(port: int) -> bool:
+    resp = httpx.get(
+        f"http://127.0.0.1:{port}/api/setup/check",
+        params={"skip_chat_model": "false"},
+        headers=UI_HEADERS,
+        timeout=120,
+    )
+    return resp.json()["ready"]
+
+
+def test_fresh_flag_starts_not_set_up(tmp_path):
+    port, llm_port = _free_port(), _free_port()
+    proc = _start(tmp_path, port, llm_port, "--fresh")
+    try:
+        assert _setup_ready(port) is False
+        assert not (tmp_path / "home" / "chat" / "initialized").exists()
+    finally:
+        _stop(proc)
+
+
+def test_fresh_refuses_a_home_that_is_already_set_up(tmp_path, monkeypatch, capsys):
+    from gaia.testing import dev_backend
+
+    monkeypatch.setattr(os, "environ", dict(os.environ))
+    home = tmp_path / "home"
+    dev_backend.isolate_environment(home, "http://127.0.0.1:1/api/v1")
+    dev_backend.mark_set_up()
+
+    code = dev_backend.main(["--port", "4299", "--home", str(home), "--fresh"])
+
+    assert code == dev_backend.EX_USAGE
+    err = capsys.readouterr().err
+    assert "Use an empty --home for --fresh" in err
+    assert str(home) in err
+
+
+def _stop(proc):
+    proc.terminate()
+    try:
+        assert proc.wait(timeout=30) == 0
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        pytest.fail("dev backend ignored SIGTERM")
+
+
+def _start(tmp_path, port, llm_port, *extra):
     script = tmp_path / "script.json"
     script.write_text(json.dumps(["The scripted answer."]))
-    port, llm_port = _free_port(), _free_port()
     env = {
         k: v for k, v in os.environ.items() if not k.startswith(("GAIA_", "LEMONADE_"))
     }
@@ -45,6 +89,7 @@ def test_scripted_reply_streams_through_real_chat_api(tmp_path):
             str(tmp_path / "home"),
             "--script",
             str(script),
+            *extra,
         ],
         env=env,
         stdout=subprocess.PIPE,
@@ -59,6 +104,17 @@ def test_scripted_reply_streams_through_real_chat_api(tmp_path):
                 break
         else:
             pytest.fail("backend exited before READY:\n" + "".join(seen[-20:]))
+    except BaseException:
+        proc.kill()
+        raise
+    return proc
+
+
+def test_scripted_reply_streams_through_real_chat_api(tmp_path):
+    port, llm_port = _free_port(), _free_port()
+    proc = _start(tmp_path, port, llm_port)
+    try:
+        assert _setup_ready(port) is True
         base = f"http://127.0.0.1:{port}"
         session = httpx.post(
             f"{base}/api/sessions", json={"title": "e2e"}, headers=UI_HEADERS
@@ -84,10 +140,4 @@ def test_scripted_reply_streams_through_real_chat_api(tmp_path):
             e for e in events if "Memory" in json.dumps(e)
         ]
     finally:
-        proc.terminate()
-        try:
-            code = proc.wait(timeout=30)
-        except subprocess.TimeoutExpired:
-            proc.kill()
-            pytest.fail("dev backend ignored SIGTERM")
-    assert code == 0
+        _stop(proc)
