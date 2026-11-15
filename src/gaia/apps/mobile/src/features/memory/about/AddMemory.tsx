@@ -4,12 +4,11 @@
 import { useState } from 'react';
 
 import { useAddMemory } from '@/data';
-import { useT } from '@/i18n/useT';
+import { describeFailureWith, useT } from '@/i18n/useT';
 import { Button, Select, Stack, TextField } from '@/ui';
 import { Plus } from '@/ui/icons';
 
 import type { MemoryPaneProps } from '../tabs';
-import { errorText } from './errorText';
 import { parseWhen } from './whenInput';
 
 /** The categories a person can add, in the web's order; "fact" is its "About you". */
@@ -41,7 +40,7 @@ export function AddMemory({ notify }: Pick<MemoryPaneProps, 'notify'>) {
                     setWhen('');
                     notify({ tone: 'success', text: t('mem.about.saved') });
                 },
-                onError: (error) => notify({ tone: 'danger', text: t('mem.about.addFailed', { error: errorText(error, t) }) }),
+                onError: (error) => notify({ tone: 'danger', text: t.compose((say) => say('mem.about.addFailed', { error: describeFailureWith(error, say) })) }),
             },
         );
     };

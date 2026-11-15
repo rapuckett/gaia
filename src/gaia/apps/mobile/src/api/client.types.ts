@@ -1,6 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
+import type { AgentInstallStatus } from '@webui/services/api';
 import type { IndexProgress } from '@webui/utils/documentLibrary.core';
 import type { FollowUpOutcome } from '@webui/utils/messageQueue';
 import type {
@@ -52,6 +53,7 @@ import type { SpeechModel, SpeechSettings } from '@webui/services/speechApi';
 import type { ActivityDay, ConvSession, ConvTurn, EntityInfo, KnowledgeEntry, TemporalItem, ToolStat } from '@webui/utils/memoryFormat.core';
 import type { CreateSessionRequest, DocumentListResponse, DocumentResponse, ModelServerInfo, ProviderSummaryList, SessionSearchResponse, ToolConfirmRequest, UserInputRequest as ApiUserInputRequest, FilePreviewResponse } from '@webui/types/api.gen';
 
+export type { AgentInstallStatus } from '@webui/services/api';
 export type {
     ActiveModel,
     AgentInfo,
@@ -492,7 +494,6 @@ export interface GaiaClient {
     confirmTool(request: ToolConfirmRequest, options?: RequestOptions): Promise<ConfirmToolResult>;
     /** Answers a `needs_input` question; the turn continues once GAIA has it. */
     sendUserInput(request: UserInputRequest, options?: RequestOptions): Promise<UserInputResult>;
-    listAgents(options?: RequestOptions): Promise<AgentList>;
     /**
      * Streams events about the PC's chat list, such as `set_active_session`. Never ends on its own:
      * it throws when the connection drops or goes silent, and the caller reconnects.
@@ -519,6 +520,11 @@ export interface GaiaClient {
     disconnectConnector(connectorId: string, options?: RequestOptions): Promise<DisconnectOutcome | null>;
     /** Servers that custom agents declare in their own mcp_servers.json; read-only. */
     listAgentMcps(options?: RequestOptions): Promise<AgentMcpList>;
+    /** The agents this PC can run; a PC without the `gaia` agent can't start chats. */
+    listAgents(options?: RequestOptions): Promise<AgentList>;
+    /** Starts installing an agent on the PC (202); follow it with `getAgentInstallStatus`. PC-only: a phone gets the refusal. */
+    installAgent(id: string, options?: RequestOptions): Promise<{ id: string; status: string }>;
+    getAgentInstallStatus(id: string, options?: RequestOptions): Promise<AgentInstallStatus>;
     listSchedules(options?: RequestOptions): Promise<ScheduleList>;
     /** The last `days` days of conversations, tool calls, learned entries and errors, oldest first. */
     getMemoryActivity(days: number, options?: RequestOptions): Promise<ActivityDay[]>;
@@ -569,6 +575,8 @@ export interface GaiaClient {
     getSpeechModel(options?: RequestOptions): Promise<SpeechModel>;
     /** Speaks `text` (at most MAX_SPEECH_CHARS) as audio, in the saved voice unless one is given. */
     speak(text: string, voice?: { voice?: string; speed?: number }, options?: RequestOptions): Promise<PcAudioBytes>;
+    /** A generated audio card's file, by its `/api/media/audio/<name>` `src`; refuses any other `src`, a reply that isn't audio, and an oversized file. */
+    getGeneratedAudio(src: string, options?: RequestOptions): Promise<PcAudioBytes>;
     getMemorySettings(options?: RequestOptions): Promise<MemorySettings>;
     /** Changes the memory switches named in `settings`; answers with all of them, and what the system scan did when discovery was switched on. */
     updateMemorySettings(settings: Partial<MemorySettings>, options?: RequestOptions): Promise<MemorySettingsUpdateResponse>;
@@ -629,8 +637,8 @@ export interface GaiaClient {
     getFilePreview(path: string, sessionId: string, options?: RequestOptions): Promise<FilePreviewResponse>;
     /** An image on the PC, as bytes; the chat's id is what lets a phone read it. */
     getImageBytes(path: string, sessionId: string, options?: RequestOptions): Promise<Uint8Array>;
-    /** A library document's file, as bytes. */
-    getDocumentBytes(docId: string, options?: RequestOptions): Promise<Uint8Array>;
+    /** A library document's file, as bytes; the chat's id is what lets a phone read it. */
+    getDocumentBytes(docId: string, sessionId: string, options?: RequestOptions): Promise<Uint8Array>;
     getSystemStatus(options?: RequestOptions): Promise<SystemStatus>;
     /** Starts a model's download on the PC (`force` downloads it again); follow it in `getSystemStatus().download_progress`. */
     downloadModel(model: string, options?: { force?: boolean; loadAfter?: boolean } & RequestOptions): Promise<{ status: string; model: string }>;

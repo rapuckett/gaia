@@ -7,6 +7,7 @@ import type { RenderCardData } from '@webui/types';
 
 import { Stack } from '@/ui';
 
+import { AudioCard } from './AudioCard';
 import { CardErrorBoundary } from './CardErrorBoundary';
 import { CalculatorCard } from './CalculatorCard';
 import { DiffCard } from './DiffCard';
@@ -19,6 +20,7 @@ import { UnsupportedCard } from './UnsupportedCard';
 
 /** The `tool_result.render` keys the phone draws; any other key shows the unsupported card. */
 const CARD_REGISTRY: Record<string, ComponentType<{ data: unknown }>> = {
+    audio: AudioCard,
     calculator: CalculatorCard,
     diff: DiffCard,
     guide: GuideCard,

@@ -12,6 +12,7 @@ import { Button, Card, Disclosure, Divider, Ltr, Notice, ProgressLine, Row, Spin
 
 import { LogsCard } from '@/features/logs';
 
+import { isPcRefusal, PcOnlyNotice } from '../PcOnlyNotice';
 import { SettingsAnchor } from '../targets';
 import { ActionError, LoadAnywaySheet, RawDetails } from './advanced/errors';
 import { ServerControlsSlot } from './advanced/ServerControls';
@@ -65,6 +66,8 @@ function StatusCard() {
                         <Spinner />
                         <Text role="label" tone="muted">{t('settings.advanced.checking')}</Text>
                     </Row>
+                ) : !status && isPcRefusal(query.error) ? (
+                    <PcOnlyNotice testID="advanced-status-pc-only" />
                 ) : !status ? (
                     <Stack gap="sm">
                         <Notice
@@ -108,10 +111,10 @@ function StatusBody({ status, modelName, actions, detailsOpen, onToggleDetails }
     const serverHint = status.lemonade_running
         ? undefined
         : setupNeeded
-          ? t('settings.advanced.notInstalledHint')
+          ? t('mobileApp.settings.advanced.notInstalledHint')
           : status.start_instruction && !/gaia init/i.test(status.start_instruction)
             ? status.start_instruction
-            : t('settings.advanced.notRunningHint');
+            : t('mobileApp.settings.advanced.notRunningHint');
     const serverValue = status.lemonade_running
         ? status.lemonade_version
             ? t.bare('settings.advanced.runningAt', { version: isolate(status.lemonade_version, 'ltr') })

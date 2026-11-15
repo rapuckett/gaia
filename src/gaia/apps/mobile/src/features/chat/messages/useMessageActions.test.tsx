@@ -31,7 +31,7 @@ const question: Message = {
     rag_sources: null,
 };
 
-async function setup(laterTurns: number) {
+async function setup(laterTurns: number, readOnly = false) {
     const client = createFakeClient({ messages: { s: [question] } });
     const send = (text: string) => {
         void client.sendMessage('s', text)[Symbol.asyncIterator]().next();
@@ -42,7 +42,7 @@ async function setup(laterTurns: number) {
             <GaiaClientProvider client={client}>
                 <ThemeProvider>
                     <SheetHost>
-                        <MessageActionsContext.Provider value={{ send, busy: false }}>
+                        <MessageActionsContext.Provider value={{ send, busy: false, readOnly }}>
                             <UserBubble message={question} context={{ laterTurns }} />
                         </MessageActionsContext.Provider>
                     </SheetHost>
@@ -77,5 +77,14 @@ describe('message actions', () => {
         await waitFor(() => expect(client.sent).toEqual([{ sessionId: 's', message: 'What did the job copy?' }]));
         expect(client.deleted).toEqual([{ sessionId: 's', messageId: 7 }]);
         await act(async () => {});
+    });
+
+    it('a retired agent\'s chat offers no Edit or Resend, but keeps Copy and Delete', async () => {
+        await setup(0, true);
+        await fireEvent(screen.getByText(question.content), 'longPress');
+        expect(await screen.findByLabelText(t('msg.copy'))).toBeTruthy();
+        expect(screen.getByLabelText(t('msg.delete'))).toBeTruthy();
+        expect(screen.queryByLabelText(t('msg.resend'))).toBeNull();
+        expect(screen.queryByLabelText(t('msg.edit'))).toBeNull();
     });
 });

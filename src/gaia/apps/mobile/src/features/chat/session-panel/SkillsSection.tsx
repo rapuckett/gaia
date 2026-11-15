@@ -3,6 +3,7 @@
 
 import type { ActiveSkill, SkillOrigin } from '@/api/client.types';
 import { useCapabilities } from '@/data';
+import { isPcRefusal, PcOnlyNotice } from '@/features/settings/PcOnlyNotice';
 import { useT } from '@/i18n/useT';
 import { Icon, Notice, Row, Stack, Text } from '@/ui';
 import { Sparkles } from '@/ui/icons';
@@ -35,10 +36,11 @@ export function SkillsSection({ sessionId, live }: SectionProps) {
 
 function SkillList({ skills, error }: { skills: ActiveSkill[] | undefined; error: unknown }) {
     const t = useT();
+    if (isPcRefusal(error)) return <PcOnlyNotice testID="skills-pc-only" />;
     if (error) {
-        const failure = capabilityFailure(error, t);
+        const failure = capabilityFailure(error, t, 'skills.listError');
         if (failure.notRunning) return <Text tone="secondary">{t('skills.notRunning')}</Text>;
-        return <Notice tone="danger" message={t('skills.listError', { error: failure.text })} />;
+        return <Notice tone="danger" message={failure.text} />;
     }
     if (!skills) return <Text tone="muted">{t('sp.checking')}</Text>;
     if (skills.length === 0) return <Text tone="secondary">{t('skills.empty')}</Text>;
