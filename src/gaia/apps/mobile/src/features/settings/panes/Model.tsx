@@ -17,6 +17,7 @@ import {
 import { useT } from '@/i18n/useT';
 import { Disclosure, Notice, Row, SegmentedControl, Spinner, Stack, StatusDot, Text } from '@/ui';
 
+import { SettingsAnchor } from '../targets';
 import { CloudPrices } from './model/CloudPrices';
 import { ModelInUse } from './model/ModelInUse';
 import { ModelList } from './model/ModelList';
@@ -32,7 +33,7 @@ function LocalMemory() {
     return <Text role="caption" tone="muted">{t('settings.model.memory', { memory })}</Text>;
 }
 
-export default function Model() {
+export default function Model({ provider: requested }: { provider?: string }) {
     const t = useT();
     const providersQuery = useProviders();
     const activeQuery = useActiveModel();
@@ -45,7 +46,8 @@ export default function Model() {
 
     const providers = providersQuery.data?.providers;
     const active = activeQuery.data ?? providersQuery.data?.active;
-    const chosen: ProviderId = picked ?? active?.provider ?? 'local';
+    const asked = providers?.find((p) => p.id === requested)?.id;
+    const chosen: ProviderId = picked ?? asked ?? active?.provider ?? 'local';
     const provider = providers?.find((p) => p.id === chosen) ?? null;
     const offline = provider?.network?.reachable === false;
     const blocked = !!provider?.blocked;
@@ -153,15 +155,17 @@ export default function Model() {
                     ) : null}
                     {modelsQuery.error ? <Notice tone="danger" message={errorText(modelsQuery.error, t)} /> : null}
                     {connected ? (
-                        <ModelList
-                            provider={provider.id}
-                            remote={!!provider.remote}
-                            models={models}
-                            activeModel={active?.model}
-                            switching={select.isPending ? (select.variables ?? null) : null}
-                            onUse={switchTo}
-                            onRefresh={() => void modelsQuery.refetch()}
-                        />
+                        <SettingsAnchor name="models-on-pc">
+                            <ModelList
+                                provider={provider.id}
+                                remote={!!provider.remote}
+                                models={models}
+                                activeModel={active?.model}
+                                switching={select.isPending ? (select.variables ?? null) : null}
+                                onUse={switchTo}
+                                onRefresh={() => void modelsQuery.refetch()}
+                            />
+                        </SettingsAnchor>
                     ) : null}
                 </Stack>
             ) : null}
