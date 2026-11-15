@@ -111,8 +111,9 @@ describe('Composer', () => {
 
     it('blocks Send while a refused file is attached, and says which', async () => {
         const attachments: Attachments = {
-            items: [{ id: '1', name: 'a.exe', uri: 'file:///a.exe', isImage: false, isMedia: false, status: 'failed', error: 'unsupported' }],
+            items: [{ id: '1', key: 'file:///a.exe', name: 'a.exe', uri: 'file:///a.exe', isImage: false, isMedia: false, status: 'failed', error: 'unsupported' }],
             add: jest.fn(),
+            addFailed: jest.fn(),
             remove: jest.fn(),
             clear: jest.fn(),
             uploading: false,
