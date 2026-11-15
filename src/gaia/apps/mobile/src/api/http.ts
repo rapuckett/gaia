@@ -3,6 +3,7 @@
 
 import type { Message, ResourceUsage, Session, StartScreen, StreamEvent, SystemStatus } from '@webui/types';
 import { fromApiMessages } from '@webui/utils/chatStream';
+import { isMediaFile } from '@webui/utils/mediaFiles';
 
 import type { FetchLike, FetchRequestInit, FetchResponseLike } from '@/platform/fetch.types';
 
@@ -19,6 +20,8 @@ import {
     type StreamEndpoint,
 } from './errors';
 import type {
+    ActiveModel,
+    AgentCapabilities,
     AgentList,
     AgentMcpList,
     CancelChatResult,
@@ -27,9 +30,11 @@ import type {
     ConnectorGrants,
     ConnectorList,
     ContextUsageResult,
+    ConsolidateMemoryResult,
     DeleteMessagesResult,
     DeleteScheduleResult,
     DocumentListResponse,
+    EmbeddingCoverage,
     FollowUpOutcome,
     FollowUpResult,
     DeleteSessionResult,
@@ -38,6 +43,8 @@ import type {
     LemonadeFound,
     LemonadeTarget,
     LocalModelStatus,
+    MemorySettings,
+    MemoryStats,
     MessageList,
     ModelNeed,
     ModelServerInfo,
@@ -46,15 +53,21 @@ import type {
     RestartModelResult,
     RequestOptions,
     ParsedSchedule,
+    ProviderModelsResponse,
+    RebuildEmbeddingsResult,
+    ReconcileMemoryResult,
+    RefreshSystemContextResult,
     Schedule,
     ScheduleList,
     ScheduleResults,
     SessionList,
+    SessionPermissions,
     SessionSearchResponse,
     SetupCheck,
     SetupPlan,
     SetupRunStatus,
     SkillList,
+    UploadedFile,
     UserInputResult,
 } from './client.types';
 import {
@@ -65,6 +78,8 @@ import {
     connectorGrantsPath,
     ENDPOINTS,
     chatContextPath,
+    chatPermissionsPath,
+    providerModelsPath,
     followupOutcomePath,
     MESSAGE_PAGE_SIZE,
     QUEUED_IDLE_MS,
@@ -72,7 +87,9 @@ import {
     scheduleResultsPath,
     scheduleRunPath,
     SEND_HEADER_TIMEOUT_MS,
+    SESSION_EVENTS_IDLE_MS,
     SESSION_PAGE_SIZE,
+    sessionCapabilitiesPath,
     sessionDocumentPath,
     sessionMessagePath,
     sessionMessagesAndBelowPath,
@@ -86,6 +103,11 @@ import {
     UI_HEADERS,
 } from './constants';
 import { parseSseStream } from './sse';
+
+/** A body sent as it is, not as JSON: a file, or a multipart form. */
+class RawBody {
+    constructor(readonly body: Blob | FormData) {}
+}
 
 export interface HttpClientConfig {
     baseUrl: string;
@@ -156,8 +178,8 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
         const url = `${base}${path}`;
         const init: FetchRequestInit = {
             method,
-            headers: headers(body !== undefined),
-            ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+            headers: headers(body !== undefined && !(body instanceof RawBody)),
+            ...(body === undefined ? {} : { body: body instanceof RawBody ? body.body : JSON.stringify(body) }),
             ...(signal ? { signal } : {}),
         };
         let res: FetchResponseLike;
@@ -282,6 +304,17 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             return postJson<Session>(ENDPOINTS.sessions, request, options?.signal);
         },
 
+        async uploadFile(file, name, options) {
+            const media = isMediaFile(name);
+            const path = media ? `${ENDPOINTS.filesUploadMedia}?name=${encodeURIComponent(name)}` : ENDPOINTS.filesUpload;
+            let body: Blob | FormData = file;
+            if (!media) {
+                body = new FormData();
+                body.append('file', file, name);
+            }
+            return readJson<UploadedFile>(await request('POST', path, new RawBody(body), options?.signal), path);
+        },
+
         setSessionPinned(sessionId, pinned, options) {
             return putJson<Session>(sessionPinPath(sessionId), { pinned }, options?.signal);
         },
@@ -292,6 +325,26 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         markSessionRead(sessionId, options) {
             return postJson<Session>(sessionReadPath(sessionId), undefined, options?.signal);
+        },
+
+        getActiveModel(options) {
+            return getJson<ActiveModel>(ENDPOINTS.providersActive, options?.signal);
+        },
+
+        listProviderModels(provider, options) {
+            return getJson<ProviderModelsResponse>(providerModelsPath(provider), options?.signal);
+        },
+
+        selectModel(model, options) {
+            return postJson<ActiveModel>(ENDPOINTS.providersSelect, { model }, options?.signal);
+        },
+
+        getPermissions(sessionId, options) {
+            return getJson<SessionPermissions>(chatPermissionsPath(sessionId), options?.signal);
+        },
+
+        setPermissionMode(sessionId, mode, options) {
+            return putJson<SessionPermissions>(chatPermissionsPath(sessionId), { mode }, options?.signal);
         },
 
         getContextUsage(sessionId, options) {
@@ -339,6 +392,10 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             await request('DELETE', sessionDocumentPath(sessionId, docId), undefined, options?.signal);
         },
 
+        getCapabilities(sessionId, options) {
+            return getJson<AgentCapabilities>(sessionCapabilitiesPath(sessionId), options?.signal);
+        },
+
         getResourceUsage(options) {
             return getJson<ResourceUsage>(ENDPOINTS.systemResources, options?.signal);
         },
@@ -351,6 +408,26 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
         attachToRun(sessionId, options) {
             const path = `${ENDPOINTS.chatAttach}?session_id=${encodeURIComponent(sessionId)}`;
             return streamTurn('GET', path, undefined, 'attach', ATTACH_HEADER_TIMEOUT_MS, options?.signal);
+        },
+
+        async *watchSessionEvents(options) {
+            const connection = new AbortController();
+            const drop = () => connection.abort();
+            if (options?.signal?.aborted) drop();
+            else options?.signal?.addEventListener('abort', drop);
+            try {
+                const res = await request('GET', ENDPOINTS.sessionEvents, undefined, connection.signal, {
+                    endpoint: 'attach',
+                    ms: ATTACH_HEADER_TIMEOUT_MS,
+                    abort: drop,
+                });
+                if (!res.body) throw new GaiaStreamError('mobileApp.error.noBody');
+                yield* parseSseStream(res.body, () => SESSION_EVENTS_IDLE_MS);
+                throw new GaiaStreamError('mobileApp.error.streamClosed');
+            } finally {
+                options?.signal?.removeEventListener('abort', drop);
+                drop();
+            }
         },
 
         deleteMessage(sessionId, messageId, options) {
@@ -442,6 +519,38 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         listScheduleResults(name, limit, options) {
             return getJson<ScheduleResults>(scheduleResultsPath(name, limit), options?.signal);
+        },
+
+        getMemoryStats(options) {
+            return getJson<MemoryStats>(ENDPOINTS.memoryStats, options?.signal);
+        },
+
+        getMemorySettings(options) {
+            return getJson<MemorySettings>(ENDPOINTS.memorySettings, options?.signal);
+        },
+
+        getEmbeddingCoverage(options) {
+            return getJson<EmbeddingCoverage>(ENDPOINTS.memoryEmbeddingCoverage, options?.signal);
+        },
+
+        consolidateMemory(options) {
+            return postJson<ConsolidateMemoryResult>(ENDPOINTS.memoryConsolidate, undefined, options?.signal);
+        },
+
+        rebuildEmbeddings(options) {
+            return postJson<RebuildEmbeddingsResult>(ENDPOINTS.memoryRebuildEmbeddings, undefined, options?.signal);
+        },
+
+        reconcileMemory(options) {
+            return postJson<ReconcileMemoryResult>(ENDPOINTS.memoryReconcile, undefined, options?.signal);
+        },
+
+        rebuildMemoryFts(options) {
+            return postJson<{ status: string }>(ENDPOINTS.memoryRebuildFts, undefined, options?.signal);
+        },
+
+        refreshSystemContext(options) {
+            return postJson<RefreshSystemContextResult>(ENDPOINTS.memoryRefreshSystemContext, undefined, options?.signal);
         },
 
         deleteSchedule(name, options) {

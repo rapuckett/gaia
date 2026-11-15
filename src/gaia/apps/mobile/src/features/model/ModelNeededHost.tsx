@@ -123,10 +123,10 @@ function NeedPrompt({ need }: { need: ModelNeed }) {
                 onClose={close}
                 title={t(`modelNeeded.off.${need.off}.title`)}
                 footer={
-                    <Row gap="sm">
-                        <Button label={t('modelNeeded.notNow')} onPress={close} />
-                        <Button label={t('modelNeeded.off.send')} variant="primary" onPress={() => settle(true)} />
-                    </Row>
+                    <Stack gap="sm">
+                        <Button full variant="primary" label={t('modelNeeded.off.send')} onPress={() => settle(true)} />
+                        <Button full label={t('modelNeeded.notNow')} onPress={close} />
+                    </Stack>
                 }
             >
                 <Text role="body">{t(`modelNeeded.off.${need.off}.body`)}</Text>
@@ -144,9 +144,10 @@ function NeedPrompt({ need }: { need: ModelNeed }) {
             onClose={close}
             title={t(`modelNeeded.title.${job}`)}
             footer={
-                <Row gap="sm">
-                    <Button label={t('modelNeeded.notNow')} onPress={close} />
+                <Stack gap="sm">
                     <Button
+                        full
+                        variant="primary"
                         label={
                             short
                                 ? t('setup.confirm.downloadAnyway')
@@ -154,11 +155,11 @@ function NeedPrompt({ need }: { need: ModelNeed }) {
                                   ? t('setup.tryAgain')
                                   : t('modelNeeded.download')
                         }
-                        variant="primary"
                         disabled={downloading}
                         onPress={() => void download(short)}
                     />
-                </Row>
+                    <Button full label={t('modelNeeded.notNow')} onPress={close} />
+                </Stack>
             }
         >
             <Stack gap="md">
