@@ -2094,7 +2094,7 @@ const messages: Messages = {
     'setup.logs.reportNote': 'سجلات الإعداد وسجلات GAIA وتفاصيل هذا الكمبيوتر في ملف واحد. تُحذف المفاتيح والأسرار الأخرى، لكن قد تقتبس السجلات من محادثاتك، فراجعه قبل إرفاقه بالبلاغ.',
     'setup.logs.reportSaved': 'تم الحفظ ({size}). توجد نسخة أيضًا في',
     'setup.logs.reportFailed': 'تعذّر حفظ التقرير: {error}',
-    'setup.logs.reportOnPc': 'غيّر هذا على الكمبيوتر الذي يشغّل GAIA',
+    'setup.logs.reportOnPc': 'احفظ تقرير استكشاف الأخطاء على الكمبيوتر الذي يشغّل GAIA.',
     'setup.progress.retry': 'إعادة المحاولة',
     'setup.progress.resume': 'استئناف',
     'setup.progress.resumeAll': 'استئناف الكل',
