@@ -1299,6 +1299,7 @@ const messages: Messages = {
     'prompt.title.python': 'هل تريد تشغيل نص Python هذا؟',
     'prompt.title.pythonFile': 'هل تريد تشغيل ملف Python هذا؟',
     'prompt.title.command': 'هل تريد تشغيل هذا الأمر؟',
+    'prompt.outsideFolders': '{path} خارج مجلدات هذه المحادثة. السماح بذلك يتيح لـ GAIA استخدام هذا الملف لبقية المحادثة.',
     'prompt.needsOk': 'يحتاج GAIA إلى موافقتك قبل {tool}.',
     'prompt.trust.title': 'هل تثق بتعليمات هذا المجلد ومهاراته؟',
     'prompt.trust.ask': 'سيضع GAIA ملفات CLAUDE.md وAGENTS.md والمهارات الموجودة في هذا المجلد في موجّه النموذج، الآن وفي كل مرة تعمل فيه.',
