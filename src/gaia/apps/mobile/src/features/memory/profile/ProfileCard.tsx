@@ -5,6 +5,8 @@ import { createContext, useContext, useEffect, useRef, useState } from 'react';
 
 import { isolate } from '@webui/i18n/registry';
 
+import { ENDPOINTS } from '@/api/constants';
+import { useDeviceRefused } from '@/api/routeAccess';
 import { useT } from '@/i18n/useT';
 import { Button, Card, ChoiceList, Disclosure, Icon, Ltr, Notice, Row, ScrollBox, Stack, Surface, Switch, Text } from '@/ui';
 import { CircleCheck, Cpu, Sparkles, Square } from '@/ui/icons';
@@ -43,6 +45,7 @@ export function ProfileCard({ kind, notify }: { kind: ProfileKind; notify: Memor
     const t = useT();
     const copy = COPY[kind];
     const run = useProfileRun(kind, notify);
+    const pcOnly = useDeviceRefused('GET', kind === 'discovery' ? ENDPOINTS.memoryStreamDiscovery : ENDPOINTS.memoryStreamInference);
     const [includeBrowser, setIncludeBrowser] = useState(false);
     const [detailOpen, setDetailOpen] = useState(false);
     const { phase, logs, items, detail, savedCount } = run;
@@ -85,13 +88,14 @@ export function ProfileCard({ kind, notify }: { kind: ProfileKind; notify: Memor
                         <Switch label={t('mem.inf.browser')} value={includeBrowser} onValueChange={setIncludeBrowser} disabled={busy} testID="profile-browser" />
                     </>
                 ) : null}
+                {pcOnly ? <Notice tone="info" message={t('mobileApp.mem.profile.pcOnly')} testID={`profile-${kind}-pc-only`} /> : null}
                 <Row gap="sm" wrap>
                     <Button
                         label={t.bare(phase === 'running' ? 'mem.running' : copy.run)}
                         accessibilityLabel={t(phase === 'running' ? 'mem.running' : copy.run)}
                         variant="secondary"
                         busy={phase === 'running'}
-                        disabled={busy}
+                        disabled={busy || pcOnly}
                         onPress={() => void run.start(includeBrowser)}
                         testID={`profile-${kind}-run`}
                     />
@@ -146,7 +150,7 @@ export function ProfileCard({ kind, notify }: { kind: ProfileKind; notify: Memor
                             variant="primary"
                             full
                             busy={phase === 'saving'}
-                            disabled={locked || kept === 0}
+                            disabled={locked || pcOnly || kept === 0}
                             onPress={() => void run.save()}
                             testID={`profile-${kind}-save`}
                         />

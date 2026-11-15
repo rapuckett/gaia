@@ -3503,9 +3503,11 @@ export const enMessages = {
     'mem.toast.reinitFailed': "Couldn't re-initialize memory: {error}",
     'mem.toast.cleared': 'Deleted {knowledge} knowledge entries, {conversations} conversations',
     'mem.toast.clearFailed': "Couldn't clear memory: {error}",
+    'mem.toast.pcOnly': 'Do this on the PC running GAIA. It isn’t available over mobile access or from another computer.',
 
     // Memory dashboard: Profile setup
     'mem.profile.intro': 'Help GAIA get to know you faster. Both scans run on this PC and send nothing anywhere. You see what they found and pick what to keep before anything is saved to memory.',
+    'mem.profile.pcOnly': 'The scans read this PC’s files, so only the PC running GAIA can run them. Open GAIA on that PC to scan and save. This window is on mobile access or another computer.',
     'mem.disc.title': 'Scan this PC',
     'mem.disc.desc': 'Reads installed apps and how often you use them, recent file types, your home and project folders, Git repositories and identity, shell and SSH settings, and browser bookmarks and the last 30 days of history.',
     'mem.disc.run': 'Start scan',
@@ -3662,6 +3664,7 @@ export const enMessages = {
     'mobileApp.chat.notFound': 'That chat is no longer on your PC.',
     'mobileApp.mem.activitySummary': '{total} total, peak {peak} on {date}',
     'mobileApp.mem.activityTapHint': 'Tap a bar to see that day.',
+    'mobileApp.mem.admin.pcOnly': 'Turning this on or resetting memory scans the PC’s files, so do it on the PC running GAIA.',
     'mobileApp.mem.goalTasksDone': '{done} of {total} tasks done',
     'mobileApp.mem.metric': '{label}: {value}',
     'mobileApp.mem.sectionFailed': "Couldn't load this section.",
@@ -3706,6 +3709,7 @@ export const enMessages = {
     'mobileApp.mem.inf.desc': 'Reads installed apps and how often you use them, recent file types, games and media, the kinds of personal files you keep, and your Git projects, then asks a model on your PC to write 5 to 10 short facts about you.',
     'mobileApp.mem.inf.note': 'Uses a model on your PC, never a cloud one, even when your chats use one.',
     'mobileApp.mem.profile.intro': 'Help GAIA get to know you faster. Both scans run on your PC and send nothing anywhere. You see what they found and pick what to keep before anything is saved to memory.',
+    'mobileApp.mem.profile.pcOnly': 'Run this on your PC. The scan reads the PC’s files, so only the PC running GAIA can start it.',
     'mobileApp.resources.settingsHint': 'CPU, memory, GPU, NPU and network use on your PC, updated every second.',
     'mobileApp.settings.advanced.notInstalledHint': 'Set it up to run models on your PC. Cloud providers still work.',
     'mobileApp.settings.advanced.notRunningHint': 'It normally starts on its own. Models on your PC work again once it is back.',
