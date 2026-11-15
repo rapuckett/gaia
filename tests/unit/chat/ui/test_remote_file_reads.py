@@ -8,12 +8,14 @@ Mobile access and paired devices name the chat they read for. Previews,
 images, folder listings, searches and documents added by path then see only
 what that chat may touch, as its session panel lists it, GAIA's secret-file
 policy still refuses keys and ``.env`` files inside it, and a preview is
-capped. A library document holding credentials is never served away from the
+capped. A library document opens only for a chat it is attached to or whose
+folders hold it, and one holding credentials is never served away from the
 PC. The PC's own reads are unchanged.
 """
 
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 
 import pytest
@@ -268,7 +270,9 @@ def test_remote_folder_index_skips_items_outside_the_chat(
 
 
 @pytest.mark.parametrize("caller", ["device", "tunnel"])
-def test_library_credential_file_not_served_away_from_the_pc(app, device, home, caller):
+def test_library_credential_file_not_served_away_from_the_pc(
+    app, device, wide, home, caller
+):
     # A row recorded before the policy, or by the PC, is judged when read.
     doc = app.state.db.add_document(
         filename="config.json",
@@ -277,8 +281,55 @@ def test_library_credential_file_not_served_away_from_the_pc(app, device, home, 
         file_size=40,
         chunk_count=1,
     )
-    resp = _caller(app, device, caller).get(f"/api/documents/{doc['id']}/file")
+    resp = _caller(app, device, caller).get(
+        f"/api/documents/{doc['id']}/file", params={"session_id": wide}
+    )
     assert resp.status_code == 403 and "registry-secret" not in resp.text
+
+
+def _library(app, path: Path) -> str:
+    return app.state.db.add_document(
+        filename=path.name,
+        filepath=str(path),
+        file_hash=hashlib.sha256(str(path).encode()).hexdigest(),
+        file_size=path.stat().st_size,
+        chunk_count=1,
+    )["id"]
+
+
+@pytest.mark.parametrize("caller", ["device", "tunnel"])
+def test_remote_document_file_stays_in_the_chat(app, device, chat, home, caller):
+    client = _caller(app, device, caller)
+    elsewhere = _library(app, home / "elsewhere.md")
+    notes = _library(app, home / "project" / "notes.md")
+    link = home / "project" / "linked.md"
+    link.symlink_to(home / "elsewhere.md")
+    linked = _library(app, link)
+
+    def get(doc_id, **params):
+        return client.get(f"/api/documents/{doc_id}/file", params=params)
+
+    outside = get(elsewhere, session_id=chat)
+    unknown = get("no-such-doc", session_id=chat)
+    for resp in (outside, unknown, get(notes), get(linked, session_id=chat)):
+        assert resp.status_code == 403
+        assert "not this chat's" not in resp.text and "elsewhere" not in resp.text
+    assert outside.json() == unknown.json()
+    assert "session_id" in get(notes).json()["detail"]
+
+    inside = get(notes, session_id=chat)
+    assert inside.status_code == 200 and inside.text.startswith("line 0")
+    app.state.db.attach_document(chat, elsewhere)
+    attached = get(elsewhere, session_id=chat)
+    assert attached.status_code == 200 and attached.text == "not this chat's\n"
+
+
+def test_pc_opens_any_document_without_naming_a_chat(app, home):
+    pc = TestClient(app, client=PC)
+    elsewhere = _library(app, home / "elsewhere.md")
+    resp = pc.get(f"/api/documents/{elsewhere}/file")
+    assert resp.status_code == 200 and resp.text == "not this chat's\n"
+    assert pc.get("/api/documents/no-such-doc/file").status_code == 404
 
 
 def test_pc_adds_any_document_and_a_device_its_chats(app, device, chat, home):

@@ -18,7 +18,7 @@ export default function ChatRoute() {
     }, [error, router]);
     return (
         <AppErrorBoundary resetKey={id}>
-            <ChatScreen sessionId={id} />
+            <ChatScreen sessionId={id} onManageDocuments={() => router.push({ pathname: '/documents', params: { chat: id } })} />
         </AppErrorBoundary>
     );
 }

@@ -132,7 +132,7 @@ export function ModelList({ provider, remote, models, activeModel, switching, on
 
     return (
         <Stack gap="md" testID="model-list">
-            <Text role="label" weight="medium" tone="secondary">{t('settings.model.models')}</Text>
+            <Text role="label" weight="medium" tone="secondary" accessibilityRole="header">{t('settings.model.models')}</Text>
             {(models?.length ?? 0) > SEARCHABLE_FROM ? (
                 <SearchField
                     value={query}
@@ -183,7 +183,7 @@ export function ModelList({ provider, remote, models, activeModel, switching, on
                 <Button label={t('settings.model.showRecommended')} onPress={() => setShowAll(false)} />
             ) : null}
             {groups.unavailable.length > 0 ? (
-                <Group id="unavailable" title={t('settings.model.groupUnavailable')} count={groups.unavailable.length} defaultOpen={false} force={searching}>
+                <Group id="unavailable" title={t('mobileApp.settings.model.groupUnavailable')} count={groups.unavailable.length} defaultOpen={false} force={searching}>
                     {groups.unavailable.map(renderRow)}
                 </Group>
             ) : null}

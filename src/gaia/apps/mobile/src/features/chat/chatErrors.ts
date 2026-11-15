@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: MIT
 
 import { ApiError } from '@webui/services/apiErrors';
-import { requestErrorText } from '@webui/utils/requestErrors.core';
+import { requestErrorParam, requestErrorText } from '@webui/utils/requestErrors.core';
+import type { Say } from '@webui/i18n/registry';
 import { classifyChatError, failureRecordId, type ChatErrorKind } from '@webui/utils/streamErrors.core';
 
 import {
@@ -15,7 +16,7 @@ import {
     GaiaUnreachableError,
     type GaiaError,
 } from '@/api/errors';
-import { describeError, type Translate } from '@/i18n/useT';
+import { describeError, describeErrorWith, type Translate } from '@/i18n/useT';
 
 /** The web client's shape of the same failure, which the shared classifiers read. */
 function webError(error: GaiaError): Error {
@@ -51,6 +52,13 @@ export function namesFailureRecord(error: GaiaError): boolean {
 /** Why a request (such as a stop) failed, as one line. */
 export function requestFailureText(error: GaiaError, t: Translate): string {
     return error instanceof GaiaConfigError || error instanceof GaiaAuthError ? describeError(error, t) : requestErrorText(webError(error), t);
+}
+
+/** `requestFailureText` for a `{param}` inside `t.compose`, so each language half fills its own wording. */
+export function requestFailureWith(error: GaiaError, say: Say): string {
+    if (error instanceof GaiaConfigError || error instanceof GaiaAuthError) return describeErrorWith(error, say);
+    const reason = requestErrorParam(webError(error));
+    return typeof reason === 'object' ? say(reason.ref, reason.params) : String(reason);
 }
 
 /** A stream failure leaves the answer possibly still running on the PC, so asking again would ask twice. */
