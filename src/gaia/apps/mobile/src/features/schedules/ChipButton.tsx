@@ -9,19 +9,20 @@ import { Icon, Pressable, Row, Text, useTheme, type Tone } from '@/ui';
 export interface ChipButtonProps {
     label: string;
     icon?: LucideIcon;
-    /** `danger` is the desktop's tan outlined button; `accent` is its filled "New" button. */
-    variant?: 'default' | 'danger' | 'accent';
+    /** `danger` is the desktop's tan outlined button; `accent` is its filled "New" button; `plain` is `.btn-secondary` and `primary` is `.btn-primary`. */
+    variant?: 'default' | 'danger' | 'accent' | 'plain' | 'primary';
     disabled?: boolean;
     onPress: () => void;
+    testID?: string;
 }
 
 /** The desktop's compact action button (`.btn-sm`): a small bordered chip inside a 44 pt touch target. */
-export function ChipButton({ label, icon, variant = 'default', disabled, onPress }: ChipButtonProps) {
+export function ChipButton({ label, icon, variant = 'default', disabled, onPress, testID }: ChipButtonProps) {
     const { colors, radius, space } = useTheme();
-    const accent = variant === 'accent';
-    const tone: Tone = variant === 'default' ? 'primary' : 'accent';
+    const accent = variant === 'accent' || variant === 'plain' || variant === 'primary';
+    const tone: Tone = variant === 'default' || variant === 'plain' ? 'primary' : variant === 'primary' ? 'onAccent' : 'accent';
     return (
-        <Pressable onPress={onPress} disabled={disabled} accessibilityLabel={label} minSize={44}>
+        <Pressable onPress={onPress} disabled={disabled} accessibilityLabel={label} minSize={44} testID={testID}>
             <View
                 style={{
                     alignSelf: 'flex-start',
@@ -30,7 +31,7 @@ export function ChipButton({ label, icon, variant = 'default', disabled, onPress
                     borderRadius: accent ? radius.md : radius.sm,
                     borderWidth: accent ? 0 : 1,
                     borderColor: variant === 'danger' ? colors.accent : colors.border,
-                    backgroundColor: accent ? colors.accentDim : colors.bgTertiary,
+                    backgroundColor: variant === 'accent' ? colors.accentDim : variant === 'primary' ? colors.accentFill : colors.bgTertiary,
                 }}
             >
                 <Row gap="xs" justify="center">

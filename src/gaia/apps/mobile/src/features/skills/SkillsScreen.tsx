@@ -23,9 +23,9 @@ import {
     Stack,
     Surface,
     Text,
-    useTheme,
 } from '@/ui';
 
+import { ChipButton } from '../schedules/ChipButton';
 import { SettingsGroup } from './SettingsGroup';
 
 import { filterSkills, GROUPS, isGrouped, SEARCH_ABOVE, SKILLS_HOW_PARAMS, skippedName, skipReason } from './skillList';
@@ -143,20 +143,8 @@ function SkillRow({ skill, onTry }: { skill: SkillInfo; onTry: () => void }) {
                         </Pressable>
                     ) : null}
                 </Stack>
-                {!skill.always_on ? <TryButton label={t('settings.skills.try')} onPress={onTry} /> : null}
+                {!skill.always_on ? <ChipButton variant="plain" label={t('settings.skills.try')} onPress={onTry} /> : null}
             </Row>
         </View>
-    );
-}
-
-/** The desktop's plain tertiary button, inside a 44 pt target. */
-function TryButton({ label, onPress }: { label: string; onPress: () => void }) {
-    const { colors, radius } = useTheme();
-    return (
-        <Pressable onPress={onPress} accessibilityLabel={label} minSize={44}>
-            <View style={{ backgroundColor: colors.bgTertiary, borderRadius: radius.md, paddingHorizontal: 12, paddingVertical: 8 }}>
-                <Text role="ui" weight="semibold" numberOfLines={1}>{label}</Text>
-            </View>
-        </Pressable>
     );
 }
