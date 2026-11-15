@@ -390,7 +390,7 @@ export interface FakeGaiaClient extends GaiaClient {
     /** Each folder removal and internet switch, in order. */
     /** Each commit and pull request the phone confirmed, in order. */
     readonly gitActions: { sessionId: string; kind: 'commit' | 'pr'; root: string; text: string }[];
-    readonly environmentChanges: ({ sessionId: string; remove: string } | { sessionId: string; internet: boolean })[];
+    readonly environmentChanges: ({ sessionId: string; add: string } | { sessionId: string; remove: string } | { sessionId: string; internet: boolean })[];
     /** Each memory maintenance POST, in order. */
     readonly memoryActions: string[];
     /** Each memory add, edit and forget, in order. */
@@ -812,6 +812,10 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             }
             const limit = data.searchLimit ?? Infinity;
             return { query, results: results.slice(0, limit), truncated: results.length > limit };
+        },
+        async exportSessionMarkdown(sessionId) {
+            const session = findSession(sessionId);
+            return { content: `# ${session.title}\n` };
         },
         async setSessionPinned(sessionId, value) {
             findSession(sessionId);
@@ -1401,6 +1405,15 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             const found = data.environments?.[sessionId];
             if (!found) throw new GaiaApiError(404, 'Session not found');
             return found;
+        },
+        async addEnvironmentFolder(sessionId, path) {
+            const env = data.environments?.[sessionId];
+            if (!env) throw new GaiaApiError(404, 'Session not found');
+            environmentChanges.push({ sessionId, add: path });
+            const entry = { path, name: path.split('/').pop() ?? path, kind: 'folder' as const, source: 'added' as const, removable: true };
+            const next = { ...env, folders: [...env.folders, entry], removed: env.removed.filter((r) => r !== path) };
+            data.environments = { ...data.environments, [sessionId]: next };
+            return next;
         },
         async removeEnvironmentFolder(sessionId, path) {
             const env = data.environments?.[sessionId];

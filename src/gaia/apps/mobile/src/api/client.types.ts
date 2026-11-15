@@ -415,6 +415,8 @@ export interface GaiaClient {
     createSession(request?: CreateSessionRequest, options?: RequestOptions): Promise<Session>;
     /** Sends a file to the PC; recordings go to the transcription folder. Rejects with the PC's refusal (type, size, empty). */
     uploadFile(file: Blob, name: string, options?: RequestOptions): Promise<UploadedFile>;
+    /** The chat as Markdown, the same text the desktop's Export saves. */
+    exportSessionMarkdown(sessionId: string, options?: RequestOptions): Promise<{ content: string }>;
     setSessionPinned(sessionId: string, pinned: boolean, options?: RequestOptions): Promise<Session>;
     /** The file changes each turn of the chat made. */
     listTurnChanges(sessionId: string, options?: RequestOptions): Promise<{ turns: TurnChanges[] }>;
@@ -498,6 +500,8 @@ export interface GaiaClient {
     getEnvironment(sessionId: string, options?: RequestOptions): Promise<SessionEnvironment>;
     /** Everything the chat produced, newest first. */
     getOutputs(sessionId: string, options?: RequestOptions): Promise<SessionOutputs>;
+    /** Gives the chat a folder on the PC; rejects with 400 when the PC refuses it (too broad, missing). */
+    addEnvironmentFolder(sessionId: string, path: string, options?: RequestOptions): Promise<SessionEnvironment>;
     /** Takes a folder or file away from the chat; rejects with 409 when the PC refuses. */
     removeEnvironmentFolder(sessionId: string, path: string, options?: RequestOptions): Promise<SessionEnvironment>;
     /** Turns the chat's web tools on or off; rejects with 409 or 502 when the PC can't apply it. */

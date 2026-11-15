@@ -4,7 +4,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 
-import type { ChatPerformance, ContextUsage, LocalModelStatus, Message, OutputItem, Session, SessionChanges, SessionEnvironment, SessionGit } from '@/api/client.types';
+import type { BrowseResponse, ChatPerformance, ContextUsage, LocalModelStatus, Message, OutputItem, Session, SessionChanges, SessionEnvironment, SessionGit } from '@/api/client.types';
 import { createFakeClient } from '@/api/fake';
 import { GaiaApiError } from '@/api/errors';
 import { GaiaClientProvider } from '@/data';
@@ -46,11 +46,13 @@ export type SessionPanelGalleryState =
     | 'ansNoLive'
     | 'ansError'
     | 'outItems'
-    | 'outEmpty';
+    | 'outEmpty'
+    | 'envPick'
+    | 'envPickRefused';
 
 const CONTEXT_STATES: readonly SessionPanelGalleryState[] = ['ctxMeasuring', 'ctxNormal', 'ctxEstimated', 'ctxFilling', 'ctxChat', 'ctxNoTurn'];
 
-const ENV_STATES: readonly SessionPanelGalleryState[] = ['envFolders', 'envRemove', 'envOffline', 'envFull', 'envEmpty'];
+const ENV_STATES: readonly SessionPanelGalleryState[] = ['envFolders', 'envRemove', 'envOffline', 'envFull', 'envEmpty', 'envPick', 'envPickRefused'];
 
 const CHANGES_STATES: readonly SessionPanelGalleryState[] = ['chgList', 'chgConfirm', 'chgConflict', 'chgGit', 'chgPending', 'chgError', 'chgReview'];
 
@@ -173,6 +175,27 @@ const ENVIRONMENT: SessionEnvironment = {
     internet: true,
     enforced: true,
     internet_enforced: true,
+};
+
+const entry = (name: string, dir: string) => ({ name, path: `${dir}/${name}`, type: 'folder' as const, size: 0, extension: null, modified: '2026-11-10T09:00:00Z' });
+const QUICK_LINKS = [
+    { name: 'Home', path: '/Users/avery', icon: 'home' },
+    { name: 'Documents', path: '/Users/avery/Documents', icon: 'documents' },
+];
+const BROWSE_FOLDERS: Record<string, BrowseResponse> = {
+    '': {
+        current_path: '/Users/avery/Documents',
+        parent_path: '/Users/avery',
+        entries: [entry('Quarterly reports', '/Users/avery/Documents'), entry('Tax 2025', '/Users/avery/Documents'), entry('.cache', '/Users/avery/Documents')],
+        quick_links: QUICK_LINKS,
+    },
+    '/Users/avery': {
+        current_path: '/Users/avery',
+        parent_path: '/Users',
+        entries: [entry('Documents', '/Users/avery'), entry('Downloads', '/Users/avery')],
+        quick_links: QUICK_LINKS,
+        folder_refusal: "That's your whole user folder. Pick a folder inside it.",
+    },
 };
 
 const USAGE: ContextUsage = {
@@ -330,6 +353,7 @@ export function SessionPanelGallery({ state }: { state: SessionPanelGalleryState
             sessionGit: state === 'chgGit' || state === 'chgConfirm' ? { dev: GIT } : undefined,
             undoConflict: state === 'chgConflict' ? new GaiaApiError(409, 'a file changed since', undefined, undefined, { status: 'conflict' }) : undefined,
             environments: env ? { dev: environment } : undefined,
+            fileFolders: env ? (state === 'envPickRefused' ? { ...BROWSE_FOLDERS, '': BROWSE_FOLDERS['/Users/avery']! } : BROWSE_FOLDERS) : undefined,
             permissions: state === 'envOffline' ? { dev: 'full_access' } : undefined,
             activeModel: env ? { provider: 'local', model: 'Gemma-4-E4B-it-GGUF', display_name: 'Gemma 4 E4B', label: null, remote: false, is_default: true, downloaded: true } : undefined,
             localModel: env ? LOCAL_MODEL : undefined,
@@ -407,6 +431,7 @@ export function SessionPanelGallery({ state }: { state: SessionPanelGalleryState
         );
         writeTurn('dev', state === 'ansPending' ? { ...IDLE_TURN, status: 'streaming' } : null);
         store.setSection('context', ctx);
+        store.setEnvPicking(state === 'envPick' || state === 'envPickRefused');
         store.setEnvConfirm(state === 'envRemove' ? { kind: 'remove', path: ENVIRONMENT.folders[0]!.path } : state === 'envFull' ? { kind: 'full' } : null);
         store.setContextScope(state === 'ctxChat' ? 'chat' : 'turn');
         return () => writeTurn('dev', null);

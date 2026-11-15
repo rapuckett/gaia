@@ -26,6 +26,9 @@ interface PanelState {
     changesSeed: { phase: 'confirm' | 'conflict'; message?: string } | { review: true } | null;
     setChangesSeed(seed: PanelState['changesSeed']): void;
     /** The Environment confirmation showing: removing a folder, or turning on full access. */
+    /** The folder picker is open inside Environment. */
+    envPicking: boolean;
+    setEnvPicking(picking: boolean): void;
     envConfirm: { kind: 'remove'; path: string } | { kind: 'full' } | null;
     setEnvConfirm(confirm: PanelState['envConfirm']): void;
 }
@@ -37,6 +40,8 @@ export const useSessionPanelStore = create<PanelState>((set) => ({
     setContextScope: (contextScope) => set({ contextScope }),
     changesSeed: null,
     setChangesSeed: (changesSeed) => set({ changesSeed }),
+    envPicking: false,
+    setEnvPicking: (envPicking) => set({ envPicking }),
     envConfirm: null,
     setEnvConfirm: (envConfirm) => set({ envConfirm }),
 }));

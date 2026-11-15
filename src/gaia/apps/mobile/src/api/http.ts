@@ -185,6 +185,7 @@ import {
     sessionChangesPartPath,
     sessionChangesPath,
     sessionChangesUndoPath,
+    sessionExportPath,
     sessionPinPath,
     sessionPrivatePath,
     sessionReadPath,
@@ -484,6 +485,10 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             return readJson<UploadedFile>(await request('POST', path, new RawBody(body), options?.signal), path);
         },
 
+        exportSessionMarkdown(sessionId, options) {
+            return getJson<{ content: string }>(`${sessionExportPath(sessionId)}?format=markdown`, options?.signal);
+        },
+
         setSessionPinned(sessionId, pinned, options) {
             return putJson<Session>(sessionPinPath(sessionId), { pinned }, options?.signal);
         },
@@ -691,6 +696,10 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         getEnvironment(sessionId, options) {
             return getJson<SessionEnvironment>(sessionEnvironmentPath(sessionId), options?.signal);
+        },
+
+        addEnvironmentFolder(sessionId, path, options) {
+            return postJson<SessionEnvironment>(sessionEnvironmentPath(sessionId, 'folders'), { path }, options?.signal);
         },
 
         removeEnvironmentFolder(sessionId, path, options) {

@@ -35,6 +35,7 @@ export function ConversationBrowser({ onOpenChat }: Pick<MemoryPaneProps, 'onOpe
     const titles = useMemo(() => new Map((sessions.data?.sessions ?? []).map((s) => [s.id, s.title])), [sessions.data]);
     const label = (sessionId: string) => titles.get(sessionId) || `${sessionId.slice(0, 8)}...`;
     const role = (value: string) => (ROLE_KEYS[value] ? t.bare(ROLE_KEYS[value]) : value);
+    const roleFull = (value: string) => (ROLE_KEYS[value] ? t(ROLE_KEYS[value]) : value);
 
     let body;
     if (searching) {
@@ -50,7 +51,7 @@ export function ConversationBrowser({ onOpenChat }: Pick<MemoryPaneProps, 'onOpe
                     <Card key={turn.id} padding="md" onPress={() => setOpen(turn.session_id)} accessibilityLabel={label(turn.session_id)} testID={`memory-conv-turn-${turn.id}`}>
                         <Stack gap="xs">
                             <Row gap="sm" wrap>
-                                <Badge label={role(turn.role)} tone={turn.role === 'user' ? 'accent' : 'neutral'} />
+                                <Badge label={role(turn.role)} accessibilityLabel={roleFull(turn.role)} tone={turn.role === 'user' ? 'accent' : 'neutral'} />
                                 <Text weight="medium" dir="auto">
                                     {label(turn.session_id)}
                                 </Text>
@@ -110,7 +111,7 @@ export function ConversationBrowser({ onOpenChat }: Pick<MemoryPaneProps, 'onOpe
             <SearchField
                 value={query}
                 onChangeText={setQuery}
-                placeholder={t('mem.conv.searchPlaceholder')}
+                placeholder={t.bare('mem.conv.searchPlaceholder')}
                 accessibilityLabel={t('mem.conv.search')}
                 debounceMs={CONVERSATION_SEARCH_DEBOUNCE_MS}
                 testID="memory-conv-search"
