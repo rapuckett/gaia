@@ -9,6 +9,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { createFakeClient, type FakeClientData } from '@/api/fake';
 import { GaiaClientProvider } from '@/data';
+import { useConnectionStore } from '@/state/connection';
 import { ThemeProvider } from '@/ui';
 
 import { ProfilePane } from './ProfilePane';
@@ -58,5 +59,19 @@ describeNative('ProfilePane', () => {
         fireEvent.press(stop);
         await waitFor(() => expect(client.profileStreamOpens[0]!.stopped).toBe(true));
         await waitFor(() => expect(screen.queryByTestId('profile-inference-stop')).toBeNull());
+    });
+
+    it('says the scan runs on the PC and offers no Run on a paired phone', async () => {
+        useConnectionStore.setState({ connection: { baseUrl: 'https://pc.local:4443', pcId: 'pc-1', pinned: true } });
+        try {
+            const client = await mount({});
+            expect(screen.getByTestId('profile-discovery-pc-only')).toBeTruthy();
+            expect(screen.getByTestId('profile-inference-pc-only')).toBeTruthy();
+            expect(screen.queryByTestId('profile-discovery-run')).toBeNull();
+            expect(screen.queryByTestId('profile-inference-run')).toBeNull();
+            expect(client.profileStreamOpens).toEqual([]);
+        } finally {
+            useConnectionStore.setState({ connection: null });
+        }
     });
 });

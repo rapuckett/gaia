@@ -88,7 +88,9 @@ def prebuild(app_env)
   Dir.chdir(app_dir) { sh('npx', 'expo', 'prebuild', '--platform', 'ios', '--clean') }
   workspace = Dir[File.join(app_dir, 'ios', '*.xcworkspace')].first
   UI.user_error!("expo prebuild made no Xcode workspace in #{File.join(app_dir, 'ios')}.") if workspace.nil?
-  { workspace: workspace, project: workspace.sub(/\.xcworkspace\z/, '.xcodeproj'), scheme: File.basename(workspace, '.xcworkspace') }
+  scheme = File.basename(workspace, '.xcworkspace')
+  project = File.join(File.dirname(workspace), "#{scheme}.xcodeproj")
+  { workspace: workspace, project: project, scheme: scheme }
 end
 
 def app_target(project_path, configuration)
@@ -108,30 +110,38 @@ def device_udid_and_name(device)
   end
 end
 
-# The certificate lives in a keychain made for this run and deleted after it, never the login keychain.
-def with_temporary_keychain
-  dir = Dir.mktmpdir('gaia-signing')
-  path = File.join(dir, 'signing.keychain-db')
-  password = SecureRandom.hex(32)
-  create_keychain(path: path, password: password, default_keychain: false, unlock: true, timeout: 0,
-                  lock_when_sleeps: false, add_to_search_list: true)
-  yield path, password
-ensure
-  delete_keychain(keychain_path: path) if path && File.exist?(path)
-  FileUtils.rm_rf(dir) if dir
+# The signing certificate goes in a keychain made for this run, never the login keychain.
+class RunKeychain
+  attr_reader :path, :password
+
+  def initialize(fastfile)
+    @fastfile = fastfile
+    @dir = Dir.mktmpdir('gaia-keychain')
+    @path = File.join(@dir, "gaia-run-#{Process.pid}.keychain-db")
+    @password = SecureRandom.alphanumeric(48)
+  end
+
+  def create!
+    options = { path: path, password: password, default_keychain: false, unlock: true,
+                timeout: 0, lock_when_sleeps: false, add_to_search_list: true }
+    @fastfile.create_keychain(options)
+  end
+
+  def destroy!
+    @fastfile.delete_keychain(keychain_path: path) if File.exist?(path)
+  ensure
+    FileUtils.rm_rf(@dir)
+  end
 end
 
-# match reads MATCH_PASSWORD from the environment, so it exists only during match's call:
-# Xcode copies the environment into build settings and its logs.
-def match_development(settings, bundle_id, readonly:, keychain:, keychain_password:)
-  ENV['MATCH_PASSWORD'] = settings.fetch('GAIA_MATCH_PASSWORD')
-  sync_code_signing(type: 'development', readonly: readonly, force_for_new_devices: !readonly,
-                    app_identifier: [bundle_id], team_id: settings['GAIA_APPLE_TEAM_ID'],
-                    storage_mode: 'git', git_url: settings['GAIA_MATCH_GIT_URL'], git_branch: match_branch,
-                    keychain_name: keychain, keychain_password: keychain_password, skip_docs: true)
-  lane_context[SharedValues::MATCH_PROVISIONING_PROFILE_MAPPING]
+# Sets an environment variable for the block only, then restores or removes it.
+def with_env_var(name, value)
+  had = ENV.key?(name)
+  previous = ENV[name]
+  ENV[name] = value
+  yield
 ensure
-  ENV.delete('MATCH_PASSWORD')
+  had ? ENV[name] = previous : ENV.delete(name)
 end
 
 def match_branch
@@ -185,9 +195,16 @@ platform :ios do
 
     archive = device_archive(app_env)
     FileUtils.rm_rf(archive)
-    with_temporary_keychain do |keychain, keychain_password|
-      mapping = match_development(settings, bundle_id, readonly: readonly,
-                                  keychain: keychain, keychain_password: keychain_password)
+    keychain = RunKeychain.new(self)
+    begin
+      keychain.create!
+      with_env_var('MATCH_PASSWORD', settings.fetch('GAIA_MATCH_PASSWORD')) do
+        sync_code_signing(type: 'development', readonly: readonly, force_for_new_devices: !readonly,
+                          app_identifier: [bundle_id], team_id: settings['GAIA_APPLE_TEAM_ID'],
+                          storage_mode: 'git', git_url: settings['GAIA_MATCH_GIT_URL'], git_branch: match_branch,
+                          keychain_name: keychain.path, keychain_password: keychain.password, skip_docs: true)
+      end
+      mapping = lane_context[SharedValues::MATCH_PROVISIONING_PROFILE_MAPPING]
       profile = mapping && mapping[bundle_id]
       UI.user_error!("match returned no development profile for #{bundle_id}. Run once with create_profiles:true.") if profile.nil?
       # Only the app target signs manually; the Pods' resource bundles keep their own settings.
@@ -200,7 +217,9 @@ platform :ios do
                 buildlog_path: build_dir('device', app_env, 'logs'), output_directory: build_dir('device', app_env),
                 output_name: paths[:scheme], export_method: 'development', export_team_id: settings['GAIA_APPLE_TEAM_ID'],
                 export_options: { provisioningProfiles: mapping }, skip_profile_detection: true,
-                xcargs: [xcode_jobs, "OTHER_CODE_SIGN_FLAGS=--keychain #{keychain}".shellescape].reject(&:empty?).join(' '))
+                xcargs: [xcode_jobs, "OTHER_CODE_SIGN_FLAGS=--keychain #{keychain.path}".shellescape].reject(&:empty?).join(' '))
+    ensure
+      keychain.destroy!
     end
     UI.success("Signed #{bundle_id} for development: #{lane_context[SharedValues::IPA_OUTPUT_PATH]}. Install it with `bundle exec fastlane ios sideload#{app_env == 'production' ? '' : " app_env:#{app_env}"}`.")
   end

@@ -13,7 +13,7 @@ export interface IconButtonProps {
     icon: LucideIcon;
     label: string;
     onPress?: () => void;
-    variant?: 'ghost' | 'filled' | 'primary' | 'danger';
+    variant?: 'ghost' | 'filled' | 'primary' | 'danger' | 'raised';
     size?: 'md' | 'sm';
     busy?: boolean;
     disabled?: boolean;
@@ -30,15 +30,17 @@ export function IconButton({
     disabled,
     testID,
 }: IconButtonProps) {
-    const { colors, radius } = useTheme();
+    const { colors, radius, shadows } = useTheme();
     const look: Record<NonNullable<IconButtonProps['variant']>, { bg: string; tone: Tone }> = {
         ghost: { bg: 'transparent', tone: 'secondary' },
         filled: { bg: colors.bgTertiary, tone: 'primary' },
         primary: { bg: colors.accentFill, tone: 'onAccent' },
         danger: { bg: colors.dangerDim, tone: 'danger' },
+        raised: { bg: colors.bgSecondary, tone: 'primary' },
     };
     const v = look[variant];
-    const box = size === 'sm' ? 36 : 44;
+    const box = size === 'sm' ? 36 : variant === 'raised' ? 38 : 44;
+    const hit = variant === 'raised' ? 44 : box;
     return (
         <Pressable
             onPress={busy ? undefined : onPress}
@@ -47,6 +49,7 @@ export function IconButton({
             accessibilityState={{ busy: !!busy }}
             testID={testID}
         >
+            <View style={{ width: hit, height: hit, alignSelf: 'center', alignItems: 'center', justifyContent: 'center' }}>
             <View
                 style={{
                     width: box,
@@ -54,11 +57,13 @@ export function IconButton({
                     alignSelf: 'center',
                     borderRadius: radius.md,
                     backgroundColor: v.bg,
+                    ...(variant === 'raised' ? { borderWidth: 1, borderColor: colors.border, boxShadow: shadows.sm } : null),
                     alignItems: 'center',
                     justifyContent: 'center',
                 }}
             >
                 {busy ? <Spinner size="sm" tone={v.tone} /> : <Icon icon={icon} tone={v.tone} />}
+            </View>
             </View>
         </Pressable>
     );

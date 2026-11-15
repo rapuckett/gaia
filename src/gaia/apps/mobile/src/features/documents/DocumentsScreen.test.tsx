@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, fireEvent, render, screen } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import type { ReactNode } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
@@ -84,7 +84,7 @@ describe('DocumentsScreen', () => {
             expect(await screen.findByText(/Attached notes\.txt to/)).toBeTruthy();
             expect(client.uploaded.map((f) => f.name)).toEqual(['notes.txt']);
             expect(client.attached).toEqual([{ sessionId: 'c1', docId: 'doc-1' }]);
-            expect((await screen.findAllByText(/notes\.txt/)).length).toBeGreaterThan(1);
+            await waitFor(() => expect(screen.getAllByText(/notes\.txt/).length).toBeGreaterThan(1));
         });
 
         it('shows the category help when GAIA refuses the file', async () => {

@@ -5,11 +5,11 @@ import { ltrIn } from '@webui/components/setup/format';
 import { FIREWORKS_KEYS_URL, GATEWAY_GUIDE_URL } from '@webui/components/setup/keyLinks';
 import type { CloudPriceList } from '@webui/types';
 import { useState } from 'react';
-import { Linking } from 'react-native';
 
 import { GaiaApiError } from '@/api/errors';
 import { useActiveModel, useCloudPrices, useCloudProviders, useConnectCloud, useLemonadeTarget } from '@/data';
 import { describeError, useLocaleCode, useT, type Translate } from '@/i18n/useT';
+import { openLinkFromPress } from '@/platform/openLink';
 import { Button, Card, ChoiceList, Notice, Spinner, Stack, Row, Text, TextField, type ChoiceOption } from '@/ui';
 
 import { shortModelName } from '../../new-chat/warmUp';
@@ -32,7 +32,7 @@ function shownRows(list: CloudPriceList, inUse: string | null) {
 }
 
 function openLink(url: string) {
-    Linking.openURL(url).catch((error: unknown) => console.error(`Opening ${url} failed`, error));
+    openLinkFromPress(url);
 }
 
 function Prices({ provider, picked, onPick, disabled, inUse }: {

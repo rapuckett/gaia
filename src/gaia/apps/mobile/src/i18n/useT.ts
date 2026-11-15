@@ -3,11 +3,14 @@
 
 import { getLocales } from 'expo-localization';
 
-import { DEFAULT_LOCALE, getLocale, isLocaleCode, type Say } from '@webui/i18n/registry';
+import { DEFAULT_LOCALE, getLocale, isLocaleCode, setVariantPrefix, type Say } from '@webui/i18n/registry';
 import { dateLocale, translator, type Translate } from '@webui/i18n/translator';
 
 import { GaiaApiError, GaiaError, GaiaNetworkError } from '@/api/errors';
 import { useLocaleStore } from '@/state/locale';
+
+// The phone says "your PC" where the shared catalog says "this PC".
+setVariantPrefix('mobileApp.yourPc.');
 
 export { dateLocale, translator, type Translate };
 

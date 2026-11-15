@@ -5,6 +5,7 @@ import type { ExpoConfig } from 'expo/config';
 
 export type AppEnv = 'development' | 'production';
 
+// Also the URL scheme, which stays fixed because pairing links use it.
 const APP_IDS: Record<AppEnv, string> = {
     development: 'ai.amd.gaia.mobile.dev',
     production: 'ai.amd.gaia.mobile',
@@ -32,10 +33,25 @@ export function readAppEnv(value: string | undefined): AppEnv {
     );
 }
 
+const BUNDLE_ID_PATTERN = /^[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+$/;
+
+/** The iOS bundle id, from GAIA_IOS_BUNDLE_ID (production) or GAIA_IOS_BUNDLE_ID_DEV (development); unset or empty keeps the default. */
+export function readIosBundleId(env: AppEnv, source: Record<string, string | undefined> = process.env): string {
+    const name = env === 'development' ? 'GAIA_IOS_BUNDLE_ID_DEV' : 'GAIA_IOS_BUNDLE_ID';
+    const value = source[name];
+    if (value === undefined || value === '') return APP_IDS[env];
+    if (BUNDLE_ID_PATTERN.test(value)) return value;
+    throw new Error(
+        `${name} must be a reverse-DNS bundle id such as "com.example.gaia", but it is "${value}". ` +
+            'Unset it to keep the default; see src/gaia/apps/mobile/README.md.',
+    );
+}
+
 export default function appConfig(): ExpoConfig {
     const env = readAppEnv(process.env.APP_ENV);
     const dev = env === 'development';
     const id = APP_IDS[env];
+    const iosId = readIosBundleId(env);
     return {
         name: 'GAIA',
         slug: 'gaia-mobile',
@@ -43,7 +59,7 @@ export default function appConfig(): ExpoConfig {
         scheme: id,
         userInterfaceStyle: 'automatic',
         ios: {
-            bundleIdentifier: id,
+            bundleIdentifier: iosId,
             supportsTablet: true,
             infoPlist: {
                 // Every build reaches the paired PC at its home-network address; the native transport pins its certificate.

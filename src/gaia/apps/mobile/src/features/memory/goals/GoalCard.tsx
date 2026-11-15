@@ -23,13 +23,12 @@ export function GoalCard({ goal, busy, onCancel, onDelete }: GoalCardProps) {
     const [open, setOpen] = useState(false);
     const [confirmDelete, setConfirmDelete] = useState(false);
     const done = goal.tasks.filter((task) => task.status === 'completed').length;
-    const status = t.bare(STATUS_KEYS[goal.status] ?? STATUS_KEYS.queued!);
 
     return (
         <Surface tone="card" radius="lg" border testID={`goal-${goal.id}`}>
             <Pressable
                 onPress={() => setOpen((was) => !was)}
-                accessibilityLabel={goal.title}
+                accessibilityLabel={`${goal.title}. ${t(STATUS_KEYS[goal.status] ?? STATUS_KEYS.queued!)}, ${t(PRIORITY_KEYS[goal.priority])}`}
                 accessibilityState={{ expanded: open }}
                 testID={`goal-toggle-${goal.id}`}
             >
@@ -43,10 +42,10 @@ export function GoalCard({ goal, busy, onCancel, onDelete }: GoalCardProps) {
                         <Icon icon={open ? ChevronDown : ChevronRight} size="sm" tone="muted" />
                     </Row>
                     <Row gap="sm" wrap>
-                        <StatusDot tone={statusTone(goal.status)} label={status} showLabel />
-                        <Badge label={t.bare(PRIORITY_KEYS[goal.priority])} tone={PRIORITY_TONES[goal.priority]} />
+                        <StatusDot tone={statusTone(goal.status)} label={t(STATUS_KEYS[goal.status] ?? STATUS_KEYS.queued!)} showLabel />
+                        <Badge label={t.bare(PRIORITY_KEYS[goal.priority])} accessibilityLabel={t(PRIORITY_KEYS[goal.priority])} tone={PRIORITY_TONES[goal.priority]} />
                         {goal.source !== 'user' && SOURCE_KEYS[goal.source] ? (
-                            <Badge label={t.bare(SOURCE_KEYS[goal.source]!)} tone="accent" />
+                            <Badge label={t.bare(SOURCE_KEYS[goal.source]!)} accessibilityLabel={t(SOURCE_KEYS[goal.source]!)} tone="accent" />
                         ) : null}
                         <Row gap="xs">
                             <Icon icon={ListChecks} size="sm" tone="muted" />
@@ -76,7 +75,7 @@ export function GoalCard({ goal, busy, onCancel, onDelete }: GoalCardProps) {
                                 {goal.tasks.map((task) => (
                                     <Stack key={task.id} gap="xs">
                                         <Row gap="sm" align="start">
-                                            <StatusDot tone={statusTone(task.status)} label={t.bare(STATUS_KEYS[task.status]!)} />
+                                            <StatusDot tone={statusTone(task.status)} label={t(STATUS_KEYS[task.status]!)} />
                                             <Stack flex={1}>
                                                 <Text dir="auto">{task.description}</Text>
                                             </Stack>
