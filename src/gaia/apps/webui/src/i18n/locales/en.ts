@@ -3657,6 +3657,7 @@ export const enMessages = {
     'mobileApp.pairing.unreachable.body': 'Connect this phone to the same Wi-Fi as your PC, and check that GAIA is open on it.',
     'mobileApp.pairing.pinMismatch': "Your PC's security certificate has changed, so this phone stopped connecting to it. If you reset pairing on the PC, pair this phone again.",
     'mobileApp.pairing.uploadUnsupported': "This phone can't send files to your PC yet. Add them on the PC.",
+    'mobileApp.pairing.transportMissing': "This build of GAIA can't open a secure connection to your PC. Install the latest GAIA app on this phone, then pair again.",
     'mobileApp.pairing.pinMismatch.title': 'Pair again',
     'mobileApp.pairing.pinMismatch.action': 'Pair again',
     'mobileApp.pairing.removed': 'This phone was removed from {pc}. Pair it again to use GAIA here.',
