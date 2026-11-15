@@ -1702,7 +1702,7 @@ def forget_provider_key(provider: str) -> Dict[str, Any]:
 
 @router.post(
     "/api/providers/key-store/retry",
-    dependencies=[Depends(require_ui_header)],
+    dependencies=[Depends(require_ui_header), Depends(require_local_pc)],
     response_model=ProviderKeyStoreRetry,
     response_model_exclude_unset=True,
 )

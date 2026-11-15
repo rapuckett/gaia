@@ -12,9 +12,11 @@ import type {
     ConnectorListEntry,
     ContextChoice,
     ContextUsageResult,
+    FeaturedLibrary,
     GpuMemoryStatus,
     LemonadeFound,
     LemonadeTarget,
+    LinkPreview,
     LocalModelStatus,
     Message,
     ModelNeed,
@@ -32,14 +34,16 @@ import type {
     SetupCheck,
     SetupPlan,
     SetupRunStatus,
+    Settings,
     SkillInfo,
     StartScreen,
     StreamEvent,
     SystemStatus,
 } from '@webui/types';
+import type { UndoSettings } from '@webui/types/changes';
 import type { AgentCapabilities } from '@webui/types/sessionPanel';
-import type { MemorySettings } from '@webui/services/memoryApi';
-import type { ActivityDay, TemporalItem, ToolStat } from '@webui/utils/memoryFormat.core';
+import type { KnowledgeCreateBody, KnowledgeListParams, KnowledgeSaveResult, KnowledgeUpdateBody, MemorySettings } from '@webui/services/memoryApi';
+import type { AboutYouItem, ActivityDay, TemporalItem, ToolStat } from '@webui/utils/memoryFormat.core';
 import type {
     AgentUiHealthResponse,
     CancelStreamResponse,
@@ -67,9 +71,12 @@ export type {
     ContextChoice,
     ContextUsage,
     ContextUsageResult,
+    FeaturedLibrary,
     GpuMemoryStatus,
     LemonadeFound,
     LemonadeTarget,
+    LinkPreview,
+    LinkSkill,
     LocalModelStatus,
     Message,
     ModelNeed,
@@ -90,6 +97,7 @@ export type {
     SetupCheck,
     SetupPlan,
     SetupRunStatus,
+    Settings,
     SkillInfo,
     SkillSource,
     StartScreen,
@@ -97,8 +105,17 @@ export type {
     SystemStatus,
     UnavailableConnectorRow,
 } from '@webui/types';
+export type { UndoSettings } from '@webui/types/changes';
 export type { ActiveSkill, AgentCapabilities, AgentTool, SkillOrigin } from '@webui/types/sessionPanel';
 export type { CreateSessionRequest, DocumentListResponse, DocumentResponse, ModelServerInfo, SessionSearchResponse, SessionSearchResult, ToolConfirmRequest } from '@webui/types/api.gen';
+
+/** A photo or file chosen on this phone: where it is, and what it is called. */
+export interface PickedFile {
+    uri: string;
+    name: string;
+    mimeType: string | null;
+    size: number | null;
+}
 
 /** `display` is what the phone shows as the answer; it is never sent to GAIA. */
 export type UserInputRequest = ApiUserInputRequest & { display?: string };
@@ -142,6 +159,10 @@ export interface SkillList {
     invalid: Record<string, string>;
 }
 
+export interface FeaturedLibraries {
+    libraries: FeaturedLibrary[];
+}
+
 export interface AgentMcpList {
     agent_mcps: AgentMcpServer[];
 }
@@ -154,6 +175,15 @@ export interface ScheduleList {
 export type { MemorySettings } from '@webui/services/memoryApi';
 /** One day of GET /api/memory/activity, one tool of GET /api/memory/tools, one item of GET /api/memory/upcoming; typed as the web's `MemoryDashboard` types them. */
 export type { ActivityDay as MemoryActivityDay, TemporalItem as MemoryUpcomingItem, ToolStat as MemoryToolStat } from '@webui/utils/memoryFormat.core';
+
+export type { KnowledgeCreateBody, KnowledgeListParams, KnowledgeSaveResult, KnowledgeUpdateBody } from '@webui/services/memoryApi';
+export type { AboutYouItem as MemoryKnowledgeItem } from '@webui/utils/memoryFormat.core';
+
+/** One page of GET /api/memory/knowledge; `total` counts every match, not just this page. */
+export interface MemoryKnowledgePage {
+    items: AboutYouItem[];
+    total?: number;
+}
 
 /** GET /api/memory/embedding-coverage; typed as the web's `MemoryDashboard` types it. */
 export interface EmbeddingCoverage {
@@ -321,6 +351,14 @@ export interface GaiaClient {
     deleteSession(sessionId: string, options?: RequestOptions): Promise<DeleteSessionResult>;
     /** Clears the chat's unread mark. */
     markSessionRead(sessionId: string, options?: RequestOptions): Promise<Session>;
+    /** The PC's settings, among them `network_policy` (Local only). */
+    getSettings(options?: RequestOptions): Promise<Settings>;
+    /** Turns Local only on or off. The PC alone may change it: 403 from a phone. */
+    setNetworkPolicy(policy: Settings['network_policy'], options?: RequestOptions): Promise<Settings>;
+    /** How long and how much undo history is kept, and how much is in use. */
+    getUndoSettings(options?: RequestOptions): Promise<UndoSettings>;
+    /** Saves the undo limits; the PC trims history to fit them at once. */
+    updateUndoSettings(retentionDays: number, maxMb: number, options?: RequestOptions): Promise<UndoSettings>;
     /** The model new chats run on and where it runs. */
     getActiveModel(options?: RequestOptions): Promise<ActiveModel>;
     getContextChoice(model: string, options?: RequestOptions): Promise<ContextChoice>;
@@ -406,6 +444,14 @@ export interface GaiaClient {
     /** Memories due within `days` days, plus the overdue ones. */
     getMemoryUpcoming(days: number, options?: RequestOptions): Promise<TemporalItem[]>;
     getMemoryStats(options?: RequestOptions): Promise<MemoryStats>;
+    /** One page of stored memories; the About you tab asks `about_user` so GAIA's own notes stay out. */
+    listMemoryKnowledge(params: KnowledgeListParams, options?: RequestOptions): Promise<MemoryKnowledgePage>;
+    /** Saves a memory and embeds it. */
+    addMemoryKnowledge(body: KnowledgeCreateBody, options?: RequestOptions): Promise<KnowledgeSaveResult>;
+    /** Changes a memory's text or due date; only the fields given are sent. */
+    updateMemoryKnowledge(knowledgeId: string, body: KnowledgeUpdateBody, options?: RequestOptions): Promise<KnowledgeSaveResult>;
+    /** Forgets a memory. */
+    deleteMemoryKnowledge(knowledgeId: string, options?: RequestOptions): Promise<unknown>;
     getMemorySettings(options?: RequestOptions): Promise<MemorySettings>;
     /** Changes the memory switches named in `settings`; answers with all of them. */
     updateMemorySettings(settings: Partial<MemorySettings>, options?: RequestOptions): Promise<MemorySettings>;
@@ -421,6 +467,10 @@ export interface GaiaClient {
     refreshSystemContext(options?: RequestOptions): Promise<RefreshSystemContextResult>;
     /** Every skill GAIA can load, plus the folders it skipped. */
     listSkills(options?: RequestOptions): Promise<SkillList>;
+    /** Skill libraries GAIA suggests adding from a link. */
+    listFeaturedSkillLibraries(options?: RequestOptions): Promise<FeaturedLibraries>;
+    /** Reads and audits the skills behind a link; writes nothing. Adding them is PC-only. */
+    previewSkillLink(url: string, options?: RequestOptions): Promise<LinkPreview>;
     /** Creates a schedule; `interval` is the plain-words "when to run", parsed by the PC. 409 when the name is taken. */
     createSchedule(request: CreateScheduleRequest, options?: RequestOptions): Promise<Schedule>;
     /** Reads a plain-words "when to run" without saving it, for the form's live preview. */
@@ -430,6 +480,10 @@ export interface GaiaClient {
     /** Runs a schedule once now (409 while a run is in flight); its next scheduled run stays as it was. */
     runSchedule(name: string, options?: RequestOptions): Promise<Schedule>;
     deleteSchedule(name: string, options?: RequestOptions): Promise<DeleteScheduleResult>;
+    /** Puts a file from this phone in the library and indexes it; resolves once GAIA has read it or failed to. */
+    uploadDocument(file: PickedFile, options?: RequestOptions): Promise<DocumentResponse>;
+    /** Attaches a library document to a chat, so the chat searches it. */
+    attachDocument(sessionId: string, docId: string, options?: RequestOptions): Promise<void>;
     /** A schedule's most recent runs, newest first. */
     listScheduleResults(name: string, limit: number, options?: RequestOptions): Promise<ScheduleResults>;
     /** The library's documents; a chat searches only the ones attached to it. */
@@ -453,6 +507,8 @@ export interface GaiaClient {
     getGpuMemory(settingGb?: number, options?: RequestOptions): Promise<GpuMemoryStatus>;
     /** Starts one model's download on the PC; follow it with `getSetupStatus`. */
     downloadSetupModel(modelId: string, acknowledgeLowDisk: boolean, options?: RequestOptions): Promise<SetupRunStatus>;
+    /** Deletes one downloaded model from the PC's model server; answers the new plan and the space freed. */
+    removeSetupModel(modelId: string, options?: RequestOptions): Promise<SetupPlan & { freed_gb: number }>;
     getSetupStatus(options?: RequestOptions): Promise<SetupRunStatus>;
     /** Stops one model's download, or the whole run without a model; finished and partial files are kept. */
     cancelSetup(modelId?: string, options?: RequestOptions): Promise<{ cancelled: boolean }>;

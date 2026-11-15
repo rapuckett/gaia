@@ -1230,6 +1230,14 @@ async def update_settings(
     observation cycle ships (#2005) — it would silently behave as
     'goal_driven'.
     """
+    policy_requested = (
+        "network_policy" in request.model_fields_set
+        and request.network_policy is not None
+    )
+    # Before any field is saved, so a refused request changes nothing.
+    if policy_requested:
+        security.require_local_pc(http_request)
+
     if request.custom_model is not None:
         value = request.custom_model.strip() if request.custom_model else None
         from gaia.config import GaiaConfig, GaiaConfigError
@@ -1317,11 +1325,7 @@ async def update_settings(
 
     policy_warnings: List[str] = []
     policy_notices: List[Dict[str, Any]] = []
-    if (
-        "network_policy" in request.model_fields_set
-        and request.network_policy is not None
-    ):
-        security.require_local_pc(http_request)
+    if policy_requested:
         from gaia.llm import local_only
 
         try:

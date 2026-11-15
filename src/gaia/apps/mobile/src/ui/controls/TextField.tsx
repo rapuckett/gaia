@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import { useState, type ComponentRef, type ReactNode, type Ref } from 'react';
-import { TextInput, View, type ReturnKeyTypeOptions } from 'react-native';
+import { TextInput, View, type KeyboardTypeOptions, type ReturnKeyTypeOptions } from 'react-native';
 import { CircleAlert } from 'lucide-react-native';
 import { useT } from '@/i18n/useT';
 import { Eye, EyeOff } from '../icons';
@@ -24,6 +24,8 @@ export interface TextFieldProps {
     multiline?: boolean;
     maxLines?: number;
     returnKeyType?: ReturnKeyTypeOptions;
+    /** `number-pad` for whole numbers. */
+    keyboardType?: KeyboardTypeOptions;
     onSubmitEditing?: () => void;
     secureTextEntry?: boolean;
     /** With `secureTextEntry`: an eye button that shows the text. */
@@ -35,6 +37,8 @@ export interface TextFieldProps {
     /** No border, fill or focus ring, for a field inside a card that draws its own (the message box). */
     bare?: boolean;
     autoFocus?: boolean;
+    /** A web address: the URL keyboard, no autocapitalize or autocorrect. */
+    url?: boolean;
     disabled?: boolean;
     inputRef?: Ref<ComponentRef<typeof TextInput>>;
     accessibilityLabel?: string;
@@ -51,6 +55,7 @@ export function TextField({
     multiline,
     maxLines = 6,
     returnKeyType,
+    keyboardType,
     onSubmitEditing,
     secureTextEntry,
     revealable,
@@ -58,6 +63,7 @@ export function TextField({
     trailing,
     bare,
     autoFocus,
+    url,
     disabled,
     inputRef,
     accessibilityLabel,
@@ -99,10 +105,13 @@ export function TextField({
                 editable={!disabled}
                 multiline={multiline}
                 returnKeyType={returnKeyType}
+                keyboardType={url ? 'url' : keyboardType}
                 onSubmitEditing={onSubmitEditing}
                 submitBehavior={multiline ? 'newline' : 'blurAndSubmit'}
                 secureTextEntry={secureTextEntry && !revealed}
                 autoFocus={autoFocus}
+                autoCapitalize={url ? 'none' : undefined}
+                autoCorrect={url ? false : undefined}
                 accessibilityLabel={accessibilityLabel ?? label}
                 onFocus={() => setFocused(true)}
                 onBlur={() => setFocused(false)}

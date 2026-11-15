@@ -1039,9 +1039,10 @@ async def configure_connector(
     return result
 
 
+# The health check reads the key store, which can prompt on the PC.
 @router.post(
     "/{connector_id}/test",
-    dependencies=[Depends(_require_ui_header)],
+    dependencies=[Depends(_require_ui_header), Depends(require_local_pc)],
     response_model=ConnectorTestResponse,
     response_model_exclude_unset=True,
 )
@@ -1144,7 +1145,7 @@ async def _set_connector_enabled(connector_id: str, enabled: bool) -> Dict[str, 
 
 @router.post(
     "/{connector_id}/enable",
-    dependencies=[Depends(_require_ui_header)],
+    dependencies=[Depends(_require_ui_header), Depends(require_local_pc)],
     response_model=ConnectorSummary,
     response_model_exclude_unset=True,
 )

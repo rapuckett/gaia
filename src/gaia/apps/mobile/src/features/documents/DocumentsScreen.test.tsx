@@ -10,12 +10,15 @@ import { REMOVE_UNDO_MS } from '@webui/utils/documentLibrary.core';
 
 import type { DocumentListResponse } from '@/api/client.types';
 import { createFakeClient } from '@/api/fake';
+import { GaiaApiError } from '@/api/errors';
 import { GaiaClientProvider } from '@/data';
+import { pickDocuments } from '@/platform/pickers';
 import { ThemeProvider } from '@/ui';
 
 import { DocumentsScreen } from './DocumentsScreen';
 
 jest.mock('@/features/nav/ScreenHeader', () => ({ ScreenHeader: () => null }));
+jest.mock('@/platform/pickers', () => ({ pickDocuments: jest.fn(), pickPhotos: jest.fn() }));
 
 const doc = (id: string, filename: string, status: string, size: number) => ({
     id,
@@ -27,7 +30,7 @@ const doc = (id: string, filename: string, status: string, size: number) => ({
     indexing_status: status,
 });
 
-async function mount(client: ReturnType<typeof createFakeClient>) {
+async function mount(client: ReturnType<typeof createFakeClient>, chatId?: string) {
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const wrap = ({ children }: { children: ReactNode }) => (
         <QueryClientProvider client={queryClient}>
@@ -38,7 +41,7 @@ async function mount(client: ReturnType<typeof createFakeClient>) {
             </GaiaClientProvider>
         </QueryClientProvider>
     );
-    await render(<DocumentsScreen />, { wrapper: wrap });
+    await render(<DocumentsScreen chatId={chatId} />, { wrapper: wrap });
 }
 
 describe('DocumentsScreen', () => {
@@ -66,6 +69,40 @@ describe('DocumentsScreen', () => {
         fireEvent.press(screen.getByText('Try again'));
         expect(await screen.findByText('No documents yet')).toBeTruthy();
         expect(listDocuments).toHaveBeenCalledTimes(2);
+    });
+
+    describe('adding a file from the phone', () => {
+        const file = (name: string) => ({ uri: `file:///cache/${name}`, name, mimeType: null, size: 10 });
+        const chat = { id: 'c1', title: 'A chat', created_at: '2026-11-14T00:00:00Z', updated_at: '2026-11-14T00:00:00Z', model: '', system_prompt: null, message_count: 1, document_ids: [] };
+
+        it('uploads it and attaches it to the chat the library was opened from', async () => {
+            (pickDocuments as jest.Mock).mockResolvedValue([file('notes.txt')]);
+            const client = createFakeClient({ sessions: [chat] });
+            await mount(client, 'c1');
+            fireEvent.press(await screen.findByText('Add a file'));
+            expect(await screen.findByText(/Attached notes\.txt to/)).toBeTruthy();
+            expect(client.uploaded.map((f) => f.name)).toEqual(['notes.txt']);
+            expect(client.attached).toEqual([{ sessionId: 'c1', docId: 'doc-1' }]);
+            expect((await screen.findAllByText(/notes\.txt/)).length).toBeGreaterThan(1);
+        });
+
+        it('shows the category help when GAIA refuses the file', async () => {
+            (pickDocuments as jest.Mock).mockResolvedValue([file('big.pdf')]);
+            const documentUploadError = new GaiaApiError(400, 'too big', undefined, undefined, { status: 'too_large', max_mb: 20 });
+            await mount(createFakeClient({ documentUploadError }));
+            fireEvent.press(await screen.findByText('Add a file'));
+            expect(await screen.findByText('"big.pdf" is too large')).toBeTruthy();
+            expect(screen.getByText(/up to 20 MB/)).toBeTruthy();
+        });
+
+        it('rules out an unsupported type before sending it', async () => {
+            (pickDocuments as jest.Mock).mockResolvedValue([file('clip.mp4')]);
+            const client = createFakeClient();
+            await mount(client);
+            fireEvent.press(await screen.findByText('Add a file'));
+            expect(await screen.findByText('Video files not supported')).toBeTruthy();
+            expect(client.uploaded).toEqual([]);
+        });
     });
 
     describe('remove with Undo', () => {
