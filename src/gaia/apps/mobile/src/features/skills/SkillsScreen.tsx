@@ -36,6 +36,16 @@ const CUT_ABOVE_CHARS = 110;
 
 export function SkillsScreen({ onTry }: { onTry: (name: string, prompt: string) => void }) {
     const t = useT();
+    return (
+        <Screen scroll header={<ScreenHeader title={t('settings.section.skills')} />}>
+            <SkillsBody onTry={onTry} />
+        </Screen>
+    );
+}
+
+/** The skills list and its add sheet, for the screen and for the Settings pane. */
+export function SkillsBody({ onTry }: { onTry: (name: string, prompt: string) => void }) {
+    const t = useT();
     const skills = useSkills();
     const [query, setQuery] = useState('');
     const [howOpen, setHowOpen] = useState(false);
@@ -56,7 +66,7 @@ export function SkillsScreen({ onTry }: { onTry: (name: string, prompt: string) 
     );
 
     return (
-        <Screen scroll header={<ScreenHeader title={t('settings.section.skills')} />}>
+        <>
             <Stack gap="md" paddingX="lg" paddingY="md">
                 <Text role="ui" tone="secondary">{t('settings.skills.lede')}</Text>
                 <Disclosure title={t('settings.model.howItWorks')} open={howOpen} onToggle={() => setHowOpen(!howOpen)}>
@@ -122,7 +132,7 @@ export function SkillsScreen({ onTry }: { onTry: (name: string, prompt: string) 
                 )}
             </Stack>
             <AddSkillsSheet open={adding} onClose={() => setAdding(false)} />
-        </Screen>
+        </>
     );
 }
 

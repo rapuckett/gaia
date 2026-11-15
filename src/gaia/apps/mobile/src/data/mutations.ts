@@ -178,6 +178,19 @@ export function useDetachDocument() {
     });
 }
 
+/** `mutate({ sessionId, docId })` attaches an indexed library document to the chat. */
+export function useAttachDocument() {
+    const client = useGaiaClient();
+    const queryClient = useQueryClient();
+    return useMutation<void, Error, { sessionId: string; docId: string }>({
+        mutationFn: ({ sessionId, docId }) => requireClient(client).attachDocument(sessionId, docId),
+        onSuccess: (_result, { sessionId }) => {
+            void queryClient.invalidateQueries({ queryKey: queryKeys.session(sessionId) });
+            void queryClient.invalidateQueries({ queryKey: queryKeys.sessions });
+        },
+    });
+}
+
 export interface AddDocumentRequest {
     file: PickedFile;
     /** The chat to attach to once indexed; null leaves it in the library for the next new chat. */

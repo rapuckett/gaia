@@ -4,7 +4,7 @@
 import { QueryClient } from '@tanstack/react-query';
 
 import { createFakeClient } from '@/api/fake';
-import { GaiaStreamDroppedError } from '@/api/errors';
+import { GaiaAuthError, GaiaStreamDroppedError } from '@/api/errors';
 import { readTurn, useChatStreamStore } from '@/state/chatStreams';
 
 import { detachTurn, sendTurn } from './chatStream';
@@ -30,6 +30,29 @@ describe('a stream that drops mid-turn', () => {
             expect(readTurn('s1').status).toBe('idle');
         } finally {
             detachTurn('s1');
+            queryClient.clear();
+        }
+    });
+
+    it('does not retry a refused reattach', async () => {
+        const base = createFakeClient({
+            replies: async function* () {
+                yield { type: 'chunk', content: 'Half ' };
+                throw new GaiaStreamDroppedError(new Error('reset'));
+            },
+        });
+        const attach = jest.fn(async function* (): AsyncGenerator<never> {
+            throw new GaiaAuthError('bad token');
+        });
+        const client = { ...base, attachToRun: attach } as typeof base;
+        const queryClient = new QueryClient();
+        try {
+            sendTurn({ client, queryClient }, 's2', 'Hi');
+            await new Promise((resolve) => setTimeout(resolve, 50));
+            expect(attach).toHaveBeenCalledTimes(1);
+            expect(readTurn('s2').error).toBeInstanceOf(GaiaAuthError);
+        } finally {
+            detachTurn('s2');
             queryClient.clear();
         }
     });
