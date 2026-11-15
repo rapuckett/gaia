@@ -1082,6 +1082,7 @@ const messages: Messages = {
     'sp.showWarn': 'إظهار لوحة الجلسة: تعذّر الحصول على بيانات مباشرة',
     'sp.section.answer': 'هذه الإجابة',
     'sp.section.context': 'السياق والأداء',
+    'sp.details': 'التفاصيل',
     'sp.checking': 'جارٍ التحقق…',
     'sp.open': 'فتح',
     'sp.showInFolder': 'إظهار في المجلد',
