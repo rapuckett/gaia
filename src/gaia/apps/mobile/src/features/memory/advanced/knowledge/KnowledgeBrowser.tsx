@@ -6,7 +6,7 @@ import { useState } from 'react';
 import { KNOWLEDGE_CATEGORIES, KNOWLEDGE_PAGE_SIZE, type KnowledgeEntry } from '@webui/utils/memoryFormat.core';
 
 import type { KnowledgeListParams } from '@/api/client.types';
-import { useKnowledgeBrowse, useMemoryEntities } from '@/data';
+import { useAddMemory, useEditMemory, useForgetMemory, useKnowledgeBrowse, useMemoryEntities } from '@/data';
 import { useT } from '@/i18n/useT';
 import { Button, Chip, IconButton, Row, SearchField, Select, Sheet, Spinner, Stack, Switch, Text } from '@/ui';
 import { Brain, ChevronLeft, ChevronRight, Plus, X } from '@/ui/icons';
@@ -54,6 +54,9 @@ export function KnowledgeBrowser({ contexts, notify }: KnowledgeBrowserProps) {
     };
     const list = useKnowledgeBrowse(params);
     const entities = useMemoryEntities();
+    const add = useAddMemory();
+    const edit = useEditMemory();
+    const forget = useForgetMemory();
     const total = list.data?.total ?? 0;
     const items = list.data?.items;
     const filtered = !!params.search || categories.length > 0 || !!context || !!entity;
@@ -159,6 +162,8 @@ export function KnowledgeBrowser({ contexts, notify }: KnowledgeBrowserProps) {
                     <KnowledgeDetail
                         key={detail.id}
                         item={detail}
+                        edit={edit}
+                        forget={forget}
                         onEdit={(item) => {
                             setDetail(null);
                             openForm(item);
@@ -176,7 +181,7 @@ export function KnowledgeBrowser({ contexts, notify }: KnowledgeBrowserProps) {
                 ) : null}
             </Sheet>
             <Sheet open={form !== null} onClose={() => setForm(null)} title={t(form?.item ? 'mem.row.edit' : 'mem.knowledge.addTitle')} dismissible>
-                {form ? <KnowledgeForm key={form.key} item={form.item} notify={notify} onSaved={() => setForm(null)} onCancel={() => setForm(null)} /> : null}
+                {form ? <KnowledgeForm key={form.key} item={form.item} add={add} edit={edit} notify={notify} onSaved={() => setForm(null)} onCancel={() => setForm(null)} /> : null}
             </Sheet>
         </Stack>
     );

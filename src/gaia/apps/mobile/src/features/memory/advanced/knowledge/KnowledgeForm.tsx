@@ -1,12 +1,12 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
+import type { UseMutationResult } from '@tanstack/react-query';
 import { useState } from 'react';
 
 import { dueInputValue, KNOWLEDGE_CATEGORIES, type KnowledgeEntry } from '@webui/utils/memoryFormat.core';
 
-import type { KnowledgeCreateBody, KnowledgeSaveResult } from '@/api/client.types';
-import { useAddMemory, useEditMemory } from '@/data';
+import type { KnowledgeCreateBody, KnowledgeSaveResult, KnowledgeUpdateBody } from '@/api/client.types';
 import { useLocaleCode, useT } from '@/i18n/useT';
 import { Button, Chip, Notice, Row, Stack, Switch, Text, TextField } from '@/ui';
 
@@ -37,6 +37,8 @@ function startValues(item?: KnowledgeEntry): FormValues {
 }
 
 interface KnowledgeFormProps extends Pick<MemoryPaneProps, 'notify'> {
+    add: UseMutationResult<KnowledgeSaveResult, Error, KnowledgeCreateBody>;
+    edit: UseMutationResult<KnowledgeSaveResult, Error, { id: string; body: KnowledgeUpdateBody }>;
     /** The memory to edit; absent adds a new one. */
     item?: KnowledgeEntry;
     /** Saved: the sheet closes. */
@@ -45,11 +47,9 @@ interface KnowledgeFormProps extends Pick<MemoryPaneProps, 'notify'> {
 }
 
 /** The add and edit form, with the web's fields: content, category, context, domain, entity, due at and sensitive. */
-export function KnowledgeForm({ item, notify, onSaved, onCancel }: KnowledgeFormProps) {
+export function KnowledgeForm({ item, add, edit, notify, onSaved, onCancel }: KnowledgeFormProps) {
     const t = useT();
     const code = useLocaleCode();
-    const add = useAddMemory();
-    const edit = useEditMemory();
     const [values, setValues] = useState(() => startValues(item));
     const [feedback, setFeedback] = useState<KnowledgeFeedback>(null);
     const set = <K extends keyof FormValues>(key: K, value: FormValues[K]) => setValues((prev) => ({ ...prev, [key]: value }));

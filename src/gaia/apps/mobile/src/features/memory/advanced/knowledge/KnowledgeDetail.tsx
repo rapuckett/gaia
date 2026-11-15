@@ -1,20 +1,24 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
+import type { UseMutationResult } from '@tanstack/react-query';
 import * as Clipboard from 'expo-clipboard';
 import { useState } from 'react';
 
 import { confidenceLevel, formatDateFull, isOverdue, type KnowledgeEntry } from '@webui/utils/memoryFormat.core';
 
-import { useEditMemory, useForgetMemory } from '@/data';
+import type { KnowledgeSaveResult, KnowledgeUpdateBody } from '@/api/client.types';
 import { dateLocale, useLocaleCode, useT } from '@/i18n/useT';
 import { Badge, Button, Divider, Ltr, Notice, Row, Stack, Text } from '@/ui';
 import { Copy, Pencil, Shield, ShieldOff, Trash2 } from '@/ui/icons';
 
 import { CATEGORY_TONE, categoryLabel, failureText, type KnowledgeFeedback } from './knowledgeUi';
 
+/** The browser owns the mutations: a sheet draws outside the screen's providers in the dev gallery, so its content can't reach the client itself. */
 interface KnowledgeDetailProps {
     item: KnowledgeEntry;
+    edit: UseMutationResult<KnowledgeSaveResult, Error, { id: string; body: KnowledgeUpdateBody }>;
+    forget: UseMutationResult<unknown, Error, string>;
     onEdit: (item: KnowledgeEntry) => void;
     /** The sensitive flag changed; the sheet shows the new row. */
     onChanged: (item: KnowledgeEntry) => void;
@@ -37,11 +41,9 @@ function Field({ label, children }: { label: string; children: string }) {
 }
 
 /** A memory in full, with Edit, the sensitive flag, Copy ID and Delete; delete asks once more, as the web does. */
-export function KnowledgeDetail({ item, onEdit, onChanged, onFilterEntity, onClose }: KnowledgeDetailProps) {
+export function KnowledgeDetail({ item, edit, forget, onEdit, onChanged, onFilterEntity, onClose }: KnowledgeDetailProps) {
     const t = useT();
     const code = useLocaleCode();
-    const edit = useEditMemory();
-    const forget = useForgetMemory();
     const [confirming, setConfirming] = useState(false);
     const [feedback, setFeedback] = useState<KnowledgeFeedback>(null);
     const locale = dateLocale(t);
