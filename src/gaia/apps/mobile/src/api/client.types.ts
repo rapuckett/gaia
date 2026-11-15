@@ -22,7 +22,7 @@ import type {
     StreamEvent,
     SystemStatus,
 } from '@webui/types';
-import type { CreateSessionRequest, DocumentListResponse, SessionSearchResponse, ToolConfirmRequest, UserInputRequest as ApiUserInputRequest } from '@webui/types/api.gen';
+import type { CreateSessionRequest, DocumentListResponse, ModelServerInfo, SessionSearchResponse, ToolConfirmRequest, UserInputRequest as ApiUserInputRequest } from '@webui/types/api.gen';
 
 export type {
     AgentMcpServer,
@@ -46,7 +46,7 @@ export type {
     SystemStatus,
     UnavailableConnectorRow,
 } from '@webui/types';
-export type { CreateSessionRequest, DocumentListResponse, SessionSearchResponse, SessionSearchResult, ToolConfirmRequest } from '@webui/types/api.gen';
+export type { CreateSessionRequest, DocumentListResponse, ModelServerInfo, SessionSearchResponse, SessionSearchResult, ToolConfirmRequest } from '@webui/types/api.gen';
 
 /** `display` is what the phone shows as the answer; it is never sent to GAIA. */
 export type UserInputRequest = ApiUserInputRequest & { display?: string };
@@ -215,6 +215,10 @@ export interface GaiaClient {
     checkSetup(skipChatModel: boolean, options?: RequestOptions): Promise<SetupCheck>;
     /** What setup will use and download, before it starts; `catalog` marks partial downloads. */
     getSetupPlan(options?: RequestOptions): Promise<SetupPlan>;
+    /** The model server GAIA uses: whether it answers, and the llama.cpp backends it lists and prefers. */
+    getModelServer(options?: RequestOptions): Promise<ModelServerInfo>;
+    /** Saves the llama.cpp backend for chat models (`auto` or a backend name); PC-only. */
+    setModelServerBackend(backend: string, options?: RequestOptions): Promise<ModelServerInfo>;
     /** What this PC can run: its graphics chip, and `blockers` when it can't run GAIA's models. */
     getOnboardingPreflight(options?: RequestOptions): Promise<PreflightReport>;
     /** The cloud providers; `blocked` is set on each while Local only is on. */

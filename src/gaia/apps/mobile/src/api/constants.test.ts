@@ -129,6 +129,8 @@ describe('endpoints', () => {
         systemStatus: ['GET'],
         documentFile: ['GET'],
         documents: ['GET'],
+        modelServer: ['GET'],
+        modelServerBackend: ['PUT'],
         onboardingPreflight: ['GET'],
         onboardingStart: ['GET'],
         providers: ['GET'],

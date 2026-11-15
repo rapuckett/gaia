@@ -13,6 +13,7 @@ import type {
     Message,
     MessageList,
     ModelNeed,
+    ModelServerInfo,
     ParsedSchedule,
     Schedule,
     ResourceUsage,
@@ -68,6 +69,7 @@ export interface FakeClientData {
     setupStatuses?: (SetupRunStatus | Error)[];
     setupPlan?: SetupPlan;
     preflight?: PreflightReport;
+    modelServer?: ModelServerInfo;
     providers?: ProvidersResponse;
     documents?: DocumentListResponse;
 }
@@ -83,6 +85,7 @@ export interface FakeGaiaClient extends GaiaClient {
     readonly followUps: { sessionId: string; text: string }[];
     readonly restarts: { confirm: boolean }[];
     readonly downloads: { modelId: string; acknowledgeLowDisk: boolean }[];
+    readonly backendSets: string[];
     readonly setupStarts: { skipChatModel: boolean; gaiaLemonade: boolean; upgradeEmbedded: boolean }[];
     readonly detached: { sessionId: string; docId: string }[];
 }
@@ -110,6 +113,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
     }
     const followUps: FakeGaiaClient['followUps'] = [];
     const setupStarts: FakeGaiaClient['setupStarts'] = [];
+    const backendSets: string[] = [];
     let checkAt = 0;
     let statusAt = 0;
     const nextOf = <T,>(list: (T | Error)[], at: number): T => {
@@ -137,6 +141,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         restarts,
         downloads,
         setupStarts,
+        backendSets,
         detached,
         async health(): Promise<HealthResponse> {
             return { status: 'ok', service: 'gaia-agent-ui' };
@@ -348,6 +353,14 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         async getSetupPlan() {
             if (!data.setupPlan) throw new GaiaApiError(503, 'This fake client was given no setup plan.');
             return data.setupPlan;
+        },
+        async getModelServer() {
+            if (!data.modelServer) throw new GaiaApiError(503, 'This fake client was given no model server.');
+            return data.modelServer;
+        },
+        async setModelServerBackend(backend) {
+            backendSets.push(backend);
+            return { ...(data.modelServer as ModelServerInfo), preferred_backend: backend };
         },
         async getOnboardingPreflight() {
             if (!data.preflight) throw new GaiaApiError(503, 'This fake client was given no preflight report.');

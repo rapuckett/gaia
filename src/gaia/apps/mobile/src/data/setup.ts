@@ -207,3 +207,22 @@ export function useStartSetup() {
         },
     });
 }
+
+/**
+ * llama.cpp runs on Vulkan, the GPU backend GAIA has tested, where the server's own pick or an earlier
+ * saved one is another and this PC lists Vulkan. Returns whether it set it; an unreachable server is left alone.
+ */
+export async function applyTestedBackend(client: GaiaClient): Promise<boolean> {
+    const server = await client.getModelServer();
+    if (!server.reachable) return false;
+    const vulkan = (server.available_backends ?? []).some((b) => b.name === 'vulkan');
+    if (!vulkan || (server.preferred_backend ?? server.default_backend) === 'vulkan') return false;
+    await client.setModelServerBackend('vulkan');
+    return true;
+}
+
+/** `mutate()` puts llama.cpp on the tested backend before a local setup starts. */
+export function useApplyTestedBackend() {
+    const client = useGaiaClient();
+    return useMutation<boolean, Error, void>({ mutationFn: () => applyTestedBackend(requireClient(client)) });
+}

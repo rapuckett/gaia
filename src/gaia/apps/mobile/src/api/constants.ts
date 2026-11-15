@@ -12,6 +12,8 @@ export const ENDPOINTS = {
     health: '/api/health',
     localModelRestart: '/api/providers/local/restart',
     localModelStatus: '/api/providers/local/status',
+    modelServer: '/api/system/model-server',
+    modelServerBackend: '/api/system/model-server/backend',
     schedule: '/api/schedules/{name:path}',
     scheduleRun: '/api/schedules/{name:path}/run',
     scheduleParse: '/api/schedules/parse',

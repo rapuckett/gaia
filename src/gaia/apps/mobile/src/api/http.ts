@@ -31,6 +31,7 @@ import type {
     LocalModelStatus,
     MessageList,
     ModelNeed,
+    ModelServerInfo,
     PreflightReport,
     ProvidersResponse,
     RestartModelResult,
@@ -417,6 +418,14 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         getSetupPlan(options) {
             return getJson<SetupPlan>(ENDPOINTS.setupPlan, options?.signal);
+        },
+
+        getModelServer(options) {
+            return getJson<ModelServerInfo>(ENDPOINTS.modelServer, options?.signal);
+        },
+
+        setModelServerBackend(backend, options) {
+            return putJson<ModelServerInfo>(ENDPOINTS.modelServerBackend, { backend }, options?.signal);
         },
 
         getOnboardingPreflight(options) {

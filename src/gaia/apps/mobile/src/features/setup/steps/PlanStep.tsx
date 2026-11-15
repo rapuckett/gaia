@@ -10,7 +10,7 @@ import type { SetupCatalogEntry, SetupComponent, SetupPlan, SetupRunStatus } fro
 import type { SetupRunOptions } from '@/api/client.types';
 
 import { GaiaApiError } from '@/api/errors';
-import { useCloudProviders, useSetupPlan, useSetupPreflight, useStartSetup } from '@/data';
+import { useApplyTestedBackend, useCloudProviders, useSetupPlan, useSetupPreflight, useStartSetup } from '@/data';
 import { describeError, useLocaleCode, useT, type Translate } from '@/i18n/useT';
 import { Button, Card, Disclosure, Ltr, Notice, Pressable, Row, Spinner, Stack, Text } from '@/ui';
 
@@ -201,6 +201,7 @@ export function PlanStep({ ctx }: { ctx: SetupStepContext }) {
     const preflight = useSetupPreflight().data;
     const cloudBlocked = cloudIsBlocked(useCloudProviders().data?.providers);
     const start = useStartSetup();
+    const backend = useApplyTestedBackend();
     const { selection, setSelection } = usePlanSelection();
     const [where, setWhere] = useState<Where>('local');
     const [listOpen, setListOpen] = useState(false);
@@ -212,6 +213,9 @@ export function PlanStep({ ctx }: { ctx: SetupStepContext }) {
     }, [plan, selection, setSelection]);
 
     const goStart = (options?: SetupRunOptions) => start.mutate({ options }, { onSuccess: () => ctx.startedRun() });
+    // A local setup puts llama.cpp on the tested backend first; a refusal there stops the run.
+    const goLocal = (options: SetupRunOptions) => backend.mutate(undefined, { onSuccess: () => goStart(options) });
+    const startError = backend.error ?? start.error;
 
     if (!plan && planQuery.error) {
         return (
@@ -222,7 +226,7 @@ export function PlanStep({ ctx }: { ctx: SetupStepContext }) {
                     <Button variant="primary" label={t('setup.tryAgain')} onPress={() => void planQuery.refetch()} />
                 </SetupFooter>
                 <Text role="caption" tone="secondary">{t('setup.models.useRecommendedNote')}</Text>
-                {start.error ? <StartError error={start.error} /> : null}
+                {startError ? <StartError error={startError} /> : null}
             </Stack>
         );
     }
@@ -239,8 +243,8 @@ export function PlanStep({ ctx }: { ctx: SetupStepContext }) {
     const { short } = view;
     const picked: Where = cloudBlocked ? 'local' : where;
     const cloud = picked === 'cloud';
-    const busy = start.isPending;
-    const proceed = (acknowledgeLowDisk: boolean) => goStart(startOptions(plan, selection, acknowledgeLowDisk));
+    const busy = start.isPending || backend.isPending;
+    const proceed = (acknowledgeLowDisk: boolean) => goLocal(startOptions(plan, selection, acknowledgeLowDisk));
     const onContinue = () => {
         if (cloud) openers.openKey?.();
         else if (short) (openers.confirmLowDisk ?? ((go) => go(false)))(proceed);
@@ -274,7 +278,7 @@ export function PlanStep({ ctx }: { ctx: SetupStepContext }) {
                     })}
                 />
             ) : null}
-            {start.error ? <StartError error={start.error} /> : null}
+            {startError ? <StartError error={startError} /> : null}
 
             {cloud ? null : (
                 <Disclosure title={t('setup.plan.whatDownloads')} open={listOpen} onToggle={() => setListOpen(!listOpen)}>
