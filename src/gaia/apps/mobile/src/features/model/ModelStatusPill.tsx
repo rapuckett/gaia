@@ -43,7 +43,7 @@ export function ModelStatusPill({ onOpenSettings }: ModelStatusPillProps) {
                             </Text>
                         </Stack>
                         {data && !pill.remote ? (
-                            <StatusDot tone={DOT_TONE[data.state]} label={t(`modelStatus.state.${data.state}`)} />
+                            <StatusDot solid tone={DOT_TONE[data.state]} label={t(`modelStatus.state.${data.state}`)} />
                         ) : null}
                     </Row>
                 </Pressable>
