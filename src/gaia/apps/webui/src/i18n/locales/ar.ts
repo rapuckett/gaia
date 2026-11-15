@@ -927,6 +927,7 @@ const messages: Messages = {
     'docs.count.other': 'المستندات: {n}',
     'docs.empty': 'لا توجد مستندات بعد',
     'docs.emptyHint': 'أفلت الملفات أعلاه أو أدخل مسار ملف',
+    'docs.emptyHintPhone': 'ستظهر هنا المستندات التي تضيفها.',
     'docs.indexingFile': 'جارٍ فهرسة {name}...',
     'docs.indexingFolder': 'جارٍ فهرسة المستندات في {name}...',
     'docs.willAttach': 'سيُرفق {name} بمحادثتك الجديدة التالية.',
