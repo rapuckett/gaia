@@ -19,6 +19,7 @@ import type {
     DocumentResponse,
     DocumentStatus,
     GaiaClient,
+    GpuMemoryStatus,
     HealthResponse,
     LemonadeFound,
     LemonadeTarget,
@@ -112,8 +113,6 @@ export interface FakeClientData {
     providerModels?: Record<string, ProviderModelsResponse>;
     /** What getContextChoice answers, by model; setContextChoice updates it. */
     contexts?: Record<string, ContextChoice>;
-    /** What getCloudPrices answers, by provider. */
-    cloudPrices?: Record<string, CloudPriceList>;
     /** Makes selectModel fail with this. */
     selectError?: GaiaApiError;
     /** What getPermissions answers, by chat; a chat not listed asks first. */
@@ -135,6 +134,8 @@ export interface FakeClientData {
     status?: SystemStatus;
     /** What getLocalModelStatus answers; restarting it records the call. */
     localModel?: LocalModelStatus;
+    /** What getGpuMemory answers (the same status whatever size is asked for); an Error is thrown. */
+    gpuMemory?: GpuMemoryStatus | Error;
     /** What getModelNeed answers, by job; a job not listed needs nothing. */
     modelNeeds?: Partial<Record<ModelNeed['job'], ModelNeed>>;
     /** What getSetupStatus answers. */
@@ -155,6 +156,10 @@ export interface FakeClientData {
     setupPlan?: SetupPlan;
     modelServer?: ModelServerInfo;
     providers?: ProvidersResponse;
+    /** What getCloudPrices answers, by provider. */
+    cloudPrices?: Record<string, CloudPriceList>;
+    /** What recheckSetupNpu answers; an Error is thrown. */
+    npuRecheck?: SetupPlan | Error;
     /** What getPreflight answers; an Error is thrown. */
     preflight?: PreflightReport | Error;
     /** What getLemonadeTarget answers; an Error is thrown. */
@@ -169,6 +174,8 @@ export interface FakeClientData {
     /** What getCapabilities answers, by chat; a chat not listed has no agent running (409). */
     capabilities?: Record<string, AgentCapabilities>;
     memorySettings?: MemorySettings;
+    /** Thrown by updateMemorySettings. */
+    memorySettingsError?: Error;
     /** Each stats read answers the next entry (the last one repeats); an Error entry is thrown. */
     memoryStats?: (MemoryStats | Error)[];
     embeddingCoverage?: EmbeddingCoverage;
@@ -208,8 +215,13 @@ export interface FakeGaiaClient extends GaiaClient {
     readonly uploads: { name: string; size: number }[];
     readonly downloads: { modelId: string; acknowledgeLowDisk: boolean }[];
     readonly removals: string[];
-    readonly skips: { modelId: string; skipped: boolean }[];
     readonly backendSets: string[];
+    /** The setup model choices saved, in order. */
+    readonly setupChoices: { kind: 'chat' | 'vision' | 'skip'; modelId: string | null; flag?: boolean }[];
+    /** The providers connectProvider was asked for, in order. */
+    readonly connects: string[];
+    /** How many times recheckSetupNpu was asked. */
+    readonly npuRechecks: number;
     readonly documentActions: { action: DocumentAction; docId: string }[];
     readonly setupStarts: { skipChatModel: boolean; gaiaLemonade: boolean; upgradeEmbedded: boolean; serverOnly: boolean }[];
     readonly detached: { sessionId: string; docId: string }[];
@@ -245,7 +257,6 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
     const uploads: FakeGaiaClient['uploads'] = [];
     const downloads: FakeGaiaClient['downloads'] = [];
     const removals: FakeGaiaClient['removals'] = [];
-    const skips: FakeGaiaClient['skips'] = [];
     const schedules = [...(data.schedules ?? [])];
     const scheduleActions: FakeGaiaClient['scheduleActions'] = [];
     const documentActions: FakeGaiaClient['documentActions'] = [];
@@ -272,6 +283,9 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
     const followUps: FakeGaiaClient['followUps'] = [];
     const setupStarts: FakeGaiaClient['setupStarts'] = [];
     const backendSets: string[] = [];
+    const setupChoices: FakeGaiaClient['setupChoices'] = [];
+    const connects: string[] = [];
+    let npuRechecks = 0;
     let checkAt = 0;
     let statusAt = 0;
     const nextOf = <T,>(list: (T | Error)[], at: number): T => {
@@ -324,9 +338,13 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         uploads,
         downloads,
         removals,
-        skips,
         setupStarts,
         backendSets,
+        setupChoices,
+        connects,
+        get npuRechecks() {
+            return npuRechecks;
+        },
         detached,
         capabilityReads,
         memoryActions,
@@ -591,6 +609,12 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             if (!data.memorySettings) throw new GaiaApiError(503, 'This fake client was given no memory settings.');
             return data.memorySettings;
         },
+        async updateMemorySettings(settings) {
+            if (!data.memorySettings) throw new GaiaApiError(503, 'This fake client was given no memory settings.');
+            if (data.memorySettingsError) throw data.memorySettingsError;
+            data.memorySettings = { ...data.memorySettings, ...settings };
+            return data.memorySettings;
+        },
         async getEmbeddingCoverage() {
             if (!data.embeddingCoverage) throw new GaiaApiError(503, 'This fake client was given no embedding coverage.');
             return data.embeddingCoverage;
@@ -727,6 +751,11 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             restarts.push({ confirm });
             return { status: 'restarting', model: data.localModel?.model ?? '', starting_server: false };
         },
+        async getGpuMemory() {
+            if (!data.gpuMemory) throw new GaiaApiError(503, 'This fake client was given no GPU memory status.');
+            if (data.gpuMemory instanceof Error) throw data.gpuMemory;
+            return data.gpuMemory;
+        },
         async getModelNeed(job) {
             return data.modelNeeds?.[job] ?? { job, needed: false, model: null, disk_free_gb: null };
         },
@@ -737,10 +766,6 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         async removeSetupModel(modelId) {
             removals.push(modelId);
             return { ...(data.setupPlan as SetupPlan), freed_gb: 0 };
-        },
-        async skipSetupModel(modelId, skipped) {
-            skips.push({ modelId, skipped });
-            return data.setupPlan as SetupPlan;
         },
         async getSetupStatus() {
             if (data.setupStatuses?.length) return nextOf(data.setupStatuses, statusAt++);
@@ -784,9 +809,31 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             if (data.lemonadeDetect instanceof Error) throw data.lemonadeDetect;
             return data.lemonadeDetect;
         },
+        async connectProvider(provider) {
+            connects.push(provider);
+            return { remembered: true };
+        },
+        async recheckSetupNpu() {
+            npuRechecks += 1;
+            if (data.npuRecheck instanceof Error) throw data.npuRecheck;
+            if (!data.npuRecheck) throw new GaiaApiError(503, 'This fake client was given no NPU recheck plan.');
+            return data.npuRecheck;
+        },
         async getSetupPlan() {
             if (!data.setupPlan) throw new GaiaApiError(503, 'This fake client was given no setup plan.');
             return data.setupPlan;
+        },
+        async chooseSetupChatModel(modelId, acknowledgeNoFit) {
+            setupChoices.push({ kind: 'chat', modelId, flag: acknowledgeNoFit });
+            return data.setupPlan as SetupPlan;
+        },
+        async chooseSetupVisionModel(modelId) {
+            setupChoices.push({ kind: 'vision', modelId });
+            return data.setupPlan as SetupPlan;
+        },
+        async skipSetupModel(modelId, skipped) {
+            setupChoices.push({ kind: 'skip', modelId, flag: skipped });
+            return data.setupPlan as SetupPlan;
         },
         async startSetup(skipChatModel, gaiaLemonade = false, options = {}) {
             setupStarts.push({ skipChatModel, gaiaLemonade, upgradeEmbedded: !!options.upgradeEmbedded, serverOnly: !!options.serverOnly });

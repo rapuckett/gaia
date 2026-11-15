@@ -20,11 +20,12 @@ import tempfile
 import unicodedata
 import uuid
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
 
+from gaia.security import secret_read_refusal
 from gaia.utils.image_formats import IMAGE_EXTENSIONS
 
 from .._chat_helpers import UnreadableDocumentError, index_progress
@@ -37,6 +38,7 @@ from ..models import (
     IndexFolderRequest,
     IndexFolderResponse,
 )
+from ..security import is_local_pc
 from ..utils import (
     ALLOWED_EXTENSIONS,
     FOLDER_INDEX_EXTENSIONS,
@@ -50,6 +52,7 @@ from ..utils import (
     safe_open_document,
     unsupported_type_message,
 )
+from .files import _refuse_remote_read, _refuse_remote_secret, _remote_read_roots
 
 logger = logging.getLogger(__name__)
 
@@ -182,7 +185,9 @@ async def list_documents(db: ChatDatabase = Depends(get_db)):
 
 @router.post("/api/documents/upload-path", response_model=DocumentResponse)
 async def upload_by_path(
+    http_request: Request,
     request: DocumentUploadRequest,
+    session_id: Optional[str] = None,
     db: ChatDatabase = Depends(get_db),
     indexing_tasks: dict = Depends(get_indexing_tasks),
     upload_locks: dict = Depends(get_upload_locks),
@@ -195,7 +200,11 @@ async def upload_by_path(
 
     Small files (<5 MB) are indexed synchronously. Larger files are
     indexed in the background so the UI stays responsive.
+
+    Away from the PC the file must be in the chat *session_id* names, and
+    never holds credentials.
     """
+    roots = _remote_read_roots(http_request, session_id)
     # An empty path resolves to the CWD, so it would be judged by whatever
     # directory the server happens to run from. Refuse it outright.
     if not request.filepath:
@@ -205,6 +214,10 @@ async def upload_by_path(
     # ValueError on an embedded NUL, bypassing every check below.
     if "\x00" in request.filepath:
         raise HTTPException(status_code=400, detail="Invalid file path")
+
+    _refuse_remote_read(
+        Path(os.path.realpath(os.path.expanduser(request.filepath))), roots
+    )
 
     # Resolve once — used for both the lock key and safe_open validation
     resolved = Path(request.filepath).resolve()
@@ -574,13 +587,18 @@ _INLINE_MEDIA_TYPES = {
 
 
 @router.get("/api/documents/{doc_id}/file")
-async def get_document_file(doc_id: str, db: ChatDatabase = Depends(get_db)):
+async def get_document_file(
+    doc_id: str, request: Request, db: ChatDatabase = Depends(get_db)
+):
     """Serve a library document's file inline, so a citation can open it at its page."""
     doc = db.get_document(doc_id)
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
     path = Path(doc.get("filepath") or "")
     real = Path(ensure_document_path_allowed(path))
+    # Judged at read time, so rows recorded before the policy are covered too.
+    if not is_local_pc(request):
+        _refuse_remote_secret(real)
     if path.is_symlink():
         raise HTTPException(status_code=403, detail="Symbolic links are not served")
     if not real.is_file():
@@ -753,7 +771,12 @@ def _record_failed_document(
 
 
 @router.post("/api/documents/index-folder", response_model=IndexFolderResponse)
-async def index_folder(request: IndexFolderRequest, db: ChatDatabase = Depends(get_db)):
+async def index_folder(
+    http_request: Request,
+    request: IndexFolderRequest,
+    session_id: Optional[str] = None,
+    db: ChatDatabase = Depends(get_db),
+):
     """Index all supported documents in a folder.
 
     Scans the given folder for files with extensions in
@@ -764,9 +787,13 @@ async def index_folder(request: IndexFolderRequest, db: ChatDatabase = Depends(g
     Indexing runs in a thread-pool executor to avoid blocking the
     event loop.
 
+    Away from the PC the folder must be in the chat *session_id* names, and
+    files holding credentials are skipped.
+
     Args:
         request: Contains folder_path and recursive flag.
     """
+    roots = _remote_read_roots(http_request, session_id)
     folder_path = request.folder_path
 
     # Security: reject null bytes
@@ -778,6 +805,7 @@ async def index_folder(request: IndexFolderRequest, db: ChatDatabase = Depends(g
     # Same check as upload-path, and before any filesystem access
     # (is_symlink/exists/is_dir can throw PermissionError on protected paths).
     resolved = Path(ensure_document_path_allowed(raw_folder))
+    _refuse_remote_read(resolved, roots)
 
     # Check symlink after home restriction
     try:
@@ -803,7 +831,9 @@ async def index_folder(request: IndexFolderRequest, db: ChatDatabase = Depends(g
         for item in pattern_iter:
             if item.is_symlink() or not item.is_file():
                 continue
-            if item.suffix.lower() in FOLDER_INDEX_EXTENSIONS:
+            if roots is not None and secret_read_refusal(item):
+                skipped += 1
+            elif item.suffix.lower() in FOLDER_INDEX_EXTENSIONS:
                 candidate_files.append(item)
             elif item.suffix.lower() in IMAGE_EXTENSIONS:
                 skipped_images += 1

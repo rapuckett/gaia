@@ -10,6 +10,7 @@ export const UI_HEADERS = {
 
 export const ENDPOINTS = {
     agents: '/api/agents',
+    gpuMemory: '/api/gpu-memory',
     health: '/api/health',
     cloudPrices: '/api/spending/prices/{provider}',
     lemonadeDetect: '/api/lemonade/detect',
@@ -30,6 +31,7 @@ export const ENDPOINTS = {
     memoryUpcoming: '/api/memory/upcoming',
     modelServer: '/api/system/model-server',
     modelServerBackend: '/api/system/model-server/backend',
+    providerConnect: '/api/providers/{provider}/connect',
     providerModels: '/api/providers/{provider}/models',
     providersActive: '/api/providers/active',
     providersSelect: '/api/providers/select',
@@ -51,14 +53,17 @@ export const ENDPOINTS = {
     sessionRead: '/api/sessions/{session_id}/read',
     sessionSearch: '/api/sessions/search',
     setupCancel: '/api/setup/cancel',
+    setupChatModel: '/api/setup/chat-model',
     setupCheck: '/api/setup/check',
     setupModelDownload: '/api/setup/models/download',
     setupModelRemove: '/api/setup/models/remove',
     setupModelSkip: '/api/setup/models/skip',
     setupNeeds: '/api/setup/needs/{job}',
+    setupNpuRecheck: '/api/setup/npu/recheck',
     setupPlan: '/api/setup/plan',
     setupRun: '/api/setup/run',
     setupStatus: '/api/setup/status',
+    setupVisionModel: '/api/setup/vision-model',
     skills: '/api/skills',
     chatSend: '/api/chat/send',
     chatAttach: '/api/chat/attach',
@@ -147,6 +152,10 @@ export function chatPerformancePath(sessionId: string): string {
 
 export function chatPermissionsPath(sessionId: string): string {
     return ENDPOINTS.chatPermissions.replace('{session_id}', encodeURIComponent(sessionId));
+}
+
+export function providerConnectPath(provider: string): string {
+    return ENDPOINTS.providerConnect.replace('{provider}', encodeURIComponent(provider));
 }
 
 export function chatPermissionGrantsPath(sessionId: string, key?: string): string {

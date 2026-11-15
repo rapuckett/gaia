@@ -351,7 +351,7 @@ export function DocumentLibrary() {
         setUploadStatus(t('docs.indexingFolder', { name: folderName }));
         try {
             // Top level only: a typed path like a home folder would otherwise index everything below it.
-            const result = await api.indexFolder(folder, false);
+            const result = await api.indexFolder(folder, false, currentSessionId);
             await attachIndexed(result.documents.map((d) => d.id).filter(Boolean), folderName);
             setFolderNotice(describeFolderResult(t, folderName, result));
             const data = await api.listDocuments();
@@ -366,16 +366,16 @@ export function DocumentLibrary() {
         } finally {
             setUploadStatus('');
         }
-    }, [attachIndexed, setDocuments, t]);
+    }, [attachIndexed, currentSessionId, setDocuments, t]);
 
     /** Index a document by a server-side filesystem path (used by the file browser and path input). */
     const uploadFile = useCallback(async (filepath: string, filename: string) => {
         return runUpload(
             filename,
-            () => api.uploadDocumentByPath(filepath),
+            () => api.uploadDocumentByPath(filepath, currentSessionId),
             () => indexFolderPath(filepath, filename),
         );
-    }, [runUpload, indexFolderPath]);
+    }, [runUpload, indexFolderPath, currentSessionId]);
 
     /**
      * Index a document by uploading its bytes directly (used by drag-and-drop).
