@@ -3747,7 +3747,7 @@ export const enMessages = {
     'mobileApp.settings.privacy.localOnlyHint': 'Keep every GAIA AI request on your PC. Turning this on clears saved cloud model choices and removes cloud keys from GAIA’s running model server.',
     'mobileApp.settings.privacy.stays': 'Chats, documents and memory stay on your PC.',
     'mobileApp.settings.privacy.local': 'Right now answers are generated on your PC too.',
-    'mobileApp.readAloud.unsupported': 'Reading aloud needs a newer GAIA on your PC. Update GAIA on your PC, then try again.',
+    'mobileApp.readAloud.unsupported': 'Reading aloud needs a newer GAIA on your PC. Update it, then try again.',
     'mobileApp.answer.place.thisPc': 'on your PC',
     'mobileApp.answer.duration.sec': '{n} s',
     'mobileApp.answer.duration.min': '{n} min',
