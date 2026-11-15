@@ -27,6 +27,8 @@ export interface SetupStepContext {
     plan: SetupPlan | undefined;
     /** A run is going and this step is one before it: its choices wait for the run. */
     locked: boolean;
+    /** Setup was reopened from Settings, not the first run. */
+    again: boolean;
     goTo(stage: SetupStage): void;
     /** Setup moves to its download: the run has started. */
     startedRun(): void;
@@ -108,7 +110,7 @@ export function SetupScreen({ onReady, onClose, renderStep }: SetupScreenProps) 
 
     const locked = viewing != null && running && (shown === 'check' || shown === 'plan');
     const at = SETUP_STAGES.indexOf(shown);
-    const ctx: SetupStepContext = { stage: shown, run, plan: plan.data, locked, goTo, startedRun, finish: onReady };
+    const ctx: SetupStepContext = { stage: shown, run, plan: plan.data, locked, again, goTo, startedRun, finish: onReady };
     const Step = SETUP_STEPS[shown];
 
     return (

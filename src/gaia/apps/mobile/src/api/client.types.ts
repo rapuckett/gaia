@@ -42,7 +42,7 @@ import type {
 } from '@webui/types';
 import type { UndoSettings } from '@webui/types/changes';
 import type { AgentCapabilities } from '@webui/types/sessionPanel';
-import type { KnowledgeCreateBody, KnowledgeListParams, KnowledgeSaveResult, KnowledgeUpdateBody, MemorySettings } from '@webui/services/memoryApi';
+import type { Goal, GoalStats, KnowledgeCreateBody, KnowledgeListParams, KnowledgeSaveResult, KnowledgeUpdateBody, MemorySettings, Priority as GoalPriority } from '@webui/services/memoryApi';
 import type { AboutYouItem, ActivityDay, TemporalItem, ToolStat } from '@webui/utils/memoryFormat.core';
 import type { CreateSessionRequest, DocumentListResponse, DocumentResponse, ModelServerInfo, SessionSearchResponse, ToolConfirmRequest, UserInputRequest as ApiUserInputRequest } from '@webui/types/api.gen';
 
@@ -116,6 +116,13 @@ export interface MessageList {
     total: number;
 }
 
+/** The `connector.disconnected` event's payload: the provider-side revoke outcome (#2591). */
+export interface DisconnectOutcome {
+    revoke_supported?: boolean;
+    revoked_remotely?: boolean;
+    revoke_error?: string | null;
+}
+
 export interface ConnectorList {
     connectors: ConnectorListEntry[];
 }
@@ -162,8 +169,17 @@ export type { MemorySettings } from '@webui/services/memoryApi';
 /** One day of GET /api/memory/activity, one tool of GET /api/memory/tools, one item of GET /api/memory/upcoming; typed as the web's `MemoryDashboard` types them. */
 export type { ActivityDay as MemoryActivityDay, TemporalItem as MemoryUpcomingItem, ToolStat as MemoryToolStat } from '@webui/utils/memoryFormat.core';
 
+export type { Goal, GoalStats, GoalStatus, GoalTask, Priority as GoalPriority } from '@webui/services/memoryApi';
+
 export type { KnowledgeCreateBody, KnowledgeListParams, KnowledgeSaveResult, KnowledgeUpdateBody } from '@webui/services/memoryApi';
 export type { AboutYouItem as MemoryKnowledgeItem } from '@webui/utils/memoryFormat.core';
+
+/** The body of POST /api/goals. */
+export interface CreateGoalBody {
+    title: string;
+    description: string;
+    priority: GoalPriority;
+}
 
 /** One page of GET /api/memory/knowledge; `total` counts every match, not just this page. */
 export interface MemoryKnowledgePage {
@@ -446,6 +462,14 @@ export interface GaiaClient {
     activateConnectorAgent(connectorId: string, agentId: string, scopes?: string[], options?: RequestOptions): Promise<void>;
     /** Hides an MCP server's tools from an agent; its grant stays. */
     deactivateConnectorAgent(connectorId: string, agentId: string, options?: RequestOptions): Promise<void>;
+    /** Pauses an MCP server; its credentials and grants stay. Turning it back on is PC-only. */
+    disableConnector(connectorId: string, options?: RequestOptions): Promise<void>;
+    /**
+     * Removes a connector's credentials from the PC. Resolves with what the PC reported about the
+     * provider-side revoke, `{}` for a connector with no revoke concept, or null when the PC's
+     * event stream could not be read in time.
+     */
+    disconnectConnector(connectorId: string, options?: RequestOptions): Promise<DisconnectOutcome | null>;
     /** Servers that custom agents declare in their own mcp_servers.json; read-only. */
     listAgentMcps(options?: RequestOptions): Promise<AgentMcpList>;
     listSchedules(options?: RequestOptions): Promise<ScheduleList>;
@@ -456,6 +480,22 @@ export interface GaiaClient {
     /** Memories due within `days` days, plus the overdue ones. */
     getMemoryUpcoming(days: number, options?: RequestOptions): Promise<TemporalItem[]>;
     getMemoryStats(options?: RequestOptions): Promise<MemoryStats>;
+    /** Every goal with its tasks, newest first. */
+    listGoals(options?: RequestOptions): Promise<{ goals: Goal[]; total: number }>;
+    /** Goal and task counts by status. */
+    getGoalStats(options?: RequestOptions): Promise<GoalStats>;
+    /** Why GAIA can't run approved goals (the goal list can't be read); null when it can. */
+    getGoalStoreHealth(options?: RequestOptions): Promise<{ error: string | null }>;
+    /** Makes a goal GAIA will work on; it starts queued. */
+    createGoal(body: CreateGoalBody, options?: RequestOptions): Promise<Goal>;
+    /** Accepts a goal GAIA suggested. A paired device's approval is audit-logged on the PC with the device's id. */
+    approveGoal(goalId: string, options?: RequestOptions): Promise<Goal>;
+    /** Turns down a goal GAIA suggested; also audit-logged. */
+    rejectGoal(goalId: string, options?: RequestOptions): Promise<Goal>;
+    /** Stops a queued or running goal. */
+    cancelGoal(goalId: string, options?: RequestOptions): Promise<Goal>;
+    /** Deletes a goal and its tasks. */
+    deleteGoal(goalId: string, options?: RequestOptions): Promise<void>;
     /** One page of stored memories; the About you tab asks `about_user` so GAIA's own notes stay out. */
     listMemoryKnowledge(params: KnowledgeListParams, options?: RequestOptions): Promise<MemoryKnowledgePage>;
     /** Saves a memory and embeds it. */

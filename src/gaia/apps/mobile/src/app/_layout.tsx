@@ -4,19 +4,20 @@
 import { focusManager, QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Drawer } from 'expo-router/drawer';
 import { useEffect, useMemo, useState } from 'react';
-import { AppState, useWindowDimensions } from 'react-native';
+import { AppState, Platform, useWindowDimensions } from 'react-native';
 
 import { createHttpClient } from '@/api/http';
 import { GaiaClientProvider } from '@/data/GaiaClientProvider';
 import { AppErrorBoundary } from '@/features/errors/AppErrorBoundary';
 import { ConnectionBanner } from '@/features/banners/ConnectionBanner';
 import { ModelNeededHost } from '@/features/model';
+import { NotificationFeed } from '@/features/notifications';
 import { AppDrawer } from '@/features/nav/AppDrawer';
 import { RoutingEffects } from '@/features/nav/RoutingEffects';
 import { INITIAL_ROUTE, PERMANENT_DRAWER_MIN_WIDTH } from '@/features/nav/navigation';
 import { installPinnedPairing, PairingGate } from '@/features/pairing';
 import { SetupGate } from '@/features/setup/SetupGate';
-import { useDirection } from '@/i18n/useT';
+import { useDirection, useLocaleCode } from '@/i18n/useT';
 import { applyDirection } from '@/platform/direction';
 import { platformFetch } from '@/platform/fetch';
 import { useConnectionStore } from '@/state/connection';
@@ -30,11 +31,12 @@ installPinnedPairing();
 export const unstable_settings = { anchor: INITIAL_ROUTE };
 
 // Expo Router renders only the screens a layout declares.
-const ROUTES = [INITIAL_ROUTE, 'new', 'connectors', 'schedules', 'settings', 'documents', 'logs', 'skills', 'memory', 'pair', 'pair/manual', 'pair/pcs', 'chat/[id]', 'dev/ui', 'dev/ui-lists', 'dev/composer', 'dev/forms', 'dev/markdown', 'dev/memory-gallery', 'dev/messages', 'dev/permission'];
+const ROUTES = [INITIAL_ROUTE, 'new', 'connectors', 'schedules', 'settings', 'documents', 'logs', 'notifications', 'skills', 'memory', 'pair', 'pair/manual', 'pair/pcs', 'chat/[id]', 'dev/ui', 'dev/ui-lists', 'dev/composer', 'dev/forms', 'dev/markdown', 'dev/memory-gallery', 'dev/messages', 'dev/permission'];
 
 export default function RootLayout() {
     const [queryClient] = useState(() => new QueryClient());
     const dir = useDirection();
+    const lang = useLocaleCode();
     const { width } = useWindowDimensions();
     const connection = useConnectionStore((s) => s.connection);
     const client = useMemo(
@@ -52,8 +54,8 @@ export default function RootLayout() {
 
     // Before the saved pick loads, dir is the phone's and would overwrite the pick's flags.
     useEffect(() => {
-        if (localeLoaded) applyDirection(dir);
-    }, [dir, localeLoaded]);
+        if (localeLoaded) applyDirection(dir, lang);
+    }, [dir, lang, localeLoaded]);
 
     if (!localeLoaded) return null;
 
@@ -66,6 +68,7 @@ export default function RootLayout() {
                         <PairingGate>
                         <SetupGate>
                             <RoutingEffects />
+                            <NotificationFeed />
                             <Drawer
                                 drawerContent={(props) => (
                                     <AppErrorBoundary variant="compact">
@@ -77,6 +80,8 @@ export default function RootLayout() {
                                     headerShown: false,
                                     freezeOnBlur: true,
                                     drawerType: width >= PERMANENT_DRAWER_MIN_WIDTH ? 'permanent' : 'front',
+                                    // react-navigation reads I18nManager, which stays LTR on web, so the closed drawer would sit inside the page.
+                                    drawerPosition: Platform.OS === 'web' && dir === 'rtl' ? 'right' : undefined,
                                 }}
                             >
                                 {ROUTES.map((name) => (

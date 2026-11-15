@@ -142,7 +142,8 @@ export function Composer({
                                 <Button
                                     variant="danger"
                                     icon={Square}
-                                    label={stopping ? t('composer.stopping') : t('composer.stop')}
+                                    label={stopping ? t.bare('composer.stopping') : t.bare('composer.stop')}
+                                    accessibilityLabel={stopping ? t('composer.stopping') : t('composer.stop')}
                                     onPress={stop}
                                     disabled={stopping}
                                     testID="composer-stop"

@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: MIT
 
 import { createFakeClient } from '@/api/fake';
-import type { GaiaClient, MemoryActivityDay, MemoryKnowledgeItem, MemoryStats, MemoryToolStat, MemoryUpcomingItem } from '@/api/client.types';
+import type { GaiaClient, Goal, MemoryActivityDay, MemoryKnowledgeItem, MemoryStats, MemoryToolStat, MemoryUpcomingItem } from '@/api/client.types';
 import { GaiaApiError } from '@/api/errors';
 
-export type MemoryScene = 'on' | 'off' | 'loading' | 'failed' | 'actionFails' | 'statsEmpty' | 'statsManyTools' | 'aboutEmpty' | 'aboutFailed' | 'aboutMany';
+export type MemoryScene = 'on' | 'off' | 'loading' | 'failed' | 'actionFails' | 'statsEmpty' | 'statsManyTools' | 'aboutEmpty' | 'aboutFailed' | 'aboutMany' | 'goalsEmpty' | 'goalsFailed' | 'goalsStoreError';
 
 export const SAMPLE_MEMORY_STATS: MemoryStats = {
     knowledge: {
@@ -75,6 +75,42 @@ export const SAMPLE_KNOWLEDGE: MemoryKnowledgeItem[] = [
 
 const MANY_KNOWLEDGE: MemoryKnowledgeItem[] = Array.from({ length: 230 }, (_, i) => knowledge(`m${i}`, ['fact', 'preference', 'note'][i % 3]!, `Memory number ${i + 1}`, 'llm_extract', i % 60));
 
+function goal(id: string, title: string, description: string, status: Goal['status'], extra: Partial<Goal> = {}): Goal {
+    return {
+        id,
+        title,
+        description,
+        status,
+        source: 'user',
+        mode_required: 'goal_driven',
+        approved_for_auto: status !== 'pending_approval',
+        priority: 'medium',
+        progress_notes: '',
+        created_at: daysAgo(3),
+        updated_at: daysAgo(1),
+        tasks: [],
+        ...extra,
+    };
+}
+
+function task(id: string, goalId: string, description: string, status: Goal['tasks'][number]['status'], result: string | null = null): Goal['tasks'][number] {
+    return { id, goal_id: goalId, description, status, order_index: 0, result, created_at: daysAgo(2), updated_at: daysAgo(1) };
+}
+
+export const SAMPLE_GOALS: Goal[] = [
+    goal('g1', 'Tidy the inbox', 'Collect the numbers and draft the summary.', 'pending_approval', { source: 'agent_inferred', priority: 'high' }),
+    goal('g2', 'Summarize this week\u2019s research notes', 'Read every note saved this week and write one page of what changed.', 'in_progress', {
+        source: 'agent_inferred',
+        priority: 'high',
+        progress_notes: 'Two of three sources read.',
+        tasks: [task('t1', 'g2', 'Read the saved notes', 'completed', 'Found 14 notes.'), task('t2', 'g2', 'Write the one-page summary', 'in_progress')],
+    }),
+    goal('g3', 'Rename the vacation photos', 'Use the date and place in each file name.', 'completed', { tasks: [task('t3', 'g3', 'Rename 212 files', 'completed')] }),
+    goal('g4', 'Back up the documents folder', '', 'queued', { priority: 'low' }),
+    goal('g5', 'Find the cheapest flight to Lisbon', 'Check three sites for dates in March.', 'failed', { tasks: [task('t4', 'g5', 'Open the booking sites', 'failed', 'The browser tool is switched off.')] }),
+    goal('g6', 'Plan the garden', 'Draft a planting calendar.', 'completed'),
+];
+
 /** A fake PC for the dev gallery route, one per state the screen has to show. */
 export function memoryScene(scene: MemoryScene): GaiaClient {
     const empty = scene === 'statsEmpty';
@@ -85,6 +121,8 @@ export function memoryScene(scene: MemoryScene): GaiaClient {
         memoryTools: empty ? [] : scene === 'statsManyTools' ? MANY_TOOLS : SAMPLE_TOOLS,
         memoryUpcoming: empty ? [] : SAMPLE_UPCOMING,
         memoryKnowledge: scene === 'aboutFailed' ? new GaiaApiError(503, 'The backend is not running') : scene === 'aboutEmpty' ? [] : scene === 'aboutMany' ? MANY_KNOWLEDGE : SAMPLE_KNOWLEDGE,
+        goals: scene === 'goalsFailed' ? new GaiaApiError(503, 'The backend is not running') : scene === 'goalsEmpty' ? [] : SAMPLE_GOALS,
+        goalStoreError: scene === 'goalsStoreError' ? 'The goal list is unreadable: unexpected end of JSON input.' : null,
         embeddingCoverage: { total_items: 42, with_embedding: 36, without_embedding: 6, coverage_pct: 85.7 },
         memoryActionResults: {
             consolidate: scene === 'actionFails' ? new GaiaApiError(500, 'Database is locked') : { status: 'ok', consolidated: 3, extracted_items: 12 },
