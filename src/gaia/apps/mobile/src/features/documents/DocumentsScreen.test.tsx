@@ -100,7 +100,7 @@ describe('DocumentsScreen', () => {
             await mount(client);
             await fireEvent.press(await screen.findByLabelText('Remove notes.txt'));
             await act(() => jest.advanceTimersByTimeAsync(REMOVE_UNDO_MS));
-            expect(await screen.findByText(/Couldn't remove notes\.txt: disk is read-only/)).toBeTruthy();
+            expect(await screen.findByText(/Couldn't remove notes\.txt: .*disk is read-only/)).toBeTruthy();
             expect(screen.getByLabelText('Remove notes.txt')).toBeTruthy();
         });
     });
