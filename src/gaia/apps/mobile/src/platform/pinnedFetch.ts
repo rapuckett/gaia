@@ -31,8 +31,13 @@ export function transportError(err: unknown): Error {
 
 /** A request to a paired PC over TLS pinned to its certificate; the device token is added natively. */
 export async function pinnedFetch(pcId: string, url: string, init: FetchRequestInit = {}): Promise<FetchResponseLike> {
+    const { signal, body: sent } = init;
+    if (sent !== undefined && typeof sent !== 'string') {
+        throw Object.assign(new Error("Sending a file to a paired PC isn't supported yet; this request carried one, so it wasn't sent."), {
+            code: 'unsupported_body',
+        });
+    }
     const id = `pinned-${++lastId}`;
-    const { signal } = init;
     if (signal?.aborted) throw Object.assign(new Error('The request was canceled.'), { code: 'aborted' });
     const abort = () => GaiaTransport.cancel(id);
     signal?.addEventListener('abort', abort);
@@ -40,7 +45,7 @@ export async function pinnedFetch(pcId: string, url: string, init: FetchRequestI
 
     let head;
     try {
-        head = await GaiaTransport.start(id, pcId, init.method ?? 'GET', url, init.headers ?? {}, init.body ?? null);
+        head = await GaiaTransport.start(id, pcId, init.method ?? 'GET', url, init.headers ?? {}, sent ?? null);
     } catch (err) {
         done();
         throw transportError(err);

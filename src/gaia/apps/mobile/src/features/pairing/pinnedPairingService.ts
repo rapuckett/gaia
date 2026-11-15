@@ -197,12 +197,11 @@ export function createPinnedPairingService(): PairingService & { restore(): Prom
             const state = await load();
             const pc = state.pcs.find((p) => p.id === pcId);
             if (!pc) throw new Error(`This phone isn't paired with a PC whose id is ${pcId}.`);
-            let untold: unknown = null;
             try {
                 await unpairOnPc(pc);
             } catch (err) {
-                // After a reset the PC has a new certificate and no longer knows this phone either.
-                if (!(err instanceof GaiaPinMismatchError)) untold = err;
+                // A changed certificate stops the request at the handshake, before the token is sent.
+                console.warn(`Couldn't tell ${pc.name} to unpair this phone; forgetting it here anyway.`, err);
             }
             await GaiaTransport.drop(pcId);
             const pcs = state.pcs.filter((p) => p.id !== pcId);
@@ -211,8 +210,6 @@ export function createPinnedPairingService(): PairingService & { restore(): Prom
             const connection = useConnectionStore.getState();
             if (next) connection.setConnection(connectionOf(next));
             else connection.clearConnection();
-            // Forgotten here either way; the caller says the PC still lists this phone.
-            if (untold) throw untold;
         },
     };
 }

@@ -25,7 +25,7 @@ interface ConnectionState {
     clearConnection(): void;
     beginRestore(): void;
     finishRestore(connection: ConnectionConfig | null): void;
-    /** The PC refused this phone's token (unpaired, or reset): back to pairing, with a note naming it. */
+    /** The PC refused this phone's token (it was unpaired there): back to pairing, with a note naming it. */
     connectionRemoved(pcName: string): void;
 }
 
