@@ -368,6 +368,9 @@ reply (`"hi"`) or a tool call (`{"tool_call": {"name": "write_file",
 of the script fails with an error rather than inventing a reply. `--home`
 is required and is refused if it is, or is inside, `~/.gaia`. The flagship runs
 from this checkout's `hub/agents/gaia/python` when it isn't pip-installed.
+It starts already set up (`/api/setup/check` answers `ready: true`), so a client
+goes straight to chat; pass `--fresh` to start not set up and see the first-run
+Setup wizard.
 
 The packaged email-agent tests are hermetic and must not invoke an interactive
 OS keychain. Run them with the null keyring backend (the email test package's

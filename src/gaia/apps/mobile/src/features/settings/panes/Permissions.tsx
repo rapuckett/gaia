@@ -3,7 +3,9 @@
 
 import { useState } from 'react';
 
+import { ENDPOINTS } from '@/api/constants';
 import { GaiaApiError } from '@/api/errors';
+import { useDeviceRefused } from '@/api/routeAccess';
 import type { SessionPermissions } from '@/api/client.types';
 import { useAllPermissions, usePermissionActions, useSessions } from '@/data';
 import { describeError, useT } from '@/i18n/useT';
@@ -12,6 +14,7 @@ import {
 } from '@/ui';
 import { Ellipsis } from '@/ui/icons';
 
+import { isPcRefusal, PcOnlyNotice } from '../PcOnlyNotice';
 import { SettingsAnchor } from '../targets';
 
 /** Settings > Permissions: the default mode for new chats, and every chat holding full access or "always allow" grants. */
@@ -20,6 +23,7 @@ export default function Permissions() {
     const all = useAllPermissions();
     const sessions = useSessions();
     const { setDefault, setChatMode, revoke } = usePermissionActions();
+    const defaultRefused = useDeviceRefused('PUT', ENDPOINTS.chatPermissionsDefault);
     const [confirming, setConfirming] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [howOpen, setHowOpen] = useState(false);
@@ -46,20 +50,32 @@ export default function Permissions() {
 
                 <Card padding="lg">
                     <Stack gap="sm">
-                        <Switch
-                            label={t('settings.permissions.fullAccess')}
-                            description={defaultMode === null ? undefined : defaultMode === 'full_access' ? t('settings.permissions.on') : t('settings.permissions.off')}
-                            value={defaultMode === 'full_access'}
-                            disabled={defaultMode === null || setDefault.isPending}
-                            onValueChange={(on) => (on ? setConfirming(true) : run(setDefault.mutateAsync('ask')))}
-                            testID="permissions-default-switch"
-                        />
+                        {defaultRefused ? (
+                            <>
+                                <Text role="ui" weight="medium">{t('settings.permissions.fullAccess')}</Text>
+                                {defaultMode === null ? null : (
+                                    <Text role="caption" tone="muted">{defaultMode === 'full_access' ? t('settings.permissions.on') : t('settings.permissions.off')}</Text>
+                                )}
+                                <PcOnlyNotice testID="permissions-default-pc-only" />
+                            </>
+                        ) : (
+                            <Switch
+                                label={t('settings.permissions.fullAccess')}
+                                description={defaultMode === null ? undefined : defaultMode === 'full_access' ? t('settings.permissions.on') : t('settings.permissions.off')}
+                                value={defaultMode === 'full_access'}
+                                disabled={defaultMode === null || setDefault.isPending}
+                                onValueChange={(on) => (on ? setConfirming(true) : run(setDefault.mutateAsync('ask')))}
+                                testID="permissions-default-switch"
+                            />
+                        )}
                     </Stack>
                 </Card>
 
-                {error ? <Notice tone="danger" message={error} testID="permissions-error" /> : null}
+                {error ? <Notice tone={error === t('mobileApp.settings.pcOnly') ? 'info' : 'danger'} message={error} testID="permissions-error" /> : null}
 
-                {all.isError ? (
+                {all.isError && isPcRefusal(all.error) ? (
+                    <PcOnlyNotice testID="permissions-pc-only" />
+                ) : all.isError ? (
                     <ErrorState title={describeError(all.error, t)} onRetry={() => void all.refetch()} />
                 ) : all.isPending ? (
                     <ListSkeleton rows={2} />
