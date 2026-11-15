@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import { useState, type ComponentRef, type ReactNode, type Ref } from 'react';
-import { TextInput, View, type ReturnKeyTypeOptions } from 'react-native';
+import { TextInput, View, type KeyboardTypeOptions, type ReturnKeyTypeOptions } from 'react-native';
 import { CircleAlert } from 'lucide-react-native';
 import { useT } from '@/i18n/useT';
 import { Eye, EyeOff } from '../icons';
@@ -24,6 +24,8 @@ export interface TextFieldProps {
     multiline?: boolean;
     maxLines?: number;
     returnKeyType?: ReturnKeyTypeOptions;
+    /** `number-pad` for whole numbers. */
+    keyboardType?: KeyboardTypeOptions;
     onSubmitEditing?: () => void;
     secureTextEntry?: boolean;
     /** With `secureTextEntry`: an eye button that shows the text. */
@@ -53,6 +55,7 @@ export function TextField({
     multiline,
     maxLines = 6,
     returnKeyType,
+    keyboardType,
     onSubmitEditing,
     secureTextEntry,
     revealable,
@@ -102,6 +105,7 @@ export function TextField({
                 editable={!disabled}
                 multiline={multiline}
                 returnKeyType={returnKeyType}
+                keyboardType={keyboardType}
                 onSubmitEditing={onSubmitEditing}
                 submitBehavior={multiline ? 'newline' : 'blurAndSubmit'}
                 secureTextEntry={secureTextEntry && !revealed}
