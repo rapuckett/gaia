@@ -155,7 +155,7 @@ export function ChatDrawerContent({ activeId, onSelect, onClose, onNewChat, onPc
                 <TextField
                     value={text}
                     onChangeText={setText}
-                    placeholder={t('sidebar.search')}
+                    placeholder={t.bare('sidebar.search')}
                     accessibilityLabel={t('sidebar.search')}
                     returnKeyType="search"
                 />
