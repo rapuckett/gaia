@@ -39,6 +39,9 @@ export interface AssistantBubbleProps {
     newest?: boolean;
 }
 
+// A reply with links stays walkable by element; plain prose reads as one block with its actions.
+const hasLinks = (text: string) => /\]\(|https?:|`|\[/.test(text);
+
 export function AssistantBubble({ message, streaming = false, latencyMs, context, sessionId, newest = false }: AssistantBubbleProps) {
     const t = useT();
     const cutOff = streaming ? null : splitCutOff(message.content);
@@ -62,7 +65,13 @@ export function AssistantBubble({ message, streaming = false, latencyMs, context
         <Stack paddingX="lg" paddingY="xs">
             {activity.steps.length > 0 ? <ActivityTimeline steps={activity.steps} answer={text} /> : null}
             <AnswerCards cards={cards} />
-            <Pressable onLongPress={cancelled ? undefined : actions.openSheet} accessible={false} minSize={0}>
+            <Pressable
+                onLongPress={cancelled ? undefined : actions.openSheet}
+                accessibilityRole="text"
+                accessible={!hasLinks(text)}
+                minSize={0}
+                {...(cancelled ? {} : actions.a11y)}
+            >
                 {text ? <Markdown text={text} streaming={streaming} /> : null}
             </Pressable>
             {!streaming && !cancelled ? <AnswerFooter latencyMs={latencyMs} stats={message.stats} ended={activity.ended} /> : null}
