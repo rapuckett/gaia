@@ -107,3 +107,8 @@ export function buildTail(messages: readonly Message[], turn: Turn): TurnTail | 
     }
     return null;
 }
+
+/** The saved reply whose failure the model-server fix under it explains, so the reply drops its own banner. */
+export function serverDownReplyId(tail: TurnTail | null): number | null {
+    return tail && !tail.live && tail.failure === 'model_server_down' ? tail.replyId : null;
+}

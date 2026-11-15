@@ -1,7 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import type { Message } from '@/api/client.types';
+import type { Message, StreamEvent } from '@/api/client.types';
 
 let nextId = 1;
 const at = (minutes: number) => new Date(Date.UTC(2026, 10, 13, 14, minutes, 9)).toISOString();
@@ -166,9 +166,9 @@ const MEDIA = [
     ]),
 ];
 
-export type MessagesFixture = 'badCards' | 'cards' | 'guide' | 'loading' | 'long' | 'many' | 'media' | 'short' | 'streaming';
+export type MessagesFixture = 'badCards' | 'cards' | 'guide' | 'loading' | 'long' | 'many' | 'media' | 'recording' | 'short' | 'streaming';
 
-export const FIXTURES: Record<MessagesFixture, { messages: Message[]; live?: Message }> = {
+export const FIXTURES: Record<MessagesFixture, { messages: Message[]; live?: Message; events?: StreamEvent[] }> = {
     badCards: { messages: BAD_CARDS },
     cards: { messages: CARDS },
     guide: { messages: GUIDE },
@@ -176,6 +176,18 @@ export const FIXTURES: Record<MessagesFixture, { messages: Message[]; live?: Mes
     long: { messages: [...SHORT.slice(0, 2), msg('user', LONG_USER, 4), msg('assistant', ANSWER, 5)] },
     many: { messages: MANY },
     media: { messages: MEDIA },
+    recording: {
+        messages: [msg('user', 'Summarize the team meeting recording.', 0)],
+        events: [
+            { type: 'status', phase: 'recording', stage: 1, state: 1 },
+            { type: 'status', phase: 'recording', stage: 2, state: 0, percent: 62, eta_seconds: 540 },
+            {
+                type: 'status', phase: 'recording_found', section: 1, sections: 4, start: '00:00', end: '07:30',
+                summary: 'Planning for the November release.',
+                items: [{ title: 'Ship the phone app by Friday', start: '02:10', seconds: 130 }],
+            },
+        ],
+    },
     short: { messages: SHORT },
     streaming: {
         messages: SHORT,
