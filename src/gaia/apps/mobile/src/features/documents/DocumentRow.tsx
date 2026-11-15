@@ -50,7 +50,11 @@ export function DocumentRow({ document: doc, progress, startedAt, now, retrying,
 
     const badge =
         status === 'failed' ? (
-            <Badge tone="danger" label={hint ? t('docs.cantRead') : t('docs.failed')} />
+            <Badge
+                tone="danger"
+                label={hint ? t('docs.cantRead') : t('docs.failed')}
+                accessibilityLabel={doc.last_error ? t('docs.failedAria', { error: doc.last_error }) : t('docs.indexingFailed')}
+            />
         ) : status === 'cancelled' ? (
             <Badge tone="neutral" label={t('docs.cancelled')} />
         ) : status === 'missing' ? (
@@ -58,7 +62,7 @@ export function DocumentRow({ document: doc, progress, startedAt, now, retrying,
         ) : null;
 
     const trailing = running ? (
-        <Button size="sm" variant="secondary" icon={Square} label={t('docs.cancel')} onPress={() => onCancel(doc.id)} />
+        <Button size="sm" variant="secondary" icon={Square} label={t('docs.cancel')} accessibilityLabel={t('docs.cancelIndexingAria', { name: doc.filename })} onPress={() => onCancel(doc.id)} />
     ) : (
         <Row gap="xs">
             {status === 'failed' ? (
@@ -67,6 +71,7 @@ export function DocumentRow({ document: doc, progress, startedAt, now, retrying,
                     variant={hint ? 'ghost' : 'secondary'}
                     icon={RotateCcw}
                     label={retrying ? t('docs.retrying') : t('docs.retry')}
+                    accessibilityLabel={t('docs.retryAria', { name: doc.filename })}
                     disabled={retrying}
                     onPress={() => onRetry(doc.id)}
                 />

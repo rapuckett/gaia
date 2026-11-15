@@ -77,9 +77,9 @@ describe('DocumentsScreen', () => {
         it('Undo puts the row back and the document is never deleted', async () => {
             const client = createFakeClient({ documents: library() });
             await mount(client);
-            fireEvent.press(await screen.findByLabelText('Remove notes.txt'));
+            await fireEvent.press(await screen.findByLabelText('Remove notes.txt'));
             expect(screen.queryByLabelText('Remove notes.txt')).toBeNull();
-            fireEvent.press(screen.getByText('Undo'));
+            await fireEvent.press(screen.getByText('Undo'));
             await act(() => jest.advanceTimersByTimeAsync(REMOVE_UNDO_MS * 2));
             expect(screen.getByLabelText('Remove notes.txt')).toBeTruthy();
             expect(client.documentActions).toEqual([]);
@@ -88,7 +88,7 @@ describe('DocumentsScreen', () => {
         it('without Undo the DELETE goes out once the window ends, not before', async () => {
             const client = createFakeClient({ documents: library() });
             await mount(client);
-            fireEvent.press(await screen.findByLabelText('Remove notes.txt'));
+            await fireEvent.press(await screen.findByLabelText('Remove notes.txt'));
             await act(() => jest.advanceTimersByTimeAsync(REMOVE_UNDO_MS - 1));
             expect(client.documentActions).toEqual([]);
             await act(() => jest.advanceTimersByTimeAsync(1));
@@ -98,7 +98,7 @@ describe('DocumentsScreen', () => {
         it('a failed DELETE brings the row back with the reason', async () => {
             const client = createFakeClient({ documents: library(), documentFailures: { delete: 'disk is read-only' } });
             await mount(client);
-            fireEvent.press(await screen.findByLabelText('Remove notes.txt'));
+            await fireEvent.press(await screen.findByLabelText('Remove notes.txt'));
             await act(() => jest.advanceTimersByTimeAsync(REMOVE_UNDO_MS));
             expect(await screen.findByText(/Couldn't remove notes\.txt: disk is read-only/)).toBeTruthy();
             expect(screen.getByLabelText('Remove notes.txt')).toBeTruthy();

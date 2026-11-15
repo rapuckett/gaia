@@ -119,6 +119,7 @@ describe('createHttpClient requests', () => {
         ['getSession', (c) => c.getSession('a b'), 'GET', '/api/sessions/a%20b', UI_HEADERS, undefined],
         ['createSession', (c) => c.createSession({ title: 'Trip' }), 'POST', '/api/sessions', JSON_HEADERS, { title: 'Trip' }],
         ['createSession with no fields', (c) => c.createSession(), 'POST', '/api/sessions', JSON_HEADERS, {}],
+        ['getCapabilities', (c) => c.getCapabilities('a b'), 'GET', '/api/sessions/a%20b/capabilities', UI_HEADERS, undefined],
         ['listDocuments', (c) => c.listDocuments(), 'GET', '/api/documents', UI_HEADERS, undefined],
         ['cancelDocumentIndexing', (c) => c.cancelDocumentIndexing('d 1'), 'POST', '/api/documents/d%201/cancel', UI_HEADERS, undefined],
         ['deleteDocument', (c) => c.deleteDocument('d 1'), 'DELETE', '/api/documents/d%201', UI_HEADERS, undefined],
