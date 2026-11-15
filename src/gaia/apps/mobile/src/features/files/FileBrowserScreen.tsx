@@ -210,7 +210,7 @@ export function FileBrowserScreen({ chatId, onClose, onPreview, onAsk, initial }
                     <Text role="caption" tone="secondary">
                         {add.isPending ? t.plural('fileBrowser.adding', chosen.length) : chosen.length > 0 ? t.plural('fileBrowser.selected', chosen.length) : t('fileBrowser.selectHint')}
                     </Text>
-                    <Button label={t('fileBrowser.askGaia')} icon={Brain} full disabled={!canAct(chosen.length, add.isPending)} onPress={() => addSelected(true)} />
+                    <Button label={t('fileBrowser.askGaia')} icon={Brain} variant="primary" full disabled={!canAct(chosen.length, add.isPending)} onPress={() => addSelected(true)} />
                     <Button label={t('fileBrowser.addToLibrary')} variant="secondary" full disabled={!canAct(chosen.length, add.isPending)} onPress={() => addSelected(false)} />
                 </Stack>
             }

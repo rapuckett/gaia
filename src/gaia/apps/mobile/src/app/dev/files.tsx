@@ -26,7 +26,7 @@ export default function FilesGalleryRoute() {
             <GaiaClientProvider client={client}>
                 <UIProvider>
                     <ScreenBannerProvider banner={null}>
-                        <FileBrowserScreen chatId="chat-1" onClose={() => router.replace('/')} initial={FILE_BROWSER_START[picked]} />
+                        <FileBrowserScreen chatId="chat-1" onClose={() => router.replace('/')} onPreview={() => router.push('/dev/file-preview?scene=binary')} initial={FILE_BROWSER_START[picked]} />
                     </ScreenBannerProvider>
                 </UIProvider>
             </GaiaClientProvider>
