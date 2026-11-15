@@ -46,6 +46,7 @@ export {
   Send,
   Settings,
   ShieldQuestion,
+  Smartphone,
   Sparkles,
   Square,
   Trash2,

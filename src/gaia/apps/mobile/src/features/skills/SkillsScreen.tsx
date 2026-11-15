@@ -2,15 +2,16 @@
 // SPDX-License-Identifier: MIT
 
 import { useState } from 'react';
+import { Text as RNText, View } from 'react-native';
 
 import type { SkillInfo } from '@/api/client.types';
 import { useSkills } from '@/data';
 import { ScreenHeader } from '@/features/nav/ScreenHeader';
 import { describeError, useT } from '@/i18n/useT';
 import {
-    Badge,
     Button,
     Disclosure,
+    Divider,
     EmptyState,
     ErrorState,
     ListSkeleton,
@@ -20,8 +21,12 @@ import {
     Screen,
     SearchField,
     Stack,
+    Surface,
     Text,
 } from '@/ui';
+
+import { ChipButton } from '../schedules/ChipButton';
+import { SettingsGroup } from './SettingsGroup';
 
 import { filterSkills, GROUPS, isGrouped, SEARCH_ABOVE, SKILLS_HOW_PARAMS, skippedName, skipReason } from './skillList';
 
@@ -51,7 +56,7 @@ export function SkillsScreen({ onTry }: { onTry: (name: string, prompt: string) 
     return (
         <Screen scroll header={<ScreenHeader title={t('settings.section.skills')} />}>
             <Stack gap="md" paddingX="lg" paddingY="md">
-                <Text tone="secondary">{t('settings.skills.lede')}</Text>
+                <Text role="ui" tone="secondary">{t('settings.skills.lede')}</Text>
                 <Disclosure title={t('settings.model.howItWorks')} open={howOpen} onToggle={() => setHowOpen(!howOpen)}>
                     <Text role="caption" tone="muted">{t('settings.skills.how', SKILLS_HOW_PARAMS)}</Text>
                 </Disclosure>
@@ -76,31 +81,32 @@ export function SkillsScreen({ onTry }: { onTry: (name: string, prompt: string) 
                                 <Button label={t('settings.skills.clearSearch')} variant="ghost" size="sm" onPress={() => setQuery('')} />
                             </Stack>
                         ) : null}
-                        {grouped
-                            ? GROUPS.map((g) => {
-                                  const rows = shown.filter((s) => s.source === g.source);
-                                  if (rows.length === 0 && (q || !g.empty)) return null;
-                                  const byDefault = g.source === 'agent-bundled' || (g.source === 'user' && rows.length > 0);
-                                  return (
-                                      <Disclosure
-                                          key={g.source}
-                                          title={t(g.title)}
-                                          open={groupOpen(g.source, byDefault)}
-                                          onToggle={toggleGroup(g.source, byDefault)}
-                                          trailing={<Badge label={String(rows.length)} />}
-                                      >
-                                          <Stack gap="sm">
-                                              <Text role="caption" tone="muted">{t(g.note, g.params)}</Text>
-                                              {rows.length === 0 && g.empty ? (
-                                                  <Text role="caption" tone="muted">{t(g.empty, g.params)}</Text>
-                                              ) : (
-                                                  rows.map(row)
-                                              )}
-                                          </Stack>
-                                      </Disclosure>
-                                  );
-                              })
-                            : shown.map(row)}
+                        {grouped ? (
+                            GROUPS.map((g) => {
+                                const rows = shown.filter((s) => s.source === g.source);
+                                if (rows.length === 0 && (q || !g.empty)) return null;
+                                const byDefault = g.source === 'agent-bundled' || (g.source === 'user' && rows.length > 0);
+                                const open = groupOpen(g.source, byDefault);
+                                return (
+                                    <SettingsGroup
+                                        key={g.source}
+                                        title={t(g.title)}
+                                        hint={t(g.note, g.params)}
+                                        count={rows.length}
+                                        open={open}
+                                        onToggle={toggleGroup(g.source, byDefault)}
+                                    >
+                                        {rows.length === 0 && g.empty ? (
+                                            <Text role="label" tone="muted">{t(g.empty, g.params)}</Text>
+                                        ) : (
+                                            rows.map((s, i) => <View key={s.name}>{i > 0 ? <Divider /> : null}{row(s)}</View>)
+                                        )}
+                                    </SettingsGroup>
+                                );
+                            })
+                        ) : shown.length > 0 ? (
+                            <Surface tone="primary" radius="md" border padding="md">{shown.map((s, i) => <View key={s.name}>{i > 0 ? <Divider /> : null}{row(s)}</View>)}</Surface>
+                        ) : null}
                         {invalid.length > 0 ? (
                             <Stack gap="xs">
                                 <Text role="label" weight="medium" tone="secondary">{t('settings.skills.skipped')}</Text>
@@ -121,27 +127,24 @@ function SkillRow({ skill, onTry }: { skill: SkillInfo; onTry: () => void }) {
     const [open, setOpen] = useState(false);
     const long = skill.description.length > CUT_ABOVE_CHARS;
     return (
-        <Stack gap="xs">
-            <Text weight="medium">
-                {skill.name}
-                {skill.always_on ? <Text tone="muted">{` · ${t('settings.skills.alwaysOn')}`}</Text> : null}
-            </Text>
-            <Text role="caption" tone="secondary" numberOfLines={open ? undefined : 2}>{skill.description}</Text>
-            <Row gap="sm">
-                {long ? (
-                    <Pressable onPress={() => setOpen(!open)} accessibilityRole="button" accessibilityState={{ expanded: open }}>
-                        <Text role="caption" tone="accent">{t(open ? 'settings.skills.less' : 'settings.skills.more')}</Text>
-                    </Pressable>
-                ) : null}
-                {!skill.always_on ? (
-                    <Button
-                        label={t('settings.skills.try')}
-                        onPress={onTry}
-                        variant="secondary"
-                        size="sm"
-                    />
-                ) : null}
+        <View style={{ paddingVertical: 9 }}>
+            <Row gap="md" align="center">
+                <Stack flex={1} gap="xs">
+                    <Text role="ui">
+                        {skill.name}
+                        {skill.always_on ? <Text role="ui" tone="muted">{` · ${t('settings.skills.alwaysOn')}`}</Text> : null}
+                    </Text>
+                    <Text role="label" tone="secondary" numberOfLines={open ? undefined : 2}>{skill.description}</Text>
+                    {long ? (
+                        <Pressable onPress={() => setOpen(!open)} accessibilityRole="button" accessibilityState={{ expanded: open }}>
+                            <Text role="label">
+                                <RNText style={{ textDecorationLine: 'underline' }}>{t(open ? 'settings.skills.less' : 'settings.skills.more')}</RNText>
+                            </Text>
+                        </Pressable>
+                    ) : null}
+                </Stack>
+                {!skill.always_on ? <ChipButton variant="plain" label={t('settings.skills.try')} onPress={onTry} /> : null}
             </Row>
-        </Stack>
+        </View>
     );
 }
