@@ -3565,6 +3565,7 @@ export const enMessages = {
     'mobileApp.skills.yoursEmpty': 'None yet. Add a folder with a SKILL.md file to {path} on your PC and it shows up here.',
     'mobileApp.banner.openOnPc': 'Open GAIA on your PC to start the model server.',
     'mobileApp.settings.comingSoon': 'This section is coming to the phone soon. For now, change it on the PC running GAIA.',
+    'mobileApp.settings.colors.invalidHex': 'Enter a color like #1F5FA8.',
 } as const;
 
 export const en: Locale = {

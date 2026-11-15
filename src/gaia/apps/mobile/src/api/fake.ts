@@ -6,6 +6,7 @@ import type {
     AgentCapabilities,
     AgentInfo,
     AgentMcpServer,
+    CloudPriceList,
     ConnectorListEntry,
     ContextUsageResult,
     ConsolidateMemoryResult,
@@ -114,10 +115,12 @@ export interface FakeClientData {
     /** Each status read answers the next entry (the last one repeats); defaults to idle. */
     setupStatuses?: (SetupRunStatus | Error)[];
     setupPlan?: SetupPlan;
-    /** What getGpuMemory answers. */
-    gpuMemory?: GpuMemoryStatus;
     modelServer?: ModelServerInfo;
     providers?: ProvidersResponse;
+    /** What getCloudPrices answers, by provider. */
+    cloudPrices?: Record<string, CloudPriceList>;
+    /** What recheckSetupNpu answers; an Error is thrown. */
+    npuRecheck?: SetupPlan | Error;
     /** What getPreflight answers; an Error is thrown. */
     preflight?: PreflightReport | Error;
     /** What getLemonadeTarget answers; an Error is thrown. */
@@ -161,6 +164,10 @@ export interface FakeGaiaClient extends GaiaClient {
     readonly backendSets: string[];
     /** The setup model choices saved, in order. */
     readonly setupChoices: { kind: 'chat' | 'vision' | 'skip'; modelId: string | null; flag?: boolean }[];
+    /** The providers connectProvider was asked for, in order. */
+    readonly connects: string[];
+    /** How many times recheckSetupNpu was asked. */
+    readonly npuRechecks: number;
     readonly setupStarts: { skipChatModel: boolean; gaiaLemonade: boolean; upgradeEmbedded: boolean; serverOnly: boolean }[];
     readonly detached: { sessionId: string; docId: string }[];
     readonly capabilityReads: string[];
@@ -202,6 +209,8 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
     const setupStarts: FakeGaiaClient['setupStarts'] = [];
     const backendSets: string[] = [];
     const setupChoices: FakeGaiaClient['setupChoices'] = [];
+    const connects: string[] = [];
+    let npuRechecks = 0;
     let checkAt = 0;
     let statusAt = 0;
     const nextOf = <T,>(list: (T | Error)[], at: number): T => {
@@ -252,6 +261,10 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         setupStarts,
         backendSets,
         setupChoices,
+        connects,
+        get npuRechecks() {
+            return npuRechecks;
+        },
         detached,
         capabilityReads,
         memoryActions,
@@ -620,6 +633,21 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             if (data.lemonadeDetect instanceof Error) throw data.lemonadeDetect;
             return data.lemonadeDetect;
         },
+        async connectProvider(provider) {
+            connects.push(provider);
+            return { remembered: true };
+        },
+        async getCloudPrices(provider) {
+            const list = data.cloudPrices?.[provider];
+            if (!list) throw new GaiaApiError(503, `This fake client was given no prices for ${provider}.`);
+            return list;
+        },
+        async recheckSetupNpu() {
+            npuRechecks += 1;
+            if (data.npuRecheck instanceof Error) throw data.npuRecheck;
+            if (!data.npuRecheck) throw new GaiaApiError(503, 'This fake client was given no NPU recheck plan.');
+            return data.npuRecheck;
+        },
         async getSetupPlan() {
             if (!data.setupPlan) throw new GaiaApiError(503, 'This fake client was given no setup plan.');
             return data.setupPlan;
@@ -635,10 +663,6 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         async skipSetupModel(modelId, skipped) {
             setupChoices.push({ kind: 'skip', modelId, flag: skipped });
             return data.setupPlan as SetupPlan;
-        },
-        async getGpuMemory() {
-            if (!data.gpuMemory) throw new GaiaApiError(503, 'This fake client was given no GPU memory.');
-            return data.gpuMemory;
         },
         async startSetup(skipChatModel, gaiaLemonade = false, options = {}) {
             setupStarts.push({ skipChatModel, gaiaLemonade, upgradeEmbedded: !!options.upgradeEmbedded, serverOnly: !!options.serverOnly });

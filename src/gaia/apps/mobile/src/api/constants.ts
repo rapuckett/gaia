@@ -26,6 +26,7 @@ export const ENDPOINTS = {
     memoryStats: '/api/memory/stats',
     modelServer: '/api/system/model-server',
     modelServerBackend: '/api/system/model-server/backend',
+    providerConnect: '/api/providers/{provider}/connect',
     providerModels: '/api/providers/{provider}/models',
     providersActive: '/api/providers/active',
     providersSelect: '/api/providers/select',
@@ -52,11 +53,13 @@ export const ENDPOINTS = {
     setupModelDownload: '/api/setup/models/download',
     setupModelSkip: '/api/setup/models/skip',
     setupNeeds: '/api/setup/needs/{job}',
+    setupNpuRecheck: '/api/setup/npu/recheck',
     setupPlan: '/api/setup/plan',
     setupRun: '/api/setup/run',
     setupStatus: '/api/setup/status',
     setupVisionModel: '/api/setup/vision-model',
     skills: '/api/skills',
+    spendingPrices: '/api/spending/prices/{provider}',
     chatSend: '/api/chat/send',
     chatAttach: '/api/chat/attach',
     chatCancel: '/api/chat/cancel',
@@ -125,6 +128,14 @@ export function sessionPath(sessionId: string): string {
 
 export function chatPermissionsPath(sessionId: string): string {
     return ENDPOINTS.chatPermissions.replace('{session_id}', encodeURIComponent(sessionId));
+}
+
+export function providerConnectPath(provider: string): string {
+    return ENDPOINTS.providerConnect.replace('{provider}', encodeURIComponent(provider));
+}
+
+export function spendingPricesPath(provider: string): string {
+    return ENDPOINTS.spendingPrices.replace('{provider}', encodeURIComponent(provider));
 }
 
 export function providerModelsPath(provider: string): string {

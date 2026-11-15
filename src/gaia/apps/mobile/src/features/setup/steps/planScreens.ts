@@ -6,6 +6,7 @@ import type { ComponentType } from 'react';
 import type { SetupStepContext } from '../SetupScreen';
 import { GpuScreen } from './GpuScreen';
 import { ModelsScreen } from './ModelsScreen';
+import { KeyScreen } from './KeyScreen';
 
 export type PlanScreenName = 'models' | 'key' | 'gpu';
 
@@ -16,4 +17,5 @@ export type PlanScreen = ComponentType<{ ctx: SetupStepContext; close: () => voi
 export const PLAN_SCREENS: Partial<Record<PlanScreenName, PlanScreen>> = {
     gpu: GpuScreen,
     models: ModelsScreen,
+    key: KeyScreen,
 };
