@@ -5,11 +5,44 @@ import ExpoModulesCore
 import Foundation
 import Security
 
+/// One address the paired PC answers at, and the route it is on: home, tailnet or relay.
+struct RouteOrigin: Codable, Equatable {
+  let kind: String
+  let origin: String
+}
+
 /// What this phone keeps for one paired PC. It never crosses into JavaScript.
 struct DeviceSecret: Codable {
-  let origin: String
+  let origins: [RouteOrigin]
   let pin: String
   let token: String
+
+  init(origins: [RouteOrigin], pin: String, token: String) {
+    self.origins = origins
+    self.pin = pin
+    self.token = token
+  }
+
+  private enum CodingKeys: String, CodingKey { case origins, origin, pin, token }
+
+  // A secret saved before routes kept one home `origin`.
+  init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    if let origins = try container.decodeIfPresent([RouteOrigin].self, forKey: .origins) {
+      self.origins = origins
+    } else {
+      self.origins = [RouteOrigin(kind: "home", origin: try container.decode(String.self, forKey: .origin))]
+    }
+    pin = try container.decode(String.self, forKey: .pin)
+    token = try container.decode(String.self, forKey: .token)
+  }
+
+  func encode(to encoder: Encoder) throws {
+    var container = encoder.container(keyedBy: CodingKeys.self)
+    try container.encode(origins, forKey: .origins)
+    try container.encode(pin, forKey: .pin)
+    try container.encode(token, forKey: .token)
+  }
 }
 
 /// One Keychain item per paired PC, readable only on this device after its first unlock.

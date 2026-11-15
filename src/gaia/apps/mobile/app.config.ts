@@ -68,6 +68,7 @@ export default function appConfig(): ExpoConfig {
     const id = APP_IDS[env];
     const iosId = readIosBundleId(env);
     const aps = readApsEnvironment(process.env.GAIA_APS_ENVIRONMENT, env);
+    const relayDomain = process.env.EXPO_PUBLIC_GAIA_RELAY_DOMAIN;
     return {
         name: 'GAIA',
         slug: 'gaia-mobile',
@@ -82,6 +83,8 @@ export default function appConfig(): ExpoConfig {
                 NSAppTransportSecurity: { NSAllowsArbitraryLoads: false, NSAllowsLocalNetworking: true },
                 NSLocalNetworkUsageDescription: LOCAL_NETWORK_USE,
                 NSPhotoLibraryAddUsageDescription: PHOTOS_ADD_USE,
+                // The native transport's copy of the relay domain, so it checks relay origins without trusting JavaScript.
+                ...(relayDomain ? { GAIARelayDomain: relayDomain } : {}),
             },
         },
         android: { package: id },

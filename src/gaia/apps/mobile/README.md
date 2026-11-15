@@ -47,6 +47,12 @@ Metro; only a change that moves the native fingerprint needs a new build.
   pinned to the PC's certificate, and ignores `EXPO_PUBLIC_GAIA_URL`. iOS keeps
   App Transport Security's local-network exception in every build, because the
   paired PC is a home-network address.
+- **Away from home**, a paired phone reaches its PC at whichever of the PC's
+  addresses answers first over the pinned connection: home addresses first on
+  Wi-Fi, then its Tailscale (`100.64.0.0/10`) and relay addresses, which the PC
+  reports at `/api/devices/me/routes`. A pairing code may name home addresses
+  only. `EXPO_PUBLIC_GAIA_RELAY_DOMAIN` builds in the relay's domain; unset, the
+  app refuses every relay address.
 - **`GAIA_APS_ENVIRONMENT`** sets the push entitlement: unset follows `APP_ENV`,
   `development` or `production` forces one, and `none` leaves push out, for a
   cable sideload whose development profile and App ID have no push capability.
