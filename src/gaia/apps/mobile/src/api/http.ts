@@ -47,11 +47,13 @@ import type {
     FollowUpOutcome,
     FollowUpResult,
     DeleteSessionResult,
+    FeaturedLibraries,
     GaiaClient,
     GpuMemoryStatus,
     HealthResponse,
     LemonadeFound,
     LemonadeTarget,
+    LinkPreview,
     LocalModelStatus,
     KnowledgeSaveResult,
     MemoryActivityDay,
@@ -118,6 +120,7 @@ import {
     SESSION_PAGE_SIZE,
     sessionCapabilitiesPath,
     sessionDocumentPath,
+    sessionDocumentsPath,
     sessionMessagePath,
     sessionMessagesAndBelowPath,
     sessionMessagesPath,
@@ -568,6 +571,14 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             return getJson<SkillList>(ENDPOINTS.skills, options?.signal);
         },
 
+        listFeaturedSkillLibraries(options) {
+            return getJson<FeaturedLibraries>(ENDPOINTS.skillsFeatured, options?.signal);
+        },
+
+        previewSkillLink(url, options) {
+            return postJson<LinkPreview>(ENDPOINTS.skillsLinkPreview, { url }, options?.signal);
+        },
+
         listSchedules(options) {
             return getJson<ScheduleList>(ENDPOINTS.schedules, options?.signal);
         },
@@ -658,6 +669,18 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         deleteSchedule(name, options) {
             return deleteJson<DeleteScheduleResult>(schedulePath(name), options?.signal);
+        },
+
+        async uploadDocument(file, options) {
+            // The multipart boundary header is the fetch's to set.
+            const bytes = await (await globalThis.fetch(file.uri)).blob();
+            const form = new FormData();
+            form.append('file', bytes, file.name);
+            return readJson<DocumentResponse>(await request('POST', ENDPOINTS.documentUpload, new RawBody(form), options?.signal), ENDPOINTS.documentUpload);
+        },
+
+        async attachDocument(sessionId, docId, options) {
+            await postJson<unknown>(sessionDocumentsPath(sessionId), { document_id: docId }, options?.signal);
         },
 
         listDocuments(options) {

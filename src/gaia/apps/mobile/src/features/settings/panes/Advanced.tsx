@@ -12,16 +12,20 @@ import { useModelActions, useSystemStatus } from '@/data';
 import { describeError, useT } from '@/i18n/useT';
 import { Button, Card, Disclosure, Divider, Ltr, Notice, ProgressLine, Row, Sheet, Spinner, Stack, Text } from '@/ui';
 
+import { LogsCard } from '@/features/logs';
+
 import { SettingsAnchor } from '../targets';
 import { capabilitiesText, needsLocalSetup, needText, statusFlags } from './advanced/statusText';
 
-/** Settings > Advanced: the PC's status and model actions, then the logs card; the server controls go in the slot. */
+/** Settings > Advanced: the PC's status and model actions, then the Logs card; the server controls go in the slot. */
 export default function Advanced() {
     return (
         <SettingsAnchor name="pane">
             <Stack gap="lg" paddingX="lg" paddingY="md">
                 <StatusCard />
-                <LogsCard />
+                <SettingsAnchor name="logs">
+                    <LogsCard />
+                </SettingsAnchor>
                 <ServerControlsSlot />
             </Stack>
         </SettingsAnchor>
@@ -306,16 +310,3 @@ function StatusBody({ status, modelName, actions, detailsOpen, onToggleDetails }
     );
 }
 
-/** The logs and the report that bundles them are the PC's alone to read, so a phone gets the pointer to the PC. */
-function LogsCard() {
-    const t = useT();
-    return (
-        <Card padding="lg" testID="advanced-logs">
-            <Stack gap="md">
-                <Text role="title" accessibilityRole="header">{t('logs.title')}</Text>
-                <Text role="caption" tone="muted">{t('logs.settingsHint')}</Text>
-                <Notice tone="info" message={t('setup.logs.reportOnPc')} testID="advanced-logs-pc-only" />
-            </Stack>
-        </Card>
-    );
-}

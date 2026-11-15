@@ -41,6 +41,7 @@ import type {
     ParsedSchedule,
     AllPermissions,
     PermissionMode,
+    PickedFile,
     ProviderModelsResponse,
     RebuildEmbeddingsResult,
     ReconcileMemoryResult,
@@ -58,6 +59,8 @@ import type {
     SetupRunStatus,
     Settings,
     SkillList,
+    FeaturedLibraries,
+    LinkPreview,
     StartScreen,
     StreamEvent,
     SystemStatus,
@@ -148,6 +151,8 @@ export interface FakeClientData {
     /** What getSetupStatus answers. */
     setupStatus?: SetupRunStatus;
     skills?: SkillList;
+    featuredLibraries?: FeaturedLibraries;
+    linkPreview?: (url: string) => LinkPreview;
     resources?: ResourceUsage;
     start?: StartScreen;
     /** What watchSessionEvents streams before it ends; the real stream never ends on its own. */
@@ -174,6 +179,10 @@ export interface FakeClientData {
     /** What detectLemonade answers; an Error is thrown. */
     lemonadeDetect?: { found: LemonadeFound | null; unchecked?: string[] } | Error;
     documents?: DocumentListResponse;
+    /** Makes every upload fail with this error. */
+    documentUploadError?: Error;
+    /** The state an uploaded document comes back in; defaults to complete. */
+    uploadStatus?: DocumentResponse['indexing_status'];
     /** What getDocumentStatus answers, by document; one not listed reports its row's status. */
     documentStatuses?: Record<string, Partial<DocumentStatus>>;
     /** Makes a library action on a document reject with this message, by action. */
@@ -249,6 +258,8 @@ export interface FakeGaiaClient extends GaiaClient {
     readonly documentActions: { action: DocumentAction; docId: string }[];
     readonly setupStarts: { skipChatModel: boolean; gaiaLemonade: boolean; upgradeEmbedded: boolean; serverOnly: boolean }[];
     readonly detached: { sessionId: string; docId: string }[];
+    readonly uploaded: PickedFile[];
+    readonly attached: { sessionId: string; docId: string }[];
     readonly capabilityReads: string[];
     /** Each memory maintenance POST, in order. */
     readonly memoryActions: string[];
@@ -322,6 +333,8 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         return item;
     };
     const detached: FakeGaiaClient['detached'] = [];
+    const uploaded: PickedFile[] = [];
+    const attached: FakeGaiaClient['attached'] = [];
     const capabilityReads: string[] = [];
     const memoryActions: string[] = [];
     let memoryStatsReads = 0;
@@ -379,6 +392,8 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             return npuRechecks;
         },
         detached,
+        uploaded,
+        attached,
         capabilityReads,
         memoryActions,
         memoryActivityReads,
@@ -619,6 +634,13 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         async listSkills() {
             return { skills: [...(data.skills?.skills ?? [])], invalid: { ...(data.skills?.invalid ?? {}) } };
         },
+        async listFeaturedSkillLibraries() {
+            return { libraries: [...(data.featuredLibraries?.libraries ?? [])] };
+        },
+        async previewSkillLink(url) {
+            if (!data.linkPreview) throw new GaiaApiError(400, 'This fake client was given no link preview.');
+            return data.linkPreview(url);
+        },
         async getMemoryActivity(days) {
             memoryActivityReads.push(days);
             if (!data.memoryActivity) throw new GaiaApiError(503, 'This fake client was given no memory activity.');
@@ -794,6 +816,26 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             scheduleActions.push({ action: 'delete', name });
             schedules.splice(schedules.indexOf(schedule), 1);
             return { deleted: true };
+        },
+        async uploadDocument(file) {
+            if (data.documentUploadError) throw data.documentUploadError;
+            uploaded.push(file);
+            const doc = {
+                id: `doc-${uploaded.length}`,
+                filename: file.name,
+                filepath: `/managed/${file.name}`,
+                file_size: file.size ?? 0,
+                chunk_count: 1,
+                indexed_at: new Date().toISOString(),
+                indexing_status: data.uploadStatus ?? 'complete',
+            } as DocumentResponse;
+            library.documents.push(doc);
+            library.total += 1;
+            return doc;
+        },
+        async attachDocument(sessionId, docId) {
+            findSession(sessionId);
+            attached.push({ sessionId, docId });
         },
         async listDocuments() {
             return { ...library, documents: [...library.documents] };

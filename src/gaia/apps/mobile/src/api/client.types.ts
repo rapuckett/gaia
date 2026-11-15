@@ -12,9 +12,11 @@ import type {
     ConnectorListEntry,
     ContextChoice,
     ContextUsageResult,
+    FeaturedLibrary,
     GpuMemoryStatus,
     LemonadeFound,
     LemonadeTarget,
+    LinkPreview,
     LocalModelStatus,
     Message,
     ModelNeed,
@@ -55,9 +57,12 @@ export type {
     ContextChoice,
     ContextUsage,
     ContextUsageResult,
+    FeaturedLibrary,
     GpuMemoryStatus,
     LemonadeFound,
     LemonadeTarget,
+    LinkPreview,
+    LinkSkill,
     LocalModelStatus,
     Message,
     ModelNeed,
@@ -89,6 +94,14 @@ export type {
 export type { UndoSettings } from '@webui/types/changes';
 export type { ActiveSkill, AgentCapabilities, AgentTool, SkillOrigin } from '@webui/types/sessionPanel';
 export type { CreateSessionRequest, DocumentListResponse, DocumentResponse, ModelServerInfo, SessionSearchResponse, SessionSearchResult, ToolConfirmRequest } from '@webui/types/api.gen';
+
+/** A photo or file chosen on this phone: where it is, and what it is called. */
+export interface PickedFile {
+    uri: string;
+    name: string;
+    mimeType: string | null;
+    size: number | null;
+}
 
 /** `display` is what the phone shows as the answer; it is never sent to GAIA. */
 export type UserInputRequest = ApiUserInputRequest & { display?: string };
@@ -130,6 +143,10 @@ export interface ConnectorActivations {
 export interface SkillList {
     skills: SkillInfo[];
     invalid: Record<string, string>;
+}
+
+export interface FeaturedLibraries {
+    libraries: FeaturedLibrary[];
 }
 
 export interface AgentMcpList {
@@ -462,6 +479,10 @@ export interface GaiaClient {
     refreshSystemContext(options?: RequestOptions): Promise<RefreshSystemContextResult>;
     /** Every skill GAIA can load, plus the folders it skipped. */
     listSkills(options?: RequestOptions): Promise<SkillList>;
+    /** Skill libraries GAIA suggests adding from a link. */
+    listFeaturedSkillLibraries(options?: RequestOptions): Promise<FeaturedLibraries>;
+    /** Reads and audits the skills behind a link; writes nothing. Adding them is PC-only. */
+    previewSkillLink(url: string, options?: RequestOptions): Promise<LinkPreview>;
     /** Creates a schedule; `interval` is the plain-words "when to run", parsed by the PC. 409 when the name is taken. */
     createSchedule(request: CreateScheduleRequest, options?: RequestOptions): Promise<Schedule>;
     /** Reads a plain-words "when to run" without saving it, for the form's live preview. */
@@ -471,6 +492,10 @@ export interface GaiaClient {
     /** Runs a schedule once now (409 while a run is in flight); its next scheduled run stays as it was. */
     runSchedule(name: string, options?: RequestOptions): Promise<Schedule>;
     deleteSchedule(name: string, options?: RequestOptions): Promise<DeleteScheduleResult>;
+    /** Puts a file from this phone in the library and indexes it; resolves once GAIA has read it or failed to. */
+    uploadDocument(file: PickedFile, options?: RequestOptions): Promise<DocumentResponse>;
+    /** Attaches a library document to a chat, so the chat searches it. */
+    attachDocument(sessionId: string, docId: string, options?: RequestOptions): Promise<void>;
     /** A schedule's most recent runs, newest first. */
     listScheduleResults(name: string, limit: number, options?: RequestOptions): Promise<ScheduleResults>;
     /** The library's documents; a chat searches only the ones attached to it. */
