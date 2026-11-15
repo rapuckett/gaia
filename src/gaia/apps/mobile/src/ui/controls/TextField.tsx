@@ -105,12 +105,11 @@ export function TextField({
                 editable={!disabled}
                 multiline={multiline}
                 returnKeyType={returnKeyType}
-                keyboardType={keyboardType}
+                keyboardType={url ? 'url' : keyboardType}
                 onSubmitEditing={onSubmitEditing}
                 submitBehavior={multiline ? 'newline' : 'blurAndSubmit'}
                 secureTextEntry={secureTextEntry && !revealed}
                 autoFocus={autoFocus}
-                keyboardType={url ? 'url' : undefined}
                 autoCapitalize={url ? 'none' : undefined}
                 autoCorrect={url ? false : undefined}
                 accessibilityLabel={accessibilityLabel ?? label}
