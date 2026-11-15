@@ -3,11 +3,13 @@
 
 import { Redirect } from 'expo-router';
 
+import { devGalleryEnabled } from '@/features/dev/devGallery';
+
 import { MarkdownGallery } from '@/features/chat/markdown/MarkdownGallery';
 import { UIProvider } from '@/ui';
 
 export default function MarkdownGalleryRoute() {
-    if (!__DEV__) return <Redirect href="/" />;
+    if (!devGalleryEnabled()) return <Redirect href="/" />;
     return (
         <UIProvider>
             <MarkdownGallery />
