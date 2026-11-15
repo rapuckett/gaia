@@ -158,7 +158,7 @@ export const ROUTE_ACCESS: Readonly<Record<string, RouteAccessClass>> = {
     'POST /api/chat/user-input': 'remote',
     'POST /api/connectors/eval-mailbox': 'pc',
     'POST /api/connectors/{connector_id}/authorize': 'pc',
-    'POST /api/connectors/{connector_id}/authorize-device': 'pc',
+    'POST /api/connectors/{connector_id}/authorize-device': 'pc_or_device',
     'POST /api/connectors/{connector_id}/configure': 'pc',
     'POST /api/connectors/{connector_id}/disable': 'remote',
     'POST /api/connectors/{connector_id}/enable': 'pc',

@@ -2562,7 +2562,13 @@ OAuth and MCP-server connections for the Settings page and per-agent grants
 
   <Accordion title="POST /api/connectors/{connector_id}/authorize-device">
     Start a device-code flow (no browser redirect, no registered OAuth app
-    needed). PC-only, like `configure`.
+    needed). Returns `user_code`, `verification_uri`, `expires_in`, `interval`
+    and `message`, never the `device_code`; the PC polls the provider and
+    keeps the account. The PC may call it, and so may a paired device the PC
+    allowed, for a connector with `supports_device_code` and without
+    `grant_agents`; a device's call is written to the audit log. Anyone else
+    gets a **403**. The device follows progress by re-reading
+    `GET /api/connectors` every `interval` seconds.
   </Accordion>
 
   <Accordion title="DELETE /api/connectors/_flows/{flow_id}">
@@ -3581,7 +3587,7 @@ Every route is in one class, pinned by `tests/unit/chat/ui/test_route_access.py`
 | Class | Who | Routes |
 |---|---|---|
 | PC-only | `pc` | Tunnel start and stop, provider keys, the model-server target, logs, messaging, GPU memory apply and revert, the default full-access setting, connector configure and authorize, an agent's connector grant and activations, deleting a provider key, `POST /v1/connections/{provider}`, skill and agent installs, `POST /api/files/open`, `POST /api/setup/npu/memlock-fix`, the troubleshooting report, the memory profile scan and its commits, re-collecting system context (`reinitialize`, `refresh-system-context`), the eval-only routes, `GET /api/connectors/_debug`, and every other [paired devices](#paired-devices) route |
-| Setup | `pc`, or an allowed device | Setup's changes (see [Setup](#setup)), `POST /api/system/download-model`, `PUT /api/system/model-server/backend` |
+| Setup | `pc`, or an allowed device | Setup's changes (see [Setup](#setup)), `POST /api/system/download-model`, `PUT /api/system/model-server/backend`, and a device-code sign-in (`POST /api/connectors/{connector_id}/authorize-device`, for a connector with `supports_device_code` only) |
 | Not from a device | `pc`, `tunnel` | `GET /api/providers`, which can register a provider |
 | Pairing | a device on the listener, with no token | `POST /api/devices/pair` |
 | Unpairing itself | a device, pending or allowed | `DELETE /api/devices/me` |
