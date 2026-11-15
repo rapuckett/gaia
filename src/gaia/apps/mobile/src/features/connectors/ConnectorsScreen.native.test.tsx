@@ -9,7 +9,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { PC_ONLY_REFUSAL } from '@/api/constants';
 import { createFakeClient } from '@/api/fake';
-import type { ConnectorRow } from '@/api/client.types';
+import type { ConnectorRow, DisconnectOutcome } from '@/api/client.types';
 import { GaiaClientProvider } from '@/data';
 import { ThemeProvider } from '@/ui';
 import { SheetHost } from '@/ui/overlays/SheetHost';
@@ -33,8 +33,8 @@ const slack = {
     activations: {},
 } as unknown as ConnectorRow;
 
-function setup(connectors: ConnectorRow[]) {
-    const client = createFakeClient({ connectors });
+function setup(connectors: ConnectorRow[], disconnectOutcome?: DisconnectOutcome) {
+    const client = createFakeClient({ connectors, disconnectOutcome });
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const wrap = ({ children }: { children: ReactNode }) => (
         <QueryClientProvider client={queryClient}>
@@ -49,6 +49,44 @@ function setup(connectors: ConnectorRow[]) {
     );
     return { client, queryClient, wrap };
 }
+
+const microsoft = {
+    id: 'microsoft',
+    display_name: 'Microsoft',
+    type: 'oauth_pkce',
+    description: 'Mail and calendar.',
+    configured: false,
+    configurable: true,
+    supports_device_code: true,
+    oauth_setup_fields: [],
+    account_id: null,
+    activations: {},
+} as unknown as ConnectorRow;
+
+describeNative('ConnectorsScreen OAuth account', () => {
+    it('sends Connect and Sign in with a code to the PC with phone wording', async () => {
+        const { queryClient, wrap } = setup([microsoft]);
+        await render(<ConnectorsScreen />, { wrapper: wrap });
+        fireEvent.press(await screen.findByLabelText('Microsoft'));
+        fireEvent.press(await screen.findByText('Sign in with a code'));
+        expect(await screen.findByText(/Sign in with a code on your PC/)).toBeTruthy();
+        fireEvent.press(await screen.findByText('Connect'));
+        expect(await screen.findByText(/Connect this on your PC/)).toBeTruthy();
+        queryClient.clear();
+    });
+
+    it('says when the provider did not confirm the revoke after a disconnect', async () => {
+        const connected = { ...microsoft, configured: true, account_id: 'me@example.com' } as ConnectorRow;
+        const { queryClient, wrap } = setup([connected], { revoke_supported: true, revoked_remotely: false, revoke_error: 'timeout' });
+        await render(<ConnectorsScreen />, { wrapper: wrap });
+        fireEvent.press(await screen.findByLabelText('Microsoft'));
+        fireEvent.press(await screen.findByLabelText('Disconnect'));
+        await screen.findByText(/^Disconnect Microsoft/);
+        fireEvent.press((await screen.findAllByLabelText('Disconnect')).at(-1)!);
+        expect(await screen.findByText(/did not confirm the revoke \(timeout\)/)).toBeTruthy();
+        queryClient.clear();
+    });
+});
 
 describeNative('ConnectorsScreen MCP server', () => {
     it('pauses a server from the phone, and refuses to turn it back on with the PC-only text', async () => {

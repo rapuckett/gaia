@@ -167,7 +167,6 @@ describe('createHttpClient requests', () => {
         ['getSystemStatus', (c) => c.getSystemStatus(), 'GET', '/api/system/status', UI_HEADERS, undefined],
         ['listConnectors', (c) => c.listConnectors(), 'GET', '/api/connectors', UI_HEADERS, undefined],
         ['disableConnector', (c) => c.disableConnector('slack'), 'POST', '/api/connectors/slack/disable', JSON_HEADERS, {}],
-        ['disconnectConnector', (c) => c.disconnectConnector('slack'), 'DELETE', '/api/connectors/slack', UI_HEADERS, undefined],
     ])('%s: %s', async (_name, call, method, path, headers, body) => {
         const { fetch, calls } = createRecordingFetch(() => jsonResponse({ status: 'ok' }));
         await call(createHttpClient({ baseUrl: BASE, fetch }));
@@ -175,6 +174,19 @@ describe('createHttpClient requests', () => {
         const sent = calls[0]!;
         expect([sent.method, sent.url, sent.headers]).toEqual([method, `${BASE}${path}`, headers]);
         expect(sent.body === undefined ? undefined : JSON.parse(sent.body)).toEqual(body);
+    });
+
+    it('disconnectConnector: listens on the connector events, deletes, and returns the revoke outcome', async () => {
+        const event = { type: 'connector.disconnected', payload: { connector_id: 'google', revoke_supported: true, revoked_remotely: false, revoke_error: 'timeout' } };
+        const { fetch, calls } = createRecordingFetch((call) =>
+            call.method === 'DELETE' ? textResponse('', 204) : streamResponse([`data: ${JSON.stringify(event)}\n\n`]),
+        );
+        const outcome = await createHttpClient({ baseUrl: BASE, fetch }).disconnectConnector('google');
+        expect(calls.map((c) => [c.method, c.url])).toEqual([
+            ['GET', `${BASE}/api/connectors/events`],
+            ['DELETE', `${BASE}/api/connectors/google`],
+        ]);
+        expect(outcome).toEqual(event.payload);
     });
 
     it('attachToRun: GET /api/chat/attach for the chat; no turn running ends with no events', async () => {
