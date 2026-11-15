@@ -1,18 +1,19 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
+import type { UseQueryResult } from '@tanstack/react-query';
+
 import { formatDateFull, ROLE_KEYS } from '@webui/utils/memoryFormat.core';
 
-import { useMemoryConversation } from '@/data';
+import type { MemoryTurn } from '@/api/client.types';
 import { dateLocale, useT } from '@/i18n/useT';
 import { Badge, Button, Divider, Row, Spinner, Stack, Text } from '@/ui';
 
 import { SectionFailed } from '../SectionFailed';
 
 /** One conversation's turns, read-only and oldest first; long text wraps and each message follows its own script's direction. */
-export function ConversationTurns({ sessionId, onOpenChat }: { sessionId: string; onOpenChat?: () => void }) {
+export function ConversationTurns({ turns, onOpenChat }: { turns: UseQueryResult<MemoryTurn[]>; onOpenChat?: () => void }) {
     const t = useT();
-    const turns = useMemoryConversation(sessionId);
     const locale = dateLocale(t);
 
     return (

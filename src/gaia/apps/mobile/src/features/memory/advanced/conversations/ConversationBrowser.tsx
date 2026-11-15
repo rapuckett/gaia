@@ -5,7 +5,7 @@ import { useMemo, useState } from 'react';
 
 import { formatRelativeDate, ROLE_KEYS } from '@webui/utils/memoryFormat.core';
 
-import { useConversationSearch, useMemoryConversations, useSessions } from '@/data';
+import { useConversationSearch, useMemoryConversation, useMemoryConversations, useSessions } from '@/data';
 import { useT } from '@/i18n/useT';
 import { Badge, Card, Row, SearchField, Sheet, Spinner, Stack, Text } from '@/ui';
 import { MessageSquare } from '@/ui/icons';
@@ -27,6 +27,7 @@ export function ConversationBrowser({ onOpenChat }: Pick<MemoryPaneProps, 'onOpe
     const [open, setOpen] = useState<string | null>(null);
     const sessions = useSessions();
     const recent = useMemoryConversations(SESSION_LIMIT);
+    const turns = useMemoryConversation(open);
     const found = useConversationSearch(query, SEARCH_LIMIT);
     const searching = query.trim() !== '';
 
@@ -119,7 +120,7 @@ export function ConversationBrowser({ onOpenChat }: Pick<MemoryPaneProps, 'onOpe
                 {open ? (
                     <ConversationTurns
                         key={open}
-                        sessionId={open}
+                        turns={turns}
                         onOpenChat={titles.has(open) && onOpenChat ? () => onOpenChat(open) : undefined}
                     />
                 ) : null}
