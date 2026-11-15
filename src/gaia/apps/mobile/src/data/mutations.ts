@@ -6,7 +6,9 @@ import { useMutation, useQueryClient, type QueryClient } from '@tanstack/react-q
 import type {
     ConfirmToolResult,
     CreateSessionRequest,
+    DocumentResponse,
     GaiaClient,
+    PickedFile,
     Session,
     SessionList,
     ToolConfirmRequest,
@@ -172,6 +174,45 @@ export function useDetachDocument() {
         onSuccess: (_result, { sessionId }) => {
             void queryClient.invalidateQueries({ queryKey: queryKeys.session(sessionId) });
             void queryClient.invalidateQueries({ queryKey: queryKeys.sessions });
+        },
+    });
+}
+
+export interface AddDocumentRequest {
+    file: PickedFile;
+    /** The chat to attach to once indexed; null leaves it in the library for the next new chat. */
+    chatId: string | null;
+}
+
+export interface AddDocumentResult {
+    document: DocumentResponse;
+    /** Set when the document was indexed but the chat refused it; the library still has it. */
+    attachError: Error | null;
+}
+
+/** `mutate({ file, chatId })` uploads a picked file to the library and attaches it to the chat, as the web library does. */
+export function useAddDocument() {
+    const client = useGaiaClient();
+    const queryClient = useQueryClient();
+    return useMutation<AddDocumentResult, Error, AddDocumentRequest>({
+        mutationFn: async ({ file, chatId }) => {
+            const api = requireClient(client);
+            const document = await api.uploadDocument(file);
+            // A file GAIA couldn't read has a library row with its reason; a chat must not be promised it.
+            if (!chatId || document.indexing_status === 'failed') return { document, attachError: null };
+            try {
+                await api.attachDocument(chatId, document.id);
+            } catch (err) {
+                return { document, attachError: err instanceof Error ? err : new Error(String(err)) };
+            }
+            return { document, attachError: null };
+        },
+        onSettled: (_result, _error, { chatId }) => {
+            void queryClient.invalidateQueries({ queryKey: queryKeys.documents });
+            if (chatId) {
+                void queryClient.invalidateQueries({ queryKey: queryKeys.session(chatId) });
+                void queryClient.invalidateQueries({ queryKey: queryKeys.sessions });
+            }
         },
     });
 }
