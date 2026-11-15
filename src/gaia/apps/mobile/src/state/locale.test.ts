@@ -14,13 +14,13 @@ describe('locale persistence', () => {
 
     it('keeps an explicit pick across a reload and forgets it when set back to the phone', async () => {
         useLocaleStore.getState().setLocale('ar');
-        await new Promise((r) => setImmediate(r));
+        await new Promise((r) => setTimeout(r, 0));
         useLocaleStore.setState({ locale: null, hydrated: false });
         await hydrateLocale();
         expect(useLocaleStore.getState()).toMatchObject({ locale: 'ar', hydrated: true });
 
         useLocaleStore.getState().setLocale(null);
-        await new Promise((r) => setImmediate(r));
+        await new Promise((r) => setTimeout(r, 0));
         expect(await AsyncStorage.getItem('gaia.locale')).toBeNull();
     });
 });
