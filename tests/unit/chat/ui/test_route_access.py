@@ -601,15 +601,27 @@ def test_a_paired_device_may_read_provider_summaries(setup, monkeypatch):
     monkeypatch.setattr(
         providers, "_install", lambda *a, **k: pytest.fail("registered a provider")
     )
+    monkeypatch.setattr(providers, "_gateway_check_applies", lambda: False)
     resp = clients["device"].get("/api/providers/list", headers={"X-Gaia-UI": "1"})
     assert resp.status_code == 200, resp.text
     listed = {p["id"]: p for p in resp.json()["providers"]}
     assert listed["amd"]["configured"] is True
     assert listed["fireworks"]["configured"] is False
     assert all(
-        set(p) == {"id", "name", "remote", "privacy_notice", "configured", "blocked"}
+        set(p)
+        == {
+            "id",
+            "name",
+            "remote",
+            "privacy_notice",
+            "configured",
+            "blocked",
+            "network",
+        }
         for p in listed.values()
     )
+    # Reachability only: the gateway's error text can name its address.
+    assert listed["amd"]["network"] == {"reachable": None}
     assert "gw.example" not in resp.text
 
 
