@@ -48,8 +48,8 @@ export interface PermissionPromptProps {
 // Width where the buttons may sit side by side.
 const SIDE_BY_SIDE_MIN_WIDTH = 600;
 
-// The body scrolls inside this share of the window, less the keyboard, so Allow and Deny stay on screen.
-const BODY_HEIGHT_SHARE = 0.55;
+// The body scrolls inside this share of the window, less the keyboard, so Allow, Deny and the composer stay on screen.
+const BODY_HEIGHT_SHARE = 0.35;
 const MIN_BODY_HEIGHT = 96;
 
 const mark = (text: string): string => isolate(text, 'ltr');
