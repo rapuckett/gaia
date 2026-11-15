@@ -94,5 +94,6 @@ describe('SheetHost', () => {
         });
         expect(shown(r)).toContain('second');
         expect(shown(r)).not.toContain('first');
-    });
+        // The first render transforms React Native's lazy components on a cold cache (about 1.6 s measured, 25 ms warm), which a loaded machine stretches past 5 s.
+    }, 20_000);
 });

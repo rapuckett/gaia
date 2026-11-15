@@ -8,8 +8,9 @@ import { dateLocale, translator } from '@webui/i18n/translator';
 
 import type { Schedule } from '@/api/client.types';
 import { CONFIRM_DELETE_MS } from '@/api/constants';
-import { useT } from '@/i18n/useT';
-import { Badge, Button, Card, Icon, Row, Stack, Text, type BadgeTone } from '@/ui';
+import { useScheduleResults } from '@/data';
+import { describeError, useT } from '@/i18n/useT';
+import { Badge, Button, Card, Disclosure, Icon, Notice, Row, Stack, Text, type BadgeTone } from '@/ui';
 import { Clock, MessageSquare, Pause, Play, Trash2, Zap } from '@/ui/icons';
 
 import { describeSchedule, formatNextRun, formatTime } from './scheduleText';
@@ -34,6 +35,10 @@ export interface ScheduleCardProps {
 export function ScheduleCard({ schedule, now, runPending, onOpenChat, onRunNow, onToggleStatus, onDelete }: ScheduleCardProps) {
     const t = useT();
     const [confirmDelete, setConfirmDelete] = useState(false);
+    const [historyOpen, setHistoryOpen] = useState(false);
+    const history = useScheduleResults(schedule.name, schedule.last_run_at, historyOpen);
+    const runs = history.data?.results ?? [];
+    const historyShowsFailure = historyOpen && runs.some((r) => r.error);
     useEffect(() => {
         if (!confirmDelete) return;
         const timer = setTimeout(() => setConfirmDelete(false), CONFIRM_DELETE_MS);
@@ -88,7 +93,7 @@ export function ScheduleCard({ schedule, now, runPending, onOpenChat, onRunNow, 
                         )}
                     </Text>
                 </Row>
-                {schedule.last_error ? (
+                {schedule.last_error && !historyShowsFailure ? (
                     <Text role="caption" tone="danger">
                         {t('schedules.card.lastFailed', { error: schedule.last_error })}
                     </Text>
@@ -123,6 +128,29 @@ export function ScheduleCard({ schedule, now, runPending, onOpenChat, onRunNow, 
                         onPress={() => (confirmDelete ? onDelete() : setConfirmDelete(true))}
                     />
                 </Row>
+                <Disclosure title={t('schedules.history')} open={historyOpen} onToggle={() => setHistoryOpen((open) => !open)}>
+                    <Stack gap="sm">
+                        {history.isPending ? <Text tone="muted">{t('schedules.historyLoading')}</Text> : null}
+                        {history.isError ? <Notice tone="danger" message={describeError(history.error, t)} /> : null}
+                        {history.data && runs.length === 0 ? <Text tone="muted">{t('schedules.historyEmpty')}</Text> : null}
+                        {runs.map((run) => (
+                            <Stack key={run.id} gap="xs">
+                                <Text role="caption" tone="muted">
+                                    {when((say, locale) => formatTime(run.executed_at, say, now, locale))}
+                                </Text>
+                                {run.error ? (
+                                    <Text role="caption" tone="danger">
+                                        {run.error}
+                                    </Text>
+                                ) : (
+                                    <Text role="caption" tone="secondary" numberOfLines={6}>
+                                        {run.result || t('schedules.noOutput')}
+                                    </Text>
+                                )}
+                            </Stack>
+                        ))}
+                    </Stack>
+                </Disclosure>
             </Stack>
         </Card>
     );
