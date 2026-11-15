@@ -55,12 +55,14 @@ import type { SpeechModel, SpeechSettings } from '@webui/services/speechApi';
 import type { AboutYouItem, ActivityDay, ConvSession, ConvTurn, EntityInfo, KnowledgeEntry, TemporalItem, ToolStat } from '@webui/utils/memoryFormat.core';
 import type {
     AgentUiHealthResponse,
+    BrowseResponse,
     CancelStreamResponse,
     ConfirmToolResponse,
     CreateSessionRequest,
     DocumentListResponse,
     DocumentResponse,
     FilePreviewResponse,
+    FileSearchResponse,
     MessagesDeleteResponse,
     ModelServerInfo,
     ProviderSummaryList,
@@ -125,7 +127,7 @@ export type {
 } from '@webui/types';
 export type { FileDiff, TurnChanges, UndoResult, UndoSettings } from '@webui/types/changes';
 export type { ActiveSkill, AgentCapabilities, AgentTool, ScopeEntry, SessionEnvironment, SkillOrigin } from '@webui/types/sessionPanel';
-export type { CreateSessionRequest, DocumentListResponse, DocumentResponse, ModelServerInfo, ProviderSummary, ProviderSummaryList, SessionSearchResponse, SessionSearchResult, ToolConfirmRequest, FilePreviewResponse } from '@webui/types/api.gen';
+export type { BrowseResponse, CreateSessionRequest, DocumentListResponse, DocumentResponse, FileEntry, FileSearchResponse, FileSearchResult, ModelServerInfo, QuickLink, ProviderSummary, ProviderSummaryList, SessionSearchResponse, SessionSearchResult, ToolConfirmRequest, FilePreviewResponse } from '@webui/types/api.gen';
 
 /** A photo or file chosen on this phone: where it is, and what it is called. */
 export interface PickedFile {
@@ -629,6 +631,12 @@ export interface GaiaClient {
     deleteSchedule(name: string, options?: RequestOptions): Promise<DeleteScheduleResult>;
     /** Puts a file from this phone in the library and indexes it; resolves once GAIA has read it or failed to. */
     uploadDocument(file: PickedFile, options?: RequestOptions): Promise<DocumentResponse>;
+    /** Indexes a file that is on the PC, as the chat's folders allow; resolves once GAIA has read it or failed to. */
+    uploadDocumentByPath(filepath: string, sessionId: string, options?: RequestOptions): Promise<DocumentResponse>;
+    /** A folder on the PC, as the chat's folders allow; with no `path` it opens the chat's first folder. 403 with `status: 'os_denied'` for a folder the PC's account can't read. */
+    browseFiles(sessionId: string, path: string | undefined, options?: RequestOptions): Promise<BrowseResponse>;
+    /** Looks for files by name in the chat's folders; `fileTypes` is a comma list of extensions. */
+    searchFiles(sessionId: string, query: string, fileTypes: string | undefined, limit: number, options?: RequestOptions): Promise<FileSearchResponse>;
     /** Attaches a library document to a chat, so the chat searches it. */
     attachDocument(sessionId: string, docId: string, options?: RequestOptions): Promise<void>;
     /** A schedule's most recent runs, newest first. */
@@ -662,6 +670,10 @@ export interface GaiaClient {
     getModelNeed(job: ModelNeedJob, options?: RequestOptions): Promise<ModelNeed>;
     /** How this PC's memory is split, the presets and what each unlocks; `settingGb` also reads the manual steps for that size. Read only: changing it is done on the PC. */
     getGpuMemory(settingGb?: number, options?: RequestOptions): Promise<GpuMemoryStatus>;
+    /** "I've done this": records the size someone set by hand on the PC, so it reports a restart pending. Changes no setting. */
+    recordGpuMemoryPending(settingGb: number, options?: RequestOptions): Promise<GpuMemoryStatus>;
+    /** "Keep {gb}": stops reporting a pending GPU memory change. Changes no setting. */
+    dismissGpuMemoryPending(options?: RequestOptions): Promise<GpuMemoryStatus>;
     /** Starts one model's download on the PC; follow it with `getSetupStatus`. */
     downloadSetupModel(modelId: string, acknowledgeLowDisk: boolean, options?: RequestOptions): Promise<SetupRunStatus>;
     /** Deletes one downloaded model from the PC's model server; answers the new plan and the space freed. */

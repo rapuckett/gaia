@@ -24,7 +24,9 @@ export interface TurnTail {
     canContinue: boolean;
     /** The turn ended as a failed reply (GAIA said so, or the send failed for good). */
     failedReply?: boolean;
-    /** Show "Something went wrong": a failed reply whose saved text doesn't already look like an error. */
+    /** The saved reply already shows the failure (its banner and log line), so the tail doesn't repeat it. */
+    shownOnReply?: boolean;
+    /** Show "Something went wrong": a failed reply whose saved copy doesn't already show it. */
     errorBanner?: boolean;
     /** The cause a failed turn named, for its fix. */
     failure?: string;
@@ -81,6 +83,7 @@ export function buildTail(messages: readonly Message[], turn: Turn): TurnTail | 
         const failed = !!turn.error && !mayStillFinish(turn.error);
         const failedReply = failed || !!turn.failed;
         const stop: Stop | undefined = turn.stopState ? { state: turn.stopState, error: turn.stopError } : undefined;
+        const shownOnReply = !!turn.failed && !turn.error && !!lastReply && (lastReply.failed === true || isErrorContent(lastReply.content));
         return {
             live: false,
             text: turn.liveText,
@@ -92,12 +95,14 @@ export function buildTail(messages: readonly Message[], turn: Turn): TurnTail | 
             canTryAgain: failedReply || (stop?.state === 'stopped' && !stop.error),
             canContinue: false,
             failedReply,
-            errorBanner: !!turn.failed && !turn.error && !(lastReply && isErrorContent(lastReply.content)),
+            shownOnReply,
+            errorBanner: !!turn.failed && !turn.error && !shownOnReply,
             failure: turn.failure,
             policyAlert: turn.policyAlert,
         };
     }
-    if (lastReply && (cutOff || cancelled)) {
+    // A failed reply read back from GAIA keeps its Try again, as on the desktop.
+    if (lastReply && (cutOff || cancelled || lastReply.failed === true)) {
         return { live: false, text: '', events: [], replyId: lastReply.id, canTryAgain: true, canContinue: false };
     }
     return null;

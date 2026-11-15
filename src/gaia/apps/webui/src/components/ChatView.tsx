@@ -1028,6 +1028,7 @@ export function ChatView({ sessionId }: ChatViewProps) {
                         stopState,
                         historyNotice,
                         libraryNotices: event.library_notices,
+                        failed: event.failed === true || undefined,
                         failure: event.failed ? event.failure : undefined,
                     };
                     if (historyNotice) historyNotices.set(assistantMsg.id, historyNotice);

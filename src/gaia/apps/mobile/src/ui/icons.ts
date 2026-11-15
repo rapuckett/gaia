@@ -22,6 +22,7 @@ export {
   CircleCheck,
   Clock,
   Cloud,
+  Code,
   Copy,
   Cpu,
   Download,
@@ -29,8 +30,12 @@ export {
   ExternalLink,
   Eye,
   EyeOff,
+  File,
   FileText,
   Folder,
+  FolderOpen,
+  HardDrive,
+  House,
   Image,
   Inbox,
   Info,
@@ -72,7 +77,11 @@ export {
   Smartphone,
   Sparkles,
   Square,
+<<<<<<< HEAD
   SquarePen,
+=======
+  Table,
+>>>>>>> origin/integration/rapuckett
   Terminal,
   Trash2,
   TrendingUp,

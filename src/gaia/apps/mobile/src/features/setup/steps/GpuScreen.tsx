@@ -5,10 +5,10 @@ import * as Clipboard from 'expo-clipboard';
 import { useState } from 'react';
 
 import { formatSize, ltrIn } from '@webui/components/setup/format';
-import { copyableCommand, gpuGbAtSetting, osName, restartLine, splitFigures } from '@webui/components/setup/gpuMemory';
+import { copyableCommand, gpuGbAtSetting, osName, splitFigures } from '@webui/components/setup/gpuMemory';
 import type { GpuMemoryStatus } from '@webui/types';
 
-import { useGpuMemory } from '@/data';
+import { useActiveModel, useGpuMemory, useGpuMemoryPending } from '@/data';
 import { describeError, useLocaleCode, useT } from '@/i18n/useT';
 import { Button, ChoiceList, Ltr, Notice, Row, Spinner, Stack, Surface, Text } from '@/ui';
 import { Check, Copy } from '@/ui/icons';
@@ -64,10 +64,15 @@ export const GpuScreen: PlanScreen = ({ ctx, close }) => {
     const [copied, setCopied] = useState<string | null>(null);
     const [copyError, setCopyError] = useState<string | null>(null);
 
-    const target = chosen !== undefined ? chosen : status ? defaultTarget(status) : null;
+    const chatInCloud = !!useActiveModel().data?.remote;
+    const target = chosen !== undefined ? chosen : status ? defaultTarget(status, chatInCloud) : null;
     const steps = useGpuMemory(target, guided && target != null);
+    const pendingChange = useGpuMemoryPending();
 
     const goBack = () => (guided ? setGuided(false) : close());
+    const doneByHand = () => {
+        if (target != null) pendingChange.mutate(target, { onSuccess: () => setGuided(false) });
+    };
     const back = <Button variant="secondary" label={t('setup.back')} onPress={goBack} />;
 
     if (!status) {
@@ -92,15 +97,17 @@ export const GpuScreen: PlanScreen = ({ ctx, close }) => {
     const presets = status.presets ?? [];
     const preset = presets.find((p) => p.setting_gb === target) ?? null;
     const max = maxSetting(status);
-    const recommended = status.recommended_setting_gb ?? null;
+    const recommended = chatInCloud ? null : status.recommended_setting_gb ?? null;
     const cpuLeft = preset && status.total_gb != null ? Math.max(0, status.total_gb - preset.gpu_gb) : null;
-    const fitsNow = recommended == null ? (status.models ?? []).find((m) => m.default && m.fits_now) : undefined;
+    const fitsNow = recommended == null && !chatInCloud ? (status.models ?? []).find((m) => m.default && m.fits_now) : undefined;
     const unlocks = preset ? unlockNames(preset, names) : [];
     const pending = status.pending ?? null;
     const restartPending = pending?.state === 'restart_required';
     const canGuide = status.guided_value !== null;
     const os = osName(status.os);
     const nowGb = gb(status.gpu_gb ?? 0);
+    const restartGb = pending ? gpuGbAtSetting(status, pending.setting_gb) : null;
+    const keepAction = { label: t('gpu.keep', { gb: nowGb }), onPress: () => pendingChange.mutate(null) };
 
     const copy = (text: string) => {
         setCopyError(null);
@@ -164,6 +171,7 @@ export const GpuScreen: PlanScreen = ({ ctx, close }) => {
                 </Stack>
             )}
             {copyError ? <Notice tone="danger" message={copyError} /> : null}
+            {pendingChange.error ? <Notice tone="danger" message={describeError(pendingChange.error, t)} /> : null}
             <Notice tone="info" message={t('setup.plan.pcOnly')} />
         </Stack>
     ) : (
@@ -176,13 +184,15 @@ export const GpuScreen: PlanScreen = ({ ctx, close }) => {
                 <Notice
                     tone="info"
                     message={[
-                        restartLine(t, gpuGbAtSetting(status, pending.setting_gb)),
+                        restartGb == null ? t('gpu.pending.restartAny') : t('gpu.pending.restart', { gb: ltrIn(locale, formatSize(restartGb)) }),
                         t('gpu.pending.restartHow'),
                         t('gpu.pending.downloadsFirst'),
                     ].join(' ')}
+                    action={pending.source === 'guided' ? keepAction : undefined}
                 />
             ) : null}
-            {pending?.state === 'not_applied' ? <Notice tone="warning" message={t('gpu.pending.notApplied', { gb: nowGb })} /> : null}
+            {pending?.state === 'not_applied' ? <Notice tone="warning" message={t('gpu.pending.notApplied', { gb: nowGb })} action={keepAction} /> : null}
+            {pendingChange.error && !guided ? <Notice tone="danger" message={describeError(pendingChange.error, t)} /> : null}
 
             {!restartPending && presets.length > 0 ? (
                 <Stack gap="md">
@@ -226,7 +236,15 @@ export const GpuScreen: PlanScreen = ({ ctx, close }) => {
             {body}
             <SetupFooter>
                 {back}
-                {guided ? <Row /> : restartPending ? (
+                {guided ? (
+                    <Button
+                        variant="primary"
+                        label={t('gpu.guided.done')}
+                        busy={pendingChange.isPending}
+                        disabled={target == null || steps.data?.guided_value == null}
+                        onPress={doneByHand}
+                    />
+                ) : restartPending ? (
                     <Button variant="primary" label={t('setup.continue')} onPress={close} />
                 ) : target == null && presets.length > 0 ? (
                     <Button variant="primary" label={t('gpu.keepAsIs')} onPress={close} />
