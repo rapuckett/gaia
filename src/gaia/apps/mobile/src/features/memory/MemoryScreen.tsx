@@ -65,7 +65,7 @@ export function MemoryScreen({ onBack }: MemoryScreenProps) {
                             <Text role="title" weight="semibold">
                                 {t('mem.title')}
                             </Text>
-                            <Badge label={t('mem.beta')} tone="warning" />
+                            <Badge label={t.bare('mem.beta')} accessibilityLabel={t('mem.beta')} tone="warning" />
                         </Row>
                     </Stack>
                     {tab === 'advanced' ? (
