@@ -25,16 +25,17 @@ jest.mock('@/ui', () => {
         Disclosure: Pass,
         Divider: () => null,
         Ltr: Pass,
+        PillTabs: () => null,
         Notice: ({ message }: { message?: string }) => <RNText>{message}</RNText>,
         Row: Pass,
-        SegmentedControl: () => null,
         Select: (p: { label: string; onChange: (v: string) => void }) => {
             selects[p.label] = p;
             return null;
         },
+        SettingsGroup: Pass,
         Spinner: () => null,
         Stack: Pass,
-        StatusDot: () => null,
+        Surface: Pass,
         Text: RNText,
     };
 });

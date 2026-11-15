@@ -36,6 +36,7 @@ export { ProgressLine, type ProgressLineProps } from './feedback/ProgressLine';
 export { ChoiceList, type ChoiceListProps, type ChoiceOption } from './feedback/ChoiceList';
 export { Chip, type ChipProps } from './feedback/Chip';
 export { Disclosure, type DisclosureProps } from './feedback/Disclosure';
+export { PillTabs, type PillTab, type PillTabsProps } from './feedback/PillTabs';
 export { SettingsGroup, type SettingsGroupProps } from './feedback/SettingsGroup';
 export { Switch, type SwitchProps } from './forms/Switch';
 export { SegmentedControl, type SegmentedControlProps } from './forms/SegmentedControl';

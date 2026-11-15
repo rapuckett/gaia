@@ -7,16 +7,17 @@ import { Disclosure } from './Disclosure';
 export interface SettingsGroupProps {
     title: string;
     hint?: string | null;
-    count: number;
+    count?: number;
     open: boolean;
     onToggle: () => void;
+    headerTestID?: string;
     children?: ReactNode;
 }
 
 /** The desktop's `.settings-disclosure`: a bordered group whose header shows a chevron, title, hint and count. */
-export function SettingsGroup({ title, hint, count, open, onToggle, children }: SettingsGroupProps) {
+export function SettingsGroup({ title, hint, count, open, onToggle, headerTestID, children }: SettingsGroupProps) {
     return (
-        <Disclosure boxed title={title} hint={hint} count={count} open={open} onToggle={onToggle}>
+        <Disclosure boxed title={title} hint={hint} count={count} open={open} onToggle={onToggle} headerTestID={headerTestID}>
             {children}
         </Disclosure>
     );
