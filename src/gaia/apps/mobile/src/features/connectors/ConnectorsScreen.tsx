@@ -278,6 +278,7 @@ function ConnectorTile({ connector, expanded, onToggle }: { connector: Connector
     const t = useT();
     const [asked, setAsked] = useState(false);
     const [menuOpen, setMenuOpen] = useState(false);
+    const [confirmOpen, setConfirmOpen] = useState(false);
     const [message, setMessage] = useState<{ tone: 'info' | 'danger'; text: string } | null>(null);
     const action = useConnectorServerAction(connector.id);
     const google = connector.id === GOOGLE_CONNECTOR_ID;
@@ -349,7 +350,7 @@ function ConnectorTile({ connector, expanded, onToggle }: { connector: Connector
                                     label={t('settings.connectors.disconnect')}
                                     variant="danger"
                                     disabled={action.isPending}
-                                    onPress={() => run('disconnect')}
+                                    onPress={() => setConfirmOpen(true)}
                                 />
                             </Row>
                         ) : null}
@@ -378,10 +379,18 @@ function ConnectorTile({ connector, expanded, onToggle }: { connector: Connector
                         paused
                             ? { label: t('settings.connectors.enable'), icon: Play, onPress: () => refuse('enablePcOnly') }
                             : { label: t('settings.connectors.disable'), icon: Pause, onPress: () => run('disable') },
-                        { label: t('settings.connectors.disconnect'), icon: Trash2, destructive: true, onPress: () => run('disconnect') },
+                        { label: t('settings.connectors.disconnect'), icon: Trash2, destructive: true, onPress: () => setConfirmOpen(true) },
                     ]}
                 />
             ) : null}
+            <ActionSheet
+                open={confirmOpen}
+                onClose={() => setConfirmOpen(false)}
+                title={t('mobileApp.connectors.disconnectConfirm', {
+                    name: connector.account_id ? `${connector.display_name} (${connector.account_id})` : connector.display_name,
+                })}
+                actions={[{ label: t('settings.connectors.disconnect'), icon: Trash2, destructive: true, onPress: () => run('disconnect') }]}
+            />
         </Tile>
     );
 }

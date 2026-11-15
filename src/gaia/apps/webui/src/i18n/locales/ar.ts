@@ -3648,6 +3648,7 @@ const messages: Messages = {
     'mobileApp.mem.whenHint': 'السنة-الشهر-اليوم والوقت، مثل 2026-11-20 09:00',
     'mobileApp.connectors.comingLater': 'الربط من الهاتف قادم في إصدار لاحق. في الوقت الحالي، اربطه من الكمبيوتر الذي يشغّل GAIA.',
     'mobileApp.connectors.checkPcOnly': 'يشغّل الكمبيوتر الخادم للتحقق منه، لذا شغّل «فحص» من الكمبيوتر الذي يشغّل GAIA.',
+    'mobileApp.connectors.disconnectConfirm': 'فصل {name}؟ سيُحذف تسجيل الدخول أو الرمز المحفوظ من الكمبيوتر، ولا يمكن إعداده من جديد إلا هناك.',
     'mobileApp.connectors.configurePcOnly': 'يحتفظ الكمبيوتر برمز هذا الخادم. أضفه أو غيّره من الكمبيوتر الذي يشغّل GAIA.',
     'mobileApp.connectors.enablePcOnly': 'يعيد الكمبيوتر تشغيل الخوادم. فعّل هذا الخادم من الكمبيوتر الذي يشغّل GAIA.',
     'mobileApp.connectors.googlePcOnly': 'لا يستطيع هذا الهاتف ربط حسابات Google. اربط Google من الكمبيوتر الذي يشغّل GAIA.',
