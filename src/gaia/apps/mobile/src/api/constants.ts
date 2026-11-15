@@ -74,6 +74,9 @@ export const ENDPOINTS = {
     sessions: '/api/sessions',
     session: '/api/sessions/{session_id}',
     sessionCapabilities: '/api/sessions/{session_id}/capabilities',
+    sessionChanges: '/api/sessions/{session_id}/changes',
+    sessionChangesDiff: '/api/sessions/{session_id}/changes/{turn_id}/diff',
+    sessionChangesUndo: '/api/sessions/{session_id}/changes/{turn_id}/undo',
     sessionDocument: '/api/sessions/{session_id}/documents/{doc_id}',
     sessionDocuments: '/api/sessions/{session_id}/documents',
     sessionEvents: '/api/sessions/events',
@@ -118,6 +121,8 @@ export const ENDPOINTS = {
     chatFollowup: '/api/chat/followup',
     chatFollowupOutcome: '/api/chat/followup/{session_id}',
     chatPerformance: '/api/chat/performance/{session_id}',
+    chatRetryWith: '/api/chat/retry-with',
+    chatRetryWithChoose: '/api/chat/retry-with/choose',
     chatUserInput: '/api/chat/user-input',
     connector: '/api/connectors/{connector_id}',
     connectorActivation: '/api/connectors/{connector_id}/activations/{agent_id:path}',
@@ -289,6 +294,18 @@ export function sessionDocumentsPath(sessionId: string): string {
 
 export function sessionCapabilitiesPath(sessionId: string): string {
     return ENDPOINTS.sessionCapabilities.replace('{session_id}', encodeURIComponent(sessionId));
+}
+
+export function sessionChangesPath(sessionId: string): string {
+    return ENDPOINTS.sessionChanges.replace('{session_id}', encodeURIComponent(sessionId));
+}
+
+export function sessionChangesDiffPath(sessionId: string, turnId: string): string {
+    return ENDPOINTS.sessionChangesDiff.replace('{session_id}', encodeURIComponent(sessionId)).replace('{turn_id}', encodeURIComponent(turnId));
+}
+
+export function sessionChangesUndoPath(sessionId: string, turnId: string): string {
+    return ENDPOINTS.sessionChangesUndo.replace('{session_id}', encodeURIComponent(sessionId)).replace('{turn_id}', encodeURIComponent(turnId));
 }
 
 export function sessionPinPath(sessionId: string): string {

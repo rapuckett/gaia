@@ -1,9 +1,9 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-export type ChipId = 'folder' | 'private' | 'permission' | 'model';
+export type ChipId = 'folder' | 'private' | 'permission' | 'model' | 'meter';
 
-/** Chips give up their label in this order; the model chip never does. */
+/** Chips give up their label in this order; the model chip never does. The meter loses its bar only after all three have. */
 export const COLLAPSE_ORDER: readonly ChipId[] = ['folder', 'private', 'permission'];
 
 export const CHIP_GAP = 8;
@@ -11,20 +11,25 @@ export const CHIP_GAP = 8;
 export const ICON_ONLY_WIDTH = 44;
 /** The model's name ellipsizes down to this before any other chip collapses. */
 export const MODEL_MIN_WIDTH = 120;
+/** The context meter's bar and its gap; without it the meter is its percentage alone. */
+export const METER_BAR_WIDTH = 48;
 
-/** Which chips must show their icon alone so the measured row fits `available`. Unmeasured chips count as absent. */
+/** Which chips must show their icon alone (the meter: no bar) so the measured row fits `available`. Absent (0 or unmeasured) items count for nothing. */
 export function collapsedChips(full: Partial<Record<ChipId, number>>, available: number): ChipId[] {
     if (available <= 0) return [];
     const width = (id: ChipId): number | undefined => {
         const w = full[id];
-        return w === undefined ? undefined : id === 'model' ? Math.min(w, MODEL_MIN_WIDTH) : w;
+        return w === undefined || w <= 0 ? undefined : id === 'model' ? Math.min(w, MODEL_MIN_WIDTH) : w;
     };
-    const present = (['folder', 'private', 'permission', 'model'] as const).filter((id) => width(id) !== undefined);
+    const present = (['folder', 'private', 'permission', 'model', 'meter'] as const).filter((id) => width(id) !== undefined);
     const collapsed: ChipId[] = [];
     const total = () =>
-        present.reduce((sum, id) => sum + (collapsed.includes(id) ? ICON_ONLY_WIDTH : (width(id) ?? 0)), 0) +
+        present.reduce((sum, id) => {
+            if (!collapsed.includes(id)) return sum + (width(id) ?? 0);
+            return sum + (id === 'meter' ? Math.max(0, (width(id) ?? 0) - METER_BAR_WIDTH) : ICON_ONLY_WIDTH);
+        }, 0) +
         CHIP_GAP * Math.max(0, present.length - 1);
-    for (const id of COLLAPSE_ORDER) {
+    for (const id of [...COLLAPSE_ORDER, 'meter'] as const) {
         if (total() <= available) break;
         if (present.includes(id)) collapsed.push(id);
     }
