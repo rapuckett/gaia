@@ -44,6 +44,22 @@ def test_fresh_flag_starts_not_set_up(tmp_path):
         _stop(proc)
 
 
+def test_fresh_refuses_a_home_that_is_already_set_up(tmp_path, monkeypatch, capsys):
+    from gaia.testing import dev_backend
+
+    monkeypatch.setattr(os, "environ", dict(os.environ))
+    home = tmp_path / "home"
+    dev_backend.isolate_environment(home, "http://127.0.0.1:1/api/v1")
+    dev_backend.mark_set_up()
+
+    code = dev_backend.main(["--port", "4299", "--home", str(home), "--fresh"])
+
+    assert code == dev_backend.EX_USAGE
+    err = capsys.readouterr().err
+    assert "Use an empty --home for --fresh" in err
+    assert str(home) in err
+
+
 def _stop(proc):
     proc.terminate()
     try:

@@ -367,6 +367,22 @@ def mark_set_up() -> None:
     mark_initialized()
 
 
+def _refuse_set_up_home(home: Path) -> None:
+    from gaia.hub import installer
+    from gaia.ui.setup_runner import _marker, is_initialized
+
+    found = None
+    if is_initialized():
+        found = _marker()
+    elif installer.read_sentinel("gaia") is not None:
+        found = installer.agent_install_dir("gaia") / installer.SENTINEL_NAME
+    if found is not None:
+        raise DevBackendError(
+            f"--fresh needs a home that was never set up, but {home} already has "
+            f"{found}. Use an empty --home for --fresh."
+        )
+
+
 # ── Serving ─────────────────────────────────────────────────────────────────
 
 
@@ -432,6 +448,8 @@ def run(
         raise DevBackendError("--llm-port must differ from --port.")
     llm_url = f"http://{HOST}:{llm_port}/api/v1"
     isolate_environment(home, llm_url, memory)
+    if fresh:
+        _refuse_set_up_home(home)
 
     from gaia.config import UnsafeGaiaHomeError
     from gaia.installer.init_command import INIT_PROFILES
