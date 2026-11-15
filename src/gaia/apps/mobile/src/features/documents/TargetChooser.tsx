@@ -1,7 +1,6 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { useSession } from '@/data';
 import { useT } from '@/i18n/useT';
 import { SegmentedControl, Stack, Text } from '@/ui';
 
@@ -42,10 +41,4 @@ export function TargetChooser({ chatTitle, target, onChange }: TargetChooserProp
             </Text>
         </Stack>
     );
-}
-
-export function ChatTargetChooser({ chatId, target, onChange }: Omit<TargetChooserProps, 'chatTitle'> & { chatId: string }) {
-    const t = useT();
-    const session = useSession(chatId);
-    return <TargetChooser chatTitle={session.data?.title || t('docs.untitledChat')} target={target} onChange={onChange} />;
 }
