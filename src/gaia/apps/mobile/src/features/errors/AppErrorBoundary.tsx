@@ -2,25 +2,26 @@
 // SPDX-License-Identifier: MIT
 
 import { reloadAppAsync } from 'expo';
+import { View } from 'react-native';
 import { Component, type ReactNode } from 'react';
 
 import { useT } from '@/i18n/useT';
-import { Button, Row, Stack, Text } from '@/ui';
+import { Button, Stack, Text } from '@/ui';
 
 export type BoundaryVariant = 'window' | 'fill' | 'compact';
 
 function Fallback({ variant, onRetry }: { variant: BoundaryVariant; onRetry: () => void }) {
     const t = useT();
     return (
-        <Stack gap="md" padding="lg" align="center" justify="center" flex={variant === 'compact' ? undefined : 1} accessibilityRole="alert" testID="error-boundary">
-            <Text role="title" align="center">{t('errorBoundary.title')}</Text>
-            <Text role="body" tone="secondary" align="center">
+        <Stack gap="sm" padding="xl" align="center" justify="center" flex={variant === 'compact' ? undefined : 1} accessibilityRole="alert" testID="error-boundary">
+            <Text role="prose" weight="semibold" align="center">{t('errorBoundary.title')}</Text>
+            <Text role="ui" tone="secondary" align="center">
                 {t(variant === 'window' ? 'errorBoundary.bodyWindow' : 'errorBoundary.body')}
             </Text>
-            <Row gap="sm" wrap justify="center">
-                <Button variant="primary" label={t('errorBoundary.retry')} onPress={onRetry} testID="error-boundary-retry" />
-                <Button variant="secondary" label={t('errorBoundary.reload')} onPress={() => void reloadAppAsync()} testID="error-boundary-reload" />
-            </Row>
+            <View style={{ alignSelf: 'stretch', gap: 8 }}>
+                <Button full variant="primary" label={t('errorBoundary.retry')} onPress={onRetry} testID="error-boundary-retry" />
+                <Button full label={t('errorBoundary.reload')} onPress={() => void reloadAppAsync()} testID="error-boundary-reload" />
+            </View>
         </Stack>
     );
 }
