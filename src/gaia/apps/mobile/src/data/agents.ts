@@ -7,15 +7,15 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { FLAGSHIP_AGENT_ID } from '@webui/utils/newTask';
 
-import type { AgentInstallStatus, AgentList, GaiaClient, SetupCheck } from '@/api/client.types';
+import type { AgentInstallStatus, GaiaClient, SetupCheck } from '@/api/client.types';
 import { GaiaApiError } from '@/api/errors';
 
 import { useGaiaClient } from './GaiaClientProvider';
-import { requireClient } from './queries';
+import { useAgents } from './connectors';
+import { queryKeys, requireClient } from './queries';
 
 export const INSTALL_POLL_MS = 1_500;
 
-const agentsKey = ['agents'] as const;
 const setupCheckKey = ['setupCheck'] as const;
 
 const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
@@ -63,11 +63,7 @@ export type FlagshipInstallState =
 export function useFlagshipAgent() {
     const client = useGaiaClient();
     const queryClient = useQueryClient();
-    const agents = useQuery<AgentList>({
-        queryKey: agentsKey,
-        enabled: client !== null,
-        queryFn: ({ signal }) => requireClient(client).listAgents({ signal }),
-    });
+    const agents = useAgents();
     const missing = !!agents.data && !agents.data.agents.some((a) => a.id === FLAGSHIP_AGENT_ID);
     const setup = useQuery<SetupCheck>({
         queryKey: setupCheckKey,
@@ -94,7 +90,7 @@ export function useFlagshipAgent() {
                 },
             });
             if (cancelled.current) return;
-            await queryClient.invalidateQueries({ queryKey: agentsKey });
+            await queryClient.invalidateQueries({ queryKey: queryKeys.agents });
             if (!cancelled.current) setState({ kind: 'idle' });
         } catch (error) {
             if (!cancelled.current) setState({ kind: 'failed', error });

@@ -360,7 +360,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             const agents = data.agents ?? [
                 { id: FLAGSHIP_AGENT_ID, name: 'GAIA', description: '', source: 'builtin', conversation_starters: [], models: [] },
             ];
-            return { agents: [...agents], total: agents.length };
+            return { agents: [...agents] };
         },
         async installAgent(id) {
             installs.push(id);
