@@ -9,6 +9,7 @@ import { hiddenAutomatedCount } from '@webui/utils/sessionGrouping';
 
 import { useDeleteSession, useMarkRead, useRenameSession, useSessions, useSessionSearch, useSetPinned } from '@/data';
 import { ModelStatusPill } from '@/features/model';
+import { NotificationsEntry } from '@/features/notifications';
 import { describeError, describeErrorWith, useT } from '@/i18n/useT';
 import {
     Chip,
@@ -145,6 +146,7 @@ export function ChatDrawerContent({ activeId, onSelect, onClose, onNewChat, onPc
                     {entries.filter((e) => e.footer).map((e) => (
                         <NavRow key={e.key} entry={e} active={activeRoute === e.route} onOpen={open} />
                     ))}
+                    <NotificationsEntry active={activeRoute === 'notifications'} onOpen={() => open('notifications')} />
                     <ModelStatusPill />
                 </Stack>
             }
@@ -228,7 +230,7 @@ function Header({ onClose, onNewChat, onPcs }: { onClose: () => void; onNewChat?
             <Row gap="sm" accessibilityRole="header">
                 <Text role="title" weight="semibold">{APP_NAME}</Text>
                 <Spacer />
-                {onPcs ? <IconButton icon={Monitor} label={t('mobileApp.pairing.pcs.title')} onPress={onPcs} /> : null}
+                {onPcs ? <IconButton icon={Monitor} label={t('mobileApp.pairing.pcs.title')} onPress={onPcs} testID="pcs-drawer-button" /> : null}
                 {onNewChat ? <IconButton icon={Plus} label={t('sidebar.newChat')} onPress={onNewChat} /> : null}
                 <IconButton icon={X} label={t('sidebar.collapse')} onPress={onClose} />
             </Row>

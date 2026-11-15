@@ -34,9 +34,64 @@ const MANY = Array.from({ length: 12 }, (_, i) => [
     msg('assistant', `Run ${i + 1} copied ${i + 4} files.`, i * 2 + 1),
 ]).flat();
 
-export type MessagesFixture = 'loading' | 'long' | 'many' | 'short' | 'streaming';
+const withCards = (m: Message, cards: NonNullable<Message['cards']>): Message => ({ ...m, cards });
+
+// A card whose payload throws when read, to show the error boundary.
+const THROWING = {
+    columns: ['Name'],
+    get rows(): never {
+        throw new Error('fixture: card payload threw');
+    },
+};
+
+const CARDS = [
+    msg('user', 'Summarize last week\'s runs as cards.', 0),
+    withCards(msg('assistant', 'Cards first, then the answer text. Run 3 was the slowest.', 1), [
+        {
+            render: 'table',
+            data: {
+                title: 'Nightly runs',
+                columns: ['Run', 'Started', 'Files copied', 'Skipped', 'Duration (s)', 'Status'],
+                rows: [
+                    ['Run 1', '2026-11-08 02:00', 12, 3, 41.5, 'ok'],
+                    ['Run 2', '2026-11-09 02:00', 15, 0, 38.2, 'ok'],
+                    ['Run 3', '2026-11-10 02:00', 1204, 17, 912, 'slow'],
+                ],
+            },
+        },
+        {
+            render: 'key_value',
+            data: {
+                title: 'Run 3',
+                items: [
+                    { key: 'Source', value: 'C:\\Users\\me\\Documents\\Projects\\Quarterly reports 2026\\drafts' },
+                    { key: 'Files copied', value: 1204 },
+                    { key: 'Notes', value: 'Copied everything again because the index was missing, so the job took far longer than the others.' },
+                    { key: 'Verified', value: true },
+                    { key: 'Error', value: null },
+                ],
+            },
+        },
+        { render: 'list', data: { title: 'Next steps', ordered: true, items: ['Rebuild the index', 'Re-run the job', 'Check the disk'] } },
+        { render: 'list', data: { title: 'خطوات تالية', items: ['إعادة بناء الفهرس', 'إعادة تشغيل المهمة'] } },
+    ]),
+];
+
+const BAD_CARDS = [
+    msg('user', 'Show me the broken cards.', 0),
+    withCards(msg('assistant', 'The answer text still shows below the cards.', 1), [
+        { render: 'table', data: { title: 'Missing its columns', rows: [[1, 2]] } },
+        { render: 'chart', data: { series: [1, 2, 3] } },
+        { render: 'table', data: THROWING },
+        { render: 'list', data: { items: ['Still fine'] } },
+    ]),
+];
+
+export type MessagesFixture = 'badCards' | 'cards' | 'loading' | 'long' | 'many' | 'short' | 'streaming';
 
 export const FIXTURES: Record<MessagesFixture, { messages: Message[]; live?: Message }> = {
+    badCards: { messages: BAD_CARDS },
+    cards: { messages: CARDS },
     loading: { messages: [] },
     long: { messages: [...SHORT.slice(0, 2), msg('user', LONG_USER, 4), msg('assistant', ANSWER, 5)] },
     many: { messages: MANY },
