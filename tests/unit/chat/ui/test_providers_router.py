@@ -88,7 +88,8 @@ class FakeLemonade:
             return _Resp(200, {"all_models_loaded": []})
         if (method, path) == ("POST", "install"):
             self.cloud.setdefault(json["provider"], {"name": json["provider"]})
-            self.cloud[json["provider"]]["base_url"] = json["base_url"]
+            for field in ("base_url", "auth_header_name", "auth_header_prefix"):
+                self.cloud[json["provider"]][field] = json[field]
             return _Resp(200, {"status": "ok"})
         if (method, path) == ("POST", "cloud/auth"):
             entry = self.cloud.setdefault(json["provider"], {"name": json["provider"]})
@@ -1093,6 +1094,101 @@ def test_connect_ignores_gateway_fields_for_fireworks(client, lemonade, keys):
         lemonade.call("POST", "install")["json"]["base_url"]
         == "https://api.fireworks.ai/inference/v1"
     )
+
+
+_CUSTOM_GATEWAY = {
+    "name": "amd",
+    "base_url": "https://gw.example/v1",
+    "auth_header_name": "X-Key",
+    "auth_header_prefix": "Token ",
+    "runtime_key_set": True,
+    "models_discovered": True,
+}
+
+
+def test_a_keyless_reconnect_keeps_a_custom_gateway(client, lemonade, keys):
+    lemonade.cloud["amd"] = dict(_CUSTOM_GATEWAY)
+    resp = client.post("/api/providers/amd/connect", json={})
+    assert resp.status_code == 200, resp.text
+    payload = lemonade.call("POST", "install")["json"]
+    assert payload["base_url"] == "https://gw.example/v1"
+    assert payload["auth_header_name"] == "X-Key"
+    assert payload["auth_header_prefix"] == "Token "
+
+
+@pytest.mark.parametrize(
+    "fields",
+    [
+        {"base_url": "https://attacker.example/v1"},
+        {"auth_header_name": "X-Leak"},
+        {"base_url": "https://attacker.example/v1", "auth_header_name": "X-Leak"},
+        {"auth_header_prefix": ""},
+    ],
+)
+@pytest.mark.parametrize(
+    "away", [{"X-Forwarded-For": "203.0.113.9"}, {"X-Forwarded-Proto": "https"}]
+)
+def test_only_the_pc_may_move_where_the_saved_key_goes(
+    client, lemonade, keys, fields, away
+):
+    lemonade.cloud["amd"] = dict(_CUSTOM_GATEWAY)
+    resp = client.post("/api/providers/amd/connect", json=fields, headers=away)
+    assert resp.status_code == 403
+    assert "on the PC running GAIA" in resp.json()["detail"]
+    assert lemonade.calls == []
+    assert lemonade.cloud["amd"] == _CUSTOM_GATEWAY
+    assert keys["ensure"] == []
+
+
+def test_the_pc_may_move_a_saved_key_to_another_gateway(client, lemonade, keys):
+    lemonade.cloud["amd"] = dict(_CUSTOM_GATEWAY)
+    resp = client.post(
+        "/api/providers/amd/connect",
+        json={"base_url": "https://gw2.example/v1", "auth_header_name": "X-Other"},
+    )
+    assert resp.status_code == 200, resp.text
+    assert lemonade.cloud["amd"]["base_url"] == "https://gw2.example/v1"
+    assert lemonade.cloud["amd"]["auth_header_name"] == "X-Other"
+    assert lemonade.cloud["amd"]["auth_header_prefix"] == "Token "
+
+
+def test_provider_summaries_read_only_and_carry_no_secret(client, lemonade, keys):
+    lemonade.cloud["amd"] = dict(_CUSTOM_GATEWAY)
+    keys["stored"]["fireworks"] = KEY
+    resp = client.get("/api/providers/list", headers={"X-Forwarded-For": "203.0.113.9"})
+    assert resp.status_code == 200, resp.text
+    assert resp.json() == {
+        "providers": [
+            {
+                "id": "local",
+                "name": "Local",
+                "remote": False,
+                "privacy_notice": providers._PRIVACY["local"],
+                "configured": True,
+                "blocked": False,
+            },
+            {
+                "id": "fireworks",
+                "name": "Fireworks AI",
+                "remote": True,
+                "privacy_notice": providers._PRIVACY["fireworks"],
+                "configured": False,
+                "blocked": False,
+            },
+            {
+                "id": "amd",
+                "name": "AMD LLM Gateway",
+                "remote": True,
+                "privacy_notice": providers._PRIVACY["amd"],
+                "configured": True,
+                "blocked": False,
+            },
+        ],
+        "lemonade_error": None,
+    }
+    assert lemonade.paths() == ["system-info", "system-info"]
+    assert keys["ensure"] == []
+    assert KEY not in resp.text and "gw.example" not in resp.text
 
 
 def test_connect_reports_a_key_the_store_did_not_keep(client, lemonade, keys):

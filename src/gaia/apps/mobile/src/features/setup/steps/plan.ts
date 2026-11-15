@@ -4,7 +4,8 @@
 import {
     catalogOf, extraModels, isNpu, pendingDownloads, shortfall, totals, type Selection, type Shortfall, type Totals,
 } from '@webui/components/setup/selection';
-import type { PreflightReport, ProviderInfo, SetupCatalogEntry, SetupPlan } from '@webui/types';
+import type { PreflightReport, SetupCatalogEntry, SetupPlan } from '@webui/types';
+import type { ProviderSummary } from '@webui/types/api.gen';
 
 import type { SetupRunOptions } from '@/api/client.types';
 
@@ -44,7 +45,7 @@ export function planView(plan: SetupPlan, selection: Selection, preflight: Prefl
 }
 
 /** Local only is on when no cloud provider can be picked. */
-export function cloudIsBlocked(providers: readonly ProviderInfo[] | undefined): boolean {
+export function cloudIsBlocked(providers: readonly Pick<ProviderSummary, 'id' | 'blocked'>[] | undefined): boolean {
     const cloud = (providers ?? []).filter((p) => p.id === 'fireworks' || p.id === 'amd');
     return cloud.length > 0 && cloud.every((p) => p.blocked);
 }

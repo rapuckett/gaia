@@ -23,6 +23,10 @@ describe('pickBanner', () => {
         expect(id(OK)).toBeNull();
         expect(id(undefined)).toBeNull();
         expect(id(undefined, new GaiaNetworkError('http://pc', new Error('x')))).toBe('unreachable');
+        const off = pickBanner(undefined, new GaiaNetworkError('http://pc', new Error('x')), t);
+        expect(off?.title).toBe(t('mobileApp.pairing.off.title'));
+        expect(off?.message).toBe(t('mobileApp.pairing.unreachable.body'));
+        expect(pickBanner(undefined, new GaiaApiError(404, 'gone'), t)?.title).toBe(t('banner.unreachable'));
         expect(id(undefined, new GaiaApiError(503, 'busy'))).toBe('backendError');
         expect(id(withStatus({ init_state: 'initializing', init_tasks: [{ name: 'Models', status: 'running' }] }))).toBe('starting');
         expect(id(withStatus({ lemonade_running: false }))).toBe('serverStopped');

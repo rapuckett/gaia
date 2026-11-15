@@ -5,11 +5,10 @@ import { directionPlan } from './direction.core';
 
 describe('directionPlan', () => {
     it.each([
-        ['rtl', 'rtl', { allowRTL: true, forceRTL: false }],
-        ['ltr', 'ltr', { allowRTL: true, forceRTL: false }],
-        ['rtl', 'ltr', { allowRTL: true, forceRTL: true }],
-        ['ltr', 'rtl', { allowRTL: false, forceRTL: false }],
-    ] as const)('app %s on a %s phone', (app, device, plan) => {
-        expect(directionPlan(app, device)).toEqual(plan);
+        [null, { allowRTL: true, forceRTL: false }],
+        ['ltr', { allowRTL: false, forceRTL: false }],
+        ['rtl', { allowRTL: true, forceRTL: true }],
+    ] as const)('pick %s', (pick, plan) => {
+        expect(directionPlan(pick)).toEqual(plan);
     });
 });

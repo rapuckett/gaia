@@ -1,14 +1,15 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { focusManager, QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Drawer } from 'expo-router/drawer';
 import { useEffect, useMemo, useState } from 'react';
-import { Platform, useWindowDimensions } from 'react-native';
+import { AppState, Platform, useWindowDimensions } from 'react-native';
 
 import { createHttpClient } from '@/api/http';
 import { GaiaClientProvider } from '@/data/GaiaClientProvider';
 import { AppErrorBoundary } from '@/features/errors/AppErrorBoundary';
+import { ChatAlertFeed } from '@/features/banners/ChatAlertFeed';
 import { ConnectionBanner } from '@/features/banners/ConnectionBanner';
 import { ModelNeededHost } from '@/features/model';
 import { NotificationFeed } from '@/features/notifications';
@@ -44,12 +45,19 @@ export default function RootLayout() {
         [connection],
     );
 
+    // Coming back to the foreground re-reads what's stale, such as the PC's status.
+    useEffect(() => {
+        const sub = AppState.addEventListener('change', (state) => focusManager.setFocused(state === 'active'));
+        return () => sub.remove();
+    }, []);
+
     const localeLoaded = useLocaleStore((s) => s.hydrated);
+    const picked = useLocaleStore((s) => s.locale !== null);
 
     // Before the saved pick loads, dir is the phone's and would overwrite the pick's flags.
     useEffect(() => {
-        if (localeLoaded) applyDirection(dir, lang);
-    }, [dir, lang, localeLoaded]);
+        if (localeLoaded) applyDirection(dir, lang, picked);
+    }, [dir, lang, picked, localeLoaded]);
 
     if (!localeLoaded) return null;
 
@@ -63,6 +71,7 @@ export default function RootLayout() {
                         <SetupGate>
                             <RoutingEffects />
                             <NotificationFeed />
+                            <ChatAlertFeed />
                             <Drawer
                                 drawerContent={(props) => (
                                     <AppErrorBoundary variant="compact">
