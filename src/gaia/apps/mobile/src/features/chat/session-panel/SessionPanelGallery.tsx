@@ -77,13 +77,20 @@ export function SessionPanelGallery({ state }: { state: SessionPanelGalleryState
         useSessionPanelStore.getState().setSection('tools', true);
     }, []);
     return (
-        <QueryClientProvider client={queryClient}>
-            <GaiaClientProvider client={client}>
-                <Screen>
-                    <MessageListView messages={FIXTURES.short.messages} />
-                </Screen>
-                <SessionPanel sessionId="dev" open onClose={() => undefined} />
-            </GaiaClientProvider>
-        </QueryClientProvider>
+        <>
+            <Screen>
+                <MessageListView messages={FIXTURES.short.messages} />
+            </Screen>
+            <SessionPanel
+                sessionId="dev"
+                open
+                onClose={() => undefined}
+                wrap={(body) => (
+                    <QueryClientProvider client={queryClient}>
+                        <GaiaClientProvider client={client}>{body}</GaiaClientProvider>
+                    </QueryClientProvider>
+                )}
+            />
+        </>
     );
 }
