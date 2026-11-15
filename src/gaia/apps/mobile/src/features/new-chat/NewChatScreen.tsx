@@ -5,7 +5,7 @@ import { bracketParts } from '@webui/i18n/registry';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type { PermissionMode } from '@/api/client.types';
-import { useCreateSession, useDocuments, useGaiaClient, useStartScreen, useSystemStatus } from '@/data';
+import { useCreateSession, useDocuments, useGaiaClient, useMemorySettings, useStartScreen, useSystemStatus } from '@/data';
 import { FlagshipAgentBanner } from '@/features/banners/FlagshipAgentBanner';
 import { Composer, FolderChip, ModelChip, PermissionChip, PrivateChip, useAttachments, useComposerQueue } from '@/features/composer';
 import { useNextChatDocs } from '@/features/documents';
@@ -47,6 +47,7 @@ export function NewChatScreen({ onOpen, onChooseDocuments, initialText = '', pro
     const attachments = useAttachments();
     // The chat doesn't exist yet: these are applied as it is made.
     const [isPrivate, setPrivate] = useState(false);
+    const memory = useMemorySettings();
     const [mode, setMode] = useState<PermissionMode>('ask');
     const documents = useDocuments().data?.documents;
     const attachedIds = useNextChatDocs((s) => s.ids);
@@ -172,7 +173,12 @@ export function NewChatScreen({ onOpen, onChooseDocuments, initialText = '', pro
                         leftControls={
                             <>
                                 <PermissionChip mode={mode} onChange={setMode} />
-                                <PrivateChip on={isPrivate} onChange={setPrivate} />
+                                <PrivateChip
+                                    on={isPrivate}
+                                    onChange={setPrivate}
+                                    memoryEnabled={memory.isError ? null : (memory.data?.memory_enabled ?? null)}
+                                    memoryUnreadable={memory.isError}
+                                />
                             </>
                         }
                         rightControls={<ModelChip />}
