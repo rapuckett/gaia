@@ -1,7 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { useState, type ReactNode } from 'react';
+import { useState } from 'react';
 import { Text as RNText, View } from 'react-native';
 
 import type { SkillInfo } from '@/api/client.types';
@@ -12,7 +12,6 @@ import {
     Button,
     Disclosure,
     Divider,
-    Icon,
     EmptyState,
     ErrorState,
     ListSkeleton,
@@ -26,7 +25,8 @@ import {
     Text,
     useTheme,
 } from '@/ui';
-import { ChevronDown, ChevronRight } from '@/ui/icons';
+
+import { SettingsGroup } from './SettingsGroup';
 
 import { filterSkills, GROUPS, isGrouped, SEARCH_ABOVE, SKILLS_HOW_PARAMS, skippedName, skipReason } from './skillList';
 
@@ -88,33 +88,24 @@ export function SkillsScreen({ onTry }: { onTry: (name: string, prompt: string) 
                                 const byDefault = g.source === 'agent-bundled' || (g.source === 'user' && rows.length > 0);
                                 const open = groupOpen(g.source, byDefault);
                                 return (
-                                    <SkillCard key={g.source}>
-                                        <Pressable
-                                            onPress={toggleGroup(g.source, byDefault)}
-                                            accessibilityLabel={t(g.title)}
-                                            accessibilityState={{ expanded: open }}
-                                        >
-                                            <Row gap="sm" align="start">
-                                                <Icon icon={open ? ChevronDown : ChevronRight} size="sm" tone="muted" />
-                                                <Stack flex={1} gap="xs">
-                                                    <Text role="ui" weight="semibold">{t(g.title)}</Text>
-                                                    <Text role="label" tone="secondary">{t(g.note, g.params)}</Text>
-                                                </Stack>
-                                                <CountPill n={rows.length} />
-                                            </Row>
-                                        </Pressable>
-                                        {open ? (
-                                            rows.length === 0 && g.empty ? (
-                                                <Text role="label" tone="muted">{t(g.empty, g.params)}</Text>
-                                            ) : (
-                                                rows.map((s, i) => <View key={s.name}>{i > 0 ? <Divider /> : null}{row(s)}</View>)
-                                            )
-                                        ) : null}
-                                    </SkillCard>
+                                    <SettingsGroup
+                                        key={g.source}
+                                        title={t(g.title)}
+                                        hint={t(g.note, g.params)}
+                                        count={rows.length}
+                                        open={open}
+                                        onToggle={toggleGroup(g.source, byDefault)}
+                                    >
+                                        {rows.length === 0 && g.empty ? (
+                                            <Text role="label" tone="muted">{t(g.empty, g.params)}</Text>
+                                        ) : (
+                                            rows.map((s, i) => <View key={s.name}>{i > 0 ? <Divider /> : null}{row(s)}</View>)
+                                        )}
+                                    </SettingsGroup>
                                 );
                             })
                         ) : shown.length > 0 ? (
-                            <SkillCard>{shown.map((s, i) => <View key={s.name}>{i > 0 ? <Divider /> : null}{row(s)}</View>)}</SkillCard>
+                            <Surface tone="primary" radius="md" border padding="md">{shown.map((s, i) => <View key={s.name}>{i > 0 ? <Divider /> : null}{row(s)}</View>)}</Surface>
                         ) : null}
                         {invalid.length > 0 ? (
                             <Stack gap="xs">
@@ -136,40 +127,24 @@ function SkillRow({ skill, onTry }: { skill: SkillInfo; onTry: () => void }) {
     const [open, setOpen] = useState(false);
     const long = skill.description.length > CUT_ABOVE_CHARS;
     return (
-        <Row gap="md" align="center">
-            <Stack flex={1} gap="xs">
-                <Text role="ui">
-                    {skill.name}
-                    {skill.always_on ? <Text role="ui" tone="muted">{` · ${t('settings.skills.alwaysOn')}`}</Text> : null}
-                </Text>
-                <Text role="label" tone="secondary" numberOfLines={open ? undefined : 2}>{skill.description}</Text>
-                {long ? (
-                    <Pressable onPress={() => setOpen(!open)} accessibilityRole="button" accessibilityState={{ expanded: open }}>
-                        <Text role="label">
-                            <RNText style={{ textDecorationLine: 'underline' }}>{t(open ? 'settings.skills.less' : 'settings.skills.more')}</RNText>
-                        </Text>
-                    </Pressable>
-                ) : null}
-            </Stack>
-            {!skill.always_on ? <TryButton label={t('settings.skills.try')} onPress={onTry} /> : null}
-        </Row>
-    );
-}
-
-/** The desktop's `.settings-card`: a bordered card holding a group of skills. */
-function SkillCard({ children }: { children: ReactNode }) {
-    return (
-        <Surface tone="card" radius="lg" border padding="md">
-            <Stack gap="sm">{children}</Stack>
-        </Surface>
-    );
-}
-
-function CountPill({ n }: { n: number }) {
-    const { colors, radius } = useTheme();
-    return (
-        <View style={{ backgroundColor: colors.bgTertiary, borderRadius: radius.full, paddingHorizontal: 8, paddingVertical: 2, minWidth: 24 }}>
-            <Text role="caption" tone="secondary" align="center">{String(n)}</Text>
+        <View style={{ paddingVertical: 9 }}>
+            <Row gap="md" align="center">
+                <Stack flex={1} gap="xs">
+                    <Text role="ui">
+                        {skill.name}
+                        {skill.always_on ? <Text role="ui" tone="muted">{` · ${t('settings.skills.alwaysOn')}`}</Text> : null}
+                    </Text>
+                    <Text role="label" tone="secondary" numberOfLines={open ? undefined : 2}>{skill.description}</Text>
+                    {long ? (
+                        <Pressable onPress={() => setOpen(!open)} accessibilityRole="button" accessibilityState={{ expanded: open }}>
+                            <Text role="label">
+                                <RNText style={{ textDecorationLine: 'underline' }}>{t(open ? 'settings.skills.less' : 'settings.skills.more')}</RNText>
+                            </Text>
+                        </Pressable>
+                    ) : null}
+                </Stack>
+                {!skill.always_on ? <TryButton label={t('settings.skills.try')} onPress={onTry} /> : null}
+            </Row>
         </View>
     );
 }
