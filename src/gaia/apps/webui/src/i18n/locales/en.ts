@@ -3676,6 +3676,7 @@ export const enMessages = {
     'mobileApp.skills.trustBody': "Skills from a link are written by someone else. A skill's instructions steer what GAIA does with your files, shell and accounts, and a skill that ships code runs it on your PC. GAIA audits each skill and refuses anything the audit blocks, but an audit is not a guarantee. Read what they do first.",
     'mobileApp.spend.limitInvalid': 'Enter an amount above zero, like 20.',
     'mobileApp.banner.openOnPc': 'Open GAIA on your PC to start the model server.',
+    'mobileApp.banner.openChat': 'Open chat',
     'mobileApp.settings.memory.lede': 'GAIA remembers facts, preferences and past conversations across chats, on your PC only. Private chats (the eye icon in a chat) are never remembered.',
     'mobileApp.settings.pcOnly': 'Change this on the PC running GAIA.',
     'mobileApp.settings.model.removeDownloadBody': 'Its downloaded files are deleted from your PC. You can add it again later.',
