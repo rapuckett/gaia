@@ -404,6 +404,11 @@ export interface PcAudioBytes {
     contentType: string;
 }
 
+/** What the PC's export route answers: the whole chat as Markdown text, or as JSON. */
+export type SessionExport =
+    | { format: 'markdown'; content: string }
+    | { format: 'json'; session: Session; messages: Message[] };
+
 export interface GaiaClient {
     health(options?: RequestOptions): Promise<HealthResponse>;
     listSessions(options?: RequestOptions): Promise<SessionList>;
@@ -480,6 +485,8 @@ export interface GaiaClient {
     detachDocument(sessionId: string, docId: string, options?: RequestOptions): Promise<void>;
     /** The tools and skills of the chat's running agent; rejects with 409 until the agent has started. */
     getCapabilities(sessionId: string, options?: RequestOptions): Promise<AgentCapabilities>;
+    /** The chat as Markdown text, or as its session and messages in JSON. */
+    exportSession(sessionId: string, format: 'markdown' | 'json', options?: RequestOptions): Promise<SessionExport>;
     /** The folders this chat may touch and whether its web tools are on. */
     getEnvironment(sessionId: string, options?: RequestOptions): Promise<SessionEnvironment>;
     /** Takes a folder or file away from the chat; rejects with 409 when the PC refuses. */

@@ -1338,6 +1338,12 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             doc.error_kind = null;
             return doc;
         },
+        async exportSession(sessionId, format) {
+            const session = findSession(sessionId);
+            const list = messages[sessionId] ?? [];
+            if (format === 'json') return { format, session, messages: list };
+            return { format, content: [`# ${session.title}`, ...list.map((m) => `**${m.role}:**\n\n${m.content}`)].join('\n\n---\n\n') };
+        },
         async getCapabilities(sessionId) {
             capabilityReads.push(sessionId);
             const found = data.capabilities?.[sessionId];

@@ -7,8 +7,9 @@ import { MAX_SESSION_TITLE_CHARS } from '@webui/utils/constants';
 
 import { useT } from '@/i18n/useT';
 import { ActionSheet, Button, Row, Sheet, Stack, TextField, type SheetAction } from '@/ui';
-import { Pencil, Pin, PinOff, Trash2 } from '@/ui/icons';
+import { Download, Pencil, Pin, PinOff, Trash2 } from '@/ui/icons';
 
+import type { ExportFormat } from './exportChat';
 import { renamedTitle, rowActions, type ChatRow, type RowAction } from './chatList';
 
 export type RowSheet = { row: ChatRow; mode: 'menu' | 'rename' | 'delete' };
@@ -19,12 +20,13 @@ export interface ChatRowSheetsProps {
     onRename: (id: string, title: string) => void;
     onSetPinned: (id: string, pinned: boolean) => void;
     onDelete: (id: string) => void;
+    onExport: (row: ChatRow, format: ExportFormat) => void;
 }
 
-const ICONS = { rename: Pencil, pin: Pin, unpin: PinOff, delete: Trash2 } as const;
+const ICONS = { rename: Pencil, pin: Pin, unpin: PinOff, exportMarkdown: Download, exportJson: Download, delete: Trash2 } as const;
 
 /** The "⋯" menu and the two steps it opens: the rename field and the delete confirm. */
-export function ChatRowSheets({ target, onTarget, onRename, onSetPinned, onDelete }: ChatRowSheetsProps) {
+export function ChatRowSheets({ target, onTarget, onRename, onSetPinned, onDelete, onExport }: ChatRowSheetsProps) {
     const t = useT();
     const close = () => onTarget(null);
     const row = target?.row;
@@ -33,12 +35,16 @@ export function ChatRowSheets({ target, onTarget, onRename, onSetPinned, onDelet
         rename: t('row.rename'),
         pin: t('row.pin'),
         unpin: t('row.unpin'),
+        exportMarkdown: t('chat.exportTitle'),
+        exportJson: t('mobileApp.export.json'),
         delete: t('row.delete'),
     };
     const run: Record<RowAction, () => void> = {
         rename: () => onTarget({ row, mode: 'rename' }),
         pin: () => onSetPinned(row.id, true),
         unpin: () => onSetPinned(row.id, false),
+        exportMarkdown: () => onExport(row, 'markdown'),
+        exportJson: () => onExport(row, 'json'),
         delete: () => onTarget({ row, mode: 'delete' }),
     };
     const actions: SheetAction[] = rowActions(row).map((a) => ({

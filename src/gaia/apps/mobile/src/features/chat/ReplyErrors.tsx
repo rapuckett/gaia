@@ -1,7 +1,6 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import * as WebBrowser from 'expo-web-browser';
 import { useState } from 'react';
 
 import { failureRecordId } from '@webui/utils/streamErrors.core';
@@ -11,6 +10,7 @@ import type { Message } from '@/api/client.types';
 import { useSession } from '@/data';
 import { ModelServerDownNotice } from '@/features/model/ModelServerDownNotice';
 import { describeError, useT } from '@/i18n/useT';
+import { openLink } from '@/platform/openLink';
 import { Button, Icon, Notice, Row, Stack, Text } from '@/ui';
 import { Info } from '@/ui/icons';
 
@@ -88,7 +88,7 @@ function ReportLink({ title }: { title: string }) {
     const [failure, setFailure] = useState<string | null>(null);
     const open = () => {
         setFailure(null);
-        WebBrowser.openBrowserAsync(phoneBugReportUrl(title)).catch((err: unknown) => setFailure(describeError(err, t)));
+        openLink(phoneBugReportUrl(title), { inApp: true }).catch((err: unknown) => setFailure(describeError(err, t)));
     };
     return (
         <Stack gap="xs">
