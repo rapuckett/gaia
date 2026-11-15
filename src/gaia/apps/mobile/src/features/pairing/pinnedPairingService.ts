@@ -17,6 +17,8 @@ import type { PairedPc, PairingService, PairingStatus, RedeemResult } from './se
 
 // Only what isn't secret; each PC's token and pin live in the Keychain, under its id.
 const STORAGE_KEY = 'gaia:paired-pcs';
+// Set once this install has run. AsyncStorage is wiped on uninstall but the Keychain is not.
+const INSTALL_MARKER_KEY = 'gaia:install-marker';
 // The route a paired device unpairs itself with (gaia/ui/devices SELF_ROUTE).
 const SELF_ROUTE = '/api/devices/me';
 
@@ -100,9 +102,18 @@ export function createPinnedPairingService(): PairingService & { restore(): Prom
         if (!res.ok && res.status !== 401) throw new GaiaApiError(res.status, parseErrorDetail(text));
     }
 
+    /** A reinstalled app finds the old install's secrets in the Keychain; a fresh install has no marker and no saved PCs. */
+    async function wipeKeychainOnReinstall(): Promise<void> {
+        if ((await AsyncStorage.getItem(INSTALL_MARKER_KEY)) !== null) return;
+        // An app updated from a build without the marker still has its saved PCs, so its secrets are its own.
+        if ((await AsyncStorage.getItem(STORAGE_KEY)) === null) await GaiaTransport.dropAll();
+        await AsyncStorage.setItem(INSTALL_MARKER_KEY, new Date().toISOString());
+    }
+
     return {
         /** The saved current PC's connection; null when there is none, or its token is no longer in the Keychain. */
         async restore() {
+            await wipeKeychainOnReinstall();
             const state = await load();
             const current = state.pcs.find((p) => p.id === state.currentId);
             if (!current) return null;

@@ -209,6 +209,7 @@ describe('endpoints', () => {
         spendingAllowMonth: ['POST'],
         spendingChat: ['GET'],
         spendingLimit: ['PUT'],
+        chatActive: ['GET'],
         chatSend: ['POST'],
         chatAttach: ['GET'],
         chatCancel: ['POST'],

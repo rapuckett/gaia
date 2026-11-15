@@ -4,6 +4,7 @@
 import { useState } from 'react';
 
 import { pluralKey } from '@webui/i18n/registry';
+import { dateLocale } from '@webui/i18n/translator';
 import { indexLimitHit, PASSAGES_AT_ONCE, SEARCHED_AT_ONCE } from '@webui/utils/docsLimits.core';
 import { middleTruncate } from '@webui/utils/format';
 
@@ -120,9 +121,10 @@ export function DocsBar({ sessionId, onFailed, onManage }: { sessionId: string; 
                 <Notice
                     tone="warning"
                     testID="docs-past-limit"
+                    role="status"
                     message={
                         limitHit === 'size'
-                            ? t('docsBar.pastSize', { passages: PASSAGES_AT_ONCE.toLocaleString(), n: readable })
+                            ? t('docsBar.pastSize', { passages: PASSAGES_AT_ONCE.toLocaleString(dateLocale(t)), n: readable })
                             : t('docsBar.pastCap', { limit: SEARCHED_AT_ONCE, n: readable })
                     }
                 />
