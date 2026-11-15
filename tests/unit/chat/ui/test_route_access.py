@@ -69,6 +69,8 @@ PC_ONLY = {
     "POST /api/connectors/{connector_id}/authorize",
     "POST /api/connectors/{connector_id}/authorize-device",
     "POST /api/connectors/{connector_id}/configure",
+    "POST /api/connectors/{connector_id}/enable",
+    "POST /api/connectors/{connector_id}/test",
     "POST /api/devices/listener",
     "POST /api/devices/pairing",
     "POST /api/devices/pairing/reset",
@@ -87,6 +89,7 @@ PC_ONLY = {
     "POST /api/messaging/discord/restart",
     "POST /api/messaging/discord/start",
     "POST /api/messaging/discord/stop",
+    "POST /api/providers/key-store/retry",
     "POST /api/setup/npu/memlock-fix",
     "POST /api/setup/report",
     "POST /api/skills/link/add",
@@ -265,8 +268,6 @@ REMOTE = {
     "POST /api/chat/send",
     "POST /api/chat/user-input",
     "POST /api/connectors/{connector_id}/disable",
-    "POST /api/connectors/{connector_id}/enable",
-    "POST /api/connectors/{connector_id}/test",
     "POST /api/documents/index-folder",
     "POST /api/documents/upload",
     "POST /api/documents/upload-path",
@@ -289,7 +290,6 @@ REMOTE = {
     "POST /api/memory/reconcile",
     "POST /api/memory/refresh-system-context",
     "POST /api/memory/reinitialize",
-    "POST /api/providers/key-store/retry",
     "POST /api/providers/local/custom",
     "POST /api/providers/local/custom/check",
     "POST /api/providers/local/restart",
@@ -563,6 +563,20 @@ def test_provider_key_refused_away_from_the_pc(setup, monkeypatch):
         assert resp.status_code == 403, caller
         assert "fw-secret-key" not in resp.text
     assert handed == []
+
+
+def test_refused_network_policy_saves_nothing(setup):
+    """A settings change that includes the policy is all or nothing away from the PC."""
+    app, clients, _ = setup
+    before = clients["pc"].get("/api/settings").json()["agent_mode"]
+    other = "manual" if before != "manual" else "goal_driven"
+    for caller in ("tunnel", "device"):
+        resp = clients[caller].put(
+            "/api/settings",
+            json={"agent_mode": other, "network_policy": "local_ai_only"},
+        )
+        assert resp.status_code == 403, caller
+    assert clients["pc"].get("/api/settings").json()["agent_mode"] == before
 
 
 def test_troubleshooting_report_is_pc_only(setup):

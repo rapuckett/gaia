@@ -421,8 +421,8 @@ function UnderTheHood({ perf, error }: { perf: ChatPerformance | undefined; erro
             <SegmentedControl
                 accessibilityLabel={t('ctx.show')}
                 options={[
-                    { value: 'turn', label: t('ctx.lastTurn') },
-                    { value: 'chat', label: t('sp.title') },
+                    { value: 'turn', label: t.bare('ctx.lastTurn'), accessibilityLabel: t('ctx.lastTurn') },
+                    { value: 'chat', label: t.bare('sp.title'), accessibilityLabel: t('sp.title') },
                 ]}
                 value={scope}
                 onChange={(v) => setScope(v === 'chat' ? 'chat' : 'turn')}

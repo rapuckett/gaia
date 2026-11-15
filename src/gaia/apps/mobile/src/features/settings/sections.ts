@@ -6,11 +6,13 @@ import type { ComponentType } from 'react';
 import type { LucideIcon } from '@/ui/icons';
 import { Bell, Brain, Clock, Cpu, Info, ListChecks, Lock, MessageSquare, Plug, ShieldQuestion, SlidersHorizontal, Sparkles, Volume2, Wrench } from '@/ui/icons';
 
+import Advanced from './panes/Advanced';
 import General from './panes/General';
 import Memory from './panes/Memory';
 import Model from './panes/Model';
 import Permissions from './panes/Permissions';
 import Placeholder from './panes/Placeholder';
+import Privacy from './panes/Privacy';
 
 /** The web's settings sections, in its nav order; `voice` is "Read aloud". */
 export type SectionId =
@@ -48,8 +50,8 @@ export const SETTINGS_SECTIONS: Record<SectionId, SettingsSectionEntry> = {
     memory: { titleKey: 'settings.section.memory', icon: Brain, pane: Memory },
     notifications: { titleKey: 'settings.section.notifications', icon: Bell, pane: Placeholder },
     voice: { titleKey: 'settings.section.voice', icon: Volume2, pane: Placeholder },
-    privacy: { titleKey: 'settings.section.privacy', icon: Lock, pane: Placeholder },
-    advanced: { titleKey: 'settings.section.advanced', icon: Wrench, pane: Placeholder },
+    privacy: { titleKey: 'settings.section.privacy', icon: Lock, pane: Privacy },
+    advanced: { titleKey: 'settings.section.advanced', icon: Wrench, pane: Advanced },
     about: { titleKey: 'settings.section.about', icon: Info, pane: Placeholder },
 };
 
