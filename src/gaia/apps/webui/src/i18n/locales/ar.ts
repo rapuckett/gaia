@@ -3564,6 +3564,8 @@ const messages: Messages = {
     'mobileApp.skills.yoursEmpty': 'لا شيء بعد. أضف مجلدًا فيه ملف SKILL.md إلى {path} على الكمبيوتر وسيظهر هنا.',
     'mobileApp.banner.openOnPc': 'افتح GAIA على جهاز الكمبيوتر لتشغيل خادم النماذج.',
     'mobileApp.settings.comingSoon': 'هذا القسم قادم إلى الهاتف قريبًا. في الوقت الحالي، غيّره من الكمبيوتر الذي يشغّل GAIA.',
+    'mobileApp.settings.pcOnly': 'غيّر هذا من الكمبيوتر الذي يشغّل GAIA.',
+    'mobileApp.settings.permissionsWarning': 'يتيح الوصول الكامل لـ GAIA تغيير الملفات أو حذفها وتشغيل الأوامر على الكمبيوتر الذي يشغّله دون سؤالك أولًا، في كل محادثة جديدة، حتى توقفه. قد يُحدث خطأ أو تعليمات ضارة في مستند يقرأه ضررًا حقيقيًا.',
 };
 
 export const ar: Locale = {

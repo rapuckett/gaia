@@ -3564,6 +3564,8 @@ export const enMessages = {
     'mobileApp.skills.yoursEmpty': 'None yet. Add a folder with a SKILL.md file to {path} on your PC and it shows up here.',
     'mobileApp.banner.openOnPc': 'Open GAIA on your PC to start the model server.',
     'mobileApp.settings.comingSoon': 'This section is coming to the phone soon. For now, change it on the PC running GAIA.',
+    'mobileApp.settings.pcOnly': 'Change this on the PC running GAIA.',
+    'mobileApp.settings.permissionsWarning': 'Full access lets GAIA change or delete files and run commands on your PC without asking you first, in every new chat, until you turn this off. A mistake or a bad instruction in a document it reads can do real damage.',
 } as const;
 
 export const en: Locale = {
