@@ -3,6 +3,7 @@
 
 export { UIProvider } from './UIProvider';
 export { ThemeProvider, useTheme, type Theme, type Scheme } from './theme/ThemeProvider';
+export { useAppearance } from './theme/appearanceStore';
 export type { Tone } from './theme/tone';
 export { Text, type TextProps } from './text/Text';
 export { Ltr } from './text/Ltr';
