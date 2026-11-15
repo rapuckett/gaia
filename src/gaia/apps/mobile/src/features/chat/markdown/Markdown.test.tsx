@@ -1,16 +1,18 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { render, screen } from '@testing-library/react-native';
+import { act, render, screen } from '@testing-library/react-native';
 import { Linking } from 'react-native';
 
 import { CODE_COLLAPSE_LINES } from '@webui/utils/longContent';
 import { translator } from '@/i18n/useT';
+import { openDocument } from '@/platform/openDocument';
 import { useConnectionStore } from '@/state/connection';
 import { ThemeProvider } from '@/ui';
 
 import { Markdown } from './Markdown';
 
+jest.mock('@/platform/openDocument', () => ({ openDocument: jest.fn() }));
 jest.mock('expo-clipboard', () => ({ setStringAsync: jest.fn(() => Promise.resolve(true)) }));
 
 const code = Array.from({ length: CODE_COLLAPSE_LINES + 5 }, (_, i) => `line ${i}`).join('\n');
@@ -48,9 +50,9 @@ describe('Markdown', () => {
         expect(paths.every((el) => el.props.onPress === undefined)).toBe(true);
     });
 
-    it('opens a cited library file in the system browser at its page, and shows library notices as notes', async () => {
-        useConnectionStore.getState().setConnection({ baseUrl: 'http://pc.local:4200/', token: null });
-        const open = jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined);
+    it('opens a cited library file through the authenticated download, and says why it could not', async () => {
+        useConnectionStore.getState().setConnection({ baseUrl: 'http://pc.local:4200/', token: 'secret' });
+        (openDocument as jest.Mock).mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('GAIA answered 404'));
         await render(
             <ThemeProvider>
                 <Markdown
@@ -60,9 +62,12 @@ describe('Markdown', () => {
                 />
             </ThemeProvider>,
         );
-        screen.getByText(/quarterly-report\.pdf/).props.onPress();
-        expect(open).toHaveBeenLastCalledWith('http://pc.local:4200/api/documents/doc%201/file#page=12');
-        expect(screen.getByRole('note')).toBeTruthy();
+        await act(async () => screen.getByText(/quarterly-report\.pdf/).props.onPress());
+        expect(openDocument).toHaveBeenLastCalledWith('http://pc.local:4200', 'secret', { id: 'doc 1', filename: 'quarterly-report.pdf' });
+        expect(screen.queryByText(/Couldn't open/)).toBeNull();
+        await act(async () => screen.getByText(/quarterly-report\.pdf/).props.onPress());
+        expect(await screen.findByText(/Couldn't open quarterly-report\.pdf: GAIA answered 404/)).toBeTruthy();
+        expect(screen.getAllByRole('note').length).toBeGreaterThan(0);
     });
 
     it('formatting variant renders a link, an image, a heading and HTML as plain text', async () => {

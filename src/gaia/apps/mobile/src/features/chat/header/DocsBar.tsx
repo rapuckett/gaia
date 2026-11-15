@@ -19,7 +19,7 @@ type LibraryDocument = DocumentListResponse['documents'][number];
 const COLLAPSED_PILLS = 3;
 
 /** The documents in this chat, under the header; renders nothing when there are none. */
-export function DocsBar({ sessionId, onFailed }: { sessionId: string; onFailed: (message: string) => void }) {
+export function DocsBar({ sessionId, onFailed, onManage }: { sessionId: string; onFailed: (message: string) => void; onManage?: () => void }) {
     const t = useT();
     const session = useSession(sessionId);
     const library = useDocuments();
@@ -65,6 +65,13 @@ export function DocsBar({ sessionId, onFailed }: { sessionId: string; onFailed: 
                 </Text>
             </Row>
             <Row gap="xs" wrap>
+                {onManage ? (
+                    <Pressable onPress={onManage} accessibilityLabel={t('docsBar.manage')}>
+                        <Text role="label" tone="accent">
+                            {t('docsBar.manage')}
+                        </Text>
+                    </Pressable>
+                ) : null}
                 {visible.map((doc) => {
                     const failed = doc.indexing_status === 'failed';
                     return (

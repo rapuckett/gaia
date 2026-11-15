@@ -31,6 +31,7 @@ export {
   Image,
   Info,
   KeyRound,
+  Link2,
   ListChecks,
   Lock,
   Menu,

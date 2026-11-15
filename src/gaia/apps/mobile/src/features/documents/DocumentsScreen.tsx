@@ -5,16 +5,17 @@ import { useState } from 'react';
 
 import { isolate } from '@webui/i18n/registry';
 
-import { useCancelIndexing, useDocumentRemoval, useDocuments, useIndexingView, useReindexDocument } from '@/data';
+import { useAttachDocument, useCancelIndexing, useDocumentRemoval, useDocuments, useIndexingView, useReindexDocument, useSession } from '@/data';
 import { ScreenHeader } from '@/features/nav/ScreenHeader';
 import { describeError, useT } from '@/i18n/useT';
 import { EmptyState, ErrorState, IconButton, List, ListSkeleton, Notice, Row, Screen, Stack, Text, useTheme } from '@/ui';
 import { X } from '@/ui/icons';
 
-import { AddDocuments, ChatAddDocuments } from './AddDocuments';
+import { AddDocuments } from './AddDocuments';
 import { DocumentRow } from './DocumentRow';
 import { libraryStats } from './libraryStats';
-import { ChatTargetChooser, TargetChooser, type LibraryTarget } from './TargetChooser';
+import { useNextChatDocs } from './nextChatDocs';
+import { TargetChooser, type LibraryTarget } from './TargetChooser';
 
 export interface DocumentsScreenProps {
     // The chat the library was opened from, if any.
@@ -27,12 +28,37 @@ export function useActionError() {
     return { error, report: setError, dismiss: () => setError(null) };
 }
 
+interface OpenChat {
+    id: string;
+    /** Quoted, for messages. */
+    name: string;
+    title: string;
+    documentIds: readonly string[];
+}
+
 export function DocumentsScreen({ chatId }: DocumentsScreenProps) {
+    return chatId ? <ChatLibrary chatId={chatId} /> : <Library chat={null} />;
+}
+
+function ChatLibrary({ chatId }: { chatId: string }) {
+    const t = useT();
+    const session = useSession(chatId);
+    const title = session.data?.title || t.bare('docs.untitledChat');
+    return <Library chat={{ id: chatId, title, name: `“${title}”`, documentIds: session.data?.document_ids ?? [] }} />;
+}
+
+function Library({ chat }: { chat: OpenChat | null }) {
     const t = useT();
     const { space } = useTheme();
     const query = useDocuments();
     const [target, setTarget] = useState<LibraryTarget>('chat');
     const action = useActionError();
+    const [note, setNote] = useState<string | null>(null);
+    const attachDocument = useAttachDocument();
+    const nextIds = useNextChatDocs((s) => s.ids);
+    const addNext = useNextChatDocs((s) => s.add);
+    // The open chat when documents go there, else null: the next new chat.
+    const targetChat = chat && target === 'chat' ? chat : null;
     const removal = useDocumentRemoval((r, error) => action.report(t('docs.deleteFailed', { name: r.name, error: describeError(error, t) })));
     const cancel = useCancelIndexing();
     const reindex = useReindexDocument();
@@ -53,12 +79,25 @@ export function DocumentsScreen({ chatId }: DocumentsScreenProps) {
         action.dismiss();
         removal.remove({ id, name: nameOf(id) });
     };
+    const onAttach = (id: string) => {
+        action.dismiss();
+        setNote(null);
+        if (!targetChat) {
+            addNext([id]);
+            setNote(t('docs.willAttach', { name: nameOf(id) }));
+            return;
+        }
+        attachDocument.mutate(
+            { sessionId: targetChat.id, docId: id },
+            {
+                onSuccess: () => setNote(t('docs.attached', { name: nameOf(id), chat: targetChat.name })),
+                onError: (e) => action.report(t('docs.attachFailed', { name: nameOf(id), chat: targetChat.name, error: describeError(e, t) })),
+            },
+        );
+    };
+    const attachedIds = targetChat ? targetChat.documentIds : nextIds;
     const loadFailed = query.isError ? t('docs.loadFailed', { error: describeError(query.error, t) }) : null;
-    const adder = chatId ? (
-        <ChatAddDocuments chatId={chatId} target={target} onStart={action.dismiss} />
-    ) : (
-        <AddDocuments chatId={null} chatName={null} onStart={action.dismiss} />
-    );
+    const adder = <AddDocuments chatId={targetChat?.id ?? null} chatName={chat?.name ?? null} onStart={action.dismiss} />;
     const retry = { label: t('docs.loadRetry'), onPress: () => void query.refetch() };
 
     return (
@@ -89,11 +128,8 @@ export function DocumentsScreen({ chatId }: DocumentsScreenProps) {
                     contentContainerStyle={{ paddingBottom: space.xl }}
                     ListHeaderComponent={
                         <Stack gap="sm" paddingX="lg" paddingY="sm">
-                            {chatId ? (
-                                <ChatTargetChooser chatId={chatId} target={target} onChange={setTarget} />
-                            ) : (
-                                <TargetChooser chatTitle={null} target={target} onChange={setTarget} />
-                            )}
+                            <TargetChooser chatTitle={chat?.title ?? null} target={target} onChange={setTarget} />
+                            {note ? <Notice tone="success" role="note" message={note} onDismiss={() => setNote(null)} /> : null}
                             {loadFailed ? <Notice tone="danger" message={loadFailed} action={retry} /> : null}
                             {action.error ? (
                                 <Row gap="sm" align="start">
@@ -127,6 +163,7 @@ export function DocumentsScreen({ chatId }: DocumentsScreenProps) {
                             startedAt={view.startedAt[item.id]}
                             now={view.now}
                             retrying={reindex.isPending && reindex.variables === item.id}
+                            attach={attachedIds.includes(item.id) ? undefined : { chatName: targetChat?.name ?? null, onAttach }}
                             onCancel={onCancel}
                             onRetry={onRetry}
                             onRemove={onRemove}

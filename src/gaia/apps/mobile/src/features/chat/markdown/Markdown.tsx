@@ -2,13 +2,13 @@
 // SPDX-License-Identifier: MIT
 
 import type { PhrasingContent, Root, RootContent } from 'mdast';
-import { useCallback, useMemo, type ReactNode } from 'react';
-import { Linking } from 'react-native';
+import { useCallback, useMemo, useState, type ReactNode } from 'react';
 
 import { buildCitationIndex, type LibraryDoc } from '@webui/utils/citations';
 import { isolate } from '@webui/i18n/registry';
-import { useDirection, useT } from '@/i18n/useT';
-import { documentFileUrl } from '@/api/constants';
+import { describeError, useDirection, useT } from '@/i18n/useT';
+import { GaiaError } from '@/api/errors';
+import { openDocument } from '@/platform/openDocument';
 import { useConnectionStore } from '@/state/connection';
 import { contentDir, Divider, HScroll, Icon, Notice, Row, Stack, Surface, Text } from '@/ui';
 import { Check, Square } from '@/ui/icons';
@@ -154,20 +154,20 @@ function endsInline(tree: Root): boolean {
     return last?.type === 'paragraph' || last?.type === 'heading';
 }
 
-/** Opens a cited library file in the system browser, at its page, from the paired PC. */
-function useOpenCitation(): (doc: LibraryDoc, page?: number) => void {
-    const baseUrl = useConnectionStore((state) => state.connection?.baseUrl);
-    return useCallback(
-        (doc, page) => {
-            if (!baseUrl) {
-                console.error(`Opening ${doc.filename} needs a paired PC, and none is connected. Pair this phone with GAIA first.`);
-                return;
-            }
-            const url = documentFileUrl(baseUrl, doc.id, page);
-            Linking.openURL(url).catch((error: unknown) => console.error(`Opening ${url} failed`, error));
+/** Opens a cited library file from the paired PC, with the pairing token; `error` says why it didn't open. */
+function useOpenCitation() {
+    const t = useT();
+    const connection = useConnectionStore((state) => state.connection);
+    const [error, setError] = useState<string | null>(null);
+    const open = useCallback(
+        (doc: LibraryDoc) => {
+            setError(null);
+            const opening = connection ? openDocument(connection.baseUrl, connection.token, doc) : Promise.reject(new GaiaError('mobileApp.error.noConnection'));
+            opening.catch((err: unknown) => setError(t('citation.openFailed', { name: doc.filename, error: describeError(err, t) })));
         },
-        [baseUrl],
+        [connection, t],
     );
+    return { open, error, dismiss: () => setError(null) };
 }
 
 /** An assistant answer as native Markdown: the same parser and rules as the web UI's answer. */
@@ -176,12 +176,12 @@ export function Markdown({ text, variant = 'answer', streaming: streamingProp = 
     // The formatting variant ignores streaming, documents, notes and onOpenCitation.
     const streaming = streamingProp && !formatting;
     const t = useT();
-    const openCitation = useOpenCitation();
+    const citation = useOpenCitation();
     const uiDir = useDirection();
     const shown = useThrottledText(text, streaming, STREAM_PARSE_MS);
     const tree = useMemo(() => (formatting ? parseFormatting(shown) : parseAnswer(shown, streaming)), [shown, streaming, formatting]);
     const index = useMemo(() => buildCitationIndex(formatting ? NO_DOCS : documents), [documents, formatting]);
-    const ctx: RenderContext = { index, t, onOpenCitation: formatting ? undefined : (onOpenCitation ?? openCitation), uiDir, streaming };
+    const ctx: RenderContext = { index, t, onOpenCitation: formatting ? undefined : (onOpenCitation ?? citation.open), uiDir, streaming };
     const caretInline = streaming && endsInline(tree);
 
     return (
@@ -192,6 +192,7 @@ export function Markdown({ text, variant = 'answer', streaming: streamingProp = 
                     <Caret />
                 </Text>
             )}
+            {citation.error !== null && <Notice tone="danger" message={citation.error} onDismiss={citation.dismiss} />}
             {!formatting && notes && notes.length > 0 && (
                 <Stack gap="sm">
                     {notes.map((note, i) => (

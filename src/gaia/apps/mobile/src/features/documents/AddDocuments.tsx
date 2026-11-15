@@ -4,14 +4,14 @@
 import { useState } from 'react';
 
 import { GaiaApiError } from '@/api/errors';
-import { useAddDocument, useSession } from '@/data';
+import { useAddDocument } from '@/data';
 import { describeError, useT } from '@/i18n/useT';
 import { pickDocuments, pickPhotos, type PickedFile } from '@/platform/pickers';
 import { Button, Notice, ProgressLine, Row, Stack, Text } from '@/ui';
 import { FileText, Image as ImageIcon } from '@/ui/icons';
 import { describeUploadError, unsupportedTypeMessage, type UploadErrorView } from '@webui/utils/uploadErrors.core';
 
-import type { LibraryTarget } from './TargetChooser';
+import { useNextChatDocs } from './nextChatDocs';
 
 // One line at a time: the indexing status, the result of the last add, or why it failed.
 type AddLine =
@@ -32,6 +32,7 @@ interface AddDocumentsProps {
 export function AddDocuments({ chatId, chatName, onStart }: AddDocumentsProps) {
     const t = useT();
     const add = useAddDocument();
+    const holdForNextChat = useNextChatDocs((s) => s.add);
     const [line, setLine] = useState<AddLine | null>(null);
     const busy = line?.kind === 'busy';
 
@@ -47,6 +48,7 @@ export function AddDocuments({ chatId, chatName, onStart }: AddDocumentsProps) {
                 const error = `Indexed, but not attached to ${chatName}: ${describeError(attachError, t)}`;
                 return { kind: 'failed', error: describeUploadError(t, { filename: file.name, error }) };
             }
+            if (!chatId) holdForNextChat([document.id]);
             return { kind: 'done', message: chatId ? t('docs.attached', { name, chat: chatName ?? '' }) : t('docs.willAttach', { name }) };
         } catch (err) {
             const api = err instanceof GaiaApiError ? err : null;
@@ -103,11 +105,4 @@ export function AddDocuments({ chatId, chatName, onStart }: AddDocumentsProps) {
             ) : null}
         </Stack>
     );
-}
-
-export function ChatAddDocuments({ chatId, target, onStart }: { chatId: string; target: LibraryTarget; onStart?: () => void }) {
-    const t = useT();
-    const session = useSession(chatId);
-    const chatName = `“${session.data?.title || t('docs.untitledChat')}”`;
-    return <AddDocuments chatId={target === 'chat' ? chatId : null} chatName={chatName} onStart={onStart} />;
 }

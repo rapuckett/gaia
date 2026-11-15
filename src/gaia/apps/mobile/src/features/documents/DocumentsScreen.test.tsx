@@ -16,6 +16,7 @@ import { pickDocuments } from '@/platform/pickers';
 import { ThemeProvider } from '@/ui';
 
 import { DocumentsScreen } from './DocumentsScreen';
+import { useNextChatDocs } from './nextChatDocs';
 
 jest.mock('@/features/nav/ScreenHeader', () => ({ ScreenHeader: () => null }));
 jest.mock('@/platform/pickers', () => ({ pickDocuments: jest.fn(), pickPhotos: jest.fn() }));
@@ -138,6 +139,30 @@ describe('DocumentsScreen', () => {
             await act(() => jest.advanceTimersByTimeAsync(REMOVE_UNDO_MS));
             expect(await screen.findByText(/Couldn't remove notes\.txt: .*disk is read-only/)).toBeTruthy();
             expect(screen.getByLabelText('Remove notes.txt')).toBeTruthy();
+        });
+    });
+
+    describe('attaching a library document', () => {
+        const library = () => ({ documents: [doc('a', 'notes.txt', 'complete', 2048), doc('b', 'bad.pdf', 'failed', 1024)], total: 2, total_chunks: 6, total_size_bytes: 3072 }) as DocumentListResponse;
+        const chat = { id: 'c1', title: 'A chat', created_at: '2026-11-14T00:00:00Z', updated_at: '2026-11-14T00:00:00Z', model: '', system_prompt: null, message_count: 1, document_ids: ['b'] };
+        beforeEach(() => useNextChatDocs.getState().clear());
+
+        it('holds it for the next chat in the store New chat reads, and offers nothing for an unreadable document', async () => {
+            await mount(createFakeClient({ documents: library() }));
+            expect(screen.queryByLabelText('Attach bad.pdf to your next chat')).toBeNull();
+            fireEvent.press(await screen.findByLabelText('Attach notes.txt to your next chat'));
+            expect(await screen.findByText(/notes\.txt will be attached to your next new chat/)).toBeTruthy();
+            expect(useNextChatDocs.getState().ids).toEqual(['a']);
+            expect(screen.queryByLabelText('Attach notes.txt to your next chat')).toBeNull();
+        });
+
+        it('attaches it to the chat the library was opened from', async () => {
+            const client = createFakeClient({ documents: library(), sessions: [chat] });
+            await mount(client, 'c1');
+            fireEvent.press(await screen.findByLabelText(/Attach notes\.txt to/));
+            expect(await screen.findByText(/Attached notes\.txt to/)).toBeTruthy();
+            expect(client.attached).toEqual([{ sessionId: 'c1', docId: 'a' }]);
+            expect(useNextChatDocs.getState().ids).toEqual([]);
         });
     });
 });
