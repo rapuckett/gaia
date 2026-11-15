@@ -3646,6 +3646,7 @@ export const enMessages = {
     'mobileApp.mem.whenHint': 'Year-month-day and time, like 2026-11-20 09:00',
     'mobileApp.connectors.comingLater': "Connecting from the phone is coming in a later build. For now, connect it on the PC running GAIA.",
     'mobileApp.connectors.checkPcOnly': "Your PC starts the server to check it, so run Check on the PC running GAIA.",
+    'mobileApp.connectors.disconnectConfirm': "Disconnect {name}? Its saved sign-in or token is deleted from your PC, and you can only set it up again there.",
     'mobileApp.connectors.configurePcOnly': "Your PC keeps this server's token. Add or change it on the PC running GAIA.",
     'mobileApp.connectors.enablePcOnly': "Your PC turns servers back on. Enable this one on the PC running GAIA.",
     'mobileApp.connectors.googlePcOnly': "This phone can't connect Google accounts. Connect Google on the PC running GAIA.",
