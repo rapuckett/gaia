@@ -227,7 +227,7 @@ class TestUploadByPathTOCTOU:
 
     @pytest.fixture
     def client(self, app):
-        return TestClient(app)
+        return TestClient(app, client=("127.0.0.1", 50000))
 
     def test_upload_copies_to_temp(self, home_tmp_dir, client):
         """_index_document must receive a temp path, not the original path."""

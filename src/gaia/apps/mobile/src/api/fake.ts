@@ -3,6 +3,8 @@
 
 import type {
     ActiveModel,
+    CloudPriceList,
+    ContextChoice,
     AgentCapabilities,
     AgentInfo,
     AgentMcpServer,
@@ -14,13 +16,19 @@ import type {
     EmbeddingCoverage,
     FollowUpOutcome,
     DocumentListResponse,
+    DocumentResponse,
+    DocumentStatus,
     GaiaClient,
+    GpuMemoryStatus,
     HealthResponse,
     LemonadeFound,
     LemonadeTarget,
     LocalModelStatus,
+    MemoryActivityDay,
     MemorySettings,
     MemoryStats,
+    MemoryToolStat,
+    MemoryUpcomingItem,
     Message,
     MessageList,
     ModelNeed,
@@ -28,6 +36,7 @@ import type {
     PreflightReport,
     ProvidersResponse,
     ParsedSchedule,
+    AllPermissions,
     PermissionMode,
     ProviderModelsResponse,
     RebuildEmbeddingsResult,
@@ -102,8 +111,18 @@ export interface FakeClientData {
     activeModel?: ActiveModel;
     /** What listProviderModels answers, by provider. */
     providerModels?: Record<string, ProviderModelsResponse>;
+    /** What getContextChoice answers, by model; setContextChoice updates it. */
+    contexts?: Record<string, ContextChoice>;
+    /** Makes selectModel fail with this. */
+    selectError?: GaiaApiError;
     /** What getPermissions answers, by chat; a chat not listed asks first. */
     permissions?: Record<string, PermissionMode>;
+    /** The "always allow" grants by chat. */
+    permissionGrants?: Record<string, { key: string; label: string }[]>;
+    /** The mode new chats start in. */
+    defaultPermissionMode?: PermissionMode;
+    /** Answers the default-mode PUT with the 403 the PC gives a phone. */
+    defaultModePcOnly?: boolean;
     /** What getContextUsage answers. */
     contextUsage?: ContextUsageResult;
     /** What getChatPerformance answers. */
@@ -115,6 +134,8 @@ export interface FakeClientData {
     status?: SystemStatus;
     /** What getLocalModelStatus answers; restarting it records the call. */
     localModel?: LocalModelStatus;
+    /** What getGpuMemory answers (the same status whatever size is asked for); an Error is thrown. */
+    gpuMemory?: GpuMemoryStatus | Error;
     /** What getModelNeed answers, by job; a job not listed needs nothing. */
     modelNeeds?: Partial<Record<ModelNeed['job'], ModelNeed>>;
     /** What getSetupStatus answers. */
@@ -135,6 +156,10 @@ export interface FakeClientData {
     setupPlan?: SetupPlan;
     modelServer?: ModelServerInfo;
     providers?: ProvidersResponse;
+    /** What getCloudPrices answers, by provider. */
+    cloudPrices?: Record<string, CloudPriceList>;
+    /** What recheckSetupNpu answers; an Error is thrown. */
+    npuRecheck?: SetupPlan | Error;
     /** What getPreflight answers; an Error is thrown. */
     preflight?: PreflightReport | Error;
     /** What getLemonadeTarget answers; an Error is thrown. */
@@ -142,12 +167,22 @@ export interface FakeClientData {
     /** What detectLemonade answers; an Error is thrown. */
     lemonadeDetect?: { found: LemonadeFound | null; unchecked?: string[] } | Error;
     documents?: DocumentListResponse;
+    /** What getDocumentStatus answers, by document; one not listed reports its row's status. */
+    documentStatuses?: Record<string, Partial<DocumentStatus>>;
+    /** Makes a library action on a document reject with this message, by action. */
+    documentFailures?: Partial<Record<DocumentAction, string>>;
     /** What getCapabilities answers, by chat; a chat not listed has no agent running (409). */
     capabilities?: Record<string, AgentCapabilities>;
     memorySettings?: MemorySettings;
+    /** Thrown by updateMemorySettings. */
+    memorySettingsError?: Error;
     /** Each stats read answers the next entry (the last one repeats); an Error entry is thrown. */
     memoryStats?: (MemoryStats | Error)[];
     embeddingCoverage?: EmbeddingCoverage;
+    /** What the activity read answers for a range in days; an Error is thrown. */
+    memoryActivity?: (days: number) => MemoryActivityDay[] | Error;
+    memoryTools?: MemoryToolStat[] | Error;
+    memoryUpcoming?: MemoryUpcomingItem[] | Error;
     /** What each maintenance POST answers; an Error makes it fail. Unlisted ones answer a zero result. */
     memoryActionResults?: {
         consolidate?: ConsolidateMemoryResult | Error;
@@ -157,6 +192,8 @@ export interface FakeClientData {
         refreshSystemContext?: RefreshSystemContextResult | Error;
     };
 }
+
+export type DocumentAction = 'cancel' | 'delete' | 'reindex';
 
 export interface FakeGaiaClient extends GaiaClient {
     readonly sent: { sessionId: string; message: string }[];
@@ -172,15 +209,26 @@ export interface FakeGaiaClient extends GaiaClient {
     readonly scheduleActions: { action: 'pause' | 'resume' | 'run' | 'delete'; name: string }[];
     readonly followUps: { sessionId: string; text: string }[];
     readonly restarts: { confirm: boolean }[];
+    readonly selected: string[];
+    readonly contextSets: { model: string; ctxSize: number | null }[];
     /** The files uploadFile took, in order. */
     readonly uploads: { name: string; size: number }[];
     readonly downloads: { modelId: string; acknowledgeLowDisk: boolean }[];
     readonly backendSets: string[];
+    /** The setup model choices saved, in order. */
+    readonly setupChoices: { kind: 'chat' | 'vision' | 'skip'; modelId: string | null; flag?: boolean }[];
+    /** The providers connectProvider was asked for, in order. */
+    readonly connects: string[];
+    /** How many times recheckSetupNpu was asked. */
+    readonly npuRechecks: number;
+    readonly documentActions: { action: DocumentAction; docId: string }[];
     readonly setupStarts: { skipChatModel: boolean; gaiaLemonade: boolean; upgradeEmbedded: boolean; serverOnly: boolean }[];
     readonly detached: { sessionId: string; docId: string }[];
     readonly capabilityReads: string[];
     /** Each memory maintenance POST, in order. */
     readonly memoryActions: string[];
+    /** The range of each activity read, in order. */
+    readonly memoryActivityReads: number[];
     /** How many times the stats were read. */
     readonly memoryStatsReads: number;
 }
@@ -203,10 +251,27 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
     const grants: Record<string, Record<string, string[]>> = cloneNested(data.grants);
     const activations: Record<string, Record<string, boolean>> = cloneNested(data.activations);
     const restarts: FakeGaiaClient['restarts'] = [];
+    const selected: string[] = [];
+    const contextSets: FakeGaiaClient['contextSets'] = [];
     const uploads: FakeGaiaClient['uploads'] = [];
     const downloads: FakeGaiaClient['downloads'] = [];
     const schedules = [...(data.schedules ?? [])];
     const scheduleActions: FakeGaiaClient['scheduleActions'] = [];
+    const documentActions: FakeGaiaClient['documentActions'] = [];
+    const library: DocumentListResponse = data.documents ?? { documents: [], total: 0, total_chunks: 0, total_size_bytes: 0 };
+
+    function findDocument(docId: string, action: DocumentAction): DocumentResponse {
+        documentActions.push({ action, docId });
+        const failure = data.documentFailures?.[action];
+        if (failure) throw new GaiaApiError(500, failure);
+        const doc = library.documents.find((d) => d.id === docId);
+        if (!doc) throw new GaiaApiError(404, 'Document not found');
+        return doc;
+    }
+
+    function permissionsOf(sessionId: string): SessionPermissions {
+        return { session_id: sessionId, mode: data.permissions?.[sessionId] ?? 'ask', grants: [...(data.permissionGrants?.[sessionId] ?? [])] };
+    }
 
     function findSchedule(name: string): Schedule {
         const schedule = schedules.find((s) => s.name === name);
@@ -216,6 +281,9 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
     const followUps: FakeGaiaClient['followUps'] = [];
     const setupStarts: FakeGaiaClient['setupStarts'] = [];
     const backendSets: string[] = [];
+    const setupChoices: FakeGaiaClient['setupChoices'] = [];
+    const connects: string[] = [];
+    let npuRechecks = 0;
     let checkAt = 0;
     let statusAt = 0;
     const nextOf = <T,>(list: (T | Error)[], at: number): T => {
@@ -227,6 +295,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
     const capabilityReads: string[] = [];
     const memoryActions: string[] = [];
     let memoryStatsReads = 0;
+    const memoryActivityReads: number[] = [];
     function memoryAction<T>(name: string, result: T | Error): T {
         memoryActions.push(name);
         if (result instanceof Error) throw result;
@@ -259,15 +328,24 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         confirmations,
         answers,
         scheduleActions,
+        documentActions,
         followUps,
         restarts,
+        selected,
+        contextSets,
         uploads,
         downloads,
         setupStarts,
         backendSets,
+        setupChoices,
+        connects,
+        get npuRechecks() {
+            return npuRechecks;
+        },
         detached,
         capabilityReads,
         memoryActions,
+        memoryActivityReads,
         get memoryStatsReads() {
             return memoryStatsReads;
         },
@@ -301,6 +379,24 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             uploads.push({ name, size: file.size });
             return { filename: name, original_name: name, url: `/api/files/uploads/${name}`, size: file.size, content_type: file.type, is_image: file.type.startsWith('image/') };
         },
+        async getContextChoice(model) {
+            const choice = data.contexts?.[model];
+            if (!choice) throw new GaiaApiError(503, `This fake client was given no context sizes for ${model}.`);
+            return choice;
+        },
+        async setContextChoice(model, ctxSize) {
+            const choice = data.contexts?.[model];
+            if (!choice) throw new GaiaApiError(503, `This fake client was given no context sizes for ${model}.`);
+            contextSets.push({ model, ctxSize });
+            const next = { ...choice, chosen: ctxSize, reload: { started: false, reason: 'already_loaded' as const } };
+            data.contexts![model] = next;
+            return next;
+        },
+        async getCloudPrices(provider) {
+            const list = data.cloudPrices?.[provider];
+            if (!list) throw new GaiaApiError(503, `This fake client was given no prices for ${provider}.`);
+            return list;
+        },
         async getActiveModel() {
             if (!data.activeModel) throw new GaiaApiError(503, 'This fake client was given no active model.');
             return data.activeModel;
@@ -309,16 +405,34 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             return data.providerModels?.[provider] ?? { provider, models: [] };
         },
         async selectModel(model) {
+            if (data.selectError) throw data.selectError;
+            selected.push(model);
             if (!data.activeModel) throw new GaiaApiError(503, 'This fake client was given no active model.');
             data.activeModel = { ...data.activeModel, model };
             return data.activeModel;
         },
         async getPermissions(sessionId): Promise<SessionPermissions> {
-            return { session_id: sessionId, mode: data.permissions?.[sessionId] ?? 'ask', grants: [] };
+            return permissionsOf(sessionId);
+        },
+        async listAllPermissions(): Promise<AllPermissions> {
+            const ids = new Set([...Object.keys(data.permissions ?? {}), ...Object.keys(data.permissionGrants ?? {})]);
+            const sessions = [...ids].map(permissionsOf).filter((p) => p.mode !== 'ask' || p.grants.length > 0);
+            return { default_mode: data.defaultPermissionMode ?? 'ask', sessions };
+        },
+        async setDefaultPermissionMode(mode) {
+            if (data.defaultModePcOnly) throw new GaiaApiError(403, 'Change this on the PC running GAIA.');
+            data.defaultPermissionMode = mode;
+            return { default_mode: mode };
+        },
+        async revokeGrants(sessionId, key): Promise<SessionPermissions> {
+            const held = data.permissionGrants?.[sessionId] ?? [];
+            if (key !== undefined && !held.some((g) => g.key === key)) throw new GaiaApiError(404, `No grant '${key}' in this chat.`);
+            data.permissionGrants = { ...data.permissionGrants, [sessionId]: key === undefined ? [] : held.filter((g) => g.key !== key) };
+            return permissionsOf(sessionId);
         },
         async setPermissionMode(sessionId, mode): Promise<SessionPermissions> {
             data.permissions = { ...data.permissions, [sessionId]: mode };
-            return { session_id: sessionId, mode, grants: [] };
+            return permissionsOf(sessionId);
         },
         async getContextUsage() {
             return data.contextUsage ?? { available: false, reason: 'Measured once GAIA has answered in this chat.' };
@@ -467,12 +581,35 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         async listSkills() {
             return { skills: [...(data.skills?.skills ?? [])], invalid: { ...(data.skills?.invalid ?? {}) } };
         },
+        async getMemoryActivity(days) {
+            memoryActivityReads.push(days);
+            if (!data.memoryActivity) throw new GaiaApiError(503, 'This fake client was given no memory activity.');
+            const rows = data.memoryActivity(days);
+            if (rows instanceof Error) throw rows;
+            return rows;
+        },
+        async getMemoryTools() {
+            if (!data.memoryTools) throw new GaiaApiError(503, 'This fake client was given no memory tool stats.');
+            if (data.memoryTools instanceof Error) throw data.memoryTools;
+            return data.memoryTools;
+        },
+        async getMemoryUpcoming() {
+            if (!data.memoryUpcoming) throw new GaiaApiError(503, 'This fake client was given no upcoming items.');
+            if (data.memoryUpcoming instanceof Error) throw data.memoryUpcoming;
+            return data.memoryUpcoming;
+        },
         async getMemoryStats() {
             if (!data.memoryStats?.length) throw new GaiaApiError(503, 'This fake client was given no memory stats.');
             return nextOf(data.memoryStats, memoryStatsReads++);
         },
         async getMemorySettings() {
             if (!data.memorySettings) throw new GaiaApiError(503, 'This fake client was given no memory settings.');
+            return data.memorySettings;
+        },
+        async updateMemorySettings(settings) {
+            if (!data.memorySettings) throw new GaiaApiError(503, 'This fake client was given no memory settings.');
+            if (data.memorySettingsError) throw data.memorySettingsError;
+            data.memorySettings = { ...data.memorySettings, ...settings };
             return data.memorySettings;
         },
         async getEmbeddingCoverage() {
@@ -562,7 +699,36 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             return { deleted: true };
         },
         async listDocuments() {
-            return data.documents ?? { documents: [], total: 0, total_chunks: 0, total_size_bytes: 0 };
+            return { ...library, documents: [...library.documents] };
+        },
+        async cancelDocumentIndexing(docId) {
+            const doc = findDocument(docId, 'cancel');
+            doc.indexing_status = 'cancelled';
+            return { cancelled: true, id: docId };
+        },
+        async deleteDocument(docId) {
+            const doc = findDocument(docId, 'delete');
+            library.documents.splice(library.documents.indexOf(doc), 1);
+            return { deleted: true };
+        },
+        async getDocumentStatus(docId) {
+            const doc = library.documents.find((d) => d.id === docId);
+            if (!doc) throw new GaiaApiError(404, 'Document not found');
+            return {
+                id: docId,
+                indexing_status: doc.indexing_status ?? 'complete',
+                chunk_count: doc.chunk_count,
+                is_active: false,
+                progress: null,
+                ...data.documentStatuses?.[docId],
+            };
+        },
+        async reindexDocument(docId) {
+            const doc = findDocument(docId, 'reindex');
+            doc.indexing_status = 'indexing';
+            doc.last_error = null;
+            doc.error_kind = null;
+            return doc;
         },
         async getCapabilities(sessionId) {
             capabilityReads.push(sessionId);
@@ -581,6 +747,11 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         async restartLocalModel(confirm) {
             restarts.push({ confirm });
             return { status: 'restarting', model: data.localModel?.model ?? '', starting_server: false };
+        },
+        async getGpuMemory() {
+            if (!data.gpuMemory) throw new GaiaApiError(503, 'This fake client was given no GPU memory status.');
+            if (data.gpuMemory instanceof Error) throw data.gpuMemory;
+            return data.gpuMemory;
         },
         async getModelNeed(job) {
             return data.modelNeeds?.[job] ?? { job, needed: false, model: null, disk_free_gb: null };
@@ -631,9 +802,31 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             if (data.lemonadeDetect instanceof Error) throw data.lemonadeDetect;
             return data.lemonadeDetect;
         },
+        async connectProvider(provider) {
+            connects.push(provider);
+            return { remembered: true };
+        },
+        async recheckSetupNpu() {
+            npuRechecks += 1;
+            if (data.npuRecheck instanceof Error) throw data.npuRecheck;
+            if (!data.npuRecheck) throw new GaiaApiError(503, 'This fake client was given no NPU recheck plan.');
+            return data.npuRecheck;
+        },
         async getSetupPlan() {
             if (!data.setupPlan) throw new GaiaApiError(503, 'This fake client was given no setup plan.');
             return data.setupPlan;
+        },
+        async chooseSetupChatModel(modelId, acknowledgeNoFit) {
+            setupChoices.push({ kind: 'chat', modelId, flag: acknowledgeNoFit });
+            return data.setupPlan as SetupPlan;
+        },
+        async chooseSetupVisionModel(modelId) {
+            setupChoices.push({ kind: 'vision', modelId });
+            return data.setupPlan as SetupPlan;
+        },
+        async skipSetupModel(modelId, skipped) {
+            setupChoices.push({ kind: 'skip', modelId, flag: skipped });
+            return data.setupPlan as SetupPlan;
         },
         async startSetup(skipChatModel, gaiaLemonade = false, options = {}) {
             setupStarts.push({ skipChatModel, gaiaLemonade, upgradeEmbedded: !!options.upgradeEmbedded, serverOnly: !!options.serverOnly });

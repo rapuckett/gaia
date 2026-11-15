@@ -43,4 +43,22 @@ describe('MemoryScreen', () => {
         await screen.findByTestId('memory-pane-advanced');
         expect(client.memoryStatsReads).toBe(2);
     });
+
+    it('reads the activity for the range that was picked', async () => {
+        const client = createFakeClient({
+            memorySettings: { memory_enabled: true, mcp_memory_enabled: false, system_discovery_consent: false },
+            memoryStats: [SAMPLE_MEMORY_STATS],
+            memoryActivity: () => [],
+            memoryTools: [],
+            memoryUpcoming: [],
+        });
+        await mount(client);
+        fireEvent.press(screen.getByTestId('memory-tab-advanced'));
+        await screen.findByTestId('memory-pane-advanced');
+        expect(client.memoryActivityReads).toEqual([30]);
+
+        fireEvent.press(screen.getByText('7D'));
+        await screen.findByText('No activity data yet');
+        expect(client.memoryActivityReads).toEqual([30, 7]);
+    });
 });

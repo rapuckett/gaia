@@ -7,14 +7,15 @@ import { useState } from 'react';
 
 import { GaiaClientProvider } from '@/data';
 import { MemoryScreen } from '@/features/memory';
+import { MEMORY_TABS } from '@/features/memory/tabs';
 import { memoryScene, type MemoryScene } from '@/features/memory/devScenes';
 import { ScreenBannerProvider, UIProvider } from '@/ui';
 
-const SCENES: readonly MemoryScene[] = ['on', 'off', 'loading', 'failed', 'actionFails'];
+const SCENES: readonly MemoryScene[] = ['on', 'off', 'loading', 'failed', 'actionFails', 'statsEmpty', 'statsManyTools'];
 
-/** The Memory screen on a fake PC; `?scene=on|off|loading|failed|actionFails`. */
+/** The Memory screen on a fake PC; `?scene=on|off|loading|failed|actionFails|statsEmpty|statsManyTools`, and `&tab=about|goals|profile|advanced`. */
 export default function MemoryGalleryRoute() {
-    const { scene } = useLocalSearchParams<{ scene?: string }>();
+    const { scene, tab } = useLocalSearchParams<{ scene?: string; tab?: string }>();
     const router = useRouter();
     const picked = SCENES.find((s) => s === scene) ?? 'on';
     const [queryClient] = useState(() => new QueryClient({ defaultOptions: { queries: { retry: false } } }));
@@ -25,7 +26,7 @@ export default function MemoryGalleryRoute() {
             <GaiaClientProvider client={client}>
                 <UIProvider>
                     <ScreenBannerProvider banner={null}>
-                        <MemoryScreen onBack={() => router.replace('/')} />
+                        <MemoryScreen onBack={() => router.replace('/')} initialTab={MEMORY_TABS.find((entry) => entry.key === tab)?.key} />
                     </ScreenBannerProvider>
                 </UIProvider>
             </GaiaClientProvider>

@@ -6,8 +6,11 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
     ConsolidateMemoryResult,
     EmbeddingCoverage,
+    MemoryActivityDay,
     MemorySettings,
     MemoryStats,
+    MemoryToolStat,
+    MemoryUpcomingItem,
     RebuildEmbeddingsResult,
     ReconcileMemoryResult,
     RefreshSystemContextResult,
@@ -22,6 +25,9 @@ export const memoryKeys = {
     stats: ['memory', 'stats'] as const,
     settings: ['memory', 'settings'] as const,
     coverage: ['memory', 'coverage'] as const,
+    activity: (days: number) => ['memory', 'activity', days] as const,
+    tools: ['memory', 'tools'] as const,
+    upcoming: (days: number) => ['memory', 'upcoming', days] as const,
 };
 
 export function useMemoryStats() {
@@ -43,12 +49,50 @@ export function useMemorySettings() {
     });
 }
 
+/** Turns a memory switch on or off: `mutate({ memory_enabled: false })`. */
+export function useUpdateMemorySettings() {
+    const client = useGaiaClient();
+    const queryClient = useQueryClient();
+    return useMutation<MemorySettings, Error, Partial<MemorySettings>>({
+        mutationFn: (settings) => requireClient(client).updateMemorySettings(settings),
+        onSettled: () => queryClient.invalidateQueries({ queryKey: memoryKeys.all }),
+    });
+}
+
 export function useEmbeddingCoverage() {
     const client = useGaiaClient();
     return useQuery<EmbeddingCoverage>({
         queryKey: memoryKeys.coverage,
         enabled: client !== null,
         queryFn: ({ signal }) => requireClient(client).getEmbeddingCoverage({ signal }),
+    });
+}
+
+/** The last `days` days of activity. */
+export function useMemoryActivity(days: number) {
+    const client = useGaiaClient();
+    return useQuery<MemoryActivityDay[]>({
+        queryKey: memoryKeys.activity(days),
+        enabled: client !== null,
+        queryFn: ({ signal }) => requireClient(client).getMemoryActivity(days, { signal }),
+    });
+}
+
+export function useMemoryTools() {
+    const client = useGaiaClient();
+    return useQuery<MemoryToolStat[]>({
+        queryKey: memoryKeys.tools,
+        enabled: client !== null,
+        queryFn: ({ signal }) => requireClient(client).getMemoryTools({ signal }),
+    });
+}
+
+export function useMemoryUpcoming(days: number) {
+    const client = useGaiaClient();
+    return useQuery<MemoryUpcomingItem[]>({
+        queryKey: memoryKeys.upcoming(days),
+        enabled: client !== null,
+        queryFn: ({ signal }) => requireClient(client).getMemoryUpcoming(days, { signal }),
     });
 }
 
