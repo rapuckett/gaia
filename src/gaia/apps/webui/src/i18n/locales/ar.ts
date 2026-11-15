@@ -3525,9 +3525,11 @@ const messages: Messages = {
     'mem.toast.reinitFailed': 'تعذّرت إعادة تهيئة الذاكرة: {error}',
     'mem.toast.cleared': 'حُذف. إدخالات المعرفة: {knowledge}، والمحادثات: {conversations}',
     'mem.toast.clearFailed': 'تعذّر مسح الذاكرة: {error}',
+    'mem.toast.pcOnly': 'نفّذ هذا على الكمبيوتر الذي يشغّل GAIA. لا يتوفر عبر الوصول من الهاتف أو من كمبيوتر آخر.',
 
     // Memory dashboard: Profile setup
     'mem.profile.intro': 'ساعد GAIA على التعرّف إليك أسرع. يعمل الفحصان على هذا الجهاز ولا يرسلان شيئًا إلى أي مكان. ترى ما وجداه وتختار ما تحتفظ به قبل حفظ أي شيء في الذاكرة.',
+    'mem.profile.pcOnly': 'يقرأ الفحصان الملفات على الكمبيوتر الذي يشغّل GAIA، لذا لا يشغّلهما إلا ذلك الكمبيوتر. افتح GAIA على ذلك الكمبيوتر للفحص والحفظ؛ هذه النافذة مفتوحة عبر الوصول من الهاتف أو من كمبيوتر آخر.',
     'mem.disc.title': 'افحص هذا الجهاز',
     'mem.disc.desc': 'يقرأ التطبيقات المثبتة وعدد مرات استخدامها، وأنواع الملفات الحديثة، ومجلدك الرئيسي ومجلدات المشاريع، ومستودعات Git وهويتك فيها، وإعدادات الطرفية وSSH، وإشارات المتصفح المرجعية وسجله لآخر 30 يومًا.',
     'mem.disc.run': 'ابدأ الفحص',
@@ -3691,6 +3693,7 @@ const messages: Messages = {
     'mobileApp.chat.notFound': 'هذه المحادثة لم تعد موجودة على جهاز الكمبيوتر.',
     'mobileApp.mem.activitySummary': 'الإجمالي {total}، الذروة {peak} في {date}',
     'mobileApp.mem.activityTapHint': 'اضغط على عمود لعرض ذلك اليوم.',
+    'mobileApp.mem.admin.pcOnly': 'تشغيل هذا أو إعادة ضبط الذاكرة يقرأ تفاصيل نظام الكمبيوتر لديك، لذا نفّذه على الكمبيوتر الذي يشغّل GAIA.',
     'mobileApp.mem.goalTasksDone': 'اكتملت {done} من {total} مهام',
     'mobileApp.mem.metric': '{label}: {value}',
     'mobileApp.mem.sectionFailed': 'تعذّر تحميل هذا القسم.',
