@@ -32,6 +32,8 @@ export interface StackProps extends BoxProps {
     padding?: Space;
     paddingX?: Space;
     paddingY?: Space;
+    /** Reads the whole box as one item with this label. */
+    accessibilityLabel?: string;
 }
 
 export interface RowProps extends BoxProps {
@@ -53,14 +55,20 @@ function boxStyle(space: Record<Space, number>, p: BoxProps): Mut<ViewStyle> {
     return style;
 }
 
-export function Stack({ children, padding, paddingX, paddingY, testID, accessibilityRole, ...box }: StackProps) {
+export function Stack({ children, padding, paddingX, paddingY, testID, accessibilityRole, accessibilityLabel, ...box }: StackProps) {
     const { space } = useTheme();
     const style = boxStyle(space, box);
     if (padding) style.padding = space[padding];
     if (paddingX) style.paddingHorizontal = space[paddingX];
     if (paddingY) style.paddingVertical = space[paddingY];
     return (
-        <View style={style} testID={testID} accessibilityRole={accessibilityRole}>
+        <View
+            style={style}
+            testID={testID}
+            accessibilityRole={accessibilityRole}
+            accessible={accessibilityLabel ? true : undefined}
+            accessibilityLabel={accessibilityLabel}
+        >
             {children}
         </View>
     );
