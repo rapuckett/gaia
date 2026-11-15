@@ -9,12 +9,13 @@ import { useState } from 'react';
 import { GaiaClientProvider } from '@/data';
 import { MemoryScreen } from '@/features/memory';
 import { MEMORY_TABS } from '@/features/memory/tabs';
-import { memoryScene, type MemoryScene } from '@/features/memory/devScenes';
+import { ProfileDevContext } from '@/features/memory/profile/ProfileCard';
+import { memoryScene, profileSceneStart, type MemoryScene } from '@/features/memory/devScenes';
 import { ScreenBannerProvider, UIProvider } from '@/ui';
 
-const SCENES: readonly MemoryScene[] = ['on', 'off', 'loading', 'failed', 'actionFails', 'statsEmpty', 'statsManyTools', 'aboutEmpty', 'aboutFailed', 'aboutMany', 'goalsEmpty', 'goalsFailed', 'goalsStoreError'];
+const SCENES: readonly MemoryScene[] = ['on', 'off', 'loading', 'failed', 'actionFails', 'statsEmpty', 'statsManyTools', 'aboutEmpty', 'aboutFailed', 'aboutMany', 'goalsEmpty', 'goalsFailed', 'goalsStoreError', 'profileIdle', 'profileScanning', 'profileReview', 'profileSaved', 'profileInferring', 'profileInferenceReview', 'profileFailed', 'profileOff'];
 
-/** The Memory screen on a fake PC; `?scene=on|off|loading|failed|actionFails|statsEmpty|statsManyTools|aboutEmpty|aboutFailed|aboutMany|goalsEmpty|goalsFailed|goalsStoreError`, and `&tab=about|goals|profile|advanced`. */
+/** The Memory screen on a fake PC; `?scene=on|off|loading|failed|actionFails|statsEmpty|statsManyTools|aboutEmpty|aboutFailed|aboutMany|goalsEmpty|goalsFailed|goalsStoreError|profileIdle|profileScanning|profileReview|profileSaved|profileInferring|profileInferenceReview|profileFailed|profileOff`, and `&tab=about|goals|profile|advanced`. */
 export default function MemoryGalleryRoute() {
     const { scene, tab } = useLocalSearchParams<{ scene?: string; tab?: string }>();
     const router = useRouter();
@@ -27,7 +28,9 @@ export default function MemoryGalleryRoute() {
             <GaiaClientProvider client={client}>
                 <UIProvider>
                     <ScreenBannerProvider banner={null}>
-                        <MemoryScreen onBack={() => router.replace('/')} initialTab={MEMORY_TABS.find((entry) => entry.key === tab)?.key} />
+                        <ProfileDevContext.Provider value={profileSceneStart(picked)}>
+                            <MemoryScreen onBack={() => router.replace('/')} initialTab={MEMORY_TABS.find((entry) => entry.key === tab)?.key} />
+                        </ProfileDevContext.Provider>
                     </ScreenBannerProvider>
                 </UIProvider>
             </GaiaClientProvider>

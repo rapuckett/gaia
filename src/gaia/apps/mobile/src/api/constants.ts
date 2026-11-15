@@ -26,6 +26,8 @@ export const ENDPOINTS = {
     localModelRestart: '/api/providers/local/restart',
     localModelStatus: '/api/providers/local/status',
     memoryActivity: '/api/memory/activity',
+    memoryCommitDiscovery: '/api/memory/commit-discovery',
+    memoryCommitInference: '/api/memory/commit-inference',
     memoryConsolidate: '/api/memory/consolidate',
     memoryEmbeddingCoverage: '/api/memory/embedding-coverage',
     memoryKnowledge: '/api/memory/knowledge',
@@ -36,6 +38,8 @@ export const ENDPOINTS = {
     memoryRefreshSystemContext: '/api/memory/refresh-system-context',
     memorySettings: '/api/memory/settings',
     memoryStats: '/api/memory/stats',
+    memoryStreamDiscovery: '/api/memory/stream-discovery',
+    memoryStreamInference: '/api/memory/stream-inference',
     memoryTools: '/api/memory/tools',
     memoryUpcoming: '/api/memory/upcoming',
     modelServer: '/api/system/model-server',
@@ -163,6 +167,10 @@ export function memoryKnowledgePath(params: object): string {
         .filter(([, value]) => value !== undefined && value !== null && value !== '')
         .flatMap(([key, value]) => (Array.isArray(value) ? value : [value]).map((one) => `${encodeURIComponent(key)}=${encodeURIComponent(String(one))}`));
     return parts.length ? `${ENDPOINTS.memoryKnowledge}?${parts.join('&')}` : ENDPOINTS.memoryKnowledge;
+}
+
+export function memoryStreamInferencePath(includeBrowser: boolean): string {
+    return `${ENDPOINTS.memoryStreamInference}?include_browser=${includeBrowser}`;
 }
 
 export function memoryUpcomingPath(days: number): string {
@@ -304,6 +312,8 @@ export const SCHEDULES_POLL_MS = 10_000;
 export const GOAL_HEALTH_POLL_MS = 30_000;
 
 /** How long a memory result notice stays up, as the web's toasts do (4 s); a failure stays twice as long to be read. */
+/** A profile scan or inference may go quiet for a while (a model call, a big home folder); the web's EventSource waits without limit, so this is only a dead-connection guard. */
+export const PROFILE_STREAM_IDLE_MS = 5 * 60_000;
 export const MEMORY_NOTICE_MS = 4_000;
 export const MEMORY_ERROR_NOTICE_MS = 8_000;
 /** How long a Delete button waits for its "Confirm?" press; the web UI's CONFIRM_DELETE_MS. */
