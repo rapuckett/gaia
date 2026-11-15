@@ -12,6 +12,7 @@ import {
     GaiaAuthError,
     GaiaConfigError,
     GaiaNetworkError,
+    GaiaPinMismatchError,
     GaiaStreamDroppedError,
     GaiaStreamError,
     GaiaStreamTimeoutError,
@@ -47,11 +48,14 @@ import type {
     FollowUpResult,
     DeleteSessionResult,
     GaiaClient,
+    GpuMemoryStatus,
     HealthResponse,
     LemonadeFound,
     LemonadeTarget,
     LocalModelStatus,
+    KnowledgeSaveResult,
     MemoryActivityDay,
+    MemoryKnowledgePage,
     MemorySettings,
     MemoryStats,
     MemoryToolStat,
@@ -78,7 +82,9 @@ import type {
     SetupCheck,
     SetupPlan,
     SetupRunStatus,
+    Settings,
     SkillList,
+    UndoSettings,
     UploadedFile,
     UserInputResult,
 } from './client.types';
@@ -95,11 +101,14 @@ import {
     chatPermissionGrantsPath,
     chatPerformancePath,
     chatPermissionsPath,
+    providerConnectPath,
     providerModelsPath,
     followupOutcomePath,
     MESSAGE_PAGE_SIZE,
     QUEUED_IDLE_MS,
     memoryActivityPath,
+    memoryKnowledgeItemPath,
+    memoryKnowledgePath,
     memoryUpcomingPath,
     schedulePath,
     scheduleResultsPath,
@@ -205,7 +214,7 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             const pending = fetch(url, init);
             res = await (headerLimit ? within(headerLimit, pending) : pending);
         } catch (err) {
-            if (err instanceof GaiaStreamTimeoutError || signal?.aborted) throw err;
+            if (err instanceof GaiaStreamTimeoutError || err instanceof GaiaPinMismatchError || signal?.aborted) throw err;
             throw new GaiaNetworkError(url, err);
         }
         if (!res.ok) {
@@ -343,6 +352,22 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         markSessionRead(sessionId, options) {
             return postJson<Session>(sessionReadPath(sessionId), undefined, options?.signal);
+        },
+
+        getSettings(options) {
+            return getJson<Settings>(ENDPOINTS.settings, options?.signal);
+        },
+
+        setNetworkPolicy(policy, options) {
+            return putJson<Settings>(ENDPOINTS.settings, { network_policy: policy }, options?.signal);
+        },
+
+        getUndoSettings(options) {
+            return getJson<UndoSettings>(ENDPOINTS.settingsUndo, options?.signal);
+        },
+
+        updateUndoSettings(retentionDays, maxMb, options) {
+            return putJson<UndoSettings>(ENDPOINTS.settingsUndo, { retention_days: retentionDays, max_mb: maxMb }, options?.signal);
         },
 
         getContextChoice(model, options) {
@@ -579,12 +604,32 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             return getJson<MemoryUpcomingItem[]>(memoryUpcomingPath(days), options?.signal);
         },
 
+        listMemoryKnowledge(params, options) {
+            return getJson<MemoryKnowledgePage>(memoryKnowledgePath(params), options?.signal);
+        },
+
+        addMemoryKnowledge(body, options) {
+            return postJson<KnowledgeSaveResult>(ENDPOINTS.memoryKnowledge, body, options?.signal);
+        },
+
+        updateMemoryKnowledge(knowledgeId, body, options) {
+            return putJson<KnowledgeSaveResult>(memoryKnowledgeItemPath(knowledgeId), body, options?.signal);
+        },
+
+        deleteMemoryKnowledge(knowledgeId, options) {
+            return deleteJson<unknown>(memoryKnowledgeItemPath(knowledgeId), options?.signal);
+        },
+
         getMemoryStats(options) {
             return getJson<MemoryStats>(ENDPOINTS.memoryStats, options?.signal);
         },
 
         getMemorySettings(options) {
             return getJson<MemorySettings>(ENDPOINTS.memorySettings, options?.signal);
+        },
+
+        updateMemorySettings(settings, options) {
+            return putJson<MemorySettings>(ENDPOINTS.memorySettings, settings, options?.signal);
         },
 
         getEmbeddingCoverage(options) {
@@ -663,6 +708,11 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             return postJson<RestartModelResult>(ENDPOINTS.localModelRestart, { confirm }, options?.signal);
         },
 
+        getGpuMemory(settingGb, options) {
+            const query = settingGb == null ? '' : `?setting_gb=${encodeURIComponent(String(settingGb))}`;
+            return getJson<GpuMemoryStatus>(`${ENDPOINTS.gpuMemory}${query}`, options?.signal);
+        },
+
         getModelNeed(job, options) {
             return getJson<ModelNeed>(setupNeedsPath(job), options?.signal);
         },
@@ -673,6 +723,10 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
                 { model_id: modelId, acknowledge_low_disk: acknowledgeLowDisk, keep_trying: false },
                 options?.signal,
             );
+        },
+
+        removeSetupModel(modelId, options) {
+            return postJson<SetupPlan & { freed_gb: number }>(ENDPOINTS.setupModelRemove, { model_id: modelId }, options?.signal);
         },
 
         getSetupStatus(options) {
@@ -715,8 +769,33 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             return getJson<{ found: LemonadeFound | null; unchecked?: string[] }>(ENDPOINTS.lemonadeDetect, options?.signal);
         },
 
+        connectProvider(provider, options) {
+            // No key travels from the phone: a blank body keeps the key the PC already holds.
+            return postJson<{ remembered: boolean }>(providerConnectPath(provider), {}, options?.signal);
+        },
+
+        recheckSetupNpu(options) {
+            return postJson<SetupPlan>(ENDPOINTS.setupNpuRecheck, undefined, options?.signal);
+        },
+
         getSetupPlan(options) {
             return getJson<SetupPlan>(ENDPOINTS.setupPlan, options?.signal);
+        },
+
+        chooseSetupChatModel(modelId, acknowledgeNoFit, options) {
+            return postJson<SetupPlan>(
+                ENDPOINTS.setupChatModel,
+                { model_id: modelId, acknowledge_no_fit: acknowledgeNoFit },
+                options?.signal,
+            );
+        },
+
+        chooseSetupVisionModel(modelId, options) {
+            return postJson<SetupPlan>(ENDPOINTS.setupVisionModel, { model_id: modelId }, options?.signal);
+        },
+
+        skipSetupModel(modelId, skipped, options) {
+            return postJson<SetupPlan>(ENDPOINTS.setupModelSkip, { model_id: modelId, skipped }, options?.signal);
         },
 
         startSetup(skipChatModel, gaiaLemonade = false, options = {}) {

@@ -10,6 +10,7 @@ export const UI_HEADERS = {
 
 export const ENDPOINTS = {
     agents: '/api/agents',
+    gpuMemory: '/api/gpu-memory',
     health: '/api/health',
     cloudPrices: '/api/spending/prices/{provider}',
     lemonadeDetect: '/api/lemonade/detect',
@@ -20,6 +21,8 @@ export const ENDPOINTS = {
     memoryActivity: '/api/memory/activity',
     memoryConsolidate: '/api/memory/consolidate',
     memoryEmbeddingCoverage: '/api/memory/embedding-coverage',
+    memoryKnowledge: '/api/memory/knowledge',
+    memoryKnowledgeItem: '/api/memory/knowledge/{knowledge_id}',
     memoryRebuildEmbeddings: '/api/memory/rebuild-embeddings',
     memoryRebuildFts: '/api/memory/rebuild-fts',
     memoryReconcile: '/api/memory/reconcile',
@@ -30,6 +33,7 @@ export const ENDPOINTS = {
     memoryUpcoming: '/api/memory/upcoming',
     modelServer: '/api/system/model-server',
     modelServerBackend: '/api/system/model-server/backend',
+    providerConnect: '/api/providers/{provider}/connect',
     providerModels: '/api/providers/{provider}/models',
     providersActive: '/api/providers/active',
     providersSelect: '/api/providers/select',
@@ -50,13 +54,20 @@ export const ENDPOINTS = {
     sessionPrivate: '/api/sessions/{session_id}/private',
     sessionRead: '/api/sessions/{session_id}/read',
     sessionSearch: '/api/sessions/search',
+    settings: '/api/settings',
+    settingsUndo: '/api/settings/undo',
     setupCancel: '/api/setup/cancel',
+    setupChatModel: '/api/setup/chat-model',
     setupCheck: '/api/setup/check',
     setupModelDownload: '/api/setup/models/download',
+    setupModelRemove: '/api/setup/models/remove',
+    setupModelSkip: '/api/setup/models/skip',
     setupNeeds: '/api/setup/needs/{job}',
+    setupNpuRecheck: '/api/setup/npu/recheck',
     setupPlan: '/api/setup/plan',
     setupRun: '/api/setup/run',
     setupStatus: '/api/setup/status',
+    setupVisionModel: '/api/setup/vision-model',
     skills: '/api/skills',
     chatSend: '/api/chat/send',
     chatAttach: '/api/chat/attach',
@@ -117,6 +128,18 @@ export function memoryActivityPath(days: number): string {
     return `${ENDPOINTS.memoryActivity}?days=${days}`;
 }
 
+export function memoryKnowledgeItemPath(knowledgeId: string): string {
+    return ENDPOINTS.memoryKnowledgeItem.replace('{knowledge_id}', encodeURIComponent(knowledgeId));
+}
+
+/** The knowledge list's query, built as the web's `toQuery` does: empty values dropped, the rest encoded. */
+export function memoryKnowledgePath(params: object): string {
+    const parts = Object.entries(params as Record<string, unknown>)
+        .filter(([, value]) => value !== undefined && value !== null && value !== '')
+        .flatMap(([key, value]) => (Array.isArray(value) ? value : [value]).map((one) => `${encodeURIComponent(key)}=${encodeURIComponent(String(one))}`));
+    return parts.length ? `${ENDPOINTS.memoryKnowledge}?${parts.join('&')}` : ENDPOINTS.memoryKnowledge;
+}
+
 export function memoryUpcomingPath(days: number): string {
     return `${ENDPOINTS.memoryUpcoming}?days=${days}`;
 }
@@ -147,6 +170,10 @@ export function chatPerformancePath(sessionId: string): string {
 
 export function chatPermissionsPath(sessionId: string): string {
     return ENDPOINTS.chatPermissions.replace('{session_id}', encodeURIComponent(sessionId));
+}
+
+export function providerConnectPath(provider: string): string {
+    return ENDPOINTS.providerConnect.replace('{provider}', encodeURIComponent(provider));
 }
 
 export function chatPermissionGrantsPath(sessionId: string, key?: string): string {

@@ -13,6 +13,7 @@ export * from './modelMenu';
 export * from './models';
 export * from './mutations';
 export * from './permissions';
+export * from './privacy';
 export * from './providers';
 export * from './queries';
 export * from './schedules';
