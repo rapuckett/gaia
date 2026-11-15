@@ -24,7 +24,7 @@ import { usePermissionPrompt } from './permission/usePermissionPrompt';
 import { liveStatusLine } from './liveStatus';
 import { MessageList } from './messages/MessageList';
 import { TailIssues } from './ReplyErrors';
-import { SessionPanel } from './session-panel';
+import { OfflineNotice, SessionPanel } from './session-panel';
 import { buildTail } from './tailState';
 import { TurnTail } from './TurnTail';
 
@@ -147,6 +147,7 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
                         onRetry={queue.retry}
                         onSteer={steerable ? queue.steer : undefined}
                     />
+                    <OfflineNotice sessionId={sessionId} live={busy} />
                     <ContextWarning usage={context.usage} />
                     <Composer
                         value={queue.draft}

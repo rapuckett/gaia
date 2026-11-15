@@ -4,7 +4,7 @@
 import { useEnvironmentActions, useSessionEnvironment } from '@/data';
 import { PcOnlyNotice, isPcRefusal } from '@/features/settings/PcOnlyNotice';
 import { useT } from '@/i18n/useT';
-import { Notice } from '@/ui';
+import { Notice, Stack } from '@/ui';
 
 import { failureReasonWith } from '../header/failureText';
 
@@ -14,17 +14,25 @@ export function OfflineNotice({ sessionId, live = false }: { sessionId: string; 
     const { data: env } = useSessionEnvironment(sessionId, { enabled: true, live });
     const { setInternet } = useEnvironmentActions(sessionId);
     if (!env || env.internet) return null;
-    if (isPcRefusal(setInternet.error)) return <PcOnlyNotice testID="offline-pc-only" />;
+    if (isPcRefusal(setInternet.error)) {
+        return (
+            <Stack paddingX="lg">
+                <PcOnlyNotice testID="offline-pc-only" />
+            </Stack>
+        );
+    }
     const error = setInternet.error;
     return (
-        <Notice
-            tone="info"
-            testID="offline-notice"
-            message={
-                t('offline.text') +
-                (error ? ` ${t.compose((say) => say('offline.error', { error: failureReasonWith(error, say) }))}` : '')
-            }
-            action={{ label: t('offline.turnOn'), onPress: () => setInternet.mutate(true) }}
-        />
+        <Stack paddingX="lg">
+            <Notice
+                tone="info"
+                testID="offline-notice"
+                message={
+                    t('offline.text') +
+                    (error ? ` ${t.compose((say) => say('offline.error', { error: failureReasonWith(error, say) }))}` : '')
+                }
+                action={{ label: t('offline.turnOn'), onPress: () => setInternet.mutate(true) }}
+            />
+        </Stack>
     );
 }
