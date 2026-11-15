@@ -401,6 +401,22 @@ def test_revoke_closes_inflight_stream(served):
     assert status == 401
 
 
+def test_revoke_between_auth_and_serving_refuses(served, monkeypatch):
+    device = _pair(served)
+    authenticate = served.access.authenticate
+
+    def then_revoked(token):
+        found = authenticate(token)
+        served.access.revoke(found.id)
+        return found
+
+    monkeypatch.setattr(served.access, "authenticate", then_revoked)
+    status, _, _ = call(
+        served.port, served.pin, "GET", "/api/sessions", token=device["token"]
+    )
+    assert status == 401
+
+
 def test_port_in_use_fails_loudly(tmp_path):
     GaiaConfig.save_key("device_pairing", True)
     with socket.socket() as taken:

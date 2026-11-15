@@ -245,6 +245,12 @@ class DeviceGate:
             await send(message)
 
         self._access.requests.add(device_id, loop, ended)
+        # A revoke after authenticate but before add had nothing to end.
+        if not self._access.still_paired(device_id):
+            self._access.requests.discard(device_id, loop, ended)
+            logger.info("Device %s was revoked before its request ran", device_id)
+            await _refuse(send, scope, 401, "This device was unpaired.")
+            return
         app = asyncio.ensure_future(self.app(scope, receive, tracked))
         revoked = asyncio.ensure_future(ended.wait())
         try:

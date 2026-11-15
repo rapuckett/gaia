@@ -396,6 +396,10 @@ class DeviceAccess:
         store = self._store
         return store.authenticate(token) if store else None
 
+    def still_paired(self, device_id: str) -> bool:
+        store = self._store
+        return bool(store and store.get(device_id))
+
     def allow(self, device_id: str) -> Optional[Device]:
         store = self._existing_store()
         device = store.allow(device_id) if store else None
