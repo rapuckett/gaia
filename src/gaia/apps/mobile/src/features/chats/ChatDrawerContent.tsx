@@ -9,6 +9,7 @@ import { hiddenAutomatedCount } from '@webui/utils/sessionGrouping';
 
 import { useDeleteSession, useMarkRead, useRenameSession, useSessions, useSessionSearch, useSetPinned } from '@/data';
 import { ModelStatusPill } from '@/features/model';
+import { NotificationsEntry } from '@/features/notifications';
 import { describeError, describeErrorWith, useT } from '@/i18n/useT';
 import {
     Chip,
@@ -145,6 +146,7 @@ export function ChatDrawerContent({ activeId, onSelect, onClose, onNewChat, onPc
                     {entries.filter((e) => e.footer).map((e) => (
                         <NavRow key={e.key} entry={e} active={activeRoute === e.route} onOpen={open} />
                     ))}
+                    <NotificationsEntry active={activeRoute === 'notifications'} onOpen={() => open('notifications')} />
                     <ModelStatusPill />
                 </Stack>
             }
