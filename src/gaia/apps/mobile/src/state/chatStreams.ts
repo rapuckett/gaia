@@ -5,7 +5,7 @@ import { create } from 'zustand';
 
 import { translator } from '@webui/i18n/translator';
 import type { StreamEvent } from '@webui/types';
-import { dropErrorsEchoedInAnswer } from '@webui/utils/messageErrors.core';
+import { dropErrorsEchoedInAnswer } from '@webui/utils/answerErrors.core';
 import { agentEventToStep } from '@webui/utils/streamSteps.core';
 
 import { AGENT_EVENT_TYPES, RESOLVES_PROMPTS } from '@/api/constants';

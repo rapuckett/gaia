@@ -5,7 +5,7 @@ import * as WebBrowser from 'expo-web-browser';
 import { useState } from 'react';
 
 import { failureRecordId } from '@webui/utils/streamErrors.core';
-import { isErrorContent, isModelFailure } from '@webui/utils/messageErrors.core';
+import { isErrorContent, isModelFailure } from '@webui/utils/answerErrors.core';
 
 import type { Message } from '@/api/client.types';
 import { useSession } from '@/data';

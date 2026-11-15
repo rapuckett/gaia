@@ -1,7 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { isErrorContent } from '@webui/utils/messageErrors.core';
+import { isErrorContent } from '@webui/utils/answerErrors.core';
 import { SERVER_CANCELLED_TEXT, splitCutOff } from '@webui/utils/turnEnding.core';
 
 import type { Message, StreamEvent } from '@/api/client.types';

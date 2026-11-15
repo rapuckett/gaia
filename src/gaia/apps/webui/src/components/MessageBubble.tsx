@@ -16,13 +16,10 @@ import * as api from '../services/api';
 import { log } from '../utils/logger';
 import { plainAnswerText } from '../utils/plainText';
 import { AnswerStats } from './AnswerStats';
-import { dropErrorsEchoedInAnswer, isErrorContent } from '../utils/answerErrors.core';
+import { dropErrorsEchoedInAnswer, isErrorContent, isModelFailure } from '../utils/answerErrors.core';
 import { SERVER_CANCELLED_TEXT, splitCutOff, turnEnding } from '../utils/turnEnding.core';
-import { dropErrorsEchoedInAnswer, isErrorContent, isModelFailure } from '../utils/messageErrors.core';
 
-export { dropErrorsEchoedInAnswer, isErrorContent, isModelFailure };
-
-export { dropErrorsEchoedInAnswer, isErrorContent, splitCutOff, turnEnding };
+export { dropErrorsEchoedInAnswer, isErrorContent, isModelFailure, splitCutOff, turnEnding };
 import { displayModelName, useInferencePlace, useModelNames } from '../stores/modelStore';
 import { MODEL_WAIT_HINT_S, isModelWaitLabel } from '../utils/modelWait';
 import { localizeLiveStatus } from '../utils/liveStatus';
