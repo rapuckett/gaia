@@ -12,6 +12,7 @@ import { ArrowUp, Square } from '@/ui/icons';
 
 import { AttachButton } from './AttachButton';
 import { AttachmentChips } from './AttachmentChips';
+import { CompactChipsContext } from './ControlChip';
 import type { Attachments } from './useAttachments';
 
 export interface ComposerProps {
@@ -43,6 +44,8 @@ const MAX_LINES = 9;
 // Row flow follows the layout direction, so Arabic mirrors without left/right.
 // Attach, Stop and Send keep their size; the chips give way first.
 const FIXED: ViewStyle = { flexDirection: 'row', alignItems: 'center', flexShrink: 0, gap: 8 };
+/** Below this width the chip row shows icons only; wider rows fit every label (a 390 pt phone's row is about 230). */
+const COMPACT_CHIPS_BELOW = 300;
 const CHIPS: ViewStyle = { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexGrow: 1, flexShrink: 1, minWidth: 0, gap: 8 };
 const GROUP: ViewStyle = { flexDirection: 'row', alignItems: 'center', flexShrink: 1, minWidth: 0, gap: 8 };
 
@@ -63,6 +66,7 @@ export function Composer({
     const t = useT();
     const [own, setOwn] = useState('');
     const [stopping, setStopping] = useState(false);
+    const [chipsWidth, setChipsWidth] = useState(0);
     const text = value ?? own;
 
     // Reset during render, so a later reply never starts out as Stopping.
@@ -127,9 +131,11 @@ export function Composer({
                     />
                     <Row gap="sm" align="center">
                         <View style={FIXED}>{attachments ? <AttachButton onPick={attachments.add} disabled={!!disabledReason} /> : null}</View>
-                        <View style={CHIPS} testID="composer-controls">
-                            <View style={GROUP}>{leftControls}</View>
-                            <View style={GROUP}>{rightControls}</View>
+                        <View style={CHIPS} testID="composer-controls" onLayout={(e) => setChipsWidth(e.nativeEvent.layout.width)}>
+                            <CompactChipsContext.Provider value={chipsWidth > 0 && chipsWidth < COMPACT_CHIPS_BELOW}>
+                                <View style={GROUP}>{leftControls}</View>
+                                <View style={GROUP}>{rightControls}</View>
+                            </CompactChipsContext.Provider>
                         </View>
                         <View style={FIXED} testID="composer-actions">
                             {running ? (
