@@ -45,12 +45,12 @@ function Problem({ problem }: { problem: SetupNpuProblem }) {
 /**
  * The NPU is there but can't run a model yet: what is missing, and a way to check again.
  * The locked-memory fix starts an administrator prompt on the PC, so here it is only shown.
- * `onReady` is told the fresh plan after each Check again, for the parent to decide from.
+ * Check again refreshes the cached plan, so a parent reading it updates; `onReady` is also told the fresh plan.
  */
 export function NpuNotReady({ problems, disabled = false, onReady }: {
     problems: SetupNpuProblem[];
     disabled?: boolean;
-    onReady: (plan: SetupPlan) => void;
+    onReady?: (plan: SetupPlan) => void;
 }) {
     const t = useT();
     const recheck = useRecheckNpu();
@@ -77,7 +77,7 @@ export function NpuNotReady({ problems, disabled = false, onReady }: {
                 label={t('setup.npu.recheck')}
                 busy={recheck.isPending}
                 disabled={disabled || recheck.isPending}
-                onPress={() => recheck.mutate(undefined, { onSuccess: (plan) => onReady(plan) })}
+                onPress={() => recheck.mutate(undefined, { onSuccess: (plan) => onReady?.(plan) })}
             />
         </Stack>
     );
