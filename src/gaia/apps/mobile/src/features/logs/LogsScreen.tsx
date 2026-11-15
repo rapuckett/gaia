@@ -21,7 +21,7 @@ export function LogsScreen({ onBack }: { onBack: () => void }) {
                 <PcOnlyAction
                     label={t('logs.saveAll')}
                     icon={Archive}
-                    note={t('setup.logs.reportNote')}
+                    note={t('mobileApp.logs.reportNote')}
                     detail={t('mobileApp.pcOnly.logs')}
                     testID="logs-save-all"
                 />

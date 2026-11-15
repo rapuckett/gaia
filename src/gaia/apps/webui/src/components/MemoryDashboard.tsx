@@ -233,6 +233,9 @@ export function MemoryDashboard() {
     const [showAddGoalForm, setShowAddGoalForm] = useState(false);
     const [goalForm, setGoalForm] = useState({ title: '', description: '', priority: 'medium' as memoryApi.Priority });
 
+    // The server refused a PC-only call (scan, save, refresh, reset): this window isn't on the PC.
+    const [pcOnly, setPcOnly] = useState(false);
+
     // Profile Setup — Discovery
     const [discPhase, setDiscPhase] = useState<ProfilePhase>('idle');
     const [discLogs, setDiscLogs] = useState<LogLine[]>([]);
@@ -806,7 +809,10 @@ export function MemoryDashboard() {
             }
         } catch (err) {
             log.system.error('Failed to refresh system context', err);
-            showToast(t('mem.toast.systemFailed', { error: errorText(err) }), 'error');
+            if (memoryApi.isPcOnlyRefusal(err)) {
+                setPcOnly(true);
+                showToast(t('mem.toast.pcOnly'), 'error');
+            } else showToast(t('mem.toast.systemFailed', { error: errorText(err) }), 'error');
         } finally {
             setRefreshingSystem(false);
         }
@@ -823,6 +829,9 @@ export function MemoryDashboard() {
         setDiscSavedCount(null);
 
         const es = memoryApi.openDiscoveryStream();
+        // A refused stream never opens; only then is it worth asking why it failed.
+        let opened = false;
+        es.onopen = () => { opened = true; };
         discEsRef.current = es;
 
         es.onmessage = (event) => {
@@ -852,11 +861,15 @@ export function MemoryDashboard() {
         es.onerror = () => {
             es.close();
             discEsRef.current = null;
-            setDiscLogs(prev => [...prev, { text: t('mem.log.discoveryConnection'), kind: 'error' }]);
             // Only go to review if items were found; otherwise stay idle so user can retry
             setDiscItems(prev => {
                 setDiscPhase(prev.length > 0 ? 'review' : 'idle');
                 return prev;
+            });
+            const refused = opened ? Promise.resolve(false) : memoryApi.streamRefusedAsPcOnly('discovery');
+            void refused.then(isRefused => {
+                if (isRefused) setPcOnly(true);
+                else setDiscLogs(prev => [...prev, { text: t('mem.log.discoveryConnection'), kind: 'error' }]);
             });
         };
     }, [t]);
@@ -875,7 +888,8 @@ export function MemoryDashboard() {
             showToast(t('mem.disc.saved', { n: result.stored }), 'success');
         } catch (err) {
             log.system.error('Failed to commit discovery items', err);
-            showToast(t('mem.disc.saveFailed', { error: errorText(err) }), 'error');
+            if (memoryApi.isPcOnlyRefusal(err)) setPcOnly(true);
+            else showToast(t('mem.disc.saveFailed', { error: errorText(err) }), 'error');
             setDiscPhase('review');
         }
     }, [discItems, refreshKnowledgeViews, showToast, t]);
@@ -889,6 +903,9 @@ export function MemoryDashboard() {
         setInfSavedCount(null);
 
         const es = memoryApi.openInferenceStream(infIncludeBrowser);
+        // A refused stream never opens; only then is it worth asking why it failed.
+        let opened = false;
+        es.onopen = () => { opened = true; };
         infEsRef.current = es;
 
         es.onmessage = (event) => {
@@ -917,10 +934,14 @@ export function MemoryDashboard() {
         es.onerror = () => {
             es.close();
             infEsRef.current = null;
-            setInfLogs(prev => [...prev, { text: t('mem.log.inferenceConnection'), kind: 'error' }]);
             setInfItems(prev => {
                 setInfPhase(prev.length > 0 ? 'review' : 'idle');
                 return prev;
+            });
+            const refused = opened ? Promise.resolve(false) : memoryApi.streamRefusedAsPcOnly('inference', infIncludeBrowser);
+            void refused.then(isRefused => {
+                if (isRefused) setPcOnly(true);
+                else setInfLogs(prev => [...prev, { text: t('mem.log.inferenceConnection'), kind: 'error' }]);
             });
         };
     }, [infIncludeBrowser, t]);
@@ -938,7 +959,8 @@ export function MemoryDashboard() {
             showToast(t('mem.inf.saved', { n: result.stored }), 'success');
         } catch (err) {
             log.system.error('Failed to commit inference insights', err);
-            showToast(t('mem.inf.saveFailed', { error: errorText(err) }), 'error');
+            if (memoryApi.isPcOnlyRefusal(err)) setPcOnly(true);
+            else showToast(t('mem.inf.saveFailed', { error: errorText(err) }), 'error');
             setInfPhase('review');
         }
     }, [infItems, refreshKnowledgeViews, showToast, t]);
@@ -1061,7 +1083,7 @@ export function MemoryDashboard() {
                                     <button
                                         className="mem-maintenance-item"
                                         onClick={handleRefreshSystemContext}
-                                        disabled={refreshingSystem}
+                                        disabled={refreshingSystem || pcOnly}
                                         role="menuitem"
                                     >
                                         <RefreshCw size={14} />
@@ -2080,7 +2102,10 @@ export function MemoryDashboard() {
                                                             await cfg.onConfirm();
                                                         } catch (err) {
                                                             log.system.warn('Failed to update setting', err);
-                                                            showToast(t('mem.toast.settingFailed', { error: errorText(err) }), 'error');
+                                                            if (memoryApi.isPcOnlyRefusal(err)) {
+                                                                setPcOnly(true);
+                                                                showToast(t('mem.toast.pcOnly'), 'error');
+                                                            } else showToast(t('mem.toast.settingFailed', { error: errorText(err) }), 'error');
                                                         } finally {
                                                             setSettingsLoading(false);
                                                             setBetaConfirm(null);
@@ -2137,7 +2162,7 @@ export function MemoryDashboard() {
                                     </div>
                                     <button
                                         className={`mem-toggle${systemDiscoveryConsent ? ' mem-toggle-on' : ''}`}
-                                        disabled={settingsLoading}
+                                        disabled={settingsLoading || (pcOnly && !systemDiscoveryConsent)}
                                         onClick={async () => {
                                             if (!systemDiscoveryConsent) {
                                                 setBetaConfirm('discovery');
@@ -2188,7 +2213,10 @@ export function MemoryDashboard() {
                                                         loadAll();
                                                     } catch (err) {
                                                         log.system.warn('Failed to reinitialize memory', err);
-                                                        showToast(t('mem.toast.reinitFailed', { error: errorText(err) }), 'error');
+                                                        if (memoryApi.isPcOnlyRefusal(err)) {
+                                                            setPcOnly(true);
+                                                            showToast(t('mem.toast.pcOnly'), 'error');
+                                                        } else showToast(t('mem.toast.reinitFailed', { error: errorText(err) }), 'error');
                                                     } finally {
                                                         setSettingsLoading(false);
                                                         setReinitConfirm(false);
@@ -2208,7 +2236,7 @@ export function MemoryDashboard() {
                                     ) : (
                                         <button
                                             className="mem-btn-danger"
-                                            disabled={settingsLoading}
+                                            disabled={settingsLoading || pcOnly}
                                             onClick={() => setReinitConfirm(true)}
                                         >
                                             {t('mem.settings.reinitButton')}
@@ -2290,6 +2318,7 @@ export function MemoryDashboard() {
                     {activeTab === 'profile' && (
                         <div className="mem-profile-grid">
                             <p className="mem-tab-intro">{t('mem.profile.intro')}</p>
+                            {pcOnly && <div className="mem-advanced-error" role="alert">{t('mem.profile.pcOnly')}</div>}
                             {/* Card A: System Discovery */}
                             <div className="mem-profile-card">
                                 <div className="mem-profile-card-title">
@@ -2298,7 +2327,7 @@ export function MemoryDashboard() {
                                 <p className="mem-profile-desc">{t('mem.disc.desc')}</p>
                                 <button
                                     className="btn-primary mem-profile-run-btn"
-                                    disabled={discPhase === 'running' || discPhase === 'saving'}
+                                    disabled={pcOnly || discPhase === 'running' || discPhase === 'saving'}
                                     onClick={runDiscovery}
                                 >
                                     {discPhase === 'running' ? (
@@ -2345,7 +2374,7 @@ export function MemoryDashboard() {
                                         <div className="mem-review-actions">
                                             <button
                                                 className="btn-primary"
-                                                disabled={discPhase === 'saving' || discPhase === 'done' || discItems.filter(i => i._checked).length === 0}
+                                                disabled={pcOnly || discPhase === 'saving' || discPhase === 'done' || discItems.filter(i => i._checked).length === 0}
                                                 onClick={saveDiscoveryItems}
                                             >
                                                 {discPhase === 'saving' ? (
@@ -2396,7 +2425,7 @@ export function MemoryDashboard() {
                                 </label>
                                 <button
                                     className="btn-primary mem-profile-run-btn"
-                                    disabled={infPhase === 'running' || infPhase === 'saving'}
+                                    disabled={pcOnly || infPhase === 'running' || infPhase === 'saving'}
                                     onClick={runInference}
                                 >
                                     {infPhase === 'running' ? (
@@ -2443,7 +2472,7 @@ export function MemoryDashboard() {
                                         <div className="mem-review-actions">
                                             <button
                                                 className="btn-primary"
-                                                disabled={infPhase === 'saving' || infPhase === 'done' || infItems.filter(i => i._checked).length === 0}
+                                                disabled={pcOnly || infPhase === 'saving' || infPhase === 'done' || infItems.filter(i => i._checked).length === 0}
                                                 onClick={saveInferenceItems}
                                             >
                                                 {infPhase === 'saving' ? (

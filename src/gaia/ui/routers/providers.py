@@ -480,19 +480,22 @@ def _gateway_check_applies() -> bool:
     return local and not urllib.request.getproxies()
 
 
-def _with_network(view: Dict[str, Any]) -> Dict[str, Any]:
-    """Say whether the AMD gateway can be reached, before anyone picks it."""
+def _gateway_network(base_url: Optional[str]) -> Dict[str, Any]:
+    """Whether the AMD gateway can be reached, and why not; ``None`` when unchecked."""
     from gaia.llm.gateway import GatewayUnreachable
 
     if not _gateway_check_applies():
-        view["network"] = {"reachable": None, "detail": None}
-        return view
+        return {"reachable": None, "detail": None}
     try:
-        check_gateway_reachable(view.get("base_url"))
+        check_gateway_reachable(base_url)
     except (GatewayUnreachable, ValueError) as e:
-        view["network"] = {"reachable": False, "detail": str(e)}
-    else:
-        view["network"] = {"reachable": True, "detail": None}
+        return {"reachable": False, "detail": str(e)}
+    return {"reachable": True, "detail": None}
+
+
+def _with_network(view: Dict[str, Any]) -> Dict[str, Any]:
+    """Say whether the AMD gateway can be reached, before anyone picks it."""
+    view["network"] = _gateway_network(view.get("base_url"))
     return view
 
 
@@ -1374,6 +1377,12 @@ def list_providers(db: ChatDatabase = Depends(get_db)) -> Dict[str, Any]:
     }
 
 
+class ProviderSummaryNetwork(BaseModel):
+    """``reachable`` is None when the check doesn't apply to this PC."""
+
+    reachable: Optional[bool]
+
+
 class ProviderSummary(BaseModel):
     """A provider as a paired device may see it: no key, key hint or address."""
 
@@ -1385,6 +1394,8 @@ class ProviderSummary(BaseModel):
     configured: bool
     #: Local only is on, so this cloud provider can't be used.
     blocked: bool
+    #: AMD only: whether its gateway answers; no detail, which can name the address.
+    network: Optional[ProviderSummaryNetwork] = None
 
 
 class ProviderSummaryList(BaseModel):
@@ -1420,6 +1431,15 @@ def list_provider_summaries() -> Dict[str, Any]:
                 "configured": provider == LOCAL
                 or bool(entry and entry.get("models_discovered")),
                 "blocked": provider != LOCAL and blocked,
+                "network": (
+                    {
+                        "reachable": _gateway_network(
+                            entry.get("base_url") if entry else None
+                        )["reachable"]
+                    }
+                    if provider == AMD
+                    else None
+                ),
             }
         )
     return {"providers": summaries, "lemonade_error": lemonade_error}

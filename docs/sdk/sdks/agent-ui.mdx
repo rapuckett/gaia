@@ -3240,9 +3240,11 @@ credential store (the slot the TUI uses). A key is never echoed back or logged.
     Every provider and whether it is set up, for a paired device: `providers`,
     each with `id`, `name`, `remote`, `privacy_notice`, `configured` (Lemonade
     has it and it lists models; always `true` for `local`) and `blocked` (Local
-    only is on), plus `lemonade_error` when Lemonade could not be read. It only
-    reads: it registers nothing, hands no key over, and never carries a key, a
-    key hint or a gateway address. Requires `X-Gaia-UI: 1` (**403** without it).
+    only is on), and for `amd` a `network` with `reachable` (`true`, `false`, or
+    `null` when the check doesn't apply to this PC; never the reason or the
+    address), plus `lemonade_error` when Lemonade could not be read. Each call
+    dials the gateway. It only reads: it registers nothing, hands no key over,
+    and never carries a key, a key hint or a gateway address. Requires `X-Gaia-UI: 1` (**403** without it).
   </Accordion>
 
   <Accordion title="GET /api/providers/active">
