@@ -136,7 +136,8 @@ const cases: [string, Step[]][] = [
             { expect: { status: 'streaming', error: null, dropped: false } },
             { events: [{ type: 'chunk', content: 'Half an ans' }] },
             { silence: STREAM_IDLE_MS },
-            { expect: { status: 'idle', liveText: 'Half an ans', error: 'mobileApp.error.streamStalled', dropped: true } },
+            // The lost view is picked up again, not reported.
+            { expect: { status: 'streaming', liveText: 'Half an ans', error: null, dropped: true } },
         ],
     ],
     [

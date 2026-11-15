@@ -3,6 +3,7 @@
 
 import type { FollowUpOutcome } from '@webui/utils/messageQueue';
 import type {
+    ActiveModel,
     AgentInfo,
     AgentMcpServer,
     ConnectorListEntry,
@@ -13,12 +14,15 @@ import type {
     Message,
     ModelNeed,
     ModelNeedJob,
+    PermissionMode,
     PreflightReport,
     ParsedSchedule,
+    ProviderModelsResponse,
     ResourceUsage,
     Schedule,
     ScheduleResult,
     Session,
+    SessionPermissions,
     SetupCheck,
     SetupPlan,
     SetupRunStatus,
@@ -28,9 +32,11 @@ import type {
     SystemStatus,
 } from '@webui/types';
 import type { AgentCapabilities } from '@webui/types/sessionPanel';
+import type { MemorySettings } from '@webui/services/memoryApi';
 import type { CreateSessionRequest, DocumentListResponse, SessionSearchResponse, ToolConfirmRequest, UserInputRequest as ApiUserInputRequest } from '@webui/types/api.gen';
 
 export type {
+    ActiveModel,
     AgentInfo,
     AgentMcpServer,
     ConnectorListEntry,
@@ -43,12 +49,15 @@ export type {
     Message,
     ModelNeed,
     ModelNeedJob,
+    PermissionMode,
     PreflightReport,
     ParsedSchedule,
+    ProviderModelsResponse,
     ResourceUsage,
     Schedule,
     ScheduleResult,
     Session,
+    SessionPermissions,
     SetupCheck,
     SetupPlan,
     SetupRunStatus,
@@ -106,6 +115,77 @@ export interface AgentMcpList {
 export interface ScheduleList {
     schedules: Schedule[];
     total: number;
+}
+
+export type { MemorySettings } from '@webui/services/memoryApi';
+
+/** GET /api/memory/embedding-coverage; typed as the web's `MemoryDashboard` types it. */
+export interface EmbeddingCoverage {
+    total_items: number;
+    with_embedding: number;
+    without_embedding: number;
+    coverage_pct: number;
+}
+
+/** GET /api/memory/stats. The web types it inside `MemoryDashboard.tsx`; the generated API types leave it out. */
+export interface MemoryStats {
+    knowledge: {
+        total: number;
+        total_retrievals: number;
+        by_category: Record<string, number>;
+        by_context: Record<string, number>;
+        sensitive_count: number;
+        entity_count: number;
+        avg_confidence: number;
+        oldest: string | null;
+        newest: string | null;
+    };
+    conversations: {
+        total_turns: number;
+        total_sessions: number;
+        consolidated_sessions?: number;
+        first_session: string | null;
+        last_session: string | null;
+    };
+    tools: {
+        total_calls: number;
+        unique_tools: number;
+        overall_success_rate: number;
+        total_errors: number;
+    };
+    temporal: {
+        upcoming_count: number;
+        overdue_count: number;
+    };
+    /** Null when the coverage query failed; `embedding_error` says why. */
+    embedding?: EmbeddingCoverage | null;
+    embedding_error?: string;
+    db_size_bytes: number;
+}
+
+export interface ConsolidateMemoryResult {
+    status: string;
+    consolidated: number;
+    extracted_items: number;
+}
+
+export interface RebuildEmbeddingsResult {
+    backfilled: number;
+    total_without: number;
+}
+
+export interface ReconcileMemoryResult {
+    pairs_checked: number;
+    reinforced: number;
+    contradicted: number;
+    weakened: number;
+    neutral: number;
+}
+
+export interface RefreshSystemContextResult {
+    stored: number;
+    skipped: boolean;
+    reason?: string;
 }
 
 export interface SessionUpdate {
@@ -211,6 +291,15 @@ export interface GaiaClient {
     deleteSession(sessionId: string, options?: RequestOptions): Promise<DeleteSessionResult>;
     /** Clears the chat's unread mark. */
     markSessionRead(sessionId: string, options?: RequestOptions): Promise<Session>;
+    /** The model new chats run on and where it runs. */
+    getActiveModel(options?: RequestOptions): Promise<ActiveModel>;
+    /** One provider's chat models; `local` also carries each one's state, size and download. */
+    listProviderModels(provider: string, options?: RequestOptions): Promise<ProviderModelsResponse>;
+    /** Makes `model` the one new messages use; a cloud model is picked after the person agrees to what leaves the PC. */
+    selectModel(model: string, options?: RequestOptions): Promise<ActiveModel>;
+    /** The chat's permission mode and the tools it always allows. */
+    getPermissions(sessionId: string, options?: RequestOptions): Promise<SessionPermissions>;
+    setPermissionMode(sessionId: string, mode: PermissionMode, options?: RequestOptions): Promise<SessionPermissions>;
     /** How full the model's context window is for the chat's next message, or why there is no reading yet. */
     getContextUsage(sessionId: string, options?: RequestOptions): Promise<ContextUsageResult>;
     /** What the chat's last finished turn did with the messages added to it; rejects with 409 while a turn still runs. */
@@ -268,6 +357,18 @@ export interface GaiaClient {
     /** Servers that custom agents declare in their own mcp_servers.json; read-only. */
     listAgentMcps(options?: RequestOptions): Promise<AgentMcpList>;
     listSchedules(options?: RequestOptions): Promise<ScheduleList>;
+    getMemoryStats(options?: RequestOptions): Promise<MemoryStats>;
+    getMemorySettings(options?: RequestOptions): Promise<MemorySettings>;
+    getEmbeddingCoverage(options?: RequestOptions): Promise<EmbeddingCoverage>;
+    /** Folds finished chats into lasting memory. */
+    consolidateMemory(options?: RequestOptions): Promise<ConsolidateMemoryResult>;
+    /** Embeds the entries that have no embedding yet. */
+    rebuildEmbeddings(options?: RequestOptions): Promise<RebuildEmbeddingsResult>;
+    /** Checks pairs of memories against each other for support or contradiction. */
+    reconcileMemory(options?: RequestOptions): Promise<ReconcileMemoryResult>;
+    rebuildMemoryFts(options?: RequestOptions): Promise<{ status: string }>;
+    /** Re-reads this PC's facts into memory; `skipped` when system context collection is off. */
+    refreshSystemContext(options?: RequestOptions): Promise<RefreshSystemContextResult>;
     /** Every skill GAIA can load, plus the folders it skipped. */
     listSkills(options?: RequestOptions): Promise<SkillList>;
     /** Creates a schedule; `interval` is the plain-words "when to run", parsed by the PC. 409 when the name is taken. */
