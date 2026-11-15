@@ -9,6 +9,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { SetupPlan, SetupRunStatus } from '@/api/client.types';
 import {
     useCancelSetup,
+    useGpuMemory,
     useLemonadeDetect,
     useLemonadeTarget,
     useSetupPlan,
@@ -24,6 +25,7 @@ import { SetupFooter } from '../SetupFooter';
 import type { SetupStepContext } from '../SetupScreen';
 import { CheckFound } from './CheckFound';
 import { CheckOffer } from './CheckOffer';
+import { usePlanScreenRequest } from './planScreenRequest';
 import { offerSettled, offerState } from './offerState';
 import { checkLede, checkRows, type CheckRow, type CheckRowState } from './checkRows';
 
@@ -149,6 +151,13 @@ export function CheckStep({ ctx }: { ctx: SetupStepContext }) {
     const detect = useLemonadeDetect(target.data?.offer === true);
     const start = useStartSetupServer();
     const cancel = useCancelSetup();
+    const gpu = useGpuMemory().data;
+    const changeMemory = gpu?.applies && !ctx.locked
+        ? () => {
+              usePlanScreenRequest.getState().request({ screen: 'gpu', from: 'check' });
+              ctx.goTo('plan');
+          }
+        : undefined;
 
     const run = status.data ?? null;
     const serverRun = run?.server_only ? run : null;
@@ -245,7 +254,7 @@ export function CheckStep({ ctx }: { ctx: SetupStepContext }) {
             <Text tone="secondary">{t(checkLede(checksDone, planData, ticked))}</Text>
             <Checks rows={rows} awaitingChoice={awaitingChoice} />
             {serverRunning && serverRun ? <RunActivity run={serverRun} plan={planData} /> : null}
-            {checksDone && planData ? <CheckFound plan={planData} hardware={hardware} /> : null}
+            {checksDone && planData ? <CheckFound plan={planData} hardware={hardware} onChangeMemory={changeMemory} /> : null}
             {serverFailed && serverRun ? <RunError run={serverRun} /> : null}
             {problem ? <ProblemHelp problem={problem} /> : null}
             {plan.isError && !planData ? (

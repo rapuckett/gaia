@@ -49,26 +49,6 @@ export function chooseBackend(plan: SetupPlan, selection: Selection, which: 'gpu
     return selection;
 }
 
-const NPU_PROBLEM_TITLES = {
-    driver: 'setup.npu.problem.driver',
-    device: 'setup.npu.problem.device',
-    firmware: 'setup.npu.problem.firmware',
-    access: 'setup.npu.problem.access',
-    memlock: 'setup.npu.problem.memlock',
-    runtime: 'setup.npu.problem.runtime',
-} as const;
-
-/** Why the NPU can't be picked yet: the catalog's own words, or the server's for a code this build doesn't know. */
-export function npuProblemText(problem: SetupNpuProblem, t: Translate): string {
-    const key = NPU_PROBLEM_TITLES[problem.code];
-    if (!key) return problem.title;
-    const p = problem.params;
-    let title: Parameters<Translate>[0] = key;
-    if (problem.code === 'memlock' && p.fix === 'restart') title = 'setup.npu.problem.memlockStill';
-    if (problem.code === 'memlock' && p.fix === 'stuck') title = 'setup.npu.problem.memlockStuck';
-    return t(title, { device: p.device ?? '', limit: p.limit ?? '', version: p.version ?? '', detail: p.detail ?? '' });
-}
-
 /** What a model is for, in fixed words. */
 export function purposeChips(e: SetupCatalogEntry, t: Translate): string[] {
     const chips: string[] = [];
