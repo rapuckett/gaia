@@ -96,6 +96,7 @@ describe('endpoints', () => {
     });
     const methods: Record<keyof typeof ENDPOINTS, string[]> = {
         agents: ['GET'],
+        gpuMemory: ['GET'],
         health: ['GET'],
         lemonadeDetect: ['GET'],
         lemonadeTarget: ['GET'],
@@ -130,12 +131,15 @@ describe('endpoints', () => {
         sessionRead: ['POST'],
         sessionSearch: ['GET'],
         setupCancel: ['POST'],
+        setupChatModel: ['POST'],
         setupCheck: ['GET'],
         setupModelDownload: ['POST'],
+        setupModelSkip: ['POST'],
         setupNeeds: ['GET'],
         setupPlan: ['GET'],
         setupRun: ['POST'],
         setupStatus: ['GET'],
+        setupVisionModel: ['POST'],
         skills: ['GET'],
         chatSend: ['POST'],
         chatAttach: ['GET'],

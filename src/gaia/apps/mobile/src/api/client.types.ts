@@ -8,6 +8,7 @@ import type {
     AgentMcpServer,
     ConnectorListEntry,
     ContextUsageResult,
+    GpuMemoryStatus,
     LemonadeFound,
     LemonadeTarget,
     LocalModelStatus,
@@ -44,6 +45,7 @@ export type {
     ConnectorRow,
     ContextUsage,
     ContextUsageResult,
+    GpuMemoryStatus,
     LemonadeFound,
     LemonadeTarget,
     LocalModelStatus,
@@ -416,6 +418,14 @@ export interface GaiaClient {
     detectLemonade(options?: RequestOptions): Promise<{ found: LemonadeFound | null; unchecked?: string[] }>;
     /** What setup will use and download, before it starts; `catalog` marks partial downloads. */
     getSetupPlan(options?: RequestOptions): Promise<SetupPlan>;
+    /** Saves setup's chat model; a 409 `no_fit` asks to be sent again with `acknowledgeNoFit`. Returns the new plan. */
+    chooseSetupChatModel(modelId: string, acknowledgeNoFit: boolean, options?: RequestOptions): Promise<SetupPlan>;
+    /** Saves the model that reads images; null goes back to GAIA's choice. Returns the new plan. */
+    chooseSetupVisionModel(modelId: string | null, options?: RequestOptions): Promise<SetupPlan>;
+    /** Skips one of setup's models, or takes it back. Returns the new plan. */
+    skipSetupModel(modelId: string, skipped: boolean, options?: RequestOptions): Promise<SetupPlan>;
+    /** The GPU's share of this PC's memory, and whether it can be changed. */
+    getGpuMemory(options?: RequestOptions): Promise<GpuMemoryStatus>;
     startSetup(
         skipChatModel: boolean,
         gaiaLemonade?: boolean,
