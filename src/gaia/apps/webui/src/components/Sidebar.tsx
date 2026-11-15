@@ -4,13 +4,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import {
     Bell, Brain, Check, Clock, EyeOff, FileText, MoreHorizontal, PanelLeftClose, PanelLeftOpen,
-    Pencil, Pin, PinOff, Plug, Search, Settings, Smartphone, Sparkles, SquarePen, Trash2, X,
+    Pencil, Pin, PinOff, Plug, Search, Settings, Smartphone, Sparkles, SquarePen, TabletSmartphone, Trash2, X,
 } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 import { useChatStore } from '../stores/chatStore';
 import { ModelStatusPill } from './ModelStatusPill';
 import { DownloadChip } from './setup/DownloadChip';
 import { useNotificationStore, selectUnreadCount, selectPromptingSessionIds } from '../stores/notificationStore';
+import { useDeviceStore } from '../stores/deviceStore';
 import * as api from '../services/api';
 import { log } from '../utils/logger';
 import {
@@ -312,6 +313,8 @@ function SessionRow({ session, active, phone, moved, focusPin, status, queuePlac
 }
 
 export function Sidebar({ onNewChat, onMobileAccess, tunnelActive }: SidebarProps) {
+    // Shown whenever paired devices can reach this PC, so the open port is never a secret.
+    const devicesListening = useDeviceStore((s) => s.available === true && s.status?.listening === true);
     const t = useT();
     const sessions = useChatStore((s) => s.sessions);
     const currentSessionId = useChatStore((s) => s.currentSessionId);
@@ -715,6 +718,17 @@ export function Sidebar({ onNewChat, onMobileAccess, tunnelActive }: SidebarProp
                             title={t('sidebar.mobileAccess')}
                         >
                             <Smartphone size={16} />
+                        </button>
+                    )}
+                    {devicesListening && (
+                        <button
+                            type="button"
+                            className="sb-icon-btn is-active"
+                            onClick={() => openSettings('devices')}
+                            aria-label={t('sidebar.devicesOn')}
+                            title={t('sidebar.devicesOn')}
+                        >
+                            <TabletSmartphone size={16} />
                         </button>
                     )}
                     <button type="button" className="sb-icon-btn" onClick={() => openSettings()} aria-label={t('sidebar.settings')} title={t.hint(t('sidebar.settings'), formatShortcut('Mod+,'))}>

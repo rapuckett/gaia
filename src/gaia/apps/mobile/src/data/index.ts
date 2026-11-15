@@ -5,6 +5,7 @@ export * from './capabilities';
 export * from './chatStream';
 export * from './connectors';
 export * from './context';
+export * from './documents';
 export * from './GaiaClientProvider';
 export * from './memory';
 export * from './modelMenu';

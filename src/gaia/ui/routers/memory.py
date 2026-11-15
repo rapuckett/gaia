@@ -39,6 +39,7 @@ from gaia.ui.memory_settings import MEMORY_ENABLED_KEY, memory_enabled
 
 from ..database import ChatDatabase
 from ..dependencies import get_db
+from ..security import require_local_pc
 from ..security import require_ui_header as _require_ui_header
 
 logger = logging.getLogger(__name__)
@@ -576,7 +577,7 @@ def _require_memory_admin() -> None:
         )
 
 
-@router.post("/api/memory/admin/clear")
+@router.post("/api/memory/admin/clear", dependencies=[Depends(require_local_pc)])
 def admin_clear(body: AdminClearRequest) -> Dict:
     """Wipe memory for an eval scenario reset.  Eval-only.
 
@@ -601,7 +602,7 @@ def admin_clear(body: AdminClearRequest) -> Dict:
     return {"scope": body.scope, "cleared": cleared}
 
 
-@router.post("/api/memory/admin/seed")
+@router.post("/api/memory/admin/seed", dependencies=[Depends(require_local_pc)])
 def admin_seed(body: AdminSeedRequest) -> Dict:
     """Bulk-insert knowledge items, bypassing dedup.  Eval-only.
 

@@ -16,6 +16,8 @@ import type {
     EmbeddingCoverage,
     FollowUpOutcome,
     DocumentListResponse,
+    DocumentResponse,
+    DocumentStatus,
     GaiaClient,
     HealthResponse,
     LemonadeFound,
@@ -160,6 +162,10 @@ export interface FakeClientData {
     /** What detectLemonade answers; an Error is thrown. */
     lemonadeDetect?: { found: LemonadeFound | null; unchecked?: string[] } | Error;
     documents?: DocumentListResponse;
+    /** What getDocumentStatus answers, by document; one not listed reports its row's status. */
+    documentStatuses?: Record<string, Partial<DocumentStatus>>;
+    /** Makes a library action on a document reject with this message, by action. */
+    documentFailures?: Partial<Record<DocumentAction, string>>;
     /** What getCapabilities answers, by chat; a chat not listed has no agent running (409). */
     capabilities?: Record<string, AgentCapabilities>;
     memorySettings?: MemorySettings;
@@ -182,6 +188,8 @@ export interface FakeClientData {
     };
 }
 
+export type DocumentAction = 'cancel' | 'delete' | 'reindex';
+
 export interface FakeGaiaClient extends GaiaClient {
     readonly sent: { sessionId: string; message: string }[];
     readonly created: CreateSessionRequest[];
@@ -202,6 +210,7 @@ export interface FakeGaiaClient extends GaiaClient {
     readonly uploads: { name: string; size: number }[];
     readonly downloads: { modelId: string; acknowledgeLowDisk: boolean }[];
     readonly backendSets: string[];
+    readonly documentActions: { action: DocumentAction; docId: string }[];
     readonly setupStarts: { skipChatModel: boolean; gaiaLemonade: boolean; upgradeEmbedded: boolean; serverOnly: boolean }[];
     readonly detached: { sessionId: string; docId: string }[];
     readonly capabilityReads: string[];
@@ -237,6 +246,17 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
     const downloads: FakeGaiaClient['downloads'] = [];
     const schedules = [...(data.schedules ?? [])];
     const scheduleActions: FakeGaiaClient['scheduleActions'] = [];
+    const documentActions: FakeGaiaClient['documentActions'] = [];
+    const library: DocumentListResponse = data.documents ?? { documents: [], total: 0, total_chunks: 0, total_size_bytes: 0 };
+
+    function findDocument(docId: string, action: DocumentAction): DocumentResponse {
+        documentActions.push({ action, docId });
+        const failure = data.documentFailures?.[action];
+        if (failure) throw new GaiaApiError(500, failure);
+        const doc = library.documents.find((d) => d.id === docId);
+        if (!doc) throw new GaiaApiError(404, 'Document not found');
+        return doc;
+    }
 
     function permissionsOf(sessionId: string): SessionPermissions {
         return { session_id: sessionId, mode: data.permissions?.[sessionId] ?? 'ask', grants: [...(data.permissionGrants?.[sessionId] ?? [])] };
@@ -294,6 +314,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         confirmations,
         answers,
         scheduleActions,
+        documentActions,
         followUps,
         restarts,
         selected,
@@ -659,7 +680,36 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             return { deleted: true };
         },
         async listDocuments() {
-            return data.documents ?? { documents: [], total: 0, total_chunks: 0, total_size_bytes: 0 };
+            return { ...library, documents: [...library.documents] };
+        },
+        async cancelDocumentIndexing(docId) {
+            const doc = findDocument(docId, 'cancel');
+            doc.indexing_status = 'cancelled';
+            return { cancelled: true, id: docId };
+        },
+        async deleteDocument(docId) {
+            const doc = findDocument(docId, 'delete');
+            library.documents.splice(library.documents.indexOf(doc), 1);
+            return { deleted: true };
+        },
+        async getDocumentStatus(docId) {
+            const doc = library.documents.find((d) => d.id === docId);
+            if (!doc) throw new GaiaApiError(404, 'Document not found');
+            return {
+                id: docId,
+                indexing_status: doc.indexing_status ?? 'complete',
+                chunk_count: doc.chunk_count,
+                is_active: false,
+                progress: null,
+                ...data.documentStatuses?.[docId],
+            };
+        },
+        async reindexDocument(docId) {
+            const doc = findDocument(docId, 'reindex');
+            doc.indexing_status = 'indexing';
+            doc.last_error = null;
+            doc.error_kind = null;
+            return doc;
         },
         async getCapabilities(sessionId) {
             capabilityReads.push(sessionId);

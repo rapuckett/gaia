@@ -25,6 +25,7 @@ import type {
     AgentList,
     AgentMcpList,
     CancelChatResult,
+    CancelIndexingResult,
     ChatPerformance,
     CloudPriceList,
     ConfirmToolResult,
@@ -35,9 +36,12 @@ import type {
     ConnectorList,
     ContextUsageResult,
     ConsolidateMemoryResult,
+    DeleteDocumentResult,
     DeleteMessagesResult,
     DeleteScheduleResult,
     DocumentListResponse,
+    DocumentResponse,
+    DocumentStatus,
     EmbeddingCoverage,
     FollowUpOutcome,
     FollowUpResult,
@@ -85,6 +89,7 @@ import {
     connectorGrantPath,
     connectorGrantsPath,
     cloudPricesPath,
+    documentPath,
     ENDPOINTS,
     chatContextPath,
     chatPermissionGrantsPath,
@@ -616,6 +621,22 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         listDocuments(options) {
             return getJson<DocumentListResponse>(ENDPOINTS.documents, options?.signal);
+        },
+
+        cancelDocumentIndexing(docId, options) {
+            return postJson<CancelIndexingResult>(documentPath(docId, 'documentCancel'), undefined, options?.signal);
+        },
+
+        deleteDocument(docId, options) {
+            return deleteJson<DeleteDocumentResult>(documentPath(docId), options?.signal);
+        },
+
+        getDocumentStatus(docId, options) {
+            return getJson<DocumentStatus>(documentPath(docId, 'documentStatus'), options?.signal);
+        },
+
+        reindexDocument(docId, options) {
+            return postJson<DocumentResponse>(documentPath(docId, 'documentReindex'), undefined, options?.signal);
         },
 
         getSystemStatus(options) {
