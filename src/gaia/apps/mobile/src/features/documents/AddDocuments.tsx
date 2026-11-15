@@ -8,7 +8,7 @@ import { useAddDocument } from '@/data';
 import { describeError, describeErrorWith, useT } from '@/i18n/useT';
 import { pickDocuments, pickPhotos, type PickedFile } from '@/platform/pickers';
 import { Button, Notice, ProgressLine, Row, Stack, Text } from '@/ui';
-import { FileText, Image as ImageIcon } from '@/ui/icons';
+import { FileText, FolderOpen, Image as ImageIcon } from '@/ui/icons';
 import { describeUploadError, unsupportedTypeMessage, type UploadErrorView } from '@webui/utils/uploadErrors.core';
 
 import { useNextChatDocs } from './nextChatDocs';
@@ -28,9 +28,11 @@ interface AddDocumentsProps {
     chatName: string | null;
     // Called when an add starts, so the screen can clear its own library line.
     onStart?: () => void;
+    // Opens the PC's file browser for the chat; unset, or with no chat, leaves the button out.
+    onBrowse?: (chatId: string) => void;
 }
 
-export function AddDocuments({ chatId, chatName, onStart }: AddDocumentsProps) {
+export function AddDocuments({ chatId, chatName, onStart, onBrowse }: AddDocumentsProps) {
     const t = useT();
     const add = useAddDocument();
     const holdForNextChat = useNextChatDocs((s) => s.add);
@@ -87,6 +89,7 @@ export function AddDocuments({ chatId, chatName, onStart }: AddDocumentsProps) {
                 <Button label={t('docs.addPhotos')} icon={ImageIcon} variant="secondary" disabled={busy} onPress={() => void run(pickPhotos)} />
                 <Button label={t('docs.addFile')} icon={FileText} variant="secondary" disabled={busy} onPress={() => void run(pickDocuments)} />
             </Row>
+            {onBrowse && chatId ? <Button label={t('chat.browseFiles')} icon={FolderOpen} variant="secondary" full disabled={busy} onPress={() => onBrowse(chatId)} /> : null}
             {line?.kind === 'busy' ? (
                 <Stack gap="xs">
                     <Text role="caption" tone="secondary">
