@@ -14,9 +14,10 @@ import { requestErrorParam } from '../utils/requestErrors';
 import { formatSize, middleTruncate } from '../utils/format';
 import { examplePath } from '../utils/platform';
 import { cleanPastedPath } from '../utils/pastedPath';
+import { countText, formatFullTimestamp, formatTimestamp } from '../utils/documentLibrary.core';
 import { PERMANENT_FAILURE_HINTS, UploadErrorToast, getUnsupportedCategory, isExtensionSupported } from './UnsupportedFeature';
 import type { Document, IndexFolderResponse } from '../types';
-import { dateLocale, useT, type Translate } from '../i18n/useT';
+import { useT, type Translate } from '../i18n/useT';
 import { pluralKey } from '../i18n/registry';
 import { IndexingProgress } from './IndexingProgress';
 import './DocumentLibrary.css';
@@ -77,54 +78,6 @@ function elapsed(startMs: number): string {
     const min = Math.floor(sec / 60);
     const rem = sec % 60;
     return `${min}m ${rem}s`;
-}
-
-/** Format an ISO timestamp as a relative or absolute local time string. */
-function formatTimestamp(isoString: string, t: Translate): string {
-    try {
-        const date = new Date(isoString);
-        if (isNaN(date.getTime())) return '';
-        const now = new Date();
-        const diffMs = now.getTime() - date.getTime();
-        const diffSec = Math.floor(diffMs / 1000);
-        const diffMin = Math.floor(diffSec / 60);
-        const diffHour = Math.floor(diffMin / 60);
-        const diffDay = Math.floor(diffHour / 24);
-
-        if (diffSec < 60) return t('time.justNow');
-        if (diffMin < 60) return t('time.minutesAgo', { n: diffMin });
-        if (diffHour < 24) return t('time.hoursAgo', { n: diffHour });
-        if (diffDay === 1) return t('time.yesterday');
-        if (diffDay < 7) return t('time.daysAgo', { n: diffDay });
-
-        // Older than a week: show date + time
-        return date.toLocaleDateString(dateLocale(t), {
-            month: 'short',
-            day: 'numeric',
-            hour: 'numeric',
-            minute: '2-digit',
-        });
-    } catch {
-        return '';
-    }
-}
-
-/** Format an ISO timestamp as a full local date/time for tooltips. */
-function formatFullTimestamp(isoString: string, t: Translate): string {
-    try {
-        const date = new Date(isoString);
-        if (isNaN(date.getTime())) return '';
-        return date.toLocaleString(dateLocale(t), {
-            year: 'numeric',
-            month: 'short',
-            day: 'numeric',
-            hour: 'numeric',
-            minute: '2-digit',
-            second: '2-digit',
-        });
-    } catch {
-        return '';
-    }
 }
 
 export function DocumentLibrary() {
@@ -855,9 +808,9 @@ export function DocumentLibrary() {
                     {/* Stats */}
                     {documents.length > 0 && !pendingRemoval && (
                         <div className="doc-stats">
-                            <span>{t.plural('docs.count', documents.length - unreadableCount)}</span>
+                            <span>{countText(t, 'docs.count', documents.length - unreadableCount)}</span>
                             {unreadableCount > 0 && (
-                                <span className="doc-stats-failed">{t.plural('docs.unreadable', unreadableCount)}</span>
+                                <span className="doc-stats-failed">{countText(t, 'docs.unreadable', unreadableCount)}</span>
                             )}
                             <span>&middot;</span>
                             <bdi dir="ltr">{formatSize(totalSize)}</bdi>

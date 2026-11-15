@@ -21,6 +21,7 @@ interface BoxProps {
     /** Where this box sits across its parent's axis; `end` is the reading end in either direction. */
     self?: 'start' | 'center' | 'end';
     maxWidth?: DimensionValue;
+    minHeight?: number;
     /** Layout direction of this box, for content whose language differs from the UI's. */
     dir?: 'ltr' | 'rtl';
     testID?: string;
@@ -48,6 +49,7 @@ function boxStyle(space: Record<Space, number>, p: BoxProps): Mut<ViewStyle> {
     if (p.dir) style.direction = p.dir;
     if (p.self) style.alignSelf = ALIGN[p.self];
     if (p.maxWidth !== undefined) style.maxWidth = p.maxWidth;
+    if (p.minHeight !== undefined) style.minHeight = p.minHeight;
     return style;
 }
 
