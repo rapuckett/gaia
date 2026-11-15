@@ -86,6 +86,8 @@ PC_ONLY = {
     "POST /api/memory/admin/seed",
     "POST /api/memory/commit-discovery",
     "POST /api/memory/commit-inference",
+    "POST /api/memory/refresh-system-context",
+    "POST /api/memory/reinitialize",
     "POST /api/messaging/discord/connect",
     "POST /api/messaging/discord/disconnect",
     "POST /api/messaging/discord/forget-always",
@@ -289,8 +291,6 @@ REMOTE = {
     "POST /api/memory/rebuild-embeddings",
     "POST /api/memory/rebuild-fts",
     "POST /api/memory/reconcile",
-    "POST /api/memory/refresh-system-context",
-    "POST /api/memory/reinitialize",
     "POST /api/providers/local/custom",
     "POST /api/providers/local/custom/check",
     "POST /api/providers/local/restart",
@@ -688,3 +688,41 @@ def test_memory_profile_scan_is_pc_only(setup, monkeypatch, method, path, body):
     assert touched == []
     assert clients["pc"].request(method, path, json=body, headers=ui).status_code == 200
     assert touched
+
+
+def test_system_context_collection_is_pc_only(setup, monkeypatch):
+    """Re-collecting system context, or consenting to it, happens on the PC only."""
+    from gaia.ui.routers import memory
+
+    app, clients, _ = setup
+    ran = []
+    monkeypatch.setattr(
+        memory,
+        "_do_system_context_refresh",
+        lambda: ran.append("refresh") or {"stored": 0, "skipped": False},
+    )
+    monkeypatch.setattr(
+        "gaia.agents.base.memory._save_memory_settings", lambda settings: None
+    )
+    ui = {"X-Gaia-UI": "1"}
+    on = {"system_discovery_consent": True}
+    for caller in ("tunnel", "device"):
+        for method, path, body in (
+            ("POST", "/api/memory/refresh-system-context", None),
+            ("POST", "/api/memory/reinitialize", None),
+            ("PUT", "/api/memory/settings", on),
+        ):
+            resp = clients[caller].request(method, path, json=body, headers=ui)
+            assert resp.status_code == 403, (caller, path, resp.text)
+        off = clients[caller].put(
+            "/api/memory/settings",
+            json={"system_discovery_consent": False},
+            headers=ui,
+        )
+        assert off.status_code == 200, (caller, off.text)
+    assert ran == []
+    assert (
+        clients["pc"].put("/api/memory/settings", json=on, headers=ui).status_code
+        == 200
+    )
+    assert ran == ["refresh"]

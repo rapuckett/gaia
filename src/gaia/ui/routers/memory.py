@@ -13,7 +13,7 @@ import uuid
 from datetime import datetime
 from typing import Any, Callable, Dict, List, Literal, Optional, Tuple
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, field_validator
 
 # Category sets come from the data layer. The dashboard may write the
@@ -1050,7 +1050,10 @@ def clear_all_memory() -> Dict:
         raise HTTPException(500, f"Clear failed: {type(exc).__name__}")
 
 
-@router.post("/api/memory/reinitialize", dependencies=[Depends(_require_ui_header)])
+@router.post(
+    "/api/memory/reinitialize",
+    dependencies=[Depends(_require_ui_header), Depends(require_local_pc)],
+)
 def reinitialize_memory() -> Dict:
     """Wipe all memory and re-run initialization from scratch.
 
@@ -1139,7 +1142,10 @@ def _do_system_context_refresh() -> Dict:
     return {"stored": stored, "skipped": False}
 
 
-@router.post("/api/memory/refresh-system-context")
+@router.post(
+    "/api/memory/refresh-system-context",
+    dependencies=[Depends(_require_ui_header), Depends(require_local_pc)],
+)
 def refresh_system_context() -> Dict:
     """Re-collect OS, hardware, installed apps, and version facts.
 
@@ -1860,6 +1866,7 @@ def get_memory_settings(db: ChatDatabase = Depends(get_db)) -> Dict:
 @router.put("/api/memory/settings", dependencies=[Depends(_require_ui_header)])
 def update_memory_settings(
     body: MemorySettingsBody,
+    request: Request,
     db: ChatDatabase = Depends(get_db),
 ) -> Dict:
     """Update memory-related feature settings.
@@ -1872,8 +1879,11 @@ def update_memory_settings(
       for debug/troubleshooting. Default false.
     - ``system_discovery_consent`` (bool): allow system scanning. Default false.
       When toggled ON, also persists the consent to ``~/.gaia/memory_settings.json``
-      and triggers an immediate system context refresh.
+      and triggers an immediate system context refresh. Turning it on is
+      PC-only, like the scan; turning it off works from anywhere.
     """
+    if body.system_discovery_consent:
+        require_local_pc(request)
     if body.system_discovery_consent is not None:
         # The file is the source of truth; write it before any DB key so a
         # failed save leaves the whole request unapplied.
