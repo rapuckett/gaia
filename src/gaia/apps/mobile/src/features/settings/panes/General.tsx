@@ -153,7 +153,7 @@ export default function General() {
             </SettingsAnchor>
 
             <Stack gap="xs">
-                <Text role="label" weight="medium" tone="secondary">
+                <Text role="label" weight="medium" tone="secondary" accessibilityRole="header">
                     {t('settings.appearance')}
                 </Text>
                 <SegmentedControl
@@ -164,7 +164,7 @@ export default function General() {
                 />
             </Stack>
 
-            <Switch label={t('resources.settings')} description={t('resources.settingsHint')} value={showResources} onValueChange={setShowResources} />
+            <Switch label={t('resources.settings')} description={t('mobileApp.resources.settingsHint')} value={showResources} onValueChange={setShowResources} />
 
             <Disclosure title={t('settings.colors')} open={colorsOpen} onToggle={() => setColorsOpen((o) => !o)}>
                 <Stack gap="md">

@@ -1846,8 +1846,8 @@ over plain http to the main server is a **401** too. What a device may call is
 in [Who may call a route](#who-may-call-a-route).
 
 A file the device opens, such as a cited document
-(`GET /api/documents/{doc_id}/file`), comes over the listener like any other
-call, with the token. The device fetches it itself and shows or shares it; a
+(`GET /api/documents/{doc_id}/file?session_id=…`, naming the chat it was cited
+in), comes over the listener like any other call, with the token. The device fetches it itself and shows or shares it; a
 browser it handed the link to couldn't send the token, so it would get a
 **401**.
 
@@ -2056,9 +2056,14 @@ else's:
   <Accordion title="GET /api/documents/{doc_id}/file">
     The document's original file, served inline so the browser can show it.
     A citation link opens a PDF at its page with `#page=N`. Only files in the
-    document library are served; a file deleted from disk returns 404. Away
-    from the PC, a file holding credentials is a **403**, however it got into
-    the library.
+    document library are served; a file deleted from disk returns 404.
+
+    Away from the PC (mobile access, or a paired device), the request names a
+    chat with the `session_id` query parameter, and the document must be
+    attached to that chat or its file must be in the chat's folders, as for
+    [file reads](#files). Otherwise it is a **403**, the same whether or not
+    the document exists, and so is a request that names no chat. A file
+    holding credentials is a **403** too, however it got into the library.
   </Accordion>
 
   <Accordion title="POST /api/documents/{doc_id}/cancel">

@@ -19,7 +19,7 @@ import { formatSize, middleTruncate } from '@webui/utils/format';
 import type { DocumentListResponse, IndexProgress } from '@/api/client.types';
 import { useT } from '@/i18n/useT';
 import { Badge, Button, Disclosure, Icon, IconButton, ListRow, ProgressLine, Row, Stack, Text } from '@/ui';
-import { FileText, RotateCcw, Square, Trash2 } from '@/ui/icons';
+import { FileText, Link2, RotateCcw, Square, Trash2 } from '@/ui/icons';
 
 interface DocumentRowProps {
     document: DocumentListResponse['documents'][number];
@@ -29,13 +29,15 @@ interface DocumentRowProps {
     startedAt?: number;
     now: number;
     retrying: boolean;
+    /** Set for a complete document not yet in the target: its chat's quoted title, null for the next chat. */
+    attach?: { chatName: string | null; onAttach: (docId: string) => void };
     onCancel: (docId: string) => void;
     onRetry: (docId: string) => void;
     onRemove: (docId: string) => void;
 }
 
 // Name (extension kept), then the state: size and when it was indexed, how far indexing has got, or why it failed.
-export function DocumentRow({ document: doc, progress, startedAt, now, retrying, onCancel, onRetry, onRemove }: DocumentRowProps) {
+export function DocumentRow({ document: doc, progress, startedAt, now, retrying, attach, onCancel, onRetry, onRemove }: DocumentRowProps) {
     const t = useT();
     const [reasonOpen, setReasonOpen] = useState(false);
     const status = doc.indexing_status || 'complete';
@@ -92,6 +94,22 @@ export function DocumentRow({ document: doc, progress, startedAt, now, retrying,
             {badge ? (
                 <Stack paddingX="lg" paddingY="xs">
                     {badge}
+                </Stack>
+            ) : null}
+            {attach && status === 'complete' ? (
+                <Stack paddingX="lg" paddingY="xs" align="start">
+                    <Button
+                        size="sm"
+                        variant="secondary"
+                        icon={Link2}
+                        label={attach.chatName === null ? t('docs.useNext') : t('docs.useIn', { chat: attach.chatName })}
+                        accessibilityLabel={
+                            attach.chatName === null
+                                ? t('docs.attachNextAria', { name: doc.filename })
+                                : t('docs.attachAria', { name: doc.filename, chat: attach.chatName })
+                        }
+                        onPress={() => attach.onAttach(doc.id)}
+                    />
                 </Stack>
             ) : null}
             {running ? (

@@ -35,6 +35,7 @@ export {
   Info,
   KeyRound,
   Lightbulb,
+  Link2,
   ListChecks,
   Lock,
   Menu,

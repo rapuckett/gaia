@@ -8,7 +8,9 @@ import { Linking } from 'react-native';
 import type { Translate } from '@webui/i18n/translator';
 
 import type { DiscordState, DiscordStatus } from '@/api/client.types';
+import { ENDPOINTS } from '@/api/constants';
 import { GaiaApiError, GaiaError, GaiaNetworkError } from '@/api/errors';
+import { useDeviceRefused } from '@/api/routeAccess';
 import { useDiscordStatus } from '@/data';
 import { useT } from '@/i18n/useT';
 import { Badge, Button, Card, Disclosure, Ltr, Notice, Row, Spinner, Stack, StatusDot, Surface, Text } from '@/ui';
@@ -321,8 +323,9 @@ function loadFailedText(t: Translate, error: unknown): string {
 /** Settings > Messaging: the Discord bridge GAIA answers through, as far as the PC shows it to a phone. */
 export default function Messaging() {
     const t = useT();
-    const status = useDiscordStatus();
-    const refused = status.error instanceof GaiaApiError && status.error.status === 403;
+    const readRefused = useDeviceRefused('GET', ENDPOINTS.messagingDiscord);
+    const status = useDiscordStatus(!readRefused);
+    const refused = readRefused || (status.error instanceof GaiaApiError && status.error.status === 403);
     const s = status.data;
 
     return (
