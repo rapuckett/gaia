@@ -8,5 +8,7 @@ export { PinMismatchScreen } from './PinMismatchScreen';
 export { PairingGate } from './PairingGate';
 export { createFakePairingService } from './fakePairingService';
 export { parseInvite, PairingInviteError, type PairingInvite } from './invite';
+export { PairingScanner, type PairingScannerProps } from './PairingScanner';
+export { createPinnedPairingService, installPinnedPairing } from './pinnedPairingService';
 export { getPairingService, setPairingService } from './registry';
 export type { PairedPc, PairingService, PairingStatus, RedeemResult } from './service';

@@ -1,21 +1,21 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { useRef, useState } from 'react';
+import { useRef, useState, type ComponentRef } from 'react';
 import { ScrollView, View } from 'react-native';
 
 import { useT } from '@/i18n/useT';
 import { Disclosure, Notice, Stack, Text, useTheme } from '@/ui';
 import type { SetupLogStage, SetupRunStatus } from '@webui/types';
 
-import { logsByStage } from './setupLogs';
+import { logsByStage } from './logLines';
 
 const LOG_HEIGHT = 220;
 
 /** A log that opens at its newest line and follows it until the reader scrolls up; scrolling back down follows again. */
 function FollowLog({ lines }: { lines: string[] }) {
     const { colors, radius, space } = useTheme();
-    const box = useRef<ScrollView>(null);
+    const box = useRef<ComponentRef<typeof ScrollView>>(null);
     const pinned = useRef(true);
     return (
         <View

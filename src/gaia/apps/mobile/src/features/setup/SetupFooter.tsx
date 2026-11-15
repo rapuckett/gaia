@@ -46,3 +46,11 @@ export function SetupFooter({ children }: { children: ReactNode }) {
     if (!register) return <Row gap="md" justify="between">{children}</Row>;
     return null;
 }
+
+const discard: Register = () => undefined;
+
+/** While `muted`, the actions of the step inside go nowhere: for a step kept mounted under another screen. */
+export function SetupFooterMuted({ muted, children }: { muted: boolean; children: ReactNode }) {
+    const register = useContext(Setter);
+    return <Setter.Provider value={muted ? discard : register}>{children}</Setter.Provider>;
+}

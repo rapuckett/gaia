@@ -10,6 +10,7 @@ export const UI_HEADERS = {
 
 export const ENDPOINTS = {
     agents: '/api/agents',
+    gpuMemory: '/api/gpu-memory',
     health: '/api/health',
     cloudPrices: '/api/spending/prices/{provider}',
     lemonadeDetect: '/api/lemonade/detect',
@@ -36,6 +37,7 @@ export const ENDPOINTS = {
     memoryUpcoming: '/api/memory/upcoming',
     modelServer: '/api/system/model-server',
     modelServerBackend: '/api/system/model-server/backend',
+    providerConnect: '/api/providers/{provider}/connect',
     providerModels: '/api/providers/{provider}/models',
     providersActive: '/api/providers/active',
     providersSelect: '/api/providers/select',
@@ -56,13 +58,20 @@ export const ENDPOINTS = {
     sessionPrivate: '/api/sessions/{session_id}/private',
     sessionRead: '/api/sessions/{session_id}/read',
     sessionSearch: '/api/sessions/search',
+    settings: '/api/settings',
+    settingsUndo: '/api/settings/undo',
     setupCancel: '/api/setup/cancel',
+    setupChatModel: '/api/setup/chat-model',
     setupCheck: '/api/setup/check',
     setupModelDownload: '/api/setup/models/download',
+    setupModelRemove: '/api/setup/models/remove',
+    setupModelSkip: '/api/setup/models/skip',
     setupNeeds: '/api/setup/needs/{job}',
+    setupNpuRecheck: '/api/setup/npu/recheck',
     setupPlan: '/api/setup/plan',
     setupRun: '/api/setup/run',
     setupStatus: '/api/setup/status',
+    setupVisionModel: '/api/setup/vision-model',
     skills: '/api/skills',
     chatSend: '/api/chat/send',
     chatAttach: '/api/chat/attach',
@@ -84,7 +93,11 @@ export const ENDPOINTS = {
     connectorsAgentMcps: '/api/connectors/agent-mcps',
     systemResources: '/api/system/resources',
     systemStatus: '/api/system/status',
+    document: '/api/documents/{doc_id}',
+    documentCancel: '/api/documents/{doc_id}/cancel',
     documentFile: '/api/documents/{doc_id}/file',
+    documentReindex: '/api/documents/{doc_id}/reindex',
+    documentStatus: '/api/documents/{doc_id}/status',
     documents: '/api/documents',
     filesUpload: '/api/files/upload',
     filesUploadMedia: '/api/files/upload-media',
@@ -173,6 +186,10 @@ export function chatPermissionsPath(sessionId: string): string {
     return ENDPOINTS.chatPermissions.replace('{session_id}', encodeURIComponent(sessionId));
 }
 
+export function providerConnectPath(provider: string): string {
+    return ENDPOINTS.providerConnect.replace('{provider}', encodeURIComponent(provider));
+}
+
 export function chatPermissionGrantsPath(sessionId: string, key?: string): string {
     const path = ENDPOINTS.chatPermissionGrants.replace('{session_id}', encodeURIComponent(sessionId));
     return key === undefined ? path : `${path}?key=${encodeURIComponent(key)}`;
@@ -230,6 +247,10 @@ export function sessionMessagesAndBelowPath(sessionId: string, messageId: number
     return ENDPOINTS.sessionMessagesAndBelow
         .replace('{session_id}', encodeURIComponent(sessionId))
         .replace('{message_id}', String(messageId));
+}
+
+export function documentPath(docId: string, endpoint: 'document' | 'documentCancel' | 'documentReindex' | 'documentStatus' = 'document'): string {
+    return ENDPOINTS[endpoint].replace('{doc_id}', encodeURIComponent(docId));
 }
 
 /** The library file's URL, as the web UI's `documentFileUrl` builds it: the page rides in the fragment. */
