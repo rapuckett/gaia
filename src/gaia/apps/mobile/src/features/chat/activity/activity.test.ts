@@ -6,6 +6,7 @@ import { consolidateSteps, stepsSummary, toolRowText } from '@webui/utils/agentA
 import type { StreamEvent } from '@/api/client.types';
 import { translator } from '@/i18n/useT';
 
+import { liveStatusLine } from '../liveStatus';
 import { stepsFromEvents } from './stepsFromEvents';
 
 const t = translator('en');
@@ -31,5 +32,24 @@ describe('a turn with a tool call, a declined call and an error', () => {
         expect(toolRowText(rows[0]!, t)).toBe('Searching web: cats');
         expect(toolRowText(rows[1]!, t)).toBe('You declined: Reading file');
         expect(stepsSummary(rows, t)).toBe('Searched web, you declined a step, hit an error');
+    });
+});
+
+describe('a model retry', () => {
+    const retry = (n: number) => `The model service is busy — retrying in 3s (${n}/4)`;
+    const notice = (n: number) => [
+        event({ type: 'status', status: 'warning', message: retry(n) }),
+        event({ type: 'status', status: 'working', phase: 'model_retry', message: retry(n) }),
+    ];
+
+    it('is one live line that a second retry replaces, and not a step per retry', () => {
+        const events = [...notice(1), ...notice(2)];
+        expect(liveStatusLine(events, { waitingOnPerson: false, answering: false }, t)).toBe(retry(2));
+        expect(stepsFromEvents(events, t)).toEqual([]);
+    });
+
+    it('is gone once the turn moves on', () => {
+        const events = [...notice(1), event({ type: 'thinking', content: 'hm' })];
+        expect(liveStatusLine(events, { waitingOnPerson: false, answering: false }, t)).toBeNull();
     });
 });
