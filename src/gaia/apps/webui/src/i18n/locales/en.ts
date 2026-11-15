@@ -1565,6 +1565,7 @@ export const enMessages = {
     'setup.plan.start': 'Download and start',
     'setup.plan.startNoDownload': 'Test and start',
     'setup.plan.customize': 'Customize',
+    'setup.plan.pcOnly': 'Change this on the PC running GAIA',
     'setup.plan.cloud': 'Use a cloud model',
     'setup.plan.cloudLabel': 'Cloud model',
     'setup.plan.cloudWhy.stillLocal': "The chat model runs on the provider's computers. GAIA still sets up graphics support and a small model on this PC to search your files and remember things.",
@@ -3564,6 +3565,7 @@ export const enMessages = {
     'mobileApp.skills.yoursEmpty': 'None yet. Add a folder with a SKILL.md file to {path} on your PC and it shows up here.',
     'mobileApp.banner.openOnPc': 'Open GAIA on your PC to start the model server.',
     'mobileApp.settings.comingSoon': 'This section is coming to the phone soon. For now, change it on the PC running GAIA.',
+    'mobileApp.settings.colors.invalidHex': 'Enter a color like #1F5FA8.',
 } as const;
 
 export const en: Locale = {

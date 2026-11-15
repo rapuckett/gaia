@@ -25,6 +25,7 @@ import type {
     AgentList,
     AgentMcpList,
     CancelChatResult,
+    ChatPerformance,
     CloudPriceList,
     ConfirmToolResult,
     ContextChoice,
@@ -49,12 +50,13 @@ import type {
     MemoryStats,
     MessageList,
     ModelNeed,
+    ModelServerInfo,
     PreflightReport,
+    ProvidersResponse,
     RestartModelResult,
     RequestOptions,
     ParsedSchedule,
     ProviderModelsResponse,
-    ProvidersResponse,
     RebuildEmbeddingsResult,
     ReconcileMemoryResult,
     RefreshSystemContextResult,
@@ -80,6 +82,7 @@ import {
     cloudPricesPath,
     ENDPOINTS,
     chatContextPath,
+    chatPerformancePath,
     chatPermissionsPath,
     providerModelsPath,
     followupOutcomePath,
@@ -329,10 +332,6 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             return postJson<Session>(sessionReadPath(sessionId), undefined, options?.signal);
         },
 
-        listProviders(options) {
-            return getJson<ProvidersResponse>(ENDPOINTS.providers, options?.signal);
-        },
-
         getContextChoice(model, options) {
             return getJson<ContextChoice>(`${ENDPOINTS.localModelContext}?model=${encodeURIComponent(model)}`, options?.signal);
         },
@@ -367,6 +366,10 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         getContextUsage(sessionId, options) {
             return getJson<ContextUsageResult>(chatContextPath(sessionId), options?.signal);
+        },
+
+        getChatPerformance(sessionId, options) {
+            return getJson<ChatPerformance>(chatPerformancePath(sessionId), options?.signal);
         },
 
         getFollowUpOutcome(sessionId, options) {
@@ -617,6 +620,18 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         checkSetup(skipChatModel, options) {
             return getJson<SetupCheck>(`${ENDPOINTS.setupCheck}?skip_chat_model=${skipChatModel}`, options?.signal);
+        },
+
+        listProviders(options) {
+            return getJson<ProvidersResponse>(ENDPOINTS.providers, options?.signal);
+        },
+
+        getModelServer(options) {
+            return getJson<ModelServerInfo>(ENDPOINTS.modelServer, options?.signal);
+        },
+
+        setModelServerBackend(backend, options) {
+            return putJson<ModelServerInfo>(ENDPOINTS.modelServerBackend, { backend }, options?.signal);
         },
 
         getPreflight(options) {

@@ -112,7 +112,6 @@ describe('endpoints', () => {
         memorySettings: ['GET'],
         memoryStats: ['GET'],
         providerModels: ['GET'],
-        providers: ['GET'],
         providersActive: ['GET'],
         providersSelect: ['POST'],
         schedule: ['DELETE', 'PUT'],
@@ -148,6 +147,7 @@ describe('endpoints', () => {
         chatPermissions: ['GET', 'PUT'],
         chatFollowup: ['POST'],
         chatFollowupOutcome: ['GET'],
+        chatPerformance: ['GET'],
         chatUserInput: ['POST'],
         connectorActivation: ['DELETE', 'PUT'],
         connectorActivations: ['GET'],
@@ -161,8 +161,11 @@ describe('endpoints', () => {
         documents: ['GET'],
         filesUpload: ['POST'],
         filesUploadMedia: ['POST'],
+        modelServer: ['GET'],
+        modelServerBackend: ['PUT'],
         onboardingPreflight: ['GET'],
         onboardingStart: ['GET'],
+        providers: ['GET'],
     };
     const calls = Object.entries(ENDPOINTS).flatMap(([name, path]) =>
         methods[name as keyof typeof ENDPOINTS].map((method) => `${method} ${path}`),

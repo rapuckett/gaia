@@ -10,7 +10,8 @@ import { modelKeys } from './models';
 import { requireClient } from './queries';
 
 export const providerKeys = {
-    all: ['providers'] as const,
+    // Shared with setup's useCloudProviders, so a Local-only change refreshes both.
+    all: ['cloudProviders'] as const,
     context: (model: string) => ['contextChoice', model] as const,
     prices: (provider: string) => ['cloudPrices', provider] as const,
 };

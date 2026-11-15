@@ -6,6 +6,7 @@ import type { ComponentType } from 'react';
 import type { LucideIcon } from '@/ui/icons';
 import { Bell, Brain, Clock, Cpu, Info, ListChecks, Lock, MessageSquare, Plug, ShieldQuestion, SlidersHorizontal, Sparkles, Volume2, Wrench } from '@/ui/icons';
 
+import General from './panes/General';
 import Model from './panes/Model';
 import Placeholder from './panes/Placeholder';
 
@@ -34,7 +35,7 @@ export interface SettingsSectionEntry {
 }
 
 export const SETTINGS_SECTIONS: Record<SectionId, SettingsSectionEntry> = {
-    general: { titleKey: 'settings.section.general', icon: SlidersHorizontal, pane: Placeholder },
+    general: { titleKey: 'settings.section.general', icon: SlidersHorizontal, pane: General },
     setup: { titleKey: 'settings.section.setup', icon: ListChecks, pane: Placeholder },
     model: { titleKey: 'settings.section.model', icon: Cpu, pane: Model },
     permissions: { titleKey: 'settings.section.permissions', icon: ShieldQuestion, pane: Placeholder },
