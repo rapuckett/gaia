@@ -3,7 +3,7 @@
 
 import { useState } from 'react';
 
-import { GaiaApiError } from '@/api/errors';
+import { GaiaApiError, GaiaError } from '@/api/errors';
 import { useAddDocument } from '@/data';
 import { describeError, useT } from '@/i18n/useT';
 import { pickDocuments, pickPhotos, type PickedFile } from '@/platform/pickers';
@@ -19,7 +19,8 @@ type AddLine =
     | { kind: 'done'; message: string }
     | { kind: 'unreadable'; message: string }
     | { kind: 'failed'; error: UploadErrorView }
-    | { kind: 'picker'; message: string };
+    | { kind: 'picker'; message: string }
+    | { kind: 'unsupported'; message: string };
 
 interface AddDocumentsProps {
     // The chat documents are attached to; null leaves them for the next new chat.
@@ -45,12 +46,17 @@ export function AddDocuments({ chatId, chatName, onStart }: AddDocumentsProps) {
             const name = document.filename || file.name;
             if (document.indexing_status === 'failed') return { kind: 'unreadable', message: t('docs.notAdded', { name }) };
             if (attachError) {
-                const error = `Indexed, but not attached to ${chatName}: ${describeError(attachError, t)}`;
+                // Bare, so an Arabic gloss in the reason never nests inside this message's brackets.
+                const reason = attachError instanceof GaiaError ? t.bare(attachError.messageKey, attachError.params) : attachError.message;
+                const error = t('docs.attachFailedAfterIndex', { chat: chatName ?? '', error: reason });
                 return { kind: 'failed', error: describeUploadError(t, { filename: file.name, error }) };
             }
             if (!chatId) holdForNextChat([document.id]);
             return { kind: 'done', message: chatId ? t('docs.attached', { name, chat: chatName ?? '' }) : t('docs.willAttach', { name }) };
         } catch (err) {
+            // The pinned transport can't send a file yet; the request wraps its error, so look at the cause too.
+            const refusal = [err, err instanceof Error ? err.cause : null].find((e) => (e as { code?: string } | null)?.code === 'unsupported_body');
+            if (refusal) return { kind: 'unsupported', message: refusal instanceof GaiaError ? describeError(refusal, t) : t('docs.uploadUnavailable') };
             const api = err instanceof GaiaApiError ? err : null;
             const kind = typeof api?.body?.status === 'string' ? api.body.status : null;
             const error = kind === 'too_large' ? t('docs.tooLargeDetail', { max: String(api?.body?.max_mb) }) : describeError(err, t);
@@ -92,6 +98,7 @@ export function AddDocuments({ chatId, chatName, onStart }: AddDocumentsProps) {
                 </Stack>
             ) : null}
             {line?.kind === 'done' ? <Notice tone="success" role="note" message={line.message} onDismiss={() => setLine(null)} /> : null}
+            {line?.kind === 'unsupported' ? <Notice tone="warning" message={line.message} onDismiss={() => setLine(null)} /> : null}
             {line?.kind === 'unreadable' || line?.kind === 'picker' ? (
                 <Notice tone="danger" message={line.message} onDismiss={() => setLine(null)} />
             ) : null}

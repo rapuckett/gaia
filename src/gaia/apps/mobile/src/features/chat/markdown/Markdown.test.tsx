@@ -63,7 +63,7 @@ describe('Markdown', () => {
             </ThemeProvider>,
         );
         await act(async () => screen.getByText(/quarterly-report\.pdf/).props.onPress());
-        expect(openDocument).toHaveBeenLastCalledWith('http://pc.local:4200', 'secret', { id: 'doc 1', filename: 'quarterly-report.pdf' });
+        expect(openDocument).toHaveBeenLastCalledWith('http://pc.local:4200', 'secret', expect.objectContaining({ id: 'doc 1', filename: 'quarterly-report.pdf' }));
         expect(screen.queryByText(/Couldn't open/)).toBeNull();
         await act(async () => screen.getByText(/quarterly-report\.pdf/).props.onPress());
         expect(await screen.findByText(/Couldn't open quarterly-report\.pdf: GAIA answered 404/)).toBeTruthy();

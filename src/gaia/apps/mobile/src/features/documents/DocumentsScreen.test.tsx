@@ -10,7 +10,7 @@ import { REMOVE_UNDO_MS } from '@webui/utils/documentLibrary.core';
 
 import type { DocumentListResponse } from '@/api/client.types';
 import { createFakeClient } from '@/api/fake';
-import { GaiaApiError } from '@/api/errors';
+import { GaiaApiError, GaiaNetworkError } from '@/api/errors';
 import { GaiaClientProvider } from '@/data';
 import { pickDocuments } from '@/platform/pickers';
 import { ThemeProvider } from '@/ui';
@@ -94,6 +94,16 @@ describe('DocumentsScreen', () => {
             fireEvent.press(await screen.findByText('Add a file'));
             expect(await screen.findByText('"big.pdf" is too large')).toBeTruthy();
             expect(screen.getByText(/up to 20 MB/)).toBeTruthy();
+        });
+
+        it('shows a warning, and no spinner, when the paired connection cannot send files yet', async () => {
+            (pickDocuments as jest.Mock).mockResolvedValue([file('notes.txt')]);
+            const refused = Object.assign(new Error('not sent'), { code: 'unsupported_body' });
+            const documentUploadError = new GaiaNetworkError('http://pc', refused);
+            await mount(createFakeClient({ documentUploadError }));
+            fireEvent.press(await screen.findByText('Add a file'));
+            expect(await screen.findByText(/isn't available over this connection yet/)).toBeTruthy();
+            expect(screen.queryByText(/Indexing notes\.txt/)).toBeNull();
         });
 
         it('rules out an unsupported type before sending it', async () => {
