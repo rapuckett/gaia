@@ -11,6 +11,8 @@ export const CHIP_GAP = 8;
 export const ICON_ONLY_WIDTH = 44;
 /** The model's name ellipsizes down to this before any other chip collapses. */
 export const MODEL_MIN_WIDTH = 96;
+/** Below this width the model chip drops its name and shows its icon and chevron. */
+export const MODEL_FLOOR_WIDTH = 72;
 /** The context meter's bar and its gap; without it the meter is its percentage alone. */
 export const METER_BAR_WIDTH = 48;
 
