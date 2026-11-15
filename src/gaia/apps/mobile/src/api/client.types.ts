@@ -662,6 +662,10 @@ export interface GaiaClient {
     getModelNeed(job: ModelNeedJob, options?: RequestOptions): Promise<ModelNeed>;
     /** How this PC's memory is split, the presets and what each unlocks; `settingGb` also reads the manual steps for that size. Read only: changing it is done on the PC. */
     getGpuMemory(settingGb?: number, options?: RequestOptions): Promise<GpuMemoryStatus>;
+    /** "I've done this": records the size someone set by hand on the PC, so it reports a restart pending. Changes no setting. */
+    recordGpuMemoryPending(settingGb: number, options?: RequestOptions): Promise<GpuMemoryStatus>;
+    /** "Keep {gb}": stops reporting a pending GPU memory change. Changes no setting. */
+    dismissGpuMemoryPending(options?: RequestOptions): Promise<GpuMemoryStatus>;
     /** Starts one model's download on the PC; follow it with `getSetupStatus`. */
     downloadSetupModel(modelId: string, acknowledgeLowDisk: boolean, options?: RequestOptions): Promise<SetupRunStatus>;
     /** Deletes one downloaded model from the PC's model server; answers the new plan and the space freed. */

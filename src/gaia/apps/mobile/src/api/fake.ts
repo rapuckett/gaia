@@ -1356,6 +1356,14 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             if (data.gpuMemory instanceof Error) throw data.gpuMemory;
             return data.gpuMemory;
         },
+        async recordGpuMemoryPending() {
+            if (!data.gpuMemory || data.gpuMemory instanceof Error) throw new GaiaApiError(503, 'This fake client was given no GPU memory status.');
+            return data.gpuMemory;
+        },
+        async dismissGpuMemoryPending() {
+            if (!data.gpuMemory || data.gpuMemory instanceof Error) throw new GaiaApiError(503, 'This fake client was given no GPU memory status.');
+            return data.gpuMemory;
+        },
         async getModelNeed(job) {
             return data.modelNeeds?.[job] ?? { job, needed: false, model: null, disk_free_gb: null };
         },
