@@ -275,6 +275,7 @@ export const SETUP_SCENES: Record<string, SetupScene> = {
     'gpu/default': scene('gpu', { gpuMemory: GPU }),
     'gpu/keep': scene('gpu', { gpuMemory: GPU_KEEP }),
     'key/default': scene('key'),
+    'key/no-key': scene('key', { lemonadeTarget: { ...COMMON.lemonadeTarget!, source: 'gaia' } }),
     'models/all-present': scene('models', { setupPlan: PLAN_PRESENT }),
     'models/default': scene('models'),
     'models/disk-short': scene('models', { setupPlan: PLAN_SHORT }),
