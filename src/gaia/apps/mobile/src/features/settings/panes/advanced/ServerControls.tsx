@@ -18,7 +18,7 @@ import { ModelServerPanel } from './ModelServerPanel';
 /** A collapsed card with an optional hint under its title; the body mounts when opened. */
 function SettingCard({ title, hint, open, onToggle, trailing, testID, children }: {
     title: string;
-    hint?: string;
+    hint?: ReactNode;
     open: boolean;
     onToggle: () => void;
     trailing?: ReactNode;
@@ -82,8 +82,7 @@ function CustomModelCard() {
     return (
         <SettingCard
             title={t('settings.advanced.customTitle')}
-            hint={saved ? undefined : t('settings.advanced.customHint')}
-            trailing={saved ? <Text role="caption" tone="muted" numberOfLines={1}><Ltr>{saved}</Ltr></Text> : undefined}
+            hint={saved ? <Ltr>{saved}</Ltr> : t('settings.advanced.customHint')}
             open={open}
             onToggle={() => setOpen((v) => !v)}
             testID="advanced-custom"
