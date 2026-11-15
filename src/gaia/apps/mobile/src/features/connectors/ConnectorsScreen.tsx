@@ -70,6 +70,16 @@ type Translator = ReturnType<typeof useT>;
 
 export function ConnectorsScreen() {
     const t = useT();
+    return (
+        <Screen scroll header={<ScreenHeader title={t('settings.section.connectors')} />}>
+            <ConnectorsBody />
+        </Screen>
+    );
+}
+
+/** The connector list, for the screen and for the Settings pane. */
+export function ConnectorsBody() {
+    const t = useT();
     const connectors = useConnectors();
     const agentMcps = useAgentMcps();
     const [query, setQuery] = useState('');
@@ -112,7 +122,7 @@ export function ConnectorsScreen() {
         ));
 
     return (
-        <Screen scroll header={<ScreenHeader title={t('settings.section.connectors')} />}>
+        <>
             <Stack gap="md" paddingX="lg" paddingY="md">
                 <Text role="ui" tone="secondary">{t('settings.connectors.lede')}</Text>
                 {notice ? <Notice tone="info" message={notice} /> : null}
@@ -183,7 +193,7 @@ export function ConnectorsScreen() {
                     </>
                 )}
             </Stack>
-        </Screen>
+        </>
     );
 }
 
