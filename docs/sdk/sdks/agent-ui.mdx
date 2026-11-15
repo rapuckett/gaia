@@ -1883,7 +1883,8 @@ else's:
     GAIA listens on IPv4 on port 4243 unless `GAIA_DEVICE_PORT` names another,
     and starts listening again after a restart until the PC turns it off.
     Returns the status. **409** with `detail` `{"code", "message"}` when it
-    can't: `port_in_use`, `unsafe_folder` (someone else can reach
+    can't: `port_in_use` (on macOS also when another program holds the port on
+    just one of the PC's addresses), `unsafe_folder` (someone else can reach
     `~/.gaia/devices`; use Reset pairing), `certificate` or `start_failed`.
     PC-only.
   </Accordion>
