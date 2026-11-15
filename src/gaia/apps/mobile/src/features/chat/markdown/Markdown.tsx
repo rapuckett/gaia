@@ -3,13 +3,12 @@
 
 import type { PhrasingContent, Root, RootContent } from 'mdast';
 import { useCallback, useMemo, type ReactNode } from 'react';
-import { Linking } from 'react-native';
 
 import { buildCitationIndex, type LibraryDoc } from '@webui/utils/citations';
 import { isolate } from '@webui/i18n/registry';
 import { useDirection, useT } from '@/i18n/useT';
-import { documentFileUrl } from '@/api/constants';
-import { useConnectionStore } from '@/state/connection';
+import { openPcFile } from '@/features/files/openPcFile';
+import { useFileScope } from '@/features/files/scopeContext';
 import { contentDir, Divider, HScroll, Icon, Notice, Row, Stack, Surface, Text } from '@/ui';
 import { Check, Square } from '@/ui/icons';
 
@@ -29,7 +28,7 @@ export interface MarkdownProps {
     documents?: LibraryDoc[];
     /** Library notices the server sent with the answer, shown under it. */
     notes?: string[];
-    /** Replaces opening the file in the system browser from the paired PC. */
+    /** Replaces opening the cited file in the app's preview. */
     onOpenCitation?: (doc: LibraryDoc, page?: number) => void;
 }
 
@@ -154,19 +153,13 @@ function endsInline(tree: Root): boolean {
     return last?.type === 'paragraph' || last?.type === 'heading';
 }
 
-/** Opens a cited library file in the system browser, at its page, from the paired PC. */
-function useOpenCitation(): (doc: LibraryDoc, page?: number) => void {
-    const baseUrl = useConnectionStore((state) => state.connection?.baseUrl);
+/** Opens a cited library file in the app's preview, at its page; none where no chat is in scope. */
+function useOpenCitation(sessionId: string | null): (doc: LibraryDoc, page?: number) => void {
     return useCallback(
-        (doc, page) => {
-            if (!baseUrl) {
-                console.error(`Opening ${doc.filename} needs a paired PC, and none is connected. Pair this phone with GAIA first.`);
-                return;
-            }
-            const url = documentFileUrl(baseUrl, doc.id, page);
-            Linking.openURL(url).catch((error: unknown) => console.error(`Opening ${url} failed`, error));
+        (doc: LibraryDoc, page?: number) => {
+            openPcFile({ docId: doc.id, name: doc.filename, ...(page ? { page } : {}) }, sessionId);
         },
-        [baseUrl],
+        [sessionId],
     );
 }
 
@@ -176,12 +169,13 @@ export function Markdown({ text, variant = 'answer', streaming: streamingProp = 
     // The formatting variant ignores streaming, documents, notes and onOpenCitation.
     const streaming = streamingProp && !formatting;
     const t = useT();
-    const openCitation = useOpenCitation();
+    const sessionId = useFileScope();
+    const openCitation = useOpenCitation(sessionId);
     const uiDir = useDirection();
     const shown = useThrottledText(text, streaming, STREAM_PARSE_MS);
     const tree = useMemo(() => (formatting ? parseFormatting(shown) : parseAnswer(shown, streaming)), [shown, streaming, formatting]);
     const index = useMemo(() => buildCitationIndex(formatting ? NO_DOCS : documents), [documents, formatting]);
-    const ctx: RenderContext = { index, t, onOpenCitation: formatting ? undefined : (onOpenCitation ?? openCitation), uiDir, streaming };
+    const ctx: RenderContext = { index, t, onOpenCitation: formatting ? undefined : (onOpenCitation ?? (sessionId ? openCitation : undefined)), sessionId: formatting ? null : sessionId, uiDir, streaming };
     const caretInline = streaming && endsInline(tree);
 
     return (
