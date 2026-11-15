@@ -7,11 +7,12 @@ import { EmptyState, ErrorState, LoadingState, Stack } from '@/ui';
 import { Brain } from '@/ui/icons';
 
 import { AdvancedBody } from '../advanced/AdvancedBody';
+import { MemoryAdmin } from '../advanced/MemoryAdmin';
 import { CoveragePill } from '../CoveragePill';
 import type { MemoryPaneProps } from '../tabs';
 
 /** The Advanced tab: the load and failed states, "Memory is off", then the stats, activity, tools and upcoming items. */
-export function AdvancedPane(_props: MemoryPaneProps) {
+export function AdvancedPane({ notify }: MemoryPaneProps) {
     const t = useT();
     const stats = useMemoryStats();
     const settings = useMemorySettings();
@@ -39,6 +40,11 @@ export function AdvancedPane(_props: MemoryPaneProps) {
             ) : (
                 stats.data ? <AdvancedBody stats={stats.data} /> : null
             )}
+            {!loading && !failed && settings.data ? (
+                <Stack paddingX="lg" paddingY="md">
+                    <MemoryAdmin settings={settings.data} notify={notify} />
+                </Stack>
+            ) : null}
         </Stack>
     );
 }
