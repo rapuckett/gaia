@@ -27,6 +27,7 @@ import type {
     StreamEvent,
     SystemStatus,
 } from '@webui/types';
+import type { AgentCapabilities } from '@webui/types/sessionPanel';
 import type { CreateSessionRequest, DocumentListResponse, SessionSearchResponse, ToolConfirmRequest, UserInputRequest as ApiUserInputRequest } from '@webui/types/api.gen';
 
 export type {
@@ -58,6 +59,7 @@ export type {
     SystemStatus,
     UnavailableConnectorRow,
 } from '@webui/types';
+export type { ActiveSkill, AgentCapabilities, AgentTool, SkillOrigin } from '@webui/types/sessionPanel';
 export type { CreateSessionRequest, DocumentListResponse, SessionSearchResponse, SessionSearchResult, ToolConfirmRequest } from '@webui/types/api.gen';
 
 /** `display` is what the phone shows as the answer; it is never sent to GAIA. */
@@ -183,6 +185,16 @@ export interface FollowUpResult {
 
 export type { FollowUpOutcome };
 
+/** What the PC answers an upload with; `url` is the link a message carries so the agent can read the file. */
+export interface UploadedFile {
+    filename: string;
+    original_name: string;
+    url: string;
+    size: number;
+    content_type: string;
+    is_image: boolean;
+}
+
 export interface RequestOptions {
     signal?: AbortSignal;
 }
@@ -192,6 +204,8 @@ export interface GaiaClient {
     listSessions(options?: RequestOptions): Promise<SessionList>;
     getSession(sessionId: string, options?: RequestOptions): Promise<Session>;
     createSession(request?: CreateSessionRequest, options?: RequestOptions): Promise<Session>;
+    /** Sends a file to the PC; recordings go to the transcription folder. Rejects with the PC's refusal (type, size, empty). */
+    uploadFile(file: Blob, name: string, options?: RequestOptions): Promise<UploadedFile>;
     setSessionPinned(sessionId: string, pinned: boolean, options?: RequestOptions): Promise<Session>;
     /** Deletes the chat and its messages; a turn still running on it is stopped first. */
     deleteSession(sessionId: string, options?: RequestOptions): Promise<DeleteSessionResult>;
@@ -212,6 +226,8 @@ export interface GaiaClient {
     toggleSessionPrivate(sessionId: string, options?: RequestOptions): Promise<Session>;
     /** Removes a document from this chat; the library keeps it. */
     detachDocument(sessionId: string, docId: string, options?: RequestOptions): Promise<void>;
+    /** The tools and skills of the chat's running agent; rejects with 409 until the agent has started. */
+    getCapabilities(sessionId: string, options?: RequestOptions): Promise<AgentCapabilities>;
     /** This PC's CPU, memory, GPU, NPU and network use. */
     getResourceUsage(options?: RequestOptions): Promise<ResourceUsage>;
     /** Deletes the message and everything after it, so the exchange can be asked again. */
