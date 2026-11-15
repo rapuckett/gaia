@@ -77,11 +77,8 @@ export {
   Smartphone,
   Sparkles,
   Square,
-<<<<<<< HEAD
   SquarePen,
-=======
   Table,
->>>>>>> origin/integration/rapuckett
   Terminal,
   Trash2,
   TrendingUp,
