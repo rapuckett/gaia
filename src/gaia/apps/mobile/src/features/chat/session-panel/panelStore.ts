@@ -22,6 +22,9 @@ interface PanelState {
     /** Which numbers Context & performance shows under the hood. */
     contextScope: 'turn' | 'chat';
     setContextScope(scope: 'turn' | 'chat'): void;
+    /** The Environment confirmation showing: removing a folder, or turning on full access. */
+    envConfirm: { kind: 'remove'; path: string } | { kind: 'full' } | null;
+    setEnvConfirm(confirm: PanelState['envConfirm']): void;
 }
 
 export const useSessionPanelStore = create<PanelState>((set) => ({
@@ -29,4 +32,6 @@ export const useSessionPanelStore = create<PanelState>((set) => ({
     setSection: (id, open) => set((state) => ({ sections: { ...state.sections, [id]: open } })),
     contextScope: 'turn',
     setContextScope: (contextScope) => set({ contextScope }),
+    envConfirm: null,
+    setEnvConfirm: (envConfirm) => set({ envConfirm }),
 }));

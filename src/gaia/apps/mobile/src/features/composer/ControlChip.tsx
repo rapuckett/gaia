@@ -31,7 +31,7 @@ export function ControlChip({ label, icon, onPress, menu, warning, chip, disable
         <Row gap="xs">
             <Icon icon={icon} size="sm" tone={warning ? 'warning' : 'secondary'} />
             {compact ? null : (
-                <View style={{ flexShrink: 1 }}>
+                <View style={{ flexShrink: chip === 'model' ? 1 : 0 }}>
                     <Text role="label" tone={warning ? 'warning' : 'secondary'} numberOfLines={1}>
                         {label}
                     </Text>
@@ -41,7 +41,7 @@ export function ControlChip({ label, icon, onPress, menu, warning, chip, disable
         </Row>
     );
     return (
-        <View style={{ flexShrink: 1, minWidth: 0 }}>
+        <View style={{ flexShrink: chip === 'model' ? 1 : 0, minWidth: 0 }}>
             <ChipMeasure id={chip}>{content(false)}</ChipMeasure>
             <Pressable
                 onPress={onPress}

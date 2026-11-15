@@ -7,6 +7,7 @@ import type { MessageKey } from '@webui/i18n/registry';
 
 import { AgentInfoSection } from './AgentInfoSection';
 import { ContextSection } from './ContextSection';
+import { EnvironmentSection } from './EnvironmentSection';
 import type { PanelSectionId } from './panelStore';
 import { SkillsSection } from './SkillsSection';
 
@@ -31,6 +32,7 @@ export const DETAILS_HEADING: MessageKey = 'sp.details';
  * its entry at its place in this list; an unbuilt section has no entry, so it shows nothing.
  */
 export const SECTIONS: readonly SectionEntry[] = [
+    { id: 'environment', render: (p) => <EnvironmentSection {...p} /> },
     { id: 'skills', render: (p) => <SkillsSection {...p} /> },
     { id: 'context', group: 'details', render: (p) => <ContextSection {...p} /> },
     { id: 'tools', group: 'details', render: (p) => <AgentInfoSection {...p} /> },

@@ -10,7 +10,7 @@ export const SETUP_STAGES = ['check', 'plan', 'download', 'test', 'ready'] as co
 export type SetupStage = (typeof SETUP_STAGES)[number];
 
 export const STAGE_LABELS: Record<SetupStage, MessageKey> = {
-    check: 'setup.check.title',
+    check: 'mobileApp.setup.check.title',
     plan: 'setup.plan.step',
     download: 'setup.download.step',
     test: 'setup.test.step',
