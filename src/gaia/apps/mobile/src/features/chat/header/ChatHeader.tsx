@@ -6,11 +6,13 @@ import { useState } from 'react';
 import { MAX_SESSION_TITLE_CHARS } from '@webui/utils/constants';
 import { isPlaceholderTitle } from '@webui/utils/sessionTitle';
 
+import { useGaiaClient } from '@/data/GaiaClientProvider';
 import { useRenameSession, useSession, useTogglePrivate } from '@/data';
 import { ScreenHeader } from '@/features/nav/ScreenHeader';
-import { useT } from '@/i18n/useT';
+import { exportChat } from '@/features/share/exportChat';
+import { describeError, useT } from '@/i18n/useT';
 import { IconButton, Notice, Pressable, Row, Stack, Text, TextField } from '@/ui';
-import { Activity, Check, Eye, EyeOff, PanelRight, X } from '@/ui/icons';
+import { Activity, Check, Download, Eye, EyeOff, PanelRight, X } from '@/ui/icons';
 
 import { DocsBar } from './DocsBar';
 import { failureReasonWith } from './failureText';
@@ -33,7 +35,9 @@ export function ChatHeader({ sessionId, onOpenSessionPanel, onManageDocuments }:
     const [editing, setEditing] = useState(false);
     const [draft, setDraft] = useState('');
     const [resources, setResources] = useState(false);
+    const client = useGaiaClient();
     const [error, setError] = useState<string | null>(null);
+    const [exporting, setExporting] = useState(false);
 
     const title = session.data?.title;
     const isPrivate = !!session.data?.private;
@@ -58,6 +62,15 @@ export function ChatHeader({ sessionId, onOpenSessionPanel, onManageDocuments }:
         togglePrivate.mutate(sessionId, {
             onError: (err) => setError(t.compose((say) => say('chat.privateFailed', { error: failureReasonWith(err, say) }))),
         });
+    };
+
+    const runExport = () => {
+        if (!client) return;
+        setError(null);
+        setExporting(true);
+        exportChat(client, sessionId, title)
+            .catch((err: unknown) => setError(describeError(err, t)))
+            .finally(() => setExporting(false));
     };
 
     const titleNode = editing ? (
@@ -101,6 +114,14 @@ export function ChatHeader({ sessionId, onOpenSessionPanel, onManageDocuments }:
                 busy={togglePrivate.isPending}
                 testID="private-toggle"
             />
+            <IconButton
+                icon={Download}
+                size="sm"
+                label={t('chat.exportLabel')}
+                onPress={runExport}
+                busy={exporting}
+                testID="export-chat"
+            />
             {onOpenSessionPanel ? (
                 <IconButton
                     icon={PanelRight}
@@ -118,7 +139,7 @@ export function ChatHeader({ sessionId, onOpenSessionPanel, onManageDocuments }:
             <ScreenHeader titleNode={session.data ? titleNode : undefined} end={end} />
             {error ? (
                 <Stack paddingX="lg">
-                    <Notice tone="danger" message={error} testID="header-error" />
+                    <Notice tone="danger" message={error} onDismiss={() => setError(null)} testID="header-error" />
                 </Stack>
             ) : null}
             {resources ? <ResourceStrip onClose={() => setResources(false)} /> : null}

@@ -9,7 +9,7 @@ import { formatTokens } from '@webui/utils/format';
 
 import type { ContextUsage } from '@/api/client.types';
 import { useT } from '@/i18n/useT';
-import { Ltr, Notice, Pressable, Row, Sheet, Stack, Text, useTheme } from '@/ui';
+import { Button, Ltr, Notice, Pressable, Row, Sheet, Stack, Text, useTheme } from '@/ui';
 
 import { ChipMeasure, useChipCollapsed } from './ChipFitContext';
 
@@ -25,13 +25,17 @@ export interface ContextMeterProps {
     usage: ContextUsage | null;
     /** Why there is no reading yet; shown as a dash that opens that reason. */
     unavailable?: string | null;
+    /** Opens the chat's panel, where the context and performance details are. */
+    onDetails?: () => void;
+    /** Starts with the breakdown sheet open (developer gallery). */
+    initialOpen?: boolean;
 }
 
 /** How full the model's context window is; tap for what fills it. */
-export function ContextMeter({ usage, unavailable }: ContextMeterProps) {
+export function ContextMeter({ usage, unavailable, onDetails, initialOpen = false }: ContextMeterProps) {
     const t = useT();
     const { colors, radius } = useTheme();
-    const [open, setOpen] = useState(false);
+    const [open, setOpen] = useState(initialOpen);
     const barless = useChipCollapsed('meter');
     if (!usage && !unavailable) return null;
 
@@ -51,6 +55,11 @@ export function ContextMeter({ usage, unavailable }: ContextMeterProps) {
               window: formatTokens(usage.window),
           })
         : `${t('ctx.context')}: ${unavailable}`;
+
+    const capped = !!usage && usage.model_window != null && usage.model_window > usage.window;
+    const hint = capped
+        ? t('ctx.meter.titleCapped', { gaia: formatTokens(usage.window), model: formatTokens(usage.model_window!) })
+        : t('ctx.meter.title');
 
     const reading = (noBar: boolean) => (
         <Row gap="sm">
@@ -74,7 +83,7 @@ export function ContextMeter({ usage, unavailable }: ContextMeterProps) {
                 </View>
             )}
             <Text role="caption" tone={warn ? 'warning' : 'secondary'}>
-                {usage ? <Ltr>{`${pct}%`}</Ltr> : '–'}
+                {usage ? <Ltr>{`${pct}%`}</Ltr> : `${t.bare('ctx.context')} –`}
             </Text>
         </Row>
     );
@@ -85,19 +94,20 @@ export function ContextMeter({ usage, unavailable }: ContextMeterProps) {
             <Pressable
                 onPress={() => setOpen(true)}
                 accessibilityLabel={aria}
+                accessibilityHint={usage ? hint : unavailable ?? undefined}
                 accessibilityState={{ expanded: open }}
                 testID="context-meter"
             >
                 {reading(barless)}
             </Pressable>
             <Sheet open={open} onClose={() => setOpen(false)} title={t('ctx.meter.window')}>
-                {usage ? <Breakdown usage={usage} colors={partColor} /> : <Text role="body">{unavailable}</Text>}
+                {usage ? <Breakdown usage={usage} colors={partColor} onDetails={onDetails ? () => { setOpen(false); onDetails(); } : undefined} /> : <Text role="body">{unavailable}</Text>}
             </Sheet>
         </>
     );
 }
 
-function Breakdown({ usage, colors: partColor }: { usage: ContextUsage; colors: Record<(typeof PARTS)[number]['key'], string> }) {
+function Breakdown({ usage, colors: partColor, onDetails }: { usage: ContextUsage; colors: Record<(typeof PARTS)[number]['key'], string>; onDetails?: () => void }) {
     const t = useT();
     const { colors, radius } = useTheme();
     const free = Math.max(0, usage.window - usage.used - usage.reply_reserve);
@@ -111,10 +121,12 @@ function Breakdown({ usage, colors: partColor }: { usage: ContextUsage; colors: 
                     <Ltr>{formatTokens(usage.used)}</Ltr>
                 </Text>{' '}
                 {t.bare('ctx.of')} <Ltr>{formatTokens(usage.window)}</Ltr> {t.bare('ctx.tokensWord')}
-                {modelWindow
-                    ? ` · ${t.bare('ctx.gaiaUses')} ${formatTokens(usage.window)} ${t.bare('ctx.ofModel')} ${formatTokens(modelWindow)}`
-                    : ''}
             </Text>
+            {modelWindow ? (
+                <Text role="caption" tone="secondary">
+                    {t('ctx.meter.capNote', { gaia: formatTokens(usage.window), model: formatTokens(modelWindow) })}
+                </Text>
+            ) : null}
             {mostlySetup ? (
                 <Text role="caption" tone="secondary">
                     {t('ctx.meter.mostlySetup', {
@@ -196,6 +208,7 @@ function Breakdown({ usage, colors: partColor }: { usage: ContextUsage; colors: 
                     ].join(''),
                 )}
             </Text>
+            {onDetails ? <Button variant="secondary" label={t('ctx.meter.details')} onPress={onDetails} testID="context-details" /> : null}
         </Stack>
     );
 }

@@ -3,6 +3,8 @@
 
 import { useState } from 'react';
 
+import { ENDPOINTS } from '@/api/constants';
+import { useDeviceRefused } from '@/api/routeAccess';
 import { useMemoryMaintenance, useMemorySettings, useRefreshMemory, type MemoryMaintenanceAction } from '@/data';
 import { useT } from '@/i18n/useT';
 import { ActionSheet, Badge, IconButton, Notice, Row, Screen, Stack, Text, type SheetAction } from '@/ui';
@@ -30,6 +32,7 @@ export function MemoryScreen({ onBack, onOpenChat, initialTab = 'about' }: Memor
     const settings = useMemorySettings();
     const refresh = useRefreshMemory();
     const maintenance = useMemoryMaintenance();
+    const systemContextRefused = useDeviceRefused('POST', ENDPOINTS.memoryRefreshSystemContext);
     const running = maintenance.isPending ? maintenance.variables : undefined;
 
     const pullToRefresh = async () => {
@@ -54,6 +57,7 @@ export function MemoryScreen({ onBack, onOpenChat, initialTab = 'about' }: Memor
         { label: t('mem.refresh'), onPress: () => void pullToRefresh() },
         ...MAINTENANCE_ACTIONS.map((action) => ({
             label: t(MAINTENANCE_LABELS[action][running === action ? 'busy' : 'idle']),
+            disabled: action === 'refreshSystemContext' && systemContextRefused,
             onPress: () => run(action),
         })),
     ];

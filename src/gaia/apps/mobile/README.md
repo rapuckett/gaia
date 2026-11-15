@@ -33,7 +33,10 @@ Metro; only a change that moves the native fingerprint needs a new build.
   `install`, `expo-doctor`). `@expo/fingerprint` doesn't fail without it: it
   silently hashes without the config, so set it there too. `development` builds
   `ai.amd.gaia.mobile.dev` and `production` builds `ai.amd.gaia.mobile`; the URL
-  scheme is the same id.
+  scheme is the same id and stays fixed. To build for your own Apple team, set
+  `GAIA_IOS_BUNDLE_ID` (production) and `GAIA_IOS_BUNDLE_ID_DEV` (development) to
+  your App IDs; they change the iOS bundle id only, and fastlane checks the
+  generated project against them.
 - **`ios/` and `android/` are generated** by `npx expo prebuild` from
   `app.config.ts` and `plugins/`, and never committed.
 - **Plain HTTP is for development only, and stays local:** iOS allows the local

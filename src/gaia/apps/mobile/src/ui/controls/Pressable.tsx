@@ -16,6 +16,7 @@ export interface PressableProps {
     onLongPress?: () => void;
     disabled?: boolean;
     accessibilityLabel?: string;
+    accessibilityHint?: string;
     accessibilityRole?: AccessibilityRole;
     accessibilityState?: AccessibilityState;
     /** Extra screen-reader actions, e.g. what a long-press does. */
@@ -36,6 +37,7 @@ export function Pressable({
     onLongPress,
     disabled,
     accessibilityLabel,
+    accessibilityHint,
     accessibilityRole = 'button',
     accessibilityState,
     accessibilityActions,
@@ -54,6 +56,7 @@ export function Pressable({
             disabled={disabled}
             accessibilityRole={accessibilityRole}
             accessibilityLabel={accessibilityLabel}
+            accessibilityHint={accessibilityHint}
             accessible={accessible}
             accessibilityActions={accessibilityActions}
             onAccessibilityAction={onAccessibilityAction}

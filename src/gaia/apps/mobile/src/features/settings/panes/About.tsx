@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: MIT
 
 import Constants from 'expo-constants';
-import { Linking } from 'react-native';
 
 import { useT } from '@/i18n/useT';
+import { openLinkFromPress } from '@/platform/openLink';
 import { Badge, Button, Card, Ltr, Row, Stack, Text } from '@/ui';
 import { ExternalLink } from '@/ui/icons';
 
@@ -18,7 +18,7 @@ const LINKS = [
 ] as const;
 
 function open(url: string) {
-    Linking.openURL(url).catch((error: unknown) => console.error(`Opening ${url} failed`, error));
+    openLinkFromPress(url);
 }
 
 /** The phone app's own version and the project's links. */
