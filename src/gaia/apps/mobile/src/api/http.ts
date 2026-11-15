@@ -23,6 +23,7 @@ import {
 } from './errors';
 import type {
     ActiveModel,
+    ActiveRuns,
     AgentCapabilities,
     AgentInstallStatus,
     AgentList,
@@ -866,6 +867,10 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         previewSkillLink(url, options) {
             return postJson<LinkPreview>(ENDPOINTS.skillsLinkPreview, { url }, options?.signal);
+        },
+
+        getActiveRuns(options) {
+            return getJson<ActiveRuns>(ENDPOINTS.chatActive, options?.signal);
         },
 
         listSchedules(options) {
