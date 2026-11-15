@@ -26,6 +26,8 @@ export interface TextProps {
     /** A label inside a fixed-size control: stops scaling at 1.3x and keeps `numberOfLines`. Give the control the full label in `accessibilityLabel`. */
     compact?: boolean;
     selectable?: boolean;
+    /** Where a one-line text is cut; `middle` keeps both ends of a path. */
+    ellipsize?: 'tail' | 'middle';
     strike?: boolean;
     underline?: boolean;
     /** Inline code: mono on the code surface. */
@@ -77,6 +79,7 @@ export function Text({
     numberOfLines,
     compact,
     selectable,
+    ellipsize,
     strike,
     underline,
     code,
@@ -134,7 +137,7 @@ export function Text({
                 style={style}
                 numberOfLines={lines}
                 maxFontSizeMultiplier={compact ? COMPACT_MAX_FONT_SCALE : undefined}
-                ellipsizeMode="tail"
+                ellipsizeMode={ellipsize ?? 'tail'}
                 selectable={selectable}
                 onPress={onPress}
                 accessibilityLabel={accessibilityLabel}
