@@ -15,6 +15,7 @@ export { Surface, Card, Divider, type SurfaceProps, type CardProps } from './lay
 export { Pressable, type PressableProps } from './controls/Pressable';
 export { Button, type ButtonProps } from './controls/Button';
 export { IconButton, type IconButtonProps } from './controls/IconButton';
+export { DotGrid } from './controls/DotGrid';
 export { Icon, type IconProps } from './controls/Icon';
 export { Screen, type ScreenProps } from './controls/Screen';
 export { ScreenBannerProvider, useScreenBanner } from './controls/ScreenBanner';
