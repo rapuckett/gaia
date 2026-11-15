@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 
 import type { Schedule } from '@/api/client.types';
 import { GaiaApiError } from '@/api/errors';
-import { useDeleteSchedule, useRunSchedule, useSchedules, useUpdateScheduleStatus } from '@/data';
+import { useDeleteSchedule, useRunSchedule, useQueryFailure, useSchedules, useUpdateScheduleStatus } from '@/data';
 import { ScreenHeader } from '@/features/nav/ScreenHeader';
 import { describeError, useT } from '@/i18n/useT';
 import { ErrorState, IconButton, List, ListSkeleton, Notice, Row, Screen, Stack, Text, useTheme } from '@/ui';
@@ -60,6 +60,7 @@ export function SchedulesScreen({ onOpenChat }: SchedulesScreenProps) {
     const t = useT();
     const { space } = useTheme();
     const query = useSchedules();
+    const failure = useQueryFailure(query);
     const update = useUpdateScheduleStatus();
     const run = useRunSchedule();
     const remove = useDeleteSchedule();
@@ -80,9 +81,9 @@ export function SchedulesScreen({ onOpenChat }: SchedulesScreenProps) {
             <Stack paddingX="lg" paddingY="sm" align="start">
                 <ChipButton label={t('schedules.new')} icon={Plus} variant="accent" onPress={() => setCreating(true)} />
             </Stack>
-            {query.isPending ? <ListSkeleton rows={4} /> : null}
-            {query.isError && !query.data ? (
-                <ErrorState title={t('schedules.loadFailed')} message={describeError(query.error, t)} onRetry={() => void query.refetch()} />
+            {query.isPending && !failure.failed ? <ListSkeleton rows={4} /> : null}
+            {failure.failed ? (
+                <ErrorState title={t('schedules.loadFailed')} message={describeError(failure.error, t)} onRetry={() => void query.refetch()} />
             ) : null}
             {query.data && schedules.length === 0 ? (
                 <>

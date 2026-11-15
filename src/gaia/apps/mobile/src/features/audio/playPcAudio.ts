@@ -22,6 +22,23 @@ const EXTENSIONS: Record<string, string> = {
     'audio/x-wav': 'wav',
 };
 
+/** Where the playing file is, in seconds. */
+export interface PcAudioProgress {
+    currentTime: number;
+    duration: number;
+}
+
+export interface PcAudioControls {
+    pause(): void;
+    resume(): void;
+}
+
+export interface PcAudioHooks {
+    /** Called once the file starts, with its pause and resume. */
+    onPlaying?(controls: PcAudioControls): void;
+    onProgress?(progress: PcAudioProgress): void;
+}
+
 let current: { stop(): void } | null = null;
 let calls = 0;
 let audioModeSet: Promise<void> | null = null;
@@ -64,7 +81,7 @@ function deleteFile(file: File): void {
  * is deleted when playback ends, fails, is stopped through `signal`, or is replaced by the next call.
  * Resolves when playback ends or is stopped; rejects with PcAudioPlaybackError when it can't play.
  */
-export function playPcAudio(audio: PcAudioBytes, signal?: AbortSignal): Promise<void> {
+export function playPcAudio(audio: PcAudioBytes, signal?: AbortSignal, hooks?: PcAudioHooks): Promise<void> {
     current?.stop();
     const seq = ++calls;
     return new Promise<void>((resolve, reject) => {
@@ -117,8 +134,17 @@ export function playPcAudio(audio: PcAudioBytes, signal?: AbortSignal): Promise<
             playing.addListener('playbackStatusUpdate', (status: AudioStatus) => {
                 if (status.error) finish(new PcAudioPlaybackError(status.error));
                 else if (status.didJustFinish) finish();
+                else hooks?.onProgress?.({ currentTime: status.currentTime, duration: status.duration });
             });
             playing.play();
+            hooks?.onPlaying?.({
+                pause: () => {
+                    if (!settled) playing.pause();
+                },
+                resume: () => {
+                    if (!settled) playing.play();
+                },
+            });
         })().catch((err: unknown) => {
             // After a stop nothing awaits this call, so a late failure surfaces as an unhandled rejection.
             if (settled) return Promise.reject(err);

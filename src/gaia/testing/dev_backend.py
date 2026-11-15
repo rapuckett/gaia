@@ -18,10 +18,10 @@ beside an installed GAIA without touching its ports or ``~/.gaia``.
   lets a test drive a tool-approval prompt.
 
 The backend starts already set up: the fake Lemonade lists every model the
-flagship profile needs as downloaded, the flagship's install sentinel is written
-under ``--home``, and the setup marker is set, so ``/api/setup/check`` reports
-``ready: true`` and a client goes straight to chat. ``--fresh`` leaves all three
-out, for flows that drive the first-run Setup wizard.
+flagship profile needs, and its speech model, as downloaded; the flagship's
+install sentinel is written under ``--home``; and the setup marker is set, so
+``/api/setup/check`` reports ``ready: true`` and a client goes straight to chat.
+``--fresh`` leaves all three out, for flows that drive the first-run Setup wizard.
 
 With no script every completion answers :data:`DEFAULT_REPLY`. When a script
 runs out the fake LLM answers HTTP 500 instead of inventing a reply.
@@ -43,6 +43,8 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 DEFAULT_REPLY = "Hello from the dev backend."
+#: GB of GPU memory the fake machine has beyond what its models need to load.
+GPU_MEMORY_MARGIN_GB = 4.0
 HOST = "127.0.0.1"
 READY_TIMEOUT_SECONDS = 60.0
 #: Exit code for a bad invocation, as ``gaia uninstall`` uses.
@@ -159,16 +161,59 @@ def isolate_environment(home: Path, llm_url: str, memory: bool = False) -> None:
 # ── Fake LLM ────────────────────────────────────────────────────────────────
 
 
+def fake_system_info(model_ids: List[str]) -> Dict[str, Any]:
+    """Lemonade's ``/system-info`` for a PC whose GPU holds *model_ids* with room.
+
+    One GPU, no NPU, llama.cpp on GAIA's proven backend; its memory is what
+    ``model_fit`` needs for every listed model at once, plus the margin.
+    """
+    from gaia.config import GaiaConfig
+    from gaia.llm.lemonade_client import find_model_requirement
+    from gaia.llm.model_fit import kv_cache_gb, required_memory_gb
+
+    need_gb = 0.0
+    for model_id in dict.fromkeys(model_ids):
+        req = find_model_requirement(model_id)
+        if req is not None and req.size_gb:
+            kv = kv_cache_gb(req.kv_bytes_per_token, req.min_ctx_size)
+            need_gb += required_memory_gb(req.size_gb, kv)
+    backend = GaiaConfig.TESTED_LLAMACPP_BACKENDS[0]
+    return {
+        "devices": {
+            "amd_gpu": [
+                {
+                    "name": "Dev backend GPU",
+                    "available": True,
+                    "integrated": False,
+                    "vram_gb": round(need_gb + GPU_MEMORY_MARGIN_GB, 1),
+                }
+            ]
+        },
+        "recipes": {
+            "llamacpp": {
+                "default_backend": backend,
+                "backends": {backend: {"state": "installed"}},
+            }
+        },
+    }
+
+
 def build_fake_llm(
     script: List[Dict[str, Any]], model: str, downloaded: Optional[List[str]] = None
 ):
     """A FastAPI app speaking the slice of Lemonade's API a chat turn uses.
 
-    *downloaded* names further models listed as downloaded beside *model*.
+    *downloaded* names further models listed as downloaded beside *model*;
+    the speech model is served only when it is among them.
     """
     from fastapi import FastAPI
-    from fastapi.responses import JSONResponse, StreamingResponse
+    from fastapi.responses import JSONResponse, Response, StreamingResponse
 
+    from gaia.audio.lemonade_tts import (
+        DEFAULT_TTS_MODEL,
+        KOKORO_VOICES,
+        TTS_SAMPLE_RATE,
+    )
     from gaia.llm.lemonade_client import GPU_CTX_SIZE
     from gaia.version import LEMONADE_VERSION
 
@@ -203,6 +248,10 @@ def build_fake_llm(
             "all_models_loaded": [loaded],
         }
 
+    @app.get("/api/v1/system-info")
+    def system_info():
+        return fake_system_info([model, *(downloaded or [])])
+
     @app.get("/api/v1/models")
     def models():
         return {
@@ -213,11 +262,36 @@ def build_fake_llm(
                     "object": "model",
                     "downloaded": True,
                     "recipe": "llamacpp",
-                    "labels": [],
+                    "labels": ["tts"] if model_id == DEFAULT_TTS_MODEL else [],
                 }
                 for model_id in dict.fromkeys([model, *(downloaded or [])])
             ],
         }
+
+    @app.post("/api/v1/audio/speech")
+    def speech(body: Dict[str, Any]):
+        if body.get("model") != DEFAULT_TTS_MODEL or DEFAULT_TTS_MODEL not in (
+            downloaded or []
+        ):
+            return JSONResponse(
+                status_code=404,
+                content={"error": {"message": f"Model not found: {body.get('model')}"}},
+            )
+        if body.get("voice") not in KOKORO_VOICES:
+            return JSONResponse(
+                status_code=500,
+                content={"error": {"message": f"Unknown voice: {body.get('voice')}"}},
+            )
+        if not body.get("input"):
+            return JSONResponse(
+                status_code=400,
+                content={"error": {"message": "Missing 'input' for speech"}},
+            )
+        # 1.5 s of silence, long enough for a scripted run to tap Stop reading.
+        return Response(
+            content=bytes(2 * int(1.5 * TTS_SAMPLE_RATE)),
+            media_type=f"audio/l16;rate={TTS_SAMPLE_RATE}",
+        )
 
     @app.get("/api/v1/stats")
     def stats():
@@ -451,6 +525,7 @@ def run(
     if fresh:
         _refuse_set_up_home(home)
 
+    from gaia.audio.lemonade_tts import DEFAULT_TTS_MODEL
     from gaia.config import UnsafeGaiaHomeError
     from gaia.installer.init_command import INIT_PROFILES
     from gaia.llm.lemonade_client import DEFAULT_MODEL_NAME
@@ -463,7 +538,11 @@ def run(
     stop = threading.Event()
     signal.signal(signal.SIGTERM, lambda *_: stop.set())
     signal.signal(signal.SIGINT, lambda *_: stop.set())
-    downloaded = [] if fresh else list(INIT_PROFILES["gaia"]["models"])
+    downloaded = (
+        []
+        if fresh
+        else list(dict.fromkeys([*INIT_PROFILES["gaia"]["models"], DEFAULT_TTS_MODEL]))
+    )
     if not fresh:
         mark_set_up()
     llm = _Server(

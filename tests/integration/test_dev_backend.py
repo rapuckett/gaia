@@ -141,3 +141,90 @@ def test_scripted_reply_streams_through_real_chat_api(tmp_path):
         ]
     finally:
         _stop(proc)
+
+
+def _speak(port, **body):
+    return httpx.post(
+        f"http://127.0.0.1:{port}/api/speech",
+        json={"text": "Hello there.", "voice": "af_bella", "speed": 100, **body},
+        headers=UI_HEADERS,
+        timeout=120,
+    )
+
+
+def test_read_aloud_returns_wav_in_the_default_state(tmp_path):
+    port, llm_port = _free_port(), _free_port()
+    proc = _start(tmp_path, port, llm_port)
+    try:
+        resp = _speak(port)
+        assert resp.status_code == 200, resp.text
+        assert resp.headers["content-type"] == "audio/wav"
+        assert resp.content[:4] == b"RIFF" and len(resp.content) > 44
+    finally:
+        _stop(proc)
+
+
+def test_read_aloud_fails_with_no_voice_under_fresh(tmp_path):
+    port, llm_port = _free_port(), _free_port()
+    proc = _start(tmp_path, port, llm_port, "--fresh")
+    try:
+        resp = _speak(port)
+        assert resp.status_code == 502
+        assert "has no model 'kokoro-v1'" in resp.json()["detail"]
+    finally:
+        _stop(proc)
+
+
+def test_fake_speech_validates_the_request():
+    from fastapi.testclient import TestClient
+
+    from gaia.audio.lemonade_tts import DEFAULT_TTS_MODEL, TTS_SAMPLE_RATE
+    from gaia.testing import dev_backend
+
+    client = TestClient(
+        dev_backend.build_fake_llm([{"text": "x"}], "m", [DEFAULT_TTS_MODEL])
+    )
+    url = "/api/v1/audio/speech"
+    good = {"model": DEFAULT_TTS_MODEL, "input": "hi", "voice": "af_bella"}
+
+    ok = client.post(url, json=good)
+    assert ok.status_code == 200
+    assert ok.headers["content-type"] == f"audio/l16;rate={TTS_SAMPLE_RATE}"
+    assert len(ok.content) == 2 * int(1.5 * TTS_SAMPLE_RATE)
+    assert client.post(url, json={**good, "model": "nope"}).status_code == 404
+    assert client.post(url, json={**good, "voice": "nobody"}).status_code == 500
+
+
+def test_local_models_list_the_chat_model_as_fitting(tmp_path):
+    from gaia.llm.lemonade_client import DEFAULT_MODEL_NAME
+
+    port, llm_port = _free_port(), _free_port()
+    proc = _start(tmp_path, port, llm_port)
+    try:
+        resp = httpx.get(
+            f"http://127.0.0.1:{port}/api/providers/local/models",
+            headers=UI_HEADERS,
+            timeout=120,
+        )
+        assert resp.status_code == 200, resp.text
+        rows = {m["id"]: m for m in resp.json()["models"]}
+        assert rows[DEFAULT_MODEL_NAME]["fits"] is True
+        assert resp.json()["capacity_error"] is None
+    finally:
+        _stop(proc)
+
+
+def test_fake_system_info_is_what_model_fit_reads():
+    from fastapi.testclient import TestClient
+
+    from gaia.llm.lemonade_client import DEFAULT_MODEL_NAME
+    from gaia.llm.model_fit import capacity_from_system_info
+    from gaia.testing import dev_backend
+
+    client = TestClient(dev_backend.build_fake_llm([{"text": "x"}], DEFAULT_MODEL_NAME))
+    resp = client.get("/api/v1/system-info")
+
+    assert resp.status_code == 200
+    capacity = capacity_from_system_info(resp.json())
+    assert capacity.memory_gb > dev_backend.GPU_MEMORY_MARGIN_GB
+    assert not capacity.has_npu
