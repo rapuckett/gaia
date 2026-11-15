@@ -33,6 +33,7 @@ import type {
     DocumentListResponse,
     FollowUpOutcome,
     FollowUpResult,
+    DeleteSessionResult,
     GaiaClient,
     HealthResponse,
     LocalModelStatus,
@@ -43,6 +44,7 @@ import type {
     ParsedSchedule,
     Schedule,
     ScheduleList,
+    ScheduleResults,
     SessionList,
     SessionSearchResponse,
     SetupCheck,
@@ -64,6 +66,7 @@ import {
     MESSAGE_PAGE_SIZE,
     QUEUED_IDLE_MS,
     schedulePath,
+    scheduleResultsPath,
     scheduleRunPath,
     SEND_HEADER_TIMEOUT_MS,
     SESSION_PAGE_SIZE,
@@ -72,7 +75,9 @@ import {
     sessionMessagesAndBelowPath,
     sessionMessagesPath,
     sessionPath,
+    sessionPinPath,
     sessionPrivatePath,
+    sessionReadPath,
     setupNeedsPath,
     STREAM_IDLE_MS,
     UI_HEADERS,
@@ -290,6 +295,18 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             return readJson<UploadedFile>(await request('POST', path, new RawBody(body), options?.signal), path);
         },
 
+        setSessionPinned(sessionId, pinned, options) {
+            return putJson<Session>(sessionPinPath(sessionId), { pinned }, options?.signal);
+        },
+
+        deleteSession(sessionId, options) {
+            return deleteJson<DeleteSessionResult>(sessionPath(sessionId), options?.signal);
+        },
+
+        markSessionRead(sessionId, options) {
+            return postJson<Session>(sessionReadPath(sessionId), undefined, options?.signal);
+        },
+
         getContextUsage(sessionId, options) {
             return getJson<ContextUsageResult>(chatContextPath(sessionId), options?.signal);
         },
@@ -434,6 +451,10 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         runSchedule(name, options) {
             return postJson<Schedule>(scheduleRunPath(name), undefined, options?.signal);
+        },
+
+        listScheduleResults(name, limit, options) {
+            return getJson<ScheduleResults>(scheduleResultsPath(name, limit), options?.signal);
         },
 
         deleteSchedule(name, options) {

@@ -3,14 +3,15 @@
 
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 
-import type { CreateScheduleRequest, DeleteScheduleResult, Schedule, ScheduleList } from '@/api/client.types';
-import { SCHEDULES_POLL_MS } from '@/api/constants';
+import type { CreateScheduleRequest, DeleteScheduleResult, Schedule, ScheduleList, ScheduleResults } from '@/api/client.types';
+import { SCHEDULE_RESULTS_LIMIT, SCHEDULES_POLL_MS } from '@/api/constants';
 
 import { useGaiaClient } from './GaiaClientProvider';
 import { requireClient } from './queries';
 
 export const scheduleKeys = {
     list: ['schedules'] as const,
+    results: (name: string) => ['schedules', name, 'results'] as const,
 };
 
 /** The PC's scheduled tasks, re-read while the screen is open so run counts and times follow the PC. */
@@ -21,6 +22,16 @@ export function useSchedules() {
         enabled: client !== null,
         queryFn: ({ signal }) => requireClient(client).listSchedules({ signal }),
         refetchInterval: SCHEDULES_POLL_MS,
+    });
+}
+
+/** A schedule's recent runs; `lastRunAt` is in the key so a finished run re-reads the history. */
+export function useScheduleResults(name: string, lastRunAt: string | null, enabled: boolean) {
+    const client = useGaiaClient();
+    return useQuery<ScheduleResults>({
+        queryKey: [...scheduleKeys.results(name), lastRunAt],
+        enabled: client !== null && enabled,
+        queryFn: ({ signal }) => requireClient(client).listScheduleResults(name, SCHEDULE_RESULTS_LIMIT, { signal }),
     });
 }
 
