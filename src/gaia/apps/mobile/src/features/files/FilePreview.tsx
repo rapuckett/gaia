@@ -2,13 +2,13 @@
 // SPDX-License-Identifier: MIT
 
 import { Image } from 'expo-image';
-import * as Sharing from 'expo-sharing';
 import { useCallback, useEffect, useState } from 'react';
 
 import { isolate } from '@webui/i18n/registry';
 import type { FilePreviewResponse } from '@/api/client.types';
 import { useGaiaClient } from '@/data/GaiaClientProvider';
 import { Markdown } from '@/features/chat/markdown/Markdown';
+import { shareFile } from '@/features/share/shareFile';
 import { describeError, useT } from '@/i18n/useT';
 import { Button, Ltr, Notice, ScrollBox, Row, Sheet, Spinner, Stack, Text } from '@/ui';
 
@@ -24,7 +24,7 @@ type Loaded =
     | { kind: 'image'; uri: string }
     | { kind: 'file' };
 
-type State = { status: 'loading' } | { status: 'error'; error: unknown } | { status: 'ready'; loaded: Loaded; cached: CachedFile | null };
+export type State = { status: 'loading' } | { status: 'error'; error: unknown } | { status: 'ready'; loaded: Loaded; cached: CachedFile | null };
 
 function baseName(path: string): string {
     return path.split(/[\\/]/).pop() || path;
@@ -35,7 +35,7 @@ export function targetName(target: PreviewTarget): string {
 }
 
 /** The file's bytes in the cache (for Share and, for an image, for showing), and the cache entry removed when the preview closes. */
-function useLoadedFile(target: PreviewTarget): State {
+export function useLoadedFile(target: PreviewTarget): State {
     const client = useGaiaClient();
     const [state, setState] = useState<State>({ status: 'loading' });
     useEffect(() => {
@@ -115,7 +115,7 @@ function TextBody({ preview, name }: { preview: FilePreviewResponse; name: strin
     );
 }
 
-function Body({ target, state }: { target: PreviewTarget; state: State }) {
+export function Body({ target, state }: { target: PreviewTarget; state: State }) {
     const t = useT();
     const name = targetName(target);
     if (state.status === 'loading') {
@@ -148,7 +148,7 @@ function OpenPreview({ target, onClose }: { target: PreviewTarget; onClose: () =
         if (!cached) return;
         setShareError(null);
         try {
-            await Sharing.shareAsync(cached.uri);
+            await shareFile(cached.uri);
         } catch (error) {
             setShareError(error);
         }

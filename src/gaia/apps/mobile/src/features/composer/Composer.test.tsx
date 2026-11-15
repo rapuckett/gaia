@@ -73,6 +73,13 @@ describe('Composer', () => {
         expect(find(r, 'composer-stop')).toBeUndefined();
     });
 
+    it('hides the send arrow while a reply runs until the draft has text', async () => {
+        const { r } = await mount({ running: true });
+        expect(find(r, 'composer-send')).toBeUndefined();
+        await type(r, 'next');
+        expect(find(r, 'composer-send').props.label).toBe('composer.queue');
+    });
+
     it('blocks Send with a reason or while the chat is starting, yet keeps the text editable', async () => {
         const { r } = await mount({ starting: true });
         await type(r, 'hi');
@@ -99,5 +106,21 @@ describe('Composer', () => {
         expect(attachments.clear).toHaveBeenCalledTimes(1);
         await act(async () => r.render(<Composer onSend={onSend} attachments={{ ...attachments, uploading: true }} />));
         expect(find(r, 'composer-send').props.disabled).toBe(true);
+    });
+
+    it('blocks Send while a refused file is attached, and says which', async () => {
+        const attachments: Attachments = {
+            items: [{ id: '1', name: 'a.exe', uri: 'file:///a.exe', isImage: false, isMedia: false, status: 'failed', error: 'unsupported' }],
+            add: jest.fn(),
+            remove: jest.fn(),
+            clear: jest.fn(),
+            uploading: false,
+            hasUploaded: false,
+            compose: (text) => text,
+        };
+        const { r } = await mount({ attachments });
+        await type(r, 'hello');
+        expect(find(r, 'composer-send').props.disabled).toBe(true);
+        expect(find(r, 'composer-refused')).toBeTruthy();
     });
 });
