@@ -10,9 +10,13 @@ import { GaiaClientProvider } from '@/data';
 import { translator } from '@/i18n/useT';
 import { ThemeProvider } from '@/ui';
 import { SheetHost } from '@/ui/overlays/SheetHost';
+import { sheetStore } from '@/ui/overlays/sheetStore';
 
 import { MessageActionsContext } from './MessageActionsContext';
 import { UserBubble } from './UserBubble';
+
+// The sheet store is module-wide: a sheet still closing from one test would hide the next one's screen.
+afterEach(() => act(() => sheetStore.reset()));
 
 jest.mock('expo-clipboard', () => ({ setStringAsync: jest.fn(() => Promise.resolve(true)) }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) }));
