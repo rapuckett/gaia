@@ -26,6 +26,7 @@ from urllib.parse import urlsplit
 
 import psutil
 
+from gaia.utils.process_tree import readable_processes
 from gaia.utils.terminal import windows_hidden_popen_kwargs
 
 logger = logging.getLogger(__name__)
@@ -776,7 +777,7 @@ class TunnelManager:
         expected = self._ngrok_args()
         stale = []
         self._uninspectable = []
-        for proc in psutil.process_iter(["name", "cmdline"]):
+        for proc in readable_processes(["name", "cmdline"]):
             name = (proc.info.get("name") or "").lower()
             if name not in ("ngrok", "ngrok.exe"):
                 continue
