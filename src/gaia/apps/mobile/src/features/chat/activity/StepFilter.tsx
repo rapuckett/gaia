@@ -18,7 +18,7 @@ export function StepFilter({ name, status, onName, onStatus }: StepFilterProps) 
     const t = useT();
     return (
         <Stack gap="sm" testID="step-filter">
-            <SearchField value={name} onChangeText={onName} placeholder={t('activity.filterPlaceholder')} accessibilityLabel={t('activity.filterByTool')} />
+            <SearchField value={name} onChangeText={onName} placeholder={t.bare('activity.filterPlaceholder')} accessibilityLabel={t('activity.filterByTool')} />
             <SegmentedControl
                 accessibilityLabel={t('activity.filterByStatus')}
                 value={status}

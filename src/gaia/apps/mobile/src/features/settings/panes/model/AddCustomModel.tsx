@@ -72,6 +72,7 @@ export function AddCustomModel({ open, onToggle, onClose, onAdded }: AddCustomMo
 
     const checks = report ? (
         <Stack gap="xs">
+            {report.ok ? null : <Text role="caption" weight="semibold" tone="secondary" accessibilityRole="header">{t('settings.custom.checks')}</Text>}
             {report.checks.map((c) => (
                 <Row key={c.id} gap="sm" align="start">
                     <Icon icon={c.ok ? Check : X} size="sm" tone={c.ok ? 'success' : 'danger'} label={c.ok ? t('settings.custom.passed') : t('settings.custom.failed')} />
@@ -113,6 +114,7 @@ export function AddCustomModel({ open, onToggle, onClose, onAdded }: AddCustomMo
                 ) : checks}
                 {report && report.warnings.length > 0 ? (
                     <Stack gap="xs">
+                        <Text role="caption" weight="semibold" tone="secondary" accessibilityRole="header">{t('settings.custom.warnings')}</Text>
                         {report.warnings.map((w) => (
                             <Row key={w} gap="sm" align="start">
                                 <Icon icon={TriangleAlert} size="sm" tone="warning" label={t('settings.custom.warning')} />
