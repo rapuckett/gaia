@@ -3519,6 +3519,7 @@ const messages: Messages = {
     'mobileApp.connectors.googlePcOnly': 'لا يستطيع هذا الهاتف ربط حسابات Google. اربط Google من الكمبيوتر الذي يشغّل GAIA.',
     'mobileApp.banner.openOnPc': 'افتح GAIA على جهاز الكمبيوتر لتشغيل خادم النماذج.',
     'mobileApp.settings.comingSoon': 'هذا القسم قادم إلى الهاتف قريبًا. في الوقت الحالي، غيّره من الكمبيوتر الذي يشغّل GAIA.',
+    'mobileApp.settings.colors.invalidHex': 'أدخل لونًا بهذا الشكل: #1F5FA8.',
 };
 
 export const ar: Locale = {

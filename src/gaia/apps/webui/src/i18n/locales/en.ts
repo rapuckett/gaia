@@ -3519,6 +3519,7 @@ export const enMessages = {
     'mobileApp.connectors.googlePcOnly': "This phone can't connect Google accounts. Connect Google on the PC running GAIA.",
     'mobileApp.banner.openOnPc': 'Open GAIA on your PC to start the model server.',
     'mobileApp.settings.comingSoon': 'This section is coming to the phone soon. For now, change it on the PC running GAIA.',
+    'mobileApp.settings.colors.invalidHex': 'Enter a color like #1F5FA8.',
 } as const;
 
 export const en: Locale = {
