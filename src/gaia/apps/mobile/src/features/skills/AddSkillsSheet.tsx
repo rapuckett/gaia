@@ -97,7 +97,7 @@ export function AddSkillsSheet({ open, onClose }: { open: boolean; onClose: () =
                     value={url}
                     onChangeText={setUrl}
                     url
-                    placeholder={t('settings.skills.link.placeholder')}
+                    placeholder={t.bare('settings.skills.link.placeholder')}
                     accessibilityLabel={t('settings.skills.link.aria')}
                     hint={t('settings.skills.link.hint')}
                     returnKeyType="go"

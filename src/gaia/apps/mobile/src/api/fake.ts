@@ -18,8 +18,10 @@ import type {
     ConsolidateMemoryResult,
     CreateSessionRequest,
     DiscordStatus,
+    BrowseResponse,
     EmbeddingCoverage,
     FilePreviewResponse,
+    FileSearchResponse,
     FollowUpOutcome,
     DocumentListResponse,
     DocumentResponse,
@@ -234,6 +236,10 @@ export interface FakeClientData {
     documentStatuses?: Record<string, Partial<DocumentStatus>>;
     /** Makes a library action on a document reject with this message, by action. */
     documentFailures?: Partial<Record<DocumentAction, string>>;
+    /** What browseFiles answers, by path ('' for no path); `'denied'` is the PC refusing the folder, and one not listed is a 404. */
+    fileFolders?: Record<string, BrowseResponse | 'denied'>;
+    /** What searchFiles answers, whatever the query. */
+    fileSearch?: FileSearchResponse;
     /** What getFilePreview answers, by path; a path not listed is a 404. */
     filePreviews?: Record<string, FilePreviewResponse>;
     /** What getImageBytes and getDocumentBytes answer, by path or document id; one not listed is a 404. */
@@ -371,6 +377,8 @@ export interface FakeGaiaClient extends GaiaClient {
     readonly detached: { sessionId: string; docId: string }[];
     readonly installs: string[];
     readonly uploaded: PickedFile[];
+    /** The PC paths indexed with uploadDocumentByPath, with the chat that was named. */
+    readonly uploadedPaths: { filepath: string; sessionId: string }[];
     readonly attached: { sessionId: string; docId: string }[];
     readonly capabilityReads: string[];
     /** Each folder removal and internet switch, in order. */
@@ -469,6 +477,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
     const installs: string[] = [];
     let polls = 0;
     const uploaded: PickedFile[] = [];
+    const uploadedPaths: { filepath: string; sessionId: string }[] = [];
     const attached: FakeGaiaClient['attached'] = [];
     const capabilityReads: string[] = [];
     const environmentChanges: FakeGaiaClient['environmentChanges'] = [];
@@ -570,6 +579,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         detached,
         installs,
         uploaded,
+        uploadedPaths,
         attached,
         capabilityReads,
         environmentChanges,
@@ -1255,6 +1265,33 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             library.documents.push(doc);
             library.total += 1;
             return doc;
+        },
+        async uploadDocumentByPath(filepath, sessionId) {
+            if (data.documentUploadError) throw data.documentUploadError;
+            uploadedPaths.push({ filepath, sessionId });
+            const name = filepath.split(/[\\/]/).pop() ?? filepath;
+            const doc = {
+                id: `doc-${uploadedPaths.length}`,
+                filename: name,
+                filepath,
+                file_size: 0,
+                chunk_count: 1,
+                indexed_at: new Date().toISOString(),
+                indexing_status: data.uploadStatus ?? 'complete',
+            } as DocumentResponse;
+            library.documents.push(doc);
+            library.total += 1;
+            return doc;
+        },
+        async browseFiles(_sessionId, path) {
+            const folder = data.fileFolders?.[path ?? ''];
+            if (folder === 'denied') throw new GaiaApiError(403, 'Access denied', 'mobileApp.error.http', undefined, { status: 'os_denied', message: 'Access denied' });
+            if (!folder) throw new GaiaApiError(404, 'Directory not found');
+            return folder;
+        },
+        async searchFiles() {
+            if (!data.fileSearch) throw new GaiaApiError(404, 'Search is not set up');
+            return data.fileSearch;
         },
         async attachDocument(sessionId, docId) {
             findSession(sessionId);

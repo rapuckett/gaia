@@ -9,6 +9,7 @@ export * from './context';
 export * from './documents';
 export * from './environment';
 export * from './fileStatus';
+export * from './files';
 export * from './GaiaClientProvider';
 export * from './goals';
 export * from './memory';

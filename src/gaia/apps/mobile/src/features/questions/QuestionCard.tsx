@@ -105,7 +105,7 @@ export function QuestionCardView({ data, state, answer, submittingValue = null, 
                             onChangeText={setSecret}
                             secureTextEntry
                             disabled={submitting}
-                            placeholder={t('question.hiddenPlaceholder', { mask: SENSITIVE_MASK })}
+                            placeholder={t.bare('question.hiddenPlaceholder', { mask: SENSITIVE_MASK })}
                             accessibilityLabel={t('question.hiddenPlaceholder', { mask: SENSITIVE_MASK })}
                             returnKeyType="send"
                             onSubmitEditing={() => secret.trim() && onSend(secret)}

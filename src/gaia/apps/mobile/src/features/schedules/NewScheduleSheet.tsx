@@ -139,14 +139,16 @@ export function NewScheduleSheet({ open, onClose }: NewScheduleSheetProps) {
                         setName(text);
                         if (nameTaken) create.reset();
                     }}
-                    placeholder={t('schedules.namePlaceholder')}
+                    placeholder={t.bare('schedules.namePlaceholder')}
+                    accessibilityLabel={t('schedules.namePlaceholder')}
                     error={nameTaken ? t('schedules.nameTaken') : undefined}
                 />
                 <TextField
                     label={t('schedules.prompt')}
                     value={prompt}
                     onChangeText={setPrompt}
-                    placeholder={t('schedules.promptPlaceholder')}
+                    placeholder={t.bare('schedules.promptPlaceholder')}
+                    accessibilityLabel={t('schedules.promptPlaceholder')}
                     multiline
                 />
                 {formError ? <Notice tone="danger" message={formError} /> : null}
