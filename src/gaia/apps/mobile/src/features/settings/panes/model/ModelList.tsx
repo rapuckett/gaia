@@ -132,7 +132,7 @@ export function ModelList({ provider, remote, models, activeModel, switching, on
 
     return (
         <Stack gap="md" testID="model-list">
-            <Text role="label" weight="medium" tone="secondary">{t('settings.model.models')}</Text>
+            <Text role="label" weight="medium" tone="secondary" accessibilityRole="header">{t('settings.model.models')}</Text>
             {(models?.length ?? 0) > SEARCHABLE_FROM ? (
                 <SearchField
                     value={query}

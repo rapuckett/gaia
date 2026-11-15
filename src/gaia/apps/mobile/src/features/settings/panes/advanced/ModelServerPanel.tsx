@@ -124,7 +124,7 @@ export function ModelServerPanel() {
             {info.system_info_error ? <RawDetails text={info.system_info_error} /> : null}
 
             <Stack gap="sm">
-                <Text role="label" weight="semibold">{t('settings.server.backend')}</Text>
+                <Text role="label" weight="semibold" accessibilityRole="header">{t('settings.server.backend')}</Text>
                 {available.length === 0 && !preferred ? (
                     <Text role="caption" tone="muted">{t('mobileApp.settings.serverNoBackends')}</Text>
                 ) : (

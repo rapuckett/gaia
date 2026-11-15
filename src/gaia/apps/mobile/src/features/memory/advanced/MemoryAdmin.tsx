@@ -135,7 +135,7 @@ export function MemoryAdmin({ settings, notify }: { settings: MemorySettings; no
             {(['reinit', 'delete'] as const).map((kind) => (
                 <Card key={kind}>
                     <Stack gap="md">
-                        <Text role="ui" weight="semibold">{t(DANGER[kind].title)}</Text>
+                        <Text role="ui" weight="semibold" accessibilityRole="header">{t(DANGER[kind].title)}</Text>
                         <Text role="label" tone="muted">{t(DANGER[kind].description)}</Text>
                         <Button
                             variant="danger"

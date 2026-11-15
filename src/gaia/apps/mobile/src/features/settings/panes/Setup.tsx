@@ -104,7 +104,7 @@ export default function Setup() {
                 {error ? <Notice tone="danger" message={describeError(error, t)} testID="setup-error" /> : null}
                 {groups.map((g) => (
                     <Stack key={g.title} gap="xs">
-                        <Text role="label" weight="medium" tone="secondary">{g.title}</Text>
+                        <Text role="label" weight="medium" tone="secondary" accessibilityRole="header">{g.title}</Text>
                         {g.lines.map((l) => {
                             const to = l.to;
                             return (

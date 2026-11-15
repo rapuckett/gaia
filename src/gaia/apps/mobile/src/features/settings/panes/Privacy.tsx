@@ -36,7 +36,7 @@ function policyText(t: Translate, notices: PolicyNotices, on: boolean): { text: 
 
 function CardTitle({ children }: { children: string }) {
     return (
-        <Text role="ui" weight="semibold">
+        <Text role="ui" weight="semibold" accessibilityRole="header">
             {children}
         </Text>
     );

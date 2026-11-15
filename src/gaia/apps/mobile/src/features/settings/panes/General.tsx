@@ -153,7 +153,7 @@ export default function General() {
             </SettingsAnchor>
 
             <Stack gap="xs">
-                <Text role="label" weight="medium" tone="secondary">
+                <Text role="label" weight="medium" tone="secondary" accessibilityRole="header">
                     {t('settings.appearance')}
                 </Text>
                 <SegmentedControl

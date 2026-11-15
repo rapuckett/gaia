@@ -35,7 +35,7 @@ export function DeleteChats() {
     return (
         <Card>
             <Stack gap="md">
-                <Text role="ui" weight="semibold">
+                <Text role="ui" weight="semibold" accessibilityRole="header">
                     {t('settings.privacy.deleteTitle')}
                 </Text>
                 <Text role="label" tone="muted">
