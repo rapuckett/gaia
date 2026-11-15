@@ -635,6 +635,26 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             return getJson<SetupPlan>(ENDPOINTS.setupPlan, options?.signal);
         },
 
+        chooseSetupChatModel(modelId, acknowledgeNoFit, options) {
+            return postJson<SetupPlan>(
+                ENDPOINTS.setupChatModel,
+                { model_id: modelId, acknowledge_no_fit: acknowledgeNoFit },
+                options?.signal,
+            );
+        },
+
+        chooseSetupVisionModel(modelId, options) {
+            return postJson<SetupPlan>(ENDPOINTS.setupVisionModel, { model_id: modelId }, options?.signal);
+        },
+
+        skipSetupModel(modelId, skipped, options) {
+            return postJson<SetupPlan>(ENDPOINTS.setupModelSkip, { model_id: modelId, skipped }, options?.signal);
+        },
+
+        getGpuMemory(options) {
+            return getJson<GpuMemoryStatus>(ENDPOINTS.gpuMemory, options?.signal);
+        },
+
         startSetup(skipChatModel, gaiaLemonade = false, options = {}) {
             return postJson<SetupRunStatus>(
                 ENDPOINTS.setupRun,

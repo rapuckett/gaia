@@ -25,6 +25,7 @@ import type {
     MessageList,
     ModelNeed,
     ModelServerInfo,
+    GpuMemoryStatus,
     PreflightReport,
     ProvidersResponse,
     ParsedSchedule,
@@ -113,6 +114,8 @@ export interface FakeClientData {
     /** Each status read answers the next entry (the last one repeats); defaults to idle. */
     setupStatuses?: (SetupRunStatus | Error)[];
     setupPlan?: SetupPlan;
+    /** What getGpuMemory answers. */
+    gpuMemory?: GpuMemoryStatus;
     modelServer?: ModelServerInfo;
     providers?: ProvidersResponse;
     /** What getPreflight answers; an Error is thrown. */
@@ -156,6 +159,8 @@ export interface FakeGaiaClient extends GaiaClient {
     readonly uploads: { name: string; size: number }[];
     readonly downloads: { modelId: string; acknowledgeLowDisk: boolean }[];
     readonly backendSets: string[];
+    /** The setup model choices saved, in order. */
+    readonly setupChoices: { kind: 'chat' | 'vision' | 'skip'; modelId: string | null; flag?: boolean }[];
     readonly setupStarts: { skipChatModel: boolean; gaiaLemonade: boolean; upgradeEmbedded: boolean; serverOnly: boolean }[];
     readonly detached: { sessionId: string; docId: string }[];
     readonly capabilityReads: string[];
@@ -196,6 +201,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
     const followUps: FakeGaiaClient['followUps'] = [];
     const setupStarts: FakeGaiaClient['setupStarts'] = [];
     const backendSets: string[] = [];
+    const setupChoices: FakeGaiaClient['setupChoices'] = [];
     let checkAt = 0;
     let statusAt = 0;
     const nextOf = <T,>(list: (T | Error)[], at: number): T => {
@@ -245,6 +251,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         downloads,
         setupStarts,
         backendSets,
+        setupChoices,
         detached,
         capabilityReads,
         memoryActions,
@@ -616,6 +623,22 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         async getSetupPlan() {
             if (!data.setupPlan) throw new GaiaApiError(503, 'This fake client was given no setup plan.');
             return data.setupPlan;
+        },
+        async chooseSetupChatModel(modelId, acknowledgeNoFit) {
+            setupChoices.push({ kind: 'chat', modelId, flag: acknowledgeNoFit });
+            return data.setupPlan as SetupPlan;
+        },
+        async chooseSetupVisionModel(modelId) {
+            setupChoices.push({ kind: 'vision', modelId });
+            return data.setupPlan as SetupPlan;
+        },
+        async skipSetupModel(modelId, skipped) {
+            setupChoices.push({ kind: 'skip', modelId, flag: skipped });
+            return data.setupPlan as SetupPlan;
+        },
+        async getGpuMemory() {
+            if (!data.gpuMemory) throw new GaiaApiError(503, 'This fake client was given no GPU memory.');
+            return data.gpuMemory;
         },
         async startSetup(skipChatModel, gaiaLemonade = false, options = {}) {
             setupStarts.push({ skipChatModel, gaiaLemonade, upgradeEmbedded: !!options.upgradeEmbedded, serverOnly: !!options.serverOnly });

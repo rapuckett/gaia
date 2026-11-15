@@ -5,6 +5,7 @@ import type { ComponentType } from 'react';
 
 import type { SetupStepContext } from '../SetupScreen';
 import { GpuScreen } from './GpuScreen';
+import { ModelsScreen } from './ModelsScreen';
 
 export type PlanScreenName = 'models' | 'key' | 'gpu';
 
@@ -14,4 +15,5 @@ export type PlanScreen = ComponentType<{ ctx: SetupStepContext; close: () => voi
 /** One line per screen; the plan step offers an opener only for a registered screen. */
 export const PLAN_SCREENS: Partial<Record<PlanScreenName, PlanScreen>> = {
     gpu: GpuScreen,
+    models: ModelsScreen,
 };

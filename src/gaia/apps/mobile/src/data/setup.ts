@@ -17,6 +17,7 @@ import type {
     SetupRunStatus,
 } from '@/api/client.types';
 import { GaiaError, GaiaNetworkError } from '@/api/errors';
+import { catalogOf, savedVision, skipChanges, type Selection } from '@webui/components/setup/selection';
 
 import { useGaiaClient } from './GaiaClientProvider';
 import { queryKeys, requireClient } from './queries';
@@ -296,4 +297,49 @@ export async function applyTestedBackend(client: GaiaClient): Promise<boolean> {
 export function useApplyTestedBackend() {
     const client = useGaiaClient();
     return useMutation<boolean, Error, void>({ mutationFn: () => applyTestedBackend(requireClient(client)) });
+}
+
+/** The GPU's share of this PC's memory; a PC that can't change it answers `applies: false`. */
+export function useGpuMemory() {
+    const client = useGaiaClient();
+    return useQuery<GpuMemoryStatus>({
+        queryKey: ['gpuMemory'],
+        enabled: client !== null,
+        retry: false,
+        queryFn: ({ signal }) => requireClient(client).getGpuMemory({ signal }),
+    });
+}
+
+/**
+ * Saves what the Customize screen ticked, in the order the web UI's setup does before it downloads:
+ * the chat model (a 409 `no_fit` asks to be sent again with `acknowledgeNoFit`), the image reader, then the skip list.
+ * Resolves to the plan the PC now holds.
+ */
+export async function saveModelChoices(
+    client: GaiaClient,
+    plan: SetupPlan,
+    selection: Selection,
+    acknowledgeNoFit: boolean,
+): Promise<SetupPlan> {
+    let latest = plan;
+    if (selection.defaultChat && selection.defaultChat !== latest.chat_model.id) {
+        latest = await client.chooseSetupChatModel(selection.defaultChat, acknowledgeNoFit);
+    }
+    const vision = savedVision(catalogOf(latest), selection);
+    if (vision !== (latest.vision_model ?? null)) latest = await client.chooseSetupVisionModel(vision);
+    for (const change of skipChanges(latest, selection)) {
+        latest = await client.skipSetupModel(change.id, change.skipped);
+    }
+    return latest;
+}
+
+/** `mutate({ plan, selection, acknowledgeNoFit })` saves the choices on the PC and refreshes the plan. */
+export function useSaveModelChoices() {
+    const client = useGaiaClient();
+    const queryClient = useQueryClient();
+    return useMutation<SetupPlan, Error, { plan: SetupPlan; selection: Selection; acknowledgeNoFit: boolean }>({
+        mutationFn: ({ plan, selection, acknowledgeNoFit }) =>
+            saveModelChoices(requireClient(client), plan, selection, acknowledgeNoFit),
+        onSuccess: (plan) => queryClient.setQueryData(queryKeys.setupPlan, plan),
+    });
 }
