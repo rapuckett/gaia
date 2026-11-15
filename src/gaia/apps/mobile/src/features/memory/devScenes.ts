@@ -1,11 +1,11 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { createFakeClient } from '@/api/fake';
-import type { GaiaClient, Goal, MemoryActivityDay, MemoryConversation, MemoryKnowledgeEntry, MemoryKnowledgeItem, MemoryStats, MemoryToolStat, MemoryTurn, MemoryUpcomingItem } from '@/api/client.types';
-import { GaiaApiError } from '@/api/errors';
+import { createFakeClient, type ProfileScript } from '@/api/fake';
+import type { GaiaClient, Goal, MemoryActivityDay, MemoryConversation, MemoryKnowledgeEntry, MemoryKnowledgeItem, MemoryStats, MemoryToolStat, MemoryTurn, MemoryUpcomingItem, ProfileStreamEvent } from '@/api/client.types';
+import { GaiaApiError, GaiaNetworkError } from '@/api/errors';
 
-export type MemoryScene = 'on' | 'off' | 'loading' | 'failed' | 'actionFails' | 'statsEmpty' | 'statsManyTools' | 'aboutEmpty' | 'aboutFailed' | 'aboutMany' | 'goalsEmpty' | 'goalsFailed' | 'goalsStoreError' | 'knowledgeRich' | 'knowledgeEmpty' | 'knowledgeFailed' | 'knowledgeMany';
+export type MemoryScene = 'on' | 'off' | 'loading' | 'failed' | 'actionFails' | 'statsEmpty' | 'statsManyTools' | 'aboutEmpty' | 'aboutFailed' | 'aboutMany' | 'goalsEmpty' | 'goalsFailed' | 'goalsStoreError' | 'knowledgeRich' | 'knowledgeEmpty' | 'knowledgeFailed' | 'knowledgeMany' | 'profileIdle' | 'profileScanning' | 'profileReview' | 'profileSaved' | 'profileInferring' | 'profileInferenceReview' | 'profileFailed' | 'profileOff';
 
 export const SAMPLE_MEMORY_STATS: MemoryStats = {
     knowledge: {
@@ -159,11 +159,61 @@ export const SAMPLE_GOALS: Goal[] = [
     goal('g6', 'Plan the garden', 'Draft a planting calendar.', 'completed'),
 ];
 
+const finding = (source: string, content: string, confidence = 0.8): ProfileStreamEvent => ({
+    type: 'finding',
+    source,
+    item: { content, category: 'profile', context: 'global', confidence, _source_name: source },
+});
+
+const DISCOVERY_SO_FAR: ProfileStreamEvent[] = [
+    { type: 'log', message: 'Scanning Installed applications...' },
+    finding('installed_apps', 'Uses Visual Studio Code, Firefox and Blender'),
+    { type: 'log', message: '  Found 1 item(s)' },
+    { type: 'log', message: 'Scanning Git repositories...' },
+    finding('git_repos', 'Works in C:\\Users\\dana\\source\\gaia-notes and 3 other repositories', 0.9),
+];
+
+const DISCOVERY_DONE: ProfileScript = {
+    events: [
+        ...DISCOVERY_SO_FAR,
+        finding('browser_bookmarks', 'Bookmarks cooking blogs and Calgary transit pages', 0.6),
+        finding('shell_config', 'Uses PowerShell 7 with a custom prompt', 0.7),
+        { type: 'done', total: 4 },
+    ],
+};
+
+const INSIGHTS_DONE: ProfileScript = {
+    events: [
+        { type: 'log', message: 'Calling local LLM (Gemma-4-E4B-it-GGUF) for insights (this may take ~30s)...' },
+        { type: 'insight', item: { content: 'Primarily a Python developer with a strong AI focus', confidence: 0.9, domain: 'work' } },
+        { type: 'insight', item: { content: 'Enjoys 3D modeling as a hobby', confidence: 0.6, domain: 'personal' } },
+        { type: 'done', total: 2 },
+    ],
+};
+
+const PROFILE_SCRIPTS: Partial<Record<MemoryScene, { discovery?: ProfileScript; inference?: ProfileScript }>> = {
+    profileScanning: { discovery: { events: DISCOVERY_SO_FAR, hang: true } },
+    profileReview: { discovery: DISCOVERY_DONE },
+    profileSaved: { discovery: DISCOVERY_DONE },
+    profileInferring: { inference: { events: INSIGHTS_DONE.events.slice(0, 2), hang: true } },
+    profileInferenceReview: { inference: INSIGHTS_DONE },
+    profileFailed: { discovery: { events: DISCOVERY_SO_FAR.slice(0, 2), error: new GaiaNetworkError('http://192.168.1.20:4200/api/memory/stream-discovery', new Error('Network request failed')) } },
+};
+
+/** The Profile setup state a scene starts in: which card runs on its own, and whether the result is saved. */
+export function profileSceneStart(scene: MemoryScene): { kind: 'discovery' | 'inference'; save?: boolean } | null {
+    if (scene === 'profileScanning' || scene === 'profileReview' || scene === 'profileFailed') return { kind: 'discovery' };
+    if (scene === 'profileSaved') return { kind: 'discovery', save: true };
+    if (scene === 'profileInferring' || scene === 'profileInferenceReview') return { kind: 'inference' };
+    return null;
+}
+
 /** A fake PC for the dev gallery route, one per state the screen has to show. */
 export function memoryScene(scene: MemoryScene): GaiaClient {
     const empty = scene === 'statsEmpty';
     const client = createFakeClient({
-        memorySettings: { memory_enabled: scene !== 'off', mcp_memory_enabled: false, system_discovery_consent: true },
+        profileStreams: PROFILE_SCRIPTS[scene] ?? { discovery: DISCOVERY_DONE, inference: INSIGHTS_DONE },
+        memorySettings: { memory_enabled: scene !== 'off' && scene !== 'profileOff', mcp_memory_enabled: false, system_discovery_consent: true },
         memoryStats: scene === 'failed' ? [new GaiaApiError(503, 'The backend is not running')] : [empty ? EMPTY_MEMORY_STATS : SAMPLE_MEMORY_STATS],
         memoryActivity: (days) => (empty ? [] : sampleActivity(days)),
         memoryTools: empty ? [] : scene === 'statsManyTools' ? MANY_TOOLS : SAMPLE_TOOLS,

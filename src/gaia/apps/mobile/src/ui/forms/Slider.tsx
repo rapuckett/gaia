@@ -20,6 +20,8 @@ export interface SliderProps {
     max?: number;
     step?: number;
     label?: string;
+    /** The accessible name when no visible `label` is drawn. */
+    accessibilityLabel?: string;
     /** The text shown beside the label, e.g. `${v}%`. Defaults to the number. */
     formatValue?: (value: number) => string;
     disabled?: boolean;
@@ -28,7 +30,7 @@ export interface SliderProps {
 
 const THUMB = 28;
 
-export function Slider({ value, onChange, onChangeEnd, min = 0, max = 100, step = 1, label, formatValue, disabled, testID }: SliderProps) {
+export function Slider({ value, onChange, onChangeEnd, min = 0, max = 100, step = 1, label, accessibilityLabel, formatValue, disabled, testID }: SliderProps) {
     const { colors, radius } = useTheme();
     const rtl = useDirection() === 'rtl';
     const [width, setWidth] = useState(0);
@@ -84,7 +86,7 @@ export function Slider({ value, onChange, onChangeEnd, min = 0, max = 100, step 
                 <View
                     accessible
                     accessibilityRole="adjustable"
-                    accessibilityLabel={label}
+                    accessibilityLabel={accessibilityLabel ?? label}
                     accessibilityValue={{ min, max, now: value, text }}
                     accessibilityState={{ disabled: !!disabled }}
                     accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}
