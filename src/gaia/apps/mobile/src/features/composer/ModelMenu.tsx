@@ -15,6 +15,7 @@ import { describeError, useT } from '@/i18n/useT';
 import { Button, Divider, Icon, IconButton, ListRow, Ltr, Notice, Row, Sheet, Spinner, Stack, StatusDot, Text } from '@/ui';
 import { Check, Download, Info, KeyRound } from '@/ui/icons';
 
+import { missedPoll, newStartWatch } from './downloadStart.core';
 import { modelDetails } from './modelDetails';
 
 /** The id without its provider prefix or catalogue path, when the PC gave no friendly name. */
@@ -58,6 +59,7 @@ export function ModelMenu({ open, onClose, turnRunning, queued, onQueue, switchE
     // The row whose facts are open; a phone has no hover, so each row has an info button.
     const [infoRow, setInfoRow] = useState<string | null>(initialInfoRow ?? null);
     const pickAfterDownload = useRef<string | null>(null);
+    const startWatch = useRef(newStartWatch());
     const [wasOpen, setWasOpen] = useState(open);
     const current = queued ?? active?.model;
     const switchingTo = select.isPending ? select.variables : forceSwitching;
@@ -91,7 +93,8 @@ export function ModelMenu({ open, onClose, turnRunning, queued, onQueue, switchE
     // A model picked before it was on the PC is switched to once its download ends.
     const models = local.data?.models;
     useEffect(() => {
-        if (!pickAfterDownload.current || !models) return;
+        // Until the request answers, the row still reads "not downloaded".
+        if (!pickAfterDownload.current || !models || download.isPending) return;
         const picked = pickAfterDownload.current;
         const m = models.find((x) => x.id === picked);
         if (!m) {
@@ -99,7 +102,10 @@ export function ModelMenu({ open, onClose, turnRunning, queued, onQueue, switchE
             onSwitchError(t('modelMenu.modelGone', { model: picked }));
             return;
         }
-        if (isDownloading(m)) return;
+        if (isDownloading(m)) {
+            startWatch.current.polls = 0;
+            return;
+        }
         if (m.download_progress?.state === 'error') {
             pickAfterDownload.current = null;
             onSwitchError(t('modelMenu.downloadFailed', { model: modelLabel(m), message: m.download_progress.message ?? '' }));
@@ -107,17 +113,26 @@ export function ModelMenu({ open, onClose, turnRunning, queued, onQueue, switchE
             pickAfterDownload.current = null;
             onSwitchError(null);
             choose(m.id, modelLabel(m));
+        } else if (missedPoll(startWatch.current, local.dataUpdatedAt)) {
+            pickAfterDownload.current = null;
+            onSwitchError(t('modelMenu.downloadNeverStarted', { name: modelLabel(m) }));
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [models]);
+    }, [models, local.dataUpdatedAt, download.isPending]);
 
     const startDownload = (m: ProviderModel, pick: boolean) => {
         setAskDownload(null);
         setError(null);
         onSwitchError(null);
-        if (pick) pickAfterDownload.current = m.id;
+        if (pick) {
+            pickAfterDownload.current = m.id;
+            startWatch.current = newStartWatch();
+        }
         download.mutate(m.id, {
-            onError: (err) => setError(describeError(err, t)),
+            onError: (err) => {
+                pickAfterDownload.current = null;
+                setError(describeError(err, t));
+            },
         });
     };
 
