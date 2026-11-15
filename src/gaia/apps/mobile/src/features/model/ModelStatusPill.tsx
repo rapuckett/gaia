@@ -29,15 +29,19 @@ export function ModelStatusPill({ onOpenSettings }: ModelStatusPillProps) {
     const [open, setOpen] = useState(false);
     const { data } = useLocalModelStatus(open);
     const pill = pillText(data, t);
+    const place = !pill.remote && pill.name ? t('modelStatus.local') : null;
     return (
         <>
             <Stack paddingX="lg" paddingY="sm">
                 <Pressable accessibilityLabel={pill.aria} onPress={() => setOpen(true)} testID="model-status-pill">
                     <Row gap="sm">
-                        <Icon icon={pill.remote ? Cloud : Cpu} size="sm" />
-                        <Text role="label" numberOfLines={1}>
-                            {pill.text}
-                        </Text>
+                        <Icon icon={pill.remote ? Cloud : Cpu} size="sm" tone="secondary" />
+                        <Stack flex={1}>
+                            {place ? <Text role="caption" tone="muted" numberOfLines={1}>{place}</Text> : null}
+                            <Text role="label" tone="secondary" numberOfLines={1} dir="auto">
+                                {pill.name ?? pill.text}
+                            </Text>
+                        </Stack>
                         {data && !pill.remote ? (
                             <StatusDot tone={DOT_TONE[data.state]} label={t(`modelStatus.state.${data.state}`)} />
                         ) : null}

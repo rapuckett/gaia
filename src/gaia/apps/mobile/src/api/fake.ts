@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import type {
+    AgentCapabilities,
     AgentInfo,
     AgentMcpServer,
     ConnectorListEntry,
@@ -61,6 +62,8 @@ export interface FakeClientData {
     /** Activations by connector id, then namespaced agent id. */
     activations?: Record<string, Record<string, boolean>>;
     agentMcps?: AgentMcpServer[];
+    /** Makes uploadFile reject, as a refused file does. */
+    uploadError?: GaiaApiError;
     /** What getContextUsage answers. */
     contextUsage?: ContextUsageResult;
     /** What getFollowUpOutcome answers; a function may throw to script a 409. */
@@ -95,6 +98,8 @@ export interface FakeClientData {
     /** What detectLemonade answers; an Error is thrown. */
     lemonadeDetect?: { found: LemonadeFound | null; unchecked?: string[] } | Error;
     documents?: DocumentListResponse;
+    /** What getCapabilities answers, by chat; a chat not listed has no agent running (409). */
+    capabilities?: Record<string, AgentCapabilities>;
 }
 
 export interface FakeGaiaClient extends GaiaClient {
@@ -111,9 +116,12 @@ export interface FakeGaiaClient extends GaiaClient {
     readonly scheduleActions: { action: 'pause' | 'resume' | 'run' | 'delete'; name: string }[];
     readonly followUps: { sessionId: string; text: string }[];
     readonly restarts: { confirm: boolean }[];
+    /** The files uploadFile took, in order. */
+    readonly uploads: { name: string; size: number }[];
     readonly downloads: { modelId: string; acknowledgeLowDisk: boolean }[];
     readonly setupStarts: { skipChatModel: boolean; gaiaLemonade: boolean; upgradeEmbedded: boolean; serverOnly: boolean }[];
     readonly detached: { sessionId: string; docId: string }[];
+    readonly capabilityReads: string[];
 }
 
 export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
@@ -134,6 +142,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
     const grants: Record<string, Record<string, string[]>> = cloneNested(data.grants);
     const activations: Record<string, Record<string, boolean>> = cloneNested(data.activations);
     const restarts: FakeGaiaClient['restarts'] = [];
+    const uploads: FakeGaiaClient['uploads'] = [];
     const downloads: FakeGaiaClient['downloads'] = [];
     const schedules = [...(data.schedules ?? [])];
     const scheduleActions: FakeGaiaClient['scheduleActions'] = [];
@@ -153,6 +162,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         return item;
     };
     const detached: FakeGaiaClient['detached'] = [];
+    const capabilityReads: string[] = [];
 
     function findSession(sessionId: string): Session {
         const session = sessions.find((s) => s.id === sessionId);
@@ -182,9 +192,11 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         scheduleActions,
         followUps,
         restarts,
+        uploads,
         downloads,
         setupStarts,
         detached,
+        capabilityReads,
         async health(): Promise<HealthResponse> {
             return { status: 'ok', service: 'gaia-agent-ui' };
         },
@@ -209,6 +221,11 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             };
             sessions.unshift(session);
             return session;
+        },
+        async uploadFile(file, name) {
+            if (data.uploadError) throw data.uploadError;
+            uploads.push({ name, size: file.size });
+            return { filename: name, original_name: name, url: `/api/files/uploads/${name}`, size: file.size, content_type: file.type, is_image: file.type.startsWith('image/') };
         },
         async getContextUsage() {
             return data.contextUsage ?? { available: false, reason: 'Measured once GAIA has answered in this chat.' };
@@ -420,6 +437,12 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         },
         async listDocuments() {
             return data.documents ?? { documents: [], total: 0, total_chunks: 0, total_size_bytes: 0 };
+        },
+        async getCapabilities(sessionId) {
+            capabilityReads.push(sessionId);
+            const found = data.capabilities?.[sessionId];
+            if (!found) throw new GaiaApiError(409, "This chat's agent isn't running yet.");
+            return found;
         },
         async getSystemStatus() {
             if (!data.status) throw new GaiaApiError(503, 'This fake client was given no system status.');

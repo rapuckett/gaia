@@ -9,6 +9,10 @@ import { useT } from '@/i18n/useT';
 import { Button, IconButton, Notice, Row, Stack, TextField } from '@/ui';
 import { ArrowUp, Square } from '@/ui/icons';
 
+import { AttachButton } from './AttachButton';
+import { AttachmentChips } from './AttachmentChips';
+import type { Attachments } from './useAttachments';
+
 export interface ComposerProps {
     /** Give `value` and `onChange` together to control the text; leave both out to let the composer keep it. */
     value?: string;
@@ -26,6 +30,8 @@ export interface ComposerProps {
     answering?: boolean;
     /** The chat is being created: the text stays editable and Send waits. */
     starting?: boolean;
+    /** Files attached to the message: the + button, a chip each, and their links go out with the text. */
+    attachments?: Attachments;
     leftControls?: ReactNode;
     rightControls?: ReactNode;
 }
@@ -43,6 +49,7 @@ export function Composer({
     answering = false,
     disabledReason,
     starting = false,
+    attachments,
     leftControls,
     rightControls,
 }: ComposerProps) {
@@ -60,13 +67,19 @@ export function Composer({
     };
 
     const message = text.trim();
-    const tooLong = message.length > MAX_MESSAGE_CHARS;
-    const canSend = !disabledReason && !starting && message.length > 0 && !tooLong;
+    // What goes out is the text plus a link for each uploaded file.
+    const sent = attachments ? attachments.compose(message) : message;
+    const tooLong = sent.length > MAX_MESSAGE_CHARS;
+    const hasContent = message.length > 0 || !!attachments?.hasUploaded;
+    const canSend = !disabledReason && !starting && !attachments?.uploading && hasContent && !tooLong;
 
     // Clears without blurring, so the keyboard stays up for the next message.
     const send = () => {
         if (!canSend) return;
-        if (onSend(message) !== false) setText('');
+        if (onSend(sent) !== false) {
+            setText('');
+            attachments?.clear();
+        }
     };
 
     const stop = () => {
@@ -83,13 +96,14 @@ export function Composer({
                 <Notice
                     tone="danger"
                     title={t('composer.tooLong', {
-                        sent: message.length.toLocaleString(),
+                        sent: sent.length.toLocaleString(),
                         max: MAX_MESSAGE_CHARS.toLocaleString(),
                     })}
                     message={t('composer.tooLongHint')}
                     testID="composer-too-long"
                 />
             ) : null}
+            {attachments ? <AttachmentChips attachments={attachments} /> : null}
             <TextField
                 value={text}
                 onChangeText={setText}
@@ -103,6 +117,7 @@ export function Composer({
             />
             <Row gap="sm" align="center" justify="between">
                 <Row gap="sm" align="center" flex={1}>
+                    {attachments ? <AttachButton onPick={attachments.add} disabled={!!disabledReason} /> : null}
                     {leftControls}
                 </Row>
                 <Row gap="sm" align="center">

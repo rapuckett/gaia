@@ -3,23 +3,8 @@
   "compilerOptions": {
     "strict": true,
     "jsx": "react-jsx",
-    "types": [
-      "jest",
-      "node",
-      "expo/types"
-    ],
-    "paths": {
-      "@/*": [
-        "./src/*"
-      ],
-      "@webui/*": [
-        "../webui/src/*"
-      ]
-    }
+    "types": ["jest", "node", "expo/types"],
+    "paths": { "@/*": ["./src/*"], "@webui/*": ["../webui/src/*"] }
   },
-  "include": [
-    "src",
-    "e2e",
-    "app.config.ts"
-  ]
+  "include": ["src", "e2e", "app.config.ts", "expo-env.d.ts", ".expo/types/**/*.ts"]
 }
