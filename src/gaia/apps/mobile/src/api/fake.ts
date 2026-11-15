@@ -54,6 +54,8 @@ import type {
     SetupPlan,
     SetupRunStatus,
     SkillList,
+    FeaturedLibraries,
+    LinkPreview,
     StartScreen,
     StreamEvent,
     SystemStatus,
@@ -141,6 +143,8 @@ export interface FakeClientData {
     /** What getSetupStatus answers. */
     setupStatus?: SetupRunStatus;
     skills?: SkillList;
+    featuredLibraries?: FeaturedLibraries;
+    linkPreview?: (url: string) => LinkPreview;
     resources?: ResourceUsage;
     start?: StartScreen;
     /** What watchSessionEvents streams before it ends; the real stream never ends on its own. */
@@ -583,6 +587,13 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         },
         async listSkills() {
             return { skills: [...(data.skills?.skills ?? [])], invalid: { ...(data.skills?.invalid ?? {}) } };
+        },
+        async listFeaturedSkillLibraries() {
+            return { libraries: [...(data.featuredLibraries?.libraries ?? [])] };
+        },
+        async previewSkillLink(url) {
+            if (!data.linkPreview) throw new GaiaApiError(400, 'This fake client was given no link preview.');
+            return data.linkPreview(url);
         },
         async getMemoryActivity(days) {
             memoryActivityReads.push(days);

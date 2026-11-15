@@ -35,6 +35,8 @@ export interface TextFieldProps {
     /** No border, fill or focus ring, for a field inside a card that draws its own (the message box). */
     bare?: boolean;
     autoFocus?: boolean;
+    /** A web address: the URL keyboard, no autocapitalize or autocorrect. */
+    url?: boolean;
     disabled?: boolean;
     inputRef?: Ref<ComponentRef<typeof TextInput>>;
     accessibilityLabel?: string;
@@ -58,6 +60,7 @@ export function TextField({
     trailing,
     bare,
     autoFocus,
+    url,
     disabled,
     inputRef,
     accessibilityLabel,
@@ -103,6 +106,9 @@ export function TextField({
                 submitBehavior={multiline ? 'newline' : 'blurAndSubmit'}
                 secureTextEntry={secureTextEntry && !revealed}
                 autoFocus={autoFocus}
+                keyboardType={url ? 'url' : undefined}
+                autoCapitalize={url ? 'none' : undefined}
+                autoCorrect={url ? false : undefined}
                 accessibilityLabel={accessibilityLabel ?? label}
                 onFocus={() => setFocused(true)}
                 onBlur={() => setFocused(false)}
