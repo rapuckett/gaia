@@ -5,8 +5,8 @@ import { useEffect, useRef, useState } from 'react';
 
 import { needsOutcome, nextToSend } from '@webui/utils/messageQueue';
 
-import { useAnswerQuestion, useChatStream, useContextUsage, useMessages, useSession } from '@/data';
-import { Composer, ContextMeter, ContextWarning, ModelChip, useAttachments, useComposerQueue, useFollowUpEvents } from '@/features/composer';
+import { useAnswerQuestion, useChatStream, useContextUsage, usePermissionMode, useMessages, useSession } from '@/data';
+import { Composer, ContextMeter, ContextWarning, ModelChip, PermissionChip, useAttachments, useComposerQueue, useFollowUpEvents } from '@/features/composer';
 import { QueuedMessages } from '@/features/composer/QueuedMessages';
 import { describeError, useT } from '@/i18n/useT';
 import { isQuestionGone, questionCardData, resolveTypedAnswer } from '@/features/questions/questionLogic';
@@ -31,6 +31,7 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
     const stream = useChatStream(sessionId);
     const queue = useComposerQueue(sessionId);
     const attachments = useAttachments();
+    const permissionMode = usePermissionMode(sessionId);
     const permission = usePermissionPrompt(sessionId);
     const answer = useAnswerQuestion();
     const followUps = useFollowUpEvents(sessionId, stream.events);
@@ -136,12 +137,15 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
                         onStop={stop}
                         running={busy}
                         attachments={attachments}
+                        leftControls={
+                            <PermissionChip mode={permissionMode.mode ?? 'ask'} onChange={(mode) => permissionMode.set.mutate(mode)} />
+                        }
                         answering={!!question}
                         placeholder={placeholder}
                         rightControls={
                             <>
                                 <ContextMeter usage={context.usage} unavailable={context.unavailable} />
-                                <ModelChip />
+                                <ModelChip turnRunning={busy} />
                             </>
                         }
                     />

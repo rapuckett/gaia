@@ -86,16 +86,14 @@ export function useAttachments(): Attachments {
             // The same file picked twice is one chip; a refused one may be tried again.
             const fresh = files
                 .filter((f) => !current.current.some((p) => p.uri === f.uri && p.status !== 'failed'))
-                .map(
-                    (f): Attachment => ({
-                        id: `attach-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-                        name: f.name,
-                        uri: f.uri,
-                        isImage: !!f.mimeType?.startsWith('image/'),
-                        isMedia: isMediaFile(f.name),
-                        status: 'uploading',
-                    }),
-                );
+                .map((f): Attachment => ({
+                    id: `attach-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+                    name: f.name,
+                    uri: f.uri,
+                    isImage: !!f.mimeType?.startsWith('image/'),
+                    isMedia: isMediaFile(f.name),
+                    status: 'uploading',
+                }));
             if (fresh.length === 0) return;
             setItems((prev) => [...prev.filter((p) => !fresh.some((a) => a.uri === p.uri)), ...fresh]);
             fresh.forEach((a) => void upload(a));
