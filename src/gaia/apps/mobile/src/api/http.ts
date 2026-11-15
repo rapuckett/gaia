@@ -102,7 +102,6 @@ import type {
     ScheduleList,
     ScheduleResults,
     SessionEnvironment,
-    SessionExport,
     SessionList,
     SessionPermissions,
     SessionSearchResponse,
@@ -172,7 +171,6 @@ import {
     sessionDocumentPath,
     sessionDocumentsPath,
     sessionEnvironmentPath,
-    sessionExportPath,
     sessionMessagePath,
     sessionMessagesAndBelowPath,
     sessionMessagesPath,
@@ -654,10 +652,6 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         getCapabilities(sessionId, options) {
             return getJson<AgentCapabilities>(sessionCapabilitiesPath(sessionId), options?.signal);
-        },
-
-        exportSession(sessionId, format, options) {
-            return getJson<SessionExport>(sessionExportPath(sessionId, format), options?.signal);
         },
 
         getEnvironment(sessionId, options) {

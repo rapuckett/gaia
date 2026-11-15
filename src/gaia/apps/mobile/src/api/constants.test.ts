@@ -169,7 +169,6 @@ describe('endpoints', () => {
         sessionEnvironmentFolderRemove: ['POST'],
         sessionEnvironmentInternet: ['PUT'],
         sessionEvents: ['GET'],
-        sessionExport: ['GET'],
         sessionMessage: ['DELETE'],
         sessionMessages: ['GET'],
         sessionMessagesAndBelow: ['DELETE'],

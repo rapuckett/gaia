@@ -1,7 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import type { MessageKey, Say } from '@webui/i18n/registry';
+import type { MessageKey } from '@webui/i18n/registry';
 import { MAX_SESSION_TITLE_CHARS } from '@webui/utils/constants';
 import {
     groupSessionsForList,
@@ -14,10 +14,10 @@ import {
 import { foldText } from '@webui/utils/chatSearch';
 
 import type { Session, SessionSearchResult } from '@/api/client.types';
-import { describeErrorWith } from '@/i18n/useT';
 
 export type { LiveRuns, RowStatus };
 
+type Say = (key: MessageKey, params?: Record<string, string | number>) => string;
 
 export const NO_LIVE_RUNS: LiveRuns = { running: [], queued: [], awaiting: {}, prompting: [] };
 
@@ -153,9 +153,9 @@ export function rowText(row: ChatRow, t: Say): RowText {
     return { status, note, noteFailed: row.failed > 0, aria };
 }
 
-export type RowErrorKind = 'delete' | 'export' | 'rename' | 'pin' | 'unpin' | 'markRead';
+export type RowErrorKind = 'delete' | 'rename' | 'pin' | 'unpin' | 'markRead';
 
-const ROW_ERROR_KEY: Record<Exclude<RowErrorKind, 'export' | 'markRead'>, MessageKey> = {
+const ROW_ERROR_KEY: Record<Exclude<RowErrorKind, 'markRead'>, MessageKey> = {
     delete: 'sidebar.deleteFailed',
     rename: 'sidebar.renameFailed',
     pin: 'sidebar.pinFailed',
@@ -166,7 +166,6 @@ const ROW_ERROR_KEY: Record<Exclude<RowErrorKind, 'export' | 'markRead'>, Messag
 export function rowErrorMessage(kind: RowErrorKind, error: unknown, t: Say): string {
     const cause = error instanceof Error ? error.message : String(error);
     if (kind === 'markRead') return t('sidebar.markReadFailed', { error: cause });
-    if (kind === 'export') return t('mobileApp.export.failed', { error: describeErrorWith(error, t) });
     return error instanceof Error && cause ? cause : t(ROW_ERROR_KEY[kind]);
 }
 
@@ -180,11 +179,11 @@ export function searchedSessions(
     return sessions.filter((s) => foldText(s.title).includes(needle) || hits.has(s.id));
 }
 
-export type RowAction = 'rename' | 'pin' | 'unpin' | 'exportMarkdown' | 'exportJson' | 'delete';
+export type RowAction = 'rename' | 'pin' | 'unpin' | 'delete';
 
 /** The "⋯" menu's items, in the web menu's order; a pinned chat offers Unpin. */
 export function rowActions(row: Pick<ChatRow, 'pinned'>): RowAction[] {
-    return ['rename', row.pinned ? 'unpin' : 'pin', 'exportMarkdown', 'exportJson', 'delete'];
+    return ['rename', row.pinned ? 'unpin' : 'pin', 'delete'];
 }
 
 /** What a rename saves: the trimmed, capped title, or null when there is nothing to change. */

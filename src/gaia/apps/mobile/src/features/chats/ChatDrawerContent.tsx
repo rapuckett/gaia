@@ -32,7 +32,6 @@ import {
 import { Ellipsis, EyeOff, Monitor, Plus, X } from '@/ui/icons';
 
 import { ChatRowSheets, type RowSheet } from './ChatRowSheets';
-import { useExportChat } from './exportChat';
 import { declaredNavEntries, type NavEntry } from './navEntries';
 import { SearchResultRow } from './SearchResultRow';
 import { useShowAutomated } from './showAutomated';
@@ -130,7 +129,6 @@ export function ChatDrawerContent({ activeId, onSelect, onClose, onNewChat, onPc
     const router = useRouter();
     const rename = useRenameSession();
     const setPinned = useSetPinned();
-    const exportChat = useExportChat();
     const remove = useDeleteSession(activeId, () => router.replace('/'));
     const markRead = useMarkRead();
     const mutateRead = markRead.mutate;
@@ -210,7 +208,6 @@ export function ChatDrawerContent({ activeId, onSelect, onClose, onNewChat, onPc
                 onRename={(id, title) => rename.mutate({ sessionId: id, title }, outcome('rename'))}
                 onSetPinned={(id, pinned) => setPinned.mutate({ id, pinned }, outcome(pinned ? 'pin' : 'unpin'))}
                 onDelete={(id) => remove.mutate(id, outcome('delete'))}
-                onExport={(row, format) => exportChat.mutate({ sessionId: row.id, title: row.title, format }, outcome('export'))}
             />
             {hiddenCount > 0 ? (
                 <Stack paddingX="lg" paddingY="sm">

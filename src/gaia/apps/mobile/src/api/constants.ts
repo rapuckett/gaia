@@ -85,7 +85,6 @@ export const ENDPOINTS = {
     sessionEnvironmentFolderRemove: '/api/sessions/{session_id}/environment/folders/remove',
     sessionEnvironmentInternet: '/api/sessions/{session_id}/environment/internet',
     sessionEvents: '/api/sessions/events',
-    sessionExport: '/api/sessions/{session_id}/export',
     sessionMessage: '/api/sessions/{session_id}/messages/{message_id}',
     sessionMessages: '/api/sessions/{session_id}/messages',
     sessionMessagesAndBelow: '/api/sessions/{session_id}/messages/{message_id}/and-below',
@@ -303,10 +302,6 @@ export function sessionDocumentsPath(sessionId: string): string {
 
 export function sessionCapabilitiesPath(sessionId: string): string {
     return ENDPOINTS.sessionCapabilities.replace('{session_id}', encodeURIComponent(sessionId));
-}
-
-export function sessionExportPath(sessionId: string, format: 'markdown' | 'json'): string {
-    return `${ENDPOINTS.sessionExport.replace('{session_id}', encodeURIComponent(sessionId))}?format=${format}`;
 }
 
 export function sessionEnvironmentPath(sessionId: string, part?: 'folderRemove' | 'internet'): string {
