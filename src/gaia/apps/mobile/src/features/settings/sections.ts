@@ -8,6 +8,7 @@ import { Bell, Brain, Clock, Cpu, Info, ListChecks, Lock, MessageSquare, Plug, S
 
 import General from './panes/General';
 import Model from './panes/Model';
+import Permissions from './panes/Permissions';
 import Placeholder from './panes/Placeholder';
 
 /** The web's settings sections, in its nav order; `voice` is "Read aloud". */
@@ -38,7 +39,7 @@ export const SETTINGS_SECTIONS: Record<SectionId, SettingsSectionEntry> = {
     general: { titleKey: 'settings.section.general', icon: SlidersHorizontal, pane: General },
     setup: { titleKey: 'settings.section.setup', icon: ListChecks, pane: Placeholder },
     model: { titleKey: 'settings.section.model', icon: Cpu, pane: Model },
-    permissions: { titleKey: 'settings.section.permissions', icon: ShieldQuestion, pane: Placeholder },
+    permissions: { titleKey: 'settings.section.permissions', icon: ShieldQuestion, pane: Permissions },
     skills: { titleKey: 'settings.section.skills', icon: Sparkles, pane: Placeholder },
     connectors: { titleKey: 'settings.section.connectors', icon: Plug, pane: Placeholder },
     messaging: { titleKey: 'settings.section.messaging', icon: MessageSquare, pane: Placeholder },
