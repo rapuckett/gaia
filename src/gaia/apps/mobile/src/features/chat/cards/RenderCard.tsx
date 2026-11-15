@@ -11,6 +11,7 @@ import { AudioCard } from './AudioCard';
 import { CardErrorBoundary } from './CardErrorBoundary';
 import { CalculatorCard } from './CalculatorCard';
 import { DiffCard } from './DiffCard';
+import { EmailPreScanCard } from './EmailPreScanCard';
 import { GuideCard } from './GuideCard';
 import { ImageCard } from './ImageCard';
 import { KeyValueCard } from './KeyValueCard';
@@ -23,6 +24,7 @@ const CARD_REGISTRY: Record<string, ComponentType<{ data: unknown }>> = {
     audio: AudioCard,
     calculator: CalculatorCard,
     diff: DiffCard,
+    email_pre_scan: EmailPreScanCard,
     guide: GuideCard,
     image: ImageCard,
     key_value: KeyValueCard,
