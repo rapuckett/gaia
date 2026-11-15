@@ -2321,6 +2321,7 @@ for (const locale of ['ar', 'en']) {
         await openDevices(page);
         await page.locator('.devices-pane .btn-primary').first().click();
         await expect(page.locator('.devices-qr img')).toBeVisible();
+        await expect(page.locator('.devices-pairing .btn-secondary').first()).toBeVisible();
         await shot(page, `devices-${locale}-pairing`);
         expect(await audit(page)).toEqual([]);
     });
