@@ -4,12 +4,12 @@
 import { getLocales } from 'expo-localization';
 
 import { DEFAULT_LOCALE, getLocale, isLocaleCode, type Say } from '@webui/i18n/registry';
-import { translator, type Translate } from '@webui/i18n/translator';
+import { dateLocale, translator, type Translate } from '@webui/i18n/translator';
 
 import { GaiaError, GaiaNetworkError } from '@/api/errors';
 import { useLocaleStore } from '@/state/locale';
 
-export { translator, type Translate };
+export { dateLocale, translator, type Translate };
 
 export function deviceLocaleCode(): string {
     const code = getLocales()[0]?.languageCode;

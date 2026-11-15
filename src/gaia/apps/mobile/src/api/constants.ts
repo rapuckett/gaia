@@ -22,18 +22,28 @@ export const ENDPOINTS = {
     cloudPrices: '/api/spending/prices/{provider}',
     lemonadeDetect: '/api/lemonade/detect',
     lemonadeTarget: '/api/lemonade/target',
+    localCustomModel: '/api/providers/local/custom',
+    localCustomModelCheck: '/api/providers/local/custom/check',
+    localCustomModelItem: '/api/providers/local/custom/{model_id}',
     localModelContext: '/api/providers/local/context',
     localModelRestart: '/api/providers/local/restart',
     localModelStatus: '/api/providers/local/status',
+    mcpStatus: '/api/mcp/status',
     memoryActivity: '/api/memory/activity',
+    memoryAll: '/api/memory/all',
     memoryConsolidate: '/api/memory/consolidate',
+    memoryConversation: '/api/memory/conversations/{session_id}',
+    memoryConversations: '/api/memory/conversations',
+    memoryConversationsSearch: '/api/memory/conversations/search',
     memoryEmbeddingCoverage: '/api/memory/embedding-coverage',
+    memoryEntities: '/api/memory/entities',
     memoryKnowledge: '/api/memory/knowledge',
     memoryKnowledgeItem: '/api/memory/knowledge/{knowledge_id}',
     memoryRebuildEmbeddings: '/api/memory/rebuild-embeddings',
     memoryRebuildFts: '/api/memory/rebuild-fts',
     memoryReconcile: '/api/memory/reconcile',
     memoryRefreshSystemContext: '/api/memory/refresh-system-context',
+    memoryReinitialize: '/api/memory/reinitialize',
     memorySettings: '/api/memory/settings',
     memoryStats: '/api/memory/stats',
     memoryTools: '/api/memory/tools',
@@ -43,6 +53,7 @@ export const ENDPOINTS = {
     providerConnect: '/api/providers/{provider}/connect',
     providerModels: '/api/providers/{provider}/models',
     providersActive: '/api/providers/active',
+    providersKeyStoreRetry: '/api/providers/key-store/retry',
     providersSelect: '/api/providers/select',
     schedule: '/api/schedules/{name:path}',
     scheduleResults: '/api/schedules/{name:path}/results',
@@ -82,6 +93,9 @@ export const ENDPOINTS = {
     speech: '/api/speech',
     speechModel: '/api/speech/model',
     speechSettings: '/api/speech/settings',
+    spending: '/api/spending',
+    spendingAllowMonth: '/api/spending/allow-month',
+    spendingLimit: '/api/spending/limit',
     chatSend: '/api/chat/send',
     chatAttach: '/api/chat/attach',
     chatCancel: '/api/chat/cancel',
@@ -102,6 +116,9 @@ export const ENDPOINTS = {
     connectorGrants: '/api/connectors/{connector_id}/grants',
     connectors: '/api/connectors',
     connectorsAgentMcps: '/api/connectors/agent-mcps',
+    systemDownloadModel: '/api/system/download-model',
+    systemLoadModel: '/api/system/load-model',
+    connectorsEvents: '/api/connectors/events',
     systemResources: '/api/system/resources',
     systemStatus: '/api/system/status',
     document: '/api/documents/{doc_id}',
@@ -153,6 +170,18 @@ export function goalPath(goalId: string, action?: 'approve' | 'cancel' | 'reject
 
 export function memoryActivityPath(days: number): string {
     return `${ENDPOINTS.memoryActivity}?days=${days}`;
+}
+
+export function memoryConversationPath(sessionId: string): string {
+    return ENDPOINTS.memoryConversation.replace('{session_id}', encodeURIComponent(sessionId));
+}
+
+export function memoryConversationsPath(limit: number): string {
+    return `${ENDPOINTS.memoryConversations}?limit=${limit}`;
+}
+
+export function memoryConversationsSearchPath(query: string, limit: number): string {
+    return `${ENDPOINTS.memoryConversationsSearch}?query=${encodeURIComponent(query)}&limit=${limit}`;
 }
 
 export function memoryKnowledgeItemPath(knowledgeId: string): string {
@@ -214,6 +243,10 @@ export function cloudPricesPath(provider: string): string {
 
 export function providerModelsPath(provider: string): string {
     return ENDPOINTS.providerModels.replace('{provider}', encodeURIComponent(provider));
+}
+
+export function localCustomModelPath(model: string): string {
+    return ENDPOINTS.localCustomModelItem.replace('{model_id}', encodeURIComponent(model));
 }
 
 export function chatContextPath(sessionId: string): string {
@@ -289,6 +322,8 @@ export const QUEUED_IDLE_MS = 10 * 60_000;
 /** The backend may hold a send for 60 s while another chat has the model, then answers 429. */
 export const SEND_HEADER_TIMEOUT_MS = 90_000;
 /** The chat-list event stream sends a keepalive every 30 s. */
+/** How long a disconnect waits for the PC to report whether the provider confirmed the revoke. */
+export const CONNECTOR_REVOKE_OUTCOME_MS = 3_000;
 export const SESSION_EVENTS_IDLE_MS = 90_000;
 /** An attach replays at once; a slower answer means the backend is stuck or unreachable. */
 export const ATTACH_HEADER_TIMEOUT_MS = 30_000;
@@ -315,6 +350,8 @@ export const MODEL_STATUS_POLL_MS = 15_000;
 export const DOWNLOAD_POLL_MS = 1_000;
 export const DOWNLOAD_NO_ROW_LIMIT = 15;
 export const DOWNLOAD_MISS_LIMIT = 5;
+/** How often a Reconnect waiting on the PC's OS key-store prompt asks again; the web UI's CONNECT_RETRY_MS. */
+export const CONNECT_RETRY_MS = 2_000;
 /** The longest the model-needed check may take before the job goes ahead without it. */
 export const MODEL_NEED_CHECK_LIMIT_MS = 8_000;
 /** What the PC answers a log request from a phone; the model server log opens only on the PC (security.py). */
@@ -326,6 +363,8 @@ export const RESOURCE_RETRY_MS = 5_000;
 export const CAPABILITIES_POLL_MS = 2_000;
 /** How often to re-read the PC's status while it is still starting or warming up. */
 export const STATUS_POLL_MS = 5_000;
+/** How often a healthy PC's status is re-read, so an idle app notices the PC going away. */
+export const STATUS_IDLE_POLL_MS = 30_000;
 
 /** Stream events that report the agent's activity rather than the answer's text. */
 export const AGENT_EVENT_TYPES: ReadonlySet<string> = new Set([

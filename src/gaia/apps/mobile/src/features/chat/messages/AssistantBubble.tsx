@@ -1,6 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
+import { cardsFromSteps } from '@webui/utils/renderCards.core';
 import { cleanToolCallContent } from '@webui/utils/toolCallContent';
 import { SERVER_CANCELLED_TEXT, splitCutOff } from '@webui/utils/turnEnding.core';
 
@@ -16,6 +17,7 @@ import { readAloudId } from '@/features/audio/useChatReadAloud';
 import { ActivityTimeline } from '../activity/ActivityTimeline';
 import { AnswerFooter } from '../activity/AnswerFooter';
 import { savedActivity } from '../activity/savedActivity';
+import { AnswerCards } from '../cards/RenderCard';
 import { CutOffNote, StoppedNote } from '../EndingNotes';
 import { Markdown } from '../markdown/Markdown';
 import { SavedReplyErrors } from '../ReplyErrors';
@@ -36,6 +38,7 @@ export function AssistantBubble({ message, streaming = false, latencyMs, context
     const cancelled = message.content.trim() === SERVER_CANCELLED_TEXT;
     const text = cancelled ? '' : cutOff ? cutOff.body : message.content;
     const activity = useMemo(() => savedActivity(message), [message]);
+    const cards = message.cards ?? cardsFromSteps(message.agentSteps);
     const spoken = useMemo(() => cleanToolCallContent(text, false), [text]);
     const speakId = readAloudId(message);
     const readAloud = useReadAloud(speakId, spoken);
@@ -50,6 +53,7 @@ export function AssistantBubble({ message, streaming = false, latencyMs, context
     return (
         <Stack paddingX="lg" paddingY="xs">
             {activity.steps.length > 0 ? <ActivityTimeline steps={activity.steps} answer={text} /> : null}
+            <AnswerCards cards={cards} />
             <Pressable onLongPress={cancelled ? undefined : actions.openSheet} accessible={false} minSize={0}>
                 {text ? <Markdown text={text} streaming={streaming} /> : null}
             </Pressable>
