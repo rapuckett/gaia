@@ -9,6 +9,7 @@ import { useMcpStatus, useSettings, useUpdateSettings } from '@/data';
 import { describeError, useT } from '@/i18n/useT';
 import { Badge, Card, Disclosure, Ltr, Notice, Row, Spinner, Stack, Switch, Text } from '@/ui';
 
+import { isPcRefusal, PcOnlyNotice } from '../../PcOnlyNotice';
 import { SettingsAnchor } from '../../targets';
 import { CustomModel } from './CustomModel';
 import { ActionError, RawDetails } from './errors';
@@ -91,6 +92,8 @@ function CustomModelCard() {
                 <CustomModel settings={settings.data} />
             ) : settings.isPending ? (
                 <Spinner />
+            ) : isPcRefusal(settings.error) ? (
+                <PcOnlyNotice testID="advanced-custom-pc-only" />
             ) : (
                 <Stack gap="sm">
                     <Notice tone="warning" message={t('mobileApp.settings.modelActionFailed')} />

@@ -6,6 +6,7 @@ import { Image } from 'react-native';
 
 import { isImagePayload } from '@webui/utils/renderCards.core';
 
+import { PcOnlyNotice } from '@/features/settings/PcOnlyNotice';
 import { useT } from '@/i18n/useT';
 import { Notice, Pressable, Skeleton, Stack, Surface, Text } from '@/ui';
 
@@ -27,6 +28,7 @@ function CardImage({ src, alt, caption }: { src: string; alt?: string; caption?:
             (e) => console.error('Reading the image size failed', e),
         );
     }, [uri]);
+    if (state.status === 'failed' && state.refused) return <PcOnlyNotice testID="card-image-pc-only" />;
     if (state.status === 'failed') {
         return <Notice tone="danger" title={t('mobileApp.render.imageFailed')} message={state.error} testID="card-image-failed" />;
     }

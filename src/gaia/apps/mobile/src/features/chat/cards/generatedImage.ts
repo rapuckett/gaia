@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { DATA_IMAGE_RE, parseMediaSrc } from '@webui/utils/renderCards.core';
 
 import { UI_HEADERS } from '@/api/constants';
+import { GaiaApiError } from '@/api/errors';
 import { platformFetch } from '@/platform/fetch';
 import { useConnectionStore } from '@/state/connection';
 
@@ -16,7 +17,7 @@ export interface LoadedImage {
     base64: string;
 }
 
-export type ImageState = { status: 'loading' } | { status: 'failed'; error: string } | { status: 'ready'; image: LoadedImage };
+export type ImageState = { status: 'loading' } | { status: 'failed'; error: string; refused?: boolean } | { status: 'ready'; image: LoadedImage };
 
 const RASTER_MIME = /^image\/(png|jpe?g|gif|webp)$/;
 const MAX_IMAGE_BYTES = 25 * 1024 * 1024;
@@ -36,6 +37,7 @@ function toBase64(bytes: Uint8Array): string {
 export async function fetchGeneratedImage(baseUrl: string, token: string | null | undefined, name: string): Promise<LoadedImage> {
     const url = `${baseUrl.replace(/\/+$/, '')}/api/media/image/${name}`;
     const res = await platformFetch(url, { headers: { ...UI_HEADERS, ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
+    if (res.status === 403) throw new GaiaApiError(403, 'The PC running GAIA refused the image to this phone');
     if (!res.ok) throw new Error(`GAIA answered ${res.status} for the image`);
     const mime = (res.headers.get('content-type') ?? '').split(';')[0].trim().toLowerCase();
     if (!RASTER_MIME.test(mime)) throw new Error(`GAIA sent "${mime || 'no type'}", which isn't a PNG, JPEG, GIF or WebP image`);
@@ -79,7 +81,7 @@ export function useCardImage(src: string): ImageState {
             (image) => live && setLoaded({ key, state: { status: 'ready', image } }),
             (e: unknown) => {
                 console.error(`Loading the image ${name} from ${baseUrl} failed`, e);
-                if (live) setLoaded({ key, state: { status: 'failed', error: e instanceof Error ? e.message : String(e) } });
+                if (live) setLoaded({ key, state: { status: 'failed', error: e instanceof Error ? e.message : String(e), refused: e instanceof GaiaApiError && e.status === 403 } });
             },
         );
         return () => {
