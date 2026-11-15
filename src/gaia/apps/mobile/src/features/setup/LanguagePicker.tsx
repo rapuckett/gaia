@@ -4,6 +4,7 @@
 import { LOCALES, localeOptionLabel } from '@webui/i18n/registry';
 
 import { useLocaleCode, useT } from '@/i18n/useT';
+import { notifyDirectionChange } from '@/state/direction';
 import { useLocaleStore } from '@/state/locale';
 import { Chip, Row, Stack, Text } from '@/ui';
 
@@ -21,7 +22,10 @@ export function LanguagePicker() {
                         key={meta.code}
                         label={localeOptionLabel(meta)}
                         selected={meta.code === current}
-                        onPress={() => setLocale(meta.code)}
+                        onPress={() => {
+                            setLocale(meta.code);
+                            notifyDirectionChange(meta.dir);
+                        }}
                     />
                 ))}
             </Row>
