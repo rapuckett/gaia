@@ -16,7 +16,7 @@ import { RoutingEffects } from '@/features/nav/RoutingEffects';
 import { INITIAL_ROUTE, PERMANENT_DRAWER_MIN_WIDTH } from '@/features/nav/navigation';
 import { installPinnedPairing, PairingGate } from '@/features/pairing';
 import { SetupGate } from '@/features/setup/SetupGate';
-import { useDirection } from '@/i18n/useT';
+import { useDirection, useLocaleCode } from '@/i18n/useT';
 import { applyDirection } from '@/platform/direction';
 import { platformFetch } from '@/platform/fetch';
 import { useConnectionStore } from '@/state/connection';
@@ -35,6 +35,7 @@ const ROUTES = [INITIAL_ROUTE, 'new', 'connectors', 'schedules', 'settings', 'do
 export default function RootLayout() {
     const [queryClient] = useState(() => new QueryClient());
     const dir = useDirection();
+    const lang = useLocaleCode();
     const { width } = useWindowDimensions();
     const connection = useConnectionStore((s) => s.connection);
     const client = useMemo(
@@ -46,8 +47,8 @@ export default function RootLayout() {
 
     // Before the saved pick loads, dir is the phone's and would overwrite the pick's flags.
     useEffect(() => {
-        if (localeLoaded) applyDirection(dir);
-    }, [dir, localeLoaded]);
+        if (localeLoaded) applyDirection(dir, lang);
+    }, [dir, lang, localeLoaded]);
 
     if (!localeLoaded) return null;
 
