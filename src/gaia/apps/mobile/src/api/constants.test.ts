@@ -160,6 +160,8 @@ describe('endpoints', () => {
         connectorGrants: ['GET'],
         connectors: ['GET'],
         connectorsAgentMcps: ['GET'],
+        systemDownloadModel: ['POST'],
+        systemLoadModel: ['POST'],
         systemResources: ['GET'],
         systemStatus: ['GET'],
         document: ['DELETE'],

@@ -639,6 +639,22 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             return getJson<SystemStatus>(ENDPOINTS.systemStatus, options?.signal);
         },
 
+        downloadModel(model, options) {
+            return postJson<{ status: string; model: string }>(
+                ENDPOINTS.systemDownloadModel,
+                { model_name: model, force: options?.force ?? false, load_after: options?.loadAfter ?? false },
+                options?.signal,
+            );
+        },
+
+        loadModel(modelName, force, options) {
+            return postJson<{ status: string; model: string; ctx_size: number }>(
+                ENDPOINTS.systemLoadModel,
+                { model_name: modelName, force },
+                options?.signal,
+            );
+        },
+
         getLocalModelStatus(options) {
             return getJson<LocalModelStatus>(ENDPOINTS.localModelStatus, options?.signal);
         },

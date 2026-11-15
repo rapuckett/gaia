@@ -6,6 +6,7 @@ import type { ComponentType } from 'react';
 import type { LucideIcon } from '@/ui/icons';
 import { Bell, Brain, Clock, Cpu, Info, ListChecks, Lock, MessageSquare, Plug, ShieldQuestion, SlidersHorizontal, Sparkles, Volume2, Wrench } from '@/ui/icons';
 
+import Advanced from './panes/Advanced';
 import General from './panes/General';
 import Model from './panes/Model';
 import Permissions from './panes/Permissions';
@@ -48,7 +49,7 @@ export const SETTINGS_SECTIONS: Record<SectionId, SettingsSectionEntry> = {
     notifications: { titleKey: 'settings.section.notifications', icon: Bell, pane: Placeholder },
     voice: { titleKey: 'settings.section.voice', icon: Volume2, pane: Placeholder },
     privacy: { titleKey: 'settings.section.privacy', icon: Lock, pane: Placeholder },
-    advanced: { titleKey: 'settings.section.advanced', icon: Wrench, pane: Placeholder },
+    advanced: { titleKey: 'settings.section.advanced', icon: Wrench, pane: Advanced },
     about: { titleKey: 'settings.section.about', icon: Info, pane: Placeholder },
 };
 

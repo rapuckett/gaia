@@ -76,6 +76,8 @@ export const ENDPOINTS = {
     connectorGrants: '/api/connectors/{connector_id}/grants',
     connectors: '/api/connectors',
     connectorsAgentMcps: '/api/connectors/agent-mcps',
+    systemDownloadModel: '/api/system/download-model',
+    systemLoadModel: '/api/system/load-model',
     systemResources: '/api/system/resources',
     systemStatus: '/api/system/status',
     document: '/api/documents/{doc_id}',

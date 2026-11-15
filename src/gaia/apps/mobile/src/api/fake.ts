@@ -124,6 +124,8 @@ export interface FakeClientData {
     defaultPermissionMode?: PermissionMode;
     /** Answers the default-mode PUT with the 403 the PC gives a phone. */
     defaultModePcOnly?: boolean;
+    /** Answers downloadModel and loadModel with that error, as a PC that refuses the phone does. */
+    modelActionError?: GaiaApiError;
     /** What getContextUsage answers. */
     contextUsage?: ContextUsageResult;
     /** What getChatPerformance answers. */
@@ -207,6 +209,8 @@ export interface FakeGaiaClient extends GaiaClient {
     /** The files uploadFile took, in order. */
     readonly uploads: { name: string; size: number }[];
     readonly downloads: { modelId: string; acknowledgeLowDisk: boolean }[];
+    readonly modelDownloads: { modelName: string; force: boolean; loadAfter: boolean }[];
+    readonly modelLoads: { modelName: string; force: boolean }[];
     readonly backendSets: string[];
     readonly documentActions: { action: DocumentAction; docId: string }[];
     readonly setupStarts: { skipChatModel: boolean; gaiaLemonade: boolean; upgradeEmbedded: boolean; serverOnly: boolean }[];
@@ -242,6 +246,8 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
     const contextSets: FakeGaiaClient['contextSets'] = [];
     const uploads: FakeGaiaClient['uploads'] = [];
     const downloads: FakeGaiaClient['downloads'] = [];
+    const modelDownloads: FakeGaiaClient['modelDownloads'] = [];
+    const modelLoads: FakeGaiaClient['modelLoads'] = [];
     const schedules = [...(data.schedules ?? [])];
     const scheduleActions: FakeGaiaClient['scheduleActions'] = [];
     const documentActions: FakeGaiaClient['documentActions'] = [];
@@ -319,6 +325,8 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         contextSets,
         uploads,
         downloads,
+        modelDownloads,
+        modelLoads,
         setupStarts,
         backendSets,
         detached,
@@ -712,6 +720,16 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         async getSystemStatus() {
             if (!data.status) throw new GaiaApiError(503, 'This fake client was given no system status.');
             return data.status;
+        },
+        async downloadModel(model, options) {
+            if (data.modelActionError) throw data.modelActionError;
+            modelDownloads.push({ modelName: model, force: options?.force ?? false, loadAfter: options?.loadAfter ?? false });
+            return { status: 'downloading', model };
+        },
+        async loadModel(modelName, force) {
+            if (data.modelActionError) throw data.modelActionError;
+            modelLoads.push({ modelName, force });
+            return { status: 'loading', model: modelName, ctx_size: 65536 };
         },
         async getLocalModelStatus() {
             if (!data.localModel) throw new GaiaApiError(503, 'This fake client was given no model status.');
