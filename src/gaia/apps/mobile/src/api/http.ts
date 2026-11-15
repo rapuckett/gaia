@@ -43,6 +43,7 @@ import type {
     ParsedSchedule,
     Schedule,
     ScheduleList,
+    ScheduleResults,
     SessionList,
     SessionSearchResponse,
     SetupCheck,
@@ -63,6 +64,7 @@ import {
     MESSAGE_PAGE_SIZE,
     QUEUED_IDLE_MS,
     schedulePath,
+    scheduleResultsPath,
     scheduleRunPath,
     SEND_HEADER_TIMEOUT_MS,
     SESSION_PAGE_SIZE,
@@ -431,6 +433,10 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         runSchedule(name, options) {
             return postJson<Schedule>(scheduleRunPath(name), undefined, options?.signal);
+        },
+
+        listScheduleResults(name, limit, options) {
+            return getJson<ScheduleResults>(scheduleResultsPath(name, limit), options?.signal);
         },
 
         deleteSchedule(name, options) {

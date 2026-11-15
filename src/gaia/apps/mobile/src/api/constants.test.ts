@@ -100,6 +100,7 @@ describe('endpoints', () => {
         localModelRestart: ['POST'],
         localModelStatus: ['GET'],
         schedule: ['DELETE', 'PUT'],
+        scheduleResults: ['GET'],
         scheduleRun: ['POST'],
         scheduleParse: ['POST'],
         schedules: ['GET', 'POST'],
