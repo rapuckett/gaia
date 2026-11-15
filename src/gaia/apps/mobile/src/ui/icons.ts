@@ -26,6 +26,7 @@ export {
   Cpu,
   Download,
   Ellipsis,
+  ExternalLink,
   Eye,
   EyeOff,
   FileText,

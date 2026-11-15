@@ -8,6 +8,8 @@ import {
     AGENT_EVENT_TYPES,
     ATTACH_HEADER_TIMEOUT_MS,
     CONFIRM_DELETE_MS,
+    DISCORD_LIVE_STATES,
+    DISCORD_POLL_MS,
     DOWNLOAD_MISS_LIMIT,
     DOWNLOAD_NO_ROW_LIMIT,
     DOWNLOAD_POLL_MS,
@@ -124,6 +126,7 @@ describe('endpoints', () => {
         memoryStats: ['GET'],
         memoryTools: ['GET'],
         memoryUpcoming: ['GET'],
+        messagingDiscord: ['GET'],
         providerConnect: ['POST'],
         providerModels: ['GET'],
         providersActive: ['GET'],
@@ -238,6 +241,7 @@ describe("webui's stream rules", () => {
         ['services/statusPoll.ts', 'STATUS_POLL_MS', STATUS_POLL_MS],
         ['components/ScheduleManager.tsx', 'CONFIRM_DELETE_MS', CONFIRM_DELETE_MS],
         ['components/ModelStatusPill.tsx', 'POLL_MS', MODEL_STATUS_OPEN_POLL_MS],
+        ['components/settings/MessagingSettings.tsx', 'POLL_MS', DISCORD_POLL_MS],
         ['components/ModelNeededDialog.tsx', 'POLL_MS', DOWNLOAD_POLL_MS],
         ['components/ModelNeededDialog.tsx', 'NO_ROW_LIMIT', DOWNLOAD_NO_ROW_LIMIT],
         ['components/ModelNeededDialog.tsx', 'MISS_LIMIT', DOWNLOAD_MISS_LIMIT],
@@ -250,6 +254,7 @@ describe("webui's stream rules", () => {
     it.each([
         ['services/api.ts', 'AGENT_EVENT_TYPES', AGENT_EVENT_TYPES],
         ['components/ChatView.tsx', 'RESOLVES_PROMPTS', RESOLVES_PROMPTS],
+        ['components/settings/MessagingSettings.tsx', 'LIVE', DISCORD_LIVE_STATES],
     ])('%s %s', (file, name, ours) => {
         expect([...ours].sort()).toEqual(tsStringSet(file, name));
     });
