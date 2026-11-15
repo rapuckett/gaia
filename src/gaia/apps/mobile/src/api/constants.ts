@@ -24,7 +24,9 @@ export const ENDPOINTS = {
     sessionMessage: '/api/sessions/{session_id}/messages/{message_id}',
     sessionMessages: '/api/sessions/{session_id}/messages',
     sessionMessagesAndBelow: '/api/sessions/{session_id}/messages/{message_id}/and-below',
+    sessionPin: '/api/sessions/{session_id}/pin',
     sessionPrivate: '/api/sessions/{session_id}/private',
+    sessionRead: '/api/sessions/{session_id}/read',
     sessionSearch: '/api/sessions/search',
     setupCancel: '/api/setup/cancel',
     setupCheck: '/api/setup/check',
@@ -109,8 +111,16 @@ export function sessionDocumentPath(sessionId: string, docId: string): string {
         .replace('{doc_id}', encodeURIComponent(docId));
 }
 
+export function sessionPinPath(sessionId: string): string {
+    return ENDPOINTS.sessionPin.replace('{session_id}', encodeURIComponent(sessionId));
+}
+
 export function sessionPrivatePath(sessionId: string): string {
     return ENDPOINTS.sessionPrivate.replace('{session_id}', encodeURIComponent(sessionId));
+}
+
+export function sessionReadPath(sessionId: string): string {
+    return ENDPOINTS.sessionRead.replace('{session_id}', encodeURIComponent(sessionId));
 }
 
 export function sessionMessagesPath(sessionId: string): string {
