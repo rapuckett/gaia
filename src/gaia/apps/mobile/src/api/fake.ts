@@ -590,6 +590,14 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         async listConnectors() {
             return { connectors: [...(data.connectors ?? [])] };
         },
+        async disableConnector(connectorId) {
+            data.connectors = (data.connectors ?? []).map((c) => (c.id === connectorId && !('error' in c) ? { ...c, enabled: false } : c));
+        },
+        async disconnectConnector(connectorId) {
+            data.connectors = (data.connectors ?? []).map((c) =>
+                c.id === connectorId && !('error' in c) ? { ...c, configured: false, enabled: true, account_id: null } : c,
+            );
+        },
         async listAgents() {
             return { agents: [...(data.agents ?? [])] };
         },

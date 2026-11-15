@@ -437,6 +437,10 @@ export interface GaiaClient {
     activateConnectorAgent(connectorId: string, agentId: string, scopes?: string[], options?: RequestOptions): Promise<void>;
     /** Hides an MCP server's tools from an agent; its grant stays. */
     deactivateConnectorAgent(connectorId: string, agentId: string, options?: RequestOptions): Promise<void>;
+    /** Pauses an MCP server; its credentials and grants stay. Turning it back on is PC-only. */
+    disableConnector(connectorId: string, options?: RequestOptions): Promise<void>;
+    /** Removes a connector's credentials from the PC. */
+    disconnectConnector(connectorId: string, options?: RequestOptions): Promise<void>;
     /** Servers that custom agents declare in their own mcp_servers.json; read-only. */
     listAgentMcps(options?: RequestOptions): Promise<AgentMcpList>;
     listSchedules(options?: RequestOptions): Promise<ScheduleList>;

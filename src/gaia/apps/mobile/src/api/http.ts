@@ -92,8 +92,10 @@ import {
     ATTACH_HEADER_TIMEOUT_MS,
     connectorActivationPath,
     connectorActivationsPath,
+    connectorDisablePath,
     connectorGrantPath,
     connectorGrantsPath,
+    connectorPath,
     cloudPricesPath,
     documentPath,
     ENDPOINTS,
@@ -559,6 +561,14 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         async deactivateConnectorAgent(connectorId, agentId, options) {
             await request('DELETE', connectorActivationPath(connectorId, agentId), undefined, options?.signal);
+        },
+
+        async disableConnector(connectorId, options) {
+            await request('POST', connectorDisablePath(connectorId), {}, options?.signal);
+        },
+
+        async disconnectConnector(connectorId, options) {
+            await request('DELETE', connectorPath(connectorId), undefined, options?.signal);
         },
 
         listAgentMcps(options) {

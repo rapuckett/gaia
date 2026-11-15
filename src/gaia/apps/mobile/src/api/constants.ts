@@ -82,8 +82,10 @@ export const ENDPOINTS = {
     chatFollowupOutcome: '/api/chat/followup/{session_id}',
     chatPerformance: '/api/chat/performance/{session_id}',
     chatUserInput: '/api/chat/user-input',
+    connector: '/api/connectors/{connector_id}',
     connectorActivation: '/api/connectors/{connector_id}/activations/{agent_id:path}',
     connectorActivations: '/api/connectors/{connector_id}/activations',
+    connectorDisable: '/api/connectors/{connector_id}/disable',
     connectorGrant: '/api/connectors/{connector_id}/grants/{agent_id:path}',
     connectorGrants: '/api/connectors/{connector_id}/grants',
     connectors: '/api/connectors',
@@ -112,6 +114,14 @@ export function connectorActivationPath(connectorId: string, agentId: string): s
 
 export function connectorActivationsPath(connectorId: string): string {
     return ENDPOINTS.connectorActivations.replace('{connector_id}', encodeURIComponent(connectorId));
+}
+
+export function connectorDisablePath(connectorId: string): string {
+    return ENDPOINTS.connectorDisable.replace('{connector_id}', encodeURIComponent(connectorId));
+}
+
+export function connectorPath(connectorId: string): string {
+    return ENDPOINTS.connector.replace('{connector_id}', encodeURIComponent(connectorId));
 }
 
 export function connectorGrantPath(connectorId: string, agentId: string): string {
