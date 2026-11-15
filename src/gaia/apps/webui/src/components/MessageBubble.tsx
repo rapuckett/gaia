@@ -16,10 +16,10 @@ import * as api from '../services/api';
 import { log } from '../utils/logger';
 import { plainAnswerText } from '../utils/plainText';
 import { AnswerStats } from './AnswerStats';
-import { dropErrorsEchoedInAnswer, isErrorContent } from '../utils/answerErrors.core';
+import { dropErrorsEchoedInAnswer, isErrorContent, isModelFailure } from '../utils/answerErrors.core';
 import { SERVER_CANCELLED_TEXT, splitCutOff, turnEnding } from '../utils/turnEnding.core';
 
-export { dropErrorsEchoedInAnswer, isErrorContent, splitCutOff, turnEnding };
+export { dropErrorsEchoedInAnswer, isErrorContent, isModelFailure, splitCutOff, turnEnding };
 import { displayModelName, useInferencePlace, useModelNames } from '../stores/modelStore';
 import { MODEL_WAIT_HINT_S, isModelWaitLabel } from '../utils/modelWait';
 import { localizeLiveStatus } from '../utils/liveStatus';
@@ -137,13 +137,6 @@ function useElapsedSeconds(active: boolean, key?: string): number {
         return () => clearInterval(t);
     }, [active, key]);
     return elapsed;
-}
-
-/** The answer an agent writes when a model call ends its turn (`_model_failure_answer` in agent.py). */
-const MODEL_FAILURE_RE = /^The model (?:call failed|stopped responding) at step \d+, so this request is unfinished\./;
-
-export function isModelFailure(content: string): boolean {
-    return MODEL_FAILURE_RE.test(content.trimStart());
 }
 
 const CHAT_REPORT_CLASSES: ReportClasses = {

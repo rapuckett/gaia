@@ -51,7 +51,7 @@ export function ModelServerDownNotice() {
         >
             <Row gap="sm">
                 <Icon icon={TriangleAlert} size="sm" tone="warning" />
-                <Text role="ui" weight="semibold">{t('serverDown.title')}</Text>
+                <Text role="ui" weight="semibold">{t('mobileApp.serverDown.title')}</Text>
             </Row>
             <Text role="ui">{t('serverDown.body')}</Text>
             {s && !ours ? <Text role="ui">{t('serverDown.notOurs')}</Text> : null}

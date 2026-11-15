@@ -56,8 +56,8 @@ export function PlanChecklist({ step }: { step: ActivityRow }) {
                         <Stack flex={1}>
                             <Text
                                 role="label"
+                                dir="auto"
                                 tone="secondary"
-                               
                                 accessibilityLabel={status ? t('activity.planItem', { status: ref(STATUS_LABEL[status]), text }) : undefined}
                             >
                                 {text}

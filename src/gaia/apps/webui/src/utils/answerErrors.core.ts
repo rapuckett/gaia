@@ -3,7 +3,12 @@
 
 /** How an assistant reply shows it failed. Pure, so the phone app can import it. */
 
-import type { AgentStep } from '../types';
+/** The answer an agent writes when a model call ends its turn (`_model_failure_answer` in agent.py). */
+const MODEL_FAILURE_RE = /^The model (?:call failed|stopped responding) at step \d+, so this request is unfinished\./;
+
+export function isModelFailure(content: string): boolean {
+    return MODEL_FAILURE_RE.test(content.trimStart());
+}
 
 /** Detect if message content looks like an error. */
 export function isErrorContent(content: string): boolean {
@@ -30,10 +35,10 @@ const squash = (text: string) => text.replace(/\s+/g, ' ').trim();
  * error keeps the step, as does one ending with an error that isn't the
  * turn's last step.
  */
-export function dropErrorsEchoedInAnswer(
-    steps: AgentStep[],
+export function dropErrorsEchoedInAnswer<S extends { type: string; detail?: string }>(
+    steps: S[],
     content: string,
-): { steps: AgentStep[]; echoed: boolean; endedBy: string | null } {
+): { steps: S[]; echoed: boolean; endedBy: string | null } {
     const answer = squash(content);
     if (!answer) return { steps, echoed: false, endedBy: null };
     const tail = content.trimEnd();
