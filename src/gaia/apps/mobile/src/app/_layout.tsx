@@ -7,6 +7,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { AppState, Platform, useWindowDimensions } from 'react-native';
 
 import { createHttpClient } from '@/api/http';
+import { shouldRetryQuery } from '@/data/queryRetry';
 import { GaiaClientProvider } from '@/data/GaiaClientProvider';
 import { AppErrorBoundary } from '@/features/errors/AppErrorBoundary';
 import { ChatAlertFeed } from '@/features/banners/ChatAlertFeed';
@@ -35,7 +36,7 @@ export const unstable_settings = { anchor: INITIAL_ROUTE };
 const ROUTES = [INITIAL_ROUTE, 'new', 'connectors', 'schedules', 'settings', 'documents', 'logs', 'notifications', 'skills', 'memory', 'pair', 'pair/manual', 'pair/pcs', 'chat/[id]', 'dev/ui', 'dev/ui-lists', 'dev/composer', 'dev/forms', 'dev/markdown', 'dev/memory-gallery', 'dev/messages', 'dev/permission'];
 
 export default function RootLayout() {
-    const [queryClient] = useState(() => new QueryClient());
+    const [queryClient] = useState(() => new QueryClient({ defaultOptions: { queries: { retry: shouldRetryQuery } } }));
     const dir = useDirection();
     const lang = useLocaleCode();
     const { width } = useWindowDimensions();
