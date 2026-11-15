@@ -15,6 +15,7 @@ import {
     EmptyState,
     ErrorState,
     ListSkeleton,
+    Ltr,
     Notice,
     Pressable,
     Row,
@@ -36,6 +37,16 @@ const CUT_ABOVE_CHARS = 110;
 
 export function SkillsScreen({ onTry }: { onTry: (name: string, prompt: string) => void }) {
     const t = useT();
+    return (
+        <Screen scroll header={<ScreenHeader title={t('settings.section.skills')} />}>
+            <SkillsBody onTry={onTry} />
+        </Screen>
+    );
+}
+
+/** The skills list and its add sheet, for the screen and for the Settings pane. */
+export function SkillsBody({ onTry }: { onTry: (name: string, prompt: string) => void }) {
+    const t = useT();
     const skills = useSkills();
     const [query, setQuery] = useState('');
     const [howOpen, setHowOpen] = useState(false);
@@ -56,7 +67,7 @@ export function SkillsScreen({ onTry }: { onTry: (name: string, prompt: string) 
     );
 
     return (
-        <Screen scroll header={<ScreenHeader title={t('settings.section.skills')} />}>
+        <>
             <Stack gap="md" paddingX="lg" paddingY="md">
                 <Text role="ui" tone="secondary">{t('settings.skills.lede')}</Text>
                 <Disclosure title={t('settings.model.howItWorks')} open={howOpen} onToggle={() => setHowOpen(!howOpen)}>
@@ -122,7 +133,7 @@ export function SkillsScreen({ onTry }: { onTry: (name: string, prompt: string) 
                 )}
             </Stack>
             <AddSkillsSheet open={adding} onClose={() => setAdding(false)} />
-        </Screen>
+        </>
     );
 }
 
@@ -135,7 +146,7 @@ function SkillRow({ skill, onTry }: { skill: SkillInfo; onTry: () => void }) {
             <Row gap="md" align="center">
                 <Stack flex={1} gap="xs">
                     <Text role="ui">
-                        {skill.name}
+                        <Ltr>{skill.name}</Ltr>
                         {skill.always_on ? <Text role="ui" tone="muted">{` · ${t('settings.skills.alwaysOn')}`}</Text> : null}
                     </Text>
                     <Text role="label" tone="secondary" numberOfLines={open ? undefined : 2}>{skill.description}</Text>
@@ -146,8 +157,10 @@ function SkillRow({ skill, onTry }: { skill: SkillInfo; onTry: () => void }) {
                             </Text>
                         </Pressable>
                     ) : null}
+                    {!skill.always_on ? (
+                        <ChipButton variant="plain" label={t.bare('settings.skills.try')} accessibilityLabel={t('settings.skills.try')} onPress={onTry} />
+                    ) : null}
                 </Stack>
-                {!skill.always_on ? <ChipButton variant="plain" label={t('settings.skills.try')} onPress={onTry} /> : null}
             </Row>
         </View>
     );

@@ -3,7 +3,9 @@
 
 import { isolate } from '@webui/i18n/registry';
 
+import { ENDPOINTS } from '@/api/constants';
 import { GaiaApiError } from '@/api/errors';
+import { useDeviceRefused } from '@/api/routeAccess';
 import { useLemonadeTarget, useSetLemonadeTarget } from '@/data';
 import { describeError, useT } from '@/i18n/useT';
 import { Button, Notice, Spinner, Stack, Text, TextField } from '@/ui';
@@ -18,9 +20,13 @@ export function LemonadeTarget() {
     const t = useT();
     const query = useLemonadeTarget();
     const save = useSetLemonadeTarget();
+    const saveRefused = useDeviceRefused('POST', ENDPOINTS.lemonadeTarget);
     const target = query.data;
 
     if (query.isPending) return <Spinner />;
+    if (!target && query.error instanceof GaiaApiError && query.error.status === 403) {
+        return <Notice tone="info" message={t('mobileApp.settings.pcOnly')} testID="advanced-lemonade-pc-only" />;
+    }
     if (!target) {
         return (
             <Stack gap="sm">
@@ -49,7 +55,10 @@ export function LemonadeTarget() {
                 <Text role="caption" tone="muted">{t('settings.server.envIgnored', { url: isolate(target.env_url_ignored, 'ltr') })}</Text>
             ) : null}
             {fromEnv ? (
-                <Text role="caption" tone="muted">{t('settings.server.envUseOwn')}</Text>
+                <>
+                    <Text role="caption" tone="muted">{t('settings.server.envUseOwn')}</Text>
+                    {external && saveRefused ? <Notice tone="info" message={t('mobileApp.settings.pcOnly')} testID="advanced-lemonade-pc-only" /> : null}
+                </>
             ) : (
                 <>
                     <Text role="caption" tone="muted">{t('mobileApp.settings.serverUseYours')}</Text>
@@ -65,7 +74,7 @@ export function LemonadeTarget() {
                     {refused ? null : <Notice tone="info" message={t('mobileApp.settings.pcOnly')} testID="advanced-lemonade-pc-only" />}
                 </>
             )}
-            {external ? (
+            {external && !saveRefused ? (
                 <Button
                     label={t('settings.server.useOwn')}
                     variant="secondary"

@@ -11,6 +11,8 @@ import type { ContextUsage } from '@/api/client.types';
 import { useT } from '@/i18n/useT';
 import { Ltr, Notice, Pressable, Row, Sheet, Stack, Text, useTheme } from '@/ui';
 
+import { ChipMeasure, useChipCollapsed } from './ChipFitContext';
+
 const PARTS = [
     { key: 'system', label: 'ctx.meter.part.system' },
     { key: 'tools', label: 'ctx.meter.part.tools' },
@@ -30,6 +32,7 @@ export function ContextMeter({ usage, unavailable }: ContextMeterProps) {
     const t = useT();
     const { colors, radius } = useTheme();
     const [open, setOpen] = useState(false);
+    const barless = useChipCollapsed('meter');
     if (!usage && !unavailable) return null;
 
     const pct = usage ? Math.min(100, Math.round((usage.used / usage.window) * 100)) : 0;
@@ -49,36 +52,43 @@ export function ContextMeter({ usage, unavailable }: ContextMeterProps) {
           })
         : `${t('ctx.context')}: ${unavailable}`;
 
+    const reading = (noBar: boolean) => (
+        <Row gap="sm">
+            {noBar ? null : (
+                <View
+                    style={{
+                        width: 40,
+                        height: 4,
+                        borderRadius: radius.full,
+                        backgroundColor: colors.bgActive,
+                        overflow: 'hidden',
+                    }}
+                >
+                    <View
+                        style={{
+                            width: `${pct}%`,
+                            height: 4,
+                            backgroundColor: warn ? colors.accentYellow : colors.accentSolid,
+                        }}
+                    />
+                </View>
+            )}
+            <Text role="caption" tone={warn ? 'warning' : 'secondary'}>
+                {usage ? <Ltr>{`${pct}%`}</Ltr> : '–'}
+            </Text>
+        </Row>
+    );
+
     return (
         <>
+            <ChipMeasure id="meter">{reading(false)}</ChipMeasure>
             <Pressable
                 onPress={() => setOpen(true)}
                 accessibilityLabel={aria}
                 accessibilityState={{ expanded: open }}
                 testID="context-meter"
             >
-                <Row gap="sm">
-                    <View
-                        style={{
-                            width: 40,
-                            height: 4,
-                            borderRadius: radius.full,
-                            backgroundColor: colors.bgActive,
-                            overflow: 'hidden',
-                        }}
-                    >
-                        <View
-                            style={{
-                                width: `${pct}%`,
-                                height: 4,
-                                backgroundColor: warn ? colors.accentYellow : colors.accentSolid,
-                            }}
-                        />
-                    </View>
-                    <Text role="caption" tone={warn ? 'warning' : 'secondary'}>
-                        {usage ? <Ltr>{`${pct}%`}</Ltr> : '–'}
-                    </Text>
-                </Row>
+                {reading(barless)}
             </Pressable>
             <Sheet open={open} onClose={() => setOpen(false)} title={t('ctx.meter.window')}>
                 {usage ? <Breakdown usage={usage} colors={partColor} /> : <Text role="body">{unavailable}</Text>}

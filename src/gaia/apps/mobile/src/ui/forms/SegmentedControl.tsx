@@ -4,7 +4,7 @@
 import { useEffect, useState } from 'react';
 import { View } from 'react-native';
 import Animated, { useAnimatedStyle, useReducedMotion, useSharedValue, withTiming } from 'react-native-reanimated';
-import { useDirection } from '@/i18n/useT';
+import { layoutDirection } from '@/platform/direction';
 import { Pressable } from '../controls/Pressable';
 import { ChoiceList, type ChoiceOption } from '../feedback/ChoiceList';
 import { useTheme } from '../theme/ThemeProvider';
@@ -28,7 +28,9 @@ const PAD = 2;
 // Falls back to a ChoiceList when a label wouldn't fit its segment on one line.
 export function SegmentedControl({ options, value, onChange, accessibilityLabel, testID }: SegmentedControlProps) {
     const { colors, radius } = useTheme();
-    const rtl = useDirection() === 'rtl';
+    // The track is always laid out LTR and mirrored by hand: iOS swaps `left` in RTL, the web doesn't.
+    const rtl = layoutDirection() === 'rtl';
+    const shown = rtl ? [...options].reverse() : options;
     const reduced = useReducedMotion();
     const [width, setWidth] = useState(0);
     const [labelWidths, setLabelWidths] = useState<number[]>([]);
@@ -41,8 +43,8 @@ export function SegmentedControl({ options, value, onChange, accessibilityLabel,
 
     const segment = Math.max(0, (width - PAD * 2) / Math.max(1, options.length));
     const indicatorStyle = useAnimatedStyle(() => {
-        const x = slide.value * segment;
-        return { transform: [{ translateX: rtl ? -x : x }] };
+        const x = (rtl ? options.length - 1 - slide.value : slide.value) * segment;
+        return { transform: [{ translateX: x }] };
     });
 
     const measured = labelWidths.length === options.length && labelWidths.every((w) => w > 0);
@@ -75,6 +77,7 @@ export function SegmentedControl({ options, value, onChange, accessibilityLabel,
                     accessibilityLabel={accessibilityLabel}
                     style={{
                         flexDirection: 'row',
+                        direction: 'ltr',
                         height: HEIGHT,
                         padding: PAD,
                         borderRadius: radius.md,
@@ -86,7 +89,7 @@ export function SegmentedControl({ options, value, onChange, accessibilityLabel,
                             {
                                 position: 'absolute',
                                 top: PAD,
-                                start: PAD,
+                                left: PAD,
                                 width: segment,
                                 height: HEIGHT - PAD * 2,
                                 borderRadius: radius.md - 2,
@@ -97,7 +100,7 @@ export function SegmentedControl({ options, value, onChange, accessibilityLabel,
                             indicatorStyle,
                         ]}
                     />
-                    {options.map((o) => {
+                    {shown.map((o) => {
                         const on = o.value === value;
                         return (
                             <View key={o.value} style={{ flex: 1 }}>

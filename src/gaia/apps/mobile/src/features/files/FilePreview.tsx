@@ -46,7 +46,7 @@ function useLoadedFile(target: PreviewTarget): State {
             const name = targetName(target);
             const ext = extensionOf(name);
             if (target.kind === 'document') {
-                const bytes = await client.getDocumentBytes(target.docId);
+                const bytes = await client.getDocumentBytes(target.docId, target.sessionId);
                 cached = await cachePcFile(`document:${target.docId}`, name, bytes);
                 return { loaded: (IMAGE_EXTENSIONS.has(ext) ? { kind: 'image', uri: cached.uri } : { kind: 'file' }) as Loaded, cached };
             }

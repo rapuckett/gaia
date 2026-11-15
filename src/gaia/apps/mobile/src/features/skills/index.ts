@@ -1,4 +1,4 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-export { SkillsScreen } from './SkillsScreen';
+export { SkillsBody, SkillsScreen } from './SkillsScreen';

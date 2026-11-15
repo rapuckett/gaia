@@ -6,12 +6,13 @@ import { useState, type ReactNode } from 'react';
 import { isolate } from '@webui/i18n/registry';
 import type { SystemStatus } from '@webui/types';
 
-import { useModelActions, useSystemStatus } from '@/data';
+import { useModelActions, useQueryFailure, useSystemStatus } from '@/data';
 import { describeError, useT } from '@/i18n/useT';
 import { Button, Card, Disclosure, Divider, Ltr, Notice, ProgressLine, Row, Spinner, Stack, Text } from '@/ui';
 
 import { LogsCard } from '@/features/logs';
 
+import { isPcRefusal, PcOnlyNotice } from '../PcOnlyNotice';
 import { SettingsAnchor } from '../targets';
 import { ActionError, LoadAnywaySheet, RawDetails } from './advanced/errors';
 import { ServerControlsSlot } from './advanced/ServerControls';
@@ -51,6 +52,7 @@ function StatusRow({ label, value, ok, hint }: { label: string; value: ReactNode
 function StatusCard() {
     const t = useT();
     const query = useSystemStatus();
+    const failure = useQueryFailure(query);
     const status = query.data;
     const modelName = status ? status.default_model_name : null;
     const actions = useModelActions(modelName, status);
@@ -60,11 +62,13 @@ function StatusCard() {
         <Card padding="lg" testID="advanced-status">
             <Stack gap="md">
                 <Text role="title" accessibilityRole="header">{t('settings.advanced.status')}</Text>
-                {query.isPending ? (
+                {query.isPending && !failure.failed ? (
                     <Row gap="sm">
                         <Spinner />
                         <Text role="label" tone="muted">{t('settings.advanced.checking')}</Text>
                     </Row>
+                ) : !status && isPcRefusal(query.error) ? (
+                    <PcOnlyNotice testID="advanced-status-pc-only" />
                 ) : !status ? (
                     <Stack gap="sm">
                         <Notice
@@ -73,7 +77,7 @@ function StatusCard() {
                             action={{ label: t('settings.key.checkAgain'), onPress: () => void query.refetch() }}
                             testID="advanced-unreachable"
                         />
-                        <RawDetails text={describeError(query.error, t)} />
+                        <RawDetails text={describeError(failure.error, t)} />
                     </Stack>
                 ) : (
                     <StatusBody
@@ -108,10 +112,10 @@ function StatusBody({ status, modelName, actions, detailsOpen, onToggleDetails }
     const serverHint = status.lemonade_running
         ? undefined
         : setupNeeded
-          ? t('settings.advanced.notInstalledHint')
+          ? t('mobileApp.settings.advanced.notInstalledHint')
           : status.start_instruction && !/gaia init/i.test(status.start_instruction)
             ? status.start_instruction
-            : t('settings.advanced.notRunningHint');
+            : t('mobileApp.settings.advanced.notRunningHint');
     const serverValue = status.lemonade_running
         ? status.lemonade_version
             ? t.bare('settings.advanced.runningAt', { version: isolate(status.lemonade_version, 'ltr') })

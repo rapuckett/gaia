@@ -10,6 +10,7 @@ import { useAllowSpendingMonth, useSetSpendingLimit, useSpending } from '@/data'
 import { useT } from '@/i18n/useT';
 import { Button, Ltr, Notice, Row, Spinner, Stack, Text, TextField } from '@/ui';
 
+import { isPcRefusal, PcOnlyNotice } from '../../PcOnlyNotice';
 import { errorText, isolate } from './modelText';
 
 /** This month's cloud spending at list price, with the monthly limit; shown for cloud providers. */
@@ -22,7 +23,9 @@ export function CloudSpending() {
     const report = spending.data;
 
     if (!report) {
-        return spending.error ? (
+        return isPcRefusal(spending.error) ? (
+            <PcOnlyNotice testID="spending-pc-only" />
+        ) : spending.error ? (
             <Notice
                 tone="danger"
                 message={errorText(spending.error, t)}
@@ -67,7 +70,7 @@ export function CloudSpending() {
             {report.state === 'reached' ? (
                 <Notice
                     tone="danger"
-                    message={t('settings.spend.reached')}
+                    message={t('mobileApp.settings.spend.reached')}
                     action={{ label: t('settings.spend.allow'), onPress: () => { setLimit.reset(); allow.mutate(); } }}
                 />
             ) : null}
@@ -103,7 +106,7 @@ export function CloudSpending() {
                 />
             ) : null}
             <Text role="caption" tone="muted">{t('settings.spend.how')}</Text>
-            {failure ? <Notice tone="danger" message={errorText(failure, t)} /> : null}
+            {failure && isPcRefusal(failure) ? <PcOnlyNotice testID="spending-pc-only" /> : failure ? <Notice tone="danger" message={errorText(failure, t)} /> : null}
         </Stack>
     );
 }

@@ -1,6 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
+import type { AgentInstallStatus } from '@webui/services/api';
 import type { IndexProgress } from '@webui/utils/documentLibrary.core';
 import type { FollowUpOutcome } from '@webui/utils/messageQueue';
 import type {
@@ -30,6 +31,8 @@ import type {
     ParsedSchedule,
     ProviderModelsResponse,
     ResourceUsage,
+    RetryChoice,
+    RetryResult,
     Schedule,
     ScheduleResult,
     Session,
@@ -44,14 +47,15 @@ import type {
     StreamEvent,
     SystemStatus,
 } from '@webui/types';
-import type { UndoSettings } from '@webui/types/changes';
+import type { FileDiff, TurnChanges, UndoResult, UndoSettings } from '@webui/types/changes';
 import type { DiscordStatus } from '@webui/services/messagingApi';
-import type { AgentCapabilities } from '@webui/types/sessionPanel';
+import type { AgentCapabilities, SessionEnvironment } from '@webui/types/sessionPanel';
 import type { DiscoveryFinding, Goal, GoalStats, InferenceInsight, KnowledgeCreateBody, KnowledgeListParams, KnowledgeSaveResult, KnowledgeUpdateBody, MemoryCleared, MemoryReinitializeResult, MemorySettings, MemorySettingsUpdateResponse, Priority as GoalPriority } from '@webui/services/memoryApi';
 import type { SpeechModel, SpeechSettings } from '@webui/services/speechApi';
 import type { ActivityDay, ConvSession, ConvTurn, EntityInfo, KnowledgeEntry, TemporalItem, ToolStat } from '@webui/utils/memoryFormat.core';
 import type { CreateSessionRequest, DocumentListResponse, DocumentResponse, ModelServerInfo, ProviderSummaryList, SessionSearchResponse, ToolConfirmRequest, UserInputRequest as ApiUserInputRequest, FilePreviewResponse } from '@webui/types/api.gen';
 
+export type { AgentInstallStatus } from '@webui/services/api';
 export type {
     ActiveModel,
     AgentInfo,
@@ -85,6 +89,8 @@ export type {
     ProviderModel,
     ProviderModelsResponse,
     ResourceUsage,
+    RetryChoice,
+    RetryResult,
     Schedule,
     ScheduleResult,
     Session,
@@ -101,8 +107,8 @@ export type {
     SystemStatus,
     UnavailableConnectorRow,
 } from '@webui/types';
-export type { UndoSettings } from '@webui/types/changes';
-export type { ActiveSkill, AgentCapabilities, AgentTool, SkillOrigin } from '@webui/types/sessionPanel';
+export type { FileDiff, TurnChanges, UndoResult, UndoSettings } from '@webui/types/changes';
+export type { ActiveSkill, AgentCapabilities, AgentTool, ScopeEntry, SessionEnvironment, SkillOrigin } from '@webui/types/sessionPanel';
 export type { CreateSessionRequest, DocumentListResponse, DocumentResponse, ModelServerInfo, ProviderSummary, ProviderSummaryList, SessionSearchResponse, SessionSearchResult, ToolConfirmRequest, FilePreviewResponse } from '@webui/types/api.gen';
 
 /** A photo or file chosen on this phone: where it is, and what it is called. */
@@ -414,6 +420,12 @@ export interface GaiaClient {
     /** Sends a file to the PC; recordings go to the transcription folder. Rejects with the PC's refusal (type, size, empty). */
     uploadFile(file: Blob, name: string, options?: RequestOptions): Promise<UploadedFile>;
     setSessionPinned(sessionId: string, pinned: boolean, options?: RequestOptions): Promise<Session>;
+    /** The file changes each turn of the chat made. */
+    listTurnChanges(sessionId: string, options?: RequestOptions): Promise<{ turns: TurnChanges[] }>;
+    /** What one turn did to each file. */
+    getTurnDiff(sessionId: string, turnId: string, options?: RequestOptions): Promise<{ turn_id: string; files: FileDiff[] }>;
+    /** Puts the turn's files back; rejects with a 409 naming a file changed since, unless `force`. */
+    undoTurn(sessionId: string, turnId: string, force?: boolean, options?: RequestOptions): Promise<UndoResult>;
     /** Deletes the chat and its messages; a turn still running on it is stopped first. */
     deleteSession(sessionId: string, options?: RequestOptions): Promise<DeleteSessionResult>;
     /** Clears the chat's unread mark. */
@@ -455,6 +467,10 @@ export interface GaiaClient {
     setPermissionMode(sessionId: string, mode: PermissionMode, options?: RequestOptions): Promise<SessionPermissions>;
     /** How full the model's context window is for the chat's next message, or why there is no reading yet. */
     getContextUsage(sessionId: string, options?: RequestOptions): Promise<ContextUsageResult>;
+    /** Answers the message again with another model, without touching the chat; keeping it is chooseRetry. A local model loads first, which can take a minute. */
+    retryWith(sessionId: string, messageId: number, model: string, options?: RequestOptions): Promise<RetryResult>;
+    /** Keeps the original answer or the retry's; the PC saves the retry over the original only for 'retry'. */
+    chooseRetry(sessionId: string, messageId: number, keep: 'original' | 'retry', options?: RequestOptions): Promise<RetryChoice>;
     /** Where each answer's time and tokens went, and the model as Lemonade reports it now. */
     getChatPerformance(sessionId: string, options?: RequestOptions): Promise<ChatPerformance>;
     /** What the chat's last finished turn did with the messages added to it; rejects with 409 while a turn still runs. */
@@ -472,6 +488,12 @@ export interface GaiaClient {
     detachDocument(sessionId: string, docId: string, options?: RequestOptions): Promise<void>;
     /** The tools and skills of the chat's running agent; rejects with 409 until the agent has started. */
     getCapabilities(sessionId: string, options?: RequestOptions): Promise<AgentCapabilities>;
+    /** The folders this chat may touch and whether its web tools are on. */
+    getEnvironment(sessionId: string, options?: RequestOptions): Promise<SessionEnvironment>;
+    /** Takes a folder or file away from the chat; rejects with 409 when the PC refuses. */
+    removeEnvironmentFolder(sessionId: string, path: string, options?: RequestOptions): Promise<SessionEnvironment>;
+    /** Turns the chat's web tools on or off; rejects with 409 or 502 when the PC can't apply it. */
+    setInternet(sessionId: string, on: boolean, options?: RequestOptions): Promise<SessionEnvironment>;
     /** This PC's CPU, memory, GPU, NPU and network use. */
     getResourceUsage(options?: RequestOptions): Promise<ResourceUsage>;
     /** Deletes the message and everything after it, so the exchange can be asked again. */
@@ -492,7 +514,6 @@ export interface GaiaClient {
     confirmTool(request: ToolConfirmRequest, options?: RequestOptions): Promise<ConfirmToolResult>;
     /** Answers a `needs_input` question; the turn continues once GAIA has it. */
     sendUserInput(request: UserInputRequest, options?: RequestOptions): Promise<UserInputResult>;
-    listAgents(options?: RequestOptions): Promise<AgentList>;
     /**
      * Streams events about the PC's chat list, such as `set_active_session`. Never ends on its own:
      * it throws when the connection drops or goes silent, and the caller reconnects.
@@ -519,6 +540,11 @@ export interface GaiaClient {
     disconnectConnector(connectorId: string, options?: RequestOptions): Promise<DisconnectOutcome | null>;
     /** Servers that custom agents declare in their own mcp_servers.json; read-only. */
     listAgentMcps(options?: RequestOptions): Promise<AgentMcpList>;
+    /** The agents this PC can run; a PC without the `gaia` agent can't start chats. */
+    listAgents(options?: RequestOptions): Promise<AgentList>;
+    /** Starts installing an agent on the PC (202); follow it with `getAgentInstallStatus`. PC-only: a phone gets the refusal. */
+    installAgent(id: string, options?: RequestOptions): Promise<{ id: string; status: string }>;
+    getAgentInstallStatus(id: string, options?: RequestOptions): Promise<AgentInstallStatus>;
     listSchedules(options?: RequestOptions): Promise<ScheduleList>;
     /** The last `days` days of conversations, tool calls, learned entries and errors, oldest first. */
     getMemoryActivity(days: number, options?: RequestOptions): Promise<ActivityDay[]>;
@@ -569,6 +595,8 @@ export interface GaiaClient {
     getSpeechModel(options?: RequestOptions): Promise<SpeechModel>;
     /** Speaks `text` (at most MAX_SPEECH_CHARS) as audio, in the saved voice unless one is given. */
     speak(text: string, voice?: { voice?: string; speed?: number }, options?: RequestOptions): Promise<PcAudioBytes>;
+    /** A generated audio card's file, by its `/api/media/audio/<name>` `src`; refuses any other `src`, a reply that isn't audio, and an oversized file. */
+    getGeneratedAudio(src: string, options?: RequestOptions): Promise<PcAudioBytes>;
     getMemorySettings(options?: RequestOptions): Promise<MemorySettings>;
     /** Changes the memory switches named in `settings`; answers with all of them, and what the system scan did when discovery was switched on. */
     updateMemorySettings(settings: Partial<MemorySettings>, options?: RequestOptions): Promise<MemorySettingsUpdateResponse>;
@@ -629,8 +657,8 @@ export interface GaiaClient {
     getFilePreview(path: string, sessionId: string, options?: RequestOptions): Promise<FilePreviewResponse>;
     /** An image on the PC, as bytes; the chat's id is what lets a phone read it. */
     getImageBytes(path: string, sessionId: string, options?: RequestOptions): Promise<Uint8Array>;
-    /** A library document's file, as bytes. */
-    getDocumentBytes(docId: string, options?: RequestOptions): Promise<Uint8Array>;
+    /** A library document's file, as bytes; the chat's id is what lets a phone read it. */
+    getDocumentBytes(docId: string, sessionId: string, options?: RequestOptions): Promise<Uint8Array>;
     getSystemStatus(options?: RequestOptions): Promise<SystemStatus>;
     /** Starts a model's download on the PC (`force` downloads it again); follow it in `getSystemStatus().download_progress`. */
     downloadModel(model: string, options?: { force?: boolean; loadAfter?: boolean } & RequestOptions): Promise<{ status: string; model: string }>;

@@ -10,6 +10,7 @@ import { useChatStream, useMessages } from '@/data';
 import { describeError, useT } from '@/i18n/useT';
 import { ErrorState, List, ListSkeleton, Stack } from '@/ui';
 
+import { useAnswerComparison } from '../compare/useAnswerComparison';
 import { AssistantBubble } from './AssistantBubble';
 import { JumpButton } from './JumpButton';
 import { MessageActionsContext } from './MessageActionsContext';
@@ -25,21 +26,24 @@ export interface MessageListViewProps {
     onRetry?: () => void;
     /** The answer being written, shown under the last message. */
     live?: ReactNode;
+    /** The chat, so each answer can show its file changes. */
+    sessionId?: string;
 }
 
 /** `shown` is newest first, so the messages after `index` are the ones before it. */
 function contextOf(shown: readonly Message[], index: number): MessageContext {
     for (let i = index - 1; i >= 0; i--) {
-        if (shown[i].role === 'user') return { laterTurns: i + 1 };
+        if (shown[i].role === 'user') return { laterTurns: i + 1, latest: index === 0 };
     }
-    return { laterTurns: 0 };
+    return { laterTurns: 0, latest: index === 0 };
 }
 
-export function MessageListView({ messages, loading = false, error, onRetry, live }: MessageListViewProps) {
+export function MessageListView({ messages, loading = false, error, onRetry, live, sessionId }: MessageListViewProps) {
     const t = useT();
     const { listRef, following, showJump, onScroll, jumpToBottom } = useFollowScroll<Message>();
     const latency = useMemo(() => latencyByMessage(messages), [messages]);
     const shown = useMemo(() => messages.filter((m) => m.role !== 'system').reverse(), [messages]);
+    const newestReply = shown.find((m) => m.role === 'assistant')?.id;
 
     const bringIntoView = useCallback(
         (index: number) => listRef.current?.scrollToIndex({ index, viewPosition: 0.5, animated: true }),
@@ -64,6 +68,8 @@ export function MessageListView({ messages, loading = false, error, onRetry, liv
                         <AssistantBubble
                             message={item}
                             context={context}
+                            sessionId={sessionId}
+                            newest={item.id === newestReply}
                             latencyMs={item.stats?.seconds != null ? item.stats.seconds * 1000 : latency.get(item.id)}
                         />
                     );
@@ -82,10 +88,11 @@ export function MessageListView({ messages, loading = false, error, onRetry, liv
 }
 
 /** A chat's transcript, from the PC. `live` is the answer still being written. */
-export function MessageList({ sessionId, live }: { sessionId: string; live?: ReactNode }) {
+export function MessageList({ sessionId, live, readOnly = false }: { sessionId: string; live?: ReactNode; readOnly?: boolean }) {
     const query = useMessages(sessionId);
     const { send, status } = useChatStream(sessionId);
-    const actions = useMemo(() => ({ send, busy: status !== 'idle' }), [send, status]);
+    const { comparing } = useAnswerComparison(sessionId);
+    const actions = useMemo(() => ({ send, busy: status !== 'idle' || comparing, readOnly }), [send, status, comparing, readOnly]);
     return (
         <MessageActionsContext.Provider value={actions}>
             <MessageListView
@@ -94,6 +101,7 @@ export function MessageList({ sessionId, live }: { sessionId: string; live?: Rea
                 error={query.error}
                 onRetry={() => void query.refetch()}
                 live={live}
+                sessionId={sessionId}
             />
         </MessageActionsContext.Provider>
     );

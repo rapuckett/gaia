@@ -32,7 +32,7 @@ export function FolderChip({ folder }: { folder: StartScreen['working_folder'] |
         </Row>
     );
     return (
-        <View testID="folder-chip" accessible accessibilityLabel={where} style={{ flexShrink: 1, minWidth: 0 }}>
+        <View testID="folder-chip" accessible accessibilityLabel={where} style={{ flexShrink: 0 }}>
             <ChipMeasure id="folder">{content(false)}</ChipMeasure>
             {content(iconOnly)}
         </View>

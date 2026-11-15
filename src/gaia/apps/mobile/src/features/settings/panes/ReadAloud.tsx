@@ -8,14 +8,13 @@ import { PREVIEW_ID, PREVIEW_TEXT, VOICE_GROUPS, speedChoices } from '@webui/uti
 
 import { useSpeechSettings, useUpdateSpeechSettings } from '@/data';
 import { ReadAloudErrorNotice, useReadAloud } from '@/features/audio/ReadAloud';
-import { useReadAloudStore } from '@/features/audio/readAloudStore';
+import { kindOf, useReadAloudStore } from '@/features/audio/readAloudStore';
 import type { SpeechSettingsUpdate } from '@/api/client.types';
-import { useT } from '@/i18n/useT';
+import { describeFailureWith, useT } from '@/i18n/useT';
 import { Button, Card, Notice, Row, Select, Spinner, Stack, Switch, Text } from '@/ui';
 import { Square, Volume2 } from '@/ui/icons';
 
 import { SettingsAnchor } from '../targets';
-import { reasonOf } from './reason';
 
 /** Settings › Read aloud: the voice and speed replies are read in, and whether every reply is read. */
 export default function ReadAloud() {
@@ -53,9 +52,18 @@ export default function ReadAloud() {
     };
 
     if (settings.error) {
+        const unsupported = kindOf(settings.error) === 'unsupported';
         return (
             <Stack gap="lg" padding="lg">
-                <Notice tone="danger" message={t('readAloud.settings.loadFailed', { reason: reasonOf(settings.error, t) })} testID="read-aloud-load-error" />
+                <Notice
+                    tone="danger"
+                    message={
+                        unsupported
+                            ? t('mobileApp.readAloud.unsupported')
+                            : t.compose((say) => say('readAloud.settings.loadFailed', { reason: describeFailureWith(settings.error, say) }))
+                    }
+                    testID="read-aloud-load-error"
+                />
             </Stack>
         );
     }
@@ -134,7 +142,7 @@ export default function ReadAloud() {
                 {t('readAloud.settings.shared')}
             </Text>
             {update.error ? (
-                <Notice tone="danger" message={t('readAloud.settings.saveFailed', { reason: reasonOf(update.error, t) })} testID="read-aloud-save-error" />
+                <Notice tone="danger" message={t.compose((say) => say('readAloud.settings.saveFailed', { reason: describeFailureWith(update.error, say) }))} testID="read-aloud-save-error" />
             ) : null}
         </Stack>
     );

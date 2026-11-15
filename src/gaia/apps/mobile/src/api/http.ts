@@ -11,6 +11,7 @@ import {
     GaiaApiError,
     GaiaAuthError,
     GaiaConfigError,
+    GaiaError,
     GaiaNetworkError,
     GaiaPinMismatchError,
     GaiaStreamDroppedError,
@@ -23,6 +24,7 @@ import {
 import type {
     ActiveModel,
     AgentCapabilities,
+    AgentInstallStatus,
     AgentList,
     AgentMcpList,
     CancelChatResult,
@@ -84,6 +86,8 @@ import type {
     PreflightReport,
     ProviderConnected,
     ProviderSummaryList,
+    RetryChoice,
+    RetryResult,
     RestartModelResult,
     RequestOptions,
     ParsedSchedule,
@@ -95,6 +99,7 @@ import type {
     Schedule,
     ScheduleList,
     ScheduleResults,
+    SessionEnvironment,
     SessionList,
     SessionPermissions,
     SessionSearchResponse,
@@ -106,11 +111,15 @@ import type {
     SpeechModel,
     SpeechSettings,
     SpendingReport,
+    FileDiff,
+    TurnChanges,
+    UndoResult,
     UndoSettings,
     UploadedFile,
     UserInputResult,
 } from './client.types';
 import {
+    agentInstallStatusPath,
     ATTACH_HEADER_TIMEOUT_MS,
     connectorActivationPath,
     connectorActivationsPath,
@@ -120,10 +129,13 @@ import {
     CONNECTOR_REVOKE_OUTCOME_MS,
     connectorPath,
     cloudPricesPath,
+    documentFilePath,
     documentPath,
     goalPath,
     ENDPOINTS,
     filePath,
+    generatedAudioPath,
+    GENERATED_AUDIO_TYPES,
     chatContextPath,
     chatPermissionGrantsPath,
     chatPerformancePath,
@@ -132,6 +144,7 @@ import {
     localCustomModelPath,
     providerModelsPath,
     followupOutcomePath,
+    MAX_GENERATED_AUDIO_BYTES,
     MESSAGE_PAGE_SIZE,
     QUEUED_IDLE_MS,
     memoryActivityPath,
@@ -152,10 +165,14 @@ import {
     sessionCapabilitiesPath,
     sessionDocumentPath,
     sessionDocumentsPath,
+    sessionEnvironmentPath,
     sessionMessagePath,
     sessionMessagesAndBelowPath,
     sessionMessagesPath,
     sessionPath,
+    sessionChangesDiffPath,
+    sessionChangesPath,
+    sessionChangesUndoPath,
     sessionPinPath,
     sessionPrivatePath,
     sessionReadPath,
@@ -298,7 +315,7 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
         }
     }
 
-    async function drainBytes(res: FetchResponseLike): Promise<Uint8Array<ArrayBuffer>> {
+    async function drainBytes(res: FetchResponseLike, limit?: { bytes: number; tooLarge: () => GaiaError }): Promise<Uint8Array<ArrayBuffer>> {
         if (!res.body) throw new GaiaStreamError('mobileApp.error.noBody');
         const reader = res.body.getReader();
         const chunks: Uint8Array[] = [];
@@ -308,6 +325,10 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             if (done) break;
             chunks.push(value);
             size += value.length;
+            if (limit && size > limit.bytes) {
+                await reader.cancel();
+                throw limit.tooLarge();
+            }
         }
         const out = new Uint8Array(size);
         let at = 0;
@@ -455,6 +476,18 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             return putJson<Session>(sessionPinPath(sessionId), { pinned }, options?.signal);
         },
 
+        listTurnChanges(sessionId, options) {
+            return getJson<{ turns: TurnChanges[] }>(sessionChangesPath(sessionId), options?.signal);
+        },
+
+        getTurnDiff(sessionId, turnId, options) {
+            return getJson<{ turn_id: string; files: FileDiff[] }>(sessionChangesDiffPath(sessionId, turnId), options?.signal);
+        },
+
+        undoTurn(sessionId, turnId, force = false, options) {
+            return postJson<UndoResult>(sessionChangesUndoPath(sessionId, turnId), { force }, options?.signal);
+        },
+
         deleteSession(sessionId, options) {
             return deleteJson<DeleteSessionResult>(sessionPath(sessionId), options?.signal);
         },
@@ -559,6 +592,14 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             return getJson<ContextUsageResult>(chatContextPath(sessionId), options?.signal);
         },
 
+        retryWith(sessionId, messageId, model, options) {
+            return postJson<RetryResult>(ENDPOINTS.chatRetryWith, { session_id: sessionId, message_id: messageId, model }, options?.signal);
+        },
+
+        chooseRetry(sessionId, messageId, keep, options) {
+            return postJson<RetryChoice>(ENDPOINTS.chatRetryWithChoose, { session_id: sessionId, message_id: messageId, keep }, options?.signal);
+        },
+
         getChatPerformance(sessionId, options) {
             return getJson<ChatPerformance>(chatPerformancePath(sessionId), options?.signal);
         },
@@ -606,6 +647,18 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         getCapabilities(sessionId, options) {
             return getJson<AgentCapabilities>(sessionCapabilitiesPath(sessionId), options?.signal);
+        },
+
+        getEnvironment(sessionId, options) {
+            return getJson<SessionEnvironment>(sessionEnvironmentPath(sessionId), options?.signal);
+        },
+
+        removeEnvironmentFolder(sessionId, path, options) {
+            return postJson<SessionEnvironment>(sessionEnvironmentPath(sessionId, 'folderRemove'), { path }, options?.signal);
+        },
+
+        setInternet(sessionId, on, options) {
+            return putJson<SessionEnvironment>(sessionEnvironmentPath(sessionId, 'internet'), { on }, options?.signal);
         },
 
         getResourceUsage(options) {
@@ -738,6 +791,14 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         listAgentMcps(options) {
             return getJson<AgentMcpList>(ENDPOINTS.connectorsAgentMcps, options?.signal);
+        },
+
+        installAgent(id, options) {
+            return postJson<{ id: string; status: string }>(ENDPOINTS.agentsInstall, { id }, options?.signal);
+        },
+
+        getAgentInstallStatus(id, options) {
+            return getJson<AgentInstallStatus>(agentInstallStatusPath(id), options?.signal);
         },
 
         listSkills(options) {
@@ -874,6 +935,19 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             return { bytes: await drainBytes(res), contentType: res.headers.get('content-type') ?? '' };
         },
 
+        async getGeneratedAudio(src, options): Promise<PcAudioBytes> {
+            const path = generatedAudioPath(src);
+            if (path === null) throw new GaiaConfigError('render.invalidPayload', { render: 'audio' });
+            const res = await request('GET', path, undefined, options?.signal);
+            const contentType = (res.headers.get('content-type') ?? '').split(';')[0]!.trim().toLowerCase();
+            if (!GENERATED_AUDIO_TYPES.includes(contentType)) {
+                await res.body?.cancel();
+                throw new GaiaStreamError('mobileApp.error.notAudio', { type: contentType || '-' });
+            }
+            const limit = { bytes: MAX_GENERATED_AUDIO_BYTES, tooLarge: () => new GaiaStreamError('mobileApp.error.audioTooLarge', { size: `${MAX_GENERATED_AUDIO_BYTES / (1024 * 1024)} MB` }) };
+            return { bytes: await drainBytes(res, limit), contentType };
+        },
+
         getMemorySettings(options) {
             return getJson<MemorySettings>(ENDPOINTS.memorySettings, options?.signal);
         },
@@ -950,8 +1024,8 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             return readBytes(filePath('filesImage', path, sessionId), options?.signal);
         },
 
-        getDocumentBytes(docId, options) {
-            return readBytes(documentPath(docId, 'documentFile'), options?.signal);
+        getDocumentBytes(docId, sessionId, options) {
+            return readBytes(documentFilePath(docId, sessionId), options?.signal);
         },
 
         getDocumentStatus(docId, options) {

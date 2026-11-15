@@ -939,10 +939,12 @@ export async function getDocumentStatus(id: string): Promise<{
 /**
  * Where a library document opens, at `page` when given. Absolute, so it opens
  * the same in a browser tab and, from the desktop app's file:// page, in the
- * system browser (the shell hands http links to it).
+ * system browser (the shell hands http links to it). Away from the PC only the
+ * chat `sessionId` names may open its documents.
  */
-export function documentFileUrl(id: string, page?: number): string {
+export function documentFileUrl(id: string, sessionId?: string | null, page?: number): string {
     const url = new URL(`${getApiBase()}/documents/${encodeURIComponent(id)}/file`, window.location.href);
+    if (sessionId) url.searchParams.set('session_id', sessionId);
     if (page) url.hash = `page=${page}`;
     return url.href;
 }
