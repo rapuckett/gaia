@@ -6,15 +6,18 @@ import type { ReactNode } from 'react';
 import { IconButton, Row, Stack, Text } from '@/ui';
 import { ArrowLeft } from '@/ui/icons';
 
-/** The settings header: back (when given), the title, and actions at the end. */
-export function SettingsHeader({ title, backLabel, onBack, end }: { title: string; backLabel?: string; onBack?: () => void; end?: ReactNode }) {
+/** The settings header: back (when given), the title, and a badge beside the title, and actions at the end. */
+export function SettingsHeader({ title, backLabel, onBack, titleEnd, end }: { title: string; backLabel?: string; onBack?: () => void; titleEnd?: ReactNode; end?: ReactNode }) {
     return (
         <Stack paddingX="lg" paddingY="sm">
             <Row gap="sm" accessibilityRole="header">
                 {onBack && backLabel ? <IconButton icon={ArrowLeft} label={backLabel} onPress={onBack} /> : null}
-                <Stack flex={1}>
-                    <Text role="title" weight="semibold" numberOfLines={1}>{title}</Text>
-                </Stack>
+                <Row gap="sm" flex={1}>
+                    <Stack>
+                        <Text role="title" weight="semibold" numberOfLines={1}>{title}</Text>
+                    </Stack>
+                    {titleEnd}
+                </Row>
                 {end}
             </Row>
         </Stack>
