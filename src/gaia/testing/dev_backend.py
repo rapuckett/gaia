@@ -17,6 +17,12 @@ beside an installed GAIA without touching its ports or ``~/.gaia``.
 * ``{"tool_call": {"name": "...", "arguments": {...}}}``: a tool call, which
   lets a test drive a tool-approval prompt.
 
+The backend starts already set up: the fake Lemonade lists every model the
+flagship profile needs as downloaded, the flagship's install sentinel is written
+under ``--home``, and the setup marker is set, so ``/api/setup/check`` reports
+``ready: true`` and a client goes straight to chat. ``--fresh`` leaves all three
+out, for flows that drive the first-run Setup wizard.
+
 With no script every completion answers :data:`DEFAULT_REPLY`. When a script
 runs out the fake LLM answers HTTP 500 instead of inventing a reply.
 """
@@ -153,8 +159,13 @@ def isolate_environment(home: Path, llm_url: str, memory: bool = False) -> None:
 # ── Fake LLM ────────────────────────────────────────────────────────────────
 
 
-def build_fake_llm(script: List[Dict[str, Any]], model: str):
-    """A FastAPI app speaking the slice of Lemonade's API a chat turn uses."""
+def build_fake_llm(
+    script: List[Dict[str, Any]], model: str, downloaded: Optional[List[str]] = None
+):
+    """A FastAPI app speaking the slice of Lemonade's API a chat turn uses.
+
+    *downloaded* names further models listed as downloaded beside *model*.
+    """
     from fastapi import FastAPI
     from fastapi.responses import JSONResponse, StreamingResponse
 
@@ -198,12 +209,13 @@ def build_fake_llm(script: List[Dict[str, Any]], model: str):
             "object": "list",
             "data": [
                 {
-                    "id": model,
+                    "id": model_id,
                     "object": "model",
                     "downloaded": True,
                     "recipe": "llamacpp",
                     "labels": [],
                 }
+                for model_id in dict.fromkeys([model, *(downloaded or [])])
             ],
         }
 
@@ -221,7 +233,9 @@ def build_fake_llm(script: List[Dict[str, Any]], model: str):
 
     @app.post("/api/v1/chat/completions")
     async def chat_completions(body: Dict[str, Any]):
-        entry = take()
+        # The prefix warm-up (one token) must not spend a scripted reply.
+        warm_up = 1 in (body.get("max_tokens"), body.get("max_completion_tokens"))
+        entry = {"text": "."} if warm_up else take()
         if entry is None:
             return JSONResponse(
                 status_code=500,
@@ -341,6 +355,18 @@ def _register_flagship_without_install() -> None:
     AgentRegistry._discover_installed_agents = discover
 
 
+def mark_set_up() -> None:
+    """Record the flagship as installed and setup as seen ready, in GAIA_HOME."""
+    from gaia.hub import installer
+    from gaia.ui.setup_runner import mark_initialized
+    from gaia.version import __version__
+
+    install_dir = installer.agent_install_dir("gaia")
+    install_dir.mkdir(parents=True, exist_ok=True)
+    installer._write_sentinel("gaia", __version__, "python", "", install_dir)
+    mark_initialized()
+
+
 # ── Serving ─────────────────────────────────────────────────────────────────
 
 
@@ -399,6 +425,7 @@ def run(
     llm_port: Optional[int],
     script: List[Dict[str, Any]],
     memory: bool = False,
+    fresh: bool = False,
 ) -> int:
     llm_port = llm_port if llm_port is not None else port + 1
     if llm_port == port:
@@ -407,6 +434,7 @@ def run(
     isolate_environment(home, llm_url, memory)
 
     from gaia.config import UnsafeGaiaHomeError
+    from gaia.installer.init_command import INIT_PROFILES
     from gaia.llm.lemonade_client import DEFAULT_MODEL_NAME
     from gaia.logger import configure
     from gaia.ui.server import AllowedPathsEnvError, create_app
@@ -417,7 +445,12 @@ def run(
     stop = threading.Event()
     signal.signal(signal.SIGTERM, lambda *_: stop.set())
     signal.signal(signal.SIGINT, lambda *_: stop.set())
-    llm = _Server(build_fake_llm(script, DEFAULT_MODEL_NAME), llm_port, "fake-llm")
+    downloaded = [] if fresh else list(INIT_PROFILES["gaia"]["models"])
+    if not fresh:
+        mark_set_up()
+    llm = _Server(
+        build_fake_llm(script, DEFAULT_MODEL_NAME, downloaded), llm_port, "fake-llm"
+    )
     llm.start()
     backend: Optional[_Server] = None
     try:
@@ -461,11 +494,16 @@ def main(argv: Optional[List[str]] = None) -> int:
         action="store_true",
         help="keep memory on (it needs an embedder, which the fake LLM lacks)",
     )
+    parser.add_argument(
+        "--fresh",
+        action="store_true",
+        help="start not set up, so a client lands on the first-run Setup wizard",
+    )
     args = parser.parse_args(argv)
     try:
         home = validate_home(args.home)
         script = load_script(args.script)
-        return run(args.port, home, args.llm_port, script, args.memory)
+        return run(args.port, home, args.llm_port, script, args.memory, args.fresh)
     except DevBackendError as e:
         print(f"Error: {e}", file=sys.stderr)
         return EX_USAGE
