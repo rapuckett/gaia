@@ -171,12 +171,24 @@ async function follow(deps: ChatStreamDeps, sessionId: string, run: Run, stream:
     await endWithTranscript(deps.queryClient, sessionId, () => {
         if (!isCurrent(sessionId, run)) return;
         finishRun(sessionId);
-        const { error, stopState, stopError, liveText, pendingConfirmation } = readTurn(sessionId);
-        // The stop note outlives the turn; a stop GAIA never confirmed has no saved answer to show, so its text stays too.
-        const kept = error || stopState || pendingConfirmation;
+        const { error, stopState, stopError, liveText, failed, failure, policyAlert, pendingConfirmation } = readTurn(sessionId);
+        // The stop note, a failure and a policy block outlive the turn; a stop GAIA never confirmed has no saved answer to show, so its text stays too.
+        const kept = error || stopState || failed || policyAlert || pendingConfirmation;
         writeTurn(
             sessionId,
-            kept ? { ...IDLE_TURN, error, stopState, stopError, pendingConfirmation, liveText: stopState === 'unconfirmed' ? liveText : '' } : null,
+            kept
+                ? {
+                      ...IDLE_TURN,
+                      error,
+                      stopState,
+                      stopError,
+                      failed,
+                      failure,
+                      policyAlert,
+                      pendingConfirmation,
+                      liveText: stopState === 'unconfirmed' ? liveText : '',
+                  }
+                : null,
         );
     });
 }
@@ -303,6 +315,12 @@ export interface ChatStream {
     pendingConfirmation: ConfirmationRequest | null;
     /** Why the last send, stop or stream failed; cleared by the next send. */
     error: GaiaError | null;
+    /** GAIA closed the last turn as failed, or its answer echoes a tool's error. */
+    failed: boolean | undefined;
+    /** The cause a failed turn named, for its fix. */
+    failure: string | undefined;
+    /** The last tool call policy blocked in the turn. */
+    policyAlert: ChatTurn['policyAlert'];
     /** How the last turn ended when the person stopped it; cleared by the next send. */
     stopState: ChatTurn['stopState'];
     /** What GAIA reported while stopping. */
@@ -372,6 +390,9 @@ export function useChatStream(sessionId: string): ChatStream {
             error: turn.error,
             stopState: turn.stopState,
             stopError: turn.stopError,
+            failed: turn.failed,
+            failure: turn.failure,
+            policyAlert: turn.policyAlert,
         }),
         [send, stop, retry, turn],
     );

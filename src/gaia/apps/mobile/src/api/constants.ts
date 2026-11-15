@@ -172,6 +172,9 @@ export const SEND_HEADER_TIMEOUT_MS = 90_000;
 export const SESSION_EVENTS_IDLE_MS = 90_000;
 /** An attach replays at once; a slower answer means the backend is stuck or unreachable. */
 export const ATTACH_HEADER_TIMEOUT_MS = 30_000;
+/** How often to re-read the PC's connectors while a reply waits on an account being connected (webui's ConnectorRetryBanner). */
+export const CONNECTOR_POLL_MS = 4_000;
+
 /** How many past runs a schedule's history shows; the web UI asks for the same 20. */
 export const SCHEDULE_RESULTS_LIMIT = 20;
 
