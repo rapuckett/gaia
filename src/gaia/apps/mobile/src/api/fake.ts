@@ -65,6 +65,7 @@ import type {
     ScheduleResult,
     ResourceUsage,
     Session,
+    SessionEnvironment,
     SessionList,
     SessionPermissions,
     SessionSearchResponse,
@@ -223,6 +224,8 @@ export interface FakeClientData {
     fileBytes?: Record<string, Uint8Array>;
     /** What getCapabilities answers, by chat; a chat not listed has no agent running (409). */
     capabilities?: Record<string, AgentCapabilities>;
+    /** What getEnvironment answers, by chat; removing a folder and the internet switch change it. A chat not listed is a 404. */
+    environments?: Record<string, SessionEnvironment>;
     memorySettings?: MemorySettings;
     /** What getSpeechSettings answers; updateSpeechSettings changes it. */
     speechSettings?: SpeechSettings;
@@ -337,6 +340,8 @@ export interface FakeGaiaClient extends GaiaClient {
     readonly uploaded: PickedFile[];
     readonly attached: { sessionId: string; docId: string }[];
     readonly capabilityReads: string[];
+    /** Each folder removal and internet switch, in order. */
+    readonly environmentChanges: ({ sessionId: string; remove: string } | { sessionId: string; internet: boolean })[];
     /** Each memory maintenance POST, in order. */
     readonly memoryActions: string[];
     /** Each memory add, edit and forget, in order. */
@@ -428,6 +433,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
     const uploaded: PickedFile[] = [];
     const attached: FakeGaiaClient['attached'] = [];
     const capabilityReads: string[] = [];
+    const environmentChanges: FakeGaiaClient['environmentChanges'] = [];
     const memoryActions: string[] = [];
     let memoryStatsReads = 0;
     const memoryActivityReads: number[] = [];
@@ -524,6 +530,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         uploaded,
         attached,
         capabilityReads,
+        environmentChanges,
         memoryActions,
         memoryActivityReads,
         profileStreamOpens,
@@ -1214,6 +1221,27 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             const found = data.capabilities?.[sessionId];
             if (!found) throw new GaiaApiError(409, "This chat's agent isn't running yet.");
             return found;
+        },
+        async getEnvironment(sessionId) {
+            const found = data.environments?.[sessionId];
+            if (!found) throw new GaiaApiError(404, 'Session not found');
+            return found;
+        },
+        async removeEnvironmentFolder(sessionId, path) {
+            const env = data.environments?.[sessionId];
+            if (!env) throw new GaiaApiError(404, 'Session not found');
+            environmentChanges.push({ sessionId, remove: path });
+            const next = { ...env, folders: env.folders.filter((f) => f.path !== path), removed: [...env.removed, path] };
+            data.environments = { ...data.environments, [sessionId]: next };
+            return next;
+        },
+        async setInternet(sessionId, on) {
+            const env = data.environments?.[sessionId];
+            if (!env) throw new GaiaApiError(404, 'Session not found');
+            environmentChanges.push({ sessionId, internet: on });
+            const next = { ...env, internet: on };
+            data.environments = { ...data.environments, [sessionId]: next };
+            return next;
         },
         async getSystemStatus() {
             if (!data.status) throw new GaiaApiError(503, 'This fake client was given no system status.');
