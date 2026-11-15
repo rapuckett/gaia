@@ -15,11 +15,11 @@ export const messagingKeys = {
 };
 
 /** The PC's Discord bridge, re-read while it can change by itself. A 403 (the PC answers only itself) is final, never retried. */
-export function useDiscordStatus() {
+export function useDiscordStatus(enabled = true) {
     const client = useGaiaClient();
     return useQuery<DiscordStatus>({
         queryKey: messagingKeys.discord,
-        enabled: client !== null,
+        enabled: client !== null && enabled,
         queryFn: ({ signal }) => requireClient(client).getDiscordStatus({ signal }),
         retry: (failures, error) => !(error instanceof GaiaApiError && error.status === 403) && failures < 3,
         refetchInterval: (query) => (query.state.data && DISCORD_LIVE_STATES.has(query.state.data.state) ? DISCORD_POLL_MS : false),
