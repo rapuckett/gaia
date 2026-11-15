@@ -1055,6 +1055,7 @@ const messages: Messages = {
     'fileBrowser.selectAria': 'تحديد {name}',
     'fileBrowser.closePreview': 'إغلاق المعاينة',
     'fileBrowser.lines': 'الأسطر: {n}',
+    'fileBrowser.firstLines': 'أول {shown} من {total} من الأسطر',
     'fileBrowser.columnCount': 'الأعمدة: {n}',
     'fileBrowser.rows': 'الصفوف: {n}',
     'fileBrowser.columnsLabel': 'الأعمدة:',

@@ -10,6 +10,7 @@ import { MAX_STREAM_RECONNECTS } from '@webui/utils/streamErrors.core';
 import { useAnswerQuestion, useChatStream, useContextUsage, usePermissionMode, useMessages, useSession } from '@/data';
 import { Composer, ContextMeter, ContextWarning, ModelChip, PermissionChip, useAttachments, useComposerQueue, useFollowUpEvents } from '@/features/composer';
 import { QueuedMessages } from '@/features/composer/QueuedMessages';
+import { FileScope } from '@/features/files';
 import { describeError, describeErrorWith, useT } from '@/i18n/useT';
 import { isQuestionGone, questionCardData, resolveTypedAnswer } from '@/features/questions/questionLogic';
 import { ErrorState, Notice, Screen, Stack } from '@/ui';
@@ -119,6 +120,7 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
             : undefined;
 
     return (
+        <FileScope sessionId={sessionId}>
         <Screen
             keyboard="avoid"
             header={<ChatHeader sessionId={sessionId} onOpenSessionPanel={() => setPanelOpen(true)} />}
@@ -190,5 +192,6 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
             )}
             <SessionPanel sessionId={sessionId} open={panelOpen} onClose={() => setPanelOpen(false)} />
         </Screen>
+        </FileScope>
     );
 }
