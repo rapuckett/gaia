@@ -205,7 +205,7 @@ def test_a_lemonade_without_the_voice_model_is_502(client, tts):
     tts.catalog_entries = []
     reply = client.get("/api/speech/model")
     assert reply.status_code == 502
-    assert "kokoro-v1" in reply.json()["detail"]
+    assert "gaia download --agent talk" in reply.json()["detail"]
 
 
 def test_the_voice_model_check_is_503_when_lemonade_is_unreachable(client, tts):

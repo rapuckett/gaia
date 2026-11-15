@@ -12,12 +12,14 @@ import os
 import platform
 import re
 import shutil
+import socket
 import sqlite3
 import threading
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, ClassVar, Dict, FrozenSet, List, Optional, Set
+from urllib.parse import urlsplit
 
 from gaia.config import gaia_home
 from gaia.logger import get_logger
@@ -122,6 +124,7 @@ from gaia.llm.lemonade_client import (
     resolve_default_vision_model,
     resolve_lemonade_base_url,
 )
+from gaia.llm.lemonade_supervisor import _is_loopback
 from gaia.mcp.mixin import MCPClientMixin
 from gaia.rag.sdk import RAGSDK, RAGConfig
 from gaia.sd.mixin import SDToolsMixin
@@ -593,6 +596,20 @@ def _where_mcp_servers_are_set_up(names: List[str], config_path: Path) -> str:
             "command and settings there."
         )
     return " ".join(where)
+
+
+def _is_this_pc(host: Optional[str]) -> bool:
+    """Whether *host* is loopback or one of this machine's own addresses."""
+    if _is_loopback(host or ""):
+        return True
+    try:
+        own = {
+            socket.gethostname().lower(),
+            *socket.gethostbyname_ex(socket.gethostname())[2],
+        }
+    except OSError:
+        return False
+    return (host or "").lower() in own
 
 
 class ChatAgent(
@@ -1680,11 +1697,12 @@ class ChatAgent(
             "current_base_url",
             None,
         )
-        label = _endpoint_label(
-            live() if callable(live) else resolve_lemonade_base_url()
-        )
+        url = live() if callable(live) else resolve_lemonade_base_url()
+        label = _endpoint_label(url)
         if not label:
             return "The configured model server"
+        if _is_this_pc(urlsplit(url).hostname):
+            return "The model server on this PC"
         return f"The model server at {label}"
 
     def _get_system_prompt(self) -> str:

@@ -123,9 +123,12 @@ def _speech_model() -> SpeechModel:
     client = LemonadeTTSClient()
     entry = next((m for m in client.catalog() if m.get("id") == client.model), None)
     if entry is None:
+        logger.error(
+            "Lemonade at %s lists no voice model '%s'", client.base_url, client.model
+        )
         raise LemonadeTTSError(
-            f"Lemonade at {client.base_url} has no voice model '{client.model}'. "
-            "Update Lemonade Server, then try again."
+            "The voice model isn't available on this PC. "
+            "Run `gaia download --agent talk` to download it, then try again."
         )
     size = entry.get("size")
     return SpeechModel(
