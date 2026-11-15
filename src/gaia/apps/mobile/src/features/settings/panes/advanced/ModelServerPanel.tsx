@@ -13,6 +13,7 @@ import { Button, Ltr, Notice, Row, SegmentedControl, Spinner, Stack, Text } from
 
 import { modelLabel } from '@/features/composer/ModelMenu';
 import { openSettings } from '../../openSettings';
+import { isPcRefusal, PcOnlyNotice } from '../../PcOnlyNotice';
 import { ActionError, LoadAnywaySheet, RawDetails } from './errors';
 
 function InfoRow({ label, children }: { label: string; children: ReactNode }) {
@@ -60,6 +61,7 @@ export function ModelServerPanel() {
             </Row>
         );
     }
+    if (!info && isPcRefusal(query.error)) return <PcOnlyNotice testID="advanced-server-pc-only" />;
     if (!info) {
         return (
             <Stack gap="sm">

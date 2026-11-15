@@ -12,6 +12,7 @@ import { Button, Card, Disclosure, Divider, Ltr, Notice, ProgressLine, Row, Spin
 
 import { LogsCard } from '@/features/logs';
 
+import { isPcRefusal, PcOnlyNotice } from '../PcOnlyNotice';
 import { SettingsAnchor } from '../targets';
 import { ActionError, LoadAnywaySheet, RawDetails } from './advanced/errors';
 import { ServerControlsSlot } from './advanced/ServerControls';
@@ -65,6 +66,8 @@ function StatusCard() {
                         <Spinner />
                         <Text role="label" tone="muted">{t('settings.advanced.checking')}</Text>
                     </Row>
+                ) : !status && isPcRefusal(query.error) ? (
+                    <PcOnlyNotice testID="advanced-status-pc-only" />
                 ) : !status ? (
                     <Stack gap="sm">
                         <Notice

@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { ABOUT_GROUPS, ABOUT_PAGE_SIZE, oneLineQuote, type AboutYouItem } from '@webui/utils/memoryFormat.core';
 
 import { useAddMemory, useForgetMemory, useMemoryKnowledge } from '@/data';
+import { isPcRefusal, PcOnlyNotice } from '@/features/settings/PcOnlyNotice';
 import { useT } from '@/i18n/useT';
 import { Button, LoadingState, SectionHeader, Stack, Text } from '@/ui';
 
@@ -81,7 +82,11 @@ export function AboutPane({ notify, memoryEnabled, onOpenAdvanced }: MemoryPaneP
                 <Text tone="secondary">{t('mem.about.intro')}</Text>
                 <AddMemory notify={notify} />
             </Stack>
-            {list.isError && !items ? (
+            {list.isError && !items && isPcRefusal(list.error) ? (
+                <Stack paddingX="lg">
+                    <PcOnlyNotice testID="memory-about-pc-only" />
+                </Stack>
+            ) : list.isError && !items ? (
                 <Stack gap="md" paddingX="lg" align="start" testID="memory-about-failed">
                     <Text tone="danger">{t('mem.about.loadFailed', { error: errorText(list.error, t) })}</Text>
                     <Button label={t.bare('mem.about.retry')} accessibilityLabel={t('mem.about.retry')} variant="secondary" onPress={() => void list.refetch()} />

@@ -5,6 +5,7 @@ import { useState, type ReactNode } from 'react';
 
 import type { ChatPerformance, ContextUsage } from '@/api/client.types';
 import { useChatPerformance, useContextSection } from '@/data';
+import { isPcRefusal, PcOnlyNotice } from '@/features/settings/PcOnlyNotice';
 import { useT, type Translate } from '@/i18n/useT';
 import { Icon, Notice, Pressable, ProgressLine, Row, SegmentedControl, Spacer, Stack, Text } from '@/ui';
 import { ChevronDown, ChevronRight } from '@/ui/icons';
@@ -116,7 +117,7 @@ function WindowFill({ reading, perf }: { reading: ReturnType<typeof useContextSe
     return (
         <Stack gap="sm">
             <Heading>{t('ctx.context')}</Heading>
-            {error ? <Notice tone="danger" message={failureReason(error, t)} /> : null}
+            {isPcRefusal(error) ? <PcOnlyNotice testID="context-pc-only" /> : error ? <Notice tone="danger" message={failureReason(error, t)} /> : null}
             {!usage && !error ? <Text tone="muted">{unavailable ?? t('ctx.measuring')}</Text> : null}
             {usage ? <Usage usage={usage} perf={perf} t={t} /> : null}
         </Stack>
@@ -427,7 +428,7 @@ function UnderTheHood({ perf, error }: { perf: ChatPerformance | undefined; erro
                 value={scope}
                 onChange={(v) => setScope(v === 'chat' ? 'chat' : 'turn')}
             />
-            {error ? <Notice tone="danger" message={failureReason(error, t)} /> : null}
+            {isPcRefusal(error) ? <PcOnlyNotice testID="performance-pc-only" /> : error ? <Notice tone="danger" message={failureReason(error, t)} /> : null}
             {!perf && !error ? <Text tone="muted">{t('ctx.measuring')}</Text> : null}
             {perf ? <Now now={perf.now} t={t} /> : null}
             {perf && scope === 'turn' ? (

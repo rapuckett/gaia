@@ -6,7 +6,8 @@ import { useEffect, useRef, useState } from 'react';
 import { providerName } from '@webui/utils/providerText';
 
 import type { ProviderConnected, ProviderInfo } from '@/api/client.types';
-import { CONNECT_RETRY_MS } from '@/api/constants';
+import { CONNECT_RETRY_MS, ENDPOINTS } from '@/api/constants';
+import { useDeviceRefused } from '@/api/routeAccess';
 import { useProviders, useReconnectProvider, useRetryKeyStore } from '@/data';
 import { useT, type Translate } from '@/i18n/useT';
 import { Badge, Button, Notice, Row, Stack, Surface, Text } from '@/ui';
@@ -37,6 +38,7 @@ export function ProviderKey({ provider, connected }: { provider: ProviderInfo; c
     const providers = useProviders();
     const reconnect = useReconnectProvider();
     const retry = useRetryKeyStore();
+    const retryRefused = useDeviceRefused('POST', ENDPOINTS.providersKeyStoreRetry);
     const [outcome, setOutcome] = useState<Outcome | null>(null);
 
     // Model mounts one per provider, so leaving the screen or picking another provider both unmount.
@@ -102,7 +104,7 @@ export function ProviderKey({ provider, connected }: { provider: ProviderInfo; c
                 <Notice
                     tone="warning"
                     message={t('settings.key.storeLocked')}
-                    action={busy ? undefined : { label: t('settings.key.unlockAgain'), onPress: onRetry }}
+                    action={busy || retryRefused ? undefined : { label: t('settings.key.unlockAgain'), onPress: onRetry }}
                 />
             ) : null}
             {!saved && provider.key_state !== 'store_locked' ? (

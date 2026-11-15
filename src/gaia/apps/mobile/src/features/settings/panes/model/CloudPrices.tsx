@@ -5,6 +5,7 @@ import { useCloudPrices } from '@/data';
 import { useT } from '@/i18n/useT';
 import { Divider, Notice, Row, Spinner, Stack, Text } from '@/ui';
 
+import { isPcRefusal, PcOnlyNotice } from '../../PcOnlyNotice';
 import { errorText, priceText } from './modelText';
 
 /** A provider's list prices, read only; shown before it is connected. */
@@ -13,6 +14,7 @@ export function CloudPrices({ provider }: { provider: string }) {
     const prices = useCloudPrices(provider, true);
     const list = prices.data;
 
+    if (isPcRefusal(prices.error)) return <PcOnlyNotice testID="prices-pc-only" />;
     if (prices.error) {
         return <Notice tone="danger" message={t('settings.price.loadFailed', { reason: errorText(prices.error, t) })} />;
     }

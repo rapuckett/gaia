@@ -6,6 +6,8 @@ import { useState } from 'react';
 import { providerName, providerNameFull, providerNotice } from '@webui/utils/providerText';
 
 import type { ProviderId, ProviderModel } from '@/api/client.types';
+import { ENDPOINTS } from '@/api/constants';
+import { useDeviceRefused } from '@/api/routeAccess';
 import {
     useActiveModel,
     useLocalModelStatus,
@@ -17,6 +19,7 @@ import {
 import { useT } from '@/i18n/useT';
 import { Disclosure, Notice, Row, SegmentedControl, Spinner, Stack, StatusDot, Text } from '@/ui';
 
+import { isPcRefusal, PcOnlyNotice } from '../PcOnlyNotice';
 import { SettingsAnchor } from '../targets';
 import { CloudPrices } from './model/CloudPrices';
 import { CloudSpending } from './model/CloudSpending';
@@ -37,7 +40,9 @@ function LocalMemory() {
 
 export default function Model({ provider: requested }: { provider?: string }) {
     const t = useT();
-    const providersQuery = useProviders();
+    // The PC serves its provider list (with key details) only to itself; a paired phone isn't asked.
+    const providersRefused = useDeviceRefused('GET', ENDPOINTS.providers);
+    const providersQuery = useProviders(!providersRefused);
     const activeQuery = useActiveModel();
     const systemStatus = useSystemStatus();
     const select = useSelectModel();
@@ -77,7 +82,8 @@ export default function Model({ provider: requested }: { provider?: string }) {
         });
     };
 
-    const loadError = providersQuery.error ? errorText(providersQuery.error, t) : providersQuery.data?.lemonade_error;
+    const pcOnly = providersRefused || isPcRefusal(providersQuery.error);
+    const loadError = pcOnly ? null : providersQuery.error ? errorText(providersQuery.error, t) : providersQuery.data?.lemonade_error;
     const row = listedInUse ?? (sameModelId(inUseRow?.id, active?.model) ? inUseRow : null);
 
     return (
@@ -102,6 +108,7 @@ export default function Model({ provider: requested }: { provider?: string }) {
 
             <Stack gap="sm">
                 <Text role="label" weight="medium" tone="secondary">{t('settings.model.whereRuns')}</Text>
+                {pcOnly ? <PcOnlyNotice testID="model-providers-pc-only" /> : null}
                 {providers ? (
                     <SegmentedControl
                         accessibilityLabel={t('settings.model.whereRuns')}
@@ -112,7 +119,7 @@ export default function Model({ provider: requested }: { provider?: string }) {
                 ) : null}
             </Stack>
 
-            {!providers && !loadError ? (
+            {!providers && !loadError && !pcOnly ? (
                 <Row gap="sm">
                     <Spinner />
                     <Text role="label" tone="muted">
@@ -160,7 +167,11 @@ export default function Model({ provider: requested }: { provider?: string }) {
                             <ProviderKey key={provider.id} provider={provider} connected={connected} />
                         </SettingsAnchor>
                     ) : null}
-                    {modelsQuery.error ? <Notice tone="danger" message={errorText(modelsQuery.error, t)} /> : null}
+                    {isPcRefusal(modelsQuery.error) ? (
+                        <PcOnlyNotice testID="model-list-pc-only" />
+                    ) : modelsQuery.error ? (
+                        <Notice tone="danger" message={errorText(modelsQuery.error, t)} />
+                    ) : null}
                     {connected ? (
                         <SettingsAnchor name="models-on-pc">
                             <ModelList

@@ -20,11 +20,11 @@ export const providerKeys = {
 };
 
 /** Every provider with its connection, network and Local-only state. */
-export function useProviders() {
+export function useProviders(enabled = true) {
     const client = useGaiaClient();
     return useQuery<ProvidersResponse>({
         queryKey: providerKeys.all,
-        enabled: client !== null,
+        enabled: client !== null && enabled,
         queryFn: ({ signal }) => requireClient(client).listProviders({ signal }),
     });
 }

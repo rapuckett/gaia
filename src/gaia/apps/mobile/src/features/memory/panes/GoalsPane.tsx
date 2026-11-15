@@ -7,6 +7,7 @@ import { ref, type MessageKey } from '@webui/i18n/registry';
 
 import type { Goal } from '@/api/client.types';
 import { useGoalAction, useGoals, useGoalStats, useGoalStoreError, type GoalAction } from '@/data';
+import { isPcRefusal, PcOnlyNotice } from '@/features/settings/PcOnlyNotice';
 import { useT } from '@/i18n/useT';
 import { Badge, Button, LoadingState, Notice, Row, Stack, Text } from '@/ui';
 import { Plus } from '@/ui/icons';
@@ -62,7 +63,9 @@ export function GoalsPane({ notify }: MemoryPaneProps) {
             <Stack align="start">
                 <Button label={t.bare('mem.goals.new')} accessibilityLabel={t('mem.goals.new')} icon={Plus} variant="secondary" onPress={() => setCreating(true)} testID="goals-new" />
             </Stack>
-            {list.isError && !goals ? (
+            {list.isError && !goals && isPcRefusal(list.error) ? (
+                <PcOnlyNotice testID="goals-pc-only" />
+            ) : list.isError && !goals ? (
                 <Stack gap="md" align="start" testID="goals-failed">
                     <Text tone="danger">{t('mobileApp.mem.sectionFailed')}</Text>
                     <Button label={t.bare('mem.about.retry')} accessibilityLabel={t('mem.about.retry')} variant="secondary" onPress={() => void list.refetch()} />
