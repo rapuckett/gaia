@@ -18,6 +18,10 @@ export function providerName(t: Translate, provider: Pick<ProviderInfo, 'id' | '
     return providerText(t, `providers.${provider.id}.name`, provider.name, true);
 }
 
+export function providerNameFull(t: Translate, provider: Pick<ProviderInfo, 'id' | 'name'>): string {
+    return providerText(t, `providers.${provider.id}.name`, provider.name);
+}
+
 /** What leaves the PC with this provider; shown before a cloud model is used. */
 export function providerNotice(t: Translate, provider: Pick<ProviderInfo, 'id' | 'privacy_notice'>): string {
     return providerText(t, `providers.${provider.id}.notice`, provider.privacy_notice);

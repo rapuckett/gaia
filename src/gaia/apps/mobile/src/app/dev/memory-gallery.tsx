@@ -3,6 +3,7 @@
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
+import { devGalleryEnabled } from '@/features/dev/devGallery';
 import { useState } from 'react';
 
 import { GaiaClientProvider } from '@/data';
@@ -11,16 +12,16 @@ import { MEMORY_TABS } from '@/features/memory/tabs';
 import { memoryScene, type MemoryScene } from '@/features/memory/devScenes';
 import { ScreenBannerProvider, UIProvider } from '@/ui';
 
-const SCENES: readonly MemoryScene[] = ['on', 'off', 'loading', 'failed', 'actionFails', 'statsEmpty', 'statsManyTools'];
+const SCENES: readonly MemoryScene[] = ['on', 'off', 'loading', 'failed', 'actionFails', 'statsEmpty', 'statsManyTools', 'aboutEmpty', 'aboutFailed', 'aboutMany', 'goalsEmpty', 'goalsFailed', 'goalsStoreError'];
 
-/** The Memory screen on a fake PC; `?scene=on|off|loading|failed|actionFails|statsEmpty|statsManyTools`, and `&tab=about|goals|profile|advanced`. */
+/** The Memory screen on a fake PC; `?scene=on|off|loading|failed|actionFails|statsEmpty|statsManyTools|aboutEmpty|aboutFailed|aboutMany|goalsEmpty|goalsFailed|goalsStoreError`, and `&tab=about|goals|profile|advanced`. */
 export default function MemoryGalleryRoute() {
     const { scene, tab } = useLocalSearchParams<{ scene?: string; tab?: string }>();
     const router = useRouter();
     const picked = SCENES.find((s) => s === scene) ?? 'on';
     const [queryClient] = useState(() => new QueryClient({ defaultOptions: { queries: { retry: false } } }));
     const [client] = useState(() => memoryScene(picked));
-    if (!__DEV__) return <Redirect href="/" />;
+    if (!devGalleryEnabled()) return <Redirect href="/" />;
     return (
         <QueryClientProvider client={queryClient}>
             <GaiaClientProvider client={client}>

@@ -14,23 +14,28 @@ import { ModelNeededHost } from '@/features/model';
 import { AppDrawer } from '@/features/nav/AppDrawer';
 import { RoutingEffects } from '@/features/nav/RoutingEffects';
 import { INITIAL_ROUTE, PERMANENT_DRAWER_MIN_WIDTH } from '@/features/nav/navigation';
-import { PairingGate } from '@/features/pairing';
+import { installPinnedPairing, PairingGate } from '@/features/pairing';
 import { SetupGate } from '@/features/setup/SetupGate';
-import { useDirection } from '@/i18n/useT';
+import { useDirection, useLocaleCode } from '@/i18n/useT';
 import { applyDirection } from '@/platform/direction';
 import { platformFetch } from '@/platform/fetch';
 import { useConnectionStore } from '@/state/connection';
+import { useLocaleStore } from '@/state/locale';
 import { ScreenBannerProvider, UIProvider } from '@/ui';
+
+// Before the first render, so the pairing screens and the saved PC use the pinned transport.
+installPinnedPairing();
 
 // A chat opened cold (deep link, notification) has the home screen beneath it.
 export const unstable_settings = { anchor: INITIAL_ROUTE };
 
 // Expo Router renders only the screens a layout declares.
-const ROUTES = [INITIAL_ROUTE, 'new', 'connectors', 'schedules', 'settings', 'documents', 'skills', 'memory', 'pair', 'pair/manual', 'pair/pcs', 'chat/[id]', 'dev/ui', 'dev/ui-lists', 'dev/composer', 'dev/forms', 'dev/markdown', 'dev/memory-gallery', 'dev/messages', 'dev/permission'];
+const ROUTES = [INITIAL_ROUTE, 'new', 'connectors', 'schedules', 'settings', 'documents', 'logs', 'skills', 'memory', 'pair', 'pair/manual', 'pair/pcs', 'chat/[id]', 'dev/ui', 'dev/ui-lists', 'dev/composer', 'dev/forms', 'dev/markdown', 'dev/memory-gallery', 'dev/messages', 'dev/permission'];
 
 export default function RootLayout() {
     const [queryClient] = useState(() => new QueryClient());
     const dir = useDirection();
+    const lang = useLocaleCode();
     const { width } = useWindowDimensions();
     const connection = useConnectionStore((s) => s.connection);
     const client = useMemo(
@@ -38,7 +43,14 @@ export default function RootLayout() {
         [connection],
     );
 
-    useEffect(() => applyDirection(dir), [dir]);
+    const localeLoaded = useLocaleStore((s) => s.hydrated);
+
+    // Before the saved pick loads, dir is the phone's and would overwrite the pick's flags.
+    useEffect(() => {
+        if (localeLoaded) applyDirection(dir, lang);
+    }, [dir, lang, localeLoaded]);
+
+    if (!localeLoaded) return null;
 
     return (
         <QueryClientProvider client={queryClient}>

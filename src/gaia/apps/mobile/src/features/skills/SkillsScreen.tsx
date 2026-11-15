@@ -26,6 +26,7 @@ import {
 } from '@/ui';
 
 import { ChipButton } from '../schedules/ChipButton';
+import { AddSkillsSheet } from './AddSkillsSheet';
 import { SettingsGroup } from './SettingsGroup';
 
 import { filterSkills, GROUPS, isGrouped, SEARCH_ABOVE, SKILLS_HOW_PARAMS, skippedName, skipReason } from './skillList';
@@ -38,6 +39,7 @@ export function SkillsScreen({ onTry }: { onTry: (name: string, prompt: string) 
     const skills = useSkills();
     const [query, setQuery] = useState('');
     const [howOpen, setHowOpen] = useState(false);
+    const [adding, setAdding] = useState(false);
     const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
 
     const all = skills.data?.skills ?? [];
@@ -60,6 +62,7 @@ export function SkillsScreen({ onTry }: { onTry: (name: string, prompt: string) 
                 <Disclosure title={t('settings.model.howItWorks')} open={howOpen} onToggle={() => setHowOpen(!howOpen)}>
                     <Text role="caption" tone="muted">{t('settings.skills.how', SKILLS_HOW_PARAMS)}</Text>
                 </Disclosure>
+                <Button label={t('settings.skills.link.title')} variant="secondary" full onPress={() => setAdding(true)} />
                 {skills.error ? (
                     <ErrorState title={describeError(skills.error, t)} onRetry={() => void skills.refetch()} />
                 ) : skills.isPending ? (
@@ -118,6 +121,7 @@ export function SkillsScreen({ onTry }: { onTry: (name: string, prompt: string) 
                     </>
                 )}
             </Stack>
+            <AddSkillsSheet open={adding} onClose={() => setAdding(false)} />
         </Screen>
     );
 }

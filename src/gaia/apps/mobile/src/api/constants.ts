@@ -10,6 +10,14 @@ export const UI_HEADERS = {
 
 export const ENDPOINTS = {
     agents: '/api/agents',
+    goal: '/api/goals/{goal_id}',
+    goalApprove: '/api/goals/{goal_id}/approve',
+    goalCancel: '/api/goals/{goal_id}/cancel',
+    goalReject: '/api/goals/{goal_id}/reject',
+    goals: '/api/goals',
+    goalsHealth: '/api/goals/health',
+    goalsStats: '/api/goals/stats',
+    gpuMemory: '/api/gpu-memory',
     health: '/api/health',
     cloudPrices: '/api/spending/prices/{provider}',
     lemonadeDetect: '/api/lemonade/detect',
@@ -20,6 +28,8 @@ export const ENDPOINTS = {
     memoryActivity: '/api/memory/activity',
     memoryConsolidate: '/api/memory/consolidate',
     memoryEmbeddingCoverage: '/api/memory/embedding-coverage',
+    memoryKnowledge: '/api/memory/knowledge',
+    memoryKnowledgeItem: '/api/memory/knowledge/{knowledge_id}',
     memoryRebuildEmbeddings: '/api/memory/rebuild-embeddings',
     memoryRebuildFts: '/api/memory/rebuild-fts',
     memoryReconcile: '/api/memory/reconcile',
@@ -30,6 +40,7 @@ export const ENDPOINTS = {
     memoryUpcoming: '/api/memory/upcoming',
     modelServer: '/api/system/model-server',
     modelServerBackend: '/api/system/model-server/backend',
+    providerConnect: '/api/providers/{provider}/connect',
     providerModels: '/api/providers/{provider}/models',
     providersActive: '/api/providers/active',
     providersSelect: '/api/providers/select',
@@ -42,6 +53,7 @@ export const ENDPOINTS = {
     session: '/api/sessions/{session_id}',
     sessionCapabilities: '/api/sessions/{session_id}/capabilities',
     sessionDocument: '/api/sessions/{session_id}/documents/{doc_id}',
+    sessionDocuments: '/api/sessions/{session_id}/documents',
     sessionEvents: '/api/sessions/events',
     sessionMessage: '/api/sessions/{session_id}/messages/{message_id}',
     sessionMessages: '/api/sessions/{session_id}/messages',
@@ -50,14 +62,23 @@ export const ENDPOINTS = {
     sessionPrivate: '/api/sessions/{session_id}/private',
     sessionRead: '/api/sessions/{session_id}/read',
     sessionSearch: '/api/sessions/search',
+    settings: '/api/settings',
+    settingsUndo: '/api/settings/undo',
     setupCancel: '/api/setup/cancel',
+    setupChatModel: '/api/setup/chat-model',
     setupCheck: '/api/setup/check',
     setupModelDownload: '/api/setup/models/download',
+    setupModelRemove: '/api/setup/models/remove',
+    setupModelSkip: '/api/setup/models/skip',
     setupNeeds: '/api/setup/needs/{job}',
+    setupNpuRecheck: '/api/setup/npu/recheck',
     setupPlan: '/api/setup/plan',
     setupRun: '/api/setup/run',
     setupStatus: '/api/setup/status',
+    setupVisionModel: '/api/setup/vision-model',
     skills: '/api/skills',
+    skillsFeatured: '/api/skills/featured',
+    skillsLinkPreview: '/api/skills/link/preview',
     chatSend: '/api/chat/send',
     chatAttach: '/api/chat/attach',
     chatCancel: '/api/chat/cancel',
@@ -70,8 +91,10 @@ export const ENDPOINTS = {
     chatFollowupOutcome: '/api/chat/followup/{session_id}',
     chatPerformance: '/api/chat/performance/{session_id}',
     chatUserInput: '/api/chat/user-input',
+    connector: '/api/connectors/{connector_id}',
     connectorActivation: '/api/connectors/{connector_id}/activations/{agent_id:path}',
     connectorActivations: '/api/connectors/{connector_id}/activations',
+    connectorDisable: '/api/connectors/{connector_id}/disable',
     connectorGrant: '/api/connectors/{connector_id}/grants/{agent_id:path}',
     connectorGrants: '/api/connectors/{connector_id}/grants',
     connectors: '/api/connectors',
@@ -83,6 +106,7 @@ export const ENDPOINTS = {
     documentFile: '/api/documents/{doc_id}/file',
     documentReindex: '/api/documents/{doc_id}/reindex',
     documentStatus: '/api/documents/{doc_id}/status',
+    documentUpload: '/api/documents/upload',
     documents: '/api/documents',
     filesUpload: '/api/files/upload',
     filesUploadMedia: '/api/files/upload-media',
@@ -101,6 +125,14 @@ export function connectorActivationsPath(connectorId: string): string {
     return ENDPOINTS.connectorActivations.replace('{connector_id}', encodeURIComponent(connectorId));
 }
 
+export function connectorDisablePath(connectorId: string): string {
+    return ENDPOINTS.connectorDisable.replace('{connector_id}', encodeURIComponent(connectorId));
+}
+
+export function connectorPath(connectorId: string): string {
+    return ENDPOINTS.connector.replace('{connector_id}', encodeURIComponent(connectorId));
+}
+
 export function connectorGrantPath(connectorId: string, agentId: string): string {
     return ENDPOINTS.connectorGrant
         .replace('{connector_id}', encodeURIComponent(connectorId))
@@ -111,8 +143,25 @@ export function connectorGrantsPath(connectorId: string): string {
     return ENDPOINTS.connectorGrants.replace('{connector_id}', encodeURIComponent(connectorId));
 }
 
+export function goalPath(goalId: string, action?: 'approve' | 'cancel' | 'reject'): string {
+    const path = ENDPOINTS.goal.replace('{goal_id}', encodeURIComponent(goalId));
+    return action ? `${path}/${action}` : path;
+}
+
 export function memoryActivityPath(days: number): string {
     return `${ENDPOINTS.memoryActivity}?days=${days}`;
+}
+
+export function memoryKnowledgeItemPath(knowledgeId: string): string {
+    return ENDPOINTS.memoryKnowledgeItem.replace('{knowledge_id}', encodeURIComponent(knowledgeId));
+}
+
+/** The knowledge list's query, built as the web's `toQuery` does: empty values dropped, the rest encoded. */
+export function memoryKnowledgePath(params: object): string {
+    const parts = Object.entries(params as Record<string, unknown>)
+        .filter(([, value]) => value !== undefined && value !== null && value !== '')
+        .flatMap(([key, value]) => (Array.isArray(value) ? value : [value]).map((one) => `${encodeURIComponent(key)}=${encodeURIComponent(String(one))}`));
+    return parts.length ? `${ENDPOINTS.memoryKnowledge}?${parts.join('&')}` : ENDPOINTS.memoryKnowledge;
 }
 
 export function memoryUpcomingPath(days: number): string {
@@ -147,6 +196,10 @@ export function chatPermissionsPath(sessionId: string): string {
     return ENDPOINTS.chatPermissions.replace('{session_id}', encodeURIComponent(sessionId));
 }
 
+export function providerConnectPath(provider: string): string {
+    return ENDPOINTS.providerConnect.replace('{provider}', encodeURIComponent(provider));
+}
+
 export function chatPermissionGrantsPath(sessionId: string, key?: string): string {
     const path = ENDPOINTS.chatPermissionGrants.replace('{session_id}', encodeURIComponent(sessionId));
     return key === undefined ? path : `${path}?key=${encodeURIComponent(key)}`;
@@ -172,6 +225,10 @@ export function sessionDocumentPath(sessionId: string, docId: string): string {
     return ENDPOINTS.sessionDocument
         .replace('{session_id}', encodeURIComponent(sessionId))
         .replace('{doc_id}', encodeURIComponent(docId));
+}
+
+export function sessionDocumentsPath(sessionId: string): string {
+    return ENDPOINTS.sessionDocuments.replace('{session_id}', encodeURIComponent(sessionId));
 }
 
 export function sessionCapabilitiesPath(sessionId: string): string {
@@ -240,6 +297,9 @@ export const SCHEDULE_RESULTS_LIMIT = 20;
 
 /** How often to re-read the schedules while their screen is open, so counts and times follow the PC. */
 export const SCHEDULES_POLL_MS = 10_000;
+/** How often the goal store's health is re-read, as the web's does (30 s). */
+export const GOAL_HEALTH_POLL_MS = 30_000;
+
 /** How long a memory result notice stays up, as the web's toasts do (4 s); a failure stays twice as long to be read. */
 export const MEMORY_NOTICE_MS = 4_000;
 export const MEMORY_ERROR_NOTICE_MS = 8_000;

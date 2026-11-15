@@ -28,7 +28,7 @@ export function MemoryTabs({ value, onChange }: { value: MemoryTabKey; onChange:
                                 <Surface tone={selected ? 'card' : 'primary'} radius="full" border={selected}>
                                     <Stack paddingX="lg" paddingY="sm">
                                         <Text role="label" weight={selected ? 'semibold' : 'medium'} tone={selected ? 'accent' : 'secondary'} numberOfLines={1}>
-                                            {t(tab.label)}
+                                            {t.bare(tab.label)}
                                         </Text>
                                     </Stack>
                                 </Surface>
