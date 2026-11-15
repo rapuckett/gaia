@@ -920,13 +920,8 @@ export async function deleteDocument(id: string): Promise<void> {
     return apiFetch('DELETE', `/documents/${id}`);
 }
 
-/** How far a running index has got: PDF pages read, then chunks embedded. */
-export interface IndexProgress {
-    phase: 'reading' | 'embedding';
-    done: number;
-    /** Null when the count isn't known upfront (e.g. pages of a non-PDF). */
-    total: number | null;
-}
+import type { IndexProgress } from '../utils/documentLibrary.core';
+export type { IndexProgress };
 
 export async function getDocumentStatus(id: string): Promise<{
     id: string;

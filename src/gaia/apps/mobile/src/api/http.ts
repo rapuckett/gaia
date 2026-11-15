@@ -25,18 +25,23 @@ import type {
     AgentList,
     AgentMcpList,
     CancelChatResult,
+    CancelIndexingResult,
     ChatPerformance,
     CloudPriceList,
     ConfirmToolResult,
     ContextChoice,
     ConnectorActivations,
+    AllPermissions,
     ConnectorGrants,
     ConnectorList,
     ContextUsageResult,
     ConsolidateMemoryResult,
+    DeleteDocumentResult,
     DeleteMessagesResult,
     DeleteScheduleResult,
     DocumentListResponse,
+    DocumentResponse,
+    DocumentStatus,
     EmbeddingCoverage,
     FollowUpOutcome,
     FollowUpResult,
@@ -60,6 +65,7 @@ import type {
     RestartModelResult,
     RequestOptions,
     ParsedSchedule,
+    PermissionMode,
     ProviderModelsResponse,
     RebuildEmbeddingsResult,
     ReconcileMemoryResult,
@@ -84,8 +90,10 @@ import {
     connectorGrantPath,
     connectorGrantsPath,
     cloudPricesPath,
+    documentPath,
     ENDPOINTS,
     chatContextPath,
+    chatPermissionGrantsPath,
     chatPerformancePath,
     chatPermissionsPath,
     providerConnectPath,
@@ -367,6 +375,18 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             return getJson<SessionPermissions>(chatPermissionsPath(sessionId), options?.signal);
         },
 
+        listAllPermissions(options) {
+            return getJson<AllPermissions>(ENDPOINTS.chatPermissionsDefault, options?.signal);
+        },
+
+        setDefaultPermissionMode(mode, options) {
+            return putJson<{ default_mode: PermissionMode }>(ENDPOINTS.chatPermissionsDefault, { mode }, options?.signal);
+        },
+
+        revokeGrants(sessionId, key, options) {
+            return deleteJson<SessionPermissions>(chatPermissionGrantsPath(sessionId, key), options?.signal);
+        },
+
         setPermissionMode(sessionId, mode, options) {
             return putJson<SessionPermissions>(chatPermissionsPath(sessionId), { mode }, options?.signal);
         },
@@ -599,6 +619,22 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         listDocuments(options) {
             return getJson<DocumentListResponse>(ENDPOINTS.documents, options?.signal);
+        },
+
+        cancelDocumentIndexing(docId, options) {
+            return postJson<CancelIndexingResult>(documentPath(docId, 'documentCancel'), undefined, options?.signal);
+        },
+
+        deleteDocument(docId, options) {
+            return deleteJson<DeleteDocumentResult>(documentPath(docId), options?.signal);
+        },
+
+        getDocumentStatus(docId, options) {
+            return getJson<DocumentStatus>(documentPath(docId, 'documentStatus'), options?.signal);
+        },
+
+        reindexDocument(docId, options) {
+            return postJson<DocumentResponse>(documentPath(docId, 'documentReindex'), undefined, options?.signal);
         },
 
         getSystemStatus(options) {

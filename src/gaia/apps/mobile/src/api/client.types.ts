@@ -1,6 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
+import type { IndexProgress } from '@webui/utils/documentLibrary.core';
 import type { FollowUpOutcome } from '@webui/utils/messageQueue';
 import type {
     ActiveModel,
@@ -39,7 +40,7 @@ import type {
 import type { AgentCapabilities } from '@webui/types/sessionPanel';
 import type { MemorySettings } from '@webui/services/memoryApi';
 import type { ActivityDay, TemporalItem, ToolStat } from '@webui/utils/memoryFormat.core';
-import type { CreateSessionRequest, DocumentListResponse, ModelServerInfo, SessionSearchResponse, ToolConfirmRequest, UserInputRequest as ApiUserInputRequest } from '@webui/types/api.gen';
+import type { CreateSessionRequest, DocumentListResponse, DocumentResponse, ModelServerInfo, SessionSearchResponse, ToolConfirmRequest, UserInputRequest as ApiUserInputRequest } from '@webui/types/api.gen';
 
 export type {
     ActiveModel,
@@ -83,7 +84,7 @@ export type {
     UnavailableConnectorRow,
 } from '@webui/types';
 export type { ActiveSkill, AgentCapabilities, AgentTool, SkillOrigin } from '@webui/types/sessionPanel';
-export type { CreateSessionRequest, DocumentListResponse, ModelServerInfo, SessionSearchResponse, SessionSearchResult, ToolConfirmRequest } from '@webui/types/api.gen';
+export type { CreateSessionRequest, DocumentListResponse, DocumentResponse, ModelServerInfo, SessionSearchResponse, SessionSearchResult, ToolConfirmRequest } from '@webui/types/api.gen';
 
 /** `display` is what the phone shows as the answer; it is never sent to GAIA. */
 export type UserInputRequest = ApiUserInputRequest & { display?: string };
@@ -104,6 +105,11 @@ export interface ConnectorList {
 
 export interface AgentList {
     agents: AgentInfo[];
+}
+
+export interface AllPermissions {
+    default_mode: PermissionMode;
+    sessions: SessionPermissions[];
 }
 
 /** Namespaced agent ids to the scopes granted to them. */
@@ -242,6 +248,26 @@ export interface UserInputResult {
     request_id: string;
 }
 
+export interface DeleteDocumentResult {
+    deleted: boolean;
+}
+
+export interface CancelIndexingResult {
+    cancelled: boolean;
+    id: string;
+}
+
+export interface DocumentStatus {
+    id: string;
+    indexing_status: string;
+    chunk_count: number;
+    is_active: boolean;
+    /** Null unless the document is being indexed right now. */
+    progress: IndexProgress | null;
+}
+
+export type { IndexProgress };
+
 /** What `POST /api/setup/run` takes; the web UI's `SetupRunOptions` (services/setupApi.ts). */
 export interface SetupRunOptions {
     acknowledgeLowDisk?: boolean;
@@ -319,6 +345,12 @@ export interface GaiaClient {
     selectModel(model: string, options?: RequestOptions): Promise<ActiveModel>;
     /** The chat's permission mode and the tools it always allows. */
     getPermissions(sessionId: string, options?: RequestOptions): Promise<SessionPermissions>;
+    /** Every chat with full access or grants, and the mode new chats start in. */
+    listAllPermissions(options?: RequestOptions): Promise<AllPermissions>;
+    /** The mode new chats start in. The PC refuses it with a 403 from anywhere but the PC itself. */
+    setDefaultPermissionMode(mode: PermissionMode, options?: RequestOptions): Promise<{ default_mode: PermissionMode }>;
+    /** Revokes one "always allow" grant, or all of the chat's when `key` is omitted. */
+    revokeGrants(sessionId: string, key?: string, options?: RequestOptions): Promise<SessionPermissions>;
     setPermissionMode(sessionId: string, mode: PermissionMode, options?: RequestOptions): Promise<SessionPermissions>;
     /** How full the model's context window is for the chat's next message, or why there is no reading yet. */
     getContextUsage(sessionId: string, options?: RequestOptions): Promise<ContextUsageResult>;
@@ -412,6 +444,14 @@ export interface GaiaClient {
     listScheduleResults(name: string, limit: number, options?: RequestOptions): Promise<ScheduleResults>;
     /** The library's documents; a chat searches only the ones attached to it. */
     listDocuments(options?: RequestOptions): Promise<DocumentListResponse>;
+    /** Stops a document's indexing; rejects with 404 when none is running. */
+    cancelDocumentIndexing(docId: string, options?: RequestOptions): Promise<CancelIndexingResult>;
+    /** Takes a document out of the library; the file on the PC is untouched. */
+    deleteDocument(docId: string, options?: RequestOptions): Promise<DeleteDocumentResult>;
+    /** Where a document's indexing has got, with its progress while it runs. */
+    getDocumentStatus(docId: string, options?: RequestOptions): Promise<DocumentStatus>;
+    /** Indexes a document again; rejects with the reason when it fails once more. */
+    reindexDocument(docId: string, options?: RequestOptions): Promise<DocumentResponse>;
     getSystemStatus(options?: RequestOptions): Promise<SystemStatus>;
     /** The model server's state, what it runs on and its memory; the pill and its sheet read it. */
     getLocalModelStatus(options?: RequestOptions): Promise<LocalModelStatus>;

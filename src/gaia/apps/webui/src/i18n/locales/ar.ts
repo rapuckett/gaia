@@ -1052,6 +1052,12 @@ const messages: Messages = {
     'docs.loadRetry': 'إعادة المحاولة',
     'docs.deleteFailed': 'تعذّرت إزالة {name}: {error}',
     'docs.cancelFailed': 'تعذّر إلغاء فهرسة {name}: {error}',
+    'docs.retryFailed': 'تعذّرت إعادة محاولة فهرسة {name}: {error}',
+    'docs.failureHint.corrupted': 'يبدو الملف تالفًا. نزّله أو صدّره من جديد ثم فهرس النسخة الجديدة.',
+    'docs.failureHint.encrypted': 'يحتاج ملف PDF إلى كلمة مرور لفتحه. احفظ نسخة بدون كلمة مرور ثم فهرس تلك النسخة.',
+    'docs.failureHint.empty': 'لا يحتوي ملف PDF على نص قابل للقراءة، وهذا يعني عادةً أنه مسح ضوئي. شغّل التعرف الضوئي على الحروف عليه ثم فهرسه مرة أخرى.',
+    'docs.failureHint.emptyFile': 'هذا الملف فارغ. أضف إليه محتوى ثم فهرسه مرة أخرى.',
+    'docs.failureHint.unsupportedWorkbook': 'هذا مصنّف .xls قديم أو محمي بكلمة مرور. افتحه في Excel واحفظ نسخة بصيغة .xlsx بدون كلمة مرور ثم فهرس تلك النسخة.',
     'docs.openFolderFailed': 'تعذّر فتح المجلد الذي يحتوي {name}: {error}',
     'docs.dismissError': 'إغلاق الخطأ',
     'docs.notAdded': 'تعذّرت إضافة {name}: لا يستطيع GAIA قراءته. السبب وزر إعادة المحاولة في صفّه أدناه.',
@@ -3583,6 +3589,8 @@ const messages: Messages = {
     'mobileApp.skills.yoursEmpty': 'لا شيء بعد. أضف مجلدًا فيه ملف SKILL.md إلى {path} على الكمبيوتر وسيظهر هنا.',
     'mobileApp.banner.openOnPc': 'افتح GAIA على جهاز الكمبيوتر لتشغيل خادم النماذج.',
     'mobileApp.settings.comingSoon': 'هذا القسم قادم إلى الهاتف قريبًا. في الوقت الحالي، غيّره من الكمبيوتر الذي يشغّل GAIA.',
+    'mobileApp.settings.pcOnly': 'غيّر هذا من الكمبيوتر الذي يشغّل GAIA.',
+    'mobileApp.settings.permissionsWarning': 'يتيح الوصول الكامل لـ GAIA تغيير الملفات أو حذفها وتشغيل الأوامر على الكمبيوتر الذي يشغّله دون سؤالك أولًا، في كل محادثة جديدة، حتى توقفه. قد يُحدث خطأ أو تعليمات ضارة في مستند يقرأه ضررًا حقيقيًا.',
     'mobileApp.settings.colors.invalidHex': 'أدخل لونًا بهذا الشكل: #1F5FA8.',
 };
 

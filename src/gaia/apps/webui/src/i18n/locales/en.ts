@@ -1052,6 +1052,12 @@ export const enMessages = {
     'docs.loadRetry': 'Try again',
     'docs.deleteFailed': 'Couldn\'t remove {name}: {error}',
     'docs.cancelFailed': 'Couldn\'t cancel indexing {name}: {error}',
+    'docs.retryFailed': 'Couldn\'t retry indexing {name}: {error}',
+    'docs.failureHint.corrupted': 'The file looks damaged. Re-download or re-export it, then index the new copy.',
+    'docs.failureHint.encrypted': 'The PDF needs a password to open. Save a copy without the password, then index that.',
+    'docs.failureHint.empty': 'The PDF has no readable text, which usually means it is a scan. Run OCR on it, then index it again.',
+    'docs.failureHint.emptyFile': 'This file is empty. Add content to it, then index it again.',
+    'docs.failureHint.unsupportedWorkbook': 'This is an old .xls workbook or has a password. Open it in Excel, save a copy as .xlsx without a password, then index that.',
     'docs.openFolderFailed': 'Couldn\'t open the folder for {name}: {error}',
     'docs.dismissError': 'Dismiss error',
     'docs.notAdded': '{name} couldn\'t be added: GAIA can\'t read it. Why, and Retry, are on its row below.',
@@ -3583,6 +3589,8 @@ export const enMessages = {
     'mobileApp.skills.yoursEmpty': 'None yet. Add a folder with a SKILL.md file to {path} on your PC and it shows up here.',
     'mobileApp.banner.openOnPc': 'Open GAIA on your PC to start the model server.',
     'mobileApp.settings.comingSoon': 'This section is coming to the phone soon. For now, change it on the PC running GAIA.',
+    'mobileApp.settings.pcOnly': 'Change this on the PC running GAIA.',
+    'mobileApp.settings.permissionsWarning': 'Full access lets GAIA change or delete files and run commands on your PC without asking you first, in every new chat, until you turn this off. A mistake or a bad instruction in a document it reads can do real damage.',
     'mobileApp.settings.colors.invalidHex': 'Enter a color like #1F5FA8.',
 } as const;
 

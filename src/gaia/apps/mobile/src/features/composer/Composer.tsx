@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import { useState, type ReactNode } from 'react';
+import { View, type ViewStyle } from 'react-native';
 
 import { MAX_MESSAGE_CHARS } from '@webui/utils/messageLimits';
 
@@ -38,6 +39,12 @@ export interface ComposerProps {
 
 // About the web box's 240 px cap at the body text size.
 const MAX_LINES = 9;
+
+// Row flow follows the layout direction, so Arabic mirrors without left/right.
+// Attach, Stop and Send keep their size; the chips give way first.
+const FIXED: ViewStyle = { flexDirection: 'row', alignItems: 'center', flexShrink: 0, gap: 8 };
+const CHIPS: ViewStyle = { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexGrow: 1, flexShrink: 1, minWidth: 0, gap: 8 };
+const GROUP: ViewStyle = { flexDirection: 'row', alignItems: 'center', flexShrink: 1, minWidth: 0, gap: 8 };
 
 export function Composer({
     value,
@@ -118,13 +125,13 @@ export function Composer({
                         bare
                         testID="composer-input"
                     />
-                    <Row gap="sm" align="center" justify="between">
-                        <Row gap="sm" align="center" flex={1}>
-                            {attachments ? <AttachButton onPick={attachments.add} disabled={!!disabledReason} /> : null}
-                            {leftControls}
-                        </Row>
-                        <Row gap="sm" align="center">
-                            {rightControls}
+                    <Row gap="sm" align="center">
+                        <View style={FIXED}>{attachments ? <AttachButton onPick={attachments.add} disabled={!!disabledReason} /> : null}</View>
+                        <View style={CHIPS} testID="composer-controls">
+                            <View style={GROUP}>{leftControls}</View>
+                            <View style={GROUP}>{rightControls}</View>
+                        </View>
+                        <View style={FIXED} testID="composer-actions">
                             {running ? (
                                 <Button
                                     variant="danger"
@@ -144,7 +151,7 @@ export function Composer({
                                 disabled={!canSend}
                                 testID="composer-send"
                             />
-                        </Row>
+                        </View>
                     </Row>
                 </Stack>
             </Surface>

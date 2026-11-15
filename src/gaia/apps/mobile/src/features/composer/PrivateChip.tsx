@@ -11,7 +11,7 @@ export function PrivateChip({ on, onChange, disabled }: { on: boolean; onChange:
     const t = useT();
     return (
         <ControlChip
-            label={on ? t('composer.private') : t('composer.memoryOn')}
+            label={t.bare(on ? 'composer.private' : 'composer.memoryOn')}
             icon={on ? EyeOff : Eye}
             warning={false}
             disabled={disabled}

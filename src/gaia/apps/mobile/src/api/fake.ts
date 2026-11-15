@@ -16,6 +16,8 @@ import type {
     EmbeddingCoverage,
     FollowUpOutcome,
     DocumentListResponse,
+    DocumentResponse,
+    DocumentStatus,
     GaiaClient,
     GpuMemoryStatus,
     HealthResponse,
@@ -34,6 +36,7 @@ import type {
     PreflightReport,
     ProvidersResponse,
     ParsedSchedule,
+    AllPermissions,
     PermissionMode,
     ProviderModelsResponse,
     RebuildEmbeddingsResult,
@@ -114,6 +117,12 @@ export interface FakeClientData {
     selectError?: GaiaApiError;
     /** What getPermissions answers, by chat; a chat not listed asks first. */
     permissions?: Record<string, PermissionMode>;
+    /** The "always allow" grants by chat. */
+    permissionGrants?: Record<string, { key: string; label: string }[]>;
+    /** The mode new chats start in. */
+    defaultPermissionMode?: PermissionMode;
+    /** Answers the default-mode PUT with the 403 the PC gives a phone. */
+    defaultModePcOnly?: boolean;
     /** What getContextUsage answers. */
     contextUsage?: ContextUsageResult;
     /** What getChatPerformance answers. */
@@ -158,6 +167,10 @@ export interface FakeClientData {
     /** What detectLemonade answers; an Error is thrown. */
     lemonadeDetect?: { found: LemonadeFound | null; unchecked?: string[] } | Error;
     documents?: DocumentListResponse;
+    /** What getDocumentStatus answers, by document; one not listed reports its row's status. */
+    documentStatuses?: Record<string, Partial<DocumentStatus>>;
+    /** Makes a library action on a document reject with this message, by action. */
+    documentFailures?: Partial<Record<DocumentAction, string>>;
     /** What getCapabilities answers, by chat; a chat not listed has no agent running (409). */
     capabilities?: Record<string, AgentCapabilities>;
     memorySettings?: MemorySettings;
@@ -177,6 +190,8 @@ export interface FakeClientData {
         refreshSystemContext?: RefreshSystemContextResult | Error;
     };
 }
+
+export type DocumentAction = 'cancel' | 'delete' | 'reindex';
 
 export interface FakeGaiaClient extends GaiaClient {
     readonly sent: { sessionId: string; message: string }[];
@@ -204,6 +219,7 @@ export interface FakeGaiaClient extends GaiaClient {
     readonly connects: string[];
     /** How many times recheckSetupNpu was asked. */
     readonly npuRechecks: number;
+    readonly documentActions: { action: DocumentAction; docId: string }[];
     readonly setupStarts: { skipChatModel: boolean; gaiaLemonade: boolean; upgradeEmbedded: boolean; serverOnly: boolean }[];
     readonly detached: { sessionId: string; docId: string }[];
     readonly capabilityReads: string[];
@@ -239,6 +255,21 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
     const downloads: FakeGaiaClient['downloads'] = [];
     const schedules = [...(data.schedules ?? [])];
     const scheduleActions: FakeGaiaClient['scheduleActions'] = [];
+    const documentActions: FakeGaiaClient['documentActions'] = [];
+    const library: DocumentListResponse = data.documents ?? { documents: [], total: 0, total_chunks: 0, total_size_bytes: 0 };
+
+    function findDocument(docId: string, action: DocumentAction): DocumentResponse {
+        documentActions.push({ action, docId });
+        const failure = data.documentFailures?.[action];
+        if (failure) throw new GaiaApiError(500, failure);
+        const doc = library.documents.find((d) => d.id === docId);
+        if (!doc) throw new GaiaApiError(404, 'Document not found');
+        return doc;
+    }
+
+    function permissionsOf(sessionId: string): SessionPermissions {
+        return { session_id: sessionId, mode: data.permissions?.[sessionId] ?? 'ask', grants: [...(data.permissionGrants?.[sessionId] ?? [])] };
+    }
 
     function findSchedule(name: string): Schedule {
         const schedule = schedules.find((s) => s.name === name);
@@ -295,6 +326,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         confirmations,
         answers,
         scheduleActions,
+        documentActions,
         followUps,
         restarts,
         selected,
@@ -378,11 +410,27 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             return data.activeModel;
         },
         async getPermissions(sessionId): Promise<SessionPermissions> {
-            return { session_id: sessionId, mode: data.permissions?.[sessionId] ?? 'ask', grants: [] };
+            return permissionsOf(sessionId);
+        },
+        async listAllPermissions(): Promise<AllPermissions> {
+            const ids = new Set([...Object.keys(data.permissions ?? {}), ...Object.keys(data.permissionGrants ?? {})]);
+            const sessions = [...ids].map(permissionsOf).filter((p) => p.mode !== 'ask' || p.grants.length > 0);
+            return { default_mode: data.defaultPermissionMode ?? 'ask', sessions };
+        },
+        async setDefaultPermissionMode(mode) {
+            if (data.defaultModePcOnly) throw new GaiaApiError(403, 'Change this on the PC running GAIA.');
+            data.defaultPermissionMode = mode;
+            return { default_mode: mode };
+        },
+        async revokeGrants(sessionId, key): Promise<SessionPermissions> {
+            const held = data.permissionGrants?.[sessionId] ?? [];
+            if (key !== undefined && !held.some((g) => g.key === key)) throw new GaiaApiError(404, `No grant '${key}' in this chat.`);
+            data.permissionGrants = { ...data.permissionGrants, [sessionId]: key === undefined ? [] : held.filter((g) => g.key !== key) };
+            return permissionsOf(sessionId);
         },
         async setPermissionMode(sessionId, mode): Promise<SessionPermissions> {
             data.permissions = { ...data.permissions, [sessionId]: mode };
-            return { session_id: sessionId, mode, grants: [] };
+            return permissionsOf(sessionId);
         },
         async getContextUsage() {
             return data.contextUsage ?? { available: false, reason: 'Measured once GAIA has answered in this chat.' };
@@ -643,7 +691,36 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             return { deleted: true };
         },
         async listDocuments() {
-            return data.documents ?? { documents: [], total: 0, total_chunks: 0, total_size_bytes: 0 };
+            return { ...library, documents: [...library.documents] };
+        },
+        async cancelDocumentIndexing(docId) {
+            const doc = findDocument(docId, 'cancel');
+            doc.indexing_status = 'cancelled';
+            return { cancelled: true, id: docId };
+        },
+        async deleteDocument(docId) {
+            const doc = findDocument(docId, 'delete');
+            library.documents.splice(library.documents.indexOf(doc), 1);
+            return { deleted: true };
+        },
+        async getDocumentStatus(docId) {
+            const doc = library.documents.find((d) => d.id === docId);
+            if (!doc) throw new GaiaApiError(404, 'Document not found');
+            return {
+                id: docId,
+                indexing_status: doc.indexing_status ?? 'complete',
+                chunk_count: doc.chunk_count,
+                is_active: false,
+                progress: null,
+                ...data.documentStatuses?.[docId],
+            };
+        },
+        async reindexDocument(docId) {
+            const doc = findDocument(docId, 'reindex');
+            doc.indexing_status = 'indexing';
+            doc.last_error = null;
+            doc.error_kind = null;
+            return doc;
         },
         async getCapabilities(sessionId) {
             capabilityReads.push(sessionId);
