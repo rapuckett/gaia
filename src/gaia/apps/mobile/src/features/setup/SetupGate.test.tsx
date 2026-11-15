@@ -8,11 +8,11 @@ import { ThemeProvider } from '@/ui';
 
 import { reopenSetup, SetupGate } from './SetupGate';
 
-const open = jest.fn();
+const mockOpen = jest.fn();
 
 jest.mock('@/data', () => ({
     useGaiaClient: () => ({}),
-    useSetupGate: () => ({ gate: { state: 'ready' }, recheck: jest.fn(), finish: jest.fn(), open }),
+    useSetupGate: () => ({ gate: { state: 'ready' }, recheck: jest.fn(), finish: jest.fn(), open: mockOpen }),
 }));
 jest.mock('@/features/pairing', () => ({ PinMismatchScreen: () => null, usePairAgain: () => ({ mutate: jest.fn(), isPending: false }) }));
 jest.mock('./SetupScreen', () => ({ SetupScreen: () => null }));
@@ -24,7 +24,7 @@ describe('reopenSetup', () => {
         const { unmount } = await render(<SetupGate><Text>App</Text></SetupGate>, { wrapper: ThemeProvider });
         expect(screen.getByText('App')).toBeTruthy();
         reopenSetup();
-        expect(open).toHaveBeenCalledTimes(1);
+        expect(mockOpen).toHaveBeenCalledTimes(1);
         await unmount();
         expect(() => reopenSetup()).toThrow(/not mounted/);
     });

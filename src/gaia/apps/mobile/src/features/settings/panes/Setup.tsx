@@ -42,7 +42,7 @@ export default function Setup() {
 
     // Rows whose setting has no anchor in this app yet (cloud keys, GPU memory, models on this PC,
     // model server) are plain lines until the section that owns them registers one.
-    const groups: Array<{ title: string; lines: Line[] }> = [
+    const groups: { title: string; lines: Line[] }[] = [
         {
             title: t('settings.setup.where'),
             lines: [{ label: t('settings.setup.chatRuns'), value: chatName, to: { section: 'model', target: 'model-in-use' }, testID: 'setup-chat-model' }],
