@@ -1,7 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { GaiaApiError } from '@/api/errors';
+import { GaiaApiError, GaiaNetworkError } from '@/api/errors';
 import type { SystemStatus } from '@/api/client.types';
 import { isStarting } from '@/data';
 import { describeErrorWith, type Translate } from '@/i18n/useT';
@@ -53,6 +53,10 @@ export function pickBanner(status: SystemStatus | undefined, fetchError: unknown
                 message: t('banner.backendErrorHint'),
                 retry: true,
             };
+        }
+        // The PC itself not answering reads as the setup gate does; the assistant wording is for a PC that answers.
+        if (fetchError instanceof GaiaNetworkError) {
+            return { id: 'unreachable', tone: 'danger', title: t('mobileApp.pairing.off.title'), message: t('mobileApp.pairing.unreachable.body'), retry: true };
         }
         return { id: 'unreachable', tone: 'danger', title: t('banner.unreachable'), message: t('banner.unreachableHint'), retry: true };
     }

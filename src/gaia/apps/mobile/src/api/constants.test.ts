@@ -145,6 +145,7 @@ describe('endpoints', () => {
         providerModels: ['GET'],
         providersActive: ['GET'],
         providersKeyStoreRetry: ['POST'],
+        providersList: ['GET'],
         providersSelect: ['POST'],
         schedule: ['DELETE', 'PUT'],
         scheduleResults: ['GET'],
@@ -181,6 +182,9 @@ describe('endpoints', () => {
         skills: ['GET'],
         skillsFeatured: ['GET'],
         skillsLinkPreview: ['POST'],
+        speech: ['POST'],
+        speechModel: ['GET'],
+        speechSettings: ['GET', 'PUT'],
         spending: ['GET'],
         spendingAllowMonth: ['POST'],
         spendingLimit: ['PUT'],
@@ -226,7 +230,6 @@ describe('endpoints', () => {
         modelServerBackend: ['PUT'],
         onboardingPreflight: ['GET'],
         onboardingStart: ['GET'],
-        providers: ['GET'],
     };
     const calls = Object.entries(ENDPOINTS).flatMap(([name, path]) =>
         methods[name as keyof typeof ENDPOINTS].map((method) => `${method} ${path}`),

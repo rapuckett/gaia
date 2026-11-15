@@ -72,6 +72,7 @@ import type {
     MemorySettings,
     MemorySettingsUpdateResponse,
     MemoryStats,
+    PcAudioBytes,
     MemoryToolStat,
     MCPServerStatus,
     MemoryTurn,
@@ -82,7 +83,7 @@ import type {
     ModelServerInfo,
     PreflightReport,
     ProviderConnected,
-    ProvidersResponse,
+    ProviderSummaryList,
     RetryChoice,
     RetryResult,
     RestartModelResult,
@@ -104,6 +105,8 @@ import type {
     SetupRunStatus,
     Settings,
     SkillList,
+    SpeechModel,
+    SpeechSettings,
     SpendingReport,
     UndoSettings,
     UploadedFile,
@@ -297,6 +300,26 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
         }
     }
 
+    async function drainBytes(res: FetchResponseLike): Promise<Uint8Array<ArrayBuffer>> {
+        if (!res.body) throw new GaiaStreamError('mobileApp.error.noBody');
+        const reader = res.body.getReader();
+        const chunks: Uint8Array[] = [];
+        let size = 0;
+        for (;;) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            chunks.push(value);
+            size += value.length;
+        }
+        const out = new Uint8Array(size);
+        let at = 0;
+        for (const chunk of chunks) {
+            out.set(chunk, at);
+            at += chunk.length;
+        }
+        return out;
+    }
+
     async function getJson<T>(path: string, signal?: AbortSignal): Promise<T> {
         return readJson<T>(await request('GET', path, undefined, signal), path);
     }
@@ -319,24 +342,7 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
     // The whole body, drained from the stream: a file on the PC is read by this client only, never by a URL handed to the system.
     async function readBytes(path: string, signal?: AbortSignal): Promise<Uint8Array> {
-        const res = await request('GET', path, undefined, signal);
-        if (!res.body) throw new GaiaStreamError('mobileApp.error.noBody');
-        const reader = res.body.getReader();
-        const parts: Uint8Array[] = [];
-        let size = 0;
-        for (;;) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            parts.push(value);
-            size += value.length;
-        }
-        const out = new Uint8Array(size);
-        let at = 0;
-        for (const part of parts) {
-            out.set(part, at);
-            at += part.length;
-        }
-        return out;
+        return drainBytes(await request('GET', path, undefined, signal));
     }
 
     async function* streamTurn(
@@ -861,6 +867,23 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             return getJson<MemoryStats>(ENDPOINTS.memoryStats, options?.signal);
         },
 
+        getSpeechSettings(options) {
+            return getJson<SpeechSettings>(ENDPOINTS.speechSettings, options?.signal);
+        },
+
+        updateSpeechSettings(change, options) {
+            return putJson<SpeechSettings>(ENDPOINTS.speechSettings, change, options?.signal);
+        },
+
+        getSpeechModel(options) {
+            return getJson<SpeechModel>(ENDPOINTS.speechModel, options?.signal);
+        },
+
+        async speak(text, voice, options): Promise<PcAudioBytes> {
+            const res = await request('POST', ENDPOINTS.speech, { text, voice: voice?.voice, speed: voice?.speed }, options?.signal);
+            return { bytes: await drainBytes(res), contentType: res.headers.get('content-type') ?? '' };
+        },
+
         getMemorySettings(options) {
             return getJson<MemorySettings>(ENDPOINTS.memorySettings, options?.signal);
         },
@@ -1014,8 +1037,8 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             return getJson<SetupCheck>(`${ENDPOINTS.setupCheck}?skip_chat_model=${skipChatModel}`, options?.signal);
         },
 
-        listProviders(options) {
-            return getJson<ProvidersResponse>(ENDPOINTS.providers, options?.signal);
+        listProviderSummaries(options) {
+            return getJson<ProviderSummaryList>(ENDPOINTS.providersList, options?.signal);
         },
 
         getModelServer(options) {

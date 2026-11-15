@@ -366,11 +366,13 @@ def _processes() -> List[Dict[str, Any]]:
     """Lemonade and its backends now running: pid, name, uptime. No cmdlines."""
     import psutil
 
+    from gaia.utils.process_tree import readable_processes
+
     now = time.time()
     found = []
     # Names only across every process: asking each for its start time and
     # status took 30-50 s on Windows. Those are read for the few matches.
-    for proc in psutil.process_iter(["pid", "name"]):
+    for proc in readable_processes(["pid", "name"]):
         info = proc.info
         name = (info.get("name") or "").lower()
         stem = name[:-4] if name.endswith(".exe") else name

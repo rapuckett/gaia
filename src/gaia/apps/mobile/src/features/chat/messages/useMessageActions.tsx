@@ -34,6 +34,7 @@ export interface MessageContext {
 export type StartOpen = 'actions' | 'delete' | 'edit';
 
 const ALONE: MessageContext = { laterTurns: 0 };
+const NO_ACTIONS: SheetAction[] = [];
 
 export interface MessageActions {
     copy(): void;
@@ -52,8 +53,14 @@ export interface MessageActions {
     notice: ReactNode;
 }
 
-// Read aloud waits for the voice work; Try again is the turn tail's button.
-export function useMessageActions(message: Message, copyText: string, context: MessageContext = ALONE, startOpen?: StartOpen): MessageActions {
+// Try again is the turn tail's button. `extra` goes before Copy (a reply's Read aloud).
+export function useMessageActions(
+    message: Message,
+    copyText: string,
+    context: MessageContext = ALONE,
+    startOpen?: StartOpen,
+    extra: SheetAction[] = NO_ACTIONS,
+): MessageActions {
     const t = useT();
     const client = useGaiaClient();
     const queryClient = useQueryClient();
@@ -133,6 +140,7 @@ export function useMessageActions(message: Message, copyText: string, context: M
                   { label: t('msg.resend'), icon: RefreshCw, onPress: () => askThenSend(message.content) },
               ]
             : []),
+        ...extra,
         ...(canRetry ? [{ label: t('retry.button'), icon: Shuffle, onPress: () => setRetryOpen(true) }] : []),
         ...(copyText ? [{ label: t('msg.copy'), icon: Copy, onPress: copy }] : []),
         ...(canChange ? [{ label: t('msg.delete'), icon: Trash2, destructive: true, onPress: () => setConfirmDelete(true) }] : []),

@@ -103,8 +103,9 @@ export function useRetryChoices(open: boolean, cloudProvider: string | null) {
         gcTime: 0,
         queryFn: async ({ signal }) => {
             const c = requireClient(client);
-            const { providers, lemonade_error } = await c.listProviders({ signal });
+            const { providers: listed, lemonade_error } = await c.listProviderSummaries({ signal });
             if (lemonade_error) throw new Error(lemonade_error);
+            const providers = listed.filter((p) => p.configured && !p.blocked);
             const inUse = cloudProvider ? providers.find((p) => p.remote && p.id === cloudProvider) : undefined;
             const [cloudList, ...lists] = await Promise.all([
                 inUse ? c.listProviderModels(inUse.id, { signal }) : Promise.resolve(null),
