@@ -7,7 +7,7 @@ import { useEffect, useRef, useState } from 'react';
 import { needsOutcome, nextToSend } from '@webui/utils/messageQueue';
 
 import { useAnswerQuestion, useChatStream, useContextUsage, useMessages, useSession } from '@/data';
-import { Composer, ContextMeter, ContextWarning, ModelChip, useComposerQueue, useFollowUpEvents } from '@/features/composer';
+import { Composer, ContextMeter, ContextWarning, ModelChip, useAttachments, useComposerQueue, useFollowUpEvents } from '@/features/composer';
 import { QueuedMessages } from '@/features/composer/QueuedMessages';
 import { describeError, useT } from '@/i18n/useT';
 import { isQuestionGone, questionCardData, resolveTypedAnswer } from '@/features/questions/questionLogic';
@@ -21,6 +21,7 @@ import { usePermissionPrompt } from './permission/usePermissionPrompt';
 import { liveStatusLine } from './liveStatus';
 import { MessageList } from './messages/MessageList';
 import { TailIssues } from './ReplyErrors';
+import { SessionPanel } from './session-panel';
 import { buildTail } from './tailState';
 import { TurnTail } from './TurnTail';
 
@@ -32,11 +33,13 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
     const messages = useMessages(sessionId);
     const stream = useChatStream(sessionId);
     const queue = useComposerQueue(sessionId);
+    const attachments = useAttachments();
     const permission = usePermissionPrompt(sessionId);
     const answer = useAnswerQuestion();
     const followUps = useFollowUpEvents(sessionId, stream.events);
     const stopped = useRef(false);
     const [actionError, setActionError] = useState<unknown>(null);
+    const [panelOpen, setPanelOpen] = useState(false);
     const busy = stream.status !== 'idle';
     const context = useContextUsage(sessionId, stream.events, busy);
     const saved = messages.data?.messages ?? NO_MESSAGES;
@@ -114,7 +117,7 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
     return (
         <Screen
             keyboard="avoid"
-            header={<ChatHeader sessionId={sessionId} />}
+            header={<ChatHeader sessionId={sessionId} onOpenSessionPanel={() => setPanelOpen(true)} />}
             footer={
                 <>
                     {actionError ? (
@@ -143,6 +146,7 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
                         onSend={send}
                         onStop={stop}
                         running={busy}
+                        attachments={attachments}
                         answering={!!question}
                         placeholder={placeholder}
                         rightControls={
@@ -177,6 +181,7 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
                     }
                 />
             )}
+            <SessionPanel sessionId={sessionId} open={panelOpen} onClose={() => setPanelOpen(false)} />
         </Screen>
     );
 }
