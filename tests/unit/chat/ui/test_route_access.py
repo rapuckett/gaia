@@ -283,6 +283,7 @@ REMOTE = {
     "POST /api/files/upload",
     "POST /api/files/upload-media",
     "POST /api/goals",
+    "POST /api/goals/store/reset",
     "POST /api/goals/{goal_id}/tasks",
     "POST /api/gpu-memory/pending",
     "POST /api/memory/consolidate",
