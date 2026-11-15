@@ -41,7 +41,7 @@ function Thought({ step, live, durationMs }: { step: ActivityRow; live: boolean;
     if (!text) return null;
     return (
         <Disclosure title={thoughtLabel(live, durationMs, t)} open={open} onToggle={() => setOpen((v) => !v)}>
-            <Text role="label" tone="secondary">
+            <Text role="label" dir="auto" tone="secondary">
                 {text}
             </Text>
         </Disclosure>
@@ -64,7 +64,7 @@ export function ActivityTimeline({ steps, running = false, awaitingUser = false,
             case 'thinking':
                 return <Thought key={row.id} step={row} live={running && !!row.active} durationMs={durations.get(row.id)} />;
             case 'tool':
-                return <ToolStepRow key={row.id} step={row} now={now} awaitingUser={running && awaitingUser} />;
+                return <ToolStepRow key={row.id} step={row} now={now} awaitingUser={running && awaitingUser} testID={`step-row-${rows.indexOf(row)}`} />;
             case 'plan':
                 return row === livePlan ? null : <PlanChecklist key={row.id} step={row} />;
             case 'status':
@@ -88,7 +88,7 @@ export function ActivityTimeline({ steps, running = false, awaitingUser = false,
             {timeline.map((item, i) => {
                 if (item.kind === 'note') {
                     return (
-                        <Text key={item.row.id} role="label" tone="secondary">
+                        <Text key={item.row.id} role="label" dir="auto" tone="secondary">
                             {item.row.detail}
                         </Text>
                     );

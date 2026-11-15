@@ -20,6 +20,7 @@ import {
     type StreamEndpoint,
 } from './errors';
 import type {
+    ActiveModel,
     AgentCapabilities,
     AgentList,
     AgentMcpList,
@@ -30,12 +31,14 @@ import type {
     ConnectorGrants,
     ConnectorList,
     ContextUsageResult,
+    ConsolidateMemoryResult,
     DeleteDocumentResult,
     DeleteMessagesResult,
     DeleteScheduleResult,
     DocumentListResponse,
     DocumentResponse,
     DocumentStatus,
+    EmbeddingCoverage,
     FollowUpOutcome,
     FollowUpResult,
     DeleteSessionResult,
@@ -44,16 +47,23 @@ import type {
     LemonadeFound,
     LemonadeTarget,
     LocalModelStatus,
+    MemorySettings,
+    MemoryStats,
     MessageList,
     ModelNeed,
     PreflightReport,
     RestartModelResult,
     RequestOptions,
     ParsedSchedule,
+    ProviderModelsResponse,
+    RebuildEmbeddingsResult,
+    ReconcileMemoryResult,
+    RefreshSystemContextResult,
     Schedule,
     ScheduleList,
     ScheduleResults,
     SessionList,
+    SessionPermissions,
     SessionSearchResponse,
     SetupCheck,
     SetupPlan,
@@ -71,6 +81,8 @@ import {
     documentPath,
     ENDPOINTS,
     chatContextPath,
+    chatPermissionsPath,
+    providerModelsPath,
     followupOutcomePath,
     MESSAGE_PAGE_SIZE,
     QUEUED_IDLE_MS,
@@ -318,6 +330,26 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             return postJson<Session>(sessionReadPath(sessionId), undefined, options?.signal);
         },
 
+        getActiveModel(options) {
+            return getJson<ActiveModel>(ENDPOINTS.providersActive, options?.signal);
+        },
+
+        listProviderModels(provider, options) {
+            return getJson<ProviderModelsResponse>(providerModelsPath(provider), options?.signal);
+        },
+
+        selectModel(model, options) {
+            return postJson<ActiveModel>(ENDPOINTS.providersSelect, { model }, options?.signal);
+        },
+
+        getPermissions(sessionId, options) {
+            return getJson<SessionPermissions>(chatPermissionsPath(sessionId), options?.signal);
+        },
+
+        setPermissionMode(sessionId, mode, options) {
+            return putJson<SessionPermissions>(chatPermissionsPath(sessionId), { mode }, options?.signal);
+        },
+
         getContextUsage(sessionId, options) {
             return getJson<ContextUsageResult>(chatContextPath(sessionId), options?.signal);
         },
@@ -490,6 +522,38 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         listScheduleResults(name, limit, options) {
             return getJson<ScheduleResults>(scheduleResultsPath(name, limit), options?.signal);
+        },
+
+        getMemoryStats(options) {
+            return getJson<MemoryStats>(ENDPOINTS.memoryStats, options?.signal);
+        },
+
+        getMemorySettings(options) {
+            return getJson<MemorySettings>(ENDPOINTS.memorySettings, options?.signal);
+        },
+
+        getEmbeddingCoverage(options) {
+            return getJson<EmbeddingCoverage>(ENDPOINTS.memoryEmbeddingCoverage, options?.signal);
+        },
+
+        consolidateMemory(options) {
+            return postJson<ConsolidateMemoryResult>(ENDPOINTS.memoryConsolidate, undefined, options?.signal);
+        },
+
+        rebuildEmbeddings(options) {
+            return postJson<RebuildEmbeddingsResult>(ENDPOINTS.memoryRebuildEmbeddings, undefined, options?.signal);
+        },
+
+        reconcileMemory(options) {
+            return postJson<ReconcileMemoryResult>(ENDPOINTS.memoryReconcile, undefined, options?.signal);
+        },
+
+        rebuildMemoryFts(options) {
+            return postJson<{ status: string }>(ENDPOINTS.memoryRebuildFts, undefined, options?.signal);
+        },
+
+        refreshSystemContext(options) {
+            return postJson<RefreshSystemContextResult>(ENDPOINTS.memoryRefreshSystemContext, undefined, options?.signal);
         },
 
         deleteSchedule(name, options) {

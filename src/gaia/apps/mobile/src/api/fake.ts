@@ -2,12 +2,15 @@
 // SPDX-License-Identifier: MIT
 
 import type {
+    ActiveModel,
     AgentCapabilities,
     AgentInfo,
     AgentMcpServer,
     ConnectorListEntry,
     ContextUsageResult,
+    ConsolidateMemoryResult,
     CreateSessionRequest,
+    EmbeddingCoverage,
     FollowUpOutcome,
     DocumentListResponse,
     DocumentResponse,
@@ -17,16 +20,24 @@ import type {
     LemonadeFound,
     LemonadeTarget,
     LocalModelStatus,
+    MemorySettings,
+    MemoryStats,
     Message,
     MessageList,
     ModelNeed,
     PreflightReport,
     ParsedSchedule,
+    PermissionMode,
+    ProviderModelsResponse,
+    RebuildEmbeddingsResult,
+    ReconcileMemoryResult,
+    RefreshSystemContextResult,
     Schedule,
     ScheduleResult,
     ResourceUsage,
     Session,
     SessionList,
+    SessionPermissions,
     SessionSearchResponse,
     SessionSearchResult,
     SetupCheck,
@@ -66,6 +77,12 @@ export interface FakeClientData {
     agentMcps?: AgentMcpServer[];
     /** Makes uploadFile reject, as a refused file does. */
     uploadError?: GaiaApiError;
+    /** What getActiveModel answers, and what selectModel last picked. */
+    activeModel?: ActiveModel;
+    /** What listProviderModels answers, by provider. */
+    providerModels?: Record<string, ProviderModelsResponse>;
+    /** What getPermissions answers, by chat; a chat not listed asks first. */
+    permissions?: Record<string, PermissionMode>;
     /** What getContextUsage answers. */
     contextUsage?: ContextUsageResult;
     /** What getFollowUpOutcome answers; a function may throw to script a 409. */
@@ -106,6 +123,18 @@ export interface FakeClientData {
     documentFailures?: Partial<Record<DocumentAction, string>>;
     /** What getCapabilities answers, by chat; a chat not listed has no agent running (409). */
     capabilities?: Record<string, AgentCapabilities>;
+    memorySettings?: MemorySettings;
+    /** Each stats read answers the next entry (the last one repeats); an Error entry is thrown. */
+    memoryStats?: (MemoryStats | Error)[];
+    embeddingCoverage?: EmbeddingCoverage;
+    /** What each maintenance POST answers; an Error makes it fail. Unlisted ones answer a zero result. */
+    memoryActionResults?: {
+        consolidate?: ConsolidateMemoryResult | Error;
+        rebuildEmbeddings?: RebuildEmbeddingsResult | Error;
+        reconcile?: ReconcileMemoryResult | Error;
+        rebuildFts?: Error;
+        refreshSystemContext?: RefreshSystemContextResult | Error;
+    };
 }
 
 export type DocumentAction = 'cancel' | 'delete' | 'reindex';
@@ -131,6 +160,10 @@ export interface FakeGaiaClient extends GaiaClient {
     readonly setupStarts: { skipChatModel: boolean; gaiaLemonade: boolean; upgradeEmbedded: boolean; serverOnly: boolean }[];
     readonly detached: { sessionId: string; docId: string }[];
     readonly capabilityReads: string[];
+    /** Each memory maintenance POST, in order. */
+    readonly memoryActions: string[];
+    /** How many times the stats were read. */
+    readonly memoryStatsReads: number;
 }
 
 export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
@@ -183,6 +216,13 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
     };
     const detached: FakeGaiaClient['detached'] = [];
     const capabilityReads: string[] = [];
+    const memoryActions: string[] = [];
+    let memoryStatsReads = 0;
+    function memoryAction<T>(name: string, result: T | Error): T {
+        memoryActions.push(name);
+        if (result instanceof Error) throw result;
+        return result;
+    }
 
     function findSession(sessionId: string): Session {
         const session = sessions.find((s) => s.id === sessionId);
@@ -218,6 +258,10 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         setupStarts,
         detached,
         capabilityReads,
+        memoryActions,
+        get memoryStatsReads() {
+            return memoryStatsReads;
+        },
         async health(): Promise<HealthResponse> {
             return { status: 'ok', service: 'gaia-agent-ui' };
         },
@@ -247,6 +291,25 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             if (data.uploadError) throw data.uploadError;
             uploads.push({ name, size: file.size });
             return { filename: name, original_name: name, url: `/api/files/uploads/${name}`, size: file.size, content_type: file.type, is_image: file.type.startsWith('image/') };
+        },
+        async getActiveModel() {
+            if (!data.activeModel) throw new GaiaApiError(503, 'This fake client was given no active model.');
+            return data.activeModel;
+        },
+        async listProviderModels(provider) {
+            return data.providerModels?.[provider] ?? { provider, models: [] };
+        },
+        async selectModel(model) {
+            if (!data.activeModel) throw new GaiaApiError(503, 'This fake client was given no active model.');
+            data.activeModel = { ...data.activeModel, model };
+            return data.activeModel;
+        },
+        async getPermissions(sessionId): Promise<SessionPermissions> {
+            return { session_id: sessionId, mode: data.permissions?.[sessionId] ?? 'ask', grants: [] };
+        },
+        async setPermissionMode(sessionId, mode): Promise<SessionPermissions> {
+            data.permissions = { ...data.permissions, [sessionId]: mode };
+            return { session_id: sessionId, mode, grants: [] };
         },
         async getContextUsage() {
             return data.contextUsage ?? { available: false, reason: 'Measured once GAIA has answered in this chat.' };
@@ -391,6 +454,36 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         },
         async listSkills() {
             return { skills: [...(data.skills?.skills ?? [])], invalid: { ...(data.skills?.invalid ?? {}) } };
+        },
+        async getMemoryStats() {
+            if (!data.memoryStats?.length) throw new GaiaApiError(503, 'This fake client was given no memory stats.');
+            return nextOf(data.memoryStats, memoryStatsReads++);
+        },
+        async getMemorySettings() {
+            if (!data.memorySettings) throw new GaiaApiError(503, 'This fake client was given no memory settings.');
+            return data.memorySettings;
+        },
+        async getEmbeddingCoverage() {
+            if (!data.embeddingCoverage) throw new GaiaApiError(503, 'This fake client was given no embedding coverage.');
+            return data.embeddingCoverage;
+        },
+        async consolidateMemory() {
+            return memoryAction('consolidate', data.memoryActionResults?.consolidate ?? { status: 'ok', consolidated: 0, extracted_items: 0 });
+        },
+        async rebuildEmbeddings() {
+            return memoryAction('rebuildEmbeddings', data.memoryActionResults?.rebuildEmbeddings ?? { backfilled: 0, total_without: 0 });
+        },
+        async reconcileMemory() {
+            return memoryAction(
+                'reconcile',
+                data.memoryActionResults?.reconcile ?? { pairs_checked: 0, reinforced: 0, contradicted: 0, weakened: 0, neutral: 0 },
+            );
+        },
+        async rebuildMemoryFts() {
+            return memoryAction('rebuildFts', data.memoryActionResults?.rebuildFts ?? { status: 'ok' });
+        },
+        async refreshSystemContext() {
+            return memoryAction('refreshSystemContext', data.memoryActionResults?.refreshSystemContext ?? { stored: 0, skipped: false });
         },
         async listSchedules() {
             return { schedules: [...schedules], total: schedules.length };
