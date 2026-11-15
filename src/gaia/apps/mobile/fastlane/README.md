@@ -72,6 +72,7 @@ and every later build is `ios device` followed by `ios sideload`.
 | `GAIA_IOS_BUNDLE_ID` | The production app's bundle id, as `app.config.ts` sets it for `APP_ENV=production` | `ios device` (`app_env:production`) |
 | `GAIA_IOS_BUNDLE_ID_DEV` | The development app's bundle id, as `app.config.ts` sets it for `APP_ENV=development` | `ios device app_env:development` |
 | `GAIA_IOS_DEVICE` | The iPhone's device id, from `xcrun devicectl list devices` | `ios sideload`, `ios device register_device:true` |
+| `GAIA_APS_ENVIRONMENT` | Optional. The push entitlement `app.config.ts` builds with: `development`, `production`, or `none` to leave push out (no Push Notifications capability needed on the App ID, e.g. for a sideload). Follows `APP_ENV` when unset | `ios check`, `ios device` |
 | `GAIA_MOBILE_APP_DIR` | Optional. The app folder to build; the folder above `fastlane/` when unset | every lane |
 | `GAIA_IOS_BUILD_DIR` | Optional. Where builds go; `build/ios` in the app folder when unset (git ignores it) | every lane |
 | `AGENT_HOST_HEAVY_JOBS` | Optional. Passed to Xcode as `-jobs` to cap parallel compiles; Xcode decides when unset | `ios check`, `ios device` |

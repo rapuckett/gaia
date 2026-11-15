@@ -3,6 +3,7 @@
 
 import { Linking } from 'react-native';
 
+import { documentFileUrl } from '@/api/constants';
 import { useConnectionStore } from '@/state/connection';
 
 import { openPcFile } from './openPcFile';
@@ -32,6 +33,11 @@ describe('openPcFile', () => {
 
     it('a PC document URL opens the preview at its page', () => {
         openPcFile('http://pc.local:4200/api/documents/d%201/file#page=3', 's1');
+        expect(usePreviewStore.getState().target).toMatchObject({ kind: 'document', docId: 'd 1', page: 3, sessionId: 's1' });
+    });
+
+    it('a PC document URL that names its chat opens the preview too', () => {
+        openPcFile(documentFileUrl('http://pc.local:4200', 'd 1', 's1', 3), 's1');
         expect(usePreviewStore.getState().target).toMatchObject({ kind: 'document', docId: 'd 1', page: 3, sessionId: 's1' });
     });
 
