@@ -35,7 +35,7 @@ export function ReadyStep({ ctx }: { ctx: SetupStepContext }) {
             return;
         }
         ctx.finish();
-        if (first) router.replace({ pathname: '/new', params: { prompt: first.prompt, promptId: `start:${first.skill}:${Date.now()}` } });
+        if (first) router.replace({ pathname: '/new', params: { prompt: first.prompt, promptId: `start:${first.skill}` } });
     };
 
     return (
@@ -54,8 +54,8 @@ export function ReadyStep({ ctx }: { ctx: SetupStepContext }) {
                 <Notice tone="warning" message={t('setup.ready.extraNotFetched', { names: view.notDownloaded.join(', ') })} />
             ) : null}
             {cards.length > 0 ? (
-                <Stack gap="sm" accessibilityLabel={t('newChat.cardsLabel')}>
-                    <Text tone="secondary">{t('setup.ready.tasks')}</Text>
+                <Stack gap="sm">
+                    <Text tone="secondary" accessibilityLabel={t('newChat.cardsLabel')}>{t('setup.ready.tasks')}</Text>
                     {cards.map((card) => {
                         const { title, note } = cardText(card, t);
                         return (

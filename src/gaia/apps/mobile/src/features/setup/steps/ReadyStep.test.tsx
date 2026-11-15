@@ -21,9 +21,10 @@ const run: SetupRunStatus = { state: 'ready', chat_model: 'Gemma-4-E4B-it-GGUF' 
 
 async function mount(finish: () => void) {
     const client = createFakeClient({
+        activeModel: { provider: 'local', model: 'old', display_name: 'old', label: null, remote: false, is_default: true, downloaded: true },
         start: {
             cards: [{ skill: 'summarize', title: 'Summarize', note: 'Any text', prompt: 'Summarize this', needs_input: true }],
-            working_folder: null,
+            working_folder: { path: '/home/test', name: 'test', gaia_folder: false, choosable: true },
         },
     });
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
