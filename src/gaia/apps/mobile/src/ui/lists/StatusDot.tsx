@@ -16,14 +16,14 @@ export interface StatusDotProps {
     /** The accessible name; shown beside the dot with `showLabel`. */
     label: string;
     showLabel?: boolean;
-    /** Draw `success` as a plain green dot instead of a check, where a check already means something else. */
-    dot?: boolean;
+    /** A plain filled dot, as the desktop's, for success, attention and error; the label still names the state. */
+    solid?: boolean;
 }
 
 const BOX = 16;
 
 // Each tone has its own shape, so none of them depends on color.
-export function StatusDot({ tone, label, showLabel, dot }: StatusDotProps) {
+export function StatusDot({ tone, label, showLabel, solid }: StatusDotProps) {
     const { colors } = useTheme();
     let mark;
     if (tone === 'idle') {
@@ -34,8 +34,9 @@ export function StatusDot({ tone, label, showLabel, dot }: StatusDotProps) {
                 <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: colors.accentBlue }} />
             </Pulse>
         );
-    } else if (tone === 'success' && dot) {
-        mark = <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors.accentGreen }} />;
+    } else if (solid) {
+        const fill = tone === 'success' ? colors.accentGreen : tone === 'attention' ? colors.accentYellow : colors.danger;
+        mark = <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: fill }} />;
     } else if (tone === 'success') {
         mark = <Icon icon={Check} size="sm" tone="success" />;
     } else if (tone === 'attention') {

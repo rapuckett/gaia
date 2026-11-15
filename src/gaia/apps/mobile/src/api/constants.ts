@@ -22,6 +22,7 @@ export const ENDPOINTS = {
     goalsHealth: '/api/goals/health',
     goalsStats: '/api/goals/stats',
     gpuMemory: '/api/gpu-memory',
+    gpuMemoryPending: '/api/gpu-memory/pending',
     health: '/api/health',
     cloudPrices: '/api/spending/prices/{provider}',
     lemonadeDetect: '/api/lemonade/detect',
@@ -32,6 +33,7 @@ export const ENDPOINTS = {
     localModelContext: '/api/providers/local/context',
     localModelRestart: '/api/providers/local/restart',
     localModelStatus: '/api/providers/local/status',
+    logs: '/api/logs',
     mcpStatus: '/api/mcp/status',
     media: '/api/media/{kind}/{name}',
     memoryActivity: '/api/memory/activity',
@@ -81,8 +83,10 @@ export const ENDPOINTS = {
     sessionDocuments: '/api/sessions/{session_id}/documents',
     sessionEnvironment: '/api/sessions/{session_id}/environment',
     sessionEnvironmentFolderRemove: '/api/sessions/{session_id}/environment/folders/remove',
+    sessionEnvironmentFolders: '/api/sessions/{session_id}/environment/folders',
     sessionEnvironmentInternet: '/api/sessions/{session_id}/environment/internet',
     sessionEvents: '/api/sessions/events',
+    sessionExport: '/api/sessions/{session_id}/export',
     sessionMessage: '/api/sessions/{session_id}/messages/{message_id}',
     sessionMessages: '/api/sessions/{session_id}/messages',
     sessionMessagesAndBelow: '/api/sessions/{session_id}/messages/{message_id}/and-below',
@@ -147,9 +151,12 @@ export const ENDPOINTS = {
     documentReindex: '/api/documents/{doc_id}/reindex',
     documentStatus: '/api/documents/{doc_id}/status',
     documentUpload: '/api/documents/upload',
+    documentUploadPath: '/api/documents/upload-path',
     documents: '/api/documents',
+    filesBrowse: '/api/files/browse',
     filesImage: '/api/files/image',
     filesPreview: '/api/files/preview',
+    filesSearch: '/api/files/search',
     filesUpload: '/api/files/upload',
     filesUploadMedia: '/api/files/upload-media',
     onboardingPreflight: '/api/onboarding/preflight',
@@ -306,9 +313,13 @@ export function sessionCapabilitiesPath(sessionId: string): string {
     return ENDPOINTS.sessionCapabilities.replace('{session_id}', encodeURIComponent(sessionId));
 }
 
-export function sessionEnvironmentPath(sessionId: string, part?: 'folderRemove' | 'internet'): string {
+export function sessionEnvironmentPath(sessionId: string, part?: 'folderRemove' | 'folders' | 'internet'): string {
     const template =
-        part === 'folderRemove' ? ENDPOINTS.sessionEnvironmentFolderRemove : part === 'internet' ? ENDPOINTS.sessionEnvironmentInternet : ENDPOINTS.sessionEnvironment;
+        part === 'folderRemove'
+            ? ENDPOINTS.sessionEnvironmentFolderRemove
+            : part === 'folders'
+              ? ENDPOINTS.sessionEnvironmentFolders
+              : part === 'internet' ? ENDPOINTS.sessionEnvironmentInternet : ENDPOINTS.sessionEnvironment;
     return template.replace('{session_id}', encodeURIComponent(sessionId));
 }
 
@@ -322,6 +333,10 @@ export function sessionChangesDiffPath(sessionId: string, turnId: string): strin
 
 export function sessionChangesUndoPath(sessionId: string, turnId: string): string {
     return ENDPOINTS.sessionChangesUndo.replace('{session_id}', encodeURIComponent(sessionId)).replace('{turn_id}', encodeURIComponent(turnId));
+}
+
+export function sessionExportPath(sessionId: string): string {
+    return ENDPOINTS.sessionExport.replace('{session_id}', encodeURIComponent(sessionId));
 }
 
 export function sessionPinPath(sessionId: string): string {
@@ -455,3 +470,22 @@ export const AGENT_EVENT_TYPES: ReadonlySet<string> = new Set([
 
 /** Once the run reaches one of these, a permission prompt or question before it is no longer waiting. */
 export const RESOLVES_PROMPTS: ReadonlySet<string> = new Set(['tool_start', 'tool_end', 'tool_result']);
+
+/** The PC's folder listing; a phone names the chat whose folders it may see. */
+export function filesBrowsePath(sessionId: string, path?: string): string {
+    const query = new URLSearchParams(path ? { path } : {});
+    query.set('session_id', sessionId);
+    return `${ENDPOINTS.filesBrowse}?${query}`;
+}
+
+/** A name search on the PC; `fileTypes` is a comma list of extensions. */
+export function filesSearchPath(sessionId: string, query: string, fileTypes: string | undefined, limit: number): string {
+    const params = new URLSearchParams({ query, max_results: String(limit), session_id: sessionId });
+    if (fileTypes) params.set('file_types', fileTypes);
+    return `${ENDPOINTS.filesSearch}?${params}`;
+}
+
+/** Indexes a file that is already on the PC, naming the chat that may read it. */
+export function documentUploadPathPath(sessionId: string): string {
+    return `${ENDPOINTS.documentUploadPath}?session_id=${encodeURIComponent(sessionId)}`;
+}

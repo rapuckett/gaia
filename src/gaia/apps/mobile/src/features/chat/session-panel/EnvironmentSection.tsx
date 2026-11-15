@@ -10,10 +10,11 @@ import { useActiveModel, useEnvironmentActions, useLocalModelStatus, usePermissi
 import { isPcRefusal, PcOnlyNotice } from '@/features/settings/PcOnlyNotice';
 import { useT, type Translate } from '@/i18n/useT';
 import { Button, Icon, IconButton, Notice, Row, SegmentedControl, Stack, Switch, Text } from '@/ui';
-import { Cloud, FileText, Folder, Monitor, X } from '@/ui/icons';
+import { Cloud, FileText, Folder, FolderPlus, Monitor, X } from '@/ui/icons';
 import { isolate } from '@webui/i18n/registry';
 
 import { failureReason, failureReasonWith } from '../header/failureText';
+import { FolderPicker } from './FolderPicker';
 import { PanelSection } from './PanelSection';
 import { useSessionPanelStore } from './panelStore';
 import type { SectionProps } from './sections';
@@ -66,8 +67,11 @@ function Group({ label, children }: { label: string; children: ReactNode }) {
 function Folders({ sessionId, env, error }: { sessionId: string; env: SessionEnvironment | undefined; error: unknown }) {
     const t = useT();
     const session = useSession(sessionId).data;
-    const { removeFolder } = useEnvironmentActions(sessionId);
+    const { addFolder, removeFolder } = useEnvironmentActions(sessionId);
     const refused = useDeviceRefused('POST', sessionEnvironmentPath(sessionId, 'folderRemove'));
+    const addRefused = useDeviceRefused('POST', sessionEnvironmentPath(sessionId, 'folders'));
+    const picking = useSessionPanelStore((s) => s.envPicking);
+    const setPicking = useSessionPanelStore((s) => s.setEnvPicking);
     const envConfirm = useSessionPanelStore((s) => s.envConfirm);
     const setEnvConfirm = useSessionPanelStore((s) => s.setEnvConfirm);
     const confirming = envConfirm?.kind === 'remove' ? envConfirm.path : null;
@@ -127,9 +131,30 @@ function Folders({ sessionId, env, error }: { sessionId: string; env: SessionEnv
                             {t('env.removed', { names: isolate(env.removed.map(baseName).join(', '), 'ltr') })}
                         </Text>
                     ) : null}
-                    {!locked ? <Text role="caption" tone="muted">{t('mobileApp.env.addFromPc')}</Text> : null}
+                    {picking ? (
+                        <FolderPicker
+                            sessionId={sessionId}
+                            busy={addFolder.isPending}
+                            error={isPcRefusal(addFolder.error) ? undefined : addFolder.error}
+                            onClose={() => setPicking(false)}
+                            onPick={(path) => addFolder.mutate(path, { onSuccess: () => setPicking(false) })}
+                        />
+                    ) : !locked && !addRefused ? (
+                        <Button
+                            variant="secondary"
+                            size="sm"
+                            icon={FolderPlus}
+                            label={t('env.addFolder')}
+                            onPress={() => {
+                                addFolder.reset();
+                                setPicking(true);
+                            }}
+                            testID="environment-add-folder"
+                        />
+                    ) : null}
                 </>
             ) : null}
+            {isPcRefusal(addFolder.error) ? <PcOnlyNotice testID="environment-add-pc-only" /> : null}
             {removeFolder.error ? (
                 isPcRefusal(removeFolder.error) ? <PcOnlyNotice testID="environment-remove-pc-only" /> : <Notice tone="danger" message={failureReason(removeFolder.error, t)} />
             ) : null}

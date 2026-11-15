@@ -35,7 +35,7 @@ jest.mock('expo-crypto', () => ({
     CryptoDigestAlgorithm: { SHA256: 'SHA-256' },
     digestStringAsync: jest.fn(async () => 'abc123'),
 }));
-jest.mock('expo-sharing', () => ({ shareAsync: jest.fn() }));
+jest.mock('expo-sharing', () => ({ shareAsync: jest.fn(), isAvailableAsync: jest.fn(async () => true) }));
 jest.mock('expo-image', () => ({ Image: () => null }));
 
 describe('FilePreview', () => {

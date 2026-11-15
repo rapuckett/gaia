@@ -41,7 +41,7 @@ export function AttachmentChips({ attachments }: { attachments: Attachments }) {
                                 <Icon icon={FileText} size="sm" tone="secondary" />
                             )}
                             <View style={{ flex: 1 }}>
-                                <Text role="label" numberOfLines={1} dir="ltr">
+                                <Text role="label" numberOfLines={1} compact dir="ltr">
                                     {middleTruncate(a.name)}
                                 </Text>
                                 {a.status === 'uploading' ? (

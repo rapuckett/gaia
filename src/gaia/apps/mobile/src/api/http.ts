@@ -47,11 +47,13 @@ import type {
     DeleteScheduleResult,
     Goal,
     GoalStats,
+    BrowseResponse,
     DocumentListResponse,
     DocumentResponse,
     DocumentStatus,
     EmbeddingCoverage,
     FilePreviewResponse,
+    FileSearchResponse,
     FollowUpOutcome,
     FollowUpResult,
     DeleteSessionResult,
@@ -132,6 +134,9 @@ import {
     chatSpendingPath,
     cloudPricesPath,
     documentFilePath,
+    documentUploadPathPath,
+    filesBrowsePath,
+    filesSearchPath,
     documentPath,
     goalPath,
     ENDPOINTS,
@@ -175,6 +180,7 @@ import {
     sessionChangesDiffPath,
     sessionChangesPath,
     sessionChangesUndoPath,
+    sessionExportPath,
     sessionPinPath,
     sessionPrivatePath,
     sessionReadPath,
@@ -474,6 +480,10 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             return readJson<UploadedFile>(await request('POST', path, new RawBody(body), options?.signal), path);
         },
 
+        exportSessionMarkdown(sessionId, options) {
+            return getJson<{ content: string }>(`${sessionExportPath(sessionId)}?format=markdown`, options?.signal);
+        },
+
         setSessionPinned(sessionId, pinned, options) {
             return putJson<Session>(sessionPinPath(sessionId), { pinned }, options?.signal);
         },
@@ -657,6 +667,10 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         getEnvironment(sessionId, options) {
             return getJson<SessionEnvironment>(sessionEnvironmentPath(sessionId), options?.signal);
+        },
+
+        addEnvironmentFolder(sessionId, path, options) {
+            return postJson<SessionEnvironment>(sessionEnvironmentPath(sessionId, 'folders'), { path }, options?.signal);
         },
 
         removeEnvironmentFolder(sessionId, path, options) {
@@ -1006,6 +1020,18 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             return readJson<DocumentResponse>(await request('POST', ENDPOINTS.documentUpload, new RawBody(form), options?.signal), ENDPOINTS.documentUpload);
         },
 
+        uploadDocumentByPath(filepath, sessionId, options) {
+            return postJson<DocumentResponse>(documentUploadPathPath(sessionId), { filepath }, options?.signal);
+        },
+
+        browseFiles(sessionId, path, options) {
+            return getJson<BrowseResponse>(filesBrowsePath(sessionId, path), options?.signal);
+        },
+
+        searchFiles(sessionId, query, fileTypes, limit, options) {
+            return getJson<FileSearchResponse>(filesSearchPath(sessionId, query, fileTypes, limit), options?.signal);
+        },
+
         async attachDocument(sessionId, docId, options) {
             await postJson<unknown>(sessionDocumentsPath(sessionId), { document_id: docId }, options?.signal);
         },
@@ -1073,6 +1099,14 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
         getGpuMemory(settingGb, options) {
             const query = settingGb == null ? '' : `?setting_gb=${encodeURIComponent(String(settingGb))}`;
             return getJson<GpuMemoryStatus>(`${ENDPOINTS.gpuMemory}${query}`, options?.signal);
+        },
+
+        recordGpuMemoryPending(settingGb, options) {
+            return postJson<GpuMemoryStatus>(ENDPOINTS.gpuMemoryPending, { setting_gb: settingGb }, options?.signal);
+        },
+
+        dismissGpuMemoryPending(options) {
+            return deleteJson<GpuMemoryStatus>(ENDPOINTS.gpuMemoryPending, options?.signal);
         },
 
         getModelNeed(job, options) {

@@ -9,6 +9,14 @@ import { useT } from '../../i18n/useT';
 import { useConnectorsSSE } from '../../hooks/useConnectorsSSE';
 import { log } from '../../utils/logger';
 import type { ConnectorListEntry, Message } from '../../types';
+import {
+    awaited,
+    CONNECT_ACCOUNT_RENDER,
+    connectCardProviders,
+    hasConnectCard,
+    isConnectAccountPayload,
+    type ConnectAccountPayload,
+} from '../../utils/connectAccountCard.core';
 import { UnsupportedCard } from './UnsupportedCard';
 
 /**
@@ -20,56 +28,7 @@ import { UnsupportedCard } from './UnsupportedCard';
  * gives that agent access in the same step.
  */
 
-export const CONNECT_ACCOUNT_RENDER = 'connect_account';
-
-interface ConnectAccountPayload {
-    kind: typeof CONNECT_ACCOUNT_RENDER;
-    providers: string[];
-    agent_id?: string;
-    /** Providers connected already, whose fault is something signing in again fixes. */
-    reconnect?: string[];
-}
-
-export function isConnectAccountPayload(value: unknown): value is ConnectAccountPayload {
-    if (!value || typeof value !== 'object') return false;
-    const v = value as Record<string, unknown>;
-    return (
-        v.kind === CONNECT_ACCOUNT_RENDER &&
-        Array.isArray(v.providers) &&
-        v.providers.length > 0 &&
-        v.providers.every((p) => typeof p === 'string' && p.length > 0) &&
-        (v.agent_id === undefined || typeof v.agent_id === 'string') &&
-        (v.reconnect === undefined
-            || (Array.isArray(v.reconnect) && v.reconnect.every((p) => typeof p === 'string')))
-    );
-}
-
-/** The providers whose becoming connected is the fix: those not connected when the tool ran. */
-function awaited(card: ConnectAccountPayload): string[] {
-    return card.providers.filter((p) => !card.reconnect?.includes(p));
-}
-
-/**
- * The connectors a message's Connect card is waiting on; empty when it has no
- * card, or when every account on it was connected already and needs signing
- * in again, which the connector list cannot show.
- */
-export function connectCardProviders(message: Pick<Message, 'cards'> | undefined): string[] {
-    const found = new Set<string>();
-    for (const card of message?.cards ?? []) {
-        if (card.render === CONNECT_ACCOUNT_RENDER && isConnectAccountPayload(card.data)) {
-            awaited(card.data).forEach((p) => found.add(p));
-        }
-    }
-    return [...found];
-}
-
-/** Whether a message carries a Connect card at all. */
-export function hasConnectCard(message: Pick<Message, 'cards'> | undefined): boolean {
-    return (message?.cards ?? []).some(
-        (card) => card.render === CONNECT_ACCOUNT_RENDER && isConnectAccountPayload(card.data),
-    );
-}
+export { CONNECT_ACCOUNT_RENDER, connectCardProviders, hasConnectCard, isConnectAccountPayload };
 
 /**
  * The agent to give access when sign-in completes: only the one that asked,

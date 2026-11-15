@@ -1028,6 +1028,7 @@ export function ChatView({ sessionId }: ChatViewProps) {
                         stopState,
                         historyNotice,
                         libraryNotices: event.library_notices,
+                        failed: event.failed === true || undefined,
                         failure: event.failed ? event.failure : undefined,
                     };
                     if (historyNotice) historyNotices.set(assistantMsg.id, historyNotice);
@@ -1687,6 +1688,7 @@ export function ChatView({ sessionId }: ChatViewProps) {
                             && msg.role === 'assistant' && idx === messages.length - 1
                             && !msg.stopState && !msg.failed && !isErrorContent(msg.content);
                         const latency = msg.stats?.seconds != null ? msg.stats.seconds * 1000 : latencyByMsgId.get(msg.id);
+                        const serverDown = msg.failure === 'model_server_down' && idx === messages.length - 1 && !busy;
                         const unsent = isUnsent(msg);
                         return (
                             <div
@@ -1722,10 +1724,9 @@ export function ChatView({ sessionId }: ChatViewProps) {
                                     onContinue={canTryAgain && stopped ? handleContinue : undefined}
                                     latest={msg.role === 'assistant' && idx === messages.length - 1}
                                     latencyMs={latency}
+                                    fixShownBelow={serverDown}
                                 />
-                                {msg.failure === 'model_server_down' && idx === messages.length - 1 && !busy && (
-                                    <ModelServerDownNotice />
-                                )}
+                                {serverDown && <ModelServerDownNotice />}
                                 {comparison?.messageId === msg.id && (
                                     <AnswerComparison
                                         original={msg}

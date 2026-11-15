@@ -2,11 +2,13 @@
 // SPDX-License-Identifier: MIT
 
 import { useMemo } from 'react';
+import { View } from 'react-native';
 
 import { cardsFromEvents } from '@webui/utils/renderCards.core';
 
 import { ModelServerDownNotice } from '@/features/model/ModelServerDownNotice';
 import { useT } from '@/i18n/useT';
+import { useAnnounce } from '@/platform/useAnnounce';
 import { Button, Notice, Row, Spinner, Stack, Text } from '@/ui';
 import { RotateCcw } from '@/ui/icons';
 
@@ -37,6 +39,7 @@ export function TurnTail({ tail, line, awaitingUser = false, onTryAgain, onConti
     // A running step row already says what is happening.
     const rowRuns = steps.some((s) => s.active && s.type !== 'status');
     const showLine = tail.live && !rowRuns && (line !== null || !tail.text);
+    useAnnounce(showLine ? (line ?? t('msg.thinking')) : null);
     return (
         <Stack gap="sm" paddingX="lg" paddingY="xs" testID="turn-tail">
             <ActivityTimeline steps={steps} running={tail.live} awaitingUser={awaitingUser} answer={tail.text} />
@@ -44,12 +47,14 @@ export function TurnTail({ tail, line, awaitingUser = false, onTryAgain, onConti
             <AnswerCards cards={cards} />
             {tail.text ? <Markdown text={tail.text} streaming={tail.live} /> : null}
             {showLine ? (
-                <Row gap="sm" accessibilityRole="progressbar">
-                    <Spinner size="sm" />
-                    <Text role="label" tone="secondary" numberOfLines={1} testID="live-line">
-                        {line ?? t('msg.thinking')}
-                    </Text>
-                </Row>
+                <View accessibilityRole="progressbar" accessibilityLiveRegion="polite">
+                    <Row gap="sm">
+                        <Spinner size="sm" />
+                        <Text role="label" tone="secondary" numberOfLines={1} testID="live-line">
+                            {line ?? t('msg.thinking')}
+                        </Text>
+                    </Row>
+                </View>
             ) : null}
             {tail.error ? <Notice tone="danger" title={t('msg.error')} message={chatErrorText(tail.error, t)} testID="reply-error" /> : null}
             {tail.error && !tail.live && isModelServerDown(tail.error, t) ? <ModelServerDownNotice /> : null}

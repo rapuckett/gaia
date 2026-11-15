@@ -3,14 +3,14 @@
 
 export type ChipId = 'folder' | 'private' | 'permission' | 'model' | 'meter';
 
-/** Chips give up their label in this order; the model chip never does. The meter loses its bar only after all three have. */
-export const COLLAPSE_ORDER: readonly ChipId[] = ['folder', 'private', 'permission'];
+/** Chips give up their label in this order; the model chip never does. The meter's bar goes before the permission chip's label, as the desktop's "Ask" stays readable. */
+export const COLLAPSE_ORDER: readonly ChipId[] = ['folder', 'private', 'meter', 'permission'];
 
 export const CHIP_GAP = 8;
 /** A collapsed chip is its icon in a touch target. */
 export const ICON_ONLY_WIDTH = 44;
 /** The model's name ellipsizes down to this before any other chip collapses. */
-export const MODEL_MIN_WIDTH = 120;
+export const MODEL_MIN_WIDTH = 96;
 /** Below this width the model chip drops its name and shows its icon and chevron. */
 export const MODEL_FLOOR_WIDTH = 72;
 /** The context meter's bar and its gap; without it the meter is its percentage alone. */
@@ -31,7 +31,7 @@ export function collapsedChips(full: Partial<Record<ChipId, number>>, available:
             return sum + (id === 'meter' ? Math.max(0, (width(id) ?? 0) - METER_BAR_WIDTH) : ICON_ONLY_WIDTH);
         }, 0) +
         CHIP_GAP * Math.max(0, present.length - 1);
-    for (const id of [...COLLAPSE_ORDER, 'meter'] as const) {
+    for (const id of COLLAPSE_ORDER) {
         if (total() <= available) break;
         if (present.includes(id)) collapsed.push(id);
     }

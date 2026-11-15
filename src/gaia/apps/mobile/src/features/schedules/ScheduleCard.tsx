@@ -5,7 +5,6 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { View } from 'react-native';
 
 import type { MessageKey, Say } from '@webui/i18n/registry';
-import { dateLocale, translator } from '@webui/i18n/translator';
 
 import type { Schedule } from '@/api/client.types';
 import { CONFIRM_DELETE_MS } from '@/api/constants';
@@ -15,7 +14,7 @@ import { Disclosure, Icon, Notice, Row, Stack, Surface, Text, useTheme } from '@
 import { Clock, MessageSquare, Pause, Play, Trash2, Zap } from '@/ui/icons';
 
 import { ChipButton } from './ChipButton';
-import { describeSchedule, formatNextRun, formatTime } from './scheduleText';
+import { composeDateLocale, describeSchedule, formatNextRun, formatTime } from './scheduleText';
 
 const STATUS: Record<Schedule['status'], { label: MessageKey; tone: 'success' | 'warning' | 'muted' }> = {
     active: { label: 'schedules.status.active', tone: 'success' },
@@ -29,7 +28,7 @@ function StatusTag({ label, tone }: { label: string; tone: 'success' | 'warning'
     const bg = { success: colors.accentGreenDim, warning: colors.accentYellowDim, muted: colors.bgTertiary }[tone];
     return (
         <View style={{ backgroundColor: bg, borderRadius: radius.sm, paddingHorizontal: 8, paddingVertical: 2 }}>
-            <Text role="caption" weight="semibold" tone={tone} numberOfLines={1}>
+            <Text role="caption" weight="semibold" tone={tone} numberOfLines={1} compact>
                 {label}
             </Text>
         </View>
@@ -74,7 +73,7 @@ export function ScheduleCard({ schedule, now, runPending, onOpenChat, onRunNow, 
     const running = schedule.running === true || runPending;
     const status = STATUS[schedule.status];
     const when = (fmt: (say: Say, locale: string | undefined) => string) =>
-        t.compose((say, code) => fmt(say, dateLocale(translator(code))));
+        t.compose((say, code) => fmt(say, composeDateLocale(code, t)));
 
     return (
         <Surface tone="secondary" radius="sm" border padding="md">

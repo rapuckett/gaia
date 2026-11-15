@@ -106,8 +106,8 @@ export function Composer({
         onStop?.();
     };
 
-    // While a reply runs, an empty draft has nothing to queue, so Stop stands alone.
-    const showSend = !running || hasContent;
+    // While a reply runs, an empty draft has nothing to queue, so Stop stands alone; a waiting question keeps Send.
+    const showSend = !running || hasContent || !!answering;
     const sendLabel = answering ? t('composer.sendAnswer') : running && message ? t('composer.queue') : t('composer.send');
     const spoken = disabledReason ?? placeholderText ?? (running ? t('composer.queueNext') : t('composer.placeholder'));
     // A placeholder can't draw the muted English half, so it shows the Arabic alone; screen readers get both.

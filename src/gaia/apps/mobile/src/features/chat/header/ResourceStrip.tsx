@@ -1,6 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
+import { View } from 'react-native';
 import { buildTiles } from '@webui/utils/resourceTiles.core';
 
 import { useResourceUsage } from '@/data';
@@ -22,9 +23,11 @@ export function ResourceStrip({ onClose }: { onClose: () => void }) {
                             tiles.map((tile) => (
                                 <Stack key={tile.key} gap="xs">
                                     <Row gap="sm" justify="between">
-                                        <Text role="label" weight="medium" numberOfLines={1}>
-                                            {tile.label}
-                                        </Text>
+                                        <View style={{ flexShrink: 1 }}>
+                                            <Text role="label" weight="medium" numberOfLines={1}>
+                                                {tile.label}
+                                            </Text>
+                                        </View>
                                         <Ltr>{[tile.value, tile.detail].filter(Boolean).join(' · ')}</Ltr>
                                     </Row>
                                     {tile.history.length > 0 && tile.tone !== 'network' ? (

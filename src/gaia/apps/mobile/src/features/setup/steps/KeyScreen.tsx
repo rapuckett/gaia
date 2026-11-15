@@ -120,6 +120,7 @@ export const KeyScreen: PlanScreen = ({ ctx, close }) => {
     const connected = !!info?.configured;
     const canConnect = (connected || usersServer) && !blocked(choice);
     const inUse = active?.provider === choice ? active.model : null;
+    const shownPick = picked ?? inUse;
 
     const options: ChoiceOption[] = PROVIDERS.map((p) => ({
         value: p.id,
@@ -127,7 +128,7 @@ export const KeyScreen: PlanScreen = ({ ctx, close }) => {
         description: blocked(p.id) ? t('settings.privacy.localOnlyBlocked') : t(p.note),
     }));
 
-    const go = () => connect.mutate({ provider: choice, wanted: picked, wantedName: picked ? shortModelName(picked) : undefined }, { onSuccess: () => ctx.startedRun() });
+    const go = () => connect.mutate({ provider: choice, wanted: shownPick, wantedName: shownPick ? shortModelName(shownPick) : undefined }, { onSuccess: () => ctx.startedRun() });
 
     return (
         <Stack gap="md" testID="key-screen">
@@ -149,7 +150,8 @@ export const KeyScreen: PlanScreen = ({ ctx, close }) => {
             ) : (
                 <>
                     {usersServer ? null : <GetAKey provider={choice} />}
-                    <Prices provider={choice} picked={picked} onPick={setPicked} disabled={connect.isPending} inUse={inUse} />
+                    <Text role="caption" tone="muted">{t('setup.models.cloudNote')}</Text>
+                    <Prices provider={choice} picked={shownPick} onPick={setPicked} disabled={connect.isPending} inUse={inUse} />
                 </>
             )}
             {usersServer ? null : (
@@ -158,7 +160,8 @@ export const KeyScreen: PlanScreen = ({ ctx, close }) => {
                         label={t('setup.key.labelFor', { provider: PROVIDERS.find((p) => p.id === choice)?.title ?? '' })}
                         value=""
                         onChangeText={() => undefined}
-                        placeholder={connected ? t('setup.key.placeholder') : t('setup.key.placeholderNew')}
+                        placeholder={connected ? t.bare('setup.key.placeholder') : t.bare('setup.key.placeholderNew')}
+                        accessibilityLabel={connected ? t('setup.key.placeholder') : t('setup.key.placeholderNew')}
                         secureTextEntry
                         disabled
                     />

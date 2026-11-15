@@ -138,7 +138,7 @@ export function ModelMenu({ open, onClose, turnRunning, queued, onQueue, switchE
         } else if (!remote && needsDownload) {
             trailing = <Icon icon={Download} size="sm" tone="secondary" label={t('modelMenu.downloadModel', { name })} />;
         } else if (!remote && state === 'loaded') {
-            trailing = <StatusDot tone="success" dot label={t('modelStatus.state.loaded')} />;
+            trailing = <StatusDot tone="success" solid label={t('modelStatus.state.loaded')} />;
         } else if (!remote) {
             trailing = (
                 <Text role="caption" tone="secondary">
