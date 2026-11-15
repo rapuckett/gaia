@@ -2,10 +2,12 @@
 // SPDX-License-Identifier: MIT
 
 import { formatSize, ltrIn } from '@webui/components/setup/format';
+import { tEn } from '@webui/i18n/translator';
+import { isServerDown } from '@webui/utils/serverDown';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 
-import { useActiveModel, useSetupPlan, useSetupPreflight } from '@/data';
+import { useActiveModel, useGpuMemory, useSetupPlan, useSetupPreflight } from '@/data';
 import { describeError, useT } from '@/i18n/useT';
 import { reopenSetup } from '@/features/setup/SetupGate';
 import { Button, Icon, ListRow, Notice, Sheet, Stack, Text } from '@/ui';
@@ -40,7 +42,9 @@ export default function Setup() {
     const error = plan.error ?? hardware.error;
     const local = !!active.data?.model && !active.data.remote && active.data.downloaded !== false;
 
-    // GPU memory has no anchor in this app yet, so it has no row until Model registers one.
+    // As on the web: where the split can change, or where reading it failed for a reason Model explains.
+    const gpuRead = useGpuMemory();
+    const gpuShown = !!gpuRead.data?.applies || (gpuRead.error != null && !isServerDown(describeError(gpuRead.error, tEn)));
     const groups: { title: string; lines: Line[] }[] = [
         {
             title: t('settings.setup.where'),
@@ -59,6 +63,9 @@ export default function Setup() {
                     to: { section: 'advanced', target: 'model-server' },
                     testID: 'setup-server',
                 },
+                ...(gpuShown
+                    ? [{ label: t('setup.gpu.title'), value: null, to: { section: 'model' as const, target: 'gpu-memory', provider: 'local' as const }, testID: 'setup-gpu' }]
+                    : []),
             ],
         },
         {
