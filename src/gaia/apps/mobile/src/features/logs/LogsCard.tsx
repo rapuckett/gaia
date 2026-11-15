@@ -6,10 +6,12 @@ import { useRouter } from 'expo-router';
 import { ENDPOINTS } from '@/api/constants';
 import { useDeviceRefused } from '@/api/routeAccess';
 import { useT } from '@/i18n/useT';
-import { Button, Card, Stack, Text } from '@/ui';
-import { ScrollText } from '@/ui/icons';
+import { Button, Card, Divider, Stack, Text } from '@/ui';
+import { Archive, ScrollText } from '@/ui/icons';
 
 import { PcOnlyNotice } from '../settings/PcOnlyNotice';
+
+import { PcOnlyAction } from './PcOnlyAction';
 
 /** Settings > Advanced > Logs: the web's card, opening the phone's read-only logs screen. */
 export function LogsCard() {
@@ -25,6 +27,18 @@ export function LogsCard() {
                     <PcOnlyNotice testID="advanced-logs-pc-only" />
                 ) : (
                     <Button label={t('logs.view')} icon={ScrollText} onPress={() => router.push('/logs')} testID="advanced-view-logs" />
+                )}
+                {refused ? null : (
+                    <>
+                        <Divider />
+                        <PcOnlyAction
+                            label={t('logs.saveAll')}
+                            icon={Archive}
+                            note={t('setup.logs.reportNote')}
+                            detail={t('mobileApp.pcOnly.logs')}
+                            testID="advanced-save-all-logs"
+                        />
+                    </>
                 )}
             </Stack>
         </Card>

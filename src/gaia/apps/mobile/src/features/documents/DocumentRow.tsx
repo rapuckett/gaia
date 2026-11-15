@@ -19,7 +19,7 @@ import { formatSize, middleTruncate } from '@webui/utils/format';
 import type { DocumentListResponse, IndexProgress } from '@/api/client.types';
 import { useT } from '@/i18n/useT';
 import { Badge, Button, Disclosure, Icon, IconButton, ListRow, ProgressLine, Row, Stack, Text } from '@/ui';
-import { FileText, Link2, RotateCcw, Square, Trash2 } from '@/ui/icons';
+import { Eye, FileText, Link2, RotateCcw, Square, Trash2 } from '@/ui/icons';
 
 interface DocumentRowProps {
     document: DocumentListResponse['documents'][number];
@@ -31,13 +31,15 @@ interface DocumentRowProps {
     retrying: boolean;
     /** Set for a complete document not yet in the target: its chat's quoted title, null for the next chat. */
     attach?: { chatName: string | null; onAttach: (docId: string) => void };
+    /** Set when the document can be previewed or shared from the phone; the phone never opens anything on the PC. */
+    onPreview?: (docId: string, name: string) => void;
     onCancel: (docId: string) => void;
     onRetry: (docId: string) => void;
     onRemove: (docId: string) => void;
 }
 
 // Name (extension kept), then the state: size and when it was indexed, how far indexing has got, or why it failed.
-export function DocumentRow({ document: doc, progress, startedAt, now, retrying, attach, onCancel, onRetry, onRemove }: DocumentRowProps) {
+export function DocumentRow({ document: doc, progress, startedAt, now, retrying, attach, onPreview, onCancel, onRetry, onRemove }: DocumentRowProps) {
     const t = useT();
     const [reasonOpen, setReasonOpen] = useState(false);
     const status = doc.indexing_status || 'complete';
@@ -77,6 +79,9 @@ export function DocumentRow({ document: doc, progress, startedAt, now, retrying,
                     disabled={retrying}
                     onPress={() => onRetry(doc.id)}
                 />
+            ) : null}
+            {onPreview && doc.filepath && status === 'complete' ? (
+                <IconButton icon={Eye} label={t('mobileApp.docs.previewShare', { name: doc.filename })} size="sm" onPress={() => onPreview(doc.id, doc.filename)} />
             ) : null}
             <IconButton icon={Trash2} label={t('docs.removeAria', { name: doc.filename })} size="sm" onPress={() => onRemove(doc.id)} />
         </Row>

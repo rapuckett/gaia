@@ -86,7 +86,7 @@ export default function Permissions() {
                         title={t('settings.permissions.chats')}
                         open={chatsOpen}
                         onToggle={() => setChatsOpen((v) => !v)}
-                        trailing={<Badge label={String(rows.length)} />}
+                        trailing={<Badge shape="pill" label={String(rows.length)} />}
                     >
                         <Stack gap="md">
                             {rows.map((r) => (

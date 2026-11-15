@@ -11126,6 +11126,16 @@
         "title": "Name",
         "type": "string"
       },
+      "network": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/ProviderSummaryNetwork"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
       "privacy_notice": {
         "title": "Privacy Notice",
         "type": "string"
@@ -11171,6 +11181,27 @@
       "providers"
     ],
     "title": "ProviderSummaryList",
+    "type": "object"
+  },
+  "ProviderSummaryNetwork": {
+    "description": "``reachable`` is None when the check doesn't apply to this PC.",
+    "properties": {
+      "reachable": {
+        "anyOf": [
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Reachable"
+      }
+    },
+    "required": [
+      "reachable"
+    ],
+    "title": "ProviderSummaryNetwork",
     "type": "object"
   },
   "ProviderView": {

@@ -81,6 +81,8 @@ interface MessageBubbleProps {
     latest?: boolean;
     /** Total wall-clock latency in ms (time from user message to response completion). */
     latencyMs?: number;
+    /** A fix under the bubble explains the failure, so it drops its own banner. */
+    fixShownBelow?: boolean;
     /** The model's current phase while streaming; null shows "Thinking...". */
     liveStatus?: string | null;
     /** What a running tool's own model calls are doing; shown on that tool's row. */
@@ -237,7 +239,7 @@ function MessageEditor({ original, draft, onDraft, onSend, onCancel, confirming 
 
 const SCHEDULE_RUN_MARKER = /^\[schedule-run\] Run #(\d+) \u00b7 (.+)$/;
 
-export function MessageBubble({ message, isStreaming, agentSteps, agentStepsActive, cards, onDelete, onResend, extraActions, onTryAgain, onContinue, onRegenerate, onEditStart, editing = false, editDraft = null, onEditDraft, onEdit, onEditCancel, laterCount = 0, latest = false, latencyMs, liveStatus, toolStatus, awaitingUser }: MessageBubbleProps) {
+export function MessageBubble({ message, isStreaming, agentSteps, agentStepsActive, cards, onDelete, onResend, extraActions, onTryAgain, onContinue, onRegenerate, onEditStart, editing = false, editDraft = null, onEditDraft, onEdit, onEditCancel, laterCount = 0, latest = false, latencyMs, fixShownBelow = false, liveStatus, toolStatus, awaitingUser }: MessageBubbleProps) {
     const t = useT();
     useModelNames();
     const echo = useMemo(() => {
@@ -443,7 +445,7 @@ export function MessageBubble({ message, isStreaming, agentSteps, agentStepsActi
                             )}
                         />
                     )}
-                    {isError && (
+                    {isError && !fixShownBelow && (
                         <div className="error-banner">
                             <AlertTriangle size={14} />
                             <span>{t('msg.error')}</span>

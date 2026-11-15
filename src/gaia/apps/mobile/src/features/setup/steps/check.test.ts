@@ -39,7 +39,7 @@ describe('checkRows', () => {
     it('fails the hardware rows with the reason on the first, and runs on', () => {
         const rows = checkRows({ hardware: null, hardwareError: 'boom', plan: null, serverRun: null, awaitingChoice: false }, t);
         expect(states(rows).slice(0, 3)).toEqual(['failed', 'failed', 'failed']);
-        expect(rows[0]!.value).toBe("This PC's hardware couldn't be read. Setup still checks it as it goes. boom");
+        expect(rows[0]!.value).toBe("Your PC's hardware couldn't be read. Setup still checks it as it goes. boom");
     });
 
     it('asks, not spins, while the PC chooses a server', () => {

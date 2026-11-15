@@ -5,7 +5,7 @@ import type { ExpoConfig } from 'expo/config';
 
 import { LOCALES } from '@webui/i18n/registry';
 
-import appConfig, { readApsEnvironment, readAppEnv, type AppEnv } from '../app.config';
+import appConfig, { readApsEnvironment, readIosBundleId, readAppEnv, type AppEnv } from '../app.config';
 
 function configFor(env: AppEnv): ExpoConfig {
     const saved = process.env.APP_ENV;
@@ -43,6 +43,24 @@ describe('app config', () => {
             else process.env.GAIA_APS_ENVIRONMENT = saved;
         }
         expect(pluginOptions(configFor('production'), 'expo-notifications').mode).toBe('production');
+    });
+
+    it('takes the iOS bundle id from the environment and keeps the URL scheme fixed', () => {
+        expect(readIosBundleId('production', {})).toBe('ai.amd.gaia.mobile');
+        expect(readIosBundleId('development', { GAIA_IOS_BUNDLE_ID_DEV: '' })).toBe('ai.amd.gaia.mobile.dev');
+        expect(readIosBundleId('production', { GAIA_IOS_BUNDLE_ID: 'com.example.gaia' })).toBe('com.example.gaia');
+        expect(() => readIosBundleId('production', { GAIA_IOS_BUNDLE_ID: 'not a id' })).toThrow(/GAIA_IOS_BUNDLE_ID .* "not a id"/);
+
+        const saved = process.env.GAIA_IOS_BUNDLE_ID;
+        process.env.GAIA_IOS_BUNDLE_ID = 'com.example.gaia';
+        try {
+            const config = configFor('production');
+            expect(config.ios?.bundleIdentifier).toBe('com.example.gaia');
+            expect(config.scheme).toBe('ai.amd.gaia.mobile');
+        } finally {
+            if (saved === undefined) delete process.env.GAIA_IOS_BUNDLE_ID;
+            else process.env.GAIA_IOS_BUNDLE_ID = saved;
+        }
     });
 
     it('refuses to load without a known APP_ENV', () => {

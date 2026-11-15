@@ -54,7 +54,7 @@ export function GoalsPane({ notify }: MemoryPaneProps) {
                         key={status}
                         label={`${stats.data?.goals[status] ?? 0} ${t.bare(STATUS_KEYS[status]!)}`}
                         tone={STAT_TONES[status]}
-                        accessibilityLabel={`${t.bare(STATUS_KEYS[status]!)}: ${stats.data?.goals[status] ?? 0}`}
+                        accessibilityLabel={`${t(STATUS_KEYS[status]!)}: ${stats.data?.goals[status] ?? 0}`}
                     />
                 ))}
             </Row>

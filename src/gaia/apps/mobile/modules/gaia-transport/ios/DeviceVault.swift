@@ -41,6 +41,16 @@ enum DeviceVault {
     guard status == errSecSuccess || status == errSecItemNotFound else { throw vaultError("delete", status) }
   }
 
+  /// Every paired-PC item this app owns, including ones no saved list names.
+  static func deleteAll() throws {
+    let query: [String: Any] = [
+      kSecClass as String: kSecClassGenericPassword,
+      kSecAttrService as String: service,
+    ]
+    let status = SecItemDelete(query as CFDictionary)
+    guard status == errSecSuccess || status == errSecItemNotFound else { throw vaultError("delete", status) }
+  }
+
   private static func item(_ pcId: String) -> [String: Any] {
     [
       kSecClass as String: kSecClassGenericPassword,

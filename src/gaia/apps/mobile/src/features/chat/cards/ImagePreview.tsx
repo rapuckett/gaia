@@ -6,6 +6,7 @@ import * as Sharing from 'expo-sharing';
 import { useState } from 'react';
 import { Image, Modal, ScrollView, View, useWindowDimensions } from 'react-native';
 
+import { SHARE_IMAGE_PREFIX } from '@/features/files/shareTemp';
 import { useT } from '@/i18n/useT';
 import { IconButton, Notice, Row, useTheme } from '@/ui';
 import { Share2, X } from '@/ui/icons';
@@ -16,10 +17,14 @@ const EXTENSION: Record<string, string> = { 'image/png': 'png', 'image/jpeg': 'j
 
 async function shareImage(image: LoadedImage): Promise<void> {
     if (!(await Sharing.isAvailableAsync())) throw new Error('This phone has no share sheet for files');
-    const file = new File(Paths.cache, `gaia-image-${Date.now()}.${EXTENSION[image.mime] ?? 'png'}`);
+    const file = new File(Paths.cache, `${SHARE_IMAGE_PREFIX}${Date.now()}.${EXTENSION[image.mime] ?? 'png'}`);
     file.create();
-    file.write(Uint8Array.from(atob(image.base64), (c) => c.charCodeAt(0)));
-    await Sharing.shareAsync(file.uri, { mimeType: image.mime });
+    try {
+        file.write(Uint8Array.from(atob(image.base64), (c) => c.charCodeAt(0)));
+        await Sharing.shareAsync(file.uri, { mimeType: image.mime });
+    } finally {
+        if (file.exists) file.delete();
+    }
 }
 
 export interface ImagePreviewProps {
