@@ -217,7 +217,12 @@ def _cloud_entry(provider: str) -> Optional[Dict[str, Any]]:
     return None
 
 
-def _registration(provider: str, body: "ConnectRequest") -> Dict[str, Any]:
+def _registration(
+    provider: str,
+    body: "ConnectRequest",
+    current: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """Where and how Lemonade sends *provider*'s key; a field left out keeps *current*'s."""
     from gaia.llm.gateway import (
         DEFAULT_AUTH_HEADER_NAME,
         DEFAULT_AUTH_HEADER_PREFIX,
@@ -231,13 +236,21 @@ def _registration(provider: str, body: "ConnectRequest") -> Dict[str, Any]:
             "auth_header_name": "Authorization",
             "auth_header_prefix": "Bearer ",
         }
+    current = current or {}
+    prefix = body.auth_header_prefix
+    if prefix is None:
+        prefix = current.get("auth_header_prefix")
     return {
-        "base_url": (body.base_url or DEFAULT_GATEWAY_BASE_URL).strip(),
-        "auth_header_name": (body.auth_header_name or DEFAULT_AUTH_HEADER_NAME).strip(),
+        "base_url": (
+            body.base_url or current.get("base_url") or DEFAULT_GATEWAY_BASE_URL
+        ).strip(),
+        "auth_header_name": (
+            body.auth_header_name
+            or current.get("auth_header_name")
+            or DEFAULT_AUTH_HEADER_NAME
+        ).strip(),
         "auth_header_prefix": (
-            body.auth_header_prefix
-            if body.auth_header_prefix is not None
-            else DEFAULT_AUTH_HEADER_PREFIX
+            prefix if prefix is not None else DEFAULT_AUTH_HEADER_PREFIX
         ),
     }
 
@@ -1018,6 +1031,57 @@ def list_providers(db: ChatDatabase = Depends(get_db)) -> Dict[str, Any]:
     }
 
 
+class ProviderSummary(BaseModel):
+    """A provider as a paired device may see it: no key, key hint or address."""
+
+    id: str
+    name: str
+    remote: bool
+    privacy_notice: str
+    #: Lemonade has it registered and it lists models; always true for local.
+    configured: bool
+    #: Local only is on, so this cloud provider can't be used.
+    blocked: bool
+
+
+class ProviderSummaryList(BaseModel):
+    providers: List[ProviderSummary]
+    #: Set when Lemonade could not be read; cloud providers then show unconfigured.
+    lemonade_error: Optional[str] = None
+
+
+@router.get(
+    "/api/providers/list",
+    response_model=ProviderSummaryList,
+    dependencies=[Depends(require_ui_header)],
+)
+def list_provider_summaries() -> Dict[str, Any]:
+    """Every provider and whether it is set up; reads only, so a paired device may."""
+    entries: Dict[str, Optional[Dict[str, Any]]] = {}
+    lemonade_error = None
+    try:
+        for provider in (FIREWORKS, AMD):
+            entries[provider] = _cloud_entry(provider)
+    except ProviderError as e:
+        lemonade_error = str(e)
+    blocked = cloud_blocked()
+    summaries = []
+    for provider in PROVIDER_IDS:
+        entry = entries.get(provider)
+        summaries.append(
+            {
+                "id": provider,
+                "name": _NAMES[provider],
+                "remote": provider != LOCAL,
+                "privacy_notice": _PRIVACY[provider],
+                "configured": provider == LOCAL
+                or bool(entry and entry.get("models_discovered")),
+                "blocked": provider != LOCAL and blocked,
+            }
+        )
+    return {"providers": summaries, "lemonade_error": lemonade_error}
+
+
 def _needs_key(
     provider: str, entry: Optional[Dict[str, Any]], key_source: Optional[str]
 ) -> bool:
@@ -1058,10 +1122,10 @@ def _register_on_gaias_server(provider: str, base_url: str) -> None:
 
     if is_users_server(base_url):
         raise ProviderError(users_server_provider_message(base_url, provider), 409)
-    _install(provider, ConnectRequest())
+    _install(provider, _registration(provider, ConnectRequest()))
 
 
-def _install(provider: str, body: "ConnectRequest") -> None:
+def _install(provider: str, registration: Dict[str, Any]) -> None:
     """Register *provider* as a cloud backend in Lemonade."""
     status, result = _lemonade(
         "POST",
@@ -1070,7 +1134,7 @@ def _install(provider: str, body: "ConnectRequest") -> None:
             "backend": "cloud",
             "provider": provider,
             "wire_format": "openai",
-            **_registration(provider, body),
+            **registration,
         },
     )
     if status >= 400:
@@ -1116,6 +1180,10 @@ class ConnectRequest(BaseModel):
     auth_header_prefix: Optional[str] = None
 
 
+#: Fields that change where, or with which header, Lemonade sends the saved key.
+_KEY_ROUTING_FIELDS = ("base_url", "auth_header_name", "auth_header_prefix")
+
+
 @router.post("/api/providers/{provider}/connect")
 def connect_provider(
     provider: str, body: ConnectRequest, request: Request
@@ -1142,6 +1210,15 @@ def connect_provider(
             detail="Enter provider keys on the PC running GAIA, not over mobile "
             "access or from a paired device.",
         )
+    if not is_local_pc(request) and any(
+        getattr(body, field) is not None for field in _KEY_ROUTING_FIELDS
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail="Change the gateway address or key header on the PC running "
+            "GAIA, not over mobile access or from a paired device. Reconnect "
+            "without them to keep the saved ones.",
+        )
     from gaia.connectors.store import retry_keyring
 
     # Connecting needs the key store, so it may ask the OS again.
@@ -1151,11 +1228,18 @@ def connect_provider(
 
         # A read from before this key was pasted must not be served after it.
         discard(_key_slot(provider))
+    try:
+        # A key-less reconnect must keep a custom gateway, not reset it.
+        registration = _registration(
+            provider, body, _cloud_entry(provider) if provider == AMD else None
+        )
+    except ProviderError as e:
+        _raise(e)
     if provider == AMD and _gateway_check_applies():
         from gaia.llm.gateway import GatewayUnreachable
 
         try:
-            check_gateway_reachable(_registration(provider, body)["base_url"])
+            check_gateway_reachable(registration["base_url"])
         except GatewayUnreachable as e:
             raise HTTPException(
                 status_code=503,
@@ -1169,7 +1253,7 @@ def connect_provider(
         _require_loopback(_base_url())
         if key and _known_models_active(provider):
             _leave_known_models()
-        _install(provider, body)
+        _install(provider, registration)
         remembered, remember_error = False, None
         if key:
             _HANDED_ENV_KEYS.pop(provider, None)
