@@ -233,6 +233,11 @@ export interface GaiaClient {
     /** Answers a `needs_input` question; the turn continues once GAIA has it. */
     sendUserInput(request: UserInputRequest, options?: RequestOptions): Promise<UserInputResult>;
     listAgents(options?: RequestOptions): Promise<AgentList>;
+    /**
+     * Streams events about the PC's chat list, such as `set_active_session`. Never ends on its own:
+     * it throws when the connection drops or goes silent, and the caller reconnects.
+     */
+    watchSessionEvents(options?: RequestOptions): AsyncIterable<StreamEvent>;
     listConnectors(options?: RequestOptions): Promise<ConnectorList>;
     listConnectorGrants(connectorId: string, options?: RequestOptions): Promise<ConnectorGrants>;
     listConnectorActivations(connectorId: string, options?: RequestOptions): Promise<ConnectorActivations>;

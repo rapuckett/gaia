@@ -77,6 +77,8 @@ export interface FakeClientData {
     skills?: SkillList;
     resources?: ResourceUsage;
     start?: StartScreen;
+    /** What watchSessionEvents streams before it ends; the real stream never ends on its own. */
+    sessionEvents?: unknown[];
     /** Most chats a search returns before it says `truncated`. */
     searchLimit?: number;
     /** Makes every search fail with this message. */
@@ -313,6 +315,9 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         async sendUserInput(request) {
             answers.push(request);
             return { status: 'ok', request_id: request.request_id };
+        },
+        async *watchSessionEvents() {
+            yield* (data.sessionEvents ?? []) as StreamEvent[];
         },
         async listConnectors() {
             return { connectors: [...(data.connectors ?? [])] };

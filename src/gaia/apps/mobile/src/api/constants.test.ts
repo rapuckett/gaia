@@ -109,6 +109,7 @@ describe('endpoints', () => {
         sessions: ['GET', 'POST'],
         session: ['DELETE', 'GET', 'PUT'],
         sessionDocument: ['DELETE'],
+        sessionEvents: ['GET'],
         sessionMessage: ['DELETE'],
         sessionMessages: ['GET'],
         sessionMessagesAndBelow: ['DELETE'],
