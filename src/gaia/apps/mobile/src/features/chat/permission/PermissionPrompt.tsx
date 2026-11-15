@@ -21,9 +21,11 @@ import {
     splitCommandSummary,
     summarize,
 } from '@webui/utils/permissionPrompts.core';
+import { calendarFacts, CALENDAR_WRITE_TOOLS } from '@webui/utils/calendarApproval.core';
+import { CHANGE_PREVIEW_LINES, fileChange, fileText, fileUnseen } from '@webui/utils/permissionChange.core';
 
 import { useT } from '@/i18n/useT';
-import { Button, Icon, Notice, Pressable, Row, Stack, Surface, Text } from '@/ui';
+import { Button, Disclosure, Icon, Notice, Pressable, Row, ScrollBox, Stack, Surface, Text } from '@/ui';
 import { ShieldQuestion } from '@/ui/icons';
 
 import { useCountdown } from './useCountdown';
@@ -47,12 +49,12 @@ const SIDE_BY_SIDE_MIN_WIDTH = 600;
 const mark = (text: string): string => isolate(text, 'ltr');
 
 /** Code or JSON, left to right and collapsed past the web's line count. */
-function Collapsible({ text }: { text: string }) {
+function Collapsible({ text, limit = PROMPT_CODE_PREVIEW_LINES }: { text: string; limit?: number }) {
     const t = useT();
     const [expanded, setExpanded] = useState(false);
     const lines = text.replace(/^\n+|\n+$/g, '').split('\n');
-    const long = lines.length > PROMPT_CODE_PREVIEW_LINES;
-    const shown = long && !expanded ? lines.slice(0, PROMPT_CODE_PREVIEW_LINES) : lines;
+    const long = lines.length > limit;
+    const shown = long && !expanded ? lines.slice(0, limit) : lines;
     return (
         <Stack gap="xs">
             <Surface tone="recessed" radius="sm" padding="sm" border>
@@ -75,6 +77,96 @@ function Collapsible({ text }: { text: string }) {
     );
 }
 
+/** The lines an edit changes, or the text a write saves, as they will land. */
+function ChangePreview({ args }: { args: Record<string, unknown> }) {
+    const t = useT();
+    const [expanded, setExpanded] = useState(false);
+    const change = fileChange(args);
+    if (!change) return null;
+    const hidden = change.kind === 'edit' ? fileUnseen(args.old_content) || fileUnseen(args.new_content) : fileUnseen(change.text);
+    const long = change.kind === 'edit' && change.lines.length > CHANGE_PREVIEW_LINES;
+    const lines = change.kind === 'edit' ? (long && !expanded ? change.lines.slice(0, CHANGE_PREVIEW_LINES) : change.lines) : [];
+    const more = t('prompt.showAllLines', { n: change.kind === 'edit' ? change.lines.length : 0 });
+    return (
+        <Stack gap="xs" testID="perm-change">
+            <Text role="label" weight="medium">
+                {t(change.kind === 'edit' ? 'prompt.willChange' : 'prompt.willWrite')}
+            </Text>
+            {change.kind === 'edit' ? (
+                <Stack gap="xs">
+                    <Surface tone="recessed" radius="sm" padding="sm" border>
+                        {lines.map((line, i) => (
+                            <Text
+                                key={i}
+                                role="caption"
+                                mono
+                                dir="ltr"
+                                selectable
+                                tone={line.startsWith('+') ? 'success' : line.startsWith('-') ? 'danger' : 'secondary'}
+                            >
+                                {fileText(line, true)}
+                            </Text>
+                        ))}
+                    </Surface>
+                    {long ? (
+                        <Pressable onPress={() => setExpanded((v) => !v)} accessibilityState={{ expanded }} accessibilityLabel={expanded ? t('prompt.showLess') : more}>
+                            <Text role="label" tone="accent" weight="medium">
+                                {expanded ? t('prompt.showLess') : more}
+                            </Text>
+                        </Pressable>
+                    ) : null}
+                </Stack>
+            ) : change.text ? (
+                <Collapsible text={fileText(change.text, true)} limit={CHANGE_PREVIEW_LINES} />
+            ) : (
+                <Text role="caption" tone="secondary">
+                    {t('prompt.emptyFile')}
+                </Text>
+            )}
+            {hidden ? (
+                <Text role="caption" tone="warning" testID="perm-change-unseen">
+                    {t('prompt.unseenChars')}
+                </Text>
+            ) : null}
+        </Stack>
+    );
+}
+
+/** Title, time, account and people of a calendar change, as the web card lists them. */
+function CalendarDetails({ tool, args }: { tool: string; args: Record<string, unknown> }) {
+    const t = useT();
+    const { rows, peopleLabel, people, unseenNote } = calendarFacts(tool, args, t);
+    const when = (v: (typeof rows)[number]['value']) =>
+        v.kind === 'text' ? v.text : v.when.raw ?? (v.when.allDay ? `${v.when.text} (${t.bare('permission.calendar.allDay')})` : v.when.text);
+    return (
+        <Stack gap="xs" testID="perm-calendar">
+            {rows.map(({ label, value }) => (
+                <Stack key={label} gap="xs">
+                    <Text role="caption" tone="muted">
+                        {label}
+                    </Text>
+                    <Text role="label" dir="auto">
+                        {when(value)}
+                    </Text>
+                </Stack>
+            ))}
+            <Text role="caption" tone="muted">
+                {peopleLabel}
+            </Text>
+            {people.map((person) => (
+                <Text key={person} role="label" dir="auto">
+                    {person}
+                </Text>
+            ))}
+            {unseenNote ? (
+                <Text role="caption" tone="warning" testID="perm-calendar-unseen">
+                    {unseenNote}
+                </Text>
+            ) : null}
+        </Stack>
+    );
+}
+
 /** What the call does, in the order the web card shows it. */
 function CallDetails({ prompt }: { prompt: GaiaNotification }) {
     const t = useT();
@@ -91,18 +183,12 @@ function CallDetails({ prompt }: { prompt: GaiaNotification }) {
               ? (prompt.summary ?? '')
               : '';
     const hasArgs = Object.keys(args).length > 0;
+    const calendar = CALENDAR_WRITE_TOOLS.has(tool);
+    const [showArgs, setShowArgs] = useState(false);
     const relayed = !hasArgs && COMMAND_SUMMARY_TOOLS.has(tool) ? splitCommandSummary(prompt.summary ?? '') : null;
     // The question already names the path of a folder or trust prompt.
     const own = tool === PATH_ACCESS_TOOL || tool === PROJECT_TRUST_TOOL;
     const shownDetail = own ? '' : detail;
-    // What the card already shows isn't repeated in the arguments.
-    const rest = Object.fromEntries(
-        Object.entries(args).filter(
-            ([key, value]) =>
-                key !== 'code' && !key.startsWith('_') && !(key === 'working_directory' && folder) && !(shownDetail && value === shownDetail),
-        ),
-    );
-    const showArgs = !own && !exactText && Object.keys(rest).length > 0;
     const inFolder = (path: string) => (
         <Text role="caption" tone="secondary">
             {t.bare('prompt.in')} <Text mono>{mark(path)}</Text>
@@ -137,12 +223,24 @@ function CallDetails({ prompt }: { prompt: GaiaNotification }) {
                     {relayed.note}
                 </Text>
             ) : null}
-            {!detail && !code && !exactText && !relayed && prompt.summary ? (
+            {calendar && hasArgs ? <CalendarDetails tool={tool} args={args} /> : null}
+            {calendar && !hasArgs && prompt.summary ? <Collapsible text={prompt.summary} /> : null}
+            {!detail && !code && !exactText && !relayed && !calendar && prompt.summary ? (
                 <Text role="caption" tone="secondary">
                     {prompt.summary}
                 </Text>
             ) : null}
-            {showArgs ? <Collapsible text={JSON.stringify(rest, null, 2)} /> : null}
+            <ChangePreview args={args} />
+            {hasArgs && !exactText ? (
+                <Disclosure
+                    title={t(fileChange(args) ? 'prompt.technicalDetails' : 'prompt.details')}
+                    open={showArgs}
+                    onToggle={() => setShowArgs((v) => !v)}
+                    testID="perm-details"
+                >
+                    <Collapsible text={JSON.stringify(args, null, 2)} />
+                </Disclosure>
+            ) : null}
         </Stack>
     );
 }
@@ -162,7 +260,7 @@ export function PermissionPrompt({
     onExpired,
 }: PermissionPromptProps) {
     const t = useT();
-    const { width } = useWindowDimensions();
+    const { width, height } = useWindowDimensions();
     const reduced = useReducedMotion();
     const left = useCountdown(prompt.expiresAt, prompt.timeoutSeconds);
     const expired = left !== null && left <= 0;
@@ -228,7 +326,9 @@ export function PermissionPrompt({
                             </Text>
                         </Stack>
                     </Row>
-                    <CallDetails prompt={prompt} />
+                    <ScrollBox maxHeight={Math.round(height * 0.4)} testID="perm-details-scroll">
+                        <CallDetails prompt={prompt} />
+                    </ScrollBox>
                     {fullAccessPending ? <Notice tone="info" message={t('perm.fullPendingNote')} testID="perm-full-pending" /> : null}
                     {suggestAlways && !expired ? (
                         <Text role="caption" tone="secondary">

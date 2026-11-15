@@ -5,9 +5,11 @@ import { useEffect, useRef, useState } from 'react';
 
 import { isDownloading, modelState } from '@webui/components/modelMeta';
 
+import { providerName } from '@webui/utils/providerText';
+
 import type { ProviderModel } from '@webui/types';
-import { PC_ONLY_REFUSAL } from '@/api/constants';
-import { useActiveModel, useDownloadModel, useProviderModels, useSelectModel } from '@/data';
+import { useActiveModel, useDownloadModel, useProviderModels, useProviders, useSelectModel } from '@/data';
+import { openSettings } from '@/features/settings/openSettings';
 import { describeError, useT } from '@/i18n/useT';
 import { Button, Divider, Icon, ListRow, Notice, Row, Sheet, Spinner, Stack, StatusDot, Text } from '@/ui';
 import { Check, Download, KeyRound } from '@/ui/icons';
@@ -36,13 +38,13 @@ export function ModelMenu({ open, onClose, turnRunning, queued, onQueue }: Model
     const active = useActiveModel().data;
     const local = useProviderModels('local', open);
     const cloud = useProviderModels(active?.remote ? active.provider : undefined, open);
+    const providers = useProviders().data?.providers;
     const select = useSelectModel();
     const download = useDownloadModel();
     const [error, setError] = useState<string | null>(null);
     const [askDownload, setAskDownload] = useState<ProviderModel | null>(null);
     const pickAfterDownload = useRef<string | null>(null);
     const [wasOpen, setWasOpen] = useState(open);
-    const [pcOnly, setPcOnly] = useState(false);
     const current = queued ?? active?.model;
 
     // A fresh open starts clean; reset while rendering, not in an effect.
@@ -51,7 +53,6 @@ export function ModelMenu({ open, onClose, turnRunning, queued, onQueue }: Model
         if (open) {
             setError(null);
             setAskDownload(null);
-            setPcOnly(false);
         }
     }
 
@@ -166,6 +167,12 @@ export function ModelMenu({ open, onClose, turnRunning, queued, onQueue }: Model
         ...localModels.filter((m) => !sameModel(current, m.id) && modelState(m) === 'not_downloaded' && !isDownloading(m)),
     ];
     const firstToDownload = ordered.find((m) => !sameModel(current, m.id) && modelState(m) === 'not_downloaded' && !isDownloading(m));
+    const unavailable = (local.data?.models ?? []).filter((m) => m.available === false).length;
+    const needsKey = providers?.filter((p) => p.remote && !p.configured) ?? [];
+    const toSettings = (target?: string) => {
+        onClose();
+        openSettings('model', target);
+    };
     const cloudModels = (cloud.data?.models ?? []).filter((m) => m.available !== false);
 
     return (
@@ -216,15 +223,21 @@ export function ModelMenu({ open, onClose, turnRunning, queued, onQueue }: Model
                     </Stack>
                 ) : null}
                 <Divider />
-                <ListRow
-                    title={t('modelMenu.addKey')}
-                    leading={<Icon icon={KeyRound} size="sm" tone="secondary" />}
-                    onPress={() => setPcOnly(true)}
-                    testID="model-menu-pc-only"
-                />
-                <ListRow title={t('modelMenu.addFromLink')} onPress={() => setPcOnly(true)} />
-                <ListRow title={t('modelMenu.providers')} onPress={() => setPcOnly(true)} />
-                {pcOnly ? <Notice tone="info" message={PC_ONLY_REFUSAL} testID="model-menu-refusal" /> : null}
+                {needsKey.map((p) => (
+                    <ListRow
+                        key={p.id}
+                        title={t('modelMenu.addKey')}
+                        subtitle={t('modelMenu.connectInSettings', { provider: providerName(t, p) })}
+                        leading={<Icon icon={KeyRound} size="sm" tone="secondary" />}
+                        onPress={() => toSettings(p.id)}
+                        testID={`model-menu-key-${p.id}`}
+                    />
+                ))}
+                {unavailable > 0 ? (
+                    <ListRow title={t.plural('modelMenu.unavailable', unavailable)} onPress={() => toSettings()} testID="model-menu-unavailable" />
+                ) : null}
+                <ListRow title={t('modelMenu.addFromLink')} subtitle={t('modelMenu.addFromLinkNote')} onPress={() => toSettings()} testID="model-menu-link" />
+                <ListRow title={t('modelMenu.providers')} onPress={() => toSettings()} testID="model-menu-providers" />
                 <Button variant="secondary" label={t('modelMenu.cancel')} onPress={onClose} />
             </Stack>
         </Sheet>

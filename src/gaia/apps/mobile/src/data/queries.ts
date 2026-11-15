@@ -18,7 +18,7 @@ import type {
     SessionSearchResponse,
     SystemStatus,
 } from '@/api/client.types';
-import { CONNECTOR_POLL_MS, RESOURCE_RETRY_MS, SEARCH_DEBOUNCE_MS, STATUS_POLL_MS } from '@/api/constants';
+import { CONNECTOR_POLL_MS, RESOURCE_RETRY_MS, SEARCH_DEBOUNCE_MS, STATUS_IDLE_POLL_MS, STATUS_POLL_MS } from '@/api/constants';
 import { GaiaConfigError } from '@/api/errors';
 
 import { useGaiaClient } from './GaiaClientProvider';
@@ -150,10 +150,15 @@ function needsWatching(status: SystemStatus | undefined, failed: boolean): boole
     return download === 'downloading' || download === 'starting' || status?.lemonade_running === false;
 }
 
+/** Fast while the status is in progress or failed, slow when healthy. */
+export function statusPollMs(status: SystemStatus | undefined, failed: boolean): number {
+    return needsWatching(status, failed) ? STATUS_POLL_MS : STATUS_IDLE_POLL_MS;
+}
+
 /**
  * What the PC runs and whether it's ready: `default_model_name` is this PC's
  * model, `model_loaded` the one in memory. Re-read while it is starting or
- * warming up, so a screen waiting on it moves on by itself.
+ * warming up, so a screen waiting on it moves on by itself, and slowly when healthy.
  */
 export function useSystemStatus() {
     const client = useGaiaClient();
@@ -161,7 +166,7 @@ export function useSystemStatus() {
         queryKey: queryKeys.systemStatus,
         enabled: client !== null,
         queryFn: ({ signal }) => requireClient(client).getSystemStatus({ signal }),
-        refetchInterval: (query) => (needsWatching(query.state.data, query.state.status === 'error') ? STATUS_POLL_MS : false),
+        refetchInterval: (query) => statusPollMs(query.state.data, query.state.status === 'error'),
     });
 }
 

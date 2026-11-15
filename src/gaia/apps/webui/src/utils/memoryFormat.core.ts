@@ -239,3 +239,54 @@ export function oneLineQuote(text: string): string {
     if (flat.length <= FORGOTTEN_QUOTE_CHARS) return flat;
     return `${flat.slice(0, FORGOTTEN_QUOTE_CHARS - 1).trimEnd()}…`;
 }
+
+// ── Knowledge browser and conversation history ──────────────────────────────
+
+/** Every category the knowledge browser filters by and the form saves, in the web's order. */
+export const KNOWLEDGE_CATEGORIES = ['fact', 'preference', 'error', 'skill', 'note', 'reminder'] as const;
+
+/** Rows per page of the knowledge browser. */
+export const KNOWLEDGE_PAGE_SIZE = 15;
+
+/** One memory with everything the browser's detail shows. */
+export interface KnowledgeEntry extends AboutYouItem {
+    confidence: number;
+    metadata: Record<string, unknown> | string | null;
+    use_count: number;
+    last_used: string | null;
+    reminded_at: string | null;
+    superseded_by: string | null;
+    has_embedding?: boolean;
+}
+
+export interface EntityInfo {
+    entity: string;
+    count: number;
+    last_updated: string;
+}
+
+export interface ConvSession {
+    session_id: string;
+    turn_count: number;
+    started_at: string | null;
+    last_activity: string | null;
+    first_message: string | null;
+    consolidated?: boolean;
+}
+
+export interface ConvTurn {
+    id: number;
+    session_id: string;
+    role: string;
+    content: string;
+    context: string;
+    timestamp: string;
+}
+
+export const ROLE_KEYS: Record<string, MessageKey> = { user: 'mem.role.user', assistant: 'mem.role.assistant' };
+
+export function confidenceLevel(c: number): 'high' | 'medium' | 'low' {
+    if (c >= 0.7) return 'high';
+    if (c >= 0.4) return 'medium';
+    return 'low';
+}

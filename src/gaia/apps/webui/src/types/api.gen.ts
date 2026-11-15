@@ -102,6 +102,8 @@ export interface ApiSchemas {
   PermissionModeRequest: PermissionModeRequest;
   PolicyNotice: PolicyNotice;
   PreflightReport: PreflightReport;
+  ProviderSummary: ProviderSummary;
+  ProviderSummaryList: ProviderSummaryList;
   PullRequestRequest: PullRequestRequest;
   QuickLink: QuickLink;
   RemoveModelRequest: RemoveModelRequest;
@@ -1230,6 +1232,21 @@ export interface PreflightReport {
   required_memory_gb?: number;
   tier?: string;
   warnings?: string[];
+}
+/**
+ * A provider as a paired device may see it: no key, key hint or address.
+ */
+export interface ProviderSummary {
+  blocked: boolean;
+  configured: boolean;
+  id: string;
+  name: string;
+  privacy_notice: string;
+  remote: boolean;
+}
+export interface ProviderSummaryList {
+  lemonade_error?: string | null;
+  providers: ProviderSummary[];
 }
 export interface PullRequestRequest {
   body?: string;

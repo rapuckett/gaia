@@ -4,7 +4,7 @@
 import { useState, type ComponentRef, type ReactNode, type Ref } from 'react';
 import { TextInput, View, type KeyboardTypeOptions, type ReturnKeyTypeOptions } from 'react-native';
 import { CircleAlert } from 'lucide-react-native';
-import { useT } from '@/i18n/useT';
+import { useDirection, useT } from '@/i18n/useT';
 import { Eye, EyeOff } from '../icons';
 import { IconButton } from './IconButton';
 import { fontFamily } from '../theme/fonts';
@@ -37,9 +37,15 @@ export interface TextFieldProps {
     /** No border, fill or focus ring, for a field inside a card that draws its own (the message box). */
     bare?: boolean;
     autoFocus?: boolean;
+    /** A web address: the URL keyboard, no autocapitalize or autocorrect. */
+    url?: boolean;
     disabled?: boolean;
     inputRef?: Ref<ComponentRef<typeof TextInput>>;
     accessibilityLabel?: string;
+    /** What a screen reader adds after the label; a placeholder that shows only one language puts the full text here. */
+    accessibilityHint?: string;
+    onFocus?: () => void;
+    onBlur?: () => void;
     testID?: string;
 }
 
@@ -61,13 +67,18 @@ export function TextField({
     trailing,
     bare,
     autoFocus,
+    url,
     disabled,
     inputRef,
     accessibilityLabel,
+    accessibilityHint,
+    onFocus,
+    onBlur,
     testID,
 }: TextFieldProps) {
     const { colors, radius, type } = useTheme();
     const t = useT();
+    const rtl = useDirection() === 'rtl';
     const [focused, setFocused] = useState(false);
     const [revealed, setRevealed] = useState(false);
     const canReveal = !!secureTextEntry && !!revealable;
@@ -102,14 +113,23 @@ export function TextField({
                 editable={!disabled}
                 multiline={multiline}
                 returnKeyType={returnKeyType}
-                keyboardType={keyboardType}
+                keyboardType={url ? 'url' : keyboardType}
                 onSubmitEditing={onSubmitEditing}
                 submitBehavior={multiline ? 'newline' : 'blurAndSubmit'}
                 secureTextEntry={secureTextEntry && !revealed}
                 autoFocus={autoFocus}
+                autoCapitalize={url ? 'none' : undefined}
+                autoCorrect={url ? false : undefined}
                 accessibilityLabel={accessibilityLabel ?? label}
-                onFocus={() => setFocused(true)}
-                onBlur={() => setFocused(false)}
+                accessibilityHint={accessibilityHint}
+                onFocus={() => {
+                    setFocused(true);
+                    onFocus?.();
+                }}
+                onBlur={() => {
+                    setFocused(false);
+                    onBlur?.();
+                }}
                 selectionColor={colors.accentSolid}
                 testID={testID}
                 style={{
@@ -128,7 +148,8 @@ export function TextField({
                     fontFamily: fontFamily({ weight: 'regular', mono: false, display: false }),
                     fontSize: size,
                     lineHeight,
-                    textAlign: 'auto',
+                    // Physical sides: native textAlign isn't swapped under forceRTL. A web address stays on the typed text's side.
+                    ...(url ? { textAlign: 'auto' as const } : { textAlign: rtl ? ('right' as const) : ('left' as const), writingDirection: rtl ? ('rtl' as const) : ('ltr' as const) }),
                     ...(focused && !error && !bare ? { boxShadow: `0 0 0 3px ${colors.accentRing}` } : null),
                 }}
             />
