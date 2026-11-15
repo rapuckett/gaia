@@ -8,7 +8,7 @@ import { isolate } from '@webui/i18n/registry';
 import { useDocuments } from '@/data';
 import { ScreenHeader } from '@/features/nav/ScreenHeader';
 import { describeError, useT } from '@/i18n/useT';
-import { Button, EmptyState, ErrorState, IconButton, List, ListSkeleton, Notice, Row, Screen, Stack, Text, useTheme } from '@/ui';
+import { EmptyState, ErrorState, IconButton, List, ListSkeleton, Notice, Row, Screen, Stack, Text, useTheme } from '@/ui';
 import { X } from '@/ui/icons';
 
 import { DocumentRow } from './DocumentRow';
