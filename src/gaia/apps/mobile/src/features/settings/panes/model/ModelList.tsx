@@ -47,7 +47,7 @@ function Group({ id, title, count, defaultOpen, force, children }: {
             title={title}
             open={open}
             onToggle={() => setPicked(!open)}
-            trailing={<Badge label={String(count)} />}
+            trailing={<Badge shape="pill" label={String(count)} />}
             testID={`model-group-${id}`}
         >
             <Stack gap="sm">{children}</Stack>
