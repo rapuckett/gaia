@@ -54,6 +54,7 @@ describe('Markdown', () => {
     it('opens a cited library file in the in-app preview at its page, never in the browser, and shows library notices as notes', async () => {
         useConnectionStore.getState().setConnection({ baseUrl: 'http://pc.local:4200/', token: null });
         const open = jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined);
+        open.mockClear();
         await render(
             <ThemeProvider>
                 <FileScopeContext.Provider value="s1">
@@ -75,11 +76,11 @@ describe('Markdown', () => {
         await render(
             <ThemeProvider>
                 <FileScopeContext.Provider value="s1">
-                    <Markdown text="Saved to `C:\\out\\a.txt`." />
+                    <Markdown text={'Saved to `C:\\out\\a.txt`.'} />
                 </FileScopeContext.Provider>
             </ThemeProvider>,
         );
-        screen.getByText(/C:\\out\\a\.txt/).props.onPress();
+        screen.getByText(/a\.txt/).props.onPress();
         expect(usePreviewStore.getState().target).toEqual({ kind: 'path', path: 'C:\\out\\a.txt', sessionId: 's1' });
     });
 

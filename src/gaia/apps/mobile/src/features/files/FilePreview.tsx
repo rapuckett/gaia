@@ -41,7 +41,6 @@ function useLoadedFile(target: PreviewTarget): State {
     useEffect(() => {
         let live = true;
         let cached: CachedFile | null = null;
-        setState({ status: 'loading' });
         (async () => {
             if (!client) throw new Error('No PC is paired.');
             const name = targetName(target);
@@ -137,7 +136,7 @@ function Body({ target, state }: { target: PreviewTarget; state: State }) {
 /** A PC file or cited document, previewed in a sheet: text, Markdown, CSV columns or an image, with Share from the cached copy. */
 export function FilePreview({ target, onClose }: { target: PreviewTarget | null; onClose: () => void }) {
     if (!target) return <Sheet open={false} onClose={onClose} />;
-    return <OpenPreview target={target} onClose={onClose} />;
+    return <OpenPreview key={target.kind === 'path' ? target.path : `${target.docId}#${target.page ?? ''}`} target={target} onClose={onClose} />;
 }
 
 function OpenPreview({ target, onClose }: { target: PreviewTarget; onClose: () => void }) {
