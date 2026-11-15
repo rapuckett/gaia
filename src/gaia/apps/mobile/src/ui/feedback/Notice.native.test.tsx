@@ -36,4 +36,10 @@ describeNative('Notice and VoiceOver', () => {
         await render(<Notice tone="warning" message="Careful" testID="n" />, { wrapper: wrap });
         expect(screen.getByTestId('n').props.accessible).toBe(true);
     });
+
+    it('keeps a status notice polite instead of an assertive alert', async () => {
+        await render(<Notice tone="warning" message="Heads up" role="status" testID="n" />, { wrapper: wrap });
+        expect(screen.getByTestId('n').props.accessibilityLiveRegion).toBe('polite');
+        expect(screen.queryByRole('alert')).toBeNull();
+    });
 });

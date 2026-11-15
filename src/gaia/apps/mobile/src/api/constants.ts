@@ -124,6 +124,7 @@ export const ENDPOINTS = {
     spendingAllowMonth: '/api/spending/allow-month',
     spendingChat: '/api/spending/chat/{session_id}',
     spendingLimit: '/api/spending/limit',
+    chatActive: '/api/chat/active',
     chatSend: '/api/chat/send',
     chatAttach: '/api/chat/attach',
     chatCancel: '/api/chat/cancel',
@@ -448,6 +449,8 @@ export const SCHEDULE_RESULTS_LIMIT = 20;
 
 /** How often to re-read the schedules while their screen is open, so counts and times follow the PC. */
 export const SCHEDULES_POLL_MS = 10_000;
+/** How often the app, while open, re-reads the schedules and which chats are running, as the web's app-wide poll does (30 s). */
+export const APP_POLL_MS = 30_000;
 /** How often the goal store's health is re-read, as the web's does (30 s). */
 export const GOAL_HEALTH_POLL_MS = 30_000;
 
