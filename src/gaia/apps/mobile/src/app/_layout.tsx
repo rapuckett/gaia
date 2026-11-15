@@ -4,7 +4,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Drawer } from 'expo-router/drawer';
 import { useEffect, useMemo, useState } from 'react';
-import { useWindowDimensions } from 'react-native';
+import { Platform, useWindowDimensions } from 'react-native';
 
 import { createHttpClient } from '@/api/http';
 import { GaiaClientProvider } from '@/data/GaiaClientProvider';
@@ -74,6 +74,8 @@ export default function RootLayout() {
                                     headerShown: false,
                                     freezeOnBlur: true,
                                     drawerType: width >= PERMANENT_DRAWER_MIN_WIDTH ? 'permanent' : 'front',
+                                    // react-navigation reads I18nManager, which stays LTR on web, so the closed drawer would sit inside the page.
+                                    drawerPosition: Platform.OS === 'web' && dir === 'rtl' ? 'right' : undefined,
                                 }}
                             >
                                 {ROUTES.map((name) => (
