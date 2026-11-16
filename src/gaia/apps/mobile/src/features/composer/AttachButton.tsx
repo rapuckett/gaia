@@ -1,18 +1,28 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { useT } from '@/i18n/useT';
 import { ActionSheet, IconButton } from '@/ui';
-import { Camera, FileText, Image, Plus } from '@/ui/icons';
+import { Camera, ClipboardPaste, FileText, Image, Plus } from '@/ui/icons';
 
-import { CameraDeniedError, pickCamera, pickDocuments, pickPhotos, type PickedFile } from './pickFiles';
+import { CameraDeniedError, clipboardHasImage, pasteImage, pickCamera, pickDocuments, pickPhotos, type PickedFile } from './pickFiles';
 
 /** The + button: a menu to attach a photo or a file. */
 export function AttachButton({ onPick, onError, disabled }: { onPick(files: PickedFile[]): void; onError(name: string, message: string): void; disabled?: boolean }) {
     const t = useT();
     const [open, setOpen] = useState(false);
+    const [canPaste, setCanPaste] = useState(false);
+    // Asked when the menu opens, so Paste shows only while the clipboard holds an image.
+    useEffect(() => {
+        if (!open) return;
+        let live = true;
+        void clipboardHasImage().then((has) => live && setCanPaste(has), () => live && setCanPaste(false));
+        return () => {
+            live = false;
+        };
+    }, [open]);
     return (
         <>
             <IconButton
@@ -38,6 +48,7 @@ export function AttachButton({ onPick, onError, disabled }: { onPick(files: Pick
                     },
                     { label: t('composer.attachPhoto'), icon: Image, onPress: () => void pickPhotos().then(onPick) },
                     { label: t('composer.attachFile'), icon: FileText, onPress: () => void pickDocuments().then(onPick) },
+                    ...(canPaste ? [{ label: t('mobileApp.composer.attachPaste'), icon: ClipboardPaste, onPress: () => void pasteImage().then(onPick) }] : []),
                 ]}
             />
         </>
