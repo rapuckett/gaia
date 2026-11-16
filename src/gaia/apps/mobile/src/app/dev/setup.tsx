@@ -6,7 +6,8 @@ import { Redirect, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 
 import { GaiaClientProvider, useSetupPlan, useSetupStatus } from '@/data';
-import { SETUP_SCENES, setupSceneClient } from '@/features/setup/devScenes';
+import { SETUP_SCENES as SCENES_A, setupSceneClient } from '@/features/setup/devScenes';
+import { SETUP_SCENES_B } from '@/features/setup/devScenesB';
 import { devGalleryEnabled } from '@/features/dev/devGallery';
 import { KeyedScene } from '@/features/dev/KeyedScene';
 import { SetupFooterBar, SetupFooterProvider } from '@/features/setup/SetupFooter';
@@ -15,6 +16,8 @@ import type { SetupStepContext } from '@/features/setup/SetupScreen';
 import { usePlanScreenRequest } from '@/features/setup/steps/planScreenRequest';
 import { SETUP_STEPS } from '@/features/setup/steps';
 import { Screen, ScreenBannerProvider, Stack, Text, UIProvider } from '@/ui';
+
+const SETUP_SCENES = { ...SCENES_A, ...SETUP_SCENES_B };
 
 const noop = () => undefined;
 
