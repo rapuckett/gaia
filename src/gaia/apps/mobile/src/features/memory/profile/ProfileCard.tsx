@@ -26,7 +26,7 @@ export const ProfileDevContext = createContext<{ kind: ProfileKind; save?: boole
 
 function Log({ lines, running }: { lines: LogLine[]; running: boolean }) {
     const body = (running ? lines.slice(-LIVE_LINES) : lines).map((line, i) => (
-        <Text key={i} role="caption" tone={line.kind === 'error' ? 'danger' : line.kind === 'finding' ? 'primary' : 'muted'} dir="auto">
+        <Text key={i} role="caption" tone={line.kind === 'error' ? 'danger' : line.kind === 'finding' ? 'primary' : 'muted'} dir={line.server ? 'ltr' : undefined}>
             {line.server ? isolate(line.text, 'ltr') : line.text}
         </Text>
     ));

@@ -10,7 +10,7 @@ import { useCreateGoal } from '@/data';
 import { describeFailureWith, useT } from '@/i18n/useT';
 import { Button, Notice, Row, SegmentedControl, Sheet, Stack, TextField } from '@/ui';
 
-import { PRIORITY_CHOICES, PRIORITY_KEYS } from './goalText';
+import { PRIORITY_CHOICES } from './goalText';
 
 export interface NewGoalSheetProps {
     open: boolean;
@@ -90,7 +90,7 @@ export function NewGoalSheet({ open, onClose }: NewGoalSheetProps) {
                     accessibilityLabel={t(PRIORITY_CHOICES.find((choice) => choice.value === priority)!.label)}
                     options={PRIORITY_CHOICES.map((choice) => ({
                         value: choice.value,
-                        label: t.bare(PRIORITY_KEYS[choice.value]),
+                        label: t.bare(choice.label),
                         accessibilityLabel: t(choice.label),
                     }))}
                     testID="goals-create-priority"

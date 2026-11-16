@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from 'react';
 
-import { isolateUnit } from '@webui/i18n/registry';
+import { keepTogether } from '@webui/i18n/registry';
 
 import { useActiveModel } from '@/data';
 import { openSettings } from '@/features/settings/openSettings';
@@ -26,7 +26,7 @@ export function ModelRestoreNotice({ onPick = () => openSettings('model'), holdO
     const message = restore && restore.status !== 'none' ? restore.message : null;
     const name = active.data?.display_name ?? active.data?.label;
     // The PC words the sentence; the name inside it must wrap as one unit.
-    const shown = message && name && message.includes(name) ? message.replace(name, isolateUnit(name)) : message;
+    const shown = message && name && message.includes(name) ? message.replace(name, keepTogether(name)) : message;
     const recheck = restore?.status === 'pending' || (restore?.status === 'failed' && !!restore.retry);
     const { refetch } = active;
 
