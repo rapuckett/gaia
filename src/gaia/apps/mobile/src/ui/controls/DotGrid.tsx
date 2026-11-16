@@ -44,7 +44,7 @@ export const DotGrid = forwardRef<DotGridHandle, DotGridProps>(function DotGrid(
             accessibilityElementsHidden
             importantForAccessibility="no-hide-descendants"
         >
-            <Svg style={StyleSheet.absoluteFill} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+            <Svg width="100%" height="100%" style={StyleSheet.absoluteFill} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
                 <Defs>
                     <Pattern id="dot-grid" width={PITCH} height={PITCH} patternUnits="userSpaceOnUse">
                         <Rect x={mid} y={mid} width={DOT} height={DOT} fill={colors.textPrimary} fillOpacity={scheme === 'dark' ? 0.17 : 0.14} />
