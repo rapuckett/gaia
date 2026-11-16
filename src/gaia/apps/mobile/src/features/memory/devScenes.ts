@@ -208,6 +208,10 @@ export function profileSceneStart(scene: MemoryScene): { kind: 'discovery' | 'in
     return null;
 }
 
+/** The stats scenes read what only the Advanced tab shows, so they open there unless the URL names a tab. */
+export const sceneDefaultTab = (scene: MemoryScene): 'advanced' | undefined =>
+    scene === 'loading' || scene === 'failed' || scene === 'actionFails' || scene === 'statsEmpty' || scene === 'statsManyTools' ? 'advanced' : undefined;
+
 /** A fake PC for the dev gallery route, one per state the screen has to show. */
 export function memoryScene(scene: MemoryScene): GaiaClient {
     const empty = scene === 'statsEmpty';
