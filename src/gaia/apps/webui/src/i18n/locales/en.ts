@@ -3939,6 +3939,7 @@ export const enMessages = {
     'mobileApp.setup.models.fit.unknown': 'GAIA couldn’t read your PC’s memory, so it can’t tell if this fits.',
     'mobileApp.setup.models.loading': 'Reading the models on your PC…',
     'mobileApp.setup.check.title': 'Check your PC',
+    'mobileApp.setup.lostContactNoReason': 'Lost contact with GAIA.',
     'mobileApp.setup.pc.step': 'Your PC',
     'mobileApp.settings.pcOnly': 'Change this on the PC running GAIA.',
     'mobileApp.settings.on': 'On',

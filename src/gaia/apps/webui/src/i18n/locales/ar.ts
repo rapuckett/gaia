@@ -3938,6 +3938,7 @@ const messages: Messages = {
     'mobileApp.setup.models.fit.unknown': 'تعذّر على GAIA قراءة ذاكرة الكمبيوتر لديك، لذا لا يستطيع معرفة ما إذا كان هذا النموذج مناسبًا.',
     'mobileApp.setup.models.loading': 'جارٍ قراءة النماذج على الكمبيوتر لديك…',
     'mobileApp.setup.check.title': 'فحص الكمبيوتر لديك',
+    'mobileApp.setup.lostContactNoReason': 'انقطع الاتصال بـ GAIA.',
     'mobileApp.setup.pc.step': 'الكمبيوتر لديك',
     'mobileApp.settings.pcOnly': 'غيّر هذا من الكمبيوتر الذي يشغّل GAIA.',
     'mobileApp.settings.on': 'مفعّل',

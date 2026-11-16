@@ -12,8 +12,8 @@ import { FIXTURES } from '@/features/chat/messages/__fixtures__/messages';
 import { SessionPanelGallery, type SessionPanelGalleryState } from '@/features/chat/session-panel/SessionPanelGallery';
 import { UIProvider } from '@/ui';
 
-const OPEN_STATES = ['actions', 'delete', 'edit', 'guided', 'prescan-dismissing', 'prescan-done'];
-const PANEL_STATES = ['loaded', 'empty', 'error', 'notRunning', 'ctxMeasuring', 'ctxNormal', 'ctxEstimated', 'ctxFilling', 'ctxChat', 'ctxNoTurn', 'envFolders', 'envRemove', 'envOffline', 'envFull', 'envEmpty', 'chgList', 'chgConfirm', 'chgConflict', 'chgGit', 'chgPending', 'chgError', 'chgReview', 'ansFull', 'ansPending', 'ansNoLive', 'ansError', 'outItems', 'outEmpty', 'envPick', 'envPickRefused'];
+const OPEN_STATES = ['actions', 'delete', 'edit', 'drop', 'guided', 'guided-sets', 'prescan-dismissing', 'prescan-done'];
+const PANEL_STATES = ['loaded', 'empty', 'error', 'notRunning', 'ctxMeasuring', 'ctxNormal', 'ctxEstimated', 'ctxFilling', 'ctxChat', 'ctxNoTurn', 'envFolders', 'envRemove', 'envOffline', 'envFull', 'envEmpty', 'chgList', 'chgConfirm', 'chgConflict', 'chgGit', 'chgGitPr', 'chgPending', 'chgError', 'chgReview', 'ansFull', 'ansPending', 'ansNoLive', 'ansError', 'outItems', 'outEmpty', 'envPick', 'envPickRefused'];
 
 function isState(state?: string): state is MessagesGalleryState {
     return !!state && (state in FIXTURES || OPEN_STATES.includes(state));

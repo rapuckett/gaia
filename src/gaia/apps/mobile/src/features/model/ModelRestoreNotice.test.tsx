@@ -6,6 +6,8 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react-nativ
 import type { ReactNode } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { isolateUnit } from '@webui/i18n/registry';
+
 import type { ActiveModel } from '@/api/client.types';
 import { createFakeClient } from '@/api/fake';
 import { GaiaClientProvider } from '@/data';
@@ -15,7 +17,7 @@ import { ThemeProvider } from '@/ui';
 import { ModelRestoreNotice } from './ModelRestoreNotice';
 
 const t = translator('en');
-const ACTIVE: ActiveModel = { provider: 'local', model: 'm', label: 'M', remote: false, is_default: true };
+const ACTIVE: ActiveModel = { provider: 'local', model: 'm', label: 'Gemma 4 E4B', remote: false, is_default: true };
 
 async function mount(restore: ActiveModel['restore'], onPick = jest.fn()) {
     const client = createFakeClient({ activeModel: { ...ACTIVE, restore } });
@@ -46,6 +48,11 @@ describe('ModelRestoreNotice', () => {
         await mount({ status: 'restored', message: 'Restored Gemma.' });
         expect(await screen.findByText('Restored Gemma.')).toBeTruthy();
         expect(screen.queryByText(t('startup.pickModel'))).toBeNull();
+    });
+
+    it('keeps the model name in the sentence as one isolated unit', async () => {
+        await mount({ status: 'restored', message: 'Restored your saved model, Gemma 4 E4B.' });
+        expect(await screen.findByText(`Restored your saved model, ${isolateUnit('Gemma 4 E4B')}.`)).toBeTruthy();
     });
 
     it('shows nothing when there is nothing to report', async () => {
