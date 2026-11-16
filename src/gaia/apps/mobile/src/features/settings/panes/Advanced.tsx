@@ -8,7 +8,7 @@ import type { SystemStatus } from '@webui/types';
 
 import { useModelActions, useQueryFailure, useSystemStatus } from '@/data';
 import { describeError, useT } from '@/i18n/useT';
-import { Button, Card, Disclosure, Divider, Ltr, ProgressLine, Row, Spinner, Stack, Surface, Text } from '@/ui';
+import { Button, Card, Disclosure, Divider, Ltr, Notice, ProgressLine, Row, Spinner, Stack, Surface, Text } from '@/ui';
 
 import { LogsCard } from '@/features/logs';
 
