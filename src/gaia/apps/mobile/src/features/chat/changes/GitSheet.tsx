@@ -66,7 +66,7 @@ export function GitSheet({
       )}
       footer={
         <Stack paddingX="lg" paddingY="md">
-          <Row gap="sm">
+          <Row gap="sm" stack>
             <Button
               label={t("mobileApp.changes.cancel")}
               variant="secondary"

@@ -96,7 +96,7 @@ export function ModelsScreen({ ctx, close }: { ctx: SetupStepContext; close: () 
         return planQuery.error ? (
             <Stack gap="md">
                 <Notice tone="danger" message={t('setup.models.listFailed', { reason: describeError(planQuery.error, t) })} />
-                <Row gap="sm">
+                <Row gap="sm" stack>
                     <Button variant="primary" label={t('setup.tryAgain')} onPress={() => void planQuery.refetch()} />
                     <Button variant="secondary" label={t('setup.back')} onPress={close} />
                 </Row>
