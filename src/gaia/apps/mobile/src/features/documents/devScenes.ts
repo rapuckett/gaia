@@ -2,8 +2,10 @@
 // SPDX-License-Identifier: MIT
 
 import type { DocumentListResponse } from '@/api/client.types';
-import { GaiaApiError } from '@/api/errors';
+import { GaiaApiError, GaiaError, GaiaNetworkError, GaiaUploadUnsupportedError } from '@/api/errors';
 import { createFakeClient, type FakeClientData } from '@/api/fake';
+
+import { unsupportedTypeMessage } from '@webui/utils/uploadErrors.core';
 
 import type { LibraryStart } from './DocumentsScreen';
 
@@ -33,6 +35,9 @@ const NOTES = doc('d3', 'meeting-notes.md', 3_400, { indexed_at: ago(3 * 24 * 60
 const PLAN = doc('d4', 'roadmap.docx', 1_250_000, { indexed_at: ago(40) });
 
 const MIXED = [BOARD, BUDGET, NOTES, PLAN, doc('d5', 'server.py', 18_200, { indexed_at: ago(9 * 24 * 60) }), doc('d6', 'handbook.txt', 2_800_000, { indexed_at: ago(2) })];
+
+const CLOCK = Date.now();
+const NO_ANSWER = new GaiaNetworkError('https://pc.local', new Error('timed out'));
 
 const INDEXING = [
     doc('i1', 'annual-report-2025.pdf', 18_400_000, { indexing_status: 'indexing', indexed_at: undefined }),
@@ -70,12 +75,12 @@ const scene = (over: Partial<DocumentsScene> & { docs?: LibraryDoc[]; attached?:
 };
 
 const PROGRESS: NonNullable<FakeClientData['documentStatuses']> = {
-    i1: { indexing_status: 'indexing', chunk_count: 0, is_active: true, progress: { phase: 'reading', done: 42, total: 120 } },
     i2: { indexing_status: 'indexing', chunk_count: 0, is_active: true, progress: { phase: 'embedding', done: 310, total: 800 } },
     i3: { indexing_status: 'pending', chunk_count: 0, is_active: true, progress: { phase: 'reading', done: 7, total: null } },
 };
 
-const upload = (error: string, title: string, icon: 'warning' | 'alert' | 'bug' = 'warning') => ({ kind: 'failed' as const, error: { title, detail: error, icon, report: null } });
+// i1 reports no progress yet, so its row shows the Indexing label and the elapsed time.
+const SEEDED_CLOCK = { now: CLOCK, startedAt: { i1: CLOCK - 83_000, i2: CLOCK - 205_000, i3: CLOCK - 12_000 } };
 
 export const DOCUMENTS_SCENES: Record<string, DocumentsScene> = {
     empty: scene({}),
@@ -83,22 +88,24 @@ export const DOCUMENTS_SCENES: Record<string, DocumentsScene> = {
     library: scene({ docs: MIXED }),
     'library-next-chat': scene({ chat: false, docs: MIXED }),
     'next-chat-chosen': scene({ docs: MIXED, start: { target: 'next' } }),
-    attached: scene({ docs: MIXED, attached: ['d1', 'd2'], start: { note: 'Added q3-board-deck.pdf to “Board prep”.' } }),
-    indexing: scene({ docs: INDEXING, data: { documentStatuses: PROGRESS } }),
+    attached: scene({ docs: MIXED, attached: ['d1', 'd2'], start: { note: { key: 'docs.attached', params: { name: 'q3-board-deck.pdf', chat: '“Board prep”' } } } }),
+    indexing: scene({ docs: INDEXING, data: { documentStatuses: PROGRESS }, start: { indexing: SEEDED_CLOCK } }),
     failed: scene({ docs: FAILED }),
+    // Cancelled and File missing at the top, which the long `failed` list pushes below the first screen.
+    'failed-more': scene({ docs: [FAILED[5]!, FAILED[6]!, FAILED[4]!, BOARD] }),
     long: scene({ docs: LONG }),
     'remove-undo': scene({ docs: MIXED, start: { removing: 'd2' }, holdRemoval: true }),
-    'remove-failed': scene({ docs: MIXED, start: { error: 'Couldn’t remove budget-2026.xlsx: The PC didn’t answer.' } }),
-    'cancel-failed': scene({ docs: INDEXING, data: { documentStatuses: PROGRESS }, start: { error: 'Couldn’t cancel indexing annual-report-2025.pdf: The PC didn’t answer.' } }),
+    'remove-failed': scene({ docs: MIXED, start: { error: { key: 'docs.deleteFailed', params: { name: 'budget-2026.xlsx' }, cause: NO_ANSWER } } }),
+    'cancel-failed': scene({ docs: INDEXING, data: { documentStatuses: PROGRESS }, start: { indexing: SEEDED_CLOCK, error: { key: 'docs.cancelFailed', params: { name: 'annual-report-2025.pdf' }, cause: NO_ANSWER } } }),
     'load-failed': scene({ loadError: 'The PC didn’t answer.' }),
     'adding-file': scene({ docs: MIXED, start: { add: { kind: 'busy', name: 'supplier-contracts.pdf' } } }),
-    'added-file': scene({ docs: MIXED, start: { add: { kind: 'done', message: 'Added supplier-contracts.pdf to “Board prep”.' } } }),
-    'added-for-next-chat': scene({ chat: false, docs: MIXED, start: { add: { kind: 'done', message: 'supplier-contracts.pdf will be added to your next new chat.' } } }),
-    'add-unreadable': scene({ docs: FAILED, start: { add: { kind: 'unreadable', message: 'scan-0042.pdf couldn’t be added: GAIA can’t read it. Why, and Retry, are on its row below.' } } }),
-    'add-unsupported-type': scene({ docs: MIXED, start: { add: upload('Video files can’t be indexed. Add a transcript or notes instead.', 'holiday.mov couldn’t be added') } }),
-    'add-too-large': scene({ docs: MIXED, start: { add: upload('The limit is 100 MB.', 'big-archive.pdf is too large') } }),
-    'add-no-uploads': scene({ docs: MIXED, start: { add: { kind: 'unsupported', message: 'This build of the app can’t send files to your PC yet.' } } }),
-    'add-picker-failed': scene({ docs: MIXED, start: { add: { kind: 'picker', message: 'GAIA needs access to your files to add them. Allow it in Settings.' } } }),
+    'added-file': scene({ docs: MIXED, start: { add: { kind: 'done', message: { key: 'docs.attached', params: { name: 'supplier-contracts.pdf', chat: '“Board prep”' } } } } }),
+    'added-for-next-chat': scene({ chat: false, docs: MIXED, start: { add: { kind: 'done', message: { key: 'docs.willAttach', params: { name: 'supplier-contracts.pdf' } } } } }),
+    'add-unreadable': scene({ docs: FAILED, start: { add: { kind: 'unreadable', message: { key: 'docs.notAdded', params: { name: 'scan-0042.pdf' } } } } }),
+    'add-unsupported-type': scene({ docs: MIXED, start: { add: { kind: 'failed', upload: { filename: 'holiday.mov', error: unsupportedTypeMessage('holiday.mov') ?? '' } } } }),
+    'add-too-large': scene({ docs: MIXED, start: { add: { kind: 'failed', upload: { filename: 'big-archive.pdf', status: 400, kind: 'too_large', error: { key: 'docs.tooLargeDetail', params: { max: '100' } } } } } }),
+    'add-no-uploads': scene({ docs: MIXED, start: { add: { kind: 'unsupported', cause: new GaiaUploadUnsupportedError() } } }),
+    'add-picker-failed': scene({ docs: MIXED, start: { add: { kind: 'picker', cause: new GaiaError('mobileApp.error.photosDenied') } } }),
 };
 
 /** The library on a fake PC; a removal that never finishes and a library read that fails are overlaid on the fake. */
