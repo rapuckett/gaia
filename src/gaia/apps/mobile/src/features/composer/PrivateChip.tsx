@@ -49,7 +49,7 @@ export function PrivateChip({ on, onChange, disabled, memoryEnabled = null, memo
             disabled={disabled}
             onPress={() => onChange(!on)}
             accessibilityLabel={on ? t('composer.privateOff') : t('composer.privateOn')}
-            accessibilityHint={on ? t('composer.privateOffTitle') : memoryUnreadable ? t('composer.memoryUnknownTitle') : t('composer.privateOnTitle')}
+            accessibilityHint={on ? t('chat.privateOffTitle') : memoryUnreadable ? t('composer.memoryUnknownTitle') : t('composer.privateOnTitle')}
             testID="private-chip"
         />
     );
