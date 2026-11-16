@@ -10,6 +10,8 @@ import type {
     AgentInfo,
     AgentInstallStatus,
     AgentMcpServer,
+    AutomationAction,
+    AutomationList,
     MCPServerStatus,
     ChatPerformance,
     ConnectorDeviceAuthResponse,
@@ -309,6 +311,8 @@ export interface FakeClientData {
     undoConflict?: GaiaApiError;
     /** What getUndoSettings answers; updateUndoSettings changes it. */
     undoSettings?: UndoSettings;
+    /** What listAutomations answers; an Error is thrown. Pause, resume and remove change it. */
+    automations?: AutomationList | Error;
     /** What getDiscordStatus answers; an Error is thrown (a phone gets the PC's 403). */
     discordStatus?: DiscordStatus | Error;
     /** Thrown by deleteSession for these chat ids. */
@@ -374,6 +378,7 @@ export interface FakeGaiaClient extends GaiaClient {
     readonly confirmations: ToolConfirmRequest[];
     readonly answers: UserInputRequest[];
     readonly scheduleActions: { action: 'pause' | 'resume' | 'run' | 'delete'; name: string }[];
+    readonly automationActions: { action: AutomationAction | 'delete'; ref: string }[];
     readonly followUps: { sessionId: string; text: string }[];
     readonly restarts: { confirm: boolean }[];
     readonly selected: string[];
@@ -477,6 +482,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
     const removals: FakeGaiaClient['removals'] = [];
     const schedules = [...(data.schedules ?? [])];
     const scheduleActions: FakeGaiaClient['scheduleActions'] = [];
+    const automationActions: FakeGaiaClient['automationActions'] = [];
     const documentActions: FakeGaiaClient['documentActions'] = [];
     const library: DocumentListResponse = data.documents ?? { documents: [], total: 0, total_chunks: 0, total_size_bytes: 0 };
 
@@ -491,6 +497,18 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
 
     function permissionsOf(sessionId: string): SessionPermissions {
         return { session_id: sessionId, mode: data.permissions?.[sessionId] ?? 'ask', grants: [...(data.permissionGrants?.[sessionId] ?? [])] };
+    }
+
+    function automationList(): AutomationList {
+        if (!data.automations) throw new GaiaApiError(503, 'This fake client was given no automations.');
+        if (data.automations instanceof Error) throw data.automations;
+        return data.automations;
+    }
+
+    function findAutomation(ref: string): number {
+        const index = automationList().automations.findIndex((a) => a.id === ref);
+        if (index < 0) throw new GaiaApiError(404, `No automation matches '${ref}'.`);
+        return index;
     }
 
     function findSchedule(name: string): Schedule {
@@ -592,6 +610,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         confirmations,
         answers,
         scheduleActions,
+        automationActions,
         documentActions,
         followUps,
         restarts,
@@ -1200,6 +1219,26 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             if (data.networkPolicyError) throw data.networkPolicyError;
             data.settings = { ...data.settings, network_policy: policy };
             return data.settings;
+        },
+        async listAutomations() {
+            const list = automationList();
+            return { ...list, automations: list.automations.map((a) => ({ ...a })) };
+        },
+        async automationAction(ref, action) {
+            const list = automationList();
+            const index = findAutomation(ref);
+            automationActions.push({ action, ref });
+            const changed = { ...list.automations[index]!, paused: action === 'pause' };
+            data.automations = { ...list, automations: list.automations.map((a, i) => (i === index ? changed : a)) };
+            return { ...changed };
+        },
+        async deleteAutomation(ref) {
+            const list = automationList();
+            const index = findAutomation(ref);
+            automationActions.push({ action: 'delete', ref });
+            const gone = list.automations[index]!;
+            data.automations = { ...list, automations: list.automations.filter((_, i) => i !== index) };
+            return { ...gone };
         },
         async getDiscordStatus() {
             if (!data.discordStatus) throw new GaiaApiError(503, 'This fake client was given no Discord status.');

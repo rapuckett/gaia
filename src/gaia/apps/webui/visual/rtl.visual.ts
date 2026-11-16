@@ -797,6 +797,85 @@ for (const locale of ['ar', 'en']) {
     });
 }
 
+const PRE_SCAN_CARD = {
+    kind: 'email_pre_scan',
+    urgent: [{ message_id: 'm1', sender: 'Dana Cruz <dana@example.com>', subject: 'Contract signature due today', why: 'Deadline mentioned' }],
+    actionable: [{ message_id: 'm2', sender: '', subject: '', why: 'Asks a direct question' }],
+    informational_count: 12,
+    suggested_archives: [{ message_id: 'm3', sender: 'Deals <deals@example.com>', subject: 'Weekend sale', reason: 'Promotional' }],
+    suggested_drafts: [],
+    preferences_applied: { priority_senders: ['dana@example.com'], low_priority_senders: ['a@x.com', 'b@x.com'], category_defaults: { newsletters: 'archive' } },
+};
+
+async function withResultCards(page: Page): Promise<void> {
+    await page.route((url) => url.pathname === `/api/sessions/${ANSWER_SESSION}/messages`, (route) =>
+        route.fulfill({
+            json: {
+                messages: [
+                    { id: 1, session_id: ANSWER_SESSION, role: 'user', content: 'Check my inbox', created_at: NOW.toISOString(), rag_sources: null },
+                    {
+                        id: 2, session_id: ANSWER_SESSION, role: 'assistant', content: 'Here is what I found.', created_at: NOW.toISOString(), rag_sources: null,
+                        agent_steps: [
+                            { id: 1, type: 'tool', tool: 'email/pre_scan_inbox', active: false, success: true, render: 'email_pre_scan', data: PRE_SCAN_CARD },
+                            { id: 2, type: 'tool', tool: 'x/unknown', active: false, success: true, render: 'not_a_real_card', data: { a: 1 } },
+                            { id: 3, type: 'tool', tool: 'email/send', active: false, success: true, render: 'needs_confirmation', data: { action: 'send_email', summary: 'Send "Hello" to dana@example.com' } },
+                            { id: 4, type: 'tool', tool: 'calculators/show_loan_calculator', active: false, success: true, render: 'calculator', data: LOAN_CARD },
+                        ],
+                    },
+                ],
+                total: 2,
+            },
+        }),
+    );
+}
+
+for (const locale of ['ar', 'en']) {
+    for (const width of [1280, 390]) {
+        test(`pre-scan, unsupported, confirmation and calculator cards follow the language (${locale} at ${width}px)`, async ({ page }, info) => {
+            await page.setViewportSize({ width, height: 1000 });
+            await open(page, `#${ANSWER_SESSION}`, locale, withResultCards);
+            await expect(page.locator('.email-pre-scan')).toBeVisible();
+            await expect(page.locator('.render-unsupported')).toBeVisible();
+            await expect(page.locator('.render-confirmation')).toBeVisible();
+            await expect(page.locator('.render-calc')).toBeVisible();
+            if (locale === 'ar') {
+                await expect(page.locator('.email-pre-scan__title')).toContainText('فحص مسبق');
+                await expect(page.locator('.render-unsupported__message')).toContainText('نوع بطاقة غير مدعوم');
+            }
+            // The closed sidebar drawer waits off screen at phone width; judge the cards.
+            const cardProblems = (await audit(page)).filter((p) => width > 500 || /email-pre-scan|render-|scrolls sideways/.test(p));
+            expect(cardProblems).toEqual([]);
+            for (const [name, sel] of [['prescan', '.email-pre-scan'], ['unsupported', '.render-unsupported'], ['confirmation', '.render-confirmation'], ['calculator', '.render-calc']] as const) {
+                await page.locator(sel).first().screenshot({ path: info.outputPath(`${name}-${locale}-${width}.png`) });
+            }
+        });
+    }
+}
+
+for (const locale of ['ar', 'en']) {
+    for (const width of [1280, 390]) {
+        test(`the model chip menu fits in ${locale} at ${width}px`, async ({ page }, info) => {
+            await page.setViewportSize({ width, height: 1000 });
+            await open(page, '', locale, async (p) => {
+                await withModelPage(p, MODEL_LIST, null);
+                await p.route('**/api/providers/active', (route) => route.fulfill({
+                    json: {
+                        provider: 'fireworks', model: 'fireworks.glm-5p3-flash', label: 'glm-5p3-flash', remote: true,
+                        provider_name: 'Fireworks AI', is_default: false, restore: { status: 'none', message: null },
+                    },
+                }));
+            });
+            await page.locator('.composer-chip').filter({ hasText: 'glm-5p3-flash' }).click();
+            const menu = page.getByRole('dialog');
+            await expect(menu.locator('.popover-heading').first()).toBeVisible();
+            await page.screenshot({ path: info.outputPath(`model-chip-menu-${locale}-${width}.png`) });
+            // The closed sidebar drawer waits off screen at phone width; judge the menu.
+            const menuProblems = (await audit(page)).filter((p) => !p.startsWith('popover opens scrolled') && (width > 500 || /popover|model|composer|scrolls sideways/.test(p)));
+            expect(menuProblems).toEqual([]);
+        });
+    }
+}
+
 /** A new chat whose empty history is still loading when its first message goes out. */
 async function withSlowNewChat(page: Page): Promise<void> {
     const created = { ...SESSIONS[0], title: 'New chat', message_count: 0 };

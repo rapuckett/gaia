@@ -7,7 +7,7 @@ import { isolate } from '@webui/i18n/registry';
 import type { SystemStatus } from '@webui/types';
 
 import { useModelActions, useQueryFailure, useSystemStatus } from '@/data';
-import { describeError, useT } from '@/i18n/useT';
+import { technicalDetail, useT } from '@/i18n/useT';
 import { Button, Card, Disclosure, Divider, Ltr, Notice, ProgressLine, Row, Spinner, Stack, Surface, Text } from '@/ui';
 
 import { LogsCard } from '@/features/logs';
@@ -34,13 +34,13 @@ export default function Advanced() {
     );
 }
 
-function StatusRow({ label, value, ok, hint, oneLine }: { label: string; value: ReactNode; ok: boolean; hint?: string; oneLine?: boolean }) {
+function StatusRow({ label, value, ok, hint }: { label: string; value: ReactNode; ok: boolean; hint?: string }) {
     return (
         <Surface tone="secondary" border radius="md" padding="md">
             <Row gap="md" align={hint ? 'start' : 'center'}>
                 <Text role="label">{label}</Text>
                 <Stack flex={1} align="end" gap="xs">
-                    <Text role="label" weight="semibold" mono tone={ok ? 'success' : 'warning'} align="end" numberOfLines={oneLine ? 1 : undefined}>{value}</Text>
+                    <Text role="label" weight="semibold" mono tone={ok ? 'success' : 'warning'} align="end">{value}</Text>
                     {hint ? <Text role="caption" tone="muted" align="end">{hint}</Text> : null}
                 </Stack>
             </Row>
@@ -75,7 +75,7 @@ function StatusCard() {
                             action={{ label: t('settings.key.checkAgain'), onPress: () => void query.refetch() }}
                             testID="advanced-unreachable"
                         />
-                        <RawDetails text={describeError(failure.error, t)} />
+                        <RawDetails text={technicalDetail(failure.error)} />
                     </Stack>
                 ) : (
                     <StatusBody
@@ -137,7 +137,6 @@ function StatusBody({ status, modelName, actions, detailsOpen, onToggleDetails }
                 {setupNeeded ? <SetUpLocalButton /> : null}
                 <StatusRow
                     label={t('settings.section.model')}
-                    oneLine
                     value={status.model_loaded ? <Ltr>{status.model_loaded}</Ltr> : t.bare('settings.advanced.noneLoaded')}
                     ok={!!status.model_loaded && (cloud || status.expected_model_loaded !== false)}
                     hint={

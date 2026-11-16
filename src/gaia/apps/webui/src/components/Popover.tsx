@@ -25,6 +25,8 @@ export function Popover({ open, onClose, anchor, label, placement = 'above', ali
     const ref = useRef<HTMLDivElement>(null);
     const [side, setSide] = useState(placement);
     const [room, setRoom] = useState<number | null>(null);
+    const [shift, setShift] = useState(0);
+    const shiftRef = useRef(0);
 
     // Flip when the preferred side can't hold the menu, and cap it to the room it has.
     useLayoutEffect(() => {
@@ -40,6 +42,14 @@ export function Popover({ open, onClose, anchor, label, placement = 'above', ali
             const flip = el.scrollHeight > preferred && other > preferred;
             setSide(flip ? (placement === 'above' ? 'below' : 'above') : placement);
             setRoom(Math.max(0, Math.floor(flip ? other : preferred)));
+            // Slide sideways so a wide panel anchored near one edge stays inside the window.
+            const box = el.getBoundingClientRect();
+            const natural = { left: box.left - shiftRef.current, right: box.right - shiftRef.current };
+            const next = natural.right > window.innerWidth - EDGE_GAP
+                ? window.innerWidth - EDGE_GAP - natural.right
+                : natural.left < EDGE_GAP ? EDGE_GAP - natural.left : 0;
+            shiftRef.current = next;
+            setShift(next);
         };
         place();
         // Content arrives after open (e.g. the model list), so re-measure when it changes.
@@ -83,7 +93,10 @@ export function Popover({ open, onClose, anchor, label, placement = 'above', ali
         <div
             ref={ref}
             className={`popover popover-${side} popover-${align}${className ? ` ${className}` : ''}`}
-            style={room === null ? undefined : ({ '--popover-room': `${room}px` } as CSSProperties)}
+            style={{
+                ...(room === null ? {} : { '--popover-room': `${room}px` }),
+                ...(shift ? { transform: `translateX(${shift}px)` } : {}),
+            } as CSSProperties}
             role="dialog"
             aria-label={label}
         >

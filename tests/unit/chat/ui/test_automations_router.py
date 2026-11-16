@@ -12,6 +12,12 @@ from fastapi.testclient import TestClient
 
 from gaia.automations import store
 from gaia.ui.routers import automations
+from gaia.ui.security import (
+    DEVICE_SCOPE_KEY,
+    LAN_LISTENER,
+    LISTENER_SCOPE_KEY,
+    DevicePrincipal,
+)
 
 LOCAL = ("127.0.0.1", 50000)
 
@@ -26,6 +32,23 @@ def make_client(peer=LOCAL, headers=None) -> TestClient:
     app = FastAPI()
     app.include_router(automations.router)
     return TestClient(app, client=peer, headers=headers or {"X-Gaia-UI": "1"})
+
+
+def make_device_client(allowed=True) -> TestClient:
+    """A paired device on the listener, its token already checked."""
+    app = FastAPI()
+    app.include_router(automations.router)
+
+    async def listener(scope, receive, send):
+        if scope["type"] == "http":
+            scope = {
+                **scope,
+                LISTENER_SCOPE_KEY: LAN_LISTENER,
+                DEVICE_SCOPE_KEY: DevicePrincipal("phone1", allowed),
+            }
+        await app(scope, receive, send)
+
+    return TestClient(listener, client=LOCAL, headers={"X-Gaia-UI": "1"})
 
 
 def _add(name, kind=store.KIND_SUMMARY, **kw) -> store.Automation:
@@ -148,3 +171,38 @@ def test_an_id_wins_over_an_earlier_automation_named_like_it():
     by_id = {a.id: a for a in store.load()}
     assert by_id[target.id].paused is True
     assert by_id["zzzz0000"].paused is False
+
+
+def test_an_allowed_device_lists_pauses_resumes_and_removes():
+    item = _add("Inbox digest")
+    client = make_device_client()
+    rows = client.get("/api/automations").json()["automations"]
+    assert [r["id"] for r in rows] == [item.id]
+    assert client.post(f"/api/automations/{item.id}/pause").json()["paused"] is True
+    assert store.find(store.load(), item.id).paused is True
+    assert client.post(f"/api/automations/{item.id}/resume").json()["paused"] is False
+    assert client.delete(f"/api/automations/{item.id}").status_code == 200
+    assert store.load() == []
+
+
+def test_a_device_is_refused_an_action_the_desktop_does_not_offer():
+    item = _add("Inbox digest")
+    response = make_device_client().post(f"/api/automations/{item.id}/run")
+    assert response.status_code == 403
+    assert "PC running GAIA" in response.json()["detail"]
+    assert store.find(store.load(), item.id).paused is False
+
+
+@pytest.mark.parametrize(
+    "method,path",
+    [
+        ("get", "/api/automations"),
+        ("post", "/api/automations/x/pause"),
+        ("delete", "/api/automations/x"),
+    ],
+)
+def test_a_pending_device_is_refused(method, path):
+    item = _add("Inbox digest")
+    client = make_device_client(allowed=False)
+    assert getattr(client, method)(path.replace("/x", f"/{item.id}")).status_code == 403
+    assert store.find(store.load(), item.id).paused is False
