@@ -1,9 +1,12 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import type { FileEntry } from '@/api/client.types';
+import { bracketParts } from '@webui/i18n/registry';
 
-import { breadcrumbs, emptyKey, folderName, visibleEntries } from './fileBrowserModel';
+import type { FileEntry } from '@/api/client.types';
+import { translator } from '@/i18n/useT';
+
+import { breadcrumbs, emptyKey, folderName, searchScopeText, visibleEntries } from './fileBrowserModel';
 
 const entry = (name: string): FileEntry => ({ name, path: `/${name}`, type: 'file', size: 1 });
 
@@ -25,5 +28,12 @@ describe('file browser model', () => {
         ]);
         expect(breadcrumbs('C:\\Users\\me').map((c) => c.path)).toEqual(['C:/', 'C:/Users', 'C:/Users/me']);
         expect(folderName('C:\\Users\\me\\')).toBe('me');
+    });
+
+    it('says where a search looked in one Arabic line with one gloss, the path and the count kept left to right', () => {
+        const [own, gloss] = bracketParts(searchScopeText(['/Users/me', '/Volumes/Data'], translator('ar')));
+        expect(own).toBe('\u2067البحث في: \u2068\u2066/Users/me\u2069\u2069 (\u2066+1\u2069 أخرى)\u2069');
+        expect(gloss).toBe('\u2066(Searching in: \u2068\u2066/Users/me\u2069\u2069 (+1 more))\u2069');
+        expect(searchScopeText([], translator('ar'))).toBe('');
     });
 });

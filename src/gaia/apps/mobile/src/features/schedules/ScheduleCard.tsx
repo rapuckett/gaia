@@ -54,12 +54,15 @@ export interface ScheduleCardProps {
     onRunNow: () => void;
     onToggleStatus: () => void;
     onDelete: () => void;
+    /** Dev gallery only: opens the card already confirming a delete, or with its history open. */
+    initialConfirmDelete?: boolean;
+    initialHistoryOpen?: boolean;
 }
 
-export function ScheduleCard({ schedule, now, runPending, onOpenChat, onRunNow, onToggleStatus, onDelete }: ScheduleCardProps) {
+export function ScheduleCard({ schedule, now, runPending, onOpenChat, onRunNow, onToggleStatus, onDelete, initialConfirmDelete = false, initialHistoryOpen = false }: ScheduleCardProps) {
     const t = useT();
-    const [confirmDelete, setConfirmDelete] = useState(false);
-    const [historyOpen, setHistoryOpen] = useState(false);
+    const [confirmDelete, setConfirmDelete] = useState(initialConfirmDelete);
+    const [historyOpen, setHistoryOpen] = useState(initialHistoryOpen);
     const history = useScheduleResults(schedule.name, schedule.last_run_at, historyOpen);
     const runs = history.data?.results ?? [];
     const historyShowsFailure = historyOpen && runs.some((r) => r.error);
