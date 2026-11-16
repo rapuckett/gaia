@@ -183,5 +183,8 @@ export function useDeviceSignIn(connector: ConnectorRow, scopes: string[] = devi
         return () => watch.abort();
     }, [waiting, client, connector.id, queryClient]);
 
-    return { signIn: connected ? ({ state: 'done' } as const) : signIn, start };
+    // As the desktop's Cancel: drops the code on the phone; the PC's poll just runs out.
+    const cancel = useCallback(() => setSignIn({ state: 'idle' }), []);
+
+    return { signIn: connected ? ({ state: 'done' } as const) : signIn, start, cancel };
 }

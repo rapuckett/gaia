@@ -24,11 +24,11 @@ export function DeviceCodeSignIn({
     leading?: ReactNode;
 }) {
     const t = useT();
-    const { signIn, start } = useDeviceSignIn(connector);
+    const { signIn, start, cancel } = useDeviceSignIn(connector);
 
     switch (signIn.state) {
         case 'waiting':
-            return <DeviceCodeBlock code={signIn.code} />;
+            return <DeviceCodeBlock code={signIn.code} onCancel={cancel} />;
         case 'done':
             return null;
         default:
@@ -47,19 +47,22 @@ export function DeviceCodeSignIn({
                     {signIn.state === 'starting' ? <Spinner size="sm" /> : null}
                     {signIn.state === 'expired' ? <Notice tone="danger" message={t('mobileApp.connectors.codeExpired')} /> : null}
                     {signIn.state === 'failed' ? <Notice tone="danger" message={describeError(signIn.error, t)} /> : null}
-                    {signIn.state === 'ended' ? <Notice tone="danger" message={signInEndedMessage(signIn, t)} /> : null}
+                    {signIn.state === 'ended' ? <Notice tone="danger" {...signInEndedNotice(signIn, t)} /> : null}
                 </Stack>
             );
     }
 }
 
-/** Why a sign-in the PC was finishing stopped: the PC's own words when it gave them. */
-export function signInEndedMessage(ended: { why: 'cancelled' | 'failed'; error?: string }, t: ReturnType<typeof useT>): string {
-    return ended.error ?? t(ended.why === 'cancelled' ? 'connectCard.cancelled' : 'connectCard.failed');
+/** Why a sign-in the PC was finishing stopped: our sentence, with the PC's own words on their own line. */
+export function signInEndedNotice(
+    ended: { why: 'cancelled' | 'failed'; error?: string },
+    t: ReturnType<typeof useT>,
+): { message: string; detail?: string } {
+    return { message: t(ended.why === 'cancelled' ? 'connectCard.cancelled' : 'settings.connectors.deviceFailed'), detail: ended.error };
 }
 
 /** The code, its page and the wait, as the desktop's `.device-code-block`. */
-export function DeviceCodeBlock({ code }: { code: ConnectorDeviceAuthResponse }) {
+export function DeviceCodeBlock({ code, onCancel }: { code: ConnectorDeviceAuthResponse; onCancel?: () => void }) {
     const t = useT();
     const [copied, setCopied] = useState<'ok' | 'failed' | null>(null);
     const copy = () => Clipboard.setStringAsync(code.user_code).then(() => setCopied('ok'), () => setCopied('failed'));
@@ -92,6 +95,15 @@ export function DeviceCodeBlock({ code }: { code: ConnectorDeviceAuthResponse })
                             label={t.bare('mobileApp.connectors.codeOpen')}
                             accessibilityLabel={t('mobileApp.connectors.codeOpen')}
                             onPress={() => openLinkFromPress(code.verification_uri)}
+                        />
+                    ) : null}
+                    {onCancel ? (
+                        <Button
+                            size="sm"
+                            label={t.bare('settings.key.cancel')}
+                            accessibilityLabel={t('settings.key.cancel')}
+                            onPress={onCancel}
+                            testID="device-code-cancel"
                         />
                     ) : null}
                 </Row>
