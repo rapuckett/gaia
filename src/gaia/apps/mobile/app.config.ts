@@ -47,27 +47,11 @@ export function readIosBundleId(env: AppEnv, source: Record<string, string | und
     );
 }
 
-export type ApsEnvironment = 'development' | 'production' | 'none';
-
-/**
- * The push entitlement, from GAIA_APS_ENVIRONMENT: unset follows APP_ENV, and `none` leaves push out,
- * for a cable sideload whose development profile and App ID have no push capability.
- */
-export function readApsEnvironment(value: string | undefined, env: AppEnv): ApsEnvironment {
-    if (value === undefined || value === '') return env;
-    if (value === 'development' || value === 'production' || value === 'none') return value;
-    throw new Error(
-        `GAIA_APS_ENVIRONMENT must be "development", "production" or "none", but it is "${value}". ` +
-            'Leave it unset to follow APP_ENV; see src/gaia/apps/mobile/README.md.',
-    );
-}
-
 export default function appConfig(): ExpoConfig {
     const env = readAppEnv(process.env.APP_ENV);
     const dev = env === 'development';
     const id = APP_IDS[env];
     const iosId = readIosBundleId(env);
-    const aps = readApsEnvironment(process.env.GAIA_APS_ENVIRONMENT, env);
     return {
         name: 'GAIA',
         slug: 'gaia-mobile',
@@ -78,8 +62,10 @@ export default function appConfig(): ExpoConfig {
             bundleIdentifier: iosId,
             supportsTablet: true,
             infoPlist: {
-                // Every build reaches the paired PC at its home-network address; the native transport pins its certificate.
-                NSAppTransportSecurity: { NSAllowsArbitraryLoads: false, NSAllowsLocalNetworking: true },
+                // Only the dev client needs plain HTTP (Metro on the home network); the paired PC is pinned https in every build.
+                NSAppTransportSecurity: dev
+                    ? { NSAllowsArbitraryLoads: false, NSAllowsLocalNetworking: true }
+                    : { NSAllowsArbitraryLoads: false },
                 NSLocalNetworkUsageDescription: LOCAL_NETWORK_USE,
                 NSPhotoLibraryAddUsageDescription: PHOTOS_ADD_USE,
             },
@@ -101,13 +87,10 @@ export default function appConfig(): ExpoConfig {
                 'expo-audio',
                 { microphonePermission: MICROPHONE_USE, enableBackgroundPlayback: true, enableBackgroundRecording: false },
             ],
-            ...(aps === 'none' ? [] : [['expo-notifications', { mode: aps, enableBackgroundRemoteNotifications: true }] as [string, object]]),
             ['expo-secure-store', { faceIDPermission: FACE_ID_USE }],
             'expo-background-task',
             ['./plugins/withCleartextHosts', { hosts: dev ? DEV_HTTP_HOSTS : [] }],
             './plugins/withNinjaJobs',
-            // Last, after Expo's own expo-notifications default has added the entitlement.
-            ...(aps === 'none' ? ['./plugins/withoutPushEntitlement'] : []),
         ],
     };
 }
