@@ -1,7 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { View } from 'react-native';
 
 import { isolate } from '@webui/i18n/registry';
@@ -94,7 +94,7 @@ export interface FileBrowserScreenProps {
     // Sends the question into the chat the files were added to; false when that chat isn't open.
     onAsk?: (prompt: string) => boolean;
     // Where the browser opens, for the dev gallery's scenes.
-    initial?: { path?: string; search?: string; selected?: string[] };
+    initial?: { path?: string; search?: string; selected?: string[]; ask?: boolean };
 }
 
 export function FileBrowserScreen({ chatId, onClose, onPreview, onAsk, initial }: FileBrowserScreenProps) {
@@ -169,8 +169,8 @@ export function FileBrowserScreen({ chatId, onClose, onPreview, onAsk, initial }
                             setResult({ tone: 'danger', message: t('fileBrowser.addedWithFailures', { added: 0, failed: bad }) });
                             return;
                         }
-                        if (bad > 0) setResult({ tone: 'danger', message: t.plural('fileBrowser.someFailed', bad) });
                         const names = added.map((d) => d.filename);
+                        if (bad > 0) setResult({ tone: 'danger', message: t.plural('fileBrowser.someFailed', bad) });
                         if (onAsk?.(askPrompt(names, t))) setSelected(new Set());
                         else setResult({ tone: 'danger', message: t('mobileApp.files.askNoChat') });
                     } else if (bad > 0) {
@@ -184,6 +184,14 @@ export function FileBrowserScreen({ chatId, onClose, onPreview, onAsk, initial }
             },
         );
     };
+
+    const autoAsked = useRef(false);
+    useEffect(() => {
+        if (!initial?.ask || autoAsked.current || chosen.length === 0) return;
+        autoAsked.current = true;
+        addSelected(true);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [chosen.length]);
 
     const crumbs = breadcrumbs(currentPath);
     const filterLabel = t(FILE_TYPE_FILTERS.find((f) => f.value === typeFilter)?.label ?? 'fileBrowser.filter.all');
