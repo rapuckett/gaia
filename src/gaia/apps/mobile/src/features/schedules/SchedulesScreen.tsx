@@ -9,7 +9,7 @@ import { useDeleteSchedule, useRunSchedule, useQueryFailure, useSchedules, useUp
 import { ScreenHeader } from '@/features/nav/ScreenHeader';
 import { describeError, useT } from '@/i18n/useT';
 import { ErrorState, IconButton, List, ListSkeleton, Notice, Row, Screen, Stack, Text, useTheme } from '@/ui';
-import { Plus, X } from '@/ui/icons';
+import { Clock, Plus, X } from '@/ui/icons';
 
 import { ChipButton } from './ChipButton';
 import { NewScheduleSheet } from './NewScheduleSheet';
@@ -62,10 +62,12 @@ export interface SchedulesDevStart {
 
 export interface SchedulesScreenProps {
     onOpenChat: (sessionId: string) => void;
+    /** Settings > Automations, where the reminders and alerts made in chat are listed. */
+    onOpenAutomations: () => void;
     dev?: SchedulesDevStart;
 }
 
-export function SchedulesScreen({ onOpenChat, dev }: SchedulesScreenProps) {
+export function SchedulesScreen({ onOpenChat, onOpenAutomations, dev }: SchedulesScreenProps) {
     const t = useT();
     const { space } = useTheme();
     const query = useSchedules();
@@ -87,8 +89,17 @@ export function SchedulesScreen({ onOpenChat, dev }: SchedulesScreenProps) {
     return (
         <Screen header={<ScreenHeader title={t('schedules.title')} />}>
             <NewScheduleSheet open={creating} onClose={() => setCreating(false)} initial={dev?.form} />
-            <Stack paddingX="lg" paddingY="sm" align="start">
-                <ChipButton label={t.bare('schedules.new')} accessibilityLabel={t('schedules.new')} icon={Plus} variant="accent" onPress={() => setCreating(true)} />
+            <Stack paddingX="lg" paddingY="sm">
+                <Row gap="sm" wrap>
+                    <ChipButton label={t.bare('schedules.new')} accessibilityLabel={t('schedules.new')} icon={Plus} variant="accent" onPress={() => setCreating(true)} />
+                    <ChipButton
+                        label={t.bare('mobileApp.schedules.automationsLink')}
+                        accessibilityLabel={t('mobileApp.schedules.automationsLink')}
+                        icon={Clock}
+                        onPress={onOpenAutomations}
+                        testID="schedules-automations-link"
+                    />
+                </Row>
             </Stack>
             {query.isPending && !failure.failed ? <ListSkeleton rows={4} /> : null}
             {failure.failed ? (

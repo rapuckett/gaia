@@ -135,6 +135,21 @@ describeNative('/dev/settings', () => {
         expect((await screen.findAllByText(value, { includeHiddenElements: true })).length).toBeGreaterThan(0);
     });
 
+    it.each([
+        ['automations-list', /Inbox digest/],
+        ['automations-list', 'Paused'],
+        ['automations-remove', /Remove .*Inbox digest.*\?/],
+        ['automations-no-delivery', 'Open Messaging'],
+        ['automations-delivery-unknown', /couldn.t check whether Discord is connected/],
+        ['automations-empty', /No automations yet/],
+        ['automations-load-failed', 'Could not load your automations.'],
+        ['automations-pc-refused', 'Change this on the PC running GAIA.'],
+    ])('%s shows %s', async (name, text) => {
+        mockState = name;
+        await mount();
+        expect((await screen.findAllByText(text, { includeHiddenElements: true })).length).toBeGreaterThan(0);
+    });
+
     it('general-custom-colors opens Colors with the custom accent, tint and Reset', async () => {
         mockState = 'general-custom-colors';
         await mount();

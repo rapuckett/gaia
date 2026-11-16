@@ -10,6 +10,7 @@ import type { ScrollView } from 'react-native';
 import { GaiaClientProvider } from '@/data';
 import { devGalleryEnabled } from '@/features/dev/devGallery';
 import { KeyedScene } from '@/features/dev/KeyedScene';
+import { SeedAutomationRemove } from '@/features/settings/panes/Automations';
 import { SeedAddedModel } from '@/features/settings/panes/model/ModelList';
 import { SETTINGS_SECTIONS } from '@/features/settings/sections';
 import { SETTINGS_SCENES, settingsSceneClient, type SettingsScene } from '@/features/settings/devScenes';
@@ -34,7 +35,9 @@ function SettingsView({ found }: { found: SettingsScene }) {
                         <Screen scroll scrollRef={scrollRef}>
                             <SettingsTargets section={found.section} target={found.target} scrollRef={scrollRef}>
                                 <SeedAddedModel.Provider value={found.addedModel ?? null}>
-                                    <Pane provider={found.provider ?? 'local'} />
+                                    <SeedAutomationRemove.Provider value={found.confirmRemove ?? null}>
+                                        <Pane provider={found.provider ?? 'local'} />
+                                    </SeedAutomationRemove.Provider>
                                 </SeedAddedModel.Provider>
                             </SettingsTargets>
                         </Screen>
