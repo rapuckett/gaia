@@ -3,10 +3,19 @@
 
 import { Image as NativeImage, View } from "react-native";
 
+import { isolate } from "@webui/i18n/registry";
 import { middleTruncate } from "@webui/utils/format";
 
 import { useT } from "@/i18n/useT";
-import { Icon, IconButton, Row, Stack, Text, useTheme } from "@/ui";
+import {
+  Icon,
+  IconButton,
+  ProgressLine,
+  Row,
+  Stack,
+  Text,
+  useTheme,
+} from "@/ui";
 import { FileText, X } from "@/ui/icons";
 
 import type { Attachments } from "./useAttachments";
@@ -46,7 +55,16 @@ export function AttachmentChips({ attachments }: { attachments: Attachments }) {
                   <Text role="label" numberOfLines={1} compact dir="ltr">
                     {middleTruncate(a.name)}
                   </Text>
-                  {a.status === "uploading" ? (
+                  {a.status === "uploading" && a.progress !== undefined ? (
+                    <Stack gap="xs">
+                      <Text role="caption" tone="secondary">
+                        {t.bare("composer.uploadingPercent", {
+                          percent: isolate(String(a.progress), "ltr"),
+                        })}
+                      </Text>
+                      <ProgressLine value={a.progress / 100} />
+                    </Stack>
+                  ) : a.status === "uploading" ? (
                     <Text role="caption" tone="secondary">
                       {t.bare("composer.uploading")}
                     </Text>

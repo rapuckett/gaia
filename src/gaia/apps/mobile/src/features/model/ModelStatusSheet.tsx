@@ -3,7 +3,6 @@
 
 import { useState } from 'react';
 
-import { PC_ONLY_REFUSAL } from '@/api/constants';
 import { GaiaApiError } from '@/api/errors';
 import { useLocalModelStatus, useQueryFailure, useRestartLocalModel } from '@/data';
 import { describeError, useT } from '@/i18n/useT';
@@ -146,7 +145,7 @@ export function ModelStatusSheet({ open, onClose, onOpenSettings }: ModelStatusS
                         </Row>
                     </Stack>
                 ) : null}
-                {logRefused ? <Notice tone="info" message={PC_ONLY_REFUSAL} /> : null}
+                {logRefused ? <Notice tone="info" message={t('mobileApp.pcOnly.refusal')} /> : null}
                 <Row gap="xs" wrap justify="end">
                     {onOpenSettings ? (
                         <ChipButton
