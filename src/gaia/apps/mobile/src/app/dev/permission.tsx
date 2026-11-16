@@ -8,6 +8,7 @@ import { useMemo, useState } from 'react';
 import type { GaiaNotification } from '@webui/types/agent';
 import { PATH_ACCESS_TOOL, PROJECT_TRUST_TOOL } from '@webui/utils/permissionPrompts.core';
 
+import { UndoScene } from '@/features/settings/panes/UndoScene';
 import { PermissionPrompt, type PermissionPromptProps } from '@/features/chat/permission/PermissionPrompt';
 import { Screen, Stack, Text, UIProvider } from '@/ui';
 
@@ -125,6 +126,7 @@ export default function PermissionGalleryRoute() {
     const fixtures = useFixtures();
     const [last, setLast] = useState('none');
     if (!devGalleryEnabled()) return <Redirect href="/" />;
+    if (only === 'undo') return <UndoScene />;
     const shown = only ? fixtures.filter((f) => f.id === only) : fixtures;
     return (
         <UIProvider>

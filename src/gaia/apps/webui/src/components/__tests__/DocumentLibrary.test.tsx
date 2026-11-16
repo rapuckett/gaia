@@ -8,6 +8,7 @@ import { useChatStore } from '../../stores/chatStore';
 import * as api from '../../services/api';
 import type { Document } from '../../types';
 import { stripIsolates } from '../../i18n/registry';
+import { tEn } from '../../i18n/translator';
 import { ARABIC_MONTH, ENGLISH_MONTH, resetUiLocale, setUiLocale } from '../../test/dates';
 
 vi.mock('../../services/api');
@@ -266,7 +267,7 @@ describe('DocumentLibrary says where documents go', () => {
 
         const toast = await screen.findByRole('alert');
         expect(toast).toHaveTextContent('Move or copy the file there');
-        expect(toast).toHaveTextContent('Or drop the file here instead');
+        expect(toast).toHaveTextContent(tEn('docs.dropInstead'));
         expect(screen.queryByRole('link', { name: /report this issue/i })).toBeNull();
     });
 });

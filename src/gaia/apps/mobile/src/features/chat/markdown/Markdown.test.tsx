@@ -88,6 +88,36 @@ describe('Markdown', () => {
         expect(usePreviewStore.getState().target).toEqual({ kind: 'path', path: 'C:\\out\\a.txt', sessionId: 's1' });
     });
 
+    it.each([
+        ['/Users/me/report.pdf', '/Users/me/report.pdf'],
+        ['/Users/a b/c.txt', '/Users/a b/c.txt'],
+        ['file:///home/me/My%20Notes.txt', '/home/me/My Notes.txt'],
+    ])('links the inline-code path %s to the preview of %s, never the browser', async (code, path) => {
+        const open = jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined);
+        open.mockClear();
+        await render(
+            <ThemeProvider>
+                <FileScopeContext.Provider value="s1">
+                    <Markdown text={`Saved to \`${code}\`.`} />
+                </FileScopeContext.Provider>
+            </ThemeProvider>,
+        );
+        screen.getByText(`\u2066${code}\u2069`).props.onPress();
+        expect(usePreviewStore.getState().target).toEqual({ kind: 'path', path, sessionId: 's1' });
+        expect(open).not.toHaveBeenCalled();
+    });
+
+    it.each(['/', '~/notes.txt', 'https://example.com/a.txt'])('leaves the inline code %s unlinked', async (code) => {
+        await render(
+            <ThemeProvider>
+                <FileScopeContext.Provider value="s1">
+                    <Markdown text={`Try \`${code}\`.`} />
+                </FileScopeContext.Provider>
+            </ThemeProvider>,
+        );
+        expect(screen.getByText(`\u2066${code}\u2069`).props.onPress).toBeUndefined();
+    });
+
     it('formatting variant renders a link, an image, a heading and HTML as plain text', async () => {
         const text = '# Urgent\n\nOpen [the form](https://example.com/login) ![pic](https://example.com/p.png) <b>raw</b>';
         await render(
