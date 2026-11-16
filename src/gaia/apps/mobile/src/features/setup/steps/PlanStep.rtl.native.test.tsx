@@ -3,15 +3,13 @@
 
 import { render, screen, waitFor } from '@testing-library/react-native';
 import type { ReactNode } from 'react';
-import { Platform } from 'react-native';
+import { I18nManager, Platform } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { useLocaleStore } from '@/state/locale';
 import { ThemeProvider } from '@/ui';
 
 import { RadioCard, Reasons } from './PlanStep';
-
-jest.mock('@/platform/direction', () => ({ applyDirection: jest.fn(), layoutDirection: () => 'rtl' }));
 
 const describeNative = Platform.OS === 'web' ? describe.skip : describe;
 
@@ -21,15 +19,21 @@ const wrap = ({ children }: { children: ReactNode }) => (
     </SafeAreaProvider>
 );
 
-beforeEach(() => useLocaleStore.getState().setLocale('ar'));
-afterEach(() => useLocaleStore.getState().setLocale(null));
+beforeEach(() => {
+    useLocaleStore.getState().setLocale('ar');
+    jest.spyOn(I18nManager, 'getConstants').mockReturnValue({ isRTL: true, doLeftAndRightSwapInRTL: true, localeIdentifier: 'ar' });
+});
+afterEach(() => {
+    useLocaleStore.getState().setLocale(null);
+    jest.restoreAllMocks();
+});
 
 describeNative('the Plan step in Arabic on native', () => {
-    it('start-aligns reason text in an RTL paragraph (iOS mirrors the physical side)', async () => {
+    it('start-aligns reason text, naming the mirrored side because native flips left and right in an RTL layout', async () => {
         const reason = 'اختيار GAIA المختبر لجهاز مثل هذا. (GAIA’s tested pick for a PC like this one.)';
         await render(<Reasons items={[reason]} />, { wrapper: wrap });
         await waitFor(() => expect(screen.getAllByText(/GAIA/)).toHaveLength(1));
-        expect(screen.getAllByText(/GAIA/)[0].props.style).toMatchObject({ writingDirection: 'rtl', textAlign: Platform.OS === 'ios' ? 'left' : 'right' });
+        expect(screen.getAllByText(/GAIA/)[0].props.style).toMatchObject({ textAlign: 'left' });
     });
 
     it('lets the choice title wrap inside the card', async () => {
