@@ -6,8 +6,8 @@ The phone app for GAIA, built with Expo and React Native (iOS first; Android can
 
 GAIA runs on your PC. The phone is a paired remote for it: it pairs once with a code from the
 PC, then talks to the PC's `/api/*` routes and SSE chat stream, the same ones the web Agent UI
-uses, over TLS pinned to that PC's certificate. It works on your home network, and away from
-home over Tailscale if you turn it on.
+uses, over TLS pinned to that PC's certificate. It works on your home network. Away from home
+over Tailscale is built but experimental: it is off by default and not yet in the user guide.
 
 The phone shows your chats and lets you continue them, approve permission requests and check on
 scheduled tasks. Models, files, memory and keys stay on the PC, and anything that changes the PC
@@ -17,7 +17,8 @@ changing the app.
 
 ## Quick start
 
-You need Node 20.19 or newer (the repo's `.nvmrc` pins 20.20.0), Xcode with an iOS simulator, and
+You need Node 22.13 or newer (what React Native 0.88 declares; the repo-root `.nvmrc` pins 20.20.0
+for the web UI), Xcode with an iOS simulator, and
 the Python environment that runs GAIA ([`docs/reference/dev.mdx`](../../../../docs/reference/dev.mdx)).
 Ruby with Bundler is needed only for the fastlane lanes under [Native builds](#native-builds).
 
@@ -38,7 +39,7 @@ EXPO_PUBLIC_GAIA_URL=http://localhost:4200 APP_ENV=development npx expo start --
 ```
 
 A development build with `EXPO_PUBLIC_GAIA_URL` set is already connected over plain HTTP, so it
-skips the pairing screens. Production builds ignore the variable.
+skips the pairing screens. Native production builds ignore the variable; a web export reads it.
 
 **Paired with a real PC.** Leave `EXPO_PUBLIC_GAIA_URL` unset so the app shows the pairing screens
 and uses the pinned transport. On the PC, turn on phone access as the guide describes (the
@@ -52,10 +53,10 @@ PC. The simulator must reach the PC's home-network address, so run both on the s
 - **Routes vs features.** `src/app` holds thin Expo Router routes. Each screen's logic lives in
   `src/features/<name>`. Routes are declared in `src/features/nav/routes.ts`, not in the layout.
 - **API and types.** `src/api` has `GaiaClient` (`client.types.ts`, `http.ts`, `sse.ts`) and the
-  endpoint table (`constants.ts`). Types, strings and locale metadata are not copied: the app
-  imports them from the web Agent UI through the `@webui/*` alias (`../webui/src/*`), type-only for
-  `@webui/types` and the pure translator for `@webui/i18n/registry`. API shapes come from the
-  generated `webui/src/types/api.gen.ts`.
+  endpoint table (`constants.ts`). Shared code is not copied: the app imports it from the web
+  Agent UI through the `@webui/*` alias (`../webui/src/*`): types (type-only), the translator and
+  locale registry, and the web UI's pure helpers (`@webui/utils/*.core`, `@webui/services/*`, a few
+  `@webui/components/*` helpers). API shapes come from the generated `webui/src/types/api.gen.ts`.
 - **State.** `src/data` is TanStack Query (queries, mutations, the chat stream). `src/state` is
   zustand (the connection, notifications, locale, per-chat stream state). `src/platform` holds
   per-platform code as file trios: `x.types.ts`, `x.ts`, `x.web.ts`. `src/ui` is the component
@@ -147,9 +148,9 @@ the native fingerprint needs a new build.
   only `10.0.2.2` (the emulator's alias for this computer), `127.0.0.1` and `localhost`. On the
   Android emulator, reach Metro at `10.0.2.2`, or at `localhost` through `adb reverse`; a LAN
   address is refused. A production phone build never sends plain HTTP: it reaches a PC only by
-  pairing, over TLS pinned to the PC's certificate, and ignores `EXPO_PUBLIC_GAIA_URL`. iOS keeps
-  App Transport Security's local-network exception in every build, because the paired PC is a
-  home-network address.
+  pairing, over TLS pinned to the PC's certificate, and ignores `EXPO_PUBLIC_GAIA_URL`. On iOS,
+  App Transport Security's local-network exception is in development builds only; production
+  allows no plain HTTP at all.
 - **Away from home**, a paired phone reaches its PC at whichever of the PC's addresses answers
   first over the pinned connection: home addresses first on Wi-Fi, then its Tailscale
   (`100.64.0.0/10`) and relay addresses, which the PC reports at `/api/devices/me/routes`. A pairing
