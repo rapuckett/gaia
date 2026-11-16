@@ -14,6 +14,7 @@ fails for a route nobody has decided about:
 * ``remote``: the PC, mobile access with its token, and allowed devices.
 * ``web``: the web UI and the API docs, which the device listener never serves.
 * ``pair``: the pairing redemption, only on the device listener, with no token.
+* ``device``: an allowed paired device asking about itself.
 * ``device_self``: a paired device unpairing itself, pending or allowed.
 """
 
@@ -125,6 +126,8 @@ NOT_ON_LISTENER = {
 }
 
 PAIR = {"POST /api/devices/pair"}
+
+DEVICE = {"GET /api/devices/me/routes"}
 
 DEVICE_SELF = {"DELETE /api/devices/me"}
 
@@ -283,6 +286,7 @@ REMOTE = {
     "POST /api/files/upload",
     "POST /api/files/upload-media",
     "POST /api/goals",
+    "POST /api/goals/store/reset",
     "POST /api/goals/{goal_id}/tasks",
     "POST /api/gpu-memory/pending",
     "POST /api/memory/consolidate",
@@ -355,6 +359,7 @@ EXPECTED = {
     **{r: "pc_or_device" for r in PC_OR_DEVICE},
     **{r: "not_on_listener" for r in NOT_ON_LISTENER},
     **{r: "pair" for r in PAIR},
+    **{r: "device" for r in DEVICE},
     **{r: "device_self" for r in DEVICE_SELF},
     **{r: "web" for r in WEB},
     **{r: "remote" for r in REMOTE},
@@ -369,6 +374,7 @@ LETS_IN = {
     "remote": {"pc", "tunnel", "device"},
     "web": {"pc", "tunnel"},
     "pair": {"device", "pending", "no_token"},
+    "device": {"device"},
     "device_self": {"device", "pending"},
 }
 GUARDS = (
@@ -376,6 +382,7 @@ GUARDS = (
     security.require_pc_or_device,
     security.refuse_on_device_listener,
     security.require_device_listener,
+    security.require_allowed_device,
     security.require_device,
 )
 
@@ -430,6 +437,8 @@ def _access_class(key, route):
         return "not_on_listener"
     if security.require_device_listener in guards:
         return "pair"
+    if security.require_allowed_device in guards:
+        return "device"
     if security.require_device in guards:
         return "device_self"
     return "remote"
@@ -738,3 +747,63 @@ def test_system_context_collection_is_pc_only(setup, monkeypatch):
         == 200
     )
     assert ran == ["refresh"]
+
+
+def test_mcp_server_secrets_stay_on_the_pc(setup, monkeypatch):
+    """A phone sees a server's args with its credentials masked; the PC sees them whole."""
+    from gaia.ui.routers import mcp
+
+    app, clients, _ = setup
+    args = [
+        "--api-key",
+        "plain-secret-value",
+        "--url=https://mcp.example/sse?token=query-secret",
+        "--verbose",
+    ]
+
+    class _Config:
+        def get_servers(self):
+            return {"search": {"command": "npx", "args": args, "env": {}}}
+
+    monkeypatch.setattr(mcp, "_load_config", _Config)
+    for caller in ("tunnel", "device"):
+        resp = clients[caller].get("/api/mcp/servers", headers={"X-Gaia-UI": "1"})
+        assert resp.status_code == 200, (caller, resp.text)
+        shown = resp.json()["servers"][0]["args"]
+        assert "plain-secret-value" not in resp.text, caller
+        assert "query-secret" not in resp.text, caller
+        assert shown[0] == "--api-key" and shown[3] == "--verbose", shown
+    pc = clients["pc"].get("/api/mcp/servers", headers={"X-Gaia-UI": "1"})
+    assert pc.json()["servers"][0]["args"] == args
+
+
+def test_spending_changes_from_a_phone_are_audited(setup):
+    """Raising cloud spend from a paired device names that device in the audit log."""
+    import logging
+
+    from gaia.security import audit_logger
+
+    app, clients, device = setup
+    lines = []
+
+    class _Capture(logging.Handler):
+        def emit(self, record):
+            lines.append(record.getMessage())
+
+    handler = _Capture()
+    level = audit_logger.level
+    audit_logger.addHandler(handler)
+    audit_logger.setLevel(logging.INFO)
+    try:
+        ui = {"X-Gaia-UI": "1"}
+        resp = clients["device"].put(
+            "/api/spending/limit", json={"limit_usd": 25.0}, headers=ui
+        )
+        assert resp.status_code == 200, resp.text
+        resp = clients["device"].post("/api/spending/allow-month", headers=ui)
+        assert resp.status_code == 200, resp.text
+    finally:
+        audit_logger.removeHandler(handler)
+        audit_logger.setLevel(level)
+    by = f"by {security.DEVICE_PRINCIPAL_PREFIX}{device.device_id}"
+    assert len(lines) == 2 and all(by in line for line in lines), lines

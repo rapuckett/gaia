@@ -1,6 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
+export * from './activeRuns';
 export * from './agents';
 export * from './capabilities';
 export * from './chatStream';

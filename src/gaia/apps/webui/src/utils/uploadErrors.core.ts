@@ -5,6 +5,7 @@
 
 import type { Translate } from '../i18n/translator';
 import { failureHint } from './documentLibrary.core';
+import { serverFailureText } from './documentFailure';
 import { AUDIO_EXTENSIONS, VIDEO_EXTENSIONS } from './mediaFiles';
 
 export interface FileTypeCategory {
@@ -183,6 +184,11 @@ export function describeUploadError(t: Translate, { filename, error, status, kin
     // A wrong path, a file outside the readable folders or a damaged file is the user's to fix, not a bug to report.
     if (permanentHint) {
         return { title: `"${filename}" can't be read`, detail: permanentHint, icon: 'warning', report: null };
+    }
+    const serverReason = serverFailureText(kind, t);
+    if (serverReason) {
+        // The file is fine; the model server didn't answer.
+        return { title: t('docs.notAddedServer', { name: filename }), detail: serverReason, icon: 'warning', report: null };
     }
     if (kind === 'too_large') {
         return { title: t('docs.tooLarge', { name: filename }), detail: error, icon: 'warning', report: null };

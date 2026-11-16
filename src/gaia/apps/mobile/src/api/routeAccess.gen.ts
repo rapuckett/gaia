@@ -4,7 +4,7 @@
 // Generated from the backend's route guards; do not edit.
 // Regenerate from the repo root: python -m gaia.ui.export_route_access
 
-export type RouteAccessClass = 'device_self' | 'not_on_listener' | 'pair' | 'pc' | 'pc_or_device' | 'remote';
+export type RouteAccessClass = 'device' | 'device_self' | 'not_on_listener' | 'pair' | 'pc' | 'pc_or_device' | 'remote';
 
 export const ROUTE_ACCESS: Readonly<Record<string, RouteAccessClass>> = {
     'DELETE /api/agents/{agent_id}': 'pc',
@@ -54,6 +54,7 @@ export const ROUTE_ACCESS: Readonly<Record<string, RouteAccessClass>> = {
     'GET /api/connectors/{connector_id}/activations': 'remote',
     'GET /api/connectors/{connector_id}/grants': 'remote',
     'GET /api/devices': 'pc',
+    'GET /api/devices/me/routes': 'device',
     'GET /api/devices/status': 'pc',
     'GET /api/documents': 'remote',
     'GET /api/documents/{doc_id}/file': 'remote',
@@ -180,6 +181,7 @@ export const ROUTE_ACCESS: Readonly<Record<string, RouteAccessClass>> = {
     'POST /api/files/upload': 'remote',
     'POST /api/files/upload-media': 'remote',
     'POST /api/goals': 'remote',
+    'POST /api/goals/store/reset': 'remote',
     'POST /api/goals/{goal_id}/tasks': 'remote',
     'POST /api/gpu-memory/apply': 'pc',
     'POST /api/gpu-memory/pending': 'remote',

@@ -1,7 +1,8 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { useState } from 'react';
+import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
+import { useEffect, useState } from 'react';
 import { useWindowDimensions } from 'react-native';
 
 import { bigTimerIndex, findDurations, formatClock, parseSets } from '@webui/components/render/guide/durations';
@@ -15,6 +16,29 @@ import { ChevronLeft, ChevronRight, Pause, Play, Square, X } from '@/ui/icons';
 
 import { StepTimers, timerId } from './GuideTimers';
 
+const AWAKE_TAG = 'guided-view';
+
+/** True while the screen is held awake; false when the phone refuses, so the view can say it may sleep. */
+function useScreenAwake(active: boolean): boolean {
+    const [awake, setAwake] = useState(true);
+    useEffect(() => {
+        if (!active) return;
+        let live = true;
+        activateKeepAwakeAsync(AWAKE_TAG).then(
+            () => live && setAwake(true),
+            (err: unknown) => {
+                console.warn('[guide] could not keep the screen awake', err);
+                if (live) setAwake(false);
+            },
+        );
+        return () => {
+            live = false;
+            deactivateKeepAwake(AWAKE_TAG).catch((err: unknown) => console.warn('[guide] could not release the screen lock', err));
+        };
+    }, [active]);
+    return awake;
+}
+
 /** One step at a time in a sheet: big text, the step's timer, sets for a workout, large previous and next. */
 export function GuidedView({ open, doc, state, timers, onClose }: { open: boolean; doc: GuideDoc; state: GuideViewState; timers: Timers; onClose: () => void }) {
     const t = useT();
@@ -22,6 +46,7 @@ export function GuidedView({ open, doc, state, timers, onClose }: { open: boolea
     const [index, setIndex] = useState(0);
     const [setsDone, setSetsDone] = useState<Record<number, number>>({});
     const [itemsOpen, setItemsOpen] = useState(false);
+    const awake = useScreenAwake(open);
     const total = doc.steps.length;
     const last = index === total - 1;
 
@@ -55,9 +80,11 @@ export function GuidedView({ open, doc, state, timers, onClose }: { open: boolea
                     <Text role="label" tone="secondary" accessibilityLabel={counter} accessibilityRole="header">
                         <Ltr>{`${index + 1} / ${total}`}</Ltr>
                     </Text>
-                    <Text role="caption" tone="muted">
-                        {t('cards.screenMaySleep')}
-                    </Text>
+                    {awake ? null : (
+                        <Text role="caption" tone="muted">
+                            {t('cards.screenMaySleep')}
+                        </Text>
+                    )}
                 </Stack>
                 <IconButton icon={X} label={t('cards.closeGuided')} size="sm" onPress={onClose} testID="guided-close" />
             </Row>

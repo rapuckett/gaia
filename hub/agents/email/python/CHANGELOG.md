@@ -9,6 +9,12 @@ contract version is tracked separately as
 
 ### Fixed
 
+- **Sender preferences now order a pre-scan across every connected mailbox
+  (#3623).** With two mailboxes, each was sorted on its own and the results
+  were joined in connection order, so the archive list could keep the first
+  mailbox's priority senders and drop the second's low-priority ones. The
+  merged lists are now sorted together before their caps.
+
 - **The search guidance no longer teaches Outlook queries that Microsoft
   Graph rejects (#3587).** The `search_messages` description and the agent's
   SEARCH prompt now say `label:` and `after:`/`before:` are Gmail-only, and
@@ -20,6 +26,12 @@ contract version is tracked separately as
 - **An email body can no longer break out of its untrusted-content fence
   (#2034).** Marker-like text inside a body is neutralized before the body is
   fenced, so the model keeps reading all of it as data.
+
+- **A fence marker's name spelled with look-alike letters is neutralized too
+  (#7853).** Letters from another script that read as Latin ones (Cyrillic,
+  Greek, Cherokee and so on), and ASCII swaps such as `rn` for `m`, are read as
+  the letters they imitate, so a near-copy of a marker no longer reaches the
+  model.
 
 - **Under the daemon, a forwarded-token hiccup no longer asks for a browser
   re-sign-in (#6995).** A token the daemon hasn't re-forwarded yet, or an
