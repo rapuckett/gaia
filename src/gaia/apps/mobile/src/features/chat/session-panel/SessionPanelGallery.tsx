@@ -429,7 +429,7 @@ export function SessionPanelGallery({ state }: { state: SessionPanelGalleryState
             state === 'chgConfirm'
                 ? { phase: 'confirm' }
                 : state === 'chgConflict'
-                  ? { phase: 'conflict', message: UNDO_CONFLICT }
+                  ? { phase: 'conflict', detail: UNDO_CONFLICT }
                   : state === 'chgReview'
                     ? { review: true }
                     : null,

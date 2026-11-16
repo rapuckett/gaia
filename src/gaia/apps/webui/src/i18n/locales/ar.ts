@@ -3990,6 +3990,7 @@ const messages: Messages = {
     'mobileApp.changes.summary.one': 'تم تغيير ملف واحد',
     'mobileApp.changes.summary.other': 'تم تغيير {n} ملفات',
     'mobileApp.changes.undone': 'تم التراجع',
+    'mobileApp.changes.undoConflict': 'تغيّرت بعض الملفات بعد هذه المحادثة، فالتراجع سيستبدل تلك التغييرات. لم تتم استعادة أي شيء.',
     'mobileApp.changes.reviewTitle': 'التغييرات في هذا الدور',
     'mobileApp.changes.loading': 'جارٍ تحميل التغييرات…',
     'mobileApp.changes.loadFailed': 'تعذّر تحميل التغييرات: {error}',
