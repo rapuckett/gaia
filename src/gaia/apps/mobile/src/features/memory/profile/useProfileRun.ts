@@ -32,9 +32,9 @@ export interface ReviewItem {
     raw: DiscoveryFinding | InferenceInsight;
 }
 
-/** "Found: <item>": the label in the UI language at the line's start, the item an isolated run. */
+/** "Found: <item>": the label in the UI language at the line's start; the item is model prose, so a first-strong run. */
 export function findingLine(t: Translate, type: 'finding' | 'insight', content: string): string {
-    return t.bare(type === 'finding' ? 'mem.log.found' : 'mem.log.insight', { content: isolate(content, 'ltr') });
+    return t.bare(type === 'finding' ? 'mem.log.found' : 'mem.log.insight', { content: `\u2068${content}\u2069` });
 }
 
 /** Runs one profile stream: nothing found is saved until `save` is called on the items the person left checked. */
