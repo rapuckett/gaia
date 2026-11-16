@@ -10,7 +10,7 @@ import { GB_UNIT, MIN_CONTEXT_SIZE } from '@webui/utils/constants';
 import { shortModelName, type PickLoad } from '@webui/utils/modelList.core';
 
 export interface Banner {
-    id: 'download' | 'goalStore' | 'starting' | 'unreachable' | 'backendError' | 'configError' | 'serverHung' | 'serverStopped' | 'contextTooSmall' | 'pickLoad';
+    id: 'download' | 'goalStore' | 'starting' | 'unreachable' | 'backendError' | 'slow' | 'configError' | 'serverHung' | 'serverStopped' | 'contextTooSmall' | 'pickLoad';
     tone: NoticeTone;
     title: string;
     message?: string;
@@ -36,6 +36,8 @@ const gb = (bytes: number, digits: number) => (bytes / 1e9).toFixed(digits);
 /**
  * The one banner the app shows, in the web's ConnectionBanner order (NTF-08..13):
  * download, start-up, backend trouble, model server, context window.
+ * The web's slow banner is a status request that outlasts its timeout or a gateway's 504; the phone has no
+ * request timer, so a 504 is the only slow signal it receives.
  * `fetchError` is the status request's failure, if it failed.
  */
 export function pickBanner(
@@ -84,6 +86,9 @@ export function pickBanner(
     }
 
     if (fetchError) {
+        if (fetchError instanceof GaiaApiError && fetchError.status === 504) {
+            return { id: 'slow', tone: 'warning', title: t('banner.slow'), message: t('banner.slowHint'), retry: true };
+        }
         if (fetchError instanceof GaiaApiError && fetchError.status >= 500) {
             return {
                 id: 'backendError',
