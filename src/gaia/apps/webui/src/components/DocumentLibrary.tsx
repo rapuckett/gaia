@@ -23,6 +23,7 @@ import type { Document, IndexFolderResponse } from '../types';
 import { useT, type Translate } from '../i18n/useT';
 import { pluralKey } from '../i18n/registry';
 import { IndexingProgress } from './IndexingProgress';
+import { isServerFailure, serverFailureText } from '../utils/documentFailure';
 import './DocumentLibrary.css';
 
 /** One sentence on what folder indexing added, skipped and couldn't read. */
@@ -63,7 +64,7 @@ function withProgress(map: Record<string, api.IndexProgress>, id: string, progre
 
 export function DocumentLibrary() {
     const t = useT();
-    const { documents, setDocuments, setShowDocLibrary, setShowFileBrowser,
+    const { documents, setDocuments, setShowDocLibrary, openFileBrowserFromLibrary,
             currentSessionId, sessions, updateSessionInList,
             draftDocumentIds, addDraftDocuments, removeDraftDocument } = useChatStore();
     const currentSession = sessions.find(s => s.id === currentSessionId) ?? null;
@@ -224,8 +225,14 @@ export function DocumentLibrary() {
         return () => clearInterval(refreshInterval);
     }, [setDocuments]);
 
-    const totalSize = documents.reduce((sum, d) => sum + d.file_size, 0);
-    const unreadableCount = documents.filter((d) => d.indexing_status === 'failed').length;
+    // The row waiting on Undo is already gone from the list, so from the count too.
+    const shownDocs = documents.filter((d) => d.id !== pendingRemoval?.id);
+    const shownCount = shownDocs.length;
+    const totalSize = shownDocs.reduce((sum, d) => sum + d.file_size, 0);
+    const failedDocs = shownDocs.filter((d) => d.indexing_status === 'failed');
+    // A file that failed only because the model server was down isn't unreadable.
+    const serverWaitCount = failedDocs.filter((d) => isServerFailure(d.error_kind)).length;
+    const unreadableCount = failedDocs.length - serverWaitCount;
 
     /** Attach a document where the user chose, and say where it went. */
     const attachToTarget = useCallback(async (docId: string, filename: string) => {
@@ -298,15 +305,20 @@ export function DocumentLibrary() {
         setIsUploading(true);
         setUploadStatus(t('docs.indexingFile', { name: filename }));
         setUploadError(null);
+        setActionError(null);
         setFolderNotice(null);
         setNotice('');
         try {
             const doc = await uploader();
             log.doc.timed(`Indexed "${filename}": ${doc?.chunk_count || '?'} chunks`, timer);
-            if (doc?.indexing_status === 'failed') {
+            const failed = doc?.indexing_status === 'failed';
+            if (failed) {
                 // Its row carries the reason and Retry; attaching it would promise a chat a file it can't search.
-                log.doc.warn(`"${filename}" couldn't be read; not attaching it`);
-                setActionError(t('docs.notAdded', { name: doc.filename || filename }));
+                log.doc.warn(`"${filename}" couldn't be added (${doc.error_kind ?? 'unreadable'}); not attaching it`);
+                const name = doc.filename || filename;
+                setActionError(serverFailureText(doc.error_kind, t)
+                    ? t('docs.notAddedServer', { name })
+                    : t('docs.notAdded', { name }));
             } else if (doc?.id) {
                 try {
                     await attachToTarget(doc.id, doc.filename || filename);
@@ -323,7 +335,8 @@ export function DocumentLibrary() {
             const data = await api.listDocuments();
             setDocuments(data.documents || []);
             setUploadStatus('');
-            return true;
+            // A failed add keeps the typed path, so Retry is one click.
+            return !failed;
         } catch (err) {
             // ApiError's fields, read by shape: the class itself is mocked in tests.
             const { httpStatus, reason, body } = (err ?? {}) as { httpStatus?: number; reason?: string | null; body?: Record<string, unknown> | null };
@@ -333,9 +346,9 @@ export function DocumentLibrary() {
             log.doc.error(`Failed to index "${filename}"`, err);
             const errMsg = reason === 'too_large'
                 ? t('docs.tooLargeDetail', { max: String(body?.max_mb) })
-                : httpStatus === 400 && unsupportedMessage
+                : serverFailureText(reason, t) ?? (httpStatus === 400 && unsupportedMessage
                     ? unsupportedMessage
-                    : err instanceof Error ? err.message : 'Upload failed';
+                    : err instanceof Error ? err.message : 'Upload failed');
             setUploadError({ filename, error: errMsg, status: httpStatus, kind: reason });
             setUploadStatus('');
             return false;
@@ -437,6 +450,9 @@ export function DocumentLibrary() {
     const handleDeleteDoc = useCallback((id: string) => {
         const name = documents.find((d) => d.id === id)?.filename || id;
         setActionError(null);
+        setUploadError(null);
+        setFolderNotice(null);
+        setNotice('');
         flushRemoval();
         const pending = { id, name };
         pendingRemovalRef.current = pending;
@@ -578,14 +594,16 @@ export function DocumentLibrary() {
             }
             case 'failed': {
                 const hint = failureHint(t, doc.error_kind);
-                const reason = doc.last_error ? splitFailureReason(doc.last_error) : null;
+                const serverReason = serverFailureText(doc.error_kind, t);
+                const lastError = serverReason ?? doc.last_error;
+                const reason = lastError ? splitFailureReason(lastError) : null;
                 return (
                     <div className="doc-failure">
                         <div className="doc-indexing-status">
                             <span
                                 className="doc-status-badge doc-status-failed"
-                                title={doc.last_error || undefined}
-                                aria-label={doc.last_error ? t('docs.failedAria', { error: doc.last_error }) : t('docs.indexingFailed')}
+                                title={lastError || undefined}
+                                aria-label={lastError ? t('docs.failedAria', { error: lastError }) : t('docs.indexingFailed')}
                             >
                                 <AlertCircle size={12} /> {hint ? t('docs.cantRead') : t('docs.failed')}
                             </span>
@@ -722,7 +740,7 @@ export function DocumentLibrary() {
                         <button
                             type="button"
                             className="btn-secondary"
-                            onClick={() => { setShowDocLibrary(false); setShowFileBrowser(true); }}
+                            onClick={openFileBrowserFromLibrary}
                             title={t('docs.browseTitle')}
                         >
                             <Search size={14} />
@@ -785,11 +803,14 @@ export function DocumentLibrary() {
                     )}
 
                     {/* Stats */}
-                    {documents.length > 0 && !pendingRemoval && (
+                    {shownCount > 0 && (
                         <div className="doc-stats">
-                            <span>{countText(t, 'docs.count', documents.length - unreadableCount)}</span>
+                            <span>{countText(t, 'docs.count', shownCount - failedDocs.length)}</span>
                             {unreadableCount > 0 && (
                                 <span className="doc-stats-failed">{countText(t, 'docs.unreadable', unreadableCount)}</span>
+                            )}
+                            {serverWaitCount > 0 && (
+                                <span className="doc-stats-failed doc-stats-server">{t.plural('docs.serverWaiting', serverWaitCount)}</span>
                             )}
                             <span>&middot;</span>
                             <bdi dir="ltr">{formatSize(totalSize)}</bdi>

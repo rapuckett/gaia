@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 
 export interface PressableProps {
-    children?: ReactNode;
+    children?: ReactNode | ((state: { pressed: boolean }) => ReactNode);
     onPress?: () => void;
     onLongPress?: () => void;
     disabled?: boolean;
@@ -71,7 +71,7 @@ export function Pressable({
                 opacity: disabled ? 0.45 : pressed ? 0.72 : 1,
             })}
         >
-            {children}
+            {({ pressed }) => (typeof children === 'function' ? children({ pressed }) : children)}
         </RNPressable>
     );
 }
