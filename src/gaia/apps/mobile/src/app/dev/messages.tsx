@@ -10,6 +10,7 @@ import { KeyedScene } from '@/features/dev/KeyedScene';
 import { MessagesGallery, type MessagesGalleryState } from '@/features/chat/messages/MessagesGallery';
 import { FIXTURES } from '@/features/chat/messages/__fixtures__/messages';
 import { SessionPanelGallery, type SessionPanelGalleryState } from '@/features/chat/session-panel/SessionPanelGallery';
+import { TURN_SCENES, TurnScenes, type TurnScene } from '@/features/chat/messages/TurnScenes';
 import { UIProvider } from '@/ui';
 
 const OPEN_STATES = ['actions', 'delete', 'edit', 'guided', 'prescan-dismissing', 'prescan-done'];
@@ -24,6 +25,7 @@ export default function MessagesGalleryRoute() {
     if (!devGalleryEnabled()) return <Redirect href="/" />;
     if ((COMPARE_STATES as readonly string[]).includes(state ?? '')) return <KeyedScene sceneKey={state as string} scene={CompareGallery} props={{ state: state as CompareState }} />;
     if ((CARD_SCENES as readonly string[]).includes(state ?? '')) return <KeyedScene sceneKey={state as string} scene={CardScenes} props={{ state: state as CardScene }} />;
+    if ((TURN_SCENES as readonly string[]).includes(state ?? '')) return <KeyedScene sceneKey={state as string} scene={TurnScenes} props={{ state: state as TurnScene }} />;
     const panel = state?.startsWith('panel-') ? state.slice('panel-'.length) : undefined;
     if (panel && PANEL_STATES.includes(panel)) {
         return (
