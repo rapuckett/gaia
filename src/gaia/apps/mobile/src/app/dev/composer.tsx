@@ -63,7 +63,7 @@ export default function ComposerGalleryRoute() {
                     <PrivateChip on={false} onChange={noop} />
                 </>
             }
-            rightControls={<ControlChip chip="model" icon={Cpu} menu label="Qwen3.6-35B-A3B-GGUF" testID="gallery-model-chip" />}
+            rightControls={<ControlChip chip="model" icon={Cpu} menu label="Gemma 4 E4B" testID="gallery-model-chip" />}
         />
     );
     return (
