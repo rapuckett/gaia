@@ -49,6 +49,10 @@ describeNative('/dev/settings', () => {
     it.each([
         ['model-key-disconnected', 'Reconnect'],
         ['model-search-empty', 'No models match.'],
+        ['model-hf-checking', /Needs 64 GB/],
+        ['model-hf-ready', /Add .*Demo Chat/],
+        ['model-search-miss', 'No models match.'],
+        ['model-details', /huggingface\.co\/me\/my-tuned-GGUF/],
         ['model-local-empty', /No models yet\./],
         ['model-available', 'Available to download'],
         ['model-fireworks', /Show all models/],
@@ -81,6 +85,7 @@ describeNative('/dev/settings', () => {
         ['msg-pairing', 'DM the bot this code'],
         ['msg-pairing-waiting', 'Waiting for a code…'],
         ['msg-paired', /Answering .*Alex.* as .*GAIA Helper/],
+        ['msg-paired-now', 'Paired. GAIA answers you on Discord now.'],
         ['adv-server-loaded', 'Speech recognition model'],
         ['adv-server-checking', 'Checking the model server…'],
         ['adv-server-error', /The model server isn.t answering/],
@@ -169,6 +174,12 @@ describeNative('/dev/settings', () => {
         await mount();
         expect(await screen.findByText(/Couldn.t read the Discord status/, undefined, { timeout: 15000 })).toBeTruthy();
     }, 20000);
+
+    it('model-many shows the search field, and a model-details scene shows the row id', async () => {
+        mockState = 'model-many';
+        await mount();
+        expect(await screen.findByTestId('model-search', { includeHiddenElements: true })).toBeTruthy();
+    });
 
     it('model-custom hides Remove for the model in use', async () => {
         mockState = 'model-custom';

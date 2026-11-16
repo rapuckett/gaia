@@ -23,6 +23,14 @@ export interface SettingsScene {
     data?: FakeClientData;
     /** Opens the Model pane on the success notice for this just-added model, with the Hugging Face section open. */
     addedModel?: string;
+    /** Opens the models search field with this text typed in. */
+    search?: string;
+    /** Opens this model's Details section expanded. */
+    openDetails?: string;
+    /** Opens Add a model from Hugging Face with this link already checked. */
+    customReport?: CustomModelReport;
+    /** Opens the Messaging status with the just-paired line showing. */
+    justPaired?: boolean;
     /** An action that never finishes, so its in-flight state stays on screen: tap its button (`#tap=model-download-<id>` or `#tap=model-use-<id>`). */
     hang?: 'download' | 'select';
     /** Client calls the scene answers itself (a hang or a PC refusal), over the fake's. */
@@ -60,6 +68,7 @@ const HAVE = model('Gemma-4-E4B-it-GGUF', {
 });
 const WANT = model('Qwen3.6-35B-A3B-GGUF', { display_name: 'Qwen3.6 35B A3B', size_gb: 23.3, fits: true });
 const WANT_SMALL = model('Llama-3.2-3B-Instruct-GGUF', { display_name: 'Llama 3.2 3B', size_gb: 2.1, fits: true });
+const MANY = [HAVE, WANT, WANT_SMALL, ...['A', 'B', 'C', 'D', 'E'].map((n) => model(`Extra-${n}-GGUF`, { display_name: `Extra model ${n}`, size_gb: 1.5, fits: true }))];
 const NEVER = model('Qwen3-Coder-480B-GGUF', { display_name: 'Qwen3 Coder 480B', size_gb: 290, available: false, unavailable_reason: 'needs 320 GB of memory' });
 const MINE_CUSTOM = model('user.my-tuned-GGUF', {
     display_name: 'My tuned model', downloaded: true, custom: true, size_gb: 4.4, source_url: 'https://huggingface.co/me/my-tuned-GGUF',
@@ -104,6 +113,14 @@ const HF_REPORT: CustomModelReport = {
     url: HF_URL, ok: true, error: null, display_name: 'Demo Chat', model_id: 'user.Demo-Chat-GGUF', size_gb: 3.4, file: 'Demo-Chat-Q4_K_M.gguf', quant: 'Q4_K_M',
     checks: [{ id: 'chat', label: 'Chat model', ok: true, detail: 'Has a chat template' }, { id: 'fit', label: 'Fits this PC', ok: true, detail: 'Needs 4.6 GB' }],
     warnings: [], variants: [],
+};
+const HF_VARIANTS = [
+    { quant: 'Q4_K_M', file: 'Demo-Chat-Q4_K_M.gguf', size_gb: 3.4, fits: true, reason: null },
+    { quant: 'Q8_0', file: 'Demo-Chat-Q8_0.gguf', size_gb: 6.1, fits: true, reason: null },
+];
+const HF_CHECKING: CustomModelReport = {
+    ...HF_REPORT, ok: false, variants: HF_VARIANTS,
+    checks: [{ id: 'chat', label: 'Chat model', ok: true, detail: 'Has a chat template' }, { id: 'fit', label: 'Fits this PC', ok: false, detail: 'Needs 64 GB' }],
 };
 
 const never = () => new Promise<never>(() => undefined);
@@ -202,6 +219,11 @@ export const SETTINGS_SCENES: Record<string, SettingsScene> = {
         section: 'model', target: 'models-on-pc', gpuMemory: GPU, hang: 'download',
         data: local([HAVE, model(WANT.id, { ...WANT, download_progress: { model_name: WANT.id, state: 'downloading', percent: 42, downloaded_bytes: 9.8e9, total_bytes: 23.3e9, file: null, file_index: 1, total_files: 1, message: null } }), WANT_SMALL]),
     },
+    // SET-MODEL-20: eight models, so the search field shows (`model-search`); the same with a miss typed into it.
+    'model-many': { section: 'model', target: 'models-on-pc', gpuMemory: GPU, data: local(MANY) },
+    'model-search-miss': { section: 'model', target: 'models-on-pc', gpuMemory: GPU, search: 'zzz-no-such-model', data: local(MANY) },
+    // SET-MODEL-24: a model row with its Details section expanded.
+    'model-details': { section: 'model', target: 'models-on-pc', gpuMemory: GPU, openDetails: MINE_CUSTOM.id, data: local([HAVE, MINE_CUSTOM]) },
     // SET-MODEL-26: a Use tap that hangs (`#tap=model-use-user.my-tuned-GGUF`).
     'model-switching': { section: 'model', target: 'models-on-pc', gpuMemory: GPU, hang: 'select', data: local([HAVE, MINE_CUSTOM]) },
     // SET-MODEL-24, 28: a custom model with Remove and its Details (`#tap=model-remove-user.my-tuned-GGUF` opens the confirm sheet); the custom model in use has none.
@@ -215,6 +237,15 @@ export const SETTINGS_SCENES: Record<string, SettingsScene> = {
     'model-hf-added': {
         section: 'model', target: 'models-on-pc', gpuMemory: GPU, addedModel: HF_REPORT.display_name!,
         data: { ...local([HAVE, model(HF_REPORT.model_id!, { display_name: HF_REPORT.display_name!, custom: true, size_gb: HF_REPORT.size_gb, source_url: HF_URL })]), customReports: { [HF_URL]: HF_REPORT } },
+    },
+    // SET-MODEL-30: the link checked, with its checks and a quantization choice, and nothing to add yet; then the same link passing, with the Add button.
+    'model-hf-checking': {
+        section: 'model', target: 'models-on-pc', gpuMemory: GPU, customReport: HF_CHECKING,
+        data: local([HAVE]),
+    },
+    'model-hf-ready': {
+        section: 'model', target: 'models-on-pc', gpuMemory: GPU, customReport: { ...HF_REPORT, variants: HF_VARIANTS },
+        data: local([HAVE]),
     },
     // SET-MODEL-36 to 38: the cloud spending block (`cloud-spending`) under a connected cloud provider.
     'spend-total': { section: 'model', provider: 'fireworks', gpuMemory: GPU, data: { ...cloud([]), spending: spent({ limit_usd: 20, state: 'ok', unpriced_turns: 2, unreported_turns: 1 }) } },
@@ -249,6 +280,8 @@ export const SETTINGS_SCENES: Record<string, SettingsScene> = {
     // SET-MSG-05, 06: steps 3 and 4 with the pairing code (`#tap=messaging-copy-code` shows Copied); the same with no code yet.
     'msg-pairing': msg(discord({ state: 'pairing', pairing_code: 'DUMY2345', pairing_expires_at: 1900000000 })),
     'msg-pairing-waiting': msg(discord({ state: 'pairing' })),
+    // SET-MSG-11: the line shown just after pairing, seeded so it needs no wait.
+    'msg-paired-now': msg(discord({ state: 'connected', paired: true, owner_name: 'Alex', model: CHAT_MODEL }), { justPaired: true }),
     // SET-MSG-11, 13: paired and answering, with the Disconnect button (`#tap=messaging-disconnect` explains it is the PC's to press).
     'msg-paired': msg(discord({ state: 'connected', paired: true, owner_name: 'Alex', model: CHAT_MODEL, always_allowed: ['Run shell commands'] })),
 
