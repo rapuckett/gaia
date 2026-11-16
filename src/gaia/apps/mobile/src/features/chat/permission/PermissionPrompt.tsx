@@ -349,7 +349,7 @@ export function PermissionPrompt({
                         </Stack>
                     </Row>
                     {typing ? null : (
-                        <ScrollBox maxHeight={bodyMax} testID="perm-details-scroll">
+                        <ScrollBox maxHeight={bodyMax} hint testID="perm-details-scroll">
                             <Stack gap="md">
                                 <CallDetails prompt={prompt} />
                                 {fullAccessPending ? <Notice tone="info" message={t('perm.fullPendingNote')} testID="perm-full-pending" /> : null}
