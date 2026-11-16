@@ -11,7 +11,7 @@ import { useRemoveCustomModel, useStartModelDownload } from '@/data';
 import { useT } from '@/i18n/useT';
 import { Button, Divider, Notice, Row, SearchField, SettingsGroup, Sheet, Spinner, Stack, Text } from '@/ui';
 
-import { AddCustomModel } from './AddCustomModel';
+import { AddCustomModel, SeedCustomLink } from './AddCustomModel';
 import { ModelRow } from './ModelRow';
 import { errorText, isolate, modelLabel, refusedOnPhone, sameModelId } from './modelText';
 
@@ -19,6 +19,8 @@ const SEARCHABLE_FROM = 6;
 
 /** Dev scenes only: the name of a model that was just added from Hugging Face, so the list opens on that success notice. */
 export const SeedAddedModel = createContext<string | null>(null);
+/** Dev scenes only: the text the models search field opens with. */
+export const SeedModelSearch = createContext('');
 
 export interface ModelListProps {
     provider: string;
@@ -61,7 +63,7 @@ export function ModelList({ provider, remote, models, activeModel, switching, on
     const seeded = useContext(SeedAddedModel);
     const download = useStartModelDownload();
     const remove = useRemoveCustomModel();
-    const [query, setQuery] = useState('');
+    const [query, setQuery] = useState(useContext(SeedModelSearch));
     const [showAll, setShowAll] = useState(false);
     const [busy, setBusy] = useState<string | null>(null);
     const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(
@@ -69,7 +71,7 @@ export function ModelList({ provider, remote, models, activeModel, switching, on
     );
     const [pcOnly, setPcOnly] = useState(false);
     const [justAdded, setJustAdded] = useState(!!seeded);
-    const [adding, setAdding] = useState(!!seeded);
+    const [adding, setAdding] = useState(!!seeded || !!useContext(SeedCustomLink));
     const [confirmRemove, setConfirmRemove] = useState<ProviderModel | null>(null);
 
     const groups = useMemo(

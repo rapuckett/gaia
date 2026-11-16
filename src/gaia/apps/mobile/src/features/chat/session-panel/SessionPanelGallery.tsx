@@ -355,11 +355,11 @@ export function SessionPanelGallery({ state }: { state: SessionPanelGalleryState
             sessionChanges: chg && state !== 'chgError' ? { dev: { ...CHANGES, pending: state === 'chgPending' } } : undefined,
             sessionGit: state === 'chgGitPr' ? { dev: GIT_PR } : state === 'chgGit' || state === 'chgConfirm' ? { dev: GIT } : undefined,
             undoConflict: state === 'chgConflict' ? new GaiaApiError(409, 'a file changed since', undefined, undefined, { status: 'conflict' }) : undefined,
-            environments: env ? { dev: environment } : undefined,
+            environments: env || chg ? { dev: environment } : undefined,
             fileFolders: env ? (state === 'envPickRefused' ? { ...BROWSE_FOLDERS, '': BROWSE_FOLDERS['/Users/avery']! } : BROWSE_FOLDERS) : undefined,
             permissions: state === 'envOffline' ? { dev: 'full_access' } : undefined,
-            activeModel: env ? { provider: 'local', model: 'Gemma-4-E4B-it-GGUF', display_name: 'Gemma 4 E4B', label: null, remote: false, is_default: true, downloaded: true } : undefined,
-            localModel: env ? LOCAL_MODEL : undefined,
+            activeModel: env || chg ? { provider: 'local', model: 'Gemma-4-E4B-it-GGUF', display_name: 'Gemma 4 E4B', label: null, remote: false, is_default: true, downloaded: true } : undefined,
+            localModel: env || chg ? LOCAL_MODEL : undefined,
             contextUsage: ctx
                 ? {
                       available: true,

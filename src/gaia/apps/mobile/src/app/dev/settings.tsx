@@ -10,7 +10,10 @@ import type { ScrollView } from 'react-native';
 import { GaiaClientProvider } from '@/data';
 import { devGalleryEnabled } from '@/features/dev/devGallery';
 import { KeyedScene } from '@/features/dev/KeyedScene';
-import { SeedAddedModel } from '@/features/settings/panes/model/ModelList';
+import { SeedJustPaired } from '@/features/settings/panes/Messaging';
+import { SeedCustomLink } from '@/features/settings/panes/model/AddCustomModel';
+import { SeedAddedModel, SeedModelSearch } from '@/features/settings/panes/model/ModelList';
+import { SeedOpenDetails } from '@/features/settings/panes/model/ModelRow';
 import { SETTINGS_SECTIONS } from '@/features/settings/sections';
 import { SETTINGS_SCENES, settingsSceneClient, type SettingsScene } from '@/features/settings/devScenes';
 import { SettingsTargets } from '@/features/settings/targets';
@@ -29,7 +32,15 @@ function SettingsView({ found }: { found: SettingsScene }) {
                         <Screen scroll scrollRef={scrollRef}>
                             <SettingsTargets section={found.section} target={found.target} scrollRef={scrollRef}>
                                 <SeedAddedModel.Provider value={found.addedModel ?? null}>
-                                    <Pane provider={found.provider ?? 'local'} />
+                                    <SeedModelSearch.Provider value={found.search ?? ''}>
+                                        <SeedOpenDetails.Provider value={found.openDetails ?? null}>
+                                            <SeedJustPaired.Provider value={!!found.justPaired}>
+                                                <SeedCustomLink.Provider value={found.customLink ?? ''}>
+                                                    <Pane provider={found.provider ?? 'local'} />
+                                                </SeedCustomLink.Provider>
+                                            </SeedJustPaired.Provider>
+                                        </SeedOpenDetails.Provider>
+                                    </SeedModelSearch.Provider>
                                 </SeedAddedModel.Provider>
                             </SettingsTargets>
                         </Screen>
