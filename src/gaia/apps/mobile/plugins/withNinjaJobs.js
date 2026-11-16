@@ -8,9 +8,9 @@ const END = '// @generated end withNinjaJobs';
 
 // Ninja otherwise runs a compile per core in every C++ module Gradle builds at once.
 const BLOCK = `${BEGIN}
-def heavyJobs = providers.environmentVariable('AGENT_HOST_HEAVY_JOBS').getOrElse('4')
+def heavyJobs = providers.environmentVariable('GAIA_BUILD_JOBS').getOrElse('4')
 if (!(heavyJobs ==~ /[1-9][0-9]*/)) {
-    throw new GradleException("AGENT_HOST_HEAVY_JOBS must be a whole number of 1 or more, not '\${heavyJobs}'. Unset it to compile 4 files at a time.")
+    throw new GradleException("GAIA_BUILD_JOBS must be a whole number of 1 or more, not '\${heavyJobs}'. Unset it to compile 4 files at a time.")
 }
 subprojects { sub ->
     ['com.android.application', 'com.android.library'].each { pluginId ->
@@ -38,7 +38,7 @@ function withoutBlock(contents) {
     return contents.slice(0, start) + contents.slice(end + END.length);
 }
 
-/** Caps the parallel C++ compiles of an Android build at AGENT_HOST_HEAVY_JOBS (default 4), read when Gradle runs. */
+/** Caps the parallel C++ compiles of an Android build at GAIA_BUILD_JOBS (default 4), read when Gradle runs. */
 module.exports = function withNinjaJobs(config) {
     return withProjectBuildGradle(config, (cfg) => {
         if (cfg.modResults.language !== 'groovy') {
