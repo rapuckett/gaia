@@ -1856,7 +1856,10 @@ How a device pairs:
 On the listener a device sends `Authorization: Bearer <token>` with every
 request and `X-Gaia-UI: 1` with every write. Nothing else authenticates there:
 not a cookie, a query parameter or the mobile access token. Only home-network
-IPv4 addresses are answered, paths outside `/api/` and `/v1/` are a **404**, a
+IPv4 peers are answered: those on the subnet of the interface carrying the PC's
+default route (or link-local there) that dialed that interface's address, plus
+peers an away route that is on admits. Any other peer is hung up on before the
+TLS handshake. Paths outside `/api/` and `/v1/` are a **404**, a
 request body over 8 MB is a **413** (uploads keep their own limits), an unknown
 or unpaired token is a **401** (`code: device_unknown`), and a device token sent
 over plain http to the main server is a **401** too. What a device may call is
@@ -1903,8 +1906,9 @@ else's:
     Returns the status. **409** with `detail` `{"code", "message"}` when it
     can't: `port_in_use` (on macOS also when another program holds the port on
     just one of the PC's addresses), `unsafe_folder` (someone else can reach
-    `~/.gaia/devices`; use Reset pairing), `certificate` or `start_failed`.
-    PC-only.
+    `~/.gaia/devices`; use Reset pairing), `certificate` or `start_failed`
+    (also when the PC has no IPv4 default route, or its interface has no
+    home-network address; `message` says which). PC-only.
   </Accordion>
 
   <Accordion title="DELETE /api/devices/listener">
@@ -1914,8 +1918,9 @@ else's:
   <Accordion title="POST /api/devices/pairing">
     Open the pairing window: a `DevicePairingOffer` with a new invitation,
     replacing any open one. **409** with `code` `listener_off` while the
-    listener is off, or `no_home_network` when the PC has no home-network
-    address. PC-only.
+    listener is off, or `no_home_network` when the interface carrying the
+    PC's default route has no home-network address to offer. The offer lists
+    only that interface's addresses. PC-only.
   </Accordion>
 
   <Accordion title="DELETE /api/devices/pairing">

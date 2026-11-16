@@ -35,6 +35,7 @@ from gaia.ui.routers import sessions as sessions_router
 from gaia.ui.security import ListenerScopeMiddleware
 from gaia.ui.server import create_app
 
+from .fake_nics import HOME_ADDRESS, fake_pc
 from .pinned_client import PinMismatch, PinnedConnection, call
 
 pytestmark = pytest.mark.allow_network  # TLS on 127.0.0.1 only
@@ -538,10 +539,13 @@ def test_bind_socket_options_per_platform(
     assert getattr(socket, forbidden) not in options
 
 
-def test_listener_restarts_on_its_own_port(tmp_path):
+def test_listener_restarts_on_its_own_port(tmp_path, monkeypatch):
     # Connections the listener closed linger in TIME_WAIT; a restart must not
     # read them as another program.
     GaiaConfig.save_key("device_pairing", True)
+    fake_pc(monkeypatch)
+    # This test is about the port; answer the loopback client as a home peer.
+    monkeypatch.setattr(listener_module, "peer_route", lambda *args: "home")
     app = create_app(db_path=":memory:")
     access = DeviceAccess(app, folder=tmp_path / "devices", host="0.0.0.0", port=0)
     client = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
@@ -586,3 +590,120 @@ def test_no_token_or_invite_in_logs(served, caplog):
     for value in (device["token"], secret[:8], invite, invite[:8]):
         assert value not in logged
     assert device["device_id"] in logged
+
+
+# ── The home network is the default route's subnet ────────────────────────
+
+
+@pytest.mark.parametrize(
+    "case, peer, dialed, admitted",
+    [
+        ("same subnet as the default route", "192.168.1.20", HOME_ADDRESS, True),
+        ("link-local on the home interface", "169.254.7.8", HOME_ADDRESS, True),
+        ("another private subnet", "192.168.2.20", HOME_ADDRESS, False),
+        ("Docker bridge", "172.17.0.2", "172.17.0.1", False),
+        ("corporate VPN", "10.8.0.5", "10.8.0.2", False),
+        ("home peer through Docker's address", "192.168.1.20", "172.17.0.1", False),
+        ("public address", "203.0.113.7", HOME_ADDRESS, False),
+    ],
+)  # fmt: skip
+def test_home_peers_at_accept_and_at_the_gate(
+    tmp_path, monkeypatch, case, peer, dialed, admitted
+):
+    """Accept-time and gate agree: only the default route's subnet is home."""
+    GaiaConfig.save_key("device_pairing", True)
+    fake_pc(monkeypatch)
+    app = create_app(db_path=":memory:")
+    access = DeviceAccess(app, folder=tmp_path / "devices")
+    app.state.devices = access
+    invite, _ = access.pairing.open()
+    device = access.redeem(invite, "Phone", "ios", "192.168.1.20")
+    access.allow(device["device_id"])
+
+    route = listener_module.peer_route(access, (peer, 50000), (dialed, 4243), False)
+    assert (route == "home") is admitted, case
+
+    headers = [(b"authorization", f"Bearer {device['token']}".encode())]
+    scope = _gate_scope(
+        client=(peer, 50000),
+        server=(dialed, 4243),
+        headers=headers,
+        query_string=b"",
+    )
+    sent = asyncio.run(_through_gate(app, scope))
+    assert sent[0]["status"] == (200 if admitted else 403), case
+
+
+def test_stranger_is_hung_up_on_before_tls(tmp_path, monkeypatch):
+    """A refused peer never gets a ServerHello; a home peer gets the API."""
+    GaiaConfig.save_key("device_pairing", True)
+    fake_pc(monkeypatch)
+    app = create_app(db_path=":memory:")
+    access = DeviceAccess(app, folder=tmp_path / "devices", host="0.0.0.0", port=0)
+    client = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    client.check_hostname = False
+    client.verify_mode = ssl.CERT_NONE
+    seen = []
+
+    async def scenario():
+        await access.start()
+        port = access.status()["port"]
+        try:
+            # 127.0.0.1 is never home on a listener bound to every address.
+            with pytest.raises((ssl.SSLError, ConnectionError)):
+                await asyncio.open_connection("127.0.0.1", port, ssl=client)
+            # The same client, once the screen counts it as home, gets TLS.
+            monkeypatch.setattr(
+                listener_module,
+                "peer_route",
+                lambda access, peer, local, loopback: seen.append(peer) or "home",
+            )
+            reader, writer = await asyncio.open_connection(
+                "127.0.0.1", port, ssl=client
+            )
+            writer.write(
+                b"GET /api/health HTTP/1.1\r\nHost: pc\r\nConnection: close\r\n\r\n"
+            )
+            assert (await reader.read()).startswith(b"HTTP/1.1 401")
+            writer.close()
+        finally:
+            await access.shutdown()
+
+    asyncio.run(scenario())
+    # Checked once at accept and once more at the gate.
+    assert len(seen) == 2
+
+
+def test_pairing_code_offers_only_the_default_route_address(tmp_path, monkeypatch):
+    GaiaConfig.save_key("device_pairing", True)
+    fake_pc(monkeypatch)
+    app = create_app(db_path=":memory:")
+    access = DeviceAccess(app, folder=tmp_path / "devices", host="0.0.0.0", port=0)
+
+    async def offer():
+        await access.start()
+        try:
+            return access.open_pairing()["origins"], access.status()["port"]
+        finally:
+            await access.shutdown()
+
+    origins, port = asyncio.run(offer())
+    assert origins == [f"https://{HOME_ADDRESS}:{port}"]
+
+
+def test_no_default_route_fails_loudly(tmp_path, monkeypatch):
+    GaiaConfig.save_key("device_pairing", True)
+    fake_pc(monkeypatch, default_route=None)
+    app = create_app(db_path=":memory:")
+    access = DeviceAccess(app, folder=tmp_path / "devices", host="0.0.0.0", port=0)
+
+    with pytest.raises(ListenerError) as failed:
+        asyncio.run(access.start())
+    status = access.status()
+    assert not status["listening"] and status["error_code"] == "start_failed"
+    assert "default route" in status["error_detail"]
+    assert "Connect the PC to your home Wi-Fi" in failed.value.detail
+    route = listener_module.peer_route(
+        access, ("192.168.1.20", 50000), (HOME_ADDRESS, 4243), False
+    )
+    assert route is None
