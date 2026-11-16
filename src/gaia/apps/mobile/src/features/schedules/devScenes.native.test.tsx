@@ -4,11 +4,9 @@
 import { render, screen } from '@testing-library/react-native';
 import { Platform } from 'react-native';
 
-import { DRAWER_SCENES } from '@/features/chats/devScenes';
-import { SCHEDULE_SCENES } from '@/features/schedules/devScenes';
+import SchedulesGalleryRoute from '@/app/dev/schedules';
 
-import DrawerGalleryRoute from './drawer';
-import SchedulesGalleryRoute from './schedules';
+import { SCHEDULE_SCENES } from './devScenes';
 
 jest.mock('expo-constants', () => ({ __esModule: true, default: { expoConfig: { version: 'test' } } }));
 
@@ -34,20 +32,6 @@ jest.mock('@/features/dev/devGallery', () => ({ devGalleryEnabled: () => true })
 
 // react-native-web’s DOM can't be mounted by the component test renderer.
 const describeNative = Platform.OS === 'web' ? describe.skip : describe;
-
-describeNative('drawer gallery route', () => {
-    it.each(Object.keys(DRAWER_SCENES))('renders %s', async (name) => {
-        mockState = name;
-        await render(<DrawerGalleryRoute />);
-        expect((await screen.findAllByLabelText(/search/i)).length).toBeGreaterThan(0);
-    });
-
-    it('names the scenes when the state is unknown', async () => {
-        mockState = 'nope';
-        await render(<DrawerGalleryRoute />);
-        expect(screen.getByText('No drawer scene "nope"')).toBeTruthy();
-    });
-});
 
 describeNative('schedules gallery route', () => {
     it.each(Object.keys(SCHEDULE_SCENES))('renders %s', async (name) => {

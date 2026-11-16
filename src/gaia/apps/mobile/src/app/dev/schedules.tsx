@@ -7,19 +7,17 @@ import { useState } from 'react';
 
 import { GaiaClientProvider } from '@/data';
 import { devGalleryEnabled } from '@/features/dev/devGallery';
+import { KeyedScene } from '@/features/dev/KeyedScene';
 import { SchedulesScreen } from '@/features/schedules';
 import { SCHEDULE_SCENES, schedulesSceneClient, type ScheduleSceneName } from '@/features/schedules/devScenes';
 import { Screen, ScreenBannerProvider, Stack, Text, UIProvider } from '@/ui';
 
 const noop = () => undefined;
 
-/** The Schedules screen on a fake PC; `?state=<name>` (see SCHEDULE_SCENES), `list` when no state is given. */
-export default function SchedulesGalleryRoute() {
-    const { state = 'list' } = useLocalSearchParams<{ state?: string }>();
+function SchedulesView({ state }: { state: string }) {
     const found = (SCHEDULE_SCENES as Record<string, (typeof SCHEDULE_SCENES)[ScheduleSceneName]>)[state];
     const [queryClient] = useState(() => new QueryClient({ defaultOptions: { queries: { retry: false } } }));
     const [client] = useState(() => (found ? schedulesSceneClient(found) : null));
-    if (!devGalleryEnabled()) return <Redirect href="/" />;
     if (!found || !client) {
         return (
             <UIProvider>
@@ -43,4 +41,11 @@ export default function SchedulesGalleryRoute() {
             </GaiaClientProvider>
         </QueryClientProvider>
     );
+}
+
+/** The Schedules screen on a fake PC; `?state=<name>` (see SCHEDULE_SCENES), `list` when no state is given. */
+export default function SchedulesGalleryRoute() {
+    const { state = 'list' } = useLocalSearchParams<{ state?: string }>();
+    if (!devGalleryEnabled()) return <Redirect href="/" />;
+    return <KeyedScene sceneKey={state} scene={SchedulesView} props={{ state }} />;
 }

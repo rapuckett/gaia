@@ -11,15 +11,14 @@ import { ChatDrawerContent } from '@/features/chats/ChatDrawerContent';
 import { DRAWER_SCENES, drawerSceneClient, sceneNotifications, type DrawerSceneName } from '@/features/chats/devScenes';
 import { NAV_ENTRIES } from '@/features/chats/navEntries';
 import { devGalleryEnabled } from '@/features/dev/devGallery';
+import { KeyedScene } from '@/features/dev/KeyedScene';
 import { addNotification, clearNotifications } from '@/state/notifications';
 import { Screen, ScreenBannerProvider, Stack, Text, UIProvider } from '@/ui';
 
 const noop = () => undefined;
 const ROUTE_NAMES = NAV_ENTRIES.map((e) => e.route);
 
-/** The chat list on a fake PC; `?state=<name>` (see DRAWER_SCENES), `groups` when no state is given. */
-export default function DrawerGalleryRoute() {
-    const { state = 'groups' } = useLocalSearchParams<{ state?: string }>();
+function DrawerView({ state }: { state: string }) {
     const found = (DRAWER_SCENES as Record<string, (typeof DRAWER_SCENES)[DrawerSceneName]>)[state];
     // The drawer fills the window, as it does in the navigator; without a height its list collapses.
     const { height } = useWindowDimensions();
@@ -30,7 +29,6 @@ export default function DrawerGalleryRoute() {
         sceneNotifications(found.unreadNotifications ?? 0).forEach(addNotification);
         return drawerSceneClient(found);
     });
-    if (!devGalleryEnabled()) return <Redirect href="/" />;
     if (!found || !client) {
         return (
             <UIProvider>
@@ -69,4 +67,11 @@ export default function DrawerGalleryRoute() {
             </GaiaClientProvider>
         </QueryClientProvider>
     );
+}
+
+/** The chat list on a fake PC; `?state=<name>` (see DRAWER_SCENES), `groups` when no state is given. */
+export default function DrawerGalleryRoute() {
+    const { state = 'groups' } = useLocalSearchParams<{ state?: string }>();
+    if (!devGalleryEnabled()) return <Redirect href="/" />;
+    return <KeyedScene sceneKey={state} scene={DrawerView} props={{ state }} />;
 }
