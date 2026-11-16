@@ -15,7 +15,6 @@ import { isolate } from '@webui/i18n/registry';
 
 import { failureReason, failureReasonWith } from '../header/failureText';
 import { FolderPicker } from './FolderPicker';
-import { PanelSection } from './PanelSection';
 import { useSessionPanelStore } from './panelStore';
 import type { SectionProps } from './sections';
 import type { MessageKey } from '@webui/i18n/registry';
@@ -38,18 +37,14 @@ function baseName(path: string): string {
 }
 
 export function EnvironmentSection({ sessionId, live }: SectionProps) {
-    const t = useT();
-    const open = useSessionPanelStore((s) => s.sections.environment);
-    const { data: env, error } = useSessionEnvironment(sessionId, { enabled: open, live });
+    const { data: env, error } = useSessionEnvironment(sessionId, { enabled: true, live });
     return (
-        <PanelSection id="environment" title={t('env.title')} summary={env && !env.internet ? t('env.offline') : undefined}>
-            <Stack gap="lg">
-                <Folders sessionId={sessionId} env={env} error={error} />
-                <Permission sessionId={sessionId} />
-                <Internet sessionId={sessionId} env={env} />
-                <RunsOn sessionId={sessionId} />
-            </Stack>
-        </PanelSection>
+        <Stack gap="lg">
+            <Folders sessionId={sessionId} env={env} error={error} />
+            <Permission sessionId={sessionId} />
+            <Internet sessionId={sessionId} env={env} />
+            <RunsOn sessionId={sessionId} />
+        </Stack>
     );
 }
 
