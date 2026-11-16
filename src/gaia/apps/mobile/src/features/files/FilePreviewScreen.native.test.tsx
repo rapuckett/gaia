@@ -7,6 +7,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { translator } from '@webui/i18n/translator';
 
 import type { FilePreviewResponse } from '@/api/client.types';
+import { GaiaApiError } from '@/api/errors';
 import { createFakeClient } from '@/api/fake';
 import { GaiaClientProvider } from '@/data/GaiaClientProvider';
 import { ThemeProvider } from '@/ui';
@@ -66,5 +67,13 @@ describeNative('FilePreviewScreen', () => {
     it('says a PDF has no preview instead of showing bytes', async () => {
         await mount('/q3.pdf');
         expect(await screen.findByText(t('fileBrowser.binary'))).toBeTruthy();
+    });
+
+    it("shows the PC's refusal as its own sentence, without the error wrapper", async () => {
+        const client = createFakeClient({ filePreviews: previews });
+        client.getFilePreview = () => Promise.reject(new GaiaApiError(403, "x.txt isn't in this chat's folders: add its folder to the chat on your PC."));
+        await mount('/x.txt', client);
+        expect(await screen.findByText("x.txt isn't in this chat's folders: add its folder to the chat on your PC.")).toBeTruthy();
+        expect(screen.queryByText(/403|answered with an error/)).toBeNull();
     });
 });

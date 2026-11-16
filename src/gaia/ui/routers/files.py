@@ -103,7 +103,7 @@ SEARCH_SETUP_ALLOWANCE_SEC = 1.0
 REMOTE_PREVIEW_MAX_LINES = 50
 
 _AWAY_FROM_PC = (
-    "Away from the PC, GAIA shows files only from the folders a chat was given."
+    "A paired device can open files only from the folders its chat was given."
 )
 
 router = APIRouter(tags=["files"])
@@ -145,7 +145,7 @@ def _refuse_remote_secret(resolved: Path) -> None:
     if secret_read_refusal(resolved):
         raise HTTPException(
             status_code=403,
-            detail="GAIA doesn't show this away from the PC: it holds "
+            detail="GAIA doesn't show this to a paired device: it holds "
             "credentials or keys.",
         )
 
@@ -167,7 +167,8 @@ def _refuse_remote_read(resolved: Path, roots) -> None:
         raise HTTPException(
             status_code=403,
             detail=f"{_AWAY_FROM_PC} {resolved.name or resolved} isn't in this "
-            "chat's folders.",
+            "chat's folders: add its folder to the chat on your PC, or open it "
+            "on your PC.",
         )
 
 
