@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import type { GaiaNotification } from '@webui/types/agent';
+import type { SetupRunStatus } from '@webui/types';
 
 import { createFakeClient, type FakeClientData } from '@/api/fake';
 import type { GaiaClient, Message, Session } from '@/api/client.types';
@@ -19,6 +20,8 @@ export interface DrawerScene {
     activeId?: string;
     error?: ChatListError;
     unreadNotifications?: number;
+    /** The saved "show background runs" choice the drawer opens with. */
+    automatedShown?: boolean;
     dev?: { query?: string; sheet?: { rowId: string; mode: RowSheet['mode'] } };
 }
 
@@ -49,6 +52,8 @@ const SESSIONS: Session[] = [
     chat('eval', 'Eval run 42', 7, { kind: 'eval' }),
 ];
 
+const BACKGROUND_CHATS = SESSIONS.filter((s) => ['today', 'pin', 'sched', 'eval'].includes(s.id));
+
 const MESSAGES: Record<string, Message[]> = {
     today: [message(1, 'today', 'Please summarize the revenue section of the Q3 report')],
     yday: [message(2, 'yday', 'Any ideas for a quick weekend recipe with lentils?')],
@@ -58,6 +63,21 @@ const MESSAGES: Record<string, Message[]> = {
 const COMMON: FakeClientData = { sessions: SESSIONS, messages: MESSAGES };
 
 const live: LiveRuns = { running: ['run'], queued: ['queued'], awaiting: { ask: 'question' }, prompting: [] };
+
+const DOWNLOADING: SetupRunStatus = {
+    state: 'running',
+    models: [{
+        id: 'Gemma-4-E4B-it-GGUF', roles: ['chat'], state: 'downloading', bytes_done: 2_100_000_000, bytes_total: 5_000_000_000,
+        speed_bps: 40_000_000, eta_s: 70, error: null, error_kind: null, can_retry: false, retrying_until: null, downloaded_before_gb: null,
+    }],
+    overall: { bytes_done: 2_100_000_000, bytes_total: 5_000_000_000, speed_bps: 40_000_000, eta_s: 70, percent: 42, failed: 0 },
+};
+
+const FAILED: SetupRunStatus = {
+    state: 'failed',
+    models: [{ ...DOWNLOADING.models![0], state: 'failed', error: 'The network dropped', error_kind: 'network', can_retry: true, speed_bps: 0, eta_s: null }],
+    overall: { bytes_done: 2_100_000_000, bytes_total: 5_000_000_000, speed_bps: 0, eta_s: null, percent: 42, failed: 1 },
+};
 
 const scene = (over: Partial<DrawerScene> = {}): DrawerScene => ({ ...over, data: { ...COMMON, ...over.data } });
 
@@ -86,6 +106,10 @@ export const DRAWER_SCENES = {
     'error-rename': scene({ error: { kind: 'rename', error: new GaiaApiError(500, 'Could not rename the chat.') } }),
     'error-pin': scene({ error: { kind: 'pin', error: new Error('') } }),
     'error-mark-read': scene({ error: { kind: 'markRead', error: new Error('The PC did not answer') } }),
+    'background-hidden': scene({ automatedShown: false, data: { sessions: BACKGROUND_CHATS } }),
+    'background-shown': scene({ automatedShown: true, data: { sessions: BACKGROUND_CHATS } }),
+    'download-chip': scene({ data: { setupStatus: DOWNLOADING } }),
+    'download-failed': scene({ data: { setupStatus: FAILED } }),
     'notifications-badge': scene({ unreadNotifications: 3 }),
     'notifications-badge-99': scene({ unreadNotifications: 120 }),
 } satisfies Record<string, DrawerScene>;
