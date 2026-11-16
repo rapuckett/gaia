@@ -1,7 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { render, screen } from '@testing-library/react-native';
+import { act, render, screen } from '@testing-library/react-native';
 import { Platform } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
@@ -76,5 +76,20 @@ describeNative('/dev/model-server', () => {
         await mount();
         expect(screen.getByText('No model-server scene "nope"', { includeHiddenElements: true })).toBeTruthy();
         expect(screen.getByText('need-chat', { includeHiddenElements: true })).toBeTruthy();
+    });
+
+    it('the restore-ok scene holds its notice past the 6 s the app shows it for', async () => {
+        jest.useFakeTimers();
+        try {
+            mockState = 'restore-ok';
+            await mount();
+            await screen.findByText('Restored your saved model, Gemma 4 E4B.');
+            await act(async () => {
+                jest.advanceTimersByTime(7000);
+            });
+            expect(screen.getByText('Restored your saved model, Gemma 4 E4B.')).toBeTruthy();
+        } finally {
+            jest.useRealTimers();
+        }
     });
 });
