@@ -52,36 +52,97 @@ def _user_path(tmp_path: Path) -> str:
     return str(bin_dir)
 
 
-def test_puts_the_shipped_core_first(frozen_app, tmp_path):
+def test_appends_the_shipped_core(frozen_app, tmp_path):
     env = {"PATH": _user_path(tmp_path)}
     gaia_env.expose_shipped_gaia(env)
     assert env["PATH"].split(os.pathsep) == [
-        str(frozen_app.parent),
         _user_path(tmp_path),
+        str(frozen_app.parent),
     ]
     found = shutil.which("gaia", path=env["PATH"])
     assert found and Path(found).resolve() == frozen_app.resolve()
+
+
+def test_defaults_to_this_process_environment(frozen_app, tmp_path, monkeypatch):
+    monkeypatch.setenv("PATH", _user_path(tmp_path))
+    gaia_env.expose_shipped_gaia()
+    assert os.environ["PATH"].split(os.pathsep)[-1] == str(frozen_app.parent)
 
 
 def test_keeps_windows_spelling_of_path(frozen_app, tmp_path):
     env = {"Path": _user_path(tmp_path)}
     gaia_env.expose_shipped_gaia(env)
     assert list(env) == ["Path"]
-    assert env["Path"].split(os.pathsep)[0] == str(frozen_app.parent)
+    assert env["Path"].split(os.pathsep)[-1] == str(frozen_app.parent)
 
 
-def test_moves_the_core_to_the_front_once(frozen_app, tmp_path):
-    core = str(frozen_app.parent)
-    env = {"PATH": os.pathsep.join([_user_path(tmp_path), core])}
+def test_untouched_when_gaia_already_resolves(frozen_app, tmp_path):
+    other = tmp_path / "other-bin"
+    other.mkdir()
+    (other / GAIA_NAME).write_bytes(b"")
+    (other / GAIA_NAME).chmod(0o755)
+    env = {"PATH": os.pathsep.join([_user_path(tmp_path), str(other)])}
+    before = dict(env)
     gaia_env.expose_shipped_gaia(env)
     gaia_env.expose_shipped_gaia(env)
-    assert env["PATH"].split(os.pathsep) == [core, _user_path(tmp_path)]
+    assert env == before
 
 
 def test_an_empty_path_gets_only_the_core(frozen_app):
     env: dict = {}
     gaia_env.expose_shipped_gaia(env)
     assert env == {"PATH": str(frozen_app.parent)}
+
+
+def test_windows_looks_for_gaia_exe(tmp_path, monkeypatch):
+    core = tmp_path / "core"
+    core.mkdir()
+    (core / "gaia").write_bytes(b"")
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setattr(sys, "executable", str(core / "gaia-agent.exe"))
+    monkeypatch.setattr(sys, "platform", "win32")
+    assert gaia_env._own_gaia_folder() is None
+    (core / "gaia.exe").write_bytes(b"")
+    assert gaia_env._own_gaia_folder() == core
+
+
+def _venv(tmp_path: Path, monkeypatch, recorded: bool) -> Path:
+    """A venv whose ``bin`` holds python and a ``gaia`` script."""
+    import importlib.metadata
+
+    bin_dir = tmp_path / "venv" / "bin"
+    bin_dir.mkdir(parents=True)
+    for name in ("python", GAIA_NAME):
+        (bin_dir / name).write_bytes(b"")
+        (bin_dir / name).chmod(0o755)
+    monkeypatch.delattr(sys, "frozen", raising=False)
+    monkeypatch.setattr(sys, "executable", str(bin_dir / "python"))
+
+    class Dist:
+        files = [importlib.metadata.PackagePath(f"../../../bin/{GAIA_NAME}")]
+
+        @staticmethod
+        def locate_file(path):
+            site = tmp_path / "venv" / "lib" / "python3" / "site-packages"
+            return site / path if recorded else tmp_path / "elsewhere" / path
+
+    monkeypatch.setattr(importlib.metadata, "distribution", lambda name: Dist())
+    return bin_dir
+
+
+def test_appends_the_venv_bin_that_holds_gaias_own_script(tmp_path, monkeypatch):
+    bin_dir = _venv(tmp_path, monkeypatch, recorded=True)
+    env = {"PATH": "/usr/bin:/bin"}
+    gaia_env.expose_shipped_gaia(env)
+    assert env["PATH"].split(os.pathsep) == ["/usr/bin", "/bin", str(bin_dir)]
+    assert shutil.which("python3", path=env["PATH"]) != str(bin_dir / "python")
+
+
+def test_ignores_a_gaia_that_amd_gaia_did_not_install(tmp_path, monkeypatch):
+    _venv(tmp_path, monkeypatch, recorded=False)
+    env = {"PATH": "/usr/bin:/bin"}
+    gaia_env.expose_shipped_gaia(env)
+    assert env == {"PATH": "/usr/bin:/bin"}
 
 
 def test_untouched_when_not_frozen(tmp_path, monkeypatch):
@@ -126,7 +187,7 @@ def test_the_spawned_agent_gets_the_core_on_path(frozen_app, tmp_path, monkeypat
         m._spawn_process(["sidecar"], {}, 9127)
 
     path = next(v for k, v in calls[0]["env"].items() if k.upper() == "PATH")
-    assert path.split(os.pathsep)[0] == str(frozen_app.parent)
+    assert path.split(os.pathsep)[-1] == str(frozen_app.parent)
     found = shutil.which("gaia", path=path)
     assert found and Path(found).resolve() == frozen_app.resolve()
 
@@ -153,5 +214,41 @@ def test_automations_refuses_honestly_without_gaia(tmp_path, monkeypatch):
         resolve_binary_policies(_automations_permissions(), skill_name="automations")
     message = str(excinfo.value)
     assert "needs the 'gaia' command" in message
+    assert "could not find 'gaia' in any folder on the PATH" in message
+    assert "Do not suggest a reinstall" in message
+    assert "Reinstall GAIA" not in message
     assert "cannot do what they asked" in message
     assert "saving a memory" in message
+
+
+def test_backend_and_daemon_startup_expose_gaia_after_the_login_path(monkeypatch):
+    """``gaia chat --ui`` (the desktop backend) and the daemon both repair PATH."""
+    import inspect
+    import types
+
+    import gaia.cli as cli
+    from gaia.daemon import server
+    from gaia.ui import server as ui_server
+
+    order = []
+    monkeypatch.setattr(cli, "use_os_trust_store", lambda: None)
+    monkeypatch.setattr(cli, "apply_login_path", lambda: order.append("login"))
+
+    def exposed(*_args):
+        order.append("gaia")
+        raise SystemExit(0)
+
+    monkeypatch.setattr(cli, "expose_shipped_gaia", exposed)
+
+    class Parser:
+        def parse_args(self):
+            return types.SimpleNamespace(action="chat")
+
+    monkeypatch.setattr(cli, "build_parser", lambda: Parser())
+    with pytest.raises(SystemExit):
+        cli.main()
+    assert order == ["login", "gaia"]
+
+    source = inspect.getsource(server.run)
+    assert source.index("apply_login_path()") < source.index("expose_shipped_gaia()")
+    assert "expose_shipped_gaia()" in inspect.getsource(ui_server.main)

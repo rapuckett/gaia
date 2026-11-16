@@ -8,9 +8,10 @@ starts for skills and tools get their environment from :func:`child_env`.
 
 import os
 import re
+import shutil
 import sys
 from pathlib import Path
-from typing import Dict, Iterable, Mapping, Optional
+from typing import Dict, Iterable, Mapping, MutableMapping, Optional
 
 import dotenv
 
@@ -191,28 +192,65 @@ def _configured_deny() -> set:
     return {part.upper() for part in re.split(r"[,\s]+", raw) if part}
 
 
-def expose_shipped_gaia(env: Dict[str, str]) -> Dict[str, str]:
-    """Put the frozen ``gaia`` this process runs from at the front of *env*'s PATH.
+def _own_gaia_folder() -> Optional[Path]:
+    """The folder holding the ``gaia`` this process belongs to, or None.
 
-    The desktop app ships ``gaia`` in its own folder and puts nothing on the
-    user's PATH on Windows, so an agent it starts could not run the ``gaia``
-    command its skills need (automations). Changes and returns *env*; a no-op
-    unless frozen with a ``gaia`` executable beside ``sys.executable``.
+    Frozen, that is ``gaia`` beside the bundle's executable. Otherwise it is
+    the console script amd-gaia installed beside ``sys.executable`` (a venv's
+    ``bin`` or ``Scripts``), checked against the package's own install record
+    so an unrelated ``gaia`` in the same folder is never taken. Nothing here
+    reads the environment, the working directory or the shell.
     """
-    if not getattr(sys, "frozen", False):
-        return env
     folder = Path(sys.executable).parent
-    name = "gaia.exe" if sys.platform == "win32" else "gaia"
-    if not (folder / name).is_file():
-        return env
+    exe = folder / ("gaia.exe" if sys.platform == "win32" else "gaia")
+    if not exe.is_file():
+        return None
+    if getattr(sys, "frozen", False):
+        return folder
+    import importlib.metadata  # pylint: disable=import-outside-toplevel
+
+    try:
+        dist = importlib.metadata.distribution("amd-gaia")
+    except importlib.metadata.PackageNotFoundError:
+        return None
+    target = exe.resolve()
+    for recorded in dist.files or ():
+        if (
+            recorded.name == exe.name
+            and Path(dist.locate_file(recorded)).resolve() == target
+        ):
+            return folder
+    return None
+
+
+def expose_shipped_gaia(
+    env: Optional[MutableMapping[str, str]] = None,
+) -> MutableMapping[str, str]:
+    """Make the ``gaia`` this process belongs to resolvable on *env*'s PATH.
+
+    A desktop app launched from Finder, the packaged Windows app and an
+    unactivated venv all start GAIA with a PATH that lacks its own ``gaia``,
+    so skills that run it (automations) refuse to load. *env* defaults to
+    ``os.environ``. A no-op when ``gaia`` already resolves on that PATH or
+    :func:`_own_gaia_folder` finds none; otherwise the folder is appended,
+    never prepended, so it shadows no tool the user already has (a venv's
+    ``bin`` also holds ``python`` and ``pip``). Changes and returns *env*.
+    """
+    if env is None:
+        env = os.environ
     # Windows keeps one PATH under any spelling; reuse the one *env* has.
     key = next((k for k in env if k.upper() == "PATH"), "PATH")
-    entries = [e for e in env.get(key, "").split(os.pathsep) if e]
-    same = os.path.normcase(os.path.normpath(str(folder)))
-    if entries and os.path.normcase(os.path.normpath(entries[0])) == same:
+    current = env.get(key, "")
+    if shutil.which("gaia", path=current):
         return env
-    rest = [e for e in entries if os.path.normcase(os.path.normpath(e)) != same]
-    env[key] = os.pathsep.join([str(folder), *rest])
+    folder = _own_gaia_folder()
+    if folder is None:
+        return env
+    entries = [e for e in current.split(os.pathsep) if e]
+    env[key] = os.pathsep.join([*entries, str(folder)])
+    from gaia.logger import get_logger  # pylint: disable=import-outside-toplevel
+
+    get_logger(__name__).info("Added GAIA's own CLI folder to PATH: %s", folder)
     return env
 
 

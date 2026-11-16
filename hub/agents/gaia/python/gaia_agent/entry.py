@@ -119,6 +119,10 @@ def main(argv: Optional[List[str]] = None) -> int:
         )
     else:
         apply_login_path()
+    from gaia.env import expose_shipped_gaia
+
+    # Positional env: older amd-gaia releases the pin allows require it.
+    expose_shipped_gaia(os.environ)
     args = list(sys.argv[1:] if argv is None else argv)
 
     if selects_http(args):
