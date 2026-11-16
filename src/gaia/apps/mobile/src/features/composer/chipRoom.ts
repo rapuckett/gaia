@@ -3,25 +3,23 @@
 
 export type ChipId = 'folder' | 'private' | 'permission' | 'model' | 'meter';
 
-/** Chips give up their label in this order; the model chip never does. The meter's bar goes before the permission chip's label, as the desktop's "Ask" stays readable. */
-export const COLLAPSE_ORDER: readonly ChipId[] = ['folder', 'private', 'meter', 'permission'];
+/** Chips give up their label in the desktop's order: the meter's bar (and the spend with it), then the folder's name, then Private and Permission. The model chip never does and is protected: its name is cut only when every other chip is already an icon. */
+export const COLLAPSE_ORDER: readonly ChipId[] = ['meter', 'folder', 'private', 'permission'];
 
 export const CHIP_GAP = 8;
 /** A collapsed chip is its icon in a touch target. */
 export const ICON_ONLY_WIDTH = 44;
-/** The model's name ellipsizes down to this before any other chip collapses. */
-export const MODEL_MIN_WIDTH = 96;
 /** Below this width the model chip drops its name and shows its icon and chevron. */
 export const MODEL_FLOOR_WIDTH = 72;
 /** The context meter's bar and its gap; without it the meter is its percentage alone. */
 export const METER_BAR_WIDTH = 48;
 
-/** Which chips must show their icon alone (the meter: no bar) so the measured row fits `available`. Absent (0 or unmeasured) items count for nothing. */
+/** Which chips must show their icon alone (the meter: no bar) so the measured row fits `available`. The model chip counts at its full width, so the others give way before its name is cut. Absent (0 or unmeasured) items count for nothing. */
 export function collapsedChips(full: Partial<Record<ChipId, number>>, available: number): ChipId[] {
     if (available <= 0) return [];
     const width = (id: ChipId): number | undefined => {
         const w = full[id];
-        return w === undefined || w <= 0 ? undefined : id === 'model' ? Math.min(w, MODEL_MIN_WIDTH) : w;
+        return w === undefined || w <= 0 ? undefined : w;
     };
     const present = (['folder', 'private', 'permission', 'model', 'meter'] as const).filter((id) => width(id) !== undefined);
     const collapsed: ChipId[] = [];
