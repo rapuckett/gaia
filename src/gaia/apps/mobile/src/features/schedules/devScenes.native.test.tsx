@@ -1,7 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { render, screen } from '@testing-library/react-native';
+import { render, screen, waitFor } from '@testing-library/react-native';
 import { Platform } from 'react-native';
 
 import SchedulesGalleryRoute from '@/app/dev/schedules';
@@ -38,6 +38,19 @@ describeNative('schedules gallery route', () => {
         mockState = name;
         await render(<SchedulesGalleryRoute />);
         expect(await screen.findByText('Scheduled tasks')).toBeTruthy();
+    });
+
+    it('delete-confirm shows the Confirm? step and keeps it up', async () => {
+        mockState = 'delete-confirm';
+        await render(<SchedulesGalleryRoute />);
+        expect(await screen.findByText('Confirm?')).toBeTruthy();
+    });
+
+    it('new-valid previews the weekday schedule it was typed as, not every hour', async () => {
+        mockState = 'new-valid';
+        await render(<SchedulesGalleryRoute />);
+        await waitFor(() => expect(screen.getAllByText(/Weekdays/).length).toBeGreaterThan(1));
+        expect(screen.queryByText('Every hour')).toBeNull();
     });
 
     it('names the scenes when the state is unknown', async () => {

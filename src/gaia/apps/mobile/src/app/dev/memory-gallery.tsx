@@ -11,7 +11,7 @@ import { GaiaClientProvider } from '@/data';
 import { MemoryScreen } from '@/features/memory';
 import { MEMORY_TABS } from '@/features/memory/tabs';
 import { ProfileDevContext } from '@/features/memory/profile/ProfileCard';
-import { memoryScene, profileSceneStart, type MemoryScene } from '@/features/memory/devScenes';
+import { memoryScene, profileSceneStart, sceneDefaultTab, type MemoryScene } from '@/features/memory/devScenes';
 import { ScreenBannerProvider, UIProvider } from '@/ui';
 
 const SCENES: readonly MemoryScene[] = ['on', 'off', 'loading', 'failed', 'actionFails', 'statsEmpty', 'statsManyTools', 'aboutEmpty', 'aboutFailed', 'aboutMany', 'goalsEmpty', 'goalsFailed', 'goalsStoreError', 'knowledgeRich', 'knowledgeEmpty', 'knowledgeFailed', 'knowledgeMany', 'profileIdle', 'profileScanning', 'profileReview', 'profileSaved', 'profileInferring', 'profileInferenceReview', 'profileFailed', 'profileOff'];
@@ -26,7 +26,7 @@ function MemoryView({ picked, tab }: { picked: MemoryScene; tab?: string }) {
                 <UIProvider>
                     <ScreenBannerProvider banner={null}>
                         <ProfileDevContext.Provider value={profileSceneStart(picked)}>
-                            <MemoryScreen onBack={() => router.replace('/')} initialTab={MEMORY_TABS.find((entry) => entry.key === tab)?.key} />
+                            <MemoryScreen onBack={() => router.replace('/')} initialTab={MEMORY_TABS.find((entry) => entry.key === (tab ?? sceneDefaultTab(picked)))?.key} />
                         </ProfileDevContext.Provider>
                     </ScreenBannerProvider>
                 </UIProvider>
