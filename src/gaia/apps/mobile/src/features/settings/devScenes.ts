@@ -126,7 +126,7 @@ const SERVER: ModelServerInfo = {
     ],
     available_backends: [{ name: 'vulkan', state: 'installed' }], preferred_backend: 'vulkan', default_backend: 'vulkan',
 };
-const TARGET: LemonadeTarget = { ...COMMON.lemonadeTarget! };
+const TARGET = COMMON.lemonadeTarget as LemonadeTarget;
 const server = (info: Partial<ModelServerInfo>, target: Partial<LemonadeTarget> = {}, scene: Partial<SettingsScene> = {}): SettingsScene => ({
     section: 'advanced', target: 'model-server', gpuMemory: GPU, ...scene,
     data: { modelServer: { ...SERVER, ...info }, lemonadeTarget: { ...TARGET, ...target }, ...scene.data },
@@ -221,14 +221,14 @@ export const SETTINGS_SCENES: Record<string, SettingsScene> = {
     // SET-ADV-17: which server GAIA uses: its own, yours, set by LEMONADE_BASE_URL, an ignored env address, and a failed read.
     'adv-target-own': server({}),
     'adv-target-yours': server({ owner: 'user', base_url: 'http://192.168.1.20:13305' }, { mode: 'external', base_url: 'http://192.168.1.20:13305', saved_base_url: 'http://192.168.1.20:13305' }),
-    'adv-target-env': server({ owner: 'user', base_url: 'http://10.0.0.5:13305' }, { mode: 'external', source: 'env', base_url: 'http://10.0.0.5:13305', env_override: 'http://10.0.0.5:13305' }),
+    'adv-target-env': server({ owner: 'user', base_url: 'http://10.0.0.5:13305' }, { mode: 'external', source: 'env', base_url: 'http://10.0.0.5:13305' }),
     'adv-target-env-ignored': server({}, { env_url_ignored: 'http://10.0.0.5:13305' }),
     'adv-target-error': server({}, {}, { override: { getLemonadeTarget: () => Promise.reject(new GaiaApiError(500, 'Target unreadable')) } }),
     // SET-ADV-20: the Custom model ID card is closed until tapped (`#tap=advanced-custom-toggle`): empty, a saved ID the server lists, one it doesn't, one it couldn't check, and refused.
     'adv-custom-empty': advanced({}),
-    'adv-custom-saved': advanced({ custom_model: 'Qwen3-4B-Instruct-2507-GGUF', model_status: { checked: true, found: true } }),
-    'adv-custom-unlisted': advanced({ custom_model: 'user.missing-GGUF', model_status: { checked: true, found: false } }),
-    'adv-custom-unchecked': advanced({ custom_model: 'user.maybe-GGUF', model_status: { checked: false, found: false } }),
+    'adv-custom-saved': advanced({ custom_model: 'Qwen3-4B-Instruct-2507-GGUF', model_status: { checked: true, found: true, downloaded: true, loaded: false } }),
+    'adv-custom-unlisted': advanced({ custom_model: 'user.missing-GGUF', model_status: { checked: true, found: false, downloaded: false, loaded: false } }),
+    'adv-custom-unchecked': advanced({ custom_model: 'user.maybe-GGUF', model_status: { checked: false, found: false, downloaded: false, loaded: false } }),
     'adv-custom-pc-only': { section: 'advanced', gpuMemory: GPU, data: { settings: SETTINGS }, override: { getSettings: refused } },
     // SET-ADV-21: Dynamic tools, closed until tapped (`#tap=advanced-dynamic-toggle`): on, and locked by GAIA_DYNAMIC_TOOLS.
     'adv-dynamic-on': advanced({ dynamic_tools: true }),
