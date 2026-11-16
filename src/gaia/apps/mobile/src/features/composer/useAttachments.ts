@@ -45,6 +45,11 @@ export interface Attachments {
     compose(text: string): string;
 }
 
+/** A web paste's object URL lives until its chip goes. */
+function revokePasted(a: Attachment) {
+    if (a.blob) URL.revokeObjectURL(a.uri);
+}
+
 export function useAttachments(): Attachments {
     const t = useT();
     const client = useGaiaClient();
@@ -131,12 +136,18 @@ export function useAttachments(): Attachments {
 
     const remove = useCallback((id: string) => {
         controllers.current.get(id)?.abort();
-        setItems((prev) => prev.filter((a) => a.id !== id));
+        setItems((prev) => {
+            prev.filter((a) => a.id === id).forEach(revokePasted);
+            return prev.filter((a) => a.id !== id);
+        });
     }, []);
 
     const clear = useCallback(() => {
         controllers.current.forEach((c) => c.abort());
-        setItems([]);
+        setItems((prev) => {
+            prev.forEach(revokePasted);
+            return [];
+        });
     }, []);
 
     const compose = useCallback(
