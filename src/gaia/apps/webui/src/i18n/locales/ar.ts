@@ -4002,8 +4002,6 @@ const messages: Messages = {
     'mobileApp.settings.comingSoon': 'هذا القسم قادم إلى الهاتف قريبًا. في الوقت الحالي، غيّره من الكمبيوتر الذي يشغّل GAIA.',
     'mobileApp.settings.automations.actionFailed': 'لم تنجح العملية. التفاصيل أدناه.',
     'mobileApp.settings.automations.loadFailed': 'تعذّر تحميل مهامك التلقائية.',
-    'mobileApp.android.title': 'GAIA على أندرويد قادم لاحقًا',
-    'mobileApp.android.body': 'يعمل الاقتران مع الكمبيوتر لديك على آيفون حاليًا، ودعم أندرويد في الطريق.',
     'mobileApp.settings.alerts.bannersHint': 'تظهر اللافتات أعلى التطبيق أثناء فتح GAIA على هذا الهاتف.',
     'mobileApp.settings.alerts.keepAwakePc': 'يُضبط إبقاء الكمبيوتر مستيقظًا أثناء عمل GAIA من تطبيق GAIA لسطح المكتب على الكمبيوتر.',
     'mobileApp.settings.loadAnyway': 'هناك محادثات تُكتب إجاباتها الآن. قد يؤدي تحميل {name} الآن إلى إبطاء هذه الإجابات أو إيقافها. هل تريد التحميل على أي حال؟',
