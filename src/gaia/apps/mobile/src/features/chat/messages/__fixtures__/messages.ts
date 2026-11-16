@@ -171,6 +171,7 @@ export type MessagesFixture =
     | 'badCards'
     | 'cards'
     | 'guide'
+    | 'library-notices'
     | 'loading'
     | 'long'
     | 'many'
@@ -245,12 +246,25 @@ const POLICY = [
     } as Message,
 ];
 
+const LIBRARY_NOTICES = [
+    msg('user', 'Add these to my documents: notes.md, run.exe and budget.xlsx.', 0),
+    {
+        ...msg('assistant', 'I added notes.md to your documents. The other two need a look.', 1),
+        library_notices: [
+            "notes.md is outside the folders your documents are read from, so your documents hold a copy of it. Changes to /Users/rich/Desktop/notes.md won't reach the copy.",
+            "run.exe couldn't be added to your documents (.exe files are not supported).",
+            'budget.xlsx has the same content as /Users/rich/Documents/budget-2026.xlsx, which is already in your documents, so this chat uses that file.',
+        ],
+    } as Message,
+];
+
 export const FIXTURES: Record<MessagesFixture, { messages: Message[]; live?: Message; events?: StreamEvent[] }> = {
     activity: { messages: ACTIVITY },
     badCards: { messages: BAD_CARDS },
     cards: { messages: CARDS },
     guide: { messages: GUIDE },
     loading: { messages: [] },
+    'library-notices': { messages: LIBRARY_NOTICES },
     long: { messages: [...SHORT.slice(0, 2), msg('user', LONG_USER, 4), msg('assistant', ANSWER, 5)] },
     many: { messages: MANY },
     media: { messages: MEDIA },
