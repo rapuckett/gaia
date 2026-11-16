@@ -2,11 +2,13 @@
 // SPDX-License-Identifier: MIT
 
 import { createContext, useContext, type ReactNode } from 'react';
-import { StatusBar } from 'react-native';
+import { StatusBar, View } from 'react-native';
 import { useFonts } from 'expo-font';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { useDirection } from '@/i18n/useT';
+import { dirProp } from '@/platform/dirProp';
 import { SheetHost } from './overlays/SheetHost';
 import { fontFiles } from './theme/fonts';
 import { ThemeProvider, useTheme } from './theme/ThemeProvider';
@@ -15,6 +17,7 @@ const Mounted = createContext(false);
 
 function Frame({ children }: { children: ReactNode }) {
     const { scheme, colors } = useTheme();
+    const direction = useDirection();
     const [loaded, error] = useFonts(fontFiles);
     if (error) {
         throw new Error(
@@ -27,7 +30,9 @@ function Frame({ children }: { children: ReactNode }) {
             <SafeAreaProvider>
                 <KeyboardProvider>
                     <StatusBar barStyle={scheme === 'dark' ? 'light-content' : 'dark-content'} />
-                    <SheetHost>{children}</SheetHost>
+                    <View style={{ flex: 1 }} {...dirProp(direction)}>
+                        <SheetHost>{children}</SheetHost>
+                    </View>
                 </KeyboardProvider>
             </SafeAreaProvider>
         </GestureHandlerRootView>

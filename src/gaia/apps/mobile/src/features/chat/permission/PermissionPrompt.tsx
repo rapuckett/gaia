@@ -27,6 +27,7 @@ import { calendarFacts, CALENDAR_WRITE_TOOLS } from '@webui/utils/calendarApprov
 import { CHANGE_PREVIEW_LINES, fileChange, fileText, fileUnseen } from '@webui/utils/permissionChange.core';
 
 import { useT } from '@/i18n/useT';
+import { dirProp } from '@/platform/dirProp';
 import { Button, Disclosure, HScroll, Icon, Notice, Pressable, Row, ScrollBox, Stack, Surface, Text } from '@/ui';
 import { ShieldQuestion } from '@/ui/icons';
 
@@ -61,7 +62,7 @@ function CodeBox({ lines, testID }: { lines: { text: string; tone?: CodeTone }[]
     return (
         <Surface tone="recessed" radius="sm" padding="sm" border>
             <HScroll dir="ltr" hint testID={testID}>
-                <View style={{ minWidth: '100%', direction: 'ltr' }}>
+                <View style={{ minWidth: '100%', direction: 'ltr' }} {...dirProp('ltr')}>
                     {lines.map((line, i) => (
                         <Text key={i} role="caption" mono dir="ltr" selectable tone={line.tone}>
                             {line.text}
@@ -210,7 +211,7 @@ function CallDetails({ prompt }: { prompt: GaiaNotification }) {
         <Stack gap="sm">
             {shownDetail && riskNote ? <Collapsible text={shownDetail} /> : null}
             {shownDetail && !riskNote ? (
-                <View style={{ direction: 'ltr' }}>
+                <View style={{ direction: 'ltr' }} {...dirProp('ltr')}>
                     <Text role="label" tone="secondary" mono dir="ltr">
                         {shownDetail}
                     </Text>

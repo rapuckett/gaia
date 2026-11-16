@@ -3,7 +3,7 @@
 
 import { useEffect, useState, type ReactNode } from 'react';
 
-import { GaiaNetworkError, GaiaPinMismatchError } from '@/api/errors';
+import { GaiaApiError, GaiaNetworkError, GaiaPinMismatchError } from '@/api/errors';
 import { useGaiaClient, useSetupGate } from '@/data';
 import { PinMismatchScreen, usePairAgain } from '@/features/pairing';
 import { describeErrorWith, technicalDetail, useT } from '@/i18n/useT';
@@ -71,7 +71,9 @@ export function SetupGate({ children, renderStep }: { children: ReactNode; rende
                 message={
                     gate.upgradeFailed
                         ? t.compose((say) => say('setup.upgrading.failed', { error: describeErrorWith(gate.error, say) }))
-                        : t.compose((say) => say('setup.unknown.failed', { error: describeErrorWith(gate.error, say) }))
+                        : gate.error instanceof GaiaApiError
+                          ? t('mobileApp.error.setupCheckHttp', { status: gate.error.status })
+                          : t.compose((say) => say('setup.unknown.failed', { error: describeErrorWith(gate.error, say) }))
                 }
                 action={{
                     label: t(gate.upgradeFailed ? 'setup.upgrading.retry' : 'setup.unknown.retry'),

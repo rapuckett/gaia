@@ -10,7 +10,7 @@ import { IconButton } from './IconButton';
 import { LARGE_TEXT_SCALE } from '../theme/a11y';
 import { fontFamily } from '../theme/fonts';
 import { useTheme } from '../theme/ThemeProvider';
-import { contentDir } from '../text/direction';
+import { contentDir, inputAlign } from '../text/direction';
 import { Text } from '../text/Text';
 import { Icon } from './Icon';
 import { Row } from '../layout/layout';
@@ -161,8 +161,8 @@ export function TextField({
                     fontFamily: fontFamily({ weight: 'regular', mono: false, display: false }),
                     fontSize: size,
                     lineHeight,
-                    // Physical sides: native textAlign isn't swapped under forceRTL. A web address stays on the typed text's side.
-                    ...(url ? { textAlign: 'auto' as const } : { textAlign: rtl ? ('right' as const) : ('left' as const), writingDirection: rtl ? ('rtl' as const) : ('ltr' as const) }),
+                    // A web address stays on the typed text's side.
+                    ...(url ? { textAlign: 'auto' as const } : { textAlign: inputAlign(rtl), writingDirection: rtl ? ('rtl' as const) : ('ltr' as const) }),
                     ...(focused && !error && !bare ? { boxShadow: `0 0 0 3px ${colors.accentRing}` } : null),
                 }}
             />

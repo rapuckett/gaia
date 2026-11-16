@@ -10,7 +10,7 @@ import { fontFamily, type Weight } from '../theme/fonts';
 import { COMPACT_MAX_FONT_SCALE, TITLE_MAX_FONT_SCALE, useLargeText } from '../theme/a11y';
 import { useTheme } from '../theme/ThemeProvider';
 import { toneColor, type Tone } from '../theme/tone';
-import { contentDir } from './direction';
+import { contentDir, physicalAlign } from './direction';
 import type { TypeRole } from '../tokens/type';
 
 export interface TextProps {
@@ -133,11 +133,10 @@ export function Text({
     }
     if (strike || underline) style.textDecorationLine = strike && underline ? 'underline line-through' : strike ? 'line-through' : 'underline';
     if (dir) style.writingDirection = dir;
-    // textAlign left/right are physical on native too (not swapped under forceRTL), so the start side is picked by direction.
     const startsRight = (dir ?? (rtl ? 'rtl' : 'ltr')) === 'rtl';
     if (align === 'center') style.textAlign = 'center';
-    else if (align === 'end') style.textAlign = startsRight ? 'left' : 'right';
-    else if (align === 'start' || !nested) style.textAlign = startsRight ? 'right' : 'left';
+    else if (align === 'end') style.textAlign = physicalAlign(!startsRight);
+    else if (align === 'start' || !nested) style.textAlign = physicalAlign(startsRight);
     if (rtl) style.letterSpacing = 0;
 
     return (

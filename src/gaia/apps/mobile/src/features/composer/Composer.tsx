@@ -1,8 +1,8 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { useCallback, useMemo, useState, type ReactNode } from 'react';
-import { View, type ViewStyle } from 'react-native';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { Platform, View, type ViewStyle } from 'react-native';
 
 import { bracketParts } from '@webui/i18n/registry';
 import { MAX_MESSAGE_CHARS } from '@webui/utils/messageLimits';
@@ -16,6 +16,7 @@ import { AttachButton } from './AttachButton';
 import { AttachmentChips } from './AttachmentChips';
 import { ChipFitContext } from './ChipFitContext';
 import { CHIP_GAP, collapsedChips, type ChipId } from './chipRoom';
+import { pickedFromPaste } from './pickFiles';
 import type { Attachments } from './useAttachments';
 
 export interface ComposerProps {
@@ -77,6 +78,25 @@ export function Composer({
         [],
     );
     const chipFit = useMemo(() => ({ collapsed: collapsedChips(fullWidths, chipsWidth), report }), [fullWidths, chipsWidth, report]);
+
+    // The web box takes pasted files of any type, as the desktop's does; a phone pastes through the attach menu.
+    const addPicked = attachments?.add;
+    useEffect(() => {
+        if (Platform.OS !== 'web' || !addPicked || disabledReason) return;
+        const onPaste = (e: ClipboardEvent) => {
+            if (!(e.target as Element | null)?.closest?.('[data-testid="composer-input"]')) return;
+            // Files win over text: apps often put the file's name on the clipboard beside it.
+            const files = Array.from(e.clipboardData?.items ?? [])
+                .filter((item) => item.kind === 'file')
+                .map((item) => item.getAsFile())
+                .filter((f): f is File => f !== null);
+            if (files.length === 0) return;
+            e.preventDefault();
+            addPicked(pickedFromPaste(files));
+        };
+        document.addEventListener('paste', onPaste);
+        return () => document.removeEventListener('paste', onPaste);
+    }, [addPicked, disabledReason]);
 
     // Reset during render, so a later reply never starts out as Stopping.
     if (!running && stopping) setStopping(false);

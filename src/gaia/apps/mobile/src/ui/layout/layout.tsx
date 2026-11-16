@@ -3,6 +3,7 @@
 
 import { View, type AccessibilityRole, type DimensionValue, type ViewStyle } from 'react-native';
 import { Children, cloneElement, isValidElement, type ReactElement, type ReactNode } from 'react';
+import { dirProp } from '@/platform/dirProp';
 import { Ltr } from '../text/Ltr';
 import { Text } from '../text/Text';
 import { useLargeText } from '../theme/a11y';
@@ -69,6 +70,7 @@ export function Stack({ children, padding, paddingX, paddingY, testID, accessibi
     return (
         <View
             style={style}
+            {...(box.dir ? dirProp(box.dir) : {})}
             testID={testID}
             accessibilityRole={accessibilityRole}
             accessible={accessibilityLabel ? true : undefined}
@@ -105,7 +107,7 @@ export function Row({ children, wrap, stack, align = 'center', testID, accessibi
     // At large text a label beside its value stacks instead of squeezing or clipping.
     if (!stacked && (wrap || (largeText && box.justify === 'between' && wrap === undefined))) style.flexWrap = 'wrap';
     return (
-        <View style={style} testID={testID} accessibilityRole={accessibilityRole}>
+        <View style={style} {...(box.dir ? dirProp(box.dir) : {})} testID={testID} accessibilityRole={accessibilityRole}>
             {stacked ? Children.map(children, unflexed) : largeText ? Children.map(children, shrinkable) : children}
         </View>
     );
