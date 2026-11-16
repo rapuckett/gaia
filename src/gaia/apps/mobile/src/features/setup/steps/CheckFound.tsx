@@ -32,8 +32,7 @@ export function CheckFound({ plan, hardware, onChangeMemory }: {
     const t = useT();
     const f = facts(plan, hardware);
     const [open, setOpen] = useState(false);
-    const warnings = findingWarnings(hardware);
-    const [noticed, setNoticed] = useState(warnings.length > 0);
+    const [noticed, setNoticed] = useState(false);
     const [copied, setCopied] = useState<'done' | 'failed' | null>(null);
     const fade = useRef<ReturnType<typeof setTimeout> | null>(null);
     useEffect(() => () => { if (fade.current) clearTimeout(fade.current); }, []);
@@ -52,6 +51,7 @@ export function CheckFound({ plan, hardware, onChangeMemory }: {
 
     const unknown = <Text tone="muted">{t('setup.found.unknown')}</Text>;
     const none = <Text tone="muted">{t('setup.found.none')}</Text>;
+    const warnings = findingWarnings(hardware);
     const build = f.build && f.build !== 'release' ? <Badge label={t(`setup.found.build.${f.build}`)} /> : null;
 
     return (
