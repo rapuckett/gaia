@@ -329,7 +329,7 @@ export function DevicesSettings() {
                                     <span className="settings-hint">
                                         {t('settings.devices.pairedAt', { platform: platformName(d.platform, t), when: ago(d.created_at, now, t) })}
                                         {d.expires_at && (
-                                            <> · <span className="perm-card-timer" title={t('prompt.timer')}><bdi dir="ltr">{formatCountdown(secondsLeft(Date.parse(d.expires_at), now))}</bdi></span></>
+                                            <> · <span className="perm-card-timer" title={t('prompt.timer')}><MarkedText text={t('countdown.left', { time: markLtr(formatCountdown(secondsLeft(Date.parse(d.expires_at), now))) })} /></span></>
                                         )}
                                     </span>
                                 </div>

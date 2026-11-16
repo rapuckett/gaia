@@ -86,7 +86,7 @@ function PolicyNotice({ alert }: { alert: NonNullable<TurnTail['policyAlert']> }
                 action={{ label: t('banner.dismiss'), onPress: () => setDismissed(alert.seq) }}
             />
             {alert.receiptId ? (
-                <Button variant="secondary" size="sm" label={t('chat.policyViewReceipt')} onPress={() => openPolicyReceipts()} testID="policy-view-receipt" />
+                <Button variant="secondary" size="sm" label={t('chat.policyViewReceipt')} onPress={() => openPolicyReceipts(alert.receiptId)} testID="policy-view-receipt" />
             ) : (
                 <Text role="label" tone="secondary">
                     {t('activity.policy.receiptUnavailable')}

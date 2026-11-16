@@ -11,7 +11,7 @@ import { TailIssues } from './ReplyErrors';
 import type { TurnTail } from './tailState';
 
 const mockOpen = jest.fn();
-jest.mock('@/features/notifications/openPolicyReceipts', () => ({ openPolicyReceipts: () => mockOpen() }));
+jest.mock('@/features/notifications/openPolicyReceipts', () => ({ openPolicyReceipts: (id?: string) => mockOpen(id) }));
 
 const t = translator('en');
 const tail = (patch: Partial<TurnTail>): TurnTail => ({ live: false, text: '', events: [], replyId: null, canTryAgain: false, canContinue: false, ...patch });
@@ -26,10 +26,10 @@ const mount = (value: TurnTail) =>
     );
 
 describe('TailIssues', () => {
-    it('a blocked tool with a receipt offers View receipt, which opens the policy alerts', async () => {
+    it('a blocked tool with a receipt offers View receipt, which opens the policy alerts at that receipt', async () => {
         await mount(tail({ policyAlert: { tool: 'delete_file', receiptId: 'r1', seq: 1 } }));
         fireEvent.press(screen.getByText(t('chat.policyViewReceipt')));
-        expect(mockOpen).toHaveBeenCalledTimes(1);
+        expect(mockOpen).toHaveBeenCalledWith('r1');
     });
 
     it('a blocked tool without a receipt says it is unavailable', async () => {
