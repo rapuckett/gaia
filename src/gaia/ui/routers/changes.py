@@ -30,6 +30,7 @@ from .. import session_git
 from ..database import ChatDatabase
 from ..dependencies import get_db
 from ..models import WireModel
+from ..security import audit_approval
 
 logger = get_logger(__name__)
 
@@ -448,7 +449,7 @@ async def git_commit(
 ):
     """Commit the chat's files in one repository; needs the user's confirmation."""
     _require_session(db, session_id)
-    return await _git_action(
+    result = await _git_action(
         http_request,
         session_id,
         session_git.commit,
@@ -458,6 +459,8 @@ async def git_commit(
         body.message,
         body.confirmed,
     )
+    audit_approval(http_request, f"git commit in {body.root} from chat {session_id}")
+    return result
 
 
 @router.post(
@@ -473,7 +476,7 @@ async def git_pull_request(
 ):
     """Push the branch and open a pull request; needs the user's confirmation."""
     _require_session(db, session_id)
-    return await _git_action(
+    result = await _git_action(
         http_request,
         session_id,
         session_git.create_pr,
@@ -484,6 +487,11 @@ async def git_pull_request(
         body.body,
         body.confirmed,
     )
+    audit_approval(
+        http_request,
+        f"branch pushed and pull request opened in {body.root} from chat {session_id}",
+    )
+    return result
 
 
 def _settings_payload() -> dict:

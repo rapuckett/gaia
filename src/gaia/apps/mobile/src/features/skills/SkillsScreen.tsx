@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import { useState } from 'react';
-import { Text as RNText, View } from 'react-native';
+import { View } from 'react-native';
 
 import type { SkillInfo } from '@/api/client.types';
 import { useSkills } from '@/data';
@@ -17,7 +17,6 @@ import {
     ListSkeleton,
     Ltr,
     Notice,
-    Pressable,
     Row,
     Screen,
     SearchField,
@@ -151,11 +150,7 @@ function SkillRow({ skill, onTry }: { skill: SkillInfo; onTry: () => void }) {
                     </Text>
                     <Text role="label" tone="secondary" numberOfLines={open ? undefined : 2}>{skill.description}</Text>
                     {long ? (
-                        <Pressable onPress={() => setOpen(!open)} accessibilityRole="button" accessibilityState={{ expanded: open }}>
-                            <Text role="label">
-                                <RNText style={{ textDecorationLine: 'underline' }}>{t(open ? 'settings.skills.less' : 'settings.skills.more')}</RNText>
-                            </Text>
-                        </Pressable>
+                        <Button variant="secondary" size="sm" label={t(open ? 'settings.skills.less' : 'settings.skills.more')} onPress={() => setOpen(!open)} />
                     ) : null}
                     {!skill.always_on ? (
                         <ChipButton variant="plain" label={t.bare('settings.skills.try')} accessibilityLabel={t('settings.skills.try')} onPress={onTry} />

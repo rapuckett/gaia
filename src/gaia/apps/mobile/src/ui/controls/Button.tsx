@@ -48,9 +48,10 @@ export function Button({
     const look: Record<NonNullable<ButtonProps['variant']>, { bg: string; border: string; tone: Tone }> = {
         primary: { bg: colors.accentFill, border: 'transparent', tone: 'onAccent' },
         secondary: { bg: colors.bgTertiary, border: size === 'sm' ? colors.border : colors.borderLight, tone: 'primary' },
-        ghost: { bg: 'transparent', border: 'transparent', tone: 'accent' },
+        ghost: { bg: 'transparent', border: colors.border, tone: 'accent' },
         danger: { bg: colors.dangerDim, border: 'transparent', tone: 'danger' },
     };
+    const pressedBg = { primary: colors.accentSolid, secondary: colors.bgActive, ghost: colors.bgTertiary, danger: colors.dangerDim };
     const v = look[variant];
     return (
         <View style={full ? { alignSelf: 'stretch' } : { alignSelf: 'flex-start' }}>
@@ -62,6 +63,7 @@ export function Button({
                 accessibilityState={{ busy: !!busy }}
                 testID={testID}
             >
+                {({ pressed }) => (
                 <View
                     style={{
                         minHeight: size === 'sm' ? 28 : 48,
@@ -69,7 +71,7 @@ export function Button({
                         borderRadius: size === 'sm' ? radius.sm : radius.md,
                         borderWidth: 1,
                         borderColor: v.border,
-                        backgroundColor: v.bg,
+                        backgroundColor: pressed ? pressedBg[variant] : v.bg,
                         alignItems: 'center',
                         justifyContent: 'center',
                     }}
@@ -94,6 +96,7 @@ export function Button({
                         {iconEnd && !busy ? <Icon icon={iconEnd} size="sm" tone={v.tone} /> : null}
                     </Row>
                 </View>
+                )}
             </Pressable>
         </View>
     );

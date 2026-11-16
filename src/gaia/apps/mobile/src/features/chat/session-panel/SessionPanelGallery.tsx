@@ -416,7 +416,6 @@ export function SessionPanelGallery({ state }: { state: SessionPanelGalleryState
         const out = OUTPUT_STATES.includes(state);
         store.setSection('answer', ans);
         store.setSection('outputs', out);
-        store.setSection('environment', env);
         store.setSection('changes', chg);
         store.setSection('skills', !ctx && !env && !chg && !ans && !out);
         store.setSection('tools', !ctx && !env && !chg && !ans && !out);
