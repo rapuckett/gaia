@@ -1107,6 +1107,7 @@ const messages: Messages = {
     'docs.removeAria': 'إزالة {name}',
     'docs.dismissFolder': 'إغلاق نتيجة فهرسة المجلد',
     'docs.loadFailed': 'تعذّر تحميل مستنداتك: {error}',
+    'docs.loadFailedNoReason': 'تعذّر تحميل مستنداتك.',
     'fileBrowser.selected.one': 'العناصر المحددة: {n}',
     'fileBrowser.selected.other': 'العناصر المحددة: {n}',
     'fileBrowser.denied': 'لا يستطيع GAIA فتح المجلد "{name}". تأكد من أن حسابك مخوّل بقراءته ثم حاول مرة أخرى.',
