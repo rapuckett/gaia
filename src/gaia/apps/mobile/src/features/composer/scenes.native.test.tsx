@@ -27,8 +27,6 @@ jest.mock('expo-router', () => ({
 
 const describeNative = Platform.OS === 'web' ? describe.skip : describe;
 const opts = { includeHiddenElements: true };
-// Finds wait for async queries and sheet mounts; the 1 s default is tight in a full run under load.
-const slow = { ...opts, timeout: 5000 };
 
 const mount = (Route: () => React.JSX.Element) =>
     render(
@@ -48,21 +46,21 @@ describeNative('composer and retry scenes', () => {
     it('attachPaste opens the attach menu with Paste image', async () => {
         mockState = 'attachPaste';
         await mount(composerRoute());
-        expect(await screen.findByText('Paste image', slow)).toBeTruthy();
+        expect(await screen.findByText('Paste image', opts)).toBeTruthy();
     });
 
     it('menuCloud asks for consent before a cloud model, with the provider notice', async () => {
         mockState = 'menuCloud';
         await mount(composerRoute());
-        fireEvent.press(await screen.findByTestId('model-row-accounts/fireworks/models/qwen3p6', slow));
-        expect(await screen.findByText(/Chat history is sent to Fireworks AI/, slow)).toBeTruthy();
+        fireEvent.press(await screen.findByTestId('model-row-accounts/fireworks/models/qwen3p6', opts));
+        expect(await screen.findByText(/Chat history is sent to Fireworks AI/, opts)).toBeTruthy();
         expect(screen.getByText('Use Qwen3.6', opts)).toBeTruthy();
     });
 
     it('menuNeverStarted shows the download-never-started message', async () => {
         mockState = 'menuNeverStarted';
         await mount(composerRoute());
-        expect(await screen.findByText(/never started/, slow)).toBeTruthy();
+        expect(await screen.findByText(/never started/, opts)).toBeTruthy();
     });
 
     it.each([
@@ -87,14 +85,14 @@ describeNative('composer and retry scenes', () => {
     it('spend shows the chip with the at-least floor and no sheet', async () => {
         mockState = 'spend';
         await mount(composerRoute());
-        expect(await screen.findByLabelText(/Cloud spending: ≥ .* in this chat/, slow)).toBeTruthy();
+        expect(await screen.findByLabelText(/Cloud spending: ≥ .* in this chat/, opts)).toBeTruthy();
         expect(screen.queryByText('Cloud spending', opts)).toBeNull();
     });
 
     it('held shows the opening message waiting for GAIA to start', async () => {
         mockState = 'held';
         await mount(composerRoute());
-        expect(await screen.findByText('Sends once GAIA has started.', slow)).toBeTruthy();
+        expect(await screen.findByText('Sends once GAIA has started.', opts)).toBeTruthy();
     });
 
     it.each([
@@ -108,6 +106,6 @@ describeNative('composer and retry scenes', () => {
         expect(COMPARE_STATES).toContain(name);
         mockState = name as string;
         await mount(messagesRoute());
-        expect(await screen.findByText(text, slow)).toBeTruthy();
+        expect(await screen.findByText(text, opts)).toBeTruthy();
     });
 });

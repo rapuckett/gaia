@@ -28,8 +28,6 @@ jest.setTimeout(30000);
 
 const describeNative = Platform.OS === 'web' ? describe.skip : describe;
 const opts = { includeHiddenElements: true };
-// Findings wait for async queries; the 1 s default is tight under load.
-const slow = { ...opts, timeout: 5000 };
 
 const mount = (Route: () => React.JSX.Element) =>
     render(
@@ -51,27 +49,27 @@ describeNative('card, connector and undo scenes', () => {
     it('connector-retry offers Ask again once the account is connected', async () => {
         mockParams = { state: 'connector-retry' };
         await mount(route('messages'));
-        expect(await screen.findByText('Ask again', slow)).toBeTruthy();
+        expect(await screen.findByText('Ask again', opts)).toBeTruthy();
     });
 
     it('audio shows the caption and file name', async () => {
         mockParams = { state: 'audio' };
         await mount(route('messages'));
-        expect(await screen.findByText('A calm piano theme for the intro.', slow)).toBeTruthy();
+        expect(await screen.findByText('A calm piano theme for the intro.', opts)).toBeTruthy();
         expect(screen.getByText(/piano-theme\.wav/, opts)).toBeTruthy();
     });
 
     it('audio-failed shows the cannot-be-played error after Play', async () => {
         mockParams = { state: 'audio-failed' };
         await mount(route('messages'));
-        fireEvent.press(await screen.findByTestId('card-audio-play', slow));
-        expect(await screen.findByTestId('card-audio-failed', slow)).toBeTruthy();
+        fireEvent.press(await screen.findByTestId('card-audio-play', opts));
+        expect(await screen.findByTestId('card-audio-failed', opts)).toBeTruthy();
     });
 
     it('guide-units shows the US and Metric switch on a recipe, and the tip until it is dismissed', async () => {
         mockParams = { state: 'guide-units' };
         await mount(route('messages'));
-        expect(await screen.findByTestId('guide-units', slow)).toBeTruthy();
+        expect(await screen.findByTestId('guide-units', opts)).toBeTruthy();
         expect(screen.getAllByText('Metric', opts).length).toBeGreaterThan(0);
         expect(screen.getByText(/switch units/, opts)).toBeTruthy();
     });
@@ -79,7 +77,7 @@ describeNative('card, connector and undo scenes', () => {
     it('guide-tip shows the one-time tip with its dismiss button', async () => {
         mockParams = { state: 'guide-tip' };
         await mount(route('messages'));
-        expect(await screen.findByTestId('guide-tip', slow)).toBeTruthy();
+        expect(await screen.findByTestId('guide-tip', opts)).toBeTruthy();
         expect(screen.getByTestId('guide-tip-dismiss', opts)).toBeTruthy();
     });
 
@@ -133,13 +131,13 @@ describeNative('card, connector and undo scenes', () => {
     ])('connectors %s renders', async (state, text) => {
         mockParams = { state };
         await mount(route('connectors'));
-        expect(await screen.findByText(text, slow)).toBeTruthy();
+        expect(await screen.findByText(text, opts)).toBeTruthy();
         if (state === 'grants') expect(screen.getByText('Who can use it', opts)).toBeTruthy();
     });
 
     it('permission undo shows the retention fields', async () => {
         mockParams = { only: 'undo' };
         await mount(route('permission'));
-        expect(await screen.findByTestId('undo-days', slow)).toBeTruthy();
+        expect(await screen.findByTestId('undo-days', opts)).toBeTruthy();
     });
 });
