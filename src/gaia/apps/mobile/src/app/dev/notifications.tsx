@@ -93,7 +93,7 @@ export default function NotificationsGalleryRoute() {
         );
     }
     return (
-        <QueryClientProvider client={queryClient}>
+        <QueryClientProvider key={state} client={queryClient}>
             <GaiaClientProvider client={client}>
                 <UIProvider>
                     <Body scene={found} />

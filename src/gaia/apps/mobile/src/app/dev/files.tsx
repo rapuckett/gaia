@@ -13,7 +13,7 @@ import { ScreenBannerProvider, UIProvider } from '@/ui';
 
 const SCENES = Object.keys(FILE_BROWSER_START) as FileBrowserScene[];
 
-/** The PC file browser on a fake PC; `?scene=root|folder|selected|search|searchStopped|denied`. */
+/** The PC file browser on a fake PC; `?scene=root|folder|selected|askPartial|search|searchStopped|denied`. */
 export default function FilesGalleryRoute() {
     const { scene } = useLocalSearchParams<{ scene?: string }>();
     const router = useRouter();
@@ -22,11 +22,11 @@ export default function FilesGalleryRoute() {
     const [client] = useState(() => fileBrowserScene(picked));
     if (!devGalleryEnabled()) return <Redirect href="/" />;
     return (
-        <QueryClientProvider client={queryClient}>
+        <QueryClientProvider key={scene} client={queryClient}>
             <GaiaClientProvider client={client}>
                 <UIProvider>
                     <ScreenBannerProvider banner={null}>
-                        <FileBrowserScreen chatId="chat-1" onClose={() => router.replace('/')} onPreview={() => router.push('/dev/file-preview?scene=binary')} initial={FILE_BROWSER_START[picked]} />
+                        <FileBrowserScreen chatId="chat-1" onClose={() => router.replace('/')} onAsk={() => true} onPreview={() => router.push('/dev/file-preview?scene=binary')} initial={FILE_BROWSER_START[picked]} />
                     </ScreenBannerProvider>
                 </UIProvider>
             </GaiaClientProvider>

@@ -1,8 +1,10 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
+import { STATUS_LOST_MS } from '@/api/constants';
 import { GaiaApiError, GaiaNetworkError } from '@/api/errors';
 import type { SystemStatus } from '@/api/client.types';
+import { createStatusHealth } from '@/data/statusHealth';
 import { translator } from '@/i18n/useT';
 
 import { pickBanner } from './pickBanner';
@@ -28,6 +30,7 @@ describe('pickBanner', () => {
         expect(off?.message).toBe(t('mobileApp.pairing.unreachable.body'));
         expect(pickBanner(undefined, new GaiaApiError(404, 'gone'), t)?.title).toBe(t('banner.unreachable'));
         expect(id(undefined, new GaiaApiError(503, 'busy'))).toBe('backendError');
+        expect(id(undefined, new GaiaApiError(504, 'gateway timeout'))).toBe('slow');
         expect(id(withStatus({ init_state: 'initializing', init_tasks: [{ name: 'Models', status: 'running' }] }))).toBe('starting');
         expect(id(withStatus({ lemonade_running: false }))).toBe('serverStopped');
         expect(id(withStatus({ lemonade_running: false, lemonade_error: 'timed out' }))).toBe('serverHung');
@@ -76,5 +79,44 @@ describe('backend errors read as one sentence', () => {
         const title = pickBanner(withStatus({ download_progress: { state: 'starting', model_name: 'M', percent: 0, file: null, file_index: 0, total_files: 0, downloaded_bytes: 0, total_bytes: 0, message: null } }), null, translator('ar'))?.title ?? '';
         expect(title.match(/large download/g)).toHaveLength(1);
         expect(title).toContain('تنزيل كبير');
+    });
+
+    it('shows slow for a 504 only, below the downloads and pick loads, and clears with the error', () => {
+        const slow = new GaiaApiError(504, 'gateway timeout');
+        const banner = pickBanner(undefined, slow, t);
+        expect([banner?.title, banner?.message, banner?.tone, banner?.retry]).toEqual([t('banner.slow'), t('banner.slowHint'), 'warning', true]);
+        const download = { state: 'downloading', model_name: 'M', percent: 50, file: 'a.gguf', file_index: 1, total_files: 2, downloaded_bytes: 5e9, total_bytes: 1e10, message: null } as const;
+        expect(id(withStatus({ download_progress: download }), slow)).toBe('download');
+        expect(pickBanner(undefined, slow, t, null, { load: { model: 'M', seconds: 3 } as never })?.id).toBe('pickLoad');
+        expect(id(OK)).toBeNull();
+    });
+
+    it('follows the status streak: nothing for the first two slow answers, slow at three, unreachable when lost', () => {
+        const h = createStatusHealth();
+        const timeout = new Error('aborted');
+        const pick = () => ({ ...h.get() });
+        const shown = (e: unknown) => pickBanner(undefined, e, t, null, pick())?.id ?? null;
+        h.record('slow');
+        expect(shown(timeout)).toBeNull();
+        expect(shown(new GaiaApiError(504, 'gateway'))).toBeNull();
+        h.record('slow');
+        expect(shown(timeout)).toBeNull();
+        h.record('slow');
+        expect(shown(timeout)).toBe('slow');
+        expect(shown(new GaiaApiError(500, 'boom'))).toBe('slow');
+    });
+
+    it('still shows unreachable for a real network failure, a 502 and five silent minutes', () => {
+        let now = 0;
+        const h = createStatusHealth(() => now);
+        h.record('slow');
+        h.record('unreachable');
+        expect(pickBanner(undefined, new GaiaNetworkError('u', new Error('r')), t, null, h.get())?.id).toBe('unreachable');
+        h.record('ok');
+        h.record('slow');
+        now = STATUS_LOST_MS;
+        h.record('slow');
+        expect(pickBanner(undefined, new GaiaApiError(504, 'gateway'), t, null, h.get())?.id).toBe('unreachable');
+        expect(pickBanner(undefined, new Error('aborted'), t, null, h.get())?.id).toBe('unreachable');
     });
 });

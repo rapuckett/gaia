@@ -10,11 +10,10 @@ import { FlagshipAgentBanner } from '@/features/banners/FlagshipAgentBanner';
 import { ResourceStrip } from '@/features/chat/header/ResourceStrip';
 import { devGalleryEnabled } from '@/features/dev/devGallery';
 import { AppErrorBoundary } from '@/features/errors/AppErrorBoundary';
-import { ModelNeededHost } from '@/features/model';
+import { NeedPrompt } from '@/features/model/ModelNeededHost';
 import { ModelServerDownNotice } from '@/features/model/ModelServerDownNotice';
 import { ModelStatusSheet } from '@/features/model/ModelStatusSheet';
 import { MODEL_SCENES, modelSceneClient, type ModelScene } from '@/features/model/devScenes';
-import { useModelNeededStore } from '@/state/modelNeeded';
 import { Screen, ScreenBannerProvider, Stack, Text, UIProvider } from '@/ui';
 
 const noop = () => undefined;
@@ -28,7 +27,7 @@ function Body({ scene }: { scene: ModelScene }) {
         case 'sheet':
             return <ModelStatusSheet open onClose={noop} onOpenSettings={noop} initial={scene.sheet} />;
         case 'need':
-            return <ModelNeededHost initial={scene.needInitial} />;
+            return scene.need ? <NeedPrompt need={scene.need} initial={scene.needInitial} /> : null;
         case 'down':
             return (
                 <Stack padding="lg">
@@ -59,7 +58,6 @@ export default function ModelServerGalleryRoute() {
     const [queryClient] = useState(() => new QueryClient({ defaultOptions: { queries: { retry: false } } }));
     const [client] = useState(() => {
         if (!found) return null;
-        useModelNeededStore.setState({ need: found.need ?? null });
         return modelSceneClient(found);
     });
     if (!devGalleryEnabled()) return <Redirect href="/" />;
@@ -76,7 +74,7 @@ export default function ModelServerGalleryRoute() {
         );
     }
     return (
-        <QueryClientProvider client={queryClient}>
+        <QueryClientProvider key={state} client={queryClient}>
             <GaiaClientProvider client={client}>
                 <UIProvider>
                     <ScreenBannerProvider banner={null}>

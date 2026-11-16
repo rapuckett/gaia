@@ -4,7 +4,7 @@
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 
-import { useActiveModel, useGaiaClient, useGoalStoreError, useQueryFailure, useSystemStatus } from '@/data';
+import { useActiveModel, useGaiaClient, useGoalStoreError, useModelActions, useQueryFailure, useStatusHealth, useSystemStatus } from '@/data';
 import { useT } from '@/i18n/useT';
 import { openChat } from '@/features/nav/navigation';
 import { hasTailnetRoute, useActiveConnection } from '@/features/pairing/routes';
@@ -55,13 +55,15 @@ export function ConnectionBanner() {
     const status = useSystemStatus();
     const { data, refetch } = status;
     const { error } = useQueryFailure(status);
+    const { slow, slowPending, lost } = useStatusHealth();
     const connection = useActiveConnection();
     const goalStoreError = useGoalStoreError().data;
     const client = useGaiaClient();
     const load = usePickLoadStore((s) => s.pickLoad);
     const activeModel = useActiveModel().data;
     const name = load && sameModelId(activeModel?.model, load.model) ? activeModel?.display_name : null;
-    const picked = pickBanner(data, error, t, goalStoreError, { load, name, awayHint: hasTailnetRoute(connection) });
+    const picked = pickBanner(data, error, t, goalStoreError, { load, name, awayHint: hasTailnetRoute(connection), slow, slowPending, lost });
+    const redownload = useModelActions(picked?.downloadRetry ?? null, data);
     const { dismissed, dismiss, reconcile } = useBannerDismissedStore();
     useEffect(() => reconcile(picked), [picked?.id, picked?.dismissible, reconcile]); // eslint-disable-line react-hooks/exhaustive-deps
     const banner = picked && picked.id === dismissed ? null : picked;
@@ -79,11 +81,13 @@ export function ConnectionBanner() {
                         message={banner.message}
                         onDismiss={banner.dismissible ? () => (banner.id === 'pickLoad' ? usePickLoadStore.getState().clear() : dismiss(banner.id)) : undefined}
                         action={
-                            banner.pickRetry && client
-                                ? { label: t('banner.pickLoad.retry'), onPress: () => void usePickLoadStore.getState().retry(client) }
-                                : banner.retry
-                                  ? { label: t('settings.key.checkAgain'), onPress: () => void refetch() }
-                                  : undefined
+                            banner.downloadRetry
+                                ? { label: t('docs.retry'), onPress: () => void redownload.download(false) }
+                                : banner.pickRetry && client
+                                  ? { label: t('banner.pickLoad.retry'), onPress: () => void usePickLoadStore.getState().retry(client) }
+                                  : banner.retry
+                                    ? { label: t('settings.key.checkAgain'), onPress: () => void refetch() }
+                                    : undefined
                         }
                     />
                     {banner.details ? <BannerDetails text={banner.details} /> : null}

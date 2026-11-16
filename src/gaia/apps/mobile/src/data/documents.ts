@@ -123,6 +123,12 @@ export function useDocumentRemoval(onFailed: (removal: PendingRemoval, error: un
     return { pending, remove, undo };
 }
 
+/** Dev gallery only: a frozen clock and when each row began indexing, so elapsed times don't move. */
+export interface IndexingSeed {
+    now: number;
+    startedAt: Record<string, number>;
+}
+
 export interface IndexingView {
     /** Progress by document, while the PC reports it. */
     progress: Record<string, IndexProgress>;
@@ -136,12 +142,12 @@ export interface IndexingView {
  * Asks for the status of every indexing or pending row each INDEX_POLL_MS while the app is in the foreground,
  * and reads the library again once one has finished.
  */
-export function useIndexingView(documents: readonly LibraryDoc[]): IndexingView {
+export function useIndexingView(documents: readonly LibraryDoc[], seed?: IndexingSeed): IndexingView {
     const client = useGaiaClient();
     const queryClient = useQueryClient();
     const [progress, setProgress] = useState<Record<string, IndexProgress>>({});
-    const [startedAt, setStartedAt] = useState<Record<string, number>>({});
-    const [now, setNow] = useState(() => Date.now());
+    const [startedAt, setStartedAt] = useState<Record<string, number>>(seed?.startedAt ?? {});
+    const [now, setNow] = useState(() => seed?.now ?? Date.now());
     const active = documents.filter((d) => isIndexing(d.indexing_status)).map((d) => d.id);
     const key = active.join('\n');
 
@@ -151,7 +157,7 @@ export function useIndexingView(documents: readonly LibraryDoc[]): IndexingView 
 
         let polling = false;
         const timer = setInterval(async () => {
-            const stamp = Date.now();
+            const stamp = seed?.now ?? Date.now();
             setNow(stamp);
             setStartedAt((m) => (ids.every((id) => id in m) && Object.keys(m).length === ids.length ? m : Object.fromEntries(ids.map((id) => [id, m[id] ?? stamp]))));
             if (polling || AppState.currentState !== 'active') return;
@@ -175,7 +181,7 @@ export function useIndexingView(documents: readonly LibraryDoc[]): IndexingView 
             }
         }, INDEX_POLL_MS);
         return () => clearInterval(timer);
-    }, [key, client, queryClient]);
+    }, [key, client, queryClient, seed]);
 
     return { progress, startedAt, now };
 }

@@ -32,7 +32,7 @@ export default function DocumentsGalleryRoute() {
         );
     }
     return (
-        <QueryClientProvider client={queryClient}>
+        <QueryClientProvider key={state} client={queryClient}>
             <GaiaClientProvider client={client}>
                 <UIProvider>
                     <ScreenBannerProvider banner={null}>

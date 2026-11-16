@@ -5,6 +5,7 @@ import { AssistantBubble } from './AssistantBubble';
 import { MessageListView } from './MessageList';
 import { UserBubble } from './UserBubble';
 import type { StartOpen } from './useMessageActions';
+import { TailIssues } from '../ReplyErrors';
 import { RecordingProgress } from '../recording/RecordingProgress';
 import { EmailPreScanCard } from '../cards/EmailPreScanCard';
 import { GuideCard } from '../cards/GuideCard';
@@ -44,12 +45,13 @@ export function MessagesGallery({ state }: { state: MessagesGalleryState }) {
         );
     }
     const fixture = FIXTURES[state];
+    const policyTail = { live: false, text: '', events: [], replyId: null, canTryAgain: false, canContinue: false, policyAlert: { tool: 'delete_file', seq: 1 } };
     return (
         <Screen>
             <MessageListView
                 messages={fixture.messages}
                 loading={state === 'loading'}
-                live={fixture.live ? <AssistantBubble message={fixture.live} streaming /> : fixture.events ? <RecordingProgress events={fixture.events} /> : undefined}
+                live={state === 'policy' ? <TailIssues tail={policyTail} local={false} /> : fixture.live ? <AssistantBubble message={fixture.live} streaming /> : fixture.events ? <RecordingProgress events={fixture.events} /> : undefined}
             />
         </Screen>
     );
