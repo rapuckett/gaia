@@ -6,31 +6,46 @@ Reads and writes the same store as ``gaia automation`` (``gaia.automations.
 store``), so the app, the terminal and chat always show the same list. A
 change made here is the user's own click, so it asks nothing further.
 
-**Local-PC only**, like Settings → Messaging: a trigger's check is a command
-that runs on this PC, and its prompts can carry private detail.
+The PC and an allowed paired device may list, pause, resume and remove, as the
+desktop does; mobile access and another computer may not, since a trigger's
+check is a command that runs on this PC and its prompts can carry private
+detail. Nothing here adds or edits one: that is chat's job.
 """
 
 from __future__ import annotations
 
 from typing import Any, Dict, List, Literal, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 
 from gaia.automations import files, store
 from gaia.logger import get_logger
 
 from ..models import WireModel
-from ..security import require_local_pc, require_ui_header
+from ..security import (
+    require_local_pc,
+    require_pc_or_allowed_device,
+    require_ui_header,
+)
 
 log = get_logger(__name__)
 
 router = APIRouter(
     prefix="/api/automations",
     tags=["automations"],
-    dependencies=[Depends(require_local_pc)],
+    dependencies=[Depends(require_pc_or_allowed_device)],
 )
 
 HEARTBEAT_NAME = "heartbeat"
+
+#: What a paired device may do: the desktop's own buttons. Any other action stays PC-only.
+DEVICE_ACTIONS = frozenset({"pause", "resume"})
+
+
+def device_action_allowed(request: Request, action: str) -> None:
+    """Refuse a device an action outside ``DEVICE_ACTIONS``, as a PC-only route would."""
+    if action not in DEVICE_ACTIONS:
+        require_local_pc(request)
 
 
 class AutomationRow(WireModel):
@@ -110,7 +125,7 @@ def list_automations() -> Dict[str, Any]:
 
 @router.post(
     "/{ref}/{action}",
-    dependencies=[Depends(require_ui_header)],
+    dependencies=[Depends(require_ui_header), Depends(device_action_allowed)],
     response_model=AutomationRow,
     response_model_exclude_unset=True,
 )
