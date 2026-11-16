@@ -3,7 +3,14 @@
 
 /** Shared wording for a local model's state, device, size and speed. */
 
-import type { LocalModelState, ProviderModel } from '../types';
+import type { Translate } from '../i18n/useT';
+import type { LocalModelState, ModelPlacement, ProviderModel } from '../types';
+
+/** "GPU · Vulkan" for a loaded model, "GPU · Vulkan (expected)" before it loads. */
+export function placementText(p: ModelPlacement | null | undefined, t: Translate): string | null {
+    if (!p?.label) return null;
+    return p.source === 'expected' ? t('modelStatus.expected', { label: p.label }) : p.label;
+}
 
 export function ctxLabel(tokens: number | null | undefined): string {
     return tokens ? `${Math.round(tokens / 1024)}K` : 'unknown';

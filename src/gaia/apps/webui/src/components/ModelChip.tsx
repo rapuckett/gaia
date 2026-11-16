@@ -11,7 +11,7 @@ import { useChatStore } from '../stores/chatStore';
 import {
     useModelStore, useInferencePlace, selectChipModel, displayModelName, distinctModelLabels, sameModelId, UNKNOWN_PLACE_TITLE,
 } from '../stores/modelStore';
-import { isDownloading, modelState } from './modelMeta';
+import { isDownloading, modelState, placementText } from './modelMeta';
 import { InfoBubble } from './InfoBubble';
 import { formatPrice } from './settings/cloudPrice';
 import { useT, type Translate } from '../i18n/useT';
@@ -37,9 +37,7 @@ function modelDetails(m: ProviderModel, remote: boolean, t: Translate): string[]
     const rank = m.rank ? `#${m.rank} ${m.note ?? ''}`.trim() : null;
     if (remote) return [rank, formatPrice(m.price)].filter((x): x is string => !!x);
     return [
-        m.placement?.label
-            ? (m.placement.source === 'expected' ? t('modelStatus.expected', { label: m.placement.label }) : m.placement.label)
-            : null,
+        placementText(m.placement, t),
         m.size_gb ? `${m.size_gb} GB` : null,
         m.tokens_per_second ? t('modelMenu.speedOnThisPc', { n: Math.round(m.tokens_per_second) }) : null,
         rank,
