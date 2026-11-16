@@ -61,6 +61,7 @@ import type {
     BrowseResponse,
     CancelStreamResponse,
     ConfirmToolResponse,
+    ConnectorDeviceAuthResponse,
     CreateSessionRequest,
     DocumentListResponse,
     DocumentResponse,
@@ -133,7 +134,7 @@ export type {
 } from '@webui/types';
 export type { FileDiff, TurnChanges, UndoResult, UndoSettings } from '@webui/types/changes';
 export type { ActiveSkill, AgentCapabilities, AgentTool, ChatFileChange, GitRepo, OutputItem, OutputKind, ScopeEntry, SessionChanges, SessionEnvironment, SessionGit, SessionOutputs, SkillOrigin, UndoAllResult } from '@webui/types/sessionPanel';
-export type { BrowseResponse, CreateSessionRequest, DocumentListResponse, DocumentResponse, FileEntry, FileSearchResponse, FileSearchResult, ModelServerInfo, QuickLink, ProviderSummary, ProviderSummaryList, SessionSearchResponse, SessionSearchResult, ToolConfirmRequest, FilePreviewResponse } from '@webui/types/api.gen';
+export type { BrowseResponse, ConnectorDeviceAuthResponse, CreateSessionRequest, DocumentListResponse, DocumentResponse, FileEntry, FileSearchResponse, FileSearchResult, ModelServerInfo, QuickLink, ProviderSummary, ProviderSummaryList, SessionSearchResponse, SessionSearchResult, ToolConfirmRequest, FilePreviewResponse } from '@webui/types/api.gen';
 
 /** A photo or file chosen on this phone: where it is, and what it is called. */
 export interface PickedFile {
@@ -166,6 +167,9 @@ export interface DisconnectOutcome {
     revoked_remotely?: boolean;
     revoke_error?: string | null;
 }
+
+/** How a sign-in the PC is finishing ended, from its `connector.oauth.*` events; `error` is the PC's own message. */
+export type ConnectorSignInEnd = { outcome: 'completed' } | { outcome: 'cancelled' | 'failed'; error?: string };
 
 export interface ConnectorList {
     connectors: ConnectorListEntry[];
@@ -553,6 +557,10 @@ export interface GaiaClient {
     activateConnectorAgent(connectorId: string, agentId: string, scopes?: string[], options?: RequestOptions): Promise<void>;
     /** Hides an MCP server's tools from an agent; its grant stays. */
     deactivateConnectorAgent(connectorId: string, agentId: string, options?: RequestOptions): Promise<void>;
+    /** Starts a sign-in with a code on the PC; only for a connector with `supports_device_code`. The PC polls the provider and keeps the account. */
+    startConnectorDeviceSignIn(connectorId: string, scopes: string[], options?: RequestOptions): Promise<ConnectorDeviceAuthResponse>;
+    /** Waits for the PC to report a sign-in for this connector finished or failed; null when the events stream can't be read. */
+    watchConnectorSignIn(connectorId: string, options?: RequestOptions): Promise<ConnectorSignInEnd | null>;
     /** Pauses an MCP server; its credentials and grants stay. Turning it back on is PC-only. */
     disableConnector(connectorId: string, options?: RequestOptions): Promise<void>;
     /**
@@ -585,7 +593,9 @@ export interface GaiaClient {
     /** Goal and task counts by status. */
     getGoalStats(options?: RequestOptions): Promise<GoalStats>;
     /** Why GAIA can't run approved goals (the goal list can't be read); null when it can. */
-    getGoalStoreHealth(options?: RequestOptions): Promise<{ error: string | null }>;
+    getGoalStoreHealth(options?: RequestOptions): Promise<{ error: string | null; damaged: boolean }>;
+    /** Moves a damaged goal list aside and starts a new one; `kept` names the old file. The PC answers 409 when the list reads. */
+    resetGoalStore(options?: RequestOptions): Promise<{ kept: string }>;
     /** Makes a goal GAIA will work on; it starts queued. */
     createGoal(body: CreateGoalBody, options?: RequestOptions): Promise<Goal>;
     /** Accepts a goal GAIA suggested. A paired device's approval is audit-logged on the PC with the device's id. */

@@ -20,13 +20,16 @@ export interface TextProps {
     weight?: Weight;
     mono?: boolean;
     italic?: boolean;
-    align?: 'start' | 'center' | 'end';
+    /** `start`/`end` follow the UI direction, whatever `dir` is; `ltr`/`rtl` pin the block to that direction's start edge (code, logs, content blocks). */
+    align?: 'start' | 'center' | 'end' | 'ltr' | 'rtl';
     /** Lines to show at normal text size; a person who chose a large size gets the whole text (up to 3 lines) unless `compact`. */
     numberOfLines?: number;
     /** Lines kept at large sizes instead of the whole text: only for long user content in a list (a chat title, a file name) or a header title. */
     largeLines?: number;
     /** A label inside a fixed-size control: stops scaling at 1.3x and keeps `numberOfLines`. Give the control the full label in `accessibilityLabel`. */
     compact?: boolean;
+    /** Where this text stops growing with the person's text size, for a label that is not a title (a navigation row). */
+    maxScale?: number;
     selectable?: boolean;
     /** Where a one-line text is cut; `middle` keeps both ends of a path. */
     ellipsize?: 'tail' | 'middle';
@@ -34,7 +37,7 @@ export interface TextProps {
     underline?: boolean;
     /** Inline code: mono on the code surface. */
     code?: boolean;
-    /** Writing direction of this run, for content whose language differs from the UI's. `auto` follows the first strong letter of a string child. */
+    /** Writing direction of this run; explicit `ltr`/`rtl` never move the line, `auto` aligns the block to its content. Content whose language differs from the UI's. `auto` follows the first strong letter of a string child. */
     dir?: 'ltr' | 'rtl' | 'auto';
     onPress?: () => void;
     accessibilityLabel?: string;
@@ -93,6 +96,7 @@ export function Text({
     numberOfLines,
     largeLines,
     compact,
+    maxScale,
     selectable,
     ellipsize,
     strike,
@@ -133,8 +137,10 @@ export function Text({
     }
     if (strike || underline) style.textDecorationLine = strike && underline ? 'underline line-through' : strike ? 'line-through' : 'underline';
     if (dir) style.writingDirection = dir;
-    const startsRight = (dir ?? (rtl ? 'rtl' : 'ltr')) === 'rtl';
+    // `auto` is a block that follows its own content, as the web's dir="auto" does; explicit ltr/rtl only set the run.
+    const startsRight = dirProp === 'auto' ? dir === 'rtl' : rtl;
     if (align === 'center') style.textAlign = 'center';
+    else if (align === 'ltr' || align === 'rtl') style.textAlign = physicalAlign(align === 'rtl');
     else if (align === 'end') style.textAlign = physicalAlign(!startsRight);
     else if (align === 'start' || !nested) style.textAlign = physicalAlign(startsRight);
     if (rtl) style.letterSpacing = 0;
@@ -144,7 +150,7 @@ export function Text({
             <RNText
                 style={style}
                 numberOfLines={lines}
-                maxFontSizeMultiplier={maxScaleFor(role, compact)}
+                maxFontSizeMultiplier={maxScale ?? maxScaleFor(role, compact)}
                 ellipsizeMode={ellipsize ?? 'tail'}
                 selectable={selectable}
                 onPress={onPress}

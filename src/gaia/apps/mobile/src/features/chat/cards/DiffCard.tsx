@@ -52,7 +52,7 @@ export function DiffCard({ data }: { data: unknown }) {
                                             {kind === 'hunk' ? line : `${GUTTER[kind]} `}
                                         </Text>
                                         {kind === 'hunk' ? null : (
-                                            <Text role="caption" mono dir="ltr">
+                                            <Text role="caption" mono dir="ltr" align="ltr">
                                                 {line.slice(kind === 'context' && !line.startsWith(' ') ? 0 : 1) || ' '}
                                             </Text>
                                         )}

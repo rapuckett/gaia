@@ -33,7 +33,7 @@ export function UnsupportedCard({ variant, render, data }: UnsupportedCardProps)
                         </Text>
                     ) : (
                         <HScroll dir="ltr">
-                            <Text role="caption" mono selectable dir="ltr">
+                            <Text role="caption" mono selectable dir="ltr" align="ltr">
                                 {pretty}
                             </Text>
                         </HScroll>

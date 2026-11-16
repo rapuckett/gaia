@@ -32,7 +32,7 @@ export interface NativeSubscription {
     remove(): void;
 }
 
-/** Rejections carry `code`: pin_mismatch, unreachable, not_home_network, not_home_origin, network, aborted, not_paired, origin_mismatch, keychain, invalid_pin, bad_response, unknown_request, upload_file. */
+/** Rejections carry `code`: pin_mismatch, unreachable, not_home_network, not_home_origin, network, aborted, not_paired, origin_mismatch, keychain, invalid_pin, invalid_origin, bad_response, unknown_request, upload_file. */
 export interface GaiaTransportNative {
     pair(pcId: string, origins: string[], pin: string, headers: Record<string, string>, body: string): Promise<NativePairAnswer>;
     start(
@@ -61,6 +61,8 @@ export interface GaiaTransportNative {
     dropAll(): Promise<void>;
     /** Moves the secret `pair` saved under `stagedId` to `pcId`, replacing what `pcId` had. */
     promote(stagedId: string, pcId: string): Promise<void>;
+    /** Replaces the paired PC's addresses with `origins`, JSON `[{kind, origin}]`; refuses the set if any is invalid for its kind. */
+    setOrigins(pcId: string, origins: string): Promise<void>;
     /** Builds made before upload progress never send the event. */
     addListener?(event: 'onUploadProgress', listener: (progress: NativeUploadProgress) => void): NativeSubscription;
 }
@@ -84,6 +86,7 @@ const STUB: GaiaTransportNative = {
     drop: async () => unsupported(),
     dropAll: async () => unsupported(),
     promote: async () => unsupported(),
+    setOrigins: async () => unsupported(),
 };
 
 const native = Platform.OS === 'ios' ? requireOptionalNativeModule<GaiaTransportNative>('GaiaTransport') : null;

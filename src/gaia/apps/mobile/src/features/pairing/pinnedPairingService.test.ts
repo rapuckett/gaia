@@ -7,7 +7,9 @@ import type { PairingInvite } from './invite';
 import { createPinnedPairingService } from './pinnedPairingService';
 
 const mockVault = new Map<string, string>();
+const mockNativeOrigins = new Map<string, string>();
 let mockHealth = 403;
+let mockRoutes: { status: number; body: string } = { status: 404, body: '{"detail":"Not Found"}' };
 
 jest.mock('expo-device', () => ({ deviceName: 'Test phone', modelName: 'iPhone' }));
 jest.mock('../../../modules/gaia-transport', () => ({
@@ -24,13 +26,15 @@ jest.mock('../../../modules/gaia-transport', () => ({
             mockVault.delete(from);
         },
         isPaired: (vaultId: string) => mockVault.has(vaultId),
+        setOrigins: async (vaultId: string, json: string) => void mockNativeOrigins.set(vaultId, json),
     },
 }));
 jest.mock('@/platform/pinnedFetch', () => ({
     onDeviceGone: () => undefined,
     transportError: (err: unknown) => err,
-    pinnedFetch: async (vaultId: string) => {
+    pinnedFetch: async (vaultId: string, url: string) => {
         if (!mockVault.has(vaultId)) throw Object.assign(new Error('not paired'), { code: 'not_paired' });
+        if (url.endsWith('/api/devices/me/routes')) return { ok: mockRoutes.status === 200, status: mockRoutes.status, text: async () => mockRoutes.body };
         const body = mockHealth === 403 ? JSON.stringify({ code: 'device_pending' }) : '{}';
         return { ok: mockHealth === 200, status: mockHealth, text: async () => body };
     },
@@ -50,6 +54,7 @@ const invite: PairingInvite = {
 beforeEach(async () => {
     await AsyncStorage.removeItem('gaia:install-marker');
     mockVault.clear();
+    mockNativeOrigins.clear();
     mockVault.set(PC_ID, 'working secret');
     await AsyncStorage.setItem(
         'gaia:paired-pcs',
@@ -79,6 +84,38 @@ describe('re-pairing a PC this phone is already paired with', () => {
         expect((await service.status()).state).toBe('paired');
         expect([...mockVault.entries()]).toEqual([[PC_ID, 'secret from https://192.168.1.99:4243']]);
         expect((await service.list()).map((pc) => pc.connection.baseUrl)).toEqual(['https://192.168.1.99:4243']);
+    });
+});
+
+describe("a paired PC's addresses", () => {
+    const HOME = 'https://192.168.1.20:4243';
+
+    it('reads a PC saved with one address as its home address', async () => {
+        const service = createPinnedPairingService();
+        expect(await service.origins(PC_ID)).toEqual([{ kind: 'home', origin: HOME }]);
+        expect((await service.list())[0].connection).toMatchObject({ baseUrl: HOME, origins: [HOME] });
+    });
+
+    it('keeps the home addresses when the PC has no routes to report', async () => {
+        const service = createPinnedPairingService();
+        mockRoutes = { status: 404, body: '{"detail":"Not Found"}' };
+        expect(await service.refreshRoutes(PC_ID, HOME)).toEqual([{ kind: 'home', origin: HOME }]);
+        expect(mockNativeOrigins.size).toBe(0);
+    });
+
+    it("saves the PC's valid routes here and natively, and drops any it may not use", async () => {
+        const service = createPinnedPairingService();
+        const origins = [
+            { kind: 'home', origin: 'https://192.168.1.31:4243' },
+            { kind: 'tailnet', origin: 'https://100.100.1.2:4243' },
+            { kind: 'tailnet', origin: 'https://8.8.8.8:4243' },
+            { kind: 'relay', origin: 'https://abcdefghijklmnopqrst234567.relay.example.net' },
+        ];
+        mockRoutes = { status: 200, body: JSON.stringify({ origins }) };
+        const kept = [origins[0], origins[1]];
+        expect(await service.refreshRoutes(PC_ID, HOME)).toEqual(kept);
+        expect(JSON.parse(mockNativeOrigins.get(PC_ID)!)).toEqual(kept);
+        expect(await createPinnedPairingService().origins(PC_ID)).toEqual(kept);
     });
 });
 

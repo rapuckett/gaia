@@ -8,16 +8,17 @@ import { useConnectionStore } from '@/state/connection';
 
 import type { FetchLike } from './fetch.types';
 import { originOf } from './pcUrl';
-import { pinnedFetch, reportIfDeviceGone } from './pinnedFetch';
+import { pinnedFetch, reportIfDeviceGone, reportIfNetworkFailure } from './pinnedFetch';
 
 export { isPcUrl } from './pcUrl';
 
-// The paired PC only over its pinned connection. Only a dev build may use the plain fetch (the simulator's dev backend).
+// The paired PC, at any of its addresses, only over its pinned connection. Only a dev build may use the plain fetch (the simulator's dev backend).
 export const platformFetch: FetchLike = (url, init) => {
     const connection = useConnectionStore.getState().connection;
-    if (connection?.pinned && connection.pcId && originOf(url) === originOf(connection.baseUrl)) {
+    const origin = originOf(url);
+    if (connection?.pinned && connection.pcId && [connection.baseUrl, ...(connection.origins ?? [])].some((o) => originOf(o) === origin)) {
         const { pcId } = connection;
-        return pinnedFetch(pcId, url, init).then((res) => reportIfDeviceGone(pcId, res));
+        return pinnedFetch(pcId, url, init).then((res) => reportIfDeviceGone(pcId, res), reportIfNetworkFailure);
     }
     if (!__DEV__) return Promise.reject(new GaiaTransportMissingError());
     return expoFetch(url, init);
