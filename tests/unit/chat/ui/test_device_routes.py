@@ -30,8 +30,8 @@ TAILNET_PEER = ("100.64.0.7", 50000)
 TAILNET_ORIGIN = "https://100.100.1.2:4243"
 
 
-class FakeTailnet(AwayRoute):
-    kind = "tailnet"
+class FakeAway(AwayRoute):
+    kind = "relay"
 
     def __init__(self) -> None:
         self._on = False
@@ -72,7 +72,7 @@ def setup(tmp_path, monkeypatch):
     access.allow(allowed["device_id"])
     invite, _ = access.pairing.open()
     pending = access.redeem(invite, "Tablet", "ipados", HOME_PEER[0])
-    tailnet = FakeTailnet()
+    tailnet = FakeAway()
     access.routes.register(tailnet)
     return app, access, tailnet, allowed, pending
 
@@ -97,7 +97,7 @@ PROBE = "/api/sessions"
     "case, peer, who, tailnet_on, method, path, status, body",
     [
         ("routes, allowed", HOME_PEER, "allowed", False, "GET", ROUTES, 200, {"origins": HOME_ONLY}),
-        ("routes list an away route that is on", HOME_PEER, "allowed", True, "GET", ROUTES, 200, {"origins": HOME_ONLY + [{"kind": "tailnet", "origin": TAILNET_ORIGIN}]}),
+        ("routes list an away route that is on", HOME_PEER, "allowed", True, "GET", ROUTES, 200, {"origins": HOME_ONLY + [{"kind": "relay", "origin": TAILNET_ORIGIN}]}),
         ("routes, pending", HOME_PEER, "pending", False, "GET", ROUTES, 403, None),
         ("routes, no token", HOME_PEER, None, False, "GET", ROUTES, 401, None),
         ("away route off refuses its peer", TAILNET_PEER, "allowed", False, "GET", ROUTES, 403, None),
@@ -106,7 +106,7 @@ PROBE = "/api/sessions"
         ("no pairing from away", TAILNET_PEER, None, True, "POST", "/api/devices/pair", 404, None),
         ("pairing at home still served", HOME_PEER, None, False, "POST", "/api/devices/pair", 403, None),
         ("home peer is the device", HOME_PEER, "allowed", True, "GET", PROBE, 204, {"route": "home"}),
-        ("away peer is still the device", TAILNET_PEER, "allowed", True, "GET", PROBE, 204, {"route": "tailnet"}),
+        ("away peer is still the device", TAILNET_PEER, "allowed", True, "GET", PROBE, 204, {"route": "relay"}),
     ],
 )  # fmt: skip
 def test_device_routes(setup, case, peer, who, tailnet_on, method, path, status, body):

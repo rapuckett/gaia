@@ -43,7 +43,7 @@ from .listener import (
     local_ipv4_addresses,
 )
 from .pairing import PairingWindow, sanitize_device_name
-from .routes import AwayRoutes
+from .routes import AwayRoute, AwayRoutes
 from .storage import (
     TABLE_NAME,
     DeviceCertificateError,
@@ -54,10 +54,21 @@ from .storage import (
     server_context,
 )
 from .store import Device, DeviceStore, read_pc_id
+from .tailnet import TailnetRoute
 
 logger = get_logger(__name__)
 
 _LISTENER_SETTING = "listener"
+_ROUTE_SETTING = "route.{}"
+
+
+class AwayRouteRefused(RuntimeError):
+    """An away route didn't turn on; *code* is for the PC to translate."""
+
+    def __init__(self, code: str, detail: str) -> None:
+        super().__init__(detail)
+        self.code = code
+        self.detail = detail
 
 
 def iso(when: Optional[float]) -> Optional[str]:
@@ -138,6 +149,7 @@ class DeviceAccess:
         self.pairing = PairingWindow(clock=clock)
         self.requests = OpenRequests()
         self.routes = AwayRoutes()
+        self.routes.register(TailnetRoute(port=self._listening_port))
         self._store: Optional[DeviceStore] = None
         self._listener: Optional[DeviceListener] = None
         self._pin: Optional[str] = None
@@ -215,6 +227,51 @@ class DeviceAccess:
         self._listener, self._pin = listener, identity.pin
         store.set_setting(_LISTENER_SETTING, "on")
         self._housekeeping = asyncio.create_task(self._housekeep())
+        await self._resume_routes(store)
+
+    async def _resume_routes(self, store: DeviceStore) -> None:
+        for route in self.routes.all():
+            if store.setting(_ROUTE_SETTING.format(route.kind)) != "on":
+                continue
+            try:
+                await route.start()
+            except RuntimeError as e:
+                logger.error("Away route %s not resumed: %s", route.kind, e)
+
+    def _listening_port(self) -> Optional[int]:
+        return self._listener.port if self.listening and self._listener else None
+
+    async def set_route(self, kind: str, on: bool) -> None:
+        """Turn an away route on or off from the PC, and keep that across
+        restarts. Only while the listener is on, since it carries every route.
+
+        Raises:
+            KeyError: No route of *kind*.
+            AwayRouteRefused: The listener is off, or the route can't start.
+        """
+        route: Optional[AwayRoute] = self.routes.get(kind)
+        if route is None:
+            raise KeyError(kind)
+        async with self._lock:
+            store = self._store
+            if not on:
+                await route.stop()
+                if store is not None:
+                    store.set_setting(_ROUTE_SETTING.format(kind), "off")
+                return
+            if not self.listening or store is None:
+                raise AwayRouteRefused(
+                    "listener_off",
+                    "Turn on access from the home network first; away routes "
+                    "reach this PC through it.",
+                )
+            try:
+                await route.start()
+            except RuntimeError as e:
+                raise AwayRouteRefused(
+                    route.error_code or "start_failed", str(e)
+                ) from e
+            store.set_setting(_ROUTE_SETTING.format(kind), "on")
 
     def _failed(self, error: ListenerError) -> ListenerError:
         self._error = (error.code, error.detail)
@@ -315,7 +372,7 @@ class DeviceAccess:
 
     def route_origins(self) -> List[dict]:
         """Every origin a device may reach this PC at now: home, then away."""
-        port = self._listener.port if self.listening and self._listener else None
+        port = self._listening_port()
         try:
             home = home_network_origins(self._host, port) if port else []
         except NoHomeNetwork as e:

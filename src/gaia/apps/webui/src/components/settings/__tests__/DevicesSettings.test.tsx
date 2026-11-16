@@ -74,4 +74,23 @@ describe('DevicesSettings', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Copied' }));
         expect(await screen.findByRole('alert')).toHaveTextContent("Couldn't copy the link");
     });
+
+    it('turns the Tailscale route on from the PC and says why it can\'t when Tailscale is off', async () => {
+        const off = { kind: 'tailnet' as const, on: false, origin: null, error_code: null };
+        replies['GET /devices/status'] = { body: { ...STATUS, routes: [off] } };
+        replies['POST /devices/routes/tailnet'] = { status: 409, body: { detail: { code: 'no_tailscale_address', message: 'no address' } } };
+        render(<DevicesSettings />);
+        const toggle = await screen.findByRole('switch', { name: 'Also allow from my Tailscale network' });
+        replies['GET /devices/status'] = { body: { ...STATUS, routes: [{ ...off, error_code: 'no_tailscale_address' }] } };
+        fireEvent.click(toggle);
+        expect(await screen.findByText("Tailscale isn't running on this PC. Start Tailscale and sign in, then turn this on again.")).toBeInTheDocument();
+        expect(toggle).not.toBeChecked();
+
+        const on = { ...off, on: true, origin: 'https://100.101.102.103:4243' };
+        replies['POST /devices/routes/tailnet'] = { body: { ...STATUS, routes: [on] } };
+        replies['GET /devices/status'] = { body: { ...STATUS, routes: [on] } };
+        fireEvent.click(toggle);
+        await waitFor(() => expect(toggle).toBeChecked());
+        expect(toggle).toHaveAccessibleDescription(/through Tailscale, at .*100\.101\.102\.103/);
+    });
 });
