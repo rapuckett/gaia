@@ -12,7 +12,14 @@ import { ThemeProvider } from '@/ui';
 
 import { ChatHeader } from './ChatHeader';
 
-jest.mock('@/features/nav/ScreenHeader', () => ({ ScreenHeader: ({ end }: { end?: ReactNode }) => end ?? null }));
+jest.mock('@/features/nav/ScreenHeader', () => ({
+    ScreenHeader: ({ titleNode, end }: { titleNode?: ReactNode; end?: ReactNode }) => (
+        <>
+            {titleNode}
+            {end}
+        </>
+    ),
+}));
 
 const SESSION = {
     id: 'chat-1',
@@ -39,6 +46,15 @@ async function mount(onOpenSessionPanel?: () => void) {
     await render(<ChatHeader sessionId="chat-1" onOpenSessionPanel={onOpenSessionPanel} />, { wrapper: wrap });
     await screen.findByTestId('private-toggle');
 }
+
+describe('ChatHeader title', () => {
+    it('is named by the chat title, with rename as the hint', async () => {
+        await mount();
+        const title = await screen.findByRole('button', { name: 'A chat' });
+        expect(title).toBe(screen.getByTestId('chat-title'));
+        expect(title.props.accessibilityHint).toBe('Rename');
+    });
+});
 
 describe('ChatHeader session panel button', () => {
     it('shows only when onOpenSessionPanel is set', async () => {
