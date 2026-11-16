@@ -55,6 +55,7 @@ export function SessionFolderChip({ sessionId, live, onOpen }: { sessionId: stri
             label={name}
             icon={Folder}
             chip="folder"
+            value="auto"
             onPress={onOpen}
             accessibilityLabel={t('folderChip.workingFolder', { name })}
             accessibilityHint={t('folderChip.worksIn', { path: folder.path })}

@@ -1395,8 +1395,11 @@ BINARY_POLICIES: dict[str, BinaryPolicy] = {
             "change asks first."
         ),
         install_hint=(
-            "The `gaia` command ships with GAIA. Reinstall GAIA from "
-            "https://amd-gaia.ai/docs/guides/install to restore it."
+            "The `gaia` command ships with GAIA, so reinstalling GAIA will not "
+            "fix this: GAIA started without the folder that holds it on its "
+            "PATH. Do not suggest a reinstall: this is a GAIA bug, not "
+            "something the user did, and they can report it at "
+            "https://github.com/amd/gaia/issues with this message."
         ),
         subcommands={
             "automation": Subcommand(
@@ -2351,9 +2354,17 @@ def resolve_binary_policies(
                 if policy.setup is not None
                 else ""
             )
+            logger.warning(
+                "Skill '%s' refused: '%s' is not on PATH (%s)",
+                skill_name,
+                policy.binary,
+                os.environ.get("PATH", ""),
+            )
             raise SkillPermissionError(
                 f"Skill '{skill_name}' needs the '{policy.binary}' command, which "
-                f"is not on PATH. {policy.summary} {remedy}{policy.install_hint} "
+                f"is not on PATH: GAIA could not find '{policy.binary}' in any "
+                "folder on the PATH it started with. "
+                f"{policy.summary} {remedy}{policy.install_hint} "
                 "The skill is refused rather than loaded without the tool it "
                 "documents. Tell the user plainly that you cannot do what they "
                 "asked right now and why; do not stand in another tool, such as "

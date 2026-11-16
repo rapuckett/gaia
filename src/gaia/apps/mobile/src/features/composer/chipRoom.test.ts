@@ -6,24 +6,25 @@ import { collapsedChips } from './chipRoom';
 const FULL = { folder: 90, private: 100, permission: 70, model: 200 };
 
 describe('collapsedChips', () => {
-    it('keeps every label when the row fits', () => {
+    it('keeps every label when the chips fit one line', () => {
         expect(collapsedChips(FULL, 500)).toEqual([]);
+        expect(collapsedChips({ ...FULL, meter: 80 }, 600)).toEqual([]);
     });
 
-    it('drops Folder first, then Private, then Permission', () => {
-        expect(collapsedChips(FULL, 370)).toEqual(['folder']);
-        expect(collapsedChips(FULL, 330)).toEqual(['folder', 'private']);
-        expect(collapsedChips(FULL, 100)).toEqual(['folder', 'private', 'permission']);
+    it('protects the model: the others collapse for its full width before its name is cut', () => {
+        expect(collapsedChips({ ...FULL, meter: 80, model: 150 }, 440)).toEqual(['meter', 'folder']);
     });
 
-    it('never collapses the model chip and skips chips that are absent', () => {
-        expect(collapsedChips({ private: 100, model: 300 }, 150)).toEqual(['private']);
+    it('drops the meter bar first, then Folder, then Private, then Permission', () => {
+        const all = { ...FULL, meter: 80 };
+        expect(collapsedChips(all, 540)).toEqual(['meter']);
+        expect(collapsedChips(all, 500)).toEqual(['meter', 'folder']);
+        expect(collapsedChips(all, 450)).toEqual(['meter', 'folder', 'private']);
+        expect(collapsedChips(all, 100)).toEqual(['meter', 'folder', 'private', 'permission']);
+    });
+
+    it('skips chips that are absent and treats an unmeasured row as fitting', () => {
+        expect(collapsedChips({ private: 100, model: 300 }, 50)).toEqual(['private']);
         expect(collapsedChips(FULL, 0)).toEqual([]);
-    });
-
-    it('counts the context meter and shrinks its bar before the permission chip loses its label', () => {
-        expect(collapsedChips({ ...FULL, meter: 80 }, 440)).toEqual(['folder']);
-        expect(collapsedChips({ ...FULL, meter: 80 }, 320)).toEqual(['folder', 'private', 'meter']);
-        expect(collapsedChips({ ...FULL, meter: 80 }, 190)).toEqual(['folder', 'private', 'meter', 'permission']);
     });
 });
