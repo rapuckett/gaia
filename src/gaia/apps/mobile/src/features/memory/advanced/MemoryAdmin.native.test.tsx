@@ -68,12 +68,12 @@ describeNative('MemoryAdmin', () => {
             const view = await render(<MemoryAdmin settings={off} notify={jest.fn()} />, { wrapper: wrap });
             expect(screen.getByTestId('memory-discovery-pc-only')).toBeTruthy();
             expect(screen.getByTestId('memory-reinit-pc-only')).toBeTruthy();
-            expect(screen.getByTestId('memory-switch-discovery').props.accessibilityState?.disabled).toBe(true);
-            expect(screen.getByTestId('memory-reinit').props.accessibilityState?.disabled).toBe(true);
+            expect(screen.getByTestId('memory-switch-discovery')).toBeDisabled();
+            expect(screen.getByTestId('memory-reinit')).toBeDisabled();
 
             await view.rerender(<MemoryAdmin settings={{ ...off, system_discovery_consent: true }} notify={jest.fn()} />);
             expect(screen.queryByTestId('memory-discovery-pc-only')).toBeNull();
-            expect(screen.getByTestId('memory-switch-discovery').props.accessibilityState?.disabled).not.toBe(true);
+            expect(screen.getByTestId('memory-switch-discovery')).toBeEnabled();
             queryClient.clear();
         } finally {
             useConnectionStore.setState({ connection: null });

@@ -87,7 +87,7 @@ function Collapsible({ text, limit = PROMPT_CODE_PREVIEW_LINES }: { text: string
             {long ? (
                 <Pressable
                     onPress={() => setExpanded((v) => !v)}
-                    accessibilityState={{ expanded }}
+                    aria-expanded={expanded}
                     accessibilityLabel={expanded ? t('prompt.showLess') : t('prompt.showAllLines', { n: lines.length })}
                 >
                     <Text role="label" tone="accent" weight="medium">

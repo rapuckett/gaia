@@ -23,14 +23,14 @@ export default function MessagesGalleryRoute() {
     if (panel && PANEL_STATES.includes(panel)) {
         return (
             <UIProvider>
-                <SessionPanelGallery state={panel as SessionPanelGalleryState} />
+                <SessionPanelGallery key={panel} state={panel as SessionPanelGalleryState} />
             </UIProvider>
         );
     }
     const fixture = isState(state) ? state : 'long';
     return (
         <UIProvider>
-            <MessagesGallery state={fixture} />
+            <MessagesGallery key={fixture} state={fixture} />
         </UIProvider>
     );
 }

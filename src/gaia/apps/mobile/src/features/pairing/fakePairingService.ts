@@ -20,7 +20,7 @@ export function createFakePairingService({ outcome = 'paired', pendingPolls = 2 
     const settled = (): RedeemResult => {
         if (outcome === 'refused') return { state: 'refused' };
         if (outcome === 'unreachable') return { state: 'unreachable' };
-        const pc: PairedPc = { id: invite!.pc_id, name: invite!.name, connection: { baseUrl: invite!.origins[0] } };
+        const pc: PairedPc = { id: invite!.pc_id, name: invite!.name, connection: { baseUrl: invite!.origins[0], pcId: invite!.pc_id } };
         paired = [...paired.filter((p) => p.id !== pc.id), pc];
         return { state: 'paired', pc };
     };
