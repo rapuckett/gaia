@@ -199,7 +199,7 @@ describeNative('card, connector and undo scenes', () => {
         ['panel-chgList', 'changes-review', t('mobileApp.changes.chat.reviewTitle')],
     ])('%s opens the %s sheet over the panel, and Android back closes only that sheet', async (state, button, title) => {
         // Android calls the newest back handler first and stops at the first that returns true.
-        const handlers: (() => boolean | null | undefined)[] = [];
+        const handlers: Parameters<typeof BackHandler.addEventListener>[1][] = [];
         const spy = jest.spyOn(BackHandler, 'addEventListener').mockImplementation((_event, handler) => {
             handlers.push(handler);
             return { remove: () => void handlers.splice(handlers.indexOf(handler), 1) };
@@ -211,7 +211,7 @@ describeNative('card, connector and undo scenes', () => {
         expect(screen.getByTestId(button, opts)).toBeTruthy();
 
         act(() => {
-            [...handlers].reverse().some((h) => h());
+            [...handlers].reverse().some((h) => h({} as never));
         });
         await waitFor(() => expect(screen.queryByText(title, opts)).toBeNull());
         expect(screen.getByTestId(button, opts)).toBeTruthy();
