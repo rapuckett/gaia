@@ -64,6 +64,11 @@ export function isolateUnit(text: string): string {
     return ARABIC_LETTER.test(text) ? `${FSI}${text}${PDI}` : isolate(text, 'ltr');
 }
 
+/** A short name (model, PC, folder or button) as one first-strong island that never wraps mid-name. Never pass sentences or paths. */
+export function keepTogether(name: string): string {
+    return `${FSI}${name.replace(/ /g, '\u00A0')}${PDI}`;
+}
+
 /** `text` without bidi isolates, for comparing what a label says. */
 export function stripIsolates(text: string): string {
     return text.replace(ISOLATES, '');
