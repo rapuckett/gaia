@@ -3,7 +3,7 @@
 
 import { render, screen } from '@testing-library/react-native';
 import type { ReactElement, ReactNode } from 'react';
-import { Platform } from 'react-native';
+import { Platform, StyleSheet } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { Notice, ThemeProvider } from '@/ui';
@@ -41,5 +41,14 @@ describeNative('Notice and VoiceOver', () => {
         await render(<Notice tone="warning" message="Heads up" role="status" testID="n" />, { wrapper: wrap });
         expect(screen.getByTestId('n').props.accessibilityLiveRegion).toBe('polite');
         expect(screen.queryByRole('alert')).toBeNull();
+    });
+
+    it('draws a full hairline border instead of a side rail, with its action as a bordered button', async () => {
+        await render(<Notice tone="danger" message="Offline" action={{ label: 'Check again', onPress: () => {} }} testID="n" />, { wrapper: wrap });
+        const style = StyleSheet.flatten(screen.getByTestId('n').props.style);
+        expect(style.borderStartWidth).toBeUndefined();
+        expect(style.borderWidth).toBe(1);
+        const button = screen.getByRole('button', { name: 'Check again' });
+        expect(StyleSheet.flatten(button.props.style).minHeight).toBe(48);
     });
 });
