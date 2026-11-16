@@ -1,6 +1,8 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
+import { createContext, useContext } from 'react';
+
 import { normalizeBaseUrl } from '@/api/http';
 import { useConnectionStore, type ConnectionConfig } from '@/state/connection';
 
@@ -20,4 +22,12 @@ export function hasTailnetRoute(connection: ConnectionConfig | null | undefined)
 
 export function useActiveRouteKind(): RouteKind | null {
     return useConnectionStore((s) => routeKindOf(s.connection));
+}
+
+/** The dev gallery's scenes show a fake paired PC without connecting the whole app to it. */
+export const ConnectionOverride = createContext<ConnectionConfig | null>(null);
+
+export function useActiveConnection(): ConnectionConfig | null {
+    const stored = useConnectionStore((s) => s.connection);
+    return useContext(ConnectionOverride) ?? stored;
 }

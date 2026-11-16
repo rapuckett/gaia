@@ -3766,7 +3766,7 @@ export const enMessages = {
     'mobileApp.pairing.unreachable.body': 'Connect this phone to the same Wi-Fi as your PC, and check that GAIA is open on it.',
     'mobileApp.pairing.route.home': 'At home',
     'mobileApp.pairing.route.tailnet': 'Through Tailscale',
-    'mobileApp.pairing.unreachable.away': "Couldn't reach your PC. Away from home, turn on Tailscale on this phone.",
+    'mobileApp.pairing.unreachable.away': "Couldn't reach your PC. If you're away from home, turn on Tailscale on this phone.",
     'mobileApp.pairing.pinMismatch': "Your PC's security certificate has changed, so this phone stopped connecting to it. If you reset pairing on the PC, pair this phone again.",
     'mobileApp.composer.attachCamera': 'Camera',
     'mobileApp.composer.cameraOff': 'Camera access is off for GAIA. Turn it on in Settings to take a photo.',

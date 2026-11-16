@@ -5,11 +5,10 @@ import { useState } from 'react';
 
 import { ScreenHeader } from '@/features/nav/ScreenHeader';
 import { describeError, useT } from '@/i18n/useT';
-import { useConnectionStore } from '@/state/connection';
 import { ActionSheet, Badge, Button, EmptyState, ErrorState, Icon, IconButton, ListRow, ListSkeleton, Notice, Row, Screen, Sheet, Stack, Text } from '@/ui';
 import { Cpu, Ellipsis, Plus, Trash2 } from '@/ui/icons';
 
-import { routeKindOf } from './routes';
+import { routeKindOf, useActiveConnection } from './routes';
 import { isCurrentPc, useForgetPc, usePairedPcs, useUsePc } from './pairedPcs';
 import type { PairedPc } from './service';
 
@@ -17,7 +16,7 @@ import type { PairedPc } from './service';
 export function PairedPcsScreen({ onAdd }: { onAdd: () => void }) {
     const t = useT();
     const pcs = usePairedPcs();
-    const connection = useConnectionStore((s) => s.connection);
+    const connection = useActiveConnection();
     const baseUrl = connection?.baseUrl;
     const kind = routeKindOf(connection);
     const routeKey = kind === 'home' ? 'mobileApp.pairing.route.home' : kind === 'tailnet' ? 'mobileApp.pairing.route.tailnet' : null;
@@ -46,6 +45,7 @@ export function PairedPcsScreen({ onAdd }: { onAdd: () => void }) {
                             key={item.id}
                             title={item.name}
                             subtitle={current && routeKey ? t(routeKey) : undefined}
+                            subtitleLines={2}
                             selected={current}
                             leading={<Icon icon={Cpu} size="md" tone="secondary" />}
                             onPress={current ? undefined : () => use.mutate(item)}
