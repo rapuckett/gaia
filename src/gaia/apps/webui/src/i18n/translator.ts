@@ -41,11 +41,6 @@ export const tEn: Translate = translator('en');
 export function dateLocale(t: Translate): string | undefined {
     if (t.locale !== DEFAULT_LOCALE) return `${t.locale}-u-nu-latn`;
     // A device region in another language (an Arabic phone) must not name the months of English text.
-    let region = '';
-    try {
-        region = Intl.DateTimeFormat().resolvedOptions().locale;
-    } catch {
-        return DEFAULT_LOCALE;
-    }
+    const region = Intl.DateTimeFormat().resolvedOptions().locale;
     return /^en(-|$)/i.test(region) ? undefined : DEFAULT_LOCALE;
 }
