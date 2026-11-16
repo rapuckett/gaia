@@ -78,7 +78,13 @@ export function Disclosure({ title, open, onToggle, children, leading, trailing,
     return (
         <View testID={testID}>
             {header}
-            {open ? <View style={{ paddingStart: space.xl, paddingBottom: space.sm }}>{children}</View> : null}
+            {open ? (
+                // A leading spacer, not paddingStart: web keeps I18nManager LTR, so a logical padding lands on the left in Arabic.
+                <View style={{ flexDirection: 'row', paddingBottom: space.sm }}>
+                    <View style={{ width: space.xl }} />
+                    <View style={{ flex: 1 }}>{children}</View>
+                </View>
+            ) : null}
         </View>
     );
 }
