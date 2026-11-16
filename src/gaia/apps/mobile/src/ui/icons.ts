@@ -14,6 +14,7 @@ export {
   Brain,
   Calculator,
   CalendarClock,
+  Camera,
   Check,
   ChefHat,
   ChevronDown,

@@ -4,8 +4,9 @@
 import { GaiaPinMismatchError, GaiaUploadUnsupportedError } from '@/api/errors';
 import { createUtf8Decoder } from '@/api/utf8';
 
-import { GaiaTransport } from '../../modules/gaia-transport';
+import { GaiaTransport, type NativeSubscription } from '../../modules/gaia-transport';
 import type { FetchRequestInit, FetchResponseLike } from './fetch.types';
+import { encodeBody } from './uploadBody';
 
 let lastId = 0;
 let deviceGone: ((pcId: string) => void) | null = null;
@@ -32,18 +33,39 @@ export function transportError(err: unknown): Error {
 /** A request to a paired PC over TLS pinned to its certificate; the device token is added natively. */
 export async function pinnedFetch(pcId: string, url: string, init: FetchRequestInit = {}): Promise<FetchResponseLike> {
     const { signal, body: sent } = init;
-    if (sent !== undefined && typeof sent !== 'string') {
-        throw new GaiaUploadUnsupportedError();
-    }
+    const upload = sent !== undefined && typeof sent !== 'string' ? encodeBody(sent) : null;
+    const { upload: sendUpload } = GaiaTransport;
+    if (upload && !sendUpload) throw new GaiaUploadUnsupportedError();
     const id = `pinned-${++lastId}`;
     if (signal?.aborted) throw Object.assign(new Error('The request was canceled.'), { code: 'aborted' });
-    const abort = () => GaiaTransport.cancel(id);
+    const { onUploadProgress } = init;
+    let progress: NativeSubscription | undefined;
+    if (upload && onUploadProgress && GaiaTransport.addListener) {
+        progress = GaiaTransport.addListener('onUploadProgress', (e) => {
+            if (e.id === id) onUploadProgress(e.sent, e.total);
+        });
+    }
+    const done = () => {
+        signal?.removeEventListener('abort', abort);
+        progress?.remove();
+        progress = undefined;
+    };
+    const abort = () => {
+        done();
+        GaiaTransport.cancel(id);
+    };
     signal?.addEventListener('abort', abort);
-    const done = () => signal?.removeEventListener('abort', abort);
 
     let head;
     try {
-        head = await GaiaTransport.start(id, pcId, init.method ?? 'GET', url, init.headers ?? {}, sent ?? null);
+        const method = init.method ?? 'GET';
+        if (upload && sendUpload) {
+            const headers = Object.fromEntries(Object.entries(init.headers ?? {}).filter(([name]) => name.toLowerCase() !== 'content-type'));
+            if (upload.contentType) headers['Content-Type'] = upload.contentType;
+            head = await sendUpload.call(GaiaTransport, id, pcId, method, url, headers, upload.segments);
+        } else {
+            head = await GaiaTransport.start(id, pcId, method, url, init.headers ?? {}, typeof sent === 'string' ? sent : null);
+        }
     } catch (err) {
         done();
         throw transportError(err);

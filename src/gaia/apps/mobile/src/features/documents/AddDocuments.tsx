@@ -54,7 +54,7 @@ export function AddDocuments({ chatId, chatName, onStart, onBrowse }: AddDocumen
             if (!chatId) holdForNextChat([document.id]);
             return { kind: 'done', message: chatId ? t('docs.attached', { name, chat: chatName ?? '' }) : t('docs.willAttach', { name }) };
         } catch (err) {
-            // The pinned transport can't send a file yet; the request wraps its error, so look at the cause too.
+            // An app build without uploads can't send a file to a paired PC; the request wraps its error, so look at the cause too.
             const refusal = [err, err instanceof Error ? err.cause : null].find((e) => (e as { code?: string } | null)?.code === 'unsupported_body');
             if (refusal) return { kind: 'unsupported', message: describeError(refusal, t) };
             const api = err instanceof GaiaApiError ? err : null;

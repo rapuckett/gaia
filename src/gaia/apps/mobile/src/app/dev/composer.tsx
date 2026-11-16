@@ -9,11 +9,29 @@ import { useState } from 'react';
 import { MAX_MESSAGE_CHARS } from '@webui/utils/messageLimits';
 
 import { COMPOSER_MENU_STATES, ComposerMenusGallery, type ComposerMenuState } from '@/features/composer/ComposerMenusGallery';
-import { Composer, FolderChip, PermissionChip, PrivateChip } from '@/features/composer';
+import { Composer, type Attachments, FolderChip, PermissionChip, PrivateChip } from '@/features/composer';
 import { ControlChip } from '@/features/composer/ControlChip';
 import { useT } from '@/i18n/useT';
 import { Divider, Screen, Stack, UIProvider } from '@/ui';
 import { Cpu } from '@/ui/icons';
+
+const FIXTURE: Attachments['items'] = [
+    { id: 'a', key: 'a', name: 'quarterly-report-final-v3.pdf', uri: '', isImage: false, isMedia: false, status: 'uploading', progress: 40 },
+    { id: 'b', key: 'b', name: 'standup-recording.m4a', uri: '', isImage: false, isMedia: true, status: 'uploaded' },
+    { id: 'c', key: 'c', name: 'notes.doc', uri: '', isImage: false, isMedia: false, status: 'failed', error: 'This file is empty.' },
+    { id: 'd', key: 'd', name: 'IMG_2041.jpg', uri: 'https://picsum.photos/id/237/48', isImage: true, isMedia: false, status: 'uploaded' },
+];
+const noop = () => {};
+const attachmentsFixture: Attachments = {
+    items: FIXTURE,
+    add: noop,
+    addFailed: noop,
+    remove: noop,
+    clear: noop,
+    uploading: true,
+    hasUploaded: true,
+    compose: (text) => text,
+};
 
 export default function ComposerGalleryRoute() {
     const t = useT();
@@ -21,8 +39,7 @@ export default function ComposerGalleryRoute() {
     const [text, setText] = useState('');
     if (!devGalleryEnabled()) return <Redirect href="/" />;
     if (state && (COMPOSER_MENU_STATES as readonly string[]).includes(state)) return <ComposerMenusGallery state={state as ComposerMenuState} />;
-    const noop = () => {};
-    const folder = { path: '/Users/rich/Projects/gaia', name: 'gaia-notes', gaia_folder: false, choosable: false };
+    const folder = { path: '/Users/avery/Projects/gaia', name: 'gaia-notes', gaia_folder: false, choosable: false };
     const chipRow = (running = false, value?: string) => (
         <Composer
             onSend={noop}
@@ -45,6 +62,8 @@ export default function ComposerGalleryRoute() {
             <Screen scroll keyboard="avoid">
                 <Stack gap="md">
                     <Composer value={text} onChange={setText} onSend={noop} />
+                    <Divider />
+                    <Composer onSend={noop} attachments={attachmentsFixture} />
                     <Divider />
                     <Composer onSend={noop} running onStop={noop} />
                     <Divider />

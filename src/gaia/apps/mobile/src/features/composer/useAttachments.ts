@@ -20,7 +20,11 @@ export interface Attachment {
     uri: string;
     isImage: boolean;
     isMedia: boolean;
+    /** Name, size and modified time: the same file picked again has the same key. */
+    key: string;
     status: 'uploading' | 'uploaded' | 'failed';
+    /** Percent sent, 0 to 100; unset until the transport first reports it. */
+    progress?: number;
     serverUrl?: string;
     error?: string;
 }
@@ -29,6 +33,8 @@ export interface Attachment {
 export interface Attachments {
     items: Attachment[];
     add(files: PickedFile[]): void;
+    /** A chip for something that never reached the upload, such as a camera that is off. */
+    addFailed(name: string, message: string): void;
     remove(id: string): void;
     clear(): void;
     uploading: boolean;
@@ -67,7 +73,14 @@ export function useAttachments(): Attachments {
             controllers.current.set(a.id, controller);
             try {
                 const blob = new File(a.uri);
-                const result = await requireClient(client).uploadFile(blob, a.name, { signal: controller.signal });
+                let percent: number | undefined;
+                const onUploadProgress = (sent: number, total: number) => {
+                    const next = Math.min(100, Math.floor((sent / total) * 100));
+                    if (next === percent) return;
+                    percent = next;
+                    patch(a.id, { progress: next });
+                };
+                const result = await requireClient(client).uploadFile(blob, a.name, { signal: controller.signal, onUploadProgress });
                 patch(a.id, { status: 'uploaded', serverUrl: result.url });
             } catch (err) {
                 if (controller.signal.aborted) return;
@@ -84,9 +97,17 @@ export function useAttachments(): Attachments {
     const add = useCallback(
         (files: PickedFile[]) => {
             // The same file picked twice is one chip; a refused one may be tried again.
+            const keyOf = (f: PickedFile) => (f.size === undefined ? f.uri : `${f.name}|${f.size}|${f.modified ?? ''}`);
+            const seen = new Set<string>();
             const fresh = files
-                .filter((f) => !current.current.some((p) => p.uri === f.uri && p.status !== 'failed'))
+                .filter((f) => {
+                    const key = keyOf(f);
+                    if (seen.has(key) || current.current.some((p) => p.key === key && p.status !== 'failed')) return false;
+                    seen.add(key);
+                    return true;
+                })
                 .map((f): Attachment => ({
+                    key: keyOf(f),
                     id: `attach-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
                     name: f.name,
                     uri: f.uri,
@@ -95,11 +116,16 @@ export function useAttachments(): Attachments {
                     status: 'uploading',
                 }));
             if (fresh.length === 0) return;
-            setItems((prev) => [...prev.filter((p) => !fresh.some((a) => a.uri === p.uri)), ...fresh]);
+            setItems((prev) => [...prev.filter((p) => !fresh.some((a) => a.key === p.key)), ...fresh]);
             fresh.forEach((a) => void upload(a));
         },
         [upload],
     );
+
+    const addFailed = useCallback((name: string, message: string) => {
+        const id = `attach-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        setItems((prev) => [...prev, { id, key: id, name, uri: '', isImage: false, isMedia: false, status: 'failed', error: message }]);
+    }, []);
 
     const remove = useCallback((id: string) => {
         controllers.current.get(id)?.abort();
@@ -124,6 +150,7 @@ export function useAttachments(): Attachments {
     return {
         items,
         add,
+        addFailed,
         remove,
         clear,
         uploading: items.some((a) => a.status === 'uploading'),

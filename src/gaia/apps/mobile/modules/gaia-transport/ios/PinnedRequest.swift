@@ -34,6 +34,8 @@ private func constantTimeEqual(_ a: Data, _ b: Data) -> Bool {
   return diff == 0
 }
 
+private let progressSeconds: TimeInterval = 0.1
+
 /// One request over TLS pinned to a PC's certificate: the leaf's SHA-256 must match, and nothing
 /// else about the certificate is checked. Redirects are refused, and nothing is cached or stored.
 final class PinnedRequest: NSObject, URLSessionDataDelegate, @unchecked Sendable {
@@ -49,14 +51,21 @@ final class PinnedRequest: NSObject, URLSessionDataDelegate, @unchecked Sendable
   private var ended = false
   private var failure: Exception?
   private var waiting: Read?
+  private var temporary: URL?
+  private var onProgress: ((Int64, Int64) -> Void)?
+  private var lastProgressAt: TimeInterval = 0
 
   init(pin: Data) {
     self.pin = pin
   }
 
+  /// With `upload`, the body is sent from its file, and a temporary one is deleted when the request ends.
+  /// `onProgress` hears the bytes sent of the body's total, at most every `progressSeconds`, and once at the end.
   func start(
     _ request: URLRequest,
     idleSeconds: TimeInterval,
+    upload: UploadBody? = nil,
+    onProgress: ((Int64, Int64) -> Void)? = nil,
     onResponse: @escaping (Result<HTTPURLResponse, Exception>) -> Void
   ) {
     let config = URLSessionConfiguration.ephemeral
@@ -72,12 +81,21 @@ final class PinnedRequest: NSObject, URLSessionDataDelegate, @unchecked Sendable
     let session = URLSession(configuration: config, delegate: self, delegateQueue: queue)
     var request = request
     request.httpShouldHandleCookies = false
-    let task = session.dataTask(with: request)
-    lock.withLock {
+    let task: URLSessionDataTask
+    if let upload {
+      task = session.uploadTask(with: request, fromFile: upload.file)
+    } else {
+      task = session.dataTask(with: request)
+    }
+    let cancelledEarly = lock.withLock { () -> Bool in
       self.onResponse = onResponse
       self.task = task
+      self.temporary = upload?.temporary
+      self.onProgress = onProgress
+      return cancelled
     }
     task.resume()
+    if cancelledEarly { task.cancel() }
     // The session keeps its delegate until it is invalidated; this lets it go once the task ends.
     session.finishTasksAndInvalidate()
   }
@@ -189,16 +207,40 @@ final class PinnedRequest: NSObject, URLSessionDataDelegate, @unchecked Sendable
     lock.unlock()
   }
 
+  func urlSession(
+    _ session: URLSession,
+    task: URLSessionTask,
+    didSendBodyData bytesSent: Int64,
+    totalBytesSent: Int64,
+    totalBytesExpectedToSend: Int64
+  ) {
+    guard totalBytesExpectedToSend > 0 else { return }
+    let now = ProcessInfo.processInfo.systemUptime
+    let report = lock.withLock { () -> ((Int64, Int64) -> Void)? in
+      guard let onProgress else { return nil }
+      let finished = totalBytesSent >= totalBytesExpectedToSend
+      guard finished || now - lastProgressAt >= progressSeconds else { return nil }
+      lastProgressAt = now
+      if finished { self.onProgress = nil }
+      return onProgress
+    }
+    report?(totalBytesSent, totalBytesExpectedToSend)
+  }
+
   func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
     lock.lock()
     let failure = error.map { describe($0) }
     ended = true
+    onProgress = nil
     self.failure = failure
     let callback = onResponse
     onResponse = nil
     let waiting = self.waiting
     self.waiting = nil
+    let temporary = self.temporary
+    self.temporary = nil
     lock.unlock()
+    if let temporary { removeTemporary(temporary) }
     callback?(.failure(failure ?? transportError("network", "The PC closed the connection without answering.")))
     waiting?(failure.map { .failure($0) } ?? .success(nil))
   }

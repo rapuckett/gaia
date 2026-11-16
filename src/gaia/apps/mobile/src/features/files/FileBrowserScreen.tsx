@@ -205,7 +205,7 @@ export function FileBrowserScreen({ chatId, onClose, onPreview, onAsk, initial }
                 </Stack>
             }
             footer={
-                <Stack gap="sm" paddingX="lg" paddingY="sm">
+                <Stack gap="sm">
                     {result ? <Notice tone={result.tone} role="note" message={result.message} onDismiss={() => setResult(null)} /> : null}
                     <Text role="caption" tone="secondary">
                         {add.isPending ? t.plural('fileBrowser.adding', chosen.length) : chosen.length > 0 ? t.plural('fileBrowser.selected', chosen.length) : t('fileBrowser.selectHint')}
@@ -292,7 +292,7 @@ export function FileBrowserScreen({ chatId, onClose, onPreview, onAsk, initial }
                 {denied ? <Notice tone="danger" message={t(pcIsMac ? 'fileBrowser.deniedMac' : 'fileBrowser.denied', { name: denied })} /> : null}
                 {failed ? <Notice tone="danger" message={failed} action={{ label: t('docs.loadRetry'), onPress: () => void (searching ? search.refetch() : browse.refetch()) }} /> : null}
             </Stack>
-            {loading && items.length === 0 ? <ListSkeleton rows={4} /> : null}
+            {loading && items.length === 0 ? <ListSkeleton rows={4} label={t('fileBrowser.loading')} /> : null}
             {!loading && !failed && !denied && items.length === 0 ? <EmptyState title={t(emptyKey(searching, entries.length - shown.length))} /> : null}
             {items.length > 0 ? (
                 <List

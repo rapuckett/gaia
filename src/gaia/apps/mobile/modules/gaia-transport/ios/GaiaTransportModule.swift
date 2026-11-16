@@ -20,6 +20,9 @@ public class GaiaTransportModule: Module {
   public func definition() -> ModuleDefinition {
     Name("GaiaTransport")
 
+    // An upload's bytes sent so far, by request id; never its body.
+    Events("onUploadProgress")
+
     // Redeems a pairing code; the PC's answer without the token, which is kept here.
     AsyncFunction("pair") {
       (pcId: String, origins: [String], pin: String, headers: [String: String], body: String, promise: Promise) in
@@ -29,6 +32,15 @@ public class GaiaTransportModule: Module {
     AsyncFunction("start") {
       (id: String, pcId: String, method: String, url: String, headers: [String: String], body: String?, promise: Promise) in
       self.start(id: id, pcId: pcId, method: method, url: url, headers: headers, body: body, promise: promise)
+    }
+
+    // As start, with a body from disk: one picked file, or a multipart form JavaScript laid out.
+    AsyncFunction("upload") {
+      (
+        id: String, pcId: String, method: String, url: String, headers: [String: String], segments: [BodySegment],
+        promise: Promise
+      ) in
+      self.upload(id: id, pcId: pcId, method: method, url: url, headers: headers, segments: segments, promise: promise)
     }
 
     AsyncFunction("read") { (id: String, promise: Promise) in
@@ -62,6 +74,10 @@ public class GaiaTransportModule: Module {
       try DeviceVault.delete(pcId)
     }
 
+    AsyncFunction("dropAll") { () throws in
+      try DeviceVault.deleteAll()
+    }
+
     // Makes a secret saved by `pair` under a staging id the one for that PC, once the PC allows it.
     AsyncFunction("promote") { (stagedId: String, pcId: String) throws in
       guard let staged = try DeviceVault.load(stagedId) else {
@@ -75,24 +91,59 @@ public class GaiaTransportModule: Module {
   private func start(
     id: String, pcId: String, method: String, url: String, headers: [String: String], body: String?, promise: Promise
   ) {
+    guard let (prepared, pin) = authorized(pcId: pcId, method: method, url: url, headers: headers, promise: promise)
+    else { return }
+    var request = prepared
+    if let body { request.httpBody = Data(body.utf8) }
+    let pinned = PinnedRequest(pin: pin)
+    open.add(id, pinned)
+    send(id, pinned, request, upload: nil, promise: promise)
+  }
+
+  private func upload(
+    id: String, pcId: String, method: String, url: String, headers: [String: String], segments: [BodySegment],
+    promise: Promise
+  ) {
+    guard let (request, pin) = authorized(pcId: pcId, method: method, url: url, headers: headers, promise: promise)
+    else { return }
+    // Open before the body is written, so a cancel while a large file is copied still lands.
+    let pinned = PinnedRequest(pin: pin)
+    open.add(id, pinned)
+    let body: UploadBody
+    do {
+      body = try UploadBody.make(segments)
+    } catch {
+      open.remove(id)
+      promise.reject(error)
+      return
+    }
+    send(id, pinned, request, upload: body, promise: promise) { [weak self] sent, total in
+      self?.sendEvent("onUploadProgress", ["id": id, "sent": Double(sent), "total": Double(total)])
+    }
+  }
+
+  /// The request to the paired PC with its device token, or nil once the promise is rejected.
+  private func authorized(
+    pcId: String, method: String, url: String, headers: [String: String], promise: Promise
+  ) -> (URLRequest, Data)? {
     let secret: DeviceSecret
     do {
       guard let found = try DeviceVault.load(pcId) else {
         promise.reject(transportError("not_paired", "This phone isn't paired with that PC. Pair it again from the PC."))
-        return
+        return nil
       }
       secret = found
     } catch {
       promise.reject(error)
-      return
+      return nil
     }
     guard let target = URL(string: url), sameOrigin(target, secret.origin) else {
       promise.reject(transportError("origin_mismatch", "That address isn't the paired PC's, so the request wasn't sent."))
-      return
+      return nil
     }
     guard let pin = pinBytes(secret.pin) else {
       promise.reject(transportError("keychain", "The paired PC's saved pin is damaged. Pair the phone again."))
-      return
+      return nil
     }
     var request = URLRequest(url: target)
     request.httpMethod = method
@@ -100,11 +151,14 @@ public class GaiaTransportModule: Module {
       request.setValue(value, forHTTPHeaderField: name)
     }
     request.setValue("Bearer \(secret.token)", forHTTPHeaderField: "Authorization")
-    if let body { request.httpBody = Data(body.utf8) }
+    return (request, pin)
+  }
 
-    let pinned = PinnedRequest(pin: pin)
-    open.add(id, pinned)
-    pinned.start(request, idleSeconds: requestIdleSeconds) { result in
+  private func send(
+    _ id: String, _ pinned: PinnedRequest, _ request: URLRequest, upload: UploadBody?, promise: Promise,
+    onProgress: ((Int64, Int64) -> Void)? = nil
+  ) {
+    pinned.start(request, idleSeconds: requestIdleSeconds, upload: upload, onProgress: onProgress) { result in
       switch result {
       case .success(let response):
         promise.resolve(describe(response))
