@@ -3,10 +3,11 @@
 
 import type { FileDiff, TurnChanges } from '@/api/client.types';
 import { useTurnDiff } from '@/data';
-import { describeErrorWith, useT, type Translate } from '@/i18n/useT';
+import { useT, type Translate } from '@/i18n/useT';
 import { ErrorState, LoadingState, Sheet, Stack, Text } from '@/ui';
 
 import { DiffCard } from '../cards/DiffCard';
+import { loadFailure } from './changesText';
 
 export function noteOf(file: FileDiff, t: Translate): string | undefined {
     const sizes = { before: file.before_size, after: file.after_size };
@@ -20,12 +21,13 @@ export function noteOf(file: FileDiff, t: Translate): string | undefined {
 export function ChangesReview({ sessionId, turn, onClose }: { sessionId: string; turn: TurnChanges; onClose: () => void }) {
     const t = useT();
     const diff = useTurnDiff(sessionId, turn.turn_id);
+    const failure = diff.isError ? loadFailure(diff.error, t, { withReason: 'mobileApp.changes.loadFailed', noReason: 'mobileApp.changes.loadFailedNoReason' }) : null;
     const label = { edited: t('chg.edited'), created: t('chg.created'), deleted: t('chg.deleted') };
     return (
         <Sheet open onClose={onClose} title={t('mobileApp.changes.reviewTitle')}>
             <Stack gap="md" paddingX="lg" paddingY="md">
-                {diff.isError ? (
-                    <ErrorState title={t.compose((say) => say('mobileApp.changes.loadFailed', { error: describeErrorWith(diff.error, say) }))} onRetry={() => void diff.refetch()} />
+                {failure ? (
+                    <ErrorState title={failure.text} detail={failure.detail} onRetry={() => void diff.refetch()} />
                 ) : !diff.data ? (
                     <LoadingState title={t('mobileApp.changes.loading')} />
                 ) : (
