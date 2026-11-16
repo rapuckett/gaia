@@ -57,6 +57,13 @@ export function isolate(text: string, dir: 'ltr' | 'rtl'): string {
     return `${dir === 'rtl' ? RLI : LRI}${text}${PDI}`;
 }
 
+const ARABIC_LETTER = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]/;
+
+/** A number with its unit as one island: left to right for a Latin unit, first-strong for an Arabic one so it reads number-then-unit. */
+export function isolateUnit(text: string): string {
+    return ARABIC_LETTER.test(text) ? `${FSI}${text}${PDI}` : isolate(text, 'ltr');
+}
+
 /** `text` without bidi isolates, for comparing what a label says. */
 export function stripIsolates(text: string): string {
     return text.replace(ISOLATES, '');

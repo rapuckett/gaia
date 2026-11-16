@@ -37,13 +37,6 @@ export const SOURCE_KEYS: Record<string, MessageKey> = {
 /** The web's header pills, in its order. */
 export const STAT_STATUSES = ['queued', 'in_progress', 'completed', 'failed'] as const;
 
-export const STAT_TONES: Record<(typeof STAT_STATUSES)[number], BadgeTone> = {
-    queued: 'accent',
-    in_progress: 'warning',
-    completed: 'success',
-    failed: 'danger',
-};
-
 export const PRIORITY_TONES: Record<GoalPriority, BadgeTone> = { low: 'neutral', medium: 'warning', high: 'danger' };
 
 export function statusTone(status: string): StatusTone {
