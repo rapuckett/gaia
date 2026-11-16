@@ -23,6 +23,8 @@ export interface Attachment {
     /** Name, size and modified time: the same file picked again has the same key. */
     key: string;
     status: 'uploading' | 'uploaded' | 'failed';
+    /** Percent sent, 0 to 100; unset until the transport first reports it. */
+    progress?: number;
     serverUrl?: string;
     error?: string;
 }
@@ -71,7 +73,14 @@ export function useAttachments(): Attachments {
             controllers.current.set(a.id, controller);
             try {
                 const blob = new File(a.uri);
-                const result = await requireClient(client).uploadFile(blob, a.name, { signal: controller.signal });
+                let percent: number | undefined;
+                const onUploadProgress = (sent: number, total: number) => {
+                    const next = Math.min(100, Math.floor((sent / total) * 100));
+                    if (next === percent) return;
+                    percent = next;
+                    patch(a.id, { progress: next });
+                };
+                const result = await requireClient(client).uploadFile(blob, a.name, { signal: controller.signal, onUploadProgress });
                 patch(a.id, { status: 'uploaded', serverUrl: result.url });
             } catch (err) {
                 if (controller.signal.aborted) return;
