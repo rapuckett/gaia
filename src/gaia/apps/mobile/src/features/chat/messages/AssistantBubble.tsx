@@ -21,6 +21,7 @@ import { AnswerFooter } from '../activity/AnswerFooter';
 import { savedActivity } from '../activity/savedActivity';
 import { AnswerCards } from '../cards/RenderCard';
 import { EmailConnect } from '../EmailConnect';
+import { LibraryNotices, libraryNoticesOf } from '../LibraryNotices';
 import { GrantNote, isAgentNotGranted } from '../GrantNote';
 import { CutOffNote, StoppedNote } from '../EndingNotes';
 import { Markdown } from '../markdown/Markdown';
@@ -83,6 +84,7 @@ export function AssistantBubble({ message, streaming = false, latencyMs, context
             {sessionId && !streaming && !cancelled && message.id > 0 ? (
                 <TurnChanges sessionId={sessionId} messageId={message.id} reportError={newest} />
             ) : null}
+            {!streaming && !cancelled ? <LibraryNotices notices={libraryNoticesOf(message)} /> : null}
             {cutOff ? <CutOffNote cutOff={cutOff} /> : null}
             {cancelled ? <StoppedNote stop={{ state: 'stopped' }} /> : null}
             {!streaming && !cancelled ? <SavedReplyErrors message={message} fixShownBelow={fixShownBelow} /> : null}
