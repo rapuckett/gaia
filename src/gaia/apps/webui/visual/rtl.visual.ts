@@ -291,7 +291,8 @@ const audit = (page: Page): Promise<string[]> =>
             const hint = getComputedStyle(input, '::placeholder');
             paint.font = `${hint.fontStyle} ${hint.fontWeight} ${hint.fontSize} ${hint.fontFamily}`;
             const s = getComputedStyle(input);
-            const room = input.clientWidth - parseFloat(s.paddingLeft) - parseFloat(s.paddingRight);
+            // offsetWidth, not clientWidth: an input's clientWidth here already leaves out the padding.
+            const room = input.offsetWidth - ['borderLeftWidth', 'borderRightWidth', 'paddingLeft', 'paddingRight'].reduce((sum, side) => sum + parseFloat(s[side as 'paddingLeft']), 0);
             const need = paint.measureText(input.placeholder.replace(/[⁦-⁩]/g, '')).width;
             if (need > room + 1) problems.push(`placeholder cut off (${Math.round(need)}px in ${Math.round(room)}px): "${input.placeholder.slice(0, 40)}"`);
         }
@@ -1287,8 +1288,8 @@ for (const locale of ['ar', 'en']) {
             const r = (await chip.boundingBox())!;
             expect(r.x, 'the path chip starts outside the column').toBeGreaterThanOrEqual(box.x - 1);
             expect(r.x + r.width, 'the path chip runs past the column').toBeLessThanOrEqual(box.x + box.width + 1);
-            // The whole path stays one click target, with the full path in its title.
-            await expect(chip).toHaveAttribute('title', new RegExp(`${LONG_PATH.replace(/[\\.]/g, '\\$&')}$`));
+            // The whole path stays one click target, with the full path in its title (in Arabic the English gloss follows it).
+            await expect(chip).toHaveAttribute('title', new RegExp(`${LONG_PATH.replace(/[\\.]/g, '\\$&')}`));
         }
         const sideways = await scroller.evaluate((el) => el.scrollWidth - el.clientWidth);
         expect(sideways, 'the chat scrolls sideways').toBeLessThanOrEqual(1);
