@@ -1,7 +1,8 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ComponentRef } from 'react';
+import { useWindowDimensions, View, type ScrollView } from 'react-native';
 import { useShallow } from 'zustand/react/shallow';
 
 import type { GaiaNotification, NotificationType } from '@webui/types/agent';
@@ -39,8 +40,11 @@ const ICONS: Record<NotificationType, { icon: LucideIcon; tone: 'accent' | 'warn
 };
 
 /** The notification center: a pushed screen, opened from the bell in the drawer's footer. */
-export function NotificationCenterScreen({ onBack, onOpenChat }: { onBack: () => void; onOpenChat: (sessionId: string) => void }) {
+export function NotificationCenterScreen({ onBack, onOpenChat, receiptId }: { onBack: () => void; onOpenChat: (sessionId: string) => void; receiptId?: string }) {
     const t = useT();
+    const scrollRef = useRef<ComponentRef<typeof ScrollView>>(null);
+    const { height: windowHeight } = useWindowDimensions();
+    const [laidOut, setLaidOut] = useState<{ id: string; y: number; height: number } | null>(null);
     const items = useNotificationStore(useShallow(selectVisible));
     const filter = useNotificationStore((s) => s.filter);
     const unread = useNotificationStore(selectUnreadCount);
@@ -48,9 +52,18 @@ export function NotificationCenterScreen({ onBack, onOpenChat }: { onBack: () =>
     const history = usePermissionPromptStore((s) => s.history);
     const now = useNow();
     const locale = useLocaleCode();
+    const target = receiptId ? items.find((n) => n.type === 'policy_alert' && n.receiptId === receiptId) : undefined;
+    const targetId = target?.id;
+
+    // As the web UI does, center the receipt's notification once it has been laid out.
+    useEffect(() => {
+        if (!laidOut || laidOut.id !== targetId) return;
+        scrollRef.current?.scrollTo({ y: Math.max(0, laidOut.y - (windowHeight - laidOut.height) / 2), animated: true });
+    }, [laidOut, targetId, windowHeight]);
 
     return (
         <Screen
+            scrollRef={scrollRef}
             header={
                 <SettingsHeader
                     title={t('notifications.title')}
@@ -83,6 +96,11 @@ export function NotificationCenterScreen({ onBack, onOpenChat }: { onBack: () =>
                     ))}
                 </Row>
             </Stack>
+            {receiptId && !target ? (
+                <Stack paddingX="gutter" paddingY="sm">
+                    <Notice tone="warning" message={t('activity.policy.receiptUnavailable')} testID="ntf-receipt-missing" />
+                </Stack>
+            ) : null}
             {items.length === 0 ? (
                 <EmptyState title={t('notifications.empty')} icon={Bell} />
             ) : (
@@ -95,6 +113,7 @@ export function NotificationCenterScreen({ onBack, onOpenChat }: { onBack: () =>
                         waiting={pending.includes(n.confirmId ?? n.id)}
                         answered={n.response ?? history[n.sessionId ?? '']?.find((h) => h.id === n.id)?.response}
                         onOpenChat={onOpenChat}
+                        onLaidOut={n.id === targetId ? (y, height) => setLaidOut({ id: n.id, y, height }) : undefined}
                     />
                 ))
             )}
@@ -119,9 +138,10 @@ interface ItemProps {
     waiting: boolean;
     answered: GaiaNotification['response'];
     onOpenChat: (sessionId: string) => void;
+    onLaidOut?: (y: number, height: number) => void;
 }
 
-function NotificationItem({ n, now, locale, waiting, answered, onOpenChat }: ItemProps) {
+function NotificationItem({ n, now, locale, waiting, answered, onOpenChat, onLaidOut }: ItemProps) {
     const t = useT();
     const confirm = useConfirmTool();
     const { icon, tone } = ICONS[n.type];
@@ -145,7 +165,7 @@ function NotificationItem({ n, now, locale, waiting, answered, onOpenChat }: Ite
     };
 
     return (
-        <Stack testID={`ntf-${n.id}`}>
+        <View testID={`ntf-${n.id}`} onLayout={onLaidOut ? (e) => onLaidOut(e.nativeEvent.layout.y, e.nativeEvent.layout.height) : undefined}>
             <Divider />
             <Pressable onPress={open} accessibilityLabel={`${title}. ${message}`}>
                 <Stack gap="xs" paddingX="lg" paddingY="md">
@@ -185,7 +205,7 @@ function NotificationItem({ n, now, locale, waiting, answered, onOpenChat }: Ite
                     {failed ? <Notice tone="danger" message={failed} /> : null}
                 </Stack>
             </Pressable>
-        </Stack>
+        </View>
     );
 }
 
