@@ -40,7 +40,7 @@ describeNative('library notices on a reply', () => {
         expect(screen.getByText('b.md has the same content as a.md')).toBeTruthy();
     });
 
-    it('puts them above the reply as quiet left-to-right captions', async () => {
+    it('puts them above the reply as centered left-to-right captions', async () => {
         await show(reply({ library_notices: [NOTICE] }));
         const notice = screen.getByText(NOTICE);
         expect(notice.props.style).toEqual(expect.objectContaining({ writingDirection: 'ltr', textAlign: 'center' }));

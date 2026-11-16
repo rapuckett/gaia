@@ -19,13 +19,13 @@ export function libraryNoticesFromEvents(events: readonly StreamEvent[]): string
     return [];
 }
 
-/** What the PC said about files it kept or could not add: quiet centered lines above the reply, each left to right as the server wrote it. */
+/** What the PC said about files it kept or could not add: small centered lines above the reply, each left to right as the server wrote it. */
 export function LibraryNotices({ notices }: { notices: readonly string[] }) {
     if (notices.length === 0) return null;
     return (
         <Stack gap="xs" paddingY="sm" testID="library-notices" accessibilityRole="text">
             {notices.map((text, i) => (
-                <Text key={`${i}-${text}`} role="caption" tone="muted" align="center" dir="ltr">
+                <Text key={`${i}-${text}`} role="caption" align="center" dir="ltr">
                     {text}
                 </Text>
             ))}
