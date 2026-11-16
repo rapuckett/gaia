@@ -373,6 +373,7 @@ export function ModelMenu({ open, onClose, turnRunning, queued, onQueue, switchE
                         key={p.id}
                         title={t('modelMenu.addKey')}
                         subtitle={t('modelMenu.connectInSettings', { provider: providerName(t, p) })}
+                        subtitleLines={3}
                         leading={<Icon icon={KeyRound} size="sm" tone="secondary" />}
                         onPress={() => toSettings(p.id)}
                         testID={`model-menu-key-${p.id}`}
@@ -381,7 +382,7 @@ export function ModelMenu({ open, onClose, turnRunning, queued, onQueue, switchE
                 {unavailable > 0 ? (
                     <ListRow title={t.plural('modelMenu.unavailable', unavailable)} onPress={() => toSettings()} testID="model-menu-unavailable" />
                 ) : null}
-                <ListRow title={t('modelMenu.addFromLink')} subtitle={t('modelMenu.addFromLinkNote')} onPress={() => toSettings()} testID="model-menu-link" />
+                <ListRow title={t('modelMenu.addFromLink')} subtitle={t('modelMenu.addFromLinkNote')} subtitleLines={3} onPress={() => toSettings()} testID="model-menu-link" />
                 <ListRow title={t('modelMenu.providers')} onPress={() => toSettings()} testID="model-menu-providers" />
                 <Button variant="secondary" label={t('modelMenu.cancel')} onPress={onClose} />
             </Stack>
