@@ -5,11 +5,13 @@ import { View } from 'react-native';
 
 import type { StartScreen } from '@webui/types';
 
+import { useSessionEnvironment } from '@/data';
 import { useT } from '@/i18n/useT';
 import { Icon, Row, Text } from '@/ui';
 import { Folder } from '@/ui/icons';
 
 import { ChipMeasure, useChipCollapsed } from './ChipFitContext';
+import { ControlChip } from './ControlChip';
 
 /** Where the new chat's agent works. Choosing another folder is done on the PC. */
 export function FolderChip({ folder }: { folder: StartScreen['working_folder'] | undefined }) {
@@ -36,5 +38,27 @@ export function FolderChip({ folder }: { folder: StartScreen['working_folder'] |
             <ChipMeasure id="folder">{content(false)}</ChipMeasure>
             {content(iconOnly)}
         </View>
+    );
+}
+
+const baseName = (path: string) => path.split(/[\\/]/).filter(Boolean).pop() ?? path;
+
+/** The folder a chat started in, beside the model in its composer; tap to see the chat's folders. Hidden when there is none. */
+export function SessionFolderChip({ sessionId, live, onOpen }: { sessionId: string; live?: boolean; onOpen: () => void }) {
+    const t = useT();
+    const env = useSessionEnvironment(sessionId, { enabled: true, live }).data;
+    const folder = env?.folders.find((f) => f.source === 'working_folder');
+    if (!folder) return null;
+    const name = baseName(folder.path);
+    return (
+        <ControlChip
+            label={name}
+            icon={Folder}
+            chip="folder"
+            onPress={onOpen}
+            accessibilityLabel={t('folderChip.workingFolder', { name })}
+            accessibilityHint={t('folderChip.worksIn', { path: folder.path })}
+            testID="session-folder-chip"
+        />
     );
 }
