@@ -26,6 +26,7 @@ const EXPECTED: Record<string, string> = {
     'route-home': t('mobileApp.pairing.route.home'),
     'route-tailnet': t('mobileApp.pairing.route.tailnet'),
     'route-tailnet-long-name': t('mobileApp.pairing.route.tailnet'),
+    'two-pcs-same-host': t('mobileApp.pairing.pcs.use'),
     'unreachable-away': t('mobileApp.pairing.unreachable.away'),
 };
 
