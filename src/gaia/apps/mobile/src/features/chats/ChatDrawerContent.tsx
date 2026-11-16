@@ -32,7 +32,7 @@ import {
     Text,
 } from '@/ui';
 import { useLargeText } from '@/ui/theme/a11y';
-import { Ellipsis, EyeOff, Monitor, Plus, X } from '@/ui/icons';
+import { Ellipsis, EyeOff, Monitor, SquarePen, X } from '@/ui/icons';
 
 import { ChatRowSheets, type RowSheet } from './ChatRowSheets';
 import { declaredNavEntries, type NavEntry } from './navEntries';
@@ -140,9 +140,14 @@ export function ChatDrawerContent({ activeId, onSelect, onClose, onNewChat, onPc
     const alert = failure ?? error;
     const largeText = useLargeText();
 
-    const navRows = entries.filter((e) => !e.footer).map((e) => (
-        <NavRow key={e.key} entry={e} active={activeRoute === e.route} onOpen={open} />
-    ));
+    const navRows = (
+        <>
+            {onNewChat ? <ListRow title={t('sidebar.newChat')} leading={<Icon icon={SquarePen} size="sm" tone="secondary" />} onPress={newChat} /> : null}
+            {entries.filter((e) => !e.footer).map((e) => (
+                <NavRow key={e.key} entry={e} active={activeRoute === e.route} onOpen={open} />
+            ))}
+        </>
+    );
     const footerRows = (
         <Stack>
             {entries.filter((e) => e.footer).map((e) => (
@@ -215,7 +220,7 @@ export function ChatDrawerContent({ activeId, onSelect, onClose, onNewChat, onPc
         <Screen
             edges={['top', 'bottom', 'start']}
             footerBleed
-            header={<Header onClose={close} onNewChat={onNewChat ? newChat : undefined} onPcs={onPcs} />}
+            header={<Header onClose={close} onPcs={onPcs} />}
             footer={largeText ? undefined : footerRows}
         >
             <Stack paddingX="lg" paddingY="sm">
@@ -252,7 +257,7 @@ export function ChatDrawerContent({ activeId, onSelect, onClose, onNewChat, onPc
 // The same mark as the web sidebar's brand.
 const gaiaRobot: ImageSourcePropType = require('@webui/assets/gaia-robot.png');
 
-function Header({ onClose, onNewChat, onPcs }: { onClose: () => void; onNewChat?: () => void; onPcs?: () => void }) {
+function Header({ onClose, onPcs }: { onClose: () => void; onPcs?: () => void }) {
     const t = useT();
     const largeText = useLargeText();
     const brand = (
@@ -266,7 +271,6 @@ function Header({ onClose, onNewChat, onPcs }: { onClose: () => void; onNewChat?
     const buttons = (
         <>
             {onPcs ? <IconButton icon={Monitor} label={t('mobileApp.pairing.pcs.title')} onPress={onPcs} testID="pcs-drawer-button" /> : null}
-            {onNewChat ? <IconButton icon={Plus} label={t('sidebar.newChat')} onPress={onNewChat} /> : null}
             <IconButton icon={X} label={t('sidebar.collapse')} onPress={onClose} />
         </>
     );
