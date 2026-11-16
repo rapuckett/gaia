@@ -106,6 +106,10 @@ export function measuredText(t: Translate, evidence: string): string {
     }));
 }
 
+// "1M" reads at a glance; "1,048,576" has to be counted.
+const compactCount = (n: number): string =>
+    new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 0 }).format(n);
+
 /** Where it runs, its size, speed and context, as one line; empty when there is nothing to say. */
 export function modelFacts(t: Translate, m: ProviderModel): string {
     const placement = m.placement?.label;
@@ -113,6 +117,6 @@ export function modelFacts(t: Translate, m: ProviderModel): string {
         placement && (m.placement?.source === 'expected' ? say('settings.model.expected', { label: placement }) : placement),
         m.size_gb ? say(m.downloaded ? 'settings.model.sizeOnDisk' : 'settings.model.sizeDownload', { size: `${m.size_gb} GB` }) : null,
         m.tokens_per_second ? say('settings.model.speed', { speed: `${Math.round(m.tokens_per_second)} tok/s` }) : null,
-        !m.placement && m.context_length ? say('settings.model.contextTokens', { size: m.context_length.toLocaleString() }) : null,
+        !m.placement && m.context_length ? say('settings.model.contextTokens', { size: compactCount(m.context_length) }) : null,
     ].filter(Boolean).join(' · '));
 }
