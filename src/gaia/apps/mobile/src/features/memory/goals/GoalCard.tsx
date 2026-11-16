@@ -29,7 +29,7 @@ export function GoalCard({ goal, busy, onCancel, onDelete }: GoalCardProps) {
             <Pressable
                 onPress={() => setOpen((was) => !was)}
                 accessibilityLabel={`${goal.title}. ${t(STATUS_KEYS[goal.status] ?? STATUS_KEYS.queued!)}, ${t(PRIORITY_KEYS[goal.priority])}`}
-                accessibilityState={{ expanded: open }}
+                aria-expanded={open}
                 testID={`goal-toggle-${goal.id}`}
             >
                 <Stack gap="sm" padding="md">
