@@ -38,6 +38,15 @@ export default function ComposerGalleryRoute() {
     const { state } = useLocalSearchParams<{ state?: string }>();
     const [text, setText] = useState('');
     if (!devGalleryEnabled()) return <Redirect href="/" />;
+    if (state === 'blocked') {
+        return (
+            <UIProvider>
+                <Screen scroll keyboard="avoid">
+                    <Composer onSend={noop} disabledReason={t('chat.retiredReadOnly', { agent: 'chat' })} />
+                </Screen>
+            </UIProvider>
+        );
+    }
     if (state && (COMPOSER_MENU_STATES as readonly string[]).includes(state)) return <ComposerMenusGallery state={state as ComposerMenuState} />;
     const folder = { path: '/Users/avery/Projects/gaia', name: 'gaia-notes', gaia_folder: false, choosable: false };
     const chipRow = (running = false, value?: string) => (
