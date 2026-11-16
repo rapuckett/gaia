@@ -58,22 +58,22 @@ export function downloadView(status: SetupRunStatus | null, plan: SetupPlan | un
 /** What the progress chip shows: "Downloading {done} of {count} · {pct}%", a failure, or nothing. */
 export type ChipView = { kind: 'moving'; done: number; count: number; percent: number } | { kind: 'failed' } | null;
 
-export function chipView(raw: SetupRunStatus | null | undefined): ChipView {
-    const status = scopedStatus(raw ?? null, []);
-    if (!status) return null;
-    const models = (status.models ?? []).filter((m) => m.state !== 'skipped');
-    const moving = isMoving(status);
-    const failed = models.some((m) => m.state === 'failed') && status.state !== 'running';
+export function chipView(raw: SetupRunStatus | null | undefined, queued = 0, started: readonly string[] = []): ChipView {
+    const status = scopedStatus(raw ?? null, started);
+    const models = (status?.models ?? []).filter((m) => m.state !== 'skipped');
+    const moving = isMoving(status) || queued > 0;
+    const failed = models.some((m) => m.state === 'failed') && status?.state !== 'running';
     if (!moving && !failed) return null;
     if (failed && !moving) return { kind: 'failed' };
-    // A failed or cancelled row isn't downloading, so it isn't one of the "N of M".
+    // A failed or cancelled row isn't downloading, so it isn't one of the "N of M"; waiting models are.
     const counted = models.filter((m) => m.state !== 'failed' && m.state !== 'cancelled');
+    const count = counted.length + queued;
     const finished = counted.filter((m) => m.state === 'ready' || m.state === 'verifying' || m.state === 'unchecked').length;
     return {
         kind: 'moving',
-        done: Math.min(counted.length, finished + 1),
-        count: counted.length,
-        percent: status.overall?.percent ?? 0,
+        done: Math.min(count, finished + 1),
+        count,
+        percent: status?.overall?.percent ?? 0,
     };
 }
 

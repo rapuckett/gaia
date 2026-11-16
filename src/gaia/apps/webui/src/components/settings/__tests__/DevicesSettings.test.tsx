@@ -55,6 +55,14 @@ describe('DevicesSettings', () => {
         await waitFor(() => expect(screen.queryByAltText('Pairing code for the GAIA app')).not.toBeInTheDocument());
     });
 
+    it('reads a pending device countdown as time left, not a clock time', async () => {
+        const expires_at = new Date(Date.now() + 5 * 60_000 + 5_000).toISOString();
+        replies['GET /devices'] = { body: { devices: [{ id: 'd1', name: 'Phone', platform: 'ios', status: 'pending', created_at: new Date().toISOString(), expires_at }] } };
+        render(<DevicesSettings />);
+        expect(await screen.findByText(/5:0\d/)).toBeInTheDocument();
+        expect(document.querySelector('.perm-card-timer')).toHaveTextContent(/5:0\d left/);
+    });
+
     it('marks pairing unavailable on a 403, which hides the section and the indicator', async () => {
         replies['GET /devices/status'] = { status: 403, body: { detail: 'Device pairing is off.' } };
         await useDeviceStore.getState().refresh();
