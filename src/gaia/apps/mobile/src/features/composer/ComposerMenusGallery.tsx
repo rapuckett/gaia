@@ -9,6 +9,7 @@ import { createFakeClient } from '@/api/fake';
 import { GaiaClientProvider } from '@/data';
 import { HistoryNotice } from '@/features/chat/HistoryNotice';
 import { useT } from '@/i18n/useT';
+import { tEn } from '@webui/i18n/translator';
 import { usePickLoadStore } from '@/state/pickLoad';
 import { Screen, SheetScope, Stack, UIProvider } from '@/ui';
 
@@ -66,7 +67,7 @@ const model = (id: string, extra: Partial<ProviderModel> = {}): ProviderModel =>
     ({ id, display_name: id.replace(/-GGUF$/, ''), context_length: 65536, downloaded: true, labels: [], rank: null, note: null, evidence: null, state: 'downloaded', size_gb: 5.1, available: true, ...extra }) as ProviderModel;
 
 const CLOUD_ID = 'accounts/fireworks/models/qwen3p6';
-const CLOUD_NOTICE = 'Your messages and any files in them are sent to Fireworks AI to be answered. They leave this PC.';
+const CLOUD_NOTICE = tEn('providers.fireworks.notice');
 const CLOUD = [model(CLOUD_ID, { display_name: 'Qwen3.6', size_gb: null })];
 
 const NO_ATTACHMENTS: Attachments = { items: [], add: () => undefined, addFailed: () => undefined, remove: () => undefined, clear: () => undefined, uploading: false, hasUploaded: false, compose: (text) => text };
