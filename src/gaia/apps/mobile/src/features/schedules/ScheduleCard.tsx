@@ -35,11 +35,11 @@ function StatusTag({ label, tone }: { label: string; tone: 'success' | 'warning'
     );
 }
 
-/** The desktop's `.schedule-card-error`: a tinted strip with a danger rule on the reading-start edge. */
+/** The desktop's `.schedule-card-error`: a tinted strip with a danger hairline border. */
 function ErrorStrip({ children }: { children: ReactNode }) {
     const { colors } = useTheme();
     return (
-        <View style={{ borderStartWidth: 2, borderStartColor: colors.danger, backgroundColor: colors.dangerDim, paddingHorizontal: 8, paddingVertical: 6 }}>
+        <View style={{ borderWidth: 1, borderColor: colors.danger, borderRadius: 6, backgroundColor: colors.dangerDim, paddingHorizontal: 8, paddingVertical: 6 }}>
             {children}
         </View>
     );
