@@ -3575,6 +3575,7 @@
               "port_in_use",
               "unsafe_folder",
               "certificate",
+              "no_home_network",
               "start_failed"
             ],
             "type": "string"
@@ -3640,6 +3641,11 @@
         },
         "title": "Routes",
         "type": "array"
+      },
+      "waiting_for_home": {
+        "default": false,
+        "title": "Waiting For Home",
+        "type": "boolean"
       }
     },
     "required": [

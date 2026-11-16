@@ -1903,6 +1903,8 @@ export const enMessages = {
     'settings.devices.connectHint': "Over the local network this PC is on. While it's off, nothing can connect, paired or not.",
     'settings.devices.portInUse': "Port {port} is in use by another app, so devices can't connect. Close that app, then turn this on again.",
     'settings.devices.listenFailed': "Devices can't connect: {detail}",
+    'settings.devices.waitingForHome': 'Waiting for your home network…',
+    'settings.devices.waitingForHomeHint': "This PC isn't on your home network yet. Devices can connect once it joins your Wi-Fi or Ethernet; GAIA checks every few seconds. If a VPN carries all of this PC's traffic, turn it off.",
     'settings.devices.tailnet': 'Also allow from my Tailscale network',
     'settings.devices.tailnetHint': 'Paired devices can reach this PC from anywhere through Tailscale. Each device needs Tailscale on, signed in to the same account.',
     'settings.devices.tailnetOnHint': 'Paired devices can reach this PC from anywhere through Tailscale, at {address}. Each device needs Tailscale on, signed in to the same account.',

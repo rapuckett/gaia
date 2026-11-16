@@ -93,4 +93,22 @@ describe('DevicesSettings', () => {
         await waitFor(() => expect(toggle).toBeChecked());
         expect(toggle).toHaveAccessibleDescription(/through Tailscale, at .*100\.101\.102\.103/);
     });
+
+    it('shows a listener waiting for the home network as on, with why, and turning it off stops the wait', async () => {
+        const off = { ...STATUS, listening: false };
+        const waiting = { ...off, waiting_for_home: true, error_code: 'no_home_network' as const, error_detail: 'This PC has no IPv4 default route.' };
+        replies['GET /devices/status'] = { body: waiting };
+        replies['DELETE /devices/listener'] = { body: off };
+        render(<DevicesSettings />);
+        const toggle = await screen.findByRole('switch', { name: 'Allow paired devices to connect' });
+        expect(toggle).toBeChecked();
+        expect(screen.getByRole('status')).toHaveTextContent('Waiting for your home network…');
+        expect(screen.getByRole('status')).toHaveTextContent("This PC isn't on your home network yet.");
+        expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+
+        replies['GET /devices/status'] = { body: off };
+        fireEvent.click(toggle);
+        await waitFor(() => expect(toggle).not.toBeChecked());
+        expect(screen.queryByText('Waiting for your home network…')).not.toBeInTheDocument();
+    });
 });

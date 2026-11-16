@@ -31,6 +31,7 @@ from . import (
     DEVICE_PORT_ENV,
     HOME_ROUTE,
     HOUSEKEEPING_SECONDS,
+    LISTENER_HOME_RETRY_SECONDS,
     PAIRING_OFFER_VERSION,
     PC_NAME_MAX,
     PENDING_DEVICE_SECONDS,
@@ -150,6 +151,7 @@ class DeviceAccess:
         self._pin: Optional[str] = None
         self._error: Optional[Tuple[str, str]] = None
         self._housekeeping: Optional[asyncio.Task] = None
+        self._waiting: Optional[asyncio.Task] = None
         self._lock = asyncio.Lock()
 
     @property
@@ -163,6 +165,11 @@ class DeviceAccess:
     @property
     def requests_served(self) -> int:
         return self._listener.requests_served if self._listener else 0
+
+    @property
+    def waiting(self) -> bool:
+        """Left on, but not started yet because the PC has no home network."""
+        return self._waiting is not None and not self._waiting.done()
 
     def _open_store(self) -> DeviceStore:
         if self._store is None:
@@ -216,10 +223,13 @@ class DeviceAccess:
         except DeviceCertificateError as e:
             raise self._failed(ListenerError("certificate", str(e))) from e
         except NoHomeNetwork as e:
-            raise self._failed(ListenerError("start_failed", e.detail)) from e
+            raise self._failed(ListenerError("no_home_network", e.detail)) from e
         except ListenerError as e:
             raise self._failed(e) from e
         self._listener, self._pin = listener, identity.pin
+        waiting, self._waiting = self._waiting, None
+        if waiting is not None and waiting is not asyncio.current_task():
+            waiting.cancel()
         store.set_setting(_LISTENER_SETTING, "on")
         self._housekeeping = asyncio.create_task(self._housekeep())
         await self._resume_routes(store)
@@ -279,6 +289,11 @@ class DeviceAccess:
             await self._stop(remember=remember)
 
     async def _stop(self, *, remember: bool) -> None:
+        waiting, self._waiting = self._waiting, None
+        if waiting is not None and not waiting.done():
+            waiting.cancel()
+            self._error = None
+            logger.info("Stopped waiting for a home network")
         housekeeping, self._housekeeping = self._housekeeping, None
         if housekeeping is not None and housekeeping is not asyncio.current_task():
             housekeeping.cancel()
@@ -308,7 +323,49 @@ class DeviceAccess:
         try:
             await self.start()
         except ListenerError as e:
+            if e.code == "no_home_network":
+                self._wait_for_home()
+                return
             logger.error("Device listener not resumed (%s): %s", e.code, e.detail)
+
+    def _wait_for_home(self) -> None:
+        """Start the listener once the PC has a home network; status shows the wait."""
+        if self.waiting:
+            return
+        logger.warning(
+            "Device listener waiting for a home network; trying every %d s",
+            LISTENER_HOME_RETRY_SECONDS,
+        )
+        self._waiting = asyncio.create_task(self._retry_until_home())
+
+    async def _retry_until_home(self) -> None:
+        while True:
+            await asyncio.sleep(LISTENER_HOME_RETRY_SECONDS)
+            try:
+                enabled = GaiaConfig.load().device_pairing
+            except GaiaConfigError as e:
+                self._failed(ListenerError("start_failed", str(e)))
+                return
+            if not enabled:
+                logger.warning("device_pairing is off; stopped waiting for a network")
+                self._error = None
+                return
+            try:
+                home_network()
+            except NoHomeNetwork as e:
+                self._error = ("no_home_network", e.detail)
+                continue
+            async with self._lock:
+                if self.listening:
+                    return
+                try:
+                    await self._start()
+                except ListenerError as e:
+                    if e.code == "no_home_network":
+                        continue
+                    return
+                logger.info("Home network found; device listener started")
+                return
 
     async def shutdown(self) -> None:
         """When the backend stops: stop serving, keep the PC's choice."""
@@ -354,6 +411,7 @@ class DeviceAccess:
         expires = self.pairing.expires_at()
         return {
             "listening": self.listening,
+            "waiting_for_home": self.waiting,
             "port": port,
             "error_code": code,
             "error_detail": detail,
@@ -500,6 +558,7 @@ class DeviceAccess:
         """
         async with self._lock:
             was_listening = self.listening
+            was_waiting = self.waiting
             await self._stop(remember=False)
             pc_id = read_pc_id(self.folder / TABLE_NAME)
             if self._store is not None:
@@ -513,7 +572,15 @@ class DeviceAccess:
             store = self._open_store()
             if pc_id:
                 store.adopt_pc_id(pc_id)
-            store.set_setting(_LISTENER_SETTING, "on" if was_listening else "off")
+            store.set_setting(
+                _LISTENER_SETTING, "on" if was_listening or was_waiting else "off"
+            )
             logger.info("Pairing reset: new key, every device unpaired")
-            if was_listening:
+            if not (was_listening or was_waiting):
+                return
+            try:
                 await self._start()
+            except ListenerError as e:
+                if not was_waiting or e.code != "no_home_network":
+                    raise
+                self._wait_for_home()

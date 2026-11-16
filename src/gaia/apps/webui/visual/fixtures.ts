@@ -520,6 +520,13 @@ export const DEVICE_STATES: Record<string, { status: Record<string, unknown>; de
         devices: [IPAD],
     },
     portInUse: { status: { ...DEVICE_STATUS_BASE, listening: false, error_code: 'port_in_use', error_detail: 'Port 4243 is in use.' }, devices: [IPAD] },
+    noHomeNetwork: {
+        status: {
+            ...DEVICE_STATUS_BASE, listening: false, waiting_for_home: true, error_code: 'no_home_network',
+            error_detail: "This PC has no IPv4 default route, so GAIA can't tell which network is your home network. Connect the PC to your home Wi-Fi or Ethernet.",
+        },
+        devices: [IPAD],
+    },
     tailnetOn: { status: { ...DEVICE_STATUS_BASE, routes: [{ kind: 'tailnet', on: true, origin: 'https://100.101.102.103:4243', error_code: null }] }, devices: [IPAD] },
     tailnetMissing: { status: { ...DEVICE_STATUS_BASE, routes: [{ kind: 'tailnet', on: false, origin: null, error_code: 'no_tailscale_address' }] }, devices: [IPAD] },
 };

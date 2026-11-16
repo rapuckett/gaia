@@ -76,7 +76,7 @@ def default_route_ipv4() -> str:
             raise NoHomeNetwork(
                 "This PC has no IPv4 default route, so GAIA can't tell which "
                 "network is your home network. Connect the PC to your home Wi-Fi "
-                "or Ethernet, then turn access on again."
+                "or Ethernet."
             ) from e
         return probe.getsockname()[0]
 
@@ -110,11 +110,10 @@ def home_network() -> HomeNetwork:
                 f"This PC reaches the internet through {name} ({source}), which "
                 f"has no home-network address ({_HOME_RANGES}). Connect the PC "
                 "to your home Wi-Fi or Ethernet, or turn off a VPN that takes "
-                "all its traffic, then turn access on again."
+                "all its traffic."
             )
         return HomeNetwork(name, tuple(subnets))
     raise NoHomeNetwork(
         f"This PC's default route uses {source}, but no network interface that "
-        "is up has that address. Reconnect the PC to your home network, then "
-        "turn access on again."
+        "is up has that address. Reconnect the PC to your home network."
     )
