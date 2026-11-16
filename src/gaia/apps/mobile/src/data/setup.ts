@@ -22,7 +22,7 @@ import { catalogOf, savedVision, skipChanges, type Selection } from '@webui/comp
 
 import { useGaiaClient } from './GaiaClientProvider';
 import { modelMenuKeys } from './modelMenu';
-import { queryKeys, requireClient } from './queries';
+import { queryKeys, requireClient, useSystemStatus } from './queries';
 
 /** How often to re-read a running setup, as the web UI's setup screen does. */
 export const SETUP_POLL_MS = 1000;
@@ -161,6 +161,19 @@ export function useSetupGate() {
             current = false;
         };
     }, [client]);
+
+    // The PC answered its status after the check could not: read now what the launch check could not,
+    // as webui's `onBackendBack`. Not after a failed update, which must not start another unasked.
+    const { dataUpdatedAt } = useSystemStatus();
+    const retryable = gate.state === 'unknown' && !gate.upgradeFailed;
+    useEffect(() => {
+        if (!client || !retryable || dataUpdatedAt === 0) return undefined;
+        const ticket = ++latest.current;
+        void runSetupCheck(client).then((next) => {
+            if (ticket === latest.current) setGate(next);
+        });
+        return undefined;
+    }, [client, retryable, dataUpdatedAt]);
 
     const finish = useCallback(() => setGate({ state: 'ready' }), []);
     const open = useCallback(() => setGate({ state: 'addingLocal' }), []);

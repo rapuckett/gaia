@@ -190,7 +190,7 @@ func testJobLabel(job string) string {
 	case setupapi.RoleChat:
 		return "Chat: loads and answers"
 	case setupapi.RoleVision:
-		return "Reading images: names a test image's colour"
+		return "Reading images: names a test image's color"
 	case setupapi.RoleEmbedding:
 		return "Documents and memory: makes an embedding"
 	case setupapi.RoleSpeech:

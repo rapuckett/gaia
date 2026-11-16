@@ -139,6 +139,18 @@ def test_remote_reads_refused(
     assert "PRIVATE KEY" not in resp.text and "project-secret" not in resp.text
 
 
+def test_remote_refusals_carry_a_code_and_the_file_name(device, chat, home):
+    outside = device.get(
+        "/api/files/preview",
+        params={"path": str(home / "elsewhere.md"), "session_id": chat},
+    )
+    assert outside.status_code == 403
+    detail = outside.json()["detail"]
+    assert detail["code"] == "not_in_chat_folders"
+    assert detail["name"] == "elsewhere.md"
+    assert "elsewhere.md isn't in this chat's folders" in detail["message"]
+
+
 def test_search_away_from_the_pc_stays_in_the_chat_and_skips_secrets(
     device, chat, wide, home
 ):
@@ -315,7 +327,7 @@ def test_remote_document_file_stays_in_the_chat(app, device, chat, home, caller)
         assert resp.status_code == 403
         assert "not this chat's" not in resp.text and "elsewhere" not in resp.text
     assert outside.json() == unknown.json()
-    assert "session_id" in get(notes).json()["detail"]
+    assert get(notes).json()["detail"]["code"] == "session_required"
 
     inside = get(notes, session_id=chat)
     assert inside.status_code == 200 and inside.text.startswith("line 0")

@@ -73,7 +73,7 @@ export function CodeBlock({ lang, code, streaming }: { lang: string; code: strin
                 {collapsible && (
                     <Pressable
                         onPress={() => setExpanded((v) => !v)}
-                        accessibilityState={{ expanded }}
+                        aria-expanded={expanded}
                         accessibilityLabel={expanded ? t('code.collapse') : t('code.expand', { size: lineCount(t, lines) })}
                     >
                         <Stack paddingX="md">

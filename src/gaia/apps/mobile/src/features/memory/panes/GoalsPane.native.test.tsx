@@ -58,7 +58,7 @@ describeNative('GoalsPane', () => {
         await screen.findByTestId('goals-empty');
         fireEvent.press(screen.getByTestId('goals-new'));
         const create = await screen.findByTestId('goals-create-submit');
-        expect(create.props.accessibilityState?.disabled).toBe(true);
+        expect(create).toBeDisabled();
         fireEvent.changeText(screen.getByTestId('goals-create-title'), '  Sort the receipts ');
         // The sheet shows what its owner last rendered, so press once the typed title has reached it.
         await waitFor(() => expect(screen.getByTestId('goals-create-title').props.value).toBe('  Sort the receipts '));

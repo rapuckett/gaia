@@ -227,7 +227,7 @@ function TileHeader({ name, trailing, onPress, open, menu }: { name: string; tra
         </View>
     );
     const main = onPress ? (
-        <Pressable onPress={onPress} accessibilityLabel={name} accessibilityState={{ expanded: !!open }}>
+        <Pressable onPress={onPress} accessibilityLabel={name} aria-expanded={!!open}>
             {body}
         </Pressable>
     ) : (

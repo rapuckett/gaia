@@ -41,7 +41,7 @@ export function ChoiceList(props: ChoiceListProps) {
                         onPress={() => toggle(o.value)}
                         accessibilityRole={multiple ? 'checkbox' : 'radio'}
                         accessibilityLabel={o.description ? `${o.label}. ${o.description}` : o.label}
-                        accessibilityState={{ checked: on }}
+                        aria-checked={on}
                     >
                         <Row gap="md" align="start">
                             <FirstLine role="ui" inset={space.sm}>
