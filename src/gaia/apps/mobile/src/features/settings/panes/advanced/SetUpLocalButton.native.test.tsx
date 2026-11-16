@@ -18,8 +18,8 @@ jest.mock('@/features/setup/SetupGate', () => ({ reopenSetup: () => mockReopen()
 const describeNative = Platform.OS === 'web' ? describe.skip : describe;
 
 describeNative('Set up local models', () => {
-    it('leaves Settings and reopens setup', () => {
-        render(
+    it('leaves Settings and reopens setup', async () => {
+        await render(
             <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 800 }, insets: { top: 0, left: 0, right: 0, bottom: 0 } }}>
                 <ThemeProvider>
                     <SetUpLocalButton />
