@@ -157,13 +157,13 @@ export function ModelChecklist({ plan, selection, onToggle, onDefaultChat, disab
             <Text role="caption" tone="muted">{t('setup.models.neverDeletes')}</Text>
 
             {more.length > 0 ? (
-                <Disclosure wrapTitle title={t('setup.models.more', { n: String(more.length) })} open={moreOpen} onToggle={() => setMoreOpen(!moreOpen)}>
+                <Disclosure title={t('setup.models.more', { n: String(more.length) })} open={moreOpen} onToggle={() => setMoreOpen(!moreOpen)}>
                     <Stack gap="md">{more.map(row)}</Stack>
                 </Disclosure>
             ) : null}
 
             {installed.length > 0 ? (
-                <Disclosure wrapTitle title={t('setup.models.installed', { n: String(installed.length) })} open={installedOpen} onToggle={() => setInstalledOpen(!installedOpen)}>
+                <Disclosure title={t('setup.models.installed', { n: String(installed.length) })} open={installedOpen} onToggle={() => setInstalledOpen(!installedOpen)}>
                     <Stack gap="md">
                         {installed.length > SEARCH_ABOVE ? <SearchField value={query} onChangeText={setQuery} placeholder={t.bare('setup.models.search')} accessibilityLabel={t('setup.models.search')} /> : null}
                         {shownInstalled.map((e) => (
