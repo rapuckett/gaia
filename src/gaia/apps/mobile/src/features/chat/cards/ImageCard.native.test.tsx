@@ -12,6 +12,7 @@ import { RenderCard } from './RenderCard';
 jest.mock('@/platform/fetch', () => ({ platformFetch: jest.fn() }));
 jest.mock('expo-file-system', () => ({ File: jest.fn(), Paths: { cache: '' } }));
 jest.mock('expo-sharing', () => ({ isAvailableAsync: jest.fn(), shareAsync: jest.fn() }));
+jest.mock('expo-constants', () => ({ __esModule: true, default: { expoConfig: { version: 'test' } } }));
 
 // Pin Image.getSize's callback form, whichever preset mock is loaded.
 beforeEach(() => {

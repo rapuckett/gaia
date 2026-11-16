@@ -13,6 +13,8 @@ export interface ConnectionConfig {
     /** The paired PC, for a connection that goes over TLS pinned to its certificate. */
     pcId?: string;
     pinned?: true;
+    /** Every address the paired PC answers at, `baseUrl` among them; requests to any of them stay pinned. */
+    origins?: string[];
 }
 
 interface ConnectionState {

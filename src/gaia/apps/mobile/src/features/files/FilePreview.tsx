@@ -101,7 +101,7 @@ function TextBody({ preview, name }: { preview: FilePreviewResponse; name: strin
                 {markdown ? (
                     <Markdown text={lines.join('\n')} />
                 ) : (
-                    <Text role="label" mono dir="ltr" selectable>
+                    <Text role="label" mono dir="ltr" align="ltr" selectable>
                         {lines.join('\n')}
                     </Text>
                 )}

@@ -64,6 +64,7 @@ import {
     tileStatus,
     unavailableHint,
 } from './connectorList';
+import { DeviceCodeSignIn } from './DeviceCodeSignIn';
 
 type Translator = ReturnType<typeof useT>;
 
@@ -314,8 +315,16 @@ function ConnectorTile({
         setMessage(next);
         if (!expanded) onToggle();
     }
-    const refuse = (detailKey: 'checkPcOnly' | 'codePcOnly' | 'configurePcOnly' | 'connectPcOnly' | 'enablePcOnly') =>
+    const refuse = (detailKey: 'checkPcOnly' | 'configurePcOnly' | 'connectPcOnly' | 'enablePcOnly') =>
         show({ tone: 'info', text: `${t('mobileApp.pcOnly.refusal')} ${t(`mobileApp.connectors.${detailKey}`)}` });
+    const connectChip = (
+        <ChipButton
+            label={t.bare('settings.key.connect')}
+            accessibilityLabel={t('settings.key.connect')}
+            variant="accent"
+            onPress={() => refuse('connectPcOnly')}
+        />
+    );
     function run(kind: 'disable' | 'disconnect') {
         setMessage(null);
         if (kind === 'disconnect') onDisconnected(null);
@@ -366,12 +375,13 @@ function ConnectorTile({
                         <Notice tone="info" message={t('mobileApp.connectors.setupPcOnly', { name: connector.display_name })} />
                     ) : (
                         <>
-                            <Row gap="sm" wrap>
-                                <ChipButton label={t('settings.key.connect')} variant="accent" onPress={() => refuse('connectPcOnly')} />
-                                {connector.supports_device_code ? (
-                                    <ChipButton label={t('settings.connectors.code')} onPress={() => refuse('codePcOnly')} />
-                                ) : null}
-                            </Row>
+                            {connector.supports_device_code ? (
+                                <DeviceCodeSignIn connector={connector} leading={connectChip} />
+                            ) : (
+                                <Row gap="sm" wrap>
+                                    {connectChip}
+                                </Row>
+                            )}
                             {message ? <Notice tone={message.tone} message={message.text} /> : null}
                         </>
                     )

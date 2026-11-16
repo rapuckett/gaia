@@ -12,6 +12,8 @@ import { useConnectionStore, type ConnectionConfig } from '@/state/connection';
 
 import { GaiaTransport, transportAvailable } from '../../../modules/gaia-transport';
 import { PairingInviteError, type PairingInvite } from './invite';
+import { routeOrigin, type RouteOrigin } from './homeNetwork';
+import { probeOrigin, startRouteKeeper } from './routeKeeper';
 import { setPairingService } from './registry';
 import type { PairedPc, PairingService, PairingStatus, RedeemResult } from './service';
 
@@ -21,6 +23,8 @@ const STORAGE_KEY = 'gaia:paired-pcs';
 const INSTALL_MARKER_KEY = 'gaia:install-marker';
 // The route a paired device unpairs itself with (gaia/ui/devices SELF_ROUTE).
 const SELF_ROUTE = '/api/devices/me';
+// Every address the PC answers this device at, by route; a PC without away routes answers 404.
+const ROUTES_ROUTE = '/api/devices/me/routes';
 
 /** Where a redeemed code's secret waits for Allow, so a PC already paired keeps its own until then. */
 const stagedId = (pcId: string) => `${pcId}.pending`;
@@ -28,7 +32,10 @@ const stagedId = (pcId: string) => `${pcId}.pending`;
 interface SavedPc {
     id: string;
     name: string;
+    /** The address in use: the one chosen last. */
     origin: string;
+    /** Every address the PC answers at; one saved before routes is its home address. */
+    origins: RouteOrigin[];
     deviceId: string;
 }
 
@@ -46,7 +53,11 @@ interface PairAnswer {
 }
 
 function connectionOf(pc: SavedPc): ConnectionConfig {
-    return { baseUrl: pc.origin, pcId: pc.id, pinned: true };
+    return { baseUrl: pc.origin, pcId: pc.id, pinned: true, origins: pc.origins.map((o) => o.origin) };
+}
+
+function withOrigins<T extends Omit<SavedPc, 'origins'> & { origins?: RouteOrigin[] }>(pc: T): T & SavedPc {
+    return { ...pc, origins: pc.origins ?? [{ kind: 'home', origin: pc.origin }] };
 }
 
 function pairedOf(pc: SavedPc): PairedPc {
@@ -68,13 +79,26 @@ function deviceName(): string {
 const NO_ANSWER = new Set(['unreachable', 'not_home_network', 'network']);
 
 /** The PairingService of an iOS build: everything over TLS pinned to the PC, the token kept natively. */
-export function createPinnedPairingService(): PairingService & { restore(): Promise<ConnectionConfig | null>; deviceGone(pcId: string): Promise<void> } {
+export interface PinnedPairingService extends PairingService {
+    restore(): Promise<ConnectionConfig | null>;
+    deviceGone(pcId: string): Promise<void>;
+    /** Every address a paired PC answers at; empty for a PC this phone isn't paired with. */
+    origins(pcId: string): Promise<RouteOrigin[]>;
+    /** Makes `origin` the paired PC's address in use, and the app's when it is the current PC. */
+    chose(pcId: string, origin: string): Promise<void>;
+    /** Asks the PC, at `origin`, for its routes and keeps the valid ones here and natively; the addresses kept. */
+    refreshRoutes(pcId: string, origin: string): Promise<RouteOrigin[]>;
+}
+
+/** `onAllowed` hears each PC that has just allowed this phone, so its routes are fetched even when it was already the one in use. */
+export function createPinnedPairingService(onAllowed?: (pcId: string) => void): PinnedPairingService {
     let saved: Saved | null = null;
 
     async function load(): Promise<Saved> {
         if (!saved) {
             const raw = await AsyncStorage.getItem(STORAGE_KEY);
-            saved = raw ? (JSON.parse(raw) as Saved) : { pcs: [], currentId: null, pending: null };
+            const read = raw ? (JSON.parse(raw) as Saved) : { pcs: [], currentId: null, pending: null };
+            saved = { ...read, pcs: read.pcs.map(withOrigins), pending: read.pending && withOrigins(read.pending) };
         }
         return saved;
     }
@@ -102,6 +126,17 @@ export function createPinnedPairingService(): PairingService & { restore(): Prom
         if (!res.ok && res.status !== 401) throw new GaiaApiError(res.status, parseErrorDetail(text));
     }
 
+    async function updatePc(pcId: string, change: (pc: SavedPc) => SavedPc): Promise<SavedPc | null> {
+        const state = await load();
+        const pc = state.pcs.find((p) => p.id === pcId);
+        if (!pc) return null;
+        const next = change(pc);
+        await save({ ...state, pcs: state.pcs.map((p) => (p.id === pcId ? next : p)) });
+        const connection = useConnectionStore.getState();
+        if (connection.connection?.pcId === pcId) connection.setConnection(connectionOf(next));
+        return next;
+    }
+
     /** A reinstalled app finds the old install's secrets in the Keychain; a fresh install has no marker and no saved PCs. */
     async function wipeKeychainOnReinstall(): Promise<void> {
         if ((await AsyncStorage.getItem(INSTALL_MARKER_KEY)) !== null) return;
@@ -111,6 +146,37 @@ export function createPinnedPairingService(): PairingService & { restore(): Prom
     }
 
     return {
+        async origins(pcId) {
+            return (await load()).pcs.find((p) => p.id === pcId)?.origins ?? [];
+        },
+
+        async chose(pcId, origin) {
+            const current = useConnectionStore.getState().connection;
+            if (current?.pcId === pcId && current.baseUrl === origin) return;
+            await updatePc(pcId, (pc) => ({ ...pc, origin }));
+        },
+
+        async refreshRoutes(pcId, origin) {
+            const res = await pinnedFetch(pcId, `${origin}${ROUTES_ROUTE}`, { headers: { ...UI_HEADERS } });
+            const text = await res.text();
+            const known = (await load()).pcs.find((p) => p.id === pcId)?.origins ?? [];
+            // A PC without away routes: it answers at the home addresses this phone already has.
+            if (res.status === 404) return known;
+            if (!res.ok) throw new GaiaApiError(res.status, parseErrorDetail(text));
+            const reported = (JSON.parse(text) as { origins?: unknown }).origins;
+            if (!Array.isArray(reported)) throw new Error(`The PC's routes answer had no list of origins: ${text.slice(0, 200)}`);
+            const routes: RouteOrigin[] = [];
+            for (const entry of reported as { kind?: unknown; origin?: unknown }[]) {
+                const route = routeOrigin(entry?.kind, entry?.origin);
+                if (!route) console.warn(`Ignoring an address the PC reported that this phone won't use: ${JSON.stringify(entry)}`);
+                else if (!routes.some((r) => r.origin === route.origin)) routes.push(route);
+            }
+            if (routes.length === 0) throw new Error(`The PC reported no address this phone can use, so its saved addresses were kept: ${text.slice(0, 200)}`);
+            await GaiaTransport.setOrigins(pcId, JSON.stringify(routes));
+            await updatePc(pcId, (pc) => ({ ...pc, origins: routes }));
+            return routes;
+        },
+
         /** The saved current PC's connection; null when there is none, or its token is no longer in the Keychain. */
         async restore() {
             await wipeKeychainOnReinstall();
@@ -155,7 +221,8 @@ export function createPinnedPairingService(): PairingService & { restore(): Prom
             if (answer.status !== 200) throw new GaiaApiError(answer.status, parseErrorDetail(answer.body));
             const paired = JSON.parse(answer.body) as PairAnswer;
             const expiresAt = paired.expires_at ? Date.parse(paired.expires_at) / 1000 : undefined;
-            const pending = { id: invite.pc_id, name: paired.pc_name || invite.name, origin: answer.origin, deviceId: paired.device_id, expiresAt };
+            const origins = invite.origins.map((origin) => ({ kind: 'home' as const, origin }));
+            const pending = { id: invite.pc_id, name: paired.pc_name || invite.name, origin: answer.origin, origins, deviceId: paired.device_id, expiresAt };
             // A PC already paired keeps its saved token, and stays the one in use, until this one is allowed.
             await save({ ...state, pending });
             return { state: 'pending', pcName: pending.name, expiresAt };
@@ -183,8 +250,9 @@ export function createPinnedPairingService(): PairingService & { restore(): Prom
                 return { state: 'refused' };
             }
             await GaiaTransport.promote(stagedId(pending.id), pending.id);
-            const pc: SavedPc = { id: pending.id, name: pending.name, origin: pending.origin, deviceId: pending.deviceId };
+            const pc: SavedPc = { id: pending.id, name: pending.name, origin: pending.origin, origins: pending.origins, deviceId: pending.deviceId };
             await save({ pcs: [...state.pcs.filter((p) => p.id !== pc.id), pc], currentId: pc.id, pending: null });
+            onAllowed?.(pc.id);
             return { state: 'paired', pc: pairedOf(pc) };
         },
 
@@ -241,11 +309,13 @@ export function createPinnedPairingService(): PairingService & { restore(): Prom
  */
 export function installPinnedPairing(): void {
     if (!transportAvailable || (__DEV__ && process.env.EXPO_PUBLIC_GAIA_URL)) return;
-    const service = createPinnedPairingService();
+    let keeper: ReturnType<typeof startRouteKeeper> | null = null;
+    const service = createPinnedPairingService(() => void keeper?.rechoose('connected'));
     setPairingService(service);
     onDeviceGone((pcId) => {
         service.deviceGone(pcId).catch((err: unknown) => console.error(`Could not forget the PC ${pcId} after it refused this phone`, err));
     });
+    keeper = startRouteKeeper({ service, probe: probeOrigin });
     const connection = useConnectionStore.getState();
     connection.beginRestore();
     service

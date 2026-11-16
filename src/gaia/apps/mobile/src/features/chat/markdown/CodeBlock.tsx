@@ -65,7 +65,7 @@ export function CodeBlock({ lang, code, streaming }: { lang: string; code: strin
                 </Row>
                 <HScroll dir="ltr">
                     <Stack paddingX="md" paddingY="sm">
-                        <Text role="label" mono selectable dir="ltr">
+                        <Text role="label" mono selectable dir="ltr" align="ltr">
                             {shown}
                         </Text>
                     </Stack>
