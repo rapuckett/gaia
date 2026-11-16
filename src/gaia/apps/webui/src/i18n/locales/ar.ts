@@ -3820,6 +3820,7 @@ const messages: Messages = {
     'mobileApp.pairing.pcs.inUse': 'قيد الاستخدام',
     'mobileApp.pairing.pcs.use': 'استخدام هذا الكمبيوتر',
     'mobileApp.pairing.pcs.add': 'اقرن جهاز كمبيوتر آخر',
+    'mobileApp.pairing.pcs.pairedOn': 'تم الاقتران في {date}',
     'mobileApp.pairing.pcs.more': 'إجراءات {name}',
     'mobileApp.pairing.pcs.forget': 'نسيان',
     'mobileApp.pairing.pcs.forgetTitle': 'هل تريد نسيان {name}؟',

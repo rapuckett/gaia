@@ -4,10 +4,11 @@
 import { useState } from 'react';
 
 import { ScreenHeader } from '@/features/nav/ScreenHeader';
-import { describeError, useT } from '@/i18n/useT';
+import { describeError, useLocaleCode, useT } from '@/i18n/useT';
 import { ActionSheet, Badge, Button, EmptyState, ErrorState, Icon, IconButton, ListRow, ListSkeleton, Notice, Row, Screen, Sheet, Stack, Text } from '@/ui';
 import { Cpu, Ellipsis, Plus, Trash2 } from '@/ui/icons';
 
+import { pcCaption } from './pcCaption';
 import { routeKindOf, useActiveConnection } from './routes';
 import { isCurrentPc, useForgetPc, usePairedPcs, useUsePc } from './pairedPcs';
 import type { PairedPc } from './service';
@@ -15,6 +16,7 @@ import type { PairedPc } from './service';
 /** The PCs this phone is paired with: switch to one, forget one after a confirmation, or pair another. */
 export function PairedPcsScreen({ onAdd }: { onAdd: () => void }) {
     const t = useT();
+    const locale = useLocaleCode();
     const pcs = usePairedPcs();
     const connection = useActiveConnection();
     const kind = routeKindOf(connection);
@@ -43,8 +45,8 @@ export function PairedPcsScreen({ onAdd }: { onAdd: () => void }) {
                         <ListRow
                             key={item.id}
                             title={item.name}
-                            subtitle={current && routeKey ? t(routeKey) : undefined}
-                            subtitleLines={2}
+                            subtitle={current ? (routeKey ? t(routeKey) : undefined) : pcCaption(item, pcs.data, t, locale)}
+                            subtitleLines={3}
                             selected={current}
                             leading={<Icon icon={Cpu} size="md" tone="secondary" />}
                             onPress={current ? undefined : () => use.mutate(item)}
