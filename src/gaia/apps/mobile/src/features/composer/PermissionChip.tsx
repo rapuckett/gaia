@@ -19,12 +19,14 @@ export interface PermissionChipProps {
     /** A tool question is waiting in this chat: full access starts from the next step. */
     promptWaiting?: boolean;
     disabled?: boolean;
+    /** Starts with the menu open (developer gallery). */
+    initialOpen?: boolean;
 }
 
 /** The chat's permission mode, the TUI's ask or full access. Full access asks once more before it turns on. */
-export function PermissionChip({ mode, onChange, onReread, promptWaiting, disabled }: PermissionChipProps) {
+export function PermissionChip({ mode, onChange, onReread, promptWaiting, disabled, initialOpen = false }: PermissionChipProps) {
     const t = useT();
-    const [open, setOpen] = useState(false);
+    const [open, setOpen] = useState(initialOpen);
     const [confirming, setConfirming] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const full = mode === 'full_access';
