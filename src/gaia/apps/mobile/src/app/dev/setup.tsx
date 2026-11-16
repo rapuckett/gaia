@@ -51,7 +51,7 @@ export default function SetupGalleryRoute() {
         );
     }
     return (
-        <QueryClientProvider client={queryClient}>
+        <QueryClientProvider key={`${step}/${state}`} client={queryClient}>
             <GaiaClientProvider client={client}>
                 <UIProvider>
                     <ScreenBannerProvider banner={null}>
