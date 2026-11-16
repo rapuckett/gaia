@@ -95,6 +95,7 @@ import type {
     StartScreen,
     StreamEvent,
     SystemStatus,
+    WarmUpStatus,
     ToolConfirmRequest,
     FileDiff,
     TurnChanges,
@@ -172,6 +173,10 @@ export interface FakeClientData {
     customReports?: Record<string, CustomModelReport>;
     /** Makes selectModel fail with this. */
     selectError?: GaiaApiError;
+    /** What getWarmUp answers; a function can answer differently per poll. */
+    warmUp?: WarmUpStatus | (() => WarmUpStatus);
+    /** Makes getWarmUp or requestWarmUp fail with this. */
+    warmUpError?: GaiaApiError;
     /** What getPermissions answers, by chat; a chat not listed asks first. */
     permissions?: Record<string, PermissionMode>;
     /** The "always allow" grants by chat. */
@@ -385,6 +390,7 @@ export interface FakeGaiaClient extends GaiaClient {
     readonly uploads: { name: string; size: number }[];
     readonly downloads: { modelId: string; acknowledgeLowDisk: boolean }[];
     readonly modelDownloads: { modelName: string; force: boolean; loadAfter: boolean }[];
+    readonly warmUpRequests: boolean[];
     readonly modelLoads: { modelName: string; force: boolean; ctxSize?: number }[];
     readonly removals: string[];
     readonly backendSets: string[];
@@ -462,6 +468,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
     const downloads: FakeGaiaClient['downloads'] = [];
     const modelDownloads: FakeGaiaClient['modelDownloads'] = [];
     const modelLoads: FakeGaiaClient['modelLoads'] = [];
+    const warmUpRequests: boolean[] = [];
     const removals: FakeGaiaClient['removals'] = [];
     const schedules = [...(data.schedules ?? [])];
     const scheduleActions: FakeGaiaClient['scheduleActions'] = [];
@@ -595,6 +602,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         downloads,
         modelDownloads,
         modelLoads,
+        warmUpRequests,
         removals,
         setupStarts,
         backendSets,
@@ -1488,6 +1496,17 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         async getSystemStatus() {
             if (!data.status) throw new GaiaApiError(503, 'This fake client was given no system status.');
             return data.status;
+        },
+        async getWarmUp() {
+            if (data.warmUpError) throw data.warmUpError;
+            const warm = typeof data.warmUp === 'function' ? data.warmUp() : data.warmUp;
+            return warm ?? { state: 'idle' };
+        },
+        async requestWarmUp(fresh) {
+            if (data.warmUpError) throw data.warmUpError;
+            warmUpRequests.push(fresh);
+            const warm = typeof data.warmUp === 'function' ? data.warmUp() : data.warmUp;
+            return warm ?? { state: 'idle' };
         },
         async downloadModel(model, options) {
             if (data.modelActionError) throw data.modelActionError;

@@ -1,7 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import type { Message, ResourceUsage, Session, StartScreen, StreamEvent, SystemStatus } from '@webui/types';
+import type { Message, ResourceUsage, Session, StartScreen, StreamEvent, SystemStatus, WarmUpStatus } from '@webui/types';
 import { fromApiMessages } from '@webui/utils/chatStream';
 import { isMediaFile } from '@webui/utils/mediaFiles';
 
@@ -1159,6 +1159,15 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         getSystemStatus(options) {
             return getJson<SystemStatus>(ENDPOINTS.systemStatus, options?.signal);
+        },
+
+        getWarmUp(options) {
+            return getJson<WarmUpStatus>(ENDPOINTS.systemWarmUp, options?.signal);
+        },
+
+        requestWarmUp(fresh, options) {
+            const path = fresh ? `${ENDPOINTS.systemWarmUp}?fresh=true` : ENDPOINTS.systemWarmUp;
+            return request('POST', path, undefined, options?.signal).then((res) => readJson<WarmUpStatus>(res, path));
         },
 
         downloadModel(model, options) {

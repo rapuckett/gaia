@@ -238,6 +238,7 @@ describe('endpoints', () => {
         connectorsEvents: ['GET'],
         systemResources: ['GET'],
         systemStatus: ['GET'],
+        systemWarmUp: ['GET', 'POST'],
         document: ['DELETE'],
         documentCancel: ['POST'],
         documentFile: ['GET'],
