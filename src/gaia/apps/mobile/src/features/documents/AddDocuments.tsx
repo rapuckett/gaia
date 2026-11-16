@@ -17,15 +17,17 @@ import { cleanPastedPath } from '@webui/utils/pastedPath';
 import { examplePath } from '@webui/utils/platform';
 import { describeUploadError, unsupportedTypeMessage, type UploadErrorInput, type UploadErrorView } from '@webui/utils/uploadErrors.core';
 
+import { fileRefusalText, isFileRefusal, isKnownRefusalCode } from '../files/fileRefusal';
 import { useNextChatDocs } from './nextChatDocs';
 
 // One line at a time: the indexing status, the result of the last add, or why it failed.
 export type AddLine =
     | { kind: 'busy'; name: string; folder?: boolean }
     | { kind: 'done'; message: string }
-    | { kind: 'folder'; message: string; added: boolean }
+    | { kind: 'folder'; message: string; added: boolean; detail?: string }
     | { kind: 'unreadable'; message: string }
     | { kind: 'failed'; error: UploadErrorView }
+    | { kind: 'refused'; message: string; title?: string; detail?: string }
     | { kind: 'picker'; message: string }
     | { kind: 'unsupported'; message: string };
 
@@ -41,7 +43,7 @@ export type AddStart =
     | { kind: 'done' | 'unreadable'; message: StartMessage }
     | { kind: 'folder'; name: string; result: IndexFolderResponse }
     | { kind: 'failed'; upload: Omit<UploadErrorInput, 'error'> & { error: string | StartMessage } }
-    | { kind: 'picker' | 'unsupported'; cause: unknown };
+    | { kind: 'refused' | 'picker' | 'unsupported'; cause: unknown };
 
 function resolveStart(t: Translate, start: AddStart): AddLine {
     switch (start.kind) {
@@ -56,13 +58,23 @@ function resolveStart(t: Translate, start: AddStart): AddLine {
             const { error, ...rest } = start.upload;
             return { kind: 'failed', error: describeUploadError(t, { ...rest, error: typeof error === 'string' ? error : t(error.key, error.params) }) };
         }
+        case 'refused':
+            return isFileRefusal(start.cause) ? refusedLine(t, start.cause) : { kind: 'refused', message: describeError(start.cause, t) };
         default:
             return { kind: start.kind, message: describeError(start.cause, t) };
     }
 }
 
+// The PC's English reason for the first unreadable file goes in `detail`, never inside the translated sentence.
 function folderLine(t: Translate, name: string, result: IndexFolderResponse): AddLine {
-    return { kind: 'folder', message: describeFolderResult(t, name, result), added: result.indexed > 0 };
+    const reason = result.failed > 0 ? result.errors[0]?.split('\n')[0] : undefined;
+    return { kind: 'folder', message: describeFolderResult(t, name, { ...result, errors: [] }), added: result.indexed > 0, detail: reason };
+}
+
+// A code this app words is fully translated; the PC's sentence for any other code is shown as a detail line.
+function refusedLine(t: Translate, error: GaiaApiError): AddLine {
+    if (isKnownRefusalCode(error)) return { kind: 'refused', title: t('docs.locationRefused'), message: fileRefusalText(error, t) };
+    return { kind: 'refused', message: t('docs.locationRefused'), detail: error.detail };
 }
 
 /** The last part of a typed path, for messages; the path itself is sent as typed. */
@@ -116,6 +128,7 @@ export function AddDocuments({ chatId, chatName, onStart, onBrowse, pcChatId, in
         // An app build without uploads can't send a file to a paired PC; the request wraps its error, so look at the cause too.
         const refusal = [err, err instanceof Error ? err.cause : null].find((e) => (e as { code?: string } | null)?.code === 'unsupported_body');
         if (refusal) return { kind: 'unsupported', message: describeError(refusal, t) };
+        if (isFileRefusal(err)) return refusedLine(t, err);
         const api = err instanceof GaiaApiError ? err : null;
         const kind = typeof api?.body?.status === 'string' ? api.body.status : null;
         const error = kind === 'too_large' ? t('docs.tooLargeDetail', { max: String(api?.body?.max_mb) }) : describeError(err, t);
@@ -223,12 +236,13 @@ export function AddDocuments({ chatId, chatName, onStart, onBrowse, pcChatId, in
             ) : null}
             {line?.kind === 'done' ? <Notice tone="success" role="note" message={line.message} onDismiss={() => setLine(null)} /> : null}
             {line?.kind === 'folder' ? (
-                <Notice tone={line.added ? 'success' : 'info'} role="status" message={line.message} onDismiss={() => setLine(null)} dismissLabel={t('docs.dismissFolder')} />
+                <Notice tone={line.added ? 'success' : 'info'} role="status" message={line.message} detail={line.detail} onDismiss={() => setLine(null)} dismissLabel={t('docs.dismissFolder')} />
             ) : null}
             {line?.kind === 'unsupported' ? <Notice tone="warning" message={line.message} onDismiss={() => setLine(null)} /> : null}
             {line?.kind === 'unreadable' || line?.kind === 'picker' ? (
                 <Notice tone="danger" message={line.message} onDismiss={() => setLine(null)} />
             ) : null}
+            {line?.kind === 'refused' ? <Notice tone="warning" title={line.title} message={line.message} detail={line.detail} onDismiss={() => setLine(null)} /> : null}
             {line?.kind === 'failed' ? (
                 <Notice
                     tone={line.error.icon === 'warning' ? 'warning' : 'danger'}
