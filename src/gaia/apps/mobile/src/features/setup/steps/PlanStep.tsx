@@ -267,7 +267,7 @@ export function PlanStep({ ctx }: { ctx: SetupStepContext }) {
                 <Stack gap="sm">
                     <Notice tone="danger" message={t('setup.blocked')} />
                     <Disclosure title={t('setup.progress.details')} open={detailsOpen} onToggle={() => setDetailsOpen(!detailsOpen)}>
-                        <Text role="caption" mono dir="ltr" selectable>{view.blockers.join('\n')}</Text>
+                        <Text role="caption" mono dir="ltr" align="ltr" selectable>{view.blockers.join('\n')}</Text>
                     </Disclosure>
                 </Stack>
             ) : null}
