@@ -145,6 +145,13 @@ describe('DocumentsScreen', () => {
             expect(client.attached).toEqual([{ sessionId: 'c1', docId: 'k1' }, { sessionId: 'c1', docId: 'k2' }]);
         });
 
+        it('isolates an Arabic folder name first-strong, so its words keep their order', async () => {
+            const pcFolders = { '/Users/me/مستندات العمل': { indexed: 1, failed: 0, skipped: 0, skipped_images: 0, documents: [{ ...doc('k1', 'a.pdf', 'complete', 100), filepath: '/Users/me/مستندات العمل/a.pdf' }] as IndexFolderResponse['documents'], errors: [] } };
+            await mount(createFakeClient({ sessions: [chat], pcFolders }), 'c1');
+            await typePath('/Users/me/مستندات العمل');
+            expect(await screen.findByText(/"\u2068مستندات العمل\u2069"/)).toBeTruthy();
+        });
+
         it("shows the PC's refusal as it sent it and keeps the path for another try", async () => {
             const documentUploadError = new GaiaApiError(403, "Away from the PC, GAIA shows files only from the folders a chat was given. Keychains isn't in this chat's folders.");
             const client = createFakeClient({ sessions: [chat], documentUploadError });

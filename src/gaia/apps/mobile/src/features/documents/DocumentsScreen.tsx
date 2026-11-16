@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from 'react';
 
-import { isolate } from '@webui/i18n/registry';
+import { isolate, isolateUnit } from '@webui/i18n/registry';
 
 import { useAttachDocument, useCancelIndexing, useDocumentRemoval, useDocuments, useIndexingView, type IndexingSeed, useReindexDocument, useSession } from '@/data';
 import { ScreenHeader } from '@/features/nav/ScreenHeader';
@@ -120,7 +120,7 @@ function Library({ chat, onBrowseFiles, onPreview, initial }: { chat: OpenChat |
         attachDocument.mutate(
             { sessionId: targetChat.id, docId: id },
             {
-                onSuccess: () => setNote(t('docs.attached', { name: isolate(nameOf(id), 'ltr'), chat: targetChat.name })),
+                onSuccess: () => setNote(t('docs.attached', { name: isolateUnit(nameOf(id)), chat: targetChat.name })),
                 onError: (e) => action.report(t.compose((say) => say('docs.attachFailed', { name: nameOf(id), chat: targetChat.name, error: describeErrorWith(e, say) }))),
             },
         );

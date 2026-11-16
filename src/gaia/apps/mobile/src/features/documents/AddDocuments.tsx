@@ -10,7 +10,7 @@ import { describeError, describeErrorWith, useT } from '@/i18n/useT';
 import { pickDocuments, pickPhotos, type PickedFile } from '@/platform/pickers';
 import { Button, Notice, ProgressLine, Row, Stack, Text, TextField } from '@/ui';
 import { FileText, FolderOpen, Image as ImageIcon } from '@/ui/icons';
-import { isolate, type MessageKey, type Params } from '@webui/i18n/registry';
+import { isolateUnit, type MessageKey, type Params } from '@webui/i18n/registry';
 import type { Translate } from '@webui/i18n/translator';
 import { describeFolderResult } from '@webui/utils/documentLibrary.core';
 import { cleanPastedPath } from '@webui/utils/pastedPath';
@@ -69,7 +69,7 @@ function resolveStart(t: Translate, start: AddStart): AddLine {
 // The PC's English reason for the first unreadable file goes in `detail`, never inside the translated sentence.
 function folderLine(t: Translate, name: string, result: IndexFolderResponse): AddLine {
     const reason = result.failed > 0 ? result.errors[0]?.split('\n')[0] : undefined;
-    return { kind: 'folder', message: describeFolderResult(t, isolate(name, 'ltr'), { ...result, errors: [] }), added: result.indexed > 0, detail: reason };
+    return { kind: 'folder', message: describeFolderResult(t, isolateUnit(name), { ...result, errors: [] }), added: result.indexed > 0, detail: reason };
 }
 
 // A code this app words is fully translated; the PC's sentence for any other code is shown as a detail line.
@@ -117,7 +117,7 @@ export function AddDocuments({ chatId, chatName, onStart, onBrowse, pcChatId, in
     }
 
     function indexedLine(document: DocumentResponse, filename: string, attachError: Error | null): AddLine {
-        const name = isolate(document.filename || filename, 'ltr');
+        const name = isolateUnit(document.filename || filename);
         if (document.indexing_status === 'failed') return { kind: 'unreadable', message: t('docs.notAdded', { name }) };
         if (attachError) return attachFailed(filename, attachError);
         if (!chatId) holdForNextChat([document.id]);
@@ -230,7 +230,7 @@ export function AddDocuments({ chatId, chatName, onStart, onBrowse, pcChatId, in
             {line?.kind === 'busy' ? (
                 <Stack gap="xs">
                     <Text role="caption" tone="secondary">
-                        {line.folder ? t('docs.indexingFolder', { name: isolate(line.name, 'ltr') }) : t('docs.indexingFile', { name: isolate(line.name, 'ltr') })}
+                        {line.folder ? t('docs.indexingFolder', { name: isolateUnit(line.name) }) : t('docs.indexingFile', { name: isolateUnit(line.name) })}
                     </Text>
                     <ProgressLine />
                 </Stack>
