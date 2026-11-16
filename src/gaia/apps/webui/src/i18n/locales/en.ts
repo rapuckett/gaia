@@ -3967,6 +3967,7 @@ export const enMessages = {
     'mobileApp.readAloud.unsupported': 'Reading aloud needs a newer GAIA on your PC. Update it, then try again.',
     'mobileApp.answer.place.thisPc': 'on your PC',
     'mobileApp.rail.preview': 'Preview',
+    'mobileApp.rail.errorShort': 'Couldn\'t put together this turn\'s sources and details.',
     'mobileApp.answer.duration.sec': '{n} s',
     'mobileApp.answer.duration.min': '{n} min',
     'mobileApp.answer.duration.minSec': '{m} min {s} s',
