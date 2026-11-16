@@ -82,4 +82,11 @@ describe('backend errors read as one sentence', () => {
         expect(pickBanner(undefined, slow, t, null, { load: { model: 'M', seconds: 3 } as never })?.id).toBe('pickLoad');
         expect(id(OK)).toBeNull();
     });
+
+    it('shows slow when the status streak says so, even for a timeout error, ahead of the 5xx banner', () => {
+        const timeout = new Error('aborted');
+        expect(pickBanner(undefined, timeout, t, null, { slow: true })?.id).toBe('slow');
+        expect(pickBanner(undefined, new GaiaApiError(500, 'boom'), t, null, { slow: true })?.id).toBe('slow');
+        expect(pickBanner(undefined, timeout, t, null, { slow: false })?.id).toBe('unreachable');
+    });
 });

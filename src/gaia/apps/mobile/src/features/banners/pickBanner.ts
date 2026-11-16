@@ -36,8 +36,8 @@ const gb = (bytes: number, digits: number) => (bytes / 1e9).toFixed(digits);
 /**
  * The one banner the app shows, in the web's ConnectionBanner order (NTF-08..13):
  * download, start-up, backend trouble, model server, context window.
- * The web's slow banner is a status request that outlasts its timeout or a gateway's 504; the phone has no
- * request timer, so a 504 is the only slow signal it receives.
+ * The web's slow banner is a status request that outlasts its timeout or a gateway's 504; `pick.slow` is
+ * the phone's streak of those (`useStatusHealth`).
  * `fetchError` is the status request's failure, if it failed.
  */
 export function pickBanner(
@@ -45,7 +45,7 @@ export function pickBanner(
     fetchError: unknown,
     t: Translate,
     goalStoreError?: string | null,
-    pick?: { load?: PickLoad | null; name?: string | null; awayHint?: boolean },
+    pick?: { load?: PickLoad | null; name?: string | null; awayHint?: boolean; slow?: boolean },
 ): Banner | null {
     const progress = status?.download_progress ?? null;
     if (progress?.state === 'downloading' || progress?.state === 'starting' || progress?.state === 'error') {
@@ -86,7 +86,7 @@ export function pickBanner(
     }
 
     if (fetchError) {
-        if (fetchError instanceof GaiaApiError && fetchError.status === 504) {
+        if (pick?.slow || (fetchError instanceof GaiaApiError && fetchError.status === 504)) {
             return { id: 'slow', tone: 'warning', title: t('banner.slow'), message: t('banner.slowHint'), retry: true };
         }
         if (fetchError instanceof GaiaApiError && fetchError.status >= 500) {
