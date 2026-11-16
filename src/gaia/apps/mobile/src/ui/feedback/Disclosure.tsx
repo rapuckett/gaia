@@ -43,7 +43,7 @@ export function Disclosure({ title, open, onToggle, children, leading, trailing,
                     </FirstLine>
                     {leading ? <FirstLine role="ui">{leading}</FirstLine> : null}
                     <Stack flex={1} gap="xs">
-                        <Text role="ui" weight="semibold" dir="auto" numberOfLines={hint ? undefined : 1}>
+                        <Text role="ui" weight="semibold" dir="auto">
                             {title}
                         </Text>
                         {hint ? (
