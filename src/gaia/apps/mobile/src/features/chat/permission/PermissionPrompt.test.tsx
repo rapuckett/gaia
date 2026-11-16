@@ -96,6 +96,7 @@ describe('PermissionPrompt', () => {
     it('hides the buttons at the deadline and reports it once', async () => {
         const { onExpired, shown } = await mount(prompt({ timeoutSeconds: 3 }));
         expect(shown()).toContain('3s');
+        expect(shown()).toContain(' left');
         await act(async () => {
             jest.advanceTimersByTime(5000);
         });
