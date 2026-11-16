@@ -36,12 +36,7 @@ from . import (
     PENDING_DEVICE_SECONDS,
 )
 from .home import NoHomeNetwork, home_network
-from .listener import (
-    DeviceListener,
-    ListenerError,
-    OpenRequests,
-    local_ipv4_addresses,
-)
+from .listener import DeviceListener, ListenerError, OpenRequests
 from .pairing import PairingWindow, sanitize_device_name
 from .routes import AwayRoute, AwayRoutes
 from .storage import (
