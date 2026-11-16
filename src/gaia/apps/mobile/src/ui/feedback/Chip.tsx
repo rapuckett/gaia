@@ -24,7 +24,7 @@ export interface ChipProps {
 export function Chip({ label, accessibilityLabel, selected, onPress, icon, testID }: ChipProps) {
     const { colors, radius } = useTheme();
     return (
-        <Pressable onPress={onPress} accessibilityLabel={accessibilityLabel ?? label} accessibilityState={{ selected: !!selected }} testID={testID}>
+        <Pressable onPress={onPress} accessibilityLabel={accessibilityLabel ?? label} aria-selected={!!selected} testID={testID}>
             <View
                 style={{
                     alignSelf: 'flex-start',

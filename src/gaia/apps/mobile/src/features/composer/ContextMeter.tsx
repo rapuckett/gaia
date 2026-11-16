@@ -95,7 +95,7 @@ export function ContextMeter({ usage, unavailable, onDetails, initialOpen = fals
                 onPress={() => setOpen(true)}
                 accessibilityLabel={aria}
                 accessibilityHint={usage ? hint : unavailable ?? undefined}
-                accessibilityState={{ expanded: open }}
+                aria-expanded={open}
                 testID="context-meter"
             >
                 {reading(barless)}
