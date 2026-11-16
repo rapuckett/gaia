@@ -35,7 +35,16 @@ const LOG_CALL = /^(console|logger|log)\./;
 const WRAPPERS = new Set(['ParenthesizedExpression', 'TSAsExpression', 'TSNonNullExpression', 'TSSatisfiesExpression']);
 
 /** Two letters in a row is English prose; all-caps names and units (GAIA, NPU, MB) are not. */
-const isProse = (s: string) => /[A-Za-z]{2,}/.test(s) && /[a-z]/.test(s);
+const isProse = (s: string) => /[A-Za-z]{2,}/.test(s) && /[a-z]/.test(s) && !/^(ms|s|sec|min|h|kb|mb|gb|tb|px|fps|tok(en)?s?)$/i.test(s.replace(/[\s()]|\$\{\}/g, ''));
+/** Product and company names stay untranslated: a string made only of these is a name, not copy. */
+const BRAND_WORDS = new Set([
+    'AMD', 'AI', 'LLM', 'Gateway', 'Microsoft', 'Office', '365', 'Google', 'GitHub', 'OAuth', 'Gmail', 'Outlook',
+    'Slack', 'Telegram', 'Lemonade', 'Fireworks', 'FastFlowLM', 'Vulkan', 'ROCm', 'Gemma', 'Qwen', 'Claude',
+    'OpenAI', 'Ryzen', 'NPU', 'GPU', 'CPU', 'GAIA',
+]);
+const isBrandName = (s: string) => s.split(/[\s()]+/).filter(Boolean).every((w) => BRAND_WORDS.has(w));
+/** Only HTML entities and punctuation, such as `&middot;`. */
+const isEntityOnly = (s: string) => !/[A-Za-z]{2,}/.test(s.replace(/&[a-z#0-9]+;/gi, ''));
 /** A catalog key such as `sidebar.label`. */
 const isKeyLike = (s: string) => /^[a-z]\w*(\.[\w-]+)+$/.test(s.trim());
 /** One token that is a URL, path, identifier or CSS-like name, not a word. */
@@ -166,16 +175,18 @@ export function scanSource(code: string, file = 'x.tsx', skipped: Skipped = {}):
         const own = text.replace(/\$\{\}/g, ' ').replace(/\s+/g, ' ').trim();
         const via = textSink(stack);
         const silent = silentRule(stack, text);
-        if (silent) return skip(silent);
+        if (silent && !(silent === 'attribute' && via?.kind === 'attr')) return skip(silent);
         if (via) {
             if (!isProse(own)) return skip('name-or-unit');
             if (isIdentifier(own)) return skip('identifier');
+            if (isBrandName(own)) return skip('brand-name');
             const wordy = /\s/.test(own) || via.kind === 'jsx-expr' || via.kind === 'attr' ||
                 (via.name !== undefined && LABEL_PROPS.has(via.name) && /^[A-Z][a-z]{2,}$/.test(own)) ||
-                (via.kind === 'case' && /^[A-Z][a-z]{2,}$/.test(own));
+                ((via.kind === 'case' || via.kind === 'message') && /^[A-Z][a-z]{2,}$/.test(own));
             if (!wordy) return skip('identifier');
             return add(via.kind, via.name ? `${via.name}="${text}"` : text, node);
         }
+        if (!isProse(own) || isBrandName(own)) return skip(isProse(own) ? 'brand-name' : 'name-or-unit');
         if (isSentence(own) || (node.type === 'TemplateLiteral' && isCountPhrase(own))) add('sentence', text, node);
     };
 
@@ -187,7 +198,9 @@ export function scanSource(code: string, file = 'x.tsx', skipped: Skipped = {}):
         stack.push(n);
         if (n.type === 'JSXText') {
             const text = String(n.value).replace(/\s+/g, ' ').trim();
-            if (isProse(text)) add('jsx-text', text, n);
+            if (!isProse(text) || isEntityOnly(text)) skip('name-or-unit');
+            else if (isBrandName(text)) skip('brand-name');
+            else add('jsx-text', text, n);
         } else if (n.type === 'ExpressionStatement' && n.directive) {
             skip('directive');
             stack.pop();
