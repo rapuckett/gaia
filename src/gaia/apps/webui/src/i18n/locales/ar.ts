@@ -3713,6 +3713,7 @@ const messages: Messages = {
     'mobileApp.pcOnly.refusal': 'نفّذ هذا على الكمبيوتر لديك. لا يسمح GAIA بذلك من هاتف مقترن.',
     'mobileApp.pcOnly.report': 'حفظ GAIA تقريرًا عن هذه المشكلة على الكمبيوتر. أنشئ تقرير استكشاف الأخطاء هناك لإرفاقه ببلاغ عن خطأ.',
     'mobileApp.connectCard.onPc': 'اربط حسابك على جهاز الكمبيوتر لديك، من «الموصلات» في الإعدادات. ثم اسأل مرة أخرى هنا.',
+    'mobileApp.agentNotGranted.note': 'حسابك مربوط، لكن GAIA يحتاج إلى إذن لاستخدامه. امنح الإذن على جهاز الكمبيوتر لديك، من «الموصلات» في الإعدادات، ثم اسأل مرة أخرى.',
     'mobileApp.emailConnect.prompt': 'اربط حساب بريدك الإلكتروني لاستخدام فرز البريد الإلكتروني.',
     'mobileApp.emailConnect.region': 'ربط حساب البريد الإلكتروني',
     'mobileApp.emailConnect.reopen': 'إعادة فتح تسجيل الدخول إلى {name}',

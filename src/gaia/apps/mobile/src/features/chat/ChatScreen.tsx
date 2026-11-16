@@ -22,6 +22,7 @@ import { ErrorState, Notice, Screen, Stack } from '@/ui';
 import { useAnswerComparison } from './compare/useAnswerComparison';
 import { ChatPrompts } from './ChatPrompts';
 import { ConnectorRetry } from './ConnectorRetry';
+import { isAgentNotGranted } from './GrantNote';
 import { HistoryNotice, historyNoticeText } from './HistoryNotice';
 import { ChatHeader } from './header';
 import { PermissionPrompt } from './permission/PermissionPrompt';
@@ -75,6 +76,7 @@ export function ChatScreen({ sessionId, onManageDocuments }: { sessionId: string
         !busy &&
         !retiredAgent &&
         lastReply?.role === 'assistant' &&
+        !isAgentNotGranted(lastReply.content) &&
         (hasConnectCard(lastReply) ? connectProviders.length > 0 : isAuthRequiredMessage(lastReply.content))
             ? lastReply
             : null;
