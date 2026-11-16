@@ -71,4 +71,10 @@ describe('backend errors read as one sentence', () => {
         expect(banner?.title).toBe(t('mobileApp.pairing.off.title'));
         expect(banner?.details).toBeUndefined();
     });
+
+    it('glosses a download of unknown size once in Arabic', () => {
+        const title = pickBanner(withStatus({ download_progress: { state: 'starting', model_name: 'M', percent: 0, file: null, file_index: 0, total_files: 0, downloaded_bytes: 0, total_bytes: 0, message: null } }), null, translator('ar'))?.title ?? '';
+        expect(title.match(/large download/g)).toHaveLength(1);
+        expect(title).toContain('تنزيل كبير');
+    });
 });

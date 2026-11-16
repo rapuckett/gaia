@@ -49,13 +49,13 @@ export function pickBanner(
         if (progress.state === 'error') {
             return { id: 'download', tone: 'danger', title: t('banner.download.failed', { name }), message: progress.message ?? undefined, dismissible: true };
         }
-        const size = progress.total_bytes ? `${gb(progress.total_bytes, 1)} ${GB_UNIT}` : t('banner.download.sizeUnknown');
+        const knownSize = progress.total_bytes ? `${gb(progress.total_bytes, 1)} ${GB_UNIT}` : null;
         const file = progress.file ? `${t('banner.download.file', { index: progress.file_index, total: progress.total_files })} ${progress.file}` : undefined;
         const bar =
             progress.state === 'downloading' && progress.total_bytes > 0
                 ? { value: progress.percent / 100, label: `${progress.percent}% · ${gb(progress.downloaded_bytes, 2)} / ${gb(progress.total_bytes, 2)} ${GB_UNIT}` }
                 : { label: progress.state === 'starting' ? (progress.message ?? t('update.picker.starting')) : t('banner.download.progress') };
-        return { id: 'download', tone: 'info', title: t('banner.download.running', { name, size }), message: file, progress: bar };
+        return { id: 'download', tone: 'info', title: t.compose((say) => say('banner.download.running', { name, size: knownSize ?? say('banner.download.sizeUnknown') })), message: file, progress: bar };
     }
 
     // A model picked from the list is loading, or its load failed; the web shows it right after a download.
