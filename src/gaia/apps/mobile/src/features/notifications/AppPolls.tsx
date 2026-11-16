@@ -3,6 +3,7 @@
 
 import { useEffect, useRef } from 'react';
 
+import { isolate } from '@webui/i18n/registry';
 import type { GaiaNotification } from '@webui/types/agent';
 import type { Schedule } from '@webui/types';
 
@@ -34,7 +35,7 @@ function raiseScheduleFailure(failed: Schedule, t: Translate): void {
     };
     addNotification(notification);
     if (failed.session_id && useAlertSettings.getState().modes.finished === 'banner') {
-        useChatAlertBannerStore.getState().show({ sessionId: failed.session_id, event: 'finished', tone: 'danger', title, message });
+        useChatAlertBannerStore.getState().show({ sessionId: failed.session_id, event: 'finished', tone: 'danger', title, message: isolate(message, 'ltr') });
     }
 }
 
