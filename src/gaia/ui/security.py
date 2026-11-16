@@ -206,6 +206,9 @@ DEVICE_SCOPE_KEY = "gaia.device"
 #: Set by device auth once it has checked a listener request, so the main
 #: app's own auth can refuse one that skipped it.
 DEVICE_AUTH_SCOPE_KEY = "gaia.device_auth"
+#: Set by device auth to how the device reached the listener: ``home``, or
+#: the kind of the away route that carried it.
+ROUTE_SCOPE_KEY = "gaia.route"
 
 PRINCIPAL_PC = "pc"
 PRINCIPAL_TUNNEL = "tunnel"
@@ -330,6 +333,18 @@ def require_device_listener(request: Request) -> None:
     """A route that exists only on the device listener: a 404 anywhere else."""
     if not on_device_listener(request):
         raise HTTPException(status_code=404, detail="Not Found")
+
+
+def require_allowed_device(request: Request) -> str:
+    """A paired device the PC allowed, acting on itself; its id."""
+    device = allowed_device(request)
+    if device is None:
+        raise HTTPException(
+            status_code=403,
+            detail="Only a paired device the PC allowed can do this, with its own "
+            "token.",
+        )
+    return device.device_id
 
 
 def require_device(request: Request) -> str:

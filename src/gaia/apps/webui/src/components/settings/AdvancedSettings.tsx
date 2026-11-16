@@ -21,7 +21,7 @@ import { ModelServerPanel } from './ModelServerPanel';
 import { SettingsDisclosure } from './SettingsDisclosure';
 import '../SettingsModal.css';
 
-/** Model server status and choice, context size, custom model id, beta flags, MCP status, version. */
+/** Model server status and choice, context size, custom model id, beta flags, MCP status. */
 export function AdvancedSettings() {
     const t = useT();
     const [status, setStatus] = useState<SystemStatus | null>(null);
@@ -150,11 +150,11 @@ export function AdvancedSettings() {
     const modelName = status ? status.default_model_name : DEFAULT_MODEL_NAME;
     const { isLoadingModel, isDownloadingModel, downloadError, loadModel, downloadModel } = useModelActions(modelName ?? undefined);
 
-    const version = __APP_VERSION__;
 
     // A cloud model runs off this PC: no device, download, load or context to manage.
     const cloudModel   = !!status?.default_model_is_cloud;
-    const wrongModel   = !cloudModel && !!(status?.lemonade_running && status.model_loaded && status.expected_model_loaded === false);
+    // A model Lemonade doesn't have (e.g. a mistyped custom ID) can't be loaded, so offer no Load.
+    const wrongModel   = !cloudModel && !!(status?.lemonade_running && status.model_loaded && status.expected_model_loaded === false && status.model_downloaded !== false);
     const smallContext = !cloudModel && !!(status?.lemonade_running && status.model_loaded && status.context_size_sufficient === false);
     const notDownloaded = !cloudModel && !!(status?.lemonade_running && !status.model_loaded && status.model_downloaded === false);
     const needsLoad    = (wrongModel || smallContext) && modelName !== null;
@@ -189,7 +189,7 @@ export function AdvancedSettings() {
                                 value={status.model_loaded || t('settings.advanced.noneLoaded')}
                                 ok={!!status.model_loaded && (cloudModel || status.expected_model_loaded !== false)}
                                 hint={!status.model_loaded
-                                    ? t('settings.advanced.loadsFirst')
+                                    ? t(status.lemonade_running ? 'settings.advanced.loadsFirst' : 'settings.advanced.loadsWhenBack')
                                     : !cloudModel && status.expected_model_loaded === false
                                     ? t('settings.advanced.expected', { name: modelName ?? '' })
                                     : undefined}
@@ -310,7 +310,7 @@ export function AdvancedSettings() {
                 <LemonadeServerSection />
             </SettingsDisclosure>
 
-            <SettingsDisclosure title={t('settings.advanced.customTitle')} hint={savedCustomModel ? isolate(savedCustomModel, 'ltr') : t('settings.advanced.customHint')}>
+            <SettingsDisclosure title={t('settings.advanced.customTitle')} hint={savedCustomModel ? isolate(savedCustomModel, 'ltr') : t('settings.advanced.customHint')} targetId="custom-model">
                 <p className="model-override-desc">{t('settings.advanced.customDesc')}</p>
                 <div className="model-input-row">
                     <input
@@ -411,11 +411,6 @@ export function AdvancedSettings() {
                     </div>
                 </SettingsDisclosure>
             )}
-
-            <div className="about-info">
-                <p><bdi dir="ltr">GAIA v{version}</bdi> <span className="beta-badge">BETA</span></p>
-                <p className="about-sub">{t('settings.advanced.about')}</p>
-            </div>
         </div>
     );
 }

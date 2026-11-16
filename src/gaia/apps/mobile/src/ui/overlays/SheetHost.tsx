@@ -162,7 +162,7 @@ function ActiveSheet({ entry }: { entry: SheetEntry }) {
                     >
                         {entry.children}
                     </ScrollView>
-                    {entry.footer ? <View style={{ paddingHorizontal: space.lg, paddingBottom: space.lg }}>{entry.footer}</View> : null}
+                    {entry.footer ? <View style={{ paddingHorizontal: space.gutter, paddingBottom: space.lg }}>{entry.footer}</View> : null}
                 </Animated.View>
             </KeyboardAvoidingView>
         </View>

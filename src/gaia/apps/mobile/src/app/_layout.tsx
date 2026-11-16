@@ -13,6 +13,7 @@ import { AppErrorBoundary } from '@/features/errors/AppErrorBoundary';
 import { ChatAlertFeed } from '@/features/banners/ChatAlertFeed';
 import { ConnectionBanner } from '@/features/banners/ConnectionBanner';
 import { ModelNeededHost } from '@/features/model';
+import { AppPolls } from '@/features/notifications/AppPolls';
 import { NotificationFeed } from '@/features/notifications';
 import { AppDrawer } from '@/features/nav/AppDrawer';
 import { RoutingEffects } from '@/features/nav/RoutingEffects';
@@ -82,6 +83,7 @@ export default function RootLayout() {
                         <SetupGate>
                             <RoutingEffects />
                             <NotificationFeed />
+                            <AppPolls />
                             <ChatAlertFeed />
                             <Drawer
                                 drawerContent={(props) => (
