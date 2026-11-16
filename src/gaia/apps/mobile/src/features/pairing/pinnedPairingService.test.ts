@@ -178,6 +178,8 @@ describe('a second PC with the same name on the same host', () => {
 
     it('keeps the first PC, its secret and its addresses, and makes the second the one in use', async () => {
         const service = await pairSecond();
+        expect((await service.list()).map((pc) => typeof pc.pairedAt)).toEqual(['undefined', 'string']);
+        expect(Number.isNaN(Date.parse((await service.list())[1].pairedAt!))).toBe(false);
         const pcs = await service.list();
         expect(pcs.map((pc) => [pc.id, pc.name, pc.connection.baseUrl])).toEqual([
             [PC_ID, 'air', FIRST_ORIGIN],
