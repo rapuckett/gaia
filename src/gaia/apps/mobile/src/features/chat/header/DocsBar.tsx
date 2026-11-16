@@ -11,7 +11,7 @@ import { middleTruncate } from '@webui/utils/format';
 import type { DocumentListResponse } from '@/api/client.types';
 import { useDetachDocument, useDocuments, useSession } from '@/data';
 import { useT } from '@/i18n/useT';
-import { Icon, IconButton, Ltr, Notice, Pressable, Row, Stack, Surface, Text } from '@/ui';
+import { Button, Icon, IconButton, Ltr, Notice, Pressable, Row, Stack, Surface, Text } from '@/ui';
 import { CircleAlert, CircleCheck, FileText, X } from '@/ui/icons';
 
 import { failureReasonWith } from './failureText';
@@ -74,11 +74,7 @@ export function DocsBar({ sessionId, onFailed, onManage }: { sessionId: string; 
             </Row>
             <Row gap="xs" wrap>
                 {onManage ? (
-                    <Pressable onPress={onManage} accessibilityLabel={t('docsBar.manage')}>
-                        <Text role="label" tone="accent">
-                            {t('docsBar.manage')}
-                        </Text>
-                    </Pressable>
+                    <Button variant="secondary" size="sm" label={t('docsBar.manage')} onPress={onManage} />
                 ) : null}
                 {visible.map((doc) => {
                     const failed = doc.indexing_status === 'failed';
@@ -103,18 +99,10 @@ export function DocsBar({ sessionId, onFailed, onManage }: { sessionId: string; 
                     );
                 })}
                 {!expanded && hidden > 0 ? (
-                    <Pressable onPress={() => setExpanded(true)} accessibilityState={{ expanded: false }}>
-                        <Text role="label" tone="accent">
-                            {t('docsBar.more', { n: hidden })}
-                        </Text>
-                    </Pressable>
+                    <Button variant="secondary" size="sm" label={t('docsBar.more', { n: hidden })} onPress={() => setExpanded(true)} />
                 ) : null}
                 {expanded && hidden > 0 ? (
-                    <Pressable onPress={() => setExpanded(false)} accessibilityState={{ expanded: true }}>
-                        <Text role="label" tone="accent">
-                            {t('docsBar.less')}
-                        </Text>
-                    </Pressable>
+                    <Button variant="secondary" size="sm" label={t('docsBar.less')} onPress={() => setExpanded(false)} />
                 ) : null}
             </Row>
             {limitHit ? (

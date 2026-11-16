@@ -123,11 +123,7 @@ function ChangePreview({ args }: { args: Record<string, unknown> }) {
                         }))}
                     />
                     {long ? (
-                        <Pressable onPress={() => setExpanded((v) => !v)} accessibilityState={{ expanded }} accessibilityLabel={expanded ? t('prompt.showLess') : more}>
-                            <Text role="label" tone="accent" weight="medium">
-                                {expanded ? t('prompt.showLess') : more}
-                            </Text>
-                        </Pressable>
+                        <Button variant="secondary" size="sm" label={expanded ? t('prompt.showLess') : more} onPress={() => setExpanded((v) => !v)} />
                     ) : null}
                 </Stack>
             ) : change.text ? (

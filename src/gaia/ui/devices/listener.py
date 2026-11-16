@@ -4,8 +4,9 @@
 """The TLS listener paired devices reach, in the backend's own process and loop.
 
 A second uvicorn server serves the same app through :class:`DeviceGate`, which
-answers the home network only, serves the API only, caps request bodies, and
-lets nothing through without a live device token except the pairing route.
+answers the home network and any away route the PC turned on, serves the API
+only, caps request bodies, and lets nothing through without a live device
+token except the pairing route, which it serves to the home network only.
 Revoking a device ends the requests it still has open.
 """
 
@@ -32,12 +33,14 @@ from gaia.logger import get_logger
 from ..security import (
     DEVICE_AUTH_SCOPE_KEY,
     DEVICE_SCOPE_KEY,
+    ROUTE_SCOPE_KEY,
     DevicePrincipal,
     ListenerScopeMiddleware,
 )
 from . import (
     DEVICE_PORT_ENV,
     HOME_NETWORKS,
+    HOME_ROUTE,
     LISTENER_BODY_LIMIT_BYTES,
     LISTENER_HANDSHAKE_SECONDS,
     LISTENER_KEEP_ALIVE_SECONDS,
@@ -47,6 +50,7 @@ from . import (
     PAIR_ROUTE,
     SELF_ROUTE,
     ListenerErrorCode,
+    RouteKind,
 )
 
 logger = get_logger(__name__)
@@ -133,22 +137,29 @@ class DeviceGate:
         # Only a loopback-bound listener, which no other machine can reach.
         self._allow_loopback = allow_loopback
 
-    def _home_peer(self, scope: Scope) -> bool:
+    def _route(self, scope: Scope) -> Optional[RouteKind]:
+        """``home`` for a home-network peer, else the away route that is on and
+        carried it; None to refuse."""
         client = scope.get("client")
         try:
             address = ipaddress.ip_address(client[0]) if client else None
         except ValueError:
-            return False
-        if address is None or address.version != 4:
-            return False
-        if address.is_loopback:
-            return self._allow_loopback
-        return any(address in network for network in _HOME)
+            address = None
+        if address is not None:
+            if address.version == 6 and address.ipv4_mapped is not None:
+                return None
+            # No away route may make a loopback peer acceptable.
+            if address.is_loopback:
+                return HOME_ROUTE if self._allow_loopback else None
+            if address.version == 4 and any(address in n for n in _HOME):
+                return HOME_ROUTE
+        return self._access.routes.admitting(scope)
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] not in ("http", "websocket"):
             return
-        if not self._home_peer(scope):
+        route = self._route(scope)
+        if route is None:
             await _refuse(
                 send, scope, 403, "GAIA answers devices on the home network only."
             )
@@ -157,7 +168,7 @@ class DeviceGate:
         if not path.startswith(("/api/", "/v1/")):
             await _refuse(send, scope, 404, "Not Found")
             return
-        scope = {**scope, DEVICE_AUTH_SCOPE_KEY: True}
+        scope = {**scope, DEVICE_AUTH_SCOPE_KEY: True, ROUTE_SCOPE_KEY: route}
         if scope["type"] == "http":
             capped = self._capped(scope, receive)
             if capped is None:
@@ -170,6 +181,9 @@ class DeviceGate:
                 return
             receive = capped
             if scope.get("method") == "POST" and path == PAIR_ROUTE:
+                if route != HOME_ROUTE:
+                    await _refuse(send, scope, 404, "Not Found")
+                    return
                 await self.app(scope, receive, send)
                 return
 
