@@ -23,6 +23,8 @@ export interface TextProps {
     align?: 'start' | 'center' | 'end';
     /** Lines to show at normal text size; a person who chose a large size gets the whole text (up to 3 lines) unless `compact`. */
     numberOfLines?: number;
+    /** Lines kept at large sizes instead of the whole text: only for long user content in a list (a chat title, a file name) or a header title. */
+    largeLines?: number;
     /** A label inside a fixed-size control: stops scaling at 1.3x and keeps `numberOfLines`. Give the control the full label in `accessibilityLabel`. */
     compact?: boolean;
     selectable?: boolean;
@@ -41,6 +43,12 @@ export interface TextProps {
 }
 
 const InsideText = createContext(false);
+
+/** A role's line height in points before the person's text size applies. */
+export function lineHeightOf(size: number, role: TypeRole, rtl: boolean): number {
+    const ratio = rtl ? (role === 'prose' || role === 'body' ? metrics.lineHeightArProse : metrics.lineHeightAr) : metrics.lineHeight;
+    return Math.round(size * ratio);
+}
 
 const GLOSS_MIN_SIZE = 11;
 const GLOSS_LINE_HEIGHT = 1.3;
@@ -77,6 +85,7 @@ export function Text({
     italic,
     align,
     numberOfLines,
+    largeLines,
     compact,
     selectable,
     ellipsize,
@@ -95,7 +104,7 @@ export function Text({
     const dir = dirProp === 'auto' ? (typeof children === 'string' ? contentDir(children, uiDir) : uiDir) : dirProp;
     const nested = useContext(InsideText);
     const largeText = useLargeText();
-    const lines = !compact && largeText && numberOfLines !== undefined && numberOfLines <= 3 ? undefined : numberOfLines;
+    const lines = !compact && largeText && numberOfLines !== undefined && numberOfLines <= 3 ? largeLines : numberOfLines;
 
     // A nested Text is a span: it inherits everything it isn't given.
     const baseSize = type[role ?? 'body'];
@@ -106,14 +115,8 @@ export function Text({
         const w: Weight = weight ?? 'regular';
         style.fontFamily = fontFamily({ weight: w, mono: !!mono || !!code, display });
         if (!nested || role) {
-            const size = type[r];
-            const ratio = rtl
-                ? r === 'prose' || r === 'body'
-                    ? metrics.lineHeightArProse
-                    : metrics.lineHeightAr
-                : metrics.lineHeight;
-            style.fontSize = size;
-            style.lineHeight = Math.round(size * ratio);
+            style.fontSize = type[r];
+            style.lineHeight = lineHeightOf(type[r], r, rtl);
         }
     }
     if (!nested || tone) style.color = toneColor(colors, tone ?? 'primary');

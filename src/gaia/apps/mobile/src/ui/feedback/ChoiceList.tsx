@@ -6,6 +6,8 @@ import { Icon } from '../controls/Icon';
 import { Pressable } from '../controls/Pressable';
 import { Check } from '../icons';
 import { Row } from '../layout/layout';
+import { FirstLine } from '../text/FirstLine';
+import { useLargeText } from '../theme/a11y';
 import { useTheme } from '../theme/ThemeProvider';
 import { Text } from '../text/Text';
 
@@ -22,6 +24,7 @@ export type ChoiceListProps = { options: ChoiceOption[]; accessibilityLabel?: st
 // Radio rows pick one; checkbox rows pick several. The mark's shape differs, not just its color.
 export function ChoiceList(props: ChoiceListProps) {
     const { colors, radius, space } = useTheme();
+    const largeText = useLargeText();
     const { options, multiple } = props;
     const picked = (v: string) => (props.multiple ? props.value.includes(v) : props.value === v);
     const toggle = (v: string) => {
@@ -41,22 +44,24 @@ export function ChoiceList(props: ChoiceListProps) {
                         accessibilityState={{ checked: on }}
                     >
                         <Row gap="md" align="start">
-                            <View
-                                style={{
-                                    width: 22,
-                                    height: 22,
-                                    marginTop: 2,
-                                    borderWidth: 2,
-                                    borderRadius: multiple ? radius.sm : radius.full,
-                                    borderColor: on ? colors.accentSolid : colors.border,
-                                    backgroundColor: on && multiple ? colors.accentSolid : 'transparent',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                }}
-                            >
-                                {on && multiple ? <Icon icon={Check} size="sm" tone="inverse" /> : null}
-                                {on && !multiple ? <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: colors.accentSolid }} /> : null}
-                            </View>
+                            <FirstLine role="ui" inset={space.sm}>
+                                <View
+                                    style={{
+                                        width: 22,
+                                        height: 22,
+                                        marginTop: largeText ? 0 : 2,
+                                        borderWidth: 2,
+                                        borderRadius: multiple ? radius.sm : radius.full,
+                                        borderColor: on ? colors.accentSolid : colors.border,
+                                        backgroundColor: on && multiple ? colors.accentSolid : 'transparent',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                    }}
+                                >
+                                    {on && multiple ? <Icon icon={Check} size="sm" tone="inverse" /> : null}
+                                    {on && !multiple ? <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: colors.accentSolid }} /> : null}
+                                </View>
+                            </FirstLine>
                             <View style={{ flex: 1, minWidth: 0, paddingVertical: space.sm }}>
                                 <Text role="ui" weight={on ? 'semibold' : 'regular'}>
                                     {o.label}

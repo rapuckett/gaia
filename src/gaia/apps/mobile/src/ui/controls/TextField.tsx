@@ -7,6 +7,7 @@ import { CircleAlert } from 'lucide-react-native';
 import { useDirection, useT } from '@/i18n/useT';
 import { Eye, EyeOff } from '../icons';
 import { IconButton } from './IconButton';
+import { LARGE_TEXT_SCALE } from '../theme/a11y';
 import { fontFamily } from '../theme/fonts';
 import { useTheme } from '../theme/ThemeProvider';
 import { contentDir } from '../text/direction';
@@ -98,7 +99,11 @@ export function TextField({
     );
     const size = Math.max(type.body, metrics.inputFontSize);
     const lineHeight = Math.round(size * (rtl ? metrics.lineHeightAr : 1.4));
-    const { fontScale } = useWindowDimensions();
+    const { fontScale, height: windowHeight } = useWindowDimensions();
+    const largeText = fontScale >= LARGE_TEXT_SCALE;
+    const grownHeight = lineHeight * maxLines * fontScale + 24;
+    // At large sizes a tall field would push everything else off screen, so it scrolls sooner.
+    const maxHeight = largeText ? Math.min(grownHeight, windowHeight * 0.35) : grownHeight;
     const borderColor = error ? colors.danger : focused ? colors.accent : colors.border;
     return (
         <View style={{ gap: 6, opacity: disabled ? 0.45 : 1 }}>
@@ -139,7 +144,7 @@ export function TextField({
                 style={{
                     minHeight: bare ? 40 : 48,
                     ...(multiline
-                        ? { maxHeight: lineHeight * maxLines * fontScale + 24, textAlignVertical: 'top' as const }
+                        ? { maxHeight, textAlignVertical: 'top' as const }
                         : null),
                     paddingStart: leading ? 40 : bare ? 4 : 12,
                     paddingEnd: end ? 48 : bare ? 4 : 12,

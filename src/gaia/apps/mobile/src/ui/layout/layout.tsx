@@ -87,9 +87,11 @@ function shrinkable(child: ReactNode): ReactNode {
     return child;
 }
 
-/** A `flex` share only means something along a row; in a column it would collapse the child. */
+/** A `flex` share only means something along a row; in a column it would collapse the child. A button takes the full width. */
 function unflexed(child: ReactNode): ReactNode {
-    if (isValidElement(child) && child.type === Stack) return cloneElement(child as ReactElement<StackProps>, { flex: undefined });
+    if (!isValidElement(child)) return child;
+    if (child.type === Stack || child.type === Row) return cloneElement(child as ReactElement<StackProps>, { flex: undefined });
+    if (typeof child.type === 'function' && 'fillsStackedRow' in child.type) return cloneElement(child as ReactElement<{ full?: boolean }>, { full: true });
     return child;
 }
 
