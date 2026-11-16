@@ -130,15 +130,18 @@ export function AddCustomModel({ open, onToggle, onClose, onAdded }: AddCustomMo
                     </Stack>
                 ) : null}
                 {report && report.variants.length > 1 ? (
-                    <ChoiceList
-                        accessibilityLabel={t('settings.custom.quantization')}
-                        options={report.variants.map((v) => ({
-                            value: v.file,
-                            label: `${v.quant} · ${isolate(`${v.size_gb} GB`)}${v.fits ? '' : ` · ${t.bare('mobileApp.settings.custom.tooLarge')}`}`,
-                        }))}
-                        value={file}
-                        onChange={(v) => { if (!busy) runCheck(v as string); }}
-                    />
+                    <Stack gap="xs">
+                        <Text role="caption" weight="semibold" tone="secondary" accessibilityRole="header">{t('settings.custom.quantization')}</Text>
+                        <ChoiceList
+                            accessibilityLabel={t('settings.custom.quantization')}
+                            options={report.variants.map((v) => ({
+                                value: v.file,
+                                label: `${v.quant} · ${isolate(`${v.size_gb} GB`)}${v.fits ? '' : ` · ${t.bare('mobileApp.settings.custom.tooLarge')}`}`,
+                            }))}
+                            value={file}
+                            onChange={(v) => { if (!busy) runCheck(v as string); }}
+                        />
+                    </Stack>
                 ) : null}
                 {report?.ok ? (
                     <Stack gap="xs">
