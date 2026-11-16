@@ -8,6 +8,9 @@ import { toolResultUpdates } from '@webui/utils/toolEvents.core';
 
 import type { Translate } from '@/i18n/useT';
 
+/** Same as SPEECH_MODEL_DOWNLOADED_PHASE in audio_tools.py. */
+const SPEECH_MODEL_DOWNLOADED = 'speech_model_downloaded';
+
 /** Statuses that carry no step of their own: the live line or a stage report says them. */
 function isSilentStatus(event: StreamEvent, text: string): boolean {
     if (event.status === 'history_cut' || event.phase === 'waiting') return true;
@@ -22,6 +25,17 @@ function isRetryNotice(events: readonly StreamEvent[], i: number): boolean {
     if (event.phase === 'model_retry') return true;
     if (event.status !== 'warning') return false;
     return [events[i - 1], events[i + 1]].some((e) => e?.phase === 'model_retry' && e.message === event.message);
+}
+
+/** *steps* with *step* just before the last tool call if it is still running, else at the end. */
+function beforeRunningCall(steps: AgentStep[], step: AgentStep): AgentStep[] {
+    let at = steps.length;
+    for (let i = steps.length - 1; i >= 0; i--) {
+        if (steps[i]!.type !== 'tool') continue;
+        if (steps[i]!.active) at = i;
+        break;
+    }
+    return [...steps.slice(0, at), step, ...steps.slice(at)];
 }
 
 /**
@@ -90,6 +104,16 @@ export function stepsFromEvents(events: readonly StreamEvent[], t: Translate): A
             case 'status': {
                 if (event.retracts_answer) {
                     add(agentEventToStep({ type: 'status', status: 'warning', message: t('live.answerRestarted') } as StreamEvent, ids, t));
+                    break;
+                }
+                if (event.phase === SPEECH_MODEL_DOWNLOADED && event.message) {
+                    // A download the user waited on stays in the turn's steps, above the call it finished inside.
+                    const done: AgentStep = {
+                        id: ++ids.current, type: 'status', label: event.message, active: false, success: true, kept: true, timestamp: Date.now(),
+                    };
+                    const last = steps[steps.length - 1];
+                    if (last?.type === 'status' && last.active) updateLast({ ...done, id: last.id, detail: undefined });
+                    else steps = beforeRunningCall(steps, done);
                     break;
                 }
                 const text = statusText(event, t);
