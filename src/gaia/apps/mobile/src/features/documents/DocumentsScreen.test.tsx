@@ -81,7 +81,7 @@ describe('DocumentsScreen', () => {
             const client = createFakeClient({ sessions: [chat] });
             await mount(client, 'c1');
             fireEvent.press(await screen.findByText('Add a file'));
-            expect(await screen.findByText(/Added notes\.txt to/)).toBeTruthy();
+            expect(await screen.findByText(/Added ⁦notes\.txt⁩ to/)).toBeTruthy();
             expect(client.uploaded.map((f) => f.name)).toEqual(['notes.txt']);
             expect(client.attached).toEqual([{ sessionId: 'c1', docId: 'doc-1' }]);
             await waitFor(() => expect(screen.getAllByText(/notes\.txt/).length).toBeGreaterThan(1));
@@ -127,7 +127,7 @@ describe('DocumentsScreen', () => {
             const client = createFakeClient({ sessions: [chat] });
             await mount(client, 'c1');
             await typePath('  /Users/me/Documents/notes.txt ');
-            expect(await screen.findByText(/Added notes\.txt to/)).toBeTruthy();
+            expect(await screen.findByText(/Added ⁦notes\.txt⁩ to/)).toBeTruthy();
             expect(client.uploadedPaths).toEqual([{ filepath: '/Users/me/Documents/notes.txt', sessionId: 'c1' }]);
             expect(client.indexedFolders).toEqual([]);
             expect(client.attached).toEqual([{ sessionId: 'c1', docId: 'doc-1' }]);
@@ -140,7 +140,7 @@ describe('DocumentsScreen', () => {
             const client = createFakeClient({ sessions: [chat], pcFolders });
             await mount(client, 'c1');
             await typePath('/Users/me/Contracts');
-            expect(await screen.findByText(/^Added 2 files from "Contracts"\. Skipped 1 file of a type GAIA can't add\. Subfolders aren't included\.$/)).toBeTruthy();
+            expect(await screen.findByText(/^Added 2 files from "\u2066Contracts\u2069"\. Skipped 1 file of a type GAIA can't add\. Subfolders aren't included\.$/)).toBeTruthy();
             expect(client.indexedFolders).toEqual([{ folderPath: '/Users/me/Contracts', recursive: false, sessionId: 'c1' }]);
             expect(client.attached).toEqual([{ sessionId: 'c1', docId: 'k1' }, { sessionId: 'c1', docId: 'k2' }]);
         });
@@ -239,7 +239,7 @@ describe('DocumentsScreen', () => {
             const client = createFakeClient({ documents: library(), sessions: [chat] });
             await mount(client, 'c1');
             fireEvent.press(await screen.findByLabelText(/Add notes\.txt to/));
-            expect(await screen.findByText(/Added notes\.txt to/)).toBeTruthy();
+            expect(await screen.findByText(/Added ⁦notes\.txt⁩ to/)).toBeTruthy();
             expect(client.attached).toEqual([{ sessionId: 'c1', docId: 'a' }]);
             expect(useNextChatDocs.getState().ids).toEqual([]);
         });
