@@ -25,7 +25,7 @@ export function DiffCard({ data }: { data: unknown }) {
                     <Stack gap="xs">
                         {data.badge ? <Badge label={data.badge} /> : null}
                         {title ? (
-                            <Text role="ui" weight="semibold" dir="auto" accessibilityRole="header">
+                            <Text role="ui" weight="semibold" dir="ltr" accessibilityRole="header">
                                 {title}
                             </Text>
                         ) : null}

@@ -59,6 +59,7 @@ export function PairedPcsScreen({ onAdd }: { onAdd: () => void }) {
                                             accessibilityLabel={t('mobileApp.pairing.pcs.use')}
                                             size="sm"
                                             variant="secondary"
+                                            shrink={false}
                                             disabled={use.isPending}
                                             onPress={() => use.mutate(item)}
                                             testID={`pc-row-${item.id}-use`}

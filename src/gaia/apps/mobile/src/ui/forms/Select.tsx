@@ -44,6 +44,7 @@ export function Select({ label, hideLabel, value, options, onChange, placeholder
                 disabled={disabled}
                 accessibilityLabel={`${label}: ${shown}`}
                 aria-expanded={open}
+                aria-haspopup="listbox"
                 testID={testID}
             >
                 <View

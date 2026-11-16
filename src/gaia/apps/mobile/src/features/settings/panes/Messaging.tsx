@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import * as Clipboard from 'expo-clipboard';
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 
 import { keepTogether } from '@webui/i18n/registry';
 import type { Translate } from '@webui/i18n/translator';
@@ -225,12 +225,15 @@ function fixKey(s: DiscordStatus) {
     }
 }
 
+/** Dev scenes only: opens the status with the just-paired line showing. */
+export const SeedJustPaired = createContext(false);
+
 /** What the PC answered, read-only: the web's states, links and pairing code, with the PC-only notice where its buttons are. */
 function StatusView({ s }: { s: DiscordStatus }) {
     const t = useT();
     const [detailOpen, setDetailOpen] = useState(false);
     const wasPairing = useRef(false);
-    const [justPaired, setJustPaired] = useState(false);
+    const [justPaired, setJustPaired] = useState(useContext(SeedJustPaired));
     useEffect(() => {
         if (wasPairing.current && s.paired && s.state === 'connected') setJustPaired(true);
         wasPairing.current = s.state === 'pairing';

@@ -1,7 +1,8 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import type { MessageKey } from '@webui/i18n/registry';
+import { pluralKey, type MessageKey } from '@webui/i18n/registry';
+import type { Translate } from '@webui/i18n/translator';
 import { MAX_SESSION_TITLE_CHARS } from '@webui/utils/constants';
 import {
     groupSessionsForList,
@@ -151,6 +152,13 @@ export function rowText(row: ChatRow, t: Say): RowText {
     const note = [place, waiting].filter(Boolean).join(' · ') || null;
     const aria = [row.title, status, waiting, row.unread ? t('row.unread') : null].filter(Boolean).join(', ');
     return { status, note, noteFailed: row.failed > 0, aria };
+}
+
+/** "Delete? Tap again" for the second tap, as one sentence so the Arabic carries one English gloss. */
+export function deleteConfirmLabel(row: Pick<ChatRow, 'unsent'>, t: Translate): string {
+    return t.compose((say) =>
+        say('row.tapAgain', { label: row.unsent > 0 ? say(pluralKey('row.deleteUnsent', row.unsent), { n: row.unsent }) : say('row.deleteConfirm') }),
+    );
 }
 
 export type RowErrorKind = 'delete' | 'rename' | 'pin' | 'unpin' | 'markRead';

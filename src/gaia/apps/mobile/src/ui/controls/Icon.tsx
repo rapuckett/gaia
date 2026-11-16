@@ -24,12 +24,14 @@ export interface IconProps {
     size?: keyof typeof SIZES;
     tone?: Tone;
     label?: string;
+    /** Points the way it is drawn, in every language (a left-to-right path). */
+    fixed?: boolean;
 }
 
-export function Icon({ icon: Glyph, size = 'md', tone = 'secondary', label }: IconProps) {
+export function Icon({ icon: Glyph, size = 'md', tone = 'secondary', label, fixed }: IconProps) {
     const { colors } = useTheme();
     const rtl = useDirection() === 'rtl';
-    const mirror = rtl && DIRECTIONAL.has(Glyph.displayName ?? '');
+    const mirror = rtl && !fixed && DIRECTIONAL.has(Glyph.displayName ?? '');
     const px = SIZES[size];
     return (
         <Glyph

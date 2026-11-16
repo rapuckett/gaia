@@ -2,11 +2,12 @@
 // SPDX-License-Identifier: MIT
 
 import { translate } from '@webui/i18n/registry';
+import { translator } from '@webui/i18n/translator';
 
 import { createFakeClient } from '@/api/fake';
 import type { Session } from '@/api/client.types';
 
-import { buildChatSections, chatListState, msUntilNextMidnight, NO_LIVE_RUNS, rowErrorMessage, rowText, searchedSessions, type ChatRow } from './chatList';
+import { buildChatSections, chatListState, deleteConfirmLabel, msUntilNextMidnight, NO_LIVE_RUNS, rowErrorMessage, rowText, searchedSessions, type ChatRow } from './chatList';
 
 const t = (key: Parameters<typeof translate>[1], params?: Parameters<typeof translate>[2]) => translate('en', key, params);
 
@@ -80,6 +81,16 @@ describe('buildChatSections', () => {
             now: NOW,
         });
         expect(section.data[0]).toMatchObject({ dot: 'queued', place: 2, private: true, unsent: 2, failed: 1 });
+    });
+});
+
+describe('deleteConfirmLabel', () => {
+    it('glosses the Arabic once, with the English sentence whole', () => {
+        const bare = (text: string) => text.replace(/[\u2066-\u2069]/g, '');
+        const label = bare(deleteConfirmLabel({ unsent: 0 }, translator('ar')));
+        expect(label.match(/\(/g)).toHaveLength(1);
+        expect(label).toContain('(Delete? Tap again)');
+        expect(bare(deleteConfirmLabel({ unsent: 2 }, translator('en')))).toBe('Delete 2 unsent? Tap again');
     });
 });
 
