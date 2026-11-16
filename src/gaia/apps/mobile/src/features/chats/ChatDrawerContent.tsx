@@ -10,6 +10,7 @@ import { hiddenAutomatedCount } from '@webui/utils/sessionGrouping';
 
 import { useDeleteSession, useMarkRead, useRenameSession, useSessions, useSessionSearch, useSetPinned, useSetupStatus } from '@/data';
 import { ModelStatusPill } from '@/features/model';
+import { openSettings } from '@/features/settings/openSettings';
 import { DownloadChip } from '@/features/setup/DownloadChip';
 import { chipView } from '@/features/setup/steps/downloadState';
 import { NotificationsEntry } from '@/features/notifications';
@@ -165,7 +166,7 @@ export function ChatDrawerContent({ activeId, onSelect, onClose, onNewChat, onPc
                 <NavRow key={e.key} entry={e} active={activeRoute === e.route} onOpen={open} />
             ))}
             <NotificationsEntry active={activeRoute === 'notifications'} onOpen={() => open('notifications')} />
-            <DownloadChipRow onPress={() => open('settings')} />
+            <DownloadChipRow onPress={() => { close(); openSettings('model'); }} />
             <ModelStatusPill />
         </Stack>
     );
