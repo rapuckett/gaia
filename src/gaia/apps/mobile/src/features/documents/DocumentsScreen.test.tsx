@@ -60,7 +60,7 @@ describe('DocumentsScreen', () => {
         await mount(createFakeClient({ documents: { documents: [doc('a', 'notes.txt', 'complete', 2048)], total: 1, total_chunks: 3, total_size_bytes: 2048 } as DocumentListResponse }));
         const list = await screen.findByLabelText('Document library');
         expect(within(list).getByTestId('docs-top')).toBeTruthy();
-        expect(within(list).getByTestId('docs-path')).toBeTruthy();
+        expect(within(list).getByText('Add a file')).toBeTruthy();
     });
 
     it('says so when the library is empty', async () => {
