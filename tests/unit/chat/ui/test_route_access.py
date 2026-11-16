@@ -7,8 +7,8 @@ Every route is in exactly one class, and ``test_every_route_is_classified``
 fails for a route nobody has decided about:
 
 * ``pc``: the PC running GAIA only (``require_local_pc``).
-* ``pc_or_device``: first-run setup and device-code sign-in; the PC or an
-  allowed paired device, never mobile access (``require_pc_or_device``,
+* ``pc_or_device``: first-run setup, device-code sign-in and Automations; the
+  PC or an allowed paired device, never mobile access (``require_pc_or_device``,
   ``require_pc_or_allowed_device``).
 * ``not_on_listener``: a read with side effects on the PC; the PC and mobile
   access, never a paired device (``refuse_on_device_listener``).
@@ -50,14 +50,12 @@ PC = ("127.0.0.1", 50000)
 
 PC_ONLY = {
     "DELETE /api/agents/{agent_id}",
-    "DELETE /api/automations/{ref}",
     "DELETE /api/connectors/{connector_id}/activations/{agent_id:path}",
     "DELETE /api/devices/listener",
     "DELETE /api/devices/pairing",
     "DELETE /api/devices/routes/{kind}",
     "DELETE /api/devices/{device_id}",
     "DELETE /api/providers/{provider}/key",
-    "GET /api/automations",
     "GET /api/connectors/_debug",
     "GET /api/connectors/eval-mailbox",
     "GET /api/devices",
@@ -69,7 +67,6 @@ PC_ONLY = {
     "GET /api/messaging/discord",
     "GET /api/setup/report/{name}",
     "POST /api/agents/install",
-    "POST /api/automations/{ref}/{action}",
     "POST /api/connectors/eval-mailbox",
     "POST /api/connectors/{connector_id}/authorize",
     "POST /api/connectors/{connector_id}/configure",
@@ -111,6 +108,9 @@ PC_ONLY = {
 }
 
 PC_OR_DEVICE = {
+    "DELETE /api/automations/{ref}",
+    "GET /api/automations",
+    "POST /api/automations/{ref}/{action}",
     "POST /api/connectors/{connector_id}/authorize-device",
     "POST /api/setup/cancel",
     "POST /api/setup/chat-model",

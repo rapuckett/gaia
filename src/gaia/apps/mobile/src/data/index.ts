@@ -3,6 +3,7 @@
 
 export * from './activeRuns';
 export * from './agents';
+export * from './automations';
 export * from './capabilities';
 export * from './chatStream';
 export * from './connectors';

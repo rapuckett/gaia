@@ -32,6 +32,8 @@ import {
     PenSquare,
     X,
 } from 'lucide-react';
+import { useT, type Translate } from '../../i18n/useT';
+import type { MessageKey } from '../../i18n/registry';
 import './EmailPreScanCard.css';
 import {
     archiveCommand,
@@ -67,13 +69,14 @@ function openInGmail(item: PreScanItem): void {
 
 interface SectionDef {
     key: 'urgent' | 'actionable' | 'archives';
-    title: string;
+    title: MessageKey;
     icon: React.ReactNode;
     items: PreScanItem[];
     intent: 'urgent' | 'actionable' | 'archive';
 }
 
 export function EmailPreScanCard({ payload }: { payload: PreScanPayload }) {
+    const t = useT();
     const [dismissed, setDismissed] = useState<Set<string>>(() => new Set());
 
     const handleDismiss = useCallback((id: string) => {
@@ -128,7 +131,7 @@ export function EmailPreScanCard({ payload }: { payload: PreScanPayload }) {
         () => [
             {
                 key: 'urgent',
-                title: 'Urgent',
+                title: 'email.prescan.urgent',
                 icon: <AlertCircle size={14} />,
                 items: payload.urgent.filter(
                     (i) => !dismissed.has(i.message_id),
@@ -137,7 +140,7 @@ export function EmailPreScanCard({ payload }: { payload: PreScanPayload }) {
             },
             {
                 key: 'actionable',
-                title: 'Needs a response',
+                title: 'email.prescan.actionable',
                 icon: <Mail size={14} />,
                 items: payload.actionable.filter(
                     (i) => !dismissed.has(i.message_id),
@@ -146,7 +149,7 @@ export function EmailPreScanCard({ payload }: { payload: PreScanPayload }) {
             },
             {
                 key: 'archives',
-                title: 'Suggested archives',
+                title: 'email.prescan.archives',
                 icon: <Archive size={14} />,
                 items: payload.suggested_archives.filter(
                     (i) => !dismissed.has(i.message_id),
@@ -161,15 +164,14 @@ export function EmailPreScanCard({ payload }: { payload: PreScanPayload }) {
     const informationalCount = payload.informational_count;
 
     return (
-        <div className="email-pre-scan" role="region" aria-label="Inbox pre-scan">
+        <div className="email-pre-scan" role="region" aria-label={t('email.prescan.title')}>
             <div className="email-pre-scan__header">
                 <Inbox size={16} aria-hidden="true" />
-                <span className="email-pre-scan__title">Inbox pre-scan</span>
+                <span className="email-pre-scan__title">{t('email.prescan.title')}</span>
                 <span className="email-pre-scan__totals">
-                    {totalVisible} surfaced
                     {informationalCount > 0
-                        ? ` · ${informationalCount} informational`
-                        : ''}
+                        ? t('email.prescan.surfacedInfo', { total: totalVisible, info: informationalCount })
+                        : t('email.prescan.surfaced', { n: totalVisible })}
                 </span>
             </div>
 
@@ -190,7 +192,7 @@ export function EmailPreScanCard({ payload }: { payload: PreScanPayload }) {
             {totalVisible === 0 && (
                 <div className="email-pre-scan__empty">
                     <CheckCircle2 size={14} />
-                    <span>Nothing to surface — your inbox looks quiet.</span>
+                    <span>{t('email.prescan.empty')}</span>
                 </div>
             )}
 
@@ -216,13 +218,14 @@ function Section({
     onDismiss: (id: string) => void;
     onOpen: (item: PreScanItem) => void;
 }) {
+    const t = useT();
     return (
         <section
             className={`email-pre-scan__section email-pre-scan__section--${def.intent}`}
         >
             <header className="email-pre-scan__section-header">
                 {def.icon}
-                <span className="email-pre-scan__section-title">{def.title}</span>
+                <span className="email-pre-scan__section-title">{t(def.title)}</span>
                 <span className="email-pre-scan__section-count">{def.items.length}</span>
             </header>
             <ul className="email-pre-scan__list">
@@ -268,25 +271,26 @@ function Row({
     onDismiss: (id: string) => void;
     onOpen: (item: PreScanItem) => void;
 }) {
+    const t = useT();
     const reason = item.reason ?? item.why ?? '';
-    const senderDisplay = formatSender(item.sender);
+    const senderDisplay = (item.sender ? formatSender(item.sender) : t.bare('email.prescan.unknownSender'));
 
     return (
         <li className="email-pre-scan__row">
             <div className="email-pre-scan__row-text">
                 <div className="email-pre-scan__row-meta">
                     <span
-                        className="email-pre-scan__row-sender"
+                        className="email-pre-scan__row-sender" dir="auto"
                         title={item.sender}
                     >
                         {senderDisplay}
                     </span>
-                    <span className="email-pre-scan__row-subject" title={item.subject}>
-                        {item.subject || '(no subject)'}
+                    <span className="email-pre-scan__row-subject" dir="auto" title={item.subject}>
+                        {item.subject || t.bare('email.prescan.noSubject')}
                     </span>
                 </div>
                 {reason && (
-                    <div className="email-pre-scan__row-reason" title={reason}>
+                    <div className="email-pre-scan__row-reason" dir="auto" title={reason}>
                         {reason}
                     </div>
                 )}
@@ -294,45 +298,45 @@ function Row({
             <div
                 className="email-pre-scan__row-actions"
                 role="group"
-                aria-label="Actions for this email"
+                aria-label={t('email.prescan.actions')}
             >
                 {intent === 'archive' ? (
                     <button
                         className="email-pre-scan__action email-pre-scan__action--primary"
                         onClick={() => onApproveArchive(item)}
                         disabled={isPending}
-                        title="Approve archive"
-                        aria-label={`Approve archive for "${item.subject}"`}
+                        title={t('email.prescan.approveArchive')}
+                        aria-label={t('email.prescan.approveArchiveFor', { subject: item.subject })}
                     >
                         <Archive size={12} />
-                        <span>Archive</span>
+                        <span>{t('email.prescan.archive')}</span>
                     </button>
                 ) : (
                     <button
                         className="email-pre-scan__action email-pre-scan__action--primary"
                         onClick={() => onReply(item)}
                         disabled={isPending}
-                        title="Draft a reply"
-                        aria-label={`Draft a reply to "${item.subject}"`}
+                        title={t('email.prescan.draftReply')}
+                        aria-label={t('email.prescan.draftReplyTo', { subject: item.subject })}
                     >
                         <PenSquare size={12} />
-                        <span>Reply</span>
+                        <span>{t('email.prescan.reply')}</span>
                     </button>
                 )}
                 <button
                     className="email-pre-scan__action"
                     onClick={() => onOpen(item)}
-                    title="Open in Gmail"
-                    aria-label={`Open "${item.subject}" in Gmail`}
+                    title={t('email.prescan.openInGmail')}
+                    aria-label={t('email.prescan.openInGmailFor', { subject: item.subject })}
                 >
                     <ExternalLink size={12} />
-                    <span>Open</span>
+                    <span>{t('sp.open')}</span>
                 </button>
                 <button
                     className="email-pre-scan__action email-pre-scan__action--ghost"
                     onClick={() => onDismiss(item.message_id)}
-                    title="Dismiss this row"
-                    aria-label={`Dismiss "${item.subject}"`}
+                    title={t('email.prescan.dismissRow')}
+                    aria-label={t('email.prescan.dismissFor', { subject: item.subject })}
                 >
                     <X size={12} />
                 </button>
@@ -348,6 +352,7 @@ function PreferenceSummary({
 }: {
     applied?: PreScanPayload['preferences_applied'];
 }) {
+    const t = useT();
     const priority = applied?.priority_senders ?? [];
     const low = applied?.low_priority_senders ?? [];
     const defaults = applied?.category_defaults ?? {};
@@ -357,19 +362,19 @@ function PreferenceSummary({
         Object.keys(defaults).length > 0;
     if (!hasAny) return null;
     return (
-        <div className="email-pre-scan__preferences" aria-label="Active session preferences">
-            <span className="email-pre-scan__preferences-label">Session preferences:</span>
+        <div className="email-pre-scan__preferences" aria-label={t('email.prescan.prefsRegion')}>
+            <span className="email-pre-scan__preferences-label">{t('email.prescan.prefs')}</span>
             {priority.length > 0 && (
-                <span className="email-pre-scan__preferences-chip" title="Always urgent">
-                    + {priority.length} priority sender{priority.length === 1 ? '' : 's'}
+                <span className="email-pre-scan__preferences-chip" title={t('email.prescan.alwaysUrgent')}>
+                    {t.plural('email.prescan.prioritySenders', priority.length)}
                 </span>
             )}
             {low.length > 0 && (
                 <span
                     className="email-pre-scan__preferences-chip"
-                    title="Always low-priority"
+                    title={t('email.prescan.alwaysLow')}
                 >
-                    − {low.length} low-priority sender{low.length === 1 ? '' : 's'}
+                    {t.plural('email.prescan.lowSenders', low.length)}
                 </span>
             )}
             {Object.entries(defaults).map(([cat, action]) => (

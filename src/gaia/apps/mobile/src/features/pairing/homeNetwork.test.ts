@@ -77,6 +77,20 @@ describe('the native transport', () => {
         expect(alphabet).toBe('abcdefghijklmnopqrstuvwxyz234567');
     });
 
+    it('checks the same route kinds, networks and relay id on Android', () => {
+        const kotlin = readFileSync(join(mobile, 'modules/gaia-transport/android/src/main/java/ai/amd/gaia/transport/HomeNetwork.kt'), 'utf-8');
+        const kinds = [...kotlin.matchAll(/^ {2}"(\w+)" -> /gm)].map((m) => m[1]);
+        expect(kinds).toEqual([...ROUTE_KINDS]);
+        expect(/^private val OFFERED_NETWORKS = listOf\(([^)]*)\)/m.exec(kotlin)?.[1]).toBe(/^private let offeredNetworks = \[([^\]]*)\]/m.exec(swift)?.[1]);
+        expect(/^private const val TAILNET_NETWORK = "([\d./]+)"/m.exec(kotlin)?.[1]).toBe(TAILNET_NETWORK);
+        expect(/^private const val RELAY_ID_LENGTH = (\d+)/m.exec(kotlin)?.[1]).toBe(/^private let relayIdLength = (\d+)/m.exec(swift)?.[1]);
+        expect(/^private const val RELAY_ID_ALPHABET = "([a-z0-9]+)"/m.exec(kotlin)?.[1]).toBe('abcdefghijklmnopqrstuvwxyz234567');
+        // The manifest meta-data plugins/withRelayDomain writes, from the same environment variable.
+        const key = /^internal const val RELAY_DOMAIN_KEY = "(\w+)"/m.exec(kotlin)?.[1];
+        expect(readFileSync(join(mobile, 'plugins/withRelayDomain.js'), 'utf-8')).toContain(`const KEY = '${key}';`);
+        expect(readFileSync(join(mobile, 'app.config.ts'), 'utf-8')).toContain("['./plugins/withRelayDomain', { domain: relayDomain || null }]");
+    });
+
     it('reads the relay domain from the Info.plist key app.config writes', () => {
         const key = /^private let relayDomainKey = "(\w+)"/m.exec(swift)?.[1];
         const config = readFileSync(join(mobile, 'app.config.ts'), 'utf-8');

@@ -67,10 +67,10 @@ function ChangesBody({ sessionId, live, changes, onUndone }: { sessionId: string
     const t = useT();
     const { undoAll } = useChangesActions(sessionId);
     const seed = useSessionPanelStore((s) => s.changesSeed);
-    const [phase, setPhase] = useState<UndoPhase>(seed && 'phase' in seed ? seed.phase : 'idle');
-    const [message, setMessage] = useState<string | null>(seed && 'phase' in seed && seed.phase === 'conflict' ? t('mobileApp.changes.undoConflict') : null);
-    const [detail, setDetail] = useState<string | undefined>(seed && 'phase' in seed ? seed.detail : undefined);
-    const [reviewing, setReviewing] = useState(Boolean(seed && 'review' in seed));
+    const [phase, setPhase] = useState<UndoPhase>(seed ? seed.phase : 'idle');
+    const [message, setMessage] = useState<string | null>(seed?.phase === 'conflict' ? t('mobileApp.changes.undoConflict') : null);
+    const [detail, setDetail] = useState<string | undefined>(seed?.detail);
+    const [reviewing, setReviewing] = useState(false);
     const count = changes.files.length;
     const groups = groupUntracked(changes.untracked);
 

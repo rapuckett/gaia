@@ -52,6 +52,7 @@ import type {
     WarmUpStatus,
 } from '@webui/types';
 import type { FileDiff, TurnChanges, UndoResult, UndoSettings } from '@webui/types/changes';
+import type { Automation, AutomationList } from '@webui/services/automationsApi';
 import type { DiscordStatus } from '@webui/services/messagingApi';
 import type { AgentCapabilities, SessionChanges, SessionEnvironment, SessionGit, SessionOutputs, UndoAllResult } from '@webui/types/sessionPanel';
 import type { DiscoveryFinding, Goal, GoalStats, InferenceInsight, KnowledgeCreateBody, KnowledgeListParams, KnowledgeSaveResult, KnowledgeUpdateBody, MemoryCleared, MemoryReinitializeResult, MemorySettings, MemorySettingsUpdateResponse, Priority as GoalPriority } from '@webui/services/memoryApi';
@@ -223,6 +224,10 @@ export interface ProviderConnected {
 }
 
 export type { MemoryCleared, MemoryReinitializeResult, MemorySettings, MemorySettingsUpdateResponse } from '@webui/services/memoryApi';
+/** GET /api/automations, typed as Settings > Automations on the web types it. */
+export type { Automation, AutomationKind, AutomationList } from '@webui/services/automationsApi';
+/** What `POST /api/automations/{ref}/{action}` takes from a paired phone: the desktop's buttons (ui/routers/automations.py DEVICE_ACTIONS). */
+export type AutomationAction = 'pause' | 'resume';
 /** GET /api/messaging/discord, typed as Settings > Messaging on the web types it. */
 export type { DiscordState, DiscordStatus } from '@webui/services/messagingApi';
 export type { DiscoveryFinding, InferenceInsight } from '@webui/services/memoryApi';
@@ -581,6 +586,12 @@ export interface GaiaClient {
     /** The chats with a turn in flight, those queued, and those paused on the user. */
     getActiveRuns(options?: RequestOptions): Promise<ActiveRuns>;
     listSchedules(options?: RequestOptions): Promise<ScheduleList>;
+    /** What GAIA runs on its own, and whether Discord delivers it (null when the PC couldn't check). */
+    listAutomations(options?: RequestOptions): Promise<AutomationList>;
+    /** Pauses or resumes one automation by id; 404 when none matches. */
+    automationAction(ref: string, action: AutomationAction, options?: RequestOptions): Promise<Automation>;
+    /** Removes one automation by id and returns it; 404 when none matches. */
+    deleteAutomation(ref: string, options?: RequestOptions): Promise<Automation>;
     /** The last `days` days of conversations, tool calls, learned entries and errors, oldest first. */
     getMemoryActivity(days: number, options?: RequestOptions): Promise<ActivityDay[]>;
     /** Per-tool call counts and timings; memory's own tools are not logged. */

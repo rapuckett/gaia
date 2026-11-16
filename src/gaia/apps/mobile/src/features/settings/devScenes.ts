@@ -4,7 +4,7 @@
 import { createFakeClient, type FakeClientData } from '@/api/fake';
 import type { SystemStatus } from '@webui/types';
 
-import type { ContextChoice, Session, SkillInfo, DiscordStatus, GaiaClient, CustomModelReport, GpuMemoryStatus, LemonadeTarget, MCPServerStatus, ModelServerInfo, ProviderModel, Settings, SpendingReport } from '@/api/client.types';
+import type { Automation, AutomationList, ContextChoice, Session, SkillInfo, DiscordStatus, GaiaClient, CustomModelReport, GpuMemoryStatus, LemonadeTarget, MCPServerStatus, ModelServerInfo, ProviderModel, Settings, SpendingReport } from '@/api/client.types';
 import { PC_ONLY_REFUSAL } from '@/api/constants';
 import { GaiaApiError, GaiaNetworkError } from '@/api/errors';
 import { COMMON, GPU } from '@/features/setup/devScenes';
@@ -13,7 +13,7 @@ import type { SectionId } from './sections';
 
 /** A settings pane on a fake PC: which section, and the anchor it opens on. */
 export interface SettingsScene {
-    section: Extract<SectionId, 'advanced' | 'general' | 'messaging' | 'model' | 'privacy' | 'setup' | 'skills'>;
+    section: Extract<SectionId, 'advanced' | 'automations' | 'general' | 'messaging' | 'model' | 'privacy' | 'setup' | 'skills'>;
     target?: string;
     gpuMemory: GpuMemoryStatus | Error;
     status?: FakeClientData['status'];
@@ -27,6 +27,8 @@ export interface SettingsScene {
     search?: string;
     /** Opens this model's Details section expanded. */
     openDetails?: string;
+    /** Opens Add a model from Hugging Face with this link typed and its check still running. */
+    checkPending?: string;
     /** Opens Add a model from Hugging Face with this link already checked. */
     customReport?: CustomModelReport;
     /** Opens the Messaging status with the just-paired line showing. */
@@ -35,6 +37,8 @@ export interface SettingsScene {
     hang?: 'download' | 'select';
     /** Client calls the scene answers itself (a hang or a PC refusal), over the fake's. */
     override?: Partial<GaiaClient>;
+    /** Opens Automations already asking to remove the automation with this id. */
+    confirmRemove?: string;
     /** The device's saved palette; scenes without one open on the default palette. */
     appearance?: { palette: 'default' | 'custom'; custom: { accent: string; base: string } };
 }
@@ -80,6 +84,7 @@ const NPU_MODEL = model('gemma4-it-e4b-FLM', {
         { code: 'memlock', title: '', fix: '', params: { limit: '8 MB', fix: 'apply' } },
     ],
 });
+const NPU_READY = { ...NPU_MODEL, npu_problems: undefined, evidence: '17/20 tasks · quality 4.4/5 · $0.00 per 20-task run' };
 const FIREWORKS_MODELS = [
     model('fireworks.qwen3p6', {
         display_name: 'Qwen3.6', rank: 1, note: 'best overall, fastest', evidence: '18/20 tasks · quality 4.6/5 · $0.42 per 20-task run',
@@ -131,6 +136,20 @@ const discord = (extra: Partial<DiscordStatus>): DiscordStatus => ({
     discord_installed: false, should_offer_setup: false, ...extra,
 });
 const NO_TOKEN = { connected: false, bot_name: '', bot_profile_url: '', invite_url: '' };
+const NEXT_AT = Date.UTC(2026, 10, 17, 9, 0) / 1000;
+const automation = (id: string, name: string, extra: Partial<Automation>): Automation => ({
+    id, name, kind: 'reminder', heartbeat: false, paused: false, every_seconds: 0, next_at: NEXT_AT, last_run_at: 0, runs: 0,
+    prompt: '', say: '', check: '', quiet: '', days: '', failures: 0, ...extra,
+});
+const AUTOMATIONS: Automation[] = [
+    automation('a1b2c3d4', 'Call Sam', { say: 'Call Sam about the venue.' }),
+    automation('b2c3d4e5', 'Inbox digest', { kind: 'summary', every_seconds: 86400, prompt: 'Summarize what came into my inbox today.', quiet: '22:00-07:00', days: 'mon,tue,wed,thu,fri', runs: 12 }),
+    automation('c3d4e5f6', 'CI on main', { kind: 'trigger', every_seconds: 900, check: 'gh run list --branch main --limit 1 --json conclusion', say: 'CI on main is red.', failures: 2 }),
+    automation('d4e5f6a7', 'Heartbeat', { kind: 'alert', heartbeat: true, every_seconds: 1800, prompt: 'Check my calendar and the open pull requests.' }),
+    automation('e5f6a7b8', 'Rainier weather', { kind: 'alert', every_seconds: 3600, prompt: 'Tell me if the Rainier forecast drops below freezing.', paused: true, days: 'sat,sun' }),
+];
+const autos = (list: AutomationList | Error, scene: Partial<SettingsScene> = {}): SettingsScene => ({ section: 'automations', gpuMemory: GPU, data: { automations: list }, ...scene });
+
 const msg = (status: DiscordStatus | Error, scene: Partial<SettingsScene> = {}): SettingsScene => ({ section: 'messaging', gpuMemory: GPU, data: { discordStatus: status }, ...scene });
 
 const SERVER: ModelServerInfo = {
@@ -208,6 +227,12 @@ export const SETTINGS_SCENES: Record<string, SettingsScene> = {
     'model-search-miss': { section: 'model', target: 'models-on-pc', gpuMemory: GPU, search: 'zzz-no-such-model', data: local(MANY) },
     // SET-MODEL-24: a model row with its Details section expanded.
     'model-details': { section: 'model', target: 'models-on-pc', gpuMemory: GPU, openDetails: MINE_CUSTOM.id, data: local([HAVE, MINE_CUSTOM]) },
+    // SET-MODEL-24: an NPU model's Details (placement marked expected, then the measured figures); and a model the PC can't run, its group held open by a search.
+    'model-details-npu': {
+        section: 'model', target: 'models-on-pc', gpuMemory: GPU, openDetails: NPU_READY.id,
+        data: local([HAVE, NPU_READY]),
+    },
+    'model-details-unfit': { section: 'model', target: 'models-on-pc', gpuMemory: GPU, openDetails: NEVER.id, search: 'Coder', data: local([HAVE, NEVER]) },
     // SET-MODEL-26: a Use tap that hangs (`#tap=model-use-user.my-tuned-GGUF`).
     'model-switching': { section: 'model', target: 'models-on-pc', gpuMemory: GPU, hang: 'select', data: local([HAVE, MINE_CUSTOM]) },
     // SET-MODEL-24, 28: a custom model with Remove and its Details (`#tap=model-remove-user.my-tuned-GGUF` opens the confirm sheet); the custom model in use has none.
@@ -227,6 +252,13 @@ export const SETTINGS_SCENES: Record<string, SettingsScene> = {
         section: 'model', target: 'models-on-pc', gpuMemory: GPU, customReport: HF_CHECKING,
         data: local([HAVE]),
     },
+    // SET-MODEL-30: the Check spinner, with the check in flight and nothing listed yet.
+    'model-hf-check-running': { section: 'model', target: 'models-on-pc', gpuMemory: GPU, checkPending: HF_URL, data: local([HAVE]) },
+    // SET-MODEL-30: the checks done and passing, with a non-blocking Warnings list under them.
+    'model-hf-warnings': {
+        section: 'model', target: 'models-on-pc', gpuMemory: GPU, data: local([HAVE]),
+        customReport: { ...HF_REPORT, warnings: ['Not tested on the NPU', 'The file is larger than most chat models'], variants: HF_VARIANTS },
+    },
     'model-hf-ready': {
         section: 'model', target: 'models-on-pc', gpuMemory: GPU, customReport: { ...HF_REPORT, variants: HF_VARIANTS },
         data: local([HAVE]),
@@ -235,6 +267,15 @@ export const SETTINGS_SCENES: Record<string, SettingsScene> = {
     'spend-total': { section: 'model', provider: 'fireworks', gpuMemory: GPU, data: { ...cloud([]), spending: spent({ limit_usd: 20, state: 'ok', unpriced_turns: 2, unreported_turns: 1 }) } },
     'spend-near-limit': { section: 'model', provider: 'fireworks', gpuMemory: GPU, data: { ...cloud([]), spending: spent({ total_usd: 17.4, limit_usd: 20, state: 'near' }) } },
     'spend-over-limit': { section: 'model', provider: 'fireworks', gpuMemory: GPU, data: { ...cloud([]), spending: spent({ total_usd: 20.3, limit_usd: 20, state: 'reached' }) } },
+
+    // Automations: one of each kind with a paused one, the remove sheet, the delivery notices, empty, a failed read, and an older PC that refuses a phone.
+    'automations-list': autos({ automations: AUTOMATIONS, delivers: true }),
+    'automations-remove': autos({ automations: AUTOMATIONS, delivers: true }, { confirmRemove: 'b2c3d4e5' }),
+    'automations-no-delivery': autos({ automations: AUTOMATIONS, delivers: false }),
+    'automations-delivery-unknown': autos({ automations: AUTOMATIONS, delivers: null }),
+    'automations-empty': autos({ automations: [], delivers: false }),
+    'automations-load-failed': autos(new GaiaApiError(500, 'automations.json is not usable: Expecting value: line 1 column 1 (char 0)')),
+    'automations-pc-refused': autos(new GaiaApiError(403, PC_ONLY_REFUSAL)),
 
     // SET-MSG-01: the card before the PC has answered, and when the read fails (`Try again`).
     'msg-loading': msg(discord({}), { override: { getDiscordStatus: never } }),

@@ -43,6 +43,14 @@ export function SheetHost({ children, scope }: { children: ReactNode; scope?: st
     const state = useSyncExternalStore(sheetStore.subscribe, sheetStore.getState);
     const shown = state.active ? state.entries[state.active] : undefined;
     const active = shown && shown.scope === scope ? shown : undefined;
+    // A host that goes away mid-sheet can't finish the exit, and the store would hold every later sheet behind it.
+    useEffect(
+        () => () => {
+            const { active: id, entries } = sheetStore.getState();
+            if (id && entries[id]?.scope === scope) sheetStore.finished(id);
+        },
+        [scope],
+    );
     return (
         <View style={{ flex: 1 }}>
             <View

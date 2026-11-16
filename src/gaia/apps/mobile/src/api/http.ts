@@ -29,6 +29,8 @@ import type {
     AgentInstallStatus,
     AgentList,
     AgentMcpList,
+    Automation,
+    AutomationList,
     CancelChatResult,
     CancelIndexingResult,
     ChatPerformance,
@@ -175,6 +177,8 @@ import {
     memoryStreamInferencePath,
     memoryUpcomingPath,
     PROFILE_STREAM_IDLE_MS,
+    automationActionPath,
+    automationPath,
     schedulePath,
     scheduleResultsPath,
     scheduleRunPath,
@@ -918,6 +922,18 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         listSchedules(options) {
             return getJson<ScheduleList>(ENDPOINTS.schedules, options?.signal);
+        },
+
+        listAutomations(options) {
+            return getJson<AutomationList>(ENDPOINTS.automations, options?.signal);
+        },
+
+        automationAction(ref, action, options) {
+            return postJson<Automation>(automationActionPath(ref, action), undefined, options?.signal);
+        },
+
+        deleteAutomation(ref, options) {
+            return deleteJson<Automation>(automationPath(ref), options?.signal);
         },
 
         createSchedule(request, options) {

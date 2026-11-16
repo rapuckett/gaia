@@ -96,4 +96,22 @@ describe('SheetHost', () => {
         expect(shown(r)).not.toContain('first');
         // The first render transforms React Native's lazy components on a cold cache (about 1.6 s measured, 25 ms warm), which a loaded machine stretches past 5 s.
     }, 20_000);
+
+    it('a host that unmounts mid-sheet does not hold the next host\'s sheet back', async () => {
+        const noop = jest.fn();
+        const first = createRoot({ textComponentTypes: ['Text', 'RCTText'] });
+        await act(async () => {
+            first.render(<Screen a b={false} onCloseA={noop} onCloseB={noop} />);
+        });
+        expect(shown(first)).toContain('first');
+        await act(async () => {
+            first.unmount();
+        });
+
+        const second = createRoot({ textComponentTypes: ['Text', 'RCTText'] });
+        await act(async () => {
+            second.render(<Screen a={false} b onCloseA={noop} onCloseB={noop} />);
+        });
+        expect(shown(second)).toContain('second');
+    }, 20_000);
 });
