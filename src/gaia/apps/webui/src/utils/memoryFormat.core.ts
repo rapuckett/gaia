@@ -176,18 +176,19 @@ export const ABOUT_GROUPS: { title: MessageKey; categories: string[] }[] = [
     { title: 'mem.about.group.notes', categories: ['note'] },
 ];
 
-const SOURCES: Record<string, MessageKey> = {
+export const MEMORY_SOURCE_KEYS: Record<string, MessageKey> = {
     user: 'mem.source.user',
     tool: 'mem.source.tool',
     llm_extract: 'mem.source.llm_extract',
     consolidation: 'mem.source.consolidation',
     inferred: 'mem.source.inferred',
     discovery: 'mem.source.discovery',
+    error_auto: 'mem.source.error_auto',
 };
 
 /** Where a memory came from, in the user's words; an unknown source reads "Saved". */
 export function sourceKey(source: string): MessageKey {
-    return SOURCES[source] ?? 'mem.source.other';
+    return MEMORY_SOURCE_KEYS[source] ?? 'mem.source.other';
 }
 
 export function relativeDay(iso: string, t: Translate): MessageRef | string | null {

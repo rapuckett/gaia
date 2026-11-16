@@ -180,6 +180,7 @@ export const ROUTE_ACCESS: Readonly<Record<string, RouteAccessClass>> = {
     'POST /api/files/upload': 'remote',
     'POST /api/files/upload-media': 'remote',
     'POST /api/goals': 'remote',
+    'POST /api/goals/store/reset': 'remote',
     'POST /api/goals/{goal_id}/tasks': 'remote',
     'POST /api/gpu-memory/apply': 'pc',
     'POST /api/gpu-memory/pending': 'remote',
