@@ -3,6 +3,8 @@
 
 import { Platform } from 'react-native';
 
+import { GaiaError } from '@/api/errors';
+
 import { createFakePairingService } from './fakePairingService';
 import type { PairingService } from './service';
 
@@ -15,9 +17,7 @@ export function setPairingService(service: PairingService | null): void {
 
 export function getPairingService(): PairingService {
     if (!current) {
-        throw new Error(
-            'This build has no pairing service. Install one with setPairingService() from features/pairing/registry.ts at start-up; development builds use the fake.',
-        );
+        throw new GaiaError('mobileApp.pairing.unavailable');
     }
     return current;
 }
