@@ -5,6 +5,7 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 
 import { stripIsolates } from '@webui/i18n/registry';
+import { translator } from '@webui/i18n/translator';
 
 import { GaiaApiError } from '@/api/errors';
 import type { Translate } from '@/i18n/useT';
@@ -92,11 +93,16 @@ describe('confirm wording', () => {
         const r = redownloadRequest('Qwen3 4B', 6_000_000_000, t);
         expect(r.title).toBe('setup.redownload.title{"name":"\u2066Qwen3 4B\u2069"}');
         expect(r.body).toHaveLength(1);
-        const params = JSON.parse(r.body[0]!.slice('setup.redownload.body'.length)) as Record<string, string>;
+        const params = JSON.parse(r.body[0]!.slice('mobileApp.setup.redownload.body'.length)) as Record<string, string>;
         expect(stripIsolates(params.name!)).toBe('Qwen3 4B');
-        expect(stripIsolates(params.size!)).toMatch(/GB/);
+        expect(stripIsolates(params.size!)).toMatch(/^\(.*GB\)$/);
         expect(params.name).not.toContain('GB');
         expect(r.danger).toBe(true);
+    });
+
+    it('re-download in Arabic keeps "(6.0 GB)" as one unbreakable left-to-right unit with the parentheses inside', () => {
+        const [body] = redownloadRequest('Qwen3 4B', 6_000_000_000, translator('ar')).body;
+        expect(body).toContain('\u2068(6.0\u00A0GB)\u2069');
     });
 
     it('a server no-fit says "use it anyway" with the server message', () => {
