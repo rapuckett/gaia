@@ -9,14 +9,14 @@ import { TailIssues } from '../ReplyErrors';
 import { RecordingProgress } from '../recording/RecordingProgress';
 import { EmailPreScanCard } from '../cards/EmailPreScanCard';
 import { GuideCard } from '../cards/GuideCard';
-import { FIXTURES, GUIDE_WORKOUT, PRESCAN_PAYLOAD, type MessagesFixture } from './__fixtures__/messages';
+import { FIXTURES, GUIDE_SETS, GUIDE_WORKOUT, PRESCAN_PAYLOAD, type MessagesFixture } from './__fixtures__/messages';
 import { Screen, Stack } from '@/ui';
 
 /** Developer gallery of the message list in each state; not part of the shipped screens. */
-export type MessagesGalleryState = MessagesFixture | StartOpen | 'guided' | 'prescan-dismissing' | 'prescan-done';
+export type MessagesGalleryState = MessagesFixture | StartOpen | 'guided' | 'guided-sets' | 'prescan-dismissing' | 'prescan-done';
 
 export function MessagesGallery({ state }: { state: MessagesGalleryState }) {
-    if (state === 'actions' || state === 'delete' || state === 'edit') {
+    if (state === 'actions' || state === 'delete' || state === 'edit' || state === 'drop') {
         const [question] = FIXTURES.short.messages;
         return (
             <Screen>
@@ -24,10 +24,10 @@ export function MessagesGallery({ state }: { state: MessagesGalleryState }) {
             </Screen>
         );
     }
-    if (state === 'guided') {
+    if (state === 'guided' || state === 'guided-sets') {
         return (
             <Screen>
-                <GuideCard data={GUIDE_WORKOUT} startGuided />
+                <GuideCard data={state === 'guided' ? GUIDE_WORKOUT : GUIDE_SETS} startGuided />
             </Screen>
         );
     }

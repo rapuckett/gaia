@@ -249,7 +249,7 @@ export function FileBrowserScreen({ chatId, onClose, onPreview, onAsk, initial }
                     onSubmitEditing={runSearch}
                 />
                 <Row gap="sm">
-                    <Button label={filterLabel} iconEnd={ChevronDown} accessibilityLabel={`${t('fileBrowser.typeFilter')}: ${filterLabel}`} onPress={() => setFilterOpen(true)} />
+                    <Button label={filterLabel} iconEnd={ChevronDown} testID="file-type-filter" accessibilityLabel={`${t('fileBrowser.typeFilter')}: ${filterLabel}`} onPress={() => setFilterOpen(true)} />
                     <Stack flex={1} />
                     <Button label={search.isFetching ? t('fileBrowser.searching') : t('fileBrowser.search')} variant="secondary" disabled={!text.trim() || search.isFetching} onPress={runSearch} />
                 </Row>
