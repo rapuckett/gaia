@@ -186,11 +186,13 @@ function WhereYourDataIs() {
 function TroubleshootingReport() {
     const t = useT();
     return (
-        <Card>
-            <Stack gap="sm">
-                <Notice tone="info" message={t('setup.logs.reportOnPc')} testID="privacy-report-pc-only" />
-            </Stack>
-        </Card>
+        <SettingsAnchor name="report">
+            <Card>
+                <Stack gap="sm">
+                    <Notice tone="info" message={t('setup.logs.reportOnPc')} testID="privacy-report-pc-only" />
+                </Stack>
+            </Card>
+        </SettingsAnchor>
     );
 }
 
