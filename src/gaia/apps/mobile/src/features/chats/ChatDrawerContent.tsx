@@ -31,7 +31,7 @@ import {
     StatusDot,
     Text,
 } from '@/ui';
-import { useLargeText } from '@/ui/theme/a11y';
+import { TITLE_MAX_FONT_SCALE, useLargeText } from '@/ui/theme/a11y';
 import { Ellipsis, EyeOff, Monitor, SquarePen, X } from '@/ui/icons';
 
 import { ChatRowSheets, type RowSheet } from './ChatRowSheets';
@@ -142,7 +142,7 @@ export function ChatDrawerContent({ activeId, onSelect, onClose, onNewChat, onPc
 
     const navRows = (
         <>
-            {onNewChat ? <ListRow title={t('sidebar.newChat')} leading={<Icon icon={SquarePen} size="sm" tone="secondary" />} onPress={newChat} /> : null}
+            {onNewChat ? <ListRow title={t('sidebar.newChat')} titleMaxScale={TITLE_MAX_FONT_SCALE} leading={<Icon icon={SquarePen} size="sm" tone="secondary" />} onPress={newChat} /> : null}
             {entries.filter((e) => !e.footer).map((e) => (
                 <NavRow key={e.key} entry={e} active={activeRoute === e.route} onOpen={open} />
             ))}
@@ -301,6 +301,7 @@ function NavRow({ entry, active, onOpen }: { entry: NavEntry; active: boolean; o
     return (
         <ListRow
             title={t(entry.labelKey)}
+            titleMaxScale={TITLE_MAX_FONT_SCALE}
             selected={active}
             leading={<Icon icon={entry.icon} size="sm" tone="secondary" />}
             onPress={() => onOpen(entry.route)}
