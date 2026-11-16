@@ -91,7 +91,7 @@ export function ChatHeader({ sessionId, onOpenSessionPanel, onManageDocuments }:
         </Row>
     ) : (
         <Pressable onPress={startEdit} accessibilityLabel={t('row.rename')} testID="chat-title">
-            <Text role="title" weight="semibold" numberOfLines={1}>
+            <Text role="title" weight="semibold" numberOfLines={1} largeLines={2}>
                 {isPlaceholderTitle(title) ? t('sidebar.newChat') : title}
             </Text>
         </Pressable>

@@ -1,0 +1,104 @@
+// Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
+// SPDX-License-Identifier: MIT
+
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { Redirect, useLocalSearchParams } from 'expo-router';
+import { useState } from 'react';
+
+import { GaiaClientProvider } from '@/data';
+import { ConnectionBanner } from '@/features/banners/ConnectionBanner';
+import { devGalleryEnabled } from '@/features/dev/devGallery';
+import { NotificationCenterScreen } from '@/features/notifications';
+import { NOTIFICATION_SCENES, notificationSceneClient, type NotificationScene } from '@/features/notifications/devScenes';
+import NotificationsPane from '@/features/settings/panes/Notifications';
+import { SetupGate } from '@/features/setup/SetupGate';
+import { IDLE_TURN, useChatStreamStore } from '@/state/chatStreams';
+import { useChatAlertBannerStore } from '@/state/chatAlertBanner';
+import { setNotificationFilter, useNotificationStore } from '@/state/notifications';
+import { Screen, ScreenBannerProvider, Stack, Text, UIProvider } from '@/ui';
+
+const noop = () => undefined;
+
+/** The app's notification stores hold the scene: a pending approval is a chat turn blocked on it. */
+function seed(scene: NotificationScene) {
+    useNotificationStore.setState({ items: scene.items ?? [], filter: scene.filter ?? null });
+    setNotificationFilter(scene.filter ?? null);
+    useChatAlertBannerStore.setState({ alert: scene.chatAlert ?? null });
+    const turns = Object.fromEntries(
+        (scene.waiting ?? []).map((confirmId, i) => [
+            `dev-chat-${i}`,
+            { ...IDLE_TURN, status: 'streaming' as const, pendingPermission: { type: 'permission_request', confirm_id: confirmId, tool: 'run_shell_command', tool_label: 'run a command', args: { command: 'git status' } } as never },
+        ]),
+    );
+    useChatStreamStore.setState({ turns });
+}
+
+function Body({ scene }: { scene: NotificationScene }) {
+    if (scene.view === 'center') {
+        return (
+            <ScreenBannerProvider banner={null}>
+                <NotificationCenterScreen onBack={noop} onOpenChat={noop} />
+            </ScreenBannerProvider>
+        );
+    }
+    if (scene.view === 'alerts') {
+        return (
+            <ScreenBannerProvider banner={null}>
+                <Screen scroll>
+                    <NotificationsPane />
+                </Screen>
+            </ScreenBannerProvider>
+        );
+    }
+    const placeholder = (
+        <Stack padding="lg">
+            <Text tone="muted">Chats</Text>
+        </Stack>
+    );
+    if (scene.view === 'gate') {
+        return (
+            <ScreenBannerProvider banner={null}>
+                <SetupGate>{placeholder}</SetupGate>
+            </ScreenBannerProvider>
+        );
+    }
+    return (
+        <ScreenBannerProvider banner={<ConnectionBanner />}>
+            <Screen scroll>{placeholder}</Screen>
+        </ScreenBannerProvider>
+    );
+}
+
+/** The notification center, connection banners, setup-gate notice and alert settings on a fake PC; `?state=<name>` (see NOTIFICATION_SCENES). */
+export default function NotificationsGalleryRoute() {
+    const { state = 'mixed' } = useLocalSearchParams<{ state?: string }>();
+    const found = NOTIFICATION_SCENES[state];
+    const [queryClient] = useState(() => new QueryClient({ defaultOptions: { queries: { retry: false } } }));
+    const [client] = useState(() => {
+        if (!found) return null;
+        seed(found);
+        return notificationSceneClient(found);
+    });
+    if (!devGalleryEnabled()) return <Redirect href="/" />;
+    if (!found || !client) {
+        return (
+            <UIProvider>
+                <Screen scroll>
+                    <Stack gap="sm" padding="lg">
+                        <Text role="title">{`No notifications scene "${state}"`}</Text>
+                        {Object.keys(NOTIFICATION_SCENES).map((key) => <Text key={key}>{key}</Text>)}
+                    </Stack>
+                </Screen>
+            </UIProvider>
+        );
+    }
+    return (
+        <QueryClientProvider client={queryClient}>
+            <GaiaClientProvider client={client}>
+                <UIProvider>
+                    <Body scene={found} />
+                </UIProvider>
+            </GaiaClientProvider>
+        </QueryClientProvider>
+    );
+}

@@ -145,7 +145,7 @@ function DataFolder({ path }: { path: string }) {
 
     return (
         <Stack gap="xs">
-            <Row gap="sm">
+            <Row gap="sm" stack>
                 <Text role="label" tone="secondary">
                     {t('settings.privacy.dataFolder')}
                 </Text>
@@ -186,11 +186,13 @@ function WhereYourDataIs() {
 function TroubleshootingReport() {
     const t = useT();
     return (
-        <Card>
-            <Stack gap="sm">
-                <Notice tone="info" message={t('setup.logs.reportOnPc')} testID="privacy-report-pc-only" />
-            </Stack>
-        </Card>
+        <SettingsAnchor name="report">
+            <Card>
+                <Stack gap="sm">
+                    <Notice tone="info" message={t('setup.logs.reportOnPc')} testID="privacy-report-pc-only" />
+                </Stack>
+            </Card>
+        </SettingsAnchor>
     );
 }
 

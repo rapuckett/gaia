@@ -1,8 +1,8 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { useCallback, useMemo, useState, type ReactNode } from 'react';
-import { View, type ViewStyle } from 'react-native';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { Platform, View, type ViewStyle } from 'react-native';
 
 import { bracketParts } from '@webui/i18n/registry';
 import { MAX_MESSAGE_CHARS } from '@webui/utils/messageLimits';
@@ -10,11 +10,13 @@ import { MAX_MESSAGE_CHARS } from '@webui/utils/messageLimits';
 import { useT } from '@/i18n/useT';
 import { IconButton, Notice, Row, Stack, Surface, TextField } from '@/ui';
 import { ArrowUp, Square } from '@/ui/icons';
+import { INPUT_MAX_FONT_SCALE } from '@/ui/theme/a11y';
 
 import { AttachButton } from './AttachButton';
 import { AttachmentChips } from './AttachmentChips';
 import { ChipFitContext } from './ChipFitContext';
 import { CHIP_GAP, collapsedChips, type ChipId } from './chipRoom';
+import { pickedFromPaste } from './pickFiles';
 import type { Attachments } from './useAttachments';
 
 export interface ComposerProps {
@@ -28,7 +30,7 @@ export interface ComposerProps {
     running?: boolean;
     /** Replaces the placeholder: `composer.queueNext` while running, else `composer.placeholder`. */
     placeholder?: string;
-    /** Why the box can't be used right now; shown as the hint and the placeholder. */
+    /** Why the box can't be used right now; shown as the hint under the box, and read aloud with the input. */
     disabledReason?: string;
     /** GAIA waits on a question: Send answers it instead of queueing. */
     answering?: boolean;
@@ -77,6 +79,25 @@ export function Composer({
     );
     const chipFit = useMemo(() => ({ collapsed: collapsedChips(fullWidths, chipsWidth), report }), [fullWidths, chipsWidth, report]);
 
+    // The web box takes pasted files of any type, as the desktop's does; a phone pastes through the attach menu.
+    const addPicked = attachments?.add;
+    useEffect(() => {
+        if (Platform.OS !== 'web' || !addPicked || disabledReason) return;
+        const onPaste = (e: ClipboardEvent) => {
+            if (!(e.target as Element | null)?.closest?.('[data-testid="composer-input"]')) return;
+            // Files win over text: apps often put the file's name on the clipboard beside it.
+            const files = Array.from(e.clipboardData?.items ?? [])
+                .filter((item) => item.kind === 'file')
+                .map((item) => item.getAsFile())
+                .filter((f): f is File => f !== null);
+            if (files.length === 0) return;
+            e.preventDefault();
+            addPicked(pickedFromPaste(files));
+        };
+        document.addEventListener('paste', onPaste);
+        return () => document.removeEventListener('paste', onPaste);
+    }, [addPicked, disabledReason]);
+
     // Reset during render, so a later reply never starts out as Stopping.
     if (!running && stopping) setStopping(false);
 
@@ -114,7 +135,8 @@ export function Composer({
     const sendLabel = answering ? t('composer.sendAnswer') : running && message ? t('composer.queue') : t('composer.send');
     const spoken = disabledReason ?? placeholderText ?? (running ? t('composer.queueNext') : t('composer.placeholder'));
     // A placeholder can't draw the muted English half, so it shows the Arabic alone; screen readers get both.
-    const [placeholder] = bracketParts(spoken);
+    // A blocked box leaves it empty: the hint line below carries the reason in full.
+    const placeholder = disabledReason ? '' : bracketParts(spoken)[0];
 
     return (
         <Stack gap="sm" padding="md">
@@ -146,6 +168,7 @@ export function Composer({
                         maxLines={MAX_LINES}
                         disabled={!!disabledReason}
                         bare
+                        maxFontSizeMultiplier={INPUT_MAX_FONT_SCALE}
                         testID="composer-input"
                     />
                     <Row gap="sm" align="center">

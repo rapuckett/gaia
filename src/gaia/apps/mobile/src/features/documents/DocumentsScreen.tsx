@@ -146,16 +146,13 @@ function Library({ chat, onBrowseFiles, onPreview }: { chat: OpenChat | null; on
                             {stats ? (
                                 <Row gap="sm" wrap>
                                     <Text role="caption" tone="secondary">
-                                        {stats.readable}
+                                        {`${stats.readable} · ${isolate(stats.size, 'ltr')}`}
                                     </Text>
                                     {stats.unreadable ? (
                                         <Text role="caption" tone="danger">
                                             {stats.unreadable}
                                         </Text>
                                     ) : null}
-                                    <Text role="caption" tone="secondary">
-                                        {`· ${isolate(stats.size, 'ltr')}`}
-                                    </Text>
                                 </Row>
                             ) : null}
                         </Stack>

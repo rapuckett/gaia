@@ -124,9 +124,14 @@ def _speech_model() -> SpeechModel:
     client = LemonadeTTSClient()
     entry = next((m for m in client.catalog() if m.get("id") == client.model), None)
     if entry is None:
+        logger.error(
+            "Lemonade at %s lists no voice model '%s'",
+            client.base_url,
+            client.model,
+        )
         raise LemonadeTTSError(
-            f"Lemonade at {client.base_url} has no voice model '{client.model}'. "
-            "Update Lemonade Server, then try again."
+            "The voice model isn't installed on this PC yet, and the model "
+            "server doesn't offer it. Update the model server, then try again."
         )
     return SpeechModel(
         downloaded=entry.get("downloaded") is True,

@@ -101,3 +101,6 @@ export function Button({
         </View>
     );
 }
+
+// Read by Row: in a stacked row the button spans the full width.
+Button.fillsStackedRow = true;

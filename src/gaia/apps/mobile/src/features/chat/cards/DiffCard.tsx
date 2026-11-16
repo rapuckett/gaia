@@ -7,6 +7,7 @@ import { diffBodyLines, diffLineKind, diffTitle, isDiffPayload } from '@webui/ut
 
 import { Badge, HScroll, Stack, Surface, Text, useTheme } from '@/ui';
 
+import { dirProp } from '@/platform/dirProp';
 import { UnsupportedCard } from './UnsupportedCard';
 
 const GUTTER = { added: '+', removed: '-', hunk: '', context: ' ' } as const;
@@ -42,7 +43,7 @@ export function DiffCard({ data }: { data: unknown }) {
                 ) : null}
                 {lines.length > 0 ? (
                     <HScroll dir="ltr" hint testID="card-diff-scroll">
-                        <View style={{ minWidth: '100%', direction: 'ltr' }}>
+                        <View style={{ minWidth: '100%', direction: 'ltr' }} {...dirProp('ltr')}>
                             {lines.map((line, i) => {
                                 const kind = diffLineKind(line);
                                 return (

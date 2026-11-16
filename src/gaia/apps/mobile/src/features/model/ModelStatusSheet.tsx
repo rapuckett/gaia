@@ -3,7 +3,6 @@
 
 import { useState } from 'react';
 
-import { PC_ONLY_REFUSAL } from '@/api/constants';
 import { GaiaApiError } from '@/api/errors';
 import { useLocalModelStatus, useQueryFailure, useRestartLocalModel } from '@/data';
 import { describeError, useT } from '@/i18n/useT';
@@ -24,6 +23,8 @@ export interface ModelStatusSheetProps {
     open: boolean;
     onClose: () => void;
     onOpenSettings?: () => void;
+    /** Dev gallery only: opens with the reload confirm or the PC-only log notice already showing. */
+    initial?: { confirming?: boolean; logRefused?: boolean };
 }
 
 function Fact({ label, value }: { label: string; value: string }) {
@@ -42,13 +43,13 @@ function Fact({ label, value }: { label: string; value: string }) {
 }
 
 /** The model's state and facts, with Model settings, the server log (PC only), and Restart. */
-export function ModelStatusSheet({ open, onClose, onOpenSettings }: ModelStatusSheetProps) {
+export function ModelStatusSheet({ open, onClose, onOpenSettings, initial }: ModelStatusSheetProps) {
     const t = useT();
     const query = useLocalModelStatus(open);
     const failure = useQueryFailure(query);
     const restart = useRestartLocalModel();
-    const [confirming, setConfirming] = useState(false);
-    const [logRefused, setLogRefused] = useState(false);
+    const [confirming, setConfirming] = useState(initial?.confirming ?? false);
+    const [logRefused, setLogRefused] = useState(initial?.logRefused ?? false);
     const s = query.data;
     const control = s ? restartControl(s, restart.isPending) : null;
     const busy = restart.isPending || !!s?.restarting;
@@ -140,13 +141,13 @@ export function ModelStatusSheet({ open, onClose, onOpenSettings }: ModelStatusS
                                 url: s.base_url ?? '—',
                             })}
                         />
-                        <Row gap="sm">
+                        <Row gap="sm" stack>
                             <Button label={t('modelStatus.cancel')} onPress={() => setConfirming(false)} />
                             <Button label={t('modelStatus.reloadIt')} variant="primary" onPress={() => reload(true)} />
                         </Row>
                     </Stack>
                 ) : null}
-                {logRefused ? <Notice tone="info" message={PC_ONLY_REFUSAL} /> : null}
+                {logRefused ? <Notice tone="info" message={t('mobileApp.pcOnly.refusal')} /> : null}
                 <Row gap="xs" wrap justify="end">
                     {onOpenSettings ? (
                         <ChipButton

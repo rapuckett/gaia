@@ -30,10 +30,10 @@ describeNative('Screen footer', () => {
         expect(style?.paddingHorizontal).toBeUndefined();
     });
 
-    it('draws a hairline above a footer with a divider', async () => {
+    it('draws a 1px line above a footer with a divider', async () => {
         await render(<Screen footerDivider footer={<Text>Actions</Text>} />, { wrapper: wrap });
         const style = StyleSheet.flatten(screen.getByTestId('screen-footer').props.style);
-        expect(style.borderTopWidth).toBe(StyleSheet.hairlineWidth);
+        expect(style.borderTopWidth).toBe(1);
         expect(style.paddingVertical).toBe(space.md);
     });
 });

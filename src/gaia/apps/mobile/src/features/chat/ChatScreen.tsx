@@ -3,6 +3,7 @@
 
 import { connectCardProviders, hasConnectCard } from '@webui/utils/connectAccountCard.core';
 import { isAuthRequiredMessage } from '@webui/utils/connectorRetry.core';
+import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 
 import { needsOutcome, nextToSend } from '@webui/utils/messageQueue';
@@ -10,9 +11,9 @@ import { FLAGSHIP_AGENT_ID } from '@webui/utils/newTask';
 import { MAX_STREAM_RECONNECTS } from '@webui/utils/streamErrors.core';
 
 import { useChatReadAloud } from '@/features/audio/useChatReadAloud';
-import { useAnswerQuestion, useChatStream, useContextUsage, usePermissionMode, useMessages, useRefreshTurnChanges, useSession } from '@/data';
+import { modelMenuKeys, useAnswerQuestion, useChatStream, useContextUsage, usePermissionMode, useMessages, useRefreshTurnChanges, useSession } from '@/data';
 import { FlagshipAgentBanner } from '@/features/banners/FlagshipAgentBanner';
-import { Composer, ContextMeter, ContextWarning, ModelChip, PermissionChip, SpendMeter, useAttachments, useComposerQueue, useFollowUpEvents } from '@/features/composer';
+import { Composer, ContextMeter, ContextWarning, ModelChip, PermissionChip, SessionFolderChip, SpendMeter, useAttachments, useComposerQueue, useFollowUpEvents } from '@/features/composer';
 import { QueuedMessages } from '@/features/composer/QueuedMessages';
 import { FileScope } from '@/features/files';
 import { describeError, describeErrorWith, useT } from '@/i18n/useT';
@@ -46,12 +47,14 @@ export function ChatScreen({ sessionId, onManageDocuments }: { sessionId: string
     const queue = useComposerQueue(sessionId);
     const attachments = useAttachments();
     const permissionMode = usePermissionMode(sessionId);
+    const queryClient = useQueryClient();
     const permission = usePermissionPrompt(sessionId);
     const answer = useAnswerQuestion();
     const followUps = useFollowUpEvents(sessionId, stream.events);
     const stopped = useRef(false);
     const [actionError, setActionError] = useState<unknown>(null);
     const [panelOpen, setPanelOpen] = useState(false);
+    const showEnvironment = () => setPanelOpen(true);
     const busy = stream.status !== 'idle';
     // A comparison waiting on its model holds new messages like a running reply does.
     const { comparing } = useAnswerComparison(sessionId);
@@ -198,7 +201,13 @@ export function ChatScreen({ sessionId, onManageDocuments }: { sessionId: string
                         running={busy}
                         attachments={attachments}
                         leftControls={
-                            <PermissionChip mode={permissionMode.mode ?? 'ask'} onChange={(mode) => permissionMode.set.mutate(mode)} />
+                            <PermissionChip
+                                mode={permissionMode.mode ?? 'ask'}
+                                onChange={(mode) => permissionMode.set.mutateAsync(mode)}
+                                onReread={() => queryClient.refetchQueries({ queryKey: modelMenuKeys.permissions(sessionId) }, { throwOnError: true })}
+                                promptWaiting={!!permission}
+                                disabled={!!retiredAgent}
+                            />
                         }
                         answering={!!question}
                         placeholder={placeholder}
@@ -207,6 +216,7 @@ export function ChatScreen({ sessionId, onManageDocuments }: { sessionId: string
                             <>
                                 <SpendMeter sessionId={sessionId} busy={busy} />
                                 <ContextMeter usage={context.usage} unavailable={context.unavailable} onDetails={() => setPanelOpen(true)} />
+                                <SessionFolderChip sessionId={sessionId} live={busy} onOpen={showEnvironment} />
                                 <ModelChip turnRunning={busy} />
                             </>
                         }

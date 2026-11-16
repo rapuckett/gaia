@@ -87,7 +87,7 @@ export function ModelRow({ model: m, name, estimate, now, freeGb, checking, chec
                     {retryLater ? (
                         <Text role="caption" tone="secondary">{t('setup.progress.retryLater')}</Text>
                     ) : (
-                        <Row gap="sm" wrap>
+                        <Row gap="sm" wrap stack>
                             <Button label={t('setup.progress.retry')} icon={RotateCw} variant="primary" size="sm" disabled={busy} onPress={() => onRetry(m)} />
                             <Button label={t('setup.progress.skipModel')} variant="secondary" size="sm" disabled={busy} onPress={() => onSkip(m)} />
                         </Row>
@@ -148,7 +148,7 @@ export function DownloadContents({ plan, run, onRetry, busy }: { plan: SetupPlan
                                         </Row>
                                     )}
                                 </Stack>
-                                <Stack align="end">
+                                <Stack align="end" maxWidth="40%">
                                     <Ltr>{c.size_gb == null ? t('setup.contents.sizeOnDownload') : formatSize(c.size_gb)}</Ltr>
                                     <Text role="caption" tone="secondary">{stateText(c, state, t)}</Text>
                                 </Stack>
