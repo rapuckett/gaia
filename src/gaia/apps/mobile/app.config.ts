@@ -92,6 +92,7 @@ export default function appConfig(): ExpoConfig {
             'expo-background-task',
             ['./plugins/withCleartextHosts', { hosts: dev ? DEV_HTTP_HOSTS : [] }],
             './plugins/withNinjaJobs',
+            './plugins/withWorkManagerKeep',
         ],
     };
 }
