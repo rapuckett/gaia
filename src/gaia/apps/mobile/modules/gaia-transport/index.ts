@@ -14,7 +14,7 @@ export interface NativePairAnswer {
     status: number;
     /** The address that answered first, and got the pairing request. */
     origin: string;
-    /** The PC's answer as text; on a 200 the token has been taken out and kept in the Keychain. */
+    /** The PC's answer as text; on a 200 the token has been taken out and kept in the Keychain or the Android Keystore vault. */
     body: string;
 }
 
@@ -68,9 +68,9 @@ export interface GaiaTransportNative {
 }
 
 const UNSUPPORTED =
-    Platform.OS === 'android'
-        ? 'Pairing with a PC works on iPhone and iPad only; Android isn\'t supported yet.'
-        : 'Pairing with a PC needs the GAIA app on an iPhone or iPad.';
+    Platform.OS === 'web'
+        ? 'Pairing with a PC needs the GAIA app on a phone or tablet.'
+        : "This build of the GAIA app can't pair with a PC. Install the latest version.";
 
 function unsupported(): never {
     throw new Error(UNSUPPORTED);
@@ -89,9 +89,9 @@ const STUB: GaiaTransportNative = {
     setOrigins: async () => unsupported(),
 };
 
-const native = Platform.OS === 'ios' ? requireOptionalNativeModule<GaiaTransportNative>('GaiaTransport') : null;
+const native = Platform.OS === 'ios' || Platform.OS === 'android' ? requireOptionalNativeModule<GaiaTransportNative>('GaiaTransport') : null;
 
-/** Whether this build has the pinned transport (an iOS build made after the module was added). */
+/** Whether this build has the pinned transport (an iOS or Android build made after the module was added for it). */
 export const transportAvailable = native !== null;
 
 export const GaiaTransport: GaiaTransportNative = native ?? STUB;
