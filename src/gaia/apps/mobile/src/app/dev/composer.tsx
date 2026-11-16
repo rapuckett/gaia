@@ -13,18 +13,19 @@ import { Composer, type Attachments, FolderChip, PermissionChip, PrivateChip } f
 import { ControlChip } from '@/features/composer/ControlChip';
 import { HeldGallery } from '@/features/new-chat/HeldGallery';
 import { useT } from '@/i18n/useT';
+import { uploadRefusalText } from '@webui/utils/uploadErrors';
 import { Divider, Screen, Stack, UIProvider } from '@/ui';
 import { Cpu } from '@/ui/icons';
 
-const FIXTURE: Attachments['items'] = [
+const fixture = (emptyFileError: string): Attachments['items'] => [
     { id: 'a', key: 'a', name: 'quarterly-report-final-v3.pdf', uri: '', isImage: false, isMedia: false, status: 'uploading', progress: 40 },
     { id: 'b', key: 'b', name: 'standup-recording.m4a', uri: '', isImage: false, isMedia: true, status: 'uploaded' },
-    { id: 'c', key: 'c', name: 'notes.doc', uri: '', isImage: false, isMedia: false, status: 'failed', error: 'This file is empty.' },
+    { id: 'c', key: 'c', name: 'notes.doc', uri: '', isImage: false, isMedia: false, status: 'failed', error: emptyFileError },
     { id: 'd', key: 'd', name: 'IMG_2041.jpg', uri: 'https://picsum.photos/id/237/48', isImage: true, isMedia: false, status: 'uploaded' },
 ];
 const noop = () => {};
-const attachmentsFixture: Attachments = {
-    items: FIXTURE,
+const attachmentsFixture = (emptyFileError: string): Attachments => ({
+    items: fixture(emptyFileError),
     add: noop,
     addFailed: noop,
     remove: noop,
@@ -32,7 +33,7 @@ const attachmentsFixture: Attachments = {
     uploading: true,
     hasUploaded: true,
     compose: (text) => text,
-};
+});
 
 export default function ComposerGalleryRoute() {
     const t = useT();
@@ -74,7 +75,7 @@ export default function ComposerGalleryRoute() {
                 <Stack gap="md">
                     <Composer value={text} onChange={setText} onSend={noop} />
                     <Divider />
-                    <Composer onSend={noop} attachments={attachmentsFixture} />
+                    <Composer onSend={noop} attachments={attachmentsFixture(uploadRefusalText('empty_file', null, '', t))} />
                     <Divider />
                     <Composer onSend={noop} running onStop={noop} />
                     <Divider />
