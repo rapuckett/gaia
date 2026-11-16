@@ -1,7 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import type { DocumentListResponse } from '@/api/client.types';
+import type { DocumentListResponse, PreflightReport } from '@/api/client.types';
 import { GaiaApiError, GaiaError, GaiaNetworkError, GaiaUploadUnsupportedError } from '@/api/errors';
 import { createFakeClient, type FakeClientData } from '@/api/fake';
 
