@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { Pressable as BarPress, View } from 'react-native';
 
 import { isolate } from '@webui/i18n/registry';
-import { dateLocale, type Translate } from '@webui/i18n/translator';
+import { dateLocale, translator, type Translate } from '@webui/i18n/translator';
 import { ACTIVITY_RANGE_LABELS, ACTIVITY_RANGES, type ActivityDay } from '@webui/utils/memoryFormat.core';
 
 import { useT } from '@/i18n/useT';
@@ -45,11 +45,13 @@ export function ActivityChart({ days, onDaysChange, activity, failure }: Activit
     const peak = rows.reduce<ActivityDay | null>((best, d) => (!best || dayTotal(d) > dayTotal(best) ? d : best), null);
     const shown = picked !== null ? rows[picked] : undefined;
     const summary = peak
-        ? t('mobileApp.mem.activitySummary', {
-              total: isolate(String(total), 'ltr'),
-              peak: isolate(String(dayTotal(peak)), 'ltr'),
-              date: dayLabel(peak.date, t),
-          })
+        ? t.compose((say, code) =>
+              say('mobileApp.mem.activitySummary', {
+                  total: isolate(String(total), 'ltr'),
+                  peak: isolate(String(dayTotal(peak)), 'ltr'),
+                  date: dayLabel(peak.date, translator(code)),
+              }),
+          )
         : t('mem.activity.empty');
     const step = (by: number) => setPicked(Math.min(rows.length - 1, Math.max(0, (picked ?? (by > 0 ? -1 : rows.length)) + by)));
     const colorOf = {

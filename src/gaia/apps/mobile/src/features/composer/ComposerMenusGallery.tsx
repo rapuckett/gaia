@@ -23,7 +23,7 @@ import { ModelChip } from './ModelChip';
 import { SpendMeter } from './SpendMeter';
 
 /** Developer gallery (`/dev/composer?state=`): the context meter, spend meter, model menu and picked-model load banner in each state. */
-export const COMPOSER_MENU_STATES = ['context', 'warning', 'spend', 'spendOpen', 'permissionMenu', 'permissionFull', 'private-off', 'private-on', 'private-memoryOff', 'folder-own', 'menu', 'menuInfo', 'menuEmpty', 'menuSwitching', 'pickLoading', 'pickFailed', 'attachPaste', 'menuCloud', 'menuNeverStarted'] as const;
+export const COMPOSER_MENU_STATES = ['context', 'warning', 'spend', 'spendOpen', 'permissionMenu', 'permissionFull', 'private-off', 'private-on', 'private-memoryOff', 'folder-own', 'folder-add', 'menu', 'menuInfo', 'menuEmpty', 'menuSwitching', 'pickLoading', 'pickFailed', 'attachPaste', 'menuCloud', 'menuNeverStarted'] as const;
 export type ComposerMenuState = (typeof COMPOSER_MENU_STATES)[number];
 
 const USAGE: ContextUsage = {
@@ -83,6 +83,7 @@ function LeftChip({ state }: { state: ComposerMenuState }) {
     if (state === 'private-off' || state === 'private-on') return <PrivateChip on={priv} onChange={setPriv} memoryEnabled />;
     if (state === 'private-memoryOff') return <PrivateChip on={false} onChange={setPriv} memoryEnabled={false} />;
     if (state === 'folder-own') return <FolderChip folder={OWN_FOLDER} />;
+    if (state === 'folder-add') return <FolderChip folder={{ ...OWN_FOLDER, choosable: true }} />;
     return null;
 }
 
@@ -104,7 +105,7 @@ export function ComposerMenusGallery({ state }: { state: ComposerMenuState }) {
     const t = useT();
     const cloud = state === 'spend' || state === 'spendOpen';
     const spendScene = cloud;
-    const chipScene = state === 'permissionMenu' || state === 'permissionFull' || state.startsWith('private-') || state === 'folder-own';
+    const chipScene = state === 'permissionMenu' || state === 'permissionFull' || state.startsWith('private-') || state === 'folder-own' || state === 'folder-add';
     const client = useMemo(() => {
         const active = { provider: cloud ? 'fireworks' : 'local', model: cloud ? SPEND.model : 'Gemma-4-E4B-it-GGUF', display_name: cloud ? 'Qwen3.6' : 'Gemma 4 E4B', label: null, remote: cloud, is_default: true, downloaded: true } as ActiveModel;
         const base = createFakeClient({
