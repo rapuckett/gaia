@@ -7,20 +7,24 @@ import type { StartScreen } from '@webui/types';
 
 import { useSessionEnvironment } from '@/data';
 import { useT } from '@/i18n/useT';
-import { Icon, Row, Text } from '@/ui';
-import { Folder } from '@/ui/icons';
+import { PcOnlyAction } from '@/features/logs/PcOnlyAction';
+import { Icon, Row, Stack, Text } from '@/ui';
+import { Folder, FolderPlus } from '@/ui/icons';
 
 import { ChipMeasure, useChipCollapsed } from './ChipFitContext';
 import { ControlChip } from './ControlChip';
 
-/** Where the new chat's agent works. Choosing another folder is done on the PC. */
+/** Where the new chat's agent works. A phone can't give a chat a folder (the PC refuses it), so "Add a folder" says to do it on the PC. */
 export function FolderChip({ folder }: { folder: StartScreen['working_folder'] | undefined }) {
     const t = useT();
     const iconOnly = useChipCollapsed('folder');
     if (!folder) return null;
     // GAIA's own folder is not named: a person never chose it.
     const named = !folder.gaia_folder;
-    if (!named && folder.choosable) return null;
+    const addOnPc = folder.choosable ? (
+        <PcOnlyAction label={t('folderChip.add')} icon={FolderPlus} note={t('folderChip.addHint')} detail={t('mobileApp.settings.pcOnly')} testID="folder-add" />
+    ) : null;
+    if (!named && addOnPc) return addOnPc;
     const where = folder.gaia_folder ? t('folderChip.worksInOwn', { path: folder.path }) : t('folderChip.worksIn', { path: folder.path });
     const name = named ? folder.name : t('folderChip.gaiaFolder');
     const content = (compact: boolean) => (
@@ -33,11 +37,19 @@ export function FolderChip({ folder }: { folder: StartScreen['working_folder'] |
             )}
         </Row>
     );
-    return (
-        <View testID="folder-chip" accessible accessibilityLabel={where} style={{ flexShrink: 0 }}>
+    const chip = (
+        <View testID="folder-chip" accessible accessibilityLabel={where} accessibilityHint={folder.choosable ? undefined : t('folderChip.ownFixedHint')} style={{ flexShrink: 0 }}>
             <ChipMeasure id="folder">{content(false)}</ChipMeasure>
             {content(iconOnly)}
         </View>
+    );
+    return addOnPc ? (
+        <Stack gap="sm">
+            {chip}
+            {addOnPc}
+        </Stack>
+    ) : (
+        chip
     );
 }
 
