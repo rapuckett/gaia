@@ -74,7 +74,7 @@ function hasGloss(children: ReactNode): boolean {
 /** Splits each string child at its English glosses and sets them small and muted, as the web's `.i18n-gloss` does. */
 function withGlosses(children: ReactNode, size: number, color: string): ReactNode {
     const gloss = Math.max(size * 0.8, GLOSS_MIN_SIZE);
-    const style = { fontSize: gloss, lineHeight: Math.round(gloss * GLOSS_LINE_HEIGHT), fontWeight: '400' as const, color };
+    const style = { fontSize: gloss, lineHeight: Math.round(gloss * GLOSS_LINE_HEIGHT), fontWeight: '400' as const, color, writingDirection: 'ltr' as const };
     let changed = false;
     const mapped = Children.map(children, (child, i) => {
         if (typeof child !== 'string') return child;
