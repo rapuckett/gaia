@@ -30,7 +30,7 @@ function Tile({ value, label, sub, testID }: { value: string; label: string; sub
                 borderRadius: radius.lg,
             }}
         >
-            <Text role="display" weight="bold">
+            <Text role="title" weight="bold">
                 {isolate(value, 'ltr')}
             </Text>
             <Text role="label" weight="medium" tone="secondary">

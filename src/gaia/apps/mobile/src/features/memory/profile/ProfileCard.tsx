@@ -95,7 +95,7 @@ export function ProfileCard({ kind, notify }: { kind: ProfileKind; notify: Memor
                         <Button
                             label={t.bare(phase === 'running' ? 'mem.running' : copy.run)}
                             accessibilityLabel={t(phase === 'running' ? 'mem.running' : copy.run)}
-                            variant="secondary"
+                            variant="primary"
                             busy={phase === 'running'}
                             disabled={busy}
                             onPress={() => void run.start(includeBrowser)}
