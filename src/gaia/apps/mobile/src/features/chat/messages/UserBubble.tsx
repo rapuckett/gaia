@@ -52,7 +52,7 @@ export function UserBubble({ message, onCollapse, context, startOpen }: UserBubb
                         {long && !actions.editor ? (
                             <Pressable
                                 onPress={toggle}
-                                accessibilityState={{ expanded }}
+                                aria-expanded={expanded}
                                 minSize={48}
                                 accessibilityLabel={
                                     expanded

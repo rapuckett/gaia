@@ -29,7 +29,7 @@ export function MemoryTabs({ value, onChange }: { value: MemoryTabKey; onChange:
                                     onPress={() => onChange(tab.key)}
                                     accessibilityRole="tab"
                                     accessibilityLabel={t(tab.label)}
-                                    accessibilityState={{ selected }}
+                                    aria-selected={selected}
                                     testID={`memory-tab-${tab.key}`}
                                 >
                                     <Stack>

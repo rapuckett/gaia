@@ -49,7 +49,7 @@ function PaletteTile({ id, scheme, selected, onPress }: { id: AppearancePaletteI
     const largeText = useLargeText();
     return (
         <View style={{ flexBasis: largeText ? '100%' : '47%', flexGrow: 1 }}>
-            <Pressable onPress={onPress} accessibilityRole="radio" accessibilityLabel={label} accessibilityState={{ checked: selected }}>
+            <Pressable onPress={onPress} accessibilityRole="radio" accessibilityLabel={label} aria-checked={selected}>
                 <View
                     style={{
                         minHeight: 48,
@@ -103,7 +103,7 @@ function ColorField({ label, hint, value, onCommit }: { label: string; hint: str
             />
             <Row gap="sm" wrap>
                 {PRESETS.map((hex) => (
-                    <Pressable key={hex} onPress={() => onCommit(hex)} accessibilityLabel={`${label} ${hex}`} accessibilityRole="radio" accessibilityState={{ checked: hex === value.toUpperCase() }}>
+                    <Pressable key={hex} onPress={() => onCommit(hex)} accessibilityLabel={`${label} ${hex}`} accessibilityRole="radio" aria-checked={hex === value.toUpperCase()}>
                         <View
                             style={{
                                 width: 36,
