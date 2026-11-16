@@ -31,7 +31,7 @@ export interface MessageContext {
 }
 
 /** What a bubble starts with open; for the dev gallery. */
-export type StartOpen = 'actions' | 'delete' | 'edit';
+export type StartOpen = 'actions' | 'delete' | 'edit' | 'drop';
 
 const ALONE: MessageContext = { laterTurns: 0 };
 const NO_ACTIONS: SheetAction[] = [];
@@ -73,7 +73,7 @@ export function useMessageActions(
     const [editing, setEditing] = useState(startOpen === 'edit');
     const [sending, setSending] = useState(false);
     const [confirmDelete, setConfirmDelete] = useState(startOpen === 'delete');
-    const [drop, setDrop] = useState<string | null>(null);
+    const [drop, setDrop] = useState<string | null>(startOpen === 'drop' ? message.content : null);
     const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     useEffect(

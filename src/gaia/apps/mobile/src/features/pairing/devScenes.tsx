@@ -59,12 +59,14 @@ export function PairingSceneView({ scene }: { scene: PairingScene }) {
             id: 'scene-pc',
             name: scene.name,
             connection: connectionOf(scene),
+            pairedAt: scene.twin ? '2026-11-10T09:15:00' : undefined,
         };
         const twinOrigin = 'https://192.168.1.20:4245';
         const twin: PairedPc = {
             id: 'scene-pc-2',
             name: scene.name,
             connection: { baseUrl: twinOrigin, pcId: 'scene-pc-2', pinned: true, origins: [twinOrigin], routes: [{ kind: 'home', origin: twinOrigin }] },
+            pairedAt: '2026-11-10T18:40:00',
         };
         setPairingService({ list: async () => (scene.twin ? [pc, twin] : [pc]) } as never);
         const fake = createFakeClient();
