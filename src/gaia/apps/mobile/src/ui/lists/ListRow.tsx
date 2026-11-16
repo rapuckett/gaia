@@ -64,7 +64,7 @@ export function ListRow({
             }}
         >
             <Row gap="md" align={largeText ? 'start' : 'center'}>
-                {leading ? <FirstLine role="ui">{leading}</FirstLine> : null}
+                {leading ? <FirstLine role="ui" maxScale={titleMaxScale}>{leading}</FirstLine> : null}
                 <View style={{ flex: 1, minWidth: 0 }}>
                     <Text role="ui" weight={selected || emphasized ? 'semibold' : 'medium'} numberOfLines={titleLines} largeLines={titleLargeLines} maxScale={titleMaxScale}>
                         {title}
