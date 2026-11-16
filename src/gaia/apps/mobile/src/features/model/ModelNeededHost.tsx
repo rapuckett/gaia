@@ -30,7 +30,8 @@ export interface NeedPromptInitial {
     error?: string | null;
 }
 
-function NeedPrompt({ need, initial }: { need: ModelNeed; initial?: NeedPromptInitial }) {
+/** The prompt itself; the dev gallery mounts it directly so the app's own host stays empty. */
+export function NeedPrompt({ need, initial }: { need: ModelNeed; initial?: NeedPromptInitial }) {
     const t = useT();
     const client = useGaiaClient();
     const settle = useModelNeededStore((s) => s.settle);
@@ -189,7 +190,7 @@ function NeedPrompt({ need, initial }: { need: ModelNeed; initial?: NeedPromptIn
                 </Text>
                 {downloading ? (
                     percent != null ? (
-                        <ProgressLine value={percent / 100} label={t('modelNeeded.dialog')} />
+                        <ProgressLine value={percent / 100} label={`${t('modelNeeded.dialog')} · ${percent}%`} />
                     ) : (
                         <Row gap="sm">
                             <Spinner />

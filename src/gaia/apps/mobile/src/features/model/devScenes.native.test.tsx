@@ -7,6 +7,9 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import ModelServerGalleryRoute from '@/app/dev/model-server';
 
+import { useModelNeededStore } from '@/state/modelNeeded';
+import { sheetStore } from '@/ui/overlays/sheetStore';
+
 import { MODEL_SCENES } from './devScenes';
 
 jest.mock('expo-font', () => ({ useFonts: () => [true, null] }));
@@ -29,10 +32,41 @@ const mount = () =>
     );
 
 describeNative('/dev/model-server', () => {
+    // Sheets queue in a global store, so one scene's sheet would otherwise show over the next.
+    beforeEach(() => sheetStore.reset());
+
     it.each(Object.keys(MODEL_SCENES))('renders the %s scene', async (name) => {
         mockState = name;
         await mount();
         expect(screen.queryByText(/^No model-server scene/)).toBeNull();
+    });
+
+    it.each([
+        ['need-chat', null],
+        ['need-downloading', '42%'],
+        ['need-starting', 'Starting the download'],
+        ['need-failed', 'The download stopped.'],
+    ])('the %s scene shows its seeded state', async (name, text) => {
+        mockState = name;
+        await mount();
+        const opts = { includeHiddenElements: true };
+        await screen.findByText('Chatting needs a model', opts);
+        // The app's own host reads this store, and its sheet would queue ahead of the scene's.
+        expect(useModelNeededStore.getState().need).toBeNull();
+        const started = screen.queryByText(/Starting the download/, opts);
+        const failed = screen.queryByText(/The download stopped\./, opts);
+        const progress = screen.queryByRole('progressbar', opts);
+        if (!text) {
+            expect([started, failed, progress]).toEqual([null, null, null]);
+        } else if (name === 'need-downloading') {
+            expect(progress?.props.accessibilityValue.now).toBe(42);
+            expect(progress?.props.accessibilityLabel).toContain(text);
+        } else if (name === 'need-starting') {
+            expect(started).not.toBeNull();
+        } else {
+            expect(failed).not.toBeNull();
+            expect(screen.getByText('Try again', opts)).toBeTruthy();
+        }
     });
 
     it('names an unknown scene and lists the known ones', async () => {

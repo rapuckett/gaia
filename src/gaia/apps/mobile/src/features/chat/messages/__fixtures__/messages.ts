@@ -175,6 +175,7 @@ export type MessagesFixture =
     | 'long'
     | 'many'
     | 'media'
+    | 'policy'
     | 'prescan'
     | 'prescan-empty'
     | 'prescan-invalid'
@@ -230,6 +231,20 @@ const ACTIVITY = [
     } as Message,
 ];
 
+const POLICY = [
+    msg('user', 'Clear out the old downloads, then export the report.', 0),
+    {
+        ...msg('assistant', 'I exported the report. Deleting the old downloads was blocked by your policy, so they are still there.', 1),
+        agentSteps: [
+            {
+                id: 1, type: 'policy_alert', label: 'Blocked', tool: 'delete_file', decision: 'BLOCK', reason: 'Deleting files is restricted.',
+                ruleIds: ['no-delete'], policyVersion: '2026-11-01', receiptId: 'rcpt-4f2a', active: false, success: false, timestamp: 1,
+            },
+            { id: 2, type: 'policy_alert', label: 'Blocked', tool: 'send_email', decision: 'BLOCK', reason: 'Sending email needs approval.', active: false, success: false, timestamp: 2 },
+        ],
+    } as Message,
+];
+
 export const FIXTURES: Record<MessagesFixture, { messages: Message[]; live?: Message; events?: StreamEvent[] }> = {
     activity: { messages: ACTIVITY },
     badCards: { messages: BAD_CARDS },
@@ -239,6 +254,7 @@ export const FIXTURES: Record<MessagesFixture, { messages: Message[]; live?: Mes
     long: { messages: [...SHORT.slice(0, 2), msg('user', LONG_USER, 4), msg('assistant', ANSWER, 5)] },
     many: { messages: MANY },
     media: { messages: MEDIA },
+    policy: { messages: POLICY },
     prescan: { messages: prescanMessages('Scan my inbox.', 'Three emails need a look; the rest can wait.', { ok: true, data: PRESCAN_PAYLOAD }) },
     'prescan-empty': {
         messages: prescanMessages('Scan my inbox.', 'Nothing needs you right now.', {
