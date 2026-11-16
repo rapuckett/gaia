@@ -148,9 +148,9 @@ export const SYSTEM_STATUS = {
     default_model_is_cloud: false, default_model_size_gb: 4.9, lemonade_url: 'http://127.0.0.1:13305',
     expected_model_loaded: true, download_progress: null, init_state: 'ready',
     init_tasks: [
-        { name: 'Checking LLM server', status: 'done' },
-        { name: 'Loading ML libraries', status: 'done' },
-        { name: 'Loading AI model', status: 'done' },
+        { name: 'Checking LLM server', step: 'check_server', status: 'done' },
+        { name: 'Loading ML libraries', step: 'load_libraries', status: 'done' },
+        { name: 'Loading AI model', step: 'load_model', status: 'done' },
     ],
     warm_up: { state: 'done', elapsed_seconds: 2.0, prompt_tokens: 1800, cached_tokens: 1800, error: null },
     detected_devices: ['gpu'], active_profile: 'chat', config_error: null, probe_warnings: [],
@@ -243,6 +243,8 @@ const ROUTES: Record<string, unknown> = {
  */
 /** Server-sent event streams the app subscribes to; each opens quiet. */
 const STREAMS = new Set(['GET /sessions/events', 'GET /connectors/events']);
+/** Device pairing is off unless a scene turns it on (`withDevices`): the backend answers 403, which hides it. */
+const PAIRING_OFF = new Set(['GET /devices/status', 'GET /devices']);
 
 /** A tenth of a second of silence: what POST /speech answers when a reply is read aloud. */
 function silentWav(): Buffer {
@@ -263,6 +265,10 @@ export async function mockApi(page: Page): Promise<string[]> {
         const key = `${route.request().method()} ${path}`;
         if (STREAMS.has(key)) {
             await route.fulfill({ status: 200, contentType: 'text/event-stream', body: ': no events\n\n' });
+            return;
+        }
+        if (PAIRING_OFF.has(key)) {
+            await route.fulfill({ status: 403, contentType: 'application/json', body: JSON.stringify({ detail: 'Device pairing is off.' }) });
             return;
         }
         if (key === 'POST /speech') {
@@ -486,11 +492,61 @@ const DISCORD_BOT = {
 export const DISCORD_STATES: Record<string, Record<string, unknown>> = {
     none: DISCORD_BASE,
     pairing: { ...DISCORD_BASE, ...DISCORD_BOT, state: 'pairing', pairing_code: 'K7QX4M9P', pairing_expires_at: 1e10, detail: 'DM the code to the bot to pair it with your Discord account.' },
-    connected: { ...DISCORD_BASE, ...DISCORD_BOT, state: 'connected', paired: true, owner_name: 'someone_with_a_long_name', model: 'Qwen3.6-35B-A3B-GGUF', always_allowed: ['write_file on files in C:/Users/someone_with_a_long_name/Documents/projects/quarterly-report', 'dir'] },
+    connected: { ...DISCORD_BASE, ...DISCORD_BOT, state: 'connected', paired: true, owner_name: 'someone_with_a_long_name', model: 'Qwen3.6-35B-A3B-GGUF', always_allowed: ['changes to files in C:/Users/someone_with_a_long_name/Documents/projects/quarterly-report', 'dir'] },
     crashed: { ...DISCORD_BASE, ...DISCORD_BOT, state: 'stopped', running: false, paired: true, owner_name: 'kalin', detail: 'The Discord bridge stopped unexpectedly.' },
     taken_over: { ...DISCORD_BASE, ...DISCORD_BOT, state: 'taken_over', paired: true, owner_name: 'kalin', detail: 'Another PC is answering this Discord bot.' },
     token_invalid: { ...DISCORD_BASE, ...DISCORD_BOT, state: 'token_invalid', paired: true, owner_name: 'kalin', detail: 'Discord rejected the bot token (HTTP 401). Reset the token in the Developer Portal and paste the new one.' },
 };
+
+const DEVICE_STATUS_BASE = {
+    listening: true, port: 4243, error_code: null, error_detail: null, pairing_open: false, pairing_expires_at: null,
+    idle_expiry_days: 90, pending_expiry_minutes: 10, failed_redemptions: [],
+    routes: [{ kind: 'tailnet', on: false, origin: null, error_code: null }],
+};
+const AT_ISO = (minutesAgo: number) => new Date(NOW.getTime() - minutesAgo * 60_000).toISOString();
+const IPAD = { id: 'dev-ipad', name: "Someone's iPad Pro with a rather long name", platform: 'ipados', status: 'allowed', created_at: AT_ISO(9000), last_seen_at: AT_ISO(1500), expires_at: null };
+const PHONE = { id: 'dev-phone', name: 'هاتف سارة', platform: 'ios', status: 'pending', created_at: AT_ISO(1), last_seen_at: null, expires_at: new Date(NOW.getTime() + 9 * 60_000).toISOString() };
+
+/** Settings > Phones and tablets, one answer per state the pane shows. */
+export const DEVICE_STATES: Record<string, { status: Record<string, unknown>; devices: unknown[] }> = {
+    off: { status: { ...DEVICE_STATUS_BASE, listening: false }, devices: [] },
+    empty: { status: DEVICE_STATUS_BASE, devices: [] },
+    waiting: { status: DEVICE_STATUS_BASE, devices: [PHONE, IPAD] },
+    failed: {
+        status: { ...DEVICE_STATUS_BASE, failed_redemptions: [
+            { at: AT_ISO(3), address: '192.168.1.23', reason: 'expired' },
+            { at: AT_ISO(2), address: '192.168.1.40', reason: 'rate_limited' },
+        ] },
+        devices: [IPAD],
+    },
+    portInUse: { status: { ...DEVICE_STATUS_BASE, listening: false, error_code: 'port_in_use', error_detail: 'Port 4243 is in use.' }, devices: [IPAD] },
+    noHomeNetwork: {
+        status: {
+            ...DEVICE_STATUS_BASE, listening: false, waiting_for_home: true, error_code: 'no_home_network',
+            error_detail: "This PC has no IPv4 default route, so GAIA can't tell which network is your home network. Connect the PC to your home Wi-Fi or Ethernet.",
+        },
+        devices: [IPAD],
+    },
+    tailnetOn: { status: { ...DEVICE_STATUS_BASE, routes: [{ kind: 'tailnet', on: true, origin: 'https://100.101.102.103:4243', error_code: null }] }, devices: [IPAD] },
+    tailnetMissing: { status: { ...DEVICE_STATUS_BASE, routes: [{ kind: 'tailnet', on: false, origin: null, error_code: 'no_tailscale_address' }] }, devices: [IPAD] },
+};
+
+/** A pairing code as the PC shows it; never a real invitation. */
+export const DEVICE_OFFER = {
+    v: 1, name: 'OFFICE-DESKTOP', pc_id: 'pc-fixture', origins: ['https://192.168.1.10:4243'],
+    pin: 'a'.repeat(64), invite: 'fixture-invitation', exp: Math.floor(NOW.getTime() / 1000) + 600,
+};
+
+export async function withDevices(page: Page, state: { status: Record<string, unknown>; devices: unknown[] }): Promise<void> {
+    let status = state.status;
+    await page.route('**/api/devices/status', (route) => route.fulfill({ json: status }));
+    await page.route('**/api/devices', (route) => route.fulfill({ json: { devices: state.devices } }));
+    await page.route('**/api/devices/pairing', (route) => {
+        const opening = route.request().method() === 'POST';
+        status = { ...status, pairing_open: opening, pairing_expires_at: opening ? new Date(DEVICE_OFFER.exp * 1000).toISOString() : null };
+        return route.fulfill({ json: opening ? DEVICE_OFFER : status });
+    });
+}
 
 export async function withDiscord(page: Page, status: Record<string, unknown>): Promise<void> {
     await page.route('**/api/messaging/discord', (route) => route.fulfill({ json: status }));

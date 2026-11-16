@@ -15,12 +15,10 @@ import concurrent.futures
 import datetime
 import logging
 import platform
-import re
 import shutil
 import threading
-import uuid
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse
@@ -28,7 +26,9 @@ from starlette.requests import ClientDisconnect
 
 from gaia.audio.media import MEDIA_EXTENSIONS, prune_older_than
 from gaia.env import child_env
-from gaia.upload_names import upload_copy_name
+from gaia.security import AllowedPathsEnvError, secret_read_refusal
+from gaia.upload_names import place_copy, reserve_copy_path, upload_copy_stem
+from gaia.utils.text_decoding import file_encoding
 from gaia.utils.user_folders import documents_dir
 
 from .. import generated_media, session_environment
@@ -43,8 +43,10 @@ from ..models import (
     FileStatusResponse,
     FileUploadResponse,
     OpenFileRequest,
+    QuickLink,
+    WireModel,
 )
-from ..security import require_local_pc
+from ..security import is_local_pc, require_local_pc
 from ..turn_summary import is_openable
 from ..utils import (
     ALLOWED_EXTENSIONS,
@@ -97,16 +99,88 @@ SEARCH_STALL_GRACE_SEC = 1.0
 # on a loaded machine (#6974).
 SEARCH_SETUP_ALLOWANCE_SEC = 1.0
 
+# Most lines one preview shows a caller away from the PC.
+REMOTE_PREVIEW_MAX_LINES = 50
+
+_AWAY_FROM_PC = (
+    "A paired device can open files only from the folders its chat was given."
+)
+
 router = APIRouter(tags=["files"])
 
 
+def _device_refusal(code: str, message: str, **extra: str) -> HTTPException:
+    """A 403 whose `detail` carries a stable `code` the phone translates."""
+    return HTTPException(
+        status_code=403, detail={"code": code, "message": message, **extra}
+    )
+
+
+class OpenFileResponse(WireModel):
+    """The resolved path that was opened."""
+
+    status: Literal["ok"]
+    path: str
+
+
+def _remote_read_roots(request: Request, session_id: Optional[str]):
+    """What a caller away from the PC may read: one chat's folders.
+
+    ``None`` for the PC, which keeps the whole home folder. Mobile access and
+    paired devices name the chat, and get only what that chat may touch.
+    """
+    if is_local_pc(request):
+        return None
+    if not session_id:
+        raise _device_refusal(
+            "session_required", f"{_AWAY_FROM_PC} Name the chat with session_id."
+        )
+    db = request.app.state.db
+    session = db.get_session(session_id)
+    if session is None:
+        raise HTTPException(status_code=404, detail="Chat not found.")
+    try:
+        described = session_environment.describe(db, session)
+    except AllowedPathsEnvError as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+    return [entry["path"] for entry in described["folders"]]
+
+
+def _refuse_remote_secret(resolved: Path) -> None:
+    """403 when *resolved* holds credentials; only for callers away from the PC."""
+    if secret_read_refusal(resolved):
+        raise _device_refusal(
+            "credentials_withheld",
+            "GAIA doesn't show this to a paired device: it holds "
+            "credentials or keys.",
+        )
+
+
+def _within_roots(resolved: Path, roots) -> bool:
+    return any(session_environment.within(str(resolved), root) for root in roots)
+
+
+def _refuse_remote_read(resolved: Path, roots) -> None:
+    """403 unless a caller away from the PC may read *resolved*.
+
+    Runs before anything touches the file, so a refusal says nothing about
+    whether it exists.
+    """
+    if roots is None:
+        return
+    _refuse_remote_secret(resolved)
+    if not _within_roots(resolved, roots):
+        name = resolved.name or str(resolved)
+        raise _device_refusal(
+            "not_in_chat_folders",
+            f"{_AWAY_FROM_PC} {name} isn't in this "
+            "chat's folders: add its folder to the chat on your PC, or open it "
+            "on your PC.",
+            name=name,
+        )
+
+
 # ── Upload ───────────────────────────────────────────────────────────────────
-
-
-def _media_file_name(original_name: str, ext: str) -> str:
-    """A safe name that keeps the recording's own, for the transcript it produces."""
-    stem = re.sub(r"[^A-Za-z0-9._-]+", "_", Path(original_name).stem).strip("._")
-    return f"{stem[:_MEDIA_NAME_CHARS] or 'recording'}-{uuid.uuid4().hex[:8]}{ext}"
 
 
 @router.post("/api/files/upload-media", response_model=FileUploadResponse)
@@ -145,10 +219,11 @@ async def upload_media(request: Request, name: str = Query(..., min_length=1)):
             f"{upload_root} for this recording.",
         )
 
-    unique_name = _media_file_name(name, ext)
-    dest_path = upload_root / unique_name
+    stem = upload_copy_stem(name)[:_MEDIA_NAME_CHARS].rstrip("._-")
+    dest_path: Optional[Path] = None
     file_size = 0
     try:
+        dest_path = reserve_copy_path(upload_root, stem, ext)
         with dest_path.open("wb") as out:
             async for chunk in request.stream():
                 file_size += len(chunk)
@@ -165,13 +240,15 @@ async def upload_media(request: Request, name: str = Query(..., min_length=1)):
         dest_path.unlink(missing_ok=True)
         raise HTTPException(status_code=400, detail="The upload was cancelled.") from e
     except OSError as e:
-        dest_path.unlink(missing_ok=True)
-        logger.error("Could not save recording %s: %s", unique_name, e)
+        if dest_path is not None:
+            dest_path.unlink(missing_ok=True)
+        logger.error("Could not save recording %s: %s", name, e)
         raise HTTPException(
             status_code=507,
             detail=f"Could not save this recording: {e}. Check that the drive "
             f"holding {upload_root} has room for it.",
         ) from e
+    unique_name = dest_path.name
 
     if file_size == 0:
         dest_path.unlink(missing_ok=True)
@@ -196,9 +273,9 @@ async def upload_file(file: UploadFile = File(...)):
     """Upload a file to the server.
 
     Accepts multipart form data with a ``file`` field.  The file is saved
-    to ``<GAIA_HOME>/chat/uploads/`` under ``<id>_<name><ext>``: the random ID
-    prevents collisions, and the name lets answers cite the file as the user
-    knows it.
+    to ``<GAIA_HOME>/chat/uploads/`` under ``<name><ext>``, so answers cite
+    the file as the user knows it; ``<id>_<name><ext>`` is used only when that
+    name holds other content.
 
     Constraints:
     - Maximum file size: 20 MB
@@ -268,16 +345,15 @@ async def upload_file(file: UploadFile = File(...)):
     upload_root = uploads_dir()
     upload_root.mkdir(parents=True, exist_ok=True)
 
-    # Unique copy name: random ID, sanitized original name, original extension
-    unique_name = upload_copy_name(original_name, ext)
-    dest_path = upload_root / unique_name
-
-    # Write file to disk
+    # The copy keeps the sanitized original name; an id is added only if it is taken.
     try:
-        dest_path.write_bytes(content)
+        dest_path = place_copy(
+            upload_root, upload_copy_stem(original_name), ext, content
+        )
     except OSError as e:
-        logger.error("Failed to save uploaded file %s: %s", unique_name, e)
+        logger.error("Failed to save uploaded file %s: %s", original_name, e)
         raise HTTPException(status_code=500, detail="Failed to save uploaded file")
+    unique_name = dest_path.name
 
     # Determine content type
     content_type = file.content_type or "application/octet-stream"
@@ -306,7 +382,9 @@ async def upload_file(file: UploadFile = File(...)):
 
 
 @router.get("/api/files/browse", response_model=BrowseResponse)
-async def browse_files(path: Optional[str] = None):
+async def browse_files(
+    request: Request, path: Optional[str] = None, session_id: Optional[str] = None
+):
     """Browse files and folders for the document picker.
 
     Lists folders (always shown) and files whose extension is in
@@ -316,11 +394,30 @@ async def browse_files(path: Optional[str] = None):
     Args:
         path: Directory to browse. Defaults to user home directory.
               On Windows, pass "/" to list drive letters.
+        session_id: The chat whose folders a caller away from the PC browses;
+              required for them. With no path they start in its first folder.
     """
-    quick_links = build_quick_links()
+    roots = _remote_read_roots(request, session_id)
+    if roots is not None and not path:
+        path = next((root for root in roots if Path(root).is_dir()), None)
+        if path is None:
+            raise _device_refusal(
+                "no_chat_folders",
+                f"{_AWAY_FROM_PC} This chat has no folders yet; add one "
+                "in its session panel.",
+            )
+    quick_links = (
+        build_quick_links()
+        if roots is None
+        else [
+            QuickLink(name=Path(root).name or root, path=root)
+            for root in roots
+            if Path(root).is_dir()
+        ]
+    )
 
     # On Windows, "/" lists drive letters; no path opens home like everywhere else.
-    if platform.system() == "Windows" and path in ("/", "\\"):
+    if roots is None and platform.system() == "Windows" and path in ("/", "\\"):
         entries = list_windows_drives()
         return BrowseResponse(
             current_path="/",
@@ -345,6 +442,7 @@ async def browse_files(path: Optional[str] = None):
     # ANY filesystem operations (is_symlink/is_dir can throw PermissionError
     # on protected OS paths).
     ensure_within_home(resolved)
+    _refuse_remote_read(resolved, roots)
 
     # Check symlink after home restriction
     try:
@@ -364,7 +462,13 @@ async def browse_files(path: Optional[str] = None):
     # Determine parent path (clamped to home directory)
     home = Path.home()
     parent_path: Optional[str] = None
-    if resolved == home:
+    if roots is not None:
+        parent = resolved.parent
+        if parent != resolved and any(
+            session_environment.within(str(parent), root) for root in roots
+        ):
+            parent_path = str(parent)
+    elif resolved == home:
         # At home directory -- no parent to navigate to
         parent_path = None
     elif resolved.parent != resolved:
@@ -383,6 +487,8 @@ async def browse_files(path: Optional[str] = None):
         for item in resolved.iterdir():
             # Skip symlinks for security
             if item.is_symlink():
+                continue
+            if roots is not None and secret_read_refusal(item):
                 continue
 
             try:
@@ -450,7 +556,12 @@ async def browse_files(path: Optional[str] = None):
 
 # Opens a window or an app on the PC, which a remote caller can neither see
 # nor close.
-@router.post("/api/files/open", dependencies=[Depends(require_local_pc)])
+@router.post(
+    "/api/files/open",
+    dependencies=[Depends(require_local_pc)],
+    response_model=OpenFileResponse,
+    response_model_exclude_unset=True,
+)
 async def open_file_or_folder(request: OpenFileRequest):
     """Open a file or its containing folder in the system file explorer.
 
@@ -597,9 +708,12 @@ async def file_status(request: FileStatusRequest):
 
 @router.get("/api/files/search", response_model=FileSearchResponse)
 async def search_files(
+    request: Request,
     query: str,
     file_types: Optional[str] = None,
     max_results: int = 20,
+    folder: Optional[str] = None,
+    session_id: Optional[str] = None,
 ):
     """Search for files across the filesystem by name pattern.
 
@@ -616,6 +730,9 @@ async def search_files(
         query: File name pattern to search for (partial matches supported).
         file_types: Comma-separated extensions to filter (e.g., 'csv,xlsx').
         max_results: Maximum results to return (1-100, default 20).
+        folder: Search this folder only.
+        session_id: The chat a caller away from the PC searches; only its
+            folders are walked, and files holding secrets never come back.
     """
     import time as _time
 
@@ -623,8 +740,15 @@ async def search_files(
         raise HTTPException(status_code=400, detail="Search query is required")
 
     # Security: reject null bytes
-    if "\x00" in query:
+    if "\x00" in query or (folder and "\x00" in folder):
         raise HTTPException(status_code=400, detail="Invalid search query")
+
+    roots = _remote_read_roots(request, session_id)
+    only: Optional[Path] = None
+    if folder:
+        only = Path(folder).resolve(strict=False)
+        ensure_within_home(only)
+        _refuse_remote_read(only, roots)
 
     query_lower = query.strip().lower()
     max_results = min(max(max_results, 1), 100)
@@ -696,6 +820,8 @@ async def search_files(
                         if item.is_symlink():
                             continue
                         if item.is_file() and _matches(item):
+                            if roots is not None and secret_read_refusal(item):
+                                continue
                             resolved_str = str(item.resolve())
                             if resolved_str in seen_paths:
                                 continue
@@ -723,16 +849,21 @@ async def search_files(
                 logger.debug("File search skipped unreadable %s: %s", directory, exc)
 
         home = Path.home()
-        priority_dirs = [
-            directory
-            for directory in (
-                documents_dir(home),
-                home / "Downloads",
-                home / "Desktop",
-                home / "OneDrive",
-            )
-            if is_within_document_roots(directory)
-        ]
+        if only is not None:
+            priority_dirs = [only]
+        elif roots is not None:
+            priority_dirs = [Path(root) for root in roots]
+        else:
+            priority_dirs = [
+                directory
+                for directory in (
+                    documents_dir(home),
+                    home / "Downloads",
+                    home / "Desktop",
+                    home / "OneDrive",
+                )
+                if is_within_document_roots(directory)
+            ]
         # Start the clock after location setup so it can't eat the scan budget.
         deadline = _time.monotonic() + SEARCH_TIME_BUDGET_SEC
         for loc in priority_dirs:
@@ -740,7 +871,7 @@ async def search_files(
                 break
             _scan(loc, max_depth=4)
 
-        if len(matching_files) < max_results:
+        if only is None and roots is None and len(matching_files) < max_results:
             # Already walked deeper above; don't spend the budget twice.
             _scan(home, max_depth=3, skip=frozenset(priority_dirs))
 
@@ -820,7 +951,9 @@ def _looks_like_text(path: Path) -> bool:
 
 
 @router.get("/api/files/preview", response_model=FilePreviewResponse)
-async def preview_file(path: str, lines: int = 50):
+async def preview_file(
+    request: Request, path: str, lines: int = 50, session_id: Optional[str] = None
+):
     """Get a preview of a file's contents.
 
     For text files, returns the first N lines.
@@ -829,8 +962,11 @@ async def preview_file(path: str, lines: int = 50):
 
     Args:
         path: Absolute path to the file.
-        lines: Number of lines to preview (default 50, max 200).
+        lines: Number of lines to preview (default 50, max 200; at most
+            ``REMOTE_PREVIEW_MAX_LINES`` away from the PC).
+        session_id: The chat whose folders a caller away from the PC reads.
     """
+    roots = _remote_read_roots(request, session_id)
     if not path:
         raise HTTPException(status_code=400, detail="File path is required")
 
@@ -846,6 +982,7 @@ async def preview_file(path: str, lines: int = 50):
     # ANY filesystem operations (is_symlink/exists/is_file can all throw
     # PermissionError on protected OS paths like C:\Windows\System32\...).
     ensure_within_home(resolved)
+    _refuse_remote_read(resolved, roots)
 
     # Check symlink before other filesystem operations
     try:
@@ -860,7 +997,7 @@ async def preview_file(path: str, lines: int = 50):
     if not resolved.is_file():
         raise HTTPException(status_code=400, detail="Path is not a file")
 
-    lines = min(max(lines, 1), 200)
+    lines = min(max(lines, 1), 200 if roots is None else REMOTE_PREVIEW_MAX_LINES)
     stat = resolved.stat()
     ext = resolved.suffix.lower()
 
@@ -883,45 +1020,45 @@ async def preview_file(path: str, lines: int = 50):
     if ext in TEXT_EXTENSIONS or (
         stat.st_size < 1_000_000 and _looks_like_text(resolved)
     ):
-        for encoding in ("utf-8", "latin-1", "cp1252"):
-            try:
-                import itertools
+        try:
+            import itertools
 
-                preview = []
-                total_lines = 0
-                with open(resolved, "r", encoding=encoding) as f:
-                    # Read only the first N lines for preview
-                    for line in itertools.islice(f, lines):
-                        preview.append(line.rstrip("\n\r")[:500])
-                    # Count remaining lines without loading into memory
-                    total_lines = len(preview)
-                    for _ in f:
-                        total_lines += 1
-                result["is_text"] = True
-                result["encoding"] = encoding
-                result["total_lines"] = total_lines
-                result["preview_lines"] = preview
+            encoding = file_encoding(resolved)
+            preview = []
+            total_lines = 0
+            with open(resolved, "r", encoding=encoding) as f:
+                # Read only the first N lines for preview
+                for line in itertools.islice(f, lines):
+                    preview.append(line.rstrip("\n\r")[:500])
+                # Count remaining lines without loading into memory
+                total_lines = len(preview)
+                for _ in f:
+                    total_lines += 1
+            result["is_text"] = True
+            result["encoding"] = encoding
+            result["total_lines"] = total_lines
+            result["preview_lines"] = preview
 
-                # CSV/TSV specific info
-                if ext in (".csv", ".tsv"):
-                    import csv as csv_mod
+            # CSV/TSV specific info
+            if ext in (".csv", ".tsv"):
+                import csv as csv_mod
 
-                    delimiter = "\t" if ext == ".tsv" else ","
-                    try:
-                        with open(resolved, "r", encoding=encoding) as cf:
-                            reader = csv_mod.reader(cf, delimiter=delimiter)
-                            header = next(reader, None)
-                            if header:
-                                result["columns"] = header
-                                row_count = sum(1 for _ in reader)
-                                result["row_count"] = row_count
-                    except (OSError, csv_mod.Error, UnicodeError) as exc:
-                        logger.warning(
-                            "CSV preview of %s has no column info: %s", resolved, exc
-                        )
-                break
-            except (UnicodeDecodeError, UnicodeError):
-                continue
+                delimiter = "\t" if ext == ".tsv" else ","
+                try:
+                    with open(resolved, "r", encoding=encoding) as cf:
+                        reader = csv_mod.reader(cf, delimiter=delimiter)
+                        header = next(reader, None)
+                        if header:
+                            result["columns"] = header
+                            row_count = sum(1 for _ in reader)
+                            result["row_count"] = row_count
+                except (OSError, csv_mod.Error, UnicodeError) as exc:
+                    logger.warning(
+                        "CSV preview of %s has no column info: %s", resolved, exc
+                    )
+        except UnicodeDecodeError as exc:
+            # The browser shows a file it cannot decode as binary.
+            logger.warning("No text preview of %s: %s", resolved, exc.reason)
 
     return FilePreviewResponse(**result)
 
@@ -929,18 +1066,32 @@ async def preview_file(path: str, lines: int = 50):
 # ── Serve Local Image ─────────────────────────────────────────────────────────
 
 
-@router.get("/api/files/image")
-async def serve_local_image(path: str):
+@router.get(
+    "/api/files/image",
+    response_class=FileResponse,
+    responses={
+        200: {
+            "content": {"application/octet-stream": {}},
+            "description": "The image file.",
+        }
+    },
+)
+async def serve_local_image(
+    request: Request, path: str, session_id: Optional[str] = None
+):
     """Serve a local image file from the user's home directory.
 
     Used by the Agent UI to display inline images generated by the agent
     (e.g., Stable Diffusion output, screenshots).
 
-    Security: only files within the user's home directory are accessible.
+    Security: only files within the user's home directory are accessible,
+    and away from the PC only those in the named chat's folders.
 
     Args:
         path: Absolute path to the image file.
+        session_id: The chat whose folders a caller away from the PC reads.
     """
+    roots = _remote_read_roots(request, session_id)
     if not path:
         raise HTTPException(status_code=400, detail="File path is required")
     if "\x00" in path:
@@ -951,6 +1102,7 @@ async def serve_local_image(path: str):
 
     # Security: restrict to user's home directory
     ensure_within_home(resolved)
+    _refuse_remote_read(resolved, roots)
 
     try:
         if raw_path.is_symlink():
@@ -986,7 +1138,16 @@ async def serve_local_image(path: str):
 # ── Serve Generated Media ────────────────────────────────────────────────────
 
 
-@router.get("/api/media/{kind}/{name}")
+@router.get(
+    "/api/media/{kind}/{name}",
+    response_class=FileResponse,
+    responses={
+        200: {
+            "content": {"application/octet-stream": {}},
+            "description": "The generated image or audio file.",
+        }
+    },
+)
 async def serve_generated_media(kind: str, name: str):
     """Serve an image or audio file GAIA generated, for the chat's inline cards.
 

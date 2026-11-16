@@ -9,6 +9,16 @@ import { useT } from '../../i18n/useT';
 import { useConnectorsSSE } from '../../hooks/useConnectorsSSE';
 import { log } from '../../utils/logger';
 import type { ConnectorListEntry, Message } from '../../types';
+import {
+    awaited,
+    CONNECT_ACCOUNT_RENDER,
+    connectCardProviders,
+    hasConnectCard,
+    isConnectAccountPayload,
+    PROVIDER_NAMES,
+    requestScopes,
+    type ConnectAccountPayload,
+} from '../../utils/connectAccountCard.core';
 import { UnsupportedCard } from './UnsupportedCard';
 
 /**
@@ -16,60 +26,12 @@ import { UnsupportedCard } from './UnsupportedCard';
  *
  * A mail or calendar tool that finds no usable account sends this card with
  * its result, so the Connect button is on screen whatever the model writes.
- * Pressing it starts sign-in for the access the asking agent declares, and
- * gives that agent access in the same step.
+ * Pressing it starts sign-in for the access the failed call needs (reading
+ * mail asks only to read it), and gives the asking agent access in the same
+ * step. A card that names no access asks for what the agent declares.
  */
 
-export const CONNECT_ACCOUNT_RENDER = 'connect_account';
-
-interface ConnectAccountPayload {
-    kind: typeof CONNECT_ACCOUNT_RENDER;
-    providers: string[];
-    agent_id?: string;
-    /** Providers connected already, whose fault is something signing in again fixes. */
-    reconnect?: string[];
-}
-
-export function isConnectAccountPayload(value: unknown): value is ConnectAccountPayload {
-    if (!value || typeof value !== 'object') return false;
-    const v = value as Record<string, unknown>;
-    return (
-        v.kind === CONNECT_ACCOUNT_RENDER &&
-        Array.isArray(v.providers) &&
-        v.providers.length > 0 &&
-        v.providers.every((p) => typeof p === 'string' && p.length > 0) &&
-        (v.agent_id === undefined || typeof v.agent_id === 'string') &&
-        (v.reconnect === undefined
-            || (Array.isArray(v.reconnect) && v.reconnect.every((p) => typeof p === 'string')))
-    );
-}
-
-/** The providers whose becoming connected is the fix: those not connected when the tool ran. */
-function awaited(card: ConnectAccountPayload): string[] {
-    return card.providers.filter((p) => !card.reconnect?.includes(p));
-}
-
-/**
- * The connectors a message's Connect card is waiting on; empty when it has no
- * card, or when every account on it was connected already and needs signing
- * in again, which the connector list cannot show.
- */
-export function connectCardProviders(message: Pick<Message, 'cards'> | undefined): string[] {
-    const found = new Set<string>();
-    for (const card of message?.cards ?? []) {
-        if (card.render === CONNECT_ACCOUNT_RENDER && isConnectAccountPayload(card.data)) {
-            awaited(card.data).forEach((p) => found.add(p));
-        }
-    }
-    return [...found];
-}
-
-/** Whether a message carries a Connect card at all. */
-export function hasConnectCard(message: Pick<Message, 'cards'> | undefined): boolean {
-    return (message?.cards ?? []).some(
-        (card) => card.render === CONNECT_ACCOUNT_RENDER && isConnectAccountPayload(card.data),
-    );
-}
+export { CONNECT_ACCOUNT_RENDER, connectCardProviders, hasConnectCard, isConnectAccountPayload, requestScopes };
 
 /**
  * The agent to give access when sign-in completes: only the one that asked,
@@ -94,13 +56,6 @@ export function grantIdsFor(
         .map((a) => a.namespaced_agent_id!);
 }
 
-// Brand names, the same in every language.
-const PROVIDER_NAMES: Record<string, string> = {
-    google: 'Google',
-    microsoft: 'Microsoft',
-    microsoft_work: 'Microsoft 365',
-};
-
 function openAuthUrl(url: string): void {
     const bridge = (window as unknown as { gaia?: { openExternal?: (url: string) => void } }).gaia;
     if (bridge?.openExternal) bridge.openExternal(url);
@@ -121,6 +76,7 @@ function ProviderRow({
     connected,
     needsSetup,
     grantAgents,
+    scopes,
     onOpened,
 }: {
     connectorId: string;
@@ -129,6 +85,7 @@ function ProviderRow({
     /** No OAuth client on this PC yet, so sign-in cannot start. */
     needsSetup: boolean;
     grantAgents: string[];
+    scopes: string[];
     onOpened: () => void;
 }) {
     const t = useT();
@@ -158,9 +115,7 @@ function ProviderRow({
         setBusy(true);
         setError(null);
         try {
-            // No scopes: the backend asks for what the granted agent declares,
-            // never the connector's whole list.
-            const flow = await api.authorizeConnector(connectorId, [], grantAgents);
+            const flow = await api.authorizeConnector(connectorId, scopes, grantAgents);
             openAuthUrl(flow.authorization_url);
             onOpened();
         } catch (e) {
@@ -169,7 +124,7 @@ function ProviderRow({
         } finally {
             setBusy(false);
         }
-    }, [connectorId, needsSetup, grantAgents, onOpened, openSettings]);
+    }, [connectorId, needsSetup, grantAgents, scopes, onOpened, openSettings]);
 
     const label = t(connected ? 'connectCard.reconnect' : 'connectCard.connect', { name });
     return (
@@ -289,6 +244,10 @@ export function ConnectAccountCard({ data }: { data: unknown }) {
         PROVIDER_NAMES[id]
         ?? connectors.find((c) => c.id === id && !('error' in c))?.display_name
         ?? id;
+    const heldScopes = (id: string) => {
+        const row = connectors.find((c) => c.id === id);
+        return row && !('error' in row) ? row.scopes : undefined;
+    };
     const anyConnected = awaited(data).some(isConnected);
 
     let prompt = t('connectCard.prompt');
@@ -312,6 +271,10 @@ export function ConnectAccountCard({ data }: { data: unknown }) {
                         connected={isConnected(id)}
                         needsSetup={needsSetup(id)}
                         grantAgents={grantIdsFor(agents, data.agent_id, id)}
+                        scopes={requestScopes(
+                            data.scopes?.[id],
+                            heldScopes(id),
+                        )}
                         onOpened={() => {
                             setEnded(null);
                             setOpened(true);

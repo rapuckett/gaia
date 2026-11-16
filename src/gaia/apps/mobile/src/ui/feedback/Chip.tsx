@@ -12,6 +12,8 @@ import { Text } from '../text/Text';
 
 export interface ChipProps {
     label: string;
+    /** The full label a screen reader says when `label` is the bare one. */
+    accessibilityLabel?: string;
     selected?: boolean;
     onPress?: () => void;
     icon?: LucideIcon;
@@ -19,10 +21,10 @@ export interface ChipProps {
 }
 
 // Selected shows a check beside the label as well as the accent fill.
-export function Chip({ label, selected, onPress, icon, testID }: ChipProps) {
+export function Chip({ label, accessibilityLabel, selected, onPress, icon, testID }: ChipProps) {
     const { colors, radius } = useTheme();
     return (
-        <Pressable onPress={onPress} accessibilityLabel={label} accessibilityState={{ selected: !!selected }} testID={testID}>
+        <Pressable onPress={onPress} accessibilityLabel={accessibilityLabel ?? label} aria-selected={!!selected} testID={testID}>
             <View
                 style={{
                     alignSelf: 'flex-start',
@@ -39,7 +41,7 @@ export function Chip({ label, selected, onPress, icon, testID }: ChipProps) {
                 <Row gap="xs">
                     {selected ? <Icon icon={Check} size="sm" tone="accent" /> : icon ? <Icon icon={icon} size="sm" tone="secondary" /> : null}
                     <View style={{ flexShrink: 1 }}>
-                        <Text role="label" weight="medium" tone={selected ? 'accent' : 'primary'} numberOfLines={1}>
+                        <Text role="label" weight="medium" tone={selected ? 'accent' : 'primary'} numberOfLines={1} compact>
                             {label}
                         </Text>
                     </View>

@@ -3,7 +3,7 @@
 
 import type { PhrasingContent } from 'mdast';
 import { Fragment, useEffect, useState, type ReactNode } from 'react';
-import { AccessibilityInfo, Linking } from 'react-native';
+import { AccessibilityInfo } from 'react-native';
 
 import { isolate } from '@webui/i18n/registry';
 import {
@@ -15,8 +15,11 @@ import {
     type LibraryDoc,
 } from '@webui/utils/citations';
 import { safeUrlTransform } from '@webui/utils/markdown';
-import { WIN_PATH_ONLY_RE, findFilePaths } from '@webui/utils/windowsPaths';
+import { filePathOfCodeSpan } from '@webui/utils/codeSpanPath';
+import { findFilePaths } from '@webui/utils/windowsPaths';
 import type { Translate } from '@/i18n/useT';
+import { isFileLink, openPcFile } from '@/features/files/openPcFile';
+import { openLinkFromPress } from '@/platform/openLink';
 import { Icon, Text } from '@/ui';
 import { FileText } from '@/ui/icons';
 
@@ -24,30 +27,45 @@ export interface InlineContext {
     index: CitationIndex;
     t: Translate;
     onOpenCitation?: (doc: LibraryDoc, page?: number) => void;
+    /** The chat whose folders a file link may read; without one, a PC file link isn't offered. */
+    sessionId?: string | null;
 }
 
 const OPENABLE_URL = /^(https?|mailto):/i;
+const SCHEME_URL = /^\s*[a-z][a-z0-9+.-]*:/i;
 const CARET_BLINK_MS = 530;
 
-function openUrl(url: string): void {
-    Linking.openURL(url).catch((error: unknown) => console.error(`Opening ${url} failed`, error));
-}
-
-/** A Windows path names a file on the PC, which a phone can't open: left to right, in mono, not a link. */
-function pathText(path: string, key: string): ReactNode {
+/** A path names a file on the PC: a link to the app's preview when a chat is in scope, else plain text; left to right, in mono. */
+function pathText(path: string, ctx: InlineContext, key: string, label = path): ReactNode {
+    const { sessionId, t } = ctx;
+    if (!sessionId) {
+        return (
+            <Text key={key} mono dir="ltr">
+                {isolate(label, 'ltr')}
+            </Text>
+        );
+    }
     return (
-        <Text key={key} mono dir="ltr">
-            {isolate(path, 'ltr')}
+        <Text
+            key={key}
+            mono
+            dir="ltr"
+            tone="accent"
+            accessibilityRole="link"
+            accessibilityLabel={t('activity.openPath', { path })}
+            onPress={() => openPcFile(path, sessionId)}
+        >
+            {isolate(label, 'ltr')}
         </Text>
     );
 }
 
-function withPaths(text: string, keyBase: string): ReactNode[] {
+function withPaths(text: string, ctx: InlineContext, keyBase: string): ReactNode[] {
     const out: ReactNode[] = [];
     let at = 0;
     for (const { start, path } of findFilePaths(text)) {
         if (start > at) out.push(text.slice(at, start));
-        out.push(pathText(path, `${keyBase}p${start}`));
+        out.push(pathText(path, ctx, `${keyBase}p${start}`));
         at = start + path.length;
     }
     if (out.length === 0) return [text];
@@ -114,23 +132,24 @@ function citeText(text: string, ctx: InlineContext, carried: LibraryDoc | null, 
         parts.push({ start: c.start, end: c.end, node: citation(c.doc, pages[0]?.page, ctx, `${keyBase}c${c.start}`) });
         addPages(c.doc, pages, c.end);
     });
-    if (parts.length === 0) return withPaths(text, keyBase);
+    if (parts.length === 0) return withPaths(text, ctx, keyBase);
     parts.sort((a, b) => a.start - b.start);
     const out: ReactNode[] = [];
     let at = 0;
     for (const part of parts) {
-        if (part.start > at) out.push(...withPaths(text.slice(at, part.start), `${keyBase}a${at}`));
+        if (part.start > at) out.push(...withPaths(text.slice(at, part.start), ctx, `${keyBase}a${at}`));
         out.push(part.node);
         at = part.end;
     }
-    if (at < text.length) out.push(...withPaths(text.slice(at), `${keyBase}a${at}`));
+    if (at < text.length) out.push(...withPaths(text.slice(at), ctx, `${keyBase}a${at}`));
     return out;
 }
 
 function inlineCode(value: string, ctx: InlineContext, key: string, page?: number): ReactNode {
     const doc = docForToken(ctx.index, value);
     if (doc) return citation(doc, page, ctx, key);
-    if (WIN_PATH_ONLY_RE.test(value.trim())) return pathText(value.trim(), key);
+    const path = filePathOfCodeSpan(value);
+    if (path) return pathText(path, ctx, key, value.trim());
     // No-break spaces keep a command on one line, so it never splits into reordered pieces.
     return (
         <Text key={key} code dir="ltr">
@@ -139,12 +158,29 @@ function inlineCode(value: string, ctx: InlineContext, key: string, page?: numbe
     );
 }
 
-function link(url: string, children: ReactNode, key: string): ReactNode {
+function link(url: string, children: ReactNode, key: string, ctx: InlineContext): ReactNode {
+    // A file:// URL or an absolute path names a file on the PC: the preview, or nothing where no chat is in scope.
+    if (isFileLink(url)) {
+        const { sessionId } = ctx;
+        if (!sessionId) return <Fragment key={key}>{children}</Fragment>;
+        return (
+            <Text key={key} tone="accent" accessibilityRole="link" onPress={() => openPcFile(url, sessionId)}>
+                {children}
+            </Text>
+        );
+    }
     const safe = safeUrlTransform(url);
-    // An unsafe URL, and one that only means something inside the web UI, shows as plain text.
-    if (!OPENABLE_URL.test(safe)) return <Fragment key={key}>{children}</Fragment>;
+    // A scheme the policy refuses stays tappable, so the tap explains the refusal; a link with no scheme shows as plain text.
+    if (!OPENABLE_URL.test(safe)) {
+        if (!SCHEME_URL.test(url)) return <Fragment key={key}>{children}</Fragment>;
+        return (
+            <Text key={key} tone="accent" accessibilityRole="link" onPress={() => openLinkFromPress(url)}>
+                {children}
+            </Text>
+        );
+    }
     return (
-        <Text key={key} tone="accent" accessibilityRole="link" onPress={() => openUrl(safe)}>
+        <Text key={key} tone="accent" accessibilityRole="link" onPress={() => openPcFile(safe, ctx.sessionId ?? null)}>
             {children}
         </Text>
     );
@@ -200,10 +236,10 @@ export function renderInline(nodes: PhrasingContent[], ctx: InlineContext, keyBa
                 out.push('\n');
                 return;
             case 'link':
-                out.push(link(node.url, renderInline(node.children, ctx, `${key}.`), key));
+                out.push(link(node.url, renderInline(node.children, ctx, `${key}.`), key, ctx));
                 return;
             case 'image':
-                out.push(link(node.url, node.alt || node.url, key));
+                out.push(link(node.url, node.alt || node.url, key, ctx));
                 return;
             default:
                 return;

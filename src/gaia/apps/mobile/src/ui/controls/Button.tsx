@@ -8,6 +8,7 @@ import { Icon } from './Icon';
 import { Pressable } from './Pressable';
 import { Spinner } from './Spinner';
 import { Row } from '../layout/layout';
+import { useLargeText } from '../theme/a11y';
 import { useTheme } from '../theme/ThemeProvider';
 import type { Tone } from '../theme/tone';
 
@@ -23,6 +24,8 @@ export interface ButtonProps {
     full?: boolean;
     /** Let a long label take more lines instead of truncating. */
     wrap?: boolean;
+    /** What a screen reader says instead of the visible label. */
+    accessibilityLabel?: string;
     testID?: string;
 }
 
@@ -37,33 +40,38 @@ export function Button({
     disabled,
     full,
     wrap,
+    accessibilityLabel,
     testID,
 }: ButtonProps) {
     const { colors, radius } = useTheme();
+    const largeText = useLargeText();
     const look: Record<NonNullable<ButtonProps['variant']>, { bg: string; border: string; tone: Tone }> = {
         primary: { bg: colors.accentFill, border: 'transparent', tone: 'onAccent' },
-        secondary: { bg: colors.bgCard, border: colors.borderLight, tone: 'primary' },
-        ghost: { bg: 'transparent', border: 'transparent', tone: 'accent' },
+        secondary: { bg: colors.bgTertiary, border: size === 'sm' ? colors.border : colors.borderLight, tone: 'primary' },
+        ghost: { bg: 'transparent', border: colors.border, tone: 'accent' },
         danger: { bg: colors.dangerDim, border: 'transparent', tone: 'danger' },
     };
+    const pressedBg = { primary: colors.accentSolid, secondary: colors.bgActive, ghost: colors.bgTertiary, danger: colors.dangerDim };
     const v = look[variant];
     return (
         <View style={full ? { alignSelf: 'stretch' } : { alignSelf: 'flex-start' }}>
             <Pressable
                 onPress={busy ? undefined : onPress}
                 disabled={disabled}
-                accessibilityLabel={label}
-                accessibilityState={{ busy: !!busy }}
+                minSize={size === 'sm' ? 44 : undefined}
+                accessibilityLabel={accessibilityLabel ?? label}
+                aria-busy={!!busy}
                 testID={testID}
             >
+                {({ pressed }) => (
                 <View
                     style={{
-                        minHeight: size === 'sm' ? 36 : 48,
-                        paddingHorizontal: size === 'sm' ? 12 : 16,
-                        borderRadius: radius.md,
+                        minHeight: size === 'sm' ? 28 : 48,
+                        paddingHorizontal: size === 'sm' ? 10 : 16,
+                        borderRadius: size === 'sm' ? radius.sm : radius.md,
                         borderWidth: 1,
                         borderColor: v.border,
-                        backgroundColor: v.bg,
+                        backgroundColor: pressed ? pressedBg[variant] : v.bg,
                         alignItems: 'center',
                         justifyContent: 'center',
                     }}
@@ -74,21 +82,25 @@ export function Button({
                         ) : icon ? (
                             <Icon icon={icon} size="sm" tone={v.tone} />
                         ) : null}
-                        {wrap ? (
+                        {wrap || largeText ? (
                             <View style={{ flexShrink: 1, paddingVertical: 10 }}>
-                                <Text role="ui" weight="medium" tone={v.tone} align="center">
+                                <Text role={size === 'sm' ? 'caption' : 'ui'} weight="medium" tone={v.tone} align="center">
                                     {label}
                                 </Text>
                             </View>
                         ) : (
-                            <Text role="ui" weight="medium" tone={v.tone} numberOfLines={1}>
+                            <Text role={size === 'sm' ? 'caption' : 'ui'} weight="medium" tone={v.tone} numberOfLines={1}>
                                 {label}
                             </Text>
                         )}
                         {iconEnd && !busy ? <Icon icon={iconEnd} size="sm" tone={v.tone} /> : null}
                     </Row>
                 </View>
+                )}
             </Pressable>
         </View>
     );
 }
+
+// Read by Row: in a stacked row the button spans the full width.
+Button.fillsStackedRow = true;

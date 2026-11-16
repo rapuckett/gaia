@@ -65,7 +65,7 @@ export function CodeBlock({ lang, code, streaming }: { lang: string; code: strin
                 </Row>
                 <HScroll dir="ltr">
                     <Stack paddingX="md" paddingY="sm">
-                        <Text role="label" mono selectable dir="ltr">
+                        <Text role="label" mono selectable dir="ltr" align="ltr">
                             {shown}
                         </Text>
                     </Stack>
@@ -73,7 +73,7 @@ export function CodeBlock({ lang, code, streaming }: { lang: string; code: strin
                 {collapsible && (
                     <Pressable
                         onPress={() => setExpanded((v) => !v)}
-                        accessibilityState={{ expanded }}
+                        aria-expanded={expanded}
                         accessibilityLabel={expanded ? t('code.collapse') : t('code.expand', { size: lineCount(t, lines) })}
                     >
                         <Stack paddingX="md">

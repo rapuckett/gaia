@@ -24,44 +24,18 @@ import * as api from '../services/api';
 import { SAFE_DISALLOWED_ELEMENTS, safeUrlTransform } from '../utils/markdown';
 import { useChatStore } from '../stores/chatStore';
 import { useConnectorsSSE } from '../hooks/useConnectorsSSE';
-import { ref, type MessageKey } from '../i18n/registry';
+import { ref } from '../i18n/registry';
 import { translator, useT, type Translate } from '../i18n/useT';
 import type { AgentMcpServer, ConnectorListEntry, ConnectorRow, UnavailableConnectorRow } from '../types';
 import { connectorDescription, connectorDescriptionBare, fieldHelp, fieldLabel, missingFieldsMessage } from '../utils/connectorText';
 import { personalizeSourceKind, requestPersonalize } from '../utils/connectorPersonalize';
+import { connectScopes, scopeLabel } from '../utils/connectorScopes';
 import { ConnectorTileMenu } from './ConnectorTileMenu';
 import { SettingsDisclosure } from './settings/SettingsDisclosure';
 import { ltrIn } from './setup/format';
 import './ConnectorsSection.css';
 
-// Human-readable labels for well-known OAuth scope URIs.
-// Unrecognised scopes fall back to the last path segment of the URI.
-const SCOPE_LABELS: Record<string, MessageKey> = {
-    'https://www.googleapis.com/auth/gmail.readonly': 'settings.connectors.scope.gmailRead',
-    'https://www.googleapis.com/auth/gmail.modify': 'settings.connectors.scope.gmailModify',
-    'https://www.googleapis.com/auth/gmail.send': 'settings.connectors.scope.gmailSend',
-    'https://www.googleapis.com/auth/gmail.compose': 'settings.connectors.scope.gmailCompose',
-    'https://www.googleapis.com/auth/calendar.readonly': 'settings.connectors.scope.calendarRead',
-    'https://www.googleapis.com/auth/calendar.events': 'settings.connectors.scope.calendarEvents',
-    'https://www.googleapis.com/auth/drive.readonly': 'settings.connectors.scope.driveRead',
-    'https://www.googleapis.com/auth/drive.file': 'settings.connectors.scope.driveFile',
-    'https://www.googleapis.com/auth/spreadsheets.readonly': 'settings.connectors.scope.sheetsRead',
-    'https://www.googleapis.com/auth/spreadsheets': 'settings.connectors.scope.sheets',
-    'openid': 'settings.connectors.scope.openid',
-    'https://www.googleapis.com/auth/userinfo.email': 'settings.connectors.scope.email',
-    'email': 'settings.connectors.scope.email',
-    'profile': 'settings.connectors.scope.profile',
-    'https://graph.microsoft.com/Mail.ReadWrite': 'settings.connectors.scope.outlookMail',
-    'https://graph.microsoft.com/Mail.Send': 'settings.connectors.scope.outlookSend',
-    'https://graph.microsoft.com/Calendars.ReadWrite': 'settings.connectors.scope.outlookCalendar',
-    'https://graph.microsoft.com/Calendars.Read': 'settings.connectors.scope.outlookCalendarRead',
-    'https://graph.microsoft.com/User.Read': 'settings.connectors.scope.microsoftProfile',
-};
-
-function scopeLabel(scope: string, t: Translate): string {
-    const key = SCOPE_LABELS[scope];
-    return key ? t(key) : scope.split(/[/.:]/).pop() ?? scope;
-}
+export { connectScopes };
 
 const SEARCH_ABOVE = 6;
 
@@ -488,6 +462,10 @@ function ConnectorTile({
         if (connector.type === 'mcp_server' && connector.enabled === false) {
             return <span className="connector-status disabled">{t('settings.connectors.paused')}</span>;
         }
+        // A server that won't start is not working, whatever was saved for it.
+        if (check?.state === 'failed' && !check.slow) {
+            return <span className="connector-status failed" role="status">{t('settings.connectors.notWorking')}</span>;
+        }
         return (
             <span className="connector-status ok">
                 <CheckCircle2 size={12} />
@@ -626,9 +604,7 @@ function OAuthConfigureBody({
         try {
             const r = await api.authorizeConnector(
                 connector.id,
-                connector.available_scopes?.length
-                    ? connector.available_scopes
-                    : connector.default_scopes,
+                connectScopes(connector, selectedGrantAgents()),
                 selectedGrantAgents(),
             );
             openAuthUrl(r.authorization_url);
@@ -650,9 +626,7 @@ function OAuthConfigureBody({
         try {
             const info = await api.authorizeConnectorDevice(
                 connector.id,
-                connector.available_scopes?.length
-                    ? connector.available_scopes
-                    : connector.default_scopes,
+                connectScopes(connector, selectedGrantAgents()),
                 selectedGrantAgents(),
             );
             setDeviceInfo(info);
@@ -722,9 +696,7 @@ function OAuthConfigureBody({
         setBusy(true);
         setErr(null);
         try {
-            const scopes = connector.available_scopes?.length
-                ? connector.available_scopes
-                : connector.default_scopes;
+            const scopes = connectScopes(connector, selectedGrantAgents());
             const result = await api.configureConnector(connector.id, {
                 ...setupValues,
                 scopes,

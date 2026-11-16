@@ -4,8 +4,10 @@
 export interface FetchRequestInit {
     method?: string;
     headers?: Record<string, string>;
-    body?: string;
+    body?: string | Blob | FormData;
     signal?: AbortSignal;
+    /** Bytes of the body sent so far, of its total. Only the pinned transport reports it; plain fetch never calls it. */
+    onUploadProgress?: (sent: number, total: number) => void;
 }
 
 export interface FetchResponseLike {

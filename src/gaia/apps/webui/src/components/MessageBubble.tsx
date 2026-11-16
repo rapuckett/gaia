@@ -3,22 +3,26 @@
 
 import React, { createContext, useCallback, useContext, useId, useLayoutEffect, useRef, useState, useEffect, useMemo } from 'react';
 import type { Components } from 'react-markdown';
-import { Copy, Check, AlertTriangle, Trash2, RefreshCw, RotateCw, Play, Pencil, FolderOpen, Square, FileText, ScrollText } from 'lucide-react';
+import { Copy, Check, AlertTriangle, Trash2, RefreshCw, RotateCw, Play, Pencil, FolderOpen, Square, FileText, ScrollText, Settings } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { SAFE_DISALLOWED_ELEMENTS, joinAttachmentLinks, safeUrlTransform, splitAttachmentLinks } from '../utils/markdown';
 import remarkGfm from 'remark-gfm';
 import remarkWindowsPaths from '../utils/remarkWindowsPaths';
 import { remarkSoftBreaks } from '../utils/remarkSoftBreaks';
+import { remarkNumericColumns } from '../utils/remarkNumericColumns';
 import { AgentActivity } from './AgentActivity';
 import { EmailConnectCta, isAuthRequiredMessage } from './email/EmailConnectCta';
 import { RenderCard } from './render/RenderCard';
 import * as api from '../services/api';
+import { ApiError } from '../services/apiErrors';
+import { requestErrorParam } from '../utils/requestErrors';
 import { log } from '../utils/logger';
 import { plainAnswerText } from '../utils/plainText';
 import { AnswerStats } from './AnswerStats';
+import { dropErrorsEchoedInAnswer, isErrorContent } from '../utils/answerErrors.core';
 import { SERVER_CANCELLED_TEXT, splitCutOff, turnEnding } from '../utils/turnEnding.core';
 
-export { splitCutOff, turnEnding };
+export { dropErrorsEchoedInAnswer, isErrorContent, splitCutOff, turnEnding };
 import { displayModelName, useInferencePlace, useModelNames } from '../stores/modelStore';
 import { MODEL_WAIT_HINT_S, isModelWaitLabel } from '../utils/modelWait';
 import { localizeLiveStatus } from '../utils/liveStatus';
@@ -26,17 +30,21 @@ import type { Message, AgentStep, RenderCardData } from '../types';
 import { TurnChanges } from './TurnChanges';
 import { ReadAloudButton, ReadAloudError, ReadAloudNote } from './ReadAloudButton';
 import { TroubleshootingReport, namesFailureRecord, type ReportClasses } from './TroubleshootingReport';
-import { CODE_COLLAPSE_LINES, CODE_PREVIEW_LINES, ExpandToggle, countLines, isLongUserMessage, lineCount, sizeLabel } from './LongContent';
+import { CODE_COLLAPSE_LINES, CODE_PREVIEW_LINES, ExpandToggle, countLines, isLongUserMessage, lineCount, messageExcerpt, sizeLabel } from './LongContent';
 import { dateLocale, useT, type Translate } from '../i18n/useT';
 import { useChatStore } from '../stores/chatStore';
 import { useLogsStore } from '../stores/logsStore';
 import { CLAIMS_ESCAPE } from '../hooks/useEscapeToClose';
 import { dropAnswerDrafts } from '../utils/answerDrafts';
+import { describeFailedTurn, failedTurnDetails } from '../utils/failedTurn';
+import { splitUploadedImages } from '../utils/messageImages';
+import { ImageThumbs } from './ImageThumbs';
 import {
     buildCitationIndex, docForToken, findCitations, findPages,
     type CitationIndex, type CitedDoc, type FoundPage,
 } from '../utils/citations';
-import { WIN_PATH_ONLY_RE, findFilePaths } from '../utils/windowsPaths';
+import { filePathOfCodeSpan } from '../utils/codeSpanPath';
+import { findFilePaths } from '../utils/windowsPaths';
 import { cleanToolCallContent } from '../utils/toolCallContent';
 export { cleanToolCallContent, escapeBareNumberLines } from '../utils/toolCallContent';
 import './MessageBubble.css';
@@ -80,6 +88,8 @@ interface MessageBubbleProps {
     latest?: boolean;
     /** Total wall-clock latency in ms (time from user message to response completion). */
     latencyMs?: number;
+    /** A fix under the bubble explains the failure, so it drops its own banner. */
+    fixShownBelow?: boolean;
     /** The model's current phase while streaming; null shows "Thinking...". */
     liveStatus?: string | null;
     /** What a running tool's own model calls are doing; shown on that tool's row. */
@@ -138,13 +148,6 @@ function useElapsedSeconds(active: boolean, key?: string): number {
     return elapsed;
 }
 
-/** The answer an agent writes when a model call ends its turn (`_model_failure_answer` in agent.py). */
-const MODEL_FAILURE_RE = /^The model (?:call failed|stopped responding) at step \d+, so this request is unfinished\./;
-
-export function isModelFailure(content: string): boolean {
-    return MODEL_FAILURE_RE.test(content.trimStart());
-}
-
 const CHAT_REPORT_CLASSES: ReportClasses = {
     root: 'msg-report',
     button: 'msg-try-again',
@@ -152,61 +155,28 @@ const CHAT_REPORT_CLASSES: ReportClasses = {
     error: 'msg-report-error',
 };
 
-/** Detect if message content looks like an error. */
-export function isErrorContent(content: string): boolean {
-    if (!content) return false;
-    const lower = content.toLowerCase();
-    return (
-        lower.startsWith('error:') ||
-        lower.startsWith('error -') ||
-        lower.includes('traceback (most recent') ||
-        lower.includes("object has no attribute") ||
-        lower.includes('is lemonade server running') ||
-        lower.includes('connection refused') ||
-        lower.includes('failed to fetch')
-    );
-}
-
-const squash = (text: string) => text.replace(/\s+/g, ' ').trim();
-
-/**
- * Drop an error step the answer is, or ends with, word for word. A run that
- * fails before answering saves its error as the whole answer (`echoed`); one
- * that dies mid-answer saves what it wrote, then the error, which then reads
- * below that text rather than above it. An answer that only quotes a tool's
- * error keeps the step, as does one ending with an error that isn't the
- * turn's last step.
- */
-export function dropErrorsEchoedInAnswer(
-    steps: AgentStep[],
-    content: string,
-): { steps: AgentStep[]; echoed: boolean; endedBy: string | null } {
-    const answer = squash(content);
-    if (!answer) return { steps, echoed: false, endedBy: null };
-    const tail = content.trimEnd();
-    const last = steps[steps.length - 1];
-    let echoed = false;
-    let endedBy: string | null = null;
-    const kept = steps.filter((s) => {
-        if (s.type !== 'error' || !s.detail?.trim()) return true;
-        if (squash(s.detail) === answer) {
-            echoed = true;
-            return false;
-        }
-        // The server appends the error that ended the turn as its own paragraph.
-        if (s !== last || !tail.endsWith(`\n\n${s.detail.trim()}`)) return true;
-        endedBy = s.detail.trim();
-        return false;
-    });
-    return { steps: kept, echoed, endedBy };
-}
-
 /** Format a full absolute timestamp for the stats tooltip. */
 function formatFullTimestamp(iso: string, t: Translate): string {
     if (!iso) return '';
     return new Date(iso).toLocaleString(dateLocale(t), {
         month: 'short', day: 'numeric', year: 'numeric',
         hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true,
+    });
+}
+
+/** "11:13 PM" today, "Yesterday, 4:10 PM", "Nov 9, 4:10 PM" this year, with the year before that. */
+export function formatShortTimestamp(iso: string, t: Translate, now: Date = new Date()): string {
+    if (!iso) return '';
+    const when = new Date(iso);
+    const locale = dateLocale(t);
+    const time = when.toLocaleTimeString(locale, { hour: 'numeric', minute: '2-digit' });
+    const dayStart = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+    const daysAgo = Math.round((dayStart(now) - dayStart(when)) / 86_400_000);
+    if (daysAgo === 0) return time;
+    if (daysAgo === 1) return t('msg.yesterdayAt', { time });
+    return when.toLocaleString(locale, {
+        month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
+        ...(when.getFullYear() === now.getFullYear() ? {} : { year: 'numeric' }),
     });
 }
 
@@ -292,7 +262,7 @@ function MessageEditor({ original, draft, onDraft, onSend, onCancel, confirming 
 
 const SCHEDULE_RUN_MARKER = /^\[schedule-run\] Run #(\d+) \u00b7 (.+)$/;
 
-export function MessageBubble({ message, isStreaming, agentSteps, agentStepsActive, cards, onDelete, onResend, extraActions, onTryAgain, onContinue, onRegenerate, onEditStart, editing = false, editDraft = null, onEditDraft, onEdit, onEditCancel, laterCount = 0, latest = false, latencyMs, liveStatus, toolStatus, awaitingUser }: MessageBubbleProps) {
+export function MessageBubble({ message, isStreaming, agentSteps, agentStepsActive, cards, onDelete, onResend, extraActions, onTryAgain, onContinue, onRegenerate, onEditStart, editing = false, editDraft = null, onEditDraft, onEdit, onEditCancel, laterCount = 0, latest = false, latencyMs, fixShownBelow = false, liveStatus, toolStatus, awaitingUser }: MessageBubbleProps) {
     const t = useT();
     useModelNames();
     const echo = useMemo(() => {
@@ -303,6 +273,12 @@ export function MessageBubble({ message, isStreaming, agentSteps, agentStepsActi
     const isError = message.role === 'assistant' && (echo.echoed || message.failed === true || isErrorContent(message.content));
     const place = useInferencePlace();
     const showServerLog = useLogsStore((s) => s.show);
+    const openSettings = useChatStore((s) => s.openSettings);
+    const jumpToSetting = useChatStore((s) => s.jumpToSetting);
+    const failedTurn = useMemo(
+        () => (isError && !isStreaming ? describeFailedTurn(message.content) : null),
+        [isError, isStreaming, message.content],
+    );
     const stopState = message.role === 'assistant'
         ? message.stopState ?? (message.content.trim() === SERVER_CANCELLED_TEXT ? 'stopped' : undefined)
         : undefined;
@@ -314,15 +290,19 @@ export function MessageBubble({ message, isStreaming, agentSteps, agentStepsActi
     const endedBy = cutOff ? null : echo.endedBy;
     // What the user typed is never agent output — render it verbatim.
     // Memoized because the assistant path runs a brace-depth parser.
+    const userParts = useMemo(
+        () => (message.role === 'user' ? splitUploadedImages(message.content) : null),
+        [message.content, message.role],
+    );
     const cleanedContent = useMemo(
         () => {
-            if (message.role === 'user') return message.content;
+            if (userParts) return userParts.text;
             const body = cutOff
                 ? cutOff.body
                 : endedBy ? message.content.trimEnd().slice(0, -endedBy.length) : message.content;
             return cleanToolCallContent(body, Boolean(isStreaming));
         },
-        [message.content, message.role, isStreaming, cutOff, endedBy],
+        [message.content, userParts, isStreaming, cutOff, endedBy],
     );
     const hasAnswerText = Boolean(cleanedContent.trim()) && !(stopState && cleanedContent.trim() === SERVER_CANCELLED_TEXT);
     const summaryFiles = message.turnSummary?.files;
@@ -331,6 +311,7 @@ export function MessageBubble({ message, isStreaming, agentSteps, agentStepsActi
     const [copied, setCopied] = useState(false);
     const [confirmDelete, setConfirmDelete] = useState(false);
     const collapsibleUser = message.role === 'user' && isLongUserMessage(message.content);
+    const excerpt = useMemo(() => (collapsibleUser ? messageExcerpt(message.content) : null), [collapsibleUser, message.content]);
     const [userExpanded, setUserExpanded] = useState(false);
     const userBodyId = useId();
     const userBodyRef = useRef<HTMLDivElement>(null);
@@ -498,10 +479,10 @@ export function MessageBubble({ message, isStreaming, agentSteps, agentStepsActi
                             )}
                         />
                     )}
-                    {isError && (
+                    {isError && !fixShownBelow && (
                         <div className="error-banner">
                             <AlertTriangle size={14} />
-                            <span>{t('msg.error')}</span>
+                            <span>{t(failedTurn && failedTurn.kind !== 'unknown' ? `failedTurn.${failedTurn.kind}.title` : 'msg.error')}</span>
                         </div>
                     )}
                     {/* Structured cards (#2108) — finalized message.cards wins;
@@ -523,13 +504,21 @@ export function MessageBubble({ message, isStreaming, agentSteps, agentStepsActi
                         />
                     ) : collapsibleUser ? (
                         <>
-                            <div
-                                ref={userBodyRef}
-                                id={userBodyId}
-                                className={`msg-collapsible${userExpanded ? '' : ' is-collapsed'}`}
-                            >
-                                <RenderedContent content={cleanedContent} />
-                            </div>
+                            {!userExpanded && excerpt ? (
+                                <div ref={userBodyRef} id={userBodyId} className="msg-excerpt md-content">
+                                    <div className="msg-excerpt-lines" dir="auto">{excerpt.head}</div>
+                                    <div className="msg-excerpt-gap">{t.plural('msg.moreLines', excerpt.hidden)}</div>
+                                    <div className="msg-excerpt-lines" dir="auto">{excerpt.tail}</div>
+                                </div>
+                            ) : (
+                                <div
+                                    ref={userBodyRef}
+                                    id={userBodyId}
+                                    className={`msg-collapsible${userExpanded ? '' : ' is-collapsed'}`}
+                                >
+                                    <RenderedContent content={cleanedContent} sessionId={message.session_id} />
+                                </div>
+                            )}
                             <ExpandToggle
                                 expanded={userExpanded}
                                 onToggle={toggleUserExpanded}
@@ -539,9 +528,18 @@ export function MessageBubble({ message, isStreaming, agentSteps, agentStepsActi
                                 className="msg-expand-toggle"
                             />
                         </>
+                    ) : failedTurn?.raw ? (
+                        <>
+                            <p className="msg-failed-lead">{t(`failedTurn.${failedTurn.kind}.body`)}</p>
+                            <details className="msg-failed-details">
+                                <summary>{t('failedTurn.details')}</summary>
+                                <RenderedContent content={failedTurnDetails(cleanedContent)} />
+                            </details>
+                        </>
                     ) : !(stopState && cleanedContent.trim() === SERVER_CANCELLED_TEXT) && (
-                        <RenderedContent content={cleanedContent} showCursor={isStreaming && !!cleanedContent && !agentStepsActive} isStreaming={isStreaming} writtenFiles={writtenFiles} />
+                        <RenderedContent content={cleanedContent} sessionId={message.session_id} showCursor={isStreaming && !!cleanedContent && !agentStepsActive} isStreaming={isStreaming} writtenFiles={writtenFiles} />
                     )}
+                    {!editing && userParts && <ImageThumbs images={userParts.images} />}
                     {pendingDrop && !isStreaming && (
                         <div className="msg-drop-confirm" role="alertdialog" aria-labelledby={`${userBodyId}-drop`}>
                             <span id={`${userBodyId}-drop`}>{t.plural('msg.dropLater', laterCount)}</span>
@@ -589,8 +587,23 @@ export function MessageBubble({ message, isStreaming, agentSteps, agentStepsActi
                             {t('msg.tryAgain')}
                         </button>
                     )}
+                    {failedTurn?.sections.map((section) => (
+                        <button
+                            key={section}
+                            type="button"
+                            className="msg-try-again"
+                            onClick={() => {
+                                const target = failedTurn?.targets[section];
+                                if (target) jumpToSetting({ section, target });
+                                else openSettings(section);
+                            }}
+                        >
+                            <Settings size={12} aria-hidden="true" />
+                            {t.compose((say) => say('failedTurn.openSettings', { tab: say(`settings.section.${section}`) }))}
+                        </button>
+                    ))}
                     {/* A local model failed: what Lemonade and its backend wrote says why. */}
-                    {(isError || (message.role === 'assistant' && isModelFailure(message.content))) && !isStreaming && place?.remote === false && (
+                    {isError && !isStreaming && place?.remote === false && (
                         <button type="button" className="msg-try-again" onClick={() => showServerLog('model_server')}>
                             <ScrollText size={12} aria-hidden="true" />
                             {t('logs.serverLog')}
@@ -607,15 +620,23 @@ export function MessageBubble({ message, isStreaming, agentSteps, agentStepsActi
                     {message.role === 'assistant' && !isStreaming && (message.stats || latencyMs != null || message.created_at) && (
                         <div className="msg-stats" aria-label={t('msg.about')}>
                             {message.created_at && (
-                                <span className="msg-stats-ts" title={t('msg.timestamp')}>
-                                    {formatFullTimestamp(message.created_at, t)}
+                                <span className="msg-stats-ts" title={formatFullTimestamp(message.created_at, t)}>
+                                    {formatShortTimestamp(message.created_at, t)}
                                 </span>
                             )}
                             {message.stats?.retried && message.stats.model && (
                                 <span title={t('msg.retriedWithTitle', { model: message.stats.model })}>{displayModelName(message.stats.model)}</span>
                             )}
+                            {!message.stats?.retried && message.stats?.route?.model && (
+                                <span className="msg-stats-route" title={t('msg.route', { reason: message.stats.route.reason ?? '' })}>
+                                    {displayModelName(message.stats.route.model)}
+                                </span>
+                            )}
                             <AnswerStats latencyMs={latencyMs} stats={message.stats} ended={turnEnding(message.content, stopState, isError || Boolean(endedBy))} />
                         </div>
+                    )}
+                    {message.role === 'assistant' && !isStreaming && message.stats?.route?.degraded && message.stats.route.notice && (
+                        <div className="msg-route-notice" role="status">{message.stats.route.notice}</div>
                     )}
                     {message.role === 'assistant' && !isStreaming && message.id > 0 && message.session_id && (
                         <TurnChanges sessionId={message.session_id} messageId={message.id} />
@@ -721,20 +742,31 @@ function writtenFileFor(files: readonly string[], children: React.ReactNode): st
 }
 
 function inlineCodePath(children: React.ReactNode): string | null {
-    if (typeof children !== 'string') return null;
-    const text = children.trim();
-    return WIN_PATH_ONLY_RE.test(text) ? text : null;
+    return typeof children === 'string' ? filePathOfCodeSpan(children) : null;
+}
+
+// The open route's own 403 for a path outside the home folder; its other 403s carry their own sentence.
+const OUTSIDE_HOME_DETAIL = /under user home directory/i;
+
+function openPathError(err: unknown, path: string, t: Translate): string {
+    if (err instanceof ApiError && err.httpStatus === 403 && OUTSIDE_HOME_DETAIL.test(err.detail)) return t('msg.openPathOutsideHome', { path });
+    if (err instanceof ApiError && err.httpStatus === 404) return t('msg.openPathGone', { path });
+    return t('sp.couldntOpen', { name: path, error: requestErrorParam(err) });
 }
 
 function FilePathLink({ path, label }: { path: string; label?: string }) {
     const t = useT();
+    const [error, setError] = useState<string | null>(null);
     const handleClick = (e: React.MouseEvent) => {
         e.preventDefault();
+        setError(null);
         api.openFileOrFolder(path).catch((err) => {
             log.ui.error('Failed to open path', err);
+            setError(openPathError(err, path, t));
         });
     };
     return (
+        <>
         <span
             className="file-path-link"
             dir="ltr"
@@ -747,6 +779,8 @@ function FilePathLink({ path, label }: { path: string; label?: string }) {
             <FolderOpen size={12} className="file-path-icon" />
             {label ?? path}
         </span>
+        {error && <span className="file-path-error" role="alert" dir="auto">{error}</span>}
+        </>
     );
 }
 
@@ -775,13 +809,16 @@ function linkifyFilePaths(text: string): React.ReactNode {
 
 /** The library's documents, as citations in an answer can name them. */
 const CitationContext = createContext<CitationIndex>(buildCitationIndex([]));
+/** The chat the answer belongs to, which a citation names to open its document. */
+const CitationChatContext = createContext<string | null>(null);
 
 /** A cited library document; opens at `page` (the first page cited after it, when there is one). */
 function CitationLink({ doc, page, t }: { doc: CitedDoc; page?: number; t: Translate }) {
+    const sessionId = useContext(CitationChatContext);
     return (
         <a
             className="citation-link"
-            href={api.documentFileUrl(doc.id, page)}
+            href={api.documentFileUrl(doc.id, sessionId, page)}
             target="_blank"
             rel="noopener noreferrer"
             dir="ltr"
@@ -796,10 +833,11 @@ function CitationLink({ doc, page, t }: { doc: CitedDoc; page?: number; t: Trans
 }
 
 function PageLink({ doc, page, label, t }: { doc: CitedDoc; page: number; label: string; t: Translate }) {
+    const sessionId = useContext(CitationChatContext);
     return (
         <a
             className="citation-page"
-            href={api.documentFileUrl(doc.id, page)}
+            href={api.documentFileUrl(doc.id, sessionId, page)}
             target="_blank"
             rel="noopener noreferrer"
             title={t('citation.openPage', { page })}
@@ -902,7 +940,7 @@ function InlineCode({ className: _className, children, node: _node, ...props }: 
     const doc = inlineCodeDoc(index, children);
     if (doc) return <CitationLink doc={doc} t={t} />;
     const path = inlineCodePath(children);
-    if (path) return <FilePathLink path={path} />;
+    if (path) return <FilePathLink path={path} label={String(children).trim()} />;
     const written = writtenFileFor(writtenFiles, children);
     if (written) return <FilePathLink path={written} label={String(children).trim()} />;
     return (
@@ -1004,17 +1042,18 @@ const MARKDOWN_COMPONENTS: Components = {
         return <hr className="md-hr" />;
     },
     // Table cells set no dir: the table's dir="auto" skips any cell that has its own.
-    td({ children }) {
-        return <td><Linkified>{children}</Linkified></td>;
+    // The markdown's own alignment arrives as `style`, a numbers column as `className`.
+    td({ children, className, style }) {
+        return <td className={className} style={style}><Linkified>{children}</Linkified></td>;
     },
-    th({ children }) {
-        return <th><Linkified>{children}</Linkified></th>;
+    th({ children, className, style }) {
+        return <th className={className} style={style}><Linkified>{children}</Linkified></th>;
     },
 };
 
 const NO_WRITTEN_FILES: readonly string[] = [];
 
-export function RenderedContent({ content, showCursor, isStreaming = false, writtenFiles = NO_WRITTEN_FILES }: { content: string; showCursor?: boolean; isStreaming?: boolean; writtenFiles?: readonly string[] }) {
+export function RenderedContent({ content, sessionId = null, showCursor, isStreaming = false, writtenFiles = NO_WRITTEN_FILES }: { content: string; sessionId?: string | null; showCursor?: boolean; isStreaming?: boolean; writtenFiles?: readonly string[] }) {
     const documents = useChatStore((s) => s.documents);
     const citations = useMemo(() => buildCitationIndex(documents), [documents]);
     if (!content && !showCursor) return null;
@@ -1023,10 +1062,11 @@ export function RenderedContent({ content, showCursor, isStreaming = false, writ
     return (
         <StreamingContext.Provider value={isStreaming}>
         <CitationContext.Provider value={citations}>
+        <CitationChatContext.Provider value={sessionId}>
         <WrittenFilesContext.Provider value={writtenFiles}>
         <div className="md-content">
             <ReactMarkdown
-                remarkPlugins={[remarkGfm, remarkWindowsPaths, remarkSoftBreaks]}
+                remarkPlugins={[remarkGfm, remarkNumericColumns, remarkWindowsPaths, remarkSoftBreaks]}
                 disallowedElements={[...SAFE_DISALLOWED_ELEMENTS]}
                 urlTransform={safeUrlTransform}
                 components={MARKDOWN_COMPONENTS}
@@ -1036,6 +1076,7 @@ export function RenderedContent({ content, showCursor, isStreaming = false, writ
             {showCursor && <span className="cursor" />}
         </div>
         </WrittenFilesContext.Provider>
+        </CitationChatContext.Provider>
         </CitationContext.Provider>
         </StreamingContext.Provider>
     );

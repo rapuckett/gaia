@@ -4,7 +4,7 @@
 /** Permission-prompt wording and consent rules, with no store, so the phone app can import them. */
 
 import type { GaiaNotification } from '../types/agent';
-import { isMessageKey, ref, type MessageKey } from '../i18n/registry';
+import { isMessageKey, ref, type MessageKey, type Say } from '../i18n/registry';
 import { tEn, type Translate } from '../i18n/translator';
 
 /** These decisions apply to one displayed snapshot or code scope, never a tool name. */
@@ -72,34 +72,58 @@ export function permissionPromptText(
   if (n.tool === PROJECT_TRUST_TOOL) {
     return { heading: t('prompt.trust.title'), question: t('prompt.trust.ask') };
   }
-  const tool = toolAction(n, t) ?? mark(n.toolLabel ?? n.tool ?? '');
+  // The action fills each half of the sentence in its own language, so Arabic never lands in the English gloss.
+  const tool = (say: Say) => toolAction(n, say) ?? mark(n.toolLabel ?? n.tool ?? '');
   const plain = PLAIN_TITLES[n.tool ?? ''];
   return {
-    heading: plain ? t(plain) : t(n.toolLabel ? 'prompt.title.tool' : 'prompt.title.toolId', { tool }),
-    question: t('prompt.needsOk', { tool }),
+    heading: plain
+      ? t(plain)
+      : t.compose((say) => say(n.toolLabel ? 'prompt.title.tool' : 'prompt.title.toolId', { tool: tool(say) })),
+    question: t.compose((say) => say('prompt.needsOk', { tool: tool(say) })),
   };
 }
 
 /** The call in the UI language ("writing file"), for a tool whose activity label is translated; the backend's own label is English. */
-function toolAction(n: GaiaNotification, t: Translate): string | null {
+function toolAction(n: GaiaNotification, say: Say): string | null {
   const key = `tool.${n.tool}.active`;
   if (!n.toolLabel || !isMessageKey(key)) return null;
-  const label = t.bare(key as MessageKey);
+  const label = say(key as MessageKey);
   return label.charAt(0).toLowerCase() + label.slice(1);
 }
 
+/** The scope of a folder grant shared by writes, edits and renames. */
+const FILE_CHANGE_SCOPE = 'changes to files in ';
+
 /**
  * What an "always allow" answer covers, in the UI language. The backend words
- * its scope in English (`write_file on notes.txt`, `write_file on files in /x`);
+ * its scope in English (`write_file on notes.txt`, `changes to files in /x`);
  * null when the scope isn't one of those, and the caller keeps the backend's text.
  */
 export function alwaysScopeText(n: GaiaNotification, t: Translate): string | null {
-  const action = toolAction(n, t);
+  return alwaysScopeWith(n, (key, params) => t.bare(key, params));
+}
+
+/** `alwaysScopeText` in the language `say` writes, for a line built inside `t.compose`. */
+export function alwaysScopeWith(n: GaiaNotification, say: Say, wrapName: (name: string) => string = (name) => name): string | null {
+  if (n.alwaysScope?.startsWith(FILE_CHANGE_SCOPE)) {
+    return say('prompt.always.changes', { folder: wrapName(n.alwaysScope.slice(FILE_CHANGE_SCOPE.length)) });
+  }
+  const action = toolAction(n, say);
   const prefix = `${n.tool} `;
   if (!action || !n.alwaysScope?.startsWith(prefix)) return null;
   const rest = n.alwaysScope.slice(prefix.length);
-  if (rest.startsWith('on files in ')) return t.bare('prompt.always.folder', { action, folder: rest.slice('on files in '.length) });
-  return t.bare('prompt.always.file', { action, name: rest.startsWith('on ') ? rest.slice(3) : rest });
+  if (rest.startsWith('on files in ')) return say('prompt.always.folder', { action, folder: wrapName(rest.slice('on files in '.length)) });
+  return say('prompt.always.file', { action, name: wrapName(rest.startsWith('on ') ? rest.slice(3) : rest) });
+}
+
+/**
+ * The path in the backend's "outside this chat's folders" risk note, else null.
+ * The backend sends only that English sentence (`call_risk` has no structured flag), so the
+ * phone matches it and words the note from the catalog.
+ */
+export function outsideFolderPath(note: string): string | null {
+  const m = /^([^]+) is outside this chat's folders\. Allowing this also lets GAIA use that file for the rest of the chat\.$/.exec(note);
+  return m ? m[1] : null;
 }
 
 /** `C:\A\b.txt` and `c:/a/b.txt/` compare equal. Picks card wording only; too loose for an access check. */
@@ -206,9 +230,10 @@ export function splitCommandSummary(summary: string): { command: string; folder:
 
 /** A grant's folder by its name alone, for a button; the full path stays in its tooltip. */
 export function shortScope(scope: string): string {
-  return scope.replace(/(\s)((?:[A-Za-z]:)?[\\/][^]*)$/, (_, space: string, path: string) => {
+  // A translated scope wraps its path in direction isolates (U+2068 ... U+2069).
+  return scope.replace(/(\s\u2068?)((?:[A-Za-z]:)?[\\/][^\u2069]*)(\u2069?)$/, (_, lead: string, path: string, close: string) => {
     const name = path.split(/[\\/]/).filter(Boolean).pop();
-    return name ? `${space}${name}` : `${space}${path}`;
+    return `${lead}${name ?? path}${close}`;
   });
 }
 

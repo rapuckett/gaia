@@ -188,7 +188,10 @@ def _build(name, prompt, say, every, at, check, alert, quiet, now) -> store.Auto
         )
     seconds = parse_interval(every)
     if say:
-        raise store.AutomationError("--say is for a one-time reminder (--at).")
+        raise store.AutomationError(
+            "--say is for a one-time reminder (--at alone). To repeat a reminder, "
+            'use --prompt instead: --every 1d --at 9am --prompt "Remind the user: …".'
+        )
     if not prompt:
         raise store.AutomationError("--prompt is empty; say what GAIA should do.")
     if check and alert:
@@ -269,7 +272,10 @@ def run_edit(
             changes["prompt"] = prompt.strip()
         if say is not None:
             if item.repeats or (not say.strip() and not item.prompt):
-                raise store.AutomationError("--say is a one-time reminder's text.")
+                raise store.AutomationError(
+                    "--say is a one-time reminder's text. To change what a repeating "
+                    "automation says, use --prompt."
+                )
             changes["say"] = say.strip()
         if every:
             if not item.repeats:

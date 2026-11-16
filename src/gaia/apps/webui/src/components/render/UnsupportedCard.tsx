@@ -2,11 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import { useT } from '../../i18n/useT';
-
-/** Above this length (JSON.stringify(data).length), skip the pretty-printed
- *  dump and show a size notice instead — a malformed/huge payload must not
- *  freeze the tab rendering a multi-megabyte <pre>. */
-const MAX_PAYLOAD_JSON_LENGTH = 2_000_000;
+import { unsupportedView } from '../../utils/renderCards.core';
 
 export interface UnsupportedCardProps {
     /** 'unknown' = no card registered for this render key; 'invalid' = the
@@ -27,21 +23,8 @@ export interface UnsupportedCardProps {
  */
 export function UnsupportedCard({ variant, render, data }: UnsupportedCardProps) {
     const t = useT();
-    let rawJson: string;
-    try {
-        rawJson = JSON.stringify(data);
-    } catch {
-        rawJson = String(data);
-    }
-    const tooLarge = rawJson.length > MAX_PAYLOAD_JSON_LENGTH;
-    let pretty = rawJson;
-    if (!tooLarge) {
-        try {
-            pretty = JSON.stringify(data, null, 2);
-        } catch {
-            pretty = rawJson;
-        }
-    }
+    const { pretty, bytes } = unsupportedView(variant, data);
+    const tooLarge = pretty === null;
 
     const message = t(variant === 'unknown' ? 'cards.unsupported.unknown' : 'cards.unsupported.invalid', { render });
 
@@ -52,7 +35,7 @@ export function UnsupportedCard({ variant, render, data }: UnsupportedCardProps)
                 <summary>{t('cards.unsupported.raw')}</summary>
                 {tooLarge ? (
                     <p className="render-unsupported__too-large">
-                        {t('cards.unsupported.tooLarge', { size: String(rawJson.length) })}
+                        {t('cards.unsupported.tooLarge', { size: String(bytes) })}
                     </p>
                 ) : (
                     <pre className="render-unsupported__json">{pretty}</pre>

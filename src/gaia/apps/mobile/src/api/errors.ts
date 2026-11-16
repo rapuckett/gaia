@@ -21,11 +21,20 @@ export class GaiaConfigError extends GaiaError {}
 export class GaiaApiError extends GaiaError {
     readonly status: number;
     readonly detail: string;
+    /** The error's `detail` when GAIA sent an object, such as a 409 asking to be confirmed. */
+    readonly body: Record<string, unknown> | null;
 
-    constructor(status: number, detail: string, messageKey: MessageKey = 'mobileApp.error.http', params?: Params) {
+    constructor(
+        status: number,
+        detail: string,
+        messageKey: MessageKey = 'mobileApp.error.http',
+        params?: Params,
+        body: Record<string, unknown> | null = null,
+    ) {
         super(messageKey, params ?? { status, detail });
         this.status = status;
         this.detail = detail;
+        this.body = body;
     }
 }
 
@@ -39,6 +48,29 @@ export class GaiaNetworkError extends GaiaError {
     constructor(url: string, cause: unknown) {
         const reason = cause instanceof Error ? cause.message : String(cause);
         super('mobileApp.error.network', { url, reason }, { cause });
+    }
+}
+
+/** A paired PC's certificate doesn't match the pin this phone paired with: a hard failure, never "trust anyway". */
+export class GaiaPinMismatchError extends GaiaError {
+    constructor(options?: { cause?: unknown }) {
+        super('mobileApp.pairing.pinMismatch', {}, options);
+    }
+}
+
+/** A file upload to a paired PC this app can't send: the app build predates uploads, or the file isn't on disk. */
+export class GaiaUploadUnsupportedError extends GaiaError {
+    readonly code = 'unsupported_body';
+
+    constructor() {
+        super('mobileApp.pairing.uploadUnsupported', {});
+    }
+}
+
+/** A production build has no pinned transport, and the app won't send a request to the PC without it. */
+export class GaiaTransportMissingError extends GaiaError {
+    constructor() {
+        super('mobileApp.pairing.transportMissing', {});
     }
 }
 
@@ -73,6 +105,13 @@ export class GaiaStreamStalledError extends GaiaStreamError {
 export class GaiaStreamDroppedError extends GaiaStreamError {
     constructor(cause: unknown) {
         super('mobileApp.error.streamBroke', {}, { cause });
+    }
+}
+
+/** The last re-attach never reached GAIA, so nothing there is still answering. */
+export class GaiaUnreachableError extends GaiaError {
+    constructor(cause: unknown) {
+        super('chatError.gaiaStopped', {}, { cause });
     }
 }
 
@@ -112,5 +151,15 @@ export function parseErrorDetail(errorText: string): string {
     } catch {
         // Not JSON (proxy HTML, empty body): the raw text is the useful part.
         return errorText;
+    }
+}
+
+/** `detail` when GAIA sent an object (a 409 asking to be confirmed), else null. */
+export function parseErrorBody(errorText: string): Record<string, unknown> | null {
+    try {
+        const parsed: unknown = JSON.parse(errorText).detail;
+        return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : null;
+    } catch {
+        return null;
     }
 }

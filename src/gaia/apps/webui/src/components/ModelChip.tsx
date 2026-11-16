@@ -16,6 +16,7 @@ import { InfoBubble } from './InfoBubble';
 import { formatPrice } from './settings/cloudPrice';
 import { useT, type Translate } from '../i18n/useT';
 import { providerName, providerNotice } from '../utils/providerText';
+import { needsCloudConsent } from '../utils/cloudConsent.core';
 import { MarkedText, markLtr } from './MarkedText';
 import type { ProviderInfo, ProviderModel } from '../types';
 
@@ -292,7 +293,7 @@ export function ModelChip() {
 
     /** Switch to *model*; returns why it failed, or null. */
     const choose = useCallback(async (model: string, provider: ProviderInfo): Promise<string | null> => {
-        if (provider.remote && !active?.remote && pendingCloud?.model !== model) {
+        if (needsCloudConsent(provider, active, model, pendingCloud?.model)) {
             setPendingCloud({ model, provider });
             return null;
         }
@@ -335,7 +336,7 @@ export function ModelChip() {
         if (!m) {
             if (!missedPoll()) return;
             setPickAfterDownload(null);
-            setAutoSwitchError(t('modelMenu.switchMissing', { name: displayModelName(model) }));
+            setAutoSwitchError(t('modelMenu.modelGone', { model: displayModelName(model) }));
             return;
         }
         if (isDownloading(m)) {
@@ -345,7 +346,7 @@ export function ModelChip() {
         const progress = m.download_progress;
         if (progress?.state === 'error') {
             setPickAfterDownload(null);
-            setAutoSwitchError(t('modelMenu.downloadFailed', { name: displayModelName(model), reason: progress.message ?? t.bare('modelMenu.noReason') }));
+            setAutoSwitchError(t('modelMenu.downloadFailed', { model: displayModelName(model), message: progress.message ?? t.bare('modelMenu.noReason') }));
             return;
         }
         // The model list can lag the finished download by a poll; "complete" already means downloaded.
@@ -357,7 +358,7 @@ export function ModelChip() {
         }
         setPickAfterDownload(null);
         void choose(model, provider).then((failed) => {
-            if (failed) setAutoSwitchError(t('modelMenu.switchFailedAfterDownload', { name: displayModelName(model), reason: failed }));
+            if (failed) setAutoSwitchError(t('modelMenu.switchAfterFailed', { model: displayModelName(model), reason: failed }));
         });
     }, [groups, pickAfterDownload, requestsPending, choose, t]);
 
@@ -400,11 +401,11 @@ export function ModelChip() {
         : queueError
         ? queueError
         : queued
-            ? t('modelMenu.usedNextMessage', { name: displayModelName(queued) })
+            ? t('modelMenu.usedNext', { name: displayModelName(queued) })
             : active?.config_error
                 ? active.config_error
                 : notDownloaded
-                    ? t('modelMenu.notDownloadedYet', { name })
+                    ? t('modelMenu.notDownloadedTitle', { name })
                     : !place
                         ? UNKNOWN_PLACE_TITLE
                         // The server writes the model name as Markdown code; a tooltip shows backticks literally.

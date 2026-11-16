@@ -2,11 +2,13 @@
 // SPDX-License-Identifier: MIT
 
 import { Redirect, useLocalSearchParams } from 'expo-router';
+import { devGalleryEnabled } from '@/features/dev/devGallery';
 import { useMemo, useState } from 'react';
 
 import type { GaiaNotification } from '@webui/types/agent';
 import { PATH_ACCESS_TOOL, PROJECT_TRUST_TOOL } from '@webui/utils/permissionPrompts.core';
 
+import { UndoScene } from '@/features/settings/panes/UndoScene';
 import { PermissionPrompt, type PermissionPromptProps } from '@/features/chat/permission/PermissionPrompt';
 import { Screen, Stack, Text, UIProvider } from '@/ui';
 
@@ -78,6 +80,25 @@ function useFixtures(): Fixture[] {
                     }),
                 },
             },
+            {
+                id: 'edit',
+                label: 'File edit outside the chat folders',
+                props: {
+                    prompt: prompt('edit', {
+                        tool: 'edit_file',
+                        toolLabel: 'editing file',
+                        toolArgs: {
+                            file_path: '~/Projects/notes/plan.txt',
+                            old_content: 'line one\nline two\nline three\n',
+                            new_content: 'line one\nline two, edited with a much longer line that has to scroll sideways inside its box\nline three\nan added line\n',
+                            _risk_note:
+                                "~/Projects/notes/plan.txt is outside this chat's folders. Allowing this also lets GAIA use that file for the rest of the chat.",
+                        },
+                        summary: '~/Projects/notes/plan.txt',
+                        alwaysScope: 'edit_file on plan.txt',
+                    }),
+                },
+            },
             { id: 'repeats', label: 'Repeats 2', props: { prompt: WRITE, repeats: 2 } },
             { id: 'busy', label: 'Busy', props: { prompt: WRITE, busy: true } },
             { id: 'error', label: 'Error', props: { prompt: WRITE, error: 'GAIA could not reach the server. Check the connection and try again.' } },
@@ -104,7 +125,8 @@ export default function PermissionGalleryRoute() {
     const { only } = useLocalSearchParams<{ only?: string }>();
     const fixtures = useFixtures();
     const [last, setLast] = useState('none');
-    if (!__DEV__) return <Redirect href="/" />;
+    if (!devGalleryEnabled()) return <Redirect href="/" />;
+    if (only === 'undo') return <UndoScene />;
     const shown = only ? fixtures.filter((f) => f.id === only) : fixtures;
     return (
         <UIProvider>

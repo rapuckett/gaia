@@ -88,7 +88,8 @@ class FakeLemonade:
             return _Resp(200, {"all_models_loaded": []})
         if (method, path) == ("POST", "install"):
             self.cloud.setdefault(json["provider"], {"name": json["provider"]})
-            self.cloud[json["provider"]]["base_url"] = json["base_url"]
+            for field in ("base_url", "auth_header_name", "auth_header_prefix"):
+                self.cloud[json["provider"]][field] = json[field]
             return _Resp(200, {"status": "ok"})
         if (method, path) == ("POST", "cloud/auth"):
             entry = self.cloud.setdefault(json["provider"], {"name": json["provider"]})
@@ -234,17 +235,23 @@ def test_unreachable_lemonade_names_the_app_fix_not_a_command(
     assert "gaia " not in error
 
 
-def test_unreachable_user_run_lemonade_gives_this_machines_start_hint(
+def test_unreachable_user_run_lemonade_is_theirs_to_start_with_no_command(
     client, lemonade, keys, monkeypatch
 ):
+    """A PC with no Lemonade of its own used to read "not installed. Run `gaia init`"."""
     from gaia.llm import lemonade_launcher
+    from gaia.llm.surface_hints import APP_OTHER_SERVER_START_HINT
 
-    hint = lemonade_launcher.StartHint(instruction="Start Lemonade from its tray icon.")
+    hint = lemonade_launcher.StartHint(
+        instruction="Lemonade Server is not installed. Run `gaia init` to install it."
+    )
     monkeypatch.setattr(lemonade_launcher, "gaia_runs_lemonade", lambda *a: False)
-    monkeypatch.setattr(lemonade_launcher, "describe_start_hint", lambda: hint)
+    monkeypatch.setattr(lemonade_launcher, "describe_start_hint", lambda *a, **k: hint)
     lemonade.down = True
     error = client.get("/api/providers").json()["lemonade_error"]
-    assert error.endswith(hint.instruction)
+    assert error.endswith(f"{APP_OTHER_SERVER_START_HINT}, then try again.")
+    assert "not installed" not in error
+    assert "`" not in error and "gaia init" not in error
 
 
 def test_list_does_not_repeat_a_provider_when_a_later_lookup_fails(
@@ -763,6 +770,37 @@ def test_active_names_a_cloud_model_only_lemonade_lists_as_cloud(
     assert body["display_name"] == "big-model"
 
 
+def test_active_names_hybrid_as_a_cloud_model(client, lemonade, keys, db):
+    db.set_setting("custom_model", "hybrid")
+
+    body = client.get("/api/providers/active").json()
+
+    assert body["model"] == "hybrid"
+    assert body["remote"] is True
+    assert body["inference_remote"] is True
+    assert body["downloaded"] is None
+    assert body["provider_name"] == "AMD LLM Gateway"
+    assert body["display_name"] == "Hybrid"
+    assert body["label"] == "Hybrid · AMD LLM Gateway"
+
+
+def test_active_reports_unusable_hybrid_settings(
+    client, lemonade, keys, db, monkeypatch
+):
+    from gaia.llm import hybrid
+
+    def broken(*_a, **_k):
+        raise hybrid.HybridConfigError("hybrid_cheap_model must name a model")
+
+    monkeypatch.setattr(hybrid.HybridSettings, "load", classmethod(broken))
+    db.set_setting("custom_model", "hybrid")
+
+    body = client.get("/api/providers/active").json()
+
+    assert body["model"] is None
+    assert "hybrid_cheap_model" in body["config_error"]
+
+
 def test_active_reads_the_catalog_to_name_a_cloud_model_on_a_cold_start(
     client, lemonade, keys, db, monkeypatch
 ):
@@ -819,6 +857,34 @@ def test_active_restores_the_last_model_once_per_run(client, lemonade, keys, db)
     again = client.get("/api/providers/active").json()
     assert again["restore"]["status"] == "restored"
     assert len(lemonade.calls) == calls
+
+
+def test_a_model_picked_elsewhere_is_restored_as_the_pick(client, lemonade, keys, db):
+    """Not as a Custom model ID, which Settings would then show in that field."""
+    from gaia.ui.routers.providers import PICKED_MODEL_SETTING, custom_model_override
+
+    model = "fireworks.accounts/fireworks/models/glm-5p3-flash"
+    db.set_setting(PICKED_MODEL_SETTING, "Qwen3-4B-GGUF")
+    db.set_setting("custom_model", "Qwen3-4B-GGUF")
+    _write_config({"last_model": model})
+    lemonade.models = _cloud_models()
+
+    assert client.get("/api/providers/active").json()["model"] == model
+    assert db.get_setting(PICKED_MODEL_SETTING) == model
+    assert custom_model_override(db) is None
+
+
+def test_a_restore_keeps_a_custom_model_id_in_force_as_one(client, lemonade, keys, db):
+    from gaia.ui.routers.providers import PICKED_MODEL_SETTING
+
+    model = "fireworks.accounts/fireworks/models/glm-5p3-flash"
+    db.set_setting(PICKED_MODEL_SETTING, "Qwen3-4B-GGUF")
+    db.set_setting("custom_model", "Phi-4-mini-instruct-GGUF")
+    _write_config({"last_model": model})
+    lemonade.models = _cloud_models()
+
+    client.get("/api/providers/active")
+    assert db.get_setting(PICKED_MODEL_SETTING) == "Qwen3-4B-GGUF"
 
 
 def test_active_never_switches_model_when_the_saved_one_cannot_run(
@@ -1095,6 +1161,118 @@ def test_connect_ignores_gateway_fields_for_fireworks(client, lemonade, keys):
     )
 
 
+_CUSTOM_GATEWAY = {
+    "name": "amd",
+    "base_url": "https://gw.example/v1",
+    "auth_header_name": "X-Key",
+    "auth_header_prefix": "Token ",
+    "runtime_key_set": True,
+    "models_discovered": True,
+}
+
+
+def test_a_keyless_reconnect_keeps_a_custom_gateway(client, lemonade, keys):
+    lemonade.cloud["amd"] = dict(_CUSTOM_GATEWAY)
+    resp = client.post("/api/providers/amd/connect", json={})
+    assert resp.status_code == 200, resp.text
+    payload = lemonade.call("POST", "install")["json"]
+    assert payload["base_url"] == "https://gw.example/v1"
+    assert payload["auth_header_name"] == "X-Key"
+    assert payload["auth_header_prefix"] == "Token "
+
+
+@pytest.mark.parametrize(
+    "fields",
+    [
+        {"base_url": "https://attacker.example/v1"},
+        {"auth_header_name": "X-Leak"},
+        {"base_url": "https://attacker.example/v1", "auth_header_name": "X-Leak"},
+        {"auth_header_prefix": ""},
+    ],
+)
+@pytest.mark.parametrize(
+    "away", [{"X-Forwarded-For": "203.0.113.9"}, {"X-Forwarded-Proto": "https"}]
+)
+def test_only_the_pc_may_move_where_the_saved_key_goes(
+    client, lemonade, keys, fields, away
+):
+    lemonade.cloud["amd"] = dict(_CUSTOM_GATEWAY)
+    resp = client.post("/api/providers/amd/connect", json=fields, headers=away)
+    assert resp.status_code == 403
+    assert "on the PC running GAIA" in resp.json()["detail"]
+    assert lemonade.calls == []
+    assert lemonade.cloud["amd"] == _CUSTOM_GATEWAY
+    assert keys["ensure"] == []
+
+
+def test_the_pc_may_move_a_saved_key_to_another_gateway(client, lemonade, keys):
+    lemonade.cloud["amd"] = dict(_CUSTOM_GATEWAY)
+    resp = client.post(
+        "/api/providers/amd/connect",
+        json={"base_url": "https://gw2.example/v1", "auth_header_name": "X-Other"},
+    )
+    assert resp.status_code == 200, resp.text
+    assert lemonade.cloud["amd"]["base_url"] == "https://gw2.example/v1"
+    assert lemonade.cloud["amd"]["auth_header_name"] == "X-Other"
+    assert lemonade.cloud["amd"]["auth_header_prefix"] == "Token "
+
+
+def test_provider_summaries_read_only_and_carry_no_secret(client, lemonade, keys):
+    lemonade.cloud["amd"] = dict(_CUSTOM_GATEWAY)
+    keys["stored"]["fireworks"] = KEY
+    resp = client.get("/api/providers/list", headers={"X-Forwarded-For": "203.0.113.9"})
+    assert resp.status_code == 200, resp.text
+    assert resp.json() == {
+        "providers": [
+            {
+                "id": "local",
+                "name": "Local",
+                "remote": False,
+                "privacy_notice": providers._PRIVACY["local"],
+                "configured": True,
+                "blocked": False,
+                "network": None,
+            },
+            {
+                "id": "fireworks",
+                "name": "Fireworks AI",
+                "remote": True,
+                "privacy_notice": providers._PRIVACY["fireworks"],
+                "configured": False,
+                "blocked": False,
+                "network": None,
+            },
+            {
+                "id": "amd",
+                "name": "AMD LLM Gateway",
+                "remote": True,
+                "privacy_notice": providers._PRIVACY["amd"],
+                "configured": True,
+                "blocked": False,
+                "network": {"reachable": True},
+            },
+        ],
+        "lemonade_error": None,
+    }
+    assert lemonade.paths() == ["system-info", "system-info"]
+    assert keys["ensure"] == []
+    assert KEY not in resp.text and "gw.example" not in resp.text
+
+
+def test_provider_summaries_say_an_unreachable_gateway_without_its_address(
+    client, lemonade, keys, reach
+):
+    lemonade.cloud["amd"] = dict(_CUSTOM_GATEWAY)
+    reach["error"] = _offline()
+    resp = client.get("/api/providers/list", headers={"X-Forwarded-For": "203.0.113.9"})
+    assert resp.status_code == 200, resp.text
+    by_id = {p["id"]: p for p in resp.json()["providers"]}
+    assert by_id["amd"]["network"] == {"reachable": False}
+    assert by_id["local"]["network"] is None
+    assert by_id["fireworks"]["network"] is None
+    assert "llm-api.amd.com" not in resp.text and "gw.example" not in resp.text
+
+
 def test_connect_reports_a_key_the_store_did_not_keep(client, lemonade, keys):
     keys["remember_error"] = "The OS credential store did not keep the key"
     resp = client.post("/api/providers/fireworks/connect", json={"api_key": KEY})
@@ -1325,6 +1503,68 @@ def test_connect_old_lemonade_409(client, lemonade, keys):
     assert resp.status_code == 409
     assert "oldest version GAIA supports" in resp.json()["detail"]
     assert "cloud/auth" not in lemonade.paths()
+
+
+def test_connect_unregistered_provider_names_settings_not_a_command(
+    client, lemonade, keys
+):
+    lemonade.answers[("POST", "cloud/auth")] = (
+        404,
+        {
+            "error": {
+                "message": (
+                    "Cloud provider 'fireworks' is not installed. Call POST "
+                    "/v1/install with backend=cloud, provider, and base_url first."
+                ),
+                "type": "invalid_request",
+            }
+        },
+    )
+    resp = client.post("/api/providers/fireworks/connect", json={"api_key": KEY})
+    assert resp.status_code == 409, resp.text
+    detail = resp.json()["detail"]
+    assert "no cloud provider registered" in detail
+    assert "Settings > Model" in detail
+    assert "connect it again" in detail
+    assert "older than" not in detail
+    assert "gaia gateway install" not in detail
+    assert "TUI" not in detail
+    assert "/gateway" not in detail
+
+
+def test_connect_install_404_with_the_marker_keeps_the_version_hint(
+    client, lemonade, keys
+):
+    lemonade.answers[("POST", "install")] = (
+        404,
+        {
+            "error": {
+                "message": (
+                    "Cloud provider 'fireworks' is not installed. Call POST "
+                    "/v1/install with backend=cloud, provider, and base_url first."
+                ),
+                "type": "invalid_request",
+            }
+        },
+    )
+    resp = client.post("/api/providers/fireworks/connect", json={"api_key": KEY})
+    assert resp.status_code == 409, resp.text
+    detail = resp.json()["detail"]
+    assert "oldest version GAIA supports" in detail
+    assert "no cloud provider registered" not in detail
+    assert "cloud/auth" not in lemonade.paths()
+
+
+def test_cloud_error_other_404_keeps_lemonades_detail():
+    err = providers._cloud_error(
+        "fireworks",
+        404,
+        {"error": {"message": "provider is misconfigured", "type": "invalid_request"}},
+    )
+    assert err.status == 502
+    assert "provider is misconfigured" in str(err)
+    assert "oldest version GAIA supports" not in str(err)
+    assert "no cloud provider registered" not in str(err)
 
 
 def test_connect_never_echoes_lemonade_errors_about_the_key(
@@ -1813,7 +2053,9 @@ def test_picking_a_local_model_starts_loading_it(
 
     asked = []
     monkeypatch.setattr(
-        warmup, "request_warm_up", lambda reason, fresh=False: asked.append(fresh)
+        warmup,
+        "request_warm_up",
+        lambda reason, fresh=False, model=None: asked.append((fresh, model)),
     )
     lemonade.models = _CATALOG
     assert (
@@ -1822,7 +2064,7 @@ def test_picking_a_local_model_starts_loading_it(
         ).status_code
         == 200
     )
-    assert asked == [True]
+    assert asked == [(True, "Qwen3-4B-GGUF")]
 
 
 def test_picking_a_cloud_model_loads_nothing_here(
@@ -1832,7 +2074,9 @@ def test_picking_a_cloud_model_loads_nothing_here(
 
     asked = []
     monkeypatch.setattr(
-        warmup, "request_warm_up", lambda reason, fresh=False: asked.append(fresh)
+        warmup,
+        "request_warm_up",
+        lambda reason, fresh=False, model=None: asked.append(fresh),
     )
     lemonade.models = _CATALOG
     resp = client.post("/api/providers/select", json={"model": "fireworks.aa-model"})
@@ -2302,8 +2546,17 @@ def test_add_twice_is_refused(client, custom_server, hf_web, custom_config):
 
 
 def test_remove_deletes_by_the_name_lemonade_lists(
-    client, custom_server, hf_web, custom_config, db
+    client, custom_server, hf_web, custom_config, db, monkeypatch
 ):
+    from gaia.llm.lemonade_client import DEFAULT_MODEL_NAME
+    from gaia.ui import warmup
+
+    asked = []
+    monkeypatch.setattr(
+        warmup,
+        "request_warm_up",
+        lambda reason, fresh=False, model=None: asked.append((fresh, model)),
+    )
     client.post("/api/providers/local/custom", json={"url": CUSTOM_URL})
     custom_server.models = [
         {"id": "Tiny-Q4_K_M-GGUF", "checkpoint": "someone/else:x.gguf"},
@@ -2323,6 +2576,54 @@ def test_remove_deletes_by_the_name_lemonade_lists(
     }
     assert cm.CONFIG_KEY not in json.loads(custom_config.read_text())
     assert db.get_setting("custom_model") is None
+    # Chat is back on the default, which loads now rather than with a message.
+    assert asked == [(True, DEFAULT_MODEL_NAME)]
+
+
+def test_removing_the_custom_model_goes_back_to_the_pick_and_loads_it(
+    client, custom_server, hf_web, custom_config, db, monkeypatch
+):
+    """Clearing the field returns to the pick; removing the model did not."""
+    from gaia.ui import warmup
+    from gaia.ui.routers.providers import PICKED_MODEL_SETTING
+
+    asked = []
+    monkeypatch.setattr(
+        warmup,
+        "request_warm_up",
+        lambda reason, fresh=False, model=None: asked.append((fresh, model)),
+    )
+    client.post("/api/providers/local/custom", json={"url": CUSTOM_URL})
+    db.set_setting(PICKED_MODEL_SETTING, "Qwen3-4B-GGUF")
+    db.set_setting("custom_model", "user.Tiny-Q4_K_M-GGUF")
+
+    resp = client.delete("/api/providers/local/custom/user.Tiny-Q4_K_M-GGUF")
+
+    assert resp.status_code == 200, resp.text
+    assert db.get_setting("custom_model") == "Qwen3-4B-GGUF"
+    saved = json.loads(custom_config.read_text())
+    assert saved["last_model"] == "Qwen3-4B-GGUF", "the next start restores the pick"
+    assert asked == [(True, "Qwen3-4B-GGUF")]
+
+
+def test_removing_a_model_that_runs_nowhere_loads_nothing(
+    client, custom_server, hf_web, custom_config, db, monkeypatch
+):
+    from gaia.ui import warmup
+
+    asked = []
+    monkeypatch.setattr(
+        warmup,
+        "request_warm_up",
+        lambda reason, fresh=False, model=None: asked.append(model),
+    )
+    client.post("/api/providers/local/custom", json={"url": CUSTOM_URL})
+    db.set_setting("custom_model", "Qwen3-4B-GGUF")
+
+    client.delete("/api/providers/local/custom/user.Tiny-Q4_K_M-GGUF")
+
+    assert db.get_setting("custom_model") == "Qwen3-4B-GGUF"
+    assert asked == []
 
 
 def test_remove_before_download_skips_the_server_delete(
@@ -2811,6 +3112,39 @@ def test_local_only_names_a_next_step_when_the_model_list_errors(
     resp = client.post("/api/providers/select", json={"model": _OTHER_CLOUD})
     assert resp.status_code == 503
     detail = resp.json()["detail"]
-    assert "HTTP 500" in detail
-    assert "close GAIA and open it again" in detail
+    assert "model list" in detail
+    assert "Check that the model server is running" in detail
     assert db.get_setting("custom_model") is None
+
+
+# ── A model server that answers, but not with a model list ─────────────────
+
+
+@pytest.mark.parametrize(
+    "body",
+    [{"object": "list", "data": "x"}, {"data": ["Qwen3-4B-GGUF"]}, {"data": None}],
+)
+@pytest.mark.parametrize("provider", ["local", "fireworks"])
+def test_a_malformed_model_list_is_named_not_a_server_error(
+    client, lemonade, keys, body, provider
+):
+    lemonade.answers[("GET", "models?show_all=true")] = (200, body)
+    resp = client.get(f"/api/providers/{provider}/models")
+    assert resp.status_code == 502
+    detail = resp.json()["detail"]
+    assert "model list came back in an unexpected shape" in detail
+    assert "Settings > Advanced > Model server" in detail
+
+
+def test_a_malformed_model_list_ends_a_switch_or_restore_with_one_full_stop(
+    client, lemonade, keys, db
+):
+    _write_config({"last_model": "Qwen3-4B-GGUF"})
+    lemonade.answers[("GET", "models?show_all=true")] = (200, {"data": "x"})
+    restore = client.get("/api/providers/active").json()["restore"]
+    assert restore["status"] == "failed"
+    assert "points at Lemonade. Pick a model to continue." in restore["message"]
+    resp = client.post("/api/providers/select", json={"model": "Qwen3-4B-GGUF"})
+    assert resp.status_code == 409, resp.text
+    assert resp.json()["detail"].endswith("points at Lemonade.")
+    assert ".." not in restore["message"] + resp.json()["detail"]
