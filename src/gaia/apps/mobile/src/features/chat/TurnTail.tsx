@@ -17,6 +17,7 @@ import { stepsFromEvents } from './activity/stepsFromEvents';
 import { AnswerCards } from './cards/RenderCard';
 import { chatErrorText, isModelServerDown } from './chatErrors';
 import { StoppedNote } from './EndingNotes';
+import { LibraryNotices, libraryNoticesFromEvents } from './LibraryNotices';
 import { Markdown } from './markdown/Markdown';
 import { RecordingProgress } from './recording/RecordingProgress';
 import type { TurnTail as Tail } from './tailState';
@@ -36,12 +37,14 @@ export function TurnTail({ tail, line, awaitingUser = false, onTryAgain, onConti
     const t = useT();
     const steps = useMemo(() => stepsFromEvents(tail.events, t), [tail.events, t]);
     const cards = useMemo(() => cardsFromEvents(tail.events), [tail.events]);
+    const libraryNotices = useMemo(() => libraryNoticesFromEvents(tail.events), [tail.events]);
     // A running step row already says what is happening.
     const rowRuns = steps.some((s) => s.active && s.type !== 'status');
     const showLine = tail.live && !rowRuns && (line !== null || !tail.text);
     useAnnounce(showLine ? (line ?? t('msg.thinking')) : null);
     return (
         <Stack gap="sm" paddingX="lg" paddingY="xs" testID="turn-tail">
+            {!tail.live ? <LibraryNotices notices={libraryNotices} /> : null}
             <ActivityTimeline steps={steps} running={tail.live} awaitingUser={awaitingUser} answer={tail.text} />
             {tail.live ? <RecordingProgress events={tail.events} /> : null}
             <AnswerCards cards={cards} />
