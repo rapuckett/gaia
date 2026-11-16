@@ -8,6 +8,7 @@ import { useState } from 'react';
 import { GaiaClientProvider, useSetupPlan, useSetupStatus } from '@/data';
 import { SETUP_SCENES, setupSceneClient } from '@/features/setup/devScenes';
 import { devGalleryEnabled } from '@/features/dev/devGallery';
+import { KeyedScene } from '@/features/dev/KeyedScene';
 import { SetupFooterBar, SetupFooterProvider } from '@/features/setup/SetupFooter';
 import type { SetupStage } from '@/features/setup/flow';
 import type { SetupStepContext } from '@/features/setup/SetupScreen';
@@ -26,32 +27,17 @@ function SceneStep({ stage }: { stage: SetupStage }) {
     return <Step ctx={ctx} />;
 }
 
-/** One setup step on a fake PC; `?step=check|plan|gpu|models|key|download|test|ready&state=<name>` (see SETUP_SCENES), `default` when no state is given. */
-export default function SetupGalleryRoute() {
-    const { step = 'check', state = 'default' } = useLocalSearchParams<{ step?: string; state?: string }>();
-    const found = SETUP_SCENES[`${step}/${state}`];
+type Found = (typeof SETUP_SCENES)[string];
+
+function SetupView({ found }: { found: Found }) {
     const [queryClient] = useState(() => new QueryClient({ defaultOptions: { queries: { retry: false } } }));
     const [client] = useState(() => {
-        if (!found) return null;
         // The plan step opens this screen on arrival, as it does when another step asks for it.
         if (found.screen) usePlanScreenRequest.getState().request({ screen: found.screen, from: 'check' });
         return setupSceneClient(found);
     });
-    if (!devGalleryEnabled()) return <Redirect href="/" />;
-    if (!found || !client) {
-        return (
-            <UIProvider>
-                <Screen scroll>
-                    <Stack gap="sm" padding="lg">
-                        <Text role="title">{`No setup scene "${step}/${state}"`}</Text>
-                        {Object.keys(SETUP_SCENES).map((key) => <Text key={key}>{key}</Text>)}
-                    </Stack>
-                </Screen>
-            </UIProvider>
-        );
-    }
     return (
-        <QueryClientProvider key={`${step}/${state}`} client={queryClient}>
+        <QueryClientProvider client={queryClient}>
             <GaiaClientProvider client={client}>
                 <UIProvider>
                     <ScreenBannerProvider banner={null}>
@@ -67,4 +53,24 @@ export default function SetupGalleryRoute() {
             </GaiaClientProvider>
         </QueryClientProvider>
     );
+}
+
+/** One setup step on a fake PC; `?step=check|plan|gpu|models|key|download|test|ready&state=<name>` (see SETUP_SCENES), `default` when no state is given. */
+export default function SetupGalleryRoute() {
+    const { step = 'check', state = 'default' } = useLocalSearchParams<{ step?: string; state?: string }>();
+    if (!devGalleryEnabled()) return <Redirect href="/" />;
+    const found = SETUP_SCENES[`${step}/${state}`];
+    if (!found) {
+        return (
+            <UIProvider>
+                <Screen scroll>
+                    <Stack gap="sm" padding="lg">
+                        <Text role="title">{`No setup scene "${step}/${state}"`}</Text>
+                        {Object.keys(SETUP_SCENES).map((key) => <Text key={key}>{key}</Text>)}
+                    </Stack>
+                </Screen>
+            </UIProvider>
+        );
+    }
+    return <KeyedScene sceneKey={`${step}/${state}`} scene={SetupView} props={{ found }} />;
 }

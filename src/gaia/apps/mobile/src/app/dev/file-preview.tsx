@@ -7,23 +7,20 @@ import { useState } from 'react';
 
 import { GaiaClientProvider } from '@/data';
 import { devGalleryEnabled } from '@/features/dev/devGallery';
+import { KeyedScene } from '@/features/dev/KeyedScene';
 import { FilePreviewScreen } from '@/features/files';
 import { FILE_PREVIEW_PATH, filePreviewScene, type FilePreviewScene } from '@/features/files/devScenes';
 import { ScreenBannerProvider, UIProvider } from '@/ui';
 
 const SCENES = Object.keys(FILE_PREVIEW_PATH) as FilePreviewScene[];
 
-/** The file preview screen on a fake PC; `?scene=loading|text|table|binary`. */
-export default function FilePreviewGalleryRoute() {
-    const { scene } = useLocalSearchParams<{ scene?: string }>();
+function FilePreviewView({ picked }: { picked: FilePreviewScene }) {
     const router = useRouter();
-    const picked = SCENES.find((s) => s === scene) ?? 'text';
     const [queryClient] = useState(() => new QueryClient({ defaultOptions: { queries: { retry: false } } }));
     const [client] = useState(() => filePreviewScene(picked));
     const [target] = useState(() => ({ kind: 'path' as const, path: FILE_PREVIEW_PATH[picked], sessionId: 'chat-1' }));
-    if (!devGalleryEnabled()) return <Redirect href="/" />;
     return (
-        <QueryClientProvider key={scene} client={queryClient}>
+        <QueryClientProvider client={queryClient}>
             <GaiaClientProvider client={client}>
                 <UIProvider>
                     <ScreenBannerProvider banner={null}>
@@ -33,4 +30,12 @@ export default function FilePreviewGalleryRoute() {
             </GaiaClientProvider>
         </QueryClientProvider>
     );
+}
+
+/** The file preview screen on a fake PC; `?scene=loading|text|table|binary`. */
+export default function FilePreviewGalleryRoute() {
+    const { scene } = useLocalSearchParams<{ scene?: string }>();
+    if (!devGalleryEnabled()) return <Redirect href="/" />;
+    const picked = SCENES.find((s) => s === scene) ?? 'text';
+    return <KeyedScene sceneKey={picked} scene={FilePreviewView} props={{ picked }} />;
 }

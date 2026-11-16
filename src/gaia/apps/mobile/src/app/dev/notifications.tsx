@@ -8,6 +8,7 @@ import { useState } from 'react';
 import { GaiaClientProvider } from '@/data';
 import { ConnectionBanner } from '@/features/banners/ConnectionBanner';
 import { devGalleryEnabled } from '@/features/dev/devGallery';
+import { KeyedScene } from '@/features/dev/KeyedScene';
 import { NotificationCenterScreen } from '@/features/notifications';
 import { NOTIFICATION_SCENES, notificationSceneClient, type NotificationScene } from '@/features/notifications/devScenes';
 import NotificationsPane from '@/features/settings/panes/Notifications';
@@ -69,18 +70,29 @@ function Body({ scene }: { scene: NotificationScene }) {
     );
 }
 
-/** The notification center, connection banners, setup-gate notice and alert settings on a fake PC; `?state=<name>` (see NOTIFICATION_SCENES). */
-export default function NotificationsGalleryRoute() {
-    const { state = 'mixed' } = useLocalSearchParams<{ state?: string }>();
-    const found = NOTIFICATION_SCENES[state];
+function NotificationsView({ found }: { found: NotificationScene }) {
     const [queryClient] = useState(() => new QueryClient({ defaultOptions: { queries: { retry: false } } }));
     const [client] = useState(() => {
-        if (!found) return null;
         seed(found);
         return notificationSceneClient(found);
     });
+    return (
+        <QueryClientProvider client={queryClient}>
+            <GaiaClientProvider client={client}>
+                <UIProvider>
+                    <Body scene={found} />
+                </UIProvider>
+            </GaiaClientProvider>
+        </QueryClientProvider>
+    );
+}
+
+/** The notification center, connection banners, setup-gate notice and alert settings on a fake PC; `?state=<name>` (see NOTIFICATION_SCENES). */
+export default function NotificationsGalleryRoute() {
+    const { state = 'mixed' } = useLocalSearchParams<{ state?: string }>();
     if (!devGalleryEnabled()) return <Redirect href="/" />;
-    if (!found || !client) {
+    const found = NOTIFICATION_SCENES[state];
+    if (!found) {
         return (
             <UIProvider>
                 <Screen scroll>
@@ -92,13 +104,5 @@ export default function NotificationsGalleryRoute() {
             </UIProvider>
         );
     }
-    return (
-        <QueryClientProvider key={state} client={queryClient}>
-            <GaiaClientProvider client={client}>
-                <UIProvider>
-                    <Body scene={found} />
-                </UIProvider>
-            </GaiaClientProvider>
-        </QueryClientProvider>
-    );
+    return <KeyedScene sceneKey={state} scene={NotificationsView} props={{ found }} />;
 }
