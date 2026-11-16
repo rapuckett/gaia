@@ -274,6 +274,7 @@ export function DownloadStep({ ctx }: { ctx: SetupStepContext }) {
                                         label={added ? t('setup.optional.added') : t('setup.optional.add')}
                                         variant={added ? 'primary' : 'secondary'}
                                         size="sm"
+                                        shrink={false}
                                         onPress={() => toggleQueued(e.id)}
                                     />
                                 </Row>

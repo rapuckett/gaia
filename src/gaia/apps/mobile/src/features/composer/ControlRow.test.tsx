@@ -6,6 +6,7 @@ import { createRoot } from 'test-renderer';
 
 import { translator } from '@webui/i18n/translator';
 
+import { ICON_ONLY_WIDTH } from './chipRoom';
 import { Composer } from './Composer';
 import { PrivateChip } from './PrivateChip';
 
@@ -74,6 +75,10 @@ describe('composer control row in Arabic', () => {
         expect(labels()).toHaveLength(2);
         await act(async () => layout(60));
         expect(labels()).toHaveLength(1);
+        // The icon alone takes less room than its 44-wide touch target, so the model's name gets the rest.
+        const chip = find(r, 'private-chip');
+        expect(chip.props.inline).toBe(true);
+        expect(style(chip.children[0] as never)).toMatchObject({ width: ICON_ONLY_WIDTH });
         expect(String(find(r, 'private-chip').props.accessibilityLabel).length).toBeGreaterThan(3);
         mockLocale = 'ar';
     });

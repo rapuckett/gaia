@@ -42,16 +42,19 @@ function Stage({ row }: { row: StageRow }) {
         <Stack gap="xs" testID={`recording-stage-${row.name}`}>
             <Row gap="sm">
                 <Mark state={row.state} />
-                <View style={{ flex: 1, minWidth: 0 }}>
-                    <Text role="ui" weight={running ? 'semibold' : undefined} tone={running ? 'primary' : 'muted'} numberOfLines={1}>
+                {/* Label and time left share what the line has, each wrapping, as the web's grid row does. */}
+                <View style={{ flexGrow: 1, flexShrink: 1, minWidth: 0 }}>
+                    <Text role="ui" weight={running ? 'semibold' : undefined} tone={running ? 'primary' : 'muted'}>
                         {label}
                     </Text>
                 </View>
                 {running && row.percent != null ? <Ltr>{`${row.percent}%`}</Ltr> : null}
                 {status ? (
-                    <Text role="caption" tone="muted">
-                        {status}
-                    </Text>
+                    <View style={{ flexShrink: 1, minWidth: 0 }}>
+                        <Text role="caption" tone="muted">
+                            {status}
+                        </Text>
+                    </View>
                 ) : null}
             </Row>
             {running ? <ProgressLine value={row.percent == null ? undefined : row.percent / 100} /> : null}
