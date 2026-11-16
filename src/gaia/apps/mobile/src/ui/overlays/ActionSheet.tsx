@@ -25,15 +25,22 @@ export interface ActionSheetProps {
     onClose: () => void;
     actions: SheetAction[];
     title?: string;
+    /** A note under the title, shown in full: what the actions will do. */
+    message?: string;
 }
 
 // Picking an action closes the sheet first, then runs it.
-export function ActionSheet({ open, onClose, actions, title }: ActionSheetProps) {
+export function ActionSheet({ open, onClose, actions, title, message }: ActionSheetProps) {
     const t = useT();
     const largeText = useLargeText();
     return (
         <Sheet open={open} onClose={onClose} title={title}>
             <Stack gap="xs">
+                {message ? (
+                    <Text role="body" tone="secondary">
+                        {message}
+                    </Text>
+                ) : null}
                 {actions.map((a) => (
                     <Pressable
                         key={a.label}

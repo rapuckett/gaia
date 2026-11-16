@@ -44,6 +44,13 @@ describeNative('/dev/notifications', () => {
         expect(await screen.findByText(title)).toBeTruthy();
     });
 
+    it('setup-upgrading-failed says the server update stopped, with Try again', async () => {
+        mockState = 'setup-upgrading-failed';
+        await mount();
+        expect(await screen.findByText(/couldn.t update its local model server/)).toBeTruthy();
+        expect(screen.getByText('Try again')).toBeTruthy();
+    });
+
     it('names an unknown scene and lists the known ones', async () => {
         mockState = 'nope';
         await mount();

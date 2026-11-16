@@ -82,7 +82,7 @@ export function KnowledgeBrowser({ contexts, notify }: KnowledgeBrowserProps) {
                 <Stack flex={1}>
                     <SectionTitle icon={Brain} title={t('mem.knowledge.title')} note={total > 0 ? String(total) : undefined} />
                 </Stack>
-                <Button label={t.bare('mem.knowledge.add')} accessibilityLabel={t('mem.knowledge.addTitle')} icon={Plus} variant="secondary" size="sm" onPress={() => openForm()} testID="memory-knowledge-add" />
+                <Button label={t.bare('mem.knowledge.add')} accessibilityLabel={t('mem.knowledge.addTitle')} icon={Plus} variant="secondary" size="sm" shrink={false} onPress={() => openForm()} testID="memory-knowledge-add" />
             </Row>
 
             <SearchField
