@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import { useState } from 'react';
+import { View } from 'react-native';
 
 import { ENDPOINTS } from '@/api/constants';
 import { useDeviceRefused } from '@/api/routeAccess';
@@ -73,7 +74,9 @@ export function MemoryScreen({ onBack, onOpenChat, initialTab = 'about' }: Memor
                             <Text role="title" weight="semibold" accessibilityRole="header">
                                 {t('mem.title')}
                             </Text>
-                            <Badge label={t.bare('mem.beta')} accessibilityLabel={t('mem.beta')} tone="warning" />
+                            <View style={{ alignSelf: 'center' }}>
+                                <Badge label={t.bare('mem.beta')} accessibilityLabel={t('mem.beta')} tone="warning" />
+                            </View>
                         </Row>
                     </Stack>
                     <IconButton icon={RefreshCw} label={t('mem.refreshAria')} busy={refreshing} onPress={() => void pullToRefresh()} testID="memory-refresh" />

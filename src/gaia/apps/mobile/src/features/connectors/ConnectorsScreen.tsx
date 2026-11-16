@@ -5,7 +5,7 @@ import { scopeLabel } from '@webui/utils/connectorScopes';
 import { ref } from '@webui/i18n/registry';
 import { useRouter } from 'expo-router';
 import { useMemo, useState, type ReactNode } from 'react';
-import { View } from 'react-native';
+import { useWindowDimensions, View } from 'react-native';
 
 import type { AgentMcpServer, ConnectorRow, UnavailableConnectorRow } from '@/api/client.types';
 import {
@@ -20,7 +20,7 @@ import {
 import { ScreenHeader } from '@/features/nav/ScreenHeader';
 import { ChipButton } from '@/features/schedules/ChipButton';
 import { SettingsGroup } from '@/features/skills/SettingsGroup';
-import { describeError, describeErrorWith, useT } from '@/i18n/useT';
+import { describeError, describeErrorWith, useDirection, useT } from '@/i18n/useT';
 import {
     ActionSheet,
     EmptyState,
@@ -40,6 +40,7 @@ import {
     Ltr,
     useTheme,
 } from '@/ui';
+import { lineHeightOf } from '@/ui/text/Text';
 import { ChevronDown, ChevronRight, CircleCheck, Ellipsis, Pause, Play, Trash2 } from '@/ui/icons';
 
 import {
@@ -216,7 +217,7 @@ function TileHeader({ name, trailing, onPress, open, menu }: { name: string; tra
     const { space } = useTheme();
     const body = (
         <View style={{ paddingHorizontal: space.lg, paddingVertical: space.md }}>
-            <Row gap="sm" justify="between">
+            <Row gap="sm" justify="between" align="start">
                 <Row gap="sm" wrap flex={1}>
                     <Text role="ui" weight="semibold" dir="auto">{name}</Text>
                     {trailing}
@@ -286,8 +287,17 @@ function StatusText({ connector, t }: { connector: ConnectorRow; t: Translator }
     }
 }
 
+/** Centered on the title's first line, so a row that wraps keeps it beside the name. */
 function Chevron({ open }: { open: boolean }) {
-    return <Icon icon={open ? ChevronDown : ChevronRight} size="sm" tone="muted" />;
+    const { type } = useTheme();
+    const { fontScale } = useWindowDimensions();
+    const rtl = useDirection() === 'rtl';
+    const line = lineHeightOf(type.ui, 'ui', rtl) * fontScale;
+    return (
+        <View style={{ minHeight: line, justifyContent: 'center' }}>
+            <Icon icon={open ? ChevronDown : ChevronRight} size="sm" tone="muted" />
+        </View>
+    );
 }
 
 function ConnectorTile({
