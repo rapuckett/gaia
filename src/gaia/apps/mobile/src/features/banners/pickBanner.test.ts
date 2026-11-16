@@ -28,6 +28,7 @@ describe('pickBanner', () => {
         expect(off?.message).toBe(t('mobileApp.pairing.unreachable.body'));
         expect(pickBanner(undefined, new GaiaApiError(404, 'gone'), t)?.title).toBe(t('banner.unreachable'));
         expect(id(undefined, new GaiaApiError(503, 'busy'))).toBe('backendError');
+        expect(id(undefined, new GaiaApiError(504, 'gateway timeout'))).toBe('slow');
         expect(id(withStatus({ init_state: 'initializing', init_tasks: [{ name: 'Models', status: 'running' }] }))).toBe('starting');
         expect(id(withStatus({ lemonade_running: false }))).toBe('serverStopped');
         expect(id(withStatus({ lemonade_running: false, lemonade_error: 'timed out' }))).toBe('serverHung');
@@ -70,5 +71,15 @@ describe('backend errors read as one sentence', () => {
         const banner = pickBanner(undefined, new GaiaNetworkError('http://pc', new Error('x')), t);
         expect(banner?.title).toBe(t('mobileApp.pairing.off.title'));
         expect(banner?.details).toBeUndefined();
+    });
+
+    it('shows slow for a 504 only, below the downloads and pick loads, and clears with the error', () => {
+        const slow = new GaiaApiError(504, 'gateway timeout');
+        const banner = pickBanner(undefined, slow, t);
+        expect([banner?.title, banner?.message, banner?.tone, banner?.retry]).toEqual([t('banner.slow'), t('banner.slowHint'), 'warning', true]);
+        const download = { state: 'downloading', model_name: 'M', percent: 50, file: 'a.gguf', file_index: 1, total_files: 2, downloaded_bytes: 5e9, total_bytes: 1e10, message: null } as const;
+        expect(id(withStatus({ download_progress: download }), slow)).toBe('download');
+        expect(pickBanner(undefined, slow, t, null, { load: { model: 'M', seconds: 3 } as never })?.id).toBe('pickLoad');
+        expect(id(OK)).toBeNull();
     });
 });
