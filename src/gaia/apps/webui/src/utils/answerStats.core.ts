@@ -46,6 +46,7 @@ function summaryLine(
     say: Say,
     mark: Mark,
     variant: Variant,
+    brief = false,
 ): string | null {
     const parts: string[] = [];
     const place = stats?.place ? placeParam(stats.place, variant) : null;
@@ -64,7 +65,8 @@ function summaryLine(
     if (stats?.steps != null && stats.steps > 0) {
         parts.push(say(pluralKey('answer.steps', stats.steps), { n: stats.steps }));
     }
-    return parts.length ? parts.join(' · ') : null;
+    if (!parts.length) return null;
+    return brief ? parts[0] : parts.join(' · ');
 }
 
 export function composeSummary(
@@ -74,9 +76,10 @@ export function composeSummary(
     t: Translate,
     mark: Mark,
     variant: Variant = same,
+    brief = false,
 ): string | null {
     if (summaryLine(latencyMs, stats, ended, tEn.bare, plain, same) === null) return null;
-    return t.compose((say) => summaryLine(latencyMs, stats, ended, say, mark, variant) ?? '');
+    return t.compose((say) => summaryLine(latencyMs, stats, ended, say, mark, variant, brief) ?? '');
 }
 
 /** "Answered in 40 s on your GPU · first word in 1 s", or null with nothing to say.

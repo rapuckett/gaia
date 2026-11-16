@@ -6,6 +6,7 @@ import { fromApiMessages } from '@webui/utils/chatStream';
 import { isMediaFile } from '@webui/utils/mediaFiles';
 
 import type { FetchLike, FetchRequestInit, FetchResponseLike } from '@/platform/fetch.types';
+import { formFile } from '@/platform/formFile';
 
 import {
     GaiaApiError,
@@ -23,6 +24,7 @@ import {
 } from './errors';
 import type {
     ActiveModel,
+    ActiveRuns,
     AgentCapabilities,
     AgentInstallStatus,
     AgentList,
@@ -481,8 +483,10 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             const path = media ? `${ENDPOINTS.filesUploadMedia}?name=${encodeURIComponent(name)}` : ENDPOINTS.filesUpload;
             let body: Blob | FormData = file;
             if (!media) {
+                // A file on this phone keeps the name it was picked with, not its cache path's.
+                const uri = (file as { uri?: unknown }).uri;
                 body = new FormData();
-                body.append('file', file, name);
+                body.append('file', typeof uri === 'string' ? await formFile(uri, name, file.type || null) : file, name);
             }
             return readJson<UploadedFile>(await request('POST', path, new RawBody(body), options?.signal), path);
         },
@@ -868,6 +872,10 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             return postJson<LinkPreview>(ENDPOINTS.skillsLinkPreview, { url }, options?.signal);
         },
 
+        getActiveRuns(options) {
+            return getJson<ActiveRuns>(ENDPOINTS.chatActive, options?.signal);
+        },
+
         listSchedules(options) {
             return getJson<ScheduleList>(ENDPOINTS.schedules, options?.signal);
         },
@@ -1049,9 +1057,8 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         async uploadDocument(file, options) {
             // The multipart boundary header is the fetch's to set.
-            const bytes = await (await globalThis.fetch(file.uri)).blob();
             const form = new FormData();
-            form.append('file', bytes, file.name);
+            form.append('file', await formFile(file.uri, file.name, file.mimeType), file.name);
             return readJson<DocumentResponse>(await request('POST', ENDPOINTS.documentUpload, new RawBody(form), options?.signal), ENDPOINTS.documentUpload);
         },
 

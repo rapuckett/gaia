@@ -133,6 +133,7 @@ export function NewChatScreen({ onOpen, onChooseDocuments, initialText = '', pro
         <Screen
             keyboard="avoid"
             scroll
+            footerBleed
             backdrop={<DotGrid />}
             header={<ScreenHeader />}
             footer={
