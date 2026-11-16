@@ -10,6 +10,7 @@ import type { FilePreviewResponse } from '@/api/client.types';
 import { useGaiaClient } from '@/data/GaiaClientProvider';
 import { Markdown } from '@/features/chat/markdown/Markdown';
 import { shareFile } from '@/features/share/shareFile';
+import { GaiaApiError } from '@/api/errors';
 import { describeError, useT } from '@/i18n/useT';
 import { Button, Ltr, Notice, ScrollBox, Row, Sheet, Spinner, Stack, Text } from '@/ui';
 
@@ -127,7 +128,11 @@ export function Body({ target, state }: { target: PreviewTarget; state: State })
             </Row>
         );
     }
-    if (state.status === 'error') return <Notice tone="danger" message={describeError(state.error, t)} />;
+    if (state.status === 'error') {
+        // The PC's refusal is its own plain sentence with a next step, not an error on the phone.
+        if (state.error instanceof GaiaApiError && state.error.status === 403) return <Notice tone="info" message={state.error.detail} testID="file-refused" />;
+        return <Notice tone="danger" message={describeError(state.error, t)} />;
+    }
     const { loaded } = state;
     if (loaded.kind === 'text') return <TextBody preview={loaded.preview} name={name} />;
     if (loaded.kind === 'image') return <Image source={{ uri: loaded.uri }} style={{ width: '100%', height: BODY_MAX_HEIGHT }} contentFit="contain" accessibilityLabel={name} />;
