@@ -20,6 +20,8 @@ export interface SettingsScene {
     provider?: string;
     /** More of the fake PC, over the common data. */
     data?: FakeClientData;
+    /** Opens the Model pane on the success notice for this just-added model, with the Hugging Face section open. */
+    addedModel?: string;
     /** An action that never finishes, so its in-flight state stays on screen: tap its button (`#tap=model-download-<id>` or `#tap=model-use-<id>`). */
     hang?: 'download' | 'select';
 }
@@ -128,8 +130,11 @@ export const SETTINGS_SCENES: Record<string, SettingsScene> = {
     },
     // SET-MODEL-29: an NPU model whose setup is not ready.
     'model-npu-not-ready': { section: 'model', target: 'models-on-pc', gpuMemory: GPU, data: local([HAVE, NPU_MODEL]) },
-    // SET-MODEL-30: type the link into `custom-model-url`, then `#tap=custom-model-check`, then `#tap=custom-model-add`; the success notice shows.
-    'model-hf-added': { section: 'model', target: 'models-on-pc', gpuMemory: GPU, data: { ...local([HAVE]), customReports: { [HF_URL]: HF_REPORT } } },
+    // SET-MODEL-30: opens on the success notice after a Hugging Face add, the section open and the new row listed.
+    'model-hf-added': {
+        section: 'model', target: 'models-on-pc', gpuMemory: GPU, addedModel: HF_REPORT.display_name!,
+        data: { ...local([HAVE, model(HF_REPORT.model_id!, { display_name: HF_REPORT.display_name!, custom: true, size_gb: HF_REPORT.size_gb, source_url: HF_URL })]), customReports: { [HF_URL]: HF_REPORT } },
+    },
     // SET-MODEL-36 to 38: the cloud spending block (`cloud-spending`) under a connected cloud provider.
     'spend-total': { section: 'model', provider: 'fireworks', gpuMemory: GPU, data: { ...cloud([]), spending: spent({ limit_usd: 20, state: 'ok', unpriced_turns: 2, unreported_turns: 1 }) } },
     'spend-near-limit': { section: 'model', provider: 'fireworks', gpuMemory: GPU, data: { ...cloud([]), spending: spent({ total_usd: 17.4, limit_usd: 20, state: 'near' }) } },
