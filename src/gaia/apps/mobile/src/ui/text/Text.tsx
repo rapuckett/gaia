@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import { Children, createContext, useContext, type ReactNode } from 'react';
-import { I18nManager, Text as RNText, type AccessibilityRole, type TextStyle } from 'react-native';
+import { Text as RNText, type AccessibilityRole, type TextStyle } from 'react-native';
 import { glossParts } from '@webui/i18n/registry';
 import { useDirection } from '@/i18n/useT';
 import { metrics } from '../tokens/generated';
@@ -10,7 +10,7 @@ import { fontFamily, type Weight } from '../theme/fonts';
 import { COMPACT_MAX_FONT_SCALE, useLargeText } from '../theme/a11y';
 import { useTheme } from '../theme/ThemeProvider';
 import { toneColor, type Tone } from '../theme/tone';
-import { contentDir } from './direction';
+import { contentDir, physicalAlign } from './direction';
 import type { TypeRole } from '../tokens/type';
 
 export interface TextProps {
@@ -124,14 +124,10 @@ export function Text({
     }
     if (strike || underline) style.textDecorationLine = strike && underline ? 'underline line-through' : strike ? 'line-through' : 'underline';
     if (dir) style.writingDirection = dir;
-    // Native flips textAlign left/right in an RTL layout, so pass the opposite side to land on the intended one.
     const startsRight = (dir ?? (rtl ? 'rtl' : 'ltr')) === 'rtl';
-    const native = I18nManager.getConstants();
-    const mirrored = native.isRTL && !!native.doLeftAndRightSwapInRTL;
-    const side = (right: boolean) => (right !== mirrored ? 'right' : 'left');
     if (align === 'center') style.textAlign = 'center';
-    else if (align === 'end') style.textAlign = side(!startsRight);
-    else if (align === 'start' || !nested) style.textAlign = side(startsRight);
+    else if (align === 'end') style.textAlign = physicalAlign(!startsRight);
+    else if (align === 'start' || !nested) style.textAlign = physicalAlign(startsRight);
     if (rtl) style.letterSpacing = 0;
 
     return (
