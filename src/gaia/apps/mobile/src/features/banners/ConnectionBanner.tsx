@@ -4,12 +4,14 @@
 import { useRouter } from 'expo-router';
 import { useEffect } from 'react';
 
-import { useGoalStoreError, useQueryFailure, useSystemStatus } from '@/data';
+import { useActiveModel, useGaiaClient, useGoalStoreError, useQueryFailure, useSystemStatus } from '@/data';
 import { useT } from '@/i18n/useT';
 import { openChat } from '@/features/nav/navigation';
 import { useAnnounce } from '@/platform/useAnnounce';
 import { useBannerDismissedStore } from '@/state/bannerDismissed';
 import { useChatAlertBannerStore, type ChatAlertBanner } from '@/state/chatAlertBanner';
+import { usePickLoadStore } from '@/state/pickLoad';
+import { sameModelId } from '@webui/utils/modelList.core';
 import { Notice, ProgressLine, Stack } from '@/ui';
 
 import { pickBanner } from './pickBanner';
@@ -43,7 +45,11 @@ export function ConnectionBanner() {
     const { data, refetch } = status;
     const { error } = useQueryFailure(status);
     const goalStoreError = useGoalStoreError().data;
-    const picked = pickBanner(data, error, t, goalStoreError);
+    const client = useGaiaClient();
+    const load = usePickLoadStore((s) => s.pickLoad);
+    const activeModel = useActiveModel().data;
+    const name = load && sameModelId(activeModel?.model, load.model) ? activeModel?.display_name : null;
+    const picked = pickBanner(data, error, t, goalStoreError, { load, name });
     const { dismissed, dismiss, reconcile } = useBannerDismissedStore();
     useEffect(() => reconcile(picked), [picked?.id, picked?.dismissible, reconcile]); // eslint-disable-line react-hooks/exhaustive-deps
     const banner = picked && picked.id === dismissed ? null : picked;
@@ -59,8 +65,14 @@ export function ConnectionBanner() {
                         tone={banner.tone}
                         title={banner.title}
                         message={banner.message}
-                        onDismiss={banner.dismissible ? () => dismiss(banner.id) : undefined}
-                        action={banner.retry ? { label: t('settings.key.checkAgain'), onPress: () => void refetch() } : undefined}
+                        onDismiss={banner.dismissible ? () => (banner.id === 'pickLoad' ? usePickLoadStore.getState().clear() : dismiss(banner.id)) : undefined}
+                        action={
+                            banner.pickRetry && client
+                                ? { label: t('banner.pickLoad.retry'), onPress: () => void usePickLoadStore.getState().retry(client) }
+                                : banner.retry
+                                  ? { label: t('settings.key.checkAgain'), onPress: () => void refetch() }
+                                  : undefined
+                        }
                     />
                     {banner.progress ? <ProgressLine value={banner.progress.value} label={banner.progress.label} /> : null}
                 </Stack>

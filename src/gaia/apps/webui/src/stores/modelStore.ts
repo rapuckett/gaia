@@ -8,22 +8,11 @@ import { create } from 'zustand';
 import * as api from '../services/api';
 import { useChatStore } from './chatStore';
 import { log } from '../utils/logger';
-import { distinctLabels, sameModelId, shortModelName } from '../utils/modelList.core';
+import { distinctLabels, isPickWarmUp, sameModelId, shortModelName, type PickLoad, type PickLoadError } from '../utils/modelList.core';
 import { tEn, useT, type Translate } from '../i18n/useT';
 import type { ActiveModel, Session, WarmUpStatus } from '../types';
 
-/** Why a pick's load failed: the backend's own reason, or a translated one when GAIA lost track. */
-export interface PickLoadError {
-    key?: 'banner.pickLoad.noReason' | 'banner.pickLoad.lostTrack' | 'banner.pickLoad.startFailed';
-    reason: string;
-}
-
-/** A local model picked from the list, loading in the background; `error` once that load failed. */
-export interface PickLoad {
-    model: string;
-    seconds: number;
-    error: PickLoadError | null;
-}
+export type { PickLoad, PickLoadError };
 
 interface ModelState {
     active: ActiveModel | null;
@@ -81,11 +70,6 @@ export function resetModelRetryForTests(): void {
     restoreRetries = 0;
     namesRequested = false;
     pickLoadWatch += 1;
-}
-
-/** The pick's own warm-up: one on another model is still finishing, and the pick's runs next. */
-function isPickWarmUp(w: WarmUpStatus, model: string): boolean {
-    return !w.model || sameModelId(w.model, model);
 }
 
 /** Follow the backend's load of a picked local model until it is ready or has failed. */

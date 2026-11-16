@@ -48,6 +48,7 @@ import type {
     StartScreen,
     StreamEvent,
     SystemStatus,
+    WarmUpStatus,
 } from '@webui/types';
 import type { FileDiff, TurnChanges, UndoResult, UndoSettings } from '@webui/types/changes';
 import type { DiscordStatus } from '@webui/services/messagingApi';
@@ -128,6 +129,7 @@ export type {
     StreamEvent,
     SystemStatus,
     UnavailableConnectorRow,
+    WarmUpStatus,
 } from '@webui/types';
 export type { FileDiff, TurnChanges, UndoResult, UndoSettings } from '@webui/types/changes';
 export type { ActiveSkill, AgentCapabilities, AgentTool, ChatFileChange, GitRepo, OutputItem, OutputKind, ScopeEntry, SessionChanges, SessionEnvironment, SessionGit, SessionOutputs, SkillOrigin, UndoAllResult } from '@webui/types/sessionPanel';
@@ -691,6 +693,10 @@ export interface GaiaClient {
     /** A library document's file, as bytes; the chat's id is what lets a phone read it. */
     getDocumentBytes(docId: string, sessionId: string, options?: RequestOptions): Promise<Uint8Array>;
     getSystemStatus(options?: RequestOptions): Promise<SystemStatus>;
+    /** The chat model's warm-up on the PC: where a picked model's load shows, and why it failed. */
+    getWarmUp(options?: RequestOptions): Promise<WarmUpStatus>;
+    /** Starts the warm-up; `fresh` retries a picked model's load, queued behind one already running. */
+    requestWarmUp(fresh: boolean, options?: RequestOptions): Promise<WarmUpStatus>;
     /** Starts a model's download on the PC (`force` downloads it again); follow it in `getSystemStatus().download_progress`. */
     downloadModel(model: string, options?: { force?: boolean; loadAfter?: boolean } & RequestOptions): Promise<{ status: string; model: string }>;
     /** Loads a model on the PC at the context window chat needs; 409 when a chat is answering, until `force`. */

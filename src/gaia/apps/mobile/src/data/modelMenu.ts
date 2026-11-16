@@ -6,6 +6,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import type { ActiveModel, PermissionMode, ProviderModel, ProviderModelsResponse, SessionPermissions } from '@/api/client.types';
 import { DOWNLOAD_POLL_MS } from '@/api/constants';
+import { usePickLoadStore } from '@/state/pickLoad';
 
 import { useGaiaClient } from './GaiaClientProvider';
 import { modelKeys } from './models';
@@ -50,6 +51,11 @@ export function useSelectModel() {
     const queryClient = useQueryClient();
     return useMutation<ActiveModel, Error, string>({
         mutationFn: (model) => requireClient(client).selectModel(model),
+        // The PC starts loading a local pick; follow it so the wait and any failure show.
+        onSuccess: (active, model) => {
+            if (active.remote) usePickLoadStore.getState().clear();
+            else usePickLoadStore.getState().watch(requireClient(client), model);
+        },
         onSettled: () => {
             void queryClient.invalidateQueries({ queryKey: modelMenuKeys.active });
             void queryClient.invalidateQueries({ queryKey: modelKeys.local });

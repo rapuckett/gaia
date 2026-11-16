@@ -2,12 +2,13 @@
 // SPDX-License-Identifier: MIT
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 
 import type { ActiveModel, ChatSpending, ContextUsage, LocalModelStatus, ProviderModel } from '@/api/client.types';
 import { createFakeClient } from '@/api/fake';
 import { GaiaClientProvider } from '@/data';
 import { HistoryNotice } from '@/features/chat/HistoryNotice';
+import { usePickLoadStore } from '@/state/pickLoad';
 import { Screen, Stack, UIProvider } from '@/ui';
 
 import { Composer } from './Composer';
@@ -15,8 +16,8 @@ import { ContextMeter, ContextWarning } from './ContextMeter';
 import { ModelChip } from './ModelChip';
 import { SpendMeter } from './SpendMeter';
 
-/** Developer gallery (`/dev/composer?state=`): the context meter, spend meter and model menu in each state. */
-export const COMPOSER_MENU_STATES = ['context', 'warning', 'spend', 'menu', 'menuInfo', 'menuEmpty', 'menuSwitching'] as const;
+/** Developer gallery (`/dev/composer?state=`): the context meter, spend meter, model menu and picked-model load banner in each state. */
+export const COMPOSER_MENU_STATES = ['context', 'warning', 'spend', 'menu', 'menuInfo', 'menuEmpty', 'menuSwitching', 'pickLoading', 'pickFailed'] as const;
 export type ComposerMenuState = (typeof COMPOSER_MENU_STATES)[number];
 
 const USAGE: ContextUsage = {
@@ -92,6 +93,11 @@ export function ComposerMenusGallery({ state }: { state: ComposerMenuState }) {
     }, [state, cloud]);
     const queryClient = useMemo(() => new QueryClient({ defaultOptions: { queries: { retry: false } } }), []);
     const noop = () => undefined;
+    useEffect(() => {
+        if (state === 'pickLoading') usePickLoadStore.setState({ pickLoad: { model: 'Qwen3.6-35B-A3B-GGUF', seconds: 14, error: null } });
+        else if (state === 'pickFailed') usePickLoadStore.setState({ pickLoad: { model: 'Qwen3.6-35B-A3B-GGUF', seconds: 0, error: { reason: 'Not enough free memory to load the model.' } } });
+        return () => usePickLoadStore.getState().clear();
+    }, [state]);
     const usage = state === 'warning' ? { ...USAGE, used: 61000, at_risk: ['What did the vendor contract say about renewal?', 'Summarize the board notes'] } : USAGE;
     return (
         <UIProvider>

@@ -39,4 +39,21 @@ describe('pickBanner', () => {
         expect(banner?.progress?.label).toBe('50% · 5.00 / 10.00 GB');
         expect(id(withStatus({ download_progress: { ...download, state: 'error' } }))).toBe('download');
     });
+
+    it('shows a picked model loading, or failing, ahead of connection trouble and after a download', () => {
+        const load = { model: 'Qwen3-4B-Instruct-GGUF', seconds: 12, error: null };
+        const loading = pickBanner(OK, new GaiaApiError(503, 'busy'), t, null, { load });
+        expect(loading).toMatchObject({ id: 'pickLoad', tone: 'info', message: t('banner.pickLoad.canType'), progress: {} });
+        expect(loading?.title).toBe(`${t('banner.pickLoad.loading', { model: 'Qwen3-4B-Instruct-GGUF' })} \u2066${t('banner.pickLoad.seconds', { s: 12 })}\u2069`);
+
+        const failed = pickBanner(OK, null, t, null, { load: { ...load, error: { key: 'banner.pickLoad.lostTrack', reason: 'timed out' } }, name: 'Qwen 4B' });
+        expect(failed).toMatchObject({ id: 'pickLoad', tone: 'danger', pickRetry: true, dismissible: true });
+        expect(failed?.title).toBe(t('banner.pickLoad.failed', { model: 'Qwen 4B' }));
+        expect(failed?.message).toBe(t('banner.pickLoad.lostTrack', { reason: 'timed out' }));
+        expect(pickBanner(OK, null, t, null, { load: { ...load, error: { reason: 'out of memory' } } })?.message).toBe('out of memory');
+
+        const download = { state: 'downloading', model_name: 'M', percent: 5, file: null, file_index: 1, total_files: 1, downloaded_bytes: 1, total_bytes: 10, message: null } as const;
+        expect(pickBanner(withStatus({ download_progress: download }), null, t, null, { load })?.id).toBe('download');
+        expect(pickBanner(OK, null, t, null, { load: null })).toBeNull();
+    });
 });
