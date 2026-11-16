@@ -6,7 +6,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react-nativ
 import type { ReactNode } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-import { isolateUnit } from '@webui/i18n/registry';
+import { keepTogether } from '@webui/i18n/registry';
 
 import type { ActiveModel } from '@/api/client.types';
 import { createFakeClient } from '@/api/fake';
@@ -52,7 +52,7 @@ describe('ModelRestoreNotice', () => {
 
     it('keeps the model name in the sentence as one isolated unit', async () => {
         await mount({ status: 'restored', message: 'Restored your saved model, Gemma 4 E4B.' });
-        expect(await screen.findByText(`Restored your saved model, ${isolateUnit('Gemma 4 E4B')}.`)).toBeTruthy();
+        expect(await screen.findByText(`Restored your saved model, ${keepTogether('Gemma 4 E4B')}.`)).toBeTruthy();
     });
 
     it('shows nothing when there is nothing to report', async () => {

@@ -62,6 +62,9 @@ describeNative('Advanced pane', () => {
         await screen.findByText('Change this on the PC running GAIA.');
         expect(screen.getByText('Wrong model loaded.')).toBeTruthy();
         expect(screen.getByText(/Other-Model/)).toBeTruthy();
+        for (let node: { props: { numberOfLines?: number }; parent: unknown } | null = screen.getByText(/Other-Model/); node; node = node.parent as typeof node) {
+            expect(node.props.numberOfLines).toBeUndefined();
+        }
         expect(screen.getByText('Load model')).toBeTruthy();
         expect(client.modelLoads).toEqual([]);
         queryClient.clear();

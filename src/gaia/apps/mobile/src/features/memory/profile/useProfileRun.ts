@@ -3,6 +3,9 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { isolate } from '@webui/i18n/registry';
+import type { Translate } from '@webui/i18n/translator';
+
 import type { DiscoveryFinding, InferenceInsight, ProfileStreamEvent } from '@/api/client.types';
 import { GaiaApiError } from '@/api/errors';
 import { useCommitProfile, useGaiaClient } from '@/data';
@@ -27,6 +30,11 @@ export interface ReviewItem {
     tag: string;
     checked: boolean;
     raw: DiscoveryFinding | InferenceInsight;
+}
+
+/** "Found: <item>": the label in the UI language at the line's start; the item is model prose, so a first-strong run. */
+export function findingLine(t: Translate, type: 'finding' | 'insight', content: string): string {
+    return t.bare(type === 'finding' ? 'mem.log.found' : 'mem.log.insight', { content: `\u2068${content}\u2069` });
 }
 
 /** Runs one profile stream: nothing found is saved until `save` is called on the items the person left checked. */
@@ -68,10 +76,10 @@ export function useProfileRun(kind: ProfileKind, notify: (notice: MemoryNotice) 
                     const item = event.item;
                     found.current += 1;
                     // Bare: a bracketed English copy would repeat the whole item on every line.
-                    addLog({ text: t.bare(event.type === 'finding' ? 'mem.log.found' : 'mem.log.insight', { content: item.content }), kind: 'finding' });
+                    addLog({ text: findingLine(t, event.type, item.content), kind: 'finding' });
                     const tag = event.type === 'insight' ? event.item.domain : (event.item._source_name ?? event.item.category);
                     setItems((prev) => [...prev, { content: item.content, confidence: item.confidence, tag, checked: true, raw: item }]);
-                } else if (event.type === 'error') addLog({ text: t.bare('mem.log.error', { message: event.message }), kind: 'error' });
+                } else if (event.type === 'error') addLog({ text: t.bare('mem.log.error', { message: isolate(event.message, 'ltr') }), kind: 'error' });
                 else if (event.type === 'done') addLog({ text: t(done, { n: event.total ?? 0 }), kind: 'log' });
             };
             try {
