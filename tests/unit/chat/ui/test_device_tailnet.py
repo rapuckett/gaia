@@ -19,6 +19,8 @@ from gaia.ui.devices.listener import DeviceGate
 from gaia.ui.security import ListenerScopeMiddleware
 from gaia.ui.server import create_app
 
+from .fake_nics import fake_pc
+
 pytestmark = pytest.mark.allow_network  # TestClient only; nothing leaves the machine
 
 OWN = "100.101.102.103"
@@ -74,10 +76,7 @@ def setup(tmp_path, monkeypatch):
     GaiaConfig.save_key("device_pairing", True)
     address = {"value": OWN}
     monkeypatch.setattr(tailnet_module, "tailnet_ipv4", lambda: address["value"])
-    monkeypatch.setattr(
-        "gaia.ui.devices.access.local_ipv4_addresses",
-        lambda: ["127.0.0.1", "192.168.1.10", OWN],
-    )
+    fake_pc(monkeypatch)
     app = create_app(db_path=":memory:")
     access = DeviceAccess(app, folder=tmp_path / "devices")
     app.state.devices = access

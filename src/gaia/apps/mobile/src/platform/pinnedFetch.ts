@@ -16,6 +16,19 @@ export function onDeviceGone(handler: ((pcId: string) => void) | null): void {
     deviceGone = handler;
 }
 
+let networkFailure: (() => void) | null = null;
+
+/** Who hears that a request to the paired PC failed at the network level, so another of its addresses can be chosen. */
+export function onNetworkFailure(handler: (() => void) | null): void {
+    networkFailure = handler;
+}
+
+/** Tells the onNetworkFailure handler about a rejection that came from the network, not from the PC. */
+export function reportIfNetworkFailure(err: unknown): never {
+    if ((err as { code?: unknown } | null)?.code === 'network') networkFailure?.();
+    throw err;
+}
+
 /** The listener's 401 for an unknown or revoked device token carries `WWW-Authenticate: Bearer`. */
 export function reportIfDeviceGone(pcId: string, res: FetchResponseLike): FetchResponseLike {
     if (res.status === 401 && /^bearer\b/i.test(res.headers.get('www-authenticate') ?? '')) deviceGone?.(pcId);

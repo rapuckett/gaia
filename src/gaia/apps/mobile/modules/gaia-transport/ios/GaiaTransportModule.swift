@@ -86,6 +86,14 @@ public class GaiaTransportModule: Module {
       try DeviceVault.save(pcId, staged)
       try DeviceVault.delete(stagedId)
     }
+
+    // Replaces the addresses a paired PC answers at with the routes it reported, each checked by its kind.
+    AsyncFunction("setOrigins") { (pcId: String, json: String) throws in
+      guard let secret = try DeviceVault.load(pcId) else {
+        throw transportError("not_paired", "This phone isn't paired with that PC. Pair it again from the PC.")
+      }
+      try DeviceVault.save(pcId, DeviceSecret(origins: try checkedRoutes(json), pin: secret.pin, token: secret.token))
+    }
   }
 
   private func start(
@@ -137,7 +145,7 @@ public class GaiaTransportModule: Module {
       promise.reject(error)
       return nil
     }
-    guard let target = URL(string: url), sameOrigin(target, secret.origin) else {
+    guard let target = URL(string: url), secret.origins.contains(where: { sameOrigin(target, $0.origin) }) else {
       promise.reject(transportError("origin_mismatch", "That address isn't the paired PC's, so the request wasn't sent."))
       return nil
     }
@@ -178,6 +186,26 @@ private func describe(_ response: HTTPURLResponse) -> [String: Any] {
   return ["status": response.statusCode, "headers": headers]
 }
 
+/// The routes JSON `[{kind, origin}]`, every one valid for its kind; any other entry refuses the whole set.
+private func checkedRoutes(_ json: String) throws -> [RouteOrigin] {
+  guard let entries = (try? JSONSerialization.jsonObject(with: Data(json.utf8))) as? [[String: Any]], !entries.isEmpty
+  else {
+    throw transportError("invalid_origin", "The PC's addresses for this phone weren't a list of routes, so none were saved.")
+  }
+  var routes: [RouteOrigin] = []
+  for entry in entries {
+    guard let kind = entry["kind"] as? String, let origin = entry["origin"] as? String,
+      let checked = routeOrigin(kind: kind, origin: origin)
+    else {
+      throw transportError(
+        "invalid_origin", "The PC reported an address this phone won't use (a \((entry["kind"] as? String) ?? "unnamed") route), so none were saved.")
+    }
+    let route = RouteOrigin(kind: kind, origin: checked)
+    if !routes.contains(route) { routes.append(route) }
+  }
+  return routes
+}
+
 private func sameOrigin(_ url: URL, _ origin: String) -> Bool {
   guard let expected = URL(string: origin), url.scheme == "https", expected.scheme == "https" else { return false }
   return url.host?.lowercased() == expected.host?.lowercased() && url.port == expected.port
@@ -201,6 +229,7 @@ private final class Pairing: @unchecked Sendable {
   private let headers: [String: String]
   private let body: String
   private let promise: Promise
+  private var homeOrigins: [String] = []
   private let lock = NSLock()
   private var probes: [PinnedRequest] = []
   private var pending = 0
@@ -237,6 +266,7 @@ private final class Pairing: @unchecked Sendable {
       promise.reject(transportError("unreachable", "The pairing code offers no address this phone can use."))
       return
     }
+    homeOrigins = targets.map { $0.0 }
     lock.withLock { pending = targets.count }
     for (origin, url) in targets {
       let probe = PinnedRequest(pin: pin)
@@ -323,7 +353,8 @@ private final class Pairing: @unchecked Sendable {
       return
     }
     do {
-      try DeviceVault.save(pcId, DeviceSecret(origin: origin, pin: pinHex.lowercased(), token: token))
+      try DeviceVault.save(pcId, DeviceSecret(
+          origins: homeOrigins.map { RouteOrigin(kind: "home", origin: $0) }, pin: pinHex.lowercased(), token: token))
       let rest = try JSONSerialization.data(withJSONObject: answer)
       promise.resolve(["status": status, "origin": origin, "body": String(decoding: rest, as: UTF8.self)])
     } catch {

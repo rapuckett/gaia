@@ -64,7 +64,7 @@ function CodeBox({ lines, testID }: { lines: { text: string; tone?: CodeTone }[]
             <HScroll dir="ltr" hint testID={testID}>
                 <View style={{ minWidth: '100%', direction: 'ltr' }} {...dirProp('ltr')}>
                     {lines.map((line, i) => (
-                        <Text key={i} role="caption" mono dir="ltr" selectable tone={line.tone}>
+                        <Text key={i} role="caption" mono dir="ltr" align="ltr" selectable tone={line.tone}>
                             {line.text}
                         </Text>
                     ))}
@@ -212,7 +212,7 @@ function CallDetails({ prompt }: { prompt: GaiaNotification }) {
             {shownDetail && riskNote ? <Collapsible text={shownDetail} /> : null}
             {shownDetail && !riskNote ? (
                 <View style={{ direction: 'ltr' }} {...dirProp('ltr')}>
-                    <Text role="label" tone="secondary" mono dir="ltr">
+                    <Text role="label" tone="secondary" mono dir="ltr" align="ltr">
                         {shownDetail}
                     </Text>
                 </View>

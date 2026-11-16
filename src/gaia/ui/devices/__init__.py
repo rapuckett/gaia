@@ -44,7 +44,9 @@ TAILNET_NETWORK = "100.64.0.0/10"
 TAILNET_INTERFACES = frozenset({"Tailscale", "tailscale0"})
 TAILNET_UTUN_PREFIX = "utun"
 
-#: Peers the listener answers, and the subset a pairing code offers.
+#: The ranges a home subnet must sit in, and the subset a pairing code offers.
+#: The home network itself is narrower: the default route's interface and its
+#: subnet (``home.py``).
 HOME_NETWORKS = ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "169.254.0.0/16")
 OFFERED_NETWORKS = ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16")
 

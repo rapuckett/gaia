@@ -42,6 +42,7 @@ export function UserBubble({ message, onCollapse, context, startOpen }: UserBubb
                                 <Text
                                     role="body"
                                     dir={contentDir(message.content, uiDir)}
+                                    align={contentDir(message.content, uiDir)}
                                     numberOfLines={collapsed ? USER_COLLAPSE_LINES : undefined}
                                 >
                                     {message.content}

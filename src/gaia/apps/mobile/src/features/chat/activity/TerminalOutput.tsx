@@ -79,12 +79,12 @@ export function TerminalOutput({ output }: { output: CommandOutput }) {
                 <HScroll dir="ltr">
                     <Stack paddingX="md" paddingY="sm" gap="xs">
                         {output.command ? (
-                            <Text role="label" mono selectable dir="ltr">
+                            <Text role="label" mono selectable dir="ltr" align="ltr">
                                 {`$ ${output.command}`}
                             </Text>
                         ) : null}
                         {hasOutput ? (
-                            <Text role="label" mono selectable dir="ltr" tone={isError && !output.stdout ? 'danger' : 'secondary'} testID="terminal-text">
+                            <Text role="label" mono selectable dir="ltr" align="ltr" tone={isError && !output.stdout ? 'danger' : 'secondary'} testID="terminal-text">
                                 {view.text}
                             </Text>
                         ) : (

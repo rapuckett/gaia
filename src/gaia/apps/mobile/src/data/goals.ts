@@ -36,14 +36,30 @@ export function useGoalStats() {
     });
 }
 
-/** Why approved goals can't run (the goal list is unreadable), or null. Re-read every 30 s, as the web does. */
-export function useGoalStoreError() {
+/** Whether the goal list is unreadable (`error`) and whether only a new list fixes it (`damaged`). Re-read every 30 s, as the web does. */
+export function useGoalStoreHealth() {
     const client = useGaiaClient();
-    return useQuery<string | null>({
+    return useQuery<{ error: string | null; damaged: boolean }>({
         queryKey: goalKeys.health,
         enabled: client !== null,
-        queryFn: async ({ signal }) => (await requireClient(client).getGoalStoreHealth({ signal })).error,
+        queryFn: ({ signal }) => requireClient(client).getGoalStoreHealth({ signal }),
         refetchInterval: (query) => (failedWithoutData(query) ? false : GOAL_HEALTH_POLL_MS),
+    });
+}
+
+/** Why approved goals can't run (the goal list is unreadable), or null. */
+export function useGoalStoreError() {
+    const { data, ...rest } = useGoalStoreHealth();
+    return { ...rest, data: data === undefined ? undefined : data.error };
+}
+
+/** Moves a damaged goal list aside and starts a new one; re-reads the goals and the health after, as the web does. */
+export function useResetGoalStore() {
+    const client = useGaiaClient();
+    const queryClient = useQueryClient();
+    return useMutation<{ kept: string }, Error, void>({
+        mutationFn: () => requireClient(client).resetGoalStore(),
+        onSettled: () => queryClient.invalidateQueries({ queryKey: goalKeys.all }),
     });
 }
 
