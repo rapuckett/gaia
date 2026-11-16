@@ -87,7 +87,7 @@ function GetAKey({ provider }: { provider: Provider }) {
         <Card>
             <Stack gap="sm">
                 <Text role="ui" weight="medium">{t('setup.key.getOne')}</Text>
-                <Button variant="ghost" label={t('setup.key.step1')} onPress={() => openLink(FIREWORKS_KEYS_URL)} />
+                <Button variant="ghost" wrap label={t('setup.key.step1')} onPress={() => openLink(FIREWORKS_KEYS_URL)} />
                 <Text role="label" tone="secondary">{t('setup.key.step2')}</Text>
                 <Text role="label" tone="secondary">{t('setup.key.step3')}</Text>
             </Stack>
