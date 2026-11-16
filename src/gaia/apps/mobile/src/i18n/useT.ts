@@ -3,7 +3,7 @@
 
 import { getLocales } from 'expo-localization';
 
-import { DEFAULT_LOCALE, getLocale, isLocaleCode, setVariantPrefix, type Say } from '@webui/i18n/registry';
+import { DEFAULT_LOCALE, getLocale, isLocaleCode, isolate, setVariantPrefix, type Say } from '@webui/i18n/registry';
 import { dateLocale, translator, type Translate } from '@webui/i18n/translator';
 
 import { GaiaApiError, GaiaError, GaiaNetworkError } from '@/api/errors';
@@ -22,6 +22,11 @@ export function deviceLocaleCode(): string {
 export function describeError(error: unknown, t: Translate): string {
     if (error instanceof GaiaError) return t(error.messageKey, error.params);
     return error instanceof Error ? error.message : String(error);
+}
+
+/** English from the PC, kept in reading order inside an Arabic line. */
+export function ltr(text: string): string {
+    return isolate(text, 'ltr');
 }
 
 /** For an error filled into another message: use inside `t.compose`, so each language half carries its own wording and the line is bracketed once. */
