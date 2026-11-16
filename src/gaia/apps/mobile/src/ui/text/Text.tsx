@@ -20,7 +20,8 @@ export interface TextProps {
     weight?: Weight;
     mono?: boolean;
     italic?: boolean;
-    align?: 'start' | 'center' | 'end';
+    /** `start`/`end` follow the UI direction, whatever `dir` is; `ltr`/`rtl` pin the block to that direction's start edge (code, logs, content blocks). */
+    align?: 'start' | 'center' | 'end' | 'ltr' | 'rtl';
     /** Lines to show at normal text size; a person who chose a large size gets the whole text (up to 3 lines) unless `compact`. */
     numberOfLines?: number;
     /** Lines kept at large sizes instead of the whole text: only for long user content in a list (a chat title, a file name) or a header title. */
@@ -34,7 +35,7 @@ export interface TextProps {
     underline?: boolean;
     /** Inline code: mono on the code surface. */
     code?: boolean;
-    /** Writing direction of this run, for content whose language differs from the UI's. `auto` follows the first strong letter of a string child. */
+    /** Writing direction of this run only; it never moves the line. Content whose language differs from the UI's. `auto` follows the first strong letter of a string child. */
     dir?: 'ltr' | 'rtl' | 'auto';
     onPress?: () => void;
     accessibilityLabel?: string;
@@ -133,10 +134,10 @@ export function Text({
     }
     if (strike || underline) style.textDecorationLine = strike && underline ? 'underline line-through' : strike ? 'line-through' : 'underline';
     if (dir) style.writingDirection = dir;
-    const startsRight = (dir ?? (rtl ? 'rtl' : 'ltr')) === 'rtl';
     if (align === 'center') style.textAlign = 'center';
-    else if (align === 'end') style.textAlign = physicalAlign(!startsRight);
-    else if (align === 'start' || !nested) style.textAlign = physicalAlign(startsRight);
+    else if (align === 'ltr' || align === 'rtl') style.textAlign = physicalAlign(align === 'rtl');
+    else if (align === 'end') style.textAlign = physicalAlign(!rtl);
+    else if (align === 'start' || !nested) style.textAlign = physicalAlign(rtl);
     if (rtl) style.letterSpacing = 0;
 
     return (

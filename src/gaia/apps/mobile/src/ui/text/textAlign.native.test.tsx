@@ -60,9 +60,18 @@ describeNative('Text alignment in the Arabic UI', () => {
         expect(await styleOf({})).toMatchObject({ textAlign: 'right' });
     });
 
-    it('puts Latin text with dir=ltr on the left, native flip included, in an LTR paragraph', async () => {
-        nativeLayout(true, true);
+    it('sets an LTR run left to right but keeps the UI-start edge', async () => {
+        nativeLayout(true, false);
         expect(await styleOf({ dir: 'ltr' })).toMatchObject({ writingDirection: 'ltr', textAlign: 'right' });
+        nativeLayout(true, true);
+        expect(await styleOf({ dir: 'ltr' })).toMatchObject({ writingDirection: 'ltr', textAlign: 'left' });
+    });
+
+    it('pins an explicit LTR block to the physical left, native flip included', async () => {
+        nativeLayout(true, false);
+        expect(await styleOf({ dir: 'ltr', align: 'ltr' })).toMatchObject({ writingDirection: 'ltr', textAlign: 'left' });
+        nativeLayout(true, true);
+        expect(await styleOf({ dir: 'ltr', align: 'ltr' })).toMatchObject({ textAlign: 'right' });
     });
 
     it('sets no writing direction by default', async () => {
