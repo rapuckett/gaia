@@ -7,6 +7,7 @@ import { Platform, StyleSheet, Text } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { Disclosure, ThemeProvider } from '@/ui';
+import { space } from '@/ui/tokens/space';
 
 const describeNative = Platform.OS === 'web' ? describe.skip : describe;
 
@@ -17,8 +18,7 @@ const wrap = ({ children }: { children: ReactNode }) => (
 );
 
 describeNative('Disclosure body indent', () => {
-    // Web keeps I18nManager LTR, so paddingStart/marginStart resolve to the left side in Arabic; a row spacer follows the page direction on both.
-    it('indents with a row spacer, never a start padding or margin', async () => {
+    it('indents the open body with paddingStart, never a left padding or margin', async () => {
         await render(
             <Disclosure title="Agent info" open onToggle={() => {}} testID="d">
                 <Text testID="item">search_web</Text>
@@ -26,13 +26,11 @@ describeNative('Disclosure body indent', () => {
             { wrapper: wrap },
         );
         let body = screen.getByTestId('item').parent as { parent: unknown; props: Record<string, unknown> } | null;
-        while (body && StyleSheet.flatten(body.props.style as never)?.flexDirection !== 'row') body = body.parent as typeof body;
+        while (body && StyleSheet.flatten(body.props.style as never)?.paddingStart === undefined) body = body.parent as typeof body;
         expect(body).not.toBeNull();
         const style = StyleSheet.flatten(body!.props.style as never);
-        expect(style).not.toHaveProperty('paddingStart');
+        expect(style.paddingStart).toBe(space.xl);
         expect(style).not.toHaveProperty('paddingLeft');
-        expect(style).not.toHaveProperty('marginStart');
-        const [spacer] = (body as unknown as { children: { props: Record<string, unknown> }[] }).children;
-        expect(StyleSheet.flatten(spacer!.props.style as never)?.width).toBeGreaterThan(0);
+        expect(style).not.toHaveProperty('marginLeft');
     });
 });
