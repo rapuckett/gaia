@@ -14,7 +14,9 @@ import {
     openDevicePairing,
     removeDevice,
     resetDevicePairing,
+    startAwayRoute,
     startDeviceListener,
+    stopAwayRoute,
     stopDeviceListener,
     type DevicePairingOffer,
     type PairedDevice,
@@ -33,6 +35,10 @@ const REASON_KEYS = {
     wrong: 'settings.devices.reason.wrong',
     closed: 'settings.devices.reason.closed',
     rate_limited: 'settings.devices.reason.rateLimited',
+} as const;
+
+const ROUTE_ERROR_KEYS = {
+    no_tailscale_address: 'settings.devices.tailnetMissing',
 } as const;
 
 const PLATFORM_KEYS = {
@@ -158,6 +164,11 @@ export function DevicesSettings() {
         }
     }, [refresh]);
 
+    const tailnet = status?.routes?.find((r) => r.kind === 'tailnet');
+    const toggleTailnet = () => act(async () => {
+        setStatus(await (tailnet?.on ? stopAwayRoute('tailnet') : startAwayRoute('tailnet')));
+    });
+
     const toggle = () => act(async () => {
         if (listening) setOffer(null);
         setStatus(await (listening ? stopDeviceListener() : startDeviceListener()));
@@ -222,6 +233,33 @@ export function DevicesSettings() {
                     <p className="settings-hint" id="devices-connect-hint">{t('settings.devices.connectHint')}</p>
                 </div>
                 {listenError && <p className="settings-error" role="alert"><MarkedText text={listenError} /></p>}
+                {tailnet && (
+                    <div>
+                        <label className="setting-row">
+                            <strong>{t('settings.devices.tailnet')}</strong>
+                            <span className="toggle-switch">
+                                <input
+                                    type="checkbox"
+                                    role="switch"
+                                    checked={tailnet.on}
+                                    disabled={!listening}
+                                    aria-describedby="devices-tailnet-hint"
+                                    onChange={() => void toggleTailnet()}
+                                    aria-busy={busy}
+                                />
+                                <span className="toggle-track" />
+                            </span>
+                        </label>
+                        <p className="settings-hint" id="devices-tailnet-hint">
+                            {tailnet.on && tailnet.origin
+                                ? <MarkedText text={t('settings.devices.tailnetOnHint', { address: markLtr(new URL(tailnet.origin).hostname) })} />
+                                : t('settings.devices.tailnetHint')}
+                        </p>
+                        {tailnet.error_code && (
+                            <p className="settings-error" role="alert">{mapped(ROUTE_ERROR_KEYS, tailnet.error_code, t, 'route error')}</p>
+                        )}
+                    </div>
+                )}
             </section>
 
             <section className="settings-card" aria-label={t('settings.devices.pair')}>

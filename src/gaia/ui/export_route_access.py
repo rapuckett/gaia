@@ -45,6 +45,7 @@ def _guard_classes():
     return (
         (security.require_local_pc, "pc"),
         (security.require_pc_or_device, "pc_or_device"),
+        (security.require_pc_or_allowed_device, "pc_or_device"),
         (security.refuse_on_device_listener, "not_on_listener"),
         (security.require_device_listener, "pair"),
         (security.require_allowed_device, "device"),
