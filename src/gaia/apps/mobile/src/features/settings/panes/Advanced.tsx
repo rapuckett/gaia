@@ -241,7 +241,7 @@ function StatusBody({ status, modelName, actions, detailsOpen, onToggleDetails }
                                 <Text role="caption" tone="muted">{t('settings.advanced.corrupted')}</Text>
                             </Stack>
                             <Button
-                                label={downloading ? t.bare('settings.advanced.downloading') : t.bare('settings.advanced.redownload')}
+                                label={downloading ? t('settings.advanced.downloading') : t('settings.advanced.redownload')}
                                 accessibilityLabel={downloading ? t('settings.advanced.downloading') : t('settings.advanced.redownload')}
                                 variant="secondary"
                                 size="sm"
