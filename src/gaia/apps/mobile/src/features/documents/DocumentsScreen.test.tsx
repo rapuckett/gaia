@@ -155,6 +155,29 @@ describe('DocumentsScreen', () => {
             expect(screen.getByLabelText('File path to add').props.value).toBe('/Users/me/Library/Keychains');
         });
 
+        it("words a refusal code in the app's language, with the PC's sentence for a code it lacks", async () => {
+            const refuse = (code: string) => new GaiaApiError(403, 'PC sentence for an odd code.', undefined, undefined, { code, name: 'Keychains' });
+            await mount(createFakeClient({ sessions: [chat], documentUploadError: refuse('not_in_chat_folders') }), 'c1');
+            await typePath('/Users/me/Library/Keychains');
+            expect(await screen.findByText(/Keychains isn't in this chat's folders: add its folder to the chat on your PC/)).toBeTruthy();
+            expect(screen.queryByText(/PC sentence/)).toBeNull();
+            await screen.unmount();
+            await mount(createFakeClient({ sessions: [chat], documentUploadError: refuse('something_new') }), 'c1');
+            await typePath('/Users/me/Library/Keychains');
+            // The PC's English sentence is its own detail line; the message is ours.
+            expect(await screen.findByText('PC sentence for an odd code.')).toBeTruthy();
+            expect(screen.getByText("GAIA can't read files in that location")).toBeTruthy();
+        });
+
+        it("keeps a folder's unreadable-file reason out of the translated sentence", async () => {
+            const bad = doc('k1', 'msa.pdf', 'complete', 100);
+            const pcFolders = { '/Users/me/Contracts': { indexed: 1, failed: 1, skipped: 0, skipped_images: 0, documents: [bad] as IndexFolderResponse['documents'], errors: ['scan.pdf: the file is damaged\ntrace'] } };
+            await mount(createFakeClient({ sessions: [chat], pcFolders }), 'c1');
+            await typePath('/Users/me/Contracts');
+            expect(await screen.findByText('scan.pdf: the file is damaged')).toBeTruthy();
+            expect(screen.getByText(/1 file couldn't be added\. Subfolders aren't included\.$/)).toBeTruthy();
+        });
+
         it('has no path box without an open chat, whose folders the PC would read from', async () => {
             await mount(createFakeClient());
             expect(await screen.findByText('Add a file')).toBeTruthy();
