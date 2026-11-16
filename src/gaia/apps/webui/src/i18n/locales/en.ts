@@ -3837,6 +3837,7 @@ export const enMessages = {
     'mobileApp.pairing.pcs.inUse': 'In use',
     'mobileApp.pairing.pcs.use': 'Use this PC',
     'mobileApp.pairing.pcs.add': 'Pair another PC',
+    'mobileApp.pairing.pcs.pairedOn': 'Paired {date}',
     'mobileApp.pairing.pcs.more': 'Actions for {name}',
     'mobileApp.pairing.pcs.forget': 'Forget',
     'mobileApp.pairing.pcs.forgetTitle': 'Forget {name}?',

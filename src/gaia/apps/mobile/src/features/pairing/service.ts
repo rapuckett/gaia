@@ -10,6 +10,8 @@ export interface PairedPc {
     id: string;
     name: string;
     connection: ConnectionConfig;
+    /** When this phone was last allowed by the PC, ISO 8601; absent for a PC paired before it was kept. */
+    pairedAt?: string;
 }
 
 /**
