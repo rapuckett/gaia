@@ -129,21 +129,19 @@ function PreScan({ payload }: { payload: PreScanPayload }) {
 
 function Section({ intent, title, icon, count, children }: { intent: Intent; title: string; icon: typeof Mail; count: number; children: React.ReactNode }) {
     const { colors, radius } = useTheme();
-    const rail = intent === 'urgent' ? colors.danger : intent === 'actionable' ? colors.accent : colors.textMuted;
+    const iconTone = intent === 'urgent' ? 'danger' : intent === 'actionable' ? 'accent' : 'secondary';
     return (
         <View
             style={{
                 borderWidth: 1,
                 borderColor: colors.borderLight,
-                borderStartWidth: 3,
-                borderStartColor: rail,
                 borderRadius: radius.md,
                 overflow: 'hidden',
             }}
         >
             <View style={{ backgroundColor: colors.bgSecondary, paddingHorizontal: 12, paddingVertical: 8 }}>
                 <Row gap="sm">
-                    <Icon icon={icon} size="sm" tone="secondary" />
+                    <Icon icon={icon} size="sm" tone={iconTone} />
                     <Stack flex={1}>
                         <Text role="caption" weight="semibold" tone="secondary" accessibilityRole="header">
                             {title}
