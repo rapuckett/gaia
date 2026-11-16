@@ -4,6 +4,9 @@
 import { Redirect, useLocalSearchParams } from 'expo-router';
 import { devGalleryEnabled } from '@/features/dev/devGallery';
 
+import { CARD_SCENES, CardScenes, type CardScene } from '@/features/chat/messages/CardScenes';
+import { COMPARE_STATES, CompareGallery, type CompareState } from '@/features/chat/compare/CompareGallery';
+import { KeyedScene } from '@/features/dev/KeyedScene';
 import { MessagesGallery, type MessagesGalleryState } from '@/features/chat/messages/MessagesGallery';
 import { FIXTURES } from '@/features/chat/messages/__fixtures__/messages';
 import { SessionPanelGallery, type SessionPanelGalleryState } from '@/features/chat/session-panel/SessionPanelGallery';
@@ -19,6 +22,8 @@ function isState(state?: string): state is MessagesGalleryState {
 export default function MessagesGalleryRoute() {
     const { state } = useLocalSearchParams<{ state?: string }>();
     if (!devGalleryEnabled()) return <Redirect href="/" />;
+    if ((COMPARE_STATES as readonly string[]).includes(state ?? '')) return <KeyedScene sceneKey={state as string} scene={CompareGallery} props={{ state: state as CompareState }} />;
+    if ((CARD_SCENES as readonly string[]).includes(state ?? '')) return <KeyedScene sceneKey={state as string} scene={CardScenes} props={{ state: state as CardScene }} />;
     const panel = state?.startsWith('panel-') ? state.slice('panel-'.length) : undefined;
     if (panel && PANEL_STATES.includes(panel)) {
         return (

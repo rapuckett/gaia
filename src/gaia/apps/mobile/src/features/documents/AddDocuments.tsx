@@ -3,22 +3,26 @@
 
 import { useState } from 'react';
 
-import { GaiaApiError, GaiaError } from '@/api/errors';
-import { useAddDocument } from '@/data';
+import type { DocumentResponse, IndexFolderResponse } from '@/api/client.types';
+import { GaiaApiError } from '@/api/errors';
+import { useAddDocument, useAddPcPath, useSetupPreflight } from '@/data';
 import { describeError, describeErrorWith, useT } from '@/i18n/useT';
 import { pickDocuments, pickPhotos, type PickedFile } from '@/platform/pickers';
-import { Button, Notice, ProgressLine, Row, Stack, Text } from '@/ui';
+import { Button, Notice, ProgressLine, Row, Stack, Text, TextField } from '@/ui';
 import { FileText, FolderOpen, Image as ImageIcon } from '@/ui/icons';
 import type { MessageKey, Params } from '@webui/i18n/registry';
 import type { Translate } from '@webui/i18n/translator';
+import { describeFolderResult } from '@webui/utils/documentLibrary.core';
+import { examplePath } from '@webui/utils/platform';
 import { describeUploadError, unsupportedTypeMessage, type UploadErrorInput, type UploadErrorView } from '@webui/utils/uploadErrors.core';
 
 import { useNextChatDocs } from './nextChatDocs';
 
 // One line at a time: the indexing status, the result of the last add, or why it failed.
 export type AddLine =
-    | { kind: 'busy'; name: string }
+    | { kind: 'busy'; name: string; folder?: boolean }
     | { kind: 'done'; message: string }
+    | { kind: 'folder'; message: string; added: boolean }
     | { kind: 'unreadable'; message: string }
     | { kind: 'failed'; error: UploadErrorView }
     | { kind: 'picker'; message: string }
@@ -32,8 +36,9 @@ export interface StartMessage {
 
 /** Dev gallery only: the line a scene opens with, in what production stores before it is translated. */
 export type AddStart =
-    | { kind: 'busy'; name: string }
+    | { kind: 'busy'; name: string; folder?: boolean }
     | { kind: 'done' | 'unreadable'; message: StartMessage }
+    | { kind: 'folder'; name: string; result: IndexFolderResponse }
     | { kind: 'failed'; upload: Omit<UploadErrorInput, 'error'> & { error: string | StartMessage } }
     | { kind: 'picker' | 'unsupported'; cause: unknown };
 
@@ -41,6 +46,8 @@ function resolveStart(t: Translate, start: AddStart): AddLine {
     switch (start.kind) {
         case 'busy':
             return start;
+        case 'folder':
+            return folderLine(t, start.name, start.result);
         case 'done':
         case 'unreadable':
             return { kind: start.kind, message: t(start.message.key, start.message.params) };
@@ -53,6 +60,15 @@ function resolveStart(t: Translate, start: AddStart): AddLine {
     }
 }
 
+function folderLine(t: Translate, name: string, result: IndexFolderResponse): AddLine {
+    return { kind: 'folder', message: describeFolderResult(t, name, result), added: result.indexed > 0 };
+}
+
+/** The last part of a typed path, for messages; the path itself is sent as typed. */
+function pathName(path: string): string {
+    return path.replace(/[\\/]+$/, '').split(/[\\/]/).pop() || path;
+}
+
 interface AddDocumentsProps {
     // The chat documents are attached to; null leaves them for the next new chat.
     chatId: string | null;
@@ -61,16 +77,49 @@ interface AddDocumentsProps {
     onStart?: () => void;
     // Opens the PC's file browser for the chat; unset, or with no chat, leaves the button out.
     onBrowse?: (chatId: string) => void;
-    // Dev gallery only: the line shown on open.
+    // The open chat, whose folders the PC reads a typed path from; unset leaves the path box out.
+    pcChatId?: string | null;
+    // Dev gallery only: the line shown on open, and the text in the path box.
     initialLine?: AddStart;
+    initialPath?: string;
 }
 
-export function AddDocuments({ chatId, chatName, onStart, onBrowse, initialLine }: AddDocumentsProps) {
+export function AddDocuments({ chatId, chatName, onStart, onBrowse, pcChatId, initialLine, initialPath }: AddDocumentsProps) {
     const t = useT();
     const add = useAddDocument();
+    const addPath = useAddPcPath();
+    const preflight = useSetupPreflight();
     const holdForNextChat = useNextChatDocs((s) => s.add);
     const [line, setLine] = useState<AddLine | null>(() => (initialLine ? resolveStart(t, initialLine) : null));
+    const [path, setPath] = useState(initialPath ?? '');
     const busy = line?.kind === 'busy';
+    const pcOs = preflight.data?.os;
+    // The example follows the PC's way of writing paths; darwin is a Mac too.
+    const pathExample = pcOs == null ? undefined : examplePath(/darwin/i.test(pcOs) ? 'Mac' : pcOs);
+
+    function attachFailed(filename: string, attachError: Error): AddLine {
+        const error = t.compose((say) => say('docs.attachFailedAfterIndex', { chat: chatName ?? '', error: describeErrorWith(attachError, say) }));
+        return { kind: 'failed', error: describeUploadError(t, { filename, error }) };
+    }
+
+    function indexedLine(document: DocumentResponse, filename: string, attachError: Error | null): AddLine {
+        const name = document.filename || filename;
+        if (document.indexing_status === 'failed') return { kind: 'unreadable', message: t('docs.notAdded', { name }) };
+        if (attachError) return attachFailed(filename, attachError);
+        if (!chatId) holdForNextChat([document.id]);
+        return { kind: 'done', message: chatId ? t('docs.attached', { name, chat: chatName ?? '' }) : t('docs.willAttach', { name }) };
+    }
+
+    // The PC's answer as it sent it, through the same formatting as a picked file's.
+    function failedLine(err: unknown, filename: string): AddLine {
+        // An app build without uploads can't send a file to a paired PC; the request wraps its error, so look at the cause too.
+        const refusal = [err, err instanceof Error ? err.cause : null].find((e) => (e as { code?: string } | null)?.code === 'unsupported_body');
+        if (refusal) return { kind: 'unsupported', message: describeError(refusal, t) };
+        const api = err instanceof GaiaApiError ? err : null;
+        const kind = typeof api?.body?.status === 'string' ? api.body.status : null;
+        const error = kind === 'too_large' ? t('docs.tooLargeDetail', { max: String(api?.body?.max_mb) }) : describeError(err, t);
+        return { kind: 'failed', error: describeUploadError(t, { filename, error, status: api?.status, kind }) };
+    }
 
     async function addOne(file: PickedFile): Promise<AddLine> {
         const unsupported = unsupportedTypeMessage(file.name);
@@ -78,23 +127,38 @@ export function AddDocuments({ chatId, chatName, onStart, onBrowse, initialLine 
         setLine({ kind: 'busy', name: file.name });
         try {
             const { document, attachError } = await add.mutateAsync({ file, chatId });
-            const name = document.filename || file.name;
-            if (document.indexing_status === 'failed') return { kind: 'unreadable', message: t('docs.notAdded', { name }) };
-            if (attachError) {
-                const error = t.compose((say) => say('docs.attachFailedAfterIndex', { chat: chatName ?? '', error: describeErrorWith(attachError, say) }));
-                return { kind: 'failed', error: describeUploadError(t, { filename: file.name, error }) };
-            }
-            if (!chatId) holdForNextChat([document.id]);
-            return { kind: 'done', message: chatId ? t('docs.attached', { name, chat: chatName ?? '' }) : t('docs.willAttach', { name }) };
+            return indexedLine(document, file.name, attachError);
         } catch (err) {
-            // An app build without uploads can't send a file to a paired PC; the request wraps its error, so look at the cause too.
-            const refusal = [err, err instanceof Error ? err.cause : null].find((e) => (e as { code?: string } | null)?.code === 'unsupported_body');
-            if (refusal) return { kind: 'unsupported', message: describeError(refusal, t) };
-            const api = err instanceof GaiaApiError ? err : null;
-            const kind = typeof api?.body?.status === 'string' ? api.body.status : null;
-            const error = kind === 'too_large' ? t('docs.tooLargeDetail', { max: String(api?.body?.max_mb) }) : describeError(err, t);
-            return { kind: 'failed', error: describeUploadError(t, { filename: file.name, error, status: api?.status, kind }) };
+            return failedLine(err, file.name);
         }
+    }
+
+    // Only the person's Add sends the path; the PC decides whether this chat may read it.
+    async function submitPath() {
+        const typed = path.trim();
+        if (!typed || busy || !pcChatId) return;
+        onStart?.();
+        const name = pathName(typed);
+        setLine({ kind: 'busy', name });
+        let next: AddLine;
+        let added = false;
+        try {
+            const out = await addPath.mutateAsync({ path: typed, readChatId: pcChatId, chatId, onFolder: () => setLine({ kind: 'busy', name, folder: true }) });
+            if (out.kind === 'folder') {
+                const ids = out.result.documents.map((d) => d.id);
+                if (!chatId && ids.length > 0) holdForNextChat(ids);
+                next = out.attachError ? attachFailed(name, out.attachError) : folderLine(t, name, out.result);
+                added = true;
+            } else {
+                next = indexedLine(out.document, name, out.attachError);
+                added = out.document.indexing_status !== 'failed';
+            }
+        } catch (err) {
+            next = failedLine(err, name);
+        }
+        setLine(next);
+        // A failed add keeps the typed path, so trying again is one tap.
+        if (added) setPath('');
     }
 
     async function run(pick: () => Promise<PickedFile[]>) {
@@ -123,15 +187,43 @@ export function AddDocuments({ chatId, chatName, onStart, onBrowse, initialLine 
                 <Button label={t('docs.addFile')} icon={FileText} variant="secondary" disabled={busy} onPress={() => void run(pickDocuments)} />
             </Row>
             {onBrowse && chatId ? <Button label={t('chat.browseFiles')} icon={FolderOpen} variant="secondary" full disabled={busy} onPress={() => onBrowse(chatId)} /> : null}
+            {pcChatId ? (
+                <Stack gap="xs">
+                    <Text role="caption" tone="secondary">
+                        {t('docs.pathHint')}
+                    </Text>
+                    <Row gap="sm" align="center">
+                        <Stack flex={1}>
+                            <TextField
+                                value={path}
+                                onChangeText={setPath}
+                                placeholder={pathExample}
+                                accessibilityLabel={t('docs.pathAria')}
+                                url
+                                returnKeyType="go"
+                                onSubmitEditing={() => void submitPath()}
+                                testID="docs-path"
+                            />
+                        </Stack>
+                        <Button label={t('docs.index')} variant="secondary" disabled={!path.trim() || busy} onPress={() => void submitPath()} />
+                    </Row>
+                    <Text role="caption" tone="secondary">
+                        {t('docs.pathSubfolders')}
+                    </Text>
+                </Stack>
+            ) : null}
             {line?.kind === 'busy' ? (
                 <Stack gap="xs">
                     <Text role="caption" tone="secondary">
-                        {t('docs.indexingFile', { name: line.name })}
+                        {line.folder ? t('docs.indexingFolder', { name: line.name }) : t('docs.indexingFile', { name: line.name })}
                     </Text>
                     <ProgressLine />
                 </Stack>
             ) : null}
             {line?.kind === 'done' ? <Notice tone="success" role="note" message={line.message} onDismiss={() => setLine(null)} /> : null}
+            {line?.kind === 'folder' ? (
+                <Notice tone={line.added ? 'success' : 'info'} role="status" message={line.message} onDismiss={() => setLine(null)} dismissLabel={t('docs.dismissFolder')} />
+            ) : null}
             {line?.kind === 'unsupported' ? <Notice tone="warning" message={line.message} onDismiss={() => setLine(null)} /> : null}
             {line?.kind === 'unreadable' || line?.kind === 'picker' ? (
                 <Notice tone="danger" message={line.message} onDismiss={() => setLine(null)} />

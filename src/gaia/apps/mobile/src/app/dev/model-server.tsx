@@ -10,6 +10,7 @@ import { FlagshipAgentBanner } from '@/features/banners/FlagshipAgentBanner';
 import { ResourceStrip } from '@/features/chat/header/ResourceStrip';
 import { devGalleryEnabled } from '@/features/dev/devGallery';
 import { KeyedScene } from '@/features/dev/KeyedScene';
+import { useT } from '@/i18n/useT';
 import { AppErrorBoundary } from '@/features/errors/AppErrorBoundary';
 import { NeedPrompt } from '@/features/model/ModelNeededHost';
 import { ModelRestoreNotice } from '@/features/model/ModelRestoreNotice';
@@ -25,6 +26,7 @@ function Boom(): never {
 }
 
 function Body({ scene }: { scene: ModelScene }) {
+    const t = useT();
     switch (scene.view) {
         case 'sheet':
             return <ModelStatusSheet open onClose={noop} onOpenSettings={noop} initial={scene.sheet} />;
@@ -37,7 +39,17 @@ function Body({ scene }: { scene: ModelScene }) {
                 </Stack>
             );
         case 'resources':
-            return <ResourceStrip onClose={noop} />;
+            // The app shows the strip under the chat header; the stub header gives it the same offset.
+            return (
+                <>
+                    <Stack paddingX="lg" paddingY="sm">
+                        <Text role="title" weight="semibold" numberOfLines={1}>
+                            {t('chat.label')}
+                        </Text>
+                    </Stack>
+                    <ResourceStrip onClose={noop} />
+                </>
+            );
         case 'agent':
             return (
                 <Stack padding="lg">

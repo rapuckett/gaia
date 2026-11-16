@@ -23,9 +23,9 @@ function formatBytes(bytes: number): string {
 }
 
 /** How long, and how much, GAIA keeps the copies that make "Undo this turn" work. */
-export function PrivacyUndo() {
+export function PrivacyUndo({ initialOpen = false }: { initialOpen?: boolean }) {
     const t = useT();
-    const [open, setOpen] = useState(false);
+    const [open, setOpen] = useState(initialOpen);
     const undo = useUndoSettings();
     const save = useUpdateUndoSettings();
     const [days, setDays] = useState<string | null>(null);
