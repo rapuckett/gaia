@@ -15,7 +15,7 @@ import { PairingScanner } from './PairingScanner';
 const mockUsePermissions = jest.fn();
 const mockCameraProps: { current: { onBarcodeScanned: (r: { data: string }) => void } | null } = { current: null };
 jest.mock('expo-camera', () => ({
-    CameraView: (props: { onBarcodeScanned: unknown }) => {
+    CameraView: (props: { onBarcodeScanned: (r: { data: string }) => void }) => {
         mockCameraProps.current = props;
         return jest.requireActual('react').createElement('View', { testID: 'camera-view' });
     },
