@@ -3,6 +3,8 @@
 
 import { CUT_OFF_NOTICE_TEXT } from '@webui/utils/constants';
 
+import type { InferenceStats } from '@webui/types';
+
 import type { Message, StreamEvent } from '@/api/client.types';
 
 let nextId = 1;
@@ -254,9 +256,9 @@ const POLICY = [
     } as Message,
 ];
 
-const ROUTED = (content: string, route: Record<string, unknown>): Message[] => [
+const ROUTED = (content: string, route: NonNullable<InferenceStats['route']>): Message[] => [
     msg('user', 'Which of these two plans costs less over three years?', 0),
-    { ...msg('assistant', content, 1), stats: { seconds: 6.4, place: 'on your GPU', route } } as Message,
+    { ...msg('assistant', content, 1), stats: { tokens_per_second: 24, time_to_first_token: 1.2, input_tokens: 180, output_tokens: 96, seconds: 6.4, place: 'on your GPU', route } } as Message,
 ];
 
 const CUT_OFF = (notice: string): Message[] => [
