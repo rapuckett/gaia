@@ -3887,6 +3887,7 @@ const messages: Messages = {
     'mobileApp.yourPc.activity.visionNeeded': 'تحتاج قراءة الصور إلى نموذج الرؤية، وهو غير موجود على الكمبيوتر لديك بعد.',
     'mobileApp.yourPc.agentNotice.noBuild': 'لا يتوفر إصدار من وكيل GAIA للكمبيوتر لديك بعد، لذا لا تتوفر المحادثة هنا.',
     'mobileApp.yourPc.answer.place.thisPc': 'على الكمبيوتر لديك',
+    'mobileApp.yourPc.chat.browseFiles': 'تصفح الملفات على الكمبيوتر لديك',
     'mobileApp.yourPc.env.fullAccessWarn': 'يتيح الوصول الكامل لـ GAIA تغيير الملفات وتشغيل الأوامر على الكمبيوتر لديك دون استئذان.',
     'mobileApp.yourPc.gpu.body': 'يتشارك الكمبيوتر لديك {total} بين المعالج (CPU) والرسومات (GPU). لدى الـGPU الآن {gpu}. تعمل نماذج الذكاء الاصطناعي على الـGPU، لذا فالمزيد هنا يعني نماذج أكبر.',
     'mobileApp.yourPc.gpu.guided.loading': 'جارٍ جلب الخطوات للكمبيوتر لديك…',
