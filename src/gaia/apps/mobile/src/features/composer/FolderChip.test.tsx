@@ -14,11 +14,12 @@ import { FolderChip } from './FolderChip';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-jest.mock('@/ui/icons', () => ({ Folder: 'Folder', FolderPlus: 'FolderPlus' }));
+jest.mock('@/ui/icons', () => ({ ChevronDown: 'ChevronDown', Folder: 'Folder', FolderPlus: 'FolderPlus' }));
 jest.mock('@/ui', () => {
     const { createElement: mockElement } = jest.requireActual('react');
     const host = (type: string) => (props: Record<string, unknown>) => mockElement(type, props, props.children as ReactNode);
-    return { Button: host('Button'), Icon: host('Icon'), Notice: host('Notice'), Row: host('Row'), Stack: host('Stack'), Text: host('Text') };
+    const pressable = (props: Record<string, unknown>) => mockElement('Pressable', props, props.children as ReactNode);
+    return { Button: host('Button'), Icon: host('Icon'), Pressable: pressable, Row: host('Row'), Sheet: host('Sheet'), Stack: host('Stack'), Text: host('Text') };
 });
 
 const en = translator('en');
@@ -43,10 +44,12 @@ describe('FolderChip on a new chat', () => {
             );
         });
         const find = (id: string) => r.container.queryAll((i) => i.props.testID === id)[0];
-        expect(find('folder-add').props.label).toBe(en('folderChip.add'));
-        expect(find('folder-add-refusal')).toBeUndefined();
+        expect(find('folder-add').props.accessibilityLabel).toBe(en('folderChip.add'));
+        expect(r.container.queryAll((i) => i.type === 'Sheet')[0].props.open).toBe(false);
         await act(async () => find('folder-add').props.onPress());
-        expect(find('folder-add-refusal').props.message).toBe(en('mobileApp.pcOnly.refusal'));
+        const sheet = r.container.queryAll((i) => i.type === 'Sheet')[0];
+        expect(sheet.props.open).toBe(true);
+        expect(sheet.props.title).toBe(en('mobileApp.pcOnly.refusal'));
         expect(called).toEqual([]);
         await act(async () => r.unmount());
     });

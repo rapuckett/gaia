@@ -30,7 +30,7 @@ const note = (over: Partial<GaiaNotification> & { id: string; type: GaiaNotifica
     agentId: 'gaia', agentName: 'GAIA', title: '', message: '', timestamp: ago(5 * MIN), read: false, dismissed: false, priority: 'medium', ...over,
 });
 
-const FINISHED = note({ id: 'n-finished', type: 'status_change', title: 'Scheduled task "Morning summary" finished', message: 'Three new emails need a reply, and the 2 PM meeting moved to 3 PM.', sessionId: 's-sched', timestamp: ago(3 * MIN) });
+const FINISHED = note({ id: 'n-finished', type: 'info', title: 'Scheduled task "Morning summary" finished', message: 'Three new emails need a reply, and the 2 PM meeting moved to 3 PM.', sessionId: 's-sched', timestamp: ago(3 * MIN) });
 const FAILED = note({ id: 'n-failed', type: 'error', title: 'Scheduled task "Weekly backup" failed', message: 'The backup folder D:\\Backups is not reachable.', sessionId: 's-backup', priority: 'high', timestamp: ago(52 * MIN) });
 const ASK = note({
     id: 'confirm-1', type: 'permission_request', title: 'Run a command?', message: 'GAIA needs your OK to run a command.', tool: 'run_shell_command', toolLabel: 'run a command',
