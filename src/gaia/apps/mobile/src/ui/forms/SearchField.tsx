@@ -7,6 +7,7 @@ import { Icon } from '../controls/Icon';
 import { IconButton } from '../controls/IconButton';
 import { TextField } from '../controls/TextField';
 import { Search, X } from '../icons';
+import { INPUT_MAX_FONT_SCALE } from '../theme/a11y';
 
 export interface SearchFieldProps {
     value: string;
@@ -51,6 +52,7 @@ export function SearchField({ value, onChangeText, placeholder, debounceMs = 0, 
             autoFocus={autoFocus}
             disabled={disabled}
             testID={testID}
+            maxFontSizeMultiplier={INPUT_MAX_FONT_SCALE}
             leading={<Icon icon={Search} size="sm" tone="muted" />}
             trailing={
                 text ? (

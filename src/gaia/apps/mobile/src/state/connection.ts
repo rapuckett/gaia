@@ -5,6 +5,7 @@ import { Platform } from 'react-native';
 import { create } from 'zustand';
 
 import { normalizeBaseUrl } from '@/api/http';
+import type { RouteOrigin } from '@/features/pairing/homeNetwork';
 
 export interface ConnectionConfig {
     baseUrl: string;
@@ -15,6 +16,8 @@ export interface ConnectionConfig {
     pinned?: true;
     /** Every address the paired PC answers at, `baseUrl` among them; requests to any of them stay pinned. */
     origins?: string[];
+    /** The same addresses with how each is reached (home, Tailscale, relay). */
+    routes?: RouteOrigin[];
 }
 
 interface ConnectionState {

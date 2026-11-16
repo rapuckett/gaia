@@ -28,6 +28,8 @@ export interface TextProps {
     largeLines?: number;
     /** A label inside a fixed-size control: stops scaling at 1.3x and keeps `numberOfLines`. Give the control the full label in `accessibilityLabel`. */
     compact?: boolean;
+    /** Where this text stops growing with the person's text size, for a label that is not a title (a navigation row). */
+    maxScale?: number;
     selectable?: boolean;
     /** Where a one-line text is cut; `middle` keeps both ends of a path. */
     ellipsize?: 'tail' | 'middle';
@@ -94,6 +96,7 @@ export function Text({
     numberOfLines,
     largeLines,
     compact,
+    maxScale,
     selectable,
     ellipsize,
     strike,
@@ -147,7 +150,7 @@ export function Text({
             <RNText
                 style={style}
                 numberOfLines={lines}
-                maxFontSizeMultiplier={maxScaleFor(role, compact)}
+                maxFontSizeMultiplier={maxScale ?? maxScaleFor(role, compact)}
                 ellipsizeMode={ellipsize ?? 'tail'}
                 selectable={selectable}
                 onPress={onPress}

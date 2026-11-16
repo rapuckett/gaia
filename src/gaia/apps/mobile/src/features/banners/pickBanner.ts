@@ -41,7 +41,7 @@ export function pickBanner(
     fetchError: unknown,
     t: Translate,
     goalStoreError?: string | null,
-    pick?: { load: PickLoad | null; name?: string | null },
+    pick?: { load?: PickLoad | null; name?: string | null; awayHint?: boolean },
 ): Banner | null {
     const progress = status?.download_progress ?? null;
     if (progress?.state === 'downloading' || progress?.state === 'starting' || progress?.state === 'error') {
@@ -94,7 +94,7 @@ export function pickBanner(
         }
         // The PC itself not answering reads as the setup gate does; the assistant wording is for a PC that answers.
         if (fetchError instanceof GaiaNetworkError) {
-            return { id: 'unreachable', tone: 'danger', title: t('mobileApp.pairing.off.title'), message: t('mobileApp.pairing.unreachable.body'), retry: true };
+            return { id: 'unreachable', tone: 'danger', title: t('mobileApp.pairing.off.title'), message: t(pick?.awayHint ? 'mobileApp.pairing.unreachable.away' : 'mobileApp.pairing.unreachable.body'), retry: true };
         }
         return { id: 'unreachable', tone: 'danger', title: t('banner.unreachable'), message: t('banner.unreachableHint'), retry: true };
     }
