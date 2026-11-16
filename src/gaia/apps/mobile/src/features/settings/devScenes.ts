@@ -27,8 +27,8 @@ export interface SettingsScene {
     search?: string;
     /** Opens this model's Details section expanded. */
     openDetails?: string;
-    /** Opens Add a model from Hugging Face with this link typed in and checked (its report is in `data.customReports`). */
-    customLink?: string;
+    /** Opens Add a model from Hugging Face with this link already checked. */
+    customReport?: CustomModelReport;
     /** Opens the Messaging status with the just-paired line showing. */
     justPaired?: boolean;
     /** An action that never finishes, so its in-flight state stays on screen: tap its button (`#tap=model-download-<id>` or `#tap=model-use-<id>`). */
@@ -209,12 +209,12 @@ export const SETTINGS_SCENES: Record<string, SettingsScene> = {
     },
     // SET-MODEL-30: the link checked, with its checks and a quantization choice, and nothing to add yet; then the same link passing, with the Add button.
     'model-hf-checking': {
-        section: 'model', target: 'models-on-pc', gpuMemory: GPU, customLink: HF_URL,
-        data: { ...local([HAVE]), customReports: { [HF_URL]: HF_CHECKING } },
+        section: 'model', target: 'models-on-pc', gpuMemory: GPU, customReport: HF_CHECKING,
+        data: local([HAVE]),
     },
     'model-hf-ready': {
-        section: 'model', target: 'models-on-pc', gpuMemory: GPU, customLink: HF_URL,
-        data: { ...local([HAVE]), customReports: { [HF_URL]: { ...HF_REPORT, variants: HF_VARIANTS, file: 'Demo-Chat-Q4_K_M.gguf' } } },
+        section: 'model', target: 'models-on-pc', gpuMemory: GPU, customReport: { ...HF_REPORT, variants: HF_VARIANTS },
+        data: local([HAVE]),
     },
     // SET-MODEL-36 to 38: the cloud spending block (`cloud-spending`) under a connected cloud provider.
     'spend-total': { section: 'model', provider: 'fireworks', gpuMemory: GPU, data: { ...cloud([]), spending: spent({ limit_usd: 20, state: 'ok', unpriced_turns: 2, unreported_turns: 1 }) } },

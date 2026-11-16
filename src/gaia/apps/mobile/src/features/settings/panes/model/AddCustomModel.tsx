@@ -1,7 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { createContext, useContext, useEffect, useRef, useState } from 'react';
+import { createContext, useContext, useRef, useState } from 'react';
 
 import type { CustomModelReport } from '@/api/client.types';
 import { useAddCustomModel, useCheckCustomModel } from '@/data';
@@ -13,8 +13,8 @@ import { errorText, isolate, refusedOnPhone } from './modelText';
 
 const EXAMPLE_LINK = 'https://huggingface.co/unsloth/Qwen3-4B-Instruct-2507-GGUF';
 
-/** Dev scenes only: a link typed in and checked as the section opens. */
-export const SeedCustomLink = createContext('');
+/** Dev scenes only: a link already checked as the section opens. */
+export const SeedCustomReport = createContext<CustomModelReport | null>(null);
 
 export interface AddCustomModelProps {
     open: boolean;
@@ -29,11 +29,11 @@ export function AddCustomModel({ open, onToggle, onClose, onAdded }: AddCustomMo
     const t = useT();
     const check = useCheckCustomModel();
     const add = useAddCustomModel();
-    const seedLink = useContext(SeedCustomLink);
-    const [url, setUrl] = useState(seedLink);
+    const seed = useContext(SeedCustomReport);
+    const [url, setUrl] = useState(seed?.url ?? '');
     // A quantization's first file: unique even when two variants share a quant name.
-    const [file, setFile] = useState('');
-    const [report, setReport] = useState<CustomModelReport | null>(null);
+    const [file, setFile] = useState(seed?.file ?? '');
+    const [report, setReport] = useState<CustomModelReport | null>(seed);
     const [error, setError] = useState<string | null>(null);
     const [passedOpen, setPassedOpen] = useState(false);
     // The link the newest check was for; an older answer is dropped.
@@ -59,11 +59,6 @@ export function AddCustomModel({ open, onToggle, onClose, onAdded }: AddCustomMo
             },
         });
     };
-
-    useEffect(() => {
-        if (seedLink) runCheck('');
-        // eslint-disable-next-line react-hooks/exhaustive-deps -- once, as the dev scene opens
-    }, []);
 
     const runAdd = () => {
         setError(null);

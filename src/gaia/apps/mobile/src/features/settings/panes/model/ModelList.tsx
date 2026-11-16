@@ -11,7 +11,7 @@ import { useRemoveCustomModel, useStartModelDownload } from '@/data';
 import { useT } from '@/i18n/useT';
 import { Button, Divider, Notice, Row, SearchField, SettingsGroup, Sheet, Spinner, Stack, Text } from '@/ui';
 
-import { AddCustomModel, SeedCustomLink } from './AddCustomModel';
+import { AddCustomModel, SeedCustomReport } from './AddCustomModel';
 import { ModelRow } from './ModelRow';
 import { errorText, isolate, modelLabel, refusedOnPhone, sameModelId } from './modelText';
 
@@ -71,7 +71,8 @@ export function ModelList({ provider, remote, models, activeModel, switching, on
     );
     const [pcOnly, setPcOnly] = useState(false);
     const [justAdded, setJustAdded] = useState(!!seeded);
-    const [adding, setAdding] = useState(!!seeded || !!useContext(SeedCustomLink));
+    const seededReport = useContext(SeedCustomReport);
+    const [adding, setAdding] = useState(!!seeded || !!seededReport);
     const [confirmRemove, setConfirmRemove] = useState<ProviderModel | null>(null);
 
     const groups = useMemo(
