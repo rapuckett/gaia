@@ -17,7 +17,7 @@ jest.mock('expo-router', () => ({
     useRouter: () => ({ replace: jest.fn(), push: jest.fn() }),
     useNavigation: () => ({ canGoBack: () => false, goBack: jest.fn(), openDrawer: jest.fn(), toggleDrawer: jest.fn(), getParent: () => undefined }),
 }));
-// The real provider waits on font files the test environment doesn't have.
+// The real provider waits on font files the test environment doesn't have; SheetScope hosts the New schedule sheet.
 jest.mock('@/ui', () => {
     const actual = jest.requireActual('@/ui');
     const { SafeAreaProvider } = jest.requireActual('react-native-safe-area-context');
@@ -25,7 +25,7 @@ jest.mock('@/ui', () => {
     return {
         ...actual,
         UIProvider: ({ children }: { children: unknown }) =>
-            createElement(SafeAreaProvider, { initialMetrics: { frame: { x: 0, y: 0, width: 390, height: 800 }, insets: { top: 0, left: 0, right: 0, bottom: 0 } } }, createElement(actual.ThemeProvider, null, children)),
+            createElement(SafeAreaProvider, { initialMetrics: { frame: { x: 0, y: 0, width: 390, height: 800 }, insets: { top: 0, left: 0, right: 0, bottom: 0 } } }, createElement(actual.ThemeProvider, null, createElement(actual.SheetScope, null, children))),
     };
 });
 jest.mock('@/features/dev/devGallery', () => ({ devGalleryEnabled: () => true }));

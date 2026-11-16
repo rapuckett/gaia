@@ -33,7 +33,8 @@ const mount = () =>
     it('loading shows no load-failed state', async () => {
         mockScene = 'loading';
         await mount();
-        await screen.findByTestId('memory-pane-advanced');
+        await screen.findByTestId('memory-tab-advanced');
+        expect(screen.queryByTestId('memory-pane-advanced')).toBeNull();
         expect(screen.queryByText('Failed to load memory data. Is the backend running?')).toBeNull();
     });
 });
