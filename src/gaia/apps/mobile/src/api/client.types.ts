@@ -586,7 +586,9 @@ export interface GaiaClient {
     /** Goal and task counts by status. */
     getGoalStats(options?: RequestOptions): Promise<GoalStats>;
     /** Why GAIA can't run approved goals (the goal list can't be read); null when it can. */
-    getGoalStoreHealth(options?: RequestOptions): Promise<{ error: string | null }>;
+    getGoalStoreHealth(options?: RequestOptions): Promise<{ error: string | null; damaged: boolean }>;
+    /** Moves a damaged goal list aside and starts a new one; `kept` names the old file. The PC answers 409 when the list reads. */
+    resetGoalStore(options?: RequestOptions): Promise<{ kept: string }>;
     /** Makes a goal GAIA will work on; it starts queued. */
     createGoal(body: CreateGoalBody, options?: RequestOptions): Promise<Goal>;
     /** Accepts a goal GAIA suggested. A paired device's approval is audit-logged on the PC with the device's id. */

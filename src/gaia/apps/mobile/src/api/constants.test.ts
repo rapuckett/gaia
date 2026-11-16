@@ -107,6 +107,7 @@ describe('endpoints', () => {
         goals: ['GET', 'POST'],
         goalsHealth: ['GET'],
         goalsStats: ['GET'],
+        goalsStoreReset: ['POST'],
         gpuMemory: ['GET'],
         gpuMemoryPending: ['DELETE', 'POST'],
         health: ['GET'],

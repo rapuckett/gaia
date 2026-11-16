@@ -6,7 +6,7 @@ import { useState } from 'react';
 import { ref, type MessageKey } from '@webui/i18n/registry';
 
 import type { Goal } from '@/api/client.types';
-import { useGoalAction, useGoals, useGoalStats, useGoalStoreError, type GoalAction } from '@/data';
+import { useGoalAction, useGoals, useGoalStats, useGoalStoreHealth, useResetGoalStore, type GoalAction } from '@/data';
 import { isPcRefusal, PcOnlyNotice } from '@/features/settings/PcOnlyNotice';
 import { describeFailureWith, useT } from '@/i18n/useT';
 import { Badge, Button, LoadingState, Notice, Row, Stack, Text } from '@/ui';
@@ -30,7 +30,8 @@ export function GoalsPane({ notify }: MemoryPaneProps) {
     const [creating, setCreating] = useState(false);
     const list = useGoals();
     const stats = useGoalStats();
-    const storeError = useGoalStoreError();
+    const health = useGoalStoreHealth();
+    const resetStore = useResetGoalStore();
     const act = useGoalAction();
     const busyId = act.isPending ? act.variables.id : null;
 
@@ -40,6 +41,12 @@ export function GoalsPane({ notify }: MemoryPaneProps) {
             { onError: (error) => notify({ tone: 'danger', text: t.compose((say) => say('mem.goals.failed', { what: ref(FAILURES[action]), error: describeFailureWith(error, say) })) }) },
         );
 
+    const startNewList = () =>
+        resetStore.mutate(undefined, {
+            onSuccess: ({ kept }) => notify({ tone: 'success', text: t('mem.goals.newListStarted', { file: kept }) }),
+            onError: (error) => notify({ tone: 'danger', text: t.compose((say) => say('mem.goals.failed', { what: ref('mem.goals.startNewListFailed'), error: describeFailureWith(error, say) })) }),
+        });
+
     const goals = list.data;
     const suggested = goals?.filter((goal) => goal.status === 'pending_approval') ?? [];
     const shown = goals?.filter((goal) => goal.status !== 'pending_approval' && goal.status !== 'rejected') ?? [];
@@ -47,7 +54,16 @@ export function GoalsPane({ notify }: MemoryPaneProps) {
     return (
         <Stack gap="lg" paddingX="lg" paddingY="md" testID="memory-pane-goals">
             <Text tone="secondary">{t('mem.goals.intro')}</Text>
-            {storeError.data ? <Notice tone="warning" title={t('mem.goals.storeError')} message={storeError.data} testID="goals-store-error" /> : null}
+            {health.data?.error ? (
+                health.data.damaged ? (
+                    <Stack gap="sm" align="start" testID="goals-store-damaged">
+                        <Notice tone="warning" message={t('mem.goals.storeDamaged')} />
+                        <Button label={t.bare('mem.goals.startNewList')} accessibilityLabel={t('mem.goals.startNewList')} variant="secondary" disabled={resetStore.isPending} onPress={startNewList} testID="goals-start-new-list" />
+                    </Stack>
+                ) : (
+                    <Notice tone="warning" title={t('mem.goals.storeError')} message={health.data.error} testID="goals-store-error" />
+                )
+            ) : null}
             <Row gap="sm" wrap testID="goals-stats">
                 {STAT_STATUSES.map((status) => (
                     <Badge
