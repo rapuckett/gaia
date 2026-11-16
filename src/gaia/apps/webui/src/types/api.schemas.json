@@ -1142,6 +1142,51 @@
     "title": "AutomationRow",
     "type": "object"
   },
+  "AwayRouteStatus": {
+    "description": "An away route as the PC sees it: on or off, and why it failed.",
+    "properties": {
+      "error_code": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Error Code"
+      },
+      "kind": {
+        "enum": [
+          "tailnet",
+          "relay"
+        ],
+        "title": "Kind",
+        "type": "string"
+      },
+      "on": {
+        "title": "On",
+        "type": "boolean"
+      },
+      "origin": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Origin"
+      }
+    },
+    "required": [
+      "kind",
+      "on"
+    ],
+    "title": "AwayRouteStatus",
+    "type": "object"
+  },
   "BackendOption": {
     "description": "A llama.cpp backend this machine can run, with Lemonade's state for it.",
     "properties": {
@@ -3566,6 +3611,13 @@
       "port": {
         "title": "Port",
         "type": "integer"
+      },
+      "routes": {
+        "items": {
+          "$ref": "#/components/schemas/AwayRouteStatus"
+        },
+        "title": "Routes",
+        "type": "array"
       }
     },
     "required": [
@@ -3576,6 +3628,30 @@
       "pending_expiry_minutes"
     ],
     "title": "DeviceAccessStatus",
+    "type": "object"
+  },
+  "DeviceOrigin": {
+    "description": "One origin a paired device may reach this PC at.",
+    "properties": {
+      "kind": {
+        "enum": [
+          "home",
+          "tailnet",
+          "relay"
+        ],
+        "title": "Kind",
+        "type": "string"
+      },
+      "origin": {
+        "title": "Origin",
+        "type": "string"
+      }
+    },
+    "required": [
+      "kind",
+      "origin"
+    ],
+    "title": "DeviceOrigin",
     "type": "object"
   },
   "DevicePairRequest": {
@@ -3706,6 +3782,23 @@
       "exp"
     ],
     "title": "DevicePairingOffer",
+    "type": "object"
+  },
+  "DeviceRoutes": {
+    "description": "Every origin a paired device may reach this PC at now.",
+    "properties": {
+      "origins": {
+        "items": {
+          "$ref": "#/components/schemas/DeviceOrigin"
+        },
+        "title": "Origins",
+        "type": "array"
+      }
+    },
+    "required": [
+      "origins"
+    ],
+    "title": "DeviceRoutes",
     "type": "object"
   },
   "DeviceUsage": {
