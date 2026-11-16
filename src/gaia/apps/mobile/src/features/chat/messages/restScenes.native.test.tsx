@@ -194,10 +194,14 @@ describeNative('card, connector and undo scenes', () => {
         expect(screen.queryByText(/Session not found|no model status/, opts)).toBeNull();
     });
 
-    it.each([
-        ['panel-chgGitPr', 'changes-pr', t('mobileApp.changes.git.prTitle')],
-        ['panel-chgList', 'changes-review', t('mobileApp.changes.chat.reviewTitle')],
-    ])('%s opens the %s sheet over the panel, and Android back closes only that sheet', async (state, button, title) => {
+    it('panel-chgReview shows the review over the panel', async () => {
+        mockParams = { state: 'panel-chgReview' };
+        await mount(route('messages'));
+        expect(await screen.findByText(t('mobileApp.changes.chat.reviewTitle'), opts)).toBeTruthy();
+    });
+
+    it('Create PR opens its sheet over the panel, and Android back closes only that sheet', async () => {
+        const [state, button, title] = ['panel-chgGitPr', 'changes-pr', t('mobileApp.changes.git.prTitle')];
         // Android calls the newest back handler first and stops at the first that returns true.
         const handlers: Parameters<typeof BackHandler.addEventListener>[1][] = [];
         const spy = jest.spyOn(BackHandler, 'addEventListener').mockImplementation((_event, handler) => {
@@ -210,7 +214,7 @@ describeNative('card, connector and undo scenes', () => {
         expect(await screen.findByText(title, opts)).toBeTruthy();
         expect(screen.getByTestId(button, opts)).toBeTruthy();
 
-        act(() => {
+        await act(async () => {
             [...handlers].reverse().some((h) => h({} as never));
         });
         await waitFor(() => expect(screen.queryByText(title, opts)).toBeNull());
