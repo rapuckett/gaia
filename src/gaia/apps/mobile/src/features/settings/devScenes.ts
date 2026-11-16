@@ -93,7 +93,7 @@ const spent = (extra: Partial<SpendingReport>): SpendingReport => ({
 const HF_URL = 'https://huggingface.co/amd/Demo-Chat-GGUF';
 const HF_REPORT: CustomModelReport = {
     url: HF_URL, ok: true, error: null, display_name: 'Demo Chat', model_id: 'user.Demo-Chat-GGUF', size_gb: 3.4, file: 'Demo-Chat-Q4_K_M.gguf', quant: 'Q4_K_M',
-    checks: [{ id: 'chat', label: 'Chat model', ok: true, detail: 'Has a chat template' }, { id: 'fits', label: 'Fits this PC', ok: true, detail: 'Needs 4.6 GB' }],
+    checks: [{ id: 'chat', label: 'Chat model', ok: true, detail: 'Has a chat template' }, { id: 'fit', label: 'Fits this PC', ok: true, detail: 'Needs 4.6 GB' }],
     warnings: [], variants: [],
 };
 
@@ -117,7 +117,7 @@ export const SETTINGS_SCENES: Record<string, SettingsScene> = {
     // SET-MODEL-24, 25: a row downloading, and a Download tap that hangs (`#tap=model-download-Llama-3.2-3B-Instruct-GGUF`) with every button disabled.
     'model-downloading': {
         section: 'model', target: 'models-on-pc', gpuMemory: GPU, hang: 'download',
-        data: local([HAVE, model(WANT.id, { ...WANT, download_progress: { model_name: WANT.id, state: 'downloading', percent: 42, downloaded_bytes: 9.8e9, total_bytes: 23.3e9, file: null, file_index: 1, total_files: 1 } }), WANT_SMALL]),
+        data: local([HAVE, model(WANT.id, { ...WANT, download_progress: { model_name: WANT.id, state: 'downloading', percent: 42, downloaded_bytes: 9.8e9, total_bytes: 23.3e9, file: null, file_index: 1, total_files: 1, message: null } }), WANT_SMALL]),
     },
     // SET-MODEL-26: a Use tap that hangs (`#tap=model-use-user.my-tuned-GGUF`).
     'model-switching': { section: 'model', target: 'models-on-pc', gpuMemory: GPU, hang: 'select', data: local([HAVE, MINE_CUSTOM]) },
