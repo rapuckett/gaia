@@ -20,6 +20,8 @@ export interface NoticeProps {
     tone: NoticeTone;
     title?: string;
     message?: string;
+    /** A technical reason kept in its own language, under the message. */
+    detail?: string;
     action?: { label: string; onPress: () => void };
     /** Shows a close button at the end. */
     onDismiss?: () => void;
@@ -42,7 +44,7 @@ function withAlpha(hex: string, alpha: number): string {
 }
 
 // The icon carries the tone with the color, so it never rests on color alone.
-export function Notice({ tone, title, message, action, onDismiss, dismissLabel, role, variant = 'tint', testID }: NoticeProps) {
+export function Notice({ tone, title, message, detail, action, onDismiss, dismissLabel, role, variant = 'tint', testID }: NoticeProps) {
     const t = useT();
     const { colors, radius, space } = useTheme();
     const largeText = useLargeText();
@@ -83,6 +85,11 @@ export function Notice({ tone, title, message, action, onDismiss, dismissLabel, 
                         {message ? (
                             <Text role="label" tone="secondary">
                                 {message}
+                            </Text>
+                        ) : null}
+                        {detail ? (
+                            <Text role="caption" tone="muted" dir="ltr">
+                                {detail}
                             </Text>
                         ) : null}
                     </View>
