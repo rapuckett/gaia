@@ -4,6 +4,7 @@
 // The wording rules of webui's AutomationsSettings.tsx, which is a component and can't be imported.
 // Each takes one language half's `say` and locale, so a composed line words its dates and plurals per half.
 
+import { pluralCategory } from '@/i18n/plural';
 import { isMessageKey, isolateUnit, type MessageKey, type Say } from '@webui/i18n/registry';
 
 const UNITS: [string, number][] = [['week', 604800], ['day', 86400], ['hour', 3600], ['minute', 60]];
@@ -12,7 +13,7 @@ const UNITS: [string, number][] = [['week', 604800], ['day', 86400], ['hour', 36
 export function everyPhrase(seconds: number, say: Say, code: string): string | null {
     const unit = UNITS.find(([, size]) => seconds % size === 0) ?? UNITS[UNITS.length - 1]!;
     const n = Math.max(1, Math.round(seconds / unit[1]));
-    const key = `schedules.span.${unit[0]}.${new Intl.PluralRules(code).select(n)}`;
+    const key = `schedules.span.${unit[0]}.${pluralCategory(code, n)}`;
     if (!isMessageKey(key)) return null;
     return say('schedules.desc.every', { span: say(key as MessageKey, { n }) });
 }

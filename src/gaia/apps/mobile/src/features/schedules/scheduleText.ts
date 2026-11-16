@@ -3,6 +3,7 @@
 
 // The wording rules of webui's ScheduleManager.tsx, which is a component and can't be imported.
 
+import { pluralCategory } from '@/i18n/plural';
 import type { ScheduleDescription } from '@webui/types';
 import { DEFAULT_LOCALE, isMessageKey, type MessageKey, type Say } from '@webui/i18n/registry';
 import { dateLocale, translator, type Translate } from '@webui/i18n/translator';
@@ -65,7 +66,7 @@ function formatTimeOfDay(time: string, locale: string | undefined): string {
 
 /** `base.<CLDR plural form>` for `n` in the UI language; null when that form has no message. */
 function countedKey(base: string, n: number, t: Translate): MessageKey | null {
-    const key = `${base}.${new Intl.PluralRules(t.locale).select(n)}`;
+    const key = `${base}.${pluralCategory(t.locale, n)}`;
     return isMessageKey(key) ? key : null;
 }
 

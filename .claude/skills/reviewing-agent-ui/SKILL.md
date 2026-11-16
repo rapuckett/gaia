@@ -30,13 +30,15 @@ dashboard, Scheduled tasks and the model-status popover shipped entirely in Engl
 downloading Chromium.
 
 `npm test` also runs `src/gaia/apps/webui/src/i18n/__tests__/hardcodedText.test.ts`,
-which fails when a component gains English written straight into JSX (text, `title`,
-`placeholder`, `aria-label`, `alt`), including both arms of a ternary, the text after
-`&&` or `||`, and template strings. Put the text through `useT`. When you translate
-strings, lower the baseline (`UPDATE_I18N_BASELINE=1 npx vitest run hardcodedText`);
-raise it only for text that stays English in every language, and say why in the PR. It
-can't see strings built in variables or helpers, or sent by the backend, so those still
-need the screenshot.
+which fails when any `.ts` or `.tsx` file gains English written outside the catalogs:
+JSX text, text attributes (`title`, `aria-label`, `placeholder`, `label`...), message
+setters and toasts, copy properties such as `label:` and `message:`, switch-case
+returns, and capitalized sentences, including both arms of a ternary and template
+strings. It reports `file:line`; add a key in `en.ts` and `ar.ts` and use `useT`. When
+you translate strings, lower the baseline (`UPDATE_I18N_BASELINE=1 npx vitest run
+hardcodedText`); raise it only for text that stays English in every language, and say
+why in the PR. Product names are skipped. It can't see text built in variables
+or sent by the backend, so those still need the screenshot.
 
 **Every option on a screen must be one GAIA has proven.** A backend, device, model or
 setting the user can pick is a promise; list only what passed evals on that hardware
