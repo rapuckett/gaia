@@ -1,6 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
+import { waitFor } from '@testing-library/react-native';
 import { QueryClient } from '@tanstack/react-query';
 
 import { createFakeClient } from '@/api/fake';
@@ -23,7 +24,7 @@ describe('a stream that drops mid-turn', () => {
             const seen: string[] = [];
             const stop = useChatStreamStore.subscribe((state) => seen.push(state.turns.s1?.liveText ?? ''));
             expect(sendTurn({ client, queryClient }, 's1', 'Hi')).toBe(true);
-            await new Promise((resolve) => setTimeout(resolve, 50));
+            await waitFor(() => expect(readTurn('s1').status).toBe('idle'));
             expect(readTurn('s1').error).toBeNull();
             stop();
             expect(seen).toContain('Half an answer.');
@@ -48,9 +49,8 @@ describe('a stream that drops mid-turn', () => {
         const queryClient = new QueryClient();
         try {
             sendTurn({ client, queryClient }, 's2', 'Hi');
-            await new Promise((resolve) => setTimeout(resolve, 50));
+            await waitFor(() => expect(readTurn('s2').error).toBeInstanceOf(GaiaAuthError));
             expect(attach).toHaveBeenCalledTimes(1);
-            expect(readTurn('s2').error).toBeInstanceOf(GaiaAuthError);
         } finally {
             detachTurn('s2');
             queryClient.clear();
