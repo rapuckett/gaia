@@ -1,30 +1,47 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
+import { useState } from 'react';
 import { View } from 'react-native';
 
 import type { StartScreen } from '@webui/types';
 
 import { useSessionEnvironment } from '@/data';
 import { useT } from '@/i18n/useT';
-import { PcOnlyAction } from '@/features/logs/PcOnlyAction';
-import { Icon, Row, Stack, Text } from '@/ui';
+import { Button, Icon, Row, Sheet, Stack, Text } from '@/ui';
 import { Folder, FolderPlus } from '@/ui/icons';
 
 import { ChipMeasure, useChipCollapsed } from './ChipFitContext';
 import { ControlChip } from './ControlChip';
 
-/** Where the new chat's agent works. A phone can't give a chat a folder (the PC refuses it), so "Add a folder" says to do it on the PC. */
+/** Where the new chat's agent works. A phone can't give a chat a folder (the PC refuses it), so the "Add a folder" chip opens a sheet saying to do it on the PC. */
 export function FolderChip({ folder }: { folder: StartScreen['working_folder'] | undefined }) {
     const t = useT();
     const iconOnly = useChipCollapsed('folder');
+    const [explaining, setExplaining] = useState(false);
     if (!folder) return null;
     // GAIA's own folder is not named: a person never chose it.
     const named = !folder.gaia_folder;
     const addOnPc = folder.choosable ? (
-        <PcOnlyAction label={t('folderChip.add')} icon={FolderPlus} note={t('folderChip.addHint')} detail={t('mobileApp.settings.pcOnly')} testID="folder-add" />
+        <>
+            <ControlChip
+                label={t('folderChip.add')}
+                icon={FolderPlus}
+                chip="folder"
+                onPress={() => setExplaining(true)}
+                accessibilityHint={t('mobileApp.env.addFromPc')}
+                testID="folder-add"
+            />
+            <Sheet open={explaining} onClose={() => setExplaining(false)} title={t('mobileApp.pcOnly.refusal')}>
+                <Stack gap="md">
+                    <Text role="body" tone="secondary" testID="folder-add-refusal">
+                        {t('mobileApp.env.addFromPc')}
+                    </Text>
+                    <Button label={t('gpu.ok')} variant="secondary" full onPress={() => setExplaining(false)} testID="folder-add-ok" />
+                </Stack>
+            </Sheet>
+        </>
     ) : null;
-    if (!named && addOnPc) return addOnPc;
     const where = folder.gaia_folder ? t('folderChip.worksInOwn', { path: folder.path }) : t('folderChip.worksIn', { path: folder.path });
     const name = named ? folder.name : t('folderChip.gaiaFolder');
     const content = (compact: boolean) => (
@@ -44,10 +61,10 @@ export function FolderChip({ folder }: { folder: StartScreen['working_folder'] |
         </View>
     );
     return addOnPc ? (
-        <Stack gap="sm">
+        <>
             {chip}
             {addOnPc}
-        </Stack>
+        </>
     ) : (
         chip
     );
