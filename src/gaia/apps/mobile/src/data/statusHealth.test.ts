@@ -21,7 +21,7 @@ describe('status health', () => {
         h.record('slow');
         expect(h.get().slow).toBe(true);
         h.record('ok');
-        expect(h.get()).toEqual({ slow: false, lost: false });
+        expect(h.get()).toEqual({ slow: false, lost: false, slowPending: false });
     });
 
     it('reads slow at once after an outage', () => {
@@ -38,10 +38,10 @@ describe('status health', () => {
         t = STATUS_LOST_MS - 1;
         h.record('slow');
         h.record('slow');
-        expect(h.get()).toEqual({ slow: true, lost: false });
+        expect(h.get()).toEqual({ slow: true, lost: false, slowPending: false });
         t = STATUS_LOST_MS;
         h.record('slow');
-        expect(h.get()).toEqual({ slow: false, lost: true });
+        expect(h.get()).toEqual({ slow: false, lost: true, slowPending: false });
     });
 
     it('classifies timeouts and 504 as slow, 502 and network failures as unreachable', () => {

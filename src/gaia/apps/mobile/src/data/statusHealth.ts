@@ -12,9 +12,11 @@ export interface StatusHealth {
     slow: boolean;
     /** It has only answered slowly for STATUS_LOST_MS: as good as gone. */
     lost: boolean;
+    /** The latest answer was slow but the streak hasn't reached the threshold: show no banner yet. */
+    slowPending: boolean;
 }
 
-const CLEAR: StatusHealth = { slow: false, lost: false };
+const CLEAR: StatusHealth = { slow: false, lost: false, slowPending: false };
 
 /** A timeout or a gateway's 504 is slow; a refused request is unreachable; any other HTTP error is a failing PC. */
 export function classifyStatusError(error: unknown, timedOut: boolean): StatusOutcome {
@@ -36,7 +38,7 @@ export function createStatusHealth(now: () => number = Date.now) {
     const listeners = new Set<() => void>();
 
     const set = (next: StatusHealth) => {
-        if (next.slow === health.slow && next.lost === health.lost) return;
+        if (next.slow === health.slow && next.lost === health.lost && next.slowPending === health.slowPending) return;
         health = next;
         listeners.forEach((l) => l());
     };
@@ -53,10 +55,11 @@ export function createStatusHealth(now: () => number = Date.now) {
             streak += 1;
             since ??= now();
             if (now() - since >= STATUS_LOST_MS) {
-                set({ slow: false, lost: true });
+                set({ slow: false, lost: true, slowPending: false });
                 return;
             }
-            set({ slow: afterOutage || streak >= STATUS_SLOW_STREAK, lost: false });
+            const slow = afterOutage || streak >= STATUS_SLOW_STREAK;
+            set({ slow, lost: false, slowPending: !slow });
         },
         get: (): StatusHealth => health,
         subscribe(listener: () => void): () => void {

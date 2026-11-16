@@ -55,14 +55,14 @@ export function ConnectionBanner() {
     const status = useSystemStatus();
     const { data, refetch } = status;
     const { error } = useQueryFailure(status);
-    const { slow } = useStatusHealth();
+    const { slow, slowPending, lost } = useStatusHealth();
     const connection = useActiveConnection();
     const goalStoreError = useGoalStoreError().data;
     const client = useGaiaClient();
     const load = usePickLoadStore((s) => s.pickLoad);
     const activeModel = useActiveModel().data;
     const name = load && sameModelId(activeModel?.model, load.model) ? activeModel?.display_name : null;
-    const picked = pickBanner(data, error, t, goalStoreError, { load, name, awayHint: hasTailnetRoute(connection), slow });
+    const picked = pickBanner(data, error, t, goalStoreError, { load, name, awayHint: hasTailnetRoute(connection), slow, slowPending, lost });
     const redownload = useModelActions(picked?.downloadRetry ?? null, data);
     const { dismissed, dismiss, reconcile } = useBannerDismissedStore();
     useEffect(() => reconcile(picked), [picked?.id, picked?.dismissible, reconcile]); // eslint-disable-line react-hooks/exhaustive-deps

@@ -33,6 +33,8 @@ const ltr = (text: string) => `\u2066${text}\u2069`;
 
 const gb = (bytes: number, digits: number) => (bytes / 1e9).toFixed(digits);
 
+const UNREACHABLE = (t: Translate): Banner => ({ id: 'unreachable', tone: 'danger', title: t('banner.unreachable'), message: t('banner.unreachableHint'), retry: true });
+
 /**
  * The one banner the app shows, in the web's ConnectionBanner order (NTF-08..13):
  * download, start-up, backend trouble, model server, context window.
@@ -45,7 +47,7 @@ export function pickBanner(
     fetchError: unknown,
     t: Translate,
     goalStoreError?: string | null,
-    pick?: { load?: PickLoad | null; name?: string | null; awayHint?: boolean; slow?: boolean },
+    pick?: { load?: PickLoad | null; name?: string | null; awayHint?: boolean; slow?: boolean; slowPending?: boolean; lost?: boolean },
 ): Banner | null {
     const progress = status?.download_progress ?? null;
     if (progress?.state === 'downloading' || progress?.state === 'starting' || progress?.state === 'error') {
@@ -85,7 +87,9 @@ export function pickBanner(
         };
     }
 
-    if (fetchError) {
+    // A slow answer below the streak shows nothing, as on the web; its timeout is no outage.
+    if (fetchError && !pick?.slowPending) {
+        if (pick?.lost) return UNREACHABLE(t);
         if (pick?.slow || (fetchError instanceof GaiaApiError && fetchError.status === 504)) {
             return { id: 'slow', tone: 'warning', title: t('banner.slow'), message: t('banner.slowHint'), retry: true };
         }
@@ -103,7 +107,7 @@ export function pickBanner(
         if (fetchError instanceof GaiaNetworkError) {
             return { id: 'unreachable', tone: 'danger', title: t('mobileApp.pairing.off.title'), message: t(pick?.awayHint ? 'mobileApp.pairing.unreachable.away' : 'mobileApp.pairing.unreachable.body'), retry: true };
         }
-        return { id: 'unreachable', tone: 'danger', title: t('banner.unreachable'), message: t('banner.unreachableHint'), retry: true };
+        return UNREACHABLE(t);
     }
     if (!status) return null;
 
