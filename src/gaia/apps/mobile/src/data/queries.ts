@@ -18,7 +18,7 @@ import type {
     SessionSearchResponse,
     SystemStatus,
 } from '@/api/client.types';
-import { CONNECTOR_POLL_MS, RESOURCE_RETRY_MS, SEARCH_DEBOUNCE_MS, STATUS_IDLE_POLL_MS, STATUS_POLL_MS, STATUS_REQUEST_TIMEOUT_MS } from '@/api/constants';
+import { CHATS_POLL_MS, CONNECTOR_POLL_MS, RESOURCE_RETRY_MS, SEARCH_DEBOUNCE_MS, STATUS_IDLE_POLL_MS, STATUS_POLL_MS, STATUS_REQUEST_TIMEOUT_MS } from '@/api/constants';
 import { GaiaConfigError } from '@/api/errors';
 
 import { useGaiaClient } from './GaiaClientProvider';
@@ -88,6 +88,7 @@ export function useSessions() {
         queryKey: queryKeys.sessions,
         enabled: client !== null,
         queryFn: ({ signal }) => fetchSessions(client, queryClient, signal),
+        refetchInterval: (query) => (failedWithoutData(query) ? false : CHATS_POLL_MS),
     });
 }
 
