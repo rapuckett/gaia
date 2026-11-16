@@ -431,9 +431,7 @@ export function SessionPanelGallery({ state }: { state: SessionPanelGalleryState
                 ? { phase: 'confirm' }
                 : state === 'chgConflict'
                   ? { phase: 'conflict', message: UNDO_CONFLICT }
-                  : state === 'chgReview'
-                    ? { review: true }
-                    : null,
+                  : null,
         );
         writeTurn('dev', state === 'ansPending' ? { ...IDLE_TURN, status: 'streaming' } : null);
         store.setSection('context', ctx);
