@@ -7,7 +7,9 @@ import { useEffect } from 'react';
 import { useGoalStoreError, useQueryFailure, useSystemStatus } from '@/data';
 import { useT } from '@/i18n/useT';
 import { openChat } from '@/features/nav/navigation';
+import { hasTailnetRoute } from '@/features/pairing/routes';
 import { useAnnounce } from '@/platform/useAnnounce';
+import { useConnectionStore } from '@/state/connection';
 import { useBannerDismissedStore } from '@/state/bannerDismissed';
 import { useChatAlertBannerStore, type ChatAlertBanner } from '@/state/chatAlertBanner';
 import { Notice, ProgressLine, Stack } from '@/ui';
@@ -42,8 +44,9 @@ export function ConnectionBanner() {
     const status = useSystemStatus();
     const { data, refetch } = status;
     const { error } = useQueryFailure(status);
+    const connection = useConnectionStore((s) => s.connection);
     const goalStoreError = useGoalStoreError().data;
-    const picked = pickBanner(data, error, t, goalStoreError);
+    const picked = pickBanner(data, error, t, goalStoreError, hasTailnetRoute(connection));
     const { dismissed, dismiss, reconcile } = useBannerDismissedStore();
     useEffect(() => reconcile(picked), [picked?.id, picked?.dismissible, reconcile]); // eslint-disable-line react-hooks/exhaustive-deps
     const banner = picked && picked.id === dismissed ? null : picked;

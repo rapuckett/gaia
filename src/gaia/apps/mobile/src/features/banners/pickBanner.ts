@@ -28,7 +28,7 @@ const gb = (bytes: number, digits: number) => (bytes / 1e9).toFixed(digits);
  * download, start-up, backend trouble, model server, context window.
  * `fetchError` is the status request's failure, if it failed.
  */
-export function pickBanner(status: SystemStatus | undefined, fetchError: unknown, t: Translate, goalStoreError?: string | null): Banner | null {
+export function pickBanner(status: SystemStatus | undefined, fetchError: unknown, t: Translate, goalStoreError?: string | null, awayHint?: boolean): Banner | null {
     const progress = status?.download_progress ?? null;
     if (progress?.state === 'downloading' || progress?.state === 'starting' || progress?.state === 'error') {
         const name = progress.model_name || status?.default_model_name || '';
@@ -56,7 +56,7 @@ export function pickBanner(status: SystemStatus | undefined, fetchError: unknown
         }
         // The PC itself not answering reads as the setup gate does; the assistant wording is for a PC that answers.
         if (fetchError instanceof GaiaNetworkError) {
-            return { id: 'unreachable', tone: 'danger', title: t('mobileApp.pairing.off.title'), message: t('mobileApp.pairing.unreachable.body'), retry: true };
+            return { id: 'unreachable', tone: 'danger', title: t('mobileApp.pairing.off.title'), message: t(awayHint ? 'mobileApp.pairing.unreachable.away' : 'mobileApp.pairing.unreachable.body'), retry: true };
         }
         return { id: 'unreachable', tone: 'danger', title: t('banner.unreachable'), message: t('banner.unreachableHint'), retry: true };
     }
