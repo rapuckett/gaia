@@ -4,7 +4,7 @@
 import { GaiaPinMismatchError, GaiaUploadUnsupportedError } from '@/api/errors';
 import { createUtf8Decoder } from '@/api/utf8';
 
-import { GaiaTransport } from '../../modules/gaia-transport';
+import { GaiaTransport, type NativeSubscription } from '../../modules/gaia-transport';
 import type { FetchRequestInit, FetchResponseLike } from './fetch.types';
 import { encodeBody } from './uploadBody';
 
@@ -38,9 +38,23 @@ export async function pinnedFetch(pcId: string, url: string, init: FetchRequestI
     if (upload && !sendUpload) throw new GaiaUploadUnsupportedError();
     const id = `pinned-${++lastId}`;
     if (signal?.aborted) throw Object.assign(new Error('The request was canceled.'), { code: 'aborted' });
-    const abort = () => GaiaTransport.cancel(id);
+    const { onUploadProgress } = init;
+    let progress: NativeSubscription | undefined;
+    if (upload && onUploadProgress && GaiaTransport.addListener) {
+        progress = GaiaTransport.addListener('onUploadProgress', (e) => {
+            if (e.id === id) onUploadProgress(e.sent, e.total);
+        });
+    }
+    const done = () => {
+        signal?.removeEventListener('abort', abort);
+        progress?.remove();
+        progress = undefined;
+    };
+    const abort = () => {
+        done();
+        GaiaTransport.cancel(id);
+    };
     signal?.addEventListener('abort', abort);
-    const done = () => signal?.removeEventListener('abort', abort);
 
     let head;
     try {
