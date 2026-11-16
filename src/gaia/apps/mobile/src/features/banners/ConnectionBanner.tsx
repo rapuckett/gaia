@@ -2,15 +2,18 @@
 // SPDX-License-Identifier: MIT
 
 import { useRouter } from 'expo-router';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
-import { useGoalStoreError, useQueryFailure, useSystemStatus } from '@/data';
+import { useActiveModel, useGaiaClient, useGoalStoreError, useModelActions, useQueryFailure, useStatusHealth, useSystemStatus } from '@/data';
 import { useT } from '@/i18n/useT';
 import { openChat } from '@/features/nav/navigation';
+import { hasTailnetRoute, useActiveConnection } from '@/features/pairing/routes';
 import { useAnnounce } from '@/platform/useAnnounce';
 import { useBannerDismissedStore } from '@/state/bannerDismissed';
 import { useChatAlertBannerStore, type ChatAlertBanner } from '@/state/chatAlertBanner';
-import { Notice, ProgressLine, Stack } from '@/ui';
+import { usePickLoadStore } from '@/state/pickLoad';
+import { sameModelId } from '@webui/utils/modelList.core';
+import { Disclosure, Ltr, Notice, ProgressLine, Stack } from '@/ui';
 
 import { pickBanner } from './pickBanner';
 
@@ -36,14 +39,31 @@ function ChatAlertNotice({ alert }: { alert: ChatAlertBanner }) {
     );
 }
 
+function BannerDetails({ text }: { text: string }) {
+    const t = useT();
+    const [open, setOpen] = useState(false);
+    return (
+        <Disclosure title={t('setup.progress.details')} open={open} onToggle={() => setOpen((o) => !o)}>
+            <Ltr>{text}</Ltr>
+        </Disclosure>
+    );
+}
+
 /** The banner for the top of a `Screen`: a chat alert, then connection trouble; nothing while all is well or no PC is connected. */
 export function ConnectionBanner() {
     const t = useT();
     const status = useSystemStatus();
     const { data, refetch } = status;
     const { error } = useQueryFailure(status);
+    const { slow, slowPending, lost } = useStatusHealth();
+    const connection = useActiveConnection();
     const goalStoreError = useGoalStoreError().data;
-    const picked = pickBanner(data, error, t, goalStoreError);
+    const client = useGaiaClient();
+    const load = usePickLoadStore((s) => s.pickLoad);
+    const activeModel = useActiveModel().data;
+    const name = load && sameModelId(activeModel?.model, load.model) ? activeModel?.display_name : null;
+    const picked = pickBanner(data, error, t, goalStoreError, { load, name, awayHint: hasTailnetRoute(connection), slow, slowPending, lost });
+    const redownload = useModelActions(picked?.downloadRetry ?? null, data);
     const { dismissed, dismiss, reconcile } = useBannerDismissedStore();
     useEffect(() => reconcile(picked), [picked?.id, picked?.dismissible, reconcile]); // eslint-disable-line react-hooks/exhaustive-deps
     const banner = picked && picked.id === dismissed ? null : picked;
@@ -59,9 +79,18 @@ export function ConnectionBanner() {
                         tone={banner.tone}
                         title={banner.title}
                         message={banner.message}
-                        onDismiss={banner.dismissible ? () => dismiss(banner.id) : undefined}
-                        action={banner.retry ? { label: t('settings.key.checkAgain'), onPress: () => void refetch() } : undefined}
+                        onDismiss={banner.dismissible ? () => (banner.id === 'pickLoad' ? usePickLoadStore.getState().clear() : dismiss(banner.id)) : undefined}
+                        action={
+                            banner.downloadRetry
+                                ? { label: t('docs.retry'), onPress: () => void redownload.download(false) }
+                                : banner.pickRetry && client
+                                  ? { label: t('banner.pickLoad.retry'), onPress: () => void usePickLoadStore.getState().retry(client) }
+                                  : banner.retry
+                                    ? { label: t('settings.key.checkAgain'), onPress: () => void refetch() }
+                                    : undefined
+                        }
                     />
+                    {banner.details ? <BannerDetails text={banner.details} /> : null}
                     {banner.progress ? <ProgressLine value={banner.progress.value} label={banner.progress.label} /> : null}
                 </Stack>
             ) : null}

@@ -91,11 +91,11 @@ export function ProfileCard({ kind, notify }: { kind: ProfileKind; notify: Memor
                 ) : null}
                 {pinned ? <PcOnlyNotice testID={`profile-${kind}-pc-only`} /> : null}
                 {pinned ? null : (
-                    <Row gap="sm" wrap>
+                    <Row gap="sm" wrap stack>
                         <Button
                             label={t.bare(phase === 'running' ? 'mem.running' : copy.run)}
                             accessibilityLabel={t(phase === 'running' ? 'mem.running' : copy.run)}
-                            variant="secondary"
+                            variant="primary"
                             busy={phase === 'running'}
                             disabled={busy}
                             onPress={() => void run.start(includeBrowser)}
@@ -136,7 +136,7 @@ export function ProfileCard({ kind, notify }: { kind: ProfileKind; notify: Memor
                             accessibilityLabel={t('mem.review.title')}
                             testID={`profile-${kind}-items`}
                         />
-                        <Row gap="md" wrap>
+                        <Row gap="md" wrap stack>
                             <Button
                                 label={t.bare('mem.review.selectAll')}
                                 accessibilityLabel={t('mem.review.selectAll')}

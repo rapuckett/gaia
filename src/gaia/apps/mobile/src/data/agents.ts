@@ -60,7 +60,7 @@ export type FlagshipInstallState =
  * agent build for this PC (nothing to install); it is read only while the agent is missing.
  * `install()` starts the install on the PC and reports `state` until the agent list shows it.
  */
-export function useFlagshipAgent() {
+export function useFlagshipAgent(initialState?: FlagshipInstallState) {
     const client = useGaiaClient();
     const queryClient = useQueryClient();
     const agents = useAgents();
@@ -70,7 +70,7 @@ export function useFlagshipAgent() {
         enabled: client !== null && missing,
         queryFn: ({ signal }) => requireClient(client).checkSetup(false, { signal }),
     });
-    const [state, setState] = useState<FlagshipInstallState>({ kind: 'idle' });
+    const [state, setState] = useState<FlagshipInstallState>(initialState ?? { kind: 'idle' });
     const cancelled = useRef(false);
     useEffect(() => {
         cancelled.current = false;

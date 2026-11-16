@@ -4,7 +4,7 @@
 import type { BrowseResponse, PreflightReport } from '@/api/client.types';
 import { createFakeClient } from '@/api/fake';
 
-export type FileBrowserScene = 'root' | 'folder' | 'search' | 'denied' | 'searchStopped' | 'selected';
+export type FileBrowserScene = 'root' | 'folder' | 'search' | 'denied' | 'searchStopped' | 'selected' | 'askPartial';
 
 const HOME = '/Users/me';
 const DOCS = `${HOME}/Documents`;
@@ -42,7 +42,7 @@ const folder: BrowseResponse = {
 
 /** The file browser on a fake PC: `root`, `folder`, `search`, `searchStopped` or `denied`. */
 export function fileBrowserScene(scene: FileBrowserScene) {
-    return createFakeClient({
+    const client = createFakeClient({
         sessions: [{ id: 'chat-1', title: 'Board prep', created_at: ago(60), updated_at: ago(5), model: '', system_prompt: null, message_count: 1, document_ids: [] }],
         preflight: { os: 'mac-arm64', detected_platform: 'mac-arm64', ram_gb: 32, disk_free_gb: 200, npu_detected: false, gpu_name: null, gpu_vram_gb: null, lemonade_running: true, compatible: true } as PreflightReport,
         fileFolders: { '': root, [DOCS]: folder, [`${HOME}/Desktop`]: 'denied' },
@@ -57,11 +57,17 @@ export function fileBrowserScene(scene: FileBrowserScene) {
             ],
         },
     });
+    if (scene === 'askPartial') {
+        const upload = client.uploadDocumentByPath;
+        client.uploadDocumentByPath = (path, chatId) => (path.endsWith('budget.xlsx') ? Promise.reject(new Error('Could not read the file')) : upload(path, chatId));
+    }
+    return client;
 }
 
-export const FILE_BROWSER_START: Record<FileBrowserScene, { path?: string; search?: string; selected?: string[] }> = {
+export const FILE_BROWSER_START: Record<FileBrowserScene, { path?: string; search?: string; selected?: string[]; ask?: boolean }> = {
     root: {},
     folder: { path: DOCS },
+    askPartial: { path: DOCS, selected: [`${DOCS}/q3-board.pdf`, `${DOCS}/budget.xlsx`], ask: true },
     selected: { path: DOCS, selected: [`${DOCS}/q3-board.pdf`, `${DOCS}/budget.xlsx`] },
     search: { search: 'board' },
     searchStopped: { search: 'board' },

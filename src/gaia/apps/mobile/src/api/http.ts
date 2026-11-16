@@ -1,7 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import type { Message, ResourceUsage, Session, StartScreen, StreamEvent, SystemStatus } from '@webui/types';
+import type { Message, ResourceUsage, Session, StartScreen, StreamEvent, SystemStatus, WarmUpStatus } from '@webui/types';
 import { fromApiMessages } from '@webui/utils/chatStream';
 import { isMediaFile } from '@webui/utils/mediaFiles';
 
@@ -36,6 +36,8 @@ import type {
     ConfirmToolResult,
     ContextChoice,
     ConnectorActivations,
+    ConnectorDeviceAuthResponse,
+    ConnectorSignInEnd,
     AllPermissions,
     ConnectorGrants,
     ConnectorList,
@@ -133,6 +135,7 @@ import {
     ATTACH_HEADER_TIMEOUT_MS,
     connectorActivationPath,
     connectorActivationsPath,
+    connectorAuthorizeDevicePath,
     connectorDisablePath,
     connectorGrantPath,
     connectorGrantsPath,
@@ -325,6 +328,20 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
         } finally {
             clearTimeout(timer);
         }
+    }
+
+    /** The first sign-in outcome the PC reports for this connector, or null when the stream ends first. */
+    async function readSignInEnd(events: AsyncGenerator<StreamEvent>, connectorId: string): Promise<ConnectorSignInEnd | null> {
+        for await (const event of events) {
+            const { type, payload } = event as unknown as { type: string; payload?: Record<string, unknown> };
+            if (payload?.connector_id !== connectorId) continue;
+            if (type === 'connector.oauth.completed') return { outcome: 'completed' };
+            if (type === 'connector.oauth.error') {
+                const error = typeof payload.error === 'string' ? payload.error : undefined;
+                return { outcome: payload.reason === 'cancelled' ? 'cancelled' : 'failed', error };
+            }
+        }
+        return null;
     }
 
     async function readJson<T>(res: FetchResponseLike, path: string): Promise<T> {
@@ -833,6 +850,23 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             await request('DELETE', connectorActivationPath(connectorId, agentId), undefined, options?.signal);
         },
 
+        startConnectorDeviceSignIn(connectorId, scopes, options) {
+            return postJson<ConnectorDeviceAuthResponse>(connectorAuthorizeDevicePath(connectorId), { scopes }, options?.signal);
+        },
+
+        async watchConnectorSignIn(connectorId, options) {
+            const listen = new AbortController();
+            const stop = () => listen.abort();
+            options?.signal?.addEventListener('abort', stop);
+            try {
+                const events = await openConnectorEvents(listen.signal);
+                return events ? await readSignInEnd(events, connectorId).catch(() => null) : null;
+            } finally {
+                options?.signal?.removeEventListener('abort', stop);
+                stop();
+            }
+        },
+
         async disableConnector(connectorId, options) {
             await request('POST', connectorDisablePath(connectorId), {}, options?.signal);
         },
@@ -957,7 +991,11 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
         },
 
         getGoalStoreHealth(options) {
-            return getJson<{ error: string | null }>(ENDPOINTS.goalsHealth, options?.signal);
+            return getJson<{ error: string | null; damaged: boolean }>(ENDPOINTS.goalsHealth, options?.signal);
+        },
+
+        resetGoalStore(options) {
+            return postJson<{ kept: string }>(ENDPOINTS.goalsStoreReset, undefined, options?.signal);
         },
 
         createGoal(body, options) {
@@ -1121,6 +1159,15 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         getSystemStatus(options) {
             return getJson<SystemStatus>(ENDPOINTS.systemStatus, options?.signal);
+        },
+
+        getWarmUp(options) {
+            return getJson<WarmUpStatus>(ENDPOINTS.systemWarmUp, options?.signal);
+        },
+
+        requestWarmUp(fresh, options) {
+            const path = fresh ? `${ENDPOINTS.systemWarmUp}?fresh=true` : ENDPOINTS.systemWarmUp;
+            return request('POST', path, undefined, options?.signal).then((res) => readJson<WarmUpStatus>(res, path));
         },
 
         downloadModel(model, options) {

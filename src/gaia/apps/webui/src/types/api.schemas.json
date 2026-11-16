@@ -602,6 +602,17 @@
         "title": "Active",
         "type": "boolean"
       },
+      "autoDeclined": {
+        "anyOf": [
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Autodeclined"
+      },
       "commandOutput": {
         "anyOf": [
           {
@@ -678,6 +689,17 @@
       "id": {
         "title": "Id",
         "type": "integer"
+      },
+      "kept": {
+        "anyOf": [
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Kept"
       },
       "label": {
         "title": "Label",
@@ -3553,6 +3575,7 @@
               "port_in_use",
               "unsafe_folder",
               "certificate",
+              "no_home_network",
               "start_failed"
             ],
             "type": "string"
@@ -3618,6 +3641,11 @@
         },
         "title": "Routes",
         "type": "array"
+      },
+      "waiting_for_home": {
+        "default": false,
+        "title": "Waiting For Home",
+        "type": "boolean"
       }
     },
     "required": [
@@ -12931,6 +12959,7 @@
       "custom_model": {
         "anyOf": [
           {
+            "maxLength": 256,
             "type": "string"
           },
           {

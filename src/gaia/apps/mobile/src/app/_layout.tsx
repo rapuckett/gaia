@@ -18,6 +18,7 @@ import { NotificationFeed } from '@/features/notifications';
 import { AppDrawer } from '@/features/nav/AppDrawer';
 import { RoutingEffects } from '@/features/nav/RoutingEffects';
 import { INITIAL_ROUTE, PERMANENT_DRAWER_MIN_WIDTH } from '@/features/nav/navigation';
+import { ROUTES } from '@/features/nav/routes';
 import { sweepTempFiles } from '@/features/files/shareTemp';
 import { installPinnedPairing, PairingGate } from '@/features/pairing';
 import { SetupGate } from '@/features/setup/SetupGate';
@@ -27,6 +28,7 @@ import { platformFetch } from '@/platform/fetch';
 import { useConnectionStore } from '@/state/connection';
 import { useLocaleStore } from '@/state/locale';
 import { ScreenBannerProvider, UIProvider } from '@/ui';
+import { useLargeText } from '@/ui/theme/a11y';
 
 // Before the first render, so the pairing screens and the saved PC use the pinned transport.
 installPinnedPairing();
@@ -43,14 +45,12 @@ if (Platform.OS !== 'web') {
 // A chat opened cold (deep link, notification) has the home screen beneath it.
 export const unstable_settings = { anchor: INITIAL_ROUTE };
 
-// Expo Router renders only the screens a layout declares.
-const ROUTES = [INITIAL_ROUTE, 'new', 'connectors', 'schedules', 'settings', 'documents', 'file-preview', 'files', 'logs', 'notifications', 'skills', 'memory', 'pair', 'pair/manual', 'pair/pcs', 'chat/[id]', 'dev/ui', 'dev/ui-lists', 'dev/composer', 'dev/drawer', 'dev/file-preview', 'dev/files', 'dev/forms', 'dev/markdown', 'dev/memory-gallery', 'dev/messages', 'dev/pairing', 'dev/permission', 'dev/schedules', 'dev/setup'];
-
 export default function RootLayout() {
     const [queryClient] = useState(() => new QueryClient({ defaultOptions: { queries: { retry: shouldRetryQuery } } }));
     const dir = useDirection();
     const lang = useLocaleCode();
     const { width } = useWindowDimensions();
+    const largeText = useLargeText();
     const connection = useConnectionStore((s) => s.connection);
     const client = useMemo(
         () => (connection ? createHttpClient({ ...connection, fetch: platformFetch }) : null),
@@ -95,6 +95,8 @@ export default function RootLayout() {
                                 screenOptions={{
                                     headerShown: false,
                                     freezeOnBlur: true,
+                                    // At large text sizes one word of a label is wider than the default drawer.
+                                    drawerStyle: largeText && width < PERMANENT_DRAWER_MIN_WIDTH ? { width: '100%' } : undefined,
                                     drawerType: width >= PERMANENT_DRAWER_MIN_WIDTH ? 'permanent' : 'front',
                                     // react-navigation reads I18nManager, which stays LTR on web, so the closed drawer would sit inside the page.
                                     drawerPosition: Platform.OS === 'web' && dir === 'rtl' ? 'right' : undefined,

@@ -3,10 +3,12 @@
 
 import { useEffect, useState, type ReactNode } from 'react';
 
-import { GaiaNetworkError, GaiaPinMismatchError } from '@/api/errors';
+import { GaiaApiError, GaiaNetworkError, GaiaPinMismatchError } from '@/api/errors';
 import { useGaiaClient, useSetupGate } from '@/data';
 import { PinMismatchScreen, usePairAgain } from '@/features/pairing';
+import { hasTailnetRoute } from '@/features/pairing/routes';
 import { describeErrorWith, technicalDetail, useT } from '@/i18n/useT';
+import { useConnectionStore } from '@/state/connection';
 import { Button, Disclosure, Ltr, Notice, Screen, Stack } from '@/ui';
 
 import { SetupScreen, type SetupScreenProps } from './SetupScreen';
@@ -30,6 +32,7 @@ export function SetupGate({ children, renderStep }: { children: ReactNode; rende
     const t = useT();
     const { gate, recheck, finish, open } = useSetupGate();
     const pairAgain = usePairAgain();
+    const connection = useConnectionStore((s) => s.connection);
 
     useEffect(() => {
         reopen = open;
@@ -55,7 +58,7 @@ export function SetupGate({ children, renderStep }: { children: ReactNode; rende
         <Notice
             tone="warning"
             title={t('mobileApp.pairing.off.title')}
-            message={t('mobileApp.pairing.unreachable.body')}
+            message={t(hasTailnetRoute(connection) ? 'mobileApp.pairing.unreachable.away' : 'mobileApp.pairing.unreachable.body')}
             action={{ label: t('mobileApp.pairing.off.retry'), onPress: () => void recheck() }}
         />
     ) :
@@ -71,7 +74,9 @@ export function SetupGate({ children, renderStep }: { children: ReactNode; rende
                 message={
                     gate.upgradeFailed
                         ? t.compose((say) => say('setup.upgrading.failed', { error: describeErrorWith(gate.error, say) }))
-                        : t.compose((say) => say('setup.unknown.failed', { error: describeErrorWith(gate.error, say) }))
+                        : gate.error instanceof GaiaApiError
+                          ? t('mobileApp.error.setupCheckHttp', { status: gate.error.status })
+                          : t.compose((say) => say('setup.unknown.failed', { error: describeErrorWith(gate.error, say) }))
                 }
                 action={{
                     label: t(gate.upgradeFailed ? 'setup.upgrading.retry' : 'setup.unknown.retry'),
@@ -81,7 +86,7 @@ export function SetupGate({ children, renderStep }: { children: ReactNode; rende
         );
     return (
         <Screen edges={['top', 'start', 'end']}>
-            <Stack gap="md" padding="md">
+            <Stack gap="md" paddingX="gutter" paddingY="md">
                 {notice}
                 {gate.state === 'unknown' && !unreachable ? <ErrorDetails error={gate.error} /> : null}
                 {gate.state === 'serverDown' && !gate.modelListUnread ? (

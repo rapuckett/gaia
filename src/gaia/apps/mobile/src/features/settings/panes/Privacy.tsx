@@ -12,8 +12,9 @@ import { usePinned } from '@/api/routeAccess';
 import { useActiveModel, useSessions, useSetNetworkPolicy, useSettings, useSystemStatus } from '@/data';
 import { describeError, useT } from '@/i18n/useT';
 import { Card, Disclosure, IconButton, Ltr, Notice, Row, Stack, Switch, Text } from '@/ui';
-import { Check, Copy } from '@/ui/icons';
+import { Archive, Check, Copy } from '@/ui/icons';
 
+import { PcOnlyAction } from '@/features/logs/PcOnlyAction';
 import { PcOnlyNotice } from '../PcOnlyNotice';
 import { SettingsAnchor } from '../targets';
 import { DeleteChats } from './DeleteChats';
@@ -87,6 +88,7 @@ function LocalOnly() {
                         <Switch
                             label={t('settings.privacy.localOnlyTitle')}
                             description={t('mobileApp.settings.privacy.localOnlyHint')}
+                            descriptionBelow
                             value={!!on}
                             disabled={!settings.data || set.isPending}
                             onValueChange={toggle}
@@ -145,7 +147,7 @@ function DataFolder({ path }: { path: string }) {
 
     return (
         <Stack gap="xs">
-            <Row gap="sm">
+            <Row gap="sm" stack>
                 <Text role="label" tone="secondary">
                     {t('settings.privacy.dataFolder')}
                 </Text>
@@ -189,7 +191,18 @@ function TroubleshootingReport() {
         <SettingsAnchor name="report">
             <Card>
                 <Stack gap="sm">
-                    <Notice tone="info" message={t('setup.logs.reportOnPc')} testID="privacy-report-pc-only" />
+                    <Text role="label" weight="medium" accessibilityRole="header">
+                        {t('settings.privacy.reportTitle')}
+                    </Text>
+                    <Text role="caption" tone="secondary">
+                        {t('settings.privacy.reportNote')}
+                    </Text>
+                    <PcOnlyAction
+                        label={t('setup.logs.report')}
+                        icon={Archive}
+                        detail={t('setup.logs.reportOnPc')}
+                        testID="privacy-report-pc-only"
+                    />
                 </Stack>
             </Card>
         </SettingsAnchor>

@@ -98,7 +98,12 @@ from gaia.connectors.store import (
 )
 
 from ..models import WireModel
-from ..security import require_local_pc
+from ..security import (
+    audit_approval,
+    is_local_pc,
+    require_local_pc,
+    require_pc_or_allowed_device,
+)
 from ..security import require_ui_header as _require_ui_header
 from .mcp import args_for_caller
 
@@ -1227,9 +1232,35 @@ async def authorize(
 _device_poll_tasks: set = set()
 
 
+def _refuse_device_unless_device_code(
+    request: Request, connector_id: str, body: AuthorizeRequest
+) -> None:
+    """A paired device may start only a device-code sign-in, and grants no agents."""
+    if is_local_pc(request):
+        return
+    try:
+        spec = REGISTRY.get(connector_id)
+    except KeyError:
+        raise HTTPException(
+            status_code=404, detail=f"Unknown connector: {connector_id!r}"
+        )
+    if not spec.supports_device_code:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Connect {spec.display_name} on the PC running GAIA. Only "
+            "sign-in with a code can start from a paired device.",
+        )
+    if body.grant_agents:
+        raise HTTPException(
+            status_code=403,
+            detail="Choose which agents may use this account on the PC running "
+            "GAIA. A paired device can only start the sign-in.",
+        )
+
+
 @router.post(
     "/{connector_id}/authorize-device",
-    dependencies=[Depends(_require_ui_header), Depends(require_local_pc)],
+    dependencies=[Depends(_require_ui_header), Depends(require_pc_or_allowed_device)],
     response_model=ConnectorDeviceAuthResponse,
     response_model_exclude_unset=True,
 )
@@ -1248,7 +1279,11 @@ async def authorize_device(
 
     The ``device_code`` is intentionally NOT returned — it is a bearer-equivalent
     for polling and the server owns the poll loop.
+
+    A paired device the PC allowed may call this for a connector with
+    ``supports_device_code``, without ``grant_agents``; it is audited.
     """
+    _refuse_device_unless_device_code(request, connector_id, body)
     retry_keyring()
     grant_map = _resolve_grant_scopes(request, connector_id, body.grant_agents)
     try:
@@ -1291,6 +1326,8 @@ async def authorize_device(
     task = asyncio.create_task(_poll_and_emit())
     _device_poll_tasks.add(task)
     task.add_done_callback(_device_poll_tasks.discard)
+    if not is_local_pc(request):
+        audit_approval(request, f"device-code sign-in started for {connector_id}")
 
     return {
         "user_code": info["user_code"],

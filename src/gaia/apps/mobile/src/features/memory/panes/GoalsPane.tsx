@@ -6,14 +6,16 @@ import { useState } from 'react';
 import { ref, type MessageKey } from '@webui/i18n/registry';
 
 import type { Goal } from '@/api/client.types';
-import { useGoalAction, useGoals, useGoalStats, useGoalStoreError, type GoalAction } from '@/data';
+import { useGoalAction, useGoals, useGoalStats, useGoalStoreHealth, useResetGoalStore, type GoalAction } from '@/data';
 import { isPcRefusal, PcOnlyNotice } from '@/features/settings/PcOnlyNotice';
 import { describeFailureWith, useT } from '@/i18n/useT';
-import { Badge, Button, LoadingState, Notice, Row, Stack, Text } from '@/ui';
+import { View } from 'react-native';
+
+import { Button, LoadingState, Notice, Row, Stack, Text, useTheme } from '@/ui';
 import { Plus } from '@/ui/icons';
 
 import { GoalCard } from '../goals/GoalCard';
-import { STAT_STATUSES, STAT_TONES, STATUS_KEYS } from '../goals/goalText';
+import { STAT_STATUSES, STATUS_KEYS } from '../goals/goalText';
 import { NewGoalSheet } from '../goals/NewGoalSheet';
 import { SuggestedGoals } from '../goals/SuggestedGoals';
 import type { MemoryPaneProps } from '../tabs';
@@ -25,12 +27,53 @@ const FAILURES: Record<GoalAction, MessageKey> = {
     delete: 'mem.goals.deleteFailed',
 };
 
+const PILL_MIN_WIDTH = 140;
+
+/** One of the desktop's four stat pills: a big count over its state's name, tinted by state. */
+function StatPill({ status, count }: { status: (typeof STAT_STATUSES)[number]; count: number }) {
+    const t = useT();
+    const { colors, radius, space } = useTheme();
+    const look = {
+        queued: { bg: colors.accentDim, tone: 'accent' },
+        in_progress: { bg: colors.accentYellowDim, tone: 'warning' },
+        completed: { bg: colors.accentGreenDim, tone: 'success' },
+        failed: { bg: colors.dangerDim, tone: 'danger' },
+    } as const;
+    const v = look[status];
+    return (
+        <View
+            accessible
+            accessibilityLabel={`${t(STATUS_KEYS[status]!)}: ${count}`}
+            testID={`goals-stat-${status}`}
+            style={{
+                flexGrow: 1,
+                flexBasis: PILL_MIN_WIDTH,
+                paddingHorizontal: space.lg,
+                paddingVertical: space.md,
+                gap: space.xs,
+                backgroundColor: v.bg,
+                borderWidth: 1,
+                borderColor: colors.borderLight,
+                borderRadius: radius.lg,
+            }}
+        >
+            <Text role="title" weight="bold" tone={v.tone}>
+                {`⁦${count}⁩`}
+            </Text>
+            <Text role="caption" weight="medium" tone={v.tone}>
+                {t(STATUS_KEYS[status]!)}
+            </Text>
+        </View>
+    );
+}
+
 export function GoalsPane({ notify }: MemoryPaneProps) {
     const t = useT();
     const [creating, setCreating] = useState(false);
     const list = useGoals();
     const stats = useGoalStats();
-    const storeError = useGoalStoreError();
+    const health = useGoalStoreHealth();
+    const resetStore = useResetGoalStore();
     const act = useGoalAction();
     const busyId = act.isPending ? act.variables.id : null;
 
@@ -40,6 +83,12 @@ export function GoalsPane({ notify }: MemoryPaneProps) {
             { onError: (error) => notify({ tone: 'danger', text: t.compose((say) => say('mem.goals.failed', { what: ref(FAILURES[action]), error: describeFailureWith(error, say) })) }) },
         );
 
+    const startNewList = () =>
+        resetStore.mutate(undefined, {
+            onSuccess: ({ kept }) => notify({ tone: 'success', text: t('mem.goals.newListStarted', { file: kept }) }),
+            onError: (error) => notify({ tone: 'danger', text: t.compose((say) => say('mem.goals.failed', { what: ref('mem.goals.startNewListFailed'), error: describeFailureWith(error, say) })) }),
+        });
+
     const goals = list.data;
     const suggested = goals?.filter((goal) => goal.status === 'pending_approval') ?? [];
     const shown = goals?.filter((goal) => goal.status !== 'pending_approval' && goal.status !== 'rejected') ?? [];
@@ -47,15 +96,19 @@ export function GoalsPane({ notify }: MemoryPaneProps) {
     return (
         <Stack gap="lg" paddingX="lg" paddingY="md" testID="memory-pane-goals">
             <Text tone="secondary">{t('mem.goals.intro')}</Text>
-            {storeError.data ? <Notice tone="warning" title={t('mem.goals.storeError')} message={storeError.data} testID="goals-store-error" /> : null}
-            <Row gap="sm" wrap testID="goals-stats">
+            {health.data?.error ? (
+                health.data.damaged ? (
+                    <Stack gap="sm" align="start" testID="goals-store-damaged">
+                        <Notice tone="warning" message={t('mem.goals.storeDamaged')} />
+                        <Button label={t.bare('mem.goals.startNewList')} accessibilityLabel={t('mem.goals.startNewList')} variant="secondary" disabled={resetStore.isPending} onPress={startNewList} testID="goals-start-new-list" />
+                    </Stack>
+                ) : (
+                    <Notice tone="warning" title={t('mem.goals.storeError')} message={health.data.error} testID="goals-store-error" />
+                )
+            ) : null}
+            <Row gap="sm" wrap align="stretch" testID="goals-stats">
                 {STAT_STATUSES.map((status) => (
-                    <Badge
-                        key={status}
-                        label={`${stats.data?.goals[status] ?? 0} ${t.bare(STATUS_KEYS[status]!)}`}
-                        tone={STAT_TONES[status]}
-                        accessibilityLabel={`${t(STATUS_KEYS[status]!)}: ${stats.data?.goals[status] ?? 0}`}
-                    />
+                    <StatPill key={status} status={status} count={stats.data?.goals[status] ?? 0} />
                 ))}
             </Row>
             <SuggestedGoals goals={suggested} busyId={busyId} onAccept={(goal) => run(goal, 'approve')} onReject={(goal) => run(goal, 'reject')} />

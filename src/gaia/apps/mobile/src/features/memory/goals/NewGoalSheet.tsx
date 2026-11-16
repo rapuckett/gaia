@@ -52,7 +52,7 @@ export function NewGoalSheet({ open, onClose }: NewGoalSheetProps) {
             onClose={close}
             title={t('mem.goals.new')}
             footer={
-                <Row gap="sm" justify="end">
+                <Row gap="sm" justify="end" stack>
                     <Button label={t.bare('mem.cancel')} accessibilityLabel={t('mem.cancel')} variant="ghost" onPress={close} />
                     <Button
                         label={t.bare('mem.goals.create')}

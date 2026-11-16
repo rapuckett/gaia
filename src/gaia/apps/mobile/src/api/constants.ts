@@ -21,6 +21,7 @@ export const ENDPOINTS = {
     goals: '/api/goals',
     goalsHealth: '/api/goals/health',
     goalsStats: '/api/goals/stats',
+    goalsStoreReset: '/api/goals/store/reset',
     gpuMemory: '/api/gpu-memory',
     gpuMemoryPending: '/api/gpu-memory/pending',
     health: '/api/health',
@@ -142,6 +143,7 @@ export const ENDPOINTS = {
     connector: '/api/connectors/{connector_id}',
     connectorActivation: '/api/connectors/{connector_id}/activations/{agent_id:path}',
     connectorActivations: '/api/connectors/{connector_id}/activations',
+    connectorAuthorizeDevice: '/api/connectors/{connector_id}/authorize-device',
     connectorDisable: '/api/connectors/{connector_id}/disable',
     connectorGrant: '/api/connectors/{connector_id}/grants/{agent_id:path}',
     connectorGrants: '/api/connectors/{connector_id}/grants',
@@ -152,6 +154,7 @@ export const ENDPOINTS = {
     connectorsEvents: '/api/connectors/events',
     systemResources: '/api/system/resources',
     systemStatus: '/api/system/status',
+    systemWarmUp: '/api/system/warm-up',
     document: '/api/documents/{doc_id}',
     documentCancel: '/api/documents/{doc_id}/cancel',
     documentFile: '/api/documents/{doc_id}/file',
@@ -183,6 +186,10 @@ export function connectorActivationPath(connectorId: string, agentId: string): s
 
 export function connectorActivationsPath(connectorId: string): string {
     return ENDPOINTS.connectorActivations.replace('{connector_id}', encodeURIComponent(connectorId));
+}
+
+export function connectorAuthorizeDevicePath(connectorId: string): string {
+    return ENDPOINTS.connectorAuthorizeDevice.replace('{connector_id}', encodeURIComponent(connectorId));
 }
 
 export function connectorDisablePath(connectorId: string): string {
@@ -484,6 +491,12 @@ export const RESOURCE_RETRY_MS = 5_000;
 export const CAPABILITIES_POLL_MS = 2_000;
 /** How often to re-read the PC's status while it is still starting or warming up. */
 export const STATUS_POLL_MS = 5_000;
+/** How long the status request may take before it counts as slow; above the PC's own sequential probes. */
+export const STATUS_REQUEST_TIMEOUT_MS = 60_000;
+/** Slow answers in a row before the status reads as slow (one right after an outage). */
+export const STATUS_SLOW_STREAK = 3;
+/** A PC that has only answered slowly for this long is treated as unreachable. */
+export const STATUS_LOST_MS = 5 * 60_000;
 /** How often a healthy PC's status is re-read, so an idle app notices the PC going away. */
 export const STATUS_IDLE_POLL_MS = 30_000;
 

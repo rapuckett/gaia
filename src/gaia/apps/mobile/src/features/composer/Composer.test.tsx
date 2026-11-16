@@ -90,6 +90,18 @@ describe('Composer', () => {
         expect(find(r, 'composer-send').props.disabled).toBe(true);
     });
 
+    it('shows a blocked reason once, as the hint, and leaves the placeholder empty', async () => {
+        const reason = 'This chat used the retired "chat" agent and is read-only.';
+        const { r } = await mount({ disabledReason: reason });
+        const input = find(r, 'composer-input');
+        expect(input.props.placeholder).toBe('');
+        expect(input.props.hint).toBe(reason);
+        expect(input.props.disabled).toBe(true);
+        expect(input.props.accessibilityHint).toBe(reason);
+        await act(async () => r.render(<Composer onSend={jest.fn()} />));
+        expect(find(r, 'composer-input').props.placeholder).toBe('composer.placeholder');
+    });
+
     it('sends the text with its file links, lets a file go with no words, and waits for uploads', async () => {
         const attachments: Attachments = {
             items: [],

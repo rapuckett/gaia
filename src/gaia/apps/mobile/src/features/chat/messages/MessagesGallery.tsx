@@ -5,13 +5,15 @@ import { AssistantBubble } from './AssistantBubble';
 import { MessageListView } from './MessageList';
 import { UserBubble } from './UserBubble';
 import type { StartOpen } from './useMessageActions';
+import { TailIssues } from '../ReplyErrors';
 import { RecordingProgress } from '../recording/RecordingProgress';
+import { EmailPreScanCard } from '../cards/EmailPreScanCard';
 import { GuideCard } from '../cards/GuideCard';
-import { FIXTURES, GUIDE_WORKOUT, type MessagesFixture } from './__fixtures__/messages';
-import { Screen } from '@/ui';
+import { FIXTURES, GUIDE_WORKOUT, PRESCAN_PAYLOAD, type MessagesFixture } from './__fixtures__/messages';
+import { Screen, Stack } from '@/ui';
 
 /** Developer gallery of the message list in each state; not part of the shipped screens. */
-export type MessagesGalleryState = MessagesFixture | StartOpen | 'guided';
+export type MessagesGalleryState = MessagesFixture | StartOpen | 'guided' | 'prescan-dismissing' | 'prescan-done';
 
 export function MessagesGallery({ state }: { state: MessagesGalleryState }) {
     if (state === 'actions' || state === 'delete' || state === 'edit') {
@@ -29,13 +31,27 @@ export function MessagesGallery({ state }: { state: MessagesGalleryState }) {
             </Screen>
         );
     }
+    if (state === 'prescan-dismissing' || state === 'prescan-done') {
+        return (
+            <Screen>
+                <Stack paddingX="gutter">
+                    <EmailPreScanCard
+                        data={{ ok: true, data: PRESCAN_PAYLOAD }}
+                        startPending={state === 'prescan-dismissing' ? 'm1' : undefined}
+                        startNotice={state === 'prescan-done'}
+                    />
+                </Stack>
+            </Screen>
+        );
+    }
     const fixture = FIXTURES[state];
+    const policyTail = { live: false, text: '', events: [], replyId: null, canTryAgain: false, canContinue: false, policyAlert: { tool: 'delete_file', seq: 1 } };
     return (
         <Screen>
             <MessageListView
                 messages={fixture.messages}
                 loading={state === 'loading'}
-                live={fixture.live ? <AssistantBubble message={fixture.live} streaming /> : fixture.events ? <RecordingProgress events={fixture.events} /> : undefined}
+                live={state === 'policy' ? <TailIssues tail={policyTail} local={false} /> : fixture.live ? <AssistantBubble message={fixture.live} streaming /> : fixture.events ? <RecordingProgress events={fixture.events} /> : undefined}
             />
         </Screen>
     );

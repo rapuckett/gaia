@@ -17,6 +17,8 @@ export interface SwitchProps {
     label: string;
     description?: string;
     disabled?: boolean;
+    /** Put the description under the title-and-switch row, full width. */
+    descriptionBelow?: boolean;
     testID?: string;
 }
 
@@ -27,7 +29,7 @@ const INSET = (TRACK_H - KNOB) / 2;
 const TRAVEL = TRACK_W - KNOB - INSET * 2;
 
 // The whole row is the touch target; the knob slides toward the end edge when on.
-export function Switch({ value, onValueChange, label, description, disabled, testID }: SwitchProps) {
+export function Switch({ value, onValueChange, label, description, disabled, descriptionBelow, testID }: SwitchProps) {
     const { colors, radius, space } = useTheme();
     const rtl = useDirection() === 'rtl';
     const reduced = useReducedMotion();
@@ -57,7 +59,7 @@ export function Switch({ value, onValueChange, label, description, disabled, tes
                     <Text role="ui" weight="medium">
                         {label}
                     </Text>
-                    {description ? (
+                    {description && !descriptionBelow ? (
                         <Text role="caption" tone="muted">
                             {description}
                         </Text>
@@ -68,21 +70,30 @@ export function Switch({ value, onValueChange, label, description, disabled, tes
                         width: TRACK_W,
                         height: TRACK_H,
                         borderRadius: radius.full,
-                        borderWidth: 1,
-                        borderColor: value ? colors.accent : colors.border,
-                        backgroundColor: value ? colors.accentFill : colors.bgActive,
+                        backgroundColor: value ? colors.accentSolid : colors.border,
                         justifyContent: 'center',
-                        paddingHorizontal: INSET - 1,
+                        paddingHorizontal: INSET,
                     }}
                 >
                     <Animated.View
                         style={[
-                            { width: KNOB, height: KNOB, borderRadius: radius.full, backgroundColor: value ? colors.accentFillText : colors.textMuted },
+                            { width: KNOB, height: KNOB, borderRadius: radius.full, backgroundColor: colors.switchKnob,
+                                shadowColor: '#000',
+                                shadowOpacity: 0.2,
+                                shadowRadius: 1,
+                                shadowOffset: { width: 0, height: 1 },
+                                elevation: 1,
+                            },
                             knobStyle,
                         ]}
                     />
                 </View>
             </Row>
+            {description && descriptionBelow ? (
+                <Text role="caption" tone="muted">
+                    {description}
+                </Text>
+            ) : null}
         </Pressable>
     );
 }

@@ -8,7 +8,7 @@ import { dueInputValue, dueLabel, relativeDay, sourceKey, type AboutYouItem } fr
 
 import { useEditMemory } from '@/data';
 import { describeFailureWith, useT } from '@/i18n/useT';
-import { Button, Divider, IconButton, Row, Stack, Text, TextField } from '@/ui';
+import { Button, IconButton, Row, SmallButton, Stack, Text, TextField } from '@/ui';
 import { Eye, Pencil, Trash2 } from '@/ui/icons';
 
 import type { MemoryPaneProps } from '../tabs';
@@ -88,7 +88,7 @@ export function MemoryRow({ item, forgetting, onForget, notify }: MemoryRowProps
                                 error={dueWrong ? t('mobileApp.mem.whenHint') : undefined}
                             />
                         ) : null}
-                        <Row gap="sm" wrap>
+                        <Row gap="sm" wrap stack>
                             <Button label={t.bare('mem.about.save')} accessibilityLabel={t('mem.about.save')} variant="primary" size="sm" busy={edit.isPending} disabled={!draft.trim() || dueWrong} onPress={save} testID={`memory-about-save-${item.id}`} />
                             <Button label={t.bare('mem.about.cancel')} accessibilityLabel={t('mem.about.cancel')} variant="secondary" size="sm" disabled={edit.isPending} onPress={() => setEditing(false)} />
                         </Row>
@@ -124,18 +124,17 @@ export function MemoryRow({ item, forgetting, onForget, notify }: MemoryRowProps
                             <IconButton
                                 icon={Pencil}
                                 size="sm"
+                                variant="outlined"
                                 label={t('mem.about.editAria', { name })}
                                 disabled={hidden}
                                 onPress={open}
                                 testID={`memory-about-edit-open-${item.id}`}
                             />
-                            <Button
+                            <SmallButton
                                 label={t.bare('mem.about.forget')}
                                 accessibilityLabel={t('mem.about.forgetAria', { name })}
                                 icon={Trash2}
-                                variant="ghost"
-                                size="sm"
-                                busy={forgetting}
+                                disabled={forgetting}
                                 onPress={() => onForget(item)}
                                 testID={`memory-about-forget-${item.id}`}
                             />
@@ -148,7 +147,6 @@ export function MemoryRow({ item, forgetting, onForget, notify }: MemoryRowProps
                     </>
                 )}
             </Stack>
-            <Divider />
         </Stack>
     );
 }

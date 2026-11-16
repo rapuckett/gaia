@@ -1,6 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
+import { isAuthRequiredMessage } from '@webui/utils/connectorRetry.core';
 import { cardsFromSteps } from '@webui/utils/renderCards.core';
 import { cleanToolCallContent } from '@webui/utils/toolCallContent';
 import { SERVER_CANCELLED_TEXT, splitCutOff } from '@webui/utils/turnEnding.core';
@@ -19,6 +20,8 @@ import { ActivityTimeline } from '../activity/ActivityTimeline';
 import { AnswerFooter } from '../activity/AnswerFooter';
 import { savedActivity } from '../activity/savedActivity';
 import { AnswerCards } from '../cards/RenderCard';
+import { EmailConnect } from '../EmailConnect';
+import { GrantNote, isAgentNotGranted } from '../GrantNote';
 import { CutOffNote, StoppedNote } from '../EndingNotes';
 import { Markdown } from '../markdown/Markdown';
 import { SavedReplyErrors } from '../ReplyErrors';
@@ -83,6 +86,8 @@ export function AssistantBubble({ message, streaming = false, latencyMs, context
             {cutOff ? <CutOffNote cutOff={cutOff} /> : null}
             {cancelled ? <StoppedNote stop={{ state: 'stopped' }} /> : null}
             {!streaming && !cancelled ? <SavedReplyErrors message={message} fixShownBelow={fixShownBelow} /> : null}
+            {!streaming && !cancelled && isAgentNotGranted(spoken) ? <GrantNote /> : null}
+            {!streaming && !cancelled && !isAgentNotGranted(spoken) && isAuthRequiredMessage(spoken) ? <EmailConnect content={spoken} /> : null}
             {!streaming && !cancelled ? (
                 <Row>
                     {readable ? <ReadAloudButton control={readAloud} /> : null}

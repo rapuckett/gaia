@@ -166,9 +166,87 @@ const MEDIA = [
     ]),
 ];
 
-export type MessagesFixture = 'badCards' | 'cards' | 'guide' | 'loading' | 'long' | 'many' | 'media' | 'recording' | 'short' | 'streaming';
+export type MessagesFixture =
+    | 'activity'
+    | 'badCards'
+    | 'cards'
+    | 'guide'
+    | 'loading'
+    | 'long'
+    | 'many'
+    | 'media'
+    | 'policy'
+    | 'prescan'
+    | 'prescan-empty'
+    | 'prescan-invalid'
+    | 'recording'
+    | 'short'
+    | 'streaming';
+
+export const PRESCAN_PAYLOAD = {
+    kind: 'email_pre_scan',
+    urgent: [
+        { message_id: 'm1', sender: 'Ada Lovelace <ada@example.com>', subject: 'Server down, need a decision before noon', why: 'Priority sender' },
+    ],
+    actionable: [
+        { message_id: 'm2', sender: 'Grace Hopper <grace@example.com>', subject: 'Review the Q4 budget draft', why: 'Asks for your feedback by Friday' },
+    ],
+    informational_count: 14,
+    suggested_archives: [
+        { message_id: 'm4', sender: 'Weekly Digest <news@example.com>', subject: 'Your weekly digest is here', reason: 'Newsletter you never open' },
+    ],
+    suggested_drafts: [],
+    preferences_applied: { priority_senders: ['ada@example.com'], low_priority_senders: ['news@example.com'], category_defaults: { promotions: 'archive' } },
+};
+
+const prescanMessages = (question: string, answer: string, data: unknown): Message[] => [
+    msg('user', question, 0),
+    withCards(msg('assistant', answer, 1), [{ render: 'email_pre_scan', data }]),
+];
+
+
+const ACTIVITY = [
+    msg('user', 'Transcribe the standup recording, then tidy my notes.', 0),
+    {
+        ...msg('assistant', 'The standup is transcribed. I left your notes alone: they were already tidy.', 1),
+        agentSteps: [
+            { id: 1, type: 'status', label: 'Downloaded the speech model (2.4 GB)', active: false, success: true, kept: true, timestamp: 1 },
+            {
+                id: 2, type: 'tool', label: 'Using tool', tool: 'transcribe_media', narration: 'Transcribing standup.wav',
+                detail: 'path: standup.wav', active: false, success: true, result: 'done', timestamp: 2,
+            },
+            {
+                id: 3, type: 'tool', label: 'Using tool', tool: 'run_shell_command', narration: 'Running echo', autoDeclined: true,
+                active: false, success: false, result: 'Not run: this request hands over text to proofread.', timestamp: 3,
+            },
+            {
+                id: 4, type: 'tool', label: 'Using tool', tool: 'write_file', declined: true,
+                active: false, success: false, timestamp: 4,
+            },
+            {
+                id: 5, type: 'tool', label: 'Using tool', tool: 'read_file', timedOut: true,
+                active: false, success: false, timestamp: 5,
+            },
+        ],
+    } as Message,
+];
+
+const POLICY = [
+    msg('user', 'Clear out the old downloads, then export the report.', 0),
+    {
+        ...msg('assistant', 'I exported the report. Deleting the old downloads was blocked by your policy, so they are still there.', 1),
+        agentSteps: [
+            {
+                id: 1, type: 'policy_alert', label: 'Blocked', tool: 'delete_file', decision: 'BLOCK', reason: 'Deleting files is restricted.',
+                ruleIds: ['no-delete'], policyVersion: '2026-11-01', receiptId: 'rcpt-4f2a', active: false, success: false, timestamp: 1,
+            },
+            { id: 2, type: 'policy_alert', label: 'Blocked', tool: 'send_email', decision: 'BLOCK', reason: 'Sending email needs approval.', active: false, success: false, timestamp: 2 },
+        ],
+    } as Message,
+];
 
 export const FIXTURES: Record<MessagesFixture, { messages: Message[]; live?: Message; events?: StreamEvent[] }> = {
+    activity: { messages: ACTIVITY },
     badCards: { messages: BAD_CARDS },
     cards: { messages: CARDS },
     guide: { messages: GUIDE },
@@ -176,6 +254,15 @@ export const FIXTURES: Record<MessagesFixture, { messages: Message[]; live?: Mes
     long: { messages: [...SHORT.slice(0, 2), msg('user', LONG_USER, 4), msg('assistant', ANSWER, 5)] },
     many: { messages: MANY },
     media: { messages: MEDIA },
+    policy: { messages: POLICY },
+    prescan: { messages: prescanMessages('Scan my inbox.', 'Three emails need a look; the rest can wait.', { ok: true, data: PRESCAN_PAYLOAD }) },
+    'prescan-empty': {
+        messages: prescanMessages('Scan my inbox.', 'Nothing needs you right now.', {
+            ok: true,
+            data: { ...PRESCAN_PAYLOAD, urgent: [], actionable: [], suggested_archives: [], informational_count: 0, preferences_applied: {} },
+        }),
+    },
+    'prescan-invalid': { messages: prescanMessages('Scan my inbox.', 'The scan result was unreadable.', { ok: true, data: { kind: 'email_pre_scan' } }) },
     recording: {
         messages: [msg('user', 'Summarize the team meeting recording.', 0)],
         events: [

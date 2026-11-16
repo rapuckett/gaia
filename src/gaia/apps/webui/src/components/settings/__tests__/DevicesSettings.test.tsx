@@ -74,4 +74,41 @@ describe('DevicesSettings', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Copied' }));
         expect(await screen.findByRole('alert')).toHaveTextContent("Couldn't copy the link");
     });
+
+    it('turns the Tailscale route on from the PC and says why it can\'t when Tailscale is off', async () => {
+        const off = { kind: 'tailnet' as const, on: false, origin: null, error_code: null };
+        replies['GET /devices/status'] = { body: { ...STATUS, routes: [off] } };
+        replies['POST /devices/routes/tailnet'] = { status: 409, body: { detail: { code: 'no_tailscale_address', message: 'no address' } } };
+        render(<DevicesSettings />);
+        const toggle = await screen.findByRole('switch', { name: 'Also allow from my Tailscale network' });
+        replies['GET /devices/status'] = { body: { ...STATUS, routes: [{ ...off, error_code: 'no_tailscale_address' }] } };
+        fireEvent.click(toggle);
+        expect(await screen.findByText("Tailscale isn't running on this PC. Start Tailscale and sign in, then turn this on again.")).toBeInTheDocument();
+        expect(toggle).not.toBeChecked();
+
+        const on = { ...off, on: true, origin: 'https://100.101.102.103:4243' };
+        replies['POST /devices/routes/tailnet'] = { body: { ...STATUS, routes: [on] } };
+        replies['GET /devices/status'] = { body: { ...STATUS, routes: [on] } };
+        fireEvent.click(toggle);
+        await waitFor(() => expect(toggle).toBeChecked());
+        expect(toggle).toHaveAccessibleDescription(/through Tailscale, at .*100\.101\.102\.103/);
+    });
+
+    it('shows a listener waiting for the home network as on, with why, and turning it off stops the wait', async () => {
+        const off = { ...STATUS, listening: false };
+        const waiting = { ...off, waiting_for_home: true, error_code: 'no_home_network' as const, error_detail: 'This PC has no IPv4 default route.' };
+        replies['GET /devices/status'] = { body: waiting };
+        replies['DELETE /devices/listener'] = { body: off };
+        render(<DevicesSettings />);
+        const toggle = await screen.findByRole('switch', { name: 'Allow paired devices to connect' });
+        expect(toggle).toBeChecked();
+        expect(screen.getByRole('status')).toHaveTextContent('Waiting for your home network…');
+        expect(screen.getByRole('status')).toHaveTextContent("This PC isn't on your home network yet.");
+        expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+
+        replies['GET /devices/status'] = { body: off };
+        fireEvent.click(toggle);
+        await waitFor(() => expect(toggle).not.toBeChecked());
+        expect(screen.queryByText('Waiting for your home network…')).not.toBeInTheDocument();
+    });
 });

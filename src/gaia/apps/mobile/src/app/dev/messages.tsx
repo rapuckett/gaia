@@ -9,7 +9,7 @@ import { FIXTURES } from '@/features/chat/messages/__fixtures__/messages';
 import { SessionPanelGallery, type SessionPanelGalleryState } from '@/features/chat/session-panel/SessionPanelGallery';
 import { UIProvider } from '@/ui';
 
-const OPEN_STATES = ['actions', 'delete', 'edit', 'guided'];
+const OPEN_STATES = ['actions', 'delete', 'edit', 'guided', 'prescan-dismissing', 'prescan-done'];
 const PANEL_STATES = ['loaded', 'empty', 'error', 'notRunning', 'ctxMeasuring', 'ctxNormal', 'ctxEstimated', 'ctxFilling', 'ctxChat', 'ctxNoTurn', 'envFolders', 'envRemove', 'envOffline', 'envFull', 'envEmpty', 'chgList', 'chgConfirm', 'chgConflict', 'chgGit', 'chgPending', 'chgError', 'chgReview', 'ansFull', 'ansPending', 'ansNoLive', 'ansError', 'outItems', 'outEmpty', 'envPick', 'envPickRefused'];
 
 function isState(state?: string): state is MessagesGalleryState {
@@ -23,14 +23,14 @@ export default function MessagesGalleryRoute() {
     if (panel && PANEL_STATES.includes(panel)) {
         return (
             <UIProvider>
-                <SessionPanelGallery state={panel as SessionPanelGalleryState} />
+                <SessionPanelGallery key={panel} state={panel as SessionPanelGalleryState} />
             </UIProvider>
         );
     }
     const fixture = isState(state) ? state : 'long';
     return (
         <UIProvider>
-            <MessagesGallery state={fixture} />
+            <MessagesGallery key={fixture} state={fixture} />
         </UIProvider>
     );
 }

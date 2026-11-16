@@ -33,8 +33,20 @@ ROUTES_ROUTE = "/api/devices/me/routes"
 RouteKind = Literal["home", "tailnet", "relay"]
 AwayRouteKind = Literal["tailnet", "relay"]
 HOME_ROUTE: RouteKind = "home"
+TAILNET_ROUTE: AwayRouteKind = "tailnet"
+#: Why an away route isn't on, as the PC sees it: the listener is off, this
+#: PC has no Tailscale address, or the route failed to start.
+AwayRouteErrorCode = Literal["listener_off", "no_tailscale_address", "start_failed"]
 
-#: Peers the listener answers, and the subset a pairing code offers.
+#: Tailscale's IPv4 range, and the interfaces that carry it: ``Tailscale`` on
+#: Windows, ``tailscale0`` on Linux, a point-to-point ``utun`` on macOS.
+TAILNET_NETWORK = "100.64.0.0/10"
+TAILNET_INTERFACES = frozenset({"Tailscale", "tailscale0"})
+TAILNET_UTUN_PREFIX = "utun"
+
+#: The ranges a home subnet must sit in, and the subset a pairing code offers.
+#: The home network itself is narrower: the default route's interface and its
+#: subnet (``home.py``).
 HOME_NETWORKS = ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "169.254.0.0/16")
 OFFERED_NETWORKS = ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16")
 
@@ -62,9 +74,10 @@ CLOSED_INVITATIONS_KEPT = 8
 #: sees one refusal for the first four, and a 429 for ``rate_limited``.
 PairFailureReason = Literal["expired", "used", "wrong", "closed", "rate_limited"]
 PAIR_FAILURE_REASONS = get_args(PairFailureReason)
-#: Why the listener isn't serving, as the PC sees it.
+#: Why the listener isn't serving, as the PC sees it. ``no_home_network``:
+#: the PC has no home network, so the listener can't tell home peers apart.
 ListenerErrorCode = Literal[
-    "port_in_use", "unsafe_folder", "certificate", "start_failed"
+    "port_in_use", "unsafe_folder", "certificate", "no_home_network", "start_failed"
 ]
 LISTENER_ERROR_CODES = get_args(ListenerErrorCode)
 #: Why the PC can't show a pairing code: the listener is off, or the PC has
@@ -111,6 +124,9 @@ LISTENER_HANDSHAKE_SECONDS = 10
 LISTENER_SHUTDOWN_SECONDS = 5
 #: How often the running listener expires idle and pending devices.
 HOUSEKEEPING_SECONDS = 60
+#: How often a listener left on, resumed before the PC has a home network,
+#: tries again.
+LISTENER_HOME_RETRY_SECONDS = 15
 
 #: The certificate: EC P-256, valid this long; its SHA-256 is the pin.
 CERTIFICATE_DAYS = 10 * 365

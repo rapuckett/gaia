@@ -61,7 +61,7 @@ function renderTable(node: Extract<RootContent, { type: 'table' }>, ctx: RenderC
                                     <Stack key={r}>
                                         {r > 0 && <Divider />}
                                         <Stack paddingX="md" paddingY="sm">
-                                            <Text role="ui" weight={r === 0 ? 'semibold' : undefined} dir={dir}>
+                                            <Text role="ui" weight={r === 0 ? 'semibold' : undefined} dir={dir} align={dir}>
                                                 {cell ? inline(cell, ctx, `${key}.${r}.${c}`) : ' '}
                                             </Text>
                                         </Stack>
@@ -106,7 +106,7 @@ function renderBlock(node: RootContent, ctx: RenderContext, key: string, caret =
     switch (node.type) {
         case 'paragraph':
             return (
-                <Text key={key} role="prose" selectable dir={contentDir(plainText(node), ctx.uiDir)}>
+                <Text key={key} role="prose" selectable dir={contentDir(plainText(node), ctx.uiDir)} align={contentDir(plainText(node), ctx.uiDir)}>
                     {inline(node, ctx, key, caret)}
                 </Text>
             );
@@ -114,7 +114,7 @@ function renderBlock(node: RootContent, ctx: RenderContext, key: string, caret =
             const dir = contentDir(plainText(node), ctx.uiDir);
             const role = node.depth === 1 ? 'title' : node.depth === 2 ? 'body' : 'ui';
             return (
-                <Text key={key} role={role} weight="semibold" selectable dir={dir} accessibilityRole="header">
+                <Text key={key} role={role} weight="semibold" selectable dir={dir} align={dir} accessibilityRole="header">
                     {inline(node, ctx, key, caret)}
                 </Text>
             );

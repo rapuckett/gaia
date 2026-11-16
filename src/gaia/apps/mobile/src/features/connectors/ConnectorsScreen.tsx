@@ -5,7 +5,7 @@ import { scopeLabel } from '@webui/utils/connectorScopes';
 import { ref } from '@webui/i18n/registry';
 import { useRouter } from 'expo-router';
 import { useMemo, useState, type ReactNode } from 'react';
-import { View } from 'react-native';
+import { useWindowDimensions, View } from 'react-native';
 
 import type { AgentMcpServer, ConnectorRow, UnavailableConnectorRow } from '@/api/client.types';
 import {
@@ -20,7 +20,7 @@ import {
 import { ScreenHeader } from '@/features/nav/ScreenHeader';
 import { ChipButton } from '@/features/schedules/ChipButton';
 import { SettingsGroup } from '@/features/skills/SettingsGroup';
-import { describeError, describeErrorWith, useT } from '@/i18n/useT';
+import { describeError, describeErrorWith, useDirection, useT } from '@/i18n/useT';
 import {
     ActionSheet,
     EmptyState,
@@ -40,6 +40,7 @@ import {
     Ltr,
     useTheme,
 } from '@/ui';
+import { lineHeightOf } from '@/ui/text/Text';
 import { ChevronDown, ChevronRight, CircleCheck, Ellipsis, Pause, Play, Trash2 } from '@/ui/icons';
 
 import {
@@ -64,6 +65,7 @@ import {
     tileStatus,
     unavailableHint,
 } from './connectorList';
+import { DeviceCodeSignIn } from './DeviceCodeSignIn';
 
 type Translator = ReturnType<typeof useT>;
 
@@ -215,7 +217,7 @@ function TileHeader({ name, trailing, onPress, open, menu }: { name: string; tra
     const { space } = useTheme();
     const body = (
         <View style={{ paddingHorizontal: space.lg, paddingVertical: space.md }}>
-            <Row gap="sm" justify="between">
+            <Row gap="sm" justify="between" align="start">
                 <Row gap="sm" wrap flex={1}>
                     <Text role="ui" weight="semibold" dir="auto">{name}</Text>
                     {trailing}
@@ -285,8 +287,17 @@ function StatusText({ connector, t }: { connector: ConnectorRow; t: Translator }
     }
 }
 
+/** Centered on the title's first line, so a row that wraps keeps it beside the name. */
 function Chevron({ open }: { open: boolean }) {
-    return <Icon icon={open ? ChevronDown : ChevronRight} size="sm" tone="muted" />;
+    const { type } = useTheme();
+    const { fontScale } = useWindowDimensions();
+    const rtl = useDirection() === 'rtl';
+    const line = lineHeightOf(type.ui, 'ui', rtl) * fontScale;
+    return (
+        <View style={{ minHeight: line, justifyContent: 'center' }}>
+            <Icon icon={open ? ChevronDown : ChevronRight} size="sm" tone="muted" />
+        </View>
+    );
 }
 
 function ConnectorTile({
@@ -314,8 +325,16 @@ function ConnectorTile({
         setMessage(next);
         if (!expanded) onToggle();
     }
-    const refuse = (detailKey: 'checkPcOnly' | 'codePcOnly' | 'configurePcOnly' | 'connectPcOnly' | 'enablePcOnly') =>
+    const refuse = (detailKey: 'checkPcOnly' | 'configurePcOnly' | 'connectPcOnly' | 'enablePcOnly') =>
         show({ tone: 'info', text: `${t('mobileApp.pcOnly.refusal')} ${t(`mobileApp.connectors.${detailKey}`)}` });
+    const connectChip = (
+        <ChipButton
+            label={t.bare('settings.key.connect')}
+            accessibilityLabel={t('settings.key.connect')}
+            variant="accent"
+            onPress={() => refuse('connectPcOnly')}
+        />
+    );
     function run(kind: 'disable' | 'disconnect') {
         setMessage(null);
         if (kind === 'disconnect') onDisconnected(null);
@@ -366,12 +385,13 @@ function ConnectorTile({
                         <Notice tone="info" message={t('mobileApp.connectors.setupPcOnly', { name: connector.display_name })} />
                     ) : (
                         <>
-                            <Row gap="sm" wrap>
-                                <ChipButton label={t('settings.key.connect')} variant="accent" onPress={() => refuse('connectPcOnly')} />
-                                {connector.supports_device_code ? (
-                                    <ChipButton label={t('settings.connectors.code')} onPress={() => refuse('codePcOnly')} />
-                                ) : null}
-                            </Row>
+                            {connector.supports_device_code ? (
+                                <DeviceCodeSignIn connector={connector} leading={connectChip} />
+                            ) : (
+                                <Row gap="sm" wrap>
+                                    {connectChip}
+                                </Row>
+                            )}
                             {message ? <Notice tone={message.tone} message={message.text} /> : null}
                         </>
                     )

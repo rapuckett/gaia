@@ -3,6 +3,7 @@
 
 import { Image } from 'expo-image';
 import { useCallback, useEffect, useState } from 'react';
+import { Platform } from 'react-native';
 
 import { isolate } from '@webui/i18n/registry';
 import type { FilePreviewResponse } from '@/api/client.types';
@@ -56,7 +57,8 @@ export function useLoadedFile(target: PreviewTarget): State {
                 return { loaded: { kind: 'image', uri: cached.uri } as Loaded, cached };
             }
             const preview = await client.getFilePreview(target.path, target.sessionId);
-            if (preview.is_text) {
+            // The browser build has no file system to cache in, so a text file shows there without Share.
+            if (preview.is_text && Platform.OS !== 'web') {
                 // The PC serves a phone no bytes of a text file, so Share carries the lines shown.
                 cached = await cachePcFile(`path:${target.path}`, name, new TextEncoder().encode((preview.preview_lines ?? []).join('\n')));
             }
@@ -94,14 +96,13 @@ function TextBody({ preview, name }: { preview: FilePreviewResponse; name: strin
                     <Text role="label" mono dir="ltr" selectable>
                         {preview.columns.join(', ')}
                     </Text>
-                    {preview.row_count != null ? <Text role="caption" tone="muted">{t('fileBrowser.rows', { n: preview.row_count })}</Text> : null}
                 </Stack>
             ) : null}
             <ScrollBox maxHeight={BODY_MAX_HEIGHT}>
                 {markdown ? (
                     <Markdown text={lines.join('\n')} />
                 ) : (
-                    <Text role="label" mono dir="ltr" selectable>
+                    <Text role="label" mono dir="ltr" align="ltr" selectable>
                         {lines.join('\n')}
                     </Text>
                 )}

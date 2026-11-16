@@ -3,6 +3,7 @@
 
 import { bracketParts } from '@webui/i18n/registry';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { View } from 'react-native';
 
 import type { PermissionMode } from '@/api/client.types';
 import { useCreateSession, useDocuments, useGaiaClient, useMemorySettings, useStartScreen, useSystemStatus } from '@/data';
@@ -15,7 +16,7 @@ import { useT } from '@/i18n/useT';
 import { useLastChatStore } from '@/state/lastChat';
 import { useRouteNoticeStore } from '@/state/routeNotice';
 import { Disclosure, IconButton, Notice, ProgressLine, Row, Screen, Stack, Surface, Text } from '@/ui';
-import { DotGrid } from '@/ui/controls/DotGrid';
+import { DotGrid, type DimRect, type DotGridHandle } from '@/ui/controls/DotGrid';
 import { X } from '@/ui/icons';
 
 import { DocumentBriefCard } from './DocumentBriefCard';
@@ -130,15 +131,45 @@ export function NewChatScreen({ onOpen, onChooseDocuments, initialText = '', pro
     const warming = warmUpProgress(status?.warm_up);
     const [greeting, gloss] = bracketParts(t(greetingKey(new Date())));
 
+    // Dots dim behind the greeting and composer, as on the desktop; padding matches its 40 and 24 px.
+    const gridRef = useRef<DotGridHandle>(null);
+    const greetingRef = useRef<DotGridHandle>(null);
+    const composerRef = useRef<DotGridHandle>(null);
+    const [dim, setDim] = useState<{ greeting: DimRect | null; composer: DimRect | null }>({ greeting: null, composer: null });
+    const sending = state.sending;
+    const measureDim = useCallback(() => {
+        const grid = gridRef.current;
+        if (!grid) return;
+        grid.measureInWindow((gx: number, gy: number) => {
+            const read = (view: DotGridHandle | null, pad: number, set: (r: DimRect | null) => void) => {
+                if (!view) return set(null);
+                view.measureInWindow((x: number, y: number, width: number, height: number) => {
+                    if (!width) return set(null);
+                    set({ x: Math.round(x - gx - pad), y: Math.round(y - gy), width: Math.round(width + pad * 2), height: Math.round(height) });
+                });
+            };
+            const keep = (key: 'greeting' | 'composer') => (r: DimRect | null) =>
+                setDim((d) => {
+                    const o = d[key];
+                    const same = o === r || (o && r && o.x === r.x && o.y === r.y && o.width === r.width && o.height === r.height);
+                    return same ? d : { ...d, [key]: r };
+                });
+            read(sending ? null : greetingRef.current, 40, keep('greeting'));
+            read(composerRef.current, 24, keep('composer'));
+        });
+    }, [sending]);
+    useEffect(measureDim, [measureDim]);
+    const dimBehind = [dim.greeting, dim.composer].filter((r): r is DimRect => r !== null);
+
     return (
         <Screen
             keyboard="avoid"
             scroll
             footerBleed
-            backdrop={<DotGrid />}
+            backdrop={<DotGrid ref={gridRef} dimBehind={dimBehind} onLayout={measureDim} />}
             header={<ScreenHeader />}
             footer={
-                <>
+                <View ref={composerRef} collapsable={false} onLayout={measureDim}>
                     {heldOpening !== null && (
                         <Stack paddingX="lg" testID="held-opening" accessibilityRole="list">
                             <Surface tone="secondary" radius="md" padding="sm" border>
@@ -184,21 +215,23 @@ export function NewChatScreen({ onOpen, onChooseDocuments, initialText = '', pro
                         }
                         rightControls={<ModelChip />}
                     />
-                </>
+                </View>
             }
         >
             <Stack gap="lg" paddingX="lg" paddingY="xl" flex={1} justify="center">
                 {!state.sending && (
-                    <Stack gap="xs">
-                        <Text role="display" accessibilityRole="header">
-                            {greeting}
-                        </Text>
-                        {gloss !== undefined && (
-                            <Text role="caption" tone="secondary">
-                                {`\u200F${gloss}`}
+                    <View ref={greetingRef} collapsable={false} onLayout={measureDim}>
+                        <Stack gap="xs">
+                            <Text role="display" accessibilityRole="header">
+                                {greeting}
                             </Text>
-                        )}
-                    </Stack>
+                            {gloss !== undefined && (
+                                <Text role="caption" tone="secondary">
+                                    {`\u200F${gloss}`}
+                                </Text>
+                            )}
+                        </Stack>
+                    </View>
                 )}
                 <FlagshipAgentBanner />
                 {failedSetup !== null && (

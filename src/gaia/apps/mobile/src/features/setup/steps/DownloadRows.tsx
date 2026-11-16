@@ -3,7 +3,7 @@
 
 import { failureText, logAddsDetail, retryingSeconds, rowDetail, stalledSeconds, STATE_KEY } from '@webui/components/setup/downloadModel';
 import { formatSize, STALL_STUCK_S, type Estimate } from '@webui/components/setup/format';
-import type { MessageKey } from '@webui/i18n/registry';
+import { isolate, type MessageKey } from '@webui/i18n/registry';
 import type { SetupComponent, SetupModelProgress, SetupPlan, SetupRunStatus } from '@webui/types';
 import { useState } from 'react';
 
@@ -20,7 +20,7 @@ function Details({ text }: { text: string }) {
     const [open, setOpen] = useState(false);
     return (
         <Disclosure title={t('setup.progress.details')} open={open} onToggle={() => setOpen((o) => !o)}>
-            <Text mono role="caption" dir="ltr" selectable>{text}</Text>
+            <Text mono role="caption" dir="ltr" align="ltr" selectable>{text}</Text>
         </Disclosure>
     );
 }
@@ -79,7 +79,7 @@ export function ModelRow({ model: m, name, estimate, now, freeGb, checking, chec
             </Row>
             <ProgressLine value={m.state === 'verifying' ? undefined : pct / 100} />
             {detail ? <Text role="caption" tone="secondary">{detail}</Text> : null}
-            {showLog && logs ? <Text mono role="caption" dir="ltr" selectable>{collapseProgress(lines).slice(-12).join('\n')}</Text> : null}
+            {showLog && logs ? <Text mono role="caption" dir="ltr" align="ltr" selectable>{collapseProgress(lines).slice(-12).join('\n')}</Text> : null}
             {m.state === 'failed' ? (
                 <Stack gap="xs">
                     <Text tone="danger" accessibilityRole="alert">{failureText(m, name, freeGb, t)}</Text>
@@ -87,7 +87,7 @@ export function ModelRow({ model: m, name, estimate, now, freeGb, checking, chec
                     {retryLater ? (
                         <Text role="caption" tone="secondary">{t('setup.progress.retryLater')}</Text>
                     ) : (
-                        <Row gap="sm" wrap>
+                        <Row gap="sm" wrap stack>
                             <Button label={t('setup.progress.retry')} icon={RotateCw} variant="primary" size="sm" disabled={busy} onPress={() => onRetry(m)} />
                             <Button label={t('setup.progress.skipModel')} variant="secondary" size="sm" disabled={busy} onPress={() => onSkip(m)} />
                         </Row>
@@ -148,8 +148,12 @@ export function DownloadContents({ plan, run, onRetry, busy }: { plan: SetupPlan
                                         </Row>
                                     )}
                                 </Stack>
-                                <Stack align="end">
-                                    <Ltr>{c.size_gb == null ? t('setup.contents.sizeOnDownload') : formatSize(c.size_gb)}</Ltr>
+                                <Stack align="end" maxWidth="40%">
+                                    {c.size_gb == null ? (
+                                        <Text>{t('setup.contents.sizeOnDownload')}</Text>
+                                    ) : (
+                                        <Text numberOfLines={1}>{isolate(formatSize(c.size_gb).replace(/ /g, '\u00A0'), 'ltr')}</Text>
+                                    )}
                                     <Text role="caption" tone="secondary">{stateText(c, state, t)}</Text>
                                 </Stack>
                             </Row>

@@ -560,6 +560,7 @@ export interface AgentMcpsResponse {
  */
 export interface AgentStepResponse {
   active?: boolean;
+  autoDeclined?: boolean | null;
   commandOutput?: CommandOutputResponse | null;
   currentStep?: number | null;
   data?: unknown;
@@ -568,6 +569,7 @@ export interface AgentStepResponse {
   detail?: string | null;
   fileList?: FileListResponse | null;
   id: number;
+  kept?: boolean | null;
   label: string;
   latencyMs?: number | null;
   mcpOutput?: McpOutputResponse | null;
@@ -1259,7 +1261,7 @@ export interface DefaultPermissionModeResponse {
  * What the PC shows about access from the home network. Carries no secret.
  */
 export interface DeviceAccessStatus {
-  error_code?: ("port_in_use" | "unsafe_folder" | "certificate" | "start_failed") | null;
+  error_code?: ("port_in_use" | "unsafe_folder" | "certificate" | "no_home_network" | "start_failed") | null;
   error_detail?: string | null;
   failed_redemptions?: FailedRedemption[];
   idle_expiry_days: number;
@@ -1269,6 +1271,7 @@ export interface DeviceAccessStatus {
   pending_expiry_minutes: number;
   port: number;
   routes?: AwayRouteStatus[];
+  waiting_for_home?: boolean;
 }
 /**
  * A pairing attempt that failed, and why; the device saw one refusal.

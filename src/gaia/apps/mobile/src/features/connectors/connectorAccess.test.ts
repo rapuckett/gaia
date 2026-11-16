@@ -3,7 +3,7 @@
 
 import type { AgentInfo, ConnectorRow } from '@/api/client.types';
 
-import { activatableAgents, nextScopes, scopesForActivation, soleMcpAgent } from './connectorAccess';
+import { activatableAgents, cardSignInScopes, nextScopes, scopesForActivation, soleMcpAgent } from './connectorAccess';
 
 const server = { id: 'mcp-slack', type: 'mcp_server' } as ConnectorRow;
 const gaia = { id: 'gaia', name: 'GAIA', namespaced_agent_id: 'builtin:gaia', consumes_mcp_servers: true } as AgentInfo;
@@ -31,5 +31,16 @@ describe('connector access', () => {
         expect(nextScopes(['a', 'b'], 'a', false)).toEqual(['b']);
         expect(nextScopes(['a'], 'a', false)).toEqual([]);
         expect(nextScopes(['a'], 'b', true)).toEqual(['a', 'b']);
+    });
+
+    it('asks a card sign-in for what the call needs, what the account holds, and the identity scopes', () => {
+        const microsoft = {
+            id: 'microsoft',
+            scopes: ['openid', 'Calendars.Read'],
+            default_scopes: ['openid', 'offline_access'],
+            available_scopes: ['openid', 'offline_access', 'Mail.Read', 'Mail.Send', 'Calendars.Read'],
+        } as ConnectorRow;
+        expect(cardSignInScopes(['Mail.Read'], microsoft).sort()).toEqual(['Calendars.Read', 'Mail.Read', 'offline_access', 'openid']);
+        expect(cardSignInScopes(undefined, microsoft)).toEqual(microsoft.available_scopes);
     });
 });

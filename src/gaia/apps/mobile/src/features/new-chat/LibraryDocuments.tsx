@@ -64,7 +64,7 @@ export function LibraryDocuments({ documents, attachedIds, onAttach, onRemove, o
                     <Text role="label" tone="secondary">
                         {attached.length ? t.plural('newChat.docs.more', n) : t.plural('newChat.docs.library', n)}
                     </Text>
-                    <Row gap="xs" wrap>
+                    <Row gap="xs" wrap stack>
                         <Button
                             variant="ghost"
                             size="sm"

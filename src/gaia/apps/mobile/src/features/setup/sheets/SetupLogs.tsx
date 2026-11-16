@@ -32,7 +32,7 @@ function FollowLog({ lines }: { lines: string[] }) {
                 }}
                 scrollEventThrottle={64}
             >
-                <Text mono role="caption" dir="ltr" selectable>
+                <Text mono role="caption" dir="ltr" align="ltr" selectable>
                     {lines.join('\n')}
                 </Text>
             </ScrollView>
