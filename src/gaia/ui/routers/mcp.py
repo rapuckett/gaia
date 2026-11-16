@@ -16,12 +16,15 @@ Mutating operations now route through:
 import logging
 from typing import Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
+from gaia.credential_shapes import REDACTED, redact_credentials
 from gaia.mcp.client.config import MCPConfig
+from gaia.mcp.client.redaction import secrets_from_launch
 
 from ..models import WireModel
+from ..security import is_local_pc
 
 logger = logging.getLogger(__name__)
 
@@ -89,6 +92,25 @@ def _mask_env(env: Dict[str, str]) -> Dict[str, str]:
     return {k: ("***" if v else "") for k, v in env.items()}
 
 
+def args_for_caller(
+    request: Request, args: List[str], env: Optional[Dict[str, str]] = None
+) -> List[str]:
+    """A server's launch args as the caller may see them.
+
+    Whole on the PC, whose edit form needs them; anywhere else, the values the
+    launch marks as secret and anything shaped like a credential are masked.
+    """
+    if is_local_pc(request):
+        return args
+    secrets = secrets_from_launch(args, env)
+    masked = []
+    for arg in args:
+        for secret in secrets:
+            arg = arg.replace(secret, REDACTED)
+        masked.append(redact_credentials(arg))
+    return masked
+
+
 # ---------------------------------------------------------------------------
 # Read-only endpoints
 # ---------------------------------------------------------------------------
@@ -97,7 +119,7 @@ def _mask_env(env: Dict[str, str]) -> Dict[str, str]:
 @router.get(
     "/api/mcp/servers", response_model=MCPServerList, response_model_exclude_unset=True
 )
-async def list_mcp_servers():
+async def list_mcp_servers(request: Request):
     """List all configured MCP servers and their enabled/disabled state."""
     config = _load_config()
     servers = config.get_servers()
@@ -107,7 +129,7 @@ async def list_mcp_servers():
             MCPServerInfo(
                 name=name,
                 command=cfg.get("command", ""),
-                args=cfg.get("args", []),
+                args=args_for_caller(request, cfg.get("args", []), cfg.get("env")),
                 env=_mask_env(cfg.get("env", {})),
                 enabled=not cfg.get("disabled", False),
             )

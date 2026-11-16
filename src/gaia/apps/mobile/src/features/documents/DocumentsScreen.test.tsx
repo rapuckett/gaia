@@ -53,7 +53,7 @@ describe('DocumentsScreen', () => {
         expect(screen.getByText(/^\u2066?1\u2069? document$/)).toBeTruthy();
         expect(screen.getByText(/couldn't be read/)).toBeTruthy();
         expect(screen.getByText(/3 KB/)).toBeTruthy();
-        expect(screen.getByText(/attached to your next new chat/)).toBeTruthy();
+        expect(screen.getByText(/go to your next new chat/)).toBeTruthy();
     });
 
     it('says so when the library is empty', async () => {
@@ -81,7 +81,7 @@ describe('DocumentsScreen', () => {
             const client = createFakeClient({ sessions: [chat] });
             await mount(client, 'c1');
             fireEvent.press(await screen.findByText('Add a file'));
-            expect(await screen.findByText(/Attached notes\.txt to/)).toBeTruthy();
+            expect(await screen.findByText(/Added notes\.txt to/)).toBeTruthy();
             expect(client.uploaded.map((f) => f.name)).toEqual(['notes.txt']);
             expect(client.attached).toEqual([{ sessionId: 'c1', docId: 'doc-1' }]);
             await waitFor(() => expect(screen.getAllByText(/notes\.txt/).length).toBeGreaterThan(1));
@@ -159,18 +159,18 @@ describe('DocumentsScreen', () => {
 
         it('holds it for the next chat in the store New chat reads, and offers nothing for an unreadable document', async () => {
             await mount(createFakeClient({ documents: library() }));
-            expect(screen.queryByLabelText('Attach bad.pdf to your next chat')).toBeNull();
-            fireEvent.press(await screen.findByLabelText('Attach notes.txt to your next chat'));
-            expect(await screen.findByText(/notes\.txt will be attached to your next new chat/)).toBeTruthy();
+            expect(screen.queryByLabelText('Add bad.pdf to your next chat')).toBeNull();
+            fireEvent.press(await screen.findByLabelText('Add notes.txt to your next chat'));
+            expect(await screen.findByText(/notes\.txt will be added to your next new chat/)).toBeTruthy();
             expect(useNextChatDocs.getState().ids).toEqual(['a']);
-            expect(screen.queryByLabelText('Attach notes.txt to your next chat')).toBeNull();
+            expect(screen.queryByLabelText('Add notes.txt to your next chat')).toBeNull();
         });
 
         it('attaches it to the chat the library was opened from', async () => {
             const client = createFakeClient({ documents: library(), sessions: [chat] });
             await mount(client, 'c1');
-            fireEvent.press(await screen.findByLabelText(/Attach notes\.txt to/));
-            expect(await screen.findByText(/Attached notes\.txt to/)).toBeTruthy();
+            fireEvent.press(await screen.findByLabelText(/Add notes\.txt to/));
+            expect(await screen.findByText(/Added notes\.txt to/)).toBeTruthy();
             expect(client.attached).toEqual([{ sessionId: 'c1', docId: 'a' }]);
             expect(useNextChatDocs.getState().ids).toEqual([]);
         });

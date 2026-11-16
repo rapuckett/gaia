@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import { render, screen } from '@testing-library/react-native';
-import { Text } from 'react-native';
+import { StyleSheet, Text } from 'react-native';
 
 import { ThemeProvider } from '@/ui';
 
@@ -35,5 +35,23 @@ describe('SetupFooterMuted', () => {
         await rerender(<Setup covered={false} />);
         expect(screen.getByText('Plan action')).toBeTruthy();
         expect(screen.queryByText('Screen action')).toBeNull();
+    });
+});
+
+describe('SetupFooterBar', () => {
+    it('gives each action an equal flex slot', async () => {
+        await render(
+            <SetupFooterProvider>
+                <SetupFooter>
+                    <Text>Customize</Text>
+                    <Text>Download and start</Text>
+                </SetupFooter>
+                <SetupFooterBar />
+            </SetupFooterProvider>,
+            { wrapper: ThemeProvider },
+        );
+        const slots = screen.getAllByTestId('setup-footer-slot');
+        expect(slots).toHaveLength(2);
+        for (const slot of slots) expect(StyleSheet.flatten(slot.props.style)).toMatchObject({ flex: 1, minWidth: 0 });
     });
 });
