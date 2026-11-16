@@ -21,6 +21,8 @@ export interface ControlChipProps {
     warning?: boolean;
     /** Which chip this is, so the row can drop its label when space runs out; the model's never goes. */
     chip: ChipId;
+    /** The label is a name the user or the PC chose (model, folder): it aligns to its own script. */
+    value?: boolean;
     disabled?: boolean;
     accessibilityLabel?: string;
     accessibilityHint?: string;
@@ -30,7 +32,7 @@ export interface ControlChipProps {
 const MODEL_CHIP_MIN = 44;
 
 /** A flat control in the message box's bottom row, as the desktop's composer chips: an icon, a short label and a chevron. */
-export function ControlChip({ label, icon, onPress, menu, warning, chip, disabled, accessibilityLabel, accessibilityHint, testID }: ControlChipProps) {
+export function ControlChip({ label, icon, onPress, menu, warning, chip, disabled, accessibilityLabel, accessibilityHint, testID, value }: ControlChipProps) {
     const collapsed = useChipCollapsed(chip);
     const [modelWidth, setModelWidth] = useState<number | null>(null);
     // Below the floor the model shows icon and chevron, never a sliver of its name.
@@ -43,7 +45,7 @@ export function ControlChip({ label, icon, onPress, menu, warning, chip, disable
             </View>
             {compact ? null : (
                 <View style={{ flexShrink: chip === 'model' ? 1 : 0 }}>
-                    <Text role="label" tone={warning ? 'warning' : 'secondary'} numberOfLines={1} compact>
+                    <Text role="label" tone={warning ? 'warning' : 'secondary'} numberOfLines={1} compact dir={value ? 'auto' : undefined}>
                         {label}
                     </Text>
                 </View>
@@ -57,7 +59,7 @@ export function ControlChip({ label, icon, onPress, menu, warning, chip, disable
     );
     return (
         <View
-            style={{ flexShrink: chip === 'model' ? 1 : 0, minWidth: chip === 'model' ? MODEL_CHIP_MIN : 0 }}
+            style={{ flexShrink: chip === 'model' ? 1 : 0, minWidth: chip === 'model' ? MODEL_CHIP_MIN : 0, maxWidth: '100%' }}
             onLayout={chip === 'model' ? (e) => setModelWidth(e.nativeEvent.layout.width) : undefined}
         >
             <ChipMeasure id={chip}>{content(false)}</ChipMeasure>

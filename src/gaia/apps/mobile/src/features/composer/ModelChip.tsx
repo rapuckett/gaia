@@ -50,6 +50,7 @@ export function ModelChip({ turnRunning = false, initialOpen = false, initialInf
                 accessibilityHint={hint}
                 menu
                 chip="model"
+                value
                 onPress={() => setOpen(true)}
                 accessibilityLabel={pill.aria}
                 testID="model-chip"
