@@ -53,7 +53,7 @@ interface PairAnswer {
 }
 
 function connectionOf(pc: SavedPc): ConnectionConfig {
-    return { baseUrl: pc.origin, pcId: pc.id, pinned: true, origins: pc.origins.map((o) => o.origin) };
+    return { baseUrl: pc.origin, pcId: pc.id, pinned: true, origins: pc.origins.map((o) => o.origin), routes: pc.origins };
 }
 
 function withOrigins<T extends Omit<SavedPc, 'origins'> & { origins?: RouteOrigin[] }>(pc: T): T & SavedPc {
