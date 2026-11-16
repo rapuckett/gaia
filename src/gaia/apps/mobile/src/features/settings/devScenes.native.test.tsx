@@ -50,7 +50,6 @@ describeNative('/dev/settings', () => {
         ['model-key-disconnected', 'Reconnect'],
         ['model-search-empty', 'No models match.'],
         ['model-hf-checking', /Needs 64 GB/],
-        ['model-hf-check-running', /huggingface\.co\/amd\/Demo-Chat-GGUF/],
         ['model-hf-warnings', /Not tested on the NPU/],
         ['model-details-npu', /Measured:.*17\/20 tasks/],
         ['model-details-npu', /\(expected\)/],
@@ -176,6 +175,13 @@ describeNative('/dev/settings', () => {
         await mount();
         expect(await screen.findByTestId('model-remove-user.my-tuned-GGUF', { includeHiddenElements: true })).toBeTruthy();
         expect(screen.queryByTestId('model-remove-user.in-use-GGUF', { includeHiddenElements: true })).toBeNull();
+    });
+
+    it('model-hf-check-running holds the Check button busy with the link typed', async () => {
+        mockState = 'model-hf-check-running';
+        await mount();
+        expect(await screen.findByDisplayValue(/Demo-Chat-GGUF/, undefined, { timeout: 3000 })).toBeTruthy();
+        expect(screen.getByTestId('custom-model-check', { includeHiddenElements: true })).toBeDisabled();
     });
 
     it('model-hf-added opens on the success notice with no typing', async () => {
