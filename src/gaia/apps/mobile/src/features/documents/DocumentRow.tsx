@@ -130,10 +130,10 @@ export function DocumentRow({ document: doc, progress, startedAt, now, retrying,
                     {hint ? <Text role="caption" tone="secondary">{hint}</Text> : null}
                     {reason && reason.more ? (
                         <Disclosure title={reason.summary} open={reasonOpen} onToggle={() => setReasonOpen((o) => !o)}>
-                            <Text role="caption" tone="secondary">{reason.more}</Text>
+                            <Text role="caption" tone="muted" dir="ltr">{reason.more}</Text>
                         </Disclosure>
                     ) : reason ? (
-                        <Text role="caption" tone="secondary">{reason.summary}</Text>
+                        <Text role="caption" tone="muted" dir="ltr">{reason.summary}</Text>
                     ) : !hint ? (
                         <Text role="caption" tone="secondary">{t('docs.noReason')}</Text>
                     ) : null}

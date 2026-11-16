@@ -380,7 +380,11 @@ class _ScreenedAcceptor:
                 ssl_handshake_timeout=LISTENER_HANDSHAKE_SECONDS,
             )
         except (OSError, asyncio.TimeoutError) as e:
-            logger.debug("Device listener: TLS from %s failed: %s", peer, e)
+            logger.warning(
+                "Device listener: hung up on %s, TLS failed: %s",
+                peer,
+                f"{type(e).__name__}: {e}",
+            )
             conn.close()
 
     def close(self) -> None:
@@ -516,6 +520,48 @@ def _bind(host: str, port: int) -> socket.socket:
     return sock
 
 
+def _prove_handshake(context: ssl.SSLContext) -> None:
+    """Complete one TLS handshake in memory on *context*, as each connection will.
+
+    Raises:
+        ListenerError: The handshake fails, so no device could be answered.
+    """
+    from gaia.tls import stock_ssl_context
+
+    client_context = stock_ssl_context(
+        ssl.PROTOCOL_TLS_CLIENT, check_hostname=False, verify_mode=ssl.CERT_NONE
+    )
+    to_server, to_client = ssl.MemoryBIO(), ssl.MemoryBIO()
+    from_server, from_client = ssl.MemoryBIO(), ssl.MemoryBIO()
+    client = client_context.wrap_bio(to_client, from_client)
+    server = context.wrap_bio(to_server, from_server, server_side=True)
+    try:
+        for _ in range(8):
+            finished = 0
+            for side in (client, server):
+                try:
+                    side.do_handshake()
+                    finished += 1
+                except ssl.SSLWantReadError:
+                    pass
+            to_server.write(from_client.read())
+            to_client.write(from_server.read())
+            if finished == 2:
+                return
+    except ssl.SSLError as e:
+        reason = f" ({type(e).__name__}: {e})"
+        error: Optional[BaseException] = e
+    else:
+        reason, error = "", None
+    raise ListenerError(
+        "start_failed",
+        f"GAIA's listener for paired devices couldn't complete a TLS "
+        f"handshake{reason}, so it didn't start. Turn access off and on in "
+        "Settings, or restart GAIA; if it keeps failing, report it at "
+        "https://github.com/amd/gaia/issues.",
+    ) from error
+
+
 def _in_use(error: OSError) -> bool:
     return error.errno == errno.EADDRINUSE or getattr(error, "winerror", None) in (
         10048,
@@ -553,6 +599,7 @@ class DeviceListener:
 
         from ..server import uvicorn_options
 
+        _prove_handshake(context)
         try:
             sock = _bind(self._host, self._port)
         except OSError as e:

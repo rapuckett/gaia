@@ -9,6 +9,7 @@ import { GaiaClientProvider } from '@/data';
 import { FlagshipAgentBanner } from '@/features/banners/FlagshipAgentBanner';
 import { ResourceStrip } from '@/features/chat/header/ResourceStrip';
 import { devGalleryEnabled } from '@/features/dev/devGallery';
+import { KeyedScene } from '@/features/dev/KeyedScene';
 import { AppErrorBoundary } from '@/features/errors/AppErrorBoundary';
 import { NeedPrompt } from '@/features/model/ModelNeededHost';
 import { ModelServerDownNotice } from '@/features/model/ModelServerDownNotice';
@@ -51,28 +52,9 @@ function Body({ scene }: { scene: ModelScene }) {
     }
 }
 
-/** Model status, server-down, resource, agent and error states on a fake PC; `?state=<name>` (see MODEL_SCENES). */
-export default function ModelServerGalleryRoute() {
-    const { state = 'sheet-loaded' } = useLocalSearchParams<{ state?: string }>();
-    const found = MODEL_SCENES[state];
+function ModelServerView({ found }: { found: ModelScene }) {
     const [queryClient] = useState(() => new QueryClient({ defaultOptions: { queries: { retry: false } } }));
-    const [client] = useState(() => {
-        if (!found) return null;
-        return modelSceneClient(found);
-    });
-    if (!devGalleryEnabled()) return <Redirect href="/" />;
-    if (!found || !client) {
-        return (
-            <UIProvider>
-                <Screen scroll>
-                    <Stack gap="sm" padding="lg">
-                        <Text role="title">{`No model-server scene "${state}"`}</Text>
-                        {Object.keys(MODEL_SCENES).map((key) => <Text key={key}>{key}</Text>)}
-                    </Stack>
-                </Screen>
-            </UIProvider>
-        );
-    }
+    const [client] = useState(() => modelSceneClient(found));
     return (
         <QueryClientProvider client={queryClient}>
             <GaiaClientProvider client={client}>
@@ -86,4 +68,24 @@ export default function ModelServerGalleryRoute() {
             </GaiaClientProvider>
         </QueryClientProvider>
     );
+}
+
+/** Model status, server-down, resource, agent and error states on a fake PC; `?state=<name>` (see MODEL_SCENES). */
+export default function ModelServerGalleryRoute() {
+    const { state = 'sheet-loaded' } = useLocalSearchParams<{ state?: string }>();
+    if (!devGalleryEnabled()) return <Redirect href="/" />;
+    const found = MODEL_SCENES[state];
+    if (!found) {
+        return (
+            <UIProvider>
+                <Screen scroll>
+                    <Stack gap="sm" padding="lg">
+                        <Text role="title">{`No model-server scene "${state}"`}</Text>
+                        {Object.keys(MODEL_SCENES).map((key) => <Text key={key}>{key}</Text>)}
+                    </Stack>
+                </Screen>
+            </UIProvider>
+        );
+    }
+    return <KeyedScene sceneKey={state} scene={ModelServerView} props={{ found }} />;
 }

@@ -60,7 +60,7 @@ describeNative('FilePreviewScreen', () => {
         expect(await screen.findByText(t('fileBrowser.columnsLabel'))).toBeTruthy();
         expect(screen.getByText('3 lines')).toBeTruthy();
         expect(screen.getByText('2 columns')).toBeTruthy();
-        expect(screen.getAllByText('2 rows').length).toBeGreaterThan(0);
+        expect(screen.getAllByText('2 rows')).toHaveLength(1);
     });
 
     it('says a PDF has no preview instead of showing bytes', async () => {

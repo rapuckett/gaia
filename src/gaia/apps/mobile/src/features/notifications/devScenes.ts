@@ -18,6 +18,8 @@ export interface NotificationScene {
     chatAlert?: ChatAlertBanner;
     /** The status request fails like a PC that doesn't answer. */
     unreachable?: boolean;
+    /** The status request answers a gateway 504, the phone's only "slow to answer" signal. */
+    slow?: boolean;
     data?: FakeClientData;
 }
 
@@ -68,6 +70,7 @@ export const NOTIFICATION_SCENES: Record<string, NotificationScene> = {
     'banner-download-starting': { view: 'banner', data: status({ download_progress: { ...DOWNLOAD, state: 'starting', percent: 0, total_bytes: 0, message: null } }) },
     'banner-server-hung': { view: 'banner', data: status({ lemonade_running: false, lemonade_error: 'The model server timed out.' }) },
     'banner-server-stopped': { view: 'banner', data: status({ lemonade_running: false }) },
+    'banner-slow': { view: 'banner', slow: true },
     'banner-starting': { view: 'banner', data: status({ init_state: 'initializing', init_tasks: [{ name: 'Loading the model', status: 'running' }] } as Partial<SystemStatus>) },
     'banner-unreachable': { view: 'banner', unreachable: true },
     empty: { view: 'center', items: [] },
@@ -86,6 +89,7 @@ export const NOTIFICATION_SCENES: Record<string, NotificationScene> = {
 
 export function notificationSceneClient(scene: NotificationScene): GaiaClient {
     const client = createFakeClient(scene.data ?? {});
+    if (scene.slow) return { ...client, getSystemStatus: () => Promise.reject(new GaiaApiError(504, 'The PC did not answer in time.')) };
     if (!scene.unreachable) return client;
     return { ...client, getSystemStatus: () => Promise.reject(new GaiaNetworkError('http://pc.local:4200', new Error('Network request failed'))) };
 }

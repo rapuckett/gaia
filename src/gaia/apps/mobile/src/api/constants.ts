@@ -491,6 +491,12 @@ export const RESOURCE_RETRY_MS = 5_000;
 export const CAPABILITIES_POLL_MS = 2_000;
 /** How often to re-read the PC's status while it is still starting or warming up. */
 export const STATUS_POLL_MS = 5_000;
+/** How long the status request may take before it counts as slow; above the PC's own sequential probes. */
+export const STATUS_REQUEST_TIMEOUT_MS = 60_000;
+/** Slow answers in a row before the status reads as slow (one right after an outage). */
+export const STATUS_SLOW_STREAK = 3;
+/** A PC that has only answered slowly for this long is treated as unreachable. */
+export const STATUS_LOST_MS = 5 * 60_000;
 /** How often a healthy PC's status is re-read, so an idle app notices the PC going away. */
 export const STATUS_IDLE_POLL_MS = 30_000;
 

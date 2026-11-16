@@ -203,7 +203,6 @@ export function createPinnedPairingService(onAllowed?: (pcId: string) => void): 
         },
 
         async redeem(invite: PairingInvite): Promise<RedeemResult> {
-            const state = await load();
             const body = JSON.stringify({ invitation: invite.invite, device_name: deviceName(), platform: devicePlatform() });
             await GaiaTransport.drop(stagedId(invite.pc_id));
             let answer;
@@ -224,7 +223,7 @@ export function createPinnedPairingService(onAllowed?: (pcId: string) => void): 
             const origins = invite.origins.map((origin) => ({ kind: 'home' as const, origin }));
             const pending = { id: invite.pc_id, name: paired.pc_name || invite.name, origin: answer.origin, origins, deviceId: paired.device_id, expiresAt };
             // A PC already paired keeps its saved token, and stays the one in use, until this one is allowed.
-            await save({ ...state, pending });
+            await save({ ...(await load()), pending });
             return { state: 'pending', pcName: pending.name, expiresAt };
         },
 
@@ -251,7 +250,9 @@ export function createPinnedPairingService(onAllowed?: (pcId: string) => void): 
             }
             await GaiaTransport.promote(stagedId(pending.id), pending.id);
             const pc: SavedPc = { id: pending.id, name: pending.name, origin: pending.origin, origins: pending.origins, deviceId: pending.deviceId };
-            await save({ pcs: [...state.pcs.filter((p) => p.id !== pc.id), pc], currentId: pc.id, pending: null });
+            // Read again: the other PCs' routes may have been refreshed while this one was being checked.
+            const latest = await load();
+            await save({ pcs: [...latest.pcs.filter((p) => p.id !== pc.id), pc], currentId: pc.id, pending: null });
             onAllowed?.(pc.id);
             return { state: 'paired', pc: pairedOf(pc) };
         },

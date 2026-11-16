@@ -1,7 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 
 import { useQuery, useQueryClient, type Query, type QueryClient, type UseQueryResult } from '@tanstack/react-query';
 
@@ -18,10 +18,11 @@ import type {
     SessionSearchResponse,
     SystemStatus,
 } from '@/api/client.types';
-import { CONNECTOR_POLL_MS, RESOURCE_RETRY_MS, SEARCH_DEBOUNCE_MS, STATUS_IDLE_POLL_MS, STATUS_POLL_MS } from '@/api/constants';
+import { CONNECTOR_POLL_MS, RESOURCE_RETRY_MS, SEARCH_DEBOUNCE_MS, STATUS_IDLE_POLL_MS, STATUS_POLL_MS, STATUS_REQUEST_TIMEOUT_MS } from '@/api/constants';
 import { GaiaConfigError } from '@/api/errors';
 
 import { useGaiaClient } from './GaiaClientProvider';
+import { classifyStatusError, createStatusHealth, type StatusHealth, type StatusHealthTracker } from './statusHealth';
 
 /** True for a query whose first fetch failed and that has no data; React Query 5 puts it back to `pending` on every refetch. */
 export function failedWithoutData(query: Pick<Query, 'state'>): boolean {
@@ -179,12 +180,55 @@ export function statusPollMs(status: SystemStatus | undefined, failed: boolean):
  */
 export function useSystemStatus() {
     const client = useGaiaClient();
+    const tracker = statusHealthFor(useQueryClient());
     return useQuery<SystemStatus>({
         queryKey: queryKeys.systemStatus,
         enabled: client !== null,
-        queryFn: ({ signal }) => requireClient(client).getSystemStatus({ signal }),
-        refetchInterval: (query) => statusPollMs(query.state.data, query.state.status === 'error' || query.state.errorUpdateCount > 0),
+        queryFn: ({ signal }) => fetchStatus(requireClient(client), signal, tracker),
+        refetchInterval: (q) => statusPollMs(q.state.data, q.state.status === 'error' || q.state.errorUpdateCount > 0),
     });
+}
+
+/** Whether the PC answers its status late (`slow`) or has stopped answering (`lost`); read beside `useSystemStatus`. */
+export function useStatusHealth(): StatusHealth {
+    const tracker = statusHealthFor(useQueryClient());
+    return useSyncExternalStore(tracker.subscribe, tracker.get);
+}
+
+const statusHealthByClient = new WeakMap<QueryClient, StatusHealthTracker>();
+
+/** One tracker per query client, so every screen reading the status sees the same streak. */
+function statusHealthFor(queryClient: QueryClient): StatusHealthTracker {
+    let tracker = statusHealthByClient.get(queryClient);
+    if (!tracker) {
+        tracker = createStatusHealth();
+        statusHealthByClient.set(queryClient, tracker);
+    }
+    return tracker;
+}
+
+/** The status request with webui's timeout, recording how it ended. */
+export async function fetchStatus(client: GaiaClient, signal: AbortSignal, tracker: StatusHealthTracker): Promise<SystemStatus> {
+    const limit = new AbortController();
+    let timedOut = false;
+    const timer = setTimeout(() => {
+        timedOut = true;
+        limit.abort();
+    }, STATUS_REQUEST_TIMEOUT_MS);
+    const cancel = () => limit.abort();
+    signal.addEventListener('abort', cancel);
+    try {
+        const status = await client.getSystemStatus({ signal: limit.signal });
+        tracker.record('ok');
+        return status;
+    } catch (error) {
+        if (!timedOut && signal.aborted) throw error;
+        tracker.record(classifyStatusError(error, timedOut));
+        throw error;
+    } finally {
+        clearTimeout(timer);
+        signal.removeEventListener('abort', cancel);
+    }
 }
 
 /** The new-chat screen's cards and working folder; refetch it to ask again while the assistant is down. */
