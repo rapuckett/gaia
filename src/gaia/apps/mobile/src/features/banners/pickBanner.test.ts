@@ -39,6 +39,7 @@ describe('pickBanner', () => {
         expect(banner?.progress?.label).toBe('50% · 5.00 / 10.00 GB');
         expect(id(withStatus({ download_progress: { ...download, state: 'error' } }))).toBe('download');
     });
+});
 
 describe('backend errors read as one sentence', () => {
     it.each([[502, 'down', '502 down'], [503, '', '503']])('%i puts the status once in the title and the raw cause in details', (status, body, details) => {
