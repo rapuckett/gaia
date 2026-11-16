@@ -100,6 +100,7 @@ from gaia.connectors.store import (
 from ..models import WireModel
 from ..security import require_local_pc
 from ..security import require_ui_header as _require_ui_header
+from .mcp import args_for_caller
 
 logger = logging.getLogger(__name__)
 
@@ -910,6 +911,8 @@ async def list_agent_mcps(request: Request) -> Dict[str, Any]:
                 continue
             raw_args = server_cfg.get("args", [])
             args = [str(a) for a in raw_args] if isinstance(raw_args, list) else []
+            raw_env = server_cfg.get("env")
+            env = raw_env if isinstance(raw_env, dict) else None
             servers.append(
                 {
                     "agent_id": reg.id,
@@ -917,7 +920,7 @@ async def list_agent_mcps(request: Request) -> Dict[str, Any]:
                     "config_path": str(config_path),
                     "server_name": server_name,
                     "command": str(server_cfg.get("command", "")),
-                    "args": args,
+                    "args": args_for_caller(request, args, env),
                     "disabled": bool(server_cfg.get("disabled", False)),
                 }
             )

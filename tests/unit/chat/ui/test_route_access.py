@@ -739,3 +739,63 @@ def test_system_context_collection_is_pc_only(setup, monkeypatch):
         == 200
     )
     assert ran == ["refresh"]
+
+
+def test_mcp_server_secrets_stay_on_the_pc(setup, monkeypatch):
+    """A phone sees a server's args with its credentials masked; the PC sees them whole."""
+    from gaia.ui.routers import mcp
+
+    app, clients, _ = setup
+    args = [
+        "--api-key",
+        "plain-secret-value",
+        "--url=https://mcp.example/sse?token=query-secret",
+        "--verbose",
+    ]
+
+    class _Config:
+        def get_servers(self):
+            return {"search": {"command": "npx", "args": args, "env": {}}}
+
+    monkeypatch.setattr(mcp, "_load_config", _Config)
+    for caller in ("tunnel", "device"):
+        resp = clients[caller].get("/api/mcp/servers", headers={"X-Gaia-UI": "1"})
+        assert resp.status_code == 200, (caller, resp.text)
+        shown = resp.json()["servers"][0]["args"]
+        assert "plain-secret-value" not in resp.text, caller
+        assert "query-secret" not in resp.text, caller
+        assert shown[0] == "--api-key" and shown[3] == "--verbose", shown
+    pc = clients["pc"].get("/api/mcp/servers", headers={"X-Gaia-UI": "1"})
+    assert pc.json()["servers"][0]["args"] == args
+
+
+def test_spending_changes_from_a_phone_are_audited(setup):
+    """Raising cloud spend from a paired device names that device in the audit log."""
+    import logging
+
+    from gaia.security import audit_logger
+
+    app, clients, device = setup
+    lines = []
+
+    class _Capture(logging.Handler):
+        def emit(self, record):
+            lines.append(record.getMessage())
+
+    handler = _Capture()
+    level = audit_logger.level
+    audit_logger.addHandler(handler)
+    audit_logger.setLevel(logging.INFO)
+    try:
+        ui = {"X-Gaia-UI": "1"}
+        resp = clients["device"].put(
+            "/api/spending/limit", json={"limit_usd": 25.0}, headers=ui
+        )
+        assert resp.status_code == 200, resp.text
+        resp = clients["device"].post("/api/spending/allow-month", headers=ui)
+        assert resp.status_code == 200, resp.text
+    finally:
+        audit_logger.removeHandler(handler)
+        audit_logger.setLevel(level)
+    by = f"by {security.DEVICE_PRINCIPAL_PREFIX}{device.device_id}"
+    assert len(lines) == 2 and all(by in line for line in lines), lines
