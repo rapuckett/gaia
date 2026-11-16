@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import type { BrowseResponse, DocumentResponse, FileSearchResponse, GaiaClient, IndexFolderResponse } from '@/api/client.types';
 import { GaiaApiError } from '@/api/errors';
+import { cleanPastedPath } from '@webui/utils/pastedPath';
 
 import { useGaiaClient } from './GaiaClientProvider';
 import { queryKeys, requireClient } from './queries';
@@ -106,8 +107,9 @@ export function useAddPcPath() {
     const client = useGaiaClient();
     const queryClient = useQueryClient();
     return useMutation<AddPcPathResult, Error, AddPcPathRequest>({
-        mutationFn: async ({ path, readChatId, chatId, onFolder }) => {
+        mutationFn: async ({ path: typed, readChatId, chatId, onFolder }) => {
             const api = requireClient(client);
+            const path = cleanPastedPath(typed);
             let document: DocumentResponse;
             try {
                 document = await api.uploadDocumentByPath(path, readChatId);

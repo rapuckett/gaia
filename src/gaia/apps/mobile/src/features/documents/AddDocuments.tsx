@@ -13,6 +13,7 @@ import { FileText, FolderOpen, Image as ImageIcon } from '@/ui/icons';
 import type { MessageKey, Params } from '@webui/i18n/registry';
 import type { Translate } from '@webui/i18n/translator';
 import { describeFolderResult } from '@webui/utils/documentLibrary.core';
+import { cleanPastedPath } from '@webui/utils/pastedPath';
 import { examplePath } from '@webui/utils/platform';
 import { describeUploadError, unsupportedTypeMessage, type UploadErrorInput, type UploadErrorView } from '@webui/utils/uploadErrors.core';
 
@@ -138,7 +139,7 @@ export function AddDocuments({ chatId, chatName, onStart, onBrowse, pcChatId, in
         const typed = path.trim();
         if (!typed || busy || !pcChatId) return;
         onStart?.();
-        const name = pathName(typed);
+        const name = pathName(cleanPastedPath(typed));
         setLine({ kind: 'busy', name });
         let next: AddLine;
         let added = false;
