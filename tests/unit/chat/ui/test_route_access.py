@@ -14,6 +14,7 @@ fails for a route nobody has decided about:
 * ``remote``: the PC, mobile access with its token, and allowed devices.
 * ``web``: the web UI and the API docs, which the device listener never serves.
 * ``pair``: the pairing redemption, only on the device listener, with no token.
+* ``device``: an allowed paired device asking about itself.
 * ``device_self``: a paired device unpairing itself, pending or allowed.
 """
 
@@ -125,6 +126,8 @@ NOT_ON_LISTENER = {
 }
 
 PAIR = {"POST /api/devices/pair"}
+
+DEVICE = {"GET /api/devices/me/routes"}
 
 DEVICE_SELF = {"DELETE /api/devices/me"}
 
@@ -356,6 +359,7 @@ EXPECTED = {
     **{r: "pc_or_device" for r in PC_OR_DEVICE},
     **{r: "not_on_listener" for r in NOT_ON_LISTENER},
     **{r: "pair" for r in PAIR},
+    **{r: "device" for r in DEVICE},
     **{r: "device_self" for r in DEVICE_SELF},
     **{r: "web" for r in WEB},
     **{r: "remote" for r in REMOTE},
@@ -370,6 +374,7 @@ LETS_IN = {
     "remote": {"pc", "tunnel", "device"},
     "web": {"pc", "tunnel"},
     "pair": {"device", "pending", "no_token"},
+    "device": {"device"},
     "device_self": {"device", "pending"},
 }
 GUARDS = (
@@ -377,6 +382,7 @@ GUARDS = (
     security.require_pc_or_device,
     security.refuse_on_device_listener,
     security.require_device_listener,
+    security.require_allowed_device,
     security.require_device,
 )
 
@@ -431,6 +437,8 @@ def _access_class(key, route):
         return "not_on_listener"
     if security.require_device_listener in guards:
         return "pair"
+    if security.require_allowed_device in guards:
+        return "device"
     if security.require_device in guards:
         return "device_self"
     return "remote"
