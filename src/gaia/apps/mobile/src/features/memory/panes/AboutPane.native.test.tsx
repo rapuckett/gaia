@@ -75,3 +75,23 @@ describeNative('AboutPane', () => {
         });
     });
 });
+
+describeNative('AboutPane paging', () => {
+    it('says how many of the total it shows and offers Show more when the PC holds more', async () => {
+        const client = createFakeClient({ memoryKnowledge: SAMPLE_KNOWLEDGE, memoryKnowledgeTotal: 230 });
+        const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+        const wrap = ({ children }: { children: ReactNode }) => (
+            <QueryClientProvider client={queryClient}>
+                <GaiaClientProvider client={client}>
+                    <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 800 }, insets: { top: 0, left: 0, right: 0, bottom: 0 } }}>
+                        <ThemeProvider>{children}</ThemeProvider>
+                    </SafeAreaProvider>
+                </GaiaClientProvider>
+            </QueryClientProvider>
+        );
+        await render(<AboutPane notify={() => undefined} memoryEnabled onOpenAdvanced={() => undefined} />, { wrapper: wrap });
+        await screen.findByText('Call me Sam.');
+        expect(await screen.findByText(/of 230/)).toBeTruthy();
+        expect(screen.getByLabelText('Show more')).toBeTruthy();
+    });
+});

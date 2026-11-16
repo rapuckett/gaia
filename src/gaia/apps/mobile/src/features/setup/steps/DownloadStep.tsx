@@ -25,7 +25,7 @@ import { useFlushQueuedModels, useQueuedModels } from '../optionalModels';
 import { SetupFooter } from '../SetupFooter';
 import type { SetupStepContext } from '../SetupScreen';
 import { useConfirmSheet } from '../sheets/ConfirmSheet';
-import { serverConfirmRequest, setupConfirmFrom } from '../sheets/setupConfirm';
+import { redownloadRequest, serverConfirmRequest, setupConfirmFrom } from '../sheets/setupConfirm';
 import { SetupLogs } from '../sheets/SetupLogs';
 import { Details, DownloadContents, ModelRow } from './DownloadRows';
 import { downloadView, milestones } from './downloadState';
@@ -108,13 +108,7 @@ export function DownloadStep({ ctx }: { ctx: SetupStepContext }) {
         act(async () => {
             if (m.error_kind === 'verify') {
                 const name = names[m.id] ?? m.id;
-                const confirmed = await ask({
-                    title: t('setup.redownload.title', { name }),
-                    body: [t('setup.redownload.body', { name, size: ltrIn(t.locale, formatBytes(m.bytes_total)) })],
-                    confirmLabel: t('setup.redownload.confirm'),
-                    cancelLabel: t('setup.redownload.keep'),
-                    danger: true,
-                });
+                const confirmed = await ask(redownloadRequest(name, m.bytes_total, t));
                 if (!confirmed) return;
                 try {
                     await redownload.mutateAsync(m.id);

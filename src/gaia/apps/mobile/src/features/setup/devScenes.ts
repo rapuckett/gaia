@@ -280,10 +280,10 @@ export const COMMON: FakeClientData = {
 
 const START_CARDS: NonNullable<FakeClientData['start']> = {
     cards: [
-        { skill: 'research-report', title: 'Research a topic', note: 'A cited report from the web', prompt: 'Research: ', needs_input: true },
-        { skill: 'summarize', title: 'Summarize a document', note: 'The short version of a long file', prompt: 'Summarize my newest document.', needs_input: false },
-        { skill: 'file-ops', title: 'Tidy a folder', note: 'Sort files into sensible folders', prompt: 'Tidy my downloads folder.', needs_input: false },
-        { skill: 'check-in', title: 'Check in', note: 'Pick up where you left off', prompt: 'Good morning.', needs_input: false },
+        { skill: 'research-report', title: 'Research a topic', note: 'A cited report from the web', prompt: 'Research and write a short cited report on: ', needs_input: true },
+        { skill: 'coding', title: 'Work on code', note: 'In you', prompt: 'Look around you and tell me what this project does.', needs_input: false },
+        { skill: 'summarize', title: 'Summarize something', note: 'A document, transcript or email', prompt: 'Summarize this: ', needs_input: true },
+        { skill: 'example-new', title: 'Plan my week', note: 'A skill the app has no translation for', prompt: 'Plan my week.', needs_input: false },
     ],
     working_folder: { path: '/home/you', name: 'you', gaia_folder: false, choosable: true },
 };

@@ -323,6 +323,8 @@ export interface FakeClientData {
     memoryTools?: MemoryToolStat[] | Error;
     /** The memories the browsers list; an Error makes the list fail. Adds, edits and forgets change it. Fields a row leaves out read as a fresh, unused memory. */
     memoryKnowledge?: (MemoryKnowledgeItem & Partial<MemoryKnowledgeEntry>)[] | Error;
+    /** What a knowledge list reports as its total, when more memories exist than the list holds (a short "Showing x of y" scene). */
+    memoryKnowledgeTotal?: number;
     /** The conversations in memory, newest first, with each one's turns; an Error makes the reads fail. */
     memoryConversations?: { sessions: MemoryConversation[]; turns: Record<string, MemoryTurn[]> } | Error;
     memoryUpcoming?: MemoryUpcomingItem[] | Error;
@@ -1114,7 +1116,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
                     confidence: 0.8, metadata: null, use_count: 0, last_used: null, reminded_at: null, superseded_by: null, has_embedding: true, ...item,
                 }),
             );
-            return { items, total: rows.length };
+            return { items, total: data.memoryKnowledgeTotal ?? rows.length };
         },
         async listMemoryEntities() {
             if (data.memoryKnowledge instanceof Error) throw data.memoryKnowledge;
