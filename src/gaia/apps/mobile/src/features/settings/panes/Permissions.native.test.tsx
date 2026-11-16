@@ -39,7 +39,7 @@ describeNative('Permissions pane', () => {
         fireEvent.press(await screen.findByText('Turn on full access for new chats'));
 
         await screen.findByText('Change this on the PC running GAIA.');
-        expect(screen.getByTestId('permissions-default-switch').props.accessibilityState).toMatchObject({ checked: false });
+        expect(screen.getByRole('switch', { checked: false })).toBe(screen.getByTestId('permissions-default-switch'));
         expect((await client.listAllPermissions()).default_mode).toBe('ask');
         queryClient.clear();
     });

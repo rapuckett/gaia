@@ -7,7 +7,6 @@ import {
     type AccessibilityActionEvent,
     type AccessibilityActionInfo,
     type AccessibilityRole,
-    type AccessibilityState,
 } from 'react-native';
 
 export interface PressableProps {
@@ -18,7 +17,10 @@ export interface PressableProps {
     accessibilityLabel?: string;
     accessibilityHint?: string;
     accessibilityRole?: AccessibilityRole;
-    accessibilityState?: AccessibilityState;
+    'aria-busy'?: boolean;
+    'aria-checked'?: boolean | 'mixed';
+    'aria-expanded'?: boolean;
+    'aria-selected'?: boolean;
     /** Extra screen-reader actions, e.g. what a long-press does. */
     accessibilityActions?: readonly AccessibilityActionInfo[];
     onAccessibilityAction?: (event: AccessibilityActionEvent) => void;
@@ -39,7 +41,10 @@ export function Pressable({
     accessibilityLabel,
     accessibilityHint,
     accessibilityRole = 'button',
-    accessibilityState,
+    'aria-busy': ariaBusy,
+    'aria-checked': ariaChecked,
+    'aria-expanded': ariaExpanded,
+    'aria-selected': ariaSelected,
     accessibilityActions,
     onAccessibilityAction,
     accessible,
@@ -60,7 +65,11 @@ export function Pressable({
             accessible={accessible}
             accessibilityActions={accessibilityActions}
             onAccessibilityAction={onAccessibilityAction}
-            accessibilityState={{ ...accessibilityState, disabled: !!disabled }}
+            aria-busy={ariaBusy}
+            aria-checked={ariaChecked}
+            aria-disabled={!!disabled}
+            aria-expanded={ariaExpanded}
+            aria-selected={ariaSelected}
             testID={testID}
             hitSlop={slop ? { left: slop, right: slop } : undefined}
             onLayout={inline ? (e) => setWidth(e.nativeEvent.layout.width) : undefined}

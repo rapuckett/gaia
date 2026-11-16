@@ -35,7 +35,7 @@ export function Disclosure({ title, open, onToggle, children, leading, trailing,
     const { colors, radius, space } = useTheme();
     const largeText = useLargeText();
     const header = (
-        <Pressable onPress={onToggle} accessibilityLabel={title} accessibilityState={{ expanded: open }} testID={headerTestID}>
+        <Pressable onPress={onToggle} accessibilityLabel={title} aria-expanded={open} testID={headerTestID}>
             <View style={boxed ? { paddingHorizontal: space.md, paddingVertical: space.sm } : undefined}>
                 <Row gap="sm" align={hint || largeText ? 'start' : 'center'}>
                     <FirstLine role="ui">

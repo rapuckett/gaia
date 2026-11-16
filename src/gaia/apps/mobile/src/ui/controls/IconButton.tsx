@@ -47,7 +47,7 @@ export function IconButton({
             onPress={busy ? undefined : onPress}
             disabled={disabled}
             accessibilityLabel={label}
-            accessibilityState={{ busy: !!busy }}
+            aria-busy={!!busy}
             testID={testID}
         >
             <View style={{ width: hit, height: hit, alignSelf: 'center', alignItems: 'center', justifyContent: 'center' }}>

@@ -51,7 +51,7 @@ function Reveal({ short, full, tone }: { short: string; full: string; tone?: 'ac
             onPress={() => setShown((v) => !v)}
             accessibilityRole="button"
             accessibilityLabel={full}
-            accessibilityState={{ expanded: shown }}
+            aria-expanded={shown}
         >
             <Text tone={tone ?? 'accent'}>{isolate(shown ? full : short, 'ltr')}</Text>
         </Pressable>
@@ -179,7 +179,7 @@ function Usage({ usage, perf, t }: { usage: ContextUsage; perf: ChatPerformance 
                     <Pressable
                         onPress={() => setToolsOpen((v) => !v)}
                         accessibilityRole="button"
-                        accessibilityState={{ expanded: toolsOpen }}
+                        aria-expanded={toolsOpen}
                     >
                         <Row gap="sm">
                             <Icon icon={toolsOpen ? ChevronDown : ChevronRight} size="sm" tone="muted" />
