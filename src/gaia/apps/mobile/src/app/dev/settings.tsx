@@ -12,7 +12,7 @@ import { devGalleryEnabled } from '@/features/dev/devGallery';
 import { KeyedScene } from '@/features/dev/KeyedScene';
 import { SeedAutomationRemove } from '@/features/settings/panes/Automations';
 import { SeedJustPaired } from '@/features/settings/panes/Messaging';
-import { SeedCustomReport } from '@/features/settings/panes/model/AddCustomModel';
+import { SeedCheckPending, SeedCustomReport } from '@/features/settings/panes/model/AddCustomModel';
 import { SeedAddedModel, SeedModelSearch } from '@/features/settings/panes/model/ModelList';
 import { SeedOpenDetails } from '@/features/settings/panes/model/ModelRow';
 import { SETTINGS_SECTIONS } from '@/features/settings/sections';
@@ -41,11 +41,13 @@ function SettingsView({ found }: { found: SettingsScene }) {
                                     <SeedModelSearch.Provider value={found.search ?? ''}>
                                         <SeedOpenDetails.Provider value={found.openDetails ?? null}>
                                             <SeedJustPaired.Provider value={!!found.justPaired}>
+                                                <SeedCheckPending.Provider value={found.checkPending ?? null}>
                                                 <SeedCustomReport.Provider value={found.customReport ?? null}>
                                                     <SeedAutomationRemove.Provider value={found.confirmRemove ?? null}>
                                                         <Pane provider={found.provider ?? 'local'} />
                                                     </SeedAutomationRemove.Provider>
                                                 </SeedCustomReport.Provider>
+                                                </SeedCheckPending.Provider>
                                             </SeedJustPaired.Provider>
                                         </SeedOpenDetails.Provider>
                                     </SeedModelSearch.Provider>
