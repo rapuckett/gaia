@@ -7,7 +7,7 @@ Each route only carries the device's TLS to the listener; :class:`DeviceGate`
 still checks the token, and the request is still ``device:<id>``, never the PC.
 A route turns on only from the PC's own controls: nothing here reads an
 environment variable or a ``.env`` file, because turning one on exposes the
-PC beyond the home network. None is registered by default.
+PC beyond the home network. Every route starts off.
 """
 
 from __future__ import annotations
@@ -70,6 +70,9 @@ class AwayRoutes:
 
     def get(self, kind: str) -> Optional[AwayRoute]:
         return self._routes.get(kind)
+
+    def all(self) -> List[AwayRoute]:
+        return list(self._routes.values())
 
     def admitting(self, scope: Scope) -> Optional[AwayRouteKind]:
         """The kind of the route that is on and carried this request, if any."""
