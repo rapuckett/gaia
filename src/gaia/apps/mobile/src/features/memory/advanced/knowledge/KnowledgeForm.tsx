@@ -12,7 +12,7 @@ import { Button, Chip, Notice, Row, Stack, Switch, Text, TextField } from '@/ui'
 
 import { parseWhen, whenText } from '../../about/whenInput';
 import type { MemoryPaneProps } from '../../tabs';
-import { categoryLabel, failureText, type KnowledgeFeedback } from './knowledgeUi';
+import { categoryLabel, failureText, savedNotice, type KnowledgeFeedback } from './knowledgeUi';
 
 interface FormValues {
     content: string;
@@ -71,11 +71,7 @@ export function KnowledgeForm({ item, add, edit, notify, onSaved, onCancel }: Kn
     const saving = add.isPending || edit.isPending;
 
     const done = (result: KnowledgeSaveResult | undefined) => {
-        notify(
-            result?.embedded === false
-                ? { tone: 'danger', text: t('mem.toast.notEmbedded') }
-                : { tone: 'success', text: t(item ? 'mem.toast.updated' : 'mem.toast.created') },
-        );
+        notify(savedNotice(code, result, Boolean(item)));
         onSaved();
     };
 

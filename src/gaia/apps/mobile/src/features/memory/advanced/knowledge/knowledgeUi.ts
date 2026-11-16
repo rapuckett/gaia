@@ -32,3 +32,12 @@ export type { KnowledgeEntry };
 export function failureText(code: string, key: MessageKey, error: unknown): string {
     return compose(code, (say) => say(key, { error: describeFailureWith(error, say) }));
 }
+
+/** The notice after a save; a memory the PC couldn't embed says why when it gave a reason, as the web does. */
+export function savedNotice(code: string, result: { embedded?: boolean; embed_error?: string } | undefined, edited: boolean): { tone: 'danger' | 'success'; text: string } {
+    if (result?.embedded === false) {
+        const text = compose(code, (say) => (result.embed_error ? say('mem.toast.server', { message: result.embed_error }) : say('mem.toast.notEmbedded')));
+        return { tone: 'danger', text };
+    }
+    return { tone: 'success', text: compose(code, (say) => say(edited ? 'mem.toast.updated' : 'mem.toast.created')) };
+}
