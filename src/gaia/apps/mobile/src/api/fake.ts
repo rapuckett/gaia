@@ -12,6 +12,7 @@ import type {
     AgentMcpServer,
     MCPServerStatus,
     ChatPerformance,
+    ConnectorDeviceAuthResponse,
     ConnectorListEntry,
     DisconnectOutcome,
     ContextUsageResult,
@@ -206,6 +207,8 @@ export interface FakeClientData {
     linkPreview?: (url: string) => LinkPreview;
     resources?: ResourceUsage;
     start?: StartScreen;
+    /** What a sign-in with a code starts with; a connector without `supports_device_code` is refused, as the PC does. */
+    deviceSignIn?: ConnectorDeviceAuthResponse;
     /** What a disconnect reports about the provider-side revoke; `{}` when unset. */
     disconnectOutcome?: DisconnectOutcome | null;
     /** What watchSessionEvents streams before it ends; the real stream never ends on its own. */
@@ -967,6 +970,13 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         },
         async listConnectors() {
             return { connectors: [...(data.connectors ?? [])] };
+        },
+        async startConnectorDeviceSignIn(connectorId) {
+            const row = (data.connectors ?? []).find((c) => c.id === connectorId);
+            if (!row || 'error' in row || !row.supports_device_code || !data.deviceSignIn) {
+                throw new GaiaApiError(403, 'Connect this account on the PC running GAIA.');
+            }
+            return { ...data.deviceSignIn };
         },
         async disableConnector(connectorId) {
             data.connectors = (data.connectors ?? []).map((c) => (c.id === connectorId && !('error' in c) ? { ...c, enabled: false } : c));

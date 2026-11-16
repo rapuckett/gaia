@@ -226,6 +226,7 @@ describe('endpoints', () => {
         connector: ['DELETE'],
         connectorActivation: ['DELETE', 'PUT'],
         connectorActivations: ['GET'],
+        connectorAuthorizeDevice: ['POST'],
         connectorDisable: ['POST'],
         connectorGrant: ['DELETE', 'PUT'],
         connectorGrants: ['GET'],
