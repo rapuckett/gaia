@@ -34,16 +34,16 @@ afterEach(() => {
 });
 
 describeNative('TextField alignment in the Arabic UI', () => {
-    it('puts an English draft on the physical left and an Arabic draft on the right when native flips sides', async () => {
-        nativeLayout(true);
-        expect(await styleOf('hello')).toMatchObject({ writingDirection: 'ltr', textAlign: 'right' });
-        expect(await styleOf('مرحبا')).toMatchObject({ writingDirection: 'rtl', textAlign: 'left' });
-    });
-
-    it('passes the physical sides when the swap is off', async () => {
-        nativeLayout(false);
+    // Unlike Text, neither iOS nor Android swaps an input's left and right, so the swap setting must not move the text.
+    it.each([true, false])('puts an English draft on the left and an Arabic draft on the right (swap %s)', async (swap) => {
+        nativeLayout(swap);
         expect(await styleOf('hello')).toMatchObject({ writingDirection: 'ltr', textAlign: 'left' });
         expect(await styleOf('مرحبا')).toMatchObject({ writingDirection: 'rtl', textAlign: 'right' });
+    });
+
+    it('keeps a secret on the UI side whatever is typed', async () => {
+        nativeLayout(true);
+        expect(await styleOf('hello', { secureTextEntry: true })).toMatchObject({ writingDirection: 'rtl', textAlign: 'right' });
     });
 
     it('leaves a web address on auto', async () => {

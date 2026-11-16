@@ -21,3 +21,8 @@ export function physicalAlign(right: boolean): 'left' | 'right' {
     const mirrored = native.isRTL && !!native.doLeftAndRightSwapInRTL;
     return right !== mirrored ? 'right' : 'left';
 }
+
+/** The `textAlign` for a TextInput: unlike Text, neither iOS nor Android flips an input's left and right in an RTL layout. */
+export function inputAlign(right: boolean): 'left' | 'right' {
+    return right ? 'right' : 'left';
+}
