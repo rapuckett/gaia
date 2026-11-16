@@ -96,7 +96,7 @@ const PLAN_LONG: SetupPlan = {
 };
 const PLAN_DONE: SetupPlan = { ...PLAN, catalog: CATALOG.map((e) => (e.gaia_model && !e.support ? e : { ...e, downloaded: true, size_gb: 0 })) };
 
-const GPU: GpuMemoryStatus = {
+export const GPU: GpuMemoryStatus = {
     applies: true, show_in_setup: true, hidden_reason: null, os: 'windows', method: 'guided',
     method_reason: 'On Windows this is set in AMD Software.', total_gb: 128, gpu_gb: 16, cpu_gb: 112,
     setting: { name: 'Variable Graphics Memory', current_gb: 16, min_gb: 4, max_gb: 96 }, reserve_gb: 16,
@@ -222,7 +222,7 @@ const providers = (localOnly: boolean): NonNullable<FakeClientData['providers']>
     };
 };
 
-const COMMON: FakeClientData = {
+export const COMMON: FakeClientData = {
     setupPlan: PLAN,
     setupStatus: { state: 'idle' },
     gpuMemory: NO_GPU,

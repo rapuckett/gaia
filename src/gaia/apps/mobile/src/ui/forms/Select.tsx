@@ -43,7 +43,7 @@ export function Select({ label, hideLabel, value, options, onChange, placeholder
                 onPress={() => setOpen(true)}
                 disabled={disabled}
                 accessibilityLabel={`${label}: ${shown}`}
-                accessibilityState={{ expanded: open }}
+                aria-expanded={open}
                 testID={testID}
             >
                 <View

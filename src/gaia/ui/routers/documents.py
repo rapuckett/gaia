@@ -60,6 +60,7 @@ from ..utils import (
 )
 from .files import (
     _AWAY_FROM_PC,
+    _device_refusal,
     _refuse_remote_read,
     _refuse_remote_secret,
     _remote_read_roots,
@@ -699,9 +700,9 @@ async def get_document_file(
     doc = db.get_document(doc_id)
     if roots is not None and not _chat_may_open(db, session_id, doc_id, doc, roots):
         # One refusal whether or not the id exists, so ids can't be probed.
-        raise HTTPException(
-            status_code=403,
-            detail=f"{_AWAY_FROM_PC} This document isn't in this chat.",
+        raise _device_refusal(
+            "document_not_in_chat",
+            f"{_AWAY_FROM_PC} This document isn't in this chat.",
         )
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
