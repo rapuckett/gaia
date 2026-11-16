@@ -39,6 +39,21 @@ describeNative('text at the largest iOS sizes', () => {
         expect(screen.getByTestId('chip').props.maxFontSizeMultiplier).toBe(1.3);
     });
 
+    it('sizes a capped row icon box from the capped line height', async () => {
+        atFontScale(AX_FONT_SCALE);
+        const line = Math.round(typeScale.ui * metrics.lineHeight);
+        await render(
+            <>
+                <ListRow title="Memory" titleMaxScale={2} leading={<Icon icon={Bell} />} />
+                <ListRow title="Chat" leading={<Icon icon={Bell} />} />
+            </>,
+            { wrapper: wrap },
+        );
+        const [capped, uncapped] = screen.getAllByTestId('first-line');
+        expect(styleOf(capped).minHeight).toBe(line * 2);
+        expect(styleOf(uncapped).minHeight).toBe(line * AX_FONT_SCALE);
+    });
+
     it('keeps the one-line text at the default size', async () => {
         atFontScale(1);
         await render(<Text numberOfLines={1} testID="title">A long row title</Text>, { wrapper: wrap });
