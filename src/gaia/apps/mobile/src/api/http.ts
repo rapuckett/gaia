@@ -953,7 +953,11 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
         },
 
         getGoalStoreHealth(options) {
-            return getJson<{ error: string | null }>(ENDPOINTS.goalsHealth, options?.signal);
+            return getJson<{ error: string | null; damaged: boolean }>(ENDPOINTS.goalsHealth, options?.signal);
+        },
+
+        resetGoalStore(options) {
+            return postJson<{ kept: string }>(ENDPOINTS.goalsStoreReset, undefined, options?.signal);
         },
 
         createGoal(body, options) {

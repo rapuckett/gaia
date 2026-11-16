@@ -268,6 +268,10 @@ export interface FakeClientData {
     goals?: Goal[] | Error;
     /** What getGoalStoreHealth answers. */
     goalStoreError?: string | null;
+    /** Whether getGoalStoreHealth says the list is damaged; resetGoalStore clears it. */
+    goalStoreDamaged?: boolean;
+    /** Thrown by resetGoalStore. */
+    goalStoreResetError?: Error;
     /** What getSettings answers; setNetworkPolicy changes it. */
     settings?: Settings;
     /** Thrown by setNetworkPolicy, as the PC's 403 is. */
@@ -330,7 +334,8 @@ export type KnowledgeCall =
 
 export type GoalCall =
     | { action: 'create'; title: string; description: string; priority: string }
-    | { action: 'approve' | 'reject' | 'cancel' | 'delete'; id: string };
+    | { action: 'approve' | 'reject' | 'cancel' | 'delete'; id: string }
+    | { action: 'resetStore' };
 
 export interface FakeGaiaClient extends GaiaClient {
     /** Each goal create, approve, reject, cancel and delete, in order. */
@@ -512,6 +517,8 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         if (script.hang) await new Promise<void>((resolve) => (signal?.aborted ? resolve() : signal?.addEventListener('abort', () => resolve())));
     }
     const goalCalls: GoalCall[] = [];
+    let storeError = data.goalStoreError ?? null;
+    let storeDamaged = data.goalStoreDamaged ?? false;
     let goals = data.goals instanceof Error ? [] : [...(data.goals ?? [])];
     const goalById = (id: string): Goal => {
         const goal = goals.find((g) => g.id === id);
@@ -615,7 +622,14 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             return count;
         },
         async getGoalStoreHealth() {
-            return { error: data.goalStoreError ?? null };
+            return { error: storeError, damaged: storeDamaged };
+        },
+        async resetGoalStore() {
+            goalCalls.push({ action: 'resetStore' });
+            if (data.goalStoreResetError) throw data.goalStoreResetError;
+            storeError = null;
+            storeDamaged = false;
+            return { kept: 'goals.json.damaged' };
         },
         async createGoal(body) {
             goalCalls.push({ action: 'create', ...body });
