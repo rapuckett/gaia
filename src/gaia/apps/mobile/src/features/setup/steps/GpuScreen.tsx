@@ -223,7 +223,7 @@ export const GpuScreen: PlanScreen = ({ ctx, close }) => {
             {!restartPending && presets.length === 0 ? <Text tone="secondary">{t('gpu.noPresets')}</Text> : null}
 
             {!restartPending && presets.length > 0 && canGuide ? (
-                <Button variant="secondary" label={t('gpu.showMe')} disabled={target == null} onPress={() => setGuided(true)} />
+                <Button variant="secondary" label={t('gpu.showMe')} testID="gpu-show-me" disabled={target == null} onPress={() => setGuided(true)} />
             ) : null}
             {status.method === 'apply' || status.revert?.available || pending ? <Notice tone="info" message={t('setup.plan.pcOnly')} /> : null}
         </Stack>

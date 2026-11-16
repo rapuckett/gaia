@@ -43,7 +43,7 @@ function Group({ id, title, count, defaultOpen, force, children }: {
     const open = force || (picked ?? defaultOpen);
     return (
         <Stack testID={`model-group-${id}`}>
-            <SettingsGroup title={title} count={count} open={open} onToggle={() => setPicked(!open)}>
+            <SettingsGroup title={title} count={count} open={open} onToggle={() => setPicked(!open)} headerTestID={`model-group-header-${id}`}>
                 <Stack gap="xs">
                     {Children.toArray(children).flatMap((c, i) => (i === 0 ? [c] : [<Divider key={`d${i}`} />, c]))}
                 </Stack>

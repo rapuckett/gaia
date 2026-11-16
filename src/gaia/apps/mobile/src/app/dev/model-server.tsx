@@ -59,7 +59,7 @@ function Body({ scene }: { scene: ModelScene }) {
         case 'restore':
             return (
                 <Stack padding="lg">
-                    <ModelRestoreNotice onPick={noop} />
+                    <ModelRestoreNotice onPick={noop} holdOk />
                 </Stack>
             );
         case 'error':
