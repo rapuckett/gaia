@@ -4043,6 +4043,7 @@ export const enMessages = {
     'mobileApp.changes.summary.one': 'Changed {n} file',
     'mobileApp.changes.summary.other': 'Changed {n} files',
     'mobileApp.changes.undone': 'undone',
+    'mobileApp.changes.undoConflict': 'Some files changed after this chat, so undoing would overwrite those changes. Nothing was restored.',
     'mobileApp.changes.reviewTitle': 'Changes in this turn',
     'mobileApp.changes.loading': 'Loading changes…',
     'mobileApp.changes.loadFailed': 'Could not load the changes: {error}',
