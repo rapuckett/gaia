@@ -34,7 +34,7 @@ export function SearchResultRow({ row, query, snippet, onSelect }: SearchResultR
     const title = splitMatch(row.title, query);
     const largeText = useLargeText();
     return (
-        <Pressable accessibilityLabel={text.aria} accessibilityState={{ selected: row.active }} minSize={48} onPress={() => onSelect(row.id)}>
+        <Pressable accessibilityLabel={text.aria} aria-selected={row.active} minSize={48} onPress={() => onSelect(row.id)}>
             <Stack gap="xs" paddingX="lg" paddingY="sm">
                 <Row gap="xs" align={largeText ? 'start' : 'center'}>
                     {row.dot && text.status ? (

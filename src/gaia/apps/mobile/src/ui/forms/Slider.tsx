@@ -89,7 +89,7 @@ export function Slider({ value, onChange, onChangeEnd, min = 0, max = 100, step 
                     accessibilityRole="adjustable"
                     accessibilityLabel={accessibilityLabel ?? label}
                     accessibilityValue={{ min, max, now: value, text }}
-                    accessibilityState={{ disabled: !!disabled }}
+                    aria-disabled={!!disabled}
                     accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}
                     onAccessibilityAction={(e: AccessibilityActionEvent) => {
                         if (disabled) return;

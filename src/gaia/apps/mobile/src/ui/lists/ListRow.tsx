@@ -85,7 +85,7 @@ export function ListRow({
             onPress={onPress}
             onLongPress={onLongPress}
             accessibilityLabel={accessibilityLabel}
-            accessibilityState={{ selected: !!selected }}
+            aria-selected={!!selected}
             minSize={48}
             testID={testID}
         >
