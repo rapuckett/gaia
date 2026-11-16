@@ -41,7 +41,7 @@ export function AnswerSection({ sessionId, live }: SectionProps) {
                 {noLive ? <Notice tone="warning" title={t('rail.noLive')} message={t('rail.noLiveWhy')} testID="answer-no-live" /> : null}
                 {summary ? (
                     summary.error ? (
-                        <Notice tone="danger" message={t('rail.error', { error: summary.error })} testID="answer-error" />
+                        <Notice tone="danger" message={t('mobileApp.rail.errorShort')} detail={summary.error} testID="answer-error" />
                     ) : (
                         <>
                             <Sources summary={summary} />

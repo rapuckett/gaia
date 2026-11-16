@@ -37,6 +37,8 @@ interface SavedPc {
     /** Every address the PC answers at; one saved before routes is its home address. */
     origins: RouteOrigin[];
     deviceId: string;
+    /** ISO time of the last Allow; absent on a PC saved before it was kept. */
+    pairedAt?: string;
 }
 
 interface Saved {
@@ -61,7 +63,7 @@ function withOrigins<T extends Omit<SavedPc, 'origins'> & { origins?: RouteOrigi
 }
 
 function pairedOf(pc: SavedPc): PairedPc {
-    return { id: pc.id, name: pc.name, connection: connectionOf(pc) };
+    return { id: pc.id, name: pc.name, connection: connectionOf(pc), pairedAt: pc.pairedAt };
 }
 
 function devicePlatform(): 'ios' | 'ipados' | 'android' {
@@ -249,7 +251,7 @@ export function createPinnedPairingService(onAllowed?: (pcId: string) => void): 
                 return { state: 'refused' };
             }
             await GaiaTransport.promote(stagedId(pending.id), pending.id);
-            const pc: SavedPc = { id: pending.id, name: pending.name, origin: pending.origin, origins: pending.origins, deviceId: pending.deviceId };
+            const pc: SavedPc = { id: pending.id, name: pending.name, origin: pending.origin, origins: pending.origins, deviceId: pending.deviceId, pairedAt: new Date().toISOString() };
             // Read again: the other PCs' routes may have been refreshed while this one was being checked.
             const latest = await load();
             await save({ pcs: [...latest.pcs.filter((p) => p.id !== pc.id), pc], currentId: pc.id, pending: null });

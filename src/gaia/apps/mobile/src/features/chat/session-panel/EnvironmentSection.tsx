@@ -37,9 +37,13 @@ function baseName(path: string): string {
 }
 
 export function EnvironmentSection({ sessionId, live }: SectionProps) {
+    const t = useT();
     const { data: env, error } = useSessionEnvironment(sessionId, { enabled: true, live });
     return (
         <Stack gap="lg">
+            <Text weight="semibold" accessibilityRole="header">
+                {t('env.title')}
+            </Text>
             <Folders sessionId={sessionId} env={env} error={error} />
             <Permission sessionId={sessionId} />
             <Internet sessionId={sessionId} env={env} />
