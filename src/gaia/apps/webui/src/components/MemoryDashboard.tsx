@@ -17,7 +17,12 @@ import { log } from '../utils/logger';
 import { formatSize } from '../utils/format';
 import { ref, type MessageKey } from '../i18n/registry';
 import { dateLocale, useT, type Translate } from '../i18n/useT';
-import { MemoryDashboardAboutYou } from './MemoryDashboardAboutYou';
+import {
+    ACTIVITY_RANGES, ACTIVITY_RANGE_LABELS, CATEGORY_KEYS, DEFAULT_ACTIVITY_DAYS, KNOWLEDGE_CATEGORIES, KNOWLEDGE_PAGE_SIZE, ROLE_KEYS, UPCOMING_DAYS,
+    confidenceLevel, formatDate, formatDateFull, formatDateRange, formatDuration, formatRelativeDate, isOverdue, successRateClass, todayCount,
+    type ActivityDay, type ConvSession, type ConvTurn, type EntityInfo, type KnowledgeEntry, type TemporalItem, type ToolStat,
+} from '../utils/memoryFormat.core';
+import { MEMORY_SOURCE_KEYS, MemoryDashboardAboutYou } from './MemoryDashboardAboutYou';
 import './MemoryDashboard.css';
 
 // ── Type definitions ─────────────────────────────────────────────────────
@@ -62,80 +67,11 @@ interface MemoryStats {
     db_size_bytes: number;
 }
 
-interface ActivityDay {
-    date: string;
-    conversations: number;
-    tool_calls: number;
-    knowledge_added: number;
-    errors: number;
-}
-
-interface KnowledgeEntry {
-    id: string;
-    category: string;
-    content: string;
-    domain: string | null;
-    source: string;
-    confidence: number;
-    metadata: Record<string, unknown> | string | null;
-    use_count: number;
-    context: string;
-    sensitive: boolean;
-    entity: string | null;
-    created_at: string;
-    updated_at: string;
-    last_used: string | null;
-    due_at: string | null;
-    reminded_at: string | null;
-    superseded_by: string | null;
-    has_embedding?: boolean;
-}
-
 interface KnowledgeResponse {
     items: KnowledgeEntry[];
     total: number;
     offset: number;
     limit: number;
-}
-
-interface ToolStat {
-    tool_name: string;
-    total_calls: number;
-    success_count: number;
-    failure_count: number;
-    denied_count?: number;
-    success_rate: number;
-    avg_duration_ms: number;
-    last_used: string | null;
-    last_error: string | null;
-}
-
-interface ConvSession {
-    session_id: string;
-    turn_count: number;
-    started_at: string | null;
-    last_activity: string | null;
-    first_message: string | null;
-    consolidated?: boolean;
-}
-
-interface ConvTurn {
-    id: number;
-    session_id: string;
-    role: string;
-    content: string;
-    context: string;
-    timestamp: string;
-}
-
-interface TemporalItem {
-    id: string;
-    content: string;
-    category: string;
-    due_at: string;
-    reminded_at: string | null;
-    context: string;
-    created_at: string;
 }
 
 // imported from memoryApi but we alias for local use
@@ -150,12 +86,6 @@ interface EmbeddingCoverage {
     coverage_pct: number;
 }
 
-interface EntityInfo {
-    entity: string;
-    count: number;
-    last_updated: string;
-}
-
 interface ToastMessage {
     id: number;
     text: string;
@@ -163,111 +93,6 @@ interface ToastMessage {
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────
-
-function formatDate(iso: string | null, locale: string | undefined): string {
-    if (!iso) return '\u2014';
-    try {
-        const d = new Date(iso);
-        if (isNaN(d.getTime())) return '\u2014';
-        const opts: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' };
-        if (d.getFullYear() !== new Date().getFullYear()) opts.year = 'numeric';
-        return d.toLocaleDateString(locale, opts);
-    } catch { return '\u2014'; }
-}
-
-function formatDateFull(iso: string | null, locale: string | undefined): string {
-    if (!iso) return '';
-    try {
-        const d = new Date(iso);
-        if (isNaN(d.getTime())) return '';
-        return d.toLocaleString(locale, {
-            year: 'numeric', month: 'short', day: 'numeric',
-            hour: '2-digit', minute: '2-digit', second: '2-digit',
-        });
-    } catch { return ''; }
-}
-
-function formatRelativeDate(iso: string | null, t: Translate): string {
-    if (!iso) return '\u2014';
-    try {
-        const d = new Date(iso);
-        if (isNaN(d.getTime())) return '\u2014';
-        const now = Date.now();
-        const diff = d.getTime() - now;
-        const absDiff = Math.abs(diff);
-        const secs = Math.floor(absDiff / 1000);
-        const mins = Math.floor(absDiff / 60000);
-        const hours = Math.floor(absDiff / 3600000);
-        const days = Math.floor(absDiff / 86400000);
-
-        if (diff < 0) {
-            // Past
-            if (secs < 5) return t('time.justNow');
-            if (secs < 60) return t('mem.rel.secondsAgo', { n: secs });
-            if (hours === 0) return t('time.minutesAgo', { n: mins });
-            if (days === 0) return t('time.hoursAgo', { n: hours });
-            if (days === 1) return t('time.yesterday');
-            if (days < 30) return t('time.daysAgo', { n: days });
-            return formatDateFull(iso, dateLocale(t));
-        } else {
-            // Future
-            if (secs < 5) return t('mem.rel.now');
-            if (secs < 60) return t('mem.rel.inSeconds', { n: secs });
-            if (hours === 0) return t('mem.rel.inMinutes', { n: mins });
-            if (days === 0) return t('mem.rel.inHours', { n: hours });
-            if (days === 1) return t('mem.rel.tomorrow');
-            if (days < 30) return t('mem.rel.inDays', { n: days });
-            return formatDateFull(iso, dateLocale(t));
-        }
-    } catch { return '\u2014'; }
-}
-
-function formatDuration(ms: number): string {
-    if (ms < 1000) return `${Math.round(ms)}ms`;
-    return `${(ms / 1000).toFixed(1)}s`;
-}
-
-function isOverdue(dueAt: string): boolean {
-    try {
-        return new Date(dueAt).getTime() < Date.now();
-    } catch { return false; }
-}
-
-function confidenceLevel(c: number): 'high' | 'medium' | 'low' {
-    if (c >= 0.7) return 'high';
-    if (c >= 0.4) return 'medium';
-    return 'low';
-}
-
-function successRateClass(rate: number): string {
-    if (rate >= 0.9) return 'high';
-    if (rate >= 0.7) return 'medium';
-    return 'low';
-}
-
-function formatDateRange(start: string | null, end: string | null, locale: string | undefined): string {
-    const s = formatDate(start, locale);
-    const e = formatDate(end, locale);
-    if (s === '\u2014' && e === '\u2014') return '';
-    if (s === e) return s;
-    return `${s} \u2013 ${e}`;
-}
-
-/** Count today's activity from the timeline data. */
-function todayCount(activity: ActivityDay[]): number {
-    if (activity.length === 0) return 0;
-    const today = new Date().toISOString().slice(0, 10);
-    const todayData = activity.find(d => d.date === today);
-    if (!todayData) return 0;
-    return todayData.knowledge_added;
-}
-
-const ALL_CATEGORIES = ['fact', 'preference', 'error', 'skill', 'note', 'reminder'] as const;
-
-const CATEGORY_KEYS: Record<string, MessageKey> = {
-    fact: 'mem.cat.fact', preference: 'mem.cat.preference', error: 'mem.cat.error',
-    skill: 'mem.cat.skill', note: 'mem.cat.note', reminder: 'mem.cat.reminder',
-};
 
 const STATUS_KEYS: Record<string, MessageKey> = {
     pending_approval: 'mem.status.pending_approval', queued: 'mem.status.queued',
@@ -281,11 +106,11 @@ const GOAL_SOURCE_KEYS: Record<string, MessageKey> = {
     agent_inferred: 'mem.goals.source.agent_inferred', agent_scheduled: 'mem.goals.source.agent_scheduled',
 };
 
-const ROLE_KEYS: Record<string, MessageKey> = { user: 'mem.role.user', assistant: 'mem.role.assistant' };
-
 const DOMAIN_KEYS: Record<string, MessageKey> = {
     work: 'mem.domain.work', technical: 'mem.domain.technical', personal: 'mem.domain.personal', general: 'mem.domain.general',
 };
+
+const CONTEXT_KEYS: Record<string, MessageKey> = { ...DOMAIN_KEYS, global: 'mem.context.global' };
 
 /** A server-side code in the user's language; one the UI has no words for stays as sent. */
 function Code({ value, keys }: { value: string; keys: Record<string, MessageKey> }) {
@@ -361,7 +186,7 @@ export function MemoryDashboard() {
     const [kOrder, setKOrder] = useState<'desc' | 'asc'>('desc');
     const [kOffset, setKOffset] = useState(0);
     const [includeSuperseded, setIncludeSuperseded] = useState(false);
-    const kLimit = 15;
+    const kLimit = KNOWLEDGE_PAGE_SIZE;
 
     // Conversation search
     const [convSearch, setConvSearch] = useState('');
@@ -399,10 +224,17 @@ export function MemoryDashboard() {
     const [goalStats, setGoalStats] = useState<GoalStats | null>(null);
     const [goalsLoading, setGoalsLoading] = useState(false);
     const goalStoreError = useGoalHealthStore((s) => s.error);
+    const goalStoreDamaged = useGoalHealthStore((s) => s.damaged);
+    const [goalsLoadError, setGoalsLoadError] = useState<string | null>(null);
+    const [goalFormError, setGoalFormError] = useState<string | null>(null);
+    const [resettingGoalStore, setResettingGoalStore] = useState(false);
     const [expandedGoalId, setExpandedGoalId] = useState<string | null>(null);
     const [confirmGoalDeleteId, setConfirmGoalDeleteId] = useState<string | null>(null);
     const [showAddGoalForm, setShowAddGoalForm] = useState(false);
     const [goalForm, setGoalForm] = useState({ title: '', description: '', priority: 'medium' as memoryApi.Priority });
+
+    // The server refused a PC-only call (scan, save, refresh, reset): this window isn't on the PC.
+    const [pcOnly, setPcOnly] = useState(false);
 
     // Profile Setup — Discovery
     const [discPhase, setDiscPhase] = useState<ProfilePhase>('idle');
@@ -422,7 +254,7 @@ export function MemoryDashboard() {
     const infEsRef = useRef<EventSource | null>(null);
 
     // Activity range
-    const [activityDays, setActivityDays] = useState(30);
+    const [activityDays, setActivityDays] = useState<number>(DEFAULT_ACTIVITY_DAYS);
 
     // Maintenance state
     const [consolidating, setConsolidating] = useState(false);
@@ -554,7 +386,7 @@ export function MemoryDashboard() {
 
     const loadUpcoming = useCallback(async () => {
         try {
-            const data = await memoryApi.getUpcomingItems(7);
+            const data = await memoryApi.getUpcomingItems(UPCOMING_DAYS);
             setUpcoming(data);
         } catch (err) {
             log.system.warn('Failed to load upcoming items', err);
@@ -600,8 +432,10 @@ export function MemoryDashboard() {
             ]);
             setGoals(goalsRes.goals);
             setGoalStats(statsRes);
+            setGoalsLoadError(null);
         } catch (err) {
             log.system.warn('Failed to load goals', err);
+            setGoalsLoadError(errorText(err));
         } finally {
             setGoalsLoading(false);
         }
@@ -615,6 +449,41 @@ export function MemoryDashboard() {
             log.system.error(`Goal action failed (${failure})`, err);
             showToast(t('mem.goals.failed', { what: ref(failure), error: errorText(err) }), 'error');
             return;
+        }
+        loadGoals();
+    }, [loadGoals, showToast, t]);
+
+    const createGoal = useCallback(async () => {
+        if (!goalForm.title.trim()) return;
+        setGoalFormError(null);
+        try {
+            await memoryApi.createGoal(goalForm);
+        } catch (err) {
+            log.system.error('Goal create failed', err);
+            // Said on the form itself: a toast is gone before anyone reads it.
+            setGoalFormError(t('mem.goals.failed', { what: ref('mem.goals.createFailed'), error: errorText(err) }));
+            return;
+        }
+        setGoalForm({ title: '', description: '', priority: 'medium' });
+        setShowAddGoalForm(false);
+        loadGoals();
+    }, [goalForm, loadGoals, t]);
+
+    // A goal list that reads again makes a "list is damaged" form error stale.
+    useEffect(() => {
+        if (!goalStoreError) setGoalFormError(null);
+    }, [goalStoreError]);
+
+    const startNewGoalList = useCallback(async () => {
+        setResettingGoalStore(true);
+        try {
+            const { kept } = await memoryApi.resetGoalStore();
+            showToast(t('mem.goals.newListStarted', { file: kept }), 'success');
+        } catch (err) {
+            log.system.error('Starting a new goal list failed', err);
+            showToast(t('mem.goals.failed', { what: ref('mem.goals.startNewListFailed'), error: errorText(err) }), 'error');
+        } finally {
+            setResettingGoalStore(false);
         }
         loadGoals();
     }, [loadGoals, showToast, t]);
@@ -940,7 +809,10 @@ export function MemoryDashboard() {
             }
         } catch (err) {
             log.system.error('Failed to refresh system context', err);
-            showToast(t('mem.toast.systemFailed', { error: errorText(err) }), 'error');
+            if (memoryApi.isPcOnlyRefusal(err)) {
+                setPcOnly(true);
+                showToast(t('mem.toast.pcOnly'), 'error');
+            } else showToast(t('mem.toast.systemFailed', { error: errorText(err) }), 'error');
         } finally {
             setRefreshingSystem(false);
         }
@@ -957,6 +829,9 @@ export function MemoryDashboard() {
         setDiscSavedCount(null);
 
         const es = memoryApi.openDiscoveryStream();
+        // A refused stream never opens; only then is it worth asking why it failed.
+        let opened = false;
+        es.onopen = () => { opened = true; };
         discEsRef.current = es;
 
         es.onmessage = (event) => {
@@ -986,11 +861,15 @@ export function MemoryDashboard() {
         es.onerror = () => {
             es.close();
             discEsRef.current = null;
-            setDiscLogs(prev => [...prev, { text: t('mem.log.discoveryConnection'), kind: 'error' }]);
             // Only go to review if items were found; otherwise stay idle so user can retry
             setDiscItems(prev => {
                 setDiscPhase(prev.length > 0 ? 'review' : 'idle');
                 return prev;
+            });
+            const refused = opened ? Promise.resolve(false) : memoryApi.streamRefusedAsPcOnly('discovery');
+            void refused.then(isRefused => {
+                if (isRefused) setPcOnly(true);
+                else setDiscLogs(prev => [...prev, { text: t('mem.log.discoveryConnection'), kind: 'error' }]);
             });
         };
     }, [t]);
@@ -1009,7 +888,8 @@ export function MemoryDashboard() {
             showToast(t('mem.disc.saved', { n: result.stored }), 'success');
         } catch (err) {
             log.system.error('Failed to commit discovery items', err);
-            showToast(t('mem.disc.saveFailed', { error: errorText(err) }), 'error');
+            if (memoryApi.isPcOnlyRefusal(err)) setPcOnly(true);
+            else showToast(t('mem.disc.saveFailed', { error: errorText(err) }), 'error');
             setDiscPhase('review');
         }
     }, [discItems, refreshKnowledgeViews, showToast, t]);
@@ -1023,6 +903,9 @@ export function MemoryDashboard() {
         setInfSavedCount(null);
 
         const es = memoryApi.openInferenceStream(infIncludeBrowser);
+        // A refused stream never opens; only then is it worth asking why it failed.
+        let opened = false;
+        es.onopen = () => { opened = true; };
         infEsRef.current = es;
 
         es.onmessage = (event) => {
@@ -1051,10 +934,14 @@ export function MemoryDashboard() {
         es.onerror = () => {
             es.close();
             infEsRef.current = null;
-            setInfLogs(prev => [...prev, { text: t('mem.log.inferenceConnection'), kind: 'error' }]);
             setInfItems(prev => {
                 setInfPhase(prev.length > 0 ? 'review' : 'idle');
                 return prev;
+            });
+            const refused = opened ? Promise.resolve(false) : memoryApi.streamRefusedAsPcOnly('inference', infIncludeBrowser);
+            void refused.then(isRefused => {
+                if (isRefused) setPcOnly(true);
+                else setInfLogs(prev => [...prev, { text: t('mem.log.inferenceConnection'), kind: 'error' }]);
             });
         };
     }, [infIncludeBrowser, t]);
@@ -1072,7 +959,8 @@ export function MemoryDashboard() {
             showToast(t('mem.inf.saved', { n: result.stored }), 'success');
         } catch (err) {
             log.system.error('Failed to commit inference insights', err);
-            showToast(t('mem.inf.saveFailed', { error: errorText(err) }), 'error');
+            if (memoryApi.isPcOnlyRefusal(err)) setPcOnly(true);
+            else showToast(t('mem.inf.saveFailed', { error: errorText(err) }), 'error');
             setInfPhase('review');
         }
     }, [infItems, refreshKnowledgeViews, showToast, t]);
@@ -1195,7 +1083,7 @@ export function MemoryDashboard() {
                                     <button
                                         className="mem-maintenance-item"
                                         onClick={handleRefreshSystemContext}
-                                        disabled={refreshingSystem}
+                                        disabled={refreshingSystem || pcOnly}
                                         role="menuitem"
                                     >
                                         <RefreshCw size={14} />
@@ -1373,13 +1261,13 @@ export function MemoryDashboard() {
                                         <TrendingUp size={14} /> {t('mem.activity.title')}
                                     </span>
                                     <div className="mem-range-tabs" role="group" aria-label={t('mem.activity.range')}>
-                                        {([1, 7, 30] as const).map(d => (
+                                        {ACTIVITY_RANGES.map(d => (
                                             <button
                                                 key={d}
                                                 className={`mem-range-tab${activityDays === d ? ' active' : ''}`}
                                                 onClick={() => setActivityDays(d)}
                                             >
-                                                {t(d === 1 ? 'mem.activity.day1' : d === 7 ? 'mem.activity.days7' : 'mem.activity.days30')}
+                                                {t(ACTIVITY_RANGE_LABELS[d])}
                                             </button>
                                         ))}
                                     </div>
@@ -1473,7 +1361,7 @@ export function MemoryDashboard() {
                                 {/* Filters */}
                                 <div className="mem-filters">
                                     <div className="mem-category-pills" role="group" aria-label={t('mem.knowledge.filterCategory')}>
-                                        {ALL_CATEGORIES.map(c => (
+                                        {KNOWLEDGE_CATEGORIES.map(c => (
                                             <button
                                                 key={c}
                                                 className={`mem-category-pill ${c}${kCategories.includes(c) ? ' active' : ''}`}
@@ -1498,7 +1386,7 @@ export function MemoryDashboard() {
                                         aria-label={t('mem.knowledge.filterContext')}>
                                         <option value="">{t.bare('mem.knowledge.allContexts')}</option>
                                         {contexts.map(c => (
-                                            <option key={c} value={c}>{c}</option>
+                                            <option key={c} value={c}>{CONTEXT_KEYS[c] ? t.bare(CONTEXT_KEYS[c]) : c}</option>
                                         ))}
                                     </select>
                                     <select className="mem-filter-select" value={kEntity}
@@ -1517,7 +1405,7 @@ export function MemoryDashboard() {
                                         )}
                                         <input className="mem-filter-search"
                                             type="text"
-                                            placeholder={t('mem.knowledge.searchPlaceholder')}
+                                            placeholder={t.bare('mem.knowledge.searchPlaceholder')}
                                             value={kSearch}
                                             onChange={e => handleSearchChange(e.target.value)}
                                             aria-label={t('mem.knowledge.search')}
@@ -1546,7 +1434,7 @@ export function MemoryDashboard() {
                                             <label>{t('mem.col.category')}</label>
                                             <select value={formData.category}
                                                 onChange={e => setFormData(prev => ({ ...prev, category: e.target.value }))}>
-                                                {ALL_CATEGORIES.map(c => (
+                                                {KNOWLEDGE_CATEGORIES.map(c => (
                                                     <option key={c} value={c}>{t.bare(CATEGORY_KEYS[c])}</option>
                                                 ))}
                                             </select>
@@ -1685,7 +1573,7 @@ export function MemoryDashboard() {
                                                                 </div>
                                                             </td>
                                                             <td>
-                                                                <bdi className="mem-date-cell">{entry.context}</bdi>
+                                                                <span className="mem-date-cell"><Code value={entry.context} keys={CONTEXT_KEYS} /></span>
                                                             </td>
                                                             <td>
                                                                 {entry.entity ? (
@@ -1708,7 +1596,7 @@ export function MemoryDashboard() {
                                                                 </div>
                                                             </td>
                                                             <td>
-                                                                <bdi className="mem-date-cell">{entry.source || '\u2014'}</bdi>
+                                                                <span className="mem-date-cell">{entry.source ? <Code value={entry.source} keys={MEMORY_SOURCE_KEYS} /> : '\u2014'}</span>
                                                             </td>
                                                             <td>
                                                                 <span className="mem-date-cell" title={formatDateFull(entry.updated_at, dateLocale(t))}>
@@ -1934,7 +1822,7 @@ export function MemoryDashboard() {
                                                             <div className="mem-temporal-text"><bdi>{item.content}</bdi></div>
                                                             <div className="mem-temporal-date">
                                                                 {t(overdue ? 'mem.upcoming.overdue' : 'mem.upcoming.due', { when: formatRelativeDate(item.due_at, t) })}
-                                                                {item.context !== 'global' && <> {'\u00B7'} <bdi>{item.context}</bdi></>}
+                                                                {item.context !== 'global' && <> {'\u00B7'} <Code value={item.context} keys={CONTEXT_KEYS} /></>}
                                                             </div>
                                                         </div>
                                                     </div>
@@ -1959,7 +1847,7 @@ export function MemoryDashboard() {
                                     <Search size={13} className="search-icon" />
                                     <input
                                         type="text"
-                                        placeholder={t('mem.conv.searchPlaceholder')}
+                                        placeholder={t.bare('mem.conv.searchPlaceholder')}
                                         value={convSearch}
                                         onChange={e => handleConvSearchChange(e.target.value)}
                                         aria-label={t('mem.conv.search')}
@@ -2214,7 +2102,10 @@ export function MemoryDashboard() {
                                                             await cfg.onConfirm();
                                                         } catch (err) {
                                                             log.system.warn('Failed to update setting', err);
-                                                            showToast(t('mem.toast.settingFailed', { error: errorText(err) }), 'error');
+                                                            if (memoryApi.isPcOnlyRefusal(err)) {
+                                                                setPcOnly(true);
+                                                                showToast(t('mem.toast.pcOnly'), 'error');
+                                                            } else showToast(t('mem.toast.settingFailed', { error: errorText(err) }), 'error');
                                                         } finally {
                                                             setSettingsLoading(false);
                                                             setBetaConfirm(null);
@@ -2271,7 +2162,7 @@ export function MemoryDashboard() {
                                     </div>
                                     <button
                                         className={`mem-toggle${systemDiscoveryConsent ? ' mem-toggle-on' : ''}`}
-                                        disabled={settingsLoading}
+                                        disabled={settingsLoading || (pcOnly && !systemDiscoveryConsent)}
                                         onClick={async () => {
                                             if (!systemDiscoveryConsent) {
                                                 setBetaConfirm('discovery');
@@ -2322,7 +2213,10 @@ export function MemoryDashboard() {
                                                         loadAll();
                                                     } catch (err) {
                                                         log.system.warn('Failed to reinitialize memory', err);
-                                                        showToast(t('mem.toast.reinitFailed', { error: errorText(err) }), 'error');
+                                                        if (memoryApi.isPcOnlyRefusal(err)) {
+                                                            setPcOnly(true);
+                                                            showToast(t('mem.toast.pcOnly'), 'error');
+                                                        } else showToast(t('mem.toast.reinitFailed', { error: errorText(err) }), 'error');
                                                     } finally {
                                                         setSettingsLoading(false);
                                                         setReinitConfirm(false);
@@ -2342,7 +2236,7 @@ export function MemoryDashboard() {
                                     ) : (
                                         <button
                                             className="mem-btn-danger"
-                                            disabled={settingsLoading}
+                                            disabled={settingsLoading || pcOnly}
                                             onClick={() => setReinitConfirm(true)}
                                         >
                                             {t('mem.settings.reinitButton')}
@@ -2424,6 +2318,7 @@ export function MemoryDashboard() {
                     {activeTab === 'profile' && (
                         <div className="mem-profile-grid">
                             <p className="mem-tab-intro">{t('mem.profile.intro')}</p>
+                            {pcOnly && <div className="mem-advanced-error" role="alert">{t('mem.profile.pcOnly')}</div>}
                             {/* Card A: System Discovery */}
                             <div className="mem-profile-card">
                                 <div className="mem-profile-card-title">
@@ -2432,7 +2327,7 @@ export function MemoryDashboard() {
                                 <p className="mem-profile-desc">{t('mem.disc.desc')}</p>
                                 <button
                                     className="btn-primary mem-profile-run-btn"
-                                    disabled={discPhase === 'running' || discPhase === 'saving'}
+                                    disabled={pcOnly || discPhase === 'running' || discPhase === 'saving'}
                                     onClick={runDiscovery}
                                 >
                                     {discPhase === 'running' ? (
@@ -2479,7 +2374,7 @@ export function MemoryDashboard() {
                                         <div className="mem-review-actions">
                                             <button
                                                 className="btn-primary"
-                                                disabled={discPhase === 'saving' || discPhase === 'done' || discItems.filter(i => i._checked).length === 0}
+                                                disabled={pcOnly || discPhase === 'saving' || discPhase === 'done' || discItems.filter(i => i._checked).length === 0}
                                                 onClick={saveDiscoveryItems}
                                             >
                                                 {discPhase === 'saving' ? (
@@ -2530,7 +2425,7 @@ export function MemoryDashboard() {
                                 </label>
                                 <button
                                     className="btn-primary mem-profile-run-btn"
-                                    disabled={infPhase === 'running' || infPhase === 'saving'}
+                                    disabled={pcOnly || infPhase === 'running' || infPhase === 'saving'}
                                     onClick={runInference}
                                 >
                                     {infPhase === 'running' ? (
@@ -2577,7 +2472,7 @@ export function MemoryDashboard() {
                                         <div className="mem-review-actions">
                                             <button
                                                 className="btn-primary"
-                                                disabled={infPhase === 'saving' || infPhase === 'done' || infItems.filter(i => i._checked).length === 0}
+                                                disabled={pcOnly || infPhase === 'saving' || infPhase === 'done' || infItems.filter(i => i._checked).length === 0}
                                                 onClick={saveInferenceItems}
                                             >
                                                 {infPhase === 'saving' ? (
@@ -2616,11 +2511,18 @@ export function MemoryDashboard() {
                     {activeTab === 'goals' && (
                         <div className="mem-goals-tab">
                             <p className="mem-tab-intro">{t('mem.goals.intro')}</p>
-                            {goalStoreError && (
+                            {goalStoreError && (goalStoreDamaged ? (
+                                <div className="mem-advanced-error" role="alert">
+                                    <AlertTriangle size={14} /> {t('mem.goals.storeDamaged')}{' '}
+                                    <button type="button" className="link-btn" disabled={resettingGoalStore} onClick={startNewGoalList}>
+                                        {t('mem.goals.startNewList')}
+                                    </button>
+                                </div>
+                            ) : (
                                 <div className="mem-advanced-error" role="alert">
                                     <AlertTriangle size={14} /> {t('mem.goals.storeError')}: <bdi>{goalStoreError}</bdi>
                                 </div>
-                            )}
+                            ))}
                             {/* Header stat row */}
                             <div className="mem-goals-stats-row">
                                 {(['queued','in_progress','completed','failed'] as const).map(s => (
@@ -2658,7 +2560,7 @@ export function MemoryDashboard() {
 
                             {/* Add goal button */}
                             <div className="mem-goals-toolbar">
-                                <button className="btn-primary" onClick={() => setShowAddGoalForm(v => !v)}>
+                                <button className="btn-primary" onClick={() => { setGoalFormError(null); setShowAddGoalForm(v => !v); }}>
                                     <Plus size={14} /> {t('mem.goals.new')}
                                 </button>
                             </div>
@@ -2689,21 +2591,18 @@ export function MemoryDashboard() {
                                             <option value="medium">{t.bare('mem.goals.priorityMedium')}</option>
                                             <option value="high">{t.bare('mem.goals.priorityHigh')}</option>
                                         </select>
-                                        <button className="btn-primary" disabled={!goalForm.title.trim()} onClick={() => {
-                                            runGoalAction(async () => {
-                                                await memoryApi.createGoal(goalForm);
-                                                setGoalForm({ title: '', description: '', priority: 'medium' });
-                                                setShowAddGoalForm(false);
-                                            }, 'mem.goals.createFailed');
-                                        }}>{t('mem.goals.create')}</button>
-                                        <button className="btn-secondary" onClick={() => setShowAddGoalForm(false)}>{t('mem.cancel')}</button>
+                                        <button className="btn-primary" disabled={!goalForm.title.trim()} onClick={createGoal}>{t('mem.goals.create')}</button>
+                                        <button className="btn-secondary" onClick={() => { setGoalFormError(null); setShowAddGoalForm(false); }}>{t('mem.cancel')}</button>
                                     </div>
+                                    {goalFormError && <p className="mem-form-error" role="alert"><bdi>{goalFormError}</bdi></p>}
                                 </div>
                             )}
 
                             {/* Goal list */}
                             {goalsLoading ? (
                                 <div className="mem-loading"><div className="mem-spinner" /> {t('mem.goals.loading')}</div>
+                            ) : goalsLoadError ? (
+                                <p className="mem-form-error" role="alert">{t('mem.goals.loadFailed')} <bdi>{goalsLoadError}</bdi></p>
                             ) : goals.filter(g => g.status !== 'pending_approval' && g.status !== 'rejected').length === 0 ? (
                                 <div className="mem-empty">
                                     <div className="mem-empty-icon"><Target size={32} /></div>

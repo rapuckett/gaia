@@ -1,7 +1,9 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import type { MessageKey } from '@webui/i18n/registry';
+import { pluralKey, type MessageKey } from '@webui/i18n/registry';
+import type { Translate } from '@webui/i18n/translator';
+import { MAX_SESSION_TITLE_CHARS } from '@webui/utils/constants';
 import {
     groupSessionsForList,
     sessionRowStatus,
@@ -10,7 +12,9 @@ import {
     type RowStatus,
 } from '@webui/utils/sessionGrouping';
 
-import type { Session } from '@/api/client.types';
+import { foldText } from '@webui/utils/chatSearch';
+
+import type { Session, SessionSearchResult } from '@/api/client.types';
 
 export type { LiveRuns, RowStatus };
 
@@ -60,6 +64,7 @@ export interface ChatRow {
     /** 1-based place in line for the GPU while queued; 0 otherwise. */
     place: number;
     private: boolean;
+    pinned: boolean;
     unsent: number;
     failed: number;
 }
@@ -77,6 +82,8 @@ export interface ChatListInput {
     /** Per-chat messages typed but not yet sent (the composer's queue). */
     queues?: Readonly<Record<string, readonly QueuedMessage[]>>;
     now?: Date;
+    /** Include eval and scheduled runs, which the list hides by default. */
+    showAutomated?: boolean;
 }
 
 export function buildChatSections({
@@ -85,8 +92,9 @@ export function buildChatSections({
     live = NO_LIVE_RUNS,
     queues = {},
     now,
+    showAutomated,
 }: ChatListInput): ChatSection[] {
-    return groupSessionsForList([...sessions], live, { now }).map((group) => ({
+    return groupSessionsForList([...sessions], live, { now, showAutomated }).map((group) => ({
         key: group.label,
         titleKey: GROUP_TITLE[group.label],
         data: group.sessions.map((s): ChatRow => {
@@ -102,6 +110,7 @@ export function buildChatSections({
                 dot: status === 'done' && !unread ? null : status,
                 place: live.queued.indexOf(s.id) + 1,
                 private: !!s.private,
+                pinned: !!s.pinned,
                 unsent: queue.length,
                 failed: queue.filter((m) => m.state === 'failed').length,
             };
@@ -145,6 +154,13 @@ export function rowText(row: ChatRow, t: Say): RowText {
     return { status, note, noteFailed: row.failed > 0, aria };
 }
 
+/** "Delete? Tap again" for the second tap, as one sentence so the Arabic carries one English gloss. */
+export function deleteConfirmLabel(row: Pick<ChatRow, 'unsent'>, t: Translate): string {
+    return t.compose((say) =>
+        say('row.tapAgain', { label: row.unsent > 0 ? say(pluralKey('row.deleteUnsent', row.unsent), { n: row.unsent }) : say('row.deleteConfirm') }),
+    );
+}
+
 export type RowErrorKind = 'delete' | 'rename' | 'pin' | 'unpin' | 'markRead';
 
 const ROW_ERROR_KEY: Record<Exclude<RowErrorKind, 'markRead'>, MessageKey> = {
@@ -159,4 +175,27 @@ export function rowErrorMessage(kind: RowErrorKind, error: unknown, t: Say): str
     const cause = error instanceof Error ? error.message : String(error);
     if (kind === 'markRead') return t('sidebar.markReadFailed', { error: cause });
     return error instanceof Error && cause ? cause : t(ROW_ERROR_KEY[kind]);
+}
+
+/** Chats whose title holds `query` or whose messages the backend matched, in the list's own order. */
+export function searchedSessions(
+    sessions: readonly Session[],
+    query: string,
+    hits: ReadonlyMap<string, SessionSearchResult>,
+): Session[] {
+    const needle = foldText(query.trim());
+    return sessions.filter((s) => foldText(s.title).includes(needle) || hits.has(s.id));
+}
+
+export type RowAction = 'rename' | 'pin' | 'unpin' | 'delete';
+
+/** The "⋯" menu's items, in the web menu's order; a pinned chat offers Unpin. */
+export function rowActions(row: Pick<ChatRow, 'pinned'>): RowAction[] {
+    return ['rename', row.pinned ? 'unpin' : 'pin', 'delete'];
+}
+
+/** What a rename saves: the trimmed, capped title, or null when there is nothing to change. */
+export function renamedTitle(draft: string, previous: string): string | null {
+    const title = draft.trim().slice(0, MAX_SESSION_TITLE_CHARS).trim();
+    return !title || draft === previous || title === previous ? null : title;
 }

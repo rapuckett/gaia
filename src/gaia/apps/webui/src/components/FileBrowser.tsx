@@ -102,6 +102,8 @@ interface IndexResult {
     unsupported: string[];
     failed: number;
     lastError: string;
+    /** The last failed document's ``error_kind``, when the server gave one. */
+    lastErrorKind?: string | null;
     /** Images inside added folders, which GAIA reads only when added one by one. */
     skippedImages: number;
 }
@@ -131,13 +133,14 @@ async function indexAndAttachFiles(
     const succeededFiles: string[] = [];
     let failed = 0;
     let lastError = '';
+    let lastErrorKind: string | null = null;
     let skippedImages = 0;
     const folderPaths = new Set(entries.filter(e => e.type === 'folder').map(e => e.path));
 
     for (const filepath of supported) {
         try {
             if (folderPaths.has(filepath)) {
-                const result = await api.indexFolder(filepath);
+                const result = await api.indexFolder(filepath, true, sessionId);
                 const newIds: string[] = [];
                 result.documents.forEach(d => { if (d.id) newIds.push(d.id); });
                 skippedImages += result.skipped_images ?? 0;
@@ -152,11 +155,12 @@ async function indexAndAttachFiles(
                 }
             } else {
                 if (!(await ensureModel('embedding'))) break;
-                const doc = await api.uploadDocumentByPath(filepath);
+                const doc = await api.uploadDocumentByPath(filepath, sessionId);
                 if (doc?.indexing_status === 'failed') {
                     // Neither attached nor held for the next chat: GAIA can't search it.
                     failed++;
                     lastError = doc.last_error ?? '';
+                    lastErrorKind = doc.error_kind ?? null;
                 } else if (doc?.id) {
                     docIds.push(doc.id);
                     succeededFiles.push(filepath);
@@ -165,6 +169,7 @@ async function indexAndAttachFiles(
         } catch (err) {
             failed++;
             lastError = err instanceof Error ? err.message : 'Unknown error';
+            lastErrorKind = (err as { reason?: string | null } | null)?.reason ?? null;
         }
     }
 
@@ -199,7 +204,7 @@ async function indexAndAttachFiles(
         }
     }
 
-    return { docIds, supported, succeededFiles, unsupported, failed, lastError, skippedImages };
+    return { docIds, supported, succeededFiles, unsupported, failed, lastError, lastErrorKind, skippedImages };
 }
 
 const isHiddenName = (name: string) => name.startsWith('.');
@@ -211,7 +216,7 @@ interface FileBrowserProps {
 
 export function FileBrowser({ onStartChat }: FileBrowserProps) {
     const t = useT();
-    const { setShowFileBrowser, currentSessionId, updateSessionInList, setPendingPrompt } = useChatStore();
+    const { setShowFileBrowser, leaveFileBrowser, currentSessionId, updateSessionInList, setPendingPrompt } = useChatStore();
     const closeBrowser = useCallback(() => setShowFileBrowser(false), [setShowFileBrowser]);
     useEscapeToClose(true, closeBrowser);
     const dialogRef = useRef<HTMLDivElement>(null);
@@ -249,7 +254,7 @@ export function FileBrowser({ onStartChat }: FileBrowserProps) {
     const indexStatusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     // Upload error toast state
-    const [indexError, setIndexError] = useState<{ filename: string; error: string } | null>(null);
+    const [indexError, setIndexError] = useState<{ filename: string; error: string; kind?: string | null } | null>(null);
 
     const loadDirectory = useCallback(async (path?: string) => {
         setLoading(true);
@@ -259,7 +264,7 @@ export function FileBrowser({ onStartChat }: FileBrowserProps) {
         setSearchQuery('');
         setSearchedLocations([]);
         try {
-            const data: BrowseResponse = await api.browseFiles(path);
+            const data: BrowseResponse = await api.browseFiles(path, useChatStore.getState().currentSessionId);
             setCurrentPath(data.current_path);
             setParentPath(data.parent_path);
             setEntries(data.entries);
@@ -302,7 +307,7 @@ export function FileBrowser({ onStartChat }: FileBrowserProps) {
         setIsSearching(true);
         setError(null);
         try {
-            const data = await api.searchFiles(searchQuery.trim(), typeFilter || undefined, 30);
+            const data = await api.searchFiles(searchQuery.trim(), typeFilter || undefined, 30, useChatStore.getState().currentSessionId);
             setSearchResults(data.results);
             setSearchedLocations(data.searched_locations ?? []);
             setSearchTruncated(data.truncated === true);
@@ -331,7 +336,7 @@ export function FileBrowser({ onStartChat }: FileBrowserProps) {
     const handleFilePreview = useCallback(async (path: string) => {
         setPreviewLoading(true);
         try {
-            const data = await api.previewFile(path);
+            const data = await api.previewFile(path, undefined, useChatStore.getState().currentSessionId);
             setPreviewFile(data as FilePreview);
         } catch (err) {
             log.ui.error('Preview failed', err);
@@ -386,6 +391,7 @@ export function FileBrowser({ onStartChat }: FileBrowserProps) {
                 setIndexError({
                     filename: `${result.failed} file(s)`,
                     error: result.lastError || 'Indexing failed for some files',
+                    kind: result.lastErrorKind,
                 });
             } else {
                 const added = t.plural('fileBrowser.added', result.docIds.length);
@@ -397,6 +403,10 @@ export function FileBrowser({ onStartChat }: FileBrowserProps) {
             if (indexStatusTimerRef.current) clearTimeout(indexStatusTimerRef.current);
             indexStatusTimerRef.current = setTimeout(() => setIndexStatus(null), 5000);
             setSelectedFiles(new Set());
+            // Opened from the library: go back there to see the files land.
+            if (result.failed === 0 && result.unsupported.length === 0 && useChatStore.getState().fileBrowserFromLibrary) {
+                setShowFileBrowser(false);
+            }
         } catch (err) {
             log.doc.error('Index selected failed', err);
             setIndexError({
@@ -406,7 +416,7 @@ export function FileBrowser({ onStartChat }: FileBrowserProps) {
         } finally {
             setIndexingFiles(new Set());
         }
-    }, [selectedFiles, currentSessionId, updateSessionInList, entries, t]);
+    }, [selectedFiles, currentSessionId, updateSessionInList, entries, setShowFileBrowser, t]);
 
     // A second click can land before the re-render that disables the button.
     const askingRef = useRef(false);
@@ -459,7 +469,7 @@ export function FileBrowser({ onStartChat }: FileBrowserProps) {
             } else {
                 await onStartChat(prompt);
             }
-            setShowFileBrowser(false);
+            leaveFileBrowser();
             setSelectedFiles(new Set());
         } catch (err) {
             log.doc.error('Ask Agent failed', err);
@@ -472,7 +482,7 @@ export function FileBrowser({ onStartChat }: FileBrowserProps) {
             setIndexingFiles(new Set());
             setIndexStatus(null);
         }
-    }, [selectedFiles, currentSessionId, updateSessionInList, entries, setPendingPrompt, setShowFileBrowser, onStartChat, t]);
+    }, [selectedFiles, currentSessionId, updateSessionInList, entries, setPendingPrompt, leaveFileBrowser, onStartChat, t]);
 
     // Build breadcrumb segments from current path
     const pathSegments = currentPath ? currentPath.replace(/\\/g, '/').split('/').filter(Boolean) : [];
@@ -741,6 +751,7 @@ export function FileBrowser({ onStartChat }: FileBrowserProps) {
                         <UploadErrorToast
                             filename={indexError.filename}
                             error={indexError.error}
+                            kind={indexError.kind ?? undefined}
                             onDismiss={() => setIndexError(null)}
                         />
                     )}

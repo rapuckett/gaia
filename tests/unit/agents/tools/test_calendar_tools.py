@@ -1114,6 +1114,11 @@ class TestConnectionErrors:
             "kind": "connect_account",
             "providers": ["google", "microsoft"],
             "agent_id": "installed:gaia",
+            # The calendar asks for calendar access, not mail.
+            "scopes": {
+                "google": ["https://www.googleapis.com/auth/calendar.events"],
+                "microsoft": ["https://graph.microsoft.com/Calendars.ReadWrite"],
+            },
         }
         assert "Connect button" in result["error"]
         assert "never give or run a terminal command" in result["error"]
@@ -1750,7 +1755,7 @@ class TestTheHiddenCharacterFilter:
     def test_the_browser_mirrors_the_same_lists(self):
         source = (
             Path(__file__).resolve().parents[4]
-            / "src/gaia/apps/webui/src/components/CalendarApproval.tsx"
+            / "src/gaia/apps/webui/src/utils/calendarApproval.core.ts"
         ).read_text(encoding="utf-8")
 
         def block(name):

@@ -3,11 +3,14 @@
 
 import { I18nManager } from 'react-native';
 
-import type { ApplyDirection } from './direction.types';
+import { directionPlan } from './direction.core';
+import type { ApplyDirection, LayoutDirection } from './direction.types';
 
-// Native layout direction only flips after an app restart; the first launch in a new direction is mirrored on the next one.
-export const applyDirection: ApplyDirection = (dir) => {
-    const rtl = dir === 'rtl';
-    I18nManager.allowRTL(rtl);
-    I18nManager.forceRTL(rtl);
+// Native layout only flips after an app restart. Both flags persist, so every launch rewrites them.
+export const applyDirection: ApplyDirection = (dir, _lang, picked) => {
+    const plan = directionPlan(picked ? dir : null);
+    I18nManager.allowRTL(plan.allowRTL);
+    I18nManager.forceRTL(plan.forceRTL);
 };
+
+export const layoutDirection: LayoutDirection = () => (I18nManager.isRTL ? 'rtl' : 'ltr');

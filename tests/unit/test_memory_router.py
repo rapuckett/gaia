@@ -86,7 +86,7 @@ def client(test_store, fake_embedder):
     db = ChatDatabase(":memory:")
     app.dependency_overrides[get_db] = lambda: db
 
-    with TestClient(app, headers={"X-Gaia-UI": "1"}) as c:
+    with TestClient(app, client=("127.0.0.1", 50000), headers={"X-Gaia-UI": "1"}) as c:
         yield c
 
     # Reset singleton so other tests get a fresh one
@@ -785,6 +785,7 @@ class TestConsolidateEndpoint:
         """POST /api/memory/consolidate returns 200 when _consolidate_fn is set."""
         memory_router_mod._consolidate_fn = lambda max_sessions=5: {
             "consolidated": 2,
+            "windows": 2,
             "extracted_items": 8,
         }
         resp = client.post("/api/memory/consolidate")
@@ -799,7 +800,7 @@ class TestConsolidateEndpoint:
 
         def mock_consolidate(max_sessions=5):
             captured["max_sessions"] = max_sessions
-            return {"consolidated": 0, "extracted_items": 0}
+            return {"consolidated": 0, "windows": 0, "extracted_items": 0}
 
         memory_router_mod._consolidate_fn = mock_consolidate
         resp = client.post("/api/memory/consolidate?max_sessions=10")
@@ -1020,7 +1021,13 @@ class TestReconcileEndpoint:
 
         def agent_reconcile(max_pairs):
             seen["max_pairs"] = max_pairs
-            return {"pairs_checked": 0}
+            return {
+                "pairs_checked": 0,
+                "reinforced": 0,
+                "contradicted": 0,
+                "weakened": 0,
+                "neutral": 0,
+            }
 
         memory_router_mod._reconcile_fn = agent_reconcile
 
@@ -2357,8 +2364,12 @@ class TestStreamInferenceModel:
         custom_model=None,
         reply="[]",
         downloaded=True,
+        picked=None,
     ):
-        """``downloaded=None`` leaves the download check to the patched catalog."""
+        """``downloaded=None`` leaves the download check to the patched catalog.
+
+        *picked* is ``last_model``: the model chat runs after a pick.
+        """
         apps = [{"content": "Installed app: Blender"}]
         fake_llm = MagicMock()
         fake_llm.chat.return_value = reply
@@ -2394,11 +2405,66 @@ class TestStreamInferenceModel:
                     ),
                 )
             )
+            stack.enter_context(
+                patch(
+                    "gaia.llm.lemonade_client.resolve_chat_model",
+                    return_value=picked or default_model,
+                )
+            )
             create = stack.enter_context(
                 patch("gaia.llm.create_client", return_value=fake_llm)
             )
             resp = client.get("/api/memory/stream-inference")
         return resp, create
+
+    def test_uses_the_local_model_chat_was_switched_to(self, client, tmp_path):
+        """The default would load a second chat model behind the one in use."""
+        resp, create = self._stream(
+            client,
+            tmp_path,
+            default_model="Gemma-4-E4B-it-GGUF",
+            picked="gemma4-it-e4b-FLM",
+        )
+
+        assert resp.status_code == 200
+        create.assert_called_once_with(model="gemma4-it-e4b-FLM")
+
+    def test_a_hybrid_pick_runs_on_its_cheap_model(self, client, tmp_path):
+        with patch(
+            "gaia.llm.hybrid.start_model",
+            side_effect=lambda m, *a, **k: "gemma4-it-e4b-FLM" if m == "hybrid" else m,
+        ):
+            resp, create = self._stream(
+                client, tmp_path, default_model="Gemma-4-E4B-it-GGUF", picked="hybrid"
+            )
+        assert resp.status_code == 200
+        create.assert_called_once_with(model="gemma4-it-e4b-FLM")
+
+    def test_a_broken_hybrid_setting_leaves_inference_on_the_default(
+        self, client, tmp_path
+    ):
+        from gaia.llm.hybrid import HybridConfigError
+
+        with patch(
+            "gaia.llm.hybrid.start_model",
+            side_effect=HybridConfigError("no cheap model"),
+        ):
+            resp, create = self._stream(
+                client, tmp_path, default_model="Gemma-4-E4B-it-GGUF", picked="hybrid"
+            )
+        assert resp.status_code == 200
+        create.assert_called_once_with(model="Gemma-4-E4B-it-GGUF")
+
+    def test_a_cloud_pick_leaves_inference_on_the_local_default(self, client, tmp_path):
+        resp, create = self._stream(
+            client,
+            tmp_path,
+            default_model="Gemma-4-E4B-it-GGUF",
+            picked="fireworks.accounts/fireworks/models/kimi-k2",
+        )
+
+        assert resp.status_code == 200
+        create.assert_called_once_with(model="Gemma-4-E4B-it-GGUF")
 
     def test_uses_the_default_chat_model_not_the_cloud_custom_model(
         self, client, tmp_path

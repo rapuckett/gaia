@@ -1,7 +1,7 @@
 // Copyright(C) 2025-2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { lazy, Suspense, useEffect, useRef } from 'react';
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef, type KeyboardEvent } from 'react';
 import { ChevronLeft, Loader2, X } from 'lucide-react';
 import { useChatStore, type SettingsSection } from '../../stores/chatStore';
 import { useEscapeToClose } from '../../hooks/useEscapeToClose';
@@ -19,16 +19,19 @@ import '../SettingsModal.css';
 import './SettingsDialog.css';
 import { useT } from '../../i18n/useT';
 import { SetupSettings } from './SetupSettings';
+import { AboutSettings } from './AboutSettings';
 import { ErrorBoundary } from '../ErrorBoundary';
+import { useDeviceStore } from '../../stores/deviceStore';
 
 // The heaviest panes, and ones most people never open, load on first open.
 const ConnectorsPane = lazy(() => import('./ConnectorsPane').then((m) => ({ default: m.ConnectorsPane })));
 const MessagingPane = lazy(() => import('./MessagingSettings').then((m) => ({ default: m.MessagingSettings })));
 const AutomationsPane = lazy(() => import('./AutomationsSettings').then((m) => ({ default: m.AutomationsSettings })));
 const AdvancedPane = lazy(() => import('./AdvancedSettings').then((m) => ({ default: m.AdvancedSettings })));
+const DevicesPane = lazy(() => import('./DevicesSettings').then((m) => ({ default: m.DevicesSettings })));
 
 const SECTIONS: SettingsSection[] = [
-    'general', 'setup', 'model', 'permissions', 'skills', 'connectors', 'messaging', 'automations', 'memory', 'notifications', 'voice', 'privacy', 'advanced',
+    'general', 'setup', 'model', 'permissions', 'skills', 'connectors', 'messaging', 'devices', 'automations', 'memory', 'notifications', 'voice', 'privacy', 'advanced', 'about',
 ];
 
 /** One settings window with a section list on the left. */
@@ -38,6 +41,9 @@ export function SettingsDialog({ onUseSkill }: { onUseSkill: (name: string) => v
     const open = useChatStore((s) => s.openSettings);
     const close = useChatStore((s) => s.closeSettings);
     const jump = useChatStore((s) => s.settingsJump);
+    // Paired devices stay out of sight unless device_pairing is on and this is the PC.
+    const devicesAvailable = useDeviceStore((s) => s.available === true);
+    const sections = devicesAvailable ? SECTIONS : SECTIONS.filter((id) => id !== 'devices');
     const panel = useRef<HTMLDivElement>(null);
     const scroller = useRef<HTMLDivElement>(null);
 
@@ -48,6 +54,11 @@ export function SettingsDialog({ onUseSkill }: { onUseSkill: (name: string) => v
     useDialogFocus(panel, isOpen, () =>
         panel.current?.querySelector<HTMLElement>('.settings-nav-item.is-active'),
     );
+
+    // One scroller serves every tab, so a new tab would open at the last one's offset.
+    useLayoutEffect(() => {
+        if (scroller.current) scroller.current.scrollTop = 0;
+    }, [section]);
 
     // Panes load their data first, so wait for the setting to appear before landing on it.
     useEffect(() => {
@@ -95,6 +106,20 @@ export function SettingsDialog({ onUseSkill }: { onUseSkill: (name: string) => v
     }, [jump, section]);
 
     if (!section) return null;
+    const backTo = jump && jump.section === section ? jump.from : undefined;
+
+    const moveInNav = (e: KeyboardEvent<HTMLElement>) => {
+        const at = SECTIONS.indexOf(section);
+        const to = e.key === 'ArrowDown' ? (at + 1) % SECTIONS.length
+            : e.key === 'ArrowUp' ? (at - 1 + SECTIONS.length) % SECTIONS.length
+                : e.key === 'Home' ? 0
+                    : e.key === 'End' ? SECTIONS.length - 1
+                        : null;
+        if (to === null) return;
+        e.preventDefault();
+        open(SECTIONS[to]);
+        panel.current?.querySelector<HTMLElement>(`[data-section="${SECTIONS[to]}"]`)?.focus();
+    };
 
     const pane = (() => {
         switch (section) {
@@ -105,27 +130,31 @@ export function SettingsDialog({ onUseSkill }: { onUseSkill: (name: string) => v
             case 'skills': return <SkillsSettings onUseSkill={(name) => { close(); onUseSkill(name); }} />;
             case 'connectors': return <ConnectorsPane />;
             case 'messaging': return <MessagingPane />;
+            case 'devices': return devicesAvailable ? <DevicesPane /> : null;
             case 'automations': return <AutomationsPane />;
             case 'memory': return <MemorySettings />;
             case 'notifications': return <NotificationSettings />;
             case 'voice': return <ReadAloudSettings />;
             case 'privacy': return <PrivacySettings />;
             case 'advanced': return <AdvancedPane />;
+            case 'about': return <AboutSettings />;
         }
     })();
 
     return (
         <div className="settings-overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) close(); }}>
             <div ref={panel} className="settings-dialog" role="dialog" aria-modal="true" aria-label={t('settings.title')}>
-                <nav className="settings-nav" aria-label={t('settings.sections')}>
+                <nav className="settings-nav" aria-label={t('settings.sections')} onKeyDown={moveInNav}>
                     <h1 className="settings-nav-title">{t('settings.title')}</h1>
-                    {SECTIONS.map((id) => (
+                    {sections.map((id) => (
                         <button
                             key={id}
                             type="button"
                             data-section={id}
                             className={`settings-nav-item${section === id ? ' is-active' : ''}`}
                             aria-current={section === id ? 'page' : undefined}
+                            // One Tab stop for the whole list; the arrow keys move within it.
+                            tabIndex={section === id ? 0 : -1}
                             // The focus ring follows the selection instead of staying on the tab focused at open.
                             onClick={(e) => { e.currentTarget.focus(); open(id); }}
                         >
@@ -138,17 +167,17 @@ export function SettingsDialog({ onUseSkill }: { onUseSkill: (name: string) => v
                         <X size={18} />
                     </button>
                     {/* Outside the scroller: a sticky tab title must not cover the way back. */}
-                    {jump && jump.section === section && (
+                    {backTo && (
                         <button
                             type="button"
                             className="settings-back"
                             onClick={() => {
-                                open(jump.from);
-                                panel.current?.querySelector<HTMLElement>(`[data-section="${jump.from}"]`)?.focus();
+                                open(backTo);
+                                panel.current?.querySelector<HTMLElement>(`[data-section="${backTo}"]`)?.focus();
                             }}
                         >
                             <ChevronLeft size={14} aria-hidden="true" />
-                            {t.compose((say) => say('settings.backTo', { section: say(`settings.section.${jump.from}`) }))}
+                            {t.compose((say) => say('settings.backTo', { section: say(`settings.section.${backTo}`) }))}
                         </button>
                     )}
                     <div ref={scroller} className="settings-scroll">

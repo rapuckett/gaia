@@ -1,0 +1,17 @@
+// Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
+// SPDX-License-Identifier: MIT
+
+import { isolate } from '@webui/i18n/registry';
+import type { GaiaNotification } from '@webui/types/agent';
+
+import { translator } from '@/i18n/useT';
+
+import { notificationText } from './notificationText';
+
+describe('notificationText', () => {
+    it("keeps the PC's English reason for a failed task in one left-to-right run, so Arabic doesn't reorder it", () => {
+        const reason = 'The model stopped responding at step 1. The model server on this PC: 5 attempts failed, the last with HTTP 500.';
+        const failed = { id: 'schedule-error-a-1', type: 'error', agentId: 'scheduler', agentName: 'GAIA', title: 'x', message: reason } as GaiaNotification;
+        expect(notificationText(failed, translator('ar')).message).toBe(isolate(reason, 'ltr'));
+    });
+});

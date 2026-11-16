@@ -5,7 +5,7 @@ import type { ExpoConfig } from 'expo/config';
 
 import { LOCALES } from '@webui/i18n/registry';
 
-import appConfig, { readAppEnv, type AppEnv } from '../app.config';
+import appConfig, { readIosBundleId, readAppEnv, type AppEnv } from '../app.config';
 
 function configFor(env: AppEnv): ExpoConfig {
     const saved = process.env.APP_ENV;
@@ -26,12 +26,30 @@ function pluginOptions(config: ExpoConfig, name: string): Record<string, unknown
 }
 
 describe('app config', () => {
+    it('takes the iOS bundle id from the environment and keeps the URL scheme fixed', () => {
+        expect(readIosBundleId('production', {})).toBe('ai.amd.gaia.mobile');
+        expect(readIosBundleId('development', { GAIA_IOS_BUNDLE_ID_DEV: '' })).toBe('ai.amd.gaia.mobile.dev');
+        expect(readIosBundleId('production', { GAIA_IOS_BUNDLE_ID: 'com.example.gaia' })).toBe('com.example.gaia');
+        expect(() => readIosBundleId('production', { GAIA_IOS_BUNDLE_ID: 'not a id' })).toThrow(/GAIA_IOS_BUNDLE_ID .* "not a id"/);
+
+        const saved = process.env.GAIA_IOS_BUNDLE_ID;
+        process.env.GAIA_IOS_BUNDLE_ID = 'com.example.gaia';
+        try {
+            const config = configFor('production');
+            expect(config.ios?.bundleIdentifier).toBe('com.example.gaia');
+            expect(config.scheme).toBe('ai.amd.gaia.mobile');
+        } finally {
+            if (saved === undefined) delete process.env.GAIA_IOS_BUNDLE_ID;
+            else process.env.GAIA_IOS_BUNDLE_ID = saved;
+        }
+    });
+
     it('refuses to load without a known APP_ENV', () => {
         expect(() => readAppEnv(undefined)).toThrow(/APP_ENV .* not set/);
         expect(() => readAppEnv('staging')).toThrow(/"staging"/);
     });
 
-    it('allows plain HTTP only in development, and only locally', () => {
+    it('allows plain HTTP only in development', () => {
         const dev = configFor('development');
         const prod = configFor('production');
 
@@ -41,10 +59,8 @@ describe('app config', () => {
         });
         expect(pluginOptions(dev, './plugins/withCleartextHosts').hosts).toEqual(['10.0.2.2', '127.0.0.1', 'localhost']);
 
-        expect(prod.ios?.infoPlist?.NSAppTransportSecurity).toEqual({
-            NSAllowsArbitraryLoads: false,
-            NSAllowsLocalNetworking: false,
-        });
+        // Production reaches the paired PC only over pinned https, which needs no ATS exception.
+        expect(prod.ios?.infoPlist?.NSAppTransportSecurity).toEqual({ NSAllowsArbitraryLoads: false });
         expect(pluginOptions(prod, './plugins/withCleartextHosts').hosts).toEqual([]);
     });
 

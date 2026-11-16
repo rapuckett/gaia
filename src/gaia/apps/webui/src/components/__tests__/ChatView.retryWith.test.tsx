@@ -102,7 +102,7 @@ async function retryWithQwen() {
     await act(async () => {
         fireEvent.click(screen.getByLabelText('Retry with another model'));
     });
-    const menu = screen.getByRole('dialog', { name: 'Retry with' });
+    const menu = screen.getByRole('dialog', { name: 'Retry with…' });
     expect(within(menu).queryByText('Gemma-4-E4B-it-GGUF')).toBeNull();
     expect(within(menu).queryByText('Not-Downloaded-GGUF')).toBeNull();
     expect(mockedApi.listProviderModels).toHaveBeenCalledTimes(1);

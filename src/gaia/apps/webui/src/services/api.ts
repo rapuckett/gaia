@@ -868,8 +868,10 @@ export async function listDocuments(): Promise<{ documents: Document[]; total: n
     return apiFetch('GET', '/documents');
 }
 
-export async function uploadDocumentByPath(filepath: string): Promise<Document> {
-    return apiFetch('POST', '/documents/upload-path', { filepath });
+/** Away from the PC, the file must be in the folders of the chat `sessionId` names. */
+export async function uploadDocumentByPath(filepath: string, sessionId?: string | null): Promise<Document> {
+    const params = withChat(new URLSearchParams(), sessionId).toString();
+    return apiFetch('POST', `/documents/upload-path${params ? `?${params}` : ''}`, { filepath });
 }
 
 function uploadError(status: number, errorText: string): ApiError {
@@ -920,13 +922,8 @@ export async function deleteDocument(id: string): Promise<void> {
     return apiFetch('DELETE', `/documents/${id}`);
 }
 
-/** How far a running index has got: PDF pages read, then chunks embedded. */
-export interface IndexProgress {
-    phase: 'reading' | 'embedding';
-    done: number;
-    /** Null when the count isn't known upfront (e.g. pages of a non-PDF). */
-    total: number | null;
-}
+import type { IndexProgress } from '../utils/documentLibrary.core';
+export type { IndexProgress };
 
 export async function getDocumentStatus(id: string): Promise<{
     id: string;
@@ -942,10 +939,12 @@ export async function getDocumentStatus(id: string): Promise<{
 /**
  * Where a library document opens, at `page` when given. Absolute, so it opens
  * the same in a browser tab and, from the desktop app's file:// page, in the
- * system browser (the shell hands http links to it).
+ * system browser (the shell hands http links to it). Away from the PC only the
+ * chat `sessionId` names may open its documents.
  */
-export function documentFileUrl(id: string, page?: number): string {
+export function documentFileUrl(id: string, sessionId?: string | null, page?: number): string {
     const url = new URL(`${getApiBase()}/documents/${encodeURIComponent(id)}/file`, window.location.href);
+    if (sessionId) url.searchParams.set('session_id', sessionId);
     if (page) url.hash = `page=${page}`;
     return url.href;
 }
@@ -968,13 +967,21 @@ export async function detachDocument(sessionId: string, documentId: string): Pro
 
 // -- File Browser -----------------------------------------------------------------
 
-export async function browseFiles(path?: string): Promise<BrowseResponse> {
-    const params = path ? `?path=${encodeURIComponent(path)}` : '';
-    return apiFetch('GET', `/files/browse${params}`);
+/** Away from the PC (mobile access, a paired device) file reads name the chat and see only its folders. */
+function withChat(params: URLSearchParams, sessionId?: string | null): URLSearchParams {
+    if (sessionId) params.set('session_id', sessionId);
+    return params;
 }
 
-export async function indexFolder(folderPath: string, recursive: boolean = true): Promise<IndexFolderResponse> {
-    return apiFetch('POST', '/documents/index-folder', { folder_path: folderPath, recursive });
+export async function browseFiles(path?: string, sessionId?: string | null): Promise<BrowseResponse> {
+    const params = withChat(new URLSearchParams(path ? { path } : {}), sessionId).toString();
+    return apiFetch('GET', `/files/browse${params ? `?${params}` : ''}`);
+}
+
+/** Away from the PC, the folder must be in the folders of the chat `sessionId` names. */
+export async function indexFolder(folderPath: string, recursive: boolean = true, sessionId?: string | null): Promise<IndexFolderResponse> {
+    const params = withChat(new URLSearchParams(), sessionId).toString();
+    return apiFetch('POST', `/documents/index-folder${params ? `?${params}` : ''}`, { folder_path: folderPath, recursive });
 }
 
 export async function openFileOrFolder(path: string, reveal: boolean = true): Promise<{ status: string; path: string }> {
@@ -1056,7 +1063,7 @@ export function uploadMedia(file: File, onProgress: (percent: number) => void, s
 
 // -- File Search & Preview ----------------------------------------------------------
 
-export async function searchFiles(query: string, fileTypes?: string, maxResults?: number): Promise<{
+export async function searchFiles(query: string, fileTypes?: string, maxResults?: number, sessionId?: string | null): Promise<{
     results: Array<{ name: string; path: string; size: number; size_display: string; extension: string; modified: string; directory: string }>;
     total: number;
     query: string;
@@ -1066,10 +1073,10 @@ export async function searchFiles(query: string, fileTypes?: string, maxResults?
     const params = new URLSearchParams({ query });
     if (fileTypes) params.set('file_types', fileTypes);
     if (maxResults) params.set('max_results', String(maxResults));
-    return apiFetch('GET', `/files/search?${params}`);
+    return apiFetch('GET', `/files/search?${withChat(params, sessionId)}`);
 }
 
-export async function previewFile(path: string, lines?: number): Promise<{
+export async function previewFile(path: string, lines?: number, sessionId?: string | null): Promise<{
     path: string;
     name: string;
     size: number;
@@ -1084,7 +1091,7 @@ export async function previewFile(path: string, lines?: number): Promise<{
 }> {
     const params = new URLSearchParams({ path });
     if (lines) params.set('lines', String(lines));
-    return apiFetch('GET', `/files/preview?${params}`);
+    return apiFetch('GET', `/files/preview?${withChat(params, sessionId)}`);
 }
 
 // -- Mobile Access / Tunnel -------------------------------------------------------

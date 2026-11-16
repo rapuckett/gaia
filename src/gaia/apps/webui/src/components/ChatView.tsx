@@ -7,9 +7,11 @@ import { TurnAnnouncer } from './TurnAnnouncer';
 import { MessageBubble, cleanToolCallContent, isErrorContent, turnEnding } from './MessageBubble';
 import { toolRowText } from './AgentActivity';
 import { agentEventToStep } from '../utils/streamSteps';
+import { latencyByMessage } from '../utils/answerStats.core';
 import { applyStatusEvent, selectToolStatus } from '../utils/statusEvents';
 import { TOOL_CALL_JSON_SAFETY_RE, carryMessageKeys, fromApiMessages, isEchoOfFailedTool, keepFailedReply, onlyFailureAfter, persistedQuestion, policyReceiptAnchor, stripStreamingEnvelope } from '../utils/chatStream';
 import { useChatStore } from '../stores/chatStore';
+import { useModelStore } from '../stores/modelStore';
 import { useReadAloudStore } from '../stores/readAloudStore';
 import { readsAloudWhenDone } from '../utils/autoReadAloud';
 import { useReadAloudSettings } from '../hooks/useReadAloudSettings';
@@ -216,6 +218,8 @@ export function ChatView({ sessionId }: ChatViewProps) {
     streamingRef.current = isStreaming;
     // Set briefly after a queued send found the chat still busy, so it waits before trying again.
     const queueHold = useChatStore((s) => !!s.queueHolds[sessionId]);
+    // A model picked during the reply is applied first, so the queued message runs on it.
+    const modelSwitching = useModelStore((s) => !!s.queued);
 
     // ── Streaming chunk buffer ──────────────────────────────────────
     // Buffer SSE chunks in a ref and flush to the store via rAF.
@@ -1027,6 +1031,7 @@ export function ChatView({ sessionId }: ChatViewProps) {
                         stopState,
                         historyNotice,
                         libraryNotices: event.library_notices,
+                        failed: event.failed === true || undefined,
                         failure: event.failed ? event.failure : undefined,
                     };
                     if (historyNotice) historyNotices.set(assistantMsg.id, historyNotice);
@@ -1392,11 +1397,11 @@ export function ChatView({ sessionId }: ChatViewProps) {
             return;
         }
         // The opening message goes first.
-        if (queue.length === 0 || queueHold || isLoadingMessages || pendingPrompt || openingRef.current || retiredAgent || initializing) return;
+        if (queue.length === 0 || queueHold || modelSwitching || isLoadingMessages || pendingPrompt || openingRef.current || retiredAgent || initializing) return;
         // Only once this chat's turn is over: seen ending here, or reported idle by a poll since.
         if (isStale() || (!observedEndRef.current && !idleHere)) return;
         void dispatchNext(sessionId, sendQueued, () => mountedRef.current && !isStale() && !useChatStore.getState().isStreaming && !comparingRef.current);
-    }, [busy, queue, queueHold, idleHere, isLoadingMessages, pendingPrompt, retiredAgent, initializing, sessionId, sendQueued, isStale]);
+    }, [busy, queue, queueHold, modelSwitching, idleHere, isLoadingMessages, pendingPrompt, retiredAgent, initializing, sessionId, sendQueued, isStale]);
 
     // The meter shows what the next message will carry, so re-measure after each reply.
     const wasBusyRef = useRef(false);
@@ -1561,8 +1566,8 @@ export function ChatView({ sessionId }: ChatViewProps) {
         setActionError(null);
         const failures = await addDroppedFiles(sessionId, documents);
         if (failures.length > 0) {
-            setActionError(failures.map(({ name, stage, error }) => (stage === 'unreadable'
-                ? t('docsBar.failedTitle', { name })
+            setActionError(failures.map(({ name, stage, error }) => (stage === 'unreadable' || stage === 'server'
+                ? t(stage === 'server' ? 'docsBar.serverTitle' : 'docsBar.failedTitle', { name })
                 : t(
                     stage === 'attach' ? 'chat.dropAttachFailed' : 'chat.dropUploadFailed',
                     { name, error: requestErrorParam(error) },
@@ -1589,22 +1594,7 @@ export function ChatView({ sessionId }: ChatViewProps) {
         // A card speaks for itself: the reply's wording is read only without one.
         && (hasConnectCard(lastMessage) ? lastConnectProviders.length > 0 : isAuthRequiredMessage(lastMessage.content));
 
-    // Pre-compute per-message latency: time from preceding user message to each
-    // assistant message. O(N) single pass, avoids repeated backward scans in render.
-    const latencyByMsgId = useMemo(() => {
-        const map = new Map<number, number>();
-        let lastUserTime: number | undefined;
-        for (const msg of messages) {
-            if (msg.role === 'user' && msg.created_at) {
-                lastUserTime = new Date(msg.created_at).getTime();
-            } else if (msg.role === 'assistant' && msg.created_at && lastUserTime !== undefined) {
-                const assistTime = new Date(msg.created_at).getTime();
-                if (assistTime > lastUserTime) map.set(msg.id, assistTime - lastUserTime);
-                lastUserTime = undefined;
-            }
-        }
-        return map;
-    }, [messages]);
+    const latencyByMsgId = useMemo(() => latencyByMessage(messages), [messages]);
 
     const composerBlocked = retiredAgent
         ? t('chat.retiredReadOnly', { agent: retiredAgent })
@@ -1701,6 +1691,7 @@ export function ChatView({ sessionId }: ChatViewProps) {
                             && msg.role === 'assistant' && idx === messages.length - 1
                             && !msg.stopState && !msg.failed && !isErrorContent(msg.content);
                         const latency = msg.stats?.seconds != null ? msg.stats.seconds * 1000 : latencyByMsgId.get(msg.id);
+                        const serverDown = msg.failure === 'model_server_down' && idx === messages.length - 1 && !busy;
                         const unsent = isUnsent(msg);
                         return (
                             <div
@@ -1736,10 +1727,9 @@ export function ChatView({ sessionId }: ChatViewProps) {
                                     onContinue={canTryAgain && stopped ? handleContinue : undefined}
                                     latest={msg.role === 'assistant' && idx === messages.length - 1}
                                     latencyMs={latency}
+                                    fixShownBelow={serverDown}
                                 />
-                                {msg.failure === 'model_server_down' && idx === messages.length - 1 && !busy && (
-                                    <ModelServerDownNotice />
-                                )}
+                                {serverDown && <ModelServerDownNotice />}
                                 {comparison?.messageId === msg.id && (
                                     <AnswerComparison
                                         original={msg}

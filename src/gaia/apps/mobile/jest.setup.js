@@ -26,3 +26,25 @@ jest.mock('react-native-reanimated', () => {
 });
 // The package's ESM entry is .mjs, which Babel doesn't transform; icons render as nothing.
 jest.mock('lucide-react-native', () => new Proxy({ __esModule: true }, { get: (target, name) => (name in target ? target[name] : () => null) }));
+// Its player is a native shared object; playPcAudio.test.ts mocks the behavior it checks.
+jest.mock('expo-audio', () => ({ createAudioPlayer: jest.fn(), setAudioModeAsync: jest.fn(() => Promise.resolve()) }));
+jest.mock('@react-native-async-storage/async-storage', () => require('@react-native-async-storage/async-storage/jest/async-storage-mock'));
+
+// RN's Jest mock reports a 2x text size; tests run at the default size unless one sets its own. (The web build has no such mock.)
+const { Dimensions, Platform } = require('react-native');
+if (Platform.OS !== 'web') {
+    Dimensions.set({ window: { ...Dimensions.get('window'), fontScale: 1 }, screen: { ...Dimensions.get('screen'), fontScale: 1 } });
+}
+
+// A query's cache timer (5 min after its screen unmounts) must not hold Jest open; a run of a few suites is in band.
+const { timeoutManager } = require('@tanstack/react-query');
+const unref = (timer) => {
+    timer?.unref?.();
+    return timer;
+};
+timeoutManager.setTimeoutProvider({
+    setTimeout: (callback, delay) => unref(setTimeout(callback, delay)),
+    clearTimeout: (timer) => clearTimeout(timer),
+    setInterval: (callback, delay) => unref(setInterval(callback, delay)),
+    clearInterval: (timer) => clearInterval(timer),
+});

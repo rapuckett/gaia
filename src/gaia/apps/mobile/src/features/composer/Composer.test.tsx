@@ -7,8 +7,12 @@ import { createRoot } from 'test-renderer';
 import { MAX_MESSAGE_CHARS } from '@webui/utils/messageLimits';
 
 import { Composer } from './Composer';
+import type { Attachments } from './useAttachments';
 
-jest.mock('@/i18n/useT', () => ({ useT: () => (key: string) => key }));
+jest.mock('./AttachButton', () => ({ AttachButton: 'AttachButton' }));
+jest.mock('./AttachmentChips', () => ({ AttachmentChips: 'AttachmentChips' }));
+
+jest.mock('@/i18n/useT', () => ({ useT: () => Object.assign((key: string) => key, { bare: (key: string) => key }) }));
 jest.mock('@/ui/icons', () => ({ ArrowUp: 'ArrowUp', Square: 'Square' }));
 jest.mock('@/ui', () => {
     const { createElement: mockElement } = jest.requireActual('react');
@@ -20,6 +24,7 @@ jest.mock('@/ui', () => {
         TextField: host('TextField'),
         Row: host('Row'),
         Stack: host('Stack'),
+        Surface: host('Surface'),
     };
 });
 
@@ -68,6 +73,13 @@ describe('Composer', () => {
         expect(find(r, 'composer-stop')).toBeUndefined();
     });
 
+    it('hides the send arrow while a reply runs until the draft has text', async () => {
+        const { r } = await mount({ running: true });
+        expect(find(r, 'composer-send')).toBeUndefined();
+        await type(r, 'next');
+        expect(find(r, 'composer-send').props.label).toBe('composer.queue');
+    });
+
     it('blocks Send with a reason or while the chat is starting, yet keeps the text editable', async () => {
         const { r } = await mount({ starting: true });
         await type(r, 'hi');
@@ -76,5 +88,53 @@ describe('Composer', () => {
         await act(async () => r.render(<Composer onSend={jest.fn()} disabledReason="GAIA is starting…" />));
         expect(find(r, 'composer-input').props.disabled).toBe(true);
         expect(find(r, 'composer-send').props.disabled).toBe(true);
+    });
+
+    it('shows a blocked reason once, as the hint, and leaves the placeholder empty', async () => {
+        const reason = 'This chat used the retired "chat" agent and is read-only.';
+        const { r } = await mount({ disabledReason: reason });
+        const input = find(r, 'composer-input');
+        expect(input.props.placeholder).toBe('');
+        expect(input.props.hint).toBe(reason);
+        expect(input.props.disabled).toBe(true);
+        expect(input.props.accessibilityHint).toBe(reason);
+        await act(async () => r.render(<Composer onSend={jest.fn()} />));
+        expect(find(r, 'composer-input').props.placeholder).toBe('composer.placeholder');
+    });
+
+    it('sends the text with its file links, lets a file go with no words, and waits for uploads', async () => {
+        const attachments: Attachments = {
+            items: [],
+            add: jest.fn(),
+            addFailed: jest.fn(),
+            remove: jest.fn(),
+            clear: jest.fn(),
+            uploading: false,
+            hasUploaded: true,
+            compose: (text) => (text ? `${text}\n\n[a.pdf](/u/a.pdf)` : '[a.pdf](/u/a.pdf)'),
+        };
+        const { r, onSend } = await mount({ attachments });
+        await act(async () => find(r, 'composer-send').props.onPress());
+        expect(onSend).toHaveBeenCalledWith('[a.pdf](/u/a.pdf)');
+        expect(attachments.clear).toHaveBeenCalledTimes(1);
+        await act(async () => r.render(<Composer onSend={onSend} attachments={{ ...attachments, uploading: true }} />));
+        expect(find(r, 'composer-send').props.disabled).toBe(true);
+    });
+
+    it('blocks Send while a refused file is attached, and says which', async () => {
+        const attachments: Attachments = {
+            items: [{ id: '1', key: 'file:///a.exe', name: 'a.exe', uri: 'file:///a.exe', isImage: false, isMedia: false, status: 'failed', error: 'unsupported' }],
+            add: jest.fn(),
+            addFailed: jest.fn(),
+            remove: jest.fn(),
+            clear: jest.fn(),
+            uploading: false,
+            hasUploaded: false,
+            compose: (text) => text,
+        };
+        const { r } = await mount({ attachments });
+        await type(r, 'hello');
+        expect(find(r, 'composer-send').props.disabled).toBe(true);
+        expect(find(r, 'composer-refused')).toBeTruthy();
     });
 });

@@ -19,6 +19,7 @@ import shutil
 import stat
 import tempfile
 import threading
+import time
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
@@ -198,6 +199,8 @@ def _secret_directories() -> Set[str]:
         and key files, ``~/.aws/credentials`` is the key itself, and neither has
         a name the extension/name denylists would catch.
     """
+    from gaia.home import default_gaia_home, devices_dir
+
     home = Path.home()
     candidates = [
         home / ".ssh",
@@ -208,6 +211,12 @@ def _secret_directories() -> Set[str]:
         home / ".docker",
         home / ".config" / "gcloud",
         home / "AppData" / "Roaming" / "gcloud",
+        # The GitHub CLI's OAuth tokens (hosts.yml).
+        home / ".config" / "gh",
+        home / "AppData" / "Roaming" / "GitHub CLI",
+        # The paired-device listener's private key and the device table.
+        devices_dir(),
+        devices_dir(default_gaia_home()),
     ]
     return {os.path.normpath(str(c)) for c in candidates}
 
@@ -390,6 +399,55 @@ BLOCKED_DIRECTORIES: Set[str] = _get_blocked_directories()
 GAIA_STATE_DIRECTORIES: Set[str] = _gaia_state_dirs()
 SECRET_DIRECTORIES: Set[str] = _secret_directories()
 
+#: How long the list of credential files is reused. A link made later still
+#: names a file already listed; only a file added to the folder waits for this.
+SECRET_LINKS_TTL_S = 10.0
+
+_secret_links_lock = threading.Lock()
+_secret_links_cache: Dict[str, Any] = {"key": None, "at": 0.0, "ids": {}}
+
+
+def _secret_links() -> Dict[Tuple[int, int], str]:
+    """``(device, inode)`` -> folder, for every file in a credential folder."""
+    key = frozenset(SECRET_DIRECTORIES)
+    with _secret_links_lock:
+        cache = _secret_links_cache
+        if cache["key"] == key and time.monotonic() - cache["at"] < SECRET_LINKS_TTL_S:
+            return cache["ids"]
+        ids: Dict[Tuple[int, int], str] = {}
+        for folder in SECRET_DIRECTORIES:
+            for current, _dirs, files in os.walk(folder):
+                for name in files:
+                    try:
+                        st = os.stat(os.path.join(current, name))
+                    except OSError:
+                        continue  # removed or locked mid-walk; it can't be read either
+                    ids[(st.st_dev, st.st_ino)] = folder
+        cache.update(key=key, at=time.monotonic(), ids=ids)
+        return ids
+
+
+def secret_folder_sharing(path: Any) -> Optional[str]:
+    """The credential folder holding the same file as *path* under another name.
+
+    A hard link is a second name for one file, so the folder check on the path
+    alone misses it. Only files with more than one name are looked up.
+
+    Args:
+        path: Path of the file about to be read or written.
+
+    Returns:
+        The credential folder, or None when *path* is not a second name for
+        one of its files.
+    """
+    try:
+        st = os.stat(path)
+    except OSError:
+        return None
+    if not stat.S_ISREG(st.st_mode) or st.st_nlink < 2:
+        return None
+    return _secret_links().get((st.st_dev, st.st_ino))
+
 
 def _real_path(path: Any) -> str:
     """*path* with ``~`` expanded and every symlink and ``..`` resolved.
@@ -398,6 +456,73 @@ def _real_path(path: Any) -> str:
     same path — not a literal ``<cwd>/~`` that happens to sit inside the CWD.
     """
     return os.path.realpath(os.path.expanduser(os.fspath(path)))
+
+
+def secret_read_refusal(path: Any) -> str:
+    """Why *path* holds secrets GAIA never reads back, or "" when it doesn't.
+
+    The one copy of the read policy: a credential's file name, a certificate
+    or key extension, a place inside a credential folder, or a second name
+    (hard link) for a file in one.
+
+    Raises:
+        OSError: When the path can't be resolved; callers fail closed.
+    """
+    real_path = Path(_real_path(path))
+    file_name = real_path.name.lower()
+    file_ext = real_path.suffix.lower()
+
+    if file_name in {s.lower() for s in SENSITIVE_FILE_NAMES}:
+        return (
+            f"Read blocked: '{real_path.name}' holds credentials, keys or "
+            f"secrets. Open it yourself if you need its contents — the "
+            f"agent is not allowed to read it into the conversation."
+        )
+
+    if file_ext in SENSITIVE_EXTENSIONS:
+        return (
+            f"Read blocked: files with extension '{file_ext}' are "
+            f"certificates or private keys. The agent is not allowed to "
+            f"read them into the conversation."
+        )
+
+    for secret_dir in SECRET_DIRECTORIES:
+        if _path_is_within(real_path, Path(secret_dir)):
+            return (
+                f"Read blocked: '{real_path}' is inside '{secret_dir}', "
+                f"which holds credentials. The agent is not allowed to "
+                f"read from it."
+            )
+
+    shared = secret_folder_sharing(real_path)
+    if shared:
+        return (
+            f"Read blocked: '{real_path}' is the same file as one inside "
+            f"'{shared}', which holds credentials. The agent is not "
+            f"allowed to read it."
+        )
+    return ""
+
+
+def protected_directory_of(path: Any) -> Optional[str]:
+    """The system, credential or GAIA-state folder *path* resolves into, or None.
+
+    No approval or full access opens these folders to the agent.
+    """
+    real = os.path.normpath(_normalize_macos_symlinks(_real_path(path)))
+    for blocked_dir in sorted(BLOCKED_DIRECTORIES):
+        normalized = os.path.normpath(_normalize_macos_symlinks(blocked_dir))
+        if not _path_is_within(Path(real), Path(normalized)):
+            continue
+        if normalized in GAIA_STATE_DIRECTORIES and _is_gaia_user_content(
+            real, normalized
+        ):
+            continue
+        return blocked_dir
+    for secret_dir in sorted(SECRET_DIRECTORIES):
+        if _path_is_within(Path(real), Path(secret_dir)):
+            return secret_dir
+    return None
 
 
 def is_credential_file_name(name: str) -> bool:
@@ -1580,37 +1705,8 @@ class PathValidator:
             Tuple of (is_blocked, reason). If blocked, reason explains why.
         """
         try:
-            real_path = Path(_real_path(path))
-            file_name = real_path.name.lower()
-            file_ext = real_path.suffix.lower()
-
-            if file_name in {s.lower() for s in SENSITIVE_FILE_NAMES}:
-                return (
-                    True,
-                    f"Read blocked: '{real_path.name}' holds credentials, keys or "
-                    f"secrets. Open it yourself if you need its contents — the "
-                    f"agent is not allowed to read it into the conversation.",
-                )
-
-            if file_ext in SENSITIVE_EXTENSIONS:
-                return (
-                    True,
-                    f"Read blocked: files with extension '{file_ext}' are "
-                    f"certificates or private keys. The agent is not allowed to "
-                    f"read them into the conversation.",
-                )
-
-            for secret_dir in SECRET_DIRECTORIES:
-                if _path_is_within(real_path, Path(secret_dir)):
-                    return (
-                        True,
-                        f"Read blocked: '{real_path}' is inside '{secret_dir}', "
-                        f"which holds credentials. The agent is not allowed to "
-                        f"read from it.",
-                    )
-
-            return (False, "")
-
+            reason = secret_read_refusal(path)
+            return (bool(reason), reason)
         except Exception as e:
             logger.error(f"Error checking read block for {path}: {e}")
             # Fail-closed: refuse if we can't determine safety.
@@ -1770,6 +1866,14 @@ class PathValidator:
                         f"directory '{secret_dir}', which holds credentials and "
                         f"tool configuration. Edit it yourself if you need to.",
                     )
+            shared = secret_folder_sharing(real_path)
+            if shared:
+                return (
+                    True,
+                    f"Write blocked: '{real_path}' is the same file as one inside "
+                    f"'{shared}', which holds credentials and tool configuration. "
+                    f"Edit it yourself if you need to.",
+                )
 
             # Check sensitive file names
             if file_name in {s.lower() for s in SENSITIVE_FILE_NAMES}:

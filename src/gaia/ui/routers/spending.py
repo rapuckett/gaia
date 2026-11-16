@@ -5,16 +5,114 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Literal, Optional, Union
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from .. import spending
 from ..database import ChatDatabase
 from ..dependencies import get_db
+from ..models import WireModel
+from ..security import audit_approval
 
 router = APIRouter(tags=["spending"])
+
+_Number = Union[int, float]
+
+
+class PriceCard(WireModel):
+    """List price in dollars per million tokens, with where it comes from."""
+
+    input_per_million: float
+    cached_input_per_million: float
+    output_per_million: float
+    source: str
+
+
+class SpendingModelRow(WireModel):
+    """One model's share of this month's cloud spending."""
+
+    model: str
+    provider: str
+    turns: int
+    usd: float
+    unpriced_turns: int
+    unreported_turns: int
+
+
+class SpendingReport(WireModel):
+    """This month's cloud spending, the limit, and where it stands."""
+
+    month: str
+    total_usd: _Number
+    turns: int
+    unpriced_turns: int
+    unreported_turns: int
+    limit_usd: Optional[float]
+    state: Literal["no_limit", "allowed_over", "reached", "near", "ok"]
+    by_model: List[SpendingModelRow]
+    price_source: str
+
+
+class ChatSpendItem(WireModel):
+    """One answer's cost in a chat."""
+
+    message_id: int
+    created_at: str
+    model: Optional[str]
+    kind: Optional[str]
+    usd: Optional[_Number]
+
+
+class ChatSpendTotals(WireModel):
+    """Cost and answer counts for a set of cloud answers."""
+
+    usd: _Number
+    answers: int
+    unpriced_answers: int
+
+
+class ChatSpendChat(ChatSpendTotals):
+    """This chat's cloud answers."""
+
+    items: List[ChatSpendItem]
+
+
+class ChatSpendToday(ChatSpendTotals):
+    """Every chat's cloud answers since the start of the viewer's day."""
+
+    chats: int
+    since: str
+
+
+class ChatSpendReport(WireModel):
+    """What this chat's cloud answers cost, and today's across chats."""
+
+    paid: bool
+    model: Optional[str]
+    chat: ChatSpendChat
+    today: ChatSpendToday
+    price_source: str
+
+
+class PriceListEntry(WireModel):
+    """A model's list price before the provider is connected."""
+
+    model: str
+    name: str
+    rank: Optional[int]
+    note: Optional[str]
+    price: Optional[PriceCard]
+
+
+class PriceListResponse(WireModel):
+    """Every priced model a provider offers; ``source`` and ``note`` explain a gap."""
+
+    provider: str
+    models: List[PriceListEntry]
+    source: Optional[str]
+    note: Optional[str]
 
 
 def _report(db: ChatDatabase) -> Dict[str, Any]:
@@ -24,13 +122,19 @@ def _report(db: ChatDatabase) -> Dict[str, Any]:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
-@router.get("/api/spending")
+@router.get(
+    "/api/spending", response_model=SpendingReport, response_model_exclude_unset=True
+)
 def get_spending(db: ChatDatabase = Depends(get_db)) -> Dict[str, Any]:
     """This month's cloud spending at list price, the limit, and where it stands."""
     return _report(db)
 
 
-@router.get("/api/spending/chat/{session_id}")
+@router.get(
+    "/api/spending/chat/{session_id}",
+    response_model=ChatSpendReport,
+    response_model_exclude_unset=True,
+)
 def get_chat_spending(
     session_id: str,
     since: str,
@@ -54,26 +158,42 @@ class LimitRequest(BaseModel):
     limit_usd: Optional[float] = None
 
 
-@router.put("/api/spending/limit")
+@router.put(
+    "/api/spending/limit",
+    response_model=SpendingReport,
+    response_model_exclude_unset=True,
+)
 def set_spending_limit(
-    body: LimitRequest, db: ChatDatabase = Depends(get_db)
+    body: LimitRequest, http_request: Request, db: ChatDatabase = Depends(get_db)
 ) -> Dict[str, Any]:
     """Set or clear the monthly limit for cloud chats."""
     try:
         spending.set_limit(db, body.limit_usd)
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e)) from e
+    audit_approval(http_request, f"cloud spending limit set to {body.limit_usd} USD")
     return _report(db)
 
 
-@router.post("/api/spending/allow-month")
-def allow_spending_this_month(db: ChatDatabase = Depends(get_db)) -> Dict[str, Any]:
+@router.post(
+    "/api/spending/allow-month",
+    response_model=SpendingReport,
+    response_model_exclude_unset=True,
+)
+def allow_spending_this_month(
+    http_request: Request, db: ChatDatabase = Depends(get_db)
+) -> Dict[str, Any]:
     """Let cloud chats go on past the limit until the month ends."""
     spending.allow_this_month(db)
+    audit_approval(http_request, "cloud spending allowed past the limit this month")
     return _report(db)
 
 
-@router.get("/api/spending/prices/{provider}")
+@router.get(
+    "/api/spending/prices/{provider}",
+    response_model=PriceListResponse,
+    response_model_exclude_unset=True,
+)
 def cloud_prices(provider: str) -> Dict[str, Any]:
     """List prices per million tokens for a provider's models, before connecting."""
     if provider not in ("fireworks", "amd"):

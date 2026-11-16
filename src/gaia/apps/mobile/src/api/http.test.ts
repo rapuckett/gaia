@@ -25,6 +25,52 @@ async function collect(events: AsyncIterable<StreamEvent>): Promise<StreamEvent[
 }
 
 describe('createHttpClient requests', () => {
+    it('uploadFile: a document goes as a multipart form, a recording as the raw file named in the query', async () => {
+        const reply = { filename: 'f', original_name: 'f', url: '/api/files/uploads/f', size: 3, content_type: 'x', is_image: false };
+        const { fetch, calls } = createRecordingFetch(() => jsonResponse(reply));
+        const client = createHttpClient({ baseUrl: BASE, token: null, fetch });
+        const blob = new Blob(['abc']);
+        await client.uploadFile(blob, 'notes.pdf');
+        await client.uploadFile(blob, 'talk 1.mp3');
+        expect(calls[0]).toMatchObject({ url: `${BASE}/api/files/upload`, method: 'POST', headers: UI_HEADERS });
+        expect(calls[0]!.rawBody).toBeInstanceOf(FormData);
+        expect(calls[1]).toMatchObject({ url: `${BASE}/api/files/upload-media?name=talk%201.mp3`, headers: UI_HEADERS });
+        expect(calls[1]!.rawBody).toBe(blob);
+    });
+
+    it('reads a PC file as bytes through the client, with the chat named and no body', async () => {
+        const { fetch, calls } = createRecordingFetch(() => streamResponse([new Uint8Array([1, 2]), new Uint8Array([3])]));
+        const client = createHttpClient({ baseUrl: BASE, token: 'tok-1', fetch });
+        expect(await client.getImageBytes('C:\\Users\\me\\a b.png', 's 1')).toEqual(new Uint8Array([1, 2, 3]));
+        expect(calls[0]).toMatchObject({
+            url: `${BASE}/api/files/image?path=C%3A%5CUsers%5Cme%5Ca%20b.png&session_id=s%201`,
+            method: 'GET',
+            headers: { ...UI_HEADERS, Authorization: 'Bearer tok-1' },
+            body: undefined,
+        });
+        await client.getDocumentBytes('d 1', 's 1');
+        expect(calls[1]).toMatchObject({ url: `${BASE}/api/documents/d%201/file?session_id=s%201`, method: 'GET', body: undefined });
+    });
+
+    it('getGeneratedAudio reads only the fixed media path, and refuses a reply that is not audio', async () => {
+        const wav = { ...streamResponse([new Uint8Array([1, 2])]), headers: { get: () => 'audio/wav' } };
+        const { fetch, calls } = createRecordingFetch(() => wav);
+        const client = createHttpClient({ baseUrl: BASE, token: 'tok-1', fetch });
+        expect(await client.getGeneratedAudio('/api/media/audio/song%201.wav')).toEqual({ bytes: new Uint8Array([1, 2]), contentType: 'audio/wav' });
+        expect(calls[0]).toMatchObject({ url: `${BASE}/api/media/audio/song%201.wav`, method: 'GET', headers: { ...UI_HEADERS, Authorization: 'Bearer tok-1' } });
+        for (const src of ['https://evil.example/a.wav', '/api/media/image/a.png', '/api/media/audio/..%2Fsecret.wav']) {
+            await expect(client.getGeneratedAudio(src)).rejects.toBeInstanceOf(GaiaConfigError);
+        }
+        expect(calls).toHaveLength(1);
+        const html = createHttpClient({ baseUrl: BASE, fetch: createRecordingFetch(() => streamResponse(['<html>'])).fetch });
+        await expect(html.getGeneratedAudio('/api/media/audio/a.wav')).rejects.toMatchObject({ messageKey: 'mobileApp.error.notAudio' });
+    });
+
+    it('a refused file read rejects with the PC status', async () => {
+        const { fetch } = createRecordingFetch(() => jsonResponse({ detail: 'Access denied' }, 403));
+        await expect(createHttpClient({ baseUrl: BASE, fetch }).getFilePreview('/x', 's1')).rejects.toMatchObject({ status: 403 });
+    });
+
     it('health: GET /api/health with the UI headers and no body', async () => {
         const { fetch, calls } = createRecordingFetch(() => jsonResponse({ status: 'ok', service: 'gaia-agent-ui' }));
         const result = await createHttpClient({ baseUrl: BASE, token: null, fetch }).health();
@@ -119,6 +165,13 @@ describe('createHttpClient requests', () => {
         ['getSession', (c) => c.getSession('a b'), 'GET', '/api/sessions/a%20b', UI_HEADERS, undefined],
         ['createSession', (c) => c.createSession({ title: 'Trip' }), 'POST', '/api/sessions', JSON_HEADERS, { title: 'Trip' }],
         ['createSession with no fields', (c) => c.createSession(), 'POST', '/api/sessions', JSON_HEADERS, {}],
+        ['getCapabilities', (c) => c.getCapabilities('a b'), 'GET', '/api/sessions/a%20b/capabilities', UI_HEADERS, undefined],
+        ['getChatPerformance', (c) => c.getChatPerformance('a b'), 'GET', '/api/chat/performance/a%20b', UI_HEADERS, undefined],
+        ['listDocuments', (c) => c.listDocuments(), 'GET', '/api/documents', UI_HEADERS, undefined],
+        ['cancelDocumentIndexing', (c) => c.cancelDocumentIndexing('d 1'), 'POST', '/api/documents/d%201/cancel', UI_HEADERS, undefined],
+        ['deleteDocument', (c) => c.deleteDocument('d 1'), 'DELETE', '/api/documents/d%201', UI_HEADERS, undefined],
+        ['getDocumentStatus', (c) => c.getDocumentStatus('d 1'), 'GET', '/api/documents/d%201/status', UI_HEADERS, undefined],
+        ['reindexDocument', (c) => c.reindexDocument('d 1'), 'POST', '/api/documents/d%201/reindex', UI_HEADERS, undefined],
         ['cancelChat', (c) => c.cancelChat('s1'), 'POST', '/api/chat/cancel', JSON_HEADERS, { session_id: 's1' }],
         [
             'confirmTool, allow once',
@@ -145,6 +198,17 @@ describe('createHttpClient requests', () => {
             { session_id: 's1', request_id: 'r1', value: 'Paris' },
         ],
         ['getSystemStatus', (c) => c.getSystemStatus(), 'GET', '/api/system/status', UI_HEADERS, undefined],
+        [
+            'downloadModel',
+            (c) => c.downloadModel('m', { force: true }),
+            'POST',
+            '/api/system/download-model',
+            JSON_HEADERS,
+            { model_name: 'm', force: true, load_after: false },
+        ],
+        ['loadModel', (c) => c.loadModel('m', false), 'POST', '/api/system/load-model', JSON_HEADERS, { model_name: 'm', force: false }],
+        ['listConnectors', (c) => c.listConnectors(), 'GET', '/api/connectors', UI_HEADERS, undefined],
+        ['disableConnector', (c) => c.disableConnector('slack'), 'POST', '/api/connectors/slack/disable', JSON_HEADERS, {}],
     ])('%s: %s', async (_name, call, method, path, headers, body) => {
         const { fetch, calls } = createRecordingFetch(() => jsonResponse({ status: 'ok' }));
         await call(createHttpClient({ baseUrl: BASE, fetch }));
@@ -152,6 +216,19 @@ describe('createHttpClient requests', () => {
         const sent = calls[0]!;
         expect([sent.method, sent.url, sent.headers]).toEqual([method, `${BASE}${path}`, headers]);
         expect(sent.body === undefined ? undefined : JSON.parse(sent.body)).toEqual(body);
+    });
+
+    it('disconnectConnector: listens on the connector events, deletes, and returns the revoke outcome', async () => {
+        const event = { type: 'connector.disconnected', payload: { connector_id: 'google', revoke_supported: true, revoked_remotely: false, revoke_error: 'timeout' } };
+        const { fetch, calls } = createRecordingFetch((call) =>
+            call.method === 'DELETE' ? textResponse('', 204) : streamResponse([`data: ${JSON.stringify(event)}\n\n`]),
+        );
+        const outcome = await createHttpClient({ baseUrl: BASE, fetch }).disconnectConnector('google');
+        expect(calls.map((c) => [c.method, c.url])).toEqual([
+            ['GET', `${BASE}/api/connectors/events`],
+            ['DELETE', `${BASE}/api/connectors/google`],
+        ]);
+        expect(outcome).toEqual(event.payload);
     });
 
     it('attachToRun: GET /api/chat/attach for the chat; no turn running ends with no events', async () => {

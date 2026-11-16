@@ -16,10 +16,15 @@ Mutating operations now route through:
 import logging
 from typing import Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
+from gaia.credential_shapes import REDACTED, redact_credentials
 from gaia.mcp.client.config import MCPConfig
+from gaia.mcp.client.redaction import secrets_from_launch
+
+from ..models import WireModel
+from ..security import is_local_pc
 
 logger = logging.getLogger(__name__)
 
@@ -39,11 +44,33 @@ class MCPServerInfo(BaseModel):
     enabled: bool
 
 
+class MCPServerList(WireModel):
+    servers: List[MCPServerInfo]
+
+
+class MCPToolInfo(WireModel):
+    name: str
+    description: str
+
+
+class MCPServerTools(WireModel):
+    """The tools an MCP server offers."""
+
+    name: str
+    tools: List[MCPToolInfo]
+
+
 class MCPServerStatus(BaseModel):
     name: str
     connected: bool
     tool_count: int
     error: Optional[str] = None
+
+
+class MCPStatusResponse(WireModel):
+    """Result of ``GET /api/mcp/status``."""
+
+    servers: List[MCPServerStatus]
 
 
 # ---------------------------------------------------------------------------
@@ -65,13 +92,34 @@ def _mask_env(env: Dict[str, str]) -> Dict[str, str]:
     return {k: ("***" if v else "") for k, v in env.items()}
 
 
+def args_for_caller(
+    request: Request, args: List[str], env: Optional[Dict[str, str]] = None
+) -> List[str]:
+    """A server's launch args as the caller may see them.
+
+    Whole on the PC, whose edit form needs them; anywhere else, the values the
+    launch marks as secret and anything shaped like a credential are masked.
+    """
+    if is_local_pc(request):
+        return args
+    secrets = secrets_from_launch(args, env)
+    masked = []
+    for arg in args:
+        for secret in secrets:
+            arg = arg.replace(secret, REDACTED)
+        masked.append(redact_credentials(arg))
+    return masked
+
+
 # ---------------------------------------------------------------------------
 # Read-only endpoints
 # ---------------------------------------------------------------------------
 
 
-@router.get("/api/mcp/servers")
-async def list_mcp_servers():
+@router.get(
+    "/api/mcp/servers", response_model=MCPServerList, response_model_exclude_unset=True
+)
+async def list_mcp_servers(request: Request):
     """List all configured MCP servers and their enabled/disabled state."""
     config = _load_config()
     servers = config.get_servers()
@@ -81,7 +129,7 @@ async def list_mcp_servers():
             MCPServerInfo(
                 name=name,
                 command=cfg.get("command", ""),
-                args=cfg.get("args", []),
+                args=args_for_caller(request, cfg.get("args", []), cfg.get("env")),
                 env=_mask_env(cfg.get("env", {})),
                 enabled=not cfg.get("disabled", False),
             )
@@ -89,7 +137,11 @@ async def list_mcp_servers():
     return {"servers": [s.model_dump() for s in result]}
 
 
-@router.get("/api/mcp/servers/{name}/tools")
+@router.get(
+    "/api/mcp/servers/{name}/tools",
+    response_model=MCPServerTools,
+    response_model_exclude_unset=True,
+)
 async def list_mcp_server_tools(name: str):
     """List tools provided by an MCP server (requires a transient connection)."""
     config = _load_config()
@@ -131,7 +183,11 @@ async def list_mcp_server_tools(name: str):
         )
 
 
-@router.get("/api/mcp/status")
+@router.get(
+    "/api/mcp/status",
+    response_model=MCPStatusResponse,
+    response_model_exclude_unset=True,
+)
 async def get_mcp_runtime_status():
     """Return runtime MCP server connection status from the most recent chat session.
 

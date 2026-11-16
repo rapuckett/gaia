@@ -3,30 +3,42 @@
 
 """Who may call each Agent UI route, decided by the listener a request reached.
 
-Every route is in exactly one class. A route added tomorrow fails
-``test_every_route_is_classified`` until someone decides who may call it:
+Every route is in exactly one class, and ``test_every_route_is_classified``
+fails for a route nobody has decided about:
 
 * ``pc``: the PC running GAIA only (``require_local_pc``).
-* ``pc_or_device``: first-run setup; the PC or an allowed paired device, never
-  mobile access (``require_pc_or_device``).
+* ``pc_or_device``: first-run setup, device-code sign-in and Automations; the
+  PC or an allowed paired device, never mobile access (``require_pc_or_device``,
+  ``require_pc_or_allowed_device``).
 * ``not_on_listener``: a read with side effects on the PC; the PC and mobile
   access, never a paired device (``refuse_on_device_listener``).
 * ``remote``: the PC, mobile access with its token, and allowed devices.
 * ``web``: the web UI and the API docs, which the device listener never serves.
+* ``pair``: the pairing redemption, only on the device listener, with no token.
+* ``device``: an allowed paired device asking about itself.
+* ``device_self``: a paired device unpairing itself, pending or allowed.
 """
 
 from __future__ import annotations
 
+import re
+import uuid
+
 import pytest
-from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket
 from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
+from starlette.exceptions import HTTPException
+from starlette.requests import Request
 from starlette.routing import Mount
 
+from gaia.config import GaiaConfig
 from gaia.ui import security
+from gaia.ui.devices.access import DeviceAccess
+from gaia.ui.devices.listener import DeviceGate
 from gaia.ui.security import (
-    DEVICE_AUTH_SCOPE_KEY,
     DEVICE_SCOPE_KEY,
+    LAN_LISTENER,
+    LISTENER_SCOPE_KEY,
     DevicePrincipal,
     ListenerScopeMiddleware,
 )
@@ -35,26 +47,47 @@ from gaia.ui.server import create_app
 pytestmark = pytest.mark.allow_network  # TestClient only; nothing leaves the machine
 
 PC = ("127.0.0.1", 50000)
-ALLOWED = DevicePrincipal(device_id="d0a1", allowed=True)
-PENDING = DevicePrincipal(device_id="d0a2", allowed=False)
 
 PC_ONLY = {
     "DELETE /api/agents/{agent_id}",
-    "DELETE /api/automations/{ref}",
-    "GET /api/automations",
+    "DELETE /api/connectors/{connector_id}/activations/{agent_id:path}",
+    "DELETE /api/devices/listener",
+    "DELETE /api/devices/pairing",
+    "DELETE /api/devices/routes/{kind}",
+    "DELETE /api/devices/{device_id}",
+    "DELETE /api/providers/{provider}/key",
+    "GET /api/connectors/_debug",
+    "GET /api/connectors/eval-mailbox",
+    "GET /api/devices",
+    "GET /api/devices/status",
     "GET /api/logs",
     "GET /api/logs/{source}",
+    "GET /api/memory/stream-discovery",
+    "GET /api/memory/stream-inference",
     "GET /api/messaging/discord",
     "GET /api/setup/report/{name}",
     "POST /api/agents/install",
-    "POST /api/automations/{ref}/{action}",
+    "POST /api/connectors/eval-mailbox",
     "POST /api/connectors/{connector_id}/authorize",
-    "POST /api/connectors/{connector_id}/authorize-device",
     "POST /api/connectors/{connector_id}/configure",
+    "POST /api/connectors/{connector_id}/enable",
+    "POST /api/connectors/{connector_id}/test",
+    "POST /api/devices/listener",
+    "POST /api/devices/pairing",
+    "POST /api/devices/pairing/reset",
+    "POST /api/devices/routes/{kind}",
+    "POST /api/devices/{device_id}/allow",
+    "POST /api/eval/scripted-user",
     "POST /api/files/open",
     "POST /api/gpu-memory/apply",
     "POST /api/gpu-memory/revert",
     "POST /api/lemonade/target",
+    "POST /api/memory/admin/clear",
+    "POST /api/memory/admin/seed",
+    "POST /api/memory/commit-discovery",
+    "POST /api/memory/commit-inference",
+    "POST /api/memory/refresh-system-context",
+    "POST /api/memory/reinitialize",
     "POST /api/messaging/discord/connect",
     "POST /api/messaging/discord/disconnect",
     "POST /api/messaging/discord/forget-always",
@@ -62,6 +95,7 @@ PC_ONLY = {
     "POST /api/messaging/discord/restart",
     "POST /api/messaging/discord/start",
     "POST /api/messaging/discord/stop",
+    "POST /api/providers/key-store/retry",
     "POST /api/setup/npu/memlock-fix",
     "POST /api/setup/report",
     "POST /api/skills/link/add",
@@ -69,9 +103,15 @@ PC_ONLY = {
     "POST /api/tunnel/stop",
     "POST /v1/connections/{provider}",
     "PUT /api/chat/permissions",
+    "PUT /api/connectors/{connector_id}/activations/{agent_id:path}",
+    "PUT /api/connectors/{connector_id}/grants/{agent_id:path}",
 }
 
 PC_OR_DEVICE = {
+    "DELETE /api/automations/{ref}",
+    "GET /api/automations",
+    "POST /api/automations/{ref}/{action}",
+    "POST /api/connectors/{connector_id}/authorize-device",
     "POST /api/setup/cancel",
     "POST /api/setup/chat-model",
     "POST /api/setup/models/download",
@@ -88,6 +128,12 @@ NOT_ON_LISTENER = {
     "GET /api/providers",
 }
 
+PAIR = {"POST /api/devices/pair"}
+
+DEVICE = {"GET /api/devices/me/routes"}
+
+DEVICE_SELF = {"DELETE /api/devices/me"}
+
 WEB = {
     "GET /docs",
     "GET /docs/oauth2-redirect",
@@ -100,14 +146,13 @@ WEB = {
     "HEAD /redoc",
 }
 
-# Some check one field on the PC inside the handler: a provider key in
-# ``POST /api/providers/{provider}/connect`` and ``network_policy`` in
-# ``PUT /api/settings``.
+# Some check fields on the PC inside the handler: a provider key and its
+# gateway fields in ``POST /api/providers/{provider}/connect``, and
+# ``network_policy`` in ``PUT /api/settings``.
 REMOTE = {
     "DELETE /api/chat/permissions/{session_id}/grants",
     "DELETE /api/connectors/_flows/{flow_id}",
     "DELETE /api/connectors/{connector_id}",
-    "DELETE /api/connectors/{connector_id}/activations/{agent_id:path}",
     "DELETE /api/connectors/{connector_id}/grants/{agent_id:path}",
     "DELETE /api/documents/{doc_id}",
     "DELETE /api/goals/{goal_id}",
@@ -115,7 +160,6 @@ REMOTE = {
     "DELETE /api/memory/all",
     "DELETE /api/memory/knowledge/{knowledge_id}",
     "DELETE /api/providers/local/custom/{model_id}",
-    "DELETE /api/providers/{provider}/key",
     "DELETE /api/schedules/{name:path}",
     "DELETE /api/sessions/{session_id}",
     "DELETE /api/sessions/{session_id}/documents/{doc_id}",
@@ -136,9 +180,7 @@ REMOTE = {
     "GET /api/chat/permissions/{session_id}",
     "GET /api/connectors",
     "GET /api/connectors/",
-    "GET /api/connectors/_debug",
     "GET /api/connectors/agent-mcps",
-    "GET /api/connectors/eval-mailbox",
     "GET /api/connectors/events",
     "GET /api/connectors/{connector_id}",
     "GET /api/connectors/{connector_id}/activations",
@@ -174,13 +216,12 @@ REMOTE = {
     "GET /api/memory/knowledge/{knowledge_id}",
     "GET /api/memory/settings",
     "GET /api/memory/stats",
-    "GET /api/memory/stream-discovery",
-    "GET /api/memory/stream-inference",
     "GET /api/memory/tools",
     "GET /api/memory/upcoming",
     "GET /api/onboarding/preflight",
     "GET /api/onboarding/start",
     "GET /api/providers/active",
+    "GET /api/providers/list",
     "GET /api/providers/local/context",
     "GET /api/providers/local/status",
     "GET /api/providers/{provider}/models",
@@ -237,36 +278,26 @@ REMOTE = {
     "POST /api/chat/retry-with/choose",
     "POST /api/chat/send",
     "POST /api/chat/user-input",
-    "POST /api/connectors/eval-mailbox",
     "POST /api/connectors/{connector_id}/disable",
-    "POST /api/connectors/{connector_id}/enable",
-    "POST /api/connectors/{connector_id}/test",
     "POST /api/documents/index-folder",
     "POST /api/documents/upload",
     "POST /api/documents/upload-path",
     "POST /api/documents/{doc_id}/cancel",
     "POST /api/documents/{doc_id}/reindex",
     "POST /api/environment/folders/check",
-    "POST /api/eval/scripted-user",
     "POST /api/files/status",
     "POST /api/files/upload",
     "POST /api/files/upload-media",
     "POST /api/goals",
+    "POST /api/goals/store/reset",
     "POST /api/goals/{goal_id}/tasks",
     "POST /api/gpu-memory/pending",
-    "POST /api/memory/admin/clear",
-    "POST /api/memory/admin/seed",
-    "POST /api/memory/commit-discovery",
-    "POST /api/memory/commit-inference",
     "POST /api/memory/consolidate",
     "POST /api/memory/knowledge",
     "POST /api/memory/prune",
     "POST /api/memory/rebuild-embeddings",
     "POST /api/memory/rebuild-fts",
     "POST /api/memory/reconcile",
-    "POST /api/memory/refresh-system-context",
-    "POST /api/memory/reinitialize",
-    "POST /api/providers/key-store/retry",
     "POST /api/providers/local/custom",
     "POST /api/providers/local/custom/check",
     "POST /api/providers/local/restart",
@@ -307,8 +338,6 @@ REMOTE = {
     "POST /v1/email/unarchive",
     "POST /v1/email/unquarantine",
     "PUT /api/chat/permissions/{session_id}",
-    "PUT /api/connectors/{connector_id}/activations/{agent_id:path}",
-    "PUT /api/connectors/{connector_id}/grants/{agent_id:path}",
     "PUT /api/goals/{goal_id}/approve",
     "PUT /api/goals/{goal_id}/cancel",
     "PUT /api/goals/{goal_id}/reject",
@@ -332,9 +361,34 @@ EXPECTED = {
     **{r: "pc" for r in PC_ONLY},
     **{r: "pc_or_device" for r in PC_OR_DEVICE},
     **{r: "not_on_listener" for r in NOT_ON_LISTENER},
+    **{r: "pair" for r in PAIR},
+    **{r: "device" for r in DEVICE},
+    **{r: "device_self" for r in DEVICE_SELF},
     **{r: "web" for r in WEB},
     **{r: "remote" for r in REMOTE},
 }
+
+#: Who each class lets in.
+CALLERS = ("pc", "tunnel", "device", "pending", "no_token")
+LETS_IN = {
+    "pc": {"pc"},
+    "pc_or_device": {"pc", "device"},
+    "not_on_listener": {"pc", "tunnel"},
+    "remote": {"pc", "tunnel", "device"},
+    "web": {"pc", "tunnel"},
+    "pair": {"device", "pending", "no_token"},
+    "device": {"device"},
+    "device_self": {"device", "pending"},
+}
+GUARDS = (
+    security.require_local_pc,
+    security.require_pc_or_device,
+    security.require_pc_or_allowed_device,
+    security.refuse_on_device_listener,
+    security.require_device_listener,
+    security.require_allowed_device,
+    security.require_device,
+)
 
 
 def _routes(app):
@@ -369,51 +423,111 @@ def _routes(app):
 def _guards(route):
     original = getattr(route, "original_route", route)
     dependant = getattr(original, "dependant", None)
-    return {d.call for d in dependant.dependencies} if dependant else set()
+    calls = {d.call for d in dependant.dependencies} if dependant else set()
+    return [guard for guard in GUARDS if guard in calls]
 
 
 def _access_class(key, route):
     if key.startswith("MOUNT "):
         return "remote"
-    path = key.split(" ", 1)[1]
-    if not path.startswith(("/api/", "/v1/")):
+    if not key.split(" ", 1)[1].startswith(("/api/", "/v1/")):
         return "web"
     guards = _guards(route)
     if security.require_local_pc in guards:
         return "pc"
-    if security.require_pc_or_device in guards:
+    if (
+        security.require_pc_or_device in guards
+        or security.require_pc_or_allowed_device in guards
+    ):
         return "pc_or_device"
     if security.refuse_on_device_listener in guards:
         return "not_on_listener"
+    if security.require_device_listener in guards:
+        return "pair"
+    if security.require_allowed_device in guards:
+        return "device"
+    if security.require_device in guards:
+        return "device_self"
     return "remote"
 
 
-def _on_listener(app, device=None):
-    """The app as the device listener hands it a request device auth passed."""
+def _request_for(caller, device):
+    scope = {"type": "http", "method": "GET", "path": "/", "headers": [], "client": PC}
+    if caller == "tunnel":
+        scope["headers"] = [(b"x-forwarded-for", b"203.0.113.7")]
+    elif caller in ("device", "pending", "no_token"):
+        scope[LISTENER_SCOPE_KEY] = LAN_LISTENER
+        if caller != "no_token":
+            scope[DEVICE_SCOPE_KEY] = DevicePrincipal(
+                device.device_id, caller == "device"
+            )
+    return Request(scope)
 
-    async def authenticated(scope, receive, send):
-        if scope["type"] in ("http", "websocket"):
-            scope = {**scope, DEVICE_AUTH_SCOPE_KEY: True}
-            if device is not None:
-                scope[DEVICE_SCOPE_KEY] = device
-        await app(scope, receive, send)
 
-    return ListenerScopeMiddleware(authenticated)
-
-
-def _fill(path):
-    import re
-
-    return re.sub(r"\{[^}]+\}", "x", path)
+def _request_path(key):
+    method, path = key.split(" ", 1)
+    if method == "MOUNT":
+        return "GET", path + "/x"
+    return method, re.sub(r"\{[^}]+\}", "x", path)
 
 
 @pytest.fixture(scope="module")
-def app():
-    return create_app(db_path=":memory:")
+def setup(tmp_path_factory):
+    app = create_app(db_path=":memory:")
+    access = DeviceAccess(app, folder=tmp_path_factory.mktemp("devices") / "devices")
+    app.state.devices = access
+    invite, _ = access.pairing.open()
+    allowed = access.redeem(invite, "Phone", "ios", "192.168.1.20")
+    access.allow(allowed["device_id"])
+    invite, _ = access.pairing.open()
+    pending = access.redeem(invite, "Tablet", "ipados", "192.168.1.21")
+
+    class _Running:
+        def poll(self):
+            return None
+
+    tunnel = app.state.tunnel
+    tunnel._url, tunnel._token = "https://fake.ngrok-free.app", str(uuid.uuid4())
+    tunnel._process = _Running()
+    # From loopback, as a relay would come: on this listener it is still not the PC.
+    listener = ListenerScopeMiddleware(DeviceGate(app, access, allow_loopback=True))
+    clients = {
+        "pc": TestClient(app, client=PC),
+        "tunnel": TestClient(
+            app,
+            client=PC,
+            headers={
+                "X-Forwarded-For": "203.0.113.7",
+                "Authorization": f"Bearer {tunnel._token}",
+            },
+        ),
+        "device": TestClient(
+            listener,
+            client=PC,
+            headers={"Authorization": f"Bearer {allowed['token']}"},
+        ),
+        "pending": TestClient(
+            listener,
+            client=PC,
+            headers={"Authorization": f"Bearer {pending['token']}"},
+        ),
+        "no_token": TestClient(listener, client=PC),
+    }
+    return app, clients, DevicePrincipal(allowed["device_id"], True)
 
 
-def test_every_route_is_classified(app):
-    actual = {key: _access_class(key, route) for key, route in _routes(app).items()}
+def test_every_route_is_classified(setup):
+    """Each route's class, checked against every kind of caller.
+
+    A refused caller is sent the request, which must be refused (401, 403 or
+    404) before anything runs. A caller let in is checked against the route's
+    guards without sending it, since the route would do its work.
+    """
+    app, clients, device = setup
+    # On, so the device routes' own guards decide rather than the switch.
+    GaiaConfig.save_key("device_pairing", True)
+    routes = _routes(app)
+    actual = {key: _access_class(key, route) for key, route in routes.items()}
     assert len(actual) > 200, "the route walk found too little to check"
     unclassified = sorted(set(actual) - set(EXPECTED))
     gone = sorted(set(EXPECTED) - set(actual))
@@ -426,151 +540,349 @@ def test_every_route_is_classified(app):
     assert not gone, f"these routes no longer exist: {gone}"
     assert not changed, f"these routes changed class: {changed}"
 
-
-def test_listener_scope_marks_every_request_remote():
-    """Loopback with no forwarded header is the PC only on the main listener."""
-    probe = FastAPI()
-
-    @probe.get("/api/who")
-    def who(request: Request):
-        return {"principal": security.principal(request)}
-
-    @probe.get("/api/pc-only", dependencies=[Depends(security.require_local_pc)])
-    def pc_only():
-        return {"ok": True}
-
-    @probe.websocket("/api/ws")
-    async def ws(websocket: WebSocket):
-        await websocket.accept()
-        await websocket.send_json({"principal": security.principal(websocket)})
-        await websocket.close()
-
-    main = TestClient(probe, client=PC)
-    assert main.get("/api/who").json() == {"principal": "pc"}
-
-    listener = TestClient(ListenerScopeMiddleware(probe), client=PC)
-    assert listener.get("/api/who").json() == {"principal": "tunnel"}
-    assert listener.get("/api/pc-only").status_code == 403
-    with listener.websocket_connect("/api/ws") as socket:
-        assert socket.receive_json() == {"principal": "tunnel"}
-
-    as_device = TestClient(_on_listener(probe, ALLOWED), client=PC)
-    assert as_device.get("/api/who").json() == {"principal": "device:d0a1"}
-    assert as_device.get("/api/pc-only").status_code == 403
+    wrong, sent, guarded = [], 0, 0
+    for key, route in sorted(routes.items()):
+        access_class = actual[key]
+        method, path = _request_path(key)
+        refusals = {404} if access_class in ("web", "pair") else {401, 403}
+        if path.startswith("/api/devices"):
+            # Reads are GETs; everything that changes state is POST or DELETE.
+            assert method in ("GET", "POST", "DELETE"), key
+        for caller in CALLERS:
+            if caller in LETS_IN[access_class]:
+                request = _request_for(caller, device)
+                for guard in _guards(route):
+                    guarded += 1
+                    try:
+                        guard(request)
+                    except HTTPException as e:
+                        wrong.append(f"{key}: {caller} refused ({e.status_code})")
+                continue
+            sent += 1
+            status = clients[caller].request(method, path, json={}).status_code
+            if status not in refusals:
+                wrong.append(f"{key}: {caller} got {status}")
+    assert not wrong, "\n".join(wrong)
+    assert sent > 500 and guarded > 40, (sent, guarded)
 
 
-def test_every_pc_only_route_refused_on_listener(app):
-    client = TestClient(_on_listener(app, ALLOWED), client=PC)
-    for key, route in sorted(_routes(app).items()):
-        if _access_class(key, route) != "pc":
-            continue
-        method, path = key.split(" ", 1)
-        resp = client.request(method, _fill(path), json={})
-        assert resp.status_code == 403, f"{key} answered {resp.status_code}"
-        assert "on the PC running GAIA" in resp.text, key
-
-
-def test_provider_key_and_lemonade_target_refused_on_listener(app, monkeypatch):
+def test_provider_key_refused_away_from_the_pc(setup, monkeypatch):
+    """A key is checked field by field inside a route mobile access may call."""
     from gaia.ui.routers import providers
 
+    app, clients, _ = setup
     handed = []
     monkeypatch.setattr(providers, "_install", lambda *a, **k: handed.append(a))
-    client = TestClient(_on_listener(app, ALLOWED), client=PC)
-
-    key = client.post(
-        "/api/providers/fireworks/connect", json={"api_key": "fw-secret-key"}
-    )
-    assert key.status_code == 403
-    assert "fw-secret-key" not in key.text
+    for caller in ("tunnel", "device"):
+        resp = clients[caller].post(
+            "/api/providers/fireworks/connect", json={"api_key": "fw-secret-key"}
+        )
+        assert resp.status_code == 403, caller
+        assert "fw-secret-key" not in resp.text
     assert handed == []
 
-    target = client.post(
-        "/api/lemonade/target",
-        json={"mode": "external", "base_url": "http://192.168.1.50:13305"},
+
+def test_provider_key_routing_refused_away_from_the_pc(setup, monkeypatch):
+    """Moving the saved key's gateway or header is the PC's call, key or not."""
+    from gaia.ui.routers import providers
+
+    app, clients, _ = setup
+    handed = []
+    monkeypatch.setattr(providers, "_install", lambda *a, **k: handed.append(a))
+    monkeypatch.setattr(providers, "_cloud_entry", lambda *a: handed.append(a))
+    for caller in ("tunnel", "device"):
+        for fields in (
+            {"base_url": "https://attacker.example/v1"},
+            {"auth_header_name": "X-Leak"},
+            {"base_url": "https://attacker.example/v1", "auth_header_name": "X-Leak"},
+        ):
+            resp = clients[caller].post("/api/providers/amd/connect", json=fields)
+            assert resp.status_code == 403, (caller, fields)
+    assert handed == []
+
+
+def test_a_paired_device_may_read_provider_summaries(setup, monkeypatch):
+    from gaia.ui.routers import providers
+
+    app, clients, _ = setup
+    entry = {
+        "name": "amd",
+        "base_url": "https://gw.example/v1",
+        "runtime_key_set": True,
+        "models_discovered": True,
+    }
+    monkeypatch.setattr(
+        providers, "_cloud_entry", lambda p: entry if p == "amd" else None
     )
-    assert target.status_code == 403
-
-    listing = client.get("/api/providers")
-    assert listing.status_code == 403
-
-
-@pytest.mark.parametrize("route", sorted(PC_OR_DEVICE))
-def test_setup_routes_refused_over_the_tunnel_and_to_pending_devices(app, route):
-    method, path = route.split(" ", 1)
-    tunnel = TestClient(app, client=PC)
-    resp = tunnel.request(
-        method, _fill(path), json={}, headers={"X-Forwarded-For": "203.0.113.7"}
+    monkeypatch.setattr(
+        providers, "_install", lambda *a, **k: pytest.fail("registered a provider")
     )
-    assert resp.status_code == 403, f"tunnel {route}: {resp.status_code}"
-
-    pending = TestClient(_on_listener(app, PENDING), client=PC)
-    resp = pending.request(method, _fill(path), json={})
-    assert resp.status_code == 403, f"pending device {route}: {resp.status_code}"
-
-    no_device = TestClient(_on_listener(app), client=PC)
-    assert no_device.request(method, _fill(path), json={}).status_code == 403
-
-
-def test_an_allowed_device_passes_the_setup_guard(app):
-    def request_for(scope_extra):
-        scope = {
-            "type": "http",
-            "method": "POST",
-            "path": "/api/setup/run",
-            "headers": [],
-            "client": PC,
-            **scope_extra,
+    monkeypatch.setattr(providers, "_gateway_check_applies", lambda: False)
+    resp = clients["device"].get("/api/providers/list", headers={"X-Gaia-UI": "1"})
+    assert resp.status_code == 200, resp.text
+    listed = {p["id"]: p for p in resp.json()["providers"]}
+    assert listed["amd"]["configured"] is True
+    assert listed["fireworks"]["configured"] is False
+    assert all(
+        set(p)
+        == {
+            "id",
+            "name",
+            "remote",
+            "privacy_notice",
+            "configured",
+            "blocked",
+            "network",
         }
-        return Request(scope)
-
-    listener = {security.LISTENER_SCOPE_KEY: security.LAN_LISTENER}
-    security.require_pc_or_device(request_for({}))
-    security.require_pc_or_device(request_for({**listener, DEVICE_SCOPE_KEY: ALLOWED}))
-    for refused in (
-        {**listener},
-        {**listener, DEVICE_SCOPE_KEY: PENDING},
-        {"headers": [(b"x-forwarded-for", b"203.0.113.7")]},
-        {"client": ("192.168.1.20", 50000)},
-    ):
-        with pytest.raises(HTTPException) as e:
-            security.require_pc_or_device(request_for(refused))
-        assert e.value.status_code == 403
-
-    # A route in the class answers an allowed device past the guard.
-    client = TestClient(_on_listener(app, ALLOWED), client=PC)
-    resp = client.post("/api/setup/models/skip", json={"model_id": "no-such-model"})
-    assert resp.status_code != 403, resp.text
+        for p in listed.values()
+    )
+    # Reachability only: the gateway's error text can name its address.
+    assert listed["amd"]["network"] == {"reachable": None}
+    assert "gw.example" not in resp.text
 
 
-def test_listener_request_that_skipped_device_auth_is_refused(app):
-    """A listener stack built without device auth serves no API at all."""
-    client = TestClient(ListenerScopeMiddleware(app), client=PC)
-    assert client.get("/api/sessions").status_code == 401
-    assert client.get("/api/health").status_code == 401
+def test_refused_network_policy_saves_nothing(setup):
+    """A settings change that includes the policy is all or nothing away from the PC."""
+    app, clients, _ = setup
+    before = clients["pc"].get("/api/settings").json()["agent_mode"]
+    other = "manual" if before != "manual" else "goal_driven"
+    for caller in ("tunnel", "device"):
+        resp = clients[caller].put(
+            "/api/settings",
+            json={"agent_mode": other, "network_policy": "local_ai_only"},
+        )
+        assert resp.status_code == 403, caller
+    assert clients["pc"].get("/api/settings").json()["agent_mode"] == before
 
 
-def test_troubleshooting_report_is_pc_only(app):
+def test_troubleshooting_report_is_pc_only(setup):
     """The report bundles every log, so it is no side door around them."""
     from gaia.home import gaia_home
 
+    app, clients, _ = setup
     name = "diagnostics-20261112-101010.tgz"
     report = gaia_home() / name
     report.parent.mkdir(parents=True, exist_ok=True)
     report.write_bytes(b"logs that quote a conversation")
     try:
-        tunnel = {"X-Forwarded-For": "203.0.113.7"}
-        for client, headers in (
-            (TestClient(app, client=PC), tunnel),
-            (TestClient(app, client=("192.168.1.20", 50000)), {}),
-            (TestClient(_on_listener(app, ALLOWED), client=PC), {}),
-        ):
-            got = client.get(f"/api/setup/report/{name}", headers=headers)
+        for caller in ("tunnel", "device"):
+            got = clients[caller].get(f"/api/setup/report/{name}")
             assert got.status_code == 403
             assert b"conversation" not in got.content
-            assert client.post("/api/setup/report", headers=headers).status_code == 403
-
-        pc = TestClient(app, client=PC).get(f"/api/setup/report/{name}")
+            assert clients[caller].post("/api/setup/report").status_code == 403
+        pc = clients["pc"].get(f"/api/setup/report/{name}")
         assert pc.status_code == 200
         assert pc.content == b"logs that quote a conversation"
     finally:
         report.unlink()
+
+
+@pytest.mark.parametrize(
+    "method,path,body",
+    [
+        ("GET", "/api/memory/stream-discovery", None),
+        ("GET", "/api/memory/stream-inference?include_browser=true", None),
+        ("POST", "/api/memory/commit-discovery", {"items": [{"content": "x"}]}),
+        ("POST", "/api/memory/commit-inference", {"insights": [{"content": "x"}]}),
+    ],
+)
+def test_memory_profile_scan_is_pc_only(setup, monkeypatch, method, path, body):
+    """The scan reads the PC's files and browsing; only the PC may run or save it."""
+    from gaia.agents.base import discovery
+    from gaia.ui.routers import memory
+
+    app, clients, _ = setup
+    touched = []
+
+    class _Discovery:
+        def __init__(self):
+            touched.append("scan")
+            raise RuntimeError("scanned")
+
+    class _Store:
+        def store(self, **kwargs):
+            touched.append("store")
+
+        def replace_by_source(self, *args, **kwargs):
+            touched.append("store")
+            return []
+
+    monkeypatch.setattr(discovery, "SystemDiscovery", _Discovery)
+    monkeypatch.setattr(memory, "_get_store", _Store)
+    ui = {"X-Gaia-UI": "1"}
+    for caller in ("tunnel", "device"):
+        resp = clients[caller].request(method, path, json=body, headers=ui)
+        assert resp.status_code == 403, (caller, resp.text)
+    assert touched == []
+    assert clients["pc"].request(method, path, json=body, headers=ui).status_code == 200
+    assert touched
+
+
+def test_system_context_collection_is_pc_only(setup, monkeypatch):
+    """Re-collecting system context, or consenting to it, happens on the PC only."""
+    from gaia.ui.routers import memory
+
+    app, clients, _ = setup
+    ran = []
+    monkeypatch.setattr(
+        memory,
+        "_do_system_context_refresh",
+        lambda: ran.append("refresh") or {"stored": 0, "skipped": False},
+    )
+    monkeypatch.setattr(
+        "gaia.agents.base.memory._save_memory_settings", lambda settings: None
+    )
+    ui = {"X-Gaia-UI": "1"}
+    on = {"system_discovery_consent": True}
+    for caller in ("tunnel", "device"):
+        for method, path, body in (
+            ("POST", "/api/memory/refresh-system-context", None),
+            ("POST", "/api/memory/reinitialize", None),
+            ("PUT", "/api/memory/settings", on),
+        ):
+            resp = clients[caller].request(method, path, json=body, headers=ui)
+            assert resp.status_code == 403, (caller, path, resp.text)
+        off = clients[caller].put(
+            "/api/memory/settings",
+            json={"system_discovery_consent": False},
+            headers=ui,
+        )
+        assert off.status_code == 200, (caller, off.text)
+    assert ran == []
+    assert (
+        clients["pc"].put("/api/memory/settings", json=on, headers=ui).status_code
+        == 200
+    )
+    assert ran == ["refresh"]
+
+
+_DEVICE_FLOW = {
+    "provider_id": "microsoft",
+    "scopes": ["https://graph.microsoft.com/Mail.ReadWrite"],
+    "device_code": "SECRET-DEVICE-CODE",
+    "user_code": "ABCD-EFGH",
+    "verification_uri": "https://microsoft.com/devicelogin",
+    "expires_in": 900,
+    "interval": 5,
+    "message": "Go to https://microsoft.com/devicelogin and enter ABCD-EFGH",
+}
+
+
+@pytest.mark.parametrize(
+    "caller, path, body, status",
+    [
+        ("device", "/api/connectors/microsoft/authorize-device", {}, 200),
+        ("pc", "/api/connectors/microsoft/authorize-device", {}, 200),
+        ("device", "/api/connectors/google/authorize-device", {}, 403),
+        (
+            "device",
+            "/api/connectors/microsoft/authorize-device",
+            {"grant_agents": ["installed:email"]},
+            403,
+        ),
+        ("device", "/api/connectors/microsoft/authorize", {}, 403),
+        ("pending", "/api/connectors/microsoft/authorize-device", {}, 403),
+        ("tunnel", "/api/connectors/microsoft/authorize-device", {}, 403),
+    ],
+)
+def test_device_code_sign_in_from_a_paired_device(
+    setup, monkeypatch, caller, path, body, status
+):
+    """A phone may start only a device-code sign-in, sees no secrets, and is audited."""
+    from unittest.mock import AsyncMock
+
+    from gaia.ui.routers import connectors
+
+    _, clients, device = setup
+    started = AsyncMock(return_value=dict(_DEVICE_FLOW))
+    monkeypatch.setattr("gaia.connectors.start_device_flow", started)
+    monkeypatch.setattr("gaia.connectors.poll_device_flow", AsyncMock())
+    monkeypatch.setattr(
+        "gaia.connectors.start_authorization",
+        AsyncMock(return_value={"flow_id": "f", "authorization_url": "https://x"}),
+    )
+    audited = []
+    monkeypatch.setattr(
+        connectors,
+        "audit_approval",
+        lambda request, what: audited.append((security.principal(request), what)),
+    )
+    resp = clients[caller].post(path, json=body, headers={"X-Gaia-UI": "1"})
+    assert resp.status_code == status, resp.text
+    if status != 200:
+        assert not started.called and not audited
+        return
+    assert resp.json() == {
+        k: _DEVICE_FLOW[k]
+        for k in ("user_code", "verification_uri", "expires_in", "interval", "message")
+    }
+    assert "SECRET-DEVICE-CODE" not in resp.text
+    if caller == "device":
+        assert audited == [
+            (
+                f"device:{device.device_id}",
+                "device-code sign-in started for microsoft",
+            )
+        ]
+    else:
+        assert audited == []
+
+
+def test_mcp_server_secrets_stay_on_the_pc(setup, monkeypatch):
+    """A phone sees a server's args with its credentials masked; the PC sees them whole."""
+    from gaia.ui.routers import mcp
+
+    app, clients, _ = setup
+    args = [
+        "--api-key",
+        "plain-secret-value",
+        "--url=https://mcp.example/sse?token=query-secret",
+        "--verbose",
+    ]
+
+    class _Config:
+        def get_servers(self):
+            return {"search": {"command": "npx", "args": args, "env": {}}}
+
+    monkeypatch.setattr(mcp, "_load_config", _Config)
+    for caller in ("tunnel", "device"):
+        resp = clients[caller].get("/api/mcp/servers", headers={"X-Gaia-UI": "1"})
+        assert resp.status_code == 200, (caller, resp.text)
+        shown = resp.json()["servers"][0]["args"]
+        assert "plain-secret-value" not in resp.text, caller
+        assert "query-secret" not in resp.text, caller
+        assert shown[0] == "--api-key" and shown[3] == "--verbose", shown
+    pc = clients["pc"].get("/api/mcp/servers", headers={"X-Gaia-UI": "1"})
+    assert pc.json()["servers"][0]["args"] == args
+
+
+def test_spending_changes_from_a_phone_are_audited(setup):
+    """Raising cloud spend from a paired device names that device in the audit log."""
+    import logging
+
+    from gaia.security import audit_logger
+
+    app, clients, device = setup
+    lines = []
+
+    class _Capture(logging.Handler):
+        def emit(self, record):
+            lines.append(record.getMessage())
+
+    handler = _Capture()
+    level = audit_logger.level
+    audit_logger.addHandler(handler)
+    audit_logger.setLevel(logging.INFO)
+    try:
+        ui = {"X-Gaia-UI": "1"}
+        resp = clients["device"].put(
+            "/api/spending/limit", json={"limit_usd": 25.0}, headers=ui
+        )
+        assert resp.status_code == 200, resp.text
+        resp = clients["device"].post("/api/spending/allow-month", headers=ui)
+        assert resp.status_code == 200, resp.text
+    finally:
+        audit_logger.removeHandler(handler)
+        audit_logger.setLevel(level)
+    by = f"by {security.DEVICE_PRINCIPAL_PREFIX}{device.device_id}"
+    assert len(lines) == 2 and all(by in line for line in lines), lines

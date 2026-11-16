@@ -2,11 +2,12 @@
 // SPDX-License-Identifier: MIT
 
 import { translate } from '@webui/i18n/registry';
+import { translator } from '@webui/i18n/translator';
 
 import { createFakeClient } from '@/api/fake';
 import type { Session } from '@/api/client.types';
 
-import { buildChatSections, chatListState, msUntilNextMidnight, NO_LIVE_RUNS, rowErrorMessage, rowText, type ChatRow } from './chatList';
+import { buildChatSections, chatListState, deleteConfirmLabel, msUntilNextMidnight, NO_LIVE_RUNS, rowErrorMessage, rowText, searchedSessions, type ChatRow } from './chatList';
 
 const t = (key: Parameters<typeof translate>[1], params?: Parameters<typeof translate>[2]) => translate('en', key, params);
 
@@ -83,8 +84,18 @@ describe('buildChatSections', () => {
     });
 });
 
+describe('deleteConfirmLabel', () => {
+    it('glosses the Arabic once, with the English sentence whole', () => {
+        const bare = (text: string) => text.replace(/[\u2066-\u2069]/g, '');
+        const label = bare(deleteConfirmLabel({ unsent: 0 }, translator('ar')));
+        expect(label.match(/\(/g)).toHaveLength(1);
+        expect(label).toContain('(Delete? Tap again)');
+        expect(bare(deleteConfirmLabel({ unsent: 2 }, translator('en')))).toBe('Delete 2 unsent? Tap again');
+    });
+});
+
 describe('rowText', () => {
-    const base: ChatRow = { id: 'a', title: 'Taxes', active: false, unread: false, dot: null, place: 0, private: false, unsent: 0, failed: 0 };
+    const base: ChatRow = { id: 'a', title: 'Taxes', active: false, unread: false, dot: null, place: 0, private: false, pinned: false, unsent: 0, failed: 0 };
 
     it('joins title, status, note and unread into the aria label', () => {
         const text = rowText({ ...base, dot: 'queued', place: 2, unsent: 3, unread: true }, t);
@@ -135,5 +146,23 @@ describe('day rollover', () => {
         const wait = msUntilNextMidnight(evening);
         expect(wait).toBe(60_000);
         expect(titles(new Date(evening.getTime() + wait))).toEqual(['Yesterday']);
+    });
+});
+
+describe('chat search', () => {
+    const messages = { b: [{ id: 1, session_id: 'b', role: 'user' as const, content: 'Where is my Résumé draft?', rag_sources: null, created_at: hoursAgo(1) }] };
+
+    it('keeps title matches and message hits, folds case and accents, and says when the backend capped the list', async () => {
+        const chats = [session('a', { title: 'Resume tips' }), session('b'), session('c')];
+        const client = createFakeClient({ sessions: chats, messages, searchLimit: 1 });
+        const found = await client.searchSessions('RESUME', false);
+        expect(found.results.map((r) => [r.session_id, r.field])).toEqual([['a', 'title']]);
+        expect(found.truncated).toBe(true);
+
+        const all = await createFakeClient({ sessions: chats, messages }).searchSessions('resume', false);
+        const hits = new Map(all.results.map((r) => [r.session_id, r]));
+        expect(hits.get('b')?.snippet).toEqual({ before: 'Where is my ', match: 'Résumé', after: ' draft?' });
+        expect(searchedSessions(chats, 'resume', hits).map((s) => s.id)).toEqual(['a', 'b']);
+        expect(searchedSessions(chats, 'zzz', new Map())).toEqual([]);
     });
 });

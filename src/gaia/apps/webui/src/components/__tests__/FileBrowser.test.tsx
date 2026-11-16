@@ -123,9 +123,9 @@ describe('FileBrowser row selection', () => {
         const previewBtn = within(row).getByRole('button', { name: /Preview/i });
         fireEvent.click(previewBtn);
 
-        // previewFile should have been called
+        // Names the chat: away from the PC, previews read only that chat's folders.
         await waitFor(() => {
-            expect(mockedApi.previewFile).toHaveBeenCalledWith('/home/user/docs/report.pdf');
+            expect(mockedApi.previewFile).toHaveBeenCalledWith('/home/user/docs/report.pdf', undefined, 'session-1');
         });
 
         // Checkbox should stay unchecked
@@ -249,6 +249,18 @@ describe('FileBrowser Index Selected', () => {
         await indexNotes();
         expect(await screen.findByText('Added 1 file')).toBeInTheDocument();
         expect(screen.queryByText(/indexed/i)).not.toBeInTheDocument();
+    });
+
+    it('blames the model server, not the file, without the connection error', async () => {
+        mockedApi.uploadDocumentByPath.mockResolvedValue({
+            ...DOC, indexing_status: 'failed', error_kind: 'model_server_down',
+            last_error: "Lemonade Server is not reachable: HTTPConnectionPool(host='127.0.0.1') [WinError 10061]",
+        } as never);
+        await indexNotes();
+        await waitFor(() => expect(document.querySelector('.upload-error-toast')).not.toBeNull());
+        const toast = document.querySelector('.upload-error-toast')!;
+        expect(toast).toHaveTextContent("GAIA's model server isn't answering");
+        expect(toast.textContent).not.toMatch(/HTTPConnectionPool|WinError/);
     });
 });
 

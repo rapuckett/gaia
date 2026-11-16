@@ -5,6 +5,8 @@ import type { ReactNode } from 'react';
 import { View } from 'react-native';
 import { Pressable } from '../controls/Pressable';
 import { Row } from '../layout/layout';
+import { FirstLine } from '../text/FirstLine';
+import { useLargeText } from '../theme/a11y';
 import { useTheme } from '../theme/ThemeProvider';
 import { Text } from '../text/Text';
 import type { Tone } from '../theme/tone';
@@ -20,6 +22,12 @@ export interface ListRowProps {
     onLongPress?: () => void;
     selected?: boolean;
     titleLines?: number;
+    /** For long user content (a chat title): the lines it keeps at large sizes, where other titles show in full. */
+    titleLargeLines?: number;
+    /** Where the title stops growing with the person's text size: for navigation labels. */
+    titleMaxScale?: number;
+    /** Let a long subtitle wrap to this many lines instead of truncating. */
+    subtitleLines?: number;
     /** Semibold title, e.g. an unread chat. */
     emphasized?: boolean;
     accessibilityLabel?: string;
@@ -36,11 +44,15 @@ export function ListRow({
     onLongPress,
     selected,
     titleLines = 1,
+    titleLargeLines,
+    titleMaxScale,
+    subtitleLines = 1,
     emphasized,
     accessibilityLabel,
     testID,
 }: ListRowProps) {
     const { colors, space } = useTheme();
+    const largeText = useLargeText();
     const body = (
         <View
             style={{
@@ -48,24 +60,22 @@ export function ListRow({
                 paddingHorizontal: space.lg,
                 paddingVertical: space.sm,
                 backgroundColor: selected ? colors.bgActive : 'transparent',
-                borderStartWidth: 3,
-                borderStartColor: selected ? colors.accentSolid : 'transparent',
                 justifyContent: 'center',
             }}
         >
-            <Row gap="md">
-                {leading}
+            <Row gap="md" align={largeText ? 'start' : 'center'}>
+                {leading ? <FirstLine role="ui" maxScale={titleMaxScale}>{leading}</FirstLine> : null}
                 <View style={{ flex: 1, minWidth: 0 }}>
-                    <Text role="ui" weight={selected || emphasized ? 'semibold' : 'medium'} numberOfLines={titleLines}>
+                    <Text role="ui" weight={selected || emphasized ? 'semibold' : 'medium'} numberOfLines={titleLines} largeLines={titleLargeLines} maxScale={titleMaxScale}>
                         {title}
                     </Text>
                     {subtitle ? (
-                        <Text role="caption" tone={subtitleTone} numberOfLines={1}>
+                        <Text role="caption" tone={subtitleTone} numberOfLines={subtitleLines}>
                             {subtitle}
                         </Text>
                     ) : null}
                 </View>
-                {trailing}
+                {trailing ? <View style={{ flexShrink: 0 }}>{trailing}</View> : null}
             </Row>
         </View>
     );
@@ -75,7 +85,7 @@ export function ListRow({
             onPress={onPress}
             onLongPress={onLongPress}
             accessibilityLabel={accessibilityLabel}
-            accessibilityState={{ selected: !!selected }}
+            aria-selected={!!selected}
             minSize={48}
             testID={testID}
         >

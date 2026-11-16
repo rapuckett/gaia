@@ -1559,6 +1559,8 @@ class EmbeddedLemonade:
         """
         import psutil
 
+        from gaia.utils.process_tree import readable_processes
+
         bin_dir = self.cache_dir / "bin"
         # Names first: reading every process's path or parent takes seconds.
         names = {name.lower() for _, _, files in os.walk(bin_dir) for name in files}
@@ -1566,7 +1568,7 @@ class EmbeddedLemonade:
             return []
         bin_root = os.path.normcase(str(bin_dir.resolve()))
         killed = []
-        for proc in psutil.process_iter(["pid", "name"]):
+        for proc in readable_processes(["pid", "name"]):
             if (proc.info.get("name") or "").lower() not in names:
                 continue
             try:

@@ -5,6 +5,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useChatStore } from '../../stores/chatStore';
 import { SetupScreen } from '../SetupScreen';
+import { tEn } from '../../i18n/translator';
 import { useModelStore } from '../../stores/modelStore';
 import * as api from '../../services/api';
 import type { LemonadeFound, LemonadeTarget, PreflightReport, SetupPlan, SetupRunStatus, SetupStep, SetupTest, StartScreen } from '../../types';
@@ -1248,7 +1249,7 @@ describe('SetupScreen: testing', () => {
         await startLocal();
         expect(await screen.findByRole('heading', { name: 'Testing everything' })).toBeInTheDocument();
         expect(screen.getByText('Chat: loads and answers').closest('li')).toHaveTextContent('Running');
-        expect(screen.getByText('Reading images: names a test image\'s colour').closest('li')).toHaveTextContent('Waiting');
+        expect(screen.getByText(tEn('setup.test.job.vision')).closest('li')).toHaveTextContent('Waiting');
         expect(screen.getByText('A real chat with GAIA').closest('li')).toHaveTextContent('Waiting');
         expect(railStep('Test')).toHaveClass('is-active');
         expect(railStep('Download')).toHaveClass('is-done');

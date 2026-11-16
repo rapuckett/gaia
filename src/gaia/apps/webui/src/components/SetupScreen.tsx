@@ -16,6 +16,7 @@ import { useT, type Translate } from '../i18n/useT';
 import { isMessageKey, type MessageKey } from '../i18n/registry';
 import { ConfirmSheet } from './setup/ConfirmSheet';
 import { DownloadContents } from './setup/DownloadContents';
+import { FIREWORKS_KEYS_URL, GATEWAY_GUIDE_URL } from './setup/keyLinks';
 import { DownloadProgress, downloadsActive } from './setup/DownloadProgress';
 import { RunActivity } from './setup/RunActivity';
 import { formatFitGb, formatSize, totalMemory } from './setup/format';
@@ -39,9 +40,6 @@ import type {
 } from '../types';
 import './SetupScreen.css';
 import './setup/setup.css';
-
-const FIREWORKS_KEYS_URL = 'https://app.fireworks.ai/settings/users/api-keys';
-const GATEWAY_GUIDE_URL = 'https://amd-gaia.ai/docs/guides/llm-gateway';
 
 const CHOICES: Array<{ id: ProviderId; title: MessageKey | string; note: MessageKey }> = [
     { id: 'local', title: 'setup.where.local', note: 'setup.where.localNote' },
@@ -720,16 +718,21 @@ export function SetupScreen({ onReady, onClose }: SetupScreenProps) {
     // The plan screen's two ways to run GAIA; this PC is the one recommended.
     const [where, setWhere] = useState<'local' | 'cloud'>('local');
 
+    // Chat already runs in the cloud: carry on there rather than recommend a local download.
+    const inUseCloud = useModelStore((s) => (s.active?.remote && s.active.provider !== 'local' ? s.active.provider : null));
+    const inUseModel = useModelStore((s) => (s.active?.remote ? s.active.model : null));
+
     const toCloud = useCallback((provider: 'fireworks' | 'amd') => {
         if (running && viewing != null) return;
         setCustomizing(false);
         setChoice(provider);
+        // Back returns to the cloud choice, and the model in use stays picked.
+        setWhere('cloud');
+        setCloudPick(provider === inUseCloud ? inUseModel : null);
         stepTo('key');
-    }, [stepTo, running, viewing]);
+    }, [stepTo, running, viewing, inUseCloud, inUseModel]);
     const useCloud = useCallback(() => toCloud(readChoice() === 'amd' ? 'amd' : 'fireworks'), [toCloud]);
 
-    // Chat already runs in the cloud: carry on there rather than recommend a local download.
-    const inUseCloud = useModelStore((s) => (s.active?.remote && s.active.provider !== 'local' ? s.active.provider : null));
     const continueFromChecks = useCallback(() => {
         if (inUseCloud) toCloud(inUseCloud);
         else stepTo('plan');
@@ -844,10 +847,10 @@ export function SetupScreen({ onReady, onClose }: SetupScreenProps) {
     const switchCloud = useCallback((id: ProviderId) => {
         saveChoice(id);
         setChoice(id);
-        setCloudPick(null);
+        setCloudPick(id === inUseCloud ? inUseModel : null);
         setCloudDefault(null);
         setKeyState({ busy: false, error: null, done: false });
-    }, []);
+    }, [inUseCloud, inUseModel]);
 
     // Extras added during the run: fetched and tested the same way, once it ends.
     useEffect(() => {
@@ -1313,7 +1316,7 @@ export function SetupScreen({ onReady, onClose }: SetupScreenProps) {
                                             spellCheck={false}
                                             value={key}
                                             onChange={(e) => setKey(e.target.value)}
-                                            placeholder={savedKey ? t('setup.key.placeholder') : t('setup.key.placeholderNew')}
+                                            placeholder={savedKey ? t.bare('setup.key.placeholder') : t.bare('setup.key.placeholderNew')}
                                         />
                                         <button type="button" className="btn-secondary setup-key-show" aria-label={t(showKey ? 'setup.key.hide' : 'setup.key.show')} title={t(showKey ? 'setup.key.hide' : 'setup.key.show')} onClick={() => setShowKey((s) => !s)}>
                                             {showKey ? <EyeOff size={14} aria-hidden="true" /> : <Eye size={14} aria-hidden="true" />}

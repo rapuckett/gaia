@@ -5,6 +5,7 @@ import type { ExpoConfig } from 'expo/config';
 
 export type AppEnv = 'development' | 'production';
 
+// Also the URL scheme, which stays fixed because pairing links use it.
 const APP_IDS: Record<AppEnv, string> = {
     development: 'ai.amd.gaia.mobile.dev',
     production: 'ai.amd.gaia.mobile',
@@ -22,7 +23,6 @@ const MICROPHONE_USE = 'GAIA uses the microphone to record voice messages.';
 const PHOTOS_USE = 'GAIA opens your photo library so you can attach photos to a chat.';
 const PHOTOS_ADD_USE = 'GAIA saves the images you choose to your photo library.';
 const LOCAL_NETWORK_USE = 'GAIA uses your local network to connect to GAIA on your PC.';
-const FACE_ID_USE = 'GAIA uses Face ID to protect the key that connects this phone to your PC.';
 
 export function readAppEnv(value: string | undefined): AppEnv {
     if (value === 'development' || value === 'production') return value;
@@ -32,10 +32,26 @@ export function readAppEnv(value: string | undefined): AppEnv {
     );
 }
 
+const BUNDLE_ID_PATTERN = /^[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+$/;
+
+/** The iOS bundle id, from GAIA_IOS_BUNDLE_ID (production) or GAIA_IOS_BUNDLE_ID_DEV (development); unset or empty keeps the default. */
+export function readIosBundleId(env: AppEnv, source: Record<string, string | undefined> = process.env): string {
+    const name = env === 'development' ? 'GAIA_IOS_BUNDLE_ID_DEV' : 'GAIA_IOS_BUNDLE_ID';
+    const value = source[name];
+    if (value === undefined || value === '') return APP_IDS[env];
+    if (BUNDLE_ID_PATTERN.test(value)) return value;
+    throw new Error(
+        `${name} must be a reverse-DNS bundle id such as "com.example.gaia", but it is "${value}". ` +
+            'Unset it to keep the default; see src/gaia/apps/mobile/README.md.',
+    );
+}
+
 export default function appConfig(): ExpoConfig {
     const env = readAppEnv(process.env.APP_ENV);
     const dev = env === 'development';
     const id = APP_IDS[env];
+    const iosId = readIosBundleId(env);
+    const relayDomain = process.env.EXPO_PUBLIC_GAIA_RELAY_DOMAIN;
     return {
         name: 'GAIA',
         slug: 'gaia-mobile',
@@ -43,12 +59,17 @@ export default function appConfig(): ExpoConfig {
         scheme: id,
         userInterfaceStyle: 'automatic',
         ios: {
-            bundleIdentifier: id,
+            bundleIdentifier: iosId,
             supportsTablet: true,
             infoPlist: {
-                NSAppTransportSecurity: { NSAllowsArbitraryLoads: false, NSAllowsLocalNetworking: dev },
+                // Only the dev client needs plain HTTP (Metro on the home network); the paired PC is pinned https in every build.
+                NSAppTransportSecurity: dev
+                    ? { NSAllowsArbitraryLoads: false, NSAllowsLocalNetworking: true }
+                    : { NSAllowsArbitraryLoads: false },
                 NSLocalNetworkUsageDescription: LOCAL_NETWORK_USE,
                 NSPhotoLibraryAddUsageDescription: PHOTOS_ADD_USE,
+                // The native transport's copy of the relay domain, so it checks relay origins without trusting JavaScript.
+                ...(relayDomain ? { GAIARelayDomain: relayDomain } : {}),
             },
         },
         android: { package: id },
@@ -68,8 +89,6 @@ export default function appConfig(): ExpoConfig {
                 'expo-audio',
                 { microphonePermission: MICROPHONE_USE, enableBackgroundPlayback: true, enableBackgroundRecording: false },
             ],
-            ['expo-notifications', { mode: env, enableBackgroundRemoteNotifications: true }],
-            ['expo-secure-store', { faceIDPermission: FACE_ID_USE }],
             'expo-background-task',
             ['./plugins/withCleartextHosts', { hosts: dev ? DEV_HTTP_HOSTS : [] }],
             './plugins/withNinjaJobs',

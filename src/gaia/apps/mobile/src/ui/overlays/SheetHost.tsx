@@ -1,7 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { useEffect, useRef, useSyncExternalStore, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useId, useRef, useSyncExternalStore, type ReactNode } from 'react';
 import { BackHandler, Pressable as RNPressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { GestureDetector, usePanGesture } from 'react-native-gesture-handler';
@@ -21,10 +21,28 @@ export const WIDE_BREAKPOINT = 600;
 const DISMISS_DISTANCE = 100;
 const DISMISS_VELOCITY = 900;
 
+const SheetScopeContext = createContext<string | undefined>(undefined);
+
+/** The scope a `Sheet` rendered here belongs to; undefined under the app's own host. */
+export function useSheetScope() {
+    return useContext(SheetScopeContext);
+}
+
+/** Hosts the sheets of everything inside it, so they render under this subtree's providers (a developer-gallery scene whose client differs from the app's). */
+export function SheetScope({ children }: { children: ReactNode }) {
+    const scope = useId();
+    return (
+        <SheetScopeContext.Provider value={scope}>
+            <SheetHost scope={scope}>{children}</SheetHost>
+        </SheetScopeContext.Provider>
+    );
+}
+
 /** Wraps the app: hides it from screen readers while a sheet is open and draws the sheet over it. */
-export function SheetHost({ children }: { children: ReactNode }) {
+export function SheetHost({ children, scope }: { children: ReactNode; scope?: string }) {
     const state = useSyncExternalStore(sheetStore.subscribe, sheetStore.getState);
-    const active = state.active ? state.entries[state.active] : undefined;
+    const shown = state.active ? state.entries[state.active] : undefined;
+    const active = shown && shown.scope === scope ? shown : undefined;
     return (
         <View style={{ flex: 1 }}>
             <View
@@ -108,7 +126,7 @@ function ActiveSheet({ entry }: { entry: SheetEntry }) {
                 <Row gap="sm" justify="between">
                     <View style={{ flex: 1, minWidth: 0, paddingHorizontal: space.lg, paddingVertical: space.sm }}>
                         {entry.title ? (
-                            <Text role="title" weight="semibold" numberOfLines={2} accessibilityRole="header">
+                            <Text role="title" weight="semibold" accessibilityRole="header">
                                 {entry.title}
                             </Text>
                         ) : null}
@@ -162,7 +180,7 @@ function ActiveSheet({ entry }: { entry: SheetEntry }) {
                     >
                         {entry.children}
                     </ScrollView>
-                    {entry.footer ? <View style={{ paddingHorizontal: space.lg, paddingBottom: space.lg }}>{entry.footer}</View> : null}
+                    {entry.footer ? <View style={{ paddingHorizontal: space.gutter, paddingBottom: space.lg }}>{entry.footer}</View> : null}
                 </Animated.View>
             </KeyboardAvoidingView>
         </View>

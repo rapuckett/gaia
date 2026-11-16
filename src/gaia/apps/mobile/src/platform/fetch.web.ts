@@ -3,4 +3,6 @@
 
 import type { FetchLike } from './fetch.types';
 
+export { isPcUrl } from './pcUrl';
+
 export const platformFetch: FetchLike = (url, init) => globalThis.fetch(url, init);

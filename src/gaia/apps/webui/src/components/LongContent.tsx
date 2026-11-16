@@ -1,17 +1,18 @@
 // Copyright(C) 2025-2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-/** Collapse rules for long user messages, code blocks and step outputs. The full text stays rendered and copyable. */
+/** Collapse rules for long user messages, code blocks and step outputs. Copy always takes the whole text. */
 
 import React, { useId, useState } from 'react';
 import { ChevronDown, ChevronUp } from 'lucide-react';
-import { useT } from '../i18n/useT';
+import { tEn, useT, type Translate } from '../i18n/useT';
 import { STEP_COLLAPSE_CHARS, STEP_COLLAPSE_LINES, countLines, sizeLabel } from '../utils/longContent';
 import './LongContent.css';
 
 export {
     USER_COLLAPSE_LINES, USER_COLLAPSE_CHARS, CODE_COLLAPSE_LINES, CODE_PREVIEW_LINES,
-    STEP_COLLAPSE_LINES, STEP_COLLAPSE_CHARS, lineCount, countLines, isLongUserMessage, sizeLabel,
+    STEP_COLLAPSE_LINES, STEP_COLLAPSE_CHARS, USER_EXCERPT_LINES, USER_EXCERPT_LINE_CHARS, lineCount, countLines,
+    isLongUserMessage, messageExcerpt, sizeLabel,
 } from '../utils/longContent';
 
 interface ExpandToggleProps {
@@ -101,16 +102,18 @@ export function parseTruncationEnvelope(text: string): TruncationEnvelope | null
     };
 }
 
-export function envelopeNote(env: TruncationEnvelope): string {
-    const n = (v: number) => v.toLocaleString('en-US');
-    const shown = env.partial
-        ? 'part of the output'
-        : env.tail
-        ? `the first ${n(env.head.length)} and last ${n(env.tail.length)} characters`
-        : `the first ${n(env.head.length)} characters`;
-    const of = env.originalChars != null ? ` of ${n(env.originalChars)}` : '';
-    const omitted = env.omittedChars != null ? ` (${n(env.omittedChars)} omitted)` : '';
-    return `Showing ${shown}${of}${omitted}.`;
+export function envelopeNote(env: TruncationEnvelope, t: Translate = tEn): string {
+    const n = (v: number) => v.toLocaleString(`${t.locale}-u-nu-latn`);
+    return t.compose((say) => {
+        const shown = env.partial
+            ? say('envelope.partial')
+            : env.tail
+            ? say('envelope.headTail', { head: n(env.head.length), tail: n(env.tail.length) })
+            : say('envelope.head', { head: n(env.head.length) });
+        const of = env.originalChars != null ? say('envelope.of', { total: n(env.originalChars) }) : '';
+        const omitted = env.omittedChars != null ? say('envelope.omitted', { n: n(env.omittedChars) }) : '';
+        return say('envelope.showing', { shown, of, omitted });
+    });
 }
 
 /**
@@ -129,7 +132,7 @@ export function StepResult({ text, renderShort }: { text: string; renderShort: (
     const collapsible = countLines(shown) > STEP_COLLAPSE_LINES || shown.length > STEP_COLLAPSE_CHARS;
     return (
         <>
-            {envelope && <div className="detail-result-note">{envelopeNote(envelope)}</div>}
+            {envelope && <div className="detail-result-note">{envelopeNote(envelope, t)}</div>}
             <div
                 id={bodyId}
                 className={`detail-result-content${collapsible && !expanded ? ' is-collapsed' : ''}`}

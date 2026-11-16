@@ -11,7 +11,7 @@ import sys
 import threading
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
@@ -49,6 +49,7 @@ from ..models import (
     SystemStatus,
     UnloadModelResponse,
     WarmUpStatus,
+    WireModel,
     WorkInProgress,
 )
 from ..run_manager import run_manager
@@ -613,6 +614,7 @@ def _restart_gaia_lemonade() -> None:
 async def system_status(request: Request, db: ChatDatabase = Depends(get_db)):
     """Check system readiness (Lemonade, models, disk space)."""
     from gaia.config import GaiaConfigError
+    from gaia.installer.model_choice import download_size_gb
     from gaia.llm.lemonade_choice import LemonadeChoiceError
 
     # The config names the Lemonade server, so a broken one is reported, not raised.
@@ -630,13 +632,16 @@ async def system_status(request: Request, db: ChatDatabase = Depends(get_db)):
     # renders the same answer. Never fatal: a banner losing its hint is far
     # better than the status endpoint failing.
     try:
-        from gaia.llm.lemonade_launcher import describe_start_hint
+        from gaia.llm.lemonade_launcher import describe_start_hint, gaia_runs_lemonade
 
-        # Resolve WITH the required ctx so the rendered command carries it;
-        # callers must print it verbatim, never append their own flag.
-        hint = describe_start_hint(_MIN_CONTEXT_SIZE)
-        status.start_instruction = hint.instruction
-        status.start_command = hint.command
+        # GAIA starts its own server by itself; the app has nothing to tell
+        # the user to run, so its own "it starts on its own" line shows.
+        if not gaia_runs_lemonade():
+            # Resolve WITH the required ctx so the rendered command carries it;
+            # callers must print it verbatim, never append their own flag.
+            hint = describe_start_hint(_MIN_CONTEXT_SIZE)
+            status.start_instruction = hint.instruction
+            status.start_command = hint.command
     except Exception as exc:  # noqa: BLE001
         logger.warning("system status: could not resolve the start hint: %s", exc)
 
@@ -715,7 +720,9 @@ async def system_status(request: Request, db: ChatDatabase = Depends(get_db)):
                     if models_resp.status_code == 200:
                         for m in _catalog_entries(models_resp.json()):
                             if m.get("id") == status.model_loaded:
-                                status.model_size_gb = m.get("size")
+                                status.model_size_gb = download_size_gb(
+                                    status.model_loaded, m.get("size")
+                                )
                                 status.model_labels = m.get("labels")
                             if "embed" in (m.get("id") or "").lower():
                                 status.embedding_model_loaded = True
@@ -799,9 +806,9 @@ async def system_status(request: Request, db: ChatDatabase = Depends(get_db)):
                                     # "not downloaded" banner can show an
                                     # accurate hint instead of a hard-coded
                                     # number that drifts with model changes.
-                                    cat_size = m.get("size")
-                                    if cat_size is not None:
-                                        status.default_model_size_gb = float(cat_size)
+                                    status.default_model_size_gb = download_size_gb(
+                                        _target, m.get("size")
+                                    )
                                     break
                             # Model not found in catalog → treat as not downloaded
                             if status.model_downloaded is None:
@@ -987,7 +994,8 @@ async def system_status(request: Request, db: ChatDatabase = Depends(get_db)):
         _shutil = sys.modules.get("gaia.ui.server", sys.modules[__name__])
         _shutil_mod = getattr(_shutil, "shutil", shutil)
         usage = _shutil_mod.disk_usage(Path.home())
-        status.disk_space_gb = round(usage.free / (1024**3), 1)
+        # Decimal GB, the unit setup and the model sizes use.
+        status.disk_space_gb = round(usage.free / 1e9, 1)
         _probe_ok("disk")
     except OSError as exc:
         _probe_failed(status, "disk", f"Could not read free disk space: {exc}")
@@ -1039,7 +1047,8 @@ async def system_status(request: Request, db: ChatDatabase = Depends(get_db)):
         else:
             status.init_state = "ready"
         status.init_tasks = [
-            InitTaskInfo(name=j.name, status=j.status.value) for j in visible
+            InitTaskInfo(name=j.name, step=j.step, status=j.status.value)
+            for j in visible
         ]
 
     # ── Live download progress ──────────────────────────────────────────
@@ -1205,6 +1214,22 @@ async def get_settings(db: ChatDatabase = Depends(get_db)):
     )
 
 
+def _load_newly_selected_model(db: ChatDatabase) -> None:
+    """Load the model new turns now run; nothing else would until the next message."""
+    from gaia.config import GaiaConfigError
+
+    from .providers import LOCAL, provider_of
+
+    try:
+        model = (db.get_setting("custom_model") or "").strip() or _default_model_name()
+    except GaiaConfigError as e:
+        # The setting is saved; the next message reports the config and loads.
+        logger.warning("Not loading the newly selected model: %s", e)
+        return
+    if provider_of(model) == LOCAL:
+        warmup.request_warm_up("model setting", fresh=True, model=model)
+
+
 @router.put("/api/settings", response_model=SettingsResponse)
 async def update_settings(
     request: SettingsUpdateRequest,
@@ -1229,6 +1254,14 @@ async def update_settings(
     observation cycle ships (#2005) — it would silently behave as
     'goal_driven'.
     """
+    policy_requested = (
+        "network_policy" in request.model_fields_set
+        and request.network_policy is not None
+    )
+    # Before any field is saved, so a refused request changes nothing.
+    if policy_requested:
+        security.require_local_pc(http_request)
+
     if request.custom_model is not None:
         value = request.custom_model.strip() if request.custom_model else None
         from gaia.config import GaiaConfig, GaiaConfigError
@@ -1263,8 +1296,14 @@ async def update_settings(
                 status_code=500,
                 detail=f"The custom model was not saved: {e} Then save it again.",
             ) from e
+        previous = (db.get_setting("custom_model") or "").strip() or None
+        changed = (value is None) != (previous is None) or (
+            value is not None and not _model_ids_match(value, previous)
+        )
         db.set_setting("custom_model", value)
         clear_restore_notice()
+        if changed:
+            _load_newly_selected_model(db)
 
     # Only touch context_size when the field was explicitly included in the request.
     if "context_size" in request.model_fields_set:
@@ -1316,11 +1355,7 @@ async def update_settings(
 
     policy_warnings: List[str] = []
     policy_notices: List[Dict[str, Any]] = []
-    if (
-        "network_policy" in request.model_fields_set
-        and request.network_policy is not None
-    ):
-        security.require_local_pc(http_request)
+    if policy_requested:
         from gaia.llm import local_only
 
         try:
@@ -1339,6 +1374,7 @@ async def update_settings(
                 _ui_cloud_provider(custom) or custom.lower().startswith("claude")
             ):
                 db.set_setting("custom_model", None)
+                _load_newly_selected_model(db)
         logger.info("Network policy set: %s", result["policy"].value)
 
     from .providers import custom_model_override
@@ -1364,7 +1400,29 @@ async def update_settings(
     )
 
 
-@router.get("/api/health")
+class AgentUiHealthStats(WireModel):
+    """Row counts and indexed size in the chat database."""
+
+    sessions: int
+    messages: int
+    documents: int
+    total_chunks: int
+    total_size_bytes: int
+
+
+class AgentUiHealthResponse(WireModel):
+    """The server is up."""
+
+    status: Literal["ok"]
+    service: Literal["gaia-agent-ui"]
+    stats: AgentUiHealthStats
+
+
+@router.get(
+    "/api/health",
+    response_model=AgentUiHealthResponse,
+    response_model_exclude_unset=True,
+)
 async def health(db: ChatDatabase = Depends(get_db)):
     """Health check endpoint."""
     stats = db.get_stats()
@@ -1548,7 +1606,20 @@ def _chats_answering() -> list:
     return run_manager.active_sessions()
 
 
-@router.post("/api/system/load-model", status_code=202)
+class LoadModelResponse(WireModel):
+    """The load started in the background."""
+
+    status: Literal["loading"]
+    model: str
+    ctx_size: int
+
+
+@router.post(
+    "/api/system/load-model",
+    status_code=202,
+    response_model=LoadModelResponse,
+    response_model_exclude_unset=True,
+)
 async def load_model_endpoint(body: LoadModelRequest):
     """Trigger loading a model on Lemonade server (non-blocking).
 
@@ -1684,10 +1755,19 @@ class DownloadModelRequest(BaseModel):
     load_after: bool = False
 
 
+class DownloadModelResponse(WireModel):
+    """The download started in the background."""
+
+    status: Literal["downloading"]
+    model: str
+
+
 @router.post(
     "/api/system/download-model",
     status_code=202,
     dependencies=[Depends(security.require_pc_or_device)],
+    response_model=DownloadModelResponse,
+    response_model_exclude_unset=True,
 )
 async def download_model_endpoint(body: DownloadModelRequest):
     """Trigger downloading a model via Lemonade server (non-blocking).

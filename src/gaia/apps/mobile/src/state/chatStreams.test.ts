@@ -5,7 +5,9 @@ import type { GaiaClient } from '@/api/client.types';
 import { answerQuestion } from '@/data/mutations';
 
 import {
+    applyEvent,
     beginTurn,
+    confirmationDismissed,
     expirePendingPrompts,
     markPromptResolved,
     useChatStreamStore,
@@ -51,5 +53,16 @@ describe('resolved prompts', () => {
         const { resolved } = useChatStreamStore.getState();
         expect(resolved.chat.plain).toEqual({ state: 'answered', answer: 'Option A' });
         expect(resolved.chat.secret).toEqual({ state: 'answered' });
+    });
+});
+
+describe('approval-needed card', () => {
+    it('outlives the turn, and goes on the next turn or a dismiss', () => {
+        const asked = applyEvent(beginTurn(), { type: 'needs_confirmation', action: 'send_email', summary: 'to bob' });
+        expect(asked.pendingConfirmation).toMatchObject({ action: 'send_email', summary: 'to bob' });
+        const ended = applyEvent(asked, { type: 'done', content: 'ok' });
+        expect(ended.pendingConfirmation).not.toBeNull();
+        expect(beginTurn().pendingConfirmation).toBeNull();
+        expect(confirmationDismissed(ended).pendingConfirmation).toBeNull();
     });
 });

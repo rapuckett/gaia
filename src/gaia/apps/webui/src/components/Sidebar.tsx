@@ -4,13 +4,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import {
     Bell, Brain, Check, Clock, EyeOff, FileText, MoreHorizontal, PanelLeftClose, PanelLeftOpen,
-    Pencil, Pin, PinOff, Plug, Search, Settings, Smartphone, Sparkles, SquarePen, Trash2, X,
+    Pencil, Pin, PinOff, Plug, Search, Settings, Smartphone, Sparkles, SquarePen, TabletSmartphone, Trash2, X,
 } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 import { useChatStore } from '../stores/chatStore';
 import { ModelStatusPill } from './ModelStatusPill';
 import { DownloadChip } from './setup/DownloadChip';
 import { useNotificationStore, selectUnreadCount, selectPromptingSessionIds } from '../stores/notificationStore';
+import { useDeviceStore } from '../stores/deviceStore';
 import * as api from '../services/api';
 import { log } from '../utils/logger';
 import {
@@ -123,11 +124,13 @@ function SessionRow({ session, active, phone, moved, focusPin, status, queuePlac
         setDraft(null);
         if (save) onRename(session.id, draft);
     };
+    // Held while the pointer rests on it: the wider label reverting under a reader puts Pin under the click.
+    const [overDelete, setOverDelete] = useState(false);
     useEffect(() => {
-        if (!confirm) return;
+        if (!confirm || overDelete) return;
         const timer = setTimeout(() => setConfirm(false), 3000);
         return () => clearTimeout(timer);
-    }, [confirm]);
+    }, [confirm, overDelete]);
     useEffect(() => {
         if (!editing && refocus.current) {
             refocus.current = false;
@@ -292,6 +295,8 @@ function SessionRow({ session, active, phone, moved, focusPin, status, queuePlac
                         type="button"
                         className={`sb-row-delete${confirm ? ' is-confirm' : ''}`}
                         onClick={() => (confirm ? onDelete(session.id) : setConfirm(true))}
+                        onPointerEnter={() => setOverDelete(true)}
+                        onPointerLeave={() => setOverDelete(false)}
                         aria-label={confirm
                             ? (unsent > 0
                                 ? t.plural('row.confirmDeleteUnsentAria', unsent, { title: session.title })
@@ -312,6 +317,8 @@ function SessionRow({ session, active, phone, moved, focusPin, status, queuePlac
 }
 
 export function Sidebar({ onNewChat, onMobileAccess, tunnelActive }: SidebarProps) {
+    // Shown whenever paired devices can reach this PC, so the open port is never a secret.
+    const devicesListening = useDeviceStore((s) => s.available === true && s.status?.listening === true);
     const t = useT();
     const sessions = useChatStore((s) => s.sessions);
     const currentSessionId = useChatStore((s) => s.currentSessionId);
@@ -597,7 +604,7 @@ export function Sidebar({ onNewChat, onMobileAccess, tunnelActive }: SidebarProp
                             onChange={(e) => setQuery(e.target.value)}
                             onKeyDown={onSearchKey}
                             {...CLAIMS_ESCAPE}
-                            placeholder={t('sidebar.search')}
+                            placeholder={t.bare('sidebar.search')}
                             aria-label={t.hint(t('sidebar.search'), formatShortcut('Mod+K'))}
                             aria-controls="sb-chat-list"
                             aria-activedescendant={picked ? resultRowId(picked.id) : undefined}
@@ -645,7 +652,8 @@ export function Sidebar({ onNewChat, onMobileAccess, tunnelActive }: SidebarProp
                                     <SessionRow
                                         key={s.id}
                                         session={s}
-                                        active={s.id === currentSessionId}
+                                        // Memory replaces the chat on screen, so its row is the one selected.
+                                        active={s.id === currentSessionId && !showMemory}
                                         phone={phone}
                                         moved={s.id === movedId}
                                         focusPin={s.id === pinFocusId}
@@ -715,6 +723,17 @@ export function Sidebar({ onNewChat, onMobileAccess, tunnelActive }: SidebarProp
                             title={t('sidebar.mobileAccess')}
                         >
                             <Smartphone size={16} />
+                        </button>
+                    )}
+                    {devicesListening && (
+                        <button
+                            type="button"
+                            className="sb-icon-btn is-active"
+                            onClick={() => openSettings('devices')}
+                            aria-label={t('sidebar.devicesOn')}
+                            title={t('sidebar.devicesOn')}
+                        >
+                            <TabletSmartphone size={16} />
                         </button>
                     )}
                     <button type="button" className="sb-icon-btn" onClick={() => openSettings()} aria-label={t('sidebar.settings')} title={t.hint(t('sidebar.settings'), formatShortcut('Mod+,'))}>

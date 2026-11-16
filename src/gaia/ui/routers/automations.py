@@ -6,30 +6,74 @@ Reads and writes the same store as ``gaia automation`` (``gaia.automations.
 store``), so the app, the terminal and chat always show the same list. A
 change made here is the user's own click, so it asks nothing further.
 
-**Local-PC only**, like Settings → Messaging: a trigger's check is a command
-that runs on this PC, and its prompts can carry private detail.
+The PC and an allowed paired device may list, pause, resume and remove, as the
+desktop does; mobile access and another computer may not, since a trigger's
+check is a command that runs on this PC and its prompts can carry private
+detail. Nothing here adds or edits one: that is chat's job.
 """
 
 from __future__ import annotations
 
-from typing import Any, Dict, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 
 from gaia.automations import files, store
 from gaia.logger import get_logger
 
-from ..security import require_local_pc, require_ui_header
+from ..models import WireModel
+from ..security import (
+    require_local_pc,
+    require_pc_or_allowed_device,
+    require_ui_header,
+)
 
 log = get_logger(__name__)
 
 router = APIRouter(
     prefix="/api/automations",
     tags=["automations"],
-    dependencies=[Depends(require_local_pc)],
+    dependencies=[Depends(require_pc_or_allowed_device)],
 )
 
 HEARTBEAT_NAME = "heartbeat"
+
+#: What a paired device may do: the desktop's own buttons. Any other action stays PC-only.
+DEVICE_ACTIONS = frozenset({"pause", "resume"})
+
+
+def device_action_allowed(request: Request, action: str) -> None:
+    """Refuse a device an action outside ``DEVICE_ACTIONS``, as a PC-only route would."""
+    if action not in DEVICE_ACTIONS:
+        require_local_pc(request)
+
+
+class AutomationRow(WireModel):
+    """One automation, in raw values the app words and formats itself."""
+
+    id: str
+    name: str
+    #: One of ``store.KINDS``; the file is not checked on load, so not narrowed here.
+    kind: str
+    heartbeat: bool
+    paused: bool
+    every_seconds: int
+    next_at: float
+    last_run_at: float
+    runs: int
+    prompt: str
+    say: str
+    check: str
+    quiet: str
+    days: str
+    failures: int
+
+
+class AutomationList(WireModel):
+    """Every automation; ``delivers`` is null when Discord's state can't be read."""
+
+    automations: List[AutomationRow]
+    delivers: Optional[bool]
 
 
 def _row(item: store.Automation) -> Dict[str, Any]:
@@ -73,7 +117,7 @@ def _load():
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
-@router.get("")
+@router.get("", response_model=AutomationList, response_model_exclude_unset=True)
 def list_automations() -> Dict[str, Any]:
     items = _load()
     return {"automations": [_row(a) for a in items], "delivers": _delivers()}
@@ -81,7 +125,9 @@ def list_automations() -> Dict[str, Any]:
 
 @router.post(
     "/{ref}/{action}",
-    dependencies=[Depends(require_ui_header)],
+    dependencies=[Depends(require_ui_header), Depends(device_action_allowed)],
+    response_model=AutomationRow,
+    response_model_exclude_unset=True,
 )
 def set_automation(ref: str, action: Literal["pause", "resume"]) -> Dict[str, Any]:
     try:
@@ -93,7 +139,12 @@ def set_automation(ref: str, action: Literal["pause", "resume"]) -> Dict[str, An
     return _row(item)
 
 
-@router.delete("/{ref}", dependencies=[Depends(require_ui_header)])
+@router.delete(
+    "/{ref}",
+    dependencies=[Depends(require_ui_header)],
+    response_model=AutomationRow,
+    response_model_exclude_unset=True,
+)
 def remove_automation(ref: str) -> Dict[str, Any]:
     try:
         item = store.remove(ref)

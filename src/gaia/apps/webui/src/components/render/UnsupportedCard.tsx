@@ -1,10 +1,8 @@
 // Copyright(C) 2025-2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-/** Above this length (JSON.stringify(data).length), skip the pretty-printed
- *  dump and show a size notice instead — a malformed/huge payload must not
- *  freeze the tab rendering a multi-megabyte <pre>. */
-const MAX_PAYLOAD_JSON_LENGTH = 2_000_000;
+import { useT } from '../../i18n/useT';
+import { unsupportedView } from '../../utils/renderCards.core';
 
 export interface UnsupportedCardProps {
     /** 'unknown' = no card registered for this render key; 'invalid' = the
@@ -24,34 +22,20 @@ export interface UnsupportedCardProps {
  * debuggable, not silently dropped.
  */
 export function UnsupportedCard({ variant, render, data }: UnsupportedCardProps) {
-    let rawJson: string;
-    try {
-        rawJson = JSON.stringify(data);
-    } catch {
-        rawJson = String(data);
-    }
-    const tooLarge = rawJson.length > MAX_PAYLOAD_JSON_LENGTH;
-    let pretty = rawJson;
-    if (!tooLarge) {
-        try {
-            pretty = JSON.stringify(data, null, 2);
-        } catch {
-            pretty = rawJson;
-        }
-    }
+    const t = useT();
+    const { pretty, bytes } = unsupportedView(variant, data);
+    const tooLarge = pretty === null;
 
-    const message = variant === 'unknown'
-        ? `Unsupported card type: "${render}"`
-        : `Invalid ${render} payload`;
+    const message = t(variant === 'unknown' ? 'cards.unsupported.unknown' : 'cards.unsupported.invalid', { render });
 
     return (
         <div className="render-unsupported">
             <p className="render-unsupported__message">{message}</p>
             <details className="render-unsupported__details">
-                <summary>Raw payload</summary>
+                <summary>{t('cards.unsupported.raw')}</summary>
                 {tooLarge ? (
                     <p className="render-unsupported__too-large">
-                        Payload too large to display ({rawJson.length} bytes)
+                        {t('cards.unsupported.tooLarge', { size: String(bytes) })}
                     </p>
                 ) : (
                     <pre className="render-unsupported__json">{pretty}</pre>
