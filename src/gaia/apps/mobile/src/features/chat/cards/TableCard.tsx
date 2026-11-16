@@ -8,6 +8,7 @@ import { contentDir, Divider, HScroll, Ltr, Row, Stack, Surface, Text } from '@/
 
 import { TruncationNote } from './TruncationNote';
 import { UnsupportedCard } from './UnsupportedCard';
+import { valueDir } from './valueDir';
 
 const isNumberColumn = (rows: Scalar[][], c: number) => {
     const cells = rows.map((r) => r[c]).filter((v) => v !== null && v !== undefined);
@@ -49,7 +50,7 @@ export function TableCard({ data }: { data: unknown }) {
                                                             <Ltr>{text}</Ltr>
                                                         </Text>
                                                     ) : (
-                                                        <Text role="label" weight={r === 0 ? 'semibold' : undefined} tone={r === 0 ? 'secondary' : 'primary'} dir="auto">
+                                                        <Text role="label" weight={r === 0 ? 'semibold' : undefined} tone={r === 0 ? 'secondary' : 'primary'} dir={valueDir(text)}>
                                                             {text === '' ? ' ' : text}
                                                         </Text>
                                                     )}

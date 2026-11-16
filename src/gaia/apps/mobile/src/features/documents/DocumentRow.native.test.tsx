@@ -48,3 +48,14 @@ describeNative('DocumentRow failure reason', () => {
         expect(reason.props.style.color).toBe(muted.props.style.color);
     });
 });
+
+describeNative('DocumentRow indexing progress', () => {
+    it('keeps the percent sign inside the left-to-right number', async () => {
+        const indexing = { ...failed(''), indexing_status: 'indexing', last_error: null } as unknown as Doc;
+        await render(
+            <DocumentRow document={indexing} progress={{ phase: 'embedding', done: 38, total: 100 }} now={Date.now()} retrying={false} onCancel={jest.fn()} onRetry={jest.fn()} onRemove={jest.fn()} />,
+            { wrapper: wrap },
+        );
+        expect(screen.getByText(/\u206638%\u2069/)).toBeTruthy();
+    });
+});
