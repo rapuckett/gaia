@@ -21,6 +21,8 @@ from gaia.ui.devices.routes import AwayRoute
 from gaia.ui.security import ListenerScopeMiddleware
 from gaia.ui.server import create_app
 
+from .fake_nics import HOME_ADDRESS, fake_pc
+
 pytestmark = pytest.mark.allow_network  # TestClient only; nothing leaves the machine
 
 HOME_PEER = ("192.168.1.20", 50000)
@@ -64,10 +66,7 @@ def setup(tmp_path, monkeypatch):
     app.state.devices = access
     # The handlers' view of a running listener, without binding a socket.
     access._listener = _Listening()
-    monkeypatch.setattr(
-        "gaia.ui.devices.access.local_ipv4_addresses",
-        lambda: ["127.0.0.1", "192.168.1.10"],
-    )
+    fake_pc(monkeypatch)
     invite, _ = access.pairing.open()
     allowed = access.redeem(invite, "Phone", "ios", HOME_PEER[0])
     access.allow(allowed["device_id"])
@@ -81,7 +80,9 @@ def setup(tmp_path, monkeypatch):
 def _client(app, access, peer, token=None):
     headers = {"Authorization": f"Bearer {token}"} if token else {}
     gate = ListenerScopeMiddleware(DeviceGate(app, access, allow_loopback=False))
-    return TestClient(gate, client=peer, headers=headers)
+    return TestClient(
+        gate, client=peer, headers=headers, base_url=f"https://{HOME_ADDRESS}:4243"
+    )
 
 
 HOME_ONLY = [{"kind": "home", "origin": "https://192.168.1.10:4243"}]
