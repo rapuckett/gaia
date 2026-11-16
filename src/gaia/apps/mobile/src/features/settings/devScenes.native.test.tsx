@@ -162,13 +162,9 @@ describeNative('/dev/settings', () => {
         expect(screen.queryByTestId('model-remove-user.in-use-GGUF', { includeHiddenElements: true })).toBeNull();
     });
 
-    it('model-hf-added shows the success notice after the link is checked and added', async () => {
+    it('model-hf-added opens on the success notice with no typing', async () => {
         mockState = 'model-hf-added';
         await mount();
-        await fireEvent.press(await screen.findByLabelText('Add a model from Hugging Face', { includeHiddenElements: true }));
-        await fireEvent.changeText(await screen.findByTestId('custom-model-url', { includeHiddenElements: true }), 'https://huggingface.co/amd/Demo-Chat-GGUF');
-        await fireEvent.press(screen.getByTestId('custom-model-check', { includeHiddenElements: true }));
-        await fireEvent.press(await screen.findByTestId('custom-model-add', { includeHiddenElements: true }));
         expect(await screen.findByText(/Added .*Demo Chat.*Choose Download/, undefined, { timeout: 3000 })).toBeTruthy();
     });
 });

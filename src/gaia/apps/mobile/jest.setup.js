@@ -35,3 +35,16 @@ const { Dimensions, Platform } = require('react-native');
 if (Platform.OS !== 'web') {
     Dimensions.set({ window: { ...Dimensions.get('window'), fontScale: 1 }, screen: { ...Dimensions.get('screen'), fontScale: 1 } });
 }
+
+// A query's cache timer (5 min after its screen unmounts) must not hold Jest open; a run of a few suites is in band.
+const { timeoutManager } = require('@tanstack/react-query');
+const unref = (timer) => {
+    timer?.unref?.();
+    return timer;
+};
+timeoutManager.setTimeoutProvider({
+    setTimeout: (callback, delay) => unref(setTimeout(callback, delay)),
+    clearTimeout: (timer) => clearTimeout(timer),
+    setInterval: (callback, delay) => unref(setInterval(callback, delay)),
+    clearInterval: (timer) => clearInterval(timer),
+});
