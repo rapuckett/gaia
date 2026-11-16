@@ -122,7 +122,10 @@ export function ScheduleCard({ schedule, now, runPending, onOpenChat, onRunNow, 
                 </Row>
                 {schedule.last_error && !historyShowsFailure ? (
                     <ErrorStrip>
-                        <Text role="label">{t('schedules.card.lastFailed', { error: schedule.last_error })}</Text>
+                        <Stack gap="xs">
+                            <Text role="label">{t('mobileApp.schedules.card.lastFailedLabel')}</Text>
+                            <Text role="label" dir="ltr">{schedule.last_error}</Text>
+                        </Stack>
                     </ErrorStrip>
                 ) : null}
                 <Row gap="xs" wrap>

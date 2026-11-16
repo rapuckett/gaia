@@ -54,7 +54,7 @@ function BackendChoice({ view, onPick, disabled }: {
                             disabled={off}
                             accessibilityRole="radio"
                             accessibilityLabel={c.label}
-                            accessibilityState={{ checked: picked, disabled: off }}
+                            aria-checked={picked}
                         >
                             <Row gap="sm">
                                 <Text tone={picked ? 'accent' : 'muted'}>{picked ? '●' : '○'}</Text>
