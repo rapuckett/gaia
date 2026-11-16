@@ -8,7 +8,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { REMOVE_UNDO_MS } from '@webui/utils/documentLibrary.core';
 
-import type { DocumentListResponse } from '@/api/client.types';
+import type { DocumentListResponse, IndexFolderResponse } from '@/api/client.types';
 import { createFakeClient } from '@/api/fake';
 import { GaiaApiError, GaiaError, GaiaNetworkError } from '@/api/errors';
 import { GaiaClientProvider } from '@/data';
@@ -119,8 +119,8 @@ describe('DocumentsScreen', () => {
     describe('adding by a path on the PC', () => {
         const chat = { id: 'c1', title: 'A chat', created_at: '2026-11-14T00:00:00Z', updated_at: '2026-11-14T00:00:00Z', model: '', system_prompt: null, message_count: 1, document_ids: [] };
         const typePath = async (path: string) => {
-            fireEvent.changeText(await screen.findByLabelText('File path to add'), path);
-            fireEvent.press(screen.getByText('Add'));
+            await fireEvent.changeText(await screen.findByLabelText('File path to add'), path);
+            await fireEvent.press(screen.getByText('Add'));
         };
 
         it('sends the path as typed, trimmed, for the open chat to read, attaches it and clears the box', async () => {
@@ -136,7 +136,7 @@ describe('DocumentsScreen', () => {
 
         it('adds a typed folder at its top level only and says what it added', async () => {
             const folderDoc = (id: string, filename: string) => ({ ...doc(id, filename, 'complete', 100), filepath: `/Users/me/Contracts/${filename}` });
-            const pcFolders = { '/Users/me/Contracts': { indexed: 2, failed: 0, skipped: 1, skipped_images: 0, documents: [folderDoc('k1', 'msa.pdf'), folderDoc('k2', 'nda.docx')], errors: [] } };
+            const pcFolders = { '/Users/me/Contracts': { indexed: 2, failed: 0, skipped: 1, skipped_images: 0, documents: [folderDoc('k1', 'msa.pdf'), folderDoc('k2', 'nda.docx')] as IndexFolderResponse['documents'], errors: [] } };
             const client = createFakeClient({ sessions: [chat], pcFolders });
             await mount(client, 'c1');
             await typePath('/Users/me/Contracts');
