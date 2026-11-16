@@ -130,7 +130,7 @@ export function KnowledgeForm({ item, add, edit, notify, onSaved, onCancel }: Kn
                 testID="memory-knowledge-form-when"
             />
             <Switch value={values.sensitive} onValueChange={(on) => set('sensitive', on)} label={t('mem.form.sensitive')} description={t('mem.form.sensitiveHint')} testID="memory-knowledge-form-sensitive" />
-            <Row gap="sm" wrap>
+            <Row gap="sm" wrap stack>
                 <Button
                     label={t.bare(item ? 'mem.form.update' : 'mem.form.save')}
                     accessibilityLabel={t(item ? 'mem.form.update' : 'mem.form.save')}

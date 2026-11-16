@@ -20,6 +20,9 @@ public class GaiaTransportModule: Module {
   public func definition() -> ModuleDefinition {
     Name("GaiaTransport")
 
+    // An upload's bytes sent so far, by request id; never its body.
+    Events("onUploadProgress")
+
     // Redeems a pairing code; the PC's answer without the token, which is kept here.
     AsyncFunction("pair") {
       (pcId: String, origins: [String], pin: String, headers: [String: String], body: String, promise: Promise) in
@@ -114,7 +117,9 @@ public class GaiaTransportModule: Module {
       promise.reject(error)
       return
     }
-    send(id, pinned, request, upload: body, promise: promise)
+    send(id, pinned, request, upload: body, promise: promise) { [weak self] sent, total in
+      self?.sendEvent("onUploadProgress", ["id": id, "sent": Double(sent), "total": Double(total)])
+    }
   }
 
   /// The request to the paired PC with its device token, or nil once the promise is rejected.
@@ -149,8 +154,11 @@ public class GaiaTransportModule: Module {
     return (request, pin)
   }
 
-  private func send(_ id: String, _ pinned: PinnedRequest, _ request: URLRequest, upload: UploadBody?, promise: Promise) {
-    pinned.start(request, idleSeconds: requestIdleSeconds, upload: upload) { result in
+  private func send(
+    _ id: String, _ pinned: PinnedRequest, _ request: URLRequest, upload: UploadBody?, promise: Promise,
+    onProgress: ((Int64, Int64) -> Void)? = nil
+  ) {
+    pinned.start(request, idleSeconds: requestIdleSeconds, upload: upload, onProgress: onProgress) { result in
       switch result {
       case .success(let response):
         promise.resolve(describe(response))

@@ -93,7 +93,7 @@ export function LocalDownloads() {
                             onRestart={() => act(async () => { await cancel.mutateAsync(); })}
                         />
                     ))}
-                    <Row gap="sm" wrap>
+                    <Row gap="sm" wrap stack>
                         {active ? (
                             <Button
                                 label={t('setup.progress.cancel')}

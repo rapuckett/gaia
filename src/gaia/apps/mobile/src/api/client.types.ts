@@ -406,6 +406,11 @@ export interface RequestOptions {
     signal?: AbortSignal;
 }
 
+export interface UploadOptions extends RequestOptions {
+    /** Bytes sent so far, of the body's total; only a paired PC's pinned connection reports them. */
+    onUploadProgress?: (sent: number, total: number) => void;
+}
+
 export type { SpeechModel, SpeechSettings, Voice } from '@webui/services/speechApi';
 /** The read-aloud settings `PUT /api/speech/settings` changes; the rest stay as saved. */
 export type SpeechSettingsUpdate = Partial<Pick<SpeechSettings, 'voice' | 'speed' | 'auto'>>;
@@ -422,7 +427,7 @@ export interface GaiaClient {
     getSession(sessionId: string, options?: RequestOptions): Promise<Session>;
     createSession(request?: CreateSessionRequest, options?: RequestOptions): Promise<Session>;
     /** Sends a file to the PC; recordings go to the transcription folder. Rejects with the PC's refusal (type, size, empty). */
-    uploadFile(file: Blob, name: string, options?: RequestOptions): Promise<UploadedFile>;
+    uploadFile(file: Blob, name: string, options?: UploadOptions): Promise<UploadedFile>;
     /** The chat as Markdown, the same text the desktop's Export saves. */
     exportSessionMarkdown(sessionId: string, options?: RequestOptions): Promise<{ content: string }>;
     setSessionPinned(sessionId: string, pinned: boolean, options?: RequestOptions): Promise<Session>;
@@ -664,7 +669,7 @@ export interface GaiaClient {
     runSchedule(name: string, options?: RequestOptions): Promise<Schedule>;
     deleteSchedule(name: string, options?: RequestOptions): Promise<DeleteScheduleResult>;
     /** Puts a file from this phone in the library and indexes it; resolves once GAIA has read it or failed to. */
-    uploadDocument(file: PickedFile, options?: RequestOptions): Promise<DocumentResponse>;
+    uploadDocument(file: PickedFile, options?: UploadOptions): Promise<DocumentResponse>;
     /** Indexes a file that is on the PC, as the chat's folders allow; resolves once GAIA has read it or failed to. */
     uploadDocumentByPath(filepath: string, sessionId: string, options?: RequestOptions): Promise<DocumentResponse>;
     /** A folder on the PC, as the chat's folders allow; with no `path` it opens the chat's first folder. 403 with `status: 'os_denied'` for a folder the PC's account can't read. */
@@ -697,7 +702,7 @@ export interface GaiaClient {
     /** Starts a model's download on the PC (`force` downloads it again); follow it in `getSystemStatus().download_progress`. */
     downloadModel(model: string, options?: { force?: boolean; loadAfter?: boolean } & RequestOptions): Promise<{ status: string; model: string }>;
     /** Loads a model on the PC at the context window chat needs; 409 when a chat is answering, until `force`. */
-    loadModel(modelName: string, force: boolean, options?: RequestOptions): Promise<{ status: string; model: string; ctx_size: number }>;
+    loadModel(modelName: string, force: boolean, options?: { ctxSize?: number } & RequestOptions): Promise<{ status: string; model: string; ctx_size: number }>;
     /** The model server's state, what it runs on and its memory; the pill and its sheet read it. */
     getLocalModelStatus(options?: RequestOptions): Promise<LocalModelStatus>;
     /** Starts the model server if stopped, then reloads the chat model. `confirm` agrees to reload a Lemonade GAIA doesn't own. */

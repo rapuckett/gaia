@@ -22,6 +22,12 @@ export const LARGE_TEXT_SCALE = 1.35;
 /** Compact controls (chips, tabs, badges) stop growing here; their full label is in `accessibilityLabel`. */
 export const COMPACT_MAX_FONT_SCALE = 1.3;
 
+/** Titles and display text (screen and card titles, the greeting) stop growing here, as Apple's large titles do; body text scales fully. */
+export const TITLE_MAX_FONT_SCALE = 2;
+
+/** Typed text in the message box stops here, so a short draft can't cover the screen above the keyboard. */
+export const INPUT_MAX_FONT_SCALE = 2;
+
 export function useLargeText(): boolean {
     return useWindowDimensions().fontScale >= LARGE_TEXT_SCALE;
 }

@@ -88,7 +88,7 @@ export function MemoryRow({ item, forgetting, onForget, notify }: MemoryRowProps
                                 error={dueWrong ? t('mobileApp.mem.whenHint') : undefined}
                             />
                         ) : null}
-                        <Row gap="sm" wrap>
+                        <Row gap="sm" wrap stack>
                             <Button label={t.bare('mem.about.save')} accessibilityLabel={t('mem.about.save')} variant="primary" size="sm" busy={edit.isPending} disabled={!draft.trim() || dueWrong} onPress={save} testID={`memory-about-save-${item.id}`} />
                             <Button label={t.bare('mem.about.cancel')} accessibilityLabel={t('mem.about.cancel')} variant="secondary" size="sm" disabled={edit.isPending} onPress={() => setEditing(false)} />
                         </Row>

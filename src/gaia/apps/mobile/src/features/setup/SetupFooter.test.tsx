@@ -2,9 +2,10 @@
 // SPDX-License-Identifier: MIT
 
 import { render, screen } from '@testing-library/react-native';
-import { Text } from 'react-native';
+import { StyleSheet, Text } from 'react-native';
 
-import { ThemeProvider } from '@/ui';
+import { AX_FONT_SCALE, atFontScale } from '@/test-support/fontScale';
+import { Button, ThemeProvider } from '@/ui';
 
 import { SetupFooter, SetupFooterBar, SetupFooterMuted, SetupFooterProvider } from './SetupFooter';
 
@@ -35,5 +36,45 @@ describe('SetupFooterMuted', () => {
         await rerender(<Setup covered={false} />);
         expect(screen.getByText('Plan action')).toBeTruthy();
         expect(screen.queryByText('Screen action')).toBeNull();
+    });
+});
+
+describe('SetupFooterBar', () => {
+    it('gives each action an equal flex slot', async () => {
+        await render(
+            <SetupFooterProvider>
+                <SetupFooter>
+                    <Text>Customize</Text>
+                    <Text>Download and start</Text>
+                </SetupFooter>
+                <SetupFooterBar />
+            </SetupFooterProvider>,
+            { wrapper: ThemeProvider },
+        );
+        const slots = screen.getAllByTestId('setup-footer-slot');
+        expect(slots).toHaveLength(2);
+        for (const slot of slots) expect(StyleSheet.flatten(slot.props.style)).toMatchObject({ flex: 1, minWidth: 0 });
+    });
+});
+
+describe('SetupFooterBar at the largest text size', () => {
+    afterEach(() => jest.restoreAllMocks());
+
+    it('stacks both actions full width instead of sharing a row', async () => {
+        atFontScale(AX_FONT_SCALE);
+        await render(
+            <SetupFooterProvider>
+                <SetupFooter>
+                    <Button label="Customize" />
+                    <Button label="Download and start" variant="primary" />
+                </SetupFooter>
+                <SetupFooterBar />
+            </SetupFooterProvider>,
+            { wrapper: ThemeProvider },
+        );
+        expect(screen.queryAllByTestId('setup-footer-slot')).toHaveLength(0);
+        for (const name of ['Customize', 'Download and start']) {
+            expect(StyleSheet.flatten(screen.getByRole('button', { name }).parent?.props.style)).toMatchObject({ alignSelf: 'stretch' });
+        }
     });
 });

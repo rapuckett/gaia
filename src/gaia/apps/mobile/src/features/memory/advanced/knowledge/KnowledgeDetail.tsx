@@ -107,7 +107,7 @@ export function KnowledgeDetail({ item, edit, forget, onEdit, onChanged, onFilte
                     <Text weight="semibold" tone="danger" accessibilityRole="header">
                         {t('mem.row.confirmDeleteAria')}
                     </Text>
-                    <Row gap="sm" wrap>
+                    <Row gap="sm" wrap stack>
                         <Button
                             label={t.bare('mem.row.delete')}
                             accessibilityLabel={t('mem.row.deleteAria')}
@@ -121,7 +121,7 @@ export function KnowledgeDetail({ item, edit, forget, onEdit, onChanged, onFilte
                     </Row>
                 </Stack>
             ) : (
-                <Row gap="sm" wrap>
+                <Row gap="sm" wrap stack>
                     <Button label={t.bare('mem.row.edit')} accessibilityLabel={t('mem.row.edit')} icon={Pencil} variant="secondary" onPress={() => onEdit(item)} testID="memory-knowledge-edit" />
                     <Button
                         label={t.bare(item.sensitive ? 'mem.row.unmarkSensitive' : 'mem.row.markSensitive')}
