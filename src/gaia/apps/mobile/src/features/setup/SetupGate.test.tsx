@@ -9,10 +9,11 @@ import { ThemeProvider } from '@/ui';
 import { reopenSetup, SetupGate } from './SetupGate';
 
 const mockOpen = jest.fn();
+let mockGate: Record<string, unknown> = { state: 'ready' };
 
 jest.mock('@/data', () => ({
     useGaiaClient: () => ({}),
-    useSetupGate: () => ({ gate: { state: 'ready' }, recheck: jest.fn(), finish: jest.fn(), open: mockOpen }),
+    useSetupGate: () => ({ gate: mockGate, recheck: jest.fn(), finish: jest.fn(), open: mockOpen }),
 }));
 jest.mock('@/features/pairing', () => ({ PinMismatchScreen: () => null, usePairAgain: () => ({ mutate: jest.fn(), isPending: false }) }));
 jest.mock('./SetupScreen', () => ({ SetupScreen: () => null }));
@@ -27,5 +28,15 @@ describe('reopenSetup', () => {
         expect(mockOpen).toHaveBeenCalledTimes(1);
         await unmount();
         expect(() => reopenSetup()).toThrow(/not mounted/);
+    });
+});
+
+describe('failed upgrade notice', () => {
+    it('keeps the server reason in its own element, not inside the translated sentence', async () => {
+        mockGate = { state: 'unknown', upgradeFailed: true, error: new Error('The download was interrupted.') };
+        await render(<SetupGate><Text>App</Text></SetupGate>, { wrapper: ThemeProvider });
+        expect(screen.getByText('The download was interrupted.')).toBeTruthy();
+        expect(screen.queryByText(/Details:/)).toBeNull();
+        mockGate = { state: 'ready' };
     });
 });

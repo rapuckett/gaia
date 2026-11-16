@@ -1,9 +1,9 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { GaiaNetworkError } from '@/api/errors';
+import { GaiaApiError, GaiaNetworkError } from '@/api/errors';
 
-import { describeErrorWith, technicalDetail, translator } from './useT';
+import { describeErrorWith, describeHttpFailure, serverText, technicalDetail, translator } from './useT';
 
 describe('nested error messages', () => {
     const error = new GaiaNetworkError('http://127.0.0.1:4210/api/setup/check', new Error('fetch failed'));
@@ -16,5 +16,19 @@ describe('nested error messages', () => {
         expect(text).not.toContain('127.0.0.1');
         expect(text).not.toContain('fetch failed');
         expect(technicalDetail(error)).toContain('fetch failed');
+    });
+});
+
+describe('server text stays out of the sentence', () => {
+    it.each(['en', 'ar'])('a PC HTTP error in %s gives a reason-free title and the raw text as detail', (code) => {
+        const { text, detail } = describeHttpFailure(new GaiaApiError(500, 'The connectors service is not running.'), translator(code));
+        expect(detail).toBe('The connectors service is not running.');
+        expect(text).not.toContain('connectors service');
+        expect(text).toContain('500');
+    });
+
+    it('serverText is the raw text only for errors we did not write', () => {
+        expect(serverText(new Error('The download was interrupted.'))).toBe('The download was interrupted.');
+        expect(serverText(new GaiaNetworkError('http://x/api', new Error('boom')))).toBeUndefined();
     });
 });
