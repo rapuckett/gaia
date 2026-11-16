@@ -75,7 +75,7 @@ export function PairedPcsScreen({ onAdd }: { onAdd: () => void }) {
             <Sheet open={target?.mode === 'confirm'} onClose={close} title={t('mobileApp.pairing.pcs.forgetTitle', { name: pc?.name ?? '' })}>
                 <Stack gap="md">
                     <Text tone="secondary">{t('mobileApp.pairing.pcs.forgetBody')}</Text>
-                    <Row gap="sm">
+                    <Row gap="sm" stack>
                         <Button label={t('mobileApp.pairing.waiting.cancel')} variant="secondary" onPress={close} />
                         <Button
                             label={t('mobileApp.pairing.pcs.forgetConfirm', { name: pc?.name ?? '' })}

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import { useRouter } from 'expo-router';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
 import { useActiveModel, useGaiaClient, useGoalStoreError, useQueryFailure, useSystemStatus } from '@/data';
 import { useT } from '@/i18n/useT';
@@ -12,7 +12,7 @@ import { useBannerDismissedStore } from '@/state/bannerDismissed';
 import { useChatAlertBannerStore, type ChatAlertBanner } from '@/state/chatAlertBanner';
 import { usePickLoadStore } from '@/state/pickLoad';
 import { sameModelId } from '@webui/utils/modelList.core';
-import { Notice, ProgressLine, Stack } from '@/ui';
+import { Disclosure, Ltr, Notice, ProgressLine, Stack } from '@/ui';
 
 import { pickBanner } from './pickBanner';
 
@@ -35,6 +35,16 @@ function ChatAlertNotice({ alert }: { alert: ChatAlertBanner }) {
                 }}
             testID="banner-chat-alert"
         />
+    );
+}
+
+function BannerDetails({ text }: { text: string }) {
+    const t = useT();
+    const [open, setOpen] = useState(false);
+    return (
+        <Disclosure title={t('setup.progress.details')} open={open} onToggle={() => setOpen((o) => !o)}>
+            <Ltr>{text}</Ltr>
+        </Disclosure>
     );
 }
 
@@ -74,6 +84,7 @@ export function ConnectionBanner() {
                                   : undefined
                         }
                     />
+                    {banner.details ? <BannerDetails text={banner.details} /> : null}
                     {banner.progress ? <ProgressLine value={banner.progress.value} label={banner.progress.label} /> : null}
                 </Stack>
             ) : null}

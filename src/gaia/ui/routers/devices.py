@@ -31,8 +31,14 @@ from ..devices import (
     ROUTES_ROUTE,
     SECURITY_ALERT_EVENT,
     SELF_ROUTE,
+    AwayRouteKind,
 )
-from ..devices.access import DeviceAccess, PairingUnavailable, iso
+from ..devices.access import (
+    AwayRouteRefused,
+    DeviceAccess,
+    PairingUnavailable,
+    iso,
+)
 from ..devices.listener import ListenerError
 from ..devices.pairing import PairingRefused
 from ..devices.storage import DeviceCertificateError, UnsafeDeviceFolderError
@@ -136,6 +142,34 @@ async def turn_off_listener(request: Request) -> Dict[str, Any]:
     """Stop listening for devices, and keep it off across restarts."""
     access = _access(request)
     await access.stop()
+    return access.status()
+
+
+@router.post(
+    "/routes/{kind}", response_model=DeviceAccessStatus, dependencies=_AT_THE_PC
+)
+async def turn_on_route(request: Request, kind: AwayRouteKind) -> Dict[str, Any]:
+    """Also let paired devices reach this PC over an away route, such as Tailscale."""
+    access = _access(request)
+    try:
+        await access.set_route(kind, True)
+    except KeyError as e:
+        raise HTTPException(status_code=404, detail="Not Found") from e
+    except AwayRouteRefused as e:
+        raise _refused(e.code, e.detail) from e
+    return access.status()
+
+
+@router.delete(
+    "/routes/{kind}", response_model=DeviceAccessStatus, dependencies=_AT_THE_PC
+)
+async def turn_off_route(request: Request, kind: AwayRouteKind) -> Dict[str, Any]:
+    """Stop serving an away route, and keep it off across restarts."""
+    access = _access(request)
+    try:
+        await access.set_route(kind, False)
+    except KeyError as e:
+        raise HTTPException(status_code=404, detail="Not Found") from e
     return access.status()
 
 

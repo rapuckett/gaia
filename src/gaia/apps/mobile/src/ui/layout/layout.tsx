@@ -3,6 +3,7 @@
 
 import { View, type AccessibilityRole, type DimensionValue, type ViewStyle } from 'react-native';
 import { Children, cloneElement, isValidElement, type ReactElement, type ReactNode } from 'react';
+import { dirProp } from '@/platform/dirProp';
 import { Ltr } from '../text/Ltr';
 import { Text } from '../text/Text';
 import { useLargeText } from '../theme/a11y';
@@ -69,6 +70,7 @@ export function Stack({ children, padding, paddingX, paddingY, testID, accessibi
     return (
         <View
             style={style}
+            {...(box.dir ? dirProp(box.dir) : {})}
             testID={testID}
             accessibilityRole={accessibilityRole}
             accessible={accessibilityLabel ? true : undefined}
@@ -87,9 +89,11 @@ function shrinkable(child: ReactNode): ReactNode {
     return child;
 }
 
-/** A `flex` share only means something along a row; in a column it would collapse the child. */
+/** A `flex` share only means something along a row; in a column it would collapse the child. A button takes the full width. */
 function unflexed(child: ReactNode): ReactNode {
-    if (isValidElement(child) && child.type === Stack) return cloneElement(child as ReactElement<StackProps>, { flex: undefined });
+    if (!isValidElement(child)) return child;
+    if (child.type === Stack || child.type === Row) return cloneElement(child as ReactElement<StackProps>, { flex: undefined });
+    if (typeof child.type === 'function' && 'fillsStackedRow' in child.type) return cloneElement(child as ReactElement<{ full?: boolean }>, { full: true });
     return child;
 }
 
@@ -103,7 +107,7 @@ export function Row({ children, wrap, stack, align = 'center', testID, accessibi
     // At large text a label beside its value stacks instead of squeezing or clipping.
     if (!stacked && (wrap || (largeText && box.justify === 'between' && wrap === undefined))) style.flexWrap = 'wrap';
     return (
-        <View style={style} testID={testID} accessibilityRole={accessibilityRole}>
+        <View style={style} {...(box.dir ? dirProp(box.dir) : {})} testID={testID} accessibilityRole={accessibilityRole}>
             {stacked ? Children.map(children, unflexed) : largeText ? Children.map(children, shrinkable) : children}
         </View>
     );

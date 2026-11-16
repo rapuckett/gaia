@@ -198,7 +198,7 @@ function PreScanRow({
                         </Text>
                     ) : null}
                 </Stack>
-                <Row gap="sm" wrap>
+                <Row gap="sm" wrap stack>
                     <Button
                         variant="primary"
                         size="sm"

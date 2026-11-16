@@ -4,7 +4,7 @@
 import { GaiaApiError, GaiaNetworkError } from '@/api/errors';
 import type { SystemStatus } from '@/api/client.types';
 import { isStarting } from '@/data';
-import { describeErrorWith, type Translate } from '@/i18n/useT';
+import { technicalDetail, type Translate } from '@/i18n/useT';
 import type { NoticeTone } from '@/ui';
 import { GB_UNIT, MIN_CONTEXT_SIZE } from '@webui/utils/constants';
 import { shortModelName, type PickLoad } from '@webui/utils/modelList.core';
@@ -14,6 +14,8 @@ export interface Banner {
     tone: NoticeTone;
     title: string;
     message?: string;
+    /** The raw cause, for a Details disclosure; never part of the sentence. */
+    details?: string;
     /** The web lets these go: a failed download, a stopped or hung model server, a too-small context window. */
     dismissible?: boolean;
     /** Re-asks GAIA; shown as the "Check again" action. */
@@ -84,8 +86,9 @@ export function pickBanner(
             return {
                 id: 'backendError',
                 tone: 'danger',
-                title: t.compose((say) => say('banner.backendError', { error: describeErrorWith(fetchError, say) })),
+                title: t('mobileApp.error.backend', { status: fetchError.status }),
                 message: t('banner.backendErrorHint'),
+                details: technicalDetail(fetchError),
                 retry: true,
             };
         }

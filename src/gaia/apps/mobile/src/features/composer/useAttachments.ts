@@ -18,6 +18,7 @@ export interface Attachment {
     id: string;
     name: string;
     uri: string;
+    blob?: Blob;
     isImage: boolean;
     isMedia: boolean;
     /** Name, size and modified time: the same file picked again has the same key. */
@@ -42,6 +43,11 @@ export interface Attachments {
     hasUploaded: boolean;
     /** The text with a link for each uploaded file. */
     compose(text: string): string;
+}
+
+/** A web paste's object URL lives until its chip goes. */
+function revokePasted(a: Attachment) {
+    if (a.blob) URL.revokeObjectURL(a.uri);
 }
 
 export function useAttachments(): Attachments {
@@ -72,7 +78,7 @@ export function useAttachments(): Attachments {
             const controller = new AbortController();
             controllers.current.set(a.id, controller);
             try {
-                const blob = new File(a.uri);
+                const blob = a.blob ?? new File(a.uri);
                 let percent: number | undefined;
                 const onUploadProgress = (sent: number, total: number) => {
                     const next = Math.min(100, Math.floor((sent / total) * 100));
@@ -111,6 +117,7 @@ export function useAttachments(): Attachments {
                     id: `attach-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
                     name: f.name,
                     uri: f.uri,
+                    blob: f.blob,
                     isImage: !!f.mimeType?.startsWith('image/'),
                     isMedia: isMediaFile(f.name),
                     status: 'uploading',
@@ -129,12 +136,18 @@ export function useAttachments(): Attachments {
 
     const remove = useCallback((id: string) => {
         controllers.current.get(id)?.abort();
-        setItems((prev) => prev.filter((a) => a.id !== id));
+        setItems((prev) => {
+            prev.filter((a) => a.id === id).forEach(revokePasted);
+            return prev.filter((a) => a.id !== id);
+        });
     }, []);
 
     const clear = useCallback(() => {
         controllers.current.forEach((c) => c.abort());
-        setItems([]);
+        setItems((prev) => {
+            prev.forEach(revokePasted);
+            return [];
+        });
     }, []);
 
     const compose = useCallback(
