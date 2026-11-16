@@ -39,7 +39,7 @@ export function ConversationTurns({ turns, onOpenChat }: { turns: UseQueryResult
                                 {formatDateFull(turn.timestamp, locale)}
                             </Text>
                         </Row>
-                        <Text dir="auto" selectable>
+                        <Text dir="ltr" selectable>
                             {turn.content}
                         </Text>
                     </Stack>

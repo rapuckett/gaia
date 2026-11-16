@@ -150,9 +150,9 @@ export function DownloadContents({ plan, run, onRetry, busy }: { plan: SetupPlan
                                 </Stack>
                                 <Stack align="end" maxWidth="40%">
                                     {c.size_gb == null ? (
-                                        <Text>{t('setup.contents.sizeOnDownload')}</Text>
+                                        <Text tone="secondary" align="end">{t('setup.contents.sizeOnDownload')}</Text>
                                     ) : (
-                                        <Text numberOfLines={1}>{isolate(formatSize(c.size_gb).replace(/ /g, '\u00A0'), 'ltr')}</Text>
+                                        <Text tone="secondary" numberOfLines={1}>{isolate(formatSize(c.size_gb).replace(/ /g, '\u00A0'), 'ltr')}</Text>
                                     )}
                                     <Text role="caption" tone="secondary">{stateText(c, state, t)}</Text>
                                 </Stack>

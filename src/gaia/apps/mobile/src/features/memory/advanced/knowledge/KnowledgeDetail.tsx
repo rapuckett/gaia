@@ -95,7 +95,7 @@ export function KnowledgeDetail({ item, edit, forget, onEdit, onChanged, onFilte
                 <Text role="caption" tone="muted">
                     {t('mem.detail.fullContent')}
                 </Text>
-                <Text dir="auto" selectable testID="memory-knowledge-detail-content">
+                <Text dir="ltr" selectable testID="memory-knowledge-detail-content">
                     {item.content}
                 </Text>
             </Stack>

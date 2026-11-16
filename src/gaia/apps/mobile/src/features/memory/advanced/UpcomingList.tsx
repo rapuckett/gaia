@@ -42,7 +42,7 @@ export function UpcomingList({ items }: { items: TemporalItem[] }) {
                             >
                                 <Icon icon={overdue ? TriangleAlert : Clock} size="md" tone={overdue ? 'danger' : 'warning'} />
                                 <Stack flex={1} gap="xs">
-                                    <Text dir="auto">{item.content}</Text>
+                                    <Text dir="ltr">{item.content}</Text>
                                     <Row wrap gap="xs">
                                         <Text role="caption" tone={overdue ? 'danger' : 'muted'}>
                                             {t(overdue ? 'mem.upcoming.overdue' : 'mem.upcoming.due', { when })}

@@ -3,7 +3,7 @@
 
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 
-import { Button, Row, Sheet, Stack, Text } from '@/ui';
+import { Button, Sheet, Stack, Text } from '@/ui';
 
 import type { ConfirmRequest } from './setupConfirm';
 
@@ -19,7 +19,7 @@ export interface ConfirmSheetProps {
     busy?: boolean;
 }
 
-/** Asks before something costly: Cancel comes first and the scrim, back and swipe all cancel. */
+/** Asks before something costly: one full-width button per line, so a long bracketed label wraps instead of widening the sheet. Cancel comes first and the scrim, back and swipe all cancel. */
 export function ConfirmSheet({ open, title, body = [], confirmLabel, cancelLabel, onConfirm, onCancel, danger, busy }: ConfirmSheetProps) {
     return (
         <Sheet
@@ -28,10 +28,10 @@ export function ConfirmSheet({ open, title, body = [], confirmLabel, cancelLabel
             title={title}
             dismissible={!busy}
             footer={
-                <Row gap="sm" stack>
-                    <Button label={cancelLabel} variant="secondary" disabled={busy} onPress={onCancel} testID="confirm-cancel" />
-                    <Button label={confirmLabel} variant={danger ? 'danger' : 'primary'} busy={busy} onPress={onConfirm} testID="confirm-ok" />
-                </Row>
+                <Stack gap="sm">
+                    <Button label={cancelLabel} variant="secondary" full wrap disabled={busy} onPress={onCancel} testID="confirm-cancel" />
+                    <Button label={confirmLabel} variant={danger ? 'danger' : 'primary'} full wrap busy={busy} onPress={onConfirm} testID="confirm-ok" />
+                </Stack>
             }
         >
             <Stack gap="sm">

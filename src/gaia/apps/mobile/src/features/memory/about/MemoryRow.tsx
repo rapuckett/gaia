@@ -3,16 +3,21 @@
 
 import { useState } from 'react';
 
-import { ref } from '@webui/i18n/registry';
+import { ref, type MessageKey, type Params, type Say } from '@webui/i18n/registry';
 import { dueInputValue, dueLabel, relativeDay, sourceKey, type AboutYouItem } from '@webui/utils/memoryFormat.core';
 
 import { useEditMemory } from '@/data';
-import { describeFailureWith, useT } from '@/i18n/useT';
+import { describeFailureWith, translator, useT, type Translate } from '@/i18n/useT';
 import { Button, IconButton, Row, SmallButton, Stack, Text, TextField } from '@/ui';
 import { Eye, Pencil, Trash2 } from '@/ui/icons';
 
 import type { MemoryPaneProps } from '../tabs';
 import { parseWhen, whenText } from './whenInput';
+
+/** A translator whose lookups are one language half of a `t.compose`, so a date inside them stays in that half. */
+function sayAs(say: Say, code: string): Translate {
+    return Object.assign((key: MessageKey, params?: Params) => say(key, params), translator(code)) as Translate;
+}
 
 interface MemoryRowProps extends Pick<MemoryPaneProps, 'notify'> {
     item: AboutYouItem;
@@ -31,9 +36,12 @@ export function MemoryRow({ item, forgetting, onForget, notify }: MemoryRowProps
     const hidden = item.sensitive && !revealed;
     const reminder = item.category === 'reminder';
     const due = item.due_at ? dueLabel(item.due_at, new Date(), t) : null;
-    const when = relativeDay(item.updated_at, t);
+    const dueText = item.due_at ? t.compose((say, code) => dueLabel(item.due_at as string, new Date(), sayAs(say, code))?.text ?? '') : null;
     const source = ref(sourceKey(item.source));
-    const meta = when === null ? t(sourceKey(item.source)) : t('mem.about.meta', { source, when });
+    const meta =
+        relativeDay(item.updated_at, t) === null
+            ? t(sourceKey(item.source))
+            : t.compose((say, code) => say('mem.about.meta', { source, when: relativeDay(item.updated_at, translator(code)) as string }));
     const name = hidden ? t.bare('mem.about.sensitiveMemory') : item.content;
 
     const open = () => {
@@ -108,13 +116,13 @@ export function MemoryRow({ item, forgetting, onForget, notify }: MemoryRowProps
                                 />
                             </Row>
                         ) : (
-                            <Text dir="auto" selectable>
+                            <Text dir="ltr" selectable>
                                 {item.content}
                             </Text>
                         )}
                         {due ? (
                             <Text role="caption" tone={due.past ? 'danger' : 'muted'}>
-                                {due.text}
+                                {dueText}
                             </Text>
                         ) : null}
                         <Text role="caption" tone="muted">

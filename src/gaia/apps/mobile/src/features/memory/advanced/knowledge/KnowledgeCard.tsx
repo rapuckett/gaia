@@ -32,7 +32,7 @@ export function KnowledgeCard({ item, onOpen }: { item: KnowledgeEntry; onOpen: 
                         <StatusDot tone={item.has_embedding ? 'success' : 'attention'} label={t(item.has_embedding ? 'mem.knowledge.embedded' : 'mem.knowledge.embedMissing')} />
                     ) : null}
                 </Row>
-                <Text dir="auto" tone={superseded || item.sensitive ? 'muted' : 'primary'}>
+                <Text dir="ltr" tone={superseded || item.sensitive ? 'muted' : 'primary'}>
                     {text}
                 </Text>
                 <Row gap="xs" wrap>

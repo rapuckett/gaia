@@ -56,7 +56,7 @@ export function ConversationBrowser({ onOpenChat }: Pick<MemoryPaneProps, 'onOpe
                                     {label(turn.session_id)}
                                 </Text>
                             </Row>
-                            <Text dir="auto" numberOfLines={4}>
+                            <Text dir="ltr" numberOfLines={4}>
                                 {turn.content}
                             </Text>
                             <Text role="caption" tone="muted">
@@ -86,7 +86,7 @@ export function ConversationBrowser({ onOpenChat }: Pick<MemoryPaneProps, 'onOpe
                                 {session.consolidated ? <Badge label={t.bare('mem.conv.consolidated')} accessibilityLabel={t('mem.conv.consolidated')} /> : null}
                             </Row>
                             {session.first_message ? (
-                                <Text dir="auto" tone="secondary" numberOfLines={3}>
+                                <Text dir="ltr" tone="secondary" numberOfLines={3}>
                                     {session.first_message}
                                 </Text>
                             ) : null}

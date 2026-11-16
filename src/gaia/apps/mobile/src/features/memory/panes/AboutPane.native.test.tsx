@@ -2,14 +2,16 @@
 // SPDX-License-Identifier: MIT
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
 import type { ReactNode } from 'react';
 import { Platform } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { createFakeClient } from '@/api/fake';
 import { GaiaClientProvider } from '@/data';
+import { useLocaleStore } from '@/state/locale';
 import { ThemeProvider } from '@/ui';
+import { physicalAlign } from '@/ui/text/direction';
 
 import { SAMPLE_KNOWLEDGE } from '../devScenes';
 import type { MemoryNotice } from '../useMemoryNotice';
@@ -45,5 +47,29 @@ describeNative('AboutPane', () => {
         const restored = client.knowledgeCalls[1]!;
         expect(restored.action).toBe('add');
         expect(restored.action === 'add' && restored.body).toMatchObject({ content: 'Call me Sam.', category: 'preference' });
+    });
+
+    describe('in the Arabic UI', () => {
+        beforeEach(() => useLocaleStore.getState().setLocale('ar'));
+        afterEach(() => useLocaleStore.getState().setLocale(null));
+
+        it('keeps English memory text left-to-right on the UI start, and the gloss date in English', async () => {
+            const client = createFakeClient({ memoryKnowledge: SAMPLE_KNOWLEDGE });
+            const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+            const wrap = ({ children }: { children: ReactNode }) => (
+                <QueryClientProvider client={queryClient}>
+                    <GaiaClientProvider client={client}>
+                        <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 800 }, insets: { top: 0, left: 0, right: 0, bottom: 0 } }}>
+                            <ThemeProvider>{children}</ThemeProvider>
+                        </SafeAreaProvider>
+                    </GaiaClientProvider>
+                </QueryClientProvider>
+            );
+            await render(<AboutPane notify={() => undefined} memoryEnabled onOpenAdvanced={() => undefined} />, { wrapper: wrap });
+            const body = await screen.findByText('Call me Sam.');
+            expect(body.props.style).toMatchObject({ writingDirection: 'ltr', textAlign: physicalAlign(true) });
+            const row = screen.getByTestId('memory-about-row-k8');
+            expect(within(row).getByText(/\([^)]*[A-Z][a-z]{2} \d{1,2}, \d{4}[^)]*\)/)).toBeTruthy();
+        });
     });
 });
