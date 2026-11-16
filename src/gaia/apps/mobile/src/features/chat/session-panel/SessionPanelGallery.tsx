@@ -86,6 +86,9 @@ const CHANGES: SessionChanges = {
     incomplete: false,
 };
 
+// The PC's own wording for a refused undo (RestoreConflict in file_snapshots.py).
+const UNDO_CONFLICT = '1 file(s) changed after turn 2: q3-summary.md. Undoing it would overwrite those changes. Nothing was restored.';
+
 const GIT: SessionGit = {
     available: true,
     repos: [
@@ -351,7 +354,7 @@ export function SessionPanelGallery({ state }: { state: SessionPanelGalleryState
             sessions: env || chg ? [SESSION] : undefined,
             sessionChanges: chg && state !== 'chgError' ? { dev: { ...CHANGES, pending: state === 'chgPending' } } : undefined,
             sessionGit: state === 'chgGit' || state === 'chgConfirm' ? { dev: GIT } : undefined,
-            undoConflict: state === 'chgConflict' ? new GaiaApiError(409, 'a file changed since', undefined, undefined, { status: 'conflict' }) : undefined,
+            undoConflict: state === 'chgConflict' ? new GaiaApiError(409, UNDO_CONFLICT, undefined, undefined, { status: 'conflict' }) : undefined,
             environments: env ? { dev: environment } : undefined,
             fileFolders: env ? (state === 'envPickRefused' ? { ...BROWSE_FOLDERS, '': BROWSE_FOLDERS['/Users/avery']! } : BROWSE_FOLDERS) : undefined,
             permissions: state === 'envOffline' ? { dev: 'full_access' } : undefined,
@@ -423,7 +426,7 @@ export function SessionPanelGallery({ state }: { state: SessionPanelGalleryState
             state === 'chgConfirm'
                 ? { phase: 'confirm' }
                 : state === 'chgConflict'
-                  ? { phase: 'conflict', message: 'a file changed since' }
+                  ? { phase: 'conflict', message: UNDO_CONFLICT }
                   : state === 'chgReview'
                     ? { review: true }
                     : null,
