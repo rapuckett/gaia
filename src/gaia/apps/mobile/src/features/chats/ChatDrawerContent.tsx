@@ -11,7 +11,8 @@ import { hiddenAutomatedCount } from '@webui/utils/sessionGrouping';
 import { useDeleteSession, useMarkRead, useRenameSession, useSessions, useSessionSearch, useSetPinned } from '@/data';
 import { ModelStatusPill } from '@/features/model';
 import { NotificationsEntry } from '@/features/notifications';
-import { describeError, describeErrorWith, useT } from '@/i18n/useT';
+import { GaiaApiError } from '@/api/errors';
+import { describeError, describeErrorWith, ltr, useT } from '@/i18n/useT';
 import {
     Chip,
     EmptyState,
@@ -175,7 +176,11 @@ export function ChatDrawerContent({ activeId, onSelect, onClose, onNewChat, onPc
             {state === 'error' ? <ErrorState title={describeError(sessions.error, t)} onRetry={() => void sessions.refetch()} /> : null}
             {state === 'empty' && q === '' ? <EmptyState title={t('sidebar.empty')} /> : null}
             {q !== '' && searchFailed ? (
-                <Notice tone="danger" message={t.compose((say) => say('sidebar.searchFailed', { error: describeErrorWith(search.error, say) }))} />
+                <Notice
+                    tone="danger"
+                    title={t('mobileApp.chats.searchFailedLabel')}
+                    message={search.error instanceof GaiaApiError ? ltr(search.error.detail) : t.compose((say) => describeErrorWith(search.error, say))}
+                />
             ) : null}
             {q !== '' && !searchFailed && settled && search.data?.truncated ? (
                 <Notice tone="info" role="note" message={t('sidebar.searchCapped', { n: search.data.results.length })} />
