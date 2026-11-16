@@ -205,7 +205,7 @@ export function FileBrowserScreen({ chatId, onClose, onPreview, onAsk, initial }
                 </Stack>
             }
             footer={
-                <Stack gap="sm" paddingX="lg" paddingY="sm">
+                <Stack gap="sm">
                     {result ? <Notice tone={result.tone} role="note" message={result.message} onDismiss={() => setResult(null)} /> : null}
                     <Text role="caption" tone="secondary">
                         {add.isPending ? t.plural('fileBrowser.adding', chosen.length) : chosen.length > 0 ? t.plural('fileBrowser.selected', chosen.length) : t('fileBrowser.selectHint')}
