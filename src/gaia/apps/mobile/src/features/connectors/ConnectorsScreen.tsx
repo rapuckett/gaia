@@ -7,7 +7,6 @@ import { useRouter } from 'expo-router';
 import { useMemo, useState, type ReactNode } from 'react';
 import { View } from 'react-native';
 
-import { PC_ONLY_REFUSAL } from '@/api/constants';
 import type { AgentMcpServer, ConnectorRow, UnavailableConnectorRow } from '@/api/client.types';
 import {
     useAgentMcps,
@@ -316,7 +315,7 @@ function ConnectorTile({
         if (!expanded) onToggle();
     }
     const refuse = (detailKey: 'checkPcOnly' | 'codePcOnly' | 'configurePcOnly' | 'connectPcOnly' | 'enablePcOnly') =>
-        show({ tone: 'info', text: `${PC_ONLY_REFUSAL} ${t(`mobileApp.connectors.${detailKey}`)}` });
+        show({ tone: 'info', text: `${t('mobileApp.pcOnly.refusal')} ${t(`mobileApp.connectors.${detailKey}`)}` });
     function run(kind: 'disable' | 'disconnect') {
         setMessage(null);
         if (kind === 'disconnect') onDisconnected(null);

@@ -1134,7 +1134,7 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
         loadModel(modelName, force, options) {
             return postJson<{ status: string; model: string; ctx_size: number }>(
                 ENDPOINTS.systemLoadModel,
-                { model_name: modelName, force },
+                { model_name: modelName, ctx_size: options?.ctxSize, force },
                 options?.signal,
             );
         },
