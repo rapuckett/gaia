@@ -3970,6 +3970,7 @@ const messages: Messages = {
     'mobileApp.answer.place.thisPc': 'على الكمبيوتر لديك',
     'mobileApp.rail.preview': 'معاينة',
     'mobileApp.rail.errorShort': 'تعذّر تجميع مصادر هذا الدور وتفاصيله.',
+    'mobileApp.env.foldersErrorShort': 'تعذّرت قراءة مجلدات هذه المحادثة.',
     'mobileApp.answer.duration.sec': '{n} ث',
     'mobileApp.answer.duration.min': '{n} د',
     'mobileApp.answer.duration.minSec': '{m} د {s} ث',

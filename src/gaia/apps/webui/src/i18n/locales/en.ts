@@ -3971,6 +3971,7 @@ export const enMessages = {
     'mobileApp.answer.place.thisPc': 'on your PC',
     'mobileApp.rail.preview': 'Preview',
     'mobileApp.rail.errorShort': 'Couldn\'t put together this turn\'s sources and details.',
+    'mobileApp.env.foldersErrorShort': 'Couldn\'t read this chat\'s folders.',
     'mobileApp.answer.duration.sec': '{n} s',
     'mobileApp.answer.duration.min': '{n} min',
     'mobileApp.answer.duration.minSec': '{m} min {s} s',

@@ -22,7 +22,7 @@ export interface TextProps {
     italic?: boolean;
     /** `start`/`end` follow the UI direction, whatever `dir` is; `ltr`/`rtl` pin the block to that direction's start edge (code, logs, content blocks). */
     align?: 'start' | 'center' | 'end' | 'ltr' | 'rtl';
-    /** Lines to show at normal text size; a person who chose a large size gets the whole text (up to 3 lines) unless `compact`. */
+    /** Lines to show at normal text size; a person who chose a large size gets the whole text (up to 3 lines) unless `compact`. A string carrying an English gloss gets twice as many. */
     numberOfLines?: number;
     /** Lines kept at large sizes instead of the whole text: only for long user content in a list (a chat title, a file name) or a header title. */
     largeLines?: number;
@@ -61,6 +61,15 @@ export function lineHeightOf(size: number, role: TypeRole, rtl: boolean): number
 
 const GLOSS_MIN_SIZE = 11;
 const GLOSS_LINE_HEIGHT = 1.3;
+
+/** Whether a string child carries an English gloss, which roughly doubles its length. */
+function hasGloss(children: ReactNode): boolean {
+    let found = false;
+    Children.forEach(children, (child) => {
+        if (typeof child === 'string' && glossParts(child)) found = true;
+    });
+    return found;
+}
 
 /** Splits each string child at its English glosses and sets them small and muted, as the web's `.i18n-gloss` does. */
 function withGlosses(children: ReactNode, size: number, color: string): ReactNode {
@@ -114,7 +123,9 @@ export function Text({
     const dir = dirProp === 'auto' ? (typeof children === 'string' ? contentDir(children, uiDir) : uiDir) : dirProp;
     const nested = useContext(InsideText);
     const largeText = useLargeText();
-    const lines = !compact && largeText && numberOfLines !== undefined && numberOfLines <= 3 ? largeLines : numberOfLines;
+    const capped = !compact && largeText && numberOfLines !== undefined && numberOfLines <= 3 ? largeLines : numberOfLines;
+    // A cap sized for English would cut the gloss off a translated line, at the wrong end in RTL.
+    const lines = capped !== undefined && !compact && hasGloss(children) ? capped * 2 : capped;
 
     // A nested Text is a span: it inherits everything it isn't given.
     const baseSize = type[role ?? 'body'];
