@@ -245,6 +245,7 @@ function StatusBody({ status, modelName, actions, detailsOpen, onToggleDetails }
                                 accessibilityLabel={downloading ? t('settings.advanced.downloading') : t('settings.advanced.redownload')}
                                 variant="secondary"
                                 size="sm"
+                                shrink={false}
                                 busy={downloading}
                                 disabled={downloading}
                                 onPress={() => void actions.download(true)}
