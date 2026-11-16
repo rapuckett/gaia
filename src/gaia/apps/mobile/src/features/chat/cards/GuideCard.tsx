@@ -161,6 +161,7 @@ function Guide({ wire, startGuided }: { wire: GuideWire; startGuided: boolean })
                         </Text>
                         {doc.items.map((_, i) => {
                             const { qty, text } = itemDisplay(doc, i, state);
+                            const itemDir = contentDir(text, uiDir);
                             const content = (
                                 <Text role="body" dir="auto" strike={features.checkItems && checked.has(i)} tone={features.checkItems && checked.has(i) ? 'muted' : 'primary'}>
                                     {qty ? (
@@ -180,13 +181,13 @@ function Guide({ wire, startGuided }: { wire: GuideWire; startGuided: boolean })
                                     accessibilityLabel={qty ? `${qty} ${text}` : text}
                                     testID={`guide-item-${i}`}
                                 >
-                                    <Row gap="sm" dir={dir}>
+                                    <Row gap="sm" dir={itemDir}>
                                         <Icon icon={checked.has(i) ? CircleCheck : Circle} tone={checked.has(i) ? 'accent' : 'muted'} />
                                         <Stack flex={1}>{content}</Stack>
                                     </Row>
                                 </Pressable>
                             ) : (
-                                <Row key={i} gap="sm" align="start" dir={dir}>
+                                <Row key={i} gap="sm" align="start" dir={itemDir}>
                                     <Text role="body" tone="secondary">
                                         •
                                     </Text>
@@ -205,8 +206,9 @@ function Guide({ wire, startGuided }: { wire: GuideWire; startGuided: boolean })
                         {doc.steps.map((step, i) => {
                             const title = stepTitle(doc, i, (n) => t('cards.dayN', { n }));
                             const body = stepText(doc, step.body, system);
+                            const stepDir = contentDir(`${title ?? ''} ${body}`, uiDir);
                             return (
-                                <Row key={i} gap="sm" align="start" dir={dir}>
+                                <Row key={i} gap="sm" align="start" dir={stepDir}>
                                     <Text role="label" weight="semibold" tone="accent">
                                         {features.timeline ? '•' : <Ltr>{`${i + 1}.`}</Ltr>}
                                     </Text>
