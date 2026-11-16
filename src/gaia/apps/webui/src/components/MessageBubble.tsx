@@ -41,7 +41,8 @@ import {
     buildCitationIndex, docForToken, findCitations, findPages,
     type CitationIndex, type CitedDoc, type FoundPage,
 } from '../utils/citations';
-import { WIN_PATH_ONLY_RE, findFilePaths } from '../utils/windowsPaths';
+import { filePathOfCodeSpan } from '../utils/codeSpanPath';
+import { findFilePaths } from '../utils/windowsPaths';
 import { cleanToolCallContent } from '../utils/toolCallContent';
 export { cleanToolCallContent, escapeBareNumberLines } from '../utils/toolCallContent';
 import './MessageBubble.css';
@@ -739,9 +740,7 @@ function writtenFileFor(files: readonly string[], children: React.ReactNode): st
 }
 
 function inlineCodePath(children: React.ReactNode): string | null {
-    if (typeof children !== 'string') return null;
-    const text = children.trim();
-    return WIN_PATH_ONLY_RE.test(text) ? text : null;
+    return typeof children === 'string' ? filePathOfCodeSpan(children) : null;
 }
 
 function FilePathLink({ path, label }: { path: string; label?: string }) {
@@ -924,7 +923,7 @@ function InlineCode({ className: _className, children, node: _node, ...props }: 
     const doc = inlineCodeDoc(index, children);
     if (doc) return <CitationLink doc={doc} t={t} />;
     const path = inlineCodePath(children);
-    if (path) return <FilePathLink path={path} />;
+    if (path) return <FilePathLink path={path} label={String(children).trim()} />;
     const written = writtenFileFor(writtenFiles, children);
     if (written) return <FilePathLink path={written} label={String(children).trim()} />;
     return (

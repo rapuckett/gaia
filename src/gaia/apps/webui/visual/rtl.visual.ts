@@ -1229,6 +1229,31 @@ for (const locale of ['ar', 'en']) {
     });
 }
 
+/** An answer naming a macOS path and a Linux file URL in inline code. */
+const POSIX_ANSWER_PATH = '/Users/test/Documents/Q3 report.pdf';
+const FILE_URL_ANSWER_PATH = 'file:///home/test/notes/plan.md';
+
+for (const locale of ['ar', 'en']) {
+    test(`a POSIX path in inline code is a chip (${locale})`, async ({ page }, info) => {
+        await open(page, `#${ANSWER_SESSION}`, locale, (p) =>
+            p.route((url) => url.pathname === `/api/sessions/${ANSWER_SESSION}/messages`, (route) =>
+                route.fulfill({
+                    json: {
+                        messages: [
+                            { id: 1, session_id: ANSWER_SESSION, role: 'user', content: 'Where did you save them?', created_at: NOW.toISOString(), rag_sources: null },
+                            { id: 2, session_id: ANSWER_SESSION, role: 'assistant', content: `The report is at \`${POSIX_ANSWER_PATH}\` and the plan at \`${FILE_URL_ANSWER_PATH}\`.`, created_at: NOW.toISOString(), rag_sources: null },
+                        ],
+                    },
+                }),
+            ),
+        );
+        const chips = page.locator('.file-path-link');
+        await expect(chips).toHaveText([POSIX_ANSWER_PATH, FILE_URL_ANSWER_PATH]);
+        expect(await audit(page)).toEqual([]);
+        await page.screenshot({ path: info.outputPath('posix-paths.png') });
+    });
+}
+
 /** A chat with 150 documents attached: more than one chat searches at once. */
 const MANY_DOCS = Array.from({ length: 150 }, (_, i) => ({
     id: `station-${i}`, filename: `station_${String(i).padStart(3, '0')}.txt`,

@@ -43,6 +43,19 @@ describe('answer file paths', () => {
         expect(mockedApi.openFileOrFolder).toHaveBeenCalledWith(ANSWER_PATH);
     });
 
+    it.each([
+        ['/Users/me/Q3 report.pdf', '/Users/me/Q3 report.pdf'],
+        ['file:///home/me/My%20Notes.txt', '/home/me/My Notes.txt'],
+    ])('opens the POSIX inline-code path %s as %s', (code, path) => {
+        renderAnswer(`Saved to \`${code}\`.`);
+
+        expect(links().map((l) => l.textContent)).toEqual([code]);
+        expect(links()[0].getAttribute('dir')).toBe('ltr');
+        fireEvent.click(links()[0]);
+        expect(mockedApi.openFileOrFolder).toHaveBeenCalledTimes(1);
+        expect(mockedApi.openFileOrFolder.mock.calls[0]).toEqual([path]);
+    });
+
     it('accepts forward slashes and a trailing folder separator', () => {
         renderAnswer('Invoices are in `C:/work/expenses/invoices/`.');
         expect(links().map((l) => l.textContent)).toEqual(['C:/work/expenses/invoices/']);
@@ -170,7 +183,6 @@ describe('files the turn wrote', () => {
         ['a name two written files share', 'notes.md', ['C:\\a\\notes.md', 'C:\\b\\notes.md']],
         ['a name the turn did not write', 'other.md', [REPORT]],
         ['a relative path to a written file', 'out/recommendation.md', [REPORT]],
-        ['a POSIX path the turn did not write', '/home/me/out/other.xlsx', [BOM]],
     ])('keeps %s as code', (_label, code, paths) => {
         renderWithWrites(`See \`${code}\`.`, paths);
 
