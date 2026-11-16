@@ -4,7 +4,8 @@
 import { createFakeClient, type FakeClientData } from '@/api/fake';
 import type { SystemStatus } from '@webui/types';
 
-import type { ContextChoice, GaiaClient, CustomModelReport, GpuMemoryStatus, ProviderModel, SpendingReport } from '@/api/client.types';
+import type { ContextChoice, DiscordStatus, GaiaClient, CustomModelReport, GpuMemoryStatus, LemonadeTarget, MCPServerStatus, ModelServerInfo, ProviderModel, Settings, SpendingReport } from '@/api/client.types';
+import { PC_ONLY_REFUSAL } from '@/api/constants';
 import { GaiaApiError } from '@/api/errors';
 import { COMMON, GPU } from '@/features/setup/devScenes';
 
@@ -12,7 +13,7 @@ import type { SectionId } from './sections';
 
 /** A settings pane on a fake PC: which section, and the anchor it opens on. */
 export interface SettingsScene {
-    section: Extract<SectionId, 'advanced' | 'model' | 'setup'>;
+    section: Extract<SectionId, 'advanced' | 'messaging' | 'model' | 'setup'>;
     target?: string;
     gpuMemory: GpuMemoryStatus | Error;
     status?: FakeClientData['status'];
@@ -22,6 +23,8 @@ export interface SettingsScene {
     data?: FakeClientData;
     /** An action that never finishes, so its in-flight state stays on screen: tap its button (`#tap=model-download-<id>` or `#tap=model-use-<id>`). */
     hang?: 'download' | 'select';
+    /** Client calls the scene answers itself (a hang or a PC refusal), over the fake's. */
+    override?: Partial<GaiaClient>;
 }
 
 const PENDING: GpuMemoryStatus = {
@@ -97,6 +100,53 @@ const HF_REPORT: CustomModelReport = {
     warnings: [], variants: [],
 };
 
+const never = () => new Promise<never>(() => undefined);
+const refused = () => Promise.reject(new GaiaApiError(403, PC_ONLY_REFUSAL));
+
+const discord = (extra: Partial<DiscordStatus>): DiscordStatus => ({
+    connected: true, paired: false, running: true, state: 'stopped', detail: '', bot_name: 'GAIA Helper', owner_name: '', autostart: false,
+    always_allowed: [], model: '', portal_url: 'https://discord.com/developers/applications', bot_page_url: 'https://discord.com/developers/applications/1/bot',
+    invite_url: 'https://discord.com/oauth2/authorize?client_id=1', bot_profile_url: 'https://discord.com/users/1', pairing_code: '', pairing_expires_at: 0,
+    discord_installed: false, should_offer_setup: false, ...extra,
+});
+const NO_TOKEN = { connected: false, bot_name: '', bot_profile_url: '', invite_url: '' };
+const msg = (status: DiscordStatus | Error, scene: Partial<SettingsScene> = {}): SettingsScene => ({ section: 'messaging', gpuMemory: GPU, data: { discordStatus: status }, ...scene });
+
+const SERVER: ModelServerInfo = {
+    reachable: true, owner: 'gaia', version: '10.8.1', base_url: 'http://127.0.0.1:13305',
+    chat_model: { name: CHAT_MODEL, backend: 'vulkan', device: 'gpu', recipe: 'llamacpp', ctx_size: 65536, model_type: 'llm' },
+    embedding_model: { name: 'nomic-embed-text-v2-moe-GGUF', backend: 'cpu', device: 'cpu', recipe: 'llamacpp', ctx_size: 2048, model_type: 'embedding' },
+    loaded_models: [
+        { name: CHAT_MODEL, backend: 'vulkan', device: 'gpu', recipe: 'llamacpp', ctx_size: 65536, model_type: 'llm' },
+        { name: 'nomic-embed-text-v2-moe-GGUF', backend: 'cpu', device: 'cpu', recipe: 'llamacpp', ctx_size: 2048, model_type: 'embedding' },
+        { name: 'Whisper-Large-v3-Turbo', backend: 'cpu', device: 'cpu', recipe: 'whispercpp', model_type: 'transcription' },
+        { name: 'SDXL-Turbo', backend: 'cpu', device: 'cpu', recipe: 'sd-cpp', model_type: 'image' },
+        { name: 'bge-reranker-v2-m3-GGUF', backend: 'cpu', device: 'cpu', recipe: 'llamacpp', model_type: 'reranking' },
+        { name: 'kokoro-v1', backend: 'cpu', device: 'cpu', recipe: 'kokoro', model_type: 'tts' },
+    ],
+    available_backends: [{ name: 'vulkan', state: 'installed' }], preferred_backend: 'vulkan', default_backend: 'vulkan',
+};
+const TARGET: LemonadeTarget = { ...COMMON.lemonadeTarget! };
+const server = (info: Partial<ModelServerInfo>, target: Partial<LemonadeTarget> = {}, scene: Partial<SettingsScene> = {}): SettingsScene => ({
+    section: 'advanced', target: 'model-server', gpuMemory: GPU, ...scene,
+    data: { modelServer: { ...SERVER, ...info }, lemonadeTarget: { ...TARGET, ...target }, ...scene.data },
+});
+const SETTINGS: Settings = {
+    custom_model: null, model_status: null, context_size: null, dynamic_tools: false, dynamic_tools_locked: false,
+    agent_mode: 'manual', network_policy: 'cloud_allowed',
+};
+const advanced = (settings: Partial<Settings>, mcp?: MCPServerStatus[]): SettingsScene => ({
+    section: 'advanced', gpuMemory: GPU, data: { settings: { ...SETTINGS, ...settings }, ...(mcp ? { mcpServers: mcp } : {}) },
+});
+const MCP_OK: MCPServerStatus[] = [
+    { name: 'filesystem', connected: true, tool_count: 1, error: null },
+    { name: 'github', connected: true, tool_count: 12, error: null },
+];
+const MCP_FAILED: MCPServerStatus[] = [
+    ...MCP_OK,
+    { name: 'jira', connected: false, tool_count: 0, error: 'spawn jira-mcp ENOENT' },
+];
+
 export const SETTINGS_SCENES: Record<string, SettingsScene> = {
     'advanced-not-installed': { section: 'advanced', gpuMemory: GPU, status: NOT_INSTALLED },
     'gpu-adjustable': { section: 'model', target: 'gpu-memory', gpuMemory: GPU },
@@ -134,13 +184,64 @@ export const SETTINGS_SCENES: Record<string, SettingsScene> = {
     'spend-total': { section: 'model', provider: 'fireworks', gpuMemory: GPU, data: { ...cloud([]), spending: spent({ limit_usd: 20, state: 'ok', unpriced_turns: 2, unreported_turns: 1 }) } },
     'spend-near-limit': { section: 'model', provider: 'fireworks', gpuMemory: GPU, data: { ...cloud([]), spending: spent({ total_usd: 17.4, limit_usd: 20, state: 'near' }) } },
     'spend-over-limit': { section: 'model', provider: 'fireworks', gpuMemory: GPU, data: { ...cloud([]), spending: spent({ total_usd: 20.3, limit_usd: 20, state: 'reached' }) } },
+
+    // SET-MSG-01: the card before the PC has answered, and when the read fails (`Try again`).
+    'msg-loading': msg(discord({}), { override: { getDiscordStatus: never } }),
+    'msg-load-failed': msg(new GaiaApiError(500, 'The messaging service is not running.')),
+    // The PC refuses the read for a phone: the steps to follow at the PC, with PC-only buttons (`#tap=messaging-connect` explains).
+    'msg-pc-refused': msg(new GaiaApiError(403, PC_ONLY_REFUSAL)),
+    // SET-MSG-01, 08: no bot yet (steps 1 and 2), and a token Discord or GAIA can't use.
+    'msg-needs-token': msg(discord({ ...NO_TOKEN, running: false })),
+    'msg-token-invalid': msg(discord({ state: 'token_invalid' })),
+    'msg-conflict': msg(discord({ ...NO_TOKEN, state: 'conflict', running: false })),
+    'msg-credentials': msg(discord({ state: 'credentials_unavailable', detail: 'The OS key store refused the request.' })),
+    // SET-MSG-08, 09: stopped (Start), crashed (stopped with autostart on), an error (Start, with its detail), and another PC answering (Answer from this PC).
+    'msg-stopped': msg(discord({ state: 'stopped' })),
+    'msg-crashed': msg(discord({ state: 'stopped', autostart: true })),
+    'msg-error': msg(discord({ state: 'error', detail: 'discord.errors.LoginFailure: Improper token has been passed.' })),
+    'msg-taken-over': msg(discord({ state: 'taken_over' })),
+    'msg-starting': msg(discord({ state: 'starting', running: false })),
+    // SET-MSG-05, 06: steps 3 and 4 with the pairing code (`#tap=messaging-copy-code` shows Copied); the same with no code yet.
+    'msg-pairing': msg(discord({ state: 'pairing', pairing_code: 'DUMY2345', pairing_expires_at: 1900000000 })),
+    'msg-pairing-waiting': msg(discord({ state: 'pairing' })),
+    // SET-MSG-11, 13: paired and answering, with the Disconnect button (`#tap=messaging-disconnect` explains it is the PC's to press).
+    'msg-paired': msg(discord({ state: 'connected', paired: true, owner_name: 'Alex', model: CHAT_MODEL, always_allowed: ['Run shell commands'] })),
+
+    // SET-ADV-13, 14, 15, 16, 17: the model server section (opens on load): GAIA's own server with the chat, embedding and each other kind of loaded model (`#tap=advanced-reload` shows the reloading notice).
+    'adv-server-loaded': server({}),
+    'adv-server-checking': server({}, {}, { override: { getModelServer: never } }),
+    'adv-server-error': server({}, {}, { override: { getModelServer: () => Promise.reject(new GaiaApiError(500, 'Connection refused')) } }),
+    'adv-server-pc-only': server({}, {}, { override: { getModelServer: refused } }),
+    'adv-server-unreachable': server({ reachable: false, error: 'connect ECONNREFUSED 127.0.0.1:13305' }),
+    'adv-server-none-loaded': server({ chat_model: null, embedding_model: null, loaded_models: [] }),
+    // SET-ADV-15: the backend a Lemonade lists but has not downloaded, none to choose, and a saved backend to switch back from (tap the "Vulkan" segment for the Saved notice).
+    'adv-server-backend-installable': server({ available_backends: [{ name: 'vulkan', state: 'installable' }] }),
+    'adv-server-no-backends': server({ available_backends: [], preferred_backend: null, default_backend: null }),
+    'adv-server-backend-switch': server({ preferred_backend: 'cpu' }),
+    // SET-ADV-17: which server GAIA uses: its own, yours, set by LEMONADE_BASE_URL, an ignored env address, and a failed read.
+    'adv-target-own': server({}),
+    'adv-target-yours': server({ owner: 'user', base_url: 'http://192.168.1.20:13305' }, { mode: 'external', base_url: 'http://192.168.1.20:13305', saved_base_url: 'http://192.168.1.20:13305' }),
+    'adv-target-env': server({ owner: 'user', base_url: 'http://10.0.0.5:13305' }, { mode: 'external', source: 'env', base_url: 'http://10.0.0.5:13305', env_override: 'http://10.0.0.5:13305' }),
+    'adv-target-env-ignored': server({}, { env_url_ignored: 'http://10.0.0.5:13305' }),
+    'adv-target-error': server({}, {}, { override: { getLemonadeTarget: () => Promise.reject(new GaiaApiError(500, 'Target unreadable')) } }),
+    // SET-ADV-20: the Custom model ID card is closed until tapped (`#tap=advanced-custom-toggle`): empty, a saved ID the server lists, one it doesn't, one it couldn't check, and refused.
+    'adv-custom-empty': advanced({}),
+    'adv-custom-saved': advanced({ custom_model: 'Qwen3-4B-Instruct-2507-GGUF', model_status: { checked: true, found: true } }),
+    'adv-custom-unlisted': advanced({ custom_model: 'user.missing-GGUF', model_status: { checked: true, found: false } }),
+    'adv-custom-unchecked': advanced({ custom_model: 'user.maybe-GGUF', model_status: { checked: false, found: false } }),
+    'adv-custom-pc-only': { section: 'advanced', gpuMemory: GPU, data: { settings: SETTINGS }, override: { getSettings: refused } },
+    // SET-ADV-21: Dynamic tools, closed until tapped (`#tap=advanced-dynamic-toggle`): on, and locked by GAIA_DYNAMIC_TOOLS.
+    'adv-dynamic-on': advanced({ dynamic_tools: true }),
+    'adv-dynamic-locked': advanced({ dynamic_tools: true, dynamic_tools_locked: true }),
+    // SET-ADV-22: MCP servers: open when one failed, and closed until tapped when all connected (`#tap=advanced-mcp-toggle`).
+    'adv-mcp-failed': advanced({}, MCP_FAILED),
+    'adv-mcp-ok': advanced({}, MCP_OK),
 };
 
 export function settingsSceneClient(scene: SettingsScene): GaiaClient {
     const client = createFakeClient({
         ...COMMON, contexts: { [CHAT_MODEL]: CONTEXT }, gpuMemory: scene.gpuMemory, ...(scene.status ? { status: scene.status } : {}), ...scene.data,
     });
-    if (!scene.hang) return client;
-    const never = () => new Promise<never>(() => undefined);
-    return { ...client, ...(scene.hang === 'download' ? { downloadModel: never } : { selectModel: never }) };
+    const hung = scene.hang ? (scene.hang === 'download' ? { downloadModel: never } : { selectModel: never }) : {};
+    return { ...client, ...hung, ...scene.override };
 }
