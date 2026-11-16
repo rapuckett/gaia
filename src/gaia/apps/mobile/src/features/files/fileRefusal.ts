@@ -12,10 +12,10 @@ const REFUSAL_KEYS = {
     session_required: 'mobileApp.files.refused.sessionRequired',
 } as const;
 
-/** True when the PC refused the file or folder with one of the codes this app words itself. */
+/** True for a 403 carrying a refusal code, one this app words itself or not. */
 export function isFileRefusal(error: unknown): error is GaiaApiError {
-    const code = (error as GaiaApiError | null)?.body?.code;
-    return typeof code === 'string' && code in REFUSAL_KEYS;
+    const e = error as GaiaApiError | null;
+    return e?.status === 403 && typeof e.body?.code === 'string';
 }
 
 /** The PC's file refusal in the app's language; its own sentence when the code is one this app lacks. */
