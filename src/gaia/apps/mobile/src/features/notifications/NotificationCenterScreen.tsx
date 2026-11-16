@@ -22,7 +22,7 @@ import {
     useNotificationStore,
 } from '@/state/notifications';
 import { usePermissionPromptStore } from '@/state/permissionPrompts';
-import { Badge, Button, Chip, Divider, EmptyState, FirstLine, HScroll, Icon, IconButton, Notice, Pressable, Row, Screen, Stack, StatusDot, Text } from '@/ui';
+import { Badge, Button, Chip, Divider, EmptyState, FirstLine, Icon, IconButton, Notice, Pressable, Row, Screen, Stack, StatusDot, Text } from '@/ui';
 import { useLargeText } from '@/ui/theme/a11y';
 import { Bell, Check, CircleAlert, CircleCheck, Info, ShieldAlert, Trash2, TriangleAlert, X, type LucideIcon } from '@/ui/icons';
 
@@ -75,18 +75,14 @@ export function NotificationCenterScreen({ onBack, onOpenChat }: { onBack: () =>
             }
             scroll
         >
-            <HScroll>
-                    <Row gap="sm" accessibilityRole="tablist">
-                        <Stack paddingX="lg" paddingY="sm">
-                            <Row gap="sm">
-                                <Chip label={t('notifications.filter.all')} selected={filter === null} onPress={() => setNotificationFilter(null)} />
-                                {FILTER_ORDER.map((kind) => (
-                                    <Chip key={kind} label={t(FILTER_LABELS[kind])} selected={filter === kind} onPress={() => setNotificationFilter(kind)} />
-                                ))}
-                            </Row>
-                        </Stack>
-                    </Row>
-            </HScroll>
+            <Stack paddingX="gutter" paddingY="sm">
+                <Row gap="sm" wrap accessibilityRole="tablist">
+                    <Chip label={t('notifications.filter.all')} selected={filter === null} onPress={() => setNotificationFilter(null)} />
+                    {FILTER_ORDER.map((kind) => (
+                        <Chip key={kind} label={t(FILTER_LABELS[kind])} selected={filter === kind} onPress={() => setNotificationFilter(kind)} />
+                    ))}
+                </Row>
+            </Stack>
             {items.length === 0 ? (
                 <EmptyState title={t('notifications.empty')} icon={Bell} />
             ) : (
