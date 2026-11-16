@@ -14,6 +14,7 @@ import { X } from '@/ui/icons';
 import { AddDocuments, type AddStart, type StartMessage } from './AddDocuments';
 import { DocumentRow } from './DocumentRow';
 import { libraryStats } from './libraryStats';
+import { loadFailedText } from './loadFailedText';
 import { useNextChatDocs } from './nextChatDocs';
 import { TargetChooser, type LibraryTarget } from './TargetChooser';
 
@@ -124,7 +125,7 @@ function Library({ chat, onBrowseFiles, onPreview, initial }: { chat: OpenChat |
         );
     };
     const attachedIds = targetChat ? targetChat.documentIds : nextIds;
-    const loadFailed = query.isError ? t.compose((say) => say('docs.loadFailed', { error: describeErrorWith(query.error, say) })) : null;
+    const loadFailed = query.isError ? loadFailedText(t, query.error) : null;
     const adder = <AddDocuments chatId={targetChat?.id ?? null} chatName={chat?.name ?? null} onStart={action.dismiss} onBrowse={onBrowseFiles} initialLine={initial?.add} />;
     const retry = { label: t('docs.loadRetry'), onPress: () => void query.refetch() };
 

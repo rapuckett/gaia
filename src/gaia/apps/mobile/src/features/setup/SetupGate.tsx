@@ -86,7 +86,7 @@ export function SetupGate({ children, renderStep }: { children: ReactNode; rende
         );
     return (
         <Screen edges={['top', 'start', 'end']}>
-            <Stack gap="md" padding="md">
+            <Stack gap="md" paddingX="gutter" paddingY="md">
                 {notice}
                 {gate.state === 'unknown' && !unreachable ? <ErrorDetails error={gate.error} /> : null}
                 {gate.state === 'serverDown' && !gate.modelListUnread ? (
