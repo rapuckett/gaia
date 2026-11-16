@@ -2,6 +2,10 @@
 // SPDX-License-Identifier: MIT
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
+
+import { platformFetch } from '@/platform/fetch';
+import { useConnectionStore } from '@/state/connection';
 
 import type { PairingInvite } from './invite';
 import { createPinnedPairingService } from './pinnedPairingService';
@@ -10,14 +14,17 @@ const mockVault = new Map<string, string>();
 const mockNativeOrigins = new Map<string, string>();
 let mockHealth = 403;
 let mockRoutes: { status: number; body: string } = { status: 404, body: '{"detail":"Not Found"}' };
+let mockPcName = 'Office PC';
+const mockSent: { vaultId: string; url: string }[] = [];
 
+jest.mock('expo/fetch', () => ({ fetch: jest.fn() }));
 jest.mock('expo-device', () => ({ deviceName: 'Test phone', modelName: 'iPhone' }));
 jest.mock('../../../modules/gaia-transport', () => ({
     transportAvailable: true,
     GaiaTransport: {
         pair: async (vaultId: string, origins: string[]) => {
             mockVault.set(vaultId, `secret from ${origins[0]}`);
-            return { status: 200, origin: origins[0], body: JSON.stringify({ device_id: 'dev-2', pc_name: 'Office PC' }) };
+            return { status: 200, origin: origins[0], body: JSON.stringify({ device_id: 'dev-2', pc_name: mockPcName }) };
         },
         dropAll: async () => void mockVault.clear(),
         drop: async (vaultId: string) => void mockVault.delete(vaultId),
@@ -32,7 +39,12 @@ jest.mock('../../../modules/gaia-transport', () => ({
 jest.mock('@/platform/pinnedFetch', () => ({
     onDeviceGone: () => undefined,
     transportError: (err: unknown) => err,
+    reportIfDeviceGone: (_pcId: string, res: unknown) => res,
+    reportIfNetworkFailure: (err: unknown) => {
+        throw err;
+    },
     pinnedFetch: async (vaultId: string, url: string) => {
+        mockSent.push({ vaultId, url });
         if (!mockVault.has(vaultId)) throw Object.assign(new Error('not paired'), { code: 'not_paired' });
         if (url.endsWith('/api/devices/me/routes')) return { ok: mockRoutes.status === 200, status: mockRoutes.status, text: async () => mockRoutes.body };
         const body = mockHealth === 403 ? JSON.stringify({ code: 'device_pending' }) : '{}';
@@ -55,6 +67,9 @@ beforeEach(async () => {
     await AsyncStorage.removeItem('gaia:install-marker');
     mockVault.clear();
     mockNativeOrigins.clear();
+    mockSent.length = 0;
+    mockPcName = 'Office PC';
+    useConnectionStore.getState().clearConnection();
     mockVault.set(PC_ID, 'working secret');
     await AsyncStorage.setItem(
         'gaia:paired-pcs',
@@ -134,5 +149,67 @@ describe('a reinstalled app', () => {
     it('keeps the secrets of an app updated from a build without the marker', async () => {
         await createPinnedPairingService().restore();
         expect(mockVault.get(PC_ID)).toBe('working secret');
+    });
+});
+
+describe('a second PC with the same name on the same host', () => {
+    // The first PC is saved as "air" on port 4243; the second is "air" too, on 4245, with its own id.
+    const FIRST_ORIGIN = 'https://192.168.1.20:4243';
+    const SECOND_ID = 'b2'.repeat(16);
+    const SECOND_ORIGIN = 'https://192.168.1.20:4245';
+    const second: PairingInvite = { ...invite, name: 'air', pc_id: SECOND_ID, origins: [SECOND_ORIGIN] };
+
+    async function pairSecond() {
+        const raw = JSON.parse((await AsyncStorage.getItem('gaia:paired-pcs'))!);
+        raw.pcs[0].name = 'air';
+        await AsyncStorage.setItem('gaia:paired-pcs', JSON.stringify(raw));
+        mockPcName = 'air';
+        const service = createPinnedPairingService();
+        useConnectionStore.getState().finishRestore(await service.restore());
+        mockHealth = 403;
+        await service.redeem(second);
+        mockHealth = 200;
+        const result = await service.status();
+        if (result.state !== 'paired') throw new Error(`pairing ended ${result.state}`);
+        // What PairingFlow does with the answer.
+        useConnectionStore.getState().setConnection(result.pc.connection);
+        return service;
+    }
+
+    it('keeps the first PC, its secret and its addresses, and makes the second the one in use', async () => {
+        const service = await pairSecond();
+        const pcs = await service.list();
+        expect(pcs.map((pc) => [pc.id, pc.name, pc.connection.baseUrl])).toEqual([
+            [PC_ID, 'air', FIRST_ORIGIN],
+            [SECOND_ID, 'air', SECOND_ORIGIN],
+        ]);
+        expect(await service.origins(PC_ID)).toEqual([{ kind: 'home', origin: FIRST_ORIGIN }]);
+        expect(mockVault.get(PC_ID)).toBe('working secret');
+        expect(mockVault.get(SECOND_ID)).toBe(`secret from ${SECOND_ORIGIN}`);
+        expect(useConnectionStore.getState().connection).toMatchObject({ pcId: SECOND_ID, baseUrl: SECOND_ORIGIN });
+    });
+
+    // The web build has no pinned transport (fetch.web.ts).
+    const itNative = Platform.OS === 'web' ? it.skip : it;
+
+    itNative("switches back to the first, and the app's requests go to it over its own pinned connection", async () => {
+        const service = await pairSecond();
+        await service.use(PC_ID);
+        const { connection } = useConnectionStore.getState();
+        expect(connection).toMatchObject({ pcId: PC_ID, baseUrl: FIRST_ORIGIN });
+
+        mockSent.length = 0;
+        await platformFetch(`${connection!.baseUrl}/api/health`, {});
+        expect(mockSent).toEqual([{ vaultId: PC_ID, url: `${FIRST_ORIGIN}/api/health` }]);
+    });
+
+    it('reopens on the PC that was in use, whichever was paired first or last', async () => {
+        await pairSecond();
+        expect(await createPinnedPairingService().restore()).toMatchObject({ pcId: SECOND_ID, baseUrl: SECOND_ORIGIN });
+
+        await createPinnedPairingService().use(PC_ID);
+        const relaunched = createPinnedPairingService();
+        expect(await relaunched.restore()).toMatchObject({ pcId: PC_ID, baseUrl: FIRST_ORIGIN });
+        expect((await relaunched.list()).map((pc) => pc.id)).toEqual([PC_ID, SECOND_ID]);
     });
 });

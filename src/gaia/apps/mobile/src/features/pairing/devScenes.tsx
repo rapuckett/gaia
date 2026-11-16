@@ -28,12 +28,15 @@ export interface PairingScene {
     name: string;
     chosen: RouteOrigin;
     banner?: boolean;
+    /** A second paired PC with the same name, on the same host at another port. */
+    twin?: boolean;
 }
 
 export const PAIRING_SCENES: Record<string, PairingScene> = {
     'route-home': { name: 'Studio PC', chosen: HOME },
     'route-tailnet': { name: 'Studio PC', chosen: TAILNET },
     'route-tailnet-long-name': { name: LONG_NAME, chosen: TAILNET },
+    'two-pcs-same-host': { name: 'air', chosen: HOME, twin: true },
     'unreachable-away': { name: 'Studio PC', chosen: TAILNET, banner: true },
 };
 
@@ -57,7 +60,13 @@ export function PairingSceneView({ scene }: { scene: PairingScene }) {
             name: scene.name,
             connection: connectionOf(scene),
         };
-        setPairingService({ list: async () => [pc] } as never);
+        const twinOrigin = 'https://192.168.1.20:4245';
+        const twin: PairedPc = {
+            id: 'scene-pc-2',
+            name: scene.name,
+            connection: { baseUrl: twinOrigin, pcId: 'scene-pc-2', pinned: true, origins: [twinOrigin], routes: [{ kind: 'home', origin: twinOrigin }] },
+        };
+        setPairingService({ list: async () => (scene.twin ? [pc, twin] : [pc]) } as never);
         const fake = createFakeClient();
         return scene.banner
             ? {
