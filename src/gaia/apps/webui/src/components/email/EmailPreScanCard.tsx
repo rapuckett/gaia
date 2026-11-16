@@ -280,17 +280,17 @@ function Row({
             <div className="email-pre-scan__row-text">
                 <div className="email-pre-scan__row-meta">
                     <span
-                        className="email-pre-scan__row-sender"
+                        className="email-pre-scan__row-sender" dir="auto"
                         title={item.sender}
                     >
                         {senderDisplay}
                     </span>
-                    <span className="email-pre-scan__row-subject" title={item.subject}>
+                    <span className="email-pre-scan__row-subject" dir="auto" title={item.subject}>
                         {item.subject || t.bare('email.prescan.noSubject')}
                     </span>
                 </div>
                 {reason && (
-                    <div className="email-pre-scan__row-reason" title={reason}>
+                    <div className="email-pre-scan__row-reason" dir="auto" title={reason}>
                         {reason}
                     </div>
                 )}
