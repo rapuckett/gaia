@@ -81,9 +81,10 @@ describeNative('/dev/model-server', () => {
     it('the restore-ok scene holds its notice past the 6 s the app shows it for', async () => {
         mockState = 'restore-ok';
         await mount();
-        const msg = 'Restored your saved model, Gemma 4 E4B.';
-        await screen.findByText(msg);
+        const notice = await screen.findByTestId('model-restore-notice');
+        expect(notice).toHaveTextContent(/Restored your saved model/);
+        expect(notice).toHaveTextContent(/Gemma 4 E4B/);
         await new Promise((resolve) => setTimeout(resolve, 6500));
-        expect(screen.getByText(msg)).toBeTruthy();
+        expect(screen.getByTestId('model-restore-notice')).toHaveTextContent(/Restored your saved model.*Gemma 4 E4B/);
     }, 15000);
 });
