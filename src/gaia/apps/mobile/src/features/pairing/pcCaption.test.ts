@@ -13,7 +13,7 @@ const pc = (id: string, port: number, pairedAt?: string): PairedPc => {
     const origin = `https://192.168.1.20:${port}`;
     return { id, name: 'air', pairedAt, connection: { baseUrl: origin, pcId: id, routes: [{ kind: 'home', origin }] } };
 };
-const caption = (p: PairedPc, all: PairedPc[]) => stripIsolates(pcCaption(p, all, t, 'en-US'));
+const caption = (p: PairedPc, all: PairedPc[]) => stripIsolates(pcCaption(p, all, t));
 
 describe('pcCaption', () => {
     it('shows the pairing date alone when no other PC was paired that day', () => {
@@ -31,5 +31,12 @@ describe('pcCaption', () => {
     it('shows only the home address for a PC with no pairing date', () => {
         const a = pc('a', 4243);
         expect(caption(a, [a, pc('b', 4245, '2026-11-10T09:00:00')])).toBe('192.168.1.20:4243');
+    });
+
+    it('writes the Arabic half in Arabic and its English gloss with the English date', () => {
+        const a = pc('a', 4243, '2026-11-10T09:00:00');
+        const text = stripIsolates(pcCaption(a, [a], translator('ar')));
+        expect(text).toContain('(Paired Nov 10, 2026)');
+        expect(text).toMatch(/نوفمبر/);
     });
 });

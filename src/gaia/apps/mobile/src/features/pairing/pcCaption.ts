@@ -4,6 +4,8 @@
 import { isolate } from '@webui/i18n/registry';
 import type { Translate } from '@webui/i18n/translator';
 
+import { composeDateLocale } from '@/features/schedules/scheduleText';
+
 import type { PairedPc } from './service';
 
 const dayKey = (iso: string) => {
@@ -22,11 +24,13 @@ function homeAddress(pc: PairedPc): string {
  * What tells a PC not in use apart from another of its name: the pairing date, plus the home
  * address when another listed PC was paired the same day, or alone when there is no date.
  */
-export function pcCaption(pc: PairedPc, all: PairedPc[], t: Translate, locale: string): string {
+export function pcCaption(pc: PairedPc, all: PairedPc[], t: Translate): string {
     const address = isolate(homeAddress(pc), 'ltr');
     if (!pc.pairedAt || Number.isNaN(Date.parse(pc.pairedAt))) return address;
-    const date = new Date(pc.pairedAt).toLocaleDateString(locale, { year: 'numeric', month: 'short', day: 'numeric' });
-    const paired = t('mobileApp.pairing.pcs.pairedOn', { date: isolate(date, 'ltr') });
+    const paired = t.compose((say, code) => {
+        const date = new Date(pc.pairedAt!).toLocaleDateString(composeDateLocale(code, t), { year: 'numeric', month: 'short', day: 'numeric' });
+        return say('mobileApp.pairing.pcs.pairedOn', { date: isolate(date, 'ltr') });
+    });
     const sameDay = all.some((o) => o.id !== pc.id && o.pairedAt && !Number.isNaN(Date.parse(o.pairedAt)) && dayKey(o.pairedAt) === dayKey(pc.pairedAt!));
     return sameDay ? `${paired}\n${address}` : paired;
 }
