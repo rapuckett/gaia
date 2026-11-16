@@ -32,12 +32,14 @@ jest.mock('@/features/dev/devGallery', () => ({ devGalleryEnabled: () => true })
 
 // react-native-web’s DOM can't be mounted by the component test renderer.
 const describeNative = Platform.OS === 'web' ? describe.skip : describe;
+// An open sheet hides the screen behind it from accessibility queries.
+const hidden = { includeHiddenElements: true };
 
 describeNative('schedules gallery route', () => {
     it.each(Object.keys(SCHEDULE_SCENES))('renders %s', async (name) => {
         mockState = name;
         await render(<SchedulesGalleryRoute />);
-        expect(await screen.findByText('Scheduled tasks')).toBeTruthy();
+        expect(await screen.findByText('Scheduled tasks', hidden)).toBeTruthy();
     });
 
     it('delete-confirm shows the Confirm? step and keeps it up', async () => {
@@ -49,8 +51,8 @@ describeNative('schedules gallery route', () => {
     it('new-valid previews the weekday schedule it was typed as, not every hour', async () => {
         mockState = 'new-valid';
         await render(<SchedulesGalleryRoute />);
-        await waitFor(() => expect(screen.getAllByText(/Weekdays/).length).toBeGreaterThan(1));
-        expect(screen.queryByText('Every hour')).toBeNull();
+        await waitFor(() => expect(screen.getAllByText(/Weekdays/, hidden).length).toBeGreaterThan(1));
+        expect(screen.queryByText('Every hour', hidden)).toBeNull();
     });
 
     it('names the scenes when the state is unknown', async () => {
