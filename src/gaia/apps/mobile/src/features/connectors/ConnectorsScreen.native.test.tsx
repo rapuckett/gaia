@@ -157,6 +157,14 @@ describeNative('ConnectorsGallery list states', () => {
     it('codeFailed ends the sign-in with the failure text', async () => {
         await scene('codeFailed');
         fireEvent.press(await screen.findByTestId('device-sign-in-microsoft'));
-        expect(await screen.findByText(/Sign-in did not finish/)).toBeTruthy();
+        expect(await screen.findByText('Device sign-in failed.')).toBeTruthy();
+    });
+
+    it('code Cancel drops the code and offers the button again', async () => {
+        await scene('code');
+        fireEvent.press(await screen.findByTestId('device-sign-in-microsoft'));
+        fireEvent.press(await screen.findByTestId('device-code-cancel'));
+        expect(await screen.findByTestId('device-sign-in-microsoft')).toBeTruthy();
+        expect(screen.queryByTestId('device-code-block')).toBeNull();
     });
 });
