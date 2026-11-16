@@ -1,7 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import type { AgentInfo, LocalModelStatus, ModelNeed, ResourceUsage, SetupCheck } from '@webui/types';
+import type { ActiveModel, AgentInfo, LocalModelStatus, ModelNeed, ResourceUsage, SetupCheck } from '@webui/types';
 
 import { createFakeClient, type FakeClientData } from '@/api/fake';
 import type { GaiaClient } from '@/api/client.types';
@@ -11,7 +11,7 @@ import type { NeedPromptInitial } from './ModelNeededHost';
 
 /** What a model-server scene shows, and the state its component can't be tapped into. */
 export interface ModelScene {
-    view: 'sheet' | 'need' | 'down' | 'resources' | 'agent' | 'error';
+    view: 'sheet' | 'need' | 'down' | 'resources' | 'agent' | 'error' | 'restore';
     data?: FakeClientData;
     sheet?: { confirming?: boolean; logRefused?: boolean };
     need?: ModelNeed;
@@ -36,6 +36,9 @@ const STOPPED: Partial<LocalModelStatus> = {
 };
 
 const NEED_CHAT: ModelNeed = { job: 'chat', needed: true, model: { id: 'Gemma-4-E4B-it-GGUF', name: 'Gemma 4 E4B', size_gb: 5.97, source: 'huggingface.co/amd' }, disk_free_gb: 120 };
+
+const ACTIVE_MODEL: ActiveModel = { provider: 'local', model: 'Gemma-4-E4B-it-GGUF', display_name: 'Gemma 4 E4B', label: 'Gemma 4 E4B', remote: false, is_default: true };
+const ACTIVE_RESTORE = (restore: NonNullable<ActiveModel['restore']>): ActiveModel => ({ ...ACTIVE_MODEL, restore });
 
 const bars = (n: number) => Array.from({ length: 20 }, (_, i) => Math.round(n + ((i * 7) % 11) - 5));
 const RESOURCES: ResourceUsage = {
@@ -71,6 +74,8 @@ export const MODEL_SCENES: Record<string, ModelScene> = {
     'need-low-disk': { view: 'need', need: { ...NEED_CHAT, job: 'vision', model: { ...NEED_CHAT.model!, name: 'Gemma 4 E4B (vision)', size_gb: 9.1 }, disk_free_gb: 4.2 } },
     'need-npu-images-off': { view: 'need', need: { job: 'vision', needed: false, model: null, disk_free_gb: null, off: 'npu' } },
     'need-starting': { view: 'need', need: NEED_CHAT, needInitial: { downloading: true, percent: null } },
+    'restore-failed': { view: 'restore', data: { activeModel: ACTIVE_RESTORE({ status: 'failed', message: 'The saved model Claude Sonnet could not be restored: its API key is missing.' }) } },
+    'restore-ok': { view: 'restore', data: { activeModel: ACTIVE_RESTORE({ status: 'restored', message: 'Restored your saved model, Gemma 4 E4B.' }) } },
     'resources-full': { view: 'resources', data: { resources: RESOURCES } },
     'resources-reading': { view: 'resources', data: { resources: { interval_ms: 1000, ready: false } } },
     'resources-unreadable': { view: 'resources', data: { resources: { ...RESOURCES, devices: [], devices_error: 'GPU counters need Windows 11.' } } },
