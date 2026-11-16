@@ -15,7 +15,7 @@ import { INPUT_MAX_FONT_SCALE } from '@/ui/theme/a11y';
 import { AttachButton } from './AttachButton';
 import { AttachmentChips } from './AttachmentChips';
 import { ChipFitContext } from './ChipFitContext';
-import { CHIP_GAP, collapsedChips, type ChipId } from './chipRoom';
+import { CHIP_GAP, collapsedChips, type RoomId } from './chipRoom';
 import { pickedFromPaste } from './pickFiles';
 import type { Attachments } from './useAttachments';
 
@@ -74,10 +74,10 @@ export function Composer({
     const [own, setOwn] = useState('');
     const [stopping, setStopping] = useState(false);
     const [chipsWidth, setChipsWidth] = useState(0);
-    const [fullWidths, setFullWidths] = useState<Partial<Record<ChipId, number>>>({});
+    const [fullWidths, setFullWidths] = useState<Partial<Record<RoomId, number>>>({});
     const text = value ?? own;
     const report = useCallback(
-        (id: ChipId, width: number) => setFullWidths((prev) => (prev[id] === width ? prev : { ...prev, [id]: width })),
+        (id: RoomId, width: number) => setFullWidths((prev) => (prev[id] === width ? prev : { ...prev, [id]: width })),
         [],
     );
     const chipFit = useMemo(() => ({ collapsed: collapsedChips(fullWidths, chipsWidth), report }), [fullWidths, chipsWidth, report]);

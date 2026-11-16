@@ -163,7 +163,7 @@ function Guide({ wire, startGuided }: { wire: GuideWire; startGuided: boolean })
                             const { qty, text } = itemDisplay(doc, i, state);
                             const itemDir = contentDir(text, uiDir);
                             const content = (
-                                <Text role="body" dir="auto" strike={features.checkItems && checked.has(i)} tone={features.checkItems && checked.has(i) ? 'muted' : 'primary'}>
+                                <Text role="body" dir="auto" align={itemDir} strike={features.checkItems && checked.has(i)} tone={features.checkItems && checked.has(i) ? 'muted' : 'primary'}>
                                     {qty ? (
                                         <Text role="body" weight="semibold" dir="ltr">
                                             {`${isolate(qty, 'ltr')} `}

@@ -78,3 +78,12 @@ describeNative('Environment: removing a folder', () => {
         expect(client.environmentChanges).toEqual([{ sessionId: 's1', add: '/Users/me/Taxes' }]);
     });
 });
+
+describeNative('Environment: a failed folder read', () => {
+    it('says it in one sentence and puts the PC\'s raw reason on its own line', async () => {
+        const client = createFakeClient({ sessions: [] });
+        await render(<EnvironmentSection sessionId="missing" live={false} />, { wrapper: wrapper(client) });
+        expect(await screen.findByText(/^.?Couldn't read this chat's folders\..?$/)).toBeTruthy();
+        expect(screen.getByText('Session not found')).toBeTruthy();
+    });
+});
