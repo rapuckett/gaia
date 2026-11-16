@@ -2303,6 +2303,7 @@ for (const locale of ['ar', 'en']) {
 
         test('long list, every group and detail open', async ({ page }) => {
             await openModelPage(page, locale);
+            await expect(groups(page).first()).toBeAttached();
             const closed = await groups(page).evaluateAll((els) => els.filter((el) => !(el as HTMLDetailsElement).open).length);
             expect(closed).toBeGreaterThan(0);
             await page.locator('.settings-disclosure:not([open]) > summary').evaluateAll((els) => els.forEach((el) => (el as HTMLElement).click()));
