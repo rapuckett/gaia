@@ -14,13 +14,14 @@ import { usePickLoadStore } from '@/state/pickLoad';
 import { Screen, SheetScope, Stack, UIProvider } from '@/ui';
 
 import { Composer } from './Composer';
+import { FolderChip } from './FolderChip';
 import type { Attachments } from './useAttachments';
 import { ContextMeter, ContextWarning } from './ContextMeter';
 import { ModelChip } from './ModelChip';
 import { SpendMeter } from './SpendMeter';
 
 /** Developer gallery (`/dev/composer?state=`): the context meter, spend meter, model menu and picked-model load banner in each state. */
-export const COMPOSER_MENU_STATES = ['context', 'warning', 'spend', 'menu', 'menuInfo', 'menuEmpty', 'menuSwitching', 'pickLoading', 'pickFailed', 'attachPaste', 'menuCloud', 'menuNeverStarted'] as const;
+export const COMPOSER_MENU_STATES = ['context', 'warning', 'spend', 'menu', 'menuInfo', 'menuEmpty', 'menuSwitching', 'pickLoading', 'pickFailed', 'attachPaste', 'menuCloud', 'menuNeverStarted', 'folder-add'] as const;
 export type ComposerMenuState = (typeof COMPOSER_MENU_STATES)[number];
 
 const USAGE: ContextUsage = {
@@ -118,6 +119,7 @@ export function ComposerMenusGallery({ state }: { state: ComposerMenuState }) {
                         <Stack gap="md" justify="end" flex={1}>
                             {state === 'warning' ? <HistoryNotice text="Older messages are now out of the model's view (6 turns). Ask me to recall them if you need them." /> : null}
                             <ContextWarning usage={state === 'warning' ? usage : null} />
+                            {state === 'folder-add' ? <FolderChip folder={{ path: '/Users/avery/GAIA', name: 'GAIA', gaia_folder: true, choosable: true }} /> : null}
                             <Composer
                                 onSend={noop}
                                 onStop={noop}
