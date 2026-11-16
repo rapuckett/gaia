@@ -45,7 +45,7 @@ describeNative('ProfilePane', () => {
         expect(client.profileCommits).toEqual([]);
 
         fireEvent.press(screen.getByLabelText(/^Uses Blender/));
-        await waitFor(() => expect(screen.getByLabelText(/^Uses Blender/).props.accessibilityState.checked).toBe(false));
+        await waitFor(() => expect(screen.getByLabelText(/^Uses Blender/)).not.toBeChecked());
         fireEvent.press(screen.getByTestId('profile-discovery-save'));
         await waitFor(() => expect(client.profileCommits).toHaveLength(1));
         expect(client.profileCommits[0]!.items).toEqual([expect.objectContaining({ content: 'Uses Firefox' })]);

@@ -108,7 +108,7 @@ export function SegmentedControl({ options, value, onChange, accessibilityLabel,
                                     onPress={() => onChange(o.value)}
                                     accessibilityRole="radio"
                                     accessibilityLabel={o.accessibilityLabel ?? o.label}
-                                    accessibilityState={{ checked: on }}
+                                    aria-checked={on}
                                     minSize={HEIGHT - PAD * 2}
                                 >
                                     <View style={{ alignItems: 'center', justifyContent: 'center', height: HEIGHT - PAD * 2 }}>

@@ -97,7 +97,7 @@ export function TerminalOutput({ output }: { output: CommandOutput }) {
                 {view.collapsible ? (
                     <Pressable
                         onPress={() => setExpanded((v) => !v)}
-                        accessibilityState={{ expanded }}
+                        aria-expanded={expanded}
                         accessibilityLabel={expanded ? t('code.collapse') : t('code.expand', { size: lineCount(t, countLines(text)) })}
                     >
                         <Stack paddingX="md" paddingY="xs">

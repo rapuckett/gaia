@@ -38,7 +38,7 @@ export function ActionSheet({ open, onClose, actions, title }: ActionSheetProps)
                     <Pressable
                         key={a.label}
                         accessibilityLabel={a.label}
-                        accessibilityState={{ disabled: !!a.disabled }}
+                        aria-disabled={!!a.disabled}
                         disabled={a.disabled}
                         onPress={() => {
                             onClose();
