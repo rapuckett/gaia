@@ -1,7 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { render, screen } from '@testing-library/react-native';
+import { fireEvent, render, screen } from '@testing-library/react-native';
 import { Platform } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
@@ -44,5 +44,42 @@ describeNative('/dev/settings', () => {
         mockState = name;
         await mount();
         expect(await screen.findByTestId(testID)).toBeTruthy();
+    });
+
+    it.each([
+        ['model-key-disconnected', 'Reconnect'],
+        ['model-search-empty', 'No models match.'],
+        ['model-local-empty', /No models yet\./],
+        ['model-available', 'Available to download'],
+        ['model-fireworks', /Show all models/],
+        ['model-unavailable', 'Not available on your PC'],
+        ['model-downloading', /Downloading Qwen3\.6 35B A3B|42%/],
+        ['model-switching', /My tuned model/],
+        ['model-custom', 'Remove'],
+        ['model-npu-not-ready', /NPU/],
+        ['spend-total', 'Cloud spending this month'],
+        ['spend-near-limit', /Close to your limit/],
+        ['spend-over-limit', /You.ve reached your limit/],
+    ])('%s shows its key text', async (name, text) => {
+        mockState = name;
+        await mount();
+        expect((await screen.findAllByText(text, { includeHiddenElements: true })).length).toBeGreaterThan(0);
+    });
+
+    it('model-custom hides Remove for the model in use', async () => {
+        mockState = 'model-custom';
+        await mount();
+        expect(await screen.findByTestId('model-remove-user.my-tuned-GGUF', { includeHiddenElements: true })).toBeTruthy();
+        expect(screen.queryByTestId('model-remove-user.in-use-GGUF', { includeHiddenElements: true })).toBeNull();
+    });
+
+    it('model-hf-added shows the success notice after the link is checked and added', async () => {
+        mockState = 'model-hf-added';
+        await mount();
+        await fireEvent.press(await screen.findByLabelText('Add a model from Hugging Face', { includeHiddenElements: true }));
+        await fireEvent.changeText(await screen.findByTestId('custom-model-url', { includeHiddenElements: true }), 'https://huggingface.co/amd/Demo-Chat-GGUF');
+        await fireEvent.press(screen.getByTestId('custom-model-check', { includeHiddenElements: true }));
+        await fireEvent.press(await screen.findByTestId('custom-model-add', { includeHiddenElements: true }));
+        expect(await screen.findByText(/Added .*Demo Chat.*Choose Download/, undefined, { timeout: 3000 })).toBeTruthy();
     });
 });

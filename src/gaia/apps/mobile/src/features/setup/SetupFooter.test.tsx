@@ -1,7 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { render, screen } from '@testing-library/react-native';
+import { fireEvent, render, screen } from '@testing-library/react-native';
 import { StyleSheet, Text } from 'react-native';
 
 import { AX_FONT_SCALE, atFontScale } from '@/test-support/fontScale';
@@ -76,5 +76,39 @@ describe('SetupFooterBar at the largest text size', () => {
         for (const name of ['Customize', 'Download and start']) {
             expect(StyleSheet.flatten(screen.getByRole('button', { name }).parent?.props.style)).toMatchObject({ alignSelf: 'stretch' });
         }
+    });
+});
+
+describe('SetupFooterBar with uneven actions', () => {
+    async function renderPair() {
+        await render(
+            <SetupFooterProvider>
+                <SetupFooter>
+                    <Button label="Try again" />
+                    <Button label="Use GAIA's own instead" variant="primary" />
+                </SetupFooter>
+                <SetupFooterBar />
+            </SetupFooterProvider>,
+            { wrapper: ThemeProvider },
+        );
+        return screen.getAllByTestId('setup-footer-slot');
+    }
+    const layout = (height: number) => ({ nativeEvent: { layout: { x: 0, y: 0, width: 150, height } } });
+
+    it('stacks the actions when one is far taller than the other', async () => {
+        const slots = await renderPair();
+        await fireEvent(slots[0], 'layout', layout(44));
+        await fireEvent(slots[1], 'layout', layout(120));
+        expect(screen.queryAllByTestId('setup-footer-slot')).toHaveLength(0);
+        for (const name of ['Try again', "Use GAIA's own instead"]) {
+            expect(StyleSheet.flatten(screen.getByRole('button', { name }).parent?.props.style)).toMatchObject({ alignSelf: 'stretch' });
+        }
+    });
+
+    it('keeps a row when the heights are close', async () => {
+        const slots = await renderPair();
+        await fireEvent(slots[0], 'layout', layout(44));
+        await fireEvent(slots[1], 'layout', layout(60));
+        expect(screen.getAllByTestId('setup-footer-slot')).toHaveLength(2);
     });
 });

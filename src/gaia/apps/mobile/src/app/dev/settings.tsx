@@ -27,7 +27,7 @@ function SettingsView({ found }: { found: SettingsScene }) {
                     <ScreenBannerProvider banner={null}>
                         <Screen scroll scrollRef={scrollRef}>
                             <SettingsTargets section={found.section} target={found.target} scrollRef={scrollRef}>
-                                <Pane provider="local" />
+                                <Pane provider={found.provider ?? 'local'} />
                             </SettingsTargets>
                         </Screen>
                     </ScreenBannerProvider>

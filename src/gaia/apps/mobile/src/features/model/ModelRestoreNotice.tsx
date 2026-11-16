@@ -13,8 +13,8 @@ const RESTORED_NOTICE_MS = 6000;
 const RECHECK_MS = 5000;
 const RECHECKS = 24;
 
-/** What the PC said about putting the saved model back: news for a moment when it worked, a way to pick another when it did not. */
-export function ModelRestoreNotice({ onPick = () => openSettings('model') }: { onPick?: () => void }) {
+/** What the PC said (`holdOk` keeps the success notice up, for the dev gallery's scene). about putting the saved model back: news for a moment when it worked, a way to pick another when it did not. */
+export function ModelRestoreNotice({ onPick = () => openSettings('model'), holdOk = false }: { onPick?: () => void; holdOk?: boolean }) {
     const t = useT();
     const active = useActiveModel();
     const restore = active.data?.restore;
@@ -35,10 +35,10 @@ export function ModelRestoreNotice({ onPick = () => openSettings('model') }: { o
     }, [recheck, rechecks, refetch]);
 
     useEffect(() => {
-        if (!ok || !message) return;
+        if (!ok || !message || holdOk) return;
         const timer = setTimeout(() => setDismissed(message), RESTORED_NOTICE_MS);
         return () => clearTimeout(timer);
-    }, [ok, message]);
+    }, [ok, message, holdOk]);
 
     if (!message || dismissed === message) return null;
     return (
