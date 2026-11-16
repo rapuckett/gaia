@@ -19,6 +19,7 @@ import { describeUploadError, unsupportedTypeMessage, type UploadErrorInput, typ
 
 import { fileRefusalText, isFileRefusal, isKnownRefusalCode } from '../files/fileRefusal';
 import { useNextChatDocs } from './nextChatDocs';
+import { phonePathExample } from './phonePathExample';
 
 // One line at a time: the indexing status, the result of the last add, or why it failed.
 export type AddLine =
@@ -108,7 +109,7 @@ export function AddDocuments({ chatId, chatName, onStart, onBrowse, pcChatId, in
     const busy = line?.kind === 'busy';
     const pcOs = preflight.data?.os;
     // The example follows the PC's way of writing paths; darwin is a Mac too.
-    const pathExample = pcOs == null ? undefined : examplePath(/darwin/i.test(pcOs) ? 'Mac' : pcOs);
+    const pathExample = pcOs == null ? undefined : phonePathExample(examplePath(/darwin/i.test(pcOs) ? 'Mac' : pcOs));
 
     function attachFailed(filename: string, attachError: Error): AddLine {
         const error = t.compose((say) => say('docs.attachFailedAfterIndex', { chat: chatName ?? '', error: describeErrorWith(attachError, say) }));
