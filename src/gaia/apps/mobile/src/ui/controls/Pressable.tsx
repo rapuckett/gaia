@@ -20,6 +20,7 @@ export interface PressableProps {
     'aria-busy'?: boolean;
     'aria-checked'?: boolean | 'mixed';
     'aria-expanded'?: boolean;
+    'aria-haspopup'?: 'listbox' | 'menu';
     'aria-selected'?: boolean;
     /** Extra screen-reader actions, e.g. what a long-press does. */
     accessibilityActions?: readonly AccessibilityActionInfo[];
@@ -44,6 +45,7 @@ export function Pressable({
     'aria-busy': ariaBusy,
     'aria-checked': ariaChecked,
     'aria-expanded': ariaExpanded,
+    'aria-haspopup': ariaHasPopup,
     'aria-selected': ariaSelected,
     accessibilityActions,
     onAccessibilityAction,
@@ -69,6 +71,7 @@ export function Pressable({
             aria-checked={ariaChecked}
             aria-disabled={!!disabled}
             aria-expanded={ariaExpanded}
+            aria-haspopup={ariaHasPopup}
             aria-selected={ariaSelected}
             testID={testID}
             hitSlop={slop ? { left: slop, right: slop } : undefined}

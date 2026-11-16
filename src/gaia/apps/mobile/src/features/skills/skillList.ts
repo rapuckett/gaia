@@ -1,16 +1,16 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import type { MessageKey, Params } from '@webui/i18n/registry';
+import { isolate, type MessageKey, type Params } from '@webui/i18n/registry';
 
 import type { SkillInfo, SkillSource } from '@/api/client.types';
 
 /** The search box appears once there are more skills than this, as on the web. */
 export const SEARCH_ABOVE = 6;
 
-// Paths go in as params, so the translator keeps them left to right inside an Arabic sentence.
-const SKILLS_DIR = { path: '~/.gaia/skills' };
-const PROJECT_SKILLS_DIR = { path: '.claude/skills' };
+// A path is a value: isolated left to right inside an Arabic sentence.
+const SKILLS_DIR = { path: isolate('~/.gaia/skills', 'ltr') };
+const PROJECT_SKILLS_DIR = { path: isolate('.claude/skills', 'ltr') };
 
 export interface SkillGroupSpec {
     source: SkillSource;

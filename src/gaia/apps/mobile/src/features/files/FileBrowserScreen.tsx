@@ -12,7 +12,7 @@ import { isExtensionSupported } from '@webui/utils/uploadErrors.core';
 import type { FileEntry, QuickLink } from '@/api/client.types';
 import { GaiaApiError } from '@/api/errors';
 import { useAddPcFiles, useBrowseFiles, useSearchFiles, useSetupPreflight } from '@/data';
-import { describeError, useT } from '@/i18n/useT';
+import { describeError, useDirection, useT } from '@/i18n/useT';
 import {
     ActionSheet,
     Badge,
@@ -99,6 +99,7 @@ export interface FileBrowserScreenProps {
 
 export function FileBrowserScreen({ chatId, onClose, onPreview, onAsk, initial }: FileBrowserScreenProps) {
     const t = useT();
+    const uiRtl = useDirection() === 'rtl';
     const preflight = useSetupPreflight();
     const pcIsMac = /^(mac|darwin)/i.test(preflight.data?.os ?? '');
 
@@ -271,18 +272,20 @@ export function FileBrowserScreen({ chatId, onClose, onPreview, onAsk, initial }
                         <Row gap="xs">
                             <Stack flex={1}>
                                 <HScroll dir="ltr">
-                                    <Row gap="xs">
-                                        {crumbs.map((crumb, i) => (
-                                            <Row key={crumb.path} gap="xs">
-                                                {i > 0 ? <Icon icon={ChevronRight} size="sm" tone="muted" /> : null}
-                                                <Pressable inline accessibilityLabel={crumb.label} onPress={() => open(crumb.path)}>
-                                                    <Text role="label" tone={i === crumbs.length - 1 ? 'primary' : 'secondary'}>
-                                                        {crumb.label}
-                                                    </Text>
-                                                </Pressable>
-                                            </Row>
-                                        ))}
-                                    </Row>
+                                    <View style={{ minWidth: '100%', flexDirection: 'row', justifyContent: uiRtl ? 'flex-end' : 'flex-start' }} testID="file-breadcrumbs">
+                                        <Row dir="ltr" gap="xs">
+                                            {crumbs.map((crumb, i) => (
+                                                <Row key={crumb.path} dir="ltr" gap="xs">
+                                                    {i > 0 ? <Icon icon={ChevronRight} size="sm" tone="muted" fixed /> : null}
+                                                    <Pressable inline accessibilityLabel={crumb.label} onPress={() => open(crumb.path)}>
+                                                        <Text role="label" dir="ltr" tone={i === crumbs.length - 1 ? 'primary' : 'secondary'}>
+                                                            {crumb.label}
+                                                        </Text>
+                                                    </Pressable>
+                                                </Row>
+                                            ))}
+                                        </Row>
+                                    </View>
                                 </HScroll>
                             </Stack>
                             {parentPath ? <IconButton icon={ArrowUp} variant="outlined" label={t('fileBrowser.goUp')} onPress={() => open(parentPath)} /> : null}

@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: MIT
 
 import type { SkillInfo } from '@/api/client.types';
+import { translator } from '@/i18n/useT';
 
-import { filterSkills, isGrouped, skipReason, skippedName } from './skillList';
+import { filterSkills, GROUPS, isGrouped, SKILLS_HOW_PARAMS, skipReason, skippedName } from './skillList';
 
 const skill = (name: string, description: string, source: SkillInfo['source'] = 'agent-bundled'): SkillInfo => ({
     name,
@@ -33,5 +34,14 @@ describe('skill list', () => {
         expect(skipReason("'description' is missing")).toBe('settings.skills.skipped.noDescription');
         expect(skipReason('bad yaml')).toBe('settings.skills.skipped.other');
         expect(skippedName('C:\\skills\\broken\\SKILL.md')).toBe('SKILL.md');
+    });
+});
+
+describe('skill folder paths in Arabic', () => {
+    it('keeps each path in its own left-to-right island inside the note, the empty text and the how-to', () => {
+        const t = translator('ar');
+        const yours = GROUPS.find((g) => g.source === 'user')!;
+        const lines = [t(yours.note, yours.params), t(yours.empty!, yours.params), t('settings.skills.how', SKILLS_HOW_PARAMS)];
+        for (const line of lines) expect(line).toContain('\u2066~/.gaia/skills\u2069');
     });
 });
