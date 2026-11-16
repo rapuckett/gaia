@@ -6,7 +6,7 @@ import { useState } from 'react';
 import { isServerDown } from '@webui/utils/serverDown';
 
 import { GaiaApiError } from '@/api/errors';
-import { describeError, useT } from '@/i18n/useT';
+import { describeError, technicalDetail, useT } from '@/i18n/useT';
 import { Button, Disclosure, Ltr, Notice, Sheet, Stack, Text } from '@/ui';
 import { isolate } from '@webui/i18n/registry';
 import { tEn } from '@webui/i18n/translator';
@@ -32,7 +32,7 @@ export function ActionError({ error, title }: { error: unknown; title?: string }
     return (
         <Stack gap="sm">
             <Notice tone="danger" title={title} message={isServerDown(raw) ? t('mobileApp.settings.errors.serverDown') : t('mobileApp.settings.modelActionFailed')} />
-            <RawDetails text={raw} />
+            <RawDetails text={technicalDetail(error)} />
         </Stack>
     );
 }

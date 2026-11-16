@@ -31,4 +31,8 @@ describe('server text stays out of the sentence', () => {
         expect(serverText(new Error('The download was interrupted.'))).toBe('The download was interrupted.');
         expect(serverText(new GaiaNetworkError('http://x/api', new Error('boom')))).toBeUndefined();
     });
+
+    it('the Technical details line is the raw status and text, with no translated words around it', () => {
+        expect(technicalDetail(new GaiaApiError(500, 'Connection refused'))).toBe('500 Connection refused');
+    });
 });

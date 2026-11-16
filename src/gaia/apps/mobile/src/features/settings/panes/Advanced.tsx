@@ -7,7 +7,7 @@ import { isolate } from '@webui/i18n/registry';
 import type { SystemStatus } from '@webui/types';
 
 import { useModelActions, useQueryFailure, useSystemStatus } from '@/data';
-import { describeError, useT } from '@/i18n/useT';
+import { technicalDetail, useT } from '@/i18n/useT';
 import { Button, Card, Disclosure, Divider, Ltr, Notice, ProgressLine, Row, Spinner, Stack, Surface, Text } from '@/ui';
 
 import { LogsCard } from '@/features/logs';
@@ -75,7 +75,7 @@ function StatusCard() {
                             action={{ label: t('settings.key.checkAgain'), onPress: () => void query.refetch() }}
                             testID="advanced-unreachable"
                         />
-                        <RawDetails text={describeError(failure.error, t)} />
+                        <RawDetails text={technicalDetail(failure.error)} />
                     </Stack>
                 ) : (
                     <StatusBody
