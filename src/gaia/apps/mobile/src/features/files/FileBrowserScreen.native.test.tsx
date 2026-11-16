@@ -53,11 +53,10 @@ describeNative('FileBrowserScreen selection bar', () => {
         await waitFor(() => expect(onAsk).toHaveBeenCalledWith(t('mobileApp.files.askOne', { name: 'q3-board.pdf' })));
     });
 
-    it('stays on the screen and says how many files were left out when some fail', async () => {
+    it('asks with only the files that were added and says how many were left out', async () => {
         const onAsk = jest.fn(() => true);
         await mount(onAsk, 'askPartial');
         expect(await screen.findByText(t.plural('fileBrowser.someFailed', 1))).toBeTruthy();
-        expect(onAsk).not.toHaveBeenCalled();
-        expect(screen.getByText(t.plural('fileBrowser.selected', 1))).toBeTruthy();
+        expect(onAsk).toHaveBeenCalledWith(t('mobileApp.files.askOne', { name: 'q3-board.pdf' }));
     });
 });

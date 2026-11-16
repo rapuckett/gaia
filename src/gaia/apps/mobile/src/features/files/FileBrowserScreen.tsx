@@ -51,8 +51,6 @@ function fileIcon(entry: { type: string; extension?: string | null }): LucideIco
     return File;
 }
 
-const baseName = (path: string) => path.split(/[\\/]/).pop() ?? path;
-
 function extensionOf(entry: { name: string; extension?: string | null }): string {
     return entry.extension || (entry.name.includes('.') ? `.${entry.name.split('.').pop()?.toLowerCase()}` : '');
 }
@@ -172,12 +170,7 @@ export function FileBrowserScreen({ chatId, onClose, onPreview, onAsk, initial }
                             return;
                         }
                         const names = added.map((d) => d.filename);
-                        if (bad > 0) {
-                            // The note would vanish with the screen, so stay: the next Ask GAIA sends the files that made it.
-                            setResult({ tone: 'danger', message: t.plural('fileBrowser.someFailed', bad) });
-                            setSelected(new Set(chosen.filter((p) => names.includes(baseName(p)))));
-                            return;
-                        }
+                        if (bad > 0) setResult({ tone: 'danger', message: t.plural('fileBrowser.someFailed', bad) });
                         if (onAsk?.(askPrompt(names, t))) setSelected(new Set());
                         else setResult({ tone: 'danger', message: t('mobileApp.files.askNoChat') });
                     } else if (bad > 0) {
