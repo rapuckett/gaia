@@ -203,7 +203,9 @@ export function WhatYouGet({ plan, selection }: { plan: SetupPlan; selection: Se
                 <Text role="ui" weight="semibold" accessibilityRole="header">{t('setup.get.title')}</Text>
                 {rows.map(([label, value, model]) => (
                     <Row key={label} gap="sm" justify="between" align="start">
-                        <Text role="label" tone="secondary">{label}</Text>
+                        <Stack flex={1}>
+                            <Text role="label" tone="secondary">{label}</Text>
+                        </Stack>
                         <Stack flex={1} align="end">
                             <Text role="label" dir={model ? 'ltr' : undefined}>{value}</Text>
                         </Stack>

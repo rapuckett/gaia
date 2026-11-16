@@ -7,6 +7,8 @@ import { Button } from '../controls/Button';
 import { Icon } from '../controls/Icon';
 import { Pressable } from '../controls/Pressable';
 import { Row, Stack } from '../layout/layout';
+import { FirstLine } from '../text/FirstLine';
+import { useLargeText } from '../theme/a11y';
 import { Text } from '../text/Text';
 import { Sheet } from './Sheet';
 
@@ -28,6 +30,7 @@ export interface ActionSheetProps {
 // Picking an action closes the sheet first, then runs it.
 export function ActionSheet({ open, onClose, actions, title }: ActionSheetProps) {
     const t = useT();
+    const largeText = useLargeText();
     return (
         <Sheet open={open} onClose={onClose} title={title}>
             <Stack gap="xs">
@@ -42,8 +45,12 @@ export function ActionSheet({ open, onClose, actions, title }: ActionSheetProps)
                             a.onPress();
                         }}
                     >
-                        <Row gap="md">
-                            {a.icon ? <Icon icon={a.icon} size="md" tone={a.destructive ? 'danger' : 'secondary'} /> : null}
+                        <Row gap="md" align={largeText ? 'start' : 'center'}>
+                            {a.icon ? (
+                                <FirstLine role="body">
+                                    <Icon icon={a.icon} size="md" tone={a.destructive ? 'danger' : 'secondary'} />
+                                </FirstLine>
+                            ) : null}
                             <Text role="body" tone={a.disabled ? 'muted' : a.destructive ? 'danger' : 'primary'} numberOfLines={2}>
                                 {a.label}
                             </Text>

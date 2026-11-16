@@ -5,13 +5,31 @@
 
 import type { MessageKey } from '../i18n/registry';
 import type { Translate } from '../i18n/translator';
-import type { ProviderModel } from '../types';
+import type { ProviderModel, WarmUpStatus } from '../types';
 
 /** Same local model: Lemonade lists a registered `user.X` as `X`, in any case. */
 export function sameModelId(a: string | null | undefined, b: string | null | undefined): boolean {
     if (!a || !b) return false;
     const bare = (id: string) => id.toLowerCase().replace(/^user\./, '');
     return bare(a) === bare(b);
+}
+
+/** Why a pick's load failed: the backend's own reason, or a translated one when GAIA lost track. */
+export interface PickLoadError {
+    key?: 'banner.pickLoad.noReason' | 'banner.pickLoad.lostTrack' | 'banner.pickLoad.startFailed';
+    reason: string;
+}
+
+/** A local model picked from the list, loading in the background; `error` once that load failed. */
+export interface PickLoad {
+    model: string;
+    seconds: number;
+    error: PickLoadError | null;
+}
+
+/** The pick's own warm-up: one on another model is still finishing, and the pick's runs next. */
+export function isPickWarmUp(w: WarmUpStatus, model: string): boolean {
+    return !w.model || sameModelId(w.model, model);
 }
 
 /** The model id without its cloud provider prefix ("fireworks." or "amd."). */

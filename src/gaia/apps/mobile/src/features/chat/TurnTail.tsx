@@ -60,7 +60,7 @@ export function TurnTail({ tail, line, awaitingUser = false, onTryAgain, onConti
             {tail.error && !tail.live && isModelServerDown(tail.error, t) ? <ModelServerDownNotice /> : null}
             {tail.stop ? <StoppedNote stop={tail.stop} /> : null}
             {tail.canContinue || tail.canTryAgain ? (
-                <Row gap="sm" wrap>
+                <Row gap="sm" wrap stack>
                     {tail.canContinue ? <Button size="sm" label={t('msg.continue')} onPress={onContinue} testID="continue" /> : null}
                     {tail.canTryAgain ? (
                         <Button size="sm" icon={RotateCcw} label={t('msg.tryAgain')} onPress={onTryAgain} testID="try-again" />

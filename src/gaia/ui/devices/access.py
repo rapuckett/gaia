@@ -31,17 +31,12 @@ from . import (
     DEVICE_PORT_ENV,
     HOME_ROUTE,
     HOUSEKEEPING_SECONDS,
-    OFFERED_NETWORKS,
     PAIRING_OFFER_VERSION,
     PC_NAME_MAX,
     PENDING_DEVICE_SECONDS,
 )
-from .listener import (
-    DeviceListener,
-    ListenerError,
-    OpenRequests,
-    local_ipv4_addresses,
-)
+from .home import NoHomeNetwork, home_network
+from .listener import DeviceListener, ListenerError, OpenRequests
 from .pairing import PairingWindow, sanitize_device_name
 from .routes import AwayRoute, AwayRoutes
 from .storage import (
@@ -109,16 +104,16 @@ def configured_port() -> int:
 
 
 def home_network_origins(host: str, port: int) -> List[str]:
-    """``https://address:port`` for each home-network address this PC has."""
+    """``https://address:port`` for each of this PC's addresses on the home network.
+
+    Raises:
+        NoHomeNetwork: The listener binds every address and the PC has no
+            home network.
+    """
     bound = ipaddress.ip_address(host)
     if not bound.is_unspecified:
         return [f"https://{bound}:{port}"]
-    offered = [ipaddress.ip_network(n) for n in OFFERED_NETWORKS]
-    return [
-        f"https://{address}:{port}"
-        for address in map(ipaddress.ip_address, local_ipv4_addresses())
-        if any(address in net for net in offered)
-    ]
+    return [f"https://{address}:{port}" for address in home_network().offered()]
 
 
 class PairingUnavailable(RuntimeError):
@@ -212,12 +207,16 @@ class DeviceAccess:
             store = self._open_store()
             context = server_context(identity)
             port = self._port if self._port is not None else configured_port()
+            if ipaddress.ip_address(self._host).is_unspecified:
+                home_network()
             listener = DeviceListener(self._app, self, self._host, port)
             await listener.start(context)
         except UnsafeDeviceFolderError as e:
             raise self._failed(ListenerError("unsafe_folder", str(e))) from e
         except DeviceCertificateError as e:
             raise self._failed(ListenerError("certificate", str(e))) from e
+        except NoHomeNetwork as e:
+            raise self._failed(ListenerError("start_failed", e.detail)) from e
         except ListenerError as e:
             raise self._failed(e) from e
         self._listener, self._pin = listener, identity.pin
@@ -369,7 +368,11 @@ class DeviceAccess:
     def route_origins(self) -> List[dict]:
         """Every origin a device may reach this PC at now: home, then away."""
         port = self._listening_port()
-        home = home_network_origins(self._host, port) if port else []
+        try:
+            home = home_network_origins(self._host, port) if port else []
+        except NoHomeNetwork as e:
+            logger.warning("No home origins to offer: %s", e.detail)
+            home = []
         return [
             {"kind": HOME_ROUTE, "origin": origin} for origin in home
         ] + self.routes.origins()
@@ -412,13 +415,16 @@ class DeviceAccess:
                 "listener_off",
                 "Turn on access from the home network before pairing a device.",
             )
-        origins = home_network_origins(self._host, self._listener.port or 0)
+        try:
+            origins = home_network_origins(self._host, self._listener.port or 0)
+        except NoHomeNetwork as e:
+            raise PairingUnavailable("no_home_network", e.detail) from e
         if not origins:
             raise PairingUnavailable(
                 "no_home_network",
-                "This PC has no home-network address (10.x, 172.16-31.x or "
-                "192.168.x) for a device to reach. Connect it to your home "
-                "network, then try again.",
+                "This PC's home network gave it only a link-local address "
+                "(169.254.x), which a device can't be sent to. Check that your "
+                "router hands out addresses, then try again.",
             )
         invitation, expires_at = self.pairing.open()
         return {

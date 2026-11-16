@@ -3,9 +3,10 @@
 
 """The TLS listener paired devices reach, in the backend's own process and loop.
 
-A second uvicorn server serves the same app through :class:`DeviceGate`, which
-answers the home network and any away route the PC turned on, serves the API
-only, caps request bodies, and lets nothing through without a live device
+A second uvicorn server serves the same app. It hangs up before TLS on any
+peer that is neither on the home network (the default route's subnet) nor
+carried by an away route the PC turned on, and :class:`DeviceGate` checks
+that again on every request, serves the API only, caps request bodies, and lets nothing through without a live device
 token except the pairing route, which it serves to the home network only.
 Revoking a device ends the requests it still has open.
 """
@@ -22,7 +23,7 @@ import socket
 import ssl
 import sys
 import threading
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 from starlette.datastructures import Headers
 from starlette.exceptions import HTTPException
@@ -39,7 +40,6 @@ from ..security import (
 )
 from . import (
     DEVICE_PORT_ENV,
-    HOME_NETWORKS,
     HOME_ROUTE,
     LISTENER_BODY_LIMIT_BYTES,
     LISTENER_HANDSHAKE_SECONDS,
@@ -52,10 +52,10 @@ from . import (
     ListenerErrorCode,
     RouteKind,
 )
+from .home import NoHomeNetwork, home_network
 
 logger = get_logger(__name__)
 
-_HOME = tuple(ipaddress.ip_network(n) for n in HOME_NETWORKS)
 _BODY_LIMIT_MB = LISTENER_BODY_LIMIT_BYTES // (1024 * 1024)
 
 
@@ -117,6 +117,33 @@ async def _refuse(send: Send, scope: Scope, status: int, detail: str, **extra) -
     await send({"type": "http.response.body", "body": body})
 
 
+def peer_route(access, client, server, allow_loopback: bool) -> Optional[RouteKind]:
+    """``home`` for a peer on the default route's subnet that dialed this PC's
+    address there, else the away route that is on and carried it; None to refuse.
+
+    *client* and *server* are ``(host, port)`` pairs, as in an ASGI scope.
+    """
+    try:
+        address = ipaddress.ip_address(client[0]) if client else None
+    except ValueError:
+        address = None
+    if address is not None:
+        if address.version == 6 and address.ipv4_mapped is not None:
+            return None
+        # No away route may make a loopback peer acceptable.
+        if address.is_loopback:
+            return HOME_ROUTE if allow_loopback else None
+        if address.version == 4 and address.is_private:
+            try:
+                home = home_network()
+            except NoHomeNetwork as e:
+                logger.warning("Refusing %s: %s", address, e.detail)
+            else:
+                if home.admits(address, server[0] if server else None):
+                    return HOME_ROUTE
+    return access.routes.admitting({"type": "tcp", "client": client, "server": server})
+
+
 def _bearer(headers: Headers) -> Optional[str]:
     scheme, _, value = headers.get("authorization", "").partition(" ")
     if scheme.lower() != "bearer" or not value.strip():
@@ -138,22 +165,9 @@ class DeviceGate:
         self._allow_loopback = allow_loopback
 
     def _route(self, scope: Scope) -> Optional[RouteKind]:
-        """``home`` for a home-network peer, else the away route that is on and
-        carried it; None to refuse."""
-        client = scope.get("client")
-        try:
-            address = ipaddress.ip_address(client[0]) if client else None
-        except ValueError:
-            address = None
-        if address is not None:
-            if address.version == 6 and address.ipv4_mapped is not None:
-                return None
-            # No away route may make a loopback peer acceptable.
-            if address.is_loopback:
-                return HOME_ROUTE if self._allow_loopback else None
-            if address.version == 4 and any(address in n for n in _HOME):
-                return HOME_ROUTE
-        return self._access.routes.admitting(scope)
+        return peer_route(
+            self._access, scope.get("client"), scope.get("server"), self._allow_loopback
+        )
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] not in ("http", "websocket"):
@@ -296,14 +310,103 @@ class DeviceGate:
             self._access.requests.discard(device_id, loop, ended)
 
 
+#: Accept errors from one connection that went away, and those that mean the
+#: process is out of resources (back off, as asyncio's own accept loop does).
+_ACCEPT_TRANSIENT = frozenset(
+    {errno.ECONNABORTED, errno.ECONNRESET, errno.EPROTO, errno.EAGAIN, errno.EINTR}
+)
+_ACCEPT_EXHAUSTED = frozenset({errno.EMFILE, errno.ENFILE, errno.ENOBUFS, errno.ENOMEM})
+
+
+class _ScreenedAcceptor:
+    """Accepts on the listener's socket and hangs up on a peer it doesn't
+    answer before a TLS byte is read; every other connection gets TLS, then
+    uvicorn's protocol. Closes like an asyncio server, for uvicorn's shutdown.
+    """
+
+    def __init__(
+        self,
+        sock: socket.socket,
+        admit: Callable[[Any, Any], bool],
+        protocol: Callable[[], asyncio.Protocol],
+        context: ssl.SSLContext,
+    ) -> None:
+        self._sock = sock
+        self._admit = admit
+        self._protocol = protocol
+        self._context = context
+        self._handshakes: Set[asyncio.Task] = set()
+        self._task = asyncio.ensure_future(self._accept())
+
+    async def _accept(self) -> None:
+        loop = asyncio.get_running_loop()
+        while True:
+            try:
+                conn, peer = await loop.sock_accept(self._sock)
+            except OSError as e:
+                if e.errno in _ACCEPT_TRANSIENT:
+                    logger.debug("Device listener: accept failed: %s", e)
+                    continue
+                if e.errno in _ACCEPT_EXHAUSTED:
+                    logger.error("Device listener can't accept connections: %s", e)
+                    await asyncio.sleep(1)
+                    continue
+                logger.error(
+                    "Device listener stopped accepting connections: %s. Turn "
+                    "access off and on in Settings to restart it.",
+                    e,
+                )
+                raise
+            try:
+                local = conn.getsockname()
+            except OSError as e:
+                logger.debug("Device listener: %s left at once: %s", peer, e)
+                conn.close()
+                continue
+            if not self._admit(peer, local):
+                logger.debug("Device listener: hung up on %s before TLS", peer)
+                conn.close()
+                continue
+            task = asyncio.ensure_future(self._serve(conn, peer))
+            self._handshakes.add(task)
+            task.add_done_callback(self._handshakes.discard)
+
+    async def _serve(self, conn: socket.socket, peer) -> None:
+        try:
+            await asyncio.get_running_loop().connect_accepted_socket(
+                self._protocol,
+                conn,
+                ssl=self._context,
+                ssl_handshake_timeout=LISTENER_HANDSHAKE_SECONDS,
+            )
+        except (OSError, asyncio.TimeoutError) as e:
+            logger.debug("Device listener: TLS from %s failed: %s", peer, e)
+            conn.close()
+
+    def close(self) -> None:
+        self._task.cancel()
+        for handshake in list(self._handshakes):
+            handshake.cancel()
+
+    async def wait_closed(self) -> None:
+        await asyncio.gather(self._task, *self._handshakes, return_exceptions=True)
+        self._sock.close()
+
+
 class _ListenerServer:
-    """uvicorn's server, minus the signals the main server owns.
+    """uvicorn's server, minus the signals the main server owns, behind an
+    accept-time peer check.
 
     Built lazily so importing this module needs no uvicorn.
     """
 
     @staticmethod
-    def make(config, sock: socket.socket, context: ssl.SSLContext):
+    def make(
+        config,
+        sock: socket.socket,
+        context: ssl.SSLContext,
+        admit: Callable[[Any, Any], bool],
+    ):
         import uvicorn
 
         class Server(uvicorn.Server):
@@ -328,16 +431,7 @@ class _ListenerServer:
                     made.access_log = False
                     return made
 
-                loop = asyncio.get_running_loop()
-                self.servers.append(
-                    await loop.create_server(
-                        protocol,
-                        sock=sock,
-                        ssl=context,
-                        backlog=config.backlog,
-                        ssl_handshake_timeout=LISTENER_HANDSHAKE_SECONDS,
-                    )
-                )
+                self.servers.append(_ScreenedAcceptor(sock, admit, protocol, context))
 
         return Server(config)
 
@@ -475,6 +569,11 @@ class DeviceListener:
                 f"GAIA can't listen for paired devices on port {self._port}: {e}.",
             ) from e
         port = int(sock.getsockname()[1])
+        allow_loopback = ipaddress.ip_address(self._host).is_loopback
+
+        def admit(peer, local) -> bool:
+            return peer_route(self._access, peer, local, allow_loopback) is not None
+
         options = {
             **uvicorn_options(self._host, port),
             # False would mute the main server's access log, which is global;
@@ -486,7 +585,7 @@ class DeviceListener:
                 DeviceGate(
                     self._app,
                     self._access,
-                    allow_loopback=ipaddress.ip_address(self._host).is_loopback,
+                    allow_loopback=allow_loopback,
                 )
             ),
             lifespan="off",
@@ -497,7 +596,7 @@ class DeviceListener:
             timeout_graceful_shutdown=LISTENER_SHUTDOWN_SECONDS,
             **options,
         )
-        self._server = _ListenerServer.make(config, sock, context)
+        self._server = _ListenerServer.make(config, sock, context, admit)
         self._task = asyncio.create_task(self._server.serve())
         while not self._server.started:
             if self._task.done():

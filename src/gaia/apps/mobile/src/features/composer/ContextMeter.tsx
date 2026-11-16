@@ -82,7 +82,7 @@ export function ContextMeter({ usage, unavailable, onDetails, initialOpen = fals
                     />
                 </View>
             )}
-            <Text role="caption" tone={warn ? 'warning' : 'secondary'}>
+            <Text role="caption" tone={warn ? 'warning' : 'secondary'} compact>
                 {usage ? <Ltr>{`${pct}%`}</Ltr> : `${t.bare('ctx.context')} –`}
             </Text>
         </Row>

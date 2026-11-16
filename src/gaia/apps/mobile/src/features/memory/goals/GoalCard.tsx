@@ -96,7 +96,7 @@ export function GoalCard({ goal, busy, onCancel, onDelete }: GoalCardProps) {
                                 {t('mem.goals.noTasks')}
                             </Text>
                         ) : null}
-                        <Row gap="sm" wrap>
+                        <Row gap="sm" wrap stack>
                             {goal.status === 'queued' ? (
                                 <Button
                                     label={t.bare('mem.cancel')}

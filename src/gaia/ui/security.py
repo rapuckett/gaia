@@ -319,6 +319,16 @@ def require_pc_or_device(request: Request) -> None:
         )
 
 
+def require_pc_or_allowed_device(request: Request) -> None:
+    """The PC, or a paired device the PC allowed; never the tunnel or a pending device."""
+    if not is_local_pc(request) and allowed_device(request) is None:
+        raise HTTPException(
+            status_code=403,
+            detail="Do this on the PC running GAIA or on a paired device the PC "
+            "allowed. It isn't allowed over mobile access or from another computer.",
+        )
+
+
 def require_device_listener(request: Request) -> None:
     """A route that exists only on the device listener: a 404 anywhere else."""
     if not on_device_listener(request):
