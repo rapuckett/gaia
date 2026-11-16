@@ -17,7 +17,7 @@ import { Disclosure, Ltr, Notice, ProgressLine, Stack } from '@/ui';
 
 import { pickBanner } from './pickBanner';
 
-function ChatAlertNotice({ alert }: { alert: ChatAlertBanner }) {
+export function ChatAlertNotice({ alert }: { alert: ChatAlertBanner }) {
     const t = useT();
     const router = useRouter();
     const dismiss = useChatAlertBannerStore((s) => s.dismiss);

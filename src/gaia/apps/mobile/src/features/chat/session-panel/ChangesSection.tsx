@@ -67,9 +67,9 @@ function ChangesBody({ sessionId, live, changes, onUndone }: { sessionId: string
     const t = useT();
     const { undoAll } = useChangesActions(sessionId);
     const seed = useSessionPanelStore((s) => s.changesSeed);
-    const [phase, setPhase] = useState<UndoPhase>(seed && 'phase' in seed ? seed.phase : 'idle');
-    const [message, setMessage] = useState<string | null>(seed && 'phase' in seed ? (seed.message ?? null) : null);
-    const [reviewing, setReviewing] = useState(Boolean(seed && 'review' in seed));
+    const [phase, setPhase] = useState<UndoPhase>(seed ? seed.phase : 'idle');
+    const [message, setMessage] = useState<string | null>(seed?.message ?? null);
+    const [reviewing, setReviewing] = useState(false);
     const count = changes.files.length;
     const groups = groupUntracked(changes.untracked);
 

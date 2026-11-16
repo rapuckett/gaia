@@ -5,12 +5,13 @@ import { formatSize, ltrIn } from '@webui/components/setup/format';
 import { cardText } from '@webui/components/startCardText';
 import type { StartCard } from '@webui/types';
 import { router } from 'expo-router';
+import { ArrowUpRight } from 'lucide-react-native';
 import { useState } from 'react';
 
 import { useGpuMemory, useSelectModel, useStartScreen } from '@/data';
 import { shortModelName } from '@/features/new-chat/warmUp';
 import { describeError, useLocaleCode, useT } from '@/i18n/useT';
-import { Button, Card, Notice, Stack, Text } from '@/ui';
+import { Button, Card, Icon, Notice, Row, Stack, Text } from '@/ui';
 
 import { SetupFooter } from '../SetupFooter';
 import type { SetupStepContext } from '../SetupScreen';
@@ -100,7 +101,10 @@ export function ReadyStep({ ctx }: { ctx: SetupStepContext }) {
                         return (
                             <Card key={card.skill} onPress={() => void finish(card)} accessibilityLabel={`${title}. ${note}`}>
                                 <Stack gap="xs">
-                                    <Text weight="semibold">{title}</Text>
+                                    <Row gap="xs" align="center" justify="between">
+                                        <Text weight="semibold">{title}</Text>
+                                        <Icon icon={ArrowUpRight} size="sm" fixed />
+                                    </Row>
                                     <Text role="caption" tone="secondary">{note}</Text>
                                 </Stack>
                             </Card>
