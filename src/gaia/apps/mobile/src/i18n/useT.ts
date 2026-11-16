@@ -39,6 +39,7 @@ export function describeFailureWith(error: unknown, say: Say): string {
 /** The raw cause for a Details disclosure; never part of the sentence a person reads. */
 export function technicalDetail(error: unknown): string {
     if (error instanceof GaiaNetworkError) return `${error.params.url}: ${error.params.reason}`;
+    if (error instanceof GaiaApiError) return `${error.status} ${error.detail}`.trim();
     return error instanceof Error ? error.message : String(error);
 }
 

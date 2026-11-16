@@ -4,6 +4,7 @@
 import { useState, type ReactNode } from 'react';
 import { ScrollView, View } from 'react-native';
 import { useDirection } from '@/i18n/useT';
+import { dirProp } from '@/platform/dirProp';
 import { Icon } from '../controls/Icon';
 import { ChevronRight } from '../icons';
 import { useTheme } from '../theme/ThemeProvider';
@@ -25,7 +26,7 @@ export function HScroll({ children, dir, testID, hint = false }: HScrollProps) {
     const more = hint && box.content > box.view + 1 && Math.abs(offset) < box.content - box.view - 1;
     const flip = (dir ?? uiDir) !== uiDir;
     return (
-        <View style={dir ? { direction: dir } : undefined}>
+        <View style={dir ? { direction: dir } : undefined} {...(dir ? dirProp(dir) : {})}>
             <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator

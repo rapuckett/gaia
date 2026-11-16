@@ -37,6 +37,27 @@ def test_a_user_chosen_base_url_is_named_without_its_credentials(monkeypatch):
     assert label == "The model server at 192.168.1.20:8080"
 
 
+@pytest.mark.parametrize(
+    "url",
+    ["http://localhost:8080/v1", "http://127.0.0.1:8080/v1", "http://[::1]:8080/v1"],
+)
+def test_a_server_on_this_pc_is_not_named_by_address(monkeypatch, url):
+    monkeypatch.setattr(chat_agent, "configured_lemonade_url", lambda: url)
+    label = ChatAgent._model_service_label(_agent("lemonade", url))
+    assert label == "The model server on this PC"
+
+
+def test_this_pcs_own_address_counts_as_this_pc(monkeypatch):
+    url = "http://10.1.2.3:8080/v1"
+    monkeypatch.setattr(chat_agent, "configured_lemonade_url", lambda: url)
+    monkeypatch.setattr(chat_agent.socket, "gethostname", lambda: "box")
+    monkeypatch.setattr(
+        chat_agent.socket, "gethostbyname_ex", lambda n: (n, [], ["10.1.2.3"])
+    )
+    label = ChatAgent._model_service_label(_agent("lemonade", url))
+    assert label == "The model server on this PC"
+
+
 def test_an_unparseable_user_url_is_never_called_lemonade(monkeypatch):
     url = "http://host:notaport/v1"
     monkeypatch.setattr(chat_agent, "configured_lemonade_url", lambda: url)
