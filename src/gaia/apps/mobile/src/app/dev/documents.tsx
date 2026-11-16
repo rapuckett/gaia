@@ -7,32 +7,19 @@ import { useState } from 'react';
 
 import { GaiaClientProvider } from '@/data';
 import { devGalleryEnabled } from '@/features/dev/devGallery';
+import { KeyedScene } from '@/features/dev/KeyedScene';
 import { DOCUMENTS_SCENES, DOCUMENTS_SCENE_CHAT_ID, documentsSceneClient } from '@/features/documents/devScenes';
 import { DocumentsScreen } from '@/features/documents';
 import { Screen, ScreenBannerProvider, Stack, Text, UIProvider } from '@/ui';
 
-/** The document library on a fake PC; `?state=<name>` (see DOCUMENTS_SCENES), `library` when no state is given. */
-export default function DocumentsGalleryRoute() {
-    const { state = 'library' } = useLocalSearchParams<{ state?: string }>();
+type Found = (typeof DOCUMENTS_SCENES)[string];
+
+function DocumentsView({ found }: { found: Found }) {
     const router = useRouter();
-    const found = DOCUMENTS_SCENES[state];
     const [queryClient] = useState(() => new QueryClient({ defaultOptions: { queries: { retry: false } } }));
-    const [client] = useState(() => (found ? documentsSceneClient(found) : null));
-    if (!devGalleryEnabled()) return <Redirect href="/" />;
-    if (!found || !client) {
-        return (
-            <UIProvider>
-                <Screen scroll>
-                    <Stack gap="sm" padding="lg">
-                        <Text role="title">{`No documents scene "${state}"`}</Text>
-                        {Object.keys(DOCUMENTS_SCENES).map((key) => <Text key={key}>{key}</Text>)}
-                    </Stack>
-                </Screen>
-            </UIProvider>
-        );
-    }
+    const [client] = useState(() => documentsSceneClient(found));
     return (
-        <QueryClientProvider key={state} client={queryClient}>
+        <QueryClientProvider client={queryClient}>
             <GaiaClientProvider client={client}>
                 <UIProvider>
                     <ScreenBannerProvider banner={null}>
@@ -47,4 +34,24 @@ export default function DocumentsGalleryRoute() {
             </GaiaClientProvider>
         </QueryClientProvider>
     );
+}
+
+/** The document library on a fake PC; `?state=<name>` (see DOCUMENTS_SCENES), `library` when no state is given. */
+export default function DocumentsGalleryRoute() {
+    const { state = 'library' } = useLocalSearchParams<{ state?: string }>();
+    if (!devGalleryEnabled()) return <Redirect href="/" />;
+    const found = DOCUMENTS_SCENES[state];
+    if (!found) {
+        return (
+            <UIProvider>
+                <Screen scroll>
+                    <Stack gap="sm" padding="lg">
+                        <Text role="title">{`No documents scene "${state}"`}</Text>
+                        {Object.keys(DOCUMENTS_SCENES).map((key) => <Text key={key}>{key}</Text>)}
+                    </Stack>
+                </Screen>
+            </UIProvider>
+        );
+    }
+    return <KeyedScene sceneKey={state} scene={DocumentsView} props={{ found }} />;
 }
