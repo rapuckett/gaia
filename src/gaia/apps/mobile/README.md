@@ -1,6 +1,6 @@
 # GAIA mobile
 
-The phone app for GAIA, built with Expo and React Native (iOS first; Android can't pair yet).
+The phone app for GAIA, built with Expo and React Native, for iOS and Android.
 
 ## What it is
 
@@ -63,9 +63,11 @@ PC. The simulator must reach the PC's home-network address, so run both on the s
   library and design tokens.
 - **Pairing and the pinned transport.** `src/features/pairing` is the flow
   (`PairingFlow.tsx`, `pinnedPairingService.ts`; `fakePairingService.ts` serves dev builds
-  and the gallery). The native module `modules/gaia-transport` (Swift, `ios/`) opens every request
-  to a paired PC with its certificate pin and keeps the device token in the Keychain, so
-  JavaScript never holds it. A pin that no longer matches shows `PinMismatchScreen`. The PC
+  and the gallery). The native module `modules/gaia-transport` (Swift in `ios/`, Kotlin in
+  `android/`) opens every request to a paired PC with its certificate pin and keeps the device
+  token in the Keychain, or on Android sealed by a non-exportable Keystore key in storage that is
+  never backed up, so JavaScript never holds it. The Kotlin unit tests run with
+  `./gradlew :gaia-transport:testDebugUnitTest` from a prebuilt `android/`. A pin that no longer matches shows `PinMismatchScreen`. The PC
   must also **Allow** each new phone before it can reach any chat.
 - **Route classes.** The PC's route guards define who may call what. `src/api/routeAccess.gen.ts`
   is generated from them (`python -m gaia.ui.export_route_access` from the repo root) and
@@ -179,4 +181,5 @@ the native fingerprint needs a new build.
 - **The installed dev client ignores a new native module or plugin.** The native fingerprint
   changed. Compare it as above and rebuild with `npx expo run:ios`; Metro can't deliver native
   changes.
-- **Android shows "not supported yet".** Android has no pinned transport, so pairing is iOS only.
+- **"This build of the GAIA app can't pair with a PC".** The build predates the native transport
+  (`modules/gaia-transport`) on its platform; rebuild the dev client.

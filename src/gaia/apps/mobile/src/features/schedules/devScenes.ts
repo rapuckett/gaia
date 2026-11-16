@@ -69,5 +69,13 @@ export const SCHEDULE_SCENES = {
 export type ScheduleSceneName = keyof typeof SCHEDULE_SCENES;
 
 export function schedulesSceneClient(found: SchedulesScene): GaiaClient {
-    return createFakeClient(found.data);
+    const client = createFakeClient(found.data);
+    // The fake parser answers "every hour" to any text; give the weekday sentence its own reading.
+    return {
+        ...client,
+        parseSchedule: async (input, tz, options) =>
+            /weekday/i.test(input)
+                ? { interval_seconds: 86_400, time_of_day: '08:00', start_hour: null, end_hour: null, days_of_week: [0, 1, 2, 3, 4], description: 'Weekdays at 8:00 AM', description_parts: weekdays, next_run_at: hoursFromNow(5), valid: true }
+                : client.parseSchedule(input, tz, options),
+    };
 }

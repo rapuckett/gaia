@@ -7,7 +7,7 @@ import { ENDPOINTS } from '@/api/constants';
 import { GaiaApiError } from '@/api/errors';
 import { useDeviceRefused } from '@/api/routeAccess';
 import { useLemonadeTarget, useSetLemonadeTarget } from '@/data';
-import { describeError, useT } from '@/i18n/useT';
+import { technicalDetail, useT } from '@/i18n/useT';
 import { Button, Notice, Spinner, Stack, Text, TextField } from '@/ui';
 
 import { ActionError, RawDetails } from './errors';
@@ -31,7 +31,7 @@ export function LemonadeTarget() {
         return (
             <Stack gap="sm">
                 <Notice tone="warning" message={t('settings.server.readFailed')} />
-                <RawDetails text={describeError(query.error, t)} />
+                <RawDetails text={technicalDetail(query.error)} />
             </Stack>
         );
     }

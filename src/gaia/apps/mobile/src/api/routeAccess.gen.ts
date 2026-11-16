@@ -8,7 +8,7 @@ export type RouteAccessClass = 'device' | 'device_self' | 'not_on_listener' | 'p
 
 export const ROUTE_ACCESS: Readonly<Record<string, RouteAccessClass>> = {
     'DELETE /api/agents/{agent_id}': 'pc',
-    'DELETE /api/automations/{ref}': 'pc',
+    'DELETE /api/automations/{ref}': 'pc_or_device',
     'DELETE /api/chat/permissions/{session_id}/grants': 'remote',
     'DELETE /api/connectors/_flows/{flow_id}': 'remote',
     'DELETE /api/connectors/{connector_id}': 'remote',
@@ -37,7 +37,7 @@ export const ROUTE_ACCESS: Readonly<Record<string, RouteAccessClass>> = {
     'GET /api/agents': 'remote',
     'GET /api/agents/catalog': 'remote',
     'GET /api/agents/{agent_id}/install-status': 'remote',
-    'GET /api/automations': 'pc',
+    'GET /api/automations': 'pc_or_device',
     'GET /api/chat/active': 'remote',
     'GET /api/chat/attach': 'remote',
     'GET /api/chat/context/{session_id}': 'remote',
@@ -150,7 +150,7 @@ export const ROUTE_ACCESS: Readonly<Record<string, RouteAccessClass>> = {
     'GET /v1/email/version': 'remote',
     'PATCH /api/sessions/{session_id}/private': 'remote',
     'POST /api/agents/install': 'pc',
-    'POST /api/automations/{ref}/{action}': 'pc',
+    'POST /api/automations/{ref}/{action}': 'pc_or_device',
     'POST /api/chat/cancel': 'remote',
     'POST /api/chat/confirm-tool': 'remote',
     'POST /api/chat/followup': 'remote',

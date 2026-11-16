@@ -72,7 +72,12 @@ export default function appConfig(): ExpoConfig {
                 ...(relayDomain ? { GAIARelayDomain: relayDomain } : {}),
             },
         },
-        android: { package: id },
+        android: {
+            package: id,
+            // No cloud backup. plugins/withBackupExclusions also keeps every app file out of device-to-device
+            // transfer, so a paired PC's records never reach another phone, where its Keystore key can't follow.
+            allowBackup: false,
+        },
         plugins: [
             'expo-router',
             'expo-dev-client',
@@ -91,6 +96,8 @@ export default function appConfig(): ExpoConfig {
             ],
             'expo-background-task',
             ['./plugins/withCleartextHosts', { hosts: dev ? DEV_HTTP_HOSTS : [] }],
+            './plugins/withBackupExclusions',
+            ['./plugins/withRelayDomain', { domain: relayDomain || null }],
             './plugins/withNinjaJobs',
         ],
     };

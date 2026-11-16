@@ -35,6 +35,15 @@ describeNative('/dev/notifications', () => {
         expect(screen.queryByText(/^No notifications scene/)).toBeNull();
     });
 
+    it.each([
+        ['banner-chat-finished', 'Morning summary finished'],
+        ['banner-chat-needs-approval', 'Weekly report needs your approval'],
+    ])('%s shows its own chat banner', async (name, title) => {
+        mockState = name;
+        await mount();
+        expect(await screen.findByText(title)).toBeTruthy();
+    });
+
     it('setup-upgrading-failed says the server update stopped, with Try again', async () => {
         mockState = 'setup-upgrading-failed';
         await mount();

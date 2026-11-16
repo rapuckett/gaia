@@ -2719,9 +2719,11 @@ routes also require the `X-Gaia-UI: 1` header.
 Settings → Automations: list, pause, resume and remove the reminders,
 summaries, alerts and triggers GAIA runs on its own
 ([Automations guide](/guides/automations)). The routes read and write the same
-store as `gaia automation`. **Every route is local-PC only, reads included:** a
-trigger's check is a command that runs on this PC, and prompts can carry
-private detail. Mutating routes also require the `X-Gaia-UI: 1` header.
+store as `gaia automation`. **The PC and an allowed paired device only, reads
+included:** a trigger's check is a command that runs on this PC, and prompts can
+carry private detail, so mobile access and another computer get a `403`. A
+paired device may do what the desktop offers (list, pause, resume and remove)
+and nothing more. Mutating routes also require the `X-Gaia-UI: 1` header.
 
 <AccordionGroup>
   <Accordion title="GET /api/automations">
@@ -2735,7 +2737,8 @@ private detail. Mutating routes also require the `X-Gaia-UI: 1` header.
 
   <Accordion title="POST /api/automations/{ref}/{action}">
     `action` is `pause` or `resume`; `ref` is an id or exact name. Returns the
-    changed automation. 404 when nothing matches.
+    changed automation. 404 when nothing matches. Any other `action` is a 422
+    from the PC and a 403 from a paired device.
   </Accordion>
 
   <Accordion title="DELETE /api/automations/{ref}">

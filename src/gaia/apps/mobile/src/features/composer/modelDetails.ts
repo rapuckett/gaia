@@ -12,7 +12,7 @@ export function modelDetails(m: ProviderModel, remote: boolean, t: Translate): s
     const rank = m.rank ? `#${m.rank} ${m.note ?? ''}`.trim() : null;
     if (remote) return [rank, formatPrice(m.price, t)].filter((x): x is string => !!x);
     return [
-        placementText(m.placement),
+        placementText(m.placement, t),
         m.size_gb ? `${m.size_gb} GB` : null,
         m.tokens_per_second ? t('modelMenu.speed', { n: Math.round(m.tokens_per_second) }) : null,
         rank,

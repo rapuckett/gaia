@@ -6,7 +6,7 @@ import { useState, type ReactNode } from 'react';
 import { isolate } from '@webui/i18n/registry';
 
 import { useMcpStatus, useSettings, useUpdateSettings } from '@/data';
-import { describeError, useT } from '@/i18n/useT';
+import { technicalDetail, useT } from '@/i18n/useT';
 import { Badge, Card, Disclosure, Ltr, Notice, Row, Spinner, Stack, Switch, Text } from '@/ui';
 
 import { isPcRefusal, PcOnlyNotice } from '../../PcOnlyNotice';
@@ -97,7 +97,7 @@ function CustomModelCard() {
             ) : (
                 <Stack gap="sm">
                     <Notice tone="warning" message={t('mobileApp.settings.modelActionFailed')} />
-                    <RawDetails text={describeError(settings.error, t)} />
+                    <RawDetails text={technicalDetail(settings.error)} />
                 </Stack>
             )}
         </SettingCard>
