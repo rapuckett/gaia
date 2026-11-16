@@ -38,7 +38,7 @@ import {
 import { ArrowUp, Brain, Check, ChevronDown, ChevronRight, Code, Eye, File, FileText, Folder, House, Monitor, Download, Table, X } from '@/ui/icons';
 import type { LucideIcon } from '@/ui/icons';
 
-import { askPrompt, breadcrumbs, canAct, emptyKey, FILE_TYPE_FILTERS, folderName, QUICK_LINK_LABELS, visibleEntries } from './fileBrowserModel';
+import { askPrompt, breadcrumbs, canAct, emptyKey, FILE_TYPE_FILTERS, folderName, QUICK_LINK_LABELS, searchScopeText, visibleEntries } from './fileBrowserModel';
 
 const QUICK_LINK_ICONS: Record<string, LucideIcon> = { home: House, desktop: Monitor, documents: FileText, download: Download };
 
@@ -196,7 +196,7 @@ export function FileBrowserScreen({ chatId, onClose, onPreview, onAsk, initial }
     const crumbs = breadcrumbs(currentPath);
     const filterLabel = t(FILE_TYPE_FILTERS.find((f) => f.value === typeFilter)?.label ?? 'fileBrowser.filter.all');
     const scope = search.data?.searched_locations ?? [];
-    const scopeText = scope.length > 1 ? t('fileBrowser.scopeMore', { first: scope[0], n: scope.length - 1 }) : (scope[0] ?? '');
+    const scopeText = searchScopeText(scope, t);
 
     return (
         <Screen
@@ -249,14 +249,7 @@ export function FileBrowserScreen({ chatId, onClose, onPreview, onAsk, initial }
                     onSubmitEditing={runSearch}
                 />
                 <Row gap="sm">
-                    <Pressable accessibilityLabel={`${t('fileBrowser.typeFilter')}: ${filterLabel}`} onPress={() => setFilterOpen(true)}>
-                        <Row gap="xs">
-                            <Text role="label" weight="medium">
-                                {filterLabel}
-                            </Text>
-                            <Icon icon={ChevronDown} size="sm" tone="secondary" />
-                        </Row>
-                    </Pressable>
+                    <Button label={filterLabel} iconEnd={ChevronDown} accessibilityLabel={`${t('fileBrowser.typeFilter')}: ${filterLabel}`} onPress={() => setFilterOpen(true)} />
                     <Stack flex={1} />
                     <Button label={search.isFetching ? t('fileBrowser.searching') : t('fileBrowser.search')} variant="secondary" disabled={!text.trim() || search.isFetching} onPress={runSearch} />
                 </Row>
@@ -265,7 +258,7 @@ export function FileBrowserScreen({ chatId, onClose, onPreview, onAsk, initial }
                         {search.data ? <Text role="label" weight="medium">{t.plural('fileBrowser.found', search.data.results.length, { query: submitted ?? '' })}</Text> : null}
                         {scopeText ? (
                             <Text role="caption" tone="secondary">
-                                {t('fileBrowser.searchingIn')} {isolate(scopeText, 'ltr')}
+                                {scopeText}
                             </Text>
                         ) : null}
                         {search.data?.truncated ? <Text role="caption" tone="warning">{t('fileBrowser.searchStopped')}</Text> : null}
@@ -292,7 +285,7 @@ export function FileBrowserScreen({ chatId, onClose, onPreview, onAsk, initial }
                                     </Row>
                                 </HScroll>
                             </Stack>
-                            {parentPath ? <IconButton icon={ArrowUp} label={t('fileBrowser.goUp')} onPress={() => open(parentPath)} /> : null}
+                            {parentPath ? <IconButton icon={ArrowUp} variant="outlined" label={t('fileBrowser.goUp')} onPress={() => open(parentPath)} /> : null}
                         </Row>
                         <Switch label={t('fileBrowser.showHidden')} value={showHidden} onValueChange={setShowHidden} />
                     </Stack>
@@ -318,6 +311,7 @@ export function FileBrowserScreen({ chatId, onClose, onPreview, onAsk, initial }
                             <ListRow
                                 title={item.name}
                                 subtitle={unsupported ? t('fileBrowser.notIndexableTitle') : subtitle}
+                                subtitleLines={unsupported ? 3 : 1}
                                 selected={picked}
                                 accessibilityLabel={isFolder ? item.name : t('fileBrowser.selectAria', { name: item.name })}
                                 onPress={isFolder ? () => open(item.path) : unsupported ? undefined : () => toggle(item.path)}
@@ -336,7 +330,7 @@ export function FileBrowserScreen({ chatId, onClose, onPreview, onAsk, initial }
                                         <Icon icon={ChevronRight} size="sm" tone="muted" />
                                     ) : (
                                         <Row gap="xs">
-                                            {unsupported ? <Badge label={t('fileBrowser.notIndexable')} tone="warning" /> : null}
+                                            {unsupported ? <Badge label={t.bare('fileBrowser.notIndexable')} accessibilityLabel={t('fileBrowser.notIndexable')} tone="warning" /> : null}
                                             {onPreview ? <IconButton icon={Eye} label={t('fileBrowser.previewAria', { name: item.name })} onPress={() => onPreview(item.path)} /> : null}
                                         </Row>
                                     )

@@ -3,6 +3,7 @@
 
 /** Which files the library can take, and what to tell the person when an upload fails; no DOM. */
 
+import type { MessageKey } from '../i18n/registry';
 import type { Translate } from '../i18n/translator';
 import { failureHint } from './documentLibrary.core';
 import { serverFailureText } from './documentFailure';
@@ -11,7 +12,11 @@ import { AUDIO_EXTENSIONS, VIDEO_EXTENSIONS } from './mediaFiles';
 export interface FileTypeCategory {
     label: string;
     extensions: Set<string>;
+    /** English, as the backend words it; an upload error carries it to `describeUploadError`. */
     message: string;
+    /** What a person reads: the category's title and `message`, translated. */
+    titleKey: MessageKey;
+    detailKey: MessageKey;
     alternatives: string[];
     featureTitle: string;
 }
@@ -19,6 +24,8 @@ export interface FileTypeCategory {
 const UNSUPPORTED_FILE_CATEGORIES: FileTypeCategory[] = [
     {
         label: 'Image',
+        titleKey: 'docs.unsupported.image',
+        detailKey: 'docs.unsupported.imageDetail',
         extensions: new Set(['.ico', '.heic', '.heif']),
         message: 'This image format cannot be indexed.',
         alternatives: [
@@ -28,6 +35,8 @@ const UNSUPPORTED_FILE_CATEGORIES: FileTypeCategory[] = [
     },
     {
         label: 'Video',
+        titleKey: 'docs.unsupported.video',
+        detailKey: 'docs.unsupported.videoDetail',
         extensions: VIDEO_EXTENSIONS,
         message: 'Video files can\'t go in the document library.',
         alternatives: [
@@ -37,6 +46,8 @@ const UNSUPPORTED_FILE_CATEGORIES: FileTypeCategory[] = [
     },
     {
         label: 'Audio',
+        titleKey: 'docs.unsupported.audio',
+        detailKey: 'docs.unsupported.audioDetail',
         extensions: AUDIO_EXTENSIONS,
         message: 'Audio files can\'t go in the document library.',
         alternatives: [
@@ -46,6 +57,8 @@ const UNSUPPORTED_FILE_CATEGORIES: FileTypeCategory[] = [
     },
     {
         label: 'Archive',
+        titleKey: 'docs.unsupported.archive',
+        detailKey: 'docs.unsupported.archiveDetail',
         extensions: new Set(['.zip', '.rar', '.7z', '.tar', '.gz', '.bz2', '.xz', '.tgz']),
         message: 'Archive files must be extracted before indexing.',
         alternatives: [
@@ -56,6 +69,8 @@ const UNSUPPORTED_FILE_CATEGORIES: FileTypeCategory[] = [
     },
     {
         label: 'Executable',
+        titleKey: 'docs.unsupported.executable',
+        detailKey: 'docs.unsupported.executableDetail',
         extensions: new Set(['.exe', '.msi', '.dll', '.so', '.app', '.dmg', '.bin', '.com']),
         message: 'Executable and binary files cannot be indexed.',
         alternatives: [
@@ -66,6 +81,8 @@ const UNSUPPORTED_FILE_CATEGORIES: FileTypeCategory[] = [
     },
     {
         label: 'Database',
+        titleKey: 'docs.unsupported.database',
+        detailKey: 'docs.unsupported.databaseDetail',
         extensions: new Set(['.sqlite', '.db', '.mdb', '.accdb', '.dbf']),
         message: 'Database files are not supported for direct indexing.',
         alternatives: [
@@ -76,6 +93,8 @@ const UNSUPPORTED_FILE_CATEGORIES: FileTypeCategory[] = [
     },
     {
         label: 'Microsoft Office',
+        titleKey: 'docs.unsupported.office',
+        detailKey: 'docs.unsupported.officeDetail',
         extensions: new Set(['.doc', '.ppt', '.xls']),
         message:
             'Legacy Office formats (.doc, legacy PowerPoint .ppt, legacy Excel ' +
@@ -209,8 +228,8 @@ export function describeUploadError(t: Translate, { filename, error, status, kin
     }
     if (isFileTypeError && category) {
         return {
-            title: `${category.label} files not supported`,
-            detail: category.message,
+            title: t(category.titleKey),
+            detail: t(category.detailKey),
             icon: 'warning',
             report: { kind: 'feature', title: category.featureTitle },
         };
