@@ -2,9 +2,10 @@
 // SPDX-License-Identifier: MIT
 
 import { Children, createContext, useContext, type ReactNode } from 'react';
-import { Text as RNText, type AccessibilityRole, type TextStyle } from 'react-native';
+import { Platform, Text as RNText, type AccessibilityRole, type TextStyle } from 'react-native';
 import { glossParts } from '@webui/i18n/registry';
 import { useDirection } from '@/i18n/useT';
+import { layoutDirection } from '@/platform/direction';
 import { metrics } from '../tokens/generated';
 import { fontFamily, type Weight } from '../theme/fonts';
 import { COMPACT_MAX_FONT_SCALE, useLargeText } from '../theme/a11y';
@@ -123,12 +124,15 @@ export function Text({
         style.color = colors.textCode;
     }
     if (strike || underline) style.textDecorationLine = strike && underline ? 'underline line-through' : strike ? 'line-through' : 'underline';
-    if (dir) style.writingDirection = dir;
-    // textAlign left/right are physical on native too (not swapped under forceRTL), so the start side is picked by direction.
+    const writing = dir ?? (rtl ? 'rtl' : undefined);
+    if (writing) style.writingDirection = writing;
+    // textAlign left/right are physical, except on iOS, which mirrors them when the native layout is RTL.
     const startsRight = (dir ?? (rtl ? 'rtl' : 'ltr')) === 'rtl';
+    const mirrored = Platform.OS === 'ios' && layoutDirection() === 'rtl';
+    const side = (right: boolean) => (right !== mirrored ? 'right' : 'left');
     if (align === 'center') style.textAlign = 'center';
-    else if (align === 'end') style.textAlign = startsRight ? 'left' : 'right';
-    else if (align === 'start' || !nested) style.textAlign = startsRight ? 'right' : 'left';
+    else if (align === 'end') style.textAlign = side(!startsRight);
+    else if (align === 'start' || !nested) style.textAlign = side(startsRight);
     if (rtl) style.letterSpacing = 0;
 
     return (
