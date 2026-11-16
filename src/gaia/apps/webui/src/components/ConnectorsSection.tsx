@@ -29,11 +29,13 @@ import { translator, useT, type Translate } from '../i18n/useT';
 import type { AgentMcpServer, ConnectorListEntry, ConnectorRow, UnavailableConnectorRow } from '../types';
 import { connectorDescription, connectorDescriptionBare, fieldHelp, fieldLabel, missingFieldsMessage } from '../utils/connectorText';
 import { personalizeSourceKind, requestPersonalize } from '../utils/connectorPersonalize';
-import { scopeLabel } from '../utils/connectorScopes';
+import { connectScopes, scopeLabel } from '../utils/connectorScopes';
 import { ConnectorTileMenu } from './ConnectorTileMenu';
 import { SettingsDisclosure } from './settings/SettingsDisclosure';
 import { ltrIn } from './setup/format';
 import './ConnectorsSection.css';
+
+export { connectScopes };
 
 const SEARCH_ABOVE = 6;
 
@@ -460,6 +462,10 @@ function ConnectorTile({
         if (connector.type === 'mcp_server' && connector.enabled === false) {
             return <span className="connector-status disabled">{t('settings.connectors.paused')}</span>;
         }
+        // A server that won't start is not working, whatever was saved for it.
+        if (check?.state === 'failed' && !check.slow) {
+            return <span className="connector-status failed" role="status">{t('settings.connectors.notWorking')}</span>;
+        }
         return (
             <span className="connector-status ok">
                 <CheckCircle2 size={12} />
@@ -598,9 +604,7 @@ function OAuthConfigureBody({
         try {
             const r = await api.authorizeConnector(
                 connector.id,
-                connector.available_scopes?.length
-                    ? connector.available_scopes
-                    : connector.default_scopes,
+                connectScopes(connector, selectedGrantAgents()),
                 selectedGrantAgents(),
             );
             openAuthUrl(r.authorization_url);
@@ -622,9 +626,7 @@ function OAuthConfigureBody({
         try {
             const info = await api.authorizeConnectorDevice(
                 connector.id,
-                connector.available_scopes?.length
-                    ? connector.available_scopes
-                    : connector.default_scopes,
+                connectScopes(connector, selectedGrantAgents()),
                 selectedGrantAgents(),
             );
             setDeviceInfo(info);
@@ -694,9 +696,7 @@ function OAuthConfigureBody({
         setBusy(true);
         setErr(null);
         try {
-            const scopes = connector.available_scopes?.length
-                ? connector.available_scopes
-                : connector.default_scopes;
+            const scopes = connectScopes(connector, selectedGrantAgents());
             const result = await api.configureConnector(connector.id, {
                 ...setupValues,
                 scopes,

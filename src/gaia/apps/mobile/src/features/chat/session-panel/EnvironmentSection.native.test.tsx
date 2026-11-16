@@ -13,7 +13,6 @@ import { GaiaClientProvider } from '@/data';
 import { ThemeProvider } from '@/ui';
 
 import { EnvironmentSection } from './EnvironmentSection';
-import { useSessionPanelStore } from './panelStore';
 
 jest.mock('expo-constants', () => ({ __esModule: true, default: { expoConfig: { version: 'test' } } }));
 
@@ -49,7 +48,6 @@ function wrapper(client: ReturnType<typeof createFakeClient>) {
 
 describeNative('Environment: removing a folder', () => {
     it('asks first, and only the confirmation sends the removal', async () => {
-        useSessionPanelStore.getState().setSection('environment', true);
         const client = createFakeClient({ environments: { s1: ENV } });
         await render(<EnvironmentSection sessionId="s1" live={false} />, { wrapper: wrapper(client) });
         expect(await screen.findByText(/^.?Reports.?$/)).toBeTruthy();
@@ -64,7 +62,6 @@ describeNative('Environment: removing a folder', () => {
     });
 
     it('adds the folder the picker is on, and not one the PC refuses', async () => {
-        useSessionPanelStore.getState().setSection('environment', true);
         const listing = (path: string, folder_refusal: string | null) => ({ current_path: path, parent_path: null, entries: [], quick_links: [], folder_refusal });
         const client = createFakeClient({ environments: { s1: ENV }, fileFolders: { '': listing('/Users/me', 'That is your whole user folder.') } });
         await render(<EnvironmentSection sessionId="s1" live={false} />, { wrapper: wrapper(client) });
