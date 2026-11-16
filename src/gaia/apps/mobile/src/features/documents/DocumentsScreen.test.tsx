@@ -58,7 +58,9 @@ describe('DocumentsScreen', () => {
 
     it('puts the chooser and adder inside the list so the whole screen scrolls', async () => {
         await mount(createFakeClient({ documents: { documents: [doc('a', 'notes.txt', 'complete', 2048)], total: 1, total_chunks: 3, total_size_bytes: 2048 } as DocumentListResponse }));
-        const list = await screen.findByLabelText('Document library');
+        // The list exists while loading too; the top block appears only once the library has loaded.
+        await screen.findByTestId('docs-top');
+        const list = screen.getByLabelText('Document library');
         expect(within(list).getByTestId('docs-top')).toBeTruthy();
         expect(within(list).getByText('Add a file')).toBeTruthy();
     });
