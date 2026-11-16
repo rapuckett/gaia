@@ -7,6 +7,13 @@ import type { Message } from '../types';
 
 export const CONNECT_ACCOUNT_RENDER = 'connect_account';
 
+/** Brand names, the same in every language. */
+export const PROVIDER_NAMES: Record<string, string> = {
+    google: 'Google',
+    microsoft: 'Microsoft',
+    microsoft_work: 'Microsoft 365',
+};
+
 export interface ConnectAccountPayload {
     kind: typeof CONNECT_ACCOUNT_RENDER;
     providers: string[];

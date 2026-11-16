@@ -166,6 +166,9 @@ export interface DisconnectOutcome {
     revoke_error?: string | null;
 }
 
+/** How a sign-in the PC is finishing ended, from its `connector.oauth.*` events; `error` is the PC's own message. */
+export type ConnectorSignInEnd = { outcome: 'completed' } | { outcome: 'cancelled' | 'failed'; error?: string };
+
 export interface ConnectorList {
     connectors: ConnectorListEntry[];
 }
@@ -549,6 +552,8 @@ export interface GaiaClient {
     deactivateConnectorAgent(connectorId: string, agentId: string, options?: RequestOptions): Promise<void>;
     /** Starts a sign-in with a code on the PC; only for a connector with `supports_device_code`. The PC polls the provider and keeps the account. */
     startConnectorDeviceSignIn(connectorId: string, scopes: string[], options?: RequestOptions): Promise<ConnectorDeviceAuthResponse>;
+    /** Waits for the PC to report a sign-in for this connector finished or failed; null when the events stream can't be read. */
+    watchConnectorSignIn(connectorId: string, options?: RequestOptions): Promise<ConnectorSignInEnd | null>;
     /** Pauses an MCP server; its credentials and grants stay. Turning it back on is PC-only. */
     disableConnector(connectorId: string, options?: RequestOptions): Promise<void>;
     /**

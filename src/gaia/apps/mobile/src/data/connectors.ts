@@ -122,20 +122,28 @@ export function useConnectorServerAction(connectorId: string, onDisconnected?: (
 export type DeviceSignIn =
     | { state: 'idle' }
     | { state: 'starting' }
-    | { state: 'waiting'; code: ConnectorDeviceAuthResponse; expiresAt: number }
+    | { state: 'waiting'; code: ConnectorDeviceAuthResponse; expiresAt: number; wasConnected: boolean }
     | { state: 'done' }
     | { state: 'expired' }
+    | { state: 'ended'; why: 'cancelled' | 'failed'; error?: string }
     | { state: 'failed'; error: Error };
 
+/** What a sign-in with a code asks for when its caller names nothing: everything the connector offers. */
+export function deviceSignInScopes(connector: ConnectorRow): string[] {
+    return connector.available_scopes?.length ? connector.available_scopes : (connector.default_scopes ?? []);
+}
+
 /**
- * A sign-in with a code, started on the PC: the PC polls the provider and keeps the account, and
- * the phone re-reads the connector list at the interval the PC gave until it shows connected.
+ * A sign-in with a code, started on the PC: the PC polls the provider and keeps the account. The
+ * phone follows the PC's sign-in events, and re-reads the connector list at the interval the PC
+ * gave, until it shows connected. `scopes` defaults to everything the connector offers.
  */
-export function useDeviceSignIn(connector: ConnectorRow) {
+export function useDeviceSignIn(connector: ConnectorRow, scopes: string[] = deviceSignInScopes(connector)) {
     const client = useGaiaClient();
     const queryClient = useQueryClient();
     const [signIn, setSignIn] = useState<DeviceSignIn>({ state: 'idle' });
-    const scopes = connector.available_scopes?.length ? connector.available_scopes : connector.default_scopes;
+    const scopeKey = scopes.join(' ');
+    const configured = connector.configured;
 
     const start = useCallback(() => {
         setSignIn({ state: 'starting' });
@@ -146,13 +154,15 @@ export function useDeviceSignIn(connector: ConnectorRow) {
             setSignIn({ state: 'failed', error: error as Error });
             return;
         }
-        c.startConnectorDeviceSignIn(connector.id, scopes).then(
-            (code) => setSignIn({ state: 'waiting', code, expiresAt: Date.now() + code.expires_in * 1000 }),
+        c.startConnectorDeviceSignIn(connector.id, scopeKey ? scopeKey.split(' ') : []).then(
+            (code) => setSignIn({ state: 'waiting', code, expiresAt: Date.now() + code.expires_in * 1000, wasConnected: configured }),
             (error: Error) => setSignIn({ state: 'failed', error }),
         );
-    }, [client, connector.id, scopes]);
+    }, [client, connector.id, scopeKey, configured]);
 
-    const connected = signIn.state === 'waiting' && connector.configured;
+    // Signing in again leaves the row connected throughout, so only the PC's event says it finished.
+    const connected = signIn.state === 'waiting' && !signIn.wasConnected && configured;
+    const waiting = signIn.state === 'waiting' && !connected;
     useEffect(() => {
         if (signIn.state !== 'waiting' || connected) return;
         const timer = setInterval(() => {
@@ -161,6 +171,17 @@ export function useDeviceSignIn(connector: ConnectorRow) {
         }, Math.max(1, signIn.code.interval) * 1000);
         return () => clearInterval(timer);
     }, [signIn, connected, queryClient]);
+
+    useEffect(() => {
+        if (!waiting || !client) return;
+        const watch = new AbortController();
+        client.watchConnectorSignIn(connector.id, { signal: watch.signal }).then((end) => {
+            if (!end || watch.signal.aborted) return;
+            void queryClient.invalidateQueries({ queryKey: queryKeys.connectors });
+            setSignIn(end.outcome === 'completed' ? { state: 'done' } : { state: 'ended', why: end.outcome, error: end.error });
+        }, () => undefined);
+        return () => watch.abort();
+    }, [waiting, client, connector.id, queryClient]);
 
     return { signIn: connected ? ({ state: 'done' } as const) : signIn, start };
 }

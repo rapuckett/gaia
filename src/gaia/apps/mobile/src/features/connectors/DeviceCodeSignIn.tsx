@@ -17,21 +17,15 @@ const HTTPS = /^https:\/\//i;
 /** The desktop's "Sign in with a code" (`.device-code-block`): the PC asks for a code, the person enters it at the provider's page, and the PC keeps the account. */
 export function DeviceCodeSignIn({
     connector,
-    startLabel,
-    doneMessage,
     leading,
 }: {
     connector: ConnectorRow;
-    startLabel?: string;
-    doneMessage?: string;
     /** Shown before the start button until a code arrives, as the desktop's Connect beside "Sign in with a code". */
     leading?: ReactNode;
 }) {
     const t = useT();
     const { signIn, start } = useDeviceSignIn(connector);
-    const label = startLabel ?? t.bare('settings.connectors.code');
 
-    if (doneMessage && (signIn.state === 'done' || connector.configured)) return <Notice tone="success" message={doneMessage} />;
     switch (signIn.state) {
         case 'waiting':
             return <DeviceCodeBlock code={signIn.code} />;
@@ -43,8 +37,8 @@ export function DeviceCodeSignIn({
                     <Row gap="sm" wrap>
                         {leading}
                         <ChipButton
-                            label={label}
-                            accessibilityLabel={startLabel ?? t('settings.connectors.code')}
+                            label={t.bare('settings.connectors.code')}
+                            accessibilityLabel={t('settings.connectors.code')}
                             disabled={signIn.state === 'starting'}
                             onPress={start}
                             testID={`device-sign-in-${connector.id}`}
@@ -53,9 +47,15 @@ export function DeviceCodeSignIn({
                     {signIn.state === 'starting' ? <Spinner size="sm" /> : null}
                     {signIn.state === 'expired' ? <Notice tone="danger" message={t('mobileApp.connectors.codeExpired')} /> : null}
                     {signIn.state === 'failed' ? <Notice tone="danger" message={describeError(signIn.error, t)} /> : null}
+                    {signIn.state === 'ended' ? <Notice tone="danger" message={signInEndedMessage(signIn, t)} /> : null}
                 </Stack>
             );
     }
+}
+
+/** Why a sign-in the PC was finishing stopped: the PC's own words when it gave them. */
+export function signInEndedMessage(ended: { why: 'cancelled' | 'failed'; error?: string }, t: ReturnType<typeof useT>): string {
+    return ended.error ?? t(ended.why === 'cancelled' ? 'connectCard.cancelled' : 'connectCard.failed');
 }
 
 /** The code, its page and the wait, as the desktop's `.device-code-block`. */
