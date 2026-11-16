@@ -67,7 +67,7 @@ export const MODEL_SCENES: Record<string, ModelScene> = {
     'error-window': { view: 'error', errorVariant: 'window' },
     'need-chat': { view: 'need', need: NEED_CHAT },
     'need-downloading': { view: 'need', need: NEED_CHAT, needInitial: { downloading: true, percent: 42 } },
-    'need-failed': { view: 'need', need: NEED_CHAT, needInitial: { error: 'The download stopped.' } },
+    'need-failed': { view: 'need', need: NEED_CHAT, needInitial: { failed: true } },
     'need-low-disk': { view: 'need', need: { ...NEED_CHAT, job: 'vision', model: { ...NEED_CHAT.model!, name: 'Gemma 4 E4B (vision)', size_gb: 9.1 }, disk_free_gb: 4.2 } },
     'need-npu-images-off': { view: 'need', need: { job: 'vision', needed: false, model: null, disk_free_gb: null, off: 'npu' } },
     'need-starting': { view: 'need', need: NEED_CHAT, needInitial: { downloading: true, percent: null } },
