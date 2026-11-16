@@ -72,7 +72,11 @@ export default function appConfig(): ExpoConfig {
                 ...(relayDomain ? { GAIARelayDomain: relayDomain } : {}),
             },
         },
-        android: { package: id },
+        android: {
+            package: id,
+            // Nothing of the app's is backed up, so a restored phone never holds a paired PC's records without its key.
+            allowBackup: false,
+        },
         plugins: [
             'expo-router',
             'expo-dev-client',
@@ -91,6 +95,7 @@ export default function appConfig(): ExpoConfig {
             ],
             'expo-background-task',
             ['./plugins/withCleartextHosts', { hosts: dev ? DEV_HTTP_HOSTS : [] }],
+            ['./plugins/withRelayDomain', { domain: relayDomain || null }],
             './plugins/withNinjaJobs',
         ],
     };

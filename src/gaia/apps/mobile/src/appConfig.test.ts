@@ -64,6 +64,17 @@ describe('app config', () => {
         expect(pluginOptions(prod, './plugins/withCleartextHosts').hosts).toEqual([]);
     });
 
+    it('trusts only system CAs on Android and keeps every app file out of backups', () => {
+        const { securityConfig } = require('../plugins/withCleartextHosts') as { securityConfig: (hosts: string[]) => string };
+        const release = securityConfig([]);
+        expect(release).toContain('<base-config cleartextTrafficPermitted="false">');
+        expect(release).toContain('<certificates src="system" />');
+        expect(release).not.toMatch(/src="user"|debug-overrides|cleartextTrafficPermitted="true"/);
+        expect(securityConfig(['10.0.2.2'])).toContain('<domain includeSubdomains="false">10.0.2.2</domain>');
+        expect(configFor('production').android?.allowBackup).toBe(false);
+        expect(configFor('development').android?.allowBackup).toBe(false);
+    });
+
     it('declares the web UI languages to iOS and Android', () => {
         expect(pluginOptions(configFor('development'), 'expo-localization').supportedLocales).toEqual(
             LOCALES.map((locale) => locale.meta.code),

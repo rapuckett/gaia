@@ -7,7 +7,6 @@ import { Platform } from 'react-native';
 import { useConnectionStore } from '@/state/connection';
 import { Screen, Spinner, Stack } from '@/ui';
 
-import { AndroidUnsupportedScreen } from './AndroidUnsupportedScreen';
 import { PairingFlow } from './PairingFlow';
 
 /**
@@ -22,8 +21,6 @@ export function PairingGate({ children }: { children: ReactNode }) {
     if (Platform.OS === 'web') return <>{children}</>;
     // Paired, not reachable: an unreachable PC is the connection banner's to show, never a reason to re-pair.
     if (connected) return <>{children}</>;
-    // Android has no pinned transport yet, so pairing (and the dev fake) stays out of reach.
-    if (Platform.OS === 'android') return <AndroidUnsupportedScreen />;
     if (!restored) {
         return (
             <Screen banner={null}>

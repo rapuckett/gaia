@@ -3949,8 +3949,6 @@ export const enMessages = {
     'mobileApp.settings.model.removeDownloadBody': 'Its downloaded files are deleted from your PC. You can add it again later.',
     'mobileApp.settings.comingSoon': 'This section is coming to the phone soon. For now, change it on the PC running GAIA.',
     'mobileApp.settings.automations.body': 'The phone app can’t list or change automations. Review them on your PC.',
-    'mobileApp.android.title': 'GAIA on Android is coming later',
-    'mobileApp.android.body': 'Pairing with your PC works on iPhone today. Android support is on the way.',
     'mobileApp.settings.alerts.bannersHint': 'Banners appear at the top of the app while GAIA is open on this phone.',
     'mobileApp.settings.alerts.keepAwakePc': 'Keeping your PC awake while GAIA works is set in the GAIA desktop app on your PC.',
     'mobileApp.settings.loadAnyway': 'Chats are answering right now. Loading {name} now can slow or stop their answers. Load it anyway?',
