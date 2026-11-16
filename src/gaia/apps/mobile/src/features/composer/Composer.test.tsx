@@ -94,6 +94,7 @@ describe('Composer', () => {
         const attachments: Attachments = {
             items: [],
             add: jest.fn(),
+            addFailed: jest.fn(),
             remove: jest.fn(),
             clear: jest.fn(),
             uploading: false,
@@ -106,5 +107,22 @@ describe('Composer', () => {
         expect(attachments.clear).toHaveBeenCalledTimes(1);
         await act(async () => r.render(<Composer onSend={onSend} attachments={{ ...attachments, uploading: true }} />));
         expect(find(r, 'composer-send').props.disabled).toBe(true);
+    });
+
+    it('blocks Send while a refused file is attached, and says which', async () => {
+        const attachments: Attachments = {
+            items: [{ id: '1', key: 'file:///a.exe', name: 'a.exe', uri: 'file:///a.exe', isImage: false, isMedia: false, status: 'failed', error: 'unsupported' }],
+            add: jest.fn(),
+            addFailed: jest.fn(),
+            remove: jest.fn(),
+            clear: jest.fn(),
+            uploading: false,
+            hasUploaded: false,
+            compose: (text) => text,
+        };
+        const { r } = await mount({ attachments });
+        await type(r, 'hello');
+        expect(find(r, 'composer-send').props.disabled).toBe(true);
+        expect(find(r, 'composer-refused')).toBeTruthy();
     });
 });

@@ -10,10 +10,12 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from gaia.version import __version__ as _gaia_version
 
 from .devices import (
+    AwayRouteKind,
     DevicePlatform,
     DeviceStatus,
     ListenerErrorCode,
     PairFailureReason,
+    RouteKind,
 )
 
 
@@ -96,7 +98,8 @@ class SystemStatus(BaseModel):
     # banner long after it stopped existing. ``start_command`` is None on hosts
     # requiring GUI/manual configuration, including service context changes,
     # and on Windows when Command Prompt and PowerShell need different lines.
-    # In those cases start_instruction carries the necessary steps.
+    # In those cases start_instruction carries the necessary steps. Both are
+    # None for GAIA's own server, which GAIA starts by itself.
     start_instruction: Optional[str] = None
     start_command: Optional[str] = None
     # Extended Lemonade info (settings modal)
@@ -304,6 +307,8 @@ class InitTaskInfo(BaseModel):
     """Summary of a boot-time initialization task (embedded in SystemStatus)."""
 
     name: str
+    # The UI shows banner.boot.<step> in the user's language, never ``name``.
+    step: Optional[str] = None
     status: str  # pending | running | done | failed
 
 
@@ -327,6 +332,9 @@ class PolicyNotice(BaseModel):
     severity: Literal["info", "warning"]
     url: Optional[str] = None
     reason: Optional[str] = None
+    # "model_server_down" when nothing answered; the UI words that itself.
+    cause: Optional[str] = None
+    models: Optional[List[str]] = None
 
 
 class SettingsResponse(BaseModel):
@@ -681,6 +689,19 @@ class AgentStepResponse(BaseModel):
     # card from history.
     render: Optional[str] = None
     data: Optional[Any] = None
+    # A model the call needed and didn't find; a reopened chat still offers it.
+    needsModel: Optional[str] = None
+
+
+class TurnRouteResponse(BaseModel):
+    """The model a ``hybrid`` turn was routed to, and why."""
+
+    model: str
+    reason: str = ""
+    # True once the classifier has failed several turns in a row.
+    degraded: bool = False
+    # A one-line warning for the user when ``degraded``; empty otherwise.
+    notice: str = ""
 
 
 class InferenceStatsResponse(BaseModel):
@@ -700,6 +721,8 @@ class InferenceStatsResponse(BaseModel):
     retried: Optional[bool] = None
     # Where the turn was answered, as the footer says it: "on your GPU", "via Fireworks AI".
     place: Optional[str] = None
+    # Set on a ``hybrid`` session's turns.
+    route: Optional[TurnRouteResponse] = None
 
 
 class TurnSummaryPage(BaseModel):
@@ -829,6 +852,7 @@ class DocumentResponse(BaseModel):
     # Set with last_error when retrying can't help until the file is fixed:
     # "corrupted", "encrypted", "empty" (no extractable text), "empty_file"
     # (nothing to index) or "unsupported_workbook" (.xls or password-protected).
+    # "model_server_down" / "model_server_busy": the file is fine; retry later.
     error_kind: Optional[str] = None
 
 
@@ -1063,6 +1087,15 @@ class FailedRedemption(BaseModel):
     reason: PairFailureReason
 
 
+class AwayRouteStatus(BaseModel):
+    """An away route as the PC sees it: on or off, and why it failed."""
+
+    kind: AwayRouteKind
+    on: bool
+    origin: Optional[str] = None
+    error_code: Optional[str] = None
+
+
 class DeviceAccessStatus(BaseModel):
     """What the PC shows about access from the home network. Carries no secret."""
 
@@ -1075,3 +1108,17 @@ class DeviceAccessStatus(BaseModel):
     idle_expiry_days: int
     pending_expiry_minutes: int
     failed_redemptions: List[FailedRedemption] = Field(default_factory=list)
+    routes: List[AwayRouteStatus] = Field(default_factory=list)
+
+
+class DeviceOrigin(BaseModel):
+    """One origin a paired device may reach this PC at."""
+
+    kind: RouteKind
+    origin: str
+
+
+class DeviceRoutes(BaseModel):
+    """Every origin a paired device may reach this PC at now."""
+
+    origins: List[DeviceOrigin]
