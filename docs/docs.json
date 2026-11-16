@@ -69,6 +69,7 @@
               "setup",
               "quickstart",
               "guides/agent-ui",
+              "guides/mobile",
               "guides/tui",
               "guides/memory",
               {
@@ -417,7 +418,8 @@
               "plans/messaging-integrations-plan",
               "plans/discord-integration",
               "plans/daemon-convergence",
-              "plans/autonomy-engine"
+              "plans/autonomy-engine",
+              "plans/goal-mode"
             ]
           },
           {

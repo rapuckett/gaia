@@ -23,7 +23,7 @@ export interface NoticeProps {
     onDismiss?: () => void;
     /** `note` or `status` marks advice that isn't an alert; a live region stays polite. */
     role?: 'note' | 'status';
-    /** `card` is the desktop's `.model-warning`: a tinted box with a 25% border in the tone's color, no start bar, and a toned title. */
+    /** `card` is the desktop's `.model-warning`: a toned title and wider padding; both variants share the tinted box with a 25% border. */
     variant?: 'tint' | 'card';
     testID?: string;
 }
@@ -59,9 +59,9 @@ export function Notice({ tone, title, message, action, onDismiss, role, variant 
             style={{
                 backgroundColor: bg,
                 borderRadius: radius.md,
-                ...(card
-                    ? { borderWidth: 1, borderColor: withAlpha(bar, 0.25), paddingHorizontal: 14, paddingVertical: space.md }
-                    : { borderStartWidth: 3, borderStartColor: bar, padding: space.md }),
+                borderWidth: 1,
+                borderColor: withAlpha(bar, 0.25),
+                ...(card ? { paddingHorizontal: 14, paddingVertical: space.md } : { padding: space.md }),
             }}
         >
             <Row gap="md" align="start">
@@ -79,7 +79,7 @@ export function Notice({ tone, title, message, action, onDismiss, role, variant 
                             </Text>
                         ) : null}
                     </View>
-                    {action ? <Button variant="ghost" size="sm" label={action.label} onPress={action.onPress} /> : null}
+                    {action ? <Button variant="secondary" label={action.label} onPress={action.onPress} /> : null}
                 </View>
                 {onDismiss ? <IconButton icon={X} size="sm" label={t('banner.dismiss')} onPress={onDismiss} /> : null}
             </Row>
