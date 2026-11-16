@@ -22,7 +22,7 @@ interface PanelState {
     contextScope: 'turn' | 'chat';
     setContextScope(scope: 'turn' | 'chat'): void;
     /** Dev gallery only: where the Changes section starts, so its confirm, conflict and review states can be shot. */
-    changesSeed: { phase: 'confirm' | 'conflict'; message?: string } | { review: true } | null;
+    changesSeed: { phase: 'confirm' | 'conflict'; message?: string } | null;
     setChangesSeed(seed: PanelState['changesSeed']): void;
     /** The Environment confirmation showing: removing a folder, or turning on full access. */
     /** The folder picker is open inside Environment. */

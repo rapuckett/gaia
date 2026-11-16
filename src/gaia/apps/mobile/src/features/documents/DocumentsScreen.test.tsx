@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
 import type { ReactNode } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
@@ -54,6 +54,15 @@ describe('DocumentsScreen', () => {
         expect(screen.getByText(/couldn't be read/)).toBeTruthy();
         expect(screen.getByText(/3 KB/)).toBeTruthy();
         expect(screen.getByText(/go to your next new chat/)).toBeTruthy();
+    });
+
+    it('puts the chooser and adder inside the list so the whole screen scrolls', async () => {
+        await mount(createFakeClient({ documents: { documents: [doc('a', 'notes.txt', 'complete', 2048)], total: 1, total_chunks: 3, total_size_bytes: 2048 } as DocumentListResponse }));
+        // The list exists while loading too; the top block appears only once the library has loaded.
+        await screen.findByTestId('docs-top');
+        const list = screen.getByLabelText('Document library');
+        expect(within(list).getByTestId('docs-top')).toBeTruthy();
+        expect(within(list).getByText('Add a file')).toBeTruthy();
     });
 
     it('says so when the library is empty', async () => {

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Platform } from 'react-native';
+import { BackHandler, Platform } from 'react-native';
 
 import { describeError, useT } from '@/i18n/useT';
 import { useConnectionStore } from '@/state/connection';
@@ -43,6 +43,8 @@ export function PairingFlow({ initialStep = 'welcome', onPaired, onScan }: Pairi
     const [error, setError] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
     const alive = useRef(true);
+    // Bumped when the person backs out of Pair while a code is being redeemed, so that answer is taken back.
+    const redeeming = useRef(0);
 
     useEffect(() => {
         alive.current = true;
@@ -122,12 +124,20 @@ export function PairingFlow({ initialStep = 'welcome', onPaired, onScan }: Pairi
     const redeem = async (invite: PairingInvite) => {
         setError(null);
         setBusy(true);
+        const attempt = ++redeeming.current;
+        const abandoned = () => attempt !== redeeming.current;
         try {
-            settle(await getPairingService().redeem(invite));
+            const result = await getPairingService().redeem(invite);
+            // Backed out mid-redeem: the PC already holds a request, so take it back, as Cancel does.
+            if (abandoned()) {
+                if (result.state === 'pending') await getPairingService().cancel();
+                return;
+            }
+            settle(result);
         } catch (e) {
-            if (alive.current) setError(describeError(e, t));
+            if (alive.current && !abandoned()) setError(describeError(e, t));
         } finally {
-            if (alive.current) setBusy(false);
+            if (alive.current && !abandoned()) setBusy(false);
         }
     };
 
@@ -140,6 +150,39 @@ export function PairingFlow({ initialStep = 'welcome', onPaired, onScan }: Pairi
         setError(null);
         setView('how');
     };
+
+    // Android's back walks the flow one step back, as its own back controls do; on the first step it leaves.
+    useEffect(() => {
+        const back = (): boolean => {
+            if (typeof view === 'object') {
+                if (view.at === 'confirm') {
+                    if (busy) {
+                        redeeming.current++;
+                        setBusy(false);
+                    }
+                    setError(null);
+                    setView(view.back);
+                } else if (view.at === 'waiting') {
+                    cancel();
+                } else {
+                    retry();
+                }
+                return true;
+            }
+            if (view === 'scan' || view === 'manual') {
+                setError(null);
+                setView('how');
+                return true;
+            }
+            if (view === 'how' && initialStep === 'welcome') {
+                setView('welcome');
+                return true;
+            }
+            return false;
+        };
+        const subscription = BackHandler.addEventListener('hardwareBackPress', back);
+        return () => subscription.remove();
+    });
 
     if (typeof view === 'object' && view.at === 'confirm') {
         const { invite, replaces, back } = view;
