@@ -27,6 +27,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from gaia.config import GaiaConfig
+from gaia.ui.devices import access as access_module
 from gaia.ui.devices import listener as listener_module
 from gaia.ui.devices.access import DeviceAccess
 from gaia.ui.devices.listener import DeviceGate, ListenerError
@@ -700,10 +701,119 @@ def test_no_default_route_fails_loudly(tmp_path, monkeypatch):
     with pytest.raises(ListenerError) as failed:
         asyncio.run(access.start())
     status = access.status()
-    assert not status["listening"] and status["error_code"] == "start_failed"
+    assert not status["listening"] and status["error_code"] == "no_home_network"
+    assert not status["waiting_for_home"]
     assert "default route" in status["error_detail"]
     assert "Connect the PC to your home Wi-Fi" in failed.value.detail
     route = listener_module.peer_route(
         access, ("192.168.1.20", 50000), (HOME_ADDRESS, 4243), False
     )
     assert route is None
+
+
+# ── Resumed before the PC has a home network ──────────────────────────────
+
+
+async def _until(condition, timeout=5.0):
+    deadline = time.monotonic() + timeout
+    while not condition():
+        assert time.monotonic() < deadline, "timed out"
+        await asyncio.sleep(0.01)
+
+
+def _left_on(tmp_path, monkeypatch, port=0):
+    """A device folder whose listener the PC left on, and an access to resume it."""
+    GaiaConfig.save_key("device_pairing", True)
+    monkeypatch.setattr(access_module, "LISTENER_HOME_RETRY_SECONDS", 0.05)
+    fake_pc(monkeypatch)
+    app = create_app(db_path=":memory:")
+    folder = tmp_path / "devices"
+
+    async def turn_on():
+        first = DeviceAccess(app, folder=folder, host="0.0.0.0", port=0)
+        await first.start()
+        await first.shutdown()
+
+    asyncio.run(turn_on())
+    return DeviceAccess(app, folder=folder, host="0.0.0.0", port=port)
+
+
+def test_resume_waits_for_a_home_network_then_starts(tmp_path, monkeypatch):
+    access = _left_on(tmp_path, monkeypatch)
+    fake_pc(monkeypatch, default_route=None)
+
+    async def scenario():
+        try:
+            await access.resume()
+            status = access.status()
+            assert status["waiting_for_home"] and not status["listening"]
+            assert status["error_code"] == "no_home_network"
+            assert "default route" in status["error_detail"]
+            # No peer is admitted while it waits: there is nothing to dial.
+            assert (
+                listener_module.peer_route(
+                    access, ("192.168.1.20", 50000), (HOME_ADDRESS, 4243), False
+                )
+                is None
+            )
+            await asyncio.sleep(0.2)
+            assert access.waiting and not access.listening
+
+            fake_pc(monkeypatch)
+            await _until(lambda: access.listening)
+            status = access.status()
+            assert not status["waiting_for_home"] and status["error_code"] is None
+        finally:
+            await access.shutdown()
+
+    asyncio.run(scenario())
+
+
+def test_turning_off_while_waiting_cancels_the_wait(tmp_path, monkeypatch):
+    access = _left_on(tmp_path, monkeypatch)
+    fake_pc(monkeypatch, default_route=None)
+
+    async def scenario():
+        try:
+            await access.resume()
+            assert access.waiting
+            await access.stop()
+            status = access.status()
+            assert not status["waiting_for_home"] and status["error_code"] is None
+            fake_pc(monkeypatch)
+            await asyncio.sleep(0.3)
+            assert not access.listening
+            await access.resume()
+            assert not access.listening and not access.waiting
+        finally:
+            await access.shutdown()
+
+    asyncio.run(scenario())
+
+
+def test_other_start_failures_end_the_wait_loudly(tmp_path, monkeypatch):
+    with socket.socket() as taken:
+        taken.bind(("0.0.0.0", 0))
+        taken.listen(1)
+        port = taken.getsockname()[1]
+        access = _left_on(tmp_path, monkeypatch, port=port)
+
+        async def scenario():
+            try:
+                # With a home network, a taken port fails at once: no wait.
+                await access.resume()
+                assert not access.waiting
+                assert access.status()["error_code"] == "port_in_use"
+
+                # Waiting, then the network appears but the port is taken.
+                fake_pc(monkeypatch, default_route=None)
+                await access.resume()
+                assert access.waiting
+                fake_pc(monkeypatch)
+                await _until(lambda: not access.waiting)
+                status = access.status()
+                assert not status["listening"] and status["error_code"] == "port_in_use"
+            finally:
+                await access.shutdown()
+
+        asyncio.run(scenario())

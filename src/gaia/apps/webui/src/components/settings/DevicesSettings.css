@@ -32,6 +32,17 @@
     gap: 10px;
 }
 
+.devices-waiting {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+}
+
+.devices-waiting .settings-note {
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
 .devices-row-icon {
     flex: none;
     color: var(--text-secondary);

@@ -1,14 +1,14 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 
 import { ABOUT_GROUPS, ABOUT_PAGE_SIZE, oneLineQuote, type AboutYouItem } from '@webui/utils/memoryFormat.core';
 
 import { useAddMemory, useForgetMemory, useMemoryKnowledge } from '@/data';
 import { isPcRefusal, PcOnlyNotice } from '@/features/settings/PcOnlyNotice';
 import { describeFailureWith, useT } from '@/i18n/useT';
-import { Button, LoadingState, SectionHeader, Stack, Text } from '@/ui';
+import { Button, Divider, LoadingState, SectionHeader, Stack, Surface, Text } from '@/ui';
 
 import { AddMemory } from '../about/AddMemory';
 import { MemoryRow } from '../about/MemoryRow';
@@ -103,9 +103,16 @@ export function AboutPane({ notify, memoryEnabled, onOpenAdvanced }: MemoryPaneP
                 groups.map((group) => (
                     <Stack key={group.title} testID={`memory-about-group-${group.categories[0]}`}>
                         <SectionHeader title={t.bare(group.title)} />
-                        {group.rows.map((item) => (
-                            <MemoryRow key={item.id} item={item} forgetting={forgetting === item.id} onForget={onForget} notify={notify} />
-                        ))}
+                        <Stack paddingX="lg">
+                            <Surface tone="card" radius="lg" border>
+                                {group.rows.map((item, i) => (
+                                    <Fragment key={item.id}>
+                                        {i > 0 ? <Divider /> : null}
+                                        <MemoryRow item={item} forgetting={forgetting === item.id} onForget={onForget} notify={notify} />
+                                    </Fragment>
+                                ))}
+                            </Surface>
+                        </Stack>
                     </Stack>
                 ))
             )}

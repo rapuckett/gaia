@@ -9,11 +9,13 @@ import type { Goal } from '@/api/client.types';
 import { useGoalAction, useGoals, useGoalStats, useGoalStoreHealth, useResetGoalStore, type GoalAction } from '@/data';
 import { isPcRefusal, PcOnlyNotice } from '@/features/settings/PcOnlyNotice';
 import { describeFailureWith, useT } from '@/i18n/useT';
-import { Badge, Button, LoadingState, Notice, Row, Stack, Text } from '@/ui';
+import { View } from 'react-native';
+
+import { Button, LoadingState, Notice, Row, Stack, Text, useTheme } from '@/ui';
 import { Plus } from '@/ui/icons';
 
 import { GoalCard } from '../goals/GoalCard';
-import { STAT_STATUSES, STAT_TONES, STATUS_KEYS } from '../goals/goalText';
+import { STAT_STATUSES, STATUS_KEYS } from '../goals/goalText';
 import { NewGoalSheet } from '../goals/NewGoalSheet';
 import { SuggestedGoals } from '../goals/SuggestedGoals';
 import type { MemoryPaneProps } from '../tabs';
@@ -24,6 +26,46 @@ const FAILURES: Record<GoalAction, MessageKey> = {
     cancel: 'mem.goals.cancelFailed',
     delete: 'mem.goals.deleteFailed',
 };
+
+const PILL_MIN_WIDTH = 140;
+
+/** One of the desktop's four stat pills: a big count over its state's name, tinted by state. */
+function StatPill({ status, count }: { status: (typeof STAT_STATUSES)[number]; count: number }) {
+    const t = useT();
+    const { colors, radius, space } = useTheme();
+    const look = {
+        queued: { bg: colors.accentDim, tone: 'accent' },
+        in_progress: { bg: colors.accentYellowDim, tone: 'warning' },
+        completed: { bg: colors.accentGreenDim, tone: 'success' },
+        failed: { bg: colors.dangerDim, tone: 'danger' },
+    } as const;
+    const v = look[status];
+    return (
+        <View
+            accessible
+            accessibilityLabel={`${t(STATUS_KEYS[status]!)}: ${count}`}
+            testID={`goals-stat-${status}`}
+            style={{
+                flexGrow: 1,
+                flexBasis: PILL_MIN_WIDTH,
+                paddingHorizontal: space.lg,
+                paddingVertical: space.md,
+                gap: space.xs,
+                backgroundColor: v.bg,
+                borderWidth: 1,
+                borderColor: colors.borderLight,
+                borderRadius: radius.lg,
+            }}
+        >
+            <Text role="title" weight="bold" tone={v.tone}>
+                {`⁦${count}⁩`}
+            </Text>
+            <Text role="caption" weight="medium" tone={v.tone}>
+                {t(STATUS_KEYS[status]!)}
+            </Text>
+        </View>
+    );
+}
 
 export function GoalsPane({ notify }: MemoryPaneProps) {
     const t = useT();
@@ -64,14 +106,9 @@ export function GoalsPane({ notify }: MemoryPaneProps) {
                     <Notice tone="warning" title={t('mem.goals.storeError')} message={health.data.error} testID="goals-store-error" />
                 )
             ) : null}
-            <Row gap="sm" wrap testID="goals-stats">
+            <Row gap="sm" wrap align="stretch" testID="goals-stats">
                 {STAT_STATUSES.map((status) => (
-                    <Badge
-                        key={status}
-                        label={`${stats.data?.goals[status] ?? 0} ${t.bare(STATUS_KEYS[status]!)}`}
-                        tone={STAT_TONES[status]}
-                        accessibilityLabel={`${t(STATUS_KEYS[status]!)}: ${stats.data?.goals[status] ?? 0}`}
-                    />
+                    <StatPill key={status} status={status} count={stats.data?.goals[status] ?? 0} />
                 ))}
             </Row>
             <SuggestedGoals goals={suggested} busyId={busyId} onAccept={(goal) => run(goal, 'approve')} onReject={(goal) => run(goal, 'reject')} />
