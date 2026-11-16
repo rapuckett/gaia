@@ -3899,7 +3899,7 @@ const messages: Messages = {
     'mobileApp.settings.comingSoon': 'هذا القسم قادم إلى الهاتف قريبًا. في الوقت الحالي، غيّره من الكمبيوتر الذي يشغّل GAIA.',
     'mobileApp.settings.automations.body': 'لا يعرض تطبيق الهاتف الأتمتة ولا يغيّرها. راجعها على الكمبيوتر لديك.',
     'mobileApp.android.title': 'GAIA على أندرويد قادم لاحقًا',
-    'mobileApp.android.body': 'الاقتران مع جهاز الكمبيوتر يعمل على آيفون اليوم. الدعم لأندرويد في الطريق.',
+    'mobileApp.android.body': 'يعمل الاقتران مع الكمبيوتر لديك على آيفون حاليًا، ودعم أندرويد في الطريق.',
     'mobileApp.settings.alerts.bannersHint': 'تظهر اللافتات أعلى التطبيق أثناء فتح GAIA على هذا الهاتف.',
     'mobileApp.settings.alerts.keepAwakePc': 'يُضبط إبقاء الكمبيوتر مستيقظًا أثناء عمل GAIA من تطبيق GAIA لسطح المكتب على الكمبيوتر.',
     'mobileApp.settings.loadAnyway': 'هناك محادثات تُكتب إجاباتها الآن. قد يؤدي تحميل {name} الآن إلى إبطاء هذه الإجابات أو إيقافها. هل تريد التحميل على أي حال؟',
