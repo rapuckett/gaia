@@ -19,6 +19,7 @@ const PURE_MODULES = [
     'utils/chatStream',
     'utils/citations',
     'utils/chatAlerts.core',
+    'utils/codeSpanPath',
     'utils/format',
     'utils/liveStatus',
     'utils/longContent',

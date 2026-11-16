@@ -472,6 +472,8 @@ export const enMessages = {
     'msg.timestamp': 'Message timestamp',
     'msg.retriedWithTitle': 'This answer was kept from Retry with… ({model})',
     'msg.openInExplorer': 'Open in file explorer: {path}',
+    'msg.openPathGone': "Couldn't open {path}: it's no longer there. It may have been moved or deleted.",
+    'msg.openPathOutsideHome': "Couldn't open {path}: GAIA opens only files and folders inside your home folder.",
     'msg.yesterdayAt': 'Yesterday, {time}',
     'msg.route': 'Picked by hybrid. {reason}',
 

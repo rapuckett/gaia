@@ -471,6 +471,13 @@
 .file-path-link:hover .file-path-icon {
     opacity: 1;
 }
+.file-path-error {
+    display: block;
+    margin-block: 4px;
+    color: var(--danger);
+    font-size: 12px;
+    overflow-wrap: anywhere;
+}
 
 /* ── Blockquotes ──────────────────────────────────────────────── */
 .md-blockquote {
