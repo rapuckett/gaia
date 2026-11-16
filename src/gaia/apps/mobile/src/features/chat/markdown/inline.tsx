@@ -15,7 +15,8 @@ import {
     type LibraryDoc,
 } from '@webui/utils/citations';
 import { safeUrlTransform } from '@webui/utils/markdown';
-import { WIN_PATH_ONLY_RE, findFilePaths } from '@webui/utils/windowsPaths';
+import { filePathOfCodeSpan } from '@webui/utils/codeSpanPath';
+import { findFilePaths } from '@webui/utils/windowsPaths';
 import type { Translate } from '@/i18n/useT';
 import { isFileLink, openPcFile } from '@/features/files/openPcFile';
 import { openLinkFromPress } from '@/platform/openLink';
@@ -35,12 +36,12 @@ const SCHEME_URL = /^\s*[a-z][a-z0-9+.-]*:/i;
 const CARET_BLINK_MS = 530;
 
 /** A path names a file on the PC: a link to the app's preview when a chat is in scope, else plain text; left to right, in mono. */
-function pathText(path: string, ctx: InlineContext, key: string): ReactNode {
+function pathText(path: string, ctx: InlineContext, key: string, label = path): ReactNode {
     const { sessionId, t } = ctx;
     if (!sessionId) {
         return (
             <Text key={key} mono dir="ltr">
-                {isolate(path, 'ltr')}
+                {isolate(label, 'ltr')}
             </Text>
         );
     }
@@ -54,7 +55,7 @@ function pathText(path: string, ctx: InlineContext, key: string): ReactNode {
             accessibilityLabel={t('activity.openPath', { path })}
             onPress={() => openPcFile(path, sessionId)}
         >
-            {isolate(path, 'ltr')}
+            {isolate(label, 'ltr')}
         </Text>
     );
 }
@@ -147,7 +148,8 @@ function citeText(text: string, ctx: InlineContext, carried: LibraryDoc | null, 
 function inlineCode(value: string, ctx: InlineContext, key: string, page?: number): ReactNode {
     const doc = docForToken(ctx.index, value);
     if (doc) return citation(doc, page, ctx, key);
-    if (WIN_PATH_ONLY_RE.test(value.trim())) return pathText(value.trim(), ctx, key);
+    const path = filePathOfCodeSpan(value);
+    if (path) return pathText(path, ctx, key, value.trim());
     // No-break spaces keep a command on one line, so it never splits into reordered pieces.
     return (
         <Text key={key} code dir="ltr">

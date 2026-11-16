@@ -472,6 +472,8 @@ const messages: Messages = {
     'msg.timestamp': 'وقت الرسالة',
     'msg.retriedWithTitle': 'أُبقيت هذه الإجابة من «إعادة المحاولة باستخدام…» ({model})',
     'msg.openInExplorer': 'فتح في مستكشف الملفات: {path}',
+    'msg.openPathGone': 'تعذّر فتح {path}: لم يعد موجودًا. ربما نُقل أو حُذف.',
+    'msg.openPathOutsideHome': 'تعذّر فتح {path}: لا يفتح GAIA إلا الملفات والمجلدات الموجودة داخل مجلدك الرئيسي.',
     'msg.yesterdayAt': 'أمس، {time}',
     'msg.route': 'اختاره التوجيه الهجين. {reason}',
 
