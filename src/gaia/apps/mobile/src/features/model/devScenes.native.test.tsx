@@ -7,6 +7,8 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import ModelServerGalleryRoute from '@/app/dev/model-server';
 
+import { tEn } from '@webui/i18n/translator';
+
 import { useModelNeededStore } from '@/state/modelNeeded';
 import { sheetStore } from '@/ui/overlays/sheetStore';
 
@@ -43,7 +45,7 @@ describeNative('/dev/model-server', () => {
 
     it.each([
         ['need-chat', null],
-        ['need-downloading', '42%'],
+        ['need-downloading', tEn('modelNeeded.dialog')],
         ['need-starting', 'Starting the download'],
         ['need-failed', 'The download stopped.'],
     ])('the %s scene shows its seeded state', async (name, text) => {
@@ -60,7 +62,7 @@ describeNative('/dev/model-server', () => {
             expect([started, failed, progress]).toEqual([null, null, null]);
         } else if (name === 'need-downloading') {
             expect(progress?.props.accessibilityValue.now).toBe(42);
-            expect(progress?.props.accessibilityLabel).toContain(text);
+            expect(progress?.props.accessibilityLabel).toBe(text);
         } else if (name === 'need-starting') {
             expect(started).not.toBeNull();
         } else {

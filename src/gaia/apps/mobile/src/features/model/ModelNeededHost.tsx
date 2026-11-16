@@ -190,7 +190,7 @@ export function NeedPrompt({ need, initial }: { need: ModelNeed; initial?: NeedP
                 </Text>
                 {downloading ? (
                     percent != null ? (
-                        <ProgressLine value={percent / 100} label={`${t('modelNeeded.dialog')} · ${percent}%`} />
+                        <ProgressLine value={percent / 100} label={t('modelNeeded.dialog')} />
                     ) : (
                         <Row gap="sm">
                             <Spinner />
