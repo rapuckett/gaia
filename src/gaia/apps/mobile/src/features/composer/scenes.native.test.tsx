@@ -58,6 +58,30 @@ describeNative('composer and retry scenes', () => {
         expect(await screen.findByText(/never started/, opts)).toBeTruthy();
     });
 
+    it.each([
+        ['permissionMenu', 'Permission mode'],
+        ['permissionMenu', /GAIA asks before it edits files/],
+        ['permissionMenu', /Runs every tool and command without asking/],
+        ['permissionFull', 'Full access'],
+        ['private-off', 'Remember across chats: on'],
+        ['private-on', 'Private'],
+        ['private-memoryOff', 'Remember across chats: off'],
+        ['spendOpen', 'Cloud spending'],
+        ['spendOpen', /Not counted: 1 stopped answer/],
+        ['folder-own', "GAIA's folder"],
+    ])('%s shows %s', async (name, text) => {
+        mockState = name as string;
+        await mount(composerRoute());
+        expect((await screen.findAllByText(text, opts)).length).toBeGreaterThan(0);
+    });
+
+    it('spend shows the chip with the at-least floor and no sheet', async () => {
+        mockState = 'spend';
+        await mount(composerRoute());
+        expect(await screen.findByLabelText(/Cloud spending: ≥ .* in this chat/, opts)).toBeTruthy();
+        expect(screen.queryByText('Cloud spending', opts)).toBeNull();
+    });
+
     it('held shows the opening message waiting for GAIA to start', async () => {
         mockState = 'held';
         await mount(composerRoute());
