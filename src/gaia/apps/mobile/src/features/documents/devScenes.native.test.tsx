@@ -5,9 +5,9 @@ import { render, screen } from '@testing-library/react-native';
 import { Platform } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-import { DOCUMENTS_SCENES } from '@/features/documents/devScenes';
+import { DOCUMENTS_SCENES } from './devScenes';
 
-import DocumentsGalleryRoute from './documents';
+import DocumentsGalleryRoute from '@/app/dev/documents';
 
 let mockState: string | undefined;
 jest.mock('expo-router', () => ({
