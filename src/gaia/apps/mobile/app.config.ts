@@ -74,7 +74,8 @@ export default function appConfig(): ExpoConfig {
         },
         android: {
             package: id,
-            // Nothing of the app's is backed up, so a restored phone never holds a paired PC's records without its key.
+            // No cloud backup. plugins/withBackupExclusions also keeps every app file out of device-to-device
+            // transfer, so a paired PC's records never reach another phone, where its Keystore key can't follow.
             allowBackup: false,
         },
         plugins: [
@@ -95,6 +96,7 @@ export default function appConfig(): ExpoConfig {
             ],
             'expo-background-task',
             ['./plugins/withCleartextHosts', { hosts: dev ? DEV_HTTP_HOSTS : [] }],
+            './plugins/withBackupExclusions',
             ['./plugins/withRelayDomain', { domain: relayDomain || null }],
             './plugins/withNinjaJobs',
         ],
