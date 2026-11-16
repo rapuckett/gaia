@@ -40,6 +40,25 @@ describeNative('drawer gallery route', () => {
         expect((await screen.findAllByLabelText(/search/i)).length).toBeGreaterThan(0);
     });
 
+    it('hides the background runs behind a counted toggle, then lists them when it is on', async () => {
+        mockState = 'background-hidden';
+        const hidden = await render(<DrawerGalleryRoute />);
+        expect(await screen.findByText('Show 2 background runs')).toBeTruthy();
+        expect(screen.queryByText('Daily summary (scheduled)')).toBeNull();
+        hidden.unmount();
+        mockState = 'background-shown';
+        await render(<DrawerGalleryRoute />);
+        expect(await screen.findByText('Hide background runs')).toBeTruthy();
+        expect(await screen.findByText('Daily summary (scheduled)')).toBeTruthy();
+        expect(screen.getByText('Eval run 42')).toBeTruthy();
+    });
+
+    it('shows the download chip from the shared download state', async () => {
+        mockState = 'download-chip';
+        await render(<DrawerGalleryRoute />);
+        expect(await screen.findByText('Downloading 1 of 1 · 42%')).toBeTruthy();
+    });
+
     it('names the scenes when the state is unknown', async () => {
         mockState = 'nope';
         await render(<DrawerGalleryRoute />);

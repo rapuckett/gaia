@@ -5,7 +5,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useCallback, useEffect, useState } from 'react';
 
 // The web UI's key, so the choice means the same on both.
-const SHOW_AUTOMATED_KEY = 'gaia-show-automated-runs';
+export const SHOW_AUTOMATED_KEY = 'gaia-show-automated-runs';
 
 /** Whether eval and scheduled chats show in the list; hidden until saved otherwise. */
 export function useShowAutomated(): [boolean, () => void] {

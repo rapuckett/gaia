@@ -8,8 +8,10 @@ import { useCallback, useMemo, useState } from 'react';
 import { APP_NAME } from '@webui/utils/constants';
 import { hiddenAutomatedCount } from '@webui/utils/sessionGrouping';
 
-import { useDeleteSession, useMarkRead, useRenameSession, useSessions, useSessionSearch, useSetPinned } from '@/data';
+import { useDeleteSession, useMarkRead, useRenameSession, useSessions, useSessionSearch, useSetPinned, useSetupStatus } from '@/data';
 import { ModelStatusPill } from '@/features/model';
+import { DownloadChip } from '@/features/setup/DownloadChip';
+import { chipView } from '@/features/setup/steps/downloadState';
 import { NotificationsEntry } from '@/features/notifications';
 import { describeError, describeErrorWith, useT } from '@/i18n/useT';
 import {
@@ -163,6 +165,7 @@ export function ChatDrawerContent({ activeId, onSelect, onClose, onNewChat, onPc
                 <NavRow key={e.key} entry={e} active={activeRoute === e.route} onOpen={open} />
             ))}
             <NotificationsEntry active={activeRoute === 'notifications'} onOpen={() => open('notifications')} />
+            <DownloadChipRow onPress={() => open('settings')} />
             <ModelStatusPill />
         </Stack>
     );
@@ -265,6 +268,17 @@ export function ChatDrawerContent({ activeId, onSelect, onClose, onNewChat, onPc
 
 // The same mark as the web sidebar's brand.
 const gaiaRobot: ImageSourcePropType = require('@webui/assets/gaia-robot.png');
+
+/** The download progress chip above the footer; nothing, not even its padding, while no download runs. */
+function DownloadChipRow({ onPress }: { onPress: () => void }) {
+    const status = useSetupStatus();
+    if (!chipView(status.data)) return null;
+    return (
+        <Stack paddingX="lg" paddingY="xs">
+            <DownloadChip onPress={onPress} />
+        </Stack>
+    );
+}
 
 function Header({ onClose, onPcs }: { onClose: () => void; onPcs?: () => void }) {
     const t = useT();
