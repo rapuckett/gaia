@@ -9,7 +9,9 @@ import { describeError, describeErrorWith, useT } from '@/i18n/useT';
 import { pickDocuments, pickPhotos, type PickedFile } from '@/platform/pickers';
 import { Button, Notice, ProgressLine, Row, Stack, Text } from '@/ui';
 import { FileText, FolderOpen, Image as ImageIcon } from '@/ui/icons';
-import { describeUploadError, unsupportedTypeMessage, type UploadErrorView } from '@webui/utils/uploadErrors.core';
+import type { MessageKey, Params } from '@webui/i18n/registry';
+import type { Translate } from '@webui/i18n/translator';
+import { describeUploadError, unsupportedTypeMessage, type UploadErrorInput, type UploadErrorView } from '@webui/utils/uploadErrors.core';
 
 import { useNextChatDocs } from './nextChatDocs';
 
@@ -22,6 +24,35 @@ export type AddLine =
     | { kind: 'picker'; message: string }
     | { kind: 'unsupported'; message: string };
 
+/** A catalog message the screen translates itself. */
+export interface StartMessage {
+    key: MessageKey;
+    params?: Params;
+}
+
+/** Dev gallery only: the line a scene opens with, in what production stores before it is translated. */
+export type AddStart =
+    | { kind: 'busy'; name: string }
+    | { kind: 'done' | 'unreadable'; message: StartMessage }
+    | { kind: 'failed'; upload: Omit<UploadErrorInput, 'error'> & { error: string | StartMessage } }
+    | { kind: 'picker' | 'unsupported'; cause: unknown };
+
+function resolveStart(t: Translate, start: AddStart): AddLine {
+    switch (start.kind) {
+        case 'busy':
+            return start;
+        case 'done':
+        case 'unreadable':
+            return { kind: start.kind, message: t(start.message.key, start.message.params) };
+        case 'failed': {
+            const { error, ...rest } = start.upload;
+            return { kind: 'failed', error: describeUploadError(t, { ...rest, error: typeof error === 'string' ? error : t(error.key, error.params) }) };
+        }
+        default:
+            return { kind: start.kind, message: describeError(start.cause, t) };
+    }
+}
+
 interface AddDocumentsProps {
     // The chat documents are attached to; null leaves them for the next new chat.
     chatId: string | null;
@@ -31,14 +62,14 @@ interface AddDocumentsProps {
     // Opens the PC's file browser for the chat; unset, or with no chat, leaves the button out.
     onBrowse?: (chatId: string) => void;
     // Dev gallery only: the line shown on open.
-    initialLine?: AddLine;
+    initialLine?: AddStart;
 }
 
 export function AddDocuments({ chatId, chatName, onStart, onBrowse, initialLine }: AddDocumentsProps) {
     const t = useT();
     const add = useAddDocument();
     const holdForNextChat = useNextChatDocs((s) => s.add);
-    const [line, setLine] = useState<AddLine | null>(initialLine ?? null);
+    const [line, setLine] = useState<AddLine | null>(() => (initialLine ? resolveStart(t, initialLine) : null));
     const busy = line?.kind === 'busy';
 
     async function addOne(file: PickedFile): Promise<AddLine> {

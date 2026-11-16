@@ -4040,6 +4040,7 @@ export const enMessages = {
     'mobileApp.yourPc.setup.found.noticed': 'Setup noticed something about your PC',
     'mobileApp.yourPc.setup.key.step3': 'Enter it in GAIA on your PC. GAIA tests it before saving.',
     'mobileApp.yourPc.setup.key.where': "Your key stays on your PC, in your system's secure storage.",
+    'mobileApp.yourPc.settings.privacy.reportNote': "When a model fails, GAIA saves what it saw on your PC. Nothing is sent anywhere. To report a problem, save a report with those records, GAIA's logs and your PC's details, look it over, and attach it yourself.",
     'mobileApp.yourPc.setup.logs.reportNote': "Setup's logs, GAIA's logs and your PC's details in one file. Keys and other secrets are removed, but a log can quote your chats, so look it over before you attach it to a report.",
     'mobileApp.yourPc.setup.models.fit.ok': 'Needs about {need} of memory; your PC has {have} for models.',
     'mobileApp.yourPc.setup.models.fit.unknown': 'GAIA couldn’t read your PC’s memory, so it can’t tell if this fits.',

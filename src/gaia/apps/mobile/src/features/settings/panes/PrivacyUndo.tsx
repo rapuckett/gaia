@@ -58,7 +58,7 @@ export function PrivacyUndo() {
 
     return (
         <SettingsAnchor name="undo" onTarget={() => setOpen(true)}>
-            <Disclosure title={t('settings.privacy.undo')} open={open} onToggle={() => setOpen((o) => !o)} headerTestID="privacy-undo-toggle">
+            <Disclosure boxed title={t('settings.privacy.undo')} open={open} onToggle={() => setOpen((o) => !o)} headerTestID="privacy-undo-toggle">
                 <Stack gap="md">
                     <Text role="label" tone="muted">
                         {t('settings.undo.hint')}

@@ -20,6 +20,8 @@ export interface Banner {
     dismissible?: boolean;
     /** Re-asks GAIA; shown as the "Check again" action. */
     retry?: boolean;
+    /** The model whose failed download the "Retry" action starts again. */
+    downloadRetry?: string;
     /** Asks the PC to load the picked model again; shown as the "Try again" action. */
     pickRetry?: boolean;
     /** 0 to 1 for a determinate line; undefined for an indeterminate one. */
@@ -47,7 +49,7 @@ export function pickBanner(
     if (progress?.state === 'downloading' || progress?.state === 'starting' || progress?.state === 'error') {
         const name = progress.model_name || status?.default_model_name || '';
         if (progress.state === 'error') {
-            return { id: 'download', tone: 'danger', title: t('banner.download.failed', { name }), message: progress.message ?? undefined, dismissible: true };
+            return { id: 'download', tone: 'danger', title: t('banner.download.failed', { name }), message: progress.message ?? undefined, dismissible: true, downloadRetry: name };
         }
         const size = progress.total_bytes ? `${gb(progress.total_bytes, 1)} ${GB_UNIT}` : t('banner.download.sizeUnknown');
         const file = progress.file ? `${t('banner.download.file', { index: progress.file_index, total: progress.total_files })} ${progress.file}` : undefined;
