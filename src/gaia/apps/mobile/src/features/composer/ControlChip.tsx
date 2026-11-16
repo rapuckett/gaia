@@ -21,8 +21,8 @@ export interface ControlChipProps {
     warning?: boolean;
     /** Which chip this is, so the row can drop its label when space runs out; the model's never goes. */
     chip: ChipId;
-    /** The label is a name the user or the PC chose (model, folder): it aligns to its own script. */
-    value?: boolean;
+    /** The label is a value, not UI copy: a model id stays `ltr`, a folder name follows its own script (`auto`). */
+    value?: 'ltr' | 'auto';
     disabled?: boolean;
     accessibilityLabel?: string;
     accessibilityHint?: string;
@@ -45,7 +45,7 @@ export function ControlChip({ label, icon, onPress, menu, warning, chip, disable
             </View>
             {compact ? null : (
                 <View style={{ flexShrink: chip === 'model' ? 1 : 0 }}>
-                    <Text role="label" tone={warning ? 'warning' : 'secondary'} numberOfLines={1} compact dir={value ? 'auto' : undefined}>
+                    <Text role="label" tone={warning ? 'warning' : 'secondary'} numberOfLines={1} compact dir={value}>
                         {label}
                     </Text>
                 </View>

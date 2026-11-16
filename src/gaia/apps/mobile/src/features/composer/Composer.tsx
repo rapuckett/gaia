@@ -49,8 +49,7 @@ const MAX_LINES = 9;
 // Attach, Stop and Send keep their size; the chips give way first.
 const FIXED: ViewStyle = { flexDirection: 'row', alignItems: 'center', flexShrink: 0, gap: 8 };
 const CHIPS: ViewStyle = { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexGrow: 1, flexShrink: 1, minWidth: 0, gap: CHIP_GAP };
-// The right group wraps: when the model's name will not fit beside the other chips it takes its own line, right-aligned, rather than be cut.
-const GROUP: ViewStyle = { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-end', alignItems: 'center', flexShrink: 1, minWidth: 0, gap: CHIP_GAP };
+const GROUP: ViewStyle = { flexDirection: 'row', alignItems: 'center', flexShrink: 1, minWidth: 0, gap: CHIP_GAP };
 // The other chips collapse to icons in chipRoom; none draw over another.
 const LEFT: ViewStyle = { ...GROUP, flexShrink: 0 };
 

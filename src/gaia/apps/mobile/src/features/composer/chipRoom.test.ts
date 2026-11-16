@@ -11,8 +11,8 @@ describe('collapsedChips', () => {
         expect(collapsedChips({ ...FULL, meter: 80 }, 370)).toEqual([]);
     });
 
-    it('never counts the model chip: it wraps to its own line instead of squeezing the others', () => {
-        expect(collapsedChips({ ...FULL, model: 5000 }, 280)).toEqual([]);
+    it('protects the model: the others collapse for its full width before its name is cut', () => {
+        expect(collapsedChips({ ...FULL, meter: 80, model: 150 }, 440)).toEqual(['meter', 'folder']);
     });
 
     it('drops the meter bar first, then Folder, then Private, then Permission', () => {
