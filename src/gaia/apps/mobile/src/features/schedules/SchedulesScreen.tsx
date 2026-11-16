@@ -52,11 +52,20 @@ function useRefreshWhenDue(schedules: Schedule[], now: Date, refetch: () => void
     }, [soonest, refetch]);
 }
 
-export interface SchedulesScreenProps {
-    onOpenChat: (sessionId: string) => void;
+/** Dev gallery only: the state a tap would reach. */
+export interface SchedulesDevStart {
+    form?: { when: string; name: string; prompt: string };
+    error?: string;
+    confirmDelete?: string;
+    historyOpen?: string;
 }
 
-export function SchedulesScreen({ onOpenChat }: SchedulesScreenProps) {
+export interface SchedulesScreenProps {
+    onOpenChat: (sessionId: string) => void;
+    dev?: SchedulesDevStart;
+}
+
+export function SchedulesScreen({ onOpenChat, dev }: SchedulesScreenProps) {
     const t = useT();
     const { space } = useTheme();
     const query = useSchedules();
@@ -64,8 +73,8 @@ export function SchedulesScreen({ onOpenChat }: SchedulesScreenProps) {
     const update = useUpdateScheduleStatus();
     const run = useRunSchedule();
     const remove = useDeleteSchedule();
-    const [actionError, setActionError] = useState<string | null>(null);
-    const [creating, setCreating] = useState(false);
+    const [actionError, setActionError] = useState<string | null>(dev?.error ?? null);
+    const [creating, setCreating] = useState(dev?.form !== undefined);
     const schedules = query.data?.schedules ?? [];
     const now = useClock(schedules);
     useRefreshWhenDue(schedules, now, () => void query.refetch());
@@ -77,7 +86,7 @@ export function SchedulesScreen({ onOpenChat }: SchedulesScreenProps) {
 
     return (
         <Screen header={<ScreenHeader title={t('schedules.title')} />}>
-            <NewScheduleSheet open={creating} onClose={() => setCreating(false)} />
+            <NewScheduleSheet open={creating} onClose={() => setCreating(false)} initial={dev?.form} />
             <Stack paddingX="lg" paddingY="sm" align="start">
                 <ChipButton label={t.bare('schedules.new')} accessibilityLabel={t('schedules.new')} icon={Plus} variant="accent" onPress={() => setCreating(true)} />
             </Stack>
@@ -127,6 +136,8 @@ export function SchedulesScreen({ onOpenChat }: SchedulesScreenProps) {
                                 update.mutate({ name: item.name, status: item.status === 'active' ? 'paused' : 'active' }, callbacks)
                             }
                             onDelete={() => remove.mutate(item.name, callbacks)}
+                            initialConfirmDelete={dev?.confirmDelete === item.name}
+                            initialHistoryOpen={dev?.historyOpen === item.name}
                         />
                     )}
                 />
