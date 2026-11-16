@@ -35,7 +35,7 @@ export interface TextProps {
     underline?: boolean;
     /** Inline code: mono on the code surface. */
     code?: boolean;
-    /** Writing direction of this run only; it never moves the line. Content whose language differs from the UI's. `auto` follows the first strong letter of a string child. */
+    /** Writing direction of this run; explicit `ltr`/`rtl` never move the line, `auto` aligns the block to its content. Content whose language differs from the UI's. `auto` follows the first strong letter of a string child. */
     dir?: 'ltr' | 'rtl' | 'auto';
     onPress?: () => void;
     accessibilityLabel?: string;
@@ -134,10 +134,12 @@ export function Text({
     }
     if (strike || underline) style.textDecorationLine = strike && underline ? 'underline line-through' : strike ? 'line-through' : 'underline';
     if (dir) style.writingDirection = dir;
+    // `auto` is a block that follows its own content, as the web's dir="auto" does; explicit ltr/rtl only set the run.
+    const startsRight = dirProp === 'auto' ? dir === 'rtl' : rtl;
     if (align === 'center') style.textAlign = 'center';
     else if (align === 'ltr' || align === 'rtl') style.textAlign = physicalAlign(align === 'rtl');
-    else if (align === 'end') style.textAlign = physicalAlign(!rtl);
-    else if (align === 'start' || !nested) style.textAlign = physicalAlign(rtl);
+    else if (align === 'end') style.textAlign = physicalAlign(!startsRight);
+    else if (align === 'start' || !nested) style.textAlign = physicalAlign(startsRight);
     if (rtl) style.letterSpacing = 0;
 
     return (

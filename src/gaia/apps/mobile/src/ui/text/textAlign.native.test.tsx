@@ -74,6 +74,14 @@ describeNative('Text alignment in the Arabic UI', () => {
         expect(await styleOf({ dir: 'ltr', align: 'ltr' })).toMatchObject({ textAlign: 'right' });
     });
 
+    it('aligns dir=auto to its own content direction', async () => {
+        nativeLayout(true, false);
+        await render(<Text testID="e" dir="auto">Hello</Text>, { wrapper: wrap });
+        await waitFor(() => expect(screen.getAllByTestId('e')).toHaveLength(1));
+        expect(screen.getAllByTestId('e')[0].props.style).toMatchObject({ writingDirection: 'ltr', textAlign: 'left' });
+        expect(await styleOf({ dir: 'auto' })).toMatchObject({ writingDirection: 'rtl', textAlign: 'right' });
+    });
+
     it('sets no writing direction by default', async () => {
         nativeLayout(true, true);
         expect((await styleOf({})).writingDirection).toBeUndefined();
