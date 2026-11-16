@@ -14,6 +14,6 @@ export default function PairingGalleryRoute() {
     const { state = 'default' } = useLocalSearchParams<{ state?: string }>();
     if (!devGalleryEnabled()) return <Redirect href="/" />;
     const scene = PAIRING_SCENES[state];
-    if (scene) return <PairingSceneView scene={scene} />;
+    if (scene) return <PairingSceneView key={state} scene={scene} />;
     return <UIProvider>{state === 'android' ? <AndroidUnsupportedScreen /> : <PairingFlow />}</UIProvider>;
 }

@@ -23,7 +23,7 @@ export default function FilePreviewGalleryRoute() {
     const [target] = useState(() => ({ kind: 'path' as const, path: FILE_PREVIEW_PATH[picked], sessionId: 'chat-1' }));
     if (!devGalleryEnabled()) return <Redirect href="/" />;
     return (
-        <QueryClientProvider client={queryClient}>
+        <QueryClientProvider key={scene} client={queryClient}>
             <GaiaClientProvider client={client}>
                 <UIProvider>
                     <ScreenBannerProvider banner={null}>
