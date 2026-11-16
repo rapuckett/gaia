@@ -158,6 +158,7 @@ export const ENDPOINTS = {
     document: '/api/documents/{doc_id}',
     documentCancel: '/api/documents/{doc_id}/cancel',
     documentFile: '/api/documents/{doc_id}/file',
+    documentIndexFolder: '/api/documents/index-folder',
     documentReindex: '/api/documents/{doc_id}/reindex',
     documentStatus: '/api/documents/{doc_id}/status',
     documentUpload: '/api/documents/upload',
@@ -456,6 +457,8 @@ export const SCHEDULE_RESULTS_LIMIT = 20;
 
 /** How often to re-read the schedules while their screen is open, so counts and times follow the PC. */
 export const SCHEDULES_POLL_MS = 10_000;
+/** How often the app, while open, re-reads the chat list, as the web's does (5 s), so a chat started or renamed elsewhere appears. */
+export const CHATS_POLL_MS = 5_000;
 /** How often the app, while open, re-reads the schedules and which chats are running, as the web's app-wide poll does (30 s). */
 export const APP_POLL_MS = 30_000;
 /** How often the goal store's health is re-read, as the web's does (30 s). */
@@ -528,4 +531,9 @@ export function filesSearchPath(sessionId: string, query: string, fileTypes: str
 /** Indexes a file that is already on the PC, naming the chat that may read it. */
 export function documentUploadPathPath(sessionId: string): string {
     return `${ENDPOINTS.documentUploadPath}?session_id=${encodeURIComponent(sessionId)}`;
+}
+
+/** Indexes a folder that is on the PC, naming the chat that may read it. */
+export function documentIndexFolderPath(sessionId: string): string {
+    return `${ENDPOINTS.documentIndexFolder}?session_id=${encodeURIComponent(sessionId)}`;
 }

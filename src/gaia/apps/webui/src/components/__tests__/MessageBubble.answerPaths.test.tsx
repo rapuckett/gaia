@@ -6,11 +6,12 @@
  * path in the user's own message. Code samples and non-paths stay plain code.
  */
 
-import { fireEvent, render } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MessageBubble } from '../MessageBubble';
 import type { Message } from '../../types';
 import * as api from '../../services/api';
+import { ApiError } from '../../services/apiErrors';
 
 vi.mock('../../services/api');
 const mockedApi = vi.mocked(api);
@@ -41,6 +42,34 @@ describe('answer file paths', () => {
 
         fireEvent.click(links()[0]);
         expect(mockedApi.openFileOrFolder).toHaveBeenCalledWith(ANSWER_PATH);
+    });
+
+    it.each([
+        ['/Users/me/Q3 report.pdf', '/Users/me/Q3 report.pdf'],
+        ['file:///home/me/My%20Notes.txt', '/home/me/My Notes.txt'],
+    ])('opens the POSIX inline-code path %s as %s', (code, path) => {
+        renderAnswer(`Saved to \`${code}\`.`);
+
+        expect(links().map((l) => l.textContent)).toEqual([code]);
+        expect(links()[0].getAttribute('dir')).toBe('ltr');
+        fireEvent.click(links()[0]);
+        expect(mockedApi.openFileOrFolder).toHaveBeenCalledTimes(1);
+        expect(mockedApi.openFileOrFolder.mock.calls[0]).toEqual([path]);
+    });
+
+    it.each([
+        [403, 'Access restricted to files under user home directory', "Couldn't open /etc/hosts: GAIA opens only files and folders inside your home folder."],
+        [404, 'Path not found', "Couldn't open /etc/hosts: it's no longer there. It may have been moved or deleted."],
+        [500, 'Failed to open file or folder. Check server logs for details.', "Couldn't open /etc/hosts: Failed to open file or folder. Check server logs for details."],
+        [403, "Do this on the PC running GAIA.", "Couldn't open /etc/hosts: Do this on the PC running GAIA."],
+    ])('says why an open failed with %i: %s', async (status, detail, shown) => {
+        mockedApi.openFileOrFolder.mockRejectedValue(new ApiError(detail, status, detail, null));
+        renderAnswer('See `/etc/hosts`.');
+
+        fireEvent.click(links()[0]);
+
+        const alert = await screen.findByRole('alert');
+        expect(alert.textContent?.replace(/[⁦-⁩]/g, '')).toBe(shown);
     });
 
     it('accepts forward slashes and a trailing folder separator', () => {
@@ -170,7 +199,6 @@ describe('files the turn wrote', () => {
         ['a name two written files share', 'notes.md', ['C:\\a\\notes.md', 'C:\\b\\notes.md']],
         ['a name the turn did not write', 'other.md', [REPORT]],
         ['a relative path to a written file', 'out/recommendation.md', [REPORT]],
-        ['a POSIX path the turn did not write', '/home/me/out/other.xlsx', [BOM]],
     ])('keeps %s as code', (_label, code, paths) => {
         renderWithWrites(`See \`${code}\`.`, paths);
 

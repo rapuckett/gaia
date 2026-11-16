@@ -31,6 +31,7 @@ export { Badge, type BadgeProps, type BadgeTone } from './lists/Badge';
 export { Skeleton, ListSkeleton, type SkeletonProps } from './lists/Skeleton';
 export { EmptyState, ErrorState, LoadingState, type StateAction } from './lists/states';
 export { Sheet, type SheetProps } from './overlays/Sheet';
+export { SheetScope } from './overlays/SheetHost';
 export { ActionSheet, type ActionSheetProps, type SheetAction } from './overlays/ActionSheet';
 export { Notice, type NoticeProps, type NoticeTone } from './feedback/Notice';
 export { ProgressLine, type ProgressLineProps } from './feedback/ProgressLine';

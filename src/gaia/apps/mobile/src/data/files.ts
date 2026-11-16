@@ -3,7 +3,8 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import type { BrowseResponse, DocumentResponse, FileSearchResponse } from '@/api/client.types';
+import type { BrowseResponse, DocumentResponse, FileSearchResponse, GaiaClient, IndexFolderResponse } from '@/api/client.types';
+import { GaiaApiError } from '@/api/errors';
 
 import { useGaiaClient } from './GaiaClientProvider';
 import { queryKeys, requireClient } from './queries';
@@ -67,6 +68,66 @@ export function useAddPcFiles() {
             void queryClient.invalidateQueries({ queryKey: queryKeys.documents });
             void queryClient.invalidateQueries({ queryKey: queryKeys.session(chatId) });
             void queryClient.invalidateQueries({ queryKey: queryKeys.sessions });
+        },
+    });
+}
+
+export type AddPcPathResult =
+    | { kind: 'file'; document: DocumentResponse; attachError: Error | null }
+    | { kind: 'folder'; result: IndexFolderResponse; attachError: Error | null };
+
+export interface AddPcPathRequest {
+    /** The path as typed; the PC checks it against `readChatId`'s folders. */
+    path: string;
+    /** The chat whose folders the PC may read the path from. */
+    readChatId: string;
+    /** The chat to attach to once indexed; null leaves the documents for the next new chat. */
+    chatId: string | null;
+    /** Called when the PC answers that the path is a folder, before its documents are indexed. */
+    onFolder?: () => void;
+}
+
+/** Attaches each document, carrying on past a refusal; the first refusal is returned. */
+async function attachEach(api: GaiaClient, chatId: string | null, ids: readonly string[]): Promise<Error | null> {
+    if (!chatId) return null;
+    let first: Error | null = null;
+    for (const id of ids) {
+        try {
+            await api.attachDocument(chatId, id);
+        } catch (err) {
+            first ??= err instanceof Error ? err : new Error(String(err));
+        }
+    }
+    return first;
+}
+
+/** `mutate({ path, readChatId, chatId })` adds a file or folder on the PC by its typed path, as the web library's path box does. */
+export function useAddPcPath() {
+    const client = useGaiaClient();
+    const queryClient = useQueryClient();
+    return useMutation<AddPcPathResult, Error, AddPcPathRequest>({
+        mutationFn: async ({ path, readChatId, chatId, onFolder }) => {
+            const api = requireClient(client);
+            let document: DocumentResponse;
+            try {
+                document = await api.uploadDocumentByPath(path, readChatId);
+            } catch (err) {
+                if (!(err instanceof GaiaApiError && err.body?.status === 'is_folder')) throw err;
+                onFolder?.();
+                // Top level only: a typed home folder would otherwise index everything below it.
+                const result = await api.indexFolder(path, false, readChatId);
+                return { kind: 'folder', result, attachError: await attachEach(api, chatId, result.documents.map((d) => d.id)) };
+            }
+            // A file GAIA couldn't read has a library row with its reason; a chat must not be promised it.
+            if (document.indexing_status === 'failed') return { kind: 'file', document, attachError: null };
+            return { kind: 'file', document, attachError: await attachEach(api, chatId, [document.id]) };
+        },
+        onSettled: (_result, _error, { chatId }) => {
+            void queryClient.invalidateQueries({ queryKey: queryKeys.documents });
+            if (chatId) {
+                void queryClient.invalidateQueries({ queryKey: queryKeys.session(chatId) });
+                void queryClient.invalidateQueries({ queryKey: queryKeys.sessions });
+            }
         },
     });
 }
