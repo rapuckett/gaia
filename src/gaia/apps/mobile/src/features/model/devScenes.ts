@@ -11,7 +11,7 @@ import type { NeedPromptInitial } from './ModelNeededHost';
 
 /** What a model-server scene shows, and the state its component can't be tapped into. */
 export interface ModelScene {
-    view: 'sheet' | 'need' | 'down' | 'resources' | 'agent' | 'error';
+    view: 'sheet' | 'need' | 'down' | 'resources' | 'agent' | 'error' | 'setupLocal';
     data?: FakeClientData;
     sheet?: { confirming?: boolean; logRefused?: boolean };
     need?: ModelNeed;
@@ -56,6 +56,7 @@ export const MODEL_SCENES: Record<string, ModelScene> = {
     'agent-installing': { view: 'agent', data: NO_FLAGSHIP, agentState: { kind: 'installing', percent: 40 } },
     'agent-missing': { view: 'agent', data: NO_FLAGSHIP },
     'agent-no-build': { view: 'agent', data: { ...NO_FLAGSHIP, setupChecks: [{ ready: false, no_agent_build: true, steps: [] } as SetupCheck] } },
+    'setup-local': { view: 'setupLocal' },
     'down-back': { view: 'down', data: model({ ...STOPPED, state: 'idle', error: null, error_cause: null }), downAsked: true },
     'down-not-ours': { view: 'down', data: model({ ...STOPPED, owner: 'user' }) },
     'down-ours': { view: 'down', data: model(STOPPED) },

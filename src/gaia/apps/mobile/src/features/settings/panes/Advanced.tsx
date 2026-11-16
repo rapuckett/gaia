@@ -8,7 +8,7 @@ import type { SystemStatus } from '@webui/types';
 
 import { useModelActions, useQueryFailure, useSystemStatus } from '@/data';
 import { describeError, useT } from '@/i18n/useT';
-import { Button, Card, Disclosure, Divider, Ltr, Notice, ProgressLine, Row, Spinner, Stack, Surface, Text } from '@/ui';
+import { Button, Card, Disclosure, Divider, Ltr, ProgressLine, Row, Spinner, Stack, Surface, Text } from '@/ui';
 
 import { LogsCard } from '@/features/logs';
 
@@ -16,6 +16,7 @@ import { isPcRefusal, PcOnlyNotice } from '../PcOnlyNotice';
 import { SettingsAnchor } from '../targets';
 import { ActionError, LoadAnywaySheet, RawDetails } from './advanced/errors';
 import { ServerControlsSlot } from './advanced/ServerControls';
+import { SetUpLocalButton } from './advanced/SetUpLocalButton';
 import { capabilitiesText, needsLocalSetup, needText, statusFlags } from './advanced/statusText';
 
 /** Settings > Advanced: the PC's status and model actions, then the Logs card; the server controls go in the slot. */
@@ -133,7 +134,7 @@ function StatusBody({ status, modelName, actions, detailsOpen, onToggleDetails }
                 {!status.lemonade_running && status.lemonade_error ? (
                     <RawDetails text={status.lemonade_error} />
                 ) : null}
-                {setupNeeded ? <Notice tone="info" message={t('mobileApp.settings.pcOnly')} testID="advanced-setup-pc-only" /> : null}
+                {setupNeeded ? <SetUpLocalButton /> : null}
                 <StatusRow
                     label={t('settings.section.model')}
                     oneLine

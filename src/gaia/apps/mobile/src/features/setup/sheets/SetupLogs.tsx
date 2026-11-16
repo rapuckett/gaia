@@ -5,7 +5,9 @@ import { useRef, useState, type ComponentRef } from 'react';
 import { ScrollView, View } from 'react-native';
 
 import { useT } from '@/i18n/useT';
-import { Disclosure, Notice, Stack, Text, useTheme } from '@/ui';
+import { PcOnlyAction } from '@/features/logs/PcOnlyAction';
+import { Disclosure, Stack, Text, useTheme } from '@/ui';
+import { Archive } from '@/ui/icons';
 import type { SetupLogStage, SetupRunStatus } from '@webui/types';
 
 import { logsByStage } from './logLines';
@@ -83,7 +85,12 @@ export function SetupLogs({
                     <Text role="caption" tone="muted">
                         {t('setup.logs.reportNote')}
                     </Text>
-                    <Notice tone="info" message={t('setup.logs.reportOnPc')} testID="setup-report-on-pc" />
+                    <PcOnlyAction
+                        label={t('setup.logs.report')}
+                        icon={Archive}
+                        detail={t('setup.logs.reportOnPc')}
+                        testID="setup-report-pc-only"
+                    />
                 </Stack>
             </Disclosure>
         </View>

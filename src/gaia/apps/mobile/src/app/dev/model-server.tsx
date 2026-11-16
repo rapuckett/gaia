@@ -15,6 +15,7 @@ import { NeedPrompt } from '@/features/model/ModelNeededHost';
 import { ModelServerDownNotice } from '@/features/model/ModelServerDownNotice';
 import { ModelStatusSheet } from '@/features/model/ModelStatusSheet';
 import { MODEL_SCENES, modelSceneClient, type ModelScene } from '@/features/model/devScenes';
+import { SetUpLocalButton } from '@/features/settings/panes/advanced/SetUpLocalButton';
 import { Screen, ScreenBannerProvider, Stack, Text, UIProvider } from '@/ui';
 
 const noop = () => undefined;
@@ -41,6 +42,12 @@ function Body({ scene }: { scene: ModelScene }) {
             return (
                 <Stack padding="lg">
                     <FlagshipAgentBanner initialState={scene.agentState} />
+                </Stack>
+            );
+        case 'setupLocal':
+            return (
+                <Stack padding="lg">
+                    <SetUpLocalButton onOpen={noop} />
                 </Stack>
             );
         case 'error':
