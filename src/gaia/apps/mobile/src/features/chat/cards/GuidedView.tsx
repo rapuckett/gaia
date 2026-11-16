@@ -10,6 +10,7 @@ import type { GuideDoc } from '@webui/components/render/guide/guideDoc';
 import { itemDisplay, stepText, type GuideViewState } from '@webui/components/render/guide/guideText';
 import type { Timers } from '@webui/components/render/guide/timerState';
 
+import { isolate } from '@webui/i18n/registry';
 import { useT } from '@/i18n/useT';
 import { Button, Disclosure, IconButton, Ltr, Row, Sheet, Stack, Text } from '@/ui';
 import { ChevronLeft, ChevronRight, Pause, Play, Square, X } from '@/ui/icons';
@@ -131,7 +132,7 @@ export function GuidedView({ open, doc, state, timers, onClose }: { open: boolea
                                     <Text key={i} role="label" dir="auto">
                                         {qty ? (
                                             <Text role="label" weight="semibold" dir="ltr">
-                                                {`${qty} `}
+                                                {`${isolate(qty, 'ltr')} `}
                                             </Text>
                                         ) : null}
                                         {text}

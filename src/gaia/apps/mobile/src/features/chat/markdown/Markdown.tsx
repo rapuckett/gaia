@@ -89,8 +89,9 @@ function renderList(node: Extract<RootContent, { type: 'list' }>, ctx: RenderCon
                     ) : (
                         <Icon icon={checked ? Check : Square} size="sm" tone={checked ? 'accent' : 'muted'} />
                     );
+                const itemDir: Dir = contentDir(plainText(item), ctx.uiDir);
                 return (
-                    <Row key={i} gap="sm" align="start" dir={dir}>
+                    <Row key={i} gap="sm" align="start" dir={itemDir}>
                         {marker}
                         <Stack flex={1} gap="xs">
                             {renderBlocks(item.children, ctx, `${key}.${i}`)}
