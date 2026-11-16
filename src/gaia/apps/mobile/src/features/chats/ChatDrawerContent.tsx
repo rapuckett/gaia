@@ -12,6 +12,7 @@ import { useDeleteSession, useMarkRead, useRenameSession, useSessions, useSessio
 import { ModelStatusPill } from '@/features/model';
 import { openSettings } from '@/features/settings/openSettings';
 import { DownloadChip } from '@/features/setup/DownloadChip';
+import { useDownloadQueue } from '@/features/settings/panes/model/downloadQueue';
 import { chipView } from '@/features/setup/steps/downloadState';
 import { NotificationsEntry } from '@/features/notifications';
 import { describeError, describeErrorWith, useT } from '@/i18n/useT';
@@ -162,11 +163,11 @@ export function ChatDrawerContent({ activeId, onSelect, onClose, onNewChat, onPc
     );
     const footerRows = (
         <Stack>
+            <DownloadChipRow onPress={() => { close(); openSettings('model'); }} />
             {entries.filter((e) => e.footer).map((e) => (
                 <NavRow key={e.key} entry={e} active={activeRoute === e.route} onOpen={open} />
             ))}
             <NotificationsEntry active={activeRoute === 'notifications'} onOpen={() => open('notifications')} />
-            <DownloadChipRow onPress={() => { close(); openSettings('model'); }} />
             <ModelStatusPill />
         </Stack>
     );
@@ -273,7 +274,9 @@ const gaiaRobot: ImageSourcePropType = require('@webui/assets/gaia-robot.png');
 /** The download progress chip above the footer; nothing, not even its padding, while no download runs. */
 function DownloadChipRow({ onPress }: { onPress: () => void }) {
     const status = useSetupStatus();
-    if (!chipView(status.data)) return null;
+    const queued = useDownloadQueue((s) => s.queue.length);
+    const started = useDownloadQueue((s) => s.started);
+    if (!chipView(status.data, queued, started)) return null;
     return (
         <Stack paddingX="lg" paddingY="xs">
             <DownloadChip onPress={onPress} />

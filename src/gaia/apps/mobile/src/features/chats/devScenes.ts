@@ -71,6 +71,12 @@ const DOWNLOADING: SetupRunStatus = {
     overall: { bytes_done: 2_100_000_000, bytes_total: 5_000_000_000, speed_bps: 40_000_000, eta_s: 70, percent: 42, failed: 0 },
 };
 
+const FAILED: SetupRunStatus = {
+    state: 'failed',
+    models: [{ ...DOWNLOADING.models![0], state: 'failed', error: 'The network dropped', error_kind: 'network', can_retry: true, speed_bps: 0, eta_s: null }],
+    overall: { bytes_done: 2_100_000_000, bytes_total: 5_000_000_000, speed_bps: 0, eta_s: null, percent: 42, failed: 1 },
+};
+
 const scene = (over: Partial<DrawerScene> = {}): DrawerScene => ({ ...over, data: { ...COMMON, ...over.data } });
 
 export const DRAWER_SCENES = {
@@ -101,6 +107,7 @@ export const DRAWER_SCENES = {
     'background-hidden': scene({ automatedShown: false }),
     'background-shown': scene({ automatedShown: true }),
     'download-chip': scene({ data: { setupStatus: DOWNLOADING } }),
+    'download-failed': scene({ data: { setupStatus: FAILED } }),
     'notifications-badge': scene({ unreadNotifications: 3 }),
     'notifications-badge-99': scene({ unreadNotifications: 120 }),
 } satisfies Record<string, DrawerScene>;

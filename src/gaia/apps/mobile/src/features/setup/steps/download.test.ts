@@ -57,6 +57,7 @@ describe('chipView', () => {
         const moving = chipView(run('running', [model('a', 'ready'), model('b', 'downloading'), model('c', 'failed')]));
         expect(moving).toEqual({ kind: 'moving', done: 2, count: 2, percent: 37 });
         expect(chipView(run('ready', [model('a', 'ready')]))).toBeNull();
+        expect(chipView(run('running', [model('a', 'downloading')]), 2)).toMatchObject({ kind: 'moving', done: 1, count: 3 });
     });
 
     it('says a download failed once the run has stopped', () => {

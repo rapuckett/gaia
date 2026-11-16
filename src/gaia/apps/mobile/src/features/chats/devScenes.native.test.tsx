@@ -59,6 +59,12 @@ describeNative('drawer gallery route', () => {
         expect(await screen.findByText('Downloading 1 of 1 · 42%')).toBeTruthy();
     });
 
+    it('keeps the download chip after a failure, as the desktop does', async () => {
+        mockState = 'download-failed';
+        await render(<DrawerGalleryRoute />);
+        expect(await screen.findByText('A download failed')).toBeTruthy();
+    });
+
     it('names the scenes when the state is unknown', async () => {
         mockState = 'nope';
         await render(<DrawerGalleryRoute />);
