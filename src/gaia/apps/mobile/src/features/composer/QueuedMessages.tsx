@@ -4,7 +4,7 @@
 import type { QueuedMessage } from '@webui/utils/messageQueue';
 
 import { useT, type Translate } from '@/i18n/useT';
-import { Button, Icon, IconButton, Pressable, Row, Stack, Surface, Text } from '@/ui';
+import { Button, IconButton, Row, Stack, Surface, Text } from '@/ui';
 import { RotateCcw, X } from '@/ui/icons';
 
 export interface QueuedMessagesProps {
@@ -44,7 +44,7 @@ export function QueuedMessages({ items, onRemove, onRetry, onSteer, replying }: 
                     <Stack gap="xs">
                         <Row gap="sm" align="center">
                             <Stack flex={1}>
-                                <Text role="ui" numberOfLines={2}>
+                                <Text role="ui" numberOfLines={2} largeLines={2}>
                                     {item.text}
                                 </Text>
                             </Stack>
@@ -62,18 +62,15 @@ export function QueuedMessages({ items, onRemove, onRetry, onSteer, replying }: 
                             {stateLine(item, replying, t)}
                         </Text>
                         {item.state === 'failed' ? (
-                            <Pressable
+                            <Button
+                                label={t('queue.sendAgain')}
                                 accessibilityLabel={t('queue.sendAgainAria', { text: item.text })}
+                                icon={RotateCcw}
+                                variant="ghost"
+                                size="sm"
                                 onPress={() => onRetry(item.id)}
                                 testID={`queued-retry-${item.id}`}
-                            >
-                                <Row gap="sm">
-                                    <Icon icon={RotateCcw} size="sm" tone="accent" />
-                                    <Text role="ui" weight="medium" tone="accent">
-                                        {t('queue.sendAgain')}
-                                    </Text>
-                                </Row>
-                            </Pressable>
+                            />
                         ) : null}
                         {item.state === 'queued' && onSteer ? (
                             <Button
