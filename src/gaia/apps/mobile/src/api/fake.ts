@@ -367,7 +367,7 @@ export interface FakeGaiaClient extends GaiaClient {
     readonly uploads: { name: string; size: number }[];
     readonly downloads: { modelId: string; acknowledgeLowDisk: boolean }[];
     readonly modelDownloads: { modelName: string; force: boolean; loadAfter: boolean }[];
-    readonly modelLoads: { modelName: string; force: boolean }[];
+    readonly modelLoads: { modelName: string; force: boolean; ctxSize?: number }[];
     readonly removals: string[];
     readonly backendSets: string[];
     /** The text each speak call was given, in order. */
@@ -1451,9 +1451,9 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             modelDownloads.push({ modelName: model, force: options?.force ?? false, loadAfter: options?.loadAfter ?? false });
             return { status: 'downloading', model };
         },
-        async loadModel(modelName, force) {
+        async loadModel(modelName, force, options) {
             if (data.modelActionError) throw data.modelActionError;
-            modelLoads.push({ modelName, force });
+            modelLoads.push({ modelName, force, ctxSize: options?.ctxSize });
             return { status: 'loading', model: modelName, ctx_size: 65536 };
         },
         async getLocalModelStatus() {
