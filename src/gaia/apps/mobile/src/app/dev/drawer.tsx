@@ -1,15 +1,17 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Redirect, useLocalSearchParams } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { View, useWindowDimensions } from 'react-native';
 
 import { GaiaClientProvider } from '@/data';
 import { ChatDrawerContent } from '@/features/chats/ChatDrawerContent';
 import { DRAWER_SCENES, drawerSceneClient, sceneNotifications, type DrawerSceneName } from '@/features/chats/devScenes';
 import { NAV_ENTRIES } from '@/features/chats/navEntries';
+import { SHOW_AUTOMATED_KEY } from '@/features/chats/showAutomated';
 import { devGalleryEnabled } from '@/features/dev/devGallery';
 import { KeyedScene } from '@/features/dev/KeyedScene';
 import { addNotification, clearNotifications } from '@/state/notifications';
@@ -29,6 +31,15 @@ function DrawerView({ state }: { state: string }) {
         sceneNotifications(found.unreadNotifications ?? 0).forEach(addNotification);
         return drawerSceneClient(found);
     });
+    // The drawer reads the saved choice when it mounts, so it is written first.
+    const [seeded, setSeeded] = useState(false);
+    useEffect(() => {
+        AsyncStorage.setItem(SHOW_AUTOMATED_KEY, found?.automatedShown ? '1' : '0').then(
+            () => setSeeded(true),
+            (err) => console.warn('Scene could not save the background-runs choice.', err),
+        );
+    }, [found]);
+    if (found && !seeded) return null;
     if (!found || !client) {
         return (
             <UIProvider>
