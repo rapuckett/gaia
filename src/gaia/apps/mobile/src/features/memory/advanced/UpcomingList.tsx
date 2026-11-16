@@ -36,8 +36,7 @@ export function UpcomingList({ items }: { items: TemporalItem[] }) {
                                     padding: space.md,
                                     borderWidth: 1,
                                     borderColor: colors.borderLight,
-                                    borderStartWidth: 3,
-                                    borderStartColor: overdue ? colors.danger : colors.accentYellow,
+                                    backgroundColor: overdue ? colors.dangerDim : colors.accentYellowDim,
                                     borderRadius: radius.md,
                                 }}
                             >
