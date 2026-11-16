@@ -5,6 +5,7 @@ import { useEffect } from 'react';
 import { View } from 'react-native';
 import Animated, { useAnimatedStyle, useReducedMotion, useSharedValue, withTiming } from 'react-native-reanimated';
 import { useDirection } from '@/i18n/useT';
+import { physicalAlign } from '../text/direction';
 import { Pressable } from '../controls/Pressable';
 import { Row } from '../layout/layout';
 import { useTheme } from '../theme/ThemeProvider';
@@ -32,6 +33,7 @@ const TRAVEL = TRACK_W - KNOB - INSET * 2;
 export function Switch({ value, onValueChange, label, description, disabled, descriptionBelow, testID }: SwitchProps) {
     const { colors, radius, space } = useTheme();
     const rtl = useDirection() === 'rtl';
+    const restSide = physicalAlign(rtl);
     const reduced = useReducedMotion();
     const progress = useSharedValue(value ? 1 : 0);
 
@@ -71,13 +73,11 @@ export function Switch({ value, onValueChange, label, description, disabled, des
                         height: TRACK_H,
                         borderRadius: radius.full,
                         backgroundColor: value ? colors.accentSolid : colors.border,
-                        justifyContent: 'center',
-                        paddingHorizontal: INSET,
                     }}
                 >
                     <Animated.View
                         style={[
-                            { width: KNOB, height: KNOB, borderRadius: radius.full, backgroundColor: colors.switchKnob,
+                            { position: 'absolute', top: INSET, [restSide]: INSET, width: KNOB, height: KNOB, borderRadius: radius.full, backgroundColor: colors.switchKnob,
                                 shadowColor: '#000',
                                 shadowOpacity: 0.2,
                                 shadowRadius: 1,
