@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import { useRouter } from 'expo-router';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
 import { useGoalStoreError, useQueryFailure, useSystemStatus } from '@/data';
 import { useT } from '@/i18n/useT';
@@ -10,7 +10,7 @@ import { openChat } from '@/features/nav/navigation';
 import { useAnnounce } from '@/platform/useAnnounce';
 import { useBannerDismissedStore } from '@/state/bannerDismissed';
 import { useChatAlertBannerStore, type ChatAlertBanner } from '@/state/chatAlertBanner';
-import { Notice, ProgressLine, Stack } from '@/ui';
+import { Disclosure, Ltr, Notice, ProgressLine, Stack } from '@/ui';
 
 import { pickBanner } from './pickBanner';
 
@@ -33,6 +33,16 @@ function ChatAlertNotice({ alert }: { alert: ChatAlertBanner }) {
                 }}
             testID="banner-chat-alert"
         />
+    );
+}
+
+function BannerDetails({ text }: { text: string }) {
+    const t = useT();
+    const [open, setOpen] = useState(false);
+    return (
+        <Disclosure title={t('setup.progress.details')} open={open} onToggle={() => setOpen((o) => !o)}>
+            <Ltr>{text}</Ltr>
+        </Disclosure>
     );
 }
 
@@ -62,6 +72,7 @@ export function ConnectionBanner() {
                         onDismiss={banner.dismissible ? () => dismiss(banner.id) : undefined}
                         action={banner.retry ? { label: t('settings.key.checkAgain'), onPress: () => void refetch() } : undefined}
                     />
+                    {banner.details ? <BannerDetails text={banner.details} /> : null}
                     {banner.progress ? <ProgressLine value={banner.progress.value} label={banner.progress.label} /> : null}
                 </Stack>
             ) : null}
