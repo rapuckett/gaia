@@ -14,6 +14,7 @@ import { Badge, Button, Divider, Ltr, Notice, Row, Stack, Text } from '@/ui';
 import { Copy, Pencil, Shield, ShieldOff, Trash2 } from '@/ui/icons';
 
 import { CATEGORY_TONE, categoryLabel, failureText, type KnowledgeFeedback } from './knowledgeUi';
+import { ContentText } from '../../ContentText';
 
 /** The browser owns the mutations: a sheet draws outside the screen's providers in the dev gallery, so its content can't reach the client itself. */
 interface KnowledgeDetailProps {
@@ -95,9 +96,9 @@ export function KnowledgeDetail({ item, edit, forget, onEdit, onChanged, onFilte
                 <Text role="caption" tone="muted">
                     {t('mem.detail.fullContent')}
                 </Text>
-                <Text dir="ltr" selectable testID="memory-knowledge-detail-content">
+                <ContentText selectable testID="memory-knowledge-detail-content">
                     {item.content}
-                </Text>
+                </ContentText>
             </Stack>
 
             {feedback ? <Notice tone={feedback.tone} message={feedback.text} testID="memory-knowledge-feedback" /> : null}

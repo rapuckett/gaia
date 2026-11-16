@@ -10,6 +10,7 @@ import { Icon, Row, Stack, Text, useTheme } from '@/ui';
 import { CircleCheck, Clock, TriangleAlert } from '@/ui/icons';
 
 import { SectionEmpty, SectionTitle } from './SectionTitle';
+import { ContentText } from '../ContentText';
 
 /** Items with a due time: overdue ones get a red edge and a warning icon, upcoming ones a yellow edge and a clock. */
 export function UpcomingList({ items }: { items: TemporalItem[] }) {
@@ -42,7 +43,7 @@ export function UpcomingList({ items }: { items: TemporalItem[] }) {
                             >
                                 <Icon icon={overdue ? TriangleAlert : Clock} size="md" tone={overdue ? 'danger' : 'warning'} />
                                 <Stack flex={1} gap="xs">
-                                    <Text dir="ltr">{item.content}</Text>
+                                    <ContentText>{item.content}</ContentText>
                                     <Row wrap gap="xs">
                                         <Text role="caption" tone={overdue ? 'danger' : 'muted'}>
                                             {t(overdue ? 'mem.upcoming.overdue' : 'mem.upcoming.due', { when })}

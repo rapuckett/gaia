@@ -13,6 +13,7 @@ import { Eye, Pencil, Trash2 } from '@/ui/icons';
 
 import type { MemoryPaneProps } from '../tabs';
 import { parseWhen, whenText } from './whenInput';
+import { ContentText } from '../ContentText';
 
 /** A translator whose lookups are one language half of a `t.compose`, so a date inside them stays in that half. */
 function sayAs(say: Say, code: string): Translate {
@@ -116,9 +117,9 @@ export function MemoryRow({ item, forgetting, onForget, notify }: MemoryRowProps
                                 />
                             </Row>
                         ) : (
-                            <Text dir="ltr" selectable>
+                            <ContentText selectable>
                                 {item.content}
-                            </Text>
+                            </ContentText>
                         )}
                         {due ? (
                             <Text role="caption" tone={due.past ? 'danger' : 'muted'}>

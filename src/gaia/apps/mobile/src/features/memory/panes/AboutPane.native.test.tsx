@@ -53,8 +53,9 @@ describeNative('AboutPane', () => {
         beforeEach(() => useLocaleStore.getState().setLocale('ar'));
         afterEach(() => useLocaleStore.getState().setLocale(null));
 
-        it('keeps English memory text left-to-right on the UI start, and the gloss date in English', async () => {
-            const client = createFakeClient({ memoryKnowledge: SAMPLE_KNOWLEDGE });
+        it('lays memory text out in its own direction, on the UI start, and keeps the gloss date in English', async () => {
+            const arabic = { ...SAMPLE_KNOWLEDGE[0]!, id: 'ar1', content: 'اتصل بي سام.' };
+            const client = createFakeClient({ memoryKnowledge: [...SAMPLE_KNOWLEDGE, arabic] });
             const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
             const wrap = ({ children }: { children: ReactNode }) => (
                 <QueryClientProvider client={queryClient}>
@@ -68,6 +69,7 @@ describeNative('AboutPane', () => {
             await render(<AboutPane notify={() => undefined} memoryEnabled onOpenAdvanced={() => undefined} />, { wrapper: wrap });
             const body = await screen.findByText('Call me Sam.');
             expect(body.props.style).toMatchObject({ writingDirection: 'ltr', textAlign: physicalAlign(true) });
+            expect((await screen.findByText('اتصل بي سام.')).props.style).toMatchObject({ writingDirection: 'rtl', textAlign: physicalAlign(true) });
             const row = screen.getByTestId('memory-about-row-k8');
             expect(within(row).getByText(/\([^)]*[A-Z][a-z]{2} \d{1,2}, \d{4}[^)]*\)/)).toBeTruthy();
         });

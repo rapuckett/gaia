@@ -8,6 +8,7 @@ import { Badge, Card, Icon, Row, Spacer, StatusDot, Stack, Text } from '@/ui';
 import { Shield } from '@/ui/icons';
 
 import { CATEGORY_TONE, categoryLabel } from './knowledgeUi';
+import { ContentText } from '../../ContentText';
 
 /** One memory as a card: what kind, the whole text (wrapped, never cut), and where and when. Tapping opens its detail. */
 export function KnowledgeCard({ item, onOpen }: { item: KnowledgeEntry; onOpen: (item: KnowledgeEntry) => void }) {
@@ -32,9 +33,9 @@ export function KnowledgeCard({ item, onOpen }: { item: KnowledgeEntry; onOpen: 
                         <StatusDot tone={item.has_embedding ? 'success' : 'attention'} label={t(item.has_embedding ? 'mem.knowledge.embedded' : 'mem.knowledge.embedMissing')} />
                     ) : null}
                 </Row>
-                <Text dir="ltr" tone={superseded || item.sensitive ? 'muted' : 'primary'}>
+                <ContentText tone={superseded || item.sensitive ? 'muted' : 'primary'}>
                     {text}
-                </Text>
+                </ContentText>
                 <Row gap="xs" wrap>
                     <Text role="caption" tone="muted" dir="auto">
                         {item.context}
