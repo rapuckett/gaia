@@ -3954,6 +3954,7 @@ export const enMessages = {
     'mobileApp.yourPc.activity.visionNeeded': 'Reading images needs the vision model, which isn\'t on your PC yet.',
     'mobileApp.yourPc.agentNotice.noBuild': "No GAIA agent build for your PC yet, so chat isn't available here.",
     'mobileApp.yourPc.answer.place.thisPc': 'on your PC',
+    'mobileApp.yourPc.chat.browseFiles': 'Browse files on your PC',
     'mobileApp.yourPc.env.fullAccessWarn': 'Full access lets GAIA change files and run commands on your PC without asking.',
     'mobileApp.yourPc.gpu.body': 'Your PC shares {total} between the processor (CPU) and graphics (GPU). The GPU has {gpu} now. AI models run on the GPU, so more here means bigger models.',
     'mobileApp.yourPc.gpu.guided.loading': 'Getting the steps for your PC…',
