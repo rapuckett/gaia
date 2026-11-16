@@ -116,6 +116,7 @@ export default function Permissions() {
                                                         accessibilityLabel={t('settings.permissions.revokeAria', { name: g.label })}
                                                         variant="ghost"
                                                         size="sm"
+                                                        shrink={false}
                                                         onPress={() => run(revoke.mutateAsync({ sessionId: r.session_id, key: g.key }))}
                                                     />
                                                 </Row>

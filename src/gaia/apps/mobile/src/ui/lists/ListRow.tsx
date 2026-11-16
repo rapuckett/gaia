@@ -75,7 +75,7 @@ export function ListRow({
                         </Text>
                     ) : null}
                 </View>
-                {trailing}
+                {trailing ? <View style={{ flexShrink: 0 }}>{trailing}</View> : null}
             </Row>
         </View>
     );
