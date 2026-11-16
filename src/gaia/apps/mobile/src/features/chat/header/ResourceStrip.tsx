@@ -24,11 +24,13 @@ export function ResourceStrip({ onClose }: { onClose: () => void }) {
                                 <Stack key={tile.key} gap="xs">
                                     <Row gap="sm" justify="between">
                                         <View style={{ flexShrink: 1 }}>
-                                            <Text role="label" weight="medium" numberOfLines={1}>
+                                            <Text role="label" weight="medium">
                                                 {tile.label}
                                             </Text>
                                         </View>
-                                        <Ltr>{[tile.value, tile.detail].filter(Boolean).join(' · ')}</Ltr>
+                                        <View style={{ flexShrink: 0 }}>
+                                            <Ltr>{[tile.value, tile.detail].filter(Boolean).join(' · ')}</Ltr>
+                                        </View>
                                     </Row>
                                     {tile.history.length > 0 && tile.tone !== 'network' ? (
                                         <ProgressLine value={parseFloat(tile.value) / 100} />

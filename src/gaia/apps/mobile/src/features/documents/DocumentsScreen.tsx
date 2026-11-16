@@ -5,15 +5,16 @@ import { useEffect, useState } from 'react';
 
 import { isolate } from '@webui/i18n/registry';
 
-import { useAttachDocument, useCancelIndexing, useDocumentRemoval, useDocuments, useIndexingView, useReindexDocument, useSession } from '@/data';
+import { useAttachDocument, useCancelIndexing, useDocumentRemoval, useDocuments, useIndexingView, type IndexingSeed, useReindexDocument, useSession } from '@/data';
 import { ScreenHeader } from '@/features/nav/ScreenHeader';
 import { describeErrorWith, useT } from '@/i18n/useT';
 import { EmptyState, ErrorState, IconButton, List, ListSkeleton, Notice, Row, Screen, Stack, Text, useTheme } from '@/ui';
 import { X } from '@/ui/icons';
 
-import { AddDocuments, type AddLine } from './AddDocuments';
+import { AddDocuments, type AddStart, type StartMessage } from './AddDocuments';
 import { DocumentRow } from './DocumentRow';
 import { libraryStats } from './libraryStats';
+import { loadFailedText } from './loadFailedText';
 import { useNextChatDocs } from './nextChatDocs';
 import { TargetChooser, type LibraryTarget } from './TargetChooser';
 
@@ -30,11 +31,19 @@ export interface DocumentsScreenProps {
 
 export interface LibraryStart {
     target?: LibraryTarget;
-    note?: string;
-    error?: string;
+    note?: StartMessage;
+    // A failed action: the message and the error filled into it, translated like production's.
+    error?: StartMessage & { cause: unknown };
     // A document id: its removal is waiting on Undo.
     removing?: string;
-    add?: AddLine;
+    add?: AddStart;
+    // A frozen clock and when each row began indexing, so the elapsed time is the same on every shot.
+    indexing?: IndexingSeed;
+}
+
+function startError(t: ReturnType<typeof useT>, error: LibraryStart['error']): string | null {
+    if (!error) return null;
+    return t.compose((say) => say(error.key, { ...error.params, error: describeErrorWith(error.cause, say) }));
 }
 
 // A failed library action (remove, cancel) shows here until dismissed; only one shows at a time.
@@ -67,8 +76,8 @@ function Library({ chat, onBrowseFiles, onPreview, initial }: { chat: OpenChat |
     const { space } = useTheme();
     const query = useDocuments();
     const [target, setTarget] = useState<LibraryTarget>(initial?.target ?? 'chat');
-    const action = useActionError(initial?.error ?? null);
-    const [note, setNote] = useState<string | null>(initial?.note ?? null);
+    const action = useActionError(startError(t, initial?.error));
+    const [note, setNote] = useState<string | null>(initial?.note ? t(initial.note.key, initial.note.params) : null);
     const attachDocument = useAttachDocument();
     const nextIds = useNextChatDocs((s) => s.ids);
     const addNext = useNextChatDocs((s) => s.add);
@@ -84,7 +93,7 @@ function Library({ chat, onBrowseFiles, onPreview, initial }: { chat: OpenChat |
     const reindex = useReindexDocument();
     const all = query.data?.documents ?? [];
     const documents = all.filter((d) => d.id !== removal.pending?.id);
-    const view = useIndexingView(all);
+    const view = useIndexingView(all, initial?.indexing);
     const stats = libraryStats(documents, t);
     const nameOf = (id: string) => all.find((d) => d.id === id)?.filename ?? id;
     const onCancel = (id: string) => {
@@ -116,7 +125,7 @@ function Library({ chat, onBrowseFiles, onPreview, initial }: { chat: OpenChat |
         );
     };
     const attachedIds = targetChat ? targetChat.documentIds : nextIds;
-    const loadFailed = query.isError ? t.compose((say) => say('docs.loadFailed', { error: describeErrorWith(query.error, say) })) : null;
+    const loadFailed = query.isError ? loadFailedText(t, query.error) : null;
     const adder = <AddDocuments chatId={targetChat?.id ?? null} chatName={chat?.name ?? null} onStart={action.dismiss} onBrowse={onBrowseFiles} initialLine={initial?.add} />;
     const retry = { label: t('docs.loadRetry'), onPress: () => void query.refetch() };
 
