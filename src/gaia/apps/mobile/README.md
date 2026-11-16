@@ -1,9 +1,10 @@
 # GAIA mobile
 
-The native (Expo, React Native) phone app for the GAIA Agent UI. It talks to a
-GAIA PC over the same `/api/*` routes and SSE chat stream the web Agent UI uses.
-This folder is the scaffold: toolchain, API client, i18n and tests. Screens come
-next.
+The native (Expo, React Native) phone app for the GAIA Agent UI. GAIA runs on your PC;
+the app is a remote for it on your home network. It pairs with the PC by QR code and
+then uses the same `/api/*` routes and SSE chat stream the web Agent UI does. For what
+it does and how to pair, see the
+[Phone App guide](https://amd-gaia.ai/docs/guides/mobile). This page is for building it.
 
 ```bash
 npm install
@@ -11,7 +12,11 @@ npm run typecheck
 npm run lint
 npm test                                  # jest: ios, android and web projects
 APP_ENV=development npm run export:web    # expo export --platform web
+npm run check:tokens                      # design tokens match the generated file
 ```
+
+To develop without pairing, start a development build with `EXPO_PUBLIC_GAIA_URL` set to a
+GAIA backend you run yourself (`python -m gaia.ui.server`); the pairing screen is skipped.
 
 Layout: `src/app` (thin routes), `src/features` (one folder per screen),
 `src/api` (`GaiaClient`), `src/data` (TanStack Query), `src/state` (zustand),
@@ -53,10 +58,7 @@ Metro; only a change that moves the native fingerprint needs a new build.
   reports at `/api/devices/me/routes`. A pairing code may name home addresses
   only. `EXPO_PUBLIC_GAIA_RELAY_DOMAIN` builds in the relay's domain; unset, the
   app refuses every relay address.
-- **`GAIA_APS_ENVIRONMENT`** sets the push entitlement: unset follows `APP_ENV`,
-  `development` or `production` forces one, and `none` leaves push out, for a
-  cable sideload whose development profile and App ID have no push capability.
-- **Android C++ compiles** run at most `AGENT_HOST_HEAVY_JOBS` (default 4) at a
+- **Android C++ compiles** run at most `GAIA_BUILD_JOBS` (default 4) at a
   time in each module.
 - **iOS builds with fastlane:** `bundle exec fastlane ios check` (an unsigned
   simulator build), `ios device` and `ios sideload` (a signed build on your own

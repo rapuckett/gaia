@@ -87,14 +87,14 @@ function useFixtures(): Fixture[] {
                         tool: 'edit_file',
                         toolLabel: 'editing file',
                         toolArgs: {
-                            file_path: '/Users/alex/Projects/gaia/.local/audit/acceptance/tool-target-edit.txt',
+                            file_path: '~/Projects/notes/plan.txt',
                             old_content: 'line one\nline two\nline three\n',
                             new_content: 'line one\nline two, edited with a much longer line that has to scroll sideways inside its box\nline three\nan added line\n',
                             _risk_note:
-                                "/Users/alex/Projects/gaia/.local/audit/acceptance/tool-target-edit.txt is outside this chat's folders. Allowing this also lets GAIA use that file for the rest of the chat.",
+                                "~/Projects/notes/plan.txt is outside this chat's folders. Allowing this also lets GAIA use that file for the rest of the chat.",
                         },
-                        summary: '/Users/alex/Projects/gaia/.local/audit/acceptance/tool-target-edit.txt',
-                        alwaysScope: 'edit_file on tool-target-edit.txt',
+                        summary: '~/Projects/notes/plan.txt',
+                        alwaysScope: 'edit_file on plan.txt',
                     }),
                 },
             },

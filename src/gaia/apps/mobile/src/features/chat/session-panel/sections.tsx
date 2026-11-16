@@ -23,7 +23,7 @@ export interface SectionProps {
 }
 
 export interface SectionEntry {
-    id: PanelSectionId;
+    id: PanelSectionId | 'environment';
     /** 'details' sections sit under the "Details" heading, shown above the first one. */
     group?: 'details';
     render(props: SectionProps): ReactNode;

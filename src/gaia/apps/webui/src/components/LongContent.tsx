@@ -1,7 +1,7 @@
 // Copyright(C) 2025-2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-/** Collapse rules for long user messages, code blocks and step outputs. The full text stays rendered and copyable. */
+/** Collapse rules for long user messages, code blocks and step outputs. Copy always takes the whole text. */
 
 import React, { useId, useState } from 'react';
 import { ChevronDown, ChevronUp } from 'lucide-react';
@@ -11,7 +11,8 @@ import './LongContent.css';
 
 export {
     USER_COLLAPSE_LINES, USER_COLLAPSE_CHARS, CODE_COLLAPSE_LINES, CODE_PREVIEW_LINES,
-    STEP_COLLAPSE_LINES, STEP_COLLAPSE_CHARS, lineCount, countLines, isLongUserMessage, sizeLabel,
+    STEP_COLLAPSE_LINES, STEP_COLLAPSE_CHARS, USER_EXCERPT_LINES, USER_EXCERPT_LINE_CHARS, lineCount, countLines,
+    isLongUserMessage, messageExcerpt, sizeLabel,
 } from '../utils/longContent';
 
 interface ExpandToggleProps {
