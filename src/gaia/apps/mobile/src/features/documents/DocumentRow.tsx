@@ -121,7 +121,7 @@ export function DocumentRow({ document: doc, progress, startedAt, now, retrying,
                 <Stack paddingX="lg" paddingY="xs">
                     <ProgressLine
                         value={pct === null ? undefined : pct / 100}
-                        label={progress ? `${progressLabel(progress, t)}${pct === null ? '' : ` · ${isolate(String(pct), 'ltr')}%`}` : indexingText}
+                        label={progress ? `${progressLabel(progress, t)}${pct === null ? '' : ` · ${isolate(`${pct}%`, 'ltr')}`}` : indexingText}
                     />
                 </Stack>
             ) : null}

@@ -4,10 +4,12 @@
 import * as Clipboard from 'expo-clipboard';
 import { useEffect, useRef, useState } from 'react';
 
-import { CODE_COLLAPSE_LINES, CODE_PREVIEW_LINES, countLines, lineCount } from '@webui/utils/longContent';
+import { CODE_COLLAPSE_LINES, CODE_PREVIEW_LINES, countLines } from '@webui/utils/longContent';
 import { useT } from '@/i18n/useT';
 import { HScroll, Icon, Pressable, Row, Stack, Surface, Text } from '@/ui';
 import { Check, ChevronDown, ChevronUp, Copy } from '@/ui/icons';
+
+import { expandLabel } from './expandLabel';
 
 const COPIED_MS = 2000;
 
@@ -74,13 +76,13 @@ export function CodeBlock({ lang, code, streaming }: { lang: string; code: strin
                     <Pressable
                         onPress={() => setExpanded((v) => !v)}
                         aria-expanded={expanded}
-                        accessibilityLabel={expanded ? t('code.collapse') : t('code.expand', { size: lineCount(t, lines) })}
+                        accessibilityLabel={expanded ? t('code.collapse') : expandLabel(t, lines)}
                     >
                         <Stack paddingX="md">
                             <Row gap="xs" dir="ltr">
                                 <Icon icon={expanded ? ChevronUp : ChevronDown} size="sm" tone="secondary" />
                                 <Text role="caption" tone="secondary">
-                                    {expanded ? t('code.collapse') : t('code.expand', { size: lineCount(t, lines) })}
+                                    {expanded ? t('code.collapse') : expandLabel(t, lines)}
                                 </Text>
                             </Row>
                         </Stack>

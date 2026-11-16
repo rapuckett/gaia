@@ -36,6 +36,11 @@ const mount = (Route: () => React.JSX.Element) =>
     );
 
 describeNative('composer and retry scenes', () => {
+    // Cold-loading the route graph on the first test outlasts its 5 s limit under load.
+    beforeAll(() => {
+        composerRoute();
+        messagesRoute();
+    }, 60000);
     beforeEach(() => sheetStore.reset());
 
     it('attachPaste opens the attach menu with Paste image', async () => {

@@ -49,6 +49,11 @@ const mount = (Route: () => React.JSX.Element) =>
     );
 
 describeNative('card, connector and undo scenes', () => {
+    beforeAll(() => {
+        route('messages');
+        route('connectors');
+        route('permission');
+    }, 60000);
     beforeEach(() => sheetStore.reset());
 
     it('connector-retry offers Ask again once the account is connected', async () => {
