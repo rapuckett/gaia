@@ -89,7 +89,7 @@ export function filePreviewScene(scene: FilePreviewScene) {
         },
     });
     if (scene === 'refused') {
-        client.getFilePreview = () => Promise.reject(new GaiaApiError(403, "A paired device can open files only from the folders its chat was given. d4-demo-trip-plan.txt isn't in this chat's folders: add its folder to the chat on your PC, or open it on your PC."));
+        client.getFilePreview = () => Promise.reject(new GaiaApiError(403, "A paired device can open files only from the folders its chat was given. d4-demo-trip-plan.txt isn't in this chat's folders: add its folder to the chat on your PC, or open it on your PC.", undefined, undefined, { code: 'not_in_chat_folders', name: 'd4-demo-trip-plan.txt' }));
     }
     if (scene === 'loading') client.getFilePreview = () => new Promise(() => {});
     return client;

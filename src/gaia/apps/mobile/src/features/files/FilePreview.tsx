@@ -15,6 +15,7 @@ import { describeError, useT } from '@/i18n/useT';
 import { Button, Ltr, Notice, ScrollBox, Row, Sheet, Spinner, Stack, Text } from '@/ui';
 
 import { cachePcFile, extensionOf, type CachedFile } from './cache';
+import { fileRefusalText } from './fileRefusal';
 import { usePreviewStore, type PreviewTarget } from './previewStore';
 
 const IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp']);
@@ -130,7 +131,7 @@ export function Body({ target, state }: { target: PreviewTarget; state: State })
     }
     if (state.status === 'error') {
         // The PC's refusal is its own plain sentence with a next step, not an error on the phone.
-        if (state.error instanceof GaiaApiError && state.error.status === 403) return <Notice tone="info" message={state.error.detail} testID="file-refused" />;
+        if (state.error instanceof GaiaApiError && state.error.status === 403) return <Notice tone="info" message={fileRefusalText(state.error, t)} testID="file-refused" />;
         return <Notice tone="danger" message={describeError(state.error, t)} />;
     }
     const { loaded } = state;

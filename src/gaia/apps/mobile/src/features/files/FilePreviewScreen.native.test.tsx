@@ -10,6 +10,7 @@ import type { FilePreviewResponse } from '@/api/client.types';
 import { GaiaApiError } from '@/api/errors';
 import { createFakeClient } from '@/api/fake';
 import { GaiaClientProvider } from '@/data/GaiaClientProvider';
+import { useLocaleStore } from '@/state/locale';
 import { ThemeProvider } from '@/ui';
 
 import { FilePreviewScreen } from './FilePreviewScreen';
@@ -75,5 +76,19 @@ describeNative('FilePreviewScreen', () => {
         await mount('/x.txt', client);
         expect(await screen.findByText("x.txt isn't in this chat's folders: add its folder to the chat on your PC.")).toBeTruthy();
         expect(screen.queryByText(/403|answered with an error/)).toBeNull();
+    });
+
+    it('shows the refusal in Arabic when the PC sends its code', async () => {
+        useLocaleStore.setState({ locale: 'ar' });
+        try {
+            const client = createFakeClient({ filePreviews: previews });
+            client.getFilePreview = () =>
+                Promise.reject(new GaiaApiError(403, "x.txt isn't in this chat's folders.", undefined, undefined, { code: 'not_in_chat_folders', name: 'x.txt' }));
+            await mount('/x.txt', client);
+            expect(await screen.findByText(/ليس في مجلدات هذه المحادثة/)).toBeTruthy();
+            expect(screen.queryByText(/^x\.txt isn't in this chat's folders\.$/)).toBeNull();
+        } finally {
+            useLocaleStore.setState({ locale: null });
+        }
     });
 });
