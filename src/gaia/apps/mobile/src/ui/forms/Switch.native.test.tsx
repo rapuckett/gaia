@@ -25,7 +25,7 @@ function nativeLayout(isRTL: boolean, swap: boolean) {
 
 async function offKnobSide() {
     await render(<Switch value={false} onValueChange={() => undefined} label="Show hidden" testID="sw" />, { wrapper: wrap });
-    const knob = screen.getByTestId('sw').findAll((n) => typeof n.type === 'string' && StyleSheet.flatten(n.props.style)?.position === 'absolute')[0];
+    const knob = screen.getByTestId('sw').queryAll((n) => typeof n.type === 'string' && StyleSheet.flatten(n.props.style)?.position === 'absolute')[0];
     const style = StyleSheet.flatten(knob.props.style);
     return 'left' in style ? 'left' : 'right';
 }

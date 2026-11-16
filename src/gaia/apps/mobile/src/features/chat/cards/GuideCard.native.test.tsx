@@ -37,14 +37,14 @@ describeNative('guide card', () => {
     it('rescales amounts with the servings stepper and converts them with the unit switch', async () => {
         await show('guide', RECIPE);
         expect(screen.getByText(/2 cups/)).toBeTruthy();
-        expect(screen.getByText(/2 large eggs/)).toBeTruthy();
+        expect(screen.getByText(/2\u2069 large eggs/)).toBeTruthy();
 
         await fireEvent.press(screen.getByLabelText(t('cards.moreServings')));
         await fireEvent.press(screen.getByLabelText(t('cards.moreServings')));
         await fireEvent.press(screen.getByLabelText(t('cards.moreServings')));
         await fireEvent.press(screen.getByLabelText(t('cards.moreServings')));
         expect(screen.getByText(/4 cups/)).toBeTruthy();
-        expect(screen.getByText(/4 large eggs/)).toBeTruthy();
+        expect(screen.getByText(/4\u2069 large eggs/)).toBeTruthy();
 
         await fireEvent.press(screen.getByLabelText(t.bare('cards.system.metric')));
         expect(screen.queryByText(/4 cups/)).toBeNull();

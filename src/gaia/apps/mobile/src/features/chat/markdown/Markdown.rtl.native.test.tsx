@@ -3,7 +3,6 @@
 
 import { render, screen } from '@testing-library/react-native';
 import { Platform, StyleSheet } from 'react-native';
-import type { ReactTestInstance } from 'react-test-renderer';
 
 import { useLocaleStore } from '@/state/locale';
 import { ThemeProvider } from '@/ui';
@@ -14,8 +13,10 @@ jest.mock('expo-clipboard', () => ({ setStringAsync: jest.fn(() => Promise.resol
 
 const describeNative = Platform.OS === 'web' ? describe.skip : describe;
 
-function rowDirection(node: ReactTestInstance): unknown {
-    for (let n: ReactTestInstance | null = node; n; n = n.parent) {
+type Host = ReturnType<typeof screen.getByText>;
+
+function rowDirection(node: Host): unknown {
+    for (let n: Host | null = node; n; n = n.parent) {
         const dir = StyleSheet.flatten(n.props.style)?.direction;
         if (dir) return dir;
     }
