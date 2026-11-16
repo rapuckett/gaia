@@ -14,6 +14,7 @@ import type { MemoryPaneProps } from '../../tabs';
 import { SectionEmpty, SectionTitle } from '../SectionTitle';
 import { SectionFailed } from '../SectionFailed';
 import { ConversationTurns } from './ConversationTurns';
+import { ContentText } from '../../ContentText';
 
 /** The web's counts: the sessions listed, and the turns a search returns. */
 const SESSION_LIMIT = 20;
@@ -56,9 +57,9 @@ export function ConversationBrowser({ onOpenChat }: Pick<MemoryPaneProps, 'onOpe
                                     {label(turn.session_id)}
                                 </Text>
                             </Row>
-                            <Text dir="auto" numberOfLines={4}>
+                            <ContentText numberOfLines={4}>
                                 {turn.content}
-                            </Text>
+                            </ContentText>
                             <Text role="caption" tone="muted">
                                 {formatRelativeDate(turn.timestamp, t)}
                             </Text>
@@ -86,9 +87,9 @@ export function ConversationBrowser({ onOpenChat }: Pick<MemoryPaneProps, 'onOpe
                                 {session.consolidated ? <Badge label={t.bare('mem.conv.consolidated')} accessibilityLabel={t('mem.conv.consolidated')} /> : null}
                             </Row>
                             {session.first_message ? (
-                                <Text dir="auto" tone="secondary" numberOfLines={3}>
+                                <ContentText tone="secondary" numberOfLines={3}>
                                     {session.first_message}
-                                </Text>
+                                </ContentText>
                             ) : null}
                             <Row gap="xs" wrap>
                                 <Text role="caption" tone="muted">
