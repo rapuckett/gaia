@@ -160,7 +160,7 @@ export function ModelsScreen({ ctx, close }: { ctx: SetupStepContext; close: () 
                     onToggle={(id, on) => setSelection(toggle(selection, catalog, id, on))}
                     onDefaultChat={(id) => setSelection(chooseChat(selection, catalog, id))}
                 />
-                <Button variant="ghost" label={t('setup.models.resetRecommended')} disabled={locked} onPress={() => setSelection(recommendedSelection(plan))} />
+                <Button variant="ghost" wrap label={t('setup.models.resetRecommended')} disabled={locked} onPress={() => setSelection(recommendedSelection(plan))} />
             </Stack>
 
             <SelectionSummary plan={plan} selection={selection} />

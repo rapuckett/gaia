@@ -25,11 +25,13 @@ export interface DisclosureProps {
     /** The desktop's settings group: a bordered box on the primary surface. */
     boxed?: boolean;
     testID?: string;
+    /** Let a long title take more lines instead of truncating. */
+    wrapTitle?: boolean;
     /** Goes on the header press target, so a device flow can tap the toggle. */
     headerTestID?: string;
 }
 
-export function Disclosure({ title, open, onToggle, children, leading, trailing, hint, count, boxed, testID, headerTestID }: DisclosureProps) {
+export function Disclosure({ title, open, onToggle, children, leading, trailing, hint, count, boxed, testID, wrapTitle, headerTestID }: DisclosureProps) {
     const { colors, radius, space } = useTheme();
     const header = (
         <Pressable onPress={onToggle} accessibilityLabel={title} accessibilityState={{ expanded: open }} testID={headerTestID}>
@@ -38,7 +40,7 @@ export function Disclosure({ title, open, onToggle, children, leading, trailing,
                     <Icon icon={open ? ChevronDown : ChevronRight} size="sm" tone="secondary" />
                     {leading}
                     <Stack flex={1} gap="xs">
-                        <Text role="ui" weight="semibold" dir="auto" numberOfLines={hint ? undefined : 1}>
+                        <Text role="ui" weight="semibold" dir="auto" numberOfLines={hint || wrapTitle ? undefined : 1}>
                             {title}
                         </Text>
                         {hint ? (
