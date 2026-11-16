@@ -287,11 +287,13 @@ def run(host: str = HOST) -> None:
     configure()
     import uvicorn
 
+    from gaia.env import expose_shipped_gaia
     from gaia.login_path import apply_login_path
     from gaia.tls import use_os_trust_store
 
     use_os_trust_store()
     apply_login_path()
+    expose_shipped_gaia()
 
     from gaia.daemon.custody.auth import CustodyAuth
     from gaia.daemon.custody.store import CustodyStore
