@@ -9,6 +9,8 @@ import { ChoiceList, type ChoiceOption } from '../feedback/ChoiceList';
 import { ChevronDown } from '../icons';
 import { Row } from '../layout/layout';
 import { Sheet } from '../overlays/Sheet';
+import { FirstLine } from '../text/FirstLine';
+import { useLargeText } from '../theme/a11y';
 import { useTheme } from '../theme/ThemeProvider';
 import { Text } from '../text/Text';
 
@@ -27,6 +29,7 @@ export interface SelectProps {
 export function Select({ label, hideLabel, value, options, onChange, placeholder, disabled, testID }: SelectProps) {
     const { colors, radius, space } = useTheme();
     const [open, setOpen] = useState(false);
+    const largeText = useLargeText();
     const current = options.find((o) => o.value === value);
     const shown = current?.label ?? placeholder ?? '';
     return (
@@ -55,13 +58,15 @@ export function Select({ label, hideLabel, value, options, onChange, placeholder
                         justifyContent: 'center',
                     }}
                 >
-                    <Row gap="sm">
+                    <Row gap="sm" align={largeText ? 'start' : 'center'}>
                         <View style={{ flex: 1, minWidth: 0 }}>
                             <Text role="body" tone={current ? 'primary' : 'muted'} numberOfLines={2}>
                                 {shown}
                             </Text>
                         </View>
-                        <Icon icon={ChevronDown} size="sm" tone="muted" />
+                        <FirstLine role="body">
+                            <Icon icon={ChevronDown} size="sm" tone="muted" />
+                        </FirstLine>
                     </Row>
                 </View>
             </Pressable>

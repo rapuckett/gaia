@@ -10,6 +10,7 @@ import { MAX_MESSAGE_CHARS } from '@webui/utils/messageLimits';
 import { useT } from '@/i18n/useT';
 import { IconButton, Notice, Row, Stack, Surface, TextField } from '@/ui';
 import { ArrowUp, Square } from '@/ui/icons';
+import { INPUT_MAX_FONT_SCALE } from '@/ui/theme/a11y';
 
 import { AttachButton } from './AttachButton';
 import { AttachmentChips } from './AttachmentChips';
@@ -29,7 +30,7 @@ export interface ComposerProps {
     running?: boolean;
     /** Replaces the placeholder: `composer.queueNext` while running, else `composer.placeholder`. */
     placeholder?: string;
-    /** Why the box can't be used right now; shown as the hint and the placeholder. */
+    /** Why the box can't be used right now; shown as the hint under the box, and read aloud with the input. */
     disabledReason?: string;
     /** GAIA waits on a question: Send answers it instead of queueing. */
     answering?: boolean;
@@ -134,7 +135,8 @@ export function Composer({
     const sendLabel = answering ? t('composer.sendAnswer') : running && message ? t('composer.queue') : t('composer.send');
     const spoken = disabledReason ?? placeholderText ?? (running ? t('composer.queueNext') : t('composer.placeholder'));
     // A placeholder can't draw the muted English half, so it shows the Arabic alone; screen readers get both.
-    const [placeholder] = bracketParts(spoken);
+    // A blocked box leaves it empty: the hint line below carries the reason in full.
+    const placeholder = disabledReason ? '' : bracketParts(spoken)[0];
 
     return (
         <Stack gap="sm" padding="md">
@@ -166,6 +168,7 @@ export function Composer({
                         maxLines={MAX_LINES}
                         disabled={!!disabledReason}
                         bare
+                        maxFontSizeMultiplier={INPUT_MAX_FONT_SCALE}
                         testID="composer-input"
                     />
                     <Row gap="sm" align="center">

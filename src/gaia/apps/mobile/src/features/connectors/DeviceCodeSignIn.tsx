@@ -58,8 +58,7 @@ export function DeviceCodeSignIn({
     }
 }
 
-/** The code, its page and the wait, as the desktop's `.device-code-block`. */
-export function DeviceCodeBlock({ code }: { code: ConnectorDeviceAuthResponse }) {
+function DeviceCodeBlock({ code }: { code: ConnectorDeviceAuthResponse }) {
     const t = useT();
     const [copied, setCopied] = useState<'ok' | 'failed' | null>(null);
     const copy = () => Clipboard.setStringAsync(code.user_code).then(() => setCopied('ok'), () => setCopied('failed'));

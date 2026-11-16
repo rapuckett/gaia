@@ -15,12 +15,12 @@ import { View } from 'react-native';
  * Under a turn that failed because the model server took no connection: start GAIA's own
  * server, or look again. Switching to GAIA's own server is PC-only, so it is not offered here.
  */
-export function ModelServerDownNotice() {
+export function ModelServerDownNotice({ initialAsked = false }: { /** Dev gallery only: opens after "Check again" was pressed. */ initialAsked?: boolean } = {}) {
     const t = useT();
     const status = useLocalModelStatus(true);
     const restart = useRestartLocalModel();
     const { colors, radius, space } = useTheme();
-    const [asked, setAsked] = useState(false);
+    const [asked, setAsked] = useState(initialAsked);
 
     const s = status.data;
     const starting = restart.isPending || !!s?.restarting;

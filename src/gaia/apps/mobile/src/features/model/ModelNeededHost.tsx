@@ -17,13 +17,20 @@ import { Button, Notice, ProgressLine, Row, Sheet, Spinner, Stack, Text } from '
  * The prompt for a job whose model isn't on the PC: names the model, its size and source, and downloads it
  * on the PC. The message that needed it waits on the answer. Mount once, inside the providers.
  */
-export function ModelNeededHost() {
+export function ModelNeededHost({ initial }: { initial?: NeedPromptInitial } = {}) {
     const need = useModelNeededStore((s) => s.need);
     // A new prompt remounts, so a download and its errors never carry over from the last one.
-    return need ? <NeedPrompt key={`${need.job}:${need.model?.id ?? need.off}`} need={need} /> : null;
+    return need ? <NeedPrompt key={`${need.job}:${need.model?.id ?? need.off}`} need={need} initial={initial} /> : null;
 }
 
-function NeedPrompt({ need }: { need: ModelNeed }) {
+/** Dev gallery only: a prompt that opens mid-download or after a failure. */
+export interface NeedPromptInitial {
+    downloading?: boolean;
+    percent?: number | null;
+    error?: string | null;
+}
+
+function NeedPrompt({ need, initial }: { need: ModelNeed; initial?: NeedPromptInitial }) {
     const t = useT();
     const client = useGaiaClient();
     const settle = useModelNeededStore((s) => s.settle);
@@ -32,9 +39,9 @@ function NeedPrompt({ need }: { need: ModelNeed }) {
     const misses = useRef(0);
     // A closed or replaced prompt must not be answered by its download.
     const live = useRef(true);
-    const [percent, setPercent] = useState<number | null>(null);
-    const [downloading, setDownloading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
+    const [percent, setPercent] = useState<number | null>(initial?.percent ?? null);
+    const [downloading, setDownloading] = useState(initial?.downloading ?? false);
+    const [error, setError] = useState<string | null>(initial?.error ?? null);
     const [serverShort, setServerShort] = useState(false);
 
     const stop = useCallback(() => {

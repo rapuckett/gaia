@@ -7,6 +7,8 @@ import { Icon } from '../controls/Icon';
 import { Pressable } from '../controls/Pressable';
 import { ChevronDown, ChevronRight } from '../icons';
 import { Row, Stack } from '../layout/layout';
+import { FirstLine } from '../text/FirstLine';
+import { useLargeText } from '../theme/a11y';
 import { useTheme } from '../theme/ThemeProvider';
 import { Text } from '../text/Text';
 
@@ -31,14 +33,17 @@ export interface DisclosureProps {
 
 export function Disclosure({ title, open, onToggle, children, leading, trailing, hint, count, boxed, testID, headerTestID }: DisclosureProps) {
     const { colors, radius, space } = useTheme();
+    const largeText = useLargeText();
     const header = (
         <Pressable onPress={onToggle} accessibilityLabel={title} accessibilityState={{ expanded: open }} testID={headerTestID}>
             <View style={boxed ? { paddingHorizontal: space.md, paddingVertical: space.sm } : undefined}>
-                <Row gap="sm" align={hint ? 'start' : 'center'}>
-                    <Icon icon={open ? ChevronDown : ChevronRight} size="sm" tone="secondary" />
-                    {leading}
+                <Row gap="sm" align={hint || largeText ? 'start' : 'center'}>
+                    <FirstLine role="ui">
+                        <Icon icon={open ? ChevronDown : ChevronRight} size="sm" tone="secondary" />
+                    </FirstLine>
+                    {leading ? <FirstLine role="ui">{leading}</FirstLine> : null}
                     <Stack flex={1} gap="xs">
-                        <Text role="ui" weight="semibold" dir="auto" numberOfLines={hint ? undefined : 1}>
+                        <Text role="ui" weight="semibold" dir="auto">
                             {title}
                         </Text>
                         {hint ? (

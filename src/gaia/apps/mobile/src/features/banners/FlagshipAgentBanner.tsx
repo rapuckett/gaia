@@ -1,14 +1,14 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { useFlagshipAgent } from '@/data';
+import { useFlagshipAgent, type FlagshipInstallState } from '@/data';
 import { describeError, useT } from '@/i18n/useT';
 import { Notice } from '@/ui';
 
 /** Shown above a chat while the PC has no GAIA agent: says why chat can't start, and offers the install. */
-export function FlagshipAgentBanner() {
+export function FlagshipAgentBanner({ initialState }: { /** Dev gallery only. */ initialState?: FlagshipInstallState } = {}) {
     const t = useT();
-    const { missing, noBuild, state, install } = useFlagshipAgent();
+    const { missing, noBuild, state, install } = useFlagshipAgent(initialState);
     if (!missing) return null;
     if (noBuild) return <Notice tone="warning" message={t('agentNotice.noBuild')} testID="flagship-notice" />;
     if (state.kind === 'installing') {

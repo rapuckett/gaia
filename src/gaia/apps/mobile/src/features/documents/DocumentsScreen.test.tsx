@@ -50,7 +50,7 @@ describe('DocumentsScreen', () => {
         const documents = [doc('a', 'notes.txt', 'complete', 2048), doc('b', 'bad.pdf', 'failed', 1024)];
         await mount(createFakeClient({ documents: { documents, total: 2, total_chunks: 6, total_size_bytes: 3072 } as DocumentListResponse }));
         expect(await screen.findByText(/notes\.txt/)).toBeTruthy();
-        expect(screen.getByText(/^\u2066?1\u2069? document$/)).toBeTruthy();
+        expect(screen.getByText(/^\u2066?1\u2069? document · \u2066?3 KB\u2069?$/)).toBeTruthy();
         expect(screen.getByText(/couldn't be read/)).toBeTruthy();
         expect(screen.getByText(/3 KB/)).toBeTruthy();
         expect(screen.getByText(/go to your next new chat/)).toBeTruthy();
