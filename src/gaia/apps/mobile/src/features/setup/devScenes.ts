@@ -250,6 +250,15 @@ export const COMMON: FakeClientData = {
     },
 };
 
+const START_CARDS: NonNullable<FakeClientData['start']> = {
+    cards: [
+        { skill: 'research-report', title: 'Research a topic', note: 'A cited report from the web', prompt: 'Research: ', needs_input: true },
+        { skill: 'summarize', title: 'Summarize a document', note: 'The short version of a long file', prompt: 'Summarize my newest document.', needs_input: false },
+        { skill: 'file-ops', title: 'Tidy a folder', note: 'Sort files into sensible folders', prompt: 'Tidy my downloads folder.', needs_input: false },
+        { skill: 'check-in', title: 'Check in', note: 'Pick up where you left off', prompt: 'Good morning.', needs_input: false },
+    ],
+    working_folder: { path: '/home/you', name: 'you', gaia_folder: false, choosable: true },
+};
 type Step = 'check' | 'plan' | 'gpu' | 'models' | 'key' | 'download' | 'test' | 'ready';
 const scene = (step: Step, data: FakeClientData = {}): SetupScene => {
     const stage: SetupStage = step === 'gpu' || step === 'models' || step === 'key' ? 'plan' : step;
@@ -287,6 +296,7 @@ export const SETUP_SCENES: Record<string, SetupScene> = {
     'plan/disk-short': scene('plan', { setupPlan: PLAN_SHORT }),
     'plan/local-only': scene('plan', { providers: providers(true) }),
     'plan/long': scene('plan', { setupPlan: PLAN_LONG }),
+    'ready/cards': scene('ready', { setupStatus: RUN_READY, setupPlan: PLAN_DONE, start: START_CARDS }),
     'ready/default': scene('ready', { setupStatus: RUN_READY, setupPlan: PLAN_DONE }),
     'test/failed-agent': scene('test', { setupStatus: RUN_AGENT_FAILED }),
     'test/failed-broken': scene('test', { setupStatus: failedTests('broken', 'The model file looks damaged.') }),
@@ -300,3 +310,6 @@ export const SETUP_SCENES: Record<string, SetupScene> = {
 export function setupSceneClient(found: SetupScene): GaiaClient {
     return createFakeClient({ ...COMMON, ...found.data });
 }
+
+/** The wait before the setup check has answered; `?state=` of `/dev/boot`. */
+export const BOOT_STATES = ['starting', 'upgrading'] as const;
