@@ -52,6 +52,8 @@ const SESSIONS: Session[] = [
     chat('eval', 'Eval run 42', 7, { kind: 'eval' }),
 ];
 
+const BACKGROUND_CHATS = SESSIONS.filter((s) => ['today', 'pin', 'sched', 'eval'].includes(s.id));
+
 const MESSAGES: Record<string, Message[]> = {
     today: [message(1, 'today', 'Please summarize the revenue section of the Q3 report')],
     yday: [message(2, 'yday', 'Any ideas for a quick weekend recipe with lentils?')],
@@ -104,8 +106,8 @@ export const DRAWER_SCENES = {
     'error-rename': scene({ error: { kind: 'rename', error: new GaiaApiError(500, 'Could not rename the chat.') } }),
     'error-pin': scene({ error: { kind: 'pin', error: new Error('') } }),
     'error-mark-read': scene({ error: { kind: 'markRead', error: new Error('The PC did not answer') } }),
-    'background-hidden': scene({ automatedShown: false }),
-    'background-shown': scene({ automatedShown: true }),
+    'background-hidden': scene({ automatedShown: false, data: { sessions: BACKGROUND_CHATS } }),
+    'background-shown': scene({ automatedShown: true, data: { sessions: BACKGROUND_CHATS } }),
     'download-chip': scene({ data: { setupStatus: DOWNLOADING } }),
     'download-failed': scene({ data: { setupStatus: FAILED } }),
     'notifications-badge': scene({ unreadNotifications: 3 }),
