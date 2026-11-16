@@ -10,24 +10,24 @@ import { useState } from 'react';
 import { useGpuMemory, useSelectModel, useStartScreen } from '@/data';
 import { shortModelName } from '@/features/new-chat/warmUp';
 import { describeError, useLocaleCode, useT } from '@/i18n/useT';
-import { Button, Card, Notice, Row, Stack, Text } from '@/ui';
+import { Button, Card, Notice, Stack, Text } from '@/ui';
 
 import { SetupFooter } from '../SetupFooter';
 import type { SetupStepContext } from '../SetupScreen';
 import { readyView, starterCards, summaryRows, type SummaryRow } from './readyView';
 
-/** One summary line's label and what it says. */
-function summaryText(row: SummaryRow, t: ReturnType<typeof useT>, locale: string): { label: string; value: string; warn?: boolean } {
+/** One summary line's label and what it says; `name` marks plain model names, which keep their own direction. */
+function summaryText(row: SummaryRow, t: ReturnType<typeof useT>, locale: string): { label: string; value: string; warn?: boolean; name?: boolean } {
     const gb = (n: number) => ltrIn(locale, formatSize(n));
     switch (row.kind) {
         case 'chat':
-            return { label: t('setup.ready.chat'), value: row.npu ? `${row.model} (${t('setup.models.npu')})` : row.model };
+            return { label: t('setup.ready.chat'), value: row.npu ? `${row.model} (${t('setup.models.npu')})` : row.model, name: !row.npu };
         case 'vision':
-            return { label: t('setup.ready.vision'), value: row.downloaded ? row.model : t('setup.ready.visionOff', { name: row.model }) };
+            return { label: t('setup.ready.vision'), value: row.downloaded ? row.model : t('setup.ready.visionOff', { name: row.model }), name: row.downloaded };
         case 'documents':
-            return { label: t('setup.ready.documents'), value: row.model };
+            return { label: t('setup.ready.documents'), value: row.model, name: true };
         case 'notInstalled':
-            return { label: t('setup.ready.notInstalled'), value: row.models.join(', ') };
+            return { label: t('setup.ready.notInstalled'), value: row.models.join(', '), name: true };
         case 'gpuRestart':
             return {
                 label: t('setup.ready.gpu'),
@@ -73,16 +73,14 @@ export function ReadyStep({ ctx }: { ctx: SetupStepContext }) {
                 </Text>
             ) : null}
             {!view.cloud ? (
-                <Stack gap="sm">
+                <Stack gap="md">
                     {summaryRows(ctx.plan, view.answering, gpu).map((row) => {
-                        const { label, value, warn } = summaryText(row, t, locale);
+                        const { label, value, warn, name } = summaryText(row, t, locale);
                         return (
-                            <Row key={row.kind} gap="md" align="start" justify="between">
+                            <Stack key={row.kind} gap="xs">
                                 <Text role="label" tone="secondary">{label}</Text>
-                                <Stack flex={1}>
-                                    <Text tone={warn ? 'warning' : 'primary'} dir="auto">{value}</Text>
-                                </Stack>
-                            </Row>
+                                <Text tone={warn ? 'warning' : 'primary'} dir={name ? 'ltr' : 'auto'} testID={`ready-row-${row.kind}`}>{value}</Text>
+                            </Stack>
                         );
                     })}
                 </Stack>
