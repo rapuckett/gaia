@@ -231,8 +231,9 @@ def expose_shipped_gaia(
     A desktop app launched from Finder, the packaged Windows app and an
     unactivated venv all start GAIA with a PATH that lacks its own ``gaia``,
     so skills that run it (automations) refuse to load. *env* defaults to
-    ``os.environ``. A no-op when ``gaia`` already resolves on that PATH or
-    :func:`_own_gaia_folder` finds none; otherwise the folder is appended,
+    ``os.environ``. A no-op when ``gaia`` already resolves on that PATH (with
+    a warning when it is another install's) or :func:`_own_gaia_folder`
+    finds none; otherwise the folder is appended,
     never prepended, so it shadows no tool the user already has (a venv's
     ``bin`` also holds ``python`` and ``pip``). Changes and returns *env*.
     """
@@ -241,15 +242,25 @@ def expose_shipped_gaia(
     # Windows keeps one PATH under any spelling; reuse the one *env* has.
     key = next((k for k in env if k.upper() == "PATH"), "PATH")
     current = env.get(key, "")
-    if shutil.which("gaia", path=current):
-        return env
     folder = _own_gaia_folder()
+    found = shutil.which("gaia", path=current)
+    from gaia.logger import get_logger  # pylint: disable=import-outside-toplevel
+
+    if found:
+        own = shutil.which("gaia", path=str(folder)) if folder else None
+        if own and Path(found).resolve() != Path(own).resolve():
+            get_logger(__name__).warning(
+                "Skills will run the gaia at %s, which is first on PATH, not "
+                "this install's %s; if their versions differ, automations may "
+                "fail or behave differently.",
+                found,
+                own,
+            )
+        return env
     if folder is None:
         return env
     entries = [e for e in current.split(os.pathsep) if e]
     env[key] = os.pathsep.join([*entries, str(folder)])
-    from gaia.logger import get_logger  # pylint: disable=import-outside-toplevel
-
     get_logger(__name__).info("Added GAIA's own CLI folder to PATH: %s", folder)
     return env
 

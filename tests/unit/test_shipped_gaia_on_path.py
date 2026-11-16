@@ -88,6 +88,29 @@ def test_untouched_when_gaia_already_resolves(frozen_app, tmp_path):
     assert env == before
 
 
+def test_quiet_when_its_own_gaia_is_already_first(frozen_app, caplog):
+    env = {"PATH": str(frozen_app.parent)}
+    with caplog.at_level("WARNING", logger="gaia.env"):
+        gaia_env.expose_shipped_gaia(env)
+    assert env == {"PATH": str(frozen_app.parent)}
+    assert not [r for r in caplog.records if r.levelname == "WARNING"]
+
+
+def test_warns_when_another_installs_gaia_is_first(frozen_app, tmp_path, caplog):
+    other = tmp_path / "old-pip" / "Scripts"
+    other.mkdir(parents=True)
+    (other / GAIA_NAME).write_bytes(b"")
+    (other / GAIA_NAME).chmod(0o755)
+    env = {"PATH": str(other)}
+    with caplog.at_level("WARNING", logger="gaia.env"):
+        gaia_env.expose_shipped_gaia(env)
+    assert env == {"PATH": str(other)}
+    warning = next(r.getMessage() for r in caplog.records if r.levelname == "WARNING")
+    assert str(other / GAIA_NAME) in warning
+    assert str(frozen_app) in warning
+    assert "versions differ" in warning
+
+
 def test_an_empty_path_gets_only_the_core(frozen_app):
     env: dict = {}
     gaia_env.expose_shipped_gaia(env)
