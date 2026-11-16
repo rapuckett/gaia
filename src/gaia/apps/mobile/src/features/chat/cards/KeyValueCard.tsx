@@ -8,6 +8,7 @@ import { Stack, Surface, Text } from '@/ui';
 
 import { TruncationNote } from './TruncationNote';
 import { UnsupportedCard } from './UnsupportedCard';
+import { valueDir } from './valueDir';
 
 export function KeyValueCard({ data }: { data: unknown }) {
     const t = useT();
@@ -24,10 +25,10 @@ export function KeyValueCard({ data }: { data: unknown }) {
                     const value = scalarText(item.value);
                     return (
                         <Stack key={i} gap="xs" accessibilityLabel={t.bare('mobileApp.render.keyValue', { key: item.key, value })}>
-                            <Text role="caption" tone="secondary" dir="auto">
+                            <Text role="caption" tone="secondary" dir={valueDir(item.key)}>
                                 {item.key}
                             </Text>
-                            <Text role="label" dir="auto" selectable>
+                            <Text role="label" dir={valueDir(value)} selectable>
                                 {value}
                             </Text>
                         </Stack>

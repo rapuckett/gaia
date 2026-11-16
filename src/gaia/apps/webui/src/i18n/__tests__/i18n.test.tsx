@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { enMessages } from '../locales/en';
 import { LOCALES, getLocale, localeOptionLabel, ref, setVariantPrefix, stripIsolates, translate, type MessageKey } from '../registry';
 import { PALETTES } from '../../utils/palette';
+import { dateLocale } from '../translator';
 import { translator, useT } from '../useT';
 import { readLocale, useChatStore } from '../../stores/chatStore';
 import { readsAs } from '../../test/readsAs';
@@ -174,5 +175,28 @@ describe('useT and the language setting', () => {
 
     it('names every palette in English exactly as the palette list does', () => {
         for (const p of PALETTES) expect(translate('en', `palette.${p.id}` as MessageKey)).toBe(p.name);
+    });
+});
+
+describe('dateLocale for English', () => {
+    const stubRegion = (locale: string) => {
+        const real = Intl.DateTimeFormat;
+        vi.spyOn(Intl, 'DateTimeFormat').mockImplementation(((...args: ConstructorParameters<typeof Intl.DateTimeFormat>) => {
+            const f = new real(...args);
+            return { format: f.format.bind(f), resolvedOptions: () => ({ ...f.resolvedOptions(), locale }) };
+        }) as unknown as typeof Intl.DateTimeFormat);
+    };
+    afterEach(() => vi.restoreAllMocks());
+
+    it('names months in English on an Arabic region', () => {
+        stubRegion('ar-EG');
+        const locale = dateLocale(translator('en'));
+        expect(locale).toBe('en');
+        expect(new Date(Date.UTC(2026, 7, 18, 12)).toLocaleDateString(locale, { month: 'long', timeZone: 'UTC' })).toBe('August');
+    });
+
+    it('keeps the English region variant', () => {
+        stubRegion('en-GB');
+        expect(dateLocale(translator('en'))).toBeUndefined();
     });
 });

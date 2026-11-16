@@ -72,7 +72,7 @@ export function SkillsBody({ onTry }: { onTry: (name: string, prompt: string) =>
                 <Disclosure title={t('settings.model.howItWorks')} open={howOpen} onToggle={() => setHowOpen(!howOpen)}>
                     <Text role="caption" tone="muted">{t('settings.skills.how', SKILLS_HOW_PARAMS)}</Text>
                 </Disclosure>
-                <Button label={t('settings.skills.link.title')} variant="secondary" full onPress={() => setAdding(true)} />
+                <Button label={t('settings.skills.link.title')} variant="secondary" full onPress={() => setAdding(true)} testID="skills-add" />
                 {skills.error ? (
                     <ErrorState title={describeError(skills.error, t)} onRetry={() => void skills.refetch()} />
                 ) : skills.isPending ? (

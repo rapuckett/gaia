@@ -1,7 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { useState } from 'react';
+import { createContext, useContext, useState } from 'react';
 
 import { isDownloading } from '@webui/components/modelMeta';
 import { measuredText, modelFacts, RANK_NOTES } from '@webui/utils/modelList.core';
@@ -28,10 +28,13 @@ export interface ModelRowProps {
     onNpuRecheck: () => void;
 }
 
+/** Dev scenes only: the id of the model whose Details open expanded. */
+export const SeedOpenDetails = createContext<string | null>(null);
+
 /** One model: its name and chips, the long facts behind Details, and its one action. */
 export function ModelRow({ model: m, label, current, remote, busy, onUse, onDownload, onRemove, onNpuRecheck }: ModelRowProps) {
     const t = useT();
-    const [detailsOpen, setDetailsOpen] = useState(false);
+    const [detailsOpen, setDetailsOpen] = useState(useContext(SeedOpenDetails) === m.id);
     const progress = isDownloading(m) ? m.download_progress : null;
     const facts = modelFacts(t, m);
     const hasDetails = !!(m.display_name || facts || m.evidence || (m.custom && m.source_url));
