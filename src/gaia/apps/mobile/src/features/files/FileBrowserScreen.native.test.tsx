@@ -20,9 +20,9 @@ const t = translator('en');
 jest.mock('expo-constants', () => ({ __esModule: true, default: { expoConfig: { version: 'test' } } }));
 jest.mock('expo-image', () => ({ Image: () => null }));
 
-function mount(onAsk: (prompt: string) => boolean) {
+function mount(onAsk: (prompt: string) => boolean, scene: 'folder' | 'askPartial' = 'folder') {
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    const client = fileBrowserScene('folder');
+    const client = fileBrowserScene(scene);
     const wrap = ({ children }: { children: ReactNode }) => (
         <QueryClientProvider client={queryClient}>
             <GaiaClientProvider client={client}>
@@ -32,7 +32,7 @@ function mount(onAsk: (prompt: string) => boolean) {
             </GaiaClientProvider>
         </QueryClientProvider>
     );
-    return render(<FileBrowserScreen chatId="chat-1" onClose={() => {}} onAsk={onAsk} initial={FILE_BROWSER_START.folder} />, { wrapper: wrap });
+    return render(<FileBrowserScreen chatId="chat-1" onClose={() => {}} onAsk={onAsk} initial={FILE_BROWSER_START[scene]} />, { wrapper: wrap });
 }
 
 const describeNative = Platform.OS === 'web' ? describe.skip : describe;
@@ -51,5 +51,13 @@ describeNative('FileBrowserScreen selection bar', () => {
         fireEvent.press(screen.getByLabelText(t('fileBrowser.askGaia')));
 
         await waitFor(() => expect(onAsk).toHaveBeenCalledWith(t('mobileApp.files.askOne', { name: 'q3-board.pdf' })));
+    });
+
+    it('stays on the screen and says how many files were left out when some fail', async () => {
+        const onAsk = jest.fn(() => true);
+        await mount(onAsk, 'askPartial');
+        expect(await screen.findByText(t.plural('fileBrowser.someFailed', 1))).toBeTruthy();
+        expect(onAsk).not.toHaveBeenCalled();
+        expect(screen.getByText(t.plural('fileBrowser.selected', 1))).toBeTruthy();
     });
 });
