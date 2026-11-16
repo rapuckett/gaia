@@ -34,7 +34,7 @@ export function AnswerFooter({ latencyMs, stats, ended }: AnswerFooterProps) {
                 </Text>
             ) : null}
             {summary || exact.length > 0 || route?.model ? (
-                <Disclosure title={summary ?? t('answer.details')} open={open} onToggle={() => setOpen((v) => !v)} testID="answer-footer">
+                <Disclosure title={summary ?? t('answer.details')} open={open} onToggle={() => setOpen((v) => !v)} testID="answer-footer" headerTestID="answer-footer-toggle">
                     <Stack gap="xs">
                         {route?.model ? (
                             <Text role="caption" tone="muted">

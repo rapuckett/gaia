@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import type { ReactNode } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
@@ -39,7 +39,7 @@ describe('ModelRestoreNotice', () => {
         expect(await screen.findByText('Could not restore Claude.')).toBeTruthy();
         fireEvent.press(screen.getByText(t('startup.pickModel')));
         expect(onPick).toHaveBeenCalledTimes(1);
-        expect(screen.queryByText('Could not restore Claude.')).toBeNull();
+        await waitFor(() => expect(screen.queryByText('Could not restore Claude.')).toBeNull());
     });
 
     it('a restore that worked says so without a Pick a model action', async () => {

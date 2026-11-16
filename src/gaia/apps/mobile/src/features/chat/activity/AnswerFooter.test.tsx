@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import type { InferenceStats } from '@webui/types';
-import { render, screen } from '@testing-library/react-native';
+import { fireEvent, render, screen } from '@testing-library/react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { translator } from '@/i18n/useT';
@@ -26,7 +26,8 @@ describe('AnswerFooter hybrid route', () => {
     it('names the model the router picked, with its reason one tap away', async () => {
         await mount({ seconds: 4, route: { model: 'Qwen3.6-35B-A3B-GGUF', reason: 'Needs the larger model.' } });
         expect(screen.getByTestId('answer-route')).toBeTruthy();
-        expect(screen.getByText(t('msg.route', { reason: 'Needs the larger model.' }), { includeHiddenElements: true })).toBeTruthy();
+        fireEvent.press(screen.getByTestId('answer-footer-toggle'));
+        expect(await screen.findByText(t('msg.route', { reason: 'Needs the larger model.' }))).toBeTruthy();
     });
 
     it('hides the pick on a retried answer but still shows a degraded-route warning', async () => {
