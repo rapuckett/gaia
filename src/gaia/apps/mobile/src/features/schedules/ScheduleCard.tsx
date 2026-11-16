@@ -67,10 +67,10 @@ export function ScheduleCard({ schedule, now, runPending, onOpenChat, onRunNow, 
     const runs = history.data?.results ?? [];
     const historyShowsFailure = historyOpen && runs.some((r) => r.error);
     useEffect(() => {
-        if (!confirmDelete) return;
+        if (!confirmDelete || initialConfirmDelete) return; // a gallery-seeded confirm stays up for the shot
         const timer = setTimeout(() => setConfirmDelete(false), CONFIRM_DELETE_MS);
         return () => clearTimeout(timer);
-    }, [confirmDelete]);
+    }, [confirmDelete, initialConfirmDelete]);
 
     const described = describeSchedule(schedule.description_parts, t);
     const running = schedule.running === true || runPending;

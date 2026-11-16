@@ -11,10 +11,10 @@ import { GaiaClientProvider } from '@/data';
 import { MemoryScreen } from '@/features/memory';
 import { MEMORY_TABS } from '@/features/memory/tabs';
 import { ProfileDevContext } from '@/features/memory/profile/ProfileCard';
-import { memoryScene, profileSceneStart, type MemoryScene } from '@/features/memory/devScenes';
+import { memoryScene, profileSceneStart, sceneDefaultTab, type MemoryScene } from '@/features/memory/devScenes';
 import { ScreenBannerProvider, UIProvider } from '@/ui';
 
-const SCENES: readonly MemoryScene[] = ['on', 'off', 'loading', 'failed', 'actionFails', 'statsEmpty', 'statsManyTools', 'aboutEmpty', 'aboutFailed', 'aboutMany', 'goalsEmpty', 'goalsFailed', 'goalsStoreError', 'goalsStoreDamaged', 'knowledgeRich', 'knowledgeEmpty', 'knowledgeFailed', 'knowledgeMany', 'profileIdle', 'profileScanning', 'profileReview', 'profileSaved', 'profileInferring', 'profileInferenceReview', 'profileFailed', 'profileOff'];
+const SCENES: readonly MemoryScene[] = ['on', 'off', 'loading', 'failed', 'actionFails', 'statsEmpty', 'statsManyTools', 'aboutEmpty', 'aboutFailed', 'aboutMany', 'aboutShowMore', 'goalsEmpty', 'goalsFailed', 'goalsStoreError', 'goalsStoreDamaged', 'knowledgeRich', 'knowledgeEmpty', 'knowledgeFailed', 'knowledgeMany', 'profileIdle', 'profileScanning', 'profileReview', 'profileSaved', 'profileInferring', 'profileInferenceReview', 'profileFailed', 'profileOff'];
 
 function MemoryView({ picked, tab }: { picked: MemoryScene; tab?: string }) {
     const router = useRouter();
@@ -26,7 +26,7 @@ function MemoryView({ picked, tab }: { picked: MemoryScene; tab?: string }) {
                 <UIProvider>
                     <ScreenBannerProvider banner={null}>
                         <ProfileDevContext.Provider value={profileSceneStart(picked)}>
-                            <MemoryScreen onBack={() => router.replace('/')} initialTab={MEMORY_TABS.find((entry) => entry.key === tab)?.key} />
+                            <MemoryScreen onBack={() => router.replace('/')} initialTab={MEMORY_TABS.find((entry) => entry.key === (tab ?? sceneDefaultTab(picked)))?.key} />
                         </ProfileDevContext.Provider>
                     </ScreenBannerProvider>
                 </UIProvider>
@@ -35,7 +35,7 @@ function MemoryView({ picked, tab }: { picked: MemoryScene; tab?: string }) {
     );
 }
 
-/** The Memory screen on a fake PC; `?scene=on|off|loading|failed|actionFails|statsEmpty|statsManyTools|aboutEmpty|aboutFailed|aboutMany|goalsEmpty|goalsFailed|goalsStoreError|goalsStoreDamaged|knowledgeRich|knowledgeEmpty|knowledgeFailed|knowledgeMany|profileIdle|profileScanning|profileReview|profileSaved|profileInferring|profileInferenceReview|profileFailed|profileOff`, and `&tab=about|goals|profile|advanced`. */
+/** The Memory screen on a fake PC; `?scene=on|off|loading|failed|actionFails|statsEmpty|statsManyTools|aboutEmpty|aboutFailed|aboutMany|aboutShowMore|goalsEmpty|goalsFailed|goalsStoreError|goalsStoreDamaged|knowledgeRich|knowledgeEmpty|knowledgeFailed|knowledgeMany|profileIdle|profileScanning|profileReview|profileSaved|profileInferring|profileInferenceReview|profileFailed|profileOff`, and `&tab=about|goals|profile|advanced`. */
 export default function MemoryGalleryRoute() {
     const { scene, tab } = useLocalSearchParams<{ scene?: string; tab?: string }>();
     if (!devGalleryEnabled()) return <Redirect href="/" />;

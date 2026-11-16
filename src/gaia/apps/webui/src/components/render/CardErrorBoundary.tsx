@@ -3,6 +3,7 @@
 
 import { Component } from 'react';
 import type { ReactNode } from 'react';
+import { getT } from '../../i18n/useT';
 
 interface CardErrorBoundaryProps {
     children: ReactNode;
@@ -34,7 +35,7 @@ export class CardErrorBoundary extends Component<CardErrorBoundaryProps, CardErr
         if (this.state.hasError) {
             return (
                 <div role="alert" className="render-card-error">
-                    Card failed to render
+                    {getT()('cards.error.renderFailed')}
                 </div>
             );
         }

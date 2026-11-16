@@ -826,7 +826,8 @@ textarea:focus-visible {
 /* A Latin name in a right-to-left UI: dir="auto" makes it truncate at its end,
    and this keeps it on the label's own edge. */
 :root[dir="rtl"] :is(.sb-location-name, .composer-chip-label,
-    .new-chat-folder-name, .sp-item-name, .connection-banner__text, .schedule-card-name, .msg-cut-off)[dir="auto"] {
+    .new-chat-folder-name, .sp-item-name, .connection-banner__text, .schedule-card-name, .msg-cut-off,
+    .email-pre-scan__row-sender, .email-pre-scan__row-subject, .email-pre-scan__row-reason)[dir="auto"] {
     text-align: right;
 }
 /* A library name reads left to right so its extension stays last; it still sits on the row's own edge. */
@@ -835,7 +836,8 @@ textarea:focus-visible {
 }
 /* The mirror: an Arabic name in a left-to-right UI stays on the left. */
 :root:not([dir="rtl"]) :is(.sb-location-name, .composer-chip-label,
-    .new-chat-folder-name, .sp-item-name, .connection-banner__text, .schedule-card-name, .msg-cut-off)[dir="auto"] {
+    .new-chat-folder-name, .sp-item-name, .connection-banner__text, .schedule-card-name, .msg-cut-off,
+    .email-pre-scan__row-sender, .email-pre-scan__row-subject, .email-pre-scan__row-reason)[dir="auto"] {
     text-align: left;
 }
 /* A clamped block aligned to its end pushes its "…" past the edge, so these keep their own start. */

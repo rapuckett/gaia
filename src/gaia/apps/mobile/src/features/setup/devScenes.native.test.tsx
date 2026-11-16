@@ -45,7 +45,14 @@ describeNative('/dev/setup ready/cards', () => {
         await mount(<SetupGalleryRoute />);
         expect(await screen.findByText(t('setup.ready.tasks'))).toBeTruthy();
         expect(await screen.findByText('Research a topic')).toBeTruthy();
-        expect(await screen.findByText('Summarize a document')).toBeTruthy();
-        expect(await screen.findByText('Tidy a folder')).toBeTruthy();
+        expect(await screen.findByText('Summarize something')).toBeTruthy();
+        expect(await screen.findByText('Work on code')).toBeTruthy();
+    });
+
+    it('shows the server texts as sent for a skill the app has no translation for', async () => {
+        mockParams = { step: 'ready', state: 'cards' };
+        await mount(<SetupGalleryRoute />);
+        expect(await screen.findByText('Plan my week')).toBeTruthy();
+        expect(screen.getByText('A document, transcript or email')).toBeTruthy();
     });
 });

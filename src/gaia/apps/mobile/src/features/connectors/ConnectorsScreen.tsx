@@ -20,7 +20,7 @@ import {
 import { ScreenHeader } from '@/features/nav/ScreenHeader';
 import { ChipButton } from '@/features/schedules/ChipButton';
 import { SettingsGroup } from '@/features/skills/SettingsGroup';
-import { describeError, describeErrorWith, useDirection, useT } from '@/i18n/useT';
+import { describeError, describeErrorWith, describeHttpFailure, useDirection, useT } from '@/i18n/useT';
 import {
     ActionSheet,
     EmptyState,
@@ -129,7 +129,8 @@ export function ConnectorsBody({ initialExpanded }: { initialExpanded?: string }
                 {notice ? <Notice tone="info" message={notice} /> : null}
                 {failure ? (
                     <ErrorState
-                        title={describeError(failure, t)}
+                        title={describeHttpFailure(failure, t).text}
+                        detail={describeHttpFailure(failure, t).detail}
                         onRetry={() => {
                             void connectors.refetch();
                             void agentMcps.refetch();

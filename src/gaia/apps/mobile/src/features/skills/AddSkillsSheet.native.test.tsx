@@ -9,6 +9,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import type { LinkPreview } from '@/api/client.types';
 import { createFakeClient } from '@/api/fake';
 import { GaiaClientProvider } from '@/data';
+import { glossParts, translate } from '@webui/i18n/registry';
 import { ThemeProvider } from '@/ui';
 import { SheetHost } from '@/ui/overlays/SheetHost';
 
@@ -49,5 +50,11 @@ describeNative('AddSkillsSheet', () => {
         expect(screen.getByText('Add these on your PC')).toBeTruthy();
         expect(screen.getByText('Share the link')).toBeTruthy();
         expect(screen.queryByText(/^Add \d/)).toBeNull();
+    });
+
+    it('writes the Arabic hint once, with one English gloss and no doubled period', () => {
+        const hint = translate('ar', 'mobileApp.skills.linkHint', { github: 'GitHub', repo: 'owner/repo', skills: 'skills.sh', https: 'https', zip: '.zip' });
+        expect(glossParts(hint)?.filter((p) => p.gloss)).toHaveLength(1);
+        expect(hint).not.toContain('..');
     });
 });

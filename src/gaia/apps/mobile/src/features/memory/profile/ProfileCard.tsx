@@ -2,12 +2,13 @@
 // SPDX-License-Identifier: MIT
 
 import { createContext, useContext, useEffect, useRef, useState } from 'react';
+import { View } from 'react-native';
 
 import { isolate } from '@webui/i18n/registry';
 
 import { usePinned } from '@/api/routeAccess';
 import { useT } from '@/i18n/useT';
-import { Button, Card, ChoiceList, Disclosure, Icon, Ltr, Notice, Row, ScrollBox, Stack, Surface, Switch, Text } from '@/ui';
+import { Button, Card, ChoiceList, Disclosure, Icon, Ltr, Notice, Row, Stack, Surface, Switch, Text } from '@/ui';
 import { CircleCheck, Cpu, Sparkles, Square } from '@/ui/icons';
 
 import { PcOnlyNotice } from '../../settings/PcOnlyNotice';
@@ -20,24 +21,27 @@ const COPY = {
 } as const;
 
 const LIVE_LINES = 8;
+const LOG_MAX_HEIGHT = 220;
 
 /** The dev gallery starts a run, and can save its result, without a tap. */
 export const ProfileDevContext = createContext<{ kind: ProfileKind; save?: boolean } | null>(null);
 
-function Log({ lines, running }: { lines: LogLine[]; running: boolean }) {
+export function Log({ lines, running }: { lines: LogLine[]; running: boolean }) {
     const body = (running ? lines.slice(-LIVE_LINES) : lines).map((line, i) => (
         <Text key={i} role="caption" tone={line.kind === 'error' ? 'danger' : line.kind === 'finding' ? 'primary' : 'muted'} dir={line.server ? 'ltr' : undefined}>
             {line.server ? isolate(line.text, 'ltr') : line.text}
         </Text>
     ));
     return running ? (
+        <View style={{ maxHeight: LOG_MAX_HEIGHT, overflow: 'hidden' }} testID="profile-log">
+            <Surface tone="recessed" radius="md" padding="md" border>
+                <Stack gap="xs">{body}</Stack>
+            </Surface>
+        </View>
+    ) : (
         <Surface tone="recessed" radius="md" padding="md" border testID="profile-log">
             <Stack gap="xs">{body}</Stack>
         </Surface>
-    ) : (
-        <ScrollBox maxHeight={220} testID="profile-log">
-            <Stack gap="xs">{body}</Stack>
-        </ScrollBox>
     );
 }
 
