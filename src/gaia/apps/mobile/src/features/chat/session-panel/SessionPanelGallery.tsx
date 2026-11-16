@@ -105,8 +105,7 @@ const GIT: SessionGit = {
     ],
 };
 
-const { pr_blocked: _blocked, ...READY_REPO } = GIT.repos[0]!;
-const GIT_PR: SessionGit = { ...GIT, repos: [{ ...READY_REPO, branch: 'q3-summary' }] };
+const GIT_PR: SessionGit = { ...GIT, repos: [{ ...GIT.repos[0]!, branch: 'q3-summary', pr_blocked: null }] };
 
 const ANSWER_STATES: readonly SessionPanelGalleryState[] = ['ansFull', 'ansPending', 'ansNoLive', 'ansError'];
 
