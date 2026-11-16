@@ -44,7 +44,7 @@ export function QueuedMessages({ items, onRemove, onRetry, onSteer, replying }: 
                     <Stack gap="xs">
                         <Row gap="sm" align="center">
                             <Stack flex={1}>
-                                <Text role="ui" numberOfLines={2}>
+                                <Text role="ui" numberOfLines={2} largeLines={2}>
                                     {item.text}
                                 </Text>
                             </Stack>

@@ -4,7 +4,8 @@
 import { splitMatch, type MatchParts } from '@webui/utils/chatSearch';
 
 import { useT } from '@/i18n/useT';
-import { Icon, Pressable, Row, Stack, StatusDot, Text } from '@/ui';
+import { FirstLine, Icon, Pressable, Row, Stack, StatusDot, Text } from '@/ui';
+import { useLargeText } from '@/ui/theme/a11y';
 import { EyeOff } from '@/ui/icons';
 
 import { rowText, statusTone, type ChatRow } from './chatList';
@@ -31,13 +32,22 @@ export function SearchResultRow({ row, query, snippet, onSelect }: SearchResultR
     const t = useT();
     const text = rowText(row, t);
     const title = splitMatch(row.title, query);
+    const largeText = useLargeText();
     return (
         <Pressable accessibilityLabel={text.aria} accessibilityState={{ selected: row.active }} minSize={48} onPress={() => onSelect(row.id)}>
             <Stack gap="xs" paddingX="lg" paddingY="sm">
-                <Row gap="xs">
-                        {row.dot && text.status ? <StatusDot tone={statusTone(row.dot)} label={text.status} /> : null}
-                    {row.private ? <Icon icon={EyeOff} size="sm" label={t('row.private')} /> : null}
-                    <Text role="ui" weight={row.active || row.unread ? 'semibold' : 'medium'} numberOfLines={1}>
+                <Row gap="xs" align={largeText ? 'start' : 'center'}>
+                    {row.dot && text.status ? (
+                        <FirstLine role="ui">
+                            <StatusDot tone={statusTone(row.dot)} label={text.status} />
+                        </FirstLine>
+                    ) : null}
+                    {row.private ? (
+                        <FirstLine role="ui">
+                            <Icon icon={EyeOff} size="sm" label={t('row.private')} />
+                        </FirstLine>
+                    ) : null}
+                    <Text role="ui" weight={row.active || row.unread ? 'semibold' : 'medium'} numberOfLines={1} largeLines={2}>
                         {title ? <Marked parts={title} /> : row.title}
                     </Text>
                 </Row>
