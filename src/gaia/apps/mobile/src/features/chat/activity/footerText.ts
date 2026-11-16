@@ -1,7 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { isolate, type MessageKey } from '@webui/i18n/registry';
+import { isolateUnit, type MessageKey } from '@webui/i18n/registry';
 import { composeSummary, exactStats } from '@webui/utils/answerStats.core';
 import type { InferenceStats } from '@webui/types';
 import type { TurnEnding } from '@webui/utils/turnEnding.core';
@@ -25,8 +25,8 @@ const PHONE_WORDS: Partial<Record<MessageKey, MessageKey>> = {
 };
 const phone = (key: MessageKey): MessageKey => PHONE_WORDS[key] ?? key;
 
-/** Numbers with units keep their own direction inside right-to-left text. */
-const ltr = (text: string): string => isolate(text, 'ltr');
+/** Latin units stay left to right inside right-to-left text; Arabic units read naturally. */
+const ltr = isolateUnit;
 
 export function answerFooterText(
     latencyMs: number | undefined,
