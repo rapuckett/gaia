@@ -44,14 +44,16 @@ function usePreview(input: string): Preview {
 export interface NewScheduleSheetProps {
     open: boolean;
     onClose: () => void;
+    /** Dev gallery only: opens with the form filled in. */
+    initial?: { when: string; name: string; prompt: string };
 }
 
-export function NewScheduleSheet({ open, onClose }: NewScheduleSheetProps) {
+export function NewScheduleSheet({ open, onClose, initial }: NewScheduleSheetProps) {
     const t = useT();
     const create = useCreateSchedule();
-    const [when, setWhen] = useState('');
-    const [name, setName] = useState('');
-    const [prompt, setPrompt] = useState('');
+    const [when, setWhen] = useState(initial?.when ?? '');
+    const [name, setName] = useState(initial?.name ?? '');
+    const [prompt, setPrompt] = useState(initial?.prompt ?? '');
     const preview = usePreview(when);
     const parsed = preview.status === 'done' ? preview.parsed : null;
     const rejected = parsed !== null && !parsed.valid;

@@ -54,7 +54,7 @@ describe('KeyScreen', () => {
     it('without a key on the PC, shows the key field read-only and cannot connect', async () => {
         const { client } = await mount([provider({ configured: false })]);
         await screen.findByText('Change this on the PC running GAIA');
-        expect(screen.getByLabelText('Test and connect').props.accessibilityState).toMatchObject({ disabled: true });
+        expect(screen.getByLabelText('Test and connect')).toBeDisabled();
         expect(client.connects).toEqual([]);
     });
 

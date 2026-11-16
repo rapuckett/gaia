@@ -21,6 +21,7 @@ import { AnswerFooter } from '../activity/AnswerFooter';
 import { savedActivity } from '../activity/savedActivity';
 import { AnswerCards } from '../cards/RenderCard';
 import { EmailConnect } from '../EmailConnect';
+import { LibraryNotices, libraryNoticesOf } from '../LibraryNotices';
 import { GrantNote, isAgentNotGranted } from '../GrantNote';
 import { CutOffNote, StoppedNote } from '../EndingNotes';
 import { Markdown } from '../markdown/Markdown';
@@ -68,6 +69,7 @@ export function AssistantBubble({ message, streaming = false, latencyMs, context
     const compare = useAnswerComparison(message.session_id);
     return (
         <Stack paddingX="lg" paddingY="xs">
+            {!streaming && !cancelled ? <LibraryNotices notices={libraryNoticesOf(message)} /> : null}
             {activity.steps.length > 0 ? <ActivityTimeline steps={activity.steps} answer={text} /> : null}
             <AnswerCards cards={cards} />
             <Pressable

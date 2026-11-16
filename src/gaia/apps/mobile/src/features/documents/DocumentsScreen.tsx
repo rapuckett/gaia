@@ -8,8 +8,7 @@ import { isolate } from '@webui/i18n/registry';
 import { useAttachDocument, useCancelIndexing, useDocumentRemoval, useDocuments, useIndexingView, type IndexingSeed, useReindexDocument, useSession } from '@/data';
 import { ScreenHeader } from '@/features/nav/ScreenHeader';
 import { describeErrorWith, useT } from '@/i18n/useT';
-import { EmptyState, ErrorState, IconButton, List, ListSkeleton, Notice, Row, Screen, Stack, Text, useTheme } from '@/ui';
-import { X } from '@/ui/icons';
+import { EmptyState, ErrorState, List, ListSkeleton, Notice, Row, Screen, Stack, Text, useTheme } from '@/ui';
 
 import { AddDocuments, type AddStart, type StartMessage } from './AddDocuments';
 import { DocumentRow } from './DocumentRow';
@@ -160,14 +159,7 @@ function Library({ chat, onBrowseFiles, onPreview, initial }: { chat: OpenChat |
                         <Stack gap="sm" paddingX="lg" paddingY="sm">
                             {note ? <Notice tone="success" role="note" message={note} onDismiss={() => setNote(null)} /> : null}
                             {loadFailed ? <Notice tone="danger" message={loadFailed.text} detail={loadFailed.detail} action={retry} /> : null}
-                            {action.error ? (
-                                <Row gap="sm" align="start">
-                                    <Stack flex={1}>
-                                        <Notice tone="danger" message={action.error} />
-                                    </Stack>
-                                    <IconButton icon={X} label={t('docs.dismissError')} onPress={action.dismiss} />
-                                </Row>
-                            ) : null}
+                            {action.error ? <Notice tone="danger" message={action.error} onDismiss={action.dismiss} dismissLabel={t('docs.dismissError')} /> : null}
                             {stats ? (
                                 <Row gap="sm" wrap>
                                     <Text role="caption" tone="secondary">

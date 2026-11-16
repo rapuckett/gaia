@@ -25,6 +25,8 @@ export interface NoticeProps {
     action?: { label: string; onPress: () => void };
     /** Shows a close button at the end. */
     onDismiss?: () => void;
+    /** What a screen reader calls the close button; "Dismiss" when not given. */
+    dismissLabel?: string;
     /** `note` or `status` marks advice that isn't an alert; a live region stays polite. */
     role?: 'note' | 'status';
     /** `card` is the desktop's `.model-warning`: a toned title and wider padding; both variants share the tinted box with a 25% border. */
@@ -42,7 +44,7 @@ function withAlpha(hex: string, alpha: number): string {
 }
 
 // The icon carries the tone with the color, so it never rests on color alone.
-export function Notice({ tone, title, message, detail, action, onDismiss, role, variant = 'tint', testID }: NoticeProps) {
+export function Notice({ tone, title, message, detail, action, onDismiss, dismissLabel, role, variant = 'tint', testID }: NoticeProps) {
     const t = useT();
     const { colors, radius, space } = useTheme();
     const largeText = useLargeText();
@@ -93,7 +95,7 @@ export function Notice({ tone, title, message, detail, action, onDismiss, role, 
                     </View>
                     {action ? <Button variant="secondary" label={action.label} onPress={action.onPress} full={largeText} /> : null}
                 </View>
-                {onDismiss ? <IconButton icon={X} size="sm" label={t('banner.dismiss')} onPress={onDismiss} /> : null}
+                {onDismiss ? <IconButton icon={X} size="sm" label={dismissLabel ?? t('banner.dismiss')} onPress={onDismiss} /> : null}
             </Row>
         </View>
     );

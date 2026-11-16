@@ -11,7 +11,8 @@ import { hiddenAutomatedCount } from '@webui/utils/sessionGrouping';
 import { useDeleteSession, useMarkRead, useRenameSession, useSessions, useSessionSearch, useSetPinned } from '@/data';
 import { ModelStatusPill } from '@/features/model';
 import { NotificationsEntry } from '@/features/notifications';
-import { describeError, describeErrorWith, useT } from '@/i18n/useT';
+import { GaiaApiError } from '@/api/errors';
+import { describeError, describeErrorWith, ltr, useT } from '@/i18n/useT';
 import {
     Chip,
     EmptyState,
@@ -77,13 +78,15 @@ export interface ChatDrawerContentProps {
     queues?: Readonly<Record<string, readonly QueuedMessage[]>>;
     /** The last failed row action, shown as an alert until the next one succeeds. */
     error?: ChatListError | null;
+    /** Dev gallery only: opens with this search typed, or this row's sheet already open. */
+    dev?: { query?: string; sheet?: { rowId: string; mode: RowSheet['mode'] } };
 }
 
-export function ChatDrawerContent({ activeId, onSelect, onClose, onNewChat, onPcs, routeNames = [], activeRoute, onOpenRoute, live, queues, error }: ChatDrawerContentProps) {
+export function ChatDrawerContent({ activeId, onSelect, onClose, onNewChat, onPcs, routeNames = [], activeRoute, onOpenRoute, live, queues, error, dev }: ChatDrawerContentProps) {
     const t = useT();
     const sessions = useSessions();
     const now = useNow();
-    const [text, setText] = useState('');
+    const [text, setText] = useState(dev?.query ?? '');
     const [showAutomated, toggleAutomated] = useShowAutomated();
     const search = useSessionSearch(text, showAutomated);
     const entries = useMemo(() => declaredNavEntries(routeNames), [routeNames]);
@@ -124,7 +127,14 @@ export function ChatDrawerContent({ activeId, onSelect, onClose, onNewChat, onPc
     const rowCount = sections.reduce((n, s) => n + s.data.length, 0);
 
     const [failure, setFailure] = useState<ChatListError | null>(null);
-    const [target, setTarget] = useState<RowSheet | null>(null);
+    const [picked, setPicked] = useState<RowSheet | null>(null);
+    const [devSheet, setDevSheet] = useState(dev?.sheet);
+    const devRow = devSheet ? sections.flatMap((s) => s.data).find((r) => r.id === devSheet.rowId) : undefined;
+    const target = picked ?? (devSheet && devRow ? { row: devRow, mode: devSheet.mode } : null);
+    const setTarget = (next: RowSheet | null) => {
+        setDevSheet(undefined);
+        setPicked(next);
+    };
     const outcome = (kind: RowErrorKind) => ({
         onSuccess: () => setFailure(null),
         onError: (e: unknown) => setFailure({ kind, error: e }),
@@ -166,7 +176,11 @@ export function ChatDrawerContent({ activeId, onSelect, onClose, onNewChat, onPc
             {state === 'error' ? <ErrorState title={describeError(sessions.error, t)} onRetry={() => void sessions.refetch()} /> : null}
             {state === 'empty' && q === '' ? <EmptyState title={t('sidebar.empty')} /> : null}
             {q !== '' && searchFailed ? (
-                <Notice tone="danger" message={t.compose((say) => say('sidebar.searchFailed', { error: describeErrorWith(search.error, say) }))} />
+                <Notice
+                    tone="danger"
+                    title={t('mobileApp.chats.searchFailedLabel')}
+                    message={search.error instanceof GaiaApiError ? ltr(search.error.detail) : t.compose((say) => describeErrorWith(search.error, say))}
+                />
             ) : null}
             {q !== '' && !searchFailed && settled && search.data?.truncated ? (
                 <Notice tone="info" role="note" message={t('sidebar.searchCapped', { n: search.data.results.length })} />

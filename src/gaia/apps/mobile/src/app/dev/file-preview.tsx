@@ -32,7 +32,7 @@ function FilePreviewView({ picked }: { picked: FilePreviewScene }) {
     );
 }
 
-/** The file preview screen on a fake PC; `?scene=loading|text|table|binary`. */
+/** The file preview screen on a fake PC; `?scene=loading|text|table|binary|refused`. */
 export default function FilePreviewGalleryRoute() {
     const { scene } = useLocalSearchParams<{ scene?: string }>();
     if (!devGalleryEnabled()) return <Redirect href="/" />;
