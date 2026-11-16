@@ -148,7 +148,7 @@ export function DownloadContents({ plan, run, onRetry, busy }: { plan: SetupPlan
                                         </Row>
                                     )}
                                 </Stack>
-                                <Stack align="end">
+                                <Stack align="end" maxWidth="40%">
                                     <Ltr>{c.size_gb == null ? t('setup.contents.sizeOnDownload') : formatSize(c.size_gb)}</Ltr>
                                     <Text role="caption" tone="secondary">{stateText(c, state, t)}</Text>
                                 </Stack>
