@@ -17,7 +17,6 @@ export function PairedPcsScreen({ onAdd }: { onAdd: () => void }) {
     const t = useT();
     const pcs = usePairedPcs();
     const connection = useActiveConnection();
-    const baseUrl = connection?.baseUrl;
     const kind = routeKindOf(connection);
     const routeKey = kind === 'home' ? 'mobileApp.pairing.route.home' : kind === 'tailnet' ? 'mobileApp.pairing.route.tailnet' : null;
     const use = useUsePc();
@@ -39,7 +38,7 @@ export function PairedPcsScreen({ onAdd }: { onAdd: () => void }) {
                 {pcs.error ? <ErrorState title={describeError(pcs.error, t)} onRetry={() => void pcs.refetch()} /> : null}
                 {pcs.data?.length === 0 ? <EmptyState title={t('mobileApp.pairing.pcs.empty')} /> : null}
                 {pcs.data?.map((item) => {
-                    const current = isCurrentPc(item, baseUrl);
+                    const current = isCurrentPc(item, connection);
                     return (
                         <ListRow
                             key={item.id}
@@ -51,7 +50,19 @@ export function PairedPcsScreen({ onAdd }: { onAdd: () => void }) {
                             onPress={current ? undefined : () => use.mutate(item)}
                             trailing={
                                 <Row gap="xs">
-                                    {current ? <Badge tone="success" label={t('mobileApp.pairing.pcs.inUse')} /> : null}
+                                    {current ? (
+                                        <Badge tone="success" label={t('mobileApp.pairing.pcs.inUse')} />
+                                    ) : (
+                                        <Button
+                                            label={t.bare('mobileApp.pairing.pcs.use')}
+                                            accessibilityLabel={t('mobileApp.pairing.pcs.use')}
+                                            size="sm"
+                                            variant="secondary"
+                                            disabled={use.isPending}
+                                            onPress={() => use.mutate(item)}
+                                            testID={`pc-row-${item.id}-use`}
+                                        />
+                                    )}
                                     <IconButton
                                         icon={Ellipsis}
                                         size="sm"
@@ -73,7 +84,7 @@ export function PairedPcsScreen({ onAdd }: { onAdd: () => void }) {
                 onClose={close}
                 title={pc?.name}
                 actions={[
-                    ...(pc && !isCurrentPc(pc, baseUrl) ? [{ label: t('mobileApp.pairing.pcs.use'), onPress: () => use.mutate(pc) }] : []),
+                    ...(pc && !isCurrentPc(pc, connection) ? [{ label: t('mobileApp.pairing.pcs.use'), onPress: () => use.mutate(pc) }] : []),
                     { label: t('mobileApp.pairing.pcs.forget'), icon: Trash2, destructive: true, onPress: () => pc && setTarget({ pc, mode: 'confirm' }) },
                 ]}
             />
