@@ -27,7 +27,8 @@ describe('AnswerFooter hybrid route', () => {
         await mount({ seconds: 4, route: { model: 'Qwen3.6-35B-A3B-GGUF', reason: 'Needs the larger model.' } });
         expect(screen.getByTestId('answer-route')).toBeTruthy();
         fireEvent.press(screen.getByTestId('answer-footer-toggle'));
-        expect(await screen.findByText(t('msg.route', { reason: 'Needs the larger model.' }))).toBeTruthy();
+        expect(await screen.findByText(t('msg.route', { reason: '' }).trim())).toBeTruthy();
+        expect(screen.getByTestId('answer-route-reason').props.children).toBe('Needs the larger model.');
     });
 
     it('hides the pick on a retried answer but still shows a degraded-route warning', async () => {

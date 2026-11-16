@@ -3,11 +3,14 @@
 
 import { Redirect, useLocalSearchParams } from 'expo-router';
 
-import { SETUP_SCENES } from '@/features/setup/devScenes';
+import { SETUP_SCENES as SCENES_A } from '@/features/setup/devScenes';
+import { SETUP_SCENES_B } from '@/features/setup/devScenesB';
 import { devGalleryEnabled } from '@/features/dev/devGallery';
 import { KeyedScene } from '@/features/dev/KeyedScene';
 import { SetupSceneView } from '@/features/setup/SetupSceneView';
 import { Screen, Stack, Text, UIProvider } from '@/ui';
+
+const SETUP_SCENES = { ...SCENES_A, ...SETUP_SCENES_B };
 
 /** One setup scene on a fake PC; `?step=<step>&state=<name>` (see SETUP_SCENES), `default` when no state is given. */
 export default function SetupGalleryRoute() {

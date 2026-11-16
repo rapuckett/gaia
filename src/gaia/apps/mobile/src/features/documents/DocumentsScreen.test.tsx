@@ -81,7 +81,7 @@ describe('DocumentsScreen', () => {
             const client = createFakeClient({ sessions: [chat] });
             await mount(client, 'c1');
             fireEvent.press(await screen.findByText('Add a file'));
-            expect(await screen.findByText(/Added notes\.txt to/)).toBeTruthy();
+            expect(await screen.findByText(/Added ⁦notes\.txt⁩ to/)).toBeTruthy();
             expect(client.uploaded.map((f) => f.name)).toEqual(['notes.txt']);
             expect(client.attached).toEqual([{ sessionId: 'c1', docId: 'doc-1' }]);
             await waitFor(() => expect(screen.getAllByText(/notes\.txt/).length).toBeGreaterThan(1));
@@ -127,7 +127,7 @@ describe('DocumentsScreen', () => {
             const client = createFakeClient({ sessions: [chat] });
             await mount(client, 'c1');
             await typePath('  /Users/me/Documents/notes.txt ');
-            expect(await screen.findByText(/Added notes\.txt to/)).toBeTruthy();
+            expect(await screen.findByText(/Added ⁦notes\.txt⁩ to/)).toBeTruthy();
             expect(client.uploadedPaths).toEqual([{ filepath: '/Users/me/Documents/notes.txt', sessionId: 'c1' }]);
             expect(client.indexedFolders).toEqual([]);
             expect(client.attached).toEqual([{ sessionId: 'c1', docId: 'doc-1' }]);
@@ -140,9 +140,16 @@ describe('DocumentsScreen', () => {
             const client = createFakeClient({ sessions: [chat], pcFolders });
             await mount(client, 'c1');
             await typePath('/Users/me/Contracts');
-            expect(await screen.findByText(/^Added 2 files from "Contracts"\. Skipped 1 file of a type GAIA can't add\. Subfolders aren't included\.$/)).toBeTruthy();
+            expect(await screen.findByText(/^Added 2 files from "\u2066Contracts\u2069"\. Skipped 1 file of a type GAIA can't add\. Subfolders aren't included\.$/)).toBeTruthy();
             expect(client.indexedFolders).toEqual([{ folderPath: '/Users/me/Contracts', recursive: false, sessionId: 'c1' }]);
             expect(client.attached).toEqual([{ sessionId: 'c1', docId: 'k1' }, { sessionId: 'c1', docId: 'k2' }]);
+        });
+
+        it('isolates an Arabic folder name first-strong, so its words keep their order', async () => {
+            const pcFolders = { '/Users/me/مستندات العمل': { indexed: 1, failed: 0, skipped: 0, skipped_images: 0, documents: [{ ...doc('k1', 'a.pdf', 'complete', 100), filepath: '/Users/me/مستندات العمل/a.pdf' }] as IndexFolderResponse['documents'], errors: [] } };
+            await mount(createFakeClient({ sessions: [chat], pcFolders }), 'c1');
+            await typePath('/Users/me/مستندات العمل');
+            expect(await screen.findByText(/"\u2068مستندات العمل\u2069"/)).toBeTruthy();
         });
 
         it("shows the PC's refusal as it sent it and keeps the path for another try", async () => {
@@ -239,7 +246,7 @@ describe('DocumentsScreen', () => {
             const client = createFakeClient({ documents: library(), sessions: [chat] });
             await mount(client, 'c1');
             fireEvent.press(await screen.findByLabelText(/Add notes\.txt to/));
-            expect(await screen.findByText(/Added notes\.txt to/)).toBeTruthy();
+            expect(await screen.findByText(/Added ⁦notes\.txt⁩ to/)).toBeTruthy();
             expect(client.attached).toEqual([{ sessionId: 'c1', docId: 'a' }]);
             expect(useNextChatDocs.getState().ids).toEqual([]);
         });

@@ -9,11 +9,12 @@ import {
     isValidElement,
     useContext,
     useEffect,
+    useRef,
     useState,
     type ReactElement,
     type ReactNode,
 } from 'react';
-import { View } from 'react-native';
+import { View, type LayoutChangeEvent } from 'react-native';
 
 import { Button, Row, Stack, type ButtonProps } from '@/ui';
 import { useLargeText } from '@/ui/theme/a11y';
@@ -51,16 +52,35 @@ function isSpacer(action: ReactNode): boolean {
     return isValidElement<{ children?: ReactNode }>(action) && action.type === Row && Children.count(action.props.children) === 0;
 }
 
-/** Up to two actions share the row equally, so long labels wrap rather than spill; more, or any at large text sizes, stack full width. */
+const UNEVEN_RATIO = 1.5;
+
+function labelKey(actions: ReactNode[]): string {
+    return actions.map((a) => (isValidElement<{ label?: string }>(a) ? (a.props.label ?? '') : '')).join('|');
+}
+
+/** Up to two actions share the row equally, so long labels wrap rather than spill; more, any at large text sizes, or two of very uneven height, stack full width. */
 function FooterActions({ children }: { children: ReactNode }) {
     const largeText = useLargeText();
     const actions = actionsOf(children);
-    if (largeText) return <Stack gap="sm">{actions.filter((a) => !isSpacer(a)).map(filled)}</Stack>;
+    const key = labelKey(actions);
+    // Latched per key so a stacked footer never flips back to a row.
+    const [unevenKey, setUnevenKey] = useState<string | null>(null);
+    const heights = useRef<number[]>([]);
+    const measure = (i: number) => (e: LayoutChangeEvent) => {
+        heights.current[i] = e.nativeEvent.layout.height;
+        const [a, b] = heights.current;
+        if (a === undefined || b === undefined || Math.min(a, b) <= 0) return;
+        if (Math.max(a, b) / Math.min(a, b) > UNEVEN_RATIO) setUnevenKey(key);
+    };
+    if (largeText || (actions.length === 2 && unevenKey === key && !actions.some(isSpacer))) {
+        return <Stack gap="sm">{actions.filter((a) => !isSpacer(a)).map(filled)}</Stack>;
+    }
     if (actions.length > 2) return <Stack gap="sm">{actions.map(filled)}</Stack>;
+    const measurable = actions.length === 2 && !actions.some(isSpacer);
     return (
         <Row gap="sm">
             {actions.map((action, i) => (
-                <View key={i} testID="setup-footer-slot" style={{ flex: 1, minWidth: 0 }}>
+                <View key={i} testID="setup-footer-slot" style={{ flex: 1, minWidth: 0 }} onLayout={measurable ? measure(i) : undefined}>
                     {filled(action)}
                 </View>
             ))}
