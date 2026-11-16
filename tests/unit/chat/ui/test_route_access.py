@@ -7,8 +7,9 @@ Every route is in exactly one class, and ``test_every_route_is_classified``
 fails for a route nobody has decided about:
 
 * ``pc``: the PC running GAIA only (``require_local_pc``).
-* ``pc_or_device``: first-run setup; the PC or an allowed paired device, never
-  mobile access (``require_pc_or_device``).
+* ``pc_or_device``: first-run setup and device-code sign-in; the PC or an
+  allowed paired device, never mobile access (``require_pc_or_device``,
+  ``require_pc_or_allowed_device``).
 * ``not_on_listener``: a read with side effects on the PC; the PC and mobile
   access, never a paired device (``refuse_on_device_listener``).
 * ``remote``: the PC, mobile access with its token, and allowed devices.
@@ -53,6 +54,7 @@ PC_ONLY = {
     "DELETE /api/connectors/{connector_id}/activations/{agent_id:path}",
     "DELETE /api/devices/listener",
     "DELETE /api/devices/pairing",
+    "DELETE /api/devices/routes/{kind}",
     "DELETE /api/devices/{device_id}",
     "DELETE /api/providers/{provider}/key",
     "GET /api/automations",
@@ -70,13 +72,13 @@ PC_ONLY = {
     "POST /api/automations/{ref}/{action}",
     "POST /api/connectors/eval-mailbox",
     "POST /api/connectors/{connector_id}/authorize",
-    "POST /api/connectors/{connector_id}/authorize-device",
     "POST /api/connectors/{connector_id}/configure",
     "POST /api/connectors/{connector_id}/enable",
     "POST /api/connectors/{connector_id}/test",
     "POST /api/devices/listener",
     "POST /api/devices/pairing",
     "POST /api/devices/pairing/reset",
+    "POST /api/devices/routes/{kind}",
     "POST /api/devices/{device_id}/allow",
     "POST /api/eval/scripted-user",
     "POST /api/files/open",
@@ -109,6 +111,7 @@ PC_ONLY = {
 }
 
 PC_OR_DEVICE = {
+    "POST /api/connectors/{connector_id}/authorize-device",
     "POST /api/setup/cancel",
     "POST /api/setup/chat-model",
     "POST /api/setup/models/download",
@@ -380,6 +383,7 @@ LETS_IN = {
 GUARDS = (
     security.require_local_pc,
     security.require_pc_or_device,
+    security.require_pc_or_allowed_device,
     security.refuse_on_device_listener,
     security.require_device_listener,
     security.require_allowed_device,
@@ -431,7 +435,10 @@ def _access_class(key, route):
     guards = _guards(route)
     if security.require_local_pc in guards:
         return "pc"
-    if security.require_pc_or_device in guards:
+    if (
+        security.require_pc_or_device in guards
+        or security.require_pc_or_allowed_device in guards
+    ):
         return "pc_or_device"
     if security.refuse_on_device_listener in guards:
         return "not_on_listener"
@@ -747,6 +754,78 @@ def test_system_context_collection_is_pc_only(setup, monkeypatch):
         == 200
     )
     assert ran == ["refresh"]
+
+
+_DEVICE_FLOW = {
+    "provider_id": "microsoft",
+    "scopes": ["https://graph.microsoft.com/Mail.ReadWrite"],
+    "device_code": "SECRET-DEVICE-CODE",
+    "user_code": "ABCD-EFGH",
+    "verification_uri": "https://microsoft.com/devicelogin",
+    "expires_in": 900,
+    "interval": 5,
+    "message": "Go to https://microsoft.com/devicelogin and enter ABCD-EFGH",
+}
+
+
+@pytest.mark.parametrize(
+    "caller, path, body, status",
+    [
+        ("device", "/api/connectors/microsoft/authorize-device", {}, 200),
+        ("pc", "/api/connectors/microsoft/authorize-device", {}, 200),
+        ("device", "/api/connectors/google/authorize-device", {}, 403),
+        (
+            "device",
+            "/api/connectors/microsoft/authorize-device",
+            {"grant_agents": ["installed:email"]},
+            403,
+        ),
+        ("device", "/api/connectors/microsoft/authorize", {}, 403),
+        ("pending", "/api/connectors/microsoft/authorize-device", {}, 403),
+        ("tunnel", "/api/connectors/microsoft/authorize-device", {}, 403),
+    ],
+)
+def test_device_code_sign_in_from_a_paired_device(
+    setup, monkeypatch, caller, path, body, status
+):
+    """A phone may start only a device-code sign-in, sees no secrets, and is audited."""
+    from unittest.mock import AsyncMock
+
+    from gaia.ui.routers import connectors
+
+    _, clients, device = setup
+    started = AsyncMock(return_value=dict(_DEVICE_FLOW))
+    monkeypatch.setattr("gaia.connectors.start_device_flow", started)
+    monkeypatch.setattr("gaia.connectors.poll_device_flow", AsyncMock())
+    monkeypatch.setattr(
+        "gaia.connectors.start_authorization",
+        AsyncMock(return_value={"flow_id": "f", "authorization_url": "https://x"}),
+    )
+    audited = []
+    monkeypatch.setattr(
+        connectors,
+        "audit_approval",
+        lambda request, what: audited.append((security.principal(request), what)),
+    )
+    resp = clients[caller].post(path, json=body, headers={"X-Gaia-UI": "1"})
+    assert resp.status_code == status, resp.text
+    if status != 200:
+        assert not started.called and not audited
+        return
+    assert resp.json() == {
+        k: _DEVICE_FLOW[k]
+        for k in ("user_code", "verification_uri", "expires_in", "interval", "message")
+    }
+    assert "SECRET-DEVICE-CODE" not in resp.text
+    if caller == "device":
+        assert audited == [
+            (
+                f"device:{device.device_id}",
+                "device-code sign-in started for microsoft",
+            )
+        ]
+    else:
+        assert audited == []
 
 
 def test_mcp_server_secrets_stay_on_the_pc(setup, monkeypatch):

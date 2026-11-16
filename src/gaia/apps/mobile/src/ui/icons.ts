@@ -24,6 +24,7 @@ export {
   Circle,
   CircleAlert,
   CircleCheck,
+  ClipboardPaste,
   Clock,
   Cloud,
   Code,

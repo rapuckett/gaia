@@ -304,6 +304,24 @@ def test_a_size_change_never_reloads_mid_reply(client, lemonade, jobs):
     assert jobs == []
 
 
+def test_a_size_chosen_mid_reply_applies_once_the_reply_ends(client, lemonade, jobs):
+    """A smaller window was otherwise never applied: turns only reload to grow."""
+    lemonade.loaded = [
+        {**_entry(LARGE_DEFAULT_MODEL_NAME, ctx=262144), "is_busy": True}
+    ]
+    client.put(
+        "/api/providers/local/context",
+        json={"model": LARGE_DEFAULT_MODEL_NAME, "ctx_size": 131072},
+    )
+    assert providers.apply_pending_context_reload() == [], "still answering"
+
+    lemonade.loaded = [_entry(LARGE_DEFAULT_MODEL_NAME, ctx=262144)]
+    assert providers.apply_pending_context_reload() == [LARGE_DEFAULT_MODEL_NAME]
+    _join_restart()
+    assert jobs == [(LARGE_DEFAULT_MODEL_NAME, True)]
+    assert providers.apply_pending_context_reload() == [], "applied once"
+
+
 def test_a_size_change_waits_for_the_new_chat_warm_up(
     client, lemonade, jobs, monkeypatch
 ):
@@ -461,7 +479,7 @@ def test_a_catalog_error_fails_the_context_view_loudly(
         )
     assert resp.status_code == 502
     detail = resp.json()["detail"]
-    assert "HTTP 500" in detail and UNREGISTERED in detail
+    assert "model list" in detail and UNREGISTERED in detail
     if config_mod.GAIA_CONFIG_FILE.exists():
         assert UNREGISTERED not in config_mod.GAIA_CONFIG_FILE.read_text(
             encoding="utf-8"
@@ -778,7 +796,7 @@ def test_corrupt_config_is_reported_not_a_500(client, lemonade):
 
 def test_active_survives_a_lemonade_error(client, lemonade, monkeypatch):
     def broken(*_a, **_k):
-        raise providers.ProviderError("Lemonade answered /models with HTTP 500.", 502)
+        raise providers.ProviderError("GAIA couldn't read the model list.", 502)
 
     monkeypatch.setattr(providers, "_list_models", broken)
     resp = client.get("/api/providers/active")
