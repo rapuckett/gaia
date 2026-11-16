@@ -69,6 +69,7 @@ export function AssistantBubble({ message, streaming = false, latencyMs, context
     const compare = useAnswerComparison(message.session_id);
     return (
         <Stack paddingX="lg" paddingY="xs">
+            {!streaming && !cancelled ? <LibraryNotices notices={libraryNoticesOf(message)} /> : null}
             {activity.steps.length > 0 ? <ActivityTimeline steps={activity.steps} answer={text} /> : null}
             <AnswerCards cards={cards} />
             <Pressable
@@ -84,7 +85,6 @@ export function AssistantBubble({ message, streaming = false, latencyMs, context
             {sessionId && !streaming && !cancelled && message.id > 0 ? (
                 <TurnChanges sessionId={sessionId} messageId={message.id} reportError={newest} />
             ) : null}
-            {!streaming && !cancelled ? <LibraryNotices notices={libraryNoticesOf(message)} /> : null}
             {cutOff ? <CutOffNote cutOff={cutOff} /> : null}
             {cancelled ? <StoppedNote stop={{ state: 'stopped' }} /> : null}
             {!streaming && !cancelled ? <SavedReplyErrors message={message} fixShownBelow={fixShownBelow} /> : null}

@@ -44,11 +44,11 @@ export function TurnTail({ tail, line, awaitingUser = false, onTryAgain, onConti
     useAnnounce(showLine ? (line ?? t('msg.thinking')) : null);
     return (
         <Stack gap="sm" paddingX="lg" paddingY="xs" testID="turn-tail">
+            {!tail.live ? <LibraryNotices notices={libraryNotices} /> : null}
             <ActivityTimeline steps={steps} running={tail.live} awaitingUser={awaitingUser} answer={tail.text} />
             {tail.live ? <RecordingProgress events={tail.events} /> : null}
             <AnswerCards cards={cards} />
             {tail.text ? <Markdown text={tail.text} streaming={tail.live} /> : null}
-            {!tail.live ? <LibraryNotices notices={libraryNotices} /> : null}
             {showLine ? (
                 <View accessibilityRole="progressbar" accessibilityLiveRegion="polite">
                     <Row gap="sm">

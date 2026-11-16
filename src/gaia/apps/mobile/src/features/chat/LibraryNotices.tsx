@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import type { Message, StreamEvent } from '@/api/client.types';
-import { Notice, Stack } from '@/ui';
+import { Stack, Text } from '@/ui';
 
 /** Notices on a saved reply; the PC keeps them with the message, under either name. */
 export function libraryNoticesOf(message: Message): string[] {
@@ -19,13 +19,15 @@ export function libraryNoticesFromEvents(events: readonly StreamEvent[]): string
     return [];
 }
 
-/** What the PC said about files it kept or could not add, one quiet notice each, in its own words. */
+/** What the PC said about files it kept or could not add: quiet centered lines above the reply, each left to right as the server wrote it. */
 export function LibraryNotices({ notices }: { notices: readonly string[] }) {
     if (notices.length === 0) return null;
     return (
-        <Stack gap="xs" testID="library-notices">
+        <Stack gap="xs" paddingY="sm" testID="library-notices" accessibilityRole="text">
             {notices.map((text, i) => (
-                <Notice key={`${i}-${text}`} tone="warning" role="note" message={text} />
+                <Text key={`${i}-${text}`} role="caption" tone="muted" align="center" dir="ltr">
+                    {text}
+                </Text>
             ))}
         </Stack>
     );

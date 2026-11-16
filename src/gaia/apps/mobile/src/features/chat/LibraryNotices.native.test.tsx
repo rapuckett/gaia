@@ -40,6 +40,14 @@ describeNative('library notices on a reply', () => {
         expect(screen.getByText('b.md has the same content as a.md')).toBeTruthy();
     });
 
+    it('puts them above the reply as quiet left-to-right captions', async () => {
+        await show(reply({ library_notices: [NOTICE] }));
+        const notice = screen.getByText(NOTICE);
+        expect(notice.props.style).toEqual(expect.objectContaining({ writingDirection: 'ltr', textAlign: 'center' }));
+        const order = (id: string) => JSON.stringify(screen.toJSON()).indexOf(id);
+        expect(order('library-notices')).toBeLessThan(order('Done.'));
+    });
+
     it('shows nothing extra without them', async () => {
         await show(reply());
         expect(screen.queryByTestId('library-notices')).toBeNull();
