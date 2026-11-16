@@ -5,7 +5,7 @@ import { ref, type MessageKey } from '@webui/i18n/registry';
 
 import { GaiaApiError } from '@/api/errors';
 import type { ContextChoice, ProviderModel } from '@/api/client.types';
-import { describeError, type Translate } from '@/i18n/useT';
+import { describeError, ltr, type Translate } from '@/i18n/useT';
 import { ctxLabel } from '@webui/components/modelMeta';
 import { sameModelId, shortModelName } from '@webui/utils/modelList.core';
 import { usd } from '@webui/components/settings/cloudPrice';
@@ -21,7 +21,7 @@ export function modelLabel(m: Pick<ProviderModel, 'id' | 'display_name'>): strin
 
 /** What went wrong, in the PC's own words when it gave them. */
 export function errorText(err: unknown, t: Translate): string {
-    return err instanceof GaiaApiError ? err.detail : describeError(err, t);
+    return err instanceof GaiaApiError ? ltr(err.detail) : describeError(err, t);
 }
 
 /** Keeps a size with its unit whole inside right-to-left text. */

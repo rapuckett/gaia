@@ -169,7 +169,7 @@ export function ChatDrawerContent({ activeId, onSelect, onClose, onNewChat, onPc
             {q !== '' && searchFailed ? (
                 <Notice
                     tone="danger"
-                    title={t.compose((say) => say('sidebar.searchFailed', { error: '' }))}
+                    title={t('mobileApp.chats.searchFailedLabel')}
                     message={search.error instanceof GaiaApiError ? ltr(search.error.detail) : t.compose((say) => describeErrorWith(search.error, say))}
                 />
             ) : null}
