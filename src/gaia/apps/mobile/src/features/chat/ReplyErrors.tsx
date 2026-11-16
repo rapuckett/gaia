@@ -8,11 +8,13 @@ import { isErrorContent } from '@webui/utils/answerErrors.core';
 
 import type { Message } from '@/api/client.types';
 import { useSession } from '@/data';
+import { PcOnlyAction } from '@/features/logs/PcOnlyAction';
+import { openPolicyReceipts } from '@/features/notifications/openPolicyReceipts';
 import { ModelServerDownNotice } from '@/features/model/ModelServerDownNotice';
 import { describeError, useT } from '@/i18n/useT';
 import { openLink } from '@/platform/openLink';
 import { Button, Icon, Notice, Row, Stack, Text } from '@/ui';
-import { Info } from '@/ui/icons';
+import { Archive, Info } from '@/ui/icons';
 
 import { chatErrorInfo, namesFailureRecord, reportTitle } from './chatErrors';
 import { phoneBugReportUrl } from './bugReport';
@@ -44,7 +46,15 @@ function PcOnlyFailureLines({ showLog, showReport }: { showLog: boolean; showRep
     return (
         <>
             {showLog ? <PcOnlyLine text={t('mobileApp.pcOnly.logs')} testID="pc-only-logs" /> : null}
-            {showReport ? <PcOnlyLine text={t('mobileApp.pcOnly.report')} testID="pc-only-report" /> : null}
+            {showReport ? (
+                <PcOnlyAction
+                    label={t('setup.logs.report')}
+                    icon={Archive}
+                    note={t('msg.reportNote')}
+                    detail={t('setup.logs.reportOnPc')}
+                    testID="pc-only-report"
+                />
+            ) : null}
         </>
     );
 }
@@ -75,9 +85,13 @@ function PolicyNotice({ alert }: { alert: NonNullable<TurnTail['policyAlert']> }
                 message={t('chat.policyBlocked', { tool: alert.tool || t('activity.policy.unknownTool') })}
                 action={{ label: t('banner.dismiss'), onPress: () => setDismissed(alert.seq) }}
             />
-            <Text role="label" tone="secondary">
-                {t('activity.policy.receiptUnavailable')}
-            </Text>
+            {alert.receiptId ? (
+                <Button variant="secondary" size="sm" label={t('chat.policyViewReceipt')} onPress={() => openPolicyReceipts(alert.receiptId)} testID="policy-view-receipt" />
+            ) : (
+                <Text role="label" tone="secondary">
+                    {t('activity.policy.receiptUnavailable')}
+                </Text>
+            )}
         </Stack>
     );
 }

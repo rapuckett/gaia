@@ -8,7 +8,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { REMOVE_UNDO_MS } from '@webui/utils/documentLibrary.core';
 
-import type { DocumentListResponse } from '@/api/client.types';
+import type { DocumentListResponse, IndexFolderResponse } from '@/api/client.types';
 import { createFakeClient } from '@/api/fake';
 import { GaiaApiError, GaiaError, GaiaNetworkError } from '@/api/errors';
 import { GaiaClientProvider } from '@/data';
@@ -113,6 +113,75 @@ describe('DocumentsScreen', () => {
             fireEvent.press(await screen.findByText('Add a file'));
             expect(await screen.findByText('Video files not supported')).toBeTruthy();
             expect(client.uploaded).toEqual([]);
+        });
+    });
+
+    describe('adding by a path on the PC', () => {
+        const chat = { id: 'c1', title: 'A chat', created_at: '2026-11-14T00:00:00Z', updated_at: '2026-11-14T00:00:00Z', model: '', system_prompt: null, message_count: 1, document_ids: [] };
+        const typePath = async (path: string) => {
+            await fireEvent.changeText(await screen.findByLabelText('File path to add'), path);
+            await fireEvent.press(screen.getByText('Add'));
+        };
+
+        it('sends the path as typed, trimmed, for the open chat to read, attaches it and clears the box', async () => {
+            const client = createFakeClient({ sessions: [chat] });
+            await mount(client, 'c1');
+            await typePath('  /Users/me/Documents/notes.txt ');
+            expect(await screen.findByText(/Added notes\.txt to/)).toBeTruthy();
+            expect(client.uploadedPaths).toEqual([{ filepath: '/Users/me/Documents/notes.txt', sessionId: 'c1' }]);
+            expect(client.indexedFolders).toEqual([]);
+            expect(client.attached).toEqual([{ sessionId: 'c1', docId: 'doc-1' }]);
+            expect(screen.getByLabelText('File path to add').props.value).toBe('');
+        });
+
+        it('adds a typed folder at its top level only and says what it added', async () => {
+            const folderDoc = (id: string, filename: string) => ({ ...doc(id, filename, 'complete', 100), filepath: `/Users/me/Contracts/${filename}` });
+            const pcFolders = { '/Users/me/Contracts': { indexed: 2, failed: 0, skipped: 1, skipped_images: 0, documents: [folderDoc('k1', 'msa.pdf'), folderDoc('k2', 'nda.docx')] as IndexFolderResponse['documents'], errors: [] } };
+            const client = createFakeClient({ sessions: [chat], pcFolders });
+            await mount(client, 'c1');
+            await typePath('/Users/me/Contracts');
+            expect(await screen.findByText(/^Added 2 files from "Contracts"\. Skipped 1 file of a type GAIA can't add\. Subfolders aren't included\.$/)).toBeTruthy();
+            expect(client.indexedFolders).toEqual([{ folderPath: '/Users/me/Contracts', recursive: false, sessionId: 'c1' }]);
+            expect(client.attached).toEqual([{ sessionId: 'c1', docId: 'k1' }, { sessionId: 'c1', docId: 'k2' }]);
+        });
+
+        it("shows the PC's refusal as it sent it and keeps the path for another try", async () => {
+            const documentUploadError = new GaiaApiError(403, "Away from the PC, GAIA shows files only from the folders a chat was given. Keychains isn't in this chat's folders.");
+            const client = createFakeClient({ sessions: [chat], documentUploadError });
+            await mount(client, 'c1');
+            await typePath('/Users/me/Library/Keychains');
+            expect(await screen.findByText(/Keychains isn't in this chat's folders/)).toBeTruthy();
+            expect(client.indexedFolders).toEqual([]);
+            expect(screen.getByLabelText('File path to add').props.value).toBe('/Users/me/Library/Keychains');
+        });
+
+        it("words a refusal code in the app's language, with the PC's sentence for a code it lacks", async () => {
+            const refuse = (code: string) => new GaiaApiError(403, 'PC sentence for an odd code.', undefined, undefined, { code, name: 'Keychains' });
+            await mount(createFakeClient({ sessions: [chat], documentUploadError: refuse('not_in_chat_folders') }), 'c1');
+            await typePath('/Users/me/Library/Keychains');
+            expect(await screen.findByText(/Keychains isn't in this chat's folders: add its folder to the chat on your PC/)).toBeTruthy();
+            expect(screen.queryByText(/PC sentence/)).toBeNull();
+            await screen.unmount();
+            await mount(createFakeClient({ sessions: [chat], documentUploadError: refuse('something_new') }), 'c1');
+            await typePath('/Users/me/Library/Keychains');
+            // The PC's English sentence is its own detail line; the message is ours.
+            expect(await screen.findByText('PC sentence for an odd code.')).toBeTruthy();
+            expect(screen.getByText("GAIA can't read files in that location")).toBeTruthy();
+        });
+
+        it("keeps a folder's unreadable-file reason out of the translated sentence", async () => {
+            const bad = doc('k1', 'msa.pdf', 'complete', 100);
+            const pcFolders = { '/Users/me/Contracts': { indexed: 1, failed: 1, skipped: 0, skipped_images: 0, documents: [bad] as IndexFolderResponse['documents'], errors: ['scan.pdf: the file is damaged\ntrace'] } };
+            await mount(createFakeClient({ sessions: [chat], pcFolders }), 'c1');
+            await typePath('/Users/me/Contracts');
+            expect(await screen.findByText('scan.pdf: the file is damaged')).toBeTruthy();
+            expect(screen.getByText(/1 file couldn't be added\. Subfolders aren't included\.$/)).toBeTruthy();
+        });
+
+        it('has no path box without an open chat, whose folders the PC would read from', async () => {
+            await mount(createFakeClient());
+            expect(await screen.findByText('Add a file')).toBeTruthy();
+            expect(screen.queryByLabelText('File path to add')).toBeNull();
         });
     });
 

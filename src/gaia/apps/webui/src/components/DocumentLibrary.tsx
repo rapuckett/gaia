@@ -14,43 +14,16 @@ import { requestErrorParam } from '../utils/requestErrors';
 import { formatSize } from '../utils/format';
 import { examplePath } from '../utils/platform';
 import { cleanPastedPath } from '../utils/pastedPath';
-import { INDEX_POLL_MS, REMOVE_UNDO_MS, countText, elapsed, failureHint, formatFullTimestamp, formatTimestamp, isIndexing, splitFailureReason } from '../utils/documentLibrary.core';
+import { INDEX_POLL_MS, REMOVE_UNDO_MS, countText, describeFolderResult, elapsed, failureHint, formatFullTimestamp, formatTimestamp, isIndexing, splitFailureReason } from '../utils/documentLibrary.core';
 
 export { INDEX_POLL_MS, REMOVE_UNDO_MS };
 import { UploadErrorToast } from './UnsupportedFeature';
 import { fileExtension, unsupportedTypeMessage } from '../utils/uploadErrors.core';
-import type { Document, IndexFolderResponse } from '../types';
-import { useT, type Translate } from '../i18n/useT';
-import { pluralKey } from '../i18n/registry';
+import type { Document } from '../types';
+import { useT } from '../i18n/useT';
 import { IndexingProgress } from './IndexingProgress';
 import { isServerFailure, serverFailureText } from '../utils/documentFailure';
 import './DocumentLibrary.css';
-
-/** One sentence on what folder indexing added, skipped and couldn't read. */
-function describeFolderResult(t: Translate, folderName: string, result: IndexFolderResponse): string {
-    const skipped = result.skipped ?? 0;
-    return t.compose((say) => {
-        const parts: string[] = [];
-        if (result.indexed > 0) {
-            parts.push(say(pluralKey('docs.folder.indexed', result.indexed), { n: result.indexed, name: folderName }));
-        } else if (result.failed === 0) {
-            parts.push(say('docs.folder.none', { name: folderName }));
-        }
-        if (skipped > 0) {
-            parts.push(say(pluralKey('docs.folder.skipped', skipped), { n: skipped }));
-        }
-        const images = result.skipped_images ?? 0;
-        if (images > 0) {
-            parts.push(say(pluralKey('docs.folder.images', images), { n: images }));
-        }
-        if (result.failed > 0) {
-            parts.push(say(pluralKey('docs.folder.failed', result.failed), { n: result.failed }));
-            if (result.errors[0]) parts.push(result.errors[0].split('\n')[0]);
-        }
-        parts.push(say('docs.folder.noSubfolders'));
-        return parts.join(' ');
-    });
-}
 
 interface PendingRemoval { id: string; name: string }
 

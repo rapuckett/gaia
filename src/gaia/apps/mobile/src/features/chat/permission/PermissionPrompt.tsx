@@ -87,7 +87,7 @@ function Collapsible({ text, limit = PROMPT_CODE_PREVIEW_LINES }: { text: string
             {long ? (
                 <Pressable
                     onPress={() => setExpanded((v) => !v)}
-                    accessibilityState={{ expanded }}
+                    aria-expanded={expanded}
                     accessibilityLabel={expanded ? t('prompt.showLess') : t('prompt.showAllLines', { n: lines.length })}
                 >
                     <Text role="label" tone="accent" weight="medium">
@@ -379,7 +379,7 @@ export function PermissionPrompt({
                             )}
                             {left !== null && !typing ? (
                                 <Text role="caption" tone="muted" testID="perm-timer">
-                                    {isolate(formatCountdown(left), 'ltr')} {'·'} {t('prompt.timer')}
+                                    {t('countdown.left', { time: mark(formatCountdown(left)) })} {'·'} {t('prompt.timer')}
                                 </Text>
                             ) : null}
                         </Stack>

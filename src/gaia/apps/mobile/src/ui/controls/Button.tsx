@@ -60,7 +60,7 @@ export function Button({
                 disabled={disabled}
                 minSize={size === 'sm' ? 44 : undefined}
                 accessibilityLabel={accessibilityLabel ?? label}
-                accessibilityState={{ busy: !!busy }}
+                aria-busy={!!busy}
                 testID={testID}
             >
                 {({ pressed }) => (

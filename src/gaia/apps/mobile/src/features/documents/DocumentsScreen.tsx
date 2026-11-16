@@ -36,6 +36,8 @@ export interface LibraryStart {
     // A document id: its removal is waiting on Undo.
     removing?: string;
     add?: AddStart;
+    // The text in the PC path box.
+    path?: string;
     // A frozen clock and when each row began indexing, so the elapsed time is the same on every shot.
     indexing?: IndexingSeed;
 }
@@ -125,7 +127,7 @@ function Library({ chat, onBrowseFiles, onPreview, initial }: { chat: OpenChat |
     };
     const attachedIds = targetChat ? targetChat.documentIds : nextIds;
     const loadFailed = query.isError ? loadFailedText(t, query.error) : null;
-    const adder = <AddDocuments chatId={targetChat?.id ?? null} chatName={chat?.name ?? null} onStart={action.dismiss} onBrowse={onBrowseFiles} initialLine={initial?.add} />;
+    const adder = <AddDocuments chatId={targetChat?.id ?? null} chatName={chat?.name ?? null} onStart={action.dismiss} onBrowse={onBrowseFiles} pcChatId={chat?.id ?? null} initialLine={initial?.add} initialPath={initial?.path} />;
     const retry = { label: t('docs.loadRetry'), onPress: () => void query.refetch() };
 
     return (
@@ -137,7 +139,7 @@ function Library({ chat, onBrowseFiles, onPreview, initial }: { chat: OpenChat |
                 </Stack>
             ) : null}
             {query.isPending ? <ListSkeleton rows={4} /> : null}
-            {loadFailed && documents.length === 0 ? <ErrorState title={loadFailed} action={retry} /> : null}
+            {loadFailed && documents.length === 0 ? <ErrorState title={loadFailed.text} detail={loadFailed.detail} action={retry} /> : null}
             {query.data && documents.length === 0 ? <EmptyState title={t('docs.empty')} message={t('docs.emptyHintPhone')} /> : null}
             {removal.pending ? (
                 <Stack paddingX="lg" paddingY="sm">
@@ -158,7 +160,7 @@ function Library({ chat, onBrowseFiles, onPreview, initial }: { chat: OpenChat |
                     ListHeaderComponent={
                         <Stack gap="sm" paddingX="lg" paddingY="sm">
                             {note ? <Notice tone="success" role="note" message={note} onDismiss={() => setNote(null)} /> : null}
-                            {loadFailed ? <Notice tone="danger" message={loadFailed} action={retry} /> : null}
+                            {loadFailed ? <Notice tone="danger" message={loadFailed.text} detail={loadFailed.detail} action={retry} /> : null}
                             {action.error ? <Notice tone="danger" message={action.error} onDismiss={action.dismiss} dismissLabel={t('docs.dismissError')} /> : null}
                             {stats ? (
                                 <Row gap="sm" wrap>

@@ -1,10 +1,11 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import type { DocumentListResponse } from '@/api/client.types';
+import type { DocumentListResponse, PreflightReport } from '@/api/client.types';
 import { GaiaApiError, GaiaError, GaiaNetworkError, GaiaUploadUnsupportedError } from '@/api/errors';
 import { createFakeClient, type FakeClientData } from '@/api/fake';
 
+import type { Document } from '@webui/types';
 import { unsupportedTypeMessage } from '@webui/utils/uploadErrors.core';
 
 import type { LibraryStart } from './DocumentsScreen';
@@ -59,6 +60,20 @@ const FAILED = [
 
 const LONG = Array.from({ length: 24 }, (_, i) => doc(`l${i}`, i % 5 === 0 ? `quarterly-financial-review-for-the-board-of-directors-draft-${i}.pdf` : `document-${i + 1}.${['pdf', 'txt', 'md', 'xlsx'][i % 4]}`, 40_000 + i * 173_000, { indexed_at: ago(10 + i * 90) }));
 
+const CONTRACTS = [
+    doc('k1', 'supplier-msa.pdf', 2_400_000, { filepath: '/Users/me/Documents/Contracts/supplier-msa.pdf', indexed_at: ago(0) }),
+    doc('k2', 'nda-acme.docx', 88_000, { filepath: '/Users/me/Documents/Contracts/nda-acme.docx', indexed_at: ago(0) }),
+    doc('k3', 'renewals.xlsx', 61_000, { filepath: '/Users/me/Documents/Contracts/renewals.xlsx', indexed_at: ago(0) }),
+];
+
+const folderResult = (documents: LibraryDoc[], over: { skipped?: number; skipped_images?: number; errors?: string[] } = {}) => {
+    const { skipped = 0, skipped_images = 0, errors = [] } = over;
+    return { indexed: documents.length, failed: errors.length, skipped, skipped_images, documents: documents as Document[], errors };
+};
+
+// What a PC says to a phone asking for a path outside the chat's folders.
+const AWAY = 'Away from the PC, GAIA shows files only from the folders a chat was given. Keychains isn’t in this chat’s folders.';
+
 const library = (documents: LibraryDoc[]): DocumentListResponse => ({
     documents, total: documents.length, total_chunks: documents.length * 12, total_size_bytes: documents.reduce((n, d) => n + d.file_size, 0),
 });
@@ -67,7 +82,11 @@ const session = (document_ids: string[]) => ({
     id: CHAT_ID, title: 'Board prep', created_at: ago(120), updated_at: ago(5), model: '', system_prompt: null, message_count: 4, document_ids,
 });
 
-const COMMON: FakeClientData = { sessions: [session([])], documents: library([]) };
+const COMMON: FakeClientData = {
+    sessions: [session([])],
+    documents: library([]),
+    preflight: { os: 'mac-arm64', detected_platform: 'mac-arm64', ram_gb: 32, disk_free_gb: 200, npu_detected: false, gpu_name: null, gpu_vram_gb: null, lemonade_running: true, compatible: true } as PreflightReport,
+};
 
 const scene = (over: Partial<DocumentsScene> & { docs?: LibraryDoc[]; attached?: string[]; data?: FakeClientData }): DocumentsScene => {
     const { docs = [], attached = [], data, ...rest } = over;
@@ -106,6 +125,24 @@ export const DOCUMENTS_SCENES: Record<string, DocumentsScene> = {
     'add-too-large': scene({ docs: MIXED, start: { add: { kind: 'failed', upload: { filename: 'big-archive.pdf', status: 400, kind: 'too_large', error: { key: 'docs.tooLargeDetail', params: { max: '100' } } } } } }),
     'add-no-uploads': scene({ docs: MIXED, start: { add: { kind: 'unsupported', cause: new GaiaUploadUnsupportedError() } } }),
     'add-picker-failed': scene({ docs: MIXED, start: { add: { kind: 'picker', cause: new GaiaError('mobileApp.error.photosDenied') } } }),
+    'path-empty': scene({ docs: MIXED }),
+    'path-invalid': scene({
+        docs: MIXED,
+        start: { path: '/Users/me/Documents/q4-forecst.xlsx', add: { kind: 'failed', upload: { filename: 'q4-forecst.xlsx', status: 404, error: { key: 'mobileApp.error.http', params: { status: 404, detail: 'File not found: there is no file at /Users/me/Documents/q4-forecst.xlsx. Check the path for typos.' } } } } },
+    }),
+    'path-refused': scene({
+        docs: MIXED,
+        start: { path: '/Users/me/Library/Keychains', add: { kind: 'refused', cause: new GaiaApiError(403, AWAY, undefined, undefined, { code: 'not_in_chat_folders', name: 'Keychains' }) } },
+    }),
+    'path-adding': scene({ docs: MIXED, start: { path: '/Users/me/Documents/q4-forecast.xlsx', add: { kind: 'busy', name: 'q4-forecast.xlsx' } } }),
+    'folder-adding': scene({ docs: MIXED, start: { path: '/Users/me/Documents/Contracts', add: { kind: 'busy', name: 'Contracts', folder: true } } }),
+    'folder-indexed-one': scene({ docs: [CONTRACTS[0]!, ...MIXED], start: { add: { kind: 'folder', name: 'Contracts', result: folderResult([CONTRACTS[0]!]) } } }),
+    'folder-indexed-other': scene({ docs: [...CONTRACTS, ...MIXED], start: { add: { kind: 'folder', name: 'Contracts', result: folderResult(CONTRACTS, { skipped: 2, skipped_images: 3 }) } } }),
+    'folder-partial': scene({
+        docs: [...CONTRACTS.slice(0, 2), FAILED[0]!, ...MIXED],
+        start: { add: { kind: 'folder', name: 'Contracts', result: folderResult(CONTRACTS.slice(0, 2), { errors: ['scan-0042.pdf: the file is damaged'] }) } },
+    }),
+    'folder-none': scene({ docs: MIXED, start: { add: { kind: 'folder', name: 'Photos', result: folderResult([], { skipped: 4, skipped_images: 12 }) } } }),
 };
 
 /** The library on a fake PC; a removal that never finishes and a library read that fails are overlaid on the fake. */

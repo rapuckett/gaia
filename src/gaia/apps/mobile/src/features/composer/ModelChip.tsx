@@ -12,13 +12,13 @@ import { ControlChip } from './ControlChip';
 import { ModelMenu } from './ModelMenu';
 
 /** The model the next message runs on; tap to switch, download or see what only the PC can change. */
-export function ModelChip({ turnRunning = false, initialOpen = false, initialInfoRow, forceSwitching }: { turnRunning?: boolean; initialOpen?: boolean; initialInfoRow?: string; forceSwitching?: string }) {
+export function ModelChip({ turnRunning = false, initialOpen = false, initialInfoRow, forceSwitching, initialSwitchError }: { turnRunning?: boolean; initialOpen?: boolean; initialInfoRow?: string; forceSwitching?: string; initialSwitchError?: string }) {
     const t = useT();
     const [open, setOpen] = useState(initialOpen);
     // A model picked while a reply runs is used from the next message.
     const [queued, setQueued] = useState<string | null>(null);
     const { data } = useLocalModelStatus(open);
-    const [switchError, setSwitchError] = useState<string | null>(null);
+    const [switchError, setSwitchError] = useState<string | null>(initialSwitchError ?? null);
     const active = useActiveModel().data;
     const select = useSelectModel();
     const { mutate } = select;

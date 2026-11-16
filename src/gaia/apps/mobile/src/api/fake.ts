@@ -31,6 +31,7 @@ import type {
     GaiaClient,
     GpuMemoryStatus,
     HealthResponse,
+    IndexFolderResponse,
     LemonadeFound,
     LemonadeTarget,
     LemonadeTargetBody,
@@ -255,6 +256,8 @@ export interface FakeClientData {
     documentUploadError?: Error;
     /** The state an uploaded document comes back in; defaults to complete. */
     uploadStatus?: DocumentResponse['indexing_status'];
+    /** Folders on the PC, by path: uploadDocumentByPath answers the PC's is_folder 400, and indexFolder answers this (an Error is thrown). */
+    pcFolders?: Record<string, IndexFolderResponse | Error>;
     /** What getDocumentStatus answers, by document; one not listed reports its row's status. */
     documentStatuses?: Record<string, Partial<DocumentStatus>>;
     /** Makes a library action on a document reject with this message, by action. */
@@ -412,6 +415,8 @@ export interface FakeGaiaClient extends GaiaClient {
     readonly uploaded: PickedFile[];
     /** The PC paths indexed with uploadDocumentByPath, with the chat that was named. */
     readonly uploadedPaths: { filepath: string; sessionId: string }[];
+    /** Each indexFolder call, with the chat that was named. */
+    readonly indexedFolders: { folderPath: string; recursive: boolean; sessionId: string }[];
     readonly attached: { sessionId: string; docId: string }[];
     readonly capabilityReads: string[];
     /** Each folder removal and internet switch, in order. */
@@ -514,6 +519,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
     let polls = 0;
     const uploaded: PickedFile[] = [];
     const uploadedPaths: { filepath: string; sessionId: string }[] = [];
+    const indexedFolders: FakeGaiaClient['indexedFolders'] = [];
     const attached: FakeGaiaClient['attached'] = [];
     const capabilityReads: string[] = [];
     const environmentChanges: FakeGaiaClient['environmentChanges'] = [];
@@ -620,6 +626,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         installs,
         uploaded,
         uploadedPaths,
+        indexedFolders,
         attached,
         capabilityReads,
         environmentChanges,
@@ -1375,6 +1382,10 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         },
         async uploadDocumentByPath(filepath, sessionId) {
             if (data.documentUploadError) throw data.documentUploadError;
+            if (data.pcFolders?.[filepath]) {
+                const message = `${filepath} is a folder, not a file. Index it as a folder to add the documents inside it.`;
+                throw new GaiaApiError(400, message, undefined, undefined, { status: 'is_folder', message });
+            }
             uploadedPaths.push({ filepath, sessionId });
             const name = filepath.split(/[\\/]/).pop() ?? filepath;
             const doc = {
@@ -1389,6 +1400,17 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             library.documents.push(doc);
             library.total += 1;
             return doc;
+        },
+        async indexFolder(folderPath, recursive, sessionId) {
+            indexedFolders.push({ folderPath, recursive, sessionId });
+            const result = data.pcFolders?.[folderPath];
+            if (result === undefined) throw new GaiaApiError(404, 'Folder not found');
+            if (result instanceof Error) throw result;
+            for (const doc of result.documents) {
+                library.documents.push(doc as DocumentResponse);
+                library.total += 1;
+            }
+            return result;
         },
         async browseFiles(_sessionId, path) {
             const folder = data.fileFolders?.[path ?? ''];

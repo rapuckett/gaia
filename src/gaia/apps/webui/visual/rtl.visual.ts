@@ -291,7 +291,8 @@ const audit = (page: Page): Promise<string[]> =>
             const hint = getComputedStyle(input, '::placeholder');
             paint.font = `${hint.fontStyle} ${hint.fontWeight} ${hint.fontSize} ${hint.fontFamily}`;
             const s = getComputedStyle(input);
-            const room = input.clientWidth - parseFloat(s.paddingLeft) - parseFloat(s.paddingRight);
+            // offsetWidth, not clientWidth: an input's clientWidth here already leaves out the padding.
+            const room = input.offsetWidth - ['borderLeftWidth', 'borderRightWidth', 'paddingLeft', 'paddingRight'].reduce((sum, side) => sum + parseFloat(s[side as 'paddingLeft']), 0);
             const need = paint.measureText(input.placeholder.replace(/[⁦-⁩]/g, '')).width;
             if (need > room + 1) problems.push(`placeholder cut off (${Math.round(need)}px in ${Math.round(room)}px): "${input.placeholder.slice(0, 40)}"`);
         }
@@ -1229,6 +1230,39 @@ for (const locale of ['ar', 'en']) {
     });
 }
 
+/** An answer naming a macOS path and a Linux file URL in inline code. */
+const POSIX_ANSWER_PATH = '/Users/test/Documents/Q3 report.pdf';
+const FILE_URL_ANSWER_PATH = 'file:///home/test/notes/plan.md';
+
+for (const locale of ['ar', 'en']) {
+    test(`a POSIX path in inline code is a chip (${locale})`, async ({ page }, info) => {
+        await open(page, `#${ANSWER_SESSION}`, locale, (p) =>
+            p.route((url) => url.pathname === `/api/sessions/${ANSWER_SESSION}/messages`, (route) =>
+                route.fulfill({
+                    json: {
+                        messages: [
+                            { id: 1, session_id: ANSWER_SESSION, role: 'user', content: 'Where did you save them?', created_at: NOW.toISOString(), rag_sources: null },
+                            { id: 2, session_id: ANSWER_SESSION, role: 'assistant', content: `The report is at \`${POSIX_ANSWER_PATH}\` and the plan at \`${FILE_URL_ANSWER_PATH}\`.`, created_at: NOW.toISOString(), rag_sources: null },
+                        ],
+                    },
+                }),
+            ),
+        );
+        const chips = page.locator('.file-path-link');
+        await expect(chips).toHaveText([POSIX_ANSWER_PATH, FILE_URL_ANSWER_PATH]);
+        expect(await audit(page)).toEqual([]);
+        await page.screenshot({ path: info.outputPath('posix-paths.png') });
+
+        await page.route((url) => url.pathname === '/api/files/open', (route) =>
+            route.fulfill({ status: 404, json: { detail: 'Path not found' } }),
+        );
+        await chips.first().click();
+        await expect(page.locator('.file-path-error')).toBeVisible();
+        expect(await audit(page)).toEqual([]);
+        await page.screenshot({ path: info.outputPath('posix-path-gone.png') });
+    });
+}
+
 /** A chat with 150 documents attached: more than one chat searches at once. */
 const MANY_DOCS = Array.from({ length: 150 }, (_, i) => ({
     id: `station-${i}`, filename: `station_${String(i).padStart(3, '0')}.txt`,
@@ -1287,8 +1321,8 @@ for (const locale of ['ar', 'en']) {
             const r = (await chip.boundingBox())!;
             expect(r.x, 'the path chip starts outside the column').toBeGreaterThanOrEqual(box.x - 1);
             expect(r.x + r.width, 'the path chip runs past the column').toBeLessThanOrEqual(box.x + box.width + 1);
-            // The whole path stays one click target, with the full path in its title.
-            await expect(chip).toHaveAttribute('title', new RegExp(`${LONG_PATH.replace(/[\\.]/g, '\\$&')}$`));
+            // The whole path stays one click target, with the full path in its title (in Arabic the English gloss follows it).
+            await expect(chip).toHaveAttribute('title', new RegExp(`${LONG_PATH.replace(/[\\.]/g, '\\$&')}`));
         }
         const sideways = await scroller.evaluate((el) => el.scrollWidth - el.clientWidth);
         expect(sideways, 'the chat scrolls sideways').toBeLessThanOrEqual(1);
@@ -2269,6 +2303,7 @@ for (const locale of ['ar', 'en']) {
 
         test('long list, every group and detail open', async ({ page }) => {
             await openModelPage(page, locale);
+            await expect(groups(page).first()).toBeAttached();
             const closed = await groups(page).evaluateAll((els) => els.filter((el) => !(el as HTMLDetailsElement).open).length);
             expect(closed).toBeGreaterThan(0);
             await page.locator('.settings-disclosure:not([open]) > summary').evaluateAll((els) => els.forEach((el) => (el as HTMLElement).click()));
@@ -4606,7 +4641,7 @@ for (const locale of ['ar', 'en']) {
 }
 
 const PYTHON_PROMPT = [{
-    type: 'permission_request', tool: 'run_python', tool_label: 'running python', confirm_id: 'c-rtl',
+    type: 'permission_request', tool: 'run_python', tool_label: 'running python', confirm_id: 'c-rtl', timeout_seconds: 305,
     args: { code: 'p = r"C:\\Users\\you\\notes.txt"\nt = open(p, encoding="utf-8").read()\nprint(len(t))' },
 }];
 
@@ -4637,6 +4672,9 @@ for (const locale of ['ar', 'en']) {
         await expect(page.getByRole('button', { name: /Allow once/ })).toContainText(locale === 'ar' ? 'السماح مرة واحدة' : 'Allow once');
         expect(await audit(page)).toEqual([]);
         if (locale === 'ar') expect(await untranslated(page, '.perm-card', 'bdi, pre')).toEqual([]);
+        const timer = page.locator('.perm-card-timer');
+        await expect(timer).toContainText(locale === 'ar' ? /متبقٍّ/ : /left/);
+        await expect(timer.locator('bdi[dir="ltr"]').first()).toHaveText(/^[45]:\d\d$/);
         await shot(page, `permission-python-${locale}`);
     });
 }

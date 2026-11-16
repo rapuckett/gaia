@@ -78,7 +78,7 @@ export function ControlChip({ label, icon, onPress, menu, warning, chip, disable
                 disabled={disabled}
                 accessibilityLabel={accessibilityLabel ?? label}
                 accessibilityHint={accessibilityHint}
-                accessibilityState={menu ? { expanded: false } : undefined}
+                aria-expanded={menu ? false : undefined}
                 minSize={44}
                 testID={testID}
             >

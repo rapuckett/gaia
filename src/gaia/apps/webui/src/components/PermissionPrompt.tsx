@@ -195,7 +195,7 @@ function PromptCard({ notification }: { notification: GaiaNotification }) {
                     <ChangePreview args={args} />
                 </div>
                 {remaining !== null && !expired && (
-                    <span className="perm-card-timer" title={t('prompt.timer')}>{formatCountdown(remaining)}</span>
+                    <span className="perm-card-timer" title={t('prompt.timer')}><MarkedText text={t('countdown.left', { time: markLtr(formatCountdown(remaining)) })} /></span>
                 )}
             </div>
             {hasArgs && !exactText && (

@@ -46,7 +46,7 @@ export function PillTabs({ tabs, value, onChange, accessibilityLabel, testID }: 
                         disabled={tab.disabled && !on}
                         accessibilityRole="radio"
                         accessibilityLabel={tab.accessibilityLabel ?? tab.label}
-                        accessibilityState={{ checked: on }}
+                        aria-checked={on}
                         minSize={44}
                         testID={testID ? `${testID}-${tab.value}` : undefined}
                     >
