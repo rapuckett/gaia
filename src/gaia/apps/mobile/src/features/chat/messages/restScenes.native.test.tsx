@@ -22,7 +22,14 @@ jest.mock('expo-router', () => ({
     useNavigation: () => ({ openDrawer: jest.fn() }),
     usePathname: () => '/dev',
 }));
-jest.mock('@/features/nav/ScreenHeader', () => ({ ScreenHeader: () => null }));
+jest.mock('@/features/nav/ScreenHeader', () => ({
+    ScreenHeader: ({ titleNode, end }: { titleNode?: React.ReactNode; end?: React.ReactNode }) => (
+        <>
+            {titleNode}
+            {end}
+        </>
+    ),
+}));
 
 const t = translator('en');
 const describeNative = Platform.OS === 'web' ? describe.skip : describe;
