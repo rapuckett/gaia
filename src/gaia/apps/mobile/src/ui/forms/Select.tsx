@@ -14,6 +14,8 @@ import { Text } from '../text/Text';
 
 export interface SelectProps {
     label: string;
+    /** Keeps the label for screen readers only, for a select whose purpose is plain from context. */
+    hideLabel?: boolean;
     value?: string;
     options: ChoiceOption[];
     onChange: (value: string) => void;
@@ -22,16 +24,18 @@ export interface SelectProps {
     testID?: string;
 }
 
-export function Select({ label, value, options, onChange, placeholder, disabled, testID }: SelectProps) {
+export function Select({ label, hideLabel, value, options, onChange, placeholder, disabled, testID }: SelectProps) {
     const { colors, radius, space } = useTheme();
     const [open, setOpen] = useState(false);
     const current = options.find((o) => o.value === value);
     const shown = current?.label ?? placeholder ?? '';
     return (
         <View style={{ gap: 6 }}>
-            <Text role="label" weight="medium" tone="secondary">
-                {label}
-            </Text>
+            {hideLabel ? null : (
+                <Text role="label" weight="medium" tone="secondary">
+                    {label}
+                </Text>
+            )}
             <Pressable
                 onPress={() => setOpen(true)}
                 disabled={disabled}

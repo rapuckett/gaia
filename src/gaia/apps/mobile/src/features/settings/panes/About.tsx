@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: MIT
 
 import Constants from 'expo-constants';
-import { Linking } from 'react-native';
 
 import { useT } from '@/i18n/useT';
+import { openLinkFromPress } from '@/platform/openLink';
 import { Badge, Button, Card, Ltr, Row, Stack, Text } from '@/ui';
 import { ExternalLink } from '@/ui/icons';
 
@@ -18,7 +18,7 @@ const LINKS = [
 ] as const;
 
 function open(url: string) {
-    Linking.openURL(url).catch((error: unknown) => console.error(`Opening ${url} failed`, error));
+    openLinkFromPress(url);
 }
 
 /** The phone app's own version and the project's links. */
@@ -31,11 +31,11 @@ export default function About() {
                 <Stack gap="xs">
                     <Row gap="sm" align="center">
                         {version ? (
-                            <Text role="title" weight="semibold">
+                            <Text role="title" weight="semibold" accessibilityRole="header">
                                 <Ltr>{`GAIA v${version}`}</Ltr>
                             </Text>
                         ) : null}
-                        <Badge label={t.bare('mem.beta')} />
+                        <Badge label={t.bare('mem.beta')} accessibilityLabel={t('mem.beta')} />
                     </Row>
                     <Text role="label" tone="secondary">{t('settings.advanced.about')}</Text>
                 </Stack>

@@ -9,6 +9,7 @@ import { Eye, EyeOff } from '../icons';
 import { IconButton } from './IconButton';
 import { fontFamily } from '../theme/fonts';
 import { useTheme } from '../theme/ThemeProvider';
+import { contentDir } from '../text/direction';
 import { Text } from '../text/Text';
 import { Icon } from './Icon';
 import { Row } from '../layout/layout';
@@ -78,7 +79,9 @@ export function TextField({
 }: TextFieldProps) {
     const { colors, radius, type } = useTheme();
     const t = useT();
-    const rtl = useDirection() === 'rtl';
+    const uiRtl = useDirection() === 'rtl';
+    // Typed text sets its own side, like a bubble; secrets and empty fields follow the UI.
+    const rtl = secureTextEntry ? uiRtl : contentDir(value, uiRtl ? 'rtl' : 'ltr') === 'rtl';
     const [focused, setFocused] = useState(false);
     const [revealed, setRevealed] = useState(false);
     const canReveal = !!secureTextEntry && !!revealable;
@@ -94,7 +97,7 @@ export function TextField({
         trailing
     );
     const size = Math.max(type.body, metrics.inputFontSize);
-    const lineHeight = Math.round(size * 1.4);
+    const lineHeight = Math.round(size * (rtl ? metrics.lineHeightAr : 1.4));
     const { fontScale } = useWindowDimensions();
     const borderColor = error ? colors.danger : focused ? colors.accent : colors.border;
     return (

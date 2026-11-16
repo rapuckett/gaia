@@ -5,6 +5,7 @@ import { AssistantBubble } from './AssistantBubble';
 import { MessageListView } from './MessageList';
 import { UserBubble } from './UserBubble';
 import type { StartOpen } from './useMessageActions';
+import { RecordingProgress } from '../recording/RecordingProgress';
 import { GuideCard } from '../cards/GuideCard';
 import { FIXTURES, GUIDE_WORKOUT, type MessagesFixture } from './__fixtures__/messages';
 import { Screen } from '@/ui';
@@ -34,7 +35,7 @@ export function MessagesGallery({ state }: { state: MessagesGalleryState }) {
             <MessageListView
                 messages={fixture.messages}
                 loading={state === 'loading'}
-                live={fixture.live ? <AssistantBubble message={fixture.live} streaming /> : undefined}
+                live={fixture.live ? <AssistantBubble message={fixture.live} streaming /> : fixture.events ? <RecordingProgress events={fixture.events} /> : undefined}
             />
         </Screen>
     );

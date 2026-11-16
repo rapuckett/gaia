@@ -115,7 +115,7 @@ export function SetupScreen({ onReady, onClose, renderStep }: SetupScreenProps) 
 
     return (
         <SetupFooterProvider>
-            <Screen scroll footer={<SetupFooterBar />}>
+            <Screen scroll footer={<SetupFooterBar />} footerDivider>
                 <Stack gap="lg" padding="lg">
                     <DirectionNotice />
                     <SetupRail steps={steps} onOpen={goTo} />

@@ -76,4 +76,13 @@ describe('KeyScreen', () => {
         await waitFor(() => expect(ctx.startedRun).toHaveBeenCalled());
         expect(client.selected).toEqual(['fireworks.glm']);
     });
+
+    it('with the AMD gateway unreachable and already chosen, says so and offers to check again', async () => {
+        const { client } = await mount([provider({ id: 'amd', name: 'AMD LLM Gateway', network: { reachable: false } })], { activeModel: { provider: 'amd', model: 'm', remote: true } as never });
+        await screen.findByText("Unavailable: needs AMD's network or VPN.");
+        const reads = jest.spyOn(client, 'listProviderSummaries');
+        fireEvent.press(screen.getByLabelText('Check the AMD gateway again'));
+        await waitFor(() => expect(reads).toHaveBeenCalled());
+    });
 });
+
