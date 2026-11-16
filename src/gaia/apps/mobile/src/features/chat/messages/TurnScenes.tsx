@@ -124,7 +124,7 @@ export function TurnScenes({ state }: { state: TurnScene }) {
             <GaiaClientProvider client={client}>
                 <UIProvider>
                     <Screen>
-                        <Stack gap="md" paddingY="md">
+                        <Stack gap="md" paddingX="gutter" paddingY="md">
                             <Body state={state} />
                         </Stack>
                     </Screen>
