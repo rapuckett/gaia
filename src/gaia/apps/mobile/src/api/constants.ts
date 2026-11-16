@@ -152,6 +152,7 @@ export const ENDPOINTS = {
     connectorsEvents: '/api/connectors/events',
     systemResources: '/api/system/resources',
     systemStatus: '/api/system/status',
+    systemWarmUp: '/api/system/warm-up',
     document: '/api/documents/{doc_id}',
     documentCancel: '/api/documents/{doc_id}/cancel',
     documentFile: '/api/documents/{doc_id}/file',
