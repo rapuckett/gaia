@@ -43,11 +43,11 @@ describeNative('FileBrowserScreen selection bar', () => {
         await mount(onAsk);
         const ask = await screen.findByLabelText(t('fileBrowser.askGaia'));
         const library = screen.getByLabelText(t('fileBrowser.addToLibrary'));
-        expect(ask.props.accessibilityState?.disabled).toBe(true);
-        expect(library.props.accessibilityState?.disabled).toBe(true);
+        expect(ask).toBeDisabled();
+        expect(library).toBeDisabled();
 
         fireEvent.press(await screen.findByLabelText(t('fileBrowser.selectAria', { name: 'q3-board.pdf' })));
-        await waitFor(() => expect(screen.getByLabelText(t('fileBrowser.askGaia')).props.accessibilityState?.disabled).toBeFalsy());
+        await waitFor(() => expect(screen.getByLabelText(t('fileBrowser.askGaia'))).toBeEnabled());
         fireEvent.press(screen.getByLabelText(t('fileBrowser.askGaia')));
 
         await waitFor(() => expect(onAsk).toHaveBeenCalledWith(t('mobileApp.files.askOne', { name: 'q3-board.pdf' })));

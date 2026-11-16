@@ -37,7 +37,7 @@ export function MarkedRow({ kind, checked, disabled, name, chips, onPress, child
             disabled={disabled}
             accessibilityRole={kind}
             accessibilityLabel={label}
-            accessibilityState={{ checked, disabled: !!disabled }}
+            aria-checked={checked}
         >
             <Row gap="sm" align="start">
                 <Text tone={checked ? 'accent' : 'muted'}>{mark}</Text>

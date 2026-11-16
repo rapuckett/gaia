@@ -39,10 +39,10 @@ describeNative('CloudSpending', () => {
 
         await fireEvent.changeText(input, '-5');
         await screen.findByText('Enter an amount above zero, like 20.');
-        expect(screen.getByTestId('spend-limit-save').props.accessibilityState).toMatchObject({ disabled: true });
+        expect(screen.getByTestId('spend-limit-save')).toBeDisabled();
 
         await fireEvent.changeText(input, '20');
-        await waitFor(() => expect(screen.getByTestId('spend-limit-save').props.accessibilityState).toMatchObject({ disabled: false }));
+        await waitFor(() => expect(screen.getByTestId('spend-limit-save')).toBeEnabled());
         await fireEvent.press(screen.getByTestId('spend-limit-save'));
         await waitFor(() => expect(client.spendingLimitSets).toEqual([20]));
         await screen.findByText(/of your .*\$20\.00.* limit/);
