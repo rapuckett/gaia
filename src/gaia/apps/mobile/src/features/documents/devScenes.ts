@@ -82,7 +82,11 @@ const session = (document_ids: string[]) => ({
     id: CHAT_ID, title: 'Board prep', created_at: ago(120), updated_at: ago(5), model: '', system_prompt: null, message_count: 4, document_ids,
 });
 
-const COMMON: FakeClientData = { sessions: [session([])], documents: library([]) };
+const COMMON: FakeClientData = {
+    sessions: [session([])],
+    documents: library([]),
+    preflight: { os: 'mac-arm64', detected_platform: 'mac-arm64', ram_gb: 32, disk_free_gb: 200, npu_detected: false, gpu_name: null, gpu_vram_gb: null, lemonade_running: true, compatible: true } as PreflightReport,
+};
 
 const scene = (over: Partial<DocumentsScene> & { docs?: LibraryDoc[]; attached?: string[]; data?: FakeClientData }): DocumentsScene => {
     const { docs = [], attached = [], data, ...rest } = over;

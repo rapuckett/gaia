@@ -18,6 +18,11 @@ export function isFileRefusal(error: unknown): error is GaiaApiError {
     return e?.status === 403 && typeof e.body?.code === 'string';
 }
 
+/** True when the refusal's code is one this app words itself. */
+export function isKnownRefusalCode(error: GaiaApiError): boolean {
+    return typeof error.body?.code === 'string' && error.body.code in REFUSAL_KEYS;
+}
+
 /** The PC's file refusal in the app's language; its own sentence when the code is one this app lacks. */
 export function fileRefusalText(error: GaiaApiError, t: Translate): string {
     const code = error.body?.code;

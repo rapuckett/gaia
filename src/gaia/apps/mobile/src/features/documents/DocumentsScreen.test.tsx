@@ -164,7 +164,18 @@ describe('DocumentsScreen', () => {
             await screen.unmount();
             await mount(createFakeClient({ sessions: [chat], documentUploadError: refuse('something_new') }), 'c1');
             await typePath('/Users/me/Library/Keychains');
+            // The PC's English sentence is its own detail line; the message is ours.
             expect(await screen.findByText('PC sentence for an odd code.')).toBeTruthy();
+            expect(screen.getByText("GAIA can't read files in that location")).toBeTruthy();
+        });
+
+        it("keeps a folder's unreadable-file reason out of the translated sentence", async () => {
+            const bad = doc('k1', 'msa.pdf', 'complete', 100);
+            const pcFolders = { '/Users/me/Contracts': { indexed: 1, failed: 1, skipped: 0, skipped_images: 0, documents: [bad] as IndexFolderResponse['documents'], errors: ['scan.pdf: the file is damaged\ntrace'] } };
+            await mount(createFakeClient({ sessions: [chat], pcFolders }), 'c1');
+            await typePath('/Users/me/Contracts');
+            expect(await screen.findByText('scan.pdf: the file is damaged')).toBeTruthy();
+            expect(screen.getByText(/1 file couldn't be added\. Subfolders aren't included\.$/)).toBeTruthy();
         });
 
         it('has no path box without an open chat, whose folders the PC would read from', async () => {
