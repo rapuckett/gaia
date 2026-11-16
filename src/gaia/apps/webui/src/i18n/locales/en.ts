@@ -3757,6 +3757,7 @@ export const enMessages = {
     'mobileApp.pcOnly.refusal': "Do this on your PC. GAIA doesn't allow it from a paired phone.",
     'mobileApp.pcOnly.report': 'GAIA saved a problem report for this on the PC. Create the troubleshooting report there to attach to a bug report.',
     'mobileApp.connectCard.onPc': 'Connect your account on your PC, in Settings under Connectors. Then ask again here.',
+    'mobileApp.agentNotGranted.note': 'Your account is connected, but GAIA needs permission to use it. Allow it on your PC, in Settings under Connectors, then ask again.',
     'mobileApp.emailConnect.prompt': 'Connect your email account to use Email Triage.',
     'mobileApp.emailConnect.region': 'Connect email account',
     'mobileApp.emailConnect.reopen': 'Reopen {name} sign-in',

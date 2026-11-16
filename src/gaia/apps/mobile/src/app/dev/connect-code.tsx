@@ -10,6 +10,7 @@ import { createFakeClient, type FakeClientData } from '@/api/fake';
 import { GaiaClientProvider } from '@/data';
 import { ConnectAccountCard } from '@/features/chat/cards/ConnectAccountCard';
 import { EmailConnect } from '@/features/chat/EmailConnect';
+import { GrantNote } from '@/features/chat/GrantNote';
 import { DeviceCodeBlock } from '@/features/connectors/DeviceCodeSignIn';
 import { devGalleryEnabled } from '@/features/dev/devGallery';
 import { Screen, Stack, Text, UIProvider } from '@/ui';
@@ -81,6 +82,9 @@ export default function ConnectCodeGalleryRoute() {
                         <Faked data={{ connectors: MAILBOXES, deviceSignIn: CODE, signInEnd: { outcome: 'failed' } }}>
                             <EmailConnect content="NOT_CONNECTED: no mailbox is connected." />
                         </Faked>
+                    </Scene>
+                    <Scene title={'Connected, but the agent is not granted'}>
+                        <GrantNote />
                     </Scene>
                     <Scene title={'Waiting for sign-in'}>
                         <DeviceCodeBlock code={CODE} />
