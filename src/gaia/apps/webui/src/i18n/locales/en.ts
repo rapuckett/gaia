@@ -1795,7 +1795,7 @@ export const enMessages = {
     'setup.test.count': 'Tests done: {done} of {total}',
     'setup.test.job.server': 'Model server answers',
     'setup.test.job.chat': 'Chat: loads and answers',
-    'setup.test.job.vision': "Reading images: names a test image's colour",
+    'setup.test.job.vision': "Reading images: names a test image's color",
     'setup.test.job.embedding': 'Documents and memory: reads a test sentence',
     'setup.test.job.speech': 'Speech to text: transcribes a test sound',
     'setup.test.job.voice': 'Text to speech: speaks a sentence',

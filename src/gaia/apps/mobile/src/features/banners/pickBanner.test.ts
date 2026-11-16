@@ -75,6 +75,12 @@ describe('backend errors read as one sentence', () => {
         expect(banner?.details).toBeUndefined();
     });
 
+    it('glosses a download of unknown size once in Arabic', () => {
+        const title = pickBanner(withStatus({ download_progress: { state: 'starting', model_name: 'M', percent: 0, file: null, file_index: 0, total_files: 0, downloaded_bytes: 0, total_bytes: 0, message: null } }), null, translator('ar'))?.title ?? '';
+        expect(title.match(/large download/g)).toHaveLength(1);
+        expect(title).toContain('تنزيل كبير');
+    });
+
     it('shows slow for a 504 only, below the downloads and pick loads, and clears with the error', () => {
         const slow = new GaiaApiError(504, 'gateway timeout');
         const banner = pickBanner(undefined, slow, t);

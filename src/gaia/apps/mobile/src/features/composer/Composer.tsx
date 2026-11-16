@@ -38,6 +38,8 @@ export interface ComposerProps {
     starting?: boolean;
     /** Files attached to the message: the + button, a chip each, and their links go out with the text. */
     attachments?: Attachments;
+    /** Opens the attach menu, with Paste image offered (developer gallery). */
+    attachMenu?: { open?: boolean; paste?: boolean };
     leftControls?: ReactNode;
     rightControls?: ReactNode;
 }
@@ -64,6 +66,7 @@ export function Composer({
     disabledReason,
     starting = false,
     attachments,
+    attachMenu,
     leftControls,
     rightControls,
 }: ComposerProps) {
@@ -172,7 +175,7 @@ export function Composer({
                         testID="composer-input"
                     />
                     <Row gap="sm" align="center">
-                        <View style={FIXED}>{attachments ? <AttachButton onPick={attachments.add} onError={attachments.addFailed} disabled={!!disabledReason} /> : null}</View>
+                        <View style={FIXED}>{attachments ? <AttachButton onPick={attachments.add} onError={attachments.addFailed} disabled={!!disabledReason} initialOpen={attachMenu?.open} showPaste={attachMenu?.paste} /> : null}</View>
                         <View style={CHIPS} testID="composer-controls" onLayout={(e) => setChipsWidth(e.nativeEvent.layout.width)}>
                             <ChipFitContext.Provider value={chipFit}>
                                 <View style={LEFT}>{leftControls}</View>
