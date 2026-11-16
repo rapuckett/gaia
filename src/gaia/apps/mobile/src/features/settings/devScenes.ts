@@ -1,7 +1,9 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { createFakeClient } from '@/api/fake';
+import { createFakeClient, type FakeClientData } from '@/api/fake';
+import type { SystemStatus } from '@webui/types';
+
 import type { ContextChoice, GaiaClient, GpuMemoryStatus } from '@/api/client.types';
 import { GaiaApiError } from '@/api/errors';
 import { COMMON, GPU } from '@/features/setup/devScenes';
@@ -10,9 +12,10 @@ import type { SectionId } from './sections';
 
 /** A settings pane on a fake PC: which section, and the anchor it opens on. */
 export interface SettingsScene {
-    section: Extract<SectionId, 'model' | 'setup'>;
+    section: Extract<SectionId, 'advanced' | 'model' | 'setup'>;
     target?: string;
     gpuMemory: GpuMemoryStatus | Error;
+    status?: FakeClientData['status'];
 }
 
 const PENDING: GpuMemoryStatus = {
@@ -26,7 +29,14 @@ const CONTEXT: ContextChoice = {
 };
 const READ_ERROR = new GaiaApiError(500, 'GAIA could not read this PC’s graphics memory setting.');
 
+const NOT_INSTALLED = {
+    lemonade_running: false, lemonade_error: null, start_command: null, start_instruction: 'Run gaia init to install the model server.',
+    model_loaded: null, embedding_model_loaded: false, disk_space_gb: 120, memory_available_gb: 40, initialized: false,
+    context_size_sufficient: true, download_progress: null, expected_model_loaded: false, model_downloaded: null,
+} as unknown as SystemStatus;
+
 export const SETTINGS_SCENES: Record<string, SettingsScene> = {
+    'advanced-not-installed': { section: 'advanced', gpuMemory: GPU, status: NOT_INSTALLED },
     'gpu-adjustable': { section: 'model', target: 'gpu-memory', gpuMemory: GPU },
     'gpu-adjustable-setup': { section: 'setup', gpuMemory: GPU },
     'gpu-pending': { section: 'model', target: 'gpu-memory', gpuMemory: PENDING },
@@ -35,5 +45,5 @@ export const SETTINGS_SCENES: Record<string, SettingsScene> = {
 };
 
 export function settingsSceneClient(scene: SettingsScene): GaiaClient {
-    return createFakeClient({ ...COMMON, contexts: { [CHAT_MODEL]: CONTEXT }, gpuMemory: scene.gpuMemory });
+    return createFakeClient({ ...COMMON, contexts: { [CHAT_MODEL]: CONTEXT }, gpuMemory: scene.gpuMemory, ...(scene.status ? { status: scene.status } : {}) });
 }
