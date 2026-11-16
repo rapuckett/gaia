@@ -21,6 +21,8 @@ export interface StateAction {
 interface StateProps {
     title?: string;
     message?: string;
+    /** A technical reason kept in its own language, under the message. */
+    detail?: string;
     action?: StateAction;
 }
 
@@ -52,7 +54,7 @@ export function EmptyState({ title, message, action, icon }: StateProps & { titl
     );
 }
 
-export function ErrorState({ title, message, action, onRetry }: StateProps & { onRetry?: () => void }) {
+export function ErrorState({ title, message, detail, action, onRetry }: StateProps & { onRetry?: () => void }) {
     const t = useT();
     return (
         <Centered>
@@ -64,6 +66,11 @@ export function ErrorState({ title, message, action, onRetry }: StateProps & { o
                 {message ? (
                     <Text tone="secondary" align="center">
                         {message}
+                    </Text>
+                ) : null}
+                {detail ? (
+                    <Text role="caption" tone="muted" dir="ltr">
+                        {detail}
                     </Text>
                 ) : null}
                 {onRetry ? (
