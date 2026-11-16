@@ -5,7 +5,7 @@ import { createFakeClient, type ProfileScript } from '@/api/fake';
 import type { GaiaClient, Goal, MemoryActivityDay, MemoryConversation, MemoryKnowledgeEntry, MemoryKnowledgeItem, MemoryStats, MemoryToolStat, MemoryTurn, MemoryUpcomingItem, ProfileStreamEvent } from '@/api/client.types';
 import { GaiaApiError, GaiaNetworkError } from '@/api/errors';
 
-export type MemoryScene = 'on' | 'off' | 'loading' | 'failed' | 'actionFails' | 'statsEmpty' | 'statsManyTools' | 'aboutEmpty' | 'aboutFailed' | 'aboutMany' | 'goalsEmpty' | 'goalsFailed' | 'goalsStoreError' | 'knowledgeRich' | 'knowledgeEmpty' | 'knowledgeFailed' | 'knowledgeMany' | 'profileIdle' | 'profileScanning' | 'profileReview' | 'profileSaved' | 'profileInferring' | 'profileInferenceReview' | 'profileFailed' | 'profileOff';
+export type MemoryScene = 'on' | 'off' | 'loading' | 'failed' | 'actionFails' | 'statsEmpty' | 'statsManyTools' | 'aboutEmpty' | 'aboutFailed' | 'aboutMany' | 'goalsEmpty' | 'goalsFailed' | 'goalsStoreError' | 'goalsStoreDamaged' | 'knowledgeRich' | 'knowledgeEmpty' | 'knowledgeFailed' | 'knowledgeMany' | 'profileIdle' | 'profileScanning' | 'profileReview' | 'profileSaved' | 'profileInferring' | 'profileInferenceReview' | 'profileFailed' | 'profileOff';
 
 export const SAMPLE_MEMORY_STATS: MemoryStats = {
     knowledge: {
@@ -225,7 +225,8 @@ export function memoryScene(scene: MemoryScene): GaiaClient {
         memoryKnowledge: knowledgeFor(scene),
         memoryConversations: scene === 'knowledgeFailed' ? new GaiaApiError(503, 'The backend is not running') : scene === 'knowledgeEmpty' ? { sessions: [], turns: {} } : BROWSER_CONVERSATIONS,
         goals: scene === 'goalsFailed' ? new GaiaApiError(503, 'The backend is not running') : scene === 'goalsEmpty' ? [] : SAMPLE_GOALS,
-        goalStoreError: scene === 'goalsStoreError' ? 'The goal list is unreadable: unexpected end of JSON input.' : null,
+        goalStoreError: scene === 'goalsStoreError' || scene === 'goalsStoreDamaged' ? 'The goal list is unreadable: unexpected end of JSON input.' : null,
+        goalStoreDamaged: scene === 'goalsStoreDamaged',
         embeddingCoverage: { total_items: 42, with_embedding: 36, without_embedding: 6, coverage_pct: 85.7 },
         memoryActionResults: {
             consolidate: scene === 'actionFails' ? new GaiaApiError(500, 'Database is locked') : { status: 'ok', consolidated: 3, extracted_items: 12 },

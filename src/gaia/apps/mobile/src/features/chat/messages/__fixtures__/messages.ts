@@ -107,6 +107,9 @@ export const GUIDE_WORKOUT = {
     notes: 'Stop if anything hurts.',
 };
 
+/** A workout whose first step is a sets step, so the guided view opens on the set counter. */
+export const GUIDE_SETS = { ...GUIDE_WORKOUT, steps: [GUIDE_WORKOUT.steps[1]!, GUIDE_WORKOUT.steps[2]!, GUIDE_WORKOUT.steps[3]!] };
+
 const GUIDE = [
     msg('user', 'Banana bread, a workout, a packing list and two calculators, please.', 0),
     withCards(msg('assistant', 'Everything is a card you can change.', 1), [

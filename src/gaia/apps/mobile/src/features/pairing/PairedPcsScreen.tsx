@@ -8,6 +8,7 @@ import { describeError, useT } from '@/i18n/useT';
 import { ActionSheet, Badge, Button, EmptyState, ErrorState, Icon, IconButton, ListRow, ListSkeleton, Notice, Row, Screen, Sheet, Stack, Text } from '@/ui';
 import { Cpu, Ellipsis, Plus, Trash2 } from '@/ui/icons';
 
+import { pcCaption } from './pcCaption';
 import { routeKindOf, useActiveConnection } from './routes';
 import { isCurrentPc, useForgetPc, usePairedPcs, useUsePc } from './pairedPcs';
 import type { PairedPc } from './service';
@@ -43,8 +44,8 @@ export function PairedPcsScreen({ onAdd }: { onAdd: () => void }) {
                         <ListRow
                             key={item.id}
                             title={item.name}
-                            subtitle={current && routeKey ? t(routeKey) : undefined}
-                            subtitleLines={2}
+                            subtitle={current ? (routeKey ? t(routeKey) : undefined) : pcCaption(item, pcs.data, t)}
+                            subtitleLines={4}
                             selected={current}
                             leading={<Icon icon={Cpu} size="md" tone="secondary" />}
                             onPress={current ? undefined : () => use.mutate(item)}
