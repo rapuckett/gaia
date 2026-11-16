@@ -67,6 +67,7 @@ import type {
     GaiaClient,
     GpuMemoryStatus,
     HealthResponse,
+    IndexFolderResponse,
     LemonadeFound,
     LemonadeTarget,
     LinkPreview,
@@ -144,6 +145,7 @@ import {
     chatSpendingPath,
     cloudPricesPath,
     documentFilePath,
+    documentIndexFolderPath,
     documentUploadPathPath,
     filesBrowsePath,
     filesSearchPath,
@@ -1107,6 +1109,10 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         uploadDocumentByPath(filepath, sessionId, options) {
             return postJson<DocumentResponse>(documentUploadPathPath(sessionId), { filepath }, options?.signal);
+        },
+
+        indexFolder(folderPath, recursive, sessionId, options) {
+            return postJson<IndexFolderResponse>(documentIndexFolderPath(sessionId), { folder_path: folderPath, recursive }, options?.signal);
         },
 
         browseFiles(sessionId, path, options) {

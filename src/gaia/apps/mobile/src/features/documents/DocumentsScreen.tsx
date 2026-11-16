@@ -36,6 +36,8 @@ export interface LibraryStart {
     // A document id: its removal is waiting on Undo.
     removing?: string;
     add?: AddStart;
+    // The text in the PC path box.
+    path?: string;
     // A frozen clock and when each row began indexing, so the elapsed time is the same on every shot.
     indexing?: IndexingSeed;
 }
@@ -125,7 +127,7 @@ function Library({ chat, onBrowseFiles, onPreview, initial }: { chat: OpenChat |
     };
     const attachedIds = targetChat ? targetChat.documentIds : nextIds;
     const loadFailed = query.isError ? loadFailedText(t, query.error) : null;
-    const adder = <AddDocuments chatId={targetChat?.id ?? null} chatName={chat?.name ?? null} onStart={action.dismiss} onBrowse={onBrowseFiles} initialLine={initial?.add} />;
+    const adder = <AddDocuments chatId={targetChat?.id ?? null} chatName={chat?.name ?? null} onStart={action.dismiss} onBrowse={onBrowseFiles} pcChatId={chat?.id ?? null} initialLine={initial?.add} initialPath={initial?.path} />;
     const retry = { label: t('docs.loadRetry'), onPress: () => void query.refetch() };
 
     return (

@@ -116,6 +116,52 @@ describe('DocumentsScreen', () => {
         });
     });
 
+    describe('adding by a path on the PC', () => {
+        const chat = { id: 'c1', title: 'A chat', created_at: '2026-11-14T00:00:00Z', updated_at: '2026-11-14T00:00:00Z', model: '', system_prompt: null, message_count: 1, document_ids: [] };
+        const typePath = async (path: string) => {
+            fireEvent.changeText(await screen.findByLabelText('File path to add'), path);
+            fireEvent.press(screen.getByText('Add'));
+        };
+
+        it('sends the path as typed, trimmed, for the open chat to read, attaches it and clears the box', async () => {
+            const client = createFakeClient({ sessions: [chat] });
+            await mount(client, 'c1');
+            await typePath('  /Users/me/Documents/notes.txt ');
+            expect(await screen.findByText(/Added notes\.txt to/)).toBeTruthy();
+            expect(client.uploadedPaths).toEqual([{ filepath: '/Users/me/Documents/notes.txt', sessionId: 'c1' }]);
+            expect(client.indexedFolders).toEqual([]);
+            expect(client.attached).toEqual([{ sessionId: 'c1', docId: 'doc-1' }]);
+            expect(screen.getByLabelText('File path to add').props.value).toBe('');
+        });
+
+        it('adds a typed folder at its top level only and says what it added', async () => {
+            const folderDoc = (id: string, filename: string) => ({ ...doc(id, filename, 'complete', 100), filepath: `/Users/me/Contracts/${filename}` });
+            const pcFolders = { '/Users/me/Contracts': { indexed: 2, failed: 0, skipped: 1, skipped_images: 0, documents: [folderDoc('k1', 'msa.pdf'), folderDoc('k2', 'nda.docx')], errors: [] } };
+            const client = createFakeClient({ sessions: [chat], pcFolders });
+            await mount(client, 'c1');
+            await typePath('/Users/me/Contracts');
+            expect(await screen.findByText(/^Added 2 files from "Contracts"\. Skipped 1 file of a type GAIA can't add\. Subfolders aren't included\.$/)).toBeTruthy();
+            expect(client.indexedFolders).toEqual([{ folderPath: '/Users/me/Contracts', recursive: false, sessionId: 'c1' }]);
+            expect(client.attached).toEqual([{ sessionId: 'c1', docId: 'k1' }, { sessionId: 'c1', docId: 'k2' }]);
+        });
+
+        it("shows the PC's refusal as it sent it and keeps the path for another try", async () => {
+            const documentUploadError = new GaiaApiError(403, "Away from the PC, GAIA shows files only from the folders a chat was given. Keychains isn't in this chat's folders.");
+            const client = createFakeClient({ sessions: [chat], documentUploadError });
+            await mount(client, 'c1');
+            await typePath('/Users/me/Library/Keychains');
+            expect(await screen.findByText(/Keychains isn't in this chat's folders/)).toBeTruthy();
+            expect(client.indexedFolders).toEqual([]);
+            expect(screen.getByLabelText('File path to add').props.value).toBe('/Users/me/Library/Keychains');
+        });
+
+        it('has no path box without an open chat, whose folders the PC would read from', async () => {
+            await mount(createFakeClient());
+            expect(await screen.findByText('Add a file')).toBeTruthy();
+            expect(screen.queryByLabelText('File path to add')).toBeNull();
+        });
+    });
+
     describe('remove with Undo', () => {
         const library = () => ({ documents: [doc('a', 'notes.txt', 'complete', 2048)], total: 1, total_chunks: 3, total_size_bytes: 2048 }) as DocumentListResponse;
         beforeEach(() => jest.useFakeTimers());
