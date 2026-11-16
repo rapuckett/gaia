@@ -4606,7 +4606,7 @@ for (const locale of ['ar', 'en']) {
 }
 
 const PYTHON_PROMPT = [{
-    type: 'permission_request', tool: 'run_python', tool_label: 'running python', confirm_id: 'c-rtl',
+    type: 'permission_request', tool: 'run_python', tool_label: 'running python', confirm_id: 'c-rtl', timeout_seconds: 305,
     args: { code: 'p = r"C:\\Users\\you\\notes.txt"\nt = open(p, encoding="utf-8").read()\nprint(len(t))' },
 }];
 
@@ -4637,6 +4637,9 @@ for (const locale of ['ar', 'en']) {
         await expect(page.getByRole('button', { name: /Allow once/ })).toContainText(locale === 'ar' ? 'السماح مرة واحدة' : 'Allow once');
         expect(await audit(page)).toEqual([]);
         if (locale === 'ar') expect(await untranslated(page, '.perm-card', 'bdi, pre')).toEqual([]);
+        const timer = page.locator('.perm-card-timer');
+        await expect(timer).toContainText(locale === 'ar' ? /متبقٍّ/ : /left/);
+        await expect(timer.locator('bdi[dir="ltr"]').first()).toHaveText(/^[45]:\d\d$/);
         await shot(page, `permission-python-${locale}`);
     });
 }
