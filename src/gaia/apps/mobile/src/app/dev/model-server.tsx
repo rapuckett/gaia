@@ -13,6 +13,7 @@ import { KeyedScene } from '@/features/dev/KeyedScene';
 import { useT } from '@/i18n/useT';
 import { AppErrorBoundary } from '@/features/errors/AppErrorBoundary';
 import { NeedPrompt } from '@/features/model/ModelNeededHost';
+import { ModelRestoreNotice } from '@/features/model/ModelRestoreNotice';
 import { ModelServerDownNotice } from '@/features/model/ModelServerDownNotice';
 import { ModelStatusSheet } from '@/features/model/ModelStatusSheet';
 import { MODEL_SCENES, modelSceneClient, type ModelScene } from '@/features/model/devScenes';
@@ -53,6 +54,12 @@ function Body({ scene }: { scene: ModelScene }) {
             return (
                 <Stack padding="lg">
                     <FlagshipAgentBanner initialState={scene.agentState} />
+                </Stack>
+            );
+        case 'restore':
+            return (
+                <Stack padding="lg">
+                    <ModelRestoreNotice onPick={noop} />
                 </Stack>
             );
         case 'error':
