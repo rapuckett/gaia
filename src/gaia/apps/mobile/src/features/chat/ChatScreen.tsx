@@ -31,7 +31,6 @@ import { MessageList } from './messages/MessageList';
 import { TailIssues } from './ReplyErrors';
 import { registerOpenChat } from './sendToOpenChat';
 import { OfflineNotice, SessionPanel } from './session-panel';
-import { useSessionPanelStore } from './session-panel/panelStore';
 import { buildTail, serverDownReplyId } from './tailState';
 import { TurnTail } from './TurnTail';
 import { useTurnAnnouncer, useTurnEnd } from './useTurnAnnouncer';
@@ -52,12 +51,7 @@ export function ChatScreen({ sessionId, onManageDocuments }: { sessionId: string
     const stopped = useRef(false);
     const [actionError, setActionError] = useState<unknown>(null);
     const [panelOpen, setPanelOpen] = useState(false);
-    const setPanelSection = useSessionPanelStore((s) => s.setSection);
-    // The Environment section may have been collapsed; open it so the tap shows the folders.
-    const showEnvironment = () => {
-        setPanelSection('environment', true);
-        setPanelOpen(true);
-    };
+    const showEnvironment = () => setPanelOpen(true);
     const busy = stream.status !== 'idle';
     // A comparison waiting on its model holds new messages like a running reply does.
     const { comparing } = useAnswerComparison(sessionId);
