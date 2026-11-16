@@ -179,6 +179,8 @@ export interface UploadErrorInput {
     status?: number;
     /** The backend's error kind (`detail.status`), e.g. `corrupted`. */
     kind?: string | null;
+    /** The person can drop a file into the window (the desktop, not the phone). */
+    canDrop?: boolean;
 }
 
 export interface UploadErrorView {
@@ -191,7 +193,7 @@ export interface UploadErrorView {
 }
 
 /** The title, help and report link for a failed upload, by what went wrong. */
-export function describeUploadError(t: Translate, { filename, error, status, kind }: UploadErrorInput): UploadErrorView {
+export function describeUploadError(t: Translate, { filename, error, status, kind, canDrop }: UploadErrorInput): UploadErrorView {
     const ext = fileExtension(filename);
     const category = ext ? getUnsupportedCategory(ext) : null;
     const isFileTypeError = error.toLowerCase().includes('unsupported file type') ||
@@ -205,7 +207,7 @@ export function describeUploadError(t: Translate, { filename, error, status, kin
 
     // A wrong path, a file outside the readable folders or a damaged file is the user's to fix, not a bug to report.
     if (permanentHint) {
-        return { title: `"${filename}" can't be read`, detail: permanentHint, icon: 'warning', report: null };
+        return { title: t('docs.cantReadFile', { name: filename }), detail: permanentHint, icon: 'warning', report: null };
     }
     const serverReason = serverFailureText(kind, t);
     if (serverReason) {
@@ -220,8 +222,8 @@ export function describeUploadError(t: Translate, { filename, error, status, kin
     }
     if (status === 403) {
         return {
-            title: `GAIA can't read files in that location`,
-            detail: `${error} Or drop the file here instead (up to 20 MB) and GAIA keeps its own copy.`,
+            title: t('docs.locationRefused'),
+            detail: canDrop ? `${error} ${t('docs.dropInstead')}` : error,
             icon: 'warning',
             report: null,
         };
@@ -236,7 +238,7 @@ export function describeUploadError(t: Translate, { filename, error, status, kin
     }
     if (isFileTypeError && !ext) {
         return {
-            title: `"${filename}" has no file extension`,
+            title: t('docs.noExtension', { name: filename }),
             detail: stripPrefix(error, 'File type not allowed:'),
             icon: 'warning',
             report: null,
@@ -244,23 +246,23 @@ export function describeUploadError(t: Translate, { filename, error, status, kin
     }
     if (isFileTypeError) {
         return {
-            title: `File type not supported: ${ext}`,
-            detail: 'This file format cannot be indexed. Supported: PDF, DOCX, PPTX, XLSX, EPUB, images (PNG, JPG, WEBP, ...), TXT, MD, CSV, JSON, HTML, XML, YAML, and 30+ code file formats.',
+            title: t('docs.fileTypeUnsupported', { ext }),
+            detail: t('docs.fileTypeUnsupportedDetail'),
             icon: 'warning',
             report: { kind: 'feature', title: `Support ${ext} file indexing` },
         };
     }
     if (isConnectionError) {
         return {
-            title: 'Connection error',
-            detail: 'Could not reach the GAIA server. Make sure the backend is running.',
+            title: t('docs.connectionError'),
+            detail: t('docs.connectionErrorDetail'),
             icon: 'alert',
             report: { kind: 'bug', title: `Upload connection error for ${filename}` },
         };
     }
     return {
-        title: `Failed to index "${filename}"`,
-        detail: error || 'An unexpected error occurred during indexing.',
+        title: t('docs.indexFailed', { name: filename }),
+        detail: error || t('docs.indexFailedDetail'),
         icon: 'bug',
         report: { kind: 'bug', title: `Indexing error: ${error.slice(0, 80)}` },
     };

@@ -55,7 +55,12 @@ export async function pasteImage(): Promise<PickedFile[]> {
 
 /** Photos and videos from the library; an empty list when the person cancels. */
 export async function pickPhotos(): Promise<PickedFile[]> {
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images', 'videos'], allowsMultipleSelection: true });
+    // Compatible hands over a JPEG for an iPhone's HEIC photo, which the PC refuses.
+    const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images', 'videos'],
+        allowsMultipleSelection: true,
+        preferredAssetRepresentationMode: ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
+    });
     if (result.canceled) return [];
     return result.assets.map((a) => ({
         uri: a.uri,

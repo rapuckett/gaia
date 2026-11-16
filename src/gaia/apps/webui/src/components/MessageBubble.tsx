@@ -14,6 +14,8 @@ import { AgentActivity } from './AgentActivity';
 import { EmailConnectCta, isAuthRequiredMessage } from './email/EmailConnectCta';
 import { RenderCard } from './render/RenderCard';
 import * as api from '../services/api';
+import { ApiError } from '../services/apiErrors';
+import { requestErrorParam } from '../utils/requestErrors';
 import { log } from '../utils/logger';
 import { plainAnswerText } from '../utils/plainText';
 import { AnswerStats } from './AnswerStats';
@@ -41,7 +43,8 @@ import {
     buildCitationIndex, docForToken, findCitations, findPages,
     type CitationIndex, type CitedDoc, type FoundPage,
 } from '../utils/citations';
-import { WIN_PATH_ONLY_RE, findFilePaths } from '../utils/windowsPaths';
+import { filePathOfCodeSpan } from '../utils/codeSpanPath';
+import { findFilePaths } from '../utils/windowsPaths';
 import { cleanToolCallContent } from '../utils/toolCallContent';
 export { cleanToolCallContent, escapeBareNumberLines } from '../utils/toolCallContent';
 import './MessageBubble.css';
@@ -739,20 +742,31 @@ function writtenFileFor(files: readonly string[], children: React.ReactNode): st
 }
 
 function inlineCodePath(children: React.ReactNode): string | null {
-    if (typeof children !== 'string') return null;
-    const text = children.trim();
-    return WIN_PATH_ONLY_RE.test(text) ? text : null;
+    return typeof children === 'string' ? filePathOfCodeSpan(children) : null;
+}
+
+// The open route's own 403 for a path outside the home folder; its other 403s carry their own sentence.
+const OUTSIDE_HOME_DETAIL = /under user home directory/i;
+
+function openPathError(err: unknown, path: string, t: Translate): string {
+    if (err instanceof ApiError && err.httpStatus === 403 && OUTSIDE_HOME_DETAIL.test(err.detail)) return t('msg.openPathOutsideHome', { path });
+    if (err instanceof ApiError && err.httpStatus === 404) return t('msg.openPathGone', { path });
+    return t('sp.couldntOpen', { name: path, error: requestErrorParam(err) });
 }
 
 function FilePathLink({ path, label }: { path: string; label?: string }) {
     const t = useT();
+    const [error, setError] = useState<string | null>(null);
     const handleClick = (e: React.MouseEvent) => {
         e.preventDefault();
+        setError(null);
         api.openFileOrFolder(path).catch((err) => {
             log.ui.error('Failed to open path', err);
+            setError(openPathError(err, path, t));
         });
     };
     return (
+        <>
         <span
             className="file-path-link"
             dir="ltr"
@@ -765,6 +779,8 @@ function FilePathLink({ path, label }: { path: string; label?: string }) {
             <FolderOpen size={12} className="file-path-icon" />
             {label ?? path}
         </span>
+        {error && <span className="file-path-error" role="alert" dir="auto">{error}</span>}
+        </>
     );
 }
 
@@ -924,7 +940,7 @@ function InlineCode({ className: _className, children, node: _node, ...props }: 
     const doc = inlineCodeDoc(index, children);
     if (doc) return <CitationLink doc={doc} t={t} />;
     const path = inlineCodePath(children);
-    if (path) return <FilePathLink path={path} />;
+    if (path) return <FilePathLink path={path} label={String(children).trim()} />;
     const written = writtenFileFor(writtenFiles, children);
     if (written) return <FilePathLink path={written} label={String(children).trim()} />;
     return (
