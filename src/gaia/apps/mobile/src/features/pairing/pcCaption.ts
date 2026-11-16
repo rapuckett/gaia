@@ -26,7 +26,7 @@ export function pcCaption(pc: PairedPc, all: PairedPc[], t: Translate, locale: s
     const address = isolate(homeAddress(pc), 'ltr');
     if (!pc.pairedAt || Number.isNaN(Date.parse(pc.pairedAt))) return address;
     const date = new Date(pc.pairedAt).toLocaleDateString(locale, { year: 'numeric', month: 'short', day: 'numeric' });
-    const paired = t.bare('mobileApp.pairing.pcs.pairedOn', { date: isolate(date, 'ltr') });
+    const paired = t('mobileApp.pairing.pcs.pairedOn', { date: isolate(date, 'ltr') });
     const sameDay = all.some((o) => o.id !== pc.id && o.pairedAt && !Number.isNaN(Date.parse(o.pairedAt)) && dayKey(o.pairedAt) === dayKey(pc.pairedAt!));
     return sameDay ? `${paired}\n${address}` : paired;
 }

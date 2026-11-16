@@ -46,7 +46,7 @@ export function PairedPcsScreen({ onAdd }: { onAdd: () => void }) {
                             key={item.id}
                             title={item.name}
                             subtitle={current ? (routeKey ? t(routeKey) : undefined) : pcCaption(item, pcs.data, t, locale)}
-                            subtitleLines={3}
+                            subtitleLines={4}
                             selected={current}
                             leading={<Icon icon={Cpu} size="md" tone="secondary" />}
                             onPress={current ? undefined : () => use.mutate(item)}
