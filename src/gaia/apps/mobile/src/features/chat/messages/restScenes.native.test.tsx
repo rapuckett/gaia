@@ -56,6 +56,21 @@ describeNative('card, connector and undo scenes', () => {
         expect(await screen.findByTestId('card-audio-failed', opts)).toBeTruthy();
     });
 
+    it('guide-units shows the US and Metric switch on a recipe, and the tip until it is dismissed', async () => {
+        mockParams = { state: 'guide-units' };
+        await mount(route('messages'));
+        expect(await screen.findByTestId('guide-units', opts)).toBeTruthy();
+        expect(screen.getAllByText('Metric', opts).length).toBeGreaterThan(0);
+        expect(screen.getByText(/switch units/, opts)).toBeTruthy();
+    });
+
+    it('guide-tip shows the one-time tip with its dismiss button', async () => {
+        mockParams = { state: 'guide-tip' };
+        await mount(route('messages'));
+        expect(await screen.findByTestId('guide-tip', opts)).toBeTruthy();
+        expect(screen.getByTestId('guide-tip-dismiss', opts)).toBeTruthy();
+    });
+
     it.each([
         ['serverOn', 'Disable this MCP server'],
         ['serverOff', 'Enable this MCP server'],

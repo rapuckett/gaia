@@ -38,7 +38,12 @@ export function AnswerFooter({ latencyMs, stats, ended }: AnswerFooterProps) {
                     <Stack gap="xs">
                         {route?.model ? (
                             <Text role="caption" tone="muted">
-                                {t('msg.route', { reason: route.reason ?? '' })}
+                                {t('msg.route', { reason: '' }).trim()}
+                            </Text>
+                        ) : null}
+                        {route?.model && route.reason ? (
+                            <Text role="caption" tone="muted" dir="ltr" align="start" testID="answer-route-reason">
+                                {route.reason}
                             </Text>
                         ) : null}
                         {exact.map((line) => (
