@@ -101,13 +101,15 @@ export function TextField({
     const { fontScale } = useWindowDimensions();
     const borderColor = error ? colors.danger : focused ? colors.accent : colors.border;
     return (
-        <View style={{ gap: 6, opacity: disabled ? 0.45 : 1 }}>
+        <View style={{ gap: 6 }}>
             {label ? (
-                <Text role="label" weight="medium" tone="secondary">
-                    {label}
-                </Text>
+                <View style={{ opacity: disabled ? 0.45 : 1 }}>
+                    <Text role="label" weight="medium" tone="secondary">
+                        {label}
+                    </Text>
+                </View>
             ) : null}
-            <View>
+            <View style={{ opacity: disabled ? 0.45 : 1 }}>
             <TextInput
                 ref={inputRef}
                 value={value}
@@ -147,7 +149,7 @@ export function TextField({
                     borderRadius: radius.md,
                     borderWidth: bare ? 0 : 1,
                     borderColor,
-                    backgroundColor: bare ? 'transparent' : colors.bgInput,
+                    backgroundColor: disabled ? colors.bgTertiary : bare ? 'transparent' : colors.bgInput,
                     color: colors.textPrimary,
                     fontFamily: fontFamily({ weight: 'regular', mono: false, display: false }),
                     fontSize: size,
