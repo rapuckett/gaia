@@ -26,18 +26,18 @@ type Intent = 'urgent' | 'actionable' | 'archive';
 /** How long one row's action locks the others, in case the reply never ends the wait. */
 const ACTION_LOCK_MS = 5000;
 
-/** The inbox pre-scan: rows to reply to, archive or open, then the session preferences it applied. */
-export function EmailPreScanCard({ data }: { data: unknown }) {
+/** The inbox pre-scan (`startPending` and `startNotice` only seed the dev gallery): rows to reply to, archive or open, then the session preferences it applied. */
+export function EmailPreScanCard({ data, startPending, startNotice }: { data: unknown; startPending?: string; startNotice?: boolean }) {
     const payload = resolvePreScanPayload(data);
     if (!isPreScanPayload(payload)) return <UnsupportedCard variant="invalid" render="email_pre_scan" data={data} />;
-    return <PreScan payload={payload} />;
+    return <PreScan payload={payload} startPending={startPending} startNotice={startNotice} />;
 }
 
-function PreScan({ payload }: { payload: PreScanPayload }) {
+function PreScan({ payload, startPending, startNotice }: { payload: PreScanPayload; startPending?: string; startNotice?: boolean }) {
     const t = useT();
     const [dismissed, setDismissed] = useState<ReadonlySet<string>>(() => new Set());
-    const [pending, setPending] = useState<string | null>(null);
-    const [notice, setNotice] = useState(false);
+    const [pending, setPending] = useState<string | null>(startPending ?? null);
+    const [notice, setNotice] = useState(startNotice ?? false);
     const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
     useEffect(
         () => () => {
