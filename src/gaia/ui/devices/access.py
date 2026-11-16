@@ -31,19 +31,14 @@ from . import (
     DEVICE_PORT_ENV,
     HOME_ROUTE,
     HOUSEKEEPING_SECONDS,
-    OFFERED_NETWORKS,
     PAIRING_OFFER_VERSION,
     PC_NAME_MAX,
     PENDING_DEVICE_SECONDS,
 )
-from .listener import (
-    DeviceListener,
-    ListenerError,
-    OpenRequests,
-    local_ipv4_addresses,
-)
+from .home import NoHomeNetwork, home_network
+from .listener import DeviceListener, ListenerError, OpenRequests
 from .pairing import PairingWindow, sanitize_device_name
-from .routes import AwayRoutes
+from .routes import AwayRoute, AwayRoutes
 from .storage import (
     TABLE_NAME,
     DeviceCertificateError,
@@ -54,10 +49,21 @@ from .storage import (
     server_context,
 )
 from .store import Device, DeviceStore, read_pc_id
+from .tailnet import TailnetRoute
 
 logger = get_logger(__name__)
 
 _LISTENER_SETTING = "listener"
+_ROUTE_SETTING = "route.{}"
+
+
+class AwayRouteRefused(RuntimeError):
+    """An away route didn't turn on; *code* is for the PC to translate."""
+
+    def __init__(self, code: str, detail: str) -> None:
+        super().__init__(detail)
+        self.code = code
+        self.detail = detail
 
 
 def iso(when: Optional[float]) -> Optional[str]:
@@ -98,16 +104,16 @@ def configured_port() -> int:
 
 
 def home_network_origins(host: str, port: int) -> List[str]:
-    """``https://address:port`` for each home-network address this PC has."""
+    """``https://address:port`` for each of this PC's addresses on the home network.
+
+    Raises:
+        NoHomeNetwork: The listener binds every address and the PC has no
+            home network.
+    """
     bound = ipaddress.ip_address(host)
     if not bound.is_unspecified:
         return [f"https://{bound}:{port}"]
-    offered = [ipaddress.ip_network(n) for n in OFFERED_NETWORKS]
-    return [
-        f"https://{address}:{port}"
-        for address in map(ipaddress.ip_address, local_ipv4_addresses())
-        if any(address in net for net in offered)
-    ]
+    return [f"https://{address}:{port}" for address in home_network().offered()]
 
 
 class PairingUnavailable(RuntimeError):
@@ -138,6 +144,7 @@ class DeviceAccess:
         self.pairing = PairingWindow(clock=clock)
         self.requests = OpenRequests()
         self.routes = AwayRoutes()
+        self.routes.register(TailnetRoute(port=self._listening_port))
         self._store: Optional[DeviceStore] = None
         self._listener: Optional[DeviceListener] = None
         self._pin: Optional[str] = None
@@ -200,17 +207,66 @@ class DeviceAccess:
             store = self._open_store()
             context = server_context(identity)
             port = self._port if self._port is not None else configured_port()
+            if ipaddress.ip_address(self._host).is_unspecified:
+                home_network()
             listener = DeviceListener(self._app, self, self._host, port)
             await listener.start(context)
         except UnsafeDeviceFolderError as e:
             raise self._failed(ListenerError("unsafe_folder", str(e))) from e
         except DeviceCertificateError as e:
             raise self._failed(ListenerError("certificate", str(e))) from e
+        except NoHomeNetwork as e:
+            raise self._failed(ListenerError("start_failed", e.detail)) from e
         except ListenerError as e:
             raise self._failed(e) from e
         self._listener, self._pin = listener, identity.pin
         store.set_setting(_LISTENER_SETTING, "on")
         self._housekeeping = asyncio.create_task(self._housekeep())
+        await self._resume_routes(store)
+
+    async def _resume_routes(self, store: DeviceStore) -> None:
+        for route in self.routes.all():
+            if store.setting(_ROUTE_SETTING.format(route.kind)) != "on":
+                continue
+            try:
+                await route.start()
+            except RuntimeError as e:
+                logger.error("Away route %s not resumed: %s", route.kind, e)
+
+    def _listening_port(self) -> Optional[int]:
+        return self._listener.port if self.listening and self._listener else None
+
+    async def set_route(self, kind: str, on: bool) -> None:
+        """Turn an away route on or off from the PC, and keep that across
+        restarts. Only while the listener is on, since it carries every route.
+
+        Raises:
+            KeyError: No route of *kind*.
+            AwayRouteRefused: The listener is off, or the route can't start.
+        """
+        route: Optional[AwayRoute] = self.routes.get(kind)
+        if route is None:
+            raise KeyError(kind)
+        async with self._lock:
+            store = self._store
+            if not on:
+                await route.stop()
+                if store is not None:
+                    store.set_setting(_ROUTE_SETTING.format(kind), "off")
+                return
+            if not self.listening or store is None:
+                raise AwayRouteRefused(
+                    "listener_off",
+                    "Turn on access from the home network first; away routes "
+                    "reach this PC through it.",
+                )
+            try:
+                await route.start()
+            except RuntimeError as e:
+                raise AwayRouteRefused(
+                    route.error_code or "start_failed", str(e)
+                ) from e
+            store.set_setting(_ROUTE_SETTING.format(kind), "on")
 
     def _failed(self, error: ListenerError) -> ListenerError:
         self._error = (error.code, error.detail)
@@ -311,8 +367,12 @@ class DeviceAccess:
 
     def route_origins(self) -> List[dict]:
         """Every origin a device may reach this PC at now: home, then away."""
-        port = self._listener.port if self.listening and self._listener else None
-        home = home_network_origins(self._host, port) if port else []
+        port = self._listening_port()
+        try:
+            home = home_network_origins(self._host, port) if port else []
+        except NoHomeNetwork as e:
+            logger.warning("No home origins to offer: %s", e.detail)
+            home = []
         return [
             {"kind": HOME_ROUTE, "origin": origin} for origin in home
         ] + self.routes.origins()
@@ -355,13 +415,16 @@ class DeviceAccess:
                 "listener_off",
                 "Turn on access from the home network before pairing a device.",
             )
-        origins = home_network_origins(self._host, self._listener.port or 0)
+        try:
+            origins = home_network_origins(self._host, self._listener.port or 0)
+        except NoHomeNetwork as e:
+            raise PairingUnavailable("no_home_network", e.detail) from e
         if not origins:
             raise PairingUnavailable(
                 "no_home_network",
-                "This PC has no home-network address (10.x, 172.16-31.x or "
-                "192.168.x) for a device to reach. Connect it to your home "
-                "network, then try again.",
+                "This PC's home network gave it only a link-local address "
+                "(169.254.x), which a device can't be sent to. Check that your "
+                "router hands out addresses, then try again.",
             )
         invitation, expires_at = self.pairing.open()
         return {

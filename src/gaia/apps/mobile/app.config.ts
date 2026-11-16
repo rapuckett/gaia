@@ -23,7 +23,6 @@ const MICROPHONE_USE = 'GAIA uses the microphone to record voice messages.';
 const PHOTOS_USE = 'GAIA opens your photo library so you can attach photos to a chat.';
 const PHOTOS_ADD_USE = 'GAIA saves the images you choose to your photo library.';
 const LOCAL_NETWORK_USE = 'GAIA uses your local network to connect to GAIA on your PC.';
-const FACE_ID_USE = 'GAIA uses Face ID to protect the key that connects this phone to your PC.';
 
 export function readAppEnv(value: string | undefined): AppEnv {
     if (value === 'development' || value === 'production') return value;
@@ -63,8 +62,10 @@ export default function appConfig(): ExpoConfig {
             bundleIdentifier: iosId,
             supportsTablet: true,
             infoPlist: {
-                // Every build reaches the paired PC at its home-network address; the native transport pins its certificate.
-                NSAppTransportSecurity: { NSAllowsArbitraryLoads: false, NSAllowsLocalNetworking: true },
+                // Only the dev client needs plain HTTP (Metro on the home network); the paired PC is pinned https in every build.
+                NSAppTransportSecurity: dev
+                    ? { NSAllowsArbitraryLoads: false, NSAllowsLocalNetworking: true }
+                    : { NSAllowsArbitraryLoads: false },
                 NSLocalNetworkUsageDescription: LOCAL_NETWORK_USE,
                 NSPhotoLibraryAddUsageDescription: PHOTOS_ADD_USE,
                 // The native transport's copy of the relay domain, so it checks relay origins without trusting JavaScript.
@@ -88,7 +89,6 @@ export default function appConfig(): ExpoConfig {
                 'expo-audio',
                 { microphonePermission: MICROPHONE_USE, enableBackgroundPlayback: true, enableBackgroundRecording: false },
             ],
-            ['expo-secure-store', { faceIDPermission: FACE_ID_USE }],
             'expo-background-task',
             ['./plugins/withCleartextHosts', { hosts: dev ? DEV_HTTP_HOSTS : [] }],
             './plugins/withNinjaJobs',

@@ -1,7 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { isolate } from '@webui/i18n/registry';
 
@@ -11,7 +11,7 @@ import { describeErrorWith, useT } from '@/i18n/useT';
 import { EmptyState, ErrorState, IconButton, List, ListSkeleton, Notice, Row, Screen, Stack, Text, useTheme } from '@/ui';
 import { X } from '@/ui/icons';
 
-import { AddDocuments } from './AddDocuments';
+import { AddDocuments, type AddLine } from './AddDocuments';
 import { DocumentRow } from './DocumentRow';
 import { libraryStats } from './libraryStats';
 import { useNextChatDocs } from './nextChatDocs';
@@ -24,11 +24,22 @@ export interface DocumentsScreenProps {
     onBrowseFiles?: (chatId: string) => void;
     // Opens a library document's preview and share screen, from the chat the library was opened from.
     onPreview?: (chatId: string, docId: string, name: string) => void;
+    // Dev gallery only: opens the screen already in a transient state.
+    initial?: LibraryStart;
+}
+
+export interface LibraryStart {
+    target?: LibraryTarget;
+    note?: string;
+    error?: string;
+    // A document id: its removal is waiting on Undo.
+    removing?: string;
+    add?: AddLine;
 }
 
 // A failed library action (remove, cancel) shows here until dismissed; only one shows at a time.
-export function useActionError() {
-    const [error, setError] = useState<string | null>(null);
+export function useActionError(first: string | null = null) {
+    const [error, setError] = useState<string | null>(first);
     return { error, report: setError, dismiss: () => setError(null) };
 }
 
@@ -40,30 +51,35 @@ interface OpenChat {
     documentIds: readonly string[];
 }
 
-export function DocumentsScreen({ chatId, onBrowseFiles, onPreview }: DocumentsScreenProps) {
-    return chatId ? <ChatLibrary chatId={chatId} onBrowseFiles={onBrowseFiles} onPreview={onPreview} /> : <Library chat={null} />;
+export function DocumentsScreen({ chatId, onBrowseFiles, onPreview, initial }: DocumentsScreenProps) {
+    return chatId ? <ChatLibrary chatId={chatId} onBrowseFiles={onBrowseFiles} onPreview={onPreview} initial={initial} /> : <Library chat={null} initial={initial} />;
 }
 
-function ChatLibrary({ chatId, onBrowseFiles, onPreview }: { chatId: string; onBrowseFiles?: (chatId: string) => void; onPreview?: DocumentsScreenProps['onPreview'] }) {
+function ChatLibrary({ chatId, onBrowseFiles, onPreview, initial }: { chatId: string; onBrowseFiles?: (chatId: string) => void; onPreview?: DocumentsScreenProps['onPreview']; initial?: LibraryStart }) {
     const t = useT();
     const session = useSession(chatId);
     const title = session.data?.title || t.bare('docs.untitledChat');
-    return <Library chat={{ id: chatId, title, name: `“${title}”`, documentIds: session.data?.document_ids ?? [] }} onBrowseFiles={onBrowseFiles} onPreview={onPreview} />;
+    return <Library chat={{ id: chatId, title, name: `“${title}”`, documentIds: session.data?.document_ids ?? [] }} onBrowseFiles={onBrowseFiles} onPreview={onPreview} initial={initial} />;
 }
 
-function Library({ chat, onBrowseFiles, onPreview }: { chat: OpenChat | null; onBrowseFiles?: (chatId: string) => void; onPreview?: DocumentsScreenProps['onPreview'] }) {
+function Library({ chat, onBrowseFiles, onPreview, initial }: { chat: OpenChat | null; onBrowseFiles?: (chatId: string) => void; onPreview?: DocumentsScreenProps['onPreview']; initial?: LibraryStart }) {
     const t = useT();
     const { space } = useTheme();
     const query = useDocuments();
-    const [target, setTarget] = useState<LibraryTarget>('chat');
-    const action = useActionError();
-    const [note, setNote] = useState<string | null>(null);
+    const [target, setTarget] = useState<LibraryTarget>(initial?.target ?? 'chat');
+    const action = useActionError(initial?.error ?? null);
+    const [note, setNote] = useState<string | null>(initial?.note ?? null);
     const attachDocument = useAttachDocument();
     const nextIds = useNextChatDocs((s) => s.ids);
     const addNext = useNextChatDocs((s) => s.add);
     // The open chat when documents go there, else null: the next new chat.
     const targetChat = chat && target === 'chat' ? chat : null;
     const removal = useDocumentRemoval((r, error) => action.report(t.compose((say) => say('docs.deleteFailed', { name: r.name, error: describeErrorWith(error, say) }))));
+    const startRemoving = initial?.removing;
+    useEffect(() => {
+        if (startRemoving) removal.remove({ id: startRemoving, name: nameOfStart(query.data?.documents, startRemoving) });
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [startRemoving, !!query.data]);
     const cancel = useCancelIndexing();
     const reindex = useReindexDocument();
     const all = query.data?.documents ?? [];
@@ -101,7 +117,7 @@ function Library({ chat, onBrowseFiles, onPreview }: { chat: OpenChat | null; on
     };
     const attachedIds = targetChat ? targetChat.documentIds : nextIds;
     const loadFailed = query.isError ? t.compose((say) => say('docs.loadFailed', { error: describeErrorWith(query.error, say) })) : null;
-    const adder = <AddDocuments chatId={targetChat?.id ?? null} chatName={chat?.name ?? null} onStart={action.dismiss} onBrowse={onBrowseFiles} />;
+    const adder = <AddDocuments chatId={targetChat?.id ?? null} chatName={chat?.name ?? null} onStart={action.dismiss} onBrowse={onBrowseFiles} initialLine={initial?.add} />;
     const retry = { label: t('docs.loadRetry'), onPress: () => void query.refetch() };
 
     return (
@@ -146,16 +162,13 @@ function Library({ chat, onBrowseFiles, onPreview }: { chat: OpenChat | null; on
                             {stats ? (
                                 <Row gap="sm" wrap>
                                     <Text role="caption" tone="secondary">
-                                        {stats.readable}
+                                        {`${stats.readable} · ${isolate(stats.size, 'ltr')}`}
                                     </Text>
                                     {stats.unreadable ? (
                                         <Text role="caption" tone="danger">
                                             {stats.unreadable}
                                         </Text>
                                     ) : null}
-                                    <Text role="caption" tone="secondary">
-                                        {`· ${isolate(stats.size, 'ltr')}`}
-                                    </Text>
                                 </Row>
                             ) : null}
                         </Stack>
@@ -178,4 +191,8 @@ function Library({ chat, onBrowseFiles, onPreview }: { chat: OpenChat | null; on
             ) : null}
         </Screen>
     );
+}
+
+function nameOfStart(docs: readonly { id: string; filename: string }[] | undefined, id: string): string {
+    return docs?.find((d) => d.id === id)?.filename ?? id;
 }

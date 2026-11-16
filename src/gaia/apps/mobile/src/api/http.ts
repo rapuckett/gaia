@@ -1,7 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import type { Message, ResourceUsage, Session, StartScreen, StreamEvent, SystemStatus } from '@webui/types';
+import type { Message, ResourceUsage, Session, StartScreen, StreamEvent, SystemStatus, WarmUpStatus } from '@webui/types';
 import { fromApiMessages } from '@webui/utils/chatStream';
 import { isMediaFile } from '@webui/utils/mediaFiles';
 
@@ -36,6 +36,8 @@ import type {
     ConfirmToolResult,
     ContextChoice,
     ConnectorActivations,
+    ConnectorDeviceAuthResponse,
+    ConnectorSignInEnd,
     AllPermissions,
     ConnectorGrants,
     ConnectorList,
@@ -133,6 +135,7 @@ import {
     ATTACH_HEADER_TIMEOUT_MS,
     connectorActivationPath,
     connectorActivationsPath,
+    connectorAuthorizeDevicePath,
     connectorDisablePath,
     connectorGrantPath,
     connectorGrantsPath,
@@ -201,7 +204,10 @@ import { parseSseStream } from './sse';
 
 /** A body sent as it is, not as JSON: a file, or a multipart form. */
 class RawBody {
-    constructor(readonly body: Blob | FormData) {}
+    constructor(
+        readonly body: Blob | FormData,
+        readonly onUploadProgress?: (sent: number, total: number) => void,
+    ) {}
 }
 
 export interface HttpClientConfig {
@@ -275,6 +281,7 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             method,
             headers: headers(body !== undefined && !(body instanceof RawBody)),
             ...(body === undefined ? {} : { body: body instanceof RawBody ? body.body : JSON.stringify(body) }),
+            ...(body instanceof RawBody && body.onUploadProgress ? { onUploadProgress: body.onUploadProgress } : {}),
             ...(signal ? { signal } : {}),
         };
         let res: FetchResponseLike;
@@ -321,6 +328,20 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
         } finally {
             clearTimeout(timer);
         }
+    }
+
+    /** The first sign-in outcome the PC reports for this connector, or null when the stream ends first. */
+    async function readSignInEnd(events: AsyncGenerator<StreamEvent>, connectorId: string): Promise<ConnectorSignInEnd | null> {
+        for await (const event of events) {
+            const { type, payload } = event as unknown as { type: string; payload?: Record<string, unknown> };
+            if (payload?.connector_id !== connectorId) continue;
+            if (type === 'connector.oauth.completed') return { outcome: 'completed' };
+            if (type === 'connector.oauth.error') {
+                const error = typeof payload.error === 'string' ? payload.error : undefined;
+                return { outcome: payload.reason === 'cancelled' ? 'cancelled' : 'failed', error };
+            }
+        }
+        return null;
     }
 
     async function readJson<T>(res: FetchResponseLike, path: string): Promise<T> {
@@ -488,7 +509,7 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
                 body = new FormData();
                 body.append('file', typeof uri === 'string' ? await formFile(uri, name, file.type || null) : file, name);
             }
-            return readJson<UploadedFile>(await request('POST', path, new RawBody(body), options?.signal), path);
+            return readJson<UploadedFile>(await request('POST', path, new RawBody(body, options?.onUploadProgress), options?.signal), path);
         },
 
         exportSessionMarkdown(sessionId, options) {
@@ -829,6 +850,23 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             await request('DELETE', connectorActivationPath(connectorId, agentId), undefined, options?.signal);
         },
 
+        startConnectorDeviceSignIn(connectorId, scopes, options) {
+            return postJson<ConnectorDeviceAuthResponse>(connectorAuthorizeDevicePath(connectorId), { scopes }, options?.signal);
+        },
+
+        async watchConnectorSignIn(connectorId, options) {
+            const listen = new AbortController();
+            const stop = () => listen.abort();
+            options?.signal?.addEventListener('abort', stop);
+            try {
+                const events = await openConnectorEvents(listen.signal);
+                return events ? await readSignInEnd(events, connectorId).catch(() => null) : null;
+            } finally {
+                options?.signal?.removeEventListener('abort', stop);
+                stop();
+            }
+        },
+
         async disableConnector(connectorId, options) {
             await request('POST', connectorDisablePath(connectorId), {}, options?.signal);
         },
@@ -953,7 +991,11 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
         },
 
         getGoalStoreHealth(options) {
-            return getJson<{ error: string | null }>(ENDPOINTS.goalsHealth, options?.signal);
+            return getJson<{ error: string | null; damaged: boolean }>(ENDPOINTS.goalsHealth, options?.signal);
+        },
+
+        resetGoalStore(options) {
+            return postJson<{ kept: string }>(ENDPOINTS.goalsStoreReset, undefined, options?.signal);
         },
 
         createGoal(body, options) {
@@ -1059,7 +1101,8 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             // The multipart boundary header is the fetch's to set.
             const form = new FormData();
             form.append('file', await formFile(file.uri, file.name, file.mimeType), file.name);
-            return readJson<DocumentResponse>(await request('POST', ENDPOINTS.documentUpload, new RawBody(form), options?.signal), ENDPOINTS.documentUpload);
+            const body = new RawBody(form, options?.onUploadProgress);
+            return readJson<DocumentResponse>(await request('POST', ENDPOINTS.documentUpload, body, options?.signal), ENDPOINTS.documentUpload);
         },
 
         uploadDocumentByPath(filepath, sessionId, options) {
@@ -1118,6 +1161,15 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             return getJson<SystemStatus>(ENDPOINTS.systemStatus, options?.signal);
         },
 
+        getWarmUp(options) {
+            return getJson<WarmUpStatus>(ENDPOINTS.systemWarmUp, options?.signal);
+        },
+
+        requestWarmUp(fresh, options) {
+            const path = fresh ? `${ENDPOINTS.systemWarmUp}?fresh=true` : ENDPOINTS.systemWarmUp;
+            return request('POST', path, undefined, options?.signal).then((res) => readJson<WarmUpStatus>(res, path));
+        },
+
         downloadModel(model, options) {
             return postJson<{ status: string; model: string }>(
                 ENDPOINTS.systemDownloadModel,
@@ -1129,7 +1181,7 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
         loadModel(modelName, force, options) {
             return postJson<{ status: string; model: string; ctx_size: number }>(
                 ENDPOINTS.systemLoadModel,
-                { model_name: modelName, force },
+                { model_name: modelName, ctx_size: options?.ctxSize, force },
                 options?.signal,
             );
         },

@@ -4,22 +4,30 @@
 import { GaiaApiError, GaiaNetworkError } from '@/api/errors';
 import type { SystemStatus } from '@/api/client.types';
 import { isStarting } from '@/data';
-import { describeErrorWith, type Translate } from '@/i18n/useT';
+import { technicalDetail, type Translate } from '@/i18n/useT';
 import type { NoticeTone } from '@/ui';
 import { GB_UNIT, MIN_CONTEXT_SIZE } from '@webui/utils/constants';
+import { shortModelName, type PickLoad } from '@webui/utils/modelList.core';
 
 export interface Banner {
-    id: 'download' | 'goalStore' | 'starting' | 'unreachable' | 'backendError' | 'configError' | 'serverHung' | 'serverStopped' | 'contextTooSmall';
+    id: 'download' | 'goalStore' | 'starting' | 'unreachable' | 'backendError' | 'configError' | 'serverHung' | 'serverStopped' | 'contextTooSmall' | 'pickLoad';
     tone: NoticeTone;
     title: string;
     message?: string;
+    /** The raw cause, for a Details disclosure; never part of the sentence. */
+    details?: string;
     /** The web lets these go: a failed download, a stopped or hung model server, a too-small context window. */
     dismissible?: boolean;
     /** Re-asks GAIA; shown as the "Check again" action. */
     retry?: boolean;
+    /** Asks the PC to load the picked model again; shown as the "Try again" action. */
+    pickRetry?: boolean;
     /** 0 to 1 for a determinate line; undefined for an indeterminate one. */
     progress?: { value?: number; label?: string };
 }
+
+/** Keeps "12s" reading left to right inside Arabic text. */
+const ltr = (text: string) => `\u2066${text}\u2069`;
 
 const gb = (bytes: number, digits: number) => (bytes / 1e9).toFixed(digits);
 
@@ -28,7 +36,13 @@ const gb = (bytes: number, digits: number) => (bytes / 1e9).toFixed(digits);
  * download, start-up, backend trouble, model server, context window.
  * `fetchError` is the status request's failure, if it failed.
  */
-export function pickBanner(status: SystemStatus | undefined, fetchError: unknown, t: Translate, goalStoreError?: string | null, awayHint?: boolean): Banner | null {
+export function pickBanner(
+    status: SystemStatus | undefined,
+    fetchError: unknown,
+    t: Translate,
+    goalStoreError?: string | null,
+    pick?: { load?: PickLoad | null; name?: string | null; awayHint?: boolean },
+): Banner | null {
     const progress = status?.download_progress ?? null;
     if (progress?.state === 'downloading' || progress?.state === 'starting' || progress?.state === 'error') {
         const name = progress.model_name || status?.default_model_name || '';
@@ -44,19 +58,43 @@ export function pickBanner(status: SystemStatus | undefined, fetchError: unknown
         return { id: 'download', tone: 'info', title: t('banner.download.running', { name, size }), message: file, progress: bar };
     }
 
+    // A model picked from the list is loading, or its load failed; the web shows it right after a download.
+    if (pick?.load) {
+        const { model, seconds, error } = pick.load;
+        const name = pick.name || shortModelName(model);
+        if (error) {
+            return {
+                id: 'pickLoad',
+                tone: 'danger',
+                title: t('banner.pickLoad.failed', { model: name }),
+                message: error.key ? t(error.key, { reason: error.reason }) : error.reason,
+                dismissible: true,
+                pickRetry: true,
+            };
+        }
+        return {
+            id: 'pickLoad',
+            tone: 'info',
+            title: `${t('banner.pickLoad.loading', { model: name })} ${ltr(t('banner.pickLoad.seconds', { s: seconds }))}`,
+            message: t('banner.pickLoad.canType'),
+            progress: {},
+        };
+    }
+
     if (fetchError) {
         if (fetchError instanceof GaiaApiError && fetchError.status >= 500) {
             return {
                 id: 'backendError',
                 tone: 'danger',
-                title: t.compose((say) => say('banner.backendError', { error: describeErrorWith(fetchError, say) })),
+                title: t('mobileApp.error.backend', { status: fetchError.status }),
                 message: t('banner.backendErrorHint'),
+                details: technicalDetail(fetchError),
                 retry: true,
             };
         }
         // The PC itself not answering reads as the setup gate does; the assistant wording is for a PC that answers.
         if (fetchError instanceof GaiaNetworkError) {
-            return { id: 'unreachable', tone: 'danger', title: t('mobileApp.pairing.off.title'), message: t(awayHint ? 'mobileApp.pairing.unreachable.away' : 'mobileApp.pairing.unreachable.body'), retry: true };
+            return { id: 'unreachable', tone: 'danger', title: t('mobileApp.pairing.off.title'), message: t(pick?.awayHint ? 'mobileApp.pairing.unreachable.away' : 'mobileApp.pairing.unreachable.body'), retry: true };
         }
         return { id: 'unreachable', tone: 'danger', title: t('banner.unreachable'), message: t('banner.unreachableHint'), retry: true };
     }

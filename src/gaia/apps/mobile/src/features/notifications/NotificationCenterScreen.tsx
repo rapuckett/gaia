@@ -22,7 +22,8 @@ import {
     useNotificationStore,
 } from '@/state/notifications';
 import { usePermissionPromptStore } from '@/state/permissionPrompts';
-import { Badge, Button, Chip, Divider, EmptyState, HScroll, Icon, IconButton, Notice, Pressable, Row, Screen, Stack, StatusDot, Text } from '@/ui';
+import { Badge, Button, Chip, Divider, EmptyState, FirstLine, Icon, IconButton, Notice, Pressable, Row, Screen, Stack, StatusDot, Text } from '@/ui';
+import { useLargeText } from '@/ui/theme/a11y';
 import { Bell, Check, CircleAlert, CircleCheck, Info, ShieldAlert, Trash2, TriangleAlert, X, type LucideIcon } from '@/ui/icons';
 
 import { SettingsHeader } from '../settings/SettingsHeader';
@@ -74,18 +75,14 @@ export function NotificationCenterScreen({ onBack, onOpenChat }: { onBack: () =>
             }
             scroll
         >
-            <HScroll>
-                    <Row gap="sm" accessibilityRole="tablist">
-                        <Stack paddingX="lg" paddingY="sm">
-                            <Row gap="sm">
-                                <Chip label={t('notifications.filter.all')} selected={filter === null} onPress={() => setNotificationFilter(null)} />
-                                {FILTER_ORDER.map((kind) => (
-                                    <Chip key={kind} label={t(FILTER_LABELS[kind])} selected={filter === kind} onPress={() => setNotificationFilter(kind)} />
-                                ))}
-                            </Row>
-                        </Stack>
-                    </Row>
-            </HScroll>
+            <Stack paddingX="gutter" paddingY="sm">
+                <Row gap="sm" wrap accessibilityRole="tablist">
+                    <Chip label={t('notifications.filter.all')} selected={filter === null} onPress={() => setNotificationFilter(null)} />
+                    {FILTER_ORDER.map((kind) => (
+                        <Chip key={kind} label={t(FILTER_LABELS[kind])} selected={filter === kind} onPress={() => setNotificationFilter(kind)} />
+                    ))}
+                </Row>
+            </Stack>
             {items.length === 0 ? (
                 <EmptyState title={t('notifications.empty')} icon={Bell} />
             ) : (
@@ -131,6 +128,9 @@ function NotificationItem({ n, now, locale, waiting, answered, onOpenChat }: Ite
     const { title, message } = useMemo(() => notificationText(n, t), [n, t]);
     const approval = n.type === 'permission_request';
     const failed = confirm.isError ? describeError(confirm.error, t) : null;
+    // At large text sizes the time goes under the agent's name, which it would otherwise squeeze to nothing.
+    const largeText = useLargeText();
+    const time = <Text role="caption" tone="muted">{relativeTime(n.timestamp, now, t, locale)}</Text>;
 
     const answer = (approved: boolean) => {
         if (!n.sessionId) return;
@@ -149,13 +149,20 @@ function NotificationItem({ n, now, locale, waiting, answered, onOpenChat }: Ite
             <Divider />
             <Pressable onPress={open} accessibilityLabel={`${title}. ${message}`}>
                 <Stack gap="xs" paddingX="lg" paddingY="md">
-                    <Row gap="sm">
-                        {!n.read ? <StatusDot tone="attention" label={t('sidebar.notificationsUnread', { n: 1 })} /> : null}
-                        <Icon icon={icon} size="sm" tone={tone} />
+                    <Row gap="sm" align={largeText ? 'start' : 'center'}>
+                        {!n.read ? (
+                            <FirstLine role="label">
+                                <StatusDot tone="attention" label={t('sidebar.notificationsUnread', { n: 1 })} />
+                            </FirstLine>
+                        ) : null}
+                        <FirstLine role="label">
+                            <Icon icon={icon} size="sm" tone={tone} />
+                        </FirstLine>
                         <Stack flex={1}>
                             <Text role="label" weight="semibold" numberOfLines={1}>{n.agentName}</Text>
+                            {largeText ? time : null}
                         </Stack>
-                        <Text role="caption" tone="muted">{relativeTime(n.timestamp, now, t, locale)}</Text>
+                        {largeText ? null : time}
                         <IconButton icon={X} size="sm" label={t('notifications.dismiss')} onPress={() => dismissNotification(n.id)} />
                     </Row>
                     <Text role="ui" weight="semibold">{title}</Text>

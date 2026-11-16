@@ -16,7 +16,7 @@ import { Divider, Screen, Stack, UIProvider } from '@/ui';
 import { Cpu } from '@/ui/icons';
 
 const FIXTURE: Attachments['items'] = [
-    { id: 'a', key: 'a', name: 'quarterly-report-final-v3.pdf', uri: '', isImage: false, isMedia: false, status: 'uploading' },
+    { id: 'a', key: 'a', name: 'quarterly-report-final-v3.pdf', uri: '', isImage: false, isMedia: false, status: 'uploading', progress: 40 },
     { id: 'b', key: 'b', name: 'standup-recording.m4a', uri: '', isImage: false, isMedia: true, status: 'uploaded' },
     { id: 'c', key: 'c', name: 'notes.doc', uri: '', isImage: false, isMedia: false, status: 'failed', error: 'This file is empty.' },
     { id: 'd', key: 'd', name: 'IMG_2041.jpg', uri: 'https://picsum.photos/id/237/48', isImage: true, isMedia: false, status: 'uploaded' },
@@ -38,6 +38,15 @@ export default function ComposerGalleryRoute() {
     const { state } = useLocalSearchParams<{ state?: string }>();
     const [text, setText] = useState('');
     if (!devGalleryEnabled()) return <Redirect href="/" />;
+    if (state === 'blocked') {
+        return (
+            <UIProvider>
+                <Screen scroll keyboard="avoid">
+                    <Composer onSend={noop} disabledReason={t('chat.retiredReadOnly', { agent: 'chat' })} />
+                </Screen>
+            </UIProvider>
+        );
+    }
     if (state && (COMPOSER_MENU_STATES as readonly string[]).includes(state)) return <ComposerMenusGallery state={state as ComposerMenuState} />;
     const folder = { path: '/Users/avery/Projects/gaia', name: 'gaia-notes', gaia_folder: false, choosable: false };
     const chipRow = (running = false, value?: string) => (

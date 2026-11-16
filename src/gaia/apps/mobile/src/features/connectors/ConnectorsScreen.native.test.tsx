@@ -7,8 +7,7 @@ import type { ReactNode } from 'react';
 import { Platform } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-import { PC_ONLY_REFUSAL } from '@/api/constants';
-import { createFakeClient } from '@/api/fake';
+import { createFakeClient, type FakeClientData } from '@/api/fake';
 import type { ConnectorRow, DisconnectOutcome } from '@/api/client.types';
 import { GaiaClientProvider } from '@/data';
 import { ThemeProvider } from '@/ui';
@@ -33,8 +32,9 @@ const slack = {
     activations: {},
 } as unknown as ConnectorRow;
 
-function setup(connectors: ConnectorRow[], disconnectOutcome?: DisconnectOutcome) {
-    const client = createFakeClient({ connectors, disconnectOutcome });
+function setup(connectors: ConnectorRow[], disconnectOutcome?: DisconnectOutcome, deviceSignIn?: FakeClientData['deviceSignIn']) {
+    const data: FakeClientData = { connectors, disconnectOutcome, deviceSignIn };
+    const client = createFakeClient(data);
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const wrap = ({ children }: { children: ReactNode }) => (
         <QueryClientProvider client={queryClient}>
@@ -47,7 +47,7 @@ function setup(connectors: ConnectorRow[], disconnectOutcome?: DisconnectOutcome
             </GaiaClientProvider>
         </QueryClientProvider>
     );
-    return { client, queryClient, wrap };
+    return { client, data, queryClient, wrap };
 }
 
 const microsoft = {
@@ -64,14 +64,22 @@ const microsoft = {
 } as unknown as ConnectorRow;
 
 describeNative('ConnectorsScreen OAuth account', () => {
-    it('sends Connect and Sign in with a code to the PC with phone wording', async () => {
-        const { queryClient, wrap } = setup([microsoft]);
+    it('signs in with a code from the phone until the PC reports the account, and sends Connect to the PC', async () => {
+        const code = { user_code: 'ABCD-EFGH', verification_uri: 'https://microsoft.com/devicelogin', expires_in: 900, interval: 1, message: '' };
+        const { data, queryClient, wrap } = setup([microsoft], undefined, code);
         await render(<ConnectorsScreen />, { wrapper: wrap });
         fireEvent.press(await screen.findByLabelText('Microsoft'));
-        fireEvent.press(await screen.findByText('Sign in with a code'));
-        expect(await screen.findByText(/Sign in with a code on your PC/)).toBeTruthy();
         fireEvent.press(await screen.findByText('Connect'));
         expect(await screen.findByText(/Connect this on your PC/)).toBeTruthy();
+
+        fireEvent.press(await screen.findByText('Sign in with a code'));
+        expect(await screen.findByText(/ABCD-EFGH/)).toBeTruthy();
+        expect(screen.getByLabelText('Open sign-in page')).toBeTruthy();
+        expect(screen.getByText('Waiting for sign-in…')).toBeTruthy();
+
+        data.connectors = [{ ...microsoft, configured: true, account_id: 'me@example.com' } as ConnectorRow];
+        expect(await screen.findByText(/me@example.com/, {}, { timeout: 3000 })).toBeTruthy();
+        expect(screen.queryByText(/ABCD-EFGH/)).toBeNull();
         queryClient.clear();
     });
 
@@ -97,7 +105,7 @@ describeNative('ConnectorsScreen MCP server', () => {
         await waitFor(async () => expect(((await client.listConnectors()).connectors[0] as ConnectorRow).enabled).toBe(false));
 
         fireEvent.press(await screen.findByText('Enable this MCP server'));
-        expect(await screen.findByText(new RegExp(`^${PC_ONLY_REFUSAL.slice(0, 30)}`))).toBeTruthy();
+        expect(await screen.findByText(/^Do this on your PC\./)).toBeTruthy();
         expect(((await client.listConnectors()).connectors[0] as ConnectorRow).enabled).toBe(false);
         queryClient.clear();
     });

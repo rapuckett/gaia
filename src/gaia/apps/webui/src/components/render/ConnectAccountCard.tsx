@@ -15,6 +15,7 @@ import {
     connectCardProviders,
     hasConnectCard,
     isConnectAccountPayload,
+    PROVIDER_NAMES,
     requestScopes,
     type ConnectAccountPayload,
 } from '../../utils/connectAccountCard.core';
@@ -54,13 +55,6 @@ export function grantIdsFor(
         )
         .map((a) => a.namespaced_agent_id!);
 }
-
-// Brand names, the same in every language.
-const PROVIDER_NAMES: Record<string, string> = {
-    google: 'Google',
-    microsoft: 'Microsoft',
-    microsoft_work: 'Microsoft 365',
-};
 
 function openAuthUrl(url: string): void {
     const bridge = (window as unknown as { gaia?: { openExternal?: (url: string) => void } }).gaia;

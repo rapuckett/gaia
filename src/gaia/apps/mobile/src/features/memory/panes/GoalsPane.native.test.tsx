@@ -13,12 +13,13 @@ import { SheetHost } from '@/ui/overlays/SheetHost';
 import { ThemeProvider } from '@/ui';
 
 import { SAMPLE_GOALS } from '../devScenes';
+import type { MemoryNotice } from '../useMemoryNotice';
 import { GoalsPane } from './GoalsPane';
 
 // The web project's renderer can't mount react-native-web's DOM.
 const describeNative = Platform.OS === 'web' ? describe.skip : describe;
 
-async function mount(data: FakeClientData) {
+async function mount(data: FakeClientData, notify: (notice: MemoryNotice) => void = () => undefined) {
     const client = createFakeClient(data);
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const wrap = ({ children }: { children: ReactNode }) => (
@@ -32,7 +33,7 @@ async function mount(data: FakeClientData) {
             </GaiaClientProvider>
         </QueryClientProvider>
     );
-    await render(<GoalsPane notify={() => undefined} memoryEnabled onOpenAdvanced={() => undefined} />, { wrapper: wrap });
+    await render(<GoalsPane notify={notify} memoryEnabled onOpenAdvanced={() => undefined} />, { wrapper: wrap });
     return client;
 }
 
@@ -68,5 +69,15 @@ describeNative('GoalsPane', () => {
     it('says when approved goals are not running', async () => {
         await mount({ goals: [], goalStoreError: 'The goal list is unreadable.' });
         await screen.findByText('The goal list is unreadable.');
+    });
+
+    it('offers a new goal list when the list is damaged, and clears the notice after', async () => {
+        const notify = jest.fn();
+        const client = await mount({ goals: [], goalStoreError: 'Unreadable.', goalStoreDamaged: true }, notify);
+        expect(screen.queryByTestId('goals-store-error')).toBeNull();
+        fireEvent.press(await screen.findByTestId('goals-start-new-list'));
+        await waitFor(() => expect(client.goalCalls).toEqual([{ action: 'resetStore' }]));
+        await waitFor(() => expect(screen.queryByTestId('goals-store-damaged')).toBeNull());
+        expect(notify).toHaveBeenCalledWith({ tone: 'success', text: expect.stringContaining('goals.json.damaged') });
     });
 });

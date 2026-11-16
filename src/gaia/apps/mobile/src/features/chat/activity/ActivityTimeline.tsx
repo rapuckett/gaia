@@ -3,13 +3,15 @@
 
 import type { AgentStep } from '@webui/types';
 import {
-    FILTER_MIN_TOOL_ROWS, consolidateSteps, foldThoughts, isTurnError, isWarning, matchesStepFilter, shownWhenDone, stepsSummary, thoughtDurations,
+    FILTER_MIN_TOOL_ROWS, consolidateSteps, foldThoughts, isKept, isTurnError, isWarning, matchesStepFilter, shownWhenDone, stepsSummary, thoughtDurations,
     thoughtLabel, toTimeline, type ActivityRow, type StepStatusFilter,
 } from '@webui/utils/agentActivity.core';
+import { localizeLiveStatus } from '@webui/utils/liveStatus';
 import { useEffect, useMemo, useState } from 'react';
 
 import { useT } from '@/i18n/useT';
-import { Disclosure, Notice, Stack, Text } from '@/ui';
+import { Disclosure, Icon, Notice, Row, Stack, Text } from '@/ui';
+import { Check } from '@/ui/icons';
 
 import { PlanChecklist } from './PlanChecklist';
 import { PolicyAlert } from './PolicyAlert';
@@ -72,7 +74,18 @@ export function ActivityTimeline({ steps, running = false, awaitingUser = false,
             case 'plan':
                 return row === livePlan ? null : <PlanChecklist key={row.id} step={row} />;
             case 'status':
-                return <Notice key={row.id} tone="warning" message={row.label} />;
+                return row.kept ? (
+                    <Row key={row.id} gap="sm" align="start" accessibilityRole="text" testID="kept-step">
+                        <Icon icon={Check} size="sm" tone="success" />
+                        <Stack flex={1}>
+                            <Text role="label" dir="auto" tone="secondary">
+                                {localizeLiveStatus(t, row.label)}
+                            </Text>
+                        </Stack>
+                    </Row>
+                ) : (
+                    <Notice key={row.id} tone="warning" message={row.label} />
+                );
             case 'error':
                 return <Notice key={row.id} tone="danger" message={row.detail || row.label || t('activity.errorOccurred')} />;
             case 'policy_alert':
@@ -84,7 +97,7 @@ export function ActivityTimeline({ steps, running = false, awaitingUser = false,
 
     const lastIndex = timeline.length - 1;
     const visibleRows = (list: ActivityRow[]) =>
-        foldThoughts(list.filter((r) => (shownWhenDone(r) || isWarning(r)) && !(r.type === 'plan' && r === livePlan)));
+        foldThoughts(list.filter((r) => (shownWhenDone(r) || isWarning(r) || isKept(r)) && !(r.type === 'plan' && r === livePlan)));
     const keep = (r: ActivityRow) => matchesStepFilter(r, nameFilter, statusFilter, t);
     // Calls in the runs that are open; folded runs and lone rows have nothing to sift.
     const openCalls = timeline.reduce((n, item, i) => {

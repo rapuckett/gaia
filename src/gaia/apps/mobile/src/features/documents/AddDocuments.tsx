@@ -14,7 +14,7 @@ import { describeUploadError, unsupportedTypeMessage, type UploadErrorView } fro
 import { useNextChatDocs } from './nextChatDocs';
 
 // One line at a time: the indexing status, the result of the last add, or why it failed.
-type AddLine =
+export type AddLine =
     | { kind: 'busy'; name: string }
     | { kind: 'done'; message: string }
     | { kind: 'unreadable'; message: string }
@@ -30,13 +30,15 @@ interface AddDocumentsProps {
     onStart?: () => void;
     // Opens the PC's file browser for the chat; unset, or with no chat, leaves the button out.
     onBrowse?: (chatId: string) => void;
+    // Dev gallery only: the line shown on open.
+    initialLine?: AddLine;
 }
 
-export function AddDocuments({ chatId, chatName, onStart, onBrowse }: AddDocumentsProps) {
+export function AddDocuments({ chatId, chatName, onStart, onBrowse, initialLine }: AddDocumentsProps) {
     const t = useT();
     const add = useAddDocument();
     const holdForNextChat = useNextChatDocs((s) => s.add);
-    const [line, setLine] = useState<AddLine | null>(null);
+    const [line, setLine] = useState<AddLine | null>(initialLine ?? null);
     const busy = line?.kind === 'busy';
 
     async function addOne(file: PickedFile): Promise<AddLine> {
@@ -85,7 +87,7 @@ export function AddDocuments({ chatId, chatName, onStart, onBrowse }: AddDocumen
 
     return (
         <Stack gap="sm">
-            <Row gap="sm" wrap>
+            <Row gap="sm" wrap stack>
                 <Button label={t('docs.addPhotos')} icon={ImageIcon} variant="secondary" disabled={busy} onPress={() => void run(pickPhotos)} />
                 <Button label={t('docs.addFile')} icon={FileText} variant="secondary" disabled={busy} onPress={() => void run(pickDocuments)} />
             </Row>

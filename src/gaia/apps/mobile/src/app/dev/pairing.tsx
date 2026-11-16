@@ -4,25 +4,16 @@
 import { Redirect, useLocalSearchParams } from 'expo-router';
 
 import { devGalleryEnabled } from '@/features/dev/devGallery';
+import { AndroidUnsupportedScreen } from '@/features/pairing/AndroidUnsupportedScreen';
 import { PAIRING_SCENES, PairingSceneView } from '@/features/pairing/devScenes';
-import { Screen, Stack, Text, UIProvider } from '@/ui';
+import { PairingFlow } from '@/features/pairing';
+import { UIProvider } from '@/ui';
 
-/** Your PCs and the connection banner on a fake paired PC; `?state=route-home|route-tailnet|route-tailnet-long-name|unreachable-away`. */
+/** The pairing screens on a fake PC; `?state=android` forces the Android "not supported yet" screen, and `route-home|route-tailnet|route-tailnet-long-name|unreachable-away` show Your PCs and the connection banner. */
 export default function PairingGalleryRoute() {
-    const { state = 'route-home' } = useLocalSearchParams<{ state?: string }>();
-    const scene = PAIRING_SCENES[state];
+    const { state = 'default' } = useLocalSearchParams<{ state?: string }>();
     if (!devGalleryEnabled()) return <Redirect href="/" />;
-    if (!scene) {
-        return (
-            <UIProvider>
-                <Screen scroll>
-                    <Stack gap="sm" padding="lg">
-                        <Text role="title">{`No pairing scene "${state}"`}</Text>
-                        {Object.keys(PAIRING_SCENES).map((key) => <Text key={key}>{key}</Text>)}
-                    </Stack>
-                </Screen>
-            </UIProvider>
-        );
-    }
-    return <PairingSceneView scene={scene} />;
+    const scene = PAIRING_SCENES[state];
+    if (scene) return <PairingSceneView scene={scene} />;
+    return <UIProvider>{state === 'android' ? <AndroidUnsupportedScreen /> : <PairingFlow />}</UIProvider>;
 }

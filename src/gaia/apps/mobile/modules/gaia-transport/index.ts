@@ -21,6 +21,17 @@ export interface NativePairAnswer {
 /** A piece of a request body: text sent as UTF-8, or a `file://` file on this device sent from disk. */
 export type NativeBodySegment = { text: string } | { file: string };
 
+/** An upload's progress: bytes of its body sent so far, of `total`. At most about ten a second, and one when all is sent. */
+export interface NativeUploadProgress {
+    id: string;
+    sent: number;
+    total: number;
+}
+
+export interface NativeSubscription {
+    remove(): void;
+}
+
 /** Rejections carry `code`: pin_mismatch, unreachable, not_home_network, not_home_origin, network, aborted, not_paired, origin_mismatch, keychain, invalid_pin, invalid_origin, bad_response, unknown_request, upload_file. */
 export interface GaiaTransportNative {
     pair(pcId: string, origins: string[], pin: string, headers: Record<string, string>, body: string): Promise<NativePairAnswer>;
@@ -52,6 +63,8 @@ export interface GaiaTransportNative {
     promote(stagedId: string, pcId: string): Promise<void>;
     /** Replaces the paired PC's addresses with `origins`, JSON `[{kind, origin}]`; refuses the set if any is invalid for its kind. */
     setOrigins(pcId: string, origins: string): Promise<void>;
+    /** Builds made before upload progress never send the event. */
+    addListener?(event: 'onUploadProgress', listener: (progress: NativeUploadProgress) => void): NativeSubscription;
 }
 
 const UNSUPPORTED =

@@ -12,7 +12,9 @@ import type {
     AgentMcpServer,
     MCPServerStatus,
     ChatPerformance,
+    ConnectorDeviceAuthResponse,
     ConnectorListEntry,
+    ConnectorSignInEnd,
     DisconnectOutcome,
     ContextUsageResult,
     ConsolidateMemoryResult,
@@ -93,6 +95,7 @@ import type {
     StartScreen,
     StreamEvent,
     SystemStatus,
+    WarmUpStatus,
     ToolConfirmRequest,
     FileDiff,
     TurnChanges,
@@ -108,6 +111,13 @@ import { GaiaApiError, GaiaConfigError } from './errors';
 
 function cloneNested<T>(source: Record<string, Record<string, T>> | undefined): Record<string, Record<string, T>> {
     return Object.fromEntries(Object.entries(source ?? {}).map(([key, inner]) => [key, { ...inner }]));
+}
+
+/** Half the body, then all of it, as the pinned transport reports a real upload. */
+function reportProgress(total: number, onUploadProgress?: (sent: number, total: number) => void): void {
+    if (!onUploadProgress || total <= 0) return;
+    onUploadProgress(Math.floor(total / 2), total);
+    onUploadProgress(total, total);
 }
 
 const EMPTY_PERFORMANCE: ChatPerformance = {
@@ -163,6 +173,10 @@ export interface FakeClientData {
     customReports?: Record<string, CustomModelReport>;
     /** Makes selectModel fail with this. */
     selectError?: GaiaApiError;
+    /** What getWarmUp answers; a function can answer differently per poll. */
+    warmUp?: WarmUpStatus | (() => WarmUpStatus);
+    /** Makes getWarmUp or requestWarmUp fail with this. */
+    warmUpError?: GaiaApiError;
     /** What getPermissions answers, by chat; a chat not listed asks first. */
     permissions?: Record<string, PermissionMode>;
     /** The "always allow" grants by chat. */
@@ -199,6 +213,10 @@ export interface FakeClientData {
     linkPreview?: (url: string) => LinkPreview;
     resources?: ResourceUsage;
     start?: StartScreen;
+    /** What a sign-in with a code starts with; a connector without `supports_device_code` is refused, as the PC does. */
+    deviceSignIn?: ConnectorDeviceAuthResponse;
+    /** How the PC reports a sign-in ended; unset waits until the watch is dropped. */
+    signInEnd?: ConnectorSignInEnd;
     /** What a disconnect reports about the provider-side revoke; `{}` when unset. */
     disconnectOutcome?: DisconnectOutcome | null;
     /** What watchSessionEvents streams before it ends; the real stream never ends on its own. */
@@ -268,6 +286,10 @@ export interface FakeClientData {
     goals?: Goal[] | Error;
     /** What getGoalStoreHealth answers. */
     goalStoreError?: string | null;
+    /** Whether getGoalStoreHealth says the list is damaged; resetGoalStore clears it. */
+    goalStoreDamaged?: boolean;
+    /** Thrown by resetGoalStore. */
+    goalStoreResetError?: Error;
     /** What getSettings answers; setNetworkPolicy changes it. */
     settings?: Settings;
     /** Thrown by setNetworkPolicy, as the PC's 403 is. */
@@ -330,7 +352,8 @@ export type KnowledgeCall =
 
 export type GoalCall =
     | { action: 'create'; title: string; description: string; priority: string }
-    | { action: 'approve' | 'reject' | 'cancel' | 'delete'; id: string };
+    | { action: 'approve' | 'reject' | 'cancel' | 'delete'; id: string }
+    | { action: 'resetStore' };
 
 export interface FakeGaiaClient extends GaiaClient {
     /** Each goal create, approve, reject, cancel and delete, in order. */
@@ -367,7 +390,8 @@ export interface FakeGaiaClient extends GaiaClient {
     readonly uploads: { name: string; size: number }[];
     readonly downloads: { modelId: string; acknowledgeLowDisk: boolean }[];
     readonly modelDownloads: { modelName: string; force: boolean; loadAfter: boolean }[];
-    readonly modelLoads: { modelName: string; force: boolean }[];
+    readonly warmUpRequests: boolean[];
+    readonly modelLoads: { modelName: string; force: boolean; ctxSize?: number }[];
     readonly removals: string[];
     readonly backendSets: string[];
     /** The text each speak call was given, in order. */
@@ -444,6 +468,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
     const downloads: FakeGaiaClient['downloads'] = [];
     const modelDownloads: FakeGaiaClient['modelDownloads'] = [];
     const modelLoads: FakeGaiaClient['modelLoads'] = [];
+    const warmUpRequests: boolean[] = [];
     const removals: FakeGaiaClient['removals'] = [];
     const schedules = [...(data.schedules ?? [])];
     const scheduleActions: FakeGaiaClient['scheduleActions'] = [];
@@ -512,6 +537,8 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         if (script.hang) await new Promise<void>((resolve) => (signal?.aborted ? resolve() : signal?.addEventListener('abort', () => resolve())));
     }
     const goalCalls: GoalCall[] = [];
+    let storeError = data.goalStoreError ?? null;
+    let storeDamaged = data.goalStoreDamaged ?? false;
     let goals = data.goals instanceof Error ? [] : [...(data.goals ?? [])];
     const goalById = (id: string): Goal => {
         const goal = goals.find((g) => g.id === id);
@@ -575,6 +602,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         downloads,
         modelDownloads,
         modelLoads,
+        warmUpRequests,
         removals,
         setupStarts,
         backendSets,
@@ -615,7 +643,14 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             return count;
         },
         async getGoalStoreHealth() {
-            return { error: data.goalStoreError ?? null };
+            return { error: storeError, damaged: storeDamaged };
+        },
+        async resetGoalStore() {
+            goalCalls.push({ action: 'resetStore' });
+            if (data.goalStoreResetError) throw data.goalStoreResetError;
+            storeError = null;
+            storeDamaged = false;
+            return { kept: 'goals.json.damaged' };
         },
         async createGoal(body) {
             goalCalls.push({ action: 'create', ...body });
@@ -684,8 +719,9 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             sessions.unshift(session);
             return session;
         },
-        async uploadFile(file, name) {
+        async uploadFile(file, name, options) {
             if (data.uploadError) throw data.uploadError;
+            reportProgress(file.size, options?.onUploadProgress);
             uploads.push({ name, size: file.size });
             return { filename: name, original_name: name, url: `/api/files/uploads/${name}`, size: file.size, content_type: file.type, is_image: file.type.startsWith('image/') };
         },
@@ -959,6 +995,21 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         },
         async listConnectors() {
             return { connectors: [...(data.connectors ?? [])] };
+        },
+        async startConnectorDeviceSignIn(connectorId) {
+            const row = (data.connectors ?? []).find((c) => c.id === connectorId);
+            if (!row || 'error' in row || !row.supports_device_code || !data.deviceSignIn) {
+                throw new GaiaApiError(403, 'Connect this account on the PC running GAIA.');
+            }
+            return { ...data.deviceSignIn };
+        },
+        async watchConnectorSignIn(_connectorId, options) {
+            if (data.signInEnd) return { ...data.signInEnd };
+            await new Promise<void>((resolve) => {
+                if (options?.signal?.aborted) resolve();
+                else options?.signal?.addEventListener('abort', () => resolve());
+            });
+            return null;
         },
         async disableConnector(connectorId) {
             data.connectors = (data.connectors ?? []).map((c) => (c.id === connectorId && !('error' in c) ? { ...c, enabled: false } : c));
@@ -1305,8 +1356,9 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             schedules.splice(schedules.indexOf(schedule), 1);
             return { deleted: true };
         },
-        async uploadDocument(file) {
+        async uploadDocument(file, options) {
             if (data.documentUploadError) throw data.documentUploadError;
+            reportProgress(file.size ?? 0, options?.onUploadProgress);
             uploaded.push(file);
             const doc = {
                 id: `doc-${uploaded.length}`,
@@ -1445,15 +1497,26 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             if (!data.status) throw new GaiaApiError(503, 'This fake client was given no system status.');
             return data.status;
         },
+        async getWarmUp() {
+            if (data.warmUpError) throw data.warmUpError;
+            const warm = typeof data.warmUp === 'function' ? data.warmUp() : data.warmUp;
+            return warm ?? { state: 'idle' };
+        },
+        async requestWarmUp(fresh) {
+            if (data.warmUpError) throw data.warmUpError;
+            warmUpRequests.push(fresh);
+            const warm = typeof data.warmUp === 'function' ? data.warmUp() : data.warmUp;
+            return warm ?? { state: 'idle' };
+        },
         async downloadModel(model, options) {
             if (data.modelActionError) throw data.modelActionError;
             if (data.modelDownloadError) throw data.modelDownloadError;
             modelDownloads.push({ modelName: model, force: options?.force ?? false, loadAfter: options?.loadAfter ?? false });
             return { status: 'downloading', model };
         },
-        async loadModel(modelName, force) {
+        async loadModel(modelName, force, options) {
             if (data.modelActionError) throw data.modelActionError;
-            modelLoads.push({ modelName, force });
+            modelLoads.push({ modelName, force, ctxSize: options?.ctxSize });
             return { status: 'loading', model: modelName, ctx_size: 65536 };
         },
         async getLocalModelStatus() {

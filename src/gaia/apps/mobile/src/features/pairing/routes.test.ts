@@ -22,7 +22,7 @@ describe('routeKindOf', () => {
 
 describe('the unreachable hint', () => {
     const t = translator('en');
-    const message = (awayHint: boolean) => pickBanner(undefined, new GaiaNetworkError('https://pc', new Error('x')), t, null, awayHint)?.message;
+    const message = (awayHint: boolean) => pickBanner(undefined, new GaiaNetworkError('https://pc', new Error('x')), t, null, { awayHint })?.message;
 
     it('mentions Tailscale only when a tailnet address is stored', () => {
         expect(hasTailnetRoute({ baseUrl: 'https://192.168.1.20:4243', routes })).toBe(true);

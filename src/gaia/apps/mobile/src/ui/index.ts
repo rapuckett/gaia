@@ -7,6 +7,7 @@ export { useAppearance } from './theme/appearanceStore';
 export type { Tone } from './theme/tone';
 export { Text, type TextProps } from './text/Text';
 export { Ltr } from './text/Ltr';
+export { FirstLine, type FirstLineProps } from './text/FirstLine';
 export { contentDir } from './text/direction';
 export { Stack, Row, Spacer, type StackProps, type RowProps } from './layout/layout';
 export { Floating, type FloatingProps } from './layout/Floating';
