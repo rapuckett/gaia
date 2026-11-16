@@ -37,6 +37,7 @@ import type {
     ContextChoice,
     ConnectorActivations,
     ConnectorDeviceAuthResponse,
+    ConnectorSignInEnd,
     AllPermissions,
     ConnectorGrants,
     ConnectorList,
@@ -327,6 +328,20 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
         } finally {
             clearTimeout(timer);
         }
+    }
+
+    /** The first sign-in outcome the PC reports for this connector, or null when the stream ends first. */
+    async function readSignInEnd(events: AsyncGenerator<StreamEvent>, connectorId: string): Promise<ConnectorSignInEnd | null> {
+        for await (const event of events) {
+            const { type, payload } = event as unknown as { type: string; payload?: Record<string, unknown> };
+            if (payload?.connector_id !== connectorId) continue;
+            if (type === 'connector.oauth.completed') return { outcome: 'completed' };
+            if (type === 'connector.oauth.error') {
+                const error = typeof payload.error === 'string' ? payload.error : undefined;
+                return { outcome: payload.reason === 'cancelled' ? 'cancelled' : 'failed', error };
+            }
+        }
+        return null;
     }
 
     async function readJson<T>(res: FetchResponseLike, path: string): Promise<T> {
@@ -837,6 +852,19 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         startConnectorDeviceSignIn(connectorId, scopes, options) {
             return postJson<ConnectorDeviceAuthResponse>(connectorAuthorizeDevicePath(connectorId), { scopes }, options?.signal);
+        },
+
+        async watchConnectorSignIn(connectorId, options) {
+            const listen = new AbortController();
+            const stop = () => listen.abort();
+            options?.signal?.addEventListener('abort', stop);
+            try {
+                const events = await openConnectorEvents(listen.signal);
+                return events ? await readSignInEnd(events, connectorId).catch(() => null) : null;
+            } finally {
+                options?.signal?.removeEventListener('abort', stop);
+                stop();
+            }
         },
 
         async disableConnector(connectorId, options) {

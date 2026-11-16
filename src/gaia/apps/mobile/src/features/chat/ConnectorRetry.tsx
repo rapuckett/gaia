@@ -7,7 +7,7 @@ import { connectedProviderLabel, referencedProviderConnected } from '@webui/util
 
 import { useConnectorWatch } from '@/data';
 import { useT } from '@/i18n/useT';
-import { Button, Notice, Stack } from '@/ui';
+import { Notice, Stack } from '@/ui';
 
 export interface ConnectorRetryProps {
     /** The newest reply: a connector sign-in error. */
@@ -26,7 +26,7 @@ export function ConnectorRetry({ content, providers = [], onRetry }: ConnectorRe
     const list = connectors.data?.connectors ?? [];
     if (dismissed || !referencedProviderConnected(content, list, providers)) return null;
     return (
-        <Stack gap="xs" paddingX="lg" testID="connector-retry">
+        <Stack paddingX="lg" testID="connector-retry">
             <Notice
                 tone="success"
                 message={t('mobileApp.connectorRetry.connected', { name: connectedProviderLabel(content, list, providers) })}
@@ -37,8 +37,8 @@ export function ConnectorRetry({ content, providers = [], onRetry }: ConnectorRe
                         onRetry();
                     },
                 }}
+                onDismiss={() => setDismissed(true)}
             />
-            <Button variant="ghost" size="sm" label={t('banner.dismiss')} onPress={() => setDismissed(true)} testID="connector-retry-dismiss" />
         </Stack>
     );
 }

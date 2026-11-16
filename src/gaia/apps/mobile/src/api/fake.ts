@@ -14,6 +14,7 @@ import type {
     ChatPerformance,
     ConnectorDeviceAuthResponse,
     ConnectorListEntry,
+    ConnectorSignInEnd,
     DisconnectOutcome,
     ContextUsageResult,
     ConsolidateMemoryResult,
@@ -209,6 +210,8 @@ export interface FakeClientData {
     start?: StartScreen;
     /** What a sign-in with a code starts with; a connector without `supports_device_code` is refused, as the PC does. */
     deviceSignIn?: ConnectorDeviceAuthResponse;
+    /** How the PC reports a sign-in ended; unset waits until the watch is dropped. */
+    signInEnd?: ConnectorSignInEnd;
     /** What a disconnect reports about the provider-side revoke; `{}` when unset. */
     disconnectOutcome?: DisconnectOutcome | null;
     /** What watchSessionEvents streams before it ends; the real stream never ends on its own. */
@@ -991,6 +994,14 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
                 throw new GaiaApiError(403, 'Connect this account on the PC running GAIA.');
             }
             return { ...data.deviceSignIn };
+        },
+        async watchConnectorSignIn(_connectorId, options) {
+            if (data.signInEnd) return { ...data.signInEnd };
+            await new Promise<void>((resolve) => {
+                if (options?.signal?.aborted) resolve();
+                else options?.signal?.addEventListener('abort', () => resolve());
+            });
+            return null;
         },
         async disableConnector(connectorId) {
             data.connectors = (data.connectors ?? []).map((c) => (c.id === connectorId && !('error' in c) ? { ...c, enabled: false } : c));

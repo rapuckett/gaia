@@ -1,50 +1,133 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { awaited, isConnectAccountPayload } from '@webui/utils/connectAccountCard.core';
+import { isConnectAccountPayload, PROVIDER_NAMES } from '@webui/utils/connectAccountCard.core';
+import { router } from 'expo-router';
+import { useCallback, useState } from 'react';
+import { View } from 'react-native';
 
 import type { ConnectorRow } from '@/api/client.types';
 import { useConnectors } from '@/data';
-import { DeviceCodeSignIn } from '@/features/connectors/DeviceCodeSignIn';
-import { useT } from '@/i18n/useT';
-import { Icon, Row, Stack, Surface, Text } from '@/ui';
-import { Link2 } from '@/ui/icons';
+import { cardSignInScopes } from '@/features/connectors/connectorAccess';
+import { ProviderConnect } from '@/features/connectors/ProviderConnect';
+import { openSettings } from '@/features/settings/openSettings';
+import { describeError, useT } from '@/i18n/useT';
+import { Button, Icon, Notice, Row, Spinner, Stack, Surface, Text } from '@/ui';
+import { CircleCheck, Link2, Settings } from '@/ui/icons';
 
 import { UnsupportedCard } from './UnsupportedCard';
 
-/** An account that signs in with a code starts here, and the PC keeps it; any other is connected on the PC. The chat offers "Ask again" once it's done. */
+/**
+ * The desktop's Connect card. An account that signs in with a code starts here and the PC keeps
+ * it; any other is connected on the PC. Once one is connected, the chat's banner offers "Ask again".
+ */
 export function ConnectAccountCard({ data }: { data: unknown }) {
     const t = useT();
     const connectors = useConnectors();
+    const [ended, setEnded] = useState<'cancelled' | 'failed' | null>(null);
+    const onEnded = useCallback((why: 'cancelled' | 'failed') => setEnded(why), []);
+    const onStarted = useCallback(() => setEnded(null), []);
     if (!isConnectAccountPayload(data)) return <UnsupportedCard variant="invalid" render="connect_account" data={data} />;
-    const waiting = new Set(awaited(data));
-    const byCode = (connectors.data?.connectors ?? []).filter(
-        (c): c is ConnectorRow => waiting.has(c.id) && !('error' in c) && c.supports_device_code === true,
-    );
-    const onPc = data.providers.length > byCode.length;
+
+    const rows = (connectors.data?.connectors ?? []).filter((c): c is ConnectorRow => !('error' in c));
+    const rowFor = (id: string) => rows.find((c) => c.id === id);
+    const prompt = ended ? t(ended === 'cancelled' ? 'connectCard.cancelled' : 'connectCard.failed') : t('connectCard.prompt');
+
     return (
         <Surface tone="card" radius="md" border padding="md" testID="card-connect-account">
-            <Stack gap="sm">
-                <Row gap="sm" align="center">
-                    <Icon icon={Link2} size="sm" tone="accent" />
-                    <Stack flex={1}>
-                        <Text role="label">{t('connectCard.prompt')}</Text>
+            <View role="group" aria-label={t('connectCard.label')}>
+                <Stack gap="md">
+                    <Row gap="sm" align="start">
+                        <Icon icon={Link2} size="sm" tone="secondary" />
+                        <View style={{ flex: 1 }} role={ended ? 'alert' : undefined}>
+                            <Text role="label">{prompt}</Text>
+                        </View>
+                    </Row>
+                    {connectors.error ? <Notice tone="danger" message={describeError(connectors.error, t)} /> : null}
+                    {connectors.isPending ? <Spinner size="sm" /> : null}
+                    {connectors.isPending ? null : data.providers.map((id) => {
+                        const row = rowFor(id);
+                        return (
+                            <ProviderRow
+                                key={id}
+                                connectorId={id}
+                                name={PROVIDER_NAMES[id] ?? row?.display_name ?? id}
+                                row={row}
+                                scopes={row ? cardSignInScopes(data.scopes?.[id], row) : undefined}
+                                onEnded={onEnded}
+                                onStarted={onStarted}
+                            />
+                        );
+                    })}
+                    <Stack align="start">
+                        <Button
+                            size="sm"
+                            variant="secondary"
+                            icon={Settings}
+                            wrap
+                            label={t('connectCard.settings')}
+                            onPress={() => openSettings('connectors')}
+                            testID="connect-card-settings"
+                        />
                     </Stack>
-                </Row>
-                {byCode.map((c) => (
-                    <DeviceCodeSignIn
-                        key={c.id}
-                        connector={c}
-                        startLabel={t('mobileApp.connectCard.signInWithCode', { name: c.display_name })}
-                        doneMessage={t('connectCard.askAgain')}
-                    />
-                ))}
-                {onPc ? (
-                    <Text role="caption" tone="secondary">
-                        {t('mobileApp.connectCard.onPc')}
-                    </Text>
-                ) : null}
-            </Stack>
+                </Stack>
+            </View>
         </Surface>
+    );
+}
+
+function ProviderRow({
+    connectorId,
+    name,
+    row,
+    scopes,
+    onEnded,
+    onStarted,
+}: {
+    connectorId: string;
+    name: string;
+    row?: ConnectorRow;
+    scopes?: string[];
+    onEnded(why: 'cancelled' | 'failed'): void;
+    onStarted(): void;
+}) {
+    const t = useT();
+    const connected = !!row?.configured;
+    // No OAuth client on the PC yet, so sign-in can't start until it is set up.
+    if (row && !connected && row.configurable === false) {
+        return (
+            <Stack gap="sm" testID={`connect-setup-${connectorId}`}>
+                <View role="status">
+                    <Text role="label" tone="secondary">
+                        {t('connectCard.needsSetup', { name })}
+                    </Text>
+                </View>
+                <Stack align="start">
+                    <Button size="sm" variant="secondary" wrap label={t('connectCard.setUp', { name })} onPress={() => router.push('/connectors')} />
+                </Stack>
+            </Stack>
+        );
+    }
+    return (
+        <Stack gap="sm">
+            {connected ? (
+                <View role="status">
+                    <Row gap="xs">
+                        <Icon icon={CircleCheck} size="sm" tone="success" />
+                        <Text role="label" tone="success">
+                            {t('connectCard.connected', { name })}
+                        </Text>
+                    </Row>
+                </View>
+            ) : null}
+            <ProviderConnect
+                connectorId={connectorId}
+                row={row}
+                label={t(connected ? 'connectCard.reconnect' : 'connectCard.connect', { name })}
+                scopes={scopes}
+                onEnded={onEnded}
+                onStarted={onStarted}
+            />
+        </Stack>
     );
 }

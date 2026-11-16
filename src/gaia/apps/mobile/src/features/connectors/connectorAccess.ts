@@ -1,6 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
+import { requestScopes } from '@webui/utils/connectAccountCard.core';
 import { buildPersonalizePrompt, personalizeSourceKind } from '@webui/utils/connectorPersonalize';
 
 import type { AgentInfo, ConnectorRow } from '@/api/client.types';
@@ -19,6 +20,17 @@ function named(agents: readonly AgentInfo[]): AccessAgent[] {
 
 function requires(agent: AgentInfo, connectorId: string) {
     return agent.required_connections?.find((rc) => rc.connector_id === connectorId);
+}
+
+/**
+ * What a Connect card's sign-in with a code asks for: the access the failed call needs, what the
+ * account already holds, and the provider's identity scopes, which the PC adds only when it grants
+ * an agent and a paired phone grants none. A card that names nothing asks for everything the connector offers.
+ */
+export function cardSignInScopes(needed: string[] | undefined, connector: ConnectorRow): string[] {
+    const asked = requestScopes(needed, connector.scopes);
+    if (!asked.length) return connector.available_scopes?.length ? connector.available_scopes : (connector.default_scopes ?? []);
+    return [...new Set([...asked, ...(connector.default_scopes ?? [])])];
 }
 
 /** Agents that declare a requirement on this connector: each gets one toggle per scope. */
