@@ -3,7 +3,7 @@
 
 import { failureText, logAddsDetail, retryingSeconds, rowDetail, stalledSeconds, STATE_KEY } from '@webui/components/setup/downloadModel';
 import { formatSize, STALL_STUCK_S, type Estimate } from '@webui/components/setup/format';
-import type { MessageKey } from '@webui/i18n/registry';
+import { isolate, type MessageKey } from '@webui/i18n/registry';
 import type { SetupComponent, SetupModelProgress, SetupPlan, SetupRunStatus } from '@webui/types';
 import { useState } from 'react';
 
@@ -149,7 +149,11 @@ export function DownloadContents({ plan, run, onRetry, busy }: { plan: SetupPlan
                                     )}
                                 </Stack>
                                 <Stack align="end" maxWidth="40%">
-                                    <Ltr>{c.size_gb == null ? t('setup.contents.sizeOnDownload') : formatSize(c.size_gb)}</Ltr>
+                                    {c.size_gb == null ? (
+                                        <Text>{t('setup.contents.sizeOnDownload')}</Text>
+                                    ) : (
+                                        <Text numberOfLines={1}>{isolate(formatSize(c.size_gb).replace(/ /g, '\u00A0'), 'ltr')}</Text>
+                                    )}
                                     <Text role="caption" tone="secondary">{stateText(c, state, t)}</Text>
                                 </Stack>
                             </Row>
