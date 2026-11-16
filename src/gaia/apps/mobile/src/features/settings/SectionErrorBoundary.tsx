@@ -46,7 +46,7 @@ function Fallback({ onRetry, onReload }: { onRetry: () => void; onReload: () => 
             <Icon icon={CircleAlert} size="lg" tone="danger" />
             <Text role="title" weight="semibold" align="center" accessibilityRole="alert">{t('errorBoundary.title')}</Text>
             <Text tone="secondary" align="center">{t('errorBoundary.body')}</Text>
-            <Row gap="sm" justify="center" wrap>
+            <Row gap="sm" justify="center" wrap stack>
                 <Button label={t('errorBoundary.retry')} onPress={onRetry} />
                 <Button label={t('errorBoundary.reload')} variant="secondary" onPress={onReload} />
             </Row>

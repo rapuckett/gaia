@@ -55,10 +55,10 @@ export function SpendMeter({ sessionId, busy, initialOpen = false }: SpendMeterP
                 testID="spend-meter"
             >
                 <Row gap="xs">
-                    <Text role="caption" tone="secondary">
+                    <Text role="caption" tone="secondary" compact>
                         <Ltr>{floor(chat)}</Ltr>
                     </Text>
-                    <Text role="caption" tone="muted">
+                    <Text role="caption" tone="muted" compact>
                         {`· ${t.bare('spend.today')} `}
                         <Ltr>{floor(today)}</Ltr>
                     </Text>

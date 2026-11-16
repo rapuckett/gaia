@@ -120,7 +120,7 @@ function ChangesBody({ sessionId, live, changes, onUndone }: { sessionId: string
                     }
                 />
             ) : null}
-            <Row gap="sm" wrap>
+            <Row gap="sm" wrap stack>
                 <Button size="sm" variant="secondary" label={t('chg.review')} onPress={() => setReviewing(true)} testID="changes-review" />
                 {phase !== 'confirm' && phase !== 'conflict' ? (
                     <Button
@@ -138,7 +138,7 @@ function ChangesBody({ sessionId, live, changes, onUndone }: { sessionId: string
             {phase === 'confirm' ? (
                 <Stack gap="sm" accessibilityRole="summary" accessibilityLabel={t('chg.confirmLabel')}>
                     <Text role="caption" dir="auto">{t(count === 1 ? 'chg.confirm.one' : 'chg.confirm.other', { files: filesRef(count) })}</Text>
-                    <Row gap="sm" wrap>
+                    <Row gap="sm" wrap stack>
                         <Button size="sm" variant="danger" label={t('chg.undoAll')} disabled={live} onPress={() => void run(false)} testID="changes-undo-confirm" />
                         <Button size="sm" variant="secondary" label={t('mobileApp.changes.cancel')} onPress={() => setPhase('idle')} />
                     </Row>
@@ -146,7 +146,7 @@ function ChangesBody({ sessionId, live, changes, onUndone }: { sessionId: string
             ) : null}
             {message ? <Notice tone={phase === 'done' ? 'success' : 'danger'} message={message} testID="changes-undo-message" /> : null}
             {phase === 'conflict' ? (
-                <Row gap="sm" wrap>
+                <Row gap="sm" wrap stack>
                     <Button size="sm" variant="danger" label={t('chg.undoAnyway')} onPress={() => void run(true)} testID="changes-undo-force" />
                     <Button
                         size="sm"
@@ -188,7 +188,7 @@ function GitActions({ sessionId, live }: { sessionId: string; live: boolean }) {
                         {`${isolate(repoName(repo.root), 'ltr')} · ${isolate(repo.branch, 'ltr')}`}
                         {nothingToCommit(repo) && repo.files.length > 0 ? ` · ${t('mobileApp.changes.git.committed')}` : ''}
                     </Text>
-                    <Row gap="sm" wrap>
+                    <Row gap="sm" wrap stack>
                         <Button
                             size="sm"
                             variant="secondary"

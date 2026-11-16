@@ -95,7 +95,7 @@ export function FolderPicker({ sessionId, onPick, onClose, error, busy }: Folder
             {browse.error ? <Notice tone="danger" message={failureReason(browse.error, t)} /> : null}
             {listing?.folder_refusal ? <Notice tone="warning" message={listing.folder_refusal} /> : null}
             {error ? <Notice tone="danger" message={failureReason(error, t)} /> : null}
-            <Row gap="sm">
+            <Row gap="sm" stack>
                 <Button label={t('sp.cancel')} variant="ghost" onPress={onClose} />
                 <Button
                     label={t('pick.use')}

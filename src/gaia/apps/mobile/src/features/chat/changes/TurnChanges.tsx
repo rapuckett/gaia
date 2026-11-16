@@ -74,7 +74,7 @@ function TurnChangesRow({ sessionId, turn }: { sessionId: string; turn: Turn }) 
                         {t.plural('mobileApp.changes.summary', count)}
                         {undone ? ` · ${t('mobileApp.changes.undone')}` : ''}
                     </Text>
-                    <Row gap="sm" wrap>
+                    <Row gap="sm" wrap stack>
                         <Button size="sm" variant="secondary" label={t('chg.review')} onPress={() => setReviewing(true)} testID="turn-changes-review" />
                         {!undone && phase !== 'confirm' && phase !== 'conflict' ? (
                             <Button
@@ -93,7 +93,7 @@ function TurnChangesRow({ sessionId, turn }: { sessionId: string; turn: Turn }) 
                             <Text role="caption" dir="auto">
                                 {t.plural('mobileApp.changes.confirm', count)}
                             </Text>
-                            <Row gap="sm" wrap>
+                            <Row gap="sm" wrap stack>
                                 <Button size="sm" variant="primary" label={t('mobileApp.changes.confirmYes')} onPress={() => void undo(false)} testID="turn-changes-confirm" />
                                 <Button size="sm" variant="secondary" label={t('mobileApp.changes.cancel')} onPress={() => setPhase('idle')} />
                             </Row>
@@ -119,7 +119,7 @@ function TurnChangesRow({ sessionId, turn }: { sessionId: string; turn: Turn }) 
                 />
             ) : null}
             {phase === 'conflict' ? (
-                <Row gap="sm" wrap>
+                <Row gap="sm" wrap stack>
                     <Button size="sm" variant="danger" label={t('chg.undoAnyway')} onPress={() => void undo(true)} testID="turn-changes-force" />
                     <Button
                         size="sm"

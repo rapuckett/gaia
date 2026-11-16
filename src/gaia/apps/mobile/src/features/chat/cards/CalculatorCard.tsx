@@ -77,7 +77,7 @@ function Calculator({ wire }: { wire: CalculatorWire }) {
 
                 <Stack gap="xs" testID="calc-results">
                     {results.map((line) => (
-                        <Row key={line.label} gap="sm">
+                        <Row key={line.label} gap="sm" stack>
                             <Stack flex={1}>
                                 <Text role={line.primary ? 'body' : 'label'} weight={line.primary ? 'semibold' : 'regular'} tone={line.primary ? 'primary' : 'secondary'}>
                                     {t(line.label)}
@@ -125,7 +125,7 @@ function NumberField({ id, field, value, money, onChange }: NumberFieldProps) {
 
     return (
         <Stack gap="xs">
-            <Row gap="md">
+            <Row gap="md" stack>
                 <Stack flex={1}>
                     <Text role="label" weight="medium" tone="secondary">
                         {label}

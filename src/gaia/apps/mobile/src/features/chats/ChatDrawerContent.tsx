@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import { useRouter } from 'expo-router';
-import { Image, type ImageSourcePropType } from 'react-native';
+import { Image, ScrollView, type ImageSourcePropType } from 'react-native';
 import { useCallback, useMemo, useState } from 'react';
 
 import { APP_NAME } from '@webui/utils/constants';
@@ -27,10 +27,12 @@ import {
     SectionHeader,
     SectionList,
     Stack,
+    Spacer,
     StatusDot,
     Text,
 } from '@/ui';
-import { Ellipsis, EyeOff, Monitor, Plus, X } from '@/ui/icons';
+import { useLargeText } from '@/ui/theme/a11y';
+import { Ellipsis, EyeOff, Monitor, SquarePen, X } from '@/ui/icons';
 
 import { ChatRowSheets, type RowSheet } from './ChatRowSheets';
 import { declaredNavEntries, type NavEntry } from './navEntries';
@@ -136,28 +138,27 @@ export function ChatDrawerContent({ activeId, onSelect, onClose, onNewChat, onPc
     const markSeen = useCallback((id: string) => mutateRead(id, { onError: (e) => setFailure({ kind: 'markRead', error: e }) }), [mutateRead]);
     useMarkReadWhenSeen(activeId, sessions.data?.sessions.find((s) => s.id === activeId)?.unread, markSeen);
     const alert = failure ?? error;
+    const largeText = useLargeText();
 
-    return (
-        <Screen
-            edges={['top', 'bottom', 'start']}
-            footerBleed
-            header={<Header onClose={close} onNewChat={onNewChat ? newChat : undefined} onPcs={onPcs} />}
-            footer={
-                <Stack>
-                    {entries.filter((e) => e.footer).map((e) => (
-                        <NavRow key={e.key} entry={e} active={activeRoute === e.route} onOpen={open} />
-                    ))}
-                    <NotificationsEntry active={activeRoute === 'notifications'} onOpen={() => open('notifications')} />
-                    <ModelStatusPill />
-                </Stack>
-            }
-        >
-            <Stack paddingX="lg" paddingY="sm">
-                <SearchField value={text} onChangeText={setText} placeholder={t.bare('sidebar.search')} accessibilityLabel={t('sidebar.search')} />
-            </Stack>
+    const navRows = (
+        <>
+            {onNewChat ? <ListRow title={t('sidebar.newChat')} leading={<Icon icon={SquarePen} size="sm" tone="secondary" />} onPress={newChat} /> : null}
             {entries.filter((e) => !e.footer).map((e) => (
                 <NavRow key={e.key} entry={e} active={activeRoute === e.route} onOpen={open} />
             ))}
+        </>
+    );
+    const footerRows = (
+        <Stack>
+            {entries.filter((e) => e.footer).map((e) => (
+                <NavRow key={e.key} entry={e} active={activeRoute === e.route} onOpen={open} />
+            ))}
+            <NotificationsEntry active={activeRoute === 'notifications'} onOpen={() => open('notifications')} />
+            <ModelStatusPill />
+        </Stack>
+    );
+    const notices = (
+        <>
             {alert ? (
                 <Notice tone="danger" message={rowErrorMessage(alert.kind, alert.error, t)} />
             ) : null}
@@ -178,26 +179,69 @@ export function ChatDrawerContent({ activeId, onSelect, onClose, onNewChat, onPc
             {q !== '' && rowCount === 0 && state !== 'loading' && state !== 'error' ? (
                 <EmptyState title={settled ? t('sidebar.noMatch') : t('sidebar.searching')} />
             ) : null}
-            {state === 'list' ? (
-                <SectionList<ChatRow, ChatSection>
-                    sections={sections}
-                    keyExtractor={(row) => row.id}
-                    accessibilityLabel={t('sidebar.recent')}
-                    renderSectionHeader={({ section }) => <SectionHeader title={t(section.titleKey)} />}
-                    renderItem={({ item }) =>
-                        q ? (
-                            <SearchResultRow
-                                row={item}
-                                query={q}
-                                snippet={hits.get(item.id)?.field === 'message' ? hits.get(item.id)!.snippet : null}
-                                onSelect={select}
-                            />
-                        ) : (
-                            <ChatListRow row={item} onSelect={select} onMore={(row) => setTarget({ row, mode: 'menu' })} />
-                        )
-                    }
+        </>
+    );
+    const automated =
+        hiddenCount > 0 ? (
+            <Stack paddingX="lg" paddingY="sm">
+                <Chip
+                    label={showAutomated ? t('sidebar.hideBackground') : t.plural('sidebar.showBackground', hiddenCount)}
+                    selected={showAutomated}
+                    onPress={toggleAutomated}
                 />
-            ) : null}
+            </Stack>
+        ) : null;
+    // At large text sizes the pinned rows alone outgrow the drawer, so everything but the search scrolls with the chats.
+    const list =
+        state === 'list' ? (
+            <SectionList<ChatRow, ChatSection>
+                sections={sections}
+                keyExtractor={(row) => row.id}
+                accessibilityLabel={t('sidebar.recent')}
+                ListHeaderComponent={largeText ? <>{navRows}{notices}</> : undefined}
+                ListFooterComponent={largeText ? <>{automated}{footerRows}</> : undefined}
+                renderSectionHeader={({ section }) => <SectionHeader title={t(section.titleKey)} />}
+                renderItem={({ item }) =>
+                    q ? (
+                        <SearchResultRow
+                            row={item}
+                            query={q}
+                            snippet={hits.get(item.id)?.field === 'message' ? hits.get(item.id)!.snippet : null}
+                            onSelect={select}
+                        />
+                    ) : (
+                        <ChatListRow row={item} onSelect={select} onMore={(row) => setTarget({ row, mode: 'menu' })} />
+                    )
+                }
+            />
+        ) : null;
+
+    return (
+        <Screen
+            edges={['top', 'bottom', 'start']}
+            footerBleed
+            header={<Header onClose={close} onPcs={onPcs} />}
+            footer={largeText ? undefined : footerRows}
+        >
+            <Stack paddingX="lg" paddingY="sm">
+                <SearchField value={text} onChangeText={setText} placeholder={t.bare('sidebar.search')} accessibilityLabel={t('sidebar.search')} />
+            </Stack>
+            {largeText ? (
+                (list ?? (
+                    <ScrollView keyboardShouldPersistTaps="handled">
+                        {navRows}
+                        {notices}
+                        {automated}
+                        {footerRows}
+                    </ScrollView>
+                ))
+            ) : (
+                <>
+                    {navRows}
+                    {notices}
+                    {list}
+                </>
+            )}
             <ChatRowSheets
                 target={target}
                 onTarget={setTarget}
@@ -205,15 +249,7 @@ export function ChatDrawerContent({ activeId, onSelect, onClose, onNewChat, onPc
                 onSetPinned={(id, pinned) => setPinned.mutate({ id, pinned }, outcome(pinned ? 'pin' : 'unpin'))}
                 onDelete={(id) => remove.mutate(id, outcome('delete'))}
             />
-            {hiddenCount > 0 ? (
-                <Stack paddingX="lg" paddingY="sm">
-                    <Chip
-                        label={showAutomated ? t('sidebar.hideBackground') : t.plural('sidebar.showBackground', hiddenCount)}
-                        selected={showAutomated}
-                        onPress={toggleAutomated}
-                    />
-                </Stack>
-            ) : null}
+            {largeText ? null : automated}
         </Screen>
     );
 }
@@ -221,18 +257,40 @@ export function ChatDrawerContent({ activeId, onSelect, onClose, onNewChat, onPc
 // The same mark as the web sidebar's brand.
 const gaiaRobot: ImageSourcePropType = require('@webui/assets/gaia-robot.png');
 
-function Header({ onClose, onNewChat, onPcs }: { onClose: () => void; onNewChat?: () => void; onPcs?: () => void }) {
+function Header({ onClose, onPcs }: { onClose: () => void; onPcs?: () => void }) {
     const t = useT();
+    const largeText = useLargeText();
+    const brand = (
+        <>
+            <Image source={gaiaRobot} accessible={false} style={{ width: 22, height: 22 }} />
+            <Stack flex={1}>
+                <Text role="title" weight="semibold">{APP_NAME}</Text>
+            </Stack>
+        </>
+    );
+    const buttons = (
+        <>
+            {onPcs ? <IconButton icon={Monitor} label={t('mobileApp.pairing.pcs.title')} onPress={onPcs} testID="pcs-drawer-button" /> : null}
+            <IconButton icon={X} label={t('sidebar.collapse')} onPress={onClose} />
+        </>
+    );
+    // At large text sizes the name gets its own line, so three buttons beside it don't break it mid-word.
+    if (largeText) {
+        return (
+            <Stack paddingX="lg" paddingY="sm" gap="xs" accessibilityRole="header">
+                <Row gap="sm">
+                    <Spacer />
+                    {buttons}
+                </Row>
+                <Row gap="sm">{brand}</Row>
+            </Stack>
+        );
+    }
     return (
         <Stack paddingX="lg" paddingY="sm">
             <Row gap="sm" accessibilityRole="header">
-                <Image source={gaiaRobot} accessible={false} style={{ width: 22, height: 22 }} />
-                <Stack flex={1}>
-                    <Text role="title" weight="semibold">{APP_NAME}</Text>
-                </Stack>
-                {onPcs ? <IconButton icon={Monitor} label={t('mobileApp.pairing.pcs.title')} onPress={onPcs} testID="pcs-drawer-button" /> : null}
-                {onNewChat ? <IconButton icon={Plus} label={t('sidebar.newChat')} onPress={onNewChat} /> : null}
-                <IconButton icon={X} label={t('sidebar.collapse')} onPress={onClose} />
+                {brand}
+                {buttons}
             </Row>
         </Stack>
     );
@@ -256,6 +314,7 @@ function ChatListRow({ row, onSelect, onMore }: { row: ChatRow; onSelect: (sessi
     return (
         <ListRow
             title={row.title}
+            titleLargeLines={2}
             emphasized={row.unread}
             selected={row.active}
             accessibilityLabel={text.aria}

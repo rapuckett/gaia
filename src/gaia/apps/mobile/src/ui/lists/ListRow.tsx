@@ -5,6 +5,8 @@ import type { ReactNode } from 'react';
 import { View } from 'react-native';
 import { Pressable } from '../controls/Pressable';
 import { Row } from '../layout/layout';
+import { FirstLine } from '../text/FirstLine';
+import { useLargeText } from '../theme/a11y';
 import { useTheme } from '../theme/ThemeProvider';
 import { Text } from '../text/Text';
 import type { Tone } from '../theme/tone';
@@ -20,6 +22,8 @@ export interface ListRowProps {
     onLongPress?: () => void;
     selected?: boolean;
     titleLines?: number;
+    /** For long user content (a chat title): the lines it keeps at large sizes, where other titles show in full. */
+    titleLargeLines?: number;
     /** Let a long subtitle wrap to this many lines instead of truncating. */
     subtitleLines?: number;
     /** Semibold title, e.g. an unread chat. */
@@ -38,12 +42,14 @@ export function ListRow({
     onLongPress,
     selected,
     titleLines = 1,
+    titleLargeLines,
     subtitleLines = 1,
     emphasized,
     accessibilityLabel,
     testID,
 }: ListRowProps) {
     const { colors, space } = useTheme();
+    const largeText = useLargeText();
     const body = (
         <View
             style={{
@@ -54,10 +60,10 @@ export function ListRow({
                 justifyContent: 'center',
             }}
         >
-            <Row gap="md">
-                {leading}
+            <Row gap="md" align={largeText ? 'start' : 'center'}>
+                {leading ? <FirstLine role="ui">{leading}</FirstLine> : null}
                 <View style={{ flex: 1, minWidth: 0 }}>
-                    <Text role="ui" weight={selected || emphasized ? 'semibold' : 'medium'} numberOfLines={titleLines}>
+                    <Text role="ui" weight={selected || emphasized ? 'semibold' : 'medium'} numberOfLines={titleLines} largeLines={titleLargeLines}>
                         {title}
                     </Text>
                     {subtitle ? (

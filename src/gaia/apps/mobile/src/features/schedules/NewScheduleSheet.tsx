@@ -86,7 +86,7 @@ export function NewScheduleSheet({ open, onClose }: NewScheduleSheetProps) {
             onClose={close}
             title={t('schedules.new')}
             footer={
-                <Row gap="sm" justify="end">
+                <Row gap="sm" justify="end" stack>
                     <Button label={t('schedules.cancel')} variant="ghost" onPress={close} />
                     <Button
                         label={t(create.isPending ? 'schedules.creating' : 'schedules.create')}

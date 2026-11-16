@@ -91,7 +91,7 @@ function RenameSheet({ row, onClose, onSave }: { row: ChatRow; onClose: () => vo
                     onSubmitEditing={save}
                     autoFocus
                 />
-                <Row gap="sm">
+                <Row gap="sm" stack>
                     <Button label={t('row.cancelRename')} variant="secondary" onPress={onClose} />
                     <Button label={t('row.saveName')} onPress={save} />
                 </Row>

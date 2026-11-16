@@ -233,10 +233,25 @@ def _cloud_error(
     return ProviderError(f"Lemonade could not configure {name}: {message}.", 502)
 
 
+def _unreadable(what: str, endpoint: str, status: int) -> str:
+    """Sentence for a model-server read that failed; the status goes to the log."""
+    from gaia.llm.lemonade_launcher import describe_start_hint, gaia_runs_lemonade
+
+    logger.warning("Model server answered /%s with HTTP %s", endpoint, status)
+    advice = (
+        APP_RESTART_HINT if gaia_runs_lemonade() else describe_start_hint().instruction
+    )
+    return (
+        f"GAIA couldn't read {what}. Check that the model server is running. {advice}"
+    )
+
+
 def _cloud_entry(provider: str) -> Optional[Dict[str, Any]]:
     status, info = _lemonade("GET", "system-info")
     if status >= 400:
-        raise ProviderError(f"Lemonade answered /system-info with HTTP {status}.")
+        raise ProviderError(
+            _unreadable("the model server's details", "system-info", status)
+        )
     for entry in (info.get("cloud") or {}).get("providers") or []:
         if entry.get("name") == provider:
             return entry
@@ -542,7 +557,7 @@ def _list_models(provider: str, *, offer_optional: bool = True) -> List[Dict[str
     status, body = _lemonade("GET", "models?show_all=true")
     if status >= 400:
         failed = _ModelListFailed if status >= 500 else ProviderError
-        raise failed(f"Lemonade answered /models with HTTP {status}.")
+        raise failed(_unreadable("the model list", "models", status))
     listed = _model_entries(body)
     offered: List[str] = []
     if provider == LOCAL:
@@ -663,7 +678,9 @@ def _optional_models_that_fit() -> List[str]:
     status, info = _lemonade("GET", "system-info")
     try:
         if status >= 400:
-            raise ModelFitError(f"Lemonade answered /system-info with HTTP {status}")
+            raise ModelFitError(
+                _unreadable("the model server's details", "system-info", status)
+            )
         capacity = capacity_from_system_info(info)
     except ModelFitError as e:
         # Not offering what may not fit; downloaded models still list.
@@ -865,9 +882,7 @@ def _listed_as_cloud(model_id: str) -> bool:
 
     status, body = _lemonade("GET", "models?show_all=true")
     if status >= 400:
-        raise ProviderError(
-            f"Lemonade answered /models with HTTP {status}. {APP_RESTART_HINT}"
-        )
+        raise ProviderError(_unreadable("the model list", "models", status))
     record_cloud_models(body)
     # Match as the server does (case, ``user.`` prefix), or a retyped id slips by.
     entries = body.get("data") if isinstance(body, dict) else None
@@ -1904,7 +1919,7 @@ def _read_system_info() -> Dict[str, Any]:
     if status >= 400:
         # A 5xx is the server's own state, not an answer about any model: 503.
         raise ProviderError(
-            f"Lemonade answered /system-info with HTTP {status}.",
+            _unreadable("the model server's details", "system-info", status),
             503 if status >= 500 else 502,
         )
     return info
@@ -1914,7 +1929,7 @@ def _read_health() -> Dict[str, Any]:
     status, health = _lemonade("GET", "health")
     if status >= 400:
         raise ProviderError(
-            f"Lemonade answered /health with HTTP {status}.",
+            _unreadable("the model server's status", "health", status),
             503 if status >= 500 else 502,
         )
     return health
@@ -2207,9 +2222,8 @@ def _trained_window(model_id: str) -> Optional[int]:
     status, body = _lemonade("GET", "models?show_all=true")
     if status >= 400:
         raise ProviderError(
-            f"Lemonade answered /models with HTTP {status}, so GAIA can't read "
-            f"the context sizes {model_id} was trained for. Try again once the "
-            "local model server is answering."
+            f"{_unreadable('the model list', 'models', status)} Without it GAIA "
+            f"can't read the context sizes {model_id} was trained for."
         )
     for m in _model_entries(body):
         if _model_ids_match(str(m.get("id") or ""), model_id):
@@ -2438,7 +2452,7 @@ def _inspect_custom(body: CustomModelRequest) -> Dict[str, Any]:
 def _lemonade_catalog() -> List[Dict[str, Any]]:
     status, body = _lemonade("GET", "models?show_all=true")
     if status >= 400:
-        raise ProviderError(f"Lemonade answered /models with HTTP {status}.")
+        raise ProviderError(_unreadable("the model list", "models", status))
     return _model_entries(body)
 
 
