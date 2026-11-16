@@ -24,7 +24,7 @@ export default function MemoryGalleryRoute() {
     const [client] = useState(() => memoryScene(picked));
     if (!devGalleryEnabled()) return <Redirect href="/" />;
     return (
-        <QueryClientProvider client={queryClient}>
+        <QueryClientProvider key={scene} client={queryClient}>
             <GaiaClientProvider client={client}>
                 <UIProvider>
                     <ScreenBannerProvider banner={null}>
