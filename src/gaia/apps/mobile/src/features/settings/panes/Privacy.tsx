@@ -14,7 +14,7 @@ import { describeError, useT } from '@/i18n/useT';
 import { Card, Disclosure, IconButton, Ltr, Notice, Row, Stack, Switch, Text } from '@/ui';
 import { Archive, Check, Copy } from '@/ui/icons';
 
-import { PcOnlyAction } from '@/features/logs';
+import { PcOnlyAction } from '@/features/logs/PcOnlyAction';
 import { PcOnlyNotice } from '../PcOnlyNotice';
 import { SettingsAnchor } from '../targets';
 import { DeleteChats } from './DeleteChats';
