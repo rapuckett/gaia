@@ -6,11 +6,12 @@
  * path in the user's own message. Code samples and non-paths stay plain code.
  */
 
-import { fireEvent, render } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MessageBubble } from '../MessageBubble';
 import type { Message } from '../../types';
 import * as api from '../../services/api';
+import { ApiError } from '../../services/apiErrors';
 
 vi.mock('../../services/api');
 const mockedApi = vi.mocked(api);
@@ -54,6 +55,21 @@ describe('answer file paths', () => {
         fireEvent.click(links()[0]);
         expect(mockedApi.openFileOrFolder).toHaveBeenCalledTimes(1);
         expect(mockedApi.openFileOrFolder.mock.calls[0]).toEqual([path]);
+    });
+
+    it.each([
+        [403, 'Access restricted to files under user home directory', "Couldn't open /etc/hosts: GAIA opens only files and folders inside your home folder."],
+        [404, 'Path not found', "Couldn't open /etc/hosts: it's no longer there. It may have been moved or deleted."],
+        [500, 'Failed to open file or folder. Check server logs for details.', "Couldn't open /etc/hosts: Failed to open file or folder. Check server logs for details."],
+        [403, "Do this on the PC running GAIA.", "Couldn't open /etc/hosts: Do this on the PC running GAIA."],
+    ])('says why an open failed with %i: %s', async (status, detail, shown) => {
+        mockedApi.openFileOrFolder.mockRejectedValue(new ApiError(detail, status, detail, null));
+        renderAnswer('See `/etc/hosts`.');
+
+        fireEvent.click(links()[0]);
+
+        const alert = await screen.findByRole('alert');
+        expect(alert.textContent?.replace(/[⁦-⁩]/g, '')).toBe(shown);
     });
 
     it('accepts forward slashes and a trailing folder separator', () => {

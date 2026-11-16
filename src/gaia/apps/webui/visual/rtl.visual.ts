@@ -1251,6 +1251,14 @@ for (const locale of ['ar', 'en']) {
         await expect(chips).toHaveText([POSIX_ANSWER_PATH, FILE_URL_ANSWER_PATH]);
         expect(await audit(page)).toEqual([]);
         await page.screenshot({ path: info.outputPath('posix-paths.png') });
+
+        await page.route((url) => url.pathname === '/api/files/open', (route) =>
+            route.fulfill({ status: 404, json: { detail: 'Path not found' } }),
+        );
+        await chips.first().click();
+        await expect(page.locator('.file-path-error')).toBeVisible();
+        expect(await audit(page)).toEqual([]);
+        await page.screenshot({ path: info.outputPath('posix-path-gone.png') });
     });
 }
 
