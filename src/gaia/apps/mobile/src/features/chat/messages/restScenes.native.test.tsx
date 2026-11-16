@@ -49,6 +49,11 @@ const mount = (Route: () => React.JSX.Element) =>
     );
 
 describeNative('card, connector and undo scenes', () => {
+    beforeAll(() => {
+        route('messages');
+        route('connectors');
+        route('permission');
+    }, 60000);
     beforeEach(() => sheetStore.reset());
 
     it('connector-retry offers Ask again once the account is connected', async () => {
@@ -181,11 +186,12 @@ describeNative('card, connector and undo scenes', () => {
         expect(screen.getByText('Pause', opts)).toBeTruthy();
     });
 
-    it('panel-chgGitPr leaves Create PR enabled', async () => {
+    it('panel-chgGitPr renders its panel with Create PR enabled and no read errors', async () => {
         mockParams = { state: 'panel-chgGitPr' };
         await mount(route('messages'));
         const button = await screen.findByTestId('changes-pr', opts);
         expect(button.props.accessibilityState?.disabled).toBeFalsy();
+        expect(screen.queryByText(/Session not found|no model status/, opts)).toBeNull();
     });
 
     it.each([

@@ -37,7 +37,10 @@ export function translator(code: string): Translate {
 /** English, for helpers whose callers pass no translator. */
 export const tEn: Translate = translator('en');
 
-/** Dates in the interface language with Western digits; English follows the PC's own region. */
+/** Dates in the interface language with Western digits; English keeps English month names, and the region only picks the English variant (en-GB order). */
 export function dateLocale(t: Translate): string | undefined {
-    return t.locale === DEFAULT_LOCALE ? undefined : `${t.locale}-u-nu-latn`;
+    if (t.locale !== DEFAULT_LOCALE) return `${t.locale}-u-nu-latn`;
+    // A device region in another language (an Arabic phone) must not name the months of English text.
+    const region = Intl.DateTimeFormat().resolvedOptions().locale;
+    return /^en(-|$)/i.test(region) ? undefined : DEFAULT_LOCALE;
 }
