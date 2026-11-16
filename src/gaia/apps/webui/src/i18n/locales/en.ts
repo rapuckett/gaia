@@ -1395,6 +1395,7 @@ export const enMessages = {
     'perm.rereadFailed': "Couldn't re-read the saved mode: {error}",
 
     // The permission prompt above the composer
+    'countdown.left': '{time} left',
     'prompt.allowOnce': 'Allow once',
     'prompt.allowForChat': 'Allow for this chat',
     'prompt.alwaysAllow': 'Always allow {scope} in this chat',

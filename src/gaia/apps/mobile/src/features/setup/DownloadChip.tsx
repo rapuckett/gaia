@@ -6,6 +6,7 @@ import { useT } from '@/i18n/useT';
 import { Icon, Pressable, Row, Text } from '@/ui';
 import { CircleAlert, Download } from '@/ui/icons';
 
+import { useDownloadQueue } from '../settings/panes/model/downloadQueue';
 import { chipView } from './steps/downloadState';
 
 /**
@@ -15,7 +16,9 @@ import { chipView } from './steps/downloadState';
 export function DownloadChip({ onPress }: { onPress: () => void }) {
     const t = useT();
     const status = useSetupStatus();
-    const view = chipView(status.data);
+    const queued = useDownloadQueue((s) => s.queue.length);
+    const started = useDownloadQueue((s) => s.started);
+    const view = chipView(status.data, queued, started);
     if (!view) return null;
     const failed = view.kind === 'failed';
     const label = failed

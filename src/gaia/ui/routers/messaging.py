@@ -200,18 +200,16 @@ def discord_restart() -> Dict[str, Any]:
 )
 def discord_forget_always() -> Dict[str, Any]:
     """Forget every "Always allow"; GAIA asks again from the next request."""
-    from gaia.messaging.discord import state
-
     cli = _cli()
     # The running agent holds its own copy of the answers, so it is restarted.
-    was_running = state.is_running()
+    was_running = bridge_state.is_running()
     if was_running and not cli.stop():
         raise HTTPException(
             status_code=500,
             detail="The Discord bridge did not stop, so nothing was forgotten. "
             + cli.stop_failed_hint(),
         )
-    state.forget_always()
+    bridge_state.forget_always()
     if was_running:
         cli.start_detached(emit=lambda _line: None)
     return _status()

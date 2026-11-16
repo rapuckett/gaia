@@ -3,6 +3,7 @@
 
 import type { SetupCatalogEntry, SetupModelProgress, SetupRole, SetupTest } from '@webui/types';
 
+import { GaiaNetworkError } from '@/api/errors';
 import { createFakeClient, type FakeClientData } from '@/api/fake';
 import type { GaiaClient, GpuMemoryStatus, PreflightReport, SetupPlan, SetupRunStatus } from '@/api/client.types';
 
@@ -13,7 +14,15 @@ export interface SetupScene {
     stage: SetupStage;
     screen?: 'gpu' | 'key' | 'models';
     data: FakeClientData;
+    /** The whole setup screen (rail, navigation, language, notes) instead of one step body; `again` is a re-run from Settings, `viewing` a step behind the live one. */
+    shell?: { again?: boolean; viewing?: SetupStage };
+    /** A confirm sheet open over the step, as the setup request builders word it. */
+    confirm?: ConfirmScene;
+    /** The download chip above the step. */
+    chip?: boolean;
 }
+
+export type ConfirmScene = 'low-disk' | 'no-fit-many' | 'no-fit-one' | 'server-low-disk' | 'server-no-fit';
 
 const entry = (over: Partial<SetupCatalogEntry> & { id: string }): SetupCatalogEntry => ({
     name: over.id, roles: ['chat'], purpose: 'Answers your chats', if_skipped: null, recipe: 'llamacpp', size_gb: 1, full_size_gb: 1,
@@ -94,6 +103,10 @@ const PLAN_LONG: SetupPlan = {
         ? { ...e, name: LONG_NAME, planned: true, selected: true, fits: true, need_gb: 14.2, purpose: 'Answers your chats, reads your images and works through long documents', source: 'huggingface.co/amd/a-repository-with-a-very-long-name-that-keeps-on-going/resolve/main' }
         : e)),
 };
+const PLAN_PARTIAL: SetupPlan = {
+    ...PLAN, download_gb: 3.97,
+    catalog: CATALOG.map((e) => (e.id === GEMMA_ID ? { ...e, partial: true, partial_gb: 2 } : e)),
+};
 const PLAN_DONE: SetupPlan = { ...PLAN, catalog: CATALOG.map((e) => (e.gaia_model && !e.support ? e : { ...e, downloaded: true, size_gb: 0 })) };
 
 export const GPU: GpuMemoryStatus = {
@@ -144,6 +157,21 @@ const RUN_AGENT_COMPONENT_FAILED: SetupRunStatus = {
     components: { server: 'done', backend: 'done', agent: 'failed' },
     component_kinds: { agent: 'transient' },
     error: "`gaia init --profile gaia` failed (exit 1): GAIA 0.25.4rc11 is release candidate v0.25.4-rc11, which installs the GAIA agent built from its own commit. Could not read https://github.com/amd/gaia/releases/download/v0.25.4-rc11/gaia-agent-release.json (tried 3 times): HTTPSConnectionPool(host='github.com', port=443): Read timed out. (read timeout=30)",
+    models: DONE_ROWS.map((m) => ({ ...m, state: 'ready' as const })),
+    overall: { bytes_done: 6.3e9, bytes_total: 6.3e9, speed_bps: 0, eta_s: null, percent: 100, failed: 0 },
+};
+const RUN_VERIFY_FAILED: SetupRunStatus = {
+    ...RUN, state: 'failed', text: 'Setup stopped',
+    components: { server: 'done', backend: 'done', agent: 'done' },
+    models: [
+        row(EMBED_ID, ['embedding'], 'ready', 330e6, 330e6),
+        row(GEMMA_ID, ['chat', 'vision'], 'failed', 5.97e9, 5.97e9, { error: 'The downloaded file failed its check.', error_kind: 'verify' }),
+    ],
+    overall: { bytes_done: 6.3e9, bytes_total: 6.3e9, speed_bps: 0, eta_s: null, percent: 100, failed: 1 },
+};
+const RUN_DOWNLOADED: SetupRunStatus = {
+    ...RUN, state: 'failed', text: 'Setup stopped',
+    components: { server: 'done', backend: 'done', agent: 'done' },
     models: DONE_ROWS.map((m) => ({ ...m, state: 'ready' as const })),
     overall: { bytes_done: 6.3e9, bytes_total: 6.3e9, speed_bps: 0, eta_s: null, percent: 100, failed: 0 },
 };
@@ -250,28 +278,54 @@ export const COMMON: FakeClientData = {
     },
 };
 
+const START_CARDS: NonNullable<FakeClientData['start']> = {
+    cards: [
+        { skill: 'research-report', title: 'Research a topic', note: 'A cited report from the web', prompt: 'Research: ', needs_input: true },
+        { skill: 'summarize', title: 'Summarize a document', note: 'The short version of a long file', prompt: 'Summarize my newest document.', needs_input: false },
+        { skill: 'file-ops', title: 'Tidy a folder', note: 'Sort files into sensible folders', prompt: 'Tidy my downloads folder.', needs_input: false },
+        { skill: 'check-in', title: 'Check in', note: 'Pick up where you left off', prompt: 'Good morning.', needs_input: false },
+    ],
+    working_folder: { path: '/home/you', name: 'you', gaia_folder: false, choosable: true },
+};
 type Step = 'check' | 'plan' | 'gpu' | 'models' | 'key' | 'download' | 'test' | 'ready';
-const scene = (step: Step, data: FakeClientData = {}): SetupScene => {
+const scene = (step: Step, data: FakeClientData = {}, extra: Pick<SetupScene, 'shell' | 'confirm' | 'chip'> = {}): SetupScene => {
     const stage: SetupStage = step === 'gpu' || step === 'models' || step === 'key' ? 'plan' : step;
-    return { stage, screen: step === 'gpu' || step === 'models' || step === 'key' ? step : undefined, data };
+    return { stage, screen: step === 'gpu' || step === 'models' || step === 'key' ? step : undefined, data, ...extra };
 };
 
 /** Every (step, state) the gallery can show; the key is `step/state`, and `default` is a step's plain state. */
 export const SETUP_SCENES: Record<string, SetupScene> = {
-    'check/found': scene('check'),
     'check/blocked': scene('check', { preflight: HARDWARE_BLOCKED }),
     'check/failed': scene('check', { setupPlan: PLAN_COLD, setupStatus: SERVER_FAILED }),
+    'check/found': scene('check'),
     'check/offer': scene('check', THEIRS),
     'check/running': scene('check', { setupPlan: PLAN_COLD, setupStatus: SERVER_RUNNING }),
+    'chip/failed': scene('download', { setupStatus: RUN_VERIFY_FAILED }, { chip: true }),
+    'chip/moving': scene('download', { setupStatus: RUN }, { chip: true }),
+    'confirm/low-disk': scene('plan', { setupPlan: PLAN_SHORT }, { confirm: 'low-disk' }),
+    'confirm/no-fit-many': scene('plan', {}, { confirm: 'no-fit-many' }),
+    'confirm/no-fit-one': scene('plan', {}, { confirm: 'no-fit-one' }),
+    'confirm/server-low-disk': scene('download', { setupStatus: RUN_VERIFY_FAILED }, { confirm: 'server-low-disk' }),
+    'confirm/server-no-fit': scene('plan', {}, { confirm: 'server-no-fit' }),
     'download/agent-failed': scene('download', { setupStatus: RUN_AGENT_COMPONENT_FAILED }),
     'download/bundled': scene('download', {
         setupStatus: RUN_PARTS,
         setupPlan: { ...PLAN, components: COMPONENTS.map((c) => (c.id === 'server' ? { ...c, source: 'the GAIA installer', bundled: true } : c)) },
     }),
-    'download/running': scene('download', { setupStatus: RUN }),
     'download/failed': scene('download', { setupStatus: RUN_ROW_FAILED }),
+    'download/finish': scene('download', { setupStatus: RUN_DOWNLOADED }),
+    'download/finish-cancelled': scene('download', { setupStatus: { ...RUN_DOWNLOADED, state: 'cancelled' } }),
     'download/long': scene('download', { setupStatus: RUN_LONG, setupPlan: PLAN_LONG }),
+    'download/lost': scene('download', { setupStatuses: [RUN, new GaiaNetworkError('http://127.0.0.1:4217/api/setup/status', new Error('Network request failed'))] }),
     'download/parts': scene('download', { setupStatus: RUN_PARTS }),
+    'download/running': scene('download', { setupStatus: RUN }),
+    'download/verify-failed': scene('download', { setupStatus: RUN_VERIFY_FAILED }),
+    'gate/again': scene('check', {}, { shell: { again: true } }),
+    'gate/check': scene('check', {}, { shell: {} }),
+    'gate/download': scene('download', { setupStatus: RUN }, { shell: {} }),
+    'gate/interrupted': scene('plan', { setupStatuses: [RUN, { state: 'idle' }] }, { shell: {} }),
+    'gate/locked': scene('download', { setupStatus: RUN }, { shell: { viewing: 'check' } }),
+    'gate/resume': scene('check', { setupPlan: PLAN_PARTIAL }, { shell: {} }),
     'gpu/default': scene('gpu', { gpuMemory: GPU }),
     'gpu/keep': scene('gpu', { gpuMemory: GPU_KEEP }),
     'key/default': scene('key'),
@@ -287,6 +341,7 @@ export const SETUP_SCENES: Record<string, SetupScene> = {
     'plan/disk-short': scene('plan', { setupPlan: PLAN_SHORT }),
     'plan/local-only': scene('plan', { providers: providers(true) }),
     'plan/long': scene('plan', { setupPlan: PLAN_LONG }),
+    'ready/cards': scene('ready', { setupStatus: RUN_READY, setupPlan: PLAN_DONE, start: START_CARDS }),
     'ready/default': scene('ready', { setupStatus: RUN_READY, setupPlan: PLAN_DONE }),
     'test/failed-agent': scene('test', { setupStatus: RUN_AGENT_FAILED }),
     'test/failed-broken': scene('test', { setupStatus: failedTests('broken', 'The model file looks damaged.') }),
@@ -300,3 +355,6 @@ export const SETUP_SCENES: Record<string, SetupScene> = {
 export function setupSceneClient(found: SetupScene): GaiaClient {
     return createFakeClient({ ...COMMON, ...found.data });
 }
+
+/** The wait before the setup check has answered; `?state=` of `/dev/boot`. */
+export const BOOT_STATES = ['starting', 'upgrading'] as const;
