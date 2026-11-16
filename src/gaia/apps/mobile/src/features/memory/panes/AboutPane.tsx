@@ -127,6 +127,7 @@ export function AboutPane({ notify, memoryEnabled, onOpenAdvanced }: MemoryPaneP
                         variant="secondary"
                         busy={list.isFetching}
                         onPress={() => setWant(Math.max(want, items.length) + ABOUT_PAGE_SIZE)}
+                        testID="memory-about-show-more"
                     />
                 </Stack>
             ) : null}
