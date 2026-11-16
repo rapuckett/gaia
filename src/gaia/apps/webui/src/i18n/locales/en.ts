@@ -3736,6 +3736,8 @@ export const enMessages = {
     'mobileApp.error.network': 'Can\'t reach GAIA on your PC. Check that it\'s on and reachable from this phone.',
     'mobileApp.error.auth': 'GAIA did not accept this phone\'s pairing: {detail}. Pair this phone with your PC again.',
     'mobileApp.error.http': 'GAIA answered with an error ({status}): {detail}',
+    'mobileApp.error.backend': "GAIA on your PC isn't responding (error {status}).",
+    'mobileApp.error.setupCheckHttp': 'Could not check whether GAIA is set up: your PC answered with an error ({status}). Try again; if it lasts, restart GAIA.',
     'mobileApp.error.sendTimeout': 'GAIA did not start this answer within {seconds} seconds; it may be busy or stuck. Reopen this chat in a minute to see whether it answered, or send the message again.',
     'mobileApp.error.attachTimeout': 'GAIA did not respond within {seconds} seconds when this phone reconnected to the running answer. The answer may still finish: reopen this chat once GAIA is answering again.',
     'mobileApp.error.streamStalled': 'GAIA went silent for {seconds} seconds, so this phone stopped waiting. The answer may still finish on your PC: reopen this chat in a minute to see it.',
