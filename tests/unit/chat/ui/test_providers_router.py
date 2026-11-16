@@ -3112,8 +3112,8 @@ def test_local_only_names_a_next_step_when_the_model_list_errors(
     resp = client.post("/api/providers/select", json={"model": _OTHER_CLOUD})
     assert resp.status_code == 503
     detail = resp.json()["detail"]
-    assert "HTTP 500" in detail
-    assert "close GAIA and open it again" in detail
+    assert "model list" in detail
+    assert "Check that the model server is running" in detail
     assert db.get_setting("custom_model") is None
 
 
