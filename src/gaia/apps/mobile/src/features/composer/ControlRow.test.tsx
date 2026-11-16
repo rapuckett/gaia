@@ -14,6 +14,7 @@ jest.mock('@/i18n/useT', () => ({ useT: () => jest.requireActual('@webui/i18n/tr
 jest.mock('react-native', () => ({ View: 'View', Platform: { OS: 'ios' } }));
 jest.mock('@/ui/icons', () => ({ ArrowUp: 'ArrowUp', Square: 'Square', ChevronDown: 'ChevronDown', Eye: 'Eye', EyeOff: 'EyeOff' }));
 jest.mock('./AttachButton', () => ({ AttachButton: 'AttachButton' }));
+jest.mock('./pickFiles', () => ({ pickedFromPaste: jest.fn() }));
 jest.mock('./AttachmentChips', () => ({ AttachmentChips: 'AttachmentChips' }));
 jest.mock('@/ui', () => {
     const { createElement: mockElement } = jest.requireActual('react');

@@ -24,7 +24,7 @@ type Where = 'local' | 'cloud';
 type ContentState = 'active' | 'done' | 'failed' | undefined;
 
 /** A choice card: a radio row that names it, and what it offers below. */
-function RadioCard({ where, picked, disabled, label, onPick, children, name }: {
+export function RadioCard({ where, picked, disabled, label, onPick, children, name }: {
     where: Where;
     picked: boolean;
     disabled: boolean;
@@ -45,7 +45,9 @@ function RadioCard({ where, picked, disabled, label, onPick, children, name }: {
                 >
                     <Row gap="sm">
                         <Text tone={picked ? 'accent' : 'muted'}>{picked ? '●' : '○'}</Text>
-                        <Text role="ui" weight="semibold" tone={disabled && !picked ? 'muted' : 'primary'}>{name}</Text>
+                        <Stack flex={1}>
+                            <Text role="ui" weight="semibold" tone={disabled && !picked ? 'muted' : 'primary'}>{name}</Text>
+                        </Stack>
                     </Row>
                 </Pressable>
                 {children}
@@ -54,7 +56,7 @@ function RadioCard({ where, picked, disabled, label, onPick, children, name }: {
     );
 }
 
-function Reasons({ items }: { items: string[] }) {
+export function Reasons({ items }: { items: string[] }) {
     return (
         <Stack gap="xs">
             {items.map((line) => (
