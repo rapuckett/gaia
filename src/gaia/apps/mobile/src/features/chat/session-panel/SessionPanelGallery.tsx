@@ -38,6 +38,7 @@ export type SessionPanelGalleryState =
     | 'chgConfirm'
     | 'chgConflict'
     | 'chgGit'
+    | 'chgGitPr'
     | 'chgPending'
     | 'chgError'
     | 'chgReview'
@@ -54,7 +55,7 @@ const CONTEXT_STATES: readonly SessionPanelGalleryState[] = ['ctxMeasuring', 'ct
 
 const ENV_STATES: readonly SessionPanelGalleryState[] = ['envFolders', 'envRemove', 'envOffline', 'envFull', 'envEmpty', 'envPick', 'envPickRefused'];
 
-const CHANGES_STATES: readonly SessionPanelGalleryState[] = ['chgList', 'chgConfirm', 'chgConflict', 'chgGit', 'chgPending', 'chgError', 'chgReview'];
+const CHANGES_STATES: readonly SessionPanelGalleryState[] = ['chgList', 'chgConfirm', 'chgConflict', 'chgGit', 'chgGitPr', 'chgPending', 'chgError', 'chgReview'];
 
 const DIFF = '@@ -1,3 +1,3 @@\n # Q3 summary\n-Revenue was flat.\n+Revenue grew 4%.\n Costs held steady.\n';
 const CHANGE = (path: string, change: 'edited' | 'created' | 'deleted', additions: number | null, deletions: number | null, turns = 1): SessionChanges['files'][number] => ({
@@ -103,6 +104,9 @@ const GIT: SessionGit = {
         },
     ],
 };
+
+const { pr_blocked: _blocked, ...READY_REPO } = GIT.repos[0]!;
+const GIT_PR: SessionGit = { ...GIT, repos: [{ ...READY_REPO, branch: 'q3-summary' }] };
 
 const ANSWER_STATES: readonly SessionPanelGalleryState[] = ['ansFull', 'ansPending', 'ansNoLive', 'ansError'];
 
@@ -350,7 +354,7 @@ export function SessionPanelGallery({ state }: { state: SessionPanelGalleryState
             fileStatus: answerState ? { '/Users/avery/Documents/packing-list.md': { path: '/Users/avery/Documents/packing-list.md', exists: true, mtime: 200 }, '/Users/avery/Documents/old-plan.md': { path: '/Users/avery/Documents/old-plan.md', exists: false } } : undefined,
             sessions: env || chg ? [SESSION] : undefined,
             sessionChanges: chg && state !== 'chgError' ? { dev: { ...CHANGES, pending: state === 'chgPending' } } : undefined,
-            sessionGit: state === 'chgGit' || state === 'chgConfirm' ? { dev: GIT } : undefined,
+            sessionGit: state === 'chgGitPr' ? { dev: GIT_PR } : state === 'chgGit' || state === 'chgConfirm' ? { dev: GIT } : undefined,
             undoConflict: state === 'chgConflict' ? new GaiaApiError(409, 'a file changed since', undefined, undefined, { status: 'conflict' }) : undefined,
             environments: env ? { dev: environment } : undefined,
             fileFolders: env ? (state === 'envPickRefused' ? { ...BROWSE_FOLDERS, '': BROWSE_FOLDERS['/Users/avery']! } : BROWSE_FOLDERS) : undefined,
