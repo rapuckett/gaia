@@ -48,7 +48,7 @@ describeNative('composer and retry scenes', () => {
         mockState = 'menuCloud';
         await mount(composerRoute());
         fireEvent.press(await screen.findByTestId('model-row-accounts/fireworks/models/qwen3p6', opts));
-        expect(await screen.findByText(/leave this PC/, opts)).toBeTruthy();
+        expect(await screen.findByText(/Chat history is sent to Fireworks AI/, opts)).toBeTruthy();
         expect(screen.getByText('Use Qwen3.6', opts)).toBeTruthy();
     });
 
