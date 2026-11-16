@@ -281,7 +281,7 @@ export const COMMON: FakeClientData = {
 const START_CARDS: NonNullable<FakeClientData['start']> = {
     cards: [
         { skill: 'research-report', title: 'Research a topic', note: 'A cited report from the web', prompt: 'Research and write a short cited report on: ', needs_input: true },
-        { skill: 'coding', title: 'Work on code', note: 'In you', prompt: 'Look around you and tell me what this project does.', needs_input: false },
+        { skill: 'coding', title: 'Work on code', note: 'In budget-app', prompt: 'Look around budget-app and tell me what this project does.', needs_input: false },
         { skill: 'summarize', title: 'Summarize something', note: 'A document, transcript or email', prompt: 'Summarize this: ', needs_input: true },
         { skill: 'example-new', title: 'Plan my week', note: 'A skill the app has no translation for', prompt: 'Plan my week.', needs_input: false },
     ],
