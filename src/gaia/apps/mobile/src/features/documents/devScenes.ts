@@ -128,7 +128,7 @@ export const DOCUMENTS_SCENES: Record<string, DocumentsScene> = {
     }),
     'path-refused': scene({
         docs: MIXED,
-        start: { path: '/Users/me/Library/Keychains', add: { kind: 'failed', upload: { filename: 'Keychains', status: 403, error: { key: 'mobileApp.error.http', params: { status: 403, detail: AWAY } } } } },
+        start: { path: '/Users/me/Library/Keychains', add: { kind: 'refused', cause: new GaiaApiError(403, AWAY, undefined, undefined, { code: 'not_in_chat_folders', name: 'Keychains' }) } },
     }),
     'path-adding': scene({ docs: MIXED, start: { path: '/Users/me/Documents/q4-forecast.xlsx', add: { kind: 'busy', name: 'q4-forecast.xlsx' } } }),
     'folder-adding': scene({ docs: MIXED, start: { path: '/Users/me/Documents/Contracts', add: { kind: 'busy', name: 'Contracts', folder: true } } }),

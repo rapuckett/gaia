@@ -16,6 +16,7 @@ import { describeFolderResult } from '@webui/utils/documentLibrary.core';
 import { examplePath } from '@webui/utils/platform';
 import { describeUploadError, unsupportedTypeMessage, type UploadErrorInput, type UploadErrorView } from '@webui/utils/uploadErrors.core';
 
+import { fileRefusalText, isFileRefusal } from '../files/fileRefusal';
 import { useNextChatDocs } from './nextChatDocs';
 
 // One line at a time: the indexing status, the result of the last add, or why it failed.
@@ -25,6 +26,7 @@ export type AddLine =
     | { kind: 'folder'; message: string; added: boolean }
     | { kind: 'unreadable'; message: string }
     | { kind: 'failed'; error: UploadErrorView }
+    | { kind: 'refused'; message: string }
     | { kind: 'picker'; message: string }
     | { kind: 'unsupported'; message: string };
 
@@ -40,7 +42,7 @@ export type AddStart =
     | { kind: 'done' | 'unreadable'; message: StartMessage }
     | { kind: 'folder'; name: string; result: IndexFolderResponse }
     | { kind: 'failed'; upload: Omit<UploadErrorInput, 'error'> & { error: string | StartMessage } }
-    | { kind: 'picker' | 'unsupported'; cause: unknown };
+    | { kind: 'refused' | 'picker' | 'unsupported'; cause: unknown };
 
 function resolveStart(t: Translate, start: AddStart): AddLine {
     switch (start.kind) {
@@ -55,6 +57,8 @@ function resolveStart(t: Translate, start: AddStart): AddLine {
             const { error, ...rest } = start.upload;
             return { kind: 'failed', error: describeUploadError(t, { ...rest, error: typeof error === 'string' ? error : t(error.key, error.params) }) };
         }
+        case 'refused':
+            return { kind: 'refused', message: isFileRefusal(start.cause) ? fileRefusalText(start.cause, t) : describeError(start.cause, t) };
         default:
             return { kind: start.kind, message: describeError(start.cause, t) };
     }
@@ -115,6 +119,7 @@ export function AddDocuments({ chatId, chatName, onStart, onBrowse, pcChatId, in
         // An app build without uploads can't send a file to a paired PC; the request wraps its error, so look at the cause too.
         const refusal = [err, err instanceof Error ? err.cause : null].find((e) => (e as { code?: string } | null)?.code === 'unsupported_body');
         if (refusal) return { kind: 'unsupported', message: describeError(refusal, t) };
+        if (isFileRefusal(err)) return { kind: 'refused', message: fileRefusalText(err, t) };
         const api = err instanceof GaiaApiError ? err : null;
         const kind = typeof api?.body?.status === 'string' ? api.body.status : null;
         const error = kind === 'too_large' ? t('docs.tooLargeDetail', { max: String(api?.body?.max_mb) }) : describeError(err, t);
@@ -228,6 +233,7 @@ export function AddDocuments({ chatId, chatName, onStart, onBrowse, pcChatId, in
             {line?.kind === 'unreadable' || line?.kind === 'picker' ? (
                 <Notice tone="danger" message={line.message} onDismiss={() => setLine(null)} />
             ) : null}
+            {line?.kind === 'refused' ? <Notice tone="warning" title={t('docs.locationRefused')} message={line.message} onDismiss={() => setLine(null)} /> : null}
             {line?.kind === 'failed' ? (
                 <Notice
                     tone={line.error.icon === 'warning' ? 'warning' : 'danger'}

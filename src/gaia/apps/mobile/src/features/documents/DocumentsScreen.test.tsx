@@ -155,6 +155,18 @@ describe('DocumentsScreen', () => {
             expect(screen.getByLabelText('File path to add').props.value).toBe('/Users/me/Library/Keychains');
         });
 
+        it("words a refusal code in the app's language, with the PC's sentence for a code it lacks", async () => {
+            const refuse = (code: string) => new GaiaApiError(403, 'PC sentence for an odd code.', undefined, undefined, { code, name: 'Keychains' });
+            await mount(createFakeClient({ sessions: [chat], documentUploadError: refuse('not_in_chat_folders') }), 'c1');
+            await typePath('/Users/me/Library/Keychains');
+            expect(await screen.findByText(/Keychains isn't in this chat's folders: add its folder to the chat on your PC/)).toBeTruthy();
+            expect(screen.queryByText(/PC sentence/)).toBeNull();
+            await screen.unmount();
+            await mount(createFakeClient({ sessions: [chat], documentUploadError: refuse('something_new') }), 'c1');
+            await typePath('/Users/me/Library/Keychains');
+            expect(await screen.findByText('PC sentence for an odd code.')).toBeTruthy();
+        });
+
         it('has no path box without an open chat, whose folders the PC would read from', async () => {
             await mount(createFakeClient());
             expect(await screen.findByText('Add a file')).toBeTruthy();
