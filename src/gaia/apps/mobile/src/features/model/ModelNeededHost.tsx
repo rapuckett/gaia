@@ -13,6 +13,8 @@ import { describeError, useT } from '@/i18n/useT';
 import { useModelNeededStore } from '@/state/modelNeeded';
 import { Button, Notice, ProgressLine, Row, Sheet, Spinner, Stack, Text } from '@/ui';
 
+import { needLine } from './modelStatusText';
+
 /**
  * The prompt for a job whose model isn't on the PC: names the model, its size and source, and downloads it
  * on the PC. The message that needed it waits on the answer. Mount once, inside the providers.
@@ -27,7 +29,8 @@ export function ModelNeededHost({ initial }: { initial?: NeedPromptInitial } = {
 export interface NeedPromptInitial {
     downloading?: boolean;
     percent?: number | null;
-    error?: string | null;
+    /** Opens after a download stopped, with the message the PC's own failure shows. */
+    failed?: boolean;
 }
 
 /** The prompt itself; the dev gallery mounts it directly so the app's own host stays empty. */
@@ -42,7 +45,7 @@ export function NeedPrompt({ need, initial }: { need: ModelNeed; initial?: NeedP
     const live = useRef(true);
     const [percent, setPercent] = useState<number | null>(initial?.percent ?? null);
     const [downloading, setDownloading] = useState(initial?.downloading ?? false);
-    const [error, setError] = useState<string | null>(initial?.error ?? null);
+    const [error, setError] = useState<string | null>(initial?.failed ? t('modelNeeded.failed') : null);
     const [serverShort, setServerShort] = useState(false);
 
     const stop = useCallback(() => {
@@ -171,15 +174,7 @@ export function NeedPrompt({ need, initial }: { need: ModelNeed; initial?: NeedP
             }
         >
             <Stack gap="md">
-                <Text role="body">
-                    {[
-                        model.name,
-                        model.size_gb != null ? formatSize(model.size_gb) : null,
-                        freeGb != null ? `${t('modelNeeded.free')} ${formatSize(freeGb)}` : null,
-                    ]
-                        .filter(Boolean)
-                        .join(' · ')}
-                </Text>
+                <Text role="body">{needLine(t, model.name, model.size_gb, freeGb)}</Text>
                 {model.source ? (
                     <Text role="label" tone="secondary">
                         {`${t('setup.contents.from')} ${model.source}`}

@@ -62,8 +62,20 @@ export function lineHeightOf(size: number, role: TypeRole, rtl: boolean): number
 const GLOSS_MIN_SIZE = 11;
 const GLOSS_LINE_HEIGHT = 1.3;
 
-/** Splits each string child at its English glosses and sets them small and muted, as the web's `.i18n-gloss` does. */
-function withGlosses(children: ReactNode, size: number, color: string): ReactNode {
+const LETTER = /\p{L}/gu;
+const RTL_LETTER = /[\u0590-\u08FF\uFB1D-\uFDFF\uFE70-\uFEFF]/;
+
+/** Whether the text before a gloss ends in a Latin word: wrapped, that word would sit beside the English gloss and read as part of it. */
+function endsLeftToRight(text: string): boolean {
+    const last = text.match(LETTER)?.pop();
+    return !!last && !RTL_LETTER.test(last);
+}
+
+/**
+ * Splits each string child at its English glosses and sets them small and muted, as the web's `.i18n-gloss` does.
+ * `breakLines`: a gloss after Latin text starts its own line, as the web's inline-block gloss does when the line is full.
+ */
+function withGlosses(children: ReactNode, size: number, color: string, breakLines: boolean): ReactNode {
     const gloss = Math.max(size * 0.8, GLOSS_MIN_SIZE);
     const style = { fontSize: gloss, lineHeight: Math.round(gloss * GLOSS_LINE_HEIGHT), fontWeight: '400' as const, color };
     let changed = false;
@@ -77,6 +89,8 @@ function withGlosses(children: ReactNode, size: number, color: string): ReactNod
                 <RNText key={`${i}.${j}`} style={style}>
                     {part.text}
                 </RNText>
+            ) : breakLines && parts[j + 1]?.gloss && part.text.endsWith(' ') && endsLeftToRight(part.text) ? (
+                `${part.text.slice(0, -1)}\n`
             ) : (
                 part.text
             ),
@@ -158,7 +172,7 @@ export function Text({
                 accessibilityRole={accessibilityRole}
                 testID={testID}
             >
-                {withGlosses(children, baseSize, toneColor(colors, 'muted'))}
+                {withGlosses(children, baseSize, toneColor(colors, 'muted'), lines === undefined || lines > 1)}
             </RNText>
         </InsideText.Provider>
     );
