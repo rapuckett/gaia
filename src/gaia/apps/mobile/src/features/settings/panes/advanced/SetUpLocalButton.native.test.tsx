@@ -10,10 +10,10 @@ import { ThemeProvider } from '@/ui';
 import { SetUpLocalButton } from './SetUpLocalButton';
 
 jest.mock('expo-constants', () => ({ __esModule: true, default: { expoConfig: { version: 'test' } } }));
-const replace = jest.fn();
-jest.mock('expo-router', () => ({ useRouter: () => ({ replace }) }));
-const reopenSetup = jest.fn();
-jest.mock('@/features/setup/SetupGate', () => ({ reopenSetup: () => reopenSetup() }));
+const mockReplace = jest.fn();
+jest.mock('expo-router', () => ({ useRouter: () => ({ replace: mockReplace }) }));
+const mockReopen = jest.fn();
+jest.mock('@/features/setup/SetupGate', () => ({ reopenSetup: () => mockReopen() }));
 
 const describeNative = Platform.OS === 'web' ? describe.skip : describe;
 
@@ -27,7 +27,7 @@ describeNative('Set up local models', () => {
             </SafeAreaProvider>,
         );
         fireEvent.press(screen.getByTestId('advanced-set-up-local'));
-        expect(replace).toHaveBeenCalledWith('/');
-        expect(reopenSetup).toHaveBeenCalledTimes(1);
+        expect(mockReplace).toHaveBeenCalledWith('/');
+        expect(mockReopen).toHaveBeenCalledTimes(1);
     });
 });
