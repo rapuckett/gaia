@@ -5,7 +5,8 @@ import { useState } from 'react';
 
 import { useLocalModelStatus } from '@/data';
 import { useT } from '@/i18n/useT';
-import { Icon, Pressable, Row, Stack, StatusDot, Text, type StatusTone } from '@/ui';
+import { FirstLine, Icon, Pressable, Row, Stack, StatusDot, Text, type StatusTone } from '@/ui';
+import { useLargeText } from '@/ui/theme/a11y';
 import { Cloud, Cpu } from '@/ui/icons';
 
 import { ModelStatusSheet } from './ModelStatusSheet';
@@ -30,12 +31,16 @@ export function ModelStatusPill({ onOpenSettings }: ModelStatusPillProps) {
     const { data } = useLocalModelStatus(open);
     const pill = pillText(data, t);
     const place = !pill.remote && pill.name ? t('mobileApp.model.onYourPc') : null;
+    const largeText = useLargeText();
+    const firstRole = place ? 'caption' : 'label';
     return (
         <>
             <Stack paddingX="lg" paddingY="sm">
                 <Pressable accessibilityLabel={pill.aria} onPress={() => setOpen(true)} testID="model-status-pill">
-                    <Row gap="sm">
-                        <Icon icon={pill.remote ? Cloud : Cpu} size="sm" tone="secondary" />
+                    <Row gap="sm" align={largeText ? 'start' : 'center'}>
+                        <FirstLine role={firstRole}>
+                            <Icon icon={pill.remote ? Cloud : Cpu} size="sm" tone="secondary" />
+                        </FirstLine>
                         <Stack flex={1}>
                             {place ? <Text role="caption" tone="muted" numberOfLines={1}>{place}</Text> : null}
                             <Text role="label" tone="secondary" numberOfLines={1} dir="auto">
@@ -43,7 +48,9 @@ export function ModelStatusPill({ onOpenSettings }: ModelStatusPillProps) {
                             </Text>
                         </Stack>
                         {data && !pill.remote ? (
-                            <StatusDot solid tone={DOT_TONE[data.state]} label={t(`modelStatus.state.${data.state}`)} />
+                            <FirstLine role={firstRole}>
+                                <StatusDot solid tone={DOT_TONE[data.state]} label={t(`modelStatus.state.${data.state}`)} />
+                            </FirstLine>
                         ) : null}
                     </Row>
                 </Pressable>

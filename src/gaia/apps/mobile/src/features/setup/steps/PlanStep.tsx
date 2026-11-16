@@ -13,6 +13,7 @@ import { GaiaApiError } from '@/api/errors';
 import { useApplyTestedBackend, useCloudProviders, useSetupPlan, useSetupPreflight, useStartSetup } from '@/data';
 import { describeError, useLocaleCode, useT, type Translate } from '@/i18n/useT';
 import { Button, Card, Disclosure, Ltr, Notice, Pressable, Row, Spinner, Stack, Text } from '@/ui';
+import { useLargeText } from '@/ui/theme/a11y';
 
 import { SetupFooter } from '../SetupFooter';
 import type { SetupStepContext } from '../SetupScreen';
@@ -92,6 +93,7 @@ function Contents({ plan, run, models }: { plan: SetupPlan; run: SetupRunStatus 
     const t = useT();
     const locale = useLocaleCode();
     const ended = run != null && run.state !== 'running' && run.state !== 'verifying';
+    const largeText = useLargeText();
     return (
         <Stack gap="md">
             {(plan.components ?? []).map((c) => {
@@ -99,7 +101,7 @@ function Contents({ plan, run, models }: { plan: SetupPlan; run: SetupRunStatus 
                 const state = reported === 'active' && ended ? undefined : reported;
                 return (
                     <Stack key={c.id} gap="xs">
-                        <Row gap="sm" justify="between" align="start">
+                        <Row gap="sm" justify="between" align="start" stack>
                             <Stack flex={1}>
                                 <Text role="ui" weight="medium">{t(`setup.component.${c.id}`)}</Text>
                                 <Text role="caption" tone="secondary">{t(`setup.component.${c.id}Note`)}</Text>
@@ -109,7 +111,7 @@ function Contents({ plan, run, models }: { plan: SetupPlan; run: SetupRunStatus 
                                     <Text role="caption" tone="muted">{`${t('setup.contents.from')} ${ltrIn(locale, c.source ?? '')}`}</Text>
                                 )}
                             </Stack>
-                            <Stack align="end">
+                            <Stack align={largeText ? 'start' : 'end'}>
                                 <Ltr>{sizeText(c.size_gb, t)}</Ltr>
                                 <Text role="caption" tone="secondary">{stateText(c, state ?? (c.installed ? 'done' : undefined), t)}</Text>
                             </Stack>
@@ -118,7 +120,7 @@ function Contents({ plan, run, models }: { plan: SetupPlan; run: SetupRunStatus 
                 );
             })}
             {models.map((e) => (
-                <Row key={e.id} gap="sm" justify="between" align="start">
+                <Row key={e.id} gap="sm" justify="between" align="start" stack>
                     <Stack flex={1}>
                         <Text role="ui" weight="medium" dir="ltr">{e.name}</Text>
                         <Text role="caption" tone="secondary">{e.roles.map((role) => t(`setup.purpose.${role}`)).join(' · ')}</Text>

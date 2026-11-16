@@ -13,6 +13,7 @@ import { notifyDirectionChange } from '@/state/direction';
 import { useLocaleStore } from '@/state/locale';
 import { Button, Disclosure, Icon, Pressable, Row, SegmentedControl, Select, Stack, Switch, Text, TextField, useAppearance, useTheme } from '@/ui';
 import { Check } from '@/ui/icons';
+import { useLargeText } from '@/ui/theme/a11y';
 import { themeColors, type AppearancePaletteId, type Scheme } from '@/ui/theme/appearance';
 
 import { SettingsAnchor } from '../targets';
@@ -44,8 +45,10 @@ function PaletteTile({ id, scheme, selected, onPress }: { id: AppearancePaletteI
     const custom = useAppearance((s) => s.custom);
     const own = themeColors(scheme, id, custom);
     const label = t(PALETTE_NAME[id]);
+    // Two to a row leave too little room for a name at large text sizes.
+    const largeText = useLargeText();
     return (
-        <View style={{ flexBasis: '47%', flexGrow: 1 }}>
+        <View style={{ flexBasis: largeText ? '100%' : '47%', flexGrow: 1 }}>
             <Pressable onPress={onPress} accessibilityRole="radio" accessibilityLabel={label} accessibilityState={{ checked: selected }}>
                 <View
                     style={{

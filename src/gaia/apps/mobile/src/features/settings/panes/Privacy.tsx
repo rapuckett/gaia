@@ -145,7 +145,7 @@ function DataFolder({ path }: { path: string }) {
 
     return (
         <Stack gap="xs">
-            <Row gap="sm">
+            <Row gap="sm" stack>
                 <Text role="label" tone="secondary">
                     {t('settings.privacy.dataFolder')}
                 </Text>
