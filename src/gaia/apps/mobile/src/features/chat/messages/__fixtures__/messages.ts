@@ -166,9 +166,36 @@ const MEDIA = [
     ]),
 ];
 
-export type MessagesFixture = 'badCards' | 'cards' | 'guide' | 'loading' | 'long' | 'many' | 'media' | 'recording' | 'short' | 'streaming';
+export type MessagesFixture = 'activity' | 'badCards' | 'cards' | 'guide' | 'loading' | 'long' | 'many' | 'media' | 'recording' | 'short' | 'streaming';
+
+const ACTIVITY = [
+    msg('user', 'Transcribe the standup recording, then tidy my notes.', 0),
+    {
+        ...msg('assistant', 'The standup is transcribed. I left your notes alone: they were already tidy.', 1),
+        agentSteps: [
+            { id: 1, type: 'status', label: 'Downloaded the speech model (2.4 GB)', active: false, success: true, kept: true, timestamp: 1 },
+            {
+                id: 2, type: 'tool', label: 'Using tool', tool: 'transcribe_media', narration: 'Transcribing standup.wav',
+                detail: 'path: standup.wav', active: false, success: true, result: 'done', timestamp: 2,
+            },
+            {
+                id: 3, type: 'tool', label: 'Using tool', tool: 'run_shell_command', narration: 'Running echo', autoDeclined: true,
+                active: false, success: false, result: 'Not run: this request hands over text to proofread.', timestamp: 3,
+            },
+            {
+                id: 4, type: 'tool', label: 'Using tool', tool: 'write_file', declined: true,
+                active: false, success: false, timestamp: 4,
+            },
+            {
+                id: 5, type: 'tool', label: 'Using tool', tool: 'read_file', timedOut: true,
+                active: false, success: false, timestamp: 5,
+            },
+        ],
+    } as Message,
+];
 
 export const FIXTURES: Record<MessagesFixture, { messages: Message[]; live?: Message; events?: StreamEvent[] }> = {
+    activity: { messages: ACTIVITY },
     badCards: { messages: BAD_CARDS },
     cards: { messages: CARDS },
     guide: { messages: GUIDE },

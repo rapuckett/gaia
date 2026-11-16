@@ -28,7 +28,7 @@ export function ConfirmSheet({ open, title, body = [], confirmLabel, cancelLabel
             title={title}
             dismissible={!busy}
             footer={
-                <Row gap="sm">
+                <Row gap="sm" stack>
                     <Button label={cancelLabel} variant="secondary" disabled={busy} onPress={onCancel} testID="confirm-cancel" />
                     <Button label={confirmLabel} variant={danger ? 'danger' : 'primary'} busy={busy} onPress={onConfirm} testID="confirm-ok" />
                 </Row>

@@ -195,7 +195,7 @@ function FolderRow({ entry, t, canRemove, busy, confirming, onAsk, onCancel, onC
             {confirming ? (
                 <Stack gap="sm">
                     <Text>{t('mobileApp.env.removeConfirm', { name: isolate(name, 'ltr') })}</Text>
-                    <Row gap="sm">
+                    <Row gap="sm" stack>
                         <Button label={t('docs.remove')} variant="danger" size="sm" onPress={onConfirm} testID="environment-remove-confirm" />
                         <Button label={t('sp.cancel')} variant="ghost" size="sm" onPress={onCancel} />
                     </Row>
@@ -274,7 +274,7 @@ function Permission({ sessionId }: { sessionId: string }) {
             {confirming ? (
                 <Stack gap="sm">
                     <Notice tone="warning" message={t('mobileApp.env.fullAccessWarn')} />
-                    <Row gap="sm">
+                    <Row gap="sm" stack>
                         <Button
                             label={t('env.turnOn')}
                             size="sm"

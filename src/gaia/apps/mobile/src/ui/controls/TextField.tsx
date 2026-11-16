@@ -7,6 +7,7 @@ import { CircleAlert } from 'lucide-react-native';
 import { useDirection, useT } from '@/i18n/useT';
 import { Eye, EyeOff } from '../icons';
 import { IconButton } from './IconButton';
+import { LARGE_TEXT_SCALE } from '../theme/a11y';
 import { fontFamily } from '../theme/fonts';
 import { useTheme } from '../theme/ThemeProvider';
 import { contentDir, inputAlign } from '../text/direction';
@@ -47,6 +48,8 @@ export interface TextFieldProps {
     accessibilityHint?: string;
     onFocus?: () => void;
     onBlur?: () => void;
+    /** Where the typed text and placeholder stop growing with the person's text size. */
+    maxFontSizeMultiplier?: number;
     testID?: string;
 }
 
@@ -75,6 +78,7 @@ export function TextField({
     accessibilityHint,
     onFocus,
     onBlur,
+    maxFontSizeMultiplier,
     testID,
 }: TextFieldProps) {
     const { colors, radius, type } = useTheme();
@@ -98,16 +102,22 @@ export function TextField({
     );
     const size = Math.max(type.body, metrics.inputFontSize);
     const lineHeight = Math.round(size * (rtl ? metrics.lineHeightAr : 1.4));
-    const { fontScale } = useWindowDimensions();
+    const { fontScale, height: windowHeight } = useWindowDimensions();
+    const largeText = fontScale >= LARGE_TEXT_SCALE;
+    const grownHeight = lineHeight * maxLines * Math.min(fontScale, maxFontSizeMultiplier ?? fontScale) + 24;
+    // At large sizes a tall field would push everything else off screen, so it scrolls sooner.
+    const maxHeight = largeText ? Math.min(grownHeight, windowHeight * 0.25) : grownHeight;
     const borderColor = error ? colors.danger : focused ? colors.accent : colors.border;
     return (
-        <View style={{ gap: 6, opacity: disabled ? 0.45 : 1 }}>
+        <View style={{ gap: 6 }}>
             {label ? (
-                <Text role="label" weight="medium" tone="secondary">
-                    {label}
-                </Text>
+                <View style={{ opacity: disabled ? 0.45 : 1 }}>
+                    <Text role="label" weight="medium" tone="secondary">
+                        {label}
+                    </Text>
+                </View>
             ) : null}
-            <View>
+            <View style={{ opacity: disabled ? 0.45 : 1 }}>
             <TextInput
                 ref={inputRef}
                 value={value}
@@ -135,11 +145,12 @@ export function TextField({
                     onBlur?.();
                 }}
                 selectionColor={colors.accentSolid}
+                maxFontSizeMultiplier={maxFontSizeMultiplier}
                 testID={testID}
                 style={{
                     minHeight: bare ? 40 : 48,
                     ...(multiline
-                        ? { maxHeight: lineHeight * maxLines * fontScale + 24, textAlignVertical: 'top' as const }
+                        ? { maxHeight, textAlignVertical: 'top' as const }
                         : null),
                     paddingStart: leading ? 40 : bare ? 4 : 12,
                     paddingEnd: end ? 48 : bare ? 4 : 12,
@@ -147,7 +158,7 @@ export function TextField({
                     borderRadius: radius.md,
                     borderWidth: bare ? 0 : 1,
                     borderColor,
-                    backgroundColor: bare ? 'transparent' : colors.bgInput,
+                    backgroundColor: disabled ? colors.bgTertiary : bare ? 'transparent' : colors.bgInput,
                     color: colors.textPrimary,
                     fontFamily: fontFamily({ weight: 'regular', mono: false, display: false }),
                     fontSize: size,

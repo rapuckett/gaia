@@ -87,7 +87,7 @@ export function AddDocuments({ chatId, chatName, onStart, onBrowse, initialLine 
 
     return (
         <Stack gap="sm">
-            <Row gap="sm" wrap>
+            <Row gap="sm" wrap stack>
                 <Button label={t('docs.addPhotos')} icon={ImageIcon} variant="secondary" disabled={busy} onPress={() => void run(pickPhotos)} />
                 <Button label={t('docs.addFile')} icon={FileText} variant="secondary" disabled={busy} onPress={() => void run(pickDocuments)} />
             </Row>

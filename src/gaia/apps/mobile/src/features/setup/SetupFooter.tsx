@@ -16,6 +16,7 @@ import {
 import { View } from 'react-native';
 
 import { Button, Row, Stack, type ButtonProps } from '@/ui';
+import { useLargeText } from '@/ui/theme/a11y';
 
 type Register = (content: ReactNode) => void;
 
@@ -45,9 +46,16 @@ function filled(action: ReactNode): ReactNode {
         : action;
 }
 
-/** Up to two actions share the row equally, so long labels wrap rather than spill; more stack. */
+/** A step's empty `<Row />` holds the main action at the end of a shared row; stacked it would be a blank slot. */
+function isSpacer(action: ReactNode): boolean {
+    return isValidElement<{ children?: ReactNode }>(action) && action.type === Row && Children.count(action.props.children) === 0;
+}
+
+/** Up to two actions share the row equally, so long labels wrap rather than spill; more, or any at large text sizes, stack full width. */
 function FooterActions({ children }: { children: ReactNode }) {
+    const largeText = useLargeText();
     const actions = actionsOf(children);
+    if (largeText) return <Stack gap="sm">{actions.filter((a) => !isSpacer(a)).map(filled)}</Stack>;
     if (actions.length > 2) return <Stack gap="sm">{actions.map(filled)}</Stack>;
     return (
         <Row gap="sm">
