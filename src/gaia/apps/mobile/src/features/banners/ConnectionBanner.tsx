@@ -7,6 +7,7 @@ import { useEffect, useState } from 'react';
 import { useActiveModel, useGaiaClient, useGoalStoreError, useQueryFailure, useSystemStatus } from '@/data';
 import { useT } from '@/i18n/useT';
 import { openChat } from '@/features/nav/navigation';
+import { hasTailnetRoute, useActiveConnection } from '@/features/pairing/routes';
 import { useAnnounce } from '@/platform/useAnnounce';
 import { useBannerDismissedStore } from '@/state/bannerDismissed';
 import { useChatAlertBannerStore, type ChatAlertBanner } from '@/state/chatAlertBanner';
@@ -54,12 +55,13 @@ export function ConnectionBanner() {
     const status = useSystemStatus();
     const { data, refetch } = status;
     const { error } = useQueryFailure(status);
+    const connection = useActiveConnection();
     const goalStoreError = useGoalStoreError().data;
     const client = useGaiaClient();
     const load = usePickLoadStore((s) => s.pickLoad);
     const activeModel = useActiveModel().data;
     const name = load && sameModelId(activeModel?.model, load.model) ? activeModel?.display_name : null;
-    const picked = pickBanner(data, error, t, goalStoreError, { load, name });
+    const picked = pickBanner(data, error, t, goalStoreError, { load, name, awayHint: hasTailnetRoute(connection) });
     const { dismissed, dismiss, reconcile } = useBannerDismissedStore();
     useEffect(() => reconcile(picked), [picked?.id, picked?.dismissible, reconcile]); // eslint-disable-line react-hooks/exhaustive-deps
     const banner = picked && picked.id === dismissed ? null : picked;
