@@ -39,7 +39,7 @@ describe('NpuNotReady', () => {
         expect(screen.getByText("The NPU driver (amdxdna) isn't loaded.")).toBeTruthy();
         expect(screen.getByText('The locked-memory limit is 64 MB, and the NPU needs it unlimited.')).toBeTruthy();
         expect(screen.getByText('Change this on the PC running GAIA')).toBeTruthy();
-        expect(screen.getByLabelText('Raise the limit').props.accessibilityState).toMatchObject({ disabled: true });
+        expect(screen.getByLabelText('Raise the limit')).toBeDisabled();
     });
 
     it('offers no Raise the limit when the limit is not what is missing', async () => {

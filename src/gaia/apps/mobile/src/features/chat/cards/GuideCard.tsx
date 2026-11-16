@@ -176,7 +176,7 @@ function Guide({ wire, startGuided }: { wire: GuideWire; startGuided: boolean })
                                     key={i}
                                     onPress={() => toggleItem(i)}
                                     accessibilityRole="checkbox"
-                                    accessibilityState={{ checked: checked.has(i) }}
+                                    aria-checked={checked.has(i)}
                                     accessibilityLabel={qty ? `${qty} ${text}` : text}
                                     testID={`guide-item-${i}`}
                                 >

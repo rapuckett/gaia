@@ -51,7 +51,7 @@ export function Switch({ value, onValueChange, label, description, disabled, des
             disabled={disabled}
             accessibilityRole="switch"
             accessibilityLabel={description ? `${label}. ${description}` : label}
-            accessibilityState={{ checked: value }}
+            aria-checked={value}
             testID={testID}
         >
             <Row gap="md" align="center">

@@ -8,6 +8,7 @@ import { View } from 'react-native';
 import type { PermissionMode } from '@/api/client.types';
 import { useCreateSession, useDocuments, useGaiaClient, useMemorySettings, useStartScreen, useSystemStatus } from '@/data';
 import { FlagshipAgentBanner } from '@/features/banners/FlagshipAgentBanner';
+import { ModelRestoreNotice } from '@/features/model/ModelRestoreNotice';
 import { Composer, FolderChip, ModelChip, PermissionChip, PrivateChip, useAttachments, useComposerQueue } from '@/features/composer';
 import { useNextChatDocs } from '@/features/documents';
 import { QueuedMessages } from '@/features/composer/QueuedMessages';
@@ -37,9 +38,11 @@ export interface NewChatScreenProps {
     initialText?: string;
     // A skill's prompt goes in the box under any unsent draft; a new `id` adds it again.
     prompt?: { id: string; text: string };
+    /** Starts with this opening message held until GAIA has started (developer gallery). */
+    initialHeld?: string;
 }
 
-export function NewChatScreen({ onOpen, onChooseDocuments, initialText = '', prompt }: NewChatScreenProps) {
+export function NewChatScreen({ onOpen, onChooseDocuments, initialText = '', prompt, initialHeld }: NewChatScreenProps) {
     const t = useT();
     const status = useSystemStatus().data;
     const createSession = useCreateSession();
@@ -77,7 +80,7 @@ export function NewChatScreen({ onOpen, onChooseDocuments, initialText = '', pro
 
     // A message sent while GAIA is still starting waits here, then goes out on its own.
     const starting = startingReason(status, t) !== null;
-    const [held, setHeld] = useState<{ text: string } | null>(null);
+    const [held, setHeld] = useState<{ text: string } | null>(initialHeld ? { text: initialHeld } : null);
     const sentHeld = useRef<{ text: string } | null>(null);
     const heldOpening = starting ? (held?.text ?? null) : null;
     const send = useCallback(
@@ -234,6 +237,7 @@ export function NewChatScreen({ onOpen, onChooseDocuments, initialText = '', pro
                     </View>
                 )}
                 <FlagshipAgentBanner />
+                <ModelRestoreNotice />
                 {failedSetup !== null && (
                     <Notice
                         tone="danger"

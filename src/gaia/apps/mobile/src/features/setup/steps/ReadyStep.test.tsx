@@ -5,9 +5,10 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { router } from 'expo-router';
 import type { ReactNode } from 'react';
+import { StyleSheet } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-import type { SetupRunStatus } from '@/api/client.types';
+import type { SetupPlan, SetupRunStatus } from '@/api/client.types';
 import { createFakeClient } from '@/api/fake';
 import { GaiaClientProvider } from '@/data';
 import { ThemeProvider } from '@/ui';
@@ -19,7 +20,7 @@ jest.mock('expo-router', () => ({ router: { replace: jest.fn() } }));
 
 const run: SetupRunStatus = { state: 'ready', chat_model: 'Gemma-4-E4B-it-GGUF' };
 
-async function mount(finish: () => void) {
+async function mount(finish: () => void, plan?: SetupPlan) {
     const client = createFakeClient({
         activeModel: { provider: 'local', model: 'old', display_name: 'old', label: null, remote: false, is_default: true, downloaded: true },
         start: {
@@ -37,7 +38,7 @@ async function mount(finish: () => void) {
             </GaiaClientProvider>
         </QueryClientProvider>
     );
-    const ctx: SetupStepContext = { stage: 'ready', run, plan: undefined, locked: false, again: false, goTo: () => undefined, startedRun: () => undefined, finish };
+    const ctx: SetupStepContext = { stage: 'ready', run, plan, locked: false, again: false, goTo: () => undefined, startedRun: () => undefined, finish };
     await render(<ReadyStep ctx={ctx} />, { wrapper: wrap });
     return client;
 }
@@ -58,5 +59,13 @@ describe('ReadyStep', () => {
         fireEvent.press(await screen.findByText('Summarize'));
         await waitFor(() => expect(finish).toHaveBeenCalledTimes(1));
         expect(router.replace).toHaveBeenCalledWith({ pathname: '/new', params: expect.objectContaining({ prompt: 'Summarize this' }) });
+    });
+
+    it('sets a model name in its own left-to-right run so it never splits mid-word', async () => {
+        const entry = { id: 'e', name: 'EmbeddingGemma 300M', roles: ['embedding'], recipe: null, downloaded: true, gaia_model: true, planned: true, skipped: false };
+        const chat = { ...entry, id: 'Gemma-4-E4B-it-GGUF', name: 'Gemma 4 E4B', roles: ['chat'] };
+        await mount(jest.fn(), { catalog: [chat, entry], vision_model: null } as unknown as SetupPlan);
+        const style = StyleSheet.flatten((await screen.findByTestId('ready-row-documents')).props.style);
+        expect(style.writingDirection).toBe('ltr');
     });
 });

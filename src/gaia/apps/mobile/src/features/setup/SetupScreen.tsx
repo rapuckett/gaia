@@ -42,6 +42,8 @@ export interface SetupScreenProps {
     onClose?: () => void;
     /** Each step's body; the steps are other screens' work. Without one the step shows only its title. */
     renderStep?: (ctx: SetupStepContext) => ReactNode;
+    /** Opens on this step instead of the live one, as a tap on the rail would; the developer gallery's way to show a step setup is past. */
+    initialViewing?: SetupStage;
 }
 
 type Phase = 'check' | 'plan' | 'download';
@@ -50,7 +52,7 @@ type Phase = 'check' | 'plan' | 'download';
  * First run on a phone: the step rail, top navigation, language, the resume and running notes,
  * Back to GAIA and the footer bar every step docks its actions in. Nothing downloads until a step says so.
  */
-export function SetupScreen({ onReady, onClose, renderStep }: SetupScreenProps) {
+export function SetupScreen({ onReady, onClose, renderStep, initialViewing }: SetupScreenProps) {
     const t = useT();
     const status = useSetupStatus();
     const run = status.data ?? null;
@@ -58,7 +60,7 @@ export function SetupScreen({ onReady, onClose, renderStep }: SetupScreenProps) 
     const again = onClose != null;
 
     const [phase, setPhase] = useState<Phase>('check');
-    const [viewing, setViewing] = useState<SetupStage | null>(null);
+    const [viewing, setViewing] = useState<SetupStage | null>(initialViewing ?? null);
     const [visited, setVisited] = useState<ReadonlySet<SetupStage>>(() => new Set<SetupStage>(['check']));
     const [interrupted, setInterrupted] = useState(false);
 

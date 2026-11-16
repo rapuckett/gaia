@@ -45,19 +45,36 @@ export function newScheduleFailures(seen: ErrorCounts, list: readonly Schedule[]
     return list.filter((s) => s.error_count > (seen[s.id] ?? 0) && !!s.last_error);
 }
 
+/** Runs that have ended; a run in flight is already counted in run_count. */
+function finishedRuns(s: Schedule): number {
+    return s.run_count - (s.running ? 1 : 0);
+}
+
+/** The schedules that finished a run cleanly after the counts were taken. */
+export function newScheduleFinishes(seenErrors: ErrorCounts, seenFinished: ErrorCounts, list: readonly Schedule[]): Schedule[] {
+    return list.filter((s) => finishedRuns(s) > (seenFinished[s.id] ?? 0) && s.error_count <= (seenErrors[s.id] ?? 0));
+}
+
 /**
  * Compares each list it is given with the counts announced so far: the first one against the last launch's saved counts,
  * so a failure from while the app was closed is raised once, and later ones against the previous list.
+ * Finished runs are raised from the second list on, as the desktop does: runs from before launch are not news.
  */
 export function createScheduleAnnouncer(
     raise: (failed: Schedule) => void,
+    raiseFinished: (finished: Schedule) => void,
     io: { load: () => Promise<ErrorCounts>; save: (counts: ErrorCounts) => Promise<void> } = { load: loadAnnouncedErrors, save: saveAnnouncedErrors },
 ): (list: readonly Schedule[]) => Promise<void> {
     let seen: ErrorCounts | null = null;
+    let finished: ErrorCounts | null = null;
     let queue: Promise<void> = Promise.resolve();
     const run = async (list: readonly Schedule[]) => {
         seen ??= await io.load();
         for (const failed of newScheduleFailures(seen, list)) raise(failed);
+        if (finished) for (const done of newScheduleFinishes(seen, finished, list)) raiseFinished(done);
+        // Max, because Run now marks a run in flight just before counting it.
+        const prior = finished ?? {};
+        finished = Object.fromEntries(list.map((s) => [s.id, Math.max(finishedRuns(s), prior[s.id] ?? 0)]));
         seen = Object.fromEntries(list.map((s) => [s.id, s.error_count]));
         await io.save(seen);
     };

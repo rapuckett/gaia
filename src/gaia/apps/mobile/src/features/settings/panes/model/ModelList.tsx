@@ -1,7 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { Children, useMemo, useState, type ReactNode } from 'react';
+import { Children, createContext, useContext, useMemo, useState, type ReactNode } from 'react';
 
 import { isDownloading } from '@webui/components/modelMeta';
 import { distinctLabels, groupModels } from '@webui/utils/modelList.core';
@@ -16,6 +16,9 @@ import { ModelRow } from './ModelRow';
 import { errorText, isolate, modelLabel, refusedOnPhone, sameModelId } from './modelText';
 
 const SEARCHABLE_FROM = 6;
+
+/** Dev scenes only: the name of a model that was just added from Hugging Face, so the list opens on that success notice. */
+export const SeedAddedModel = createContext<string | null>(null);
 
 export interface ModelListProps {
     provider: string;
@@ -43,7 +46,7 @@ function Group({ id, title, count, defaultOpen, force, children }: {
     const open = force || (picked ?? defaultOpen);
     return (
         <Stack testID={`model-group-${id}`}>
-            <SettingsGroup title={title} count={count} open={open} onToggle={() => setPicked(!open)}>
+            <SettingsGroup title={title} count={count} open={open} onToggle={() => setPicked(!open)} headerTestID={`model-group-header-${id}`}>
                 <Stack gap="xs">
                     {Children.toArray(children).flatMap((c, i) => (i === 0 ? [c] : [<Divider key={`d${i}`} />, c]))}
                 </Stack>
@@ -55,15 +58,18 @@ function Group({ id, title, count, defaultOpen, force, children }: {
 /** Settings > Model's list: what is on the PC, what can be downloaded, and what can't run here. */
 export function ModelList({ provider, remote, models, activeModel, switching, onUse, onRefresh }: ModelListProps) {
     const t = useT();
+    const seeded = useContext(SeedAddedModel);
     const download = useStartModelDownload();
     const remove = useRemoveCustomModel();
     const [query, setQuery] = useState('');
     const [showAll, setShowAll] = useState(false);
     const [busy, setBusy] = useState<string | null>(null);
-    const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null);
+    const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(
+        seeded ? { ok: true, text: t('settings.model.added', { name: isolate(seeded) }) } : null,
+    );
     const [pcOnly, setPcOnly] = useState(false);
-    const [justAdded, setJustAdded] = useState(false);
-    const [adding, setAdding] = useState(false);
+    const [justAdded, setJustAdded] = useState(!!seeded);
+    const [adding, setAdding] = useState(!!seeded);
     const [confirmRemove, setConfirmRemove] = useState<ProviderModel | null>(null);
 
     const groups = useMemo(

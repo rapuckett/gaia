@@ -11,7 +11,7 @@ import { shouldRetryQuery } from '@/data/queryRetry';
 import { GaiaClientProvider } from '@/data/GaiaClientProvider';
 import { AppErrorBoundary } from '@/features/errors/AppErrorBoundary';
 import { ChatAlertFeed } from '@/features/banners/ChatAlertFeed';
-import { ConnectionBanner } from '@/features/banners/ConnectionBanner';
+import { AppBanner } from '@/features/banners/AppBanner';
 import { ModelNeededHost } from '@/features/model';
 import { AppPolls } from '@/features/notifications/AppPolls';
 import { NotificationFeed } from '@/features/notifications';
@@ -78,7 +78,7 @@ export default function RootLayout() {
             <GaiaClientProvider client={client}>
                 <UIProvider>
                     <AppErrorBoundary variant="window">
-                    <ScreenBannerProvider banner={<ConnectionBanner />}>
+                    <ScreenBannerProvider banner={<AppBanner />}>
                         <PairingGate>
                         <SetupGate>
                             <RoutingEffects />

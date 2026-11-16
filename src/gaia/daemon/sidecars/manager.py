@@ -489,7 +489,7 @@ class AgentSidecarManager:
 
         # A frozen sidecar is another bundle: it must not record ours as the
         # user's library path and hand it to the commands it runs. Its skills
-        # run `gaia`, which the desktop app ships beside us, not on PATH.
+        # run `gaia`, which may not be on the PATH a popen env override sets.
         spawn_env = child_lemonade_env(
             expose_shipped_gaia(
                 unfreeze_loader_paths(

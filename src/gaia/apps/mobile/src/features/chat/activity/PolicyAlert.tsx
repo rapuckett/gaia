@@ -40,7 +40,7 @@ export function PolicyAlert({ step }: { step: ActivityRow }) {
                         {step.tool || t('activity.policy.unknownTool')}
                     </Text>
                 </Line>
-                <Text role="label" dir="auto" tone="secondary">
+                <Text role="label" dir="ltr" tone="secondary">
                     {step.reason || step.detail}
                 </Text>
                 {step.ruleIds && step.ruleIds.length > 0 ? (

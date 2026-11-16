@@ -29,6 +29,7 @@ import { serverConfirmRequest, setupConfirmFrom } from '../sheets/setupConfirm';
 import { SetupLogs } from '../sheets/SetupLogs';
 import { Details, DownloadContents, ModelRow } from './DownloadRows';
 import { downloadView, milestones } from './downloadState';
+import { lostContactText } from './lostContactText';
 import { useDownloadEstimates } from './useDownloadEstimates';
 
 /** The third step: everything coming to this PC, each model's progress, and what to do when one fails. */
@@ -50,7 +51,7 @@ export function DownloadStep({ ctx }: { ctx: SetupStepContext }) {
     const view = useMemo(() => downloadView(ctx.run, plan), [ctx.run, plan]);
     const [actionError, setActionError] = useState<unknown>(null);
     const [skipped, setSkipped] = useState<ReadonlySet<string>>(() => new Set());
-    const lost = status.isError ? describeError(status.error, t) : null;
+    const lost = status.isError ? lostContactText(t, status.error) : null;
     const busy = [cancel, download, skip, redownload, start].some((m) => m.isPending) || lost != null;
 
     const rows = useMemo(() => (view?.rows ?? []).filter((m) => !skipped.has(m.id)), [view, skipped]);
@@ -166,7 +167,7 @@ export function DownloadStep({ ctx }: { ctx: SetupStepContext }) {
     if (lost) {
         footer = <Button label={t('setup.reconnect')} variant="primary" busy={status.isFetching} onPress={() => void status.refetch()} />;
     } else if (view?.active) {
-        footer = <Button label={t('setup.progress.cancel')} disabled={busy} onPress={() => void stop()} />;
+        footer = <Button label={t('setup.progress.cancel')} disabled={busy} onPress={() => void stop()} testID="download-stop" />;
     } else if (view && view.cancelled.length > 0) {
         footer = <Button label={t('setup.progress.resumeAll')} variant="primary" busy={start.isPending} disabled={busy} onPress={() => void act(() => startRun())} />;
     } else if (stoppedBeforeCheck) {
@@ -282,7 +283,7 @@ export function DownloadStep({ ctx }: { ctx: SetupStepContext }) {
                 </Card>
             ) : null}
 
-            {lost ? <Notice tone="danger" message={t('setup.lostContact', { error: lost })} /> : null}
+            {lost ? <Notice tone="danger" message={lost.text} detail={lost.detail} /> : null}
 
             {stoppedEarly || stoppedNote ? (
                 <Stack gap="xs">

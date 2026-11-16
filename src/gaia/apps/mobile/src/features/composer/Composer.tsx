@@ -38,6 +38,8 @@ export interface ComposerProps {
     starting?: boolean;
     /** Files attached to the message: the + button, a chip each, and their links go out with the text. */
     attachments?: Attachments;
+    /** Opens the attach menu, with Paste image offered (developer gallery). */
+    attachMenu?: { open?: boolean; paste?: boolean };
     leftControls?: ReactNode;
     rightControls?: ReactNode;
 }
@@ -50,7 +52,7 @@ const MAX_LINES = 9;
 const FIXED: ViewStyle = { flexDirection: 'row', alignItems: 'center', flexShrink: 0, gap: 8 };
 const CHIPS: ViewStyle = { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexGrow: 1, flexShrink: 1, minWidth: 0, gap: CHIP_GAP };
 const GROUP: ViewStyle = { flexDirection: 'row', alignItems: 'center', flexShrink: 1, minWidth: 0, gap: CHIP_GAP };
-// The left chips collapse to icons in chipRoom; only the right group (the model) gives up width, so none draw over another.
+// The other chips collapse to icons in chipRoom; none draw over another.
 const LEFT: ViewStyle = { ...GROUP, flexShrink: 0 };
 
 export function Composer({
@@ -64,6 +66,7 @@ export function Composer({
     disabledReason,
     starting = false,
     attachments,
+    attachMenu,
     leftControls,
     rightControls,
 }: ComposerProps) {
@@ -139,7 +142,7 @@ export function Composer({
     const placeholder = disabledReason ? '' : bracketParts(spoken)[0];
 
     return (
-        <Stack gap="sm" padding="md">
+        <Stack gap="sm" paddingX="gutter" paddingY="md">
             {tooLong ? (
                 <Notice
                     tone="danger"
@@ -172,7 +175,7 @@ export function Composer({
                         testID="composer-input"
                     />
                     <Row gap="sm" align="center">
-                        <View style={FIXED}>{attachments ? <AttachButton onPick={attachments.add} onError={attachments.addFailed} disabled={!!disabledReason} /> : null}</View>
+                        <View style={FIXED}>{attachments ? <AttachButton onPick={attachments.add} onError={attachments.addFailed} disabled={!!disabledReason} initialOpen={attachMenu?.open} showPaste={attachMenu?.paste} /> : null}</View>
                         <View style={CHIPS} testID="composer-controls" onLayout={(e) => setChipsWidth(e.nativeEvent.layout.width)}>
                             <ChipFitContext.Provider value={chipFit}>
                                 <View style={LEFT}>{leftControls}</View>

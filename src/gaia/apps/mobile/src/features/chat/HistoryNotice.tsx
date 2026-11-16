@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import type { StreamEvent } from '@/api/client.types';
-import { Text } from '@/ui';
+import { Stack, Text } from '@/ui';
 
 /** The PC's text when a turn pushed older turns out of the model's view; null when none did. */
 export function historyNoticeText(events: readonly StreamEvent[]): string | null {
@@ -13,11 +13,13 @@ export function historyNoticeText(events: readonly StreamEvent[]): string | null
     return null;
 }
 
-/** One quiet line before the reply. The text comes from the PC and is in English. */
+/** One quiet line before the reply. The text comes from the PC in English, as on the desktop, so it stays left-to-right. */
 export function HistoryNotice({ text }: { text: string }) {
     return (
-        <Text role="caption" tone="secondary" testID="history-notice">
-            {text}
-        </Text>
+        <Stack paddingX="gutter">
+            <Text role="caption" tone="secondary" align="center" dir="ltr" testID="history-notice">
+                {text}
+            </Text>
+        </Stack>
     );
 }

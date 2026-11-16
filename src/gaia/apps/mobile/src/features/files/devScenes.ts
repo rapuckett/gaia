@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import type { BrowseResponse, PreflightReport } from '@/api/client.types';
+import { GaiaApiError } from '@/api/errors';
 import { createFakeClient } from '@/api/fake';
 
 export type FileBrowserScene = 'root' | 'folder' | 'search' | 'denied' | 'searchStopped' | 'selected' | 'askPartial';
@@ -74,7 +75,7 @@ export const FILE_BROWSER_START: Record<FileBrowserScene, { path?: string; searc
     denied: { path: `${HOME}/Desktop` },
 };
 
-export type FilePreviewScene = 'loading' | 'text' | 'table' | 'binary';
+export type FilePreviewScene = 'loading' | 'text' | 'table' | 'binary' | 'refused';
 
 const previewBase = { extension: '', modified: ago(60), is_text: true, encoding: 'utf-8' };
 
@@ -87,6 +88,9 @@ export function filePreviewScene(scene: FilePreviewScene) {
             [`${DOCS}/q3-board.pdf`]: { ...previewBase, name: 'q3-board.pdf', path: `${DOCS}/q3-board.pdf`, extension: '.pdf', is_text: false, size: 481_000, size_display: '470 KB', preview_lines: [] },
         },
     });
+    if (scene === 'refused') {
+        client.getFilePreview = () => Promise.reject(new GaiaApiError(403, "A paired device can open files only from the folders its chat was given. d4-demo-trip-plan.txt isn't in this chat's folders: add its folder to the chat on your PC, or open it on your PC.", undefined, undefined, { code: 'not_in_chat_folders', name: 'd4-demo-trip-plan.txt' }));
+    }
     if (scene === 'loading') client.getFilePreview = () => new Promise(() => {});
     return client;
 }
@@ -96,4 +100,5 @@ export const FILE_PREVIEW_PATH: Record<FilePreviewScene, string> = {
     text: `${DOCS}/notes.txt`,
     table: `${DOCS}/budget.csv`,
     binary: `${DOCS}/q3-board.pdf`,
+    refused: `${HOME}/Trips/d4-demo-trip-plan.txt`,
 };

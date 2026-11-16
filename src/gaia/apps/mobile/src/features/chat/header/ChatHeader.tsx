@@ -73,6 +73,8 @@ export function ChatHeader({ sessionId, onOpenSessionPanel, onManageDocuments }:
             .finally(() => setExporting(false));
     };
 
+    const shownTitle = isPlaceholderTitle(title) ? t('sidebar.newChat') : title;
+
     const titleNode = editing ? (
         <Row gap="xs">
             <Stack flex={1}>
@@ -90,9 +92,15 @@ export function ChatHeader({ sessionId, onOpenSessionPanel, onManageDocuments }:
             <IconButton icon={X} size="sm" label={t('msg.editCancel')} onPress={() => setEditing(false)} />
         </Row>
     ) : (
-        <Pressable onPress={startEdit} accessibilityLabel={t('row.rename')} testID="chat-title">
+        <Pressable
+            onPress={startEdit}
+            accessibilityRole="button"
+            accessibilityLabel={shownTitle}
+            accessibilityHint={t('row.rename')}
+            testID="chat-title"
+        >
             <Text role="title" weight="semibold" numberOfLines={1} largeLines={2}>
-                {isPlaceholderTitle(title) ? t('sidebar.newChat') : title}
+                {shownTitle}
             </Text>
         </Pressable>
     );

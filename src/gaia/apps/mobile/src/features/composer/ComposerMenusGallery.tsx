@@ -2,22 +2,28 @@
 // SPDX-License-Identifier: MIT
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
-import type { ActiveModel, ChatSpending, ContextUsage, LocalModelStatus, ProviderModel } from '@/api/client.types';
+import type { ActiveModel, ChatSpending, PermissionMode, ContextUsage, LocalModelStatus, ProviderModel } from '@/api/client.types';
 import { createFakeClient } from '@/api/fake';
 import { GaiaClientProvider } from '@/data';
 import { HistoryNotice } from '@/features/chat/HistoryNotice';
+import { useT } from '@/i18n/useT';
+import { tEn } from '@webui/i18n/translator';
 import { usePickLoadStore } from '@/state/pickLoad';
-import { Screen, Stack, UIProvider } from '@/ui';
+import { Screen, SheetScope, Stack, UIProvider } from '@/ui';
 
 import { Composer } from './Composer';
+import { FolderChip } from './FolderChip';
+import { PermissionChip } from './PermissionChip';
+import { PrivateChip } from './PrivateChip';
+import type { Attachments } from './useAttachments';
 import { ContextMeter, ContextWarning } from './ContextMeter';
 import { ModelChip } from './ModelChip';
 import { SpendMeter } from './SpendMeter';
 
 /** Developer gallery (`/dev/composer?state=`): the context meter, spend meter, model menu and picked-model load banner in each state. */
-export const COMPOSER_MENU_STATES = ['context', 'warning', 'spend', 'menu', 'menuInfo', 'menuEmpty', 'menuSwitching', 'pickLoading', 'pickFailed'] as const;
+export const COMPOSER_MENU_STATES = ['context', 'warning', 'spend', 'spendOpen', 'permissionMenu', 'permissionAsk', 'permissionFull', 'permissionFullWaiting', 'private-off', 'private-on', 'private-memoryOff', 'folder-own', 'folder-add', 'menu', 'menuInfo', 'menuEmpty', 'menuSwitching', 'pickLoading', 'pickFailed', 'attachPaste', 'menuCloud', 'menuNeverStarted'] as const;
 export type ComposerMenuState = (typeof COMPOSER_MENU_STATES)[number];
 
 const USAGE: ContextUsage = {
@@ -63,6 +69,28 @@ const SPEND: ChatSpending = {
 const model = (id: string, extra: Partial<ProviderModel> = {}): ProviderModel =>
     ({ id, display_name: id.replace(/-GGUF$/, ''), context_length: 65536, downloaded: true, labels: [], rank: null, note: null, evidence: null, state: 'downloaded', size_gb: 5.1, available: true, ...extra }) as ProviderModel;
 
+const CLOUD_ID = 'accounts/fireworks/models/qwen3p6';
+const CLOUD_NOTICE = tEn('providers.fireworks.notice');
+const CLOUD = [model(CLOUD_ID, { display_name: 'Qwen3.6', size_gb: null })];
+
+const OWN_FOLDER = { path: '/Users/avery/.gaia/documents', name: 'documents', gaia_folder: true, choosable: false };
+
+/** The left-hand chip under test; the private and permission chips keep their own state so a tap flips them. */
+function LeftChip({ state }: { state: ComposerMenuState }) {
+    const [priv, setPriv] = useState(state === 'private-on');
+    const [mode, setMode] = useState<PermissionMode>(state === 'permissionFull' || state === 'permissionFullWaiting' ? 'full_access' : 'ask');
+    if (state === 'permissionMenu' || state === 'permissionAsk' || state === 'permissionFull' || state === 'permissionFullWaiting') {
+        return <PermissionChip mode={mode} onChange={setMode} initialOpen={state === 'permissionMenu' || state === 'permissionFullWaiting'} promptWaiting={state === 'permissionFullWaiting'} />;
+    }
+    if (state === 'private-off' || state === 'private-on') return <PrivateChip on={priv} onChange={setPriv} memoryEnabled />;
+    if (state === 'private-memoryOff') return <PrivateChip on={false} onChange={setPriv} memoryEnabled={false} />;
+    if (state === 'folder-own') return <FolderChip folder={OWN_FOLDER} />;
+    if (state === 'folder-add') return <FolderChip folder={{ ...OWN_FOLDER, choosable: true }} />;
+    return null;
+}
+
+const NO_ATTACHMENTS: Attachments = { items: [], add: () => undefined, addFailed: () => undefined, remove: () => undefined, clear: () => undefined, uploading: false, hasUploaded: false, compose: (text) => text };
+
 const LOCAL = [
     model('Gemma-4-E4B-it-GGUF', { state: 'loaded', size_gb: 5.1, tokens_per_second: 31.6, placement: { label: 'GPU · Vulkan', source: 'reported', device: 'gpu', backend: 'vulkan', warning: null } as ProviderModel['placement'] }),
     model('Qwen3-4B-Instruct-GGUF', { size_gb: 2.5 }),
@@ -76,17 +104,20 @@ const LOCAL_STATUS: LocalModelStatus = {
 };
 
 export function ComposerMenusGallery({ state }: { state: ComposerMenuState }) {
-    const cloud = state === 'spend';
+    const t = useT();
+    const cloud = state === 'spend' || state === 'spendOpen';
+    const spendScene = cloud;
+    const chipScene = state.startsWith('permission') || state.startsWith('private-') || state === 'folder-own' || state === 'folder-add';
     const client = useMemo(() => {
         const active = { provider: cloud ? 'fireworks' : 'local', model: cloud ? SPEND.model : 'Gemma-4-E4B-it-GGUF', display_name: cloud ? 'Qwen3.6' : 'Gemma 4 E4B', label: null, remote: cloud, is_default: true, downloaded: true } as ActiveModel;
         const base = createFakeClient({
             activeModel: active,
             localModel: cloud ? { ...LOCAL_STATUS, active_remote: true, active_display_name: 'Qwen3.6' } : LOCAL_STATUS,
             chatSpending: SPEND,
-            providerModels: { local: { provider: 'local', models: state === 'menuEmpty' ? [] : LOCAL } },
+            providerModels: { local: { provider: 'local', models: state === 'menuEmpty' ? [] : LOCAL }, ...(state === 'menuCloud' ? { fireworks: { provider: 'fireworks', models: CLOUD } } : {}) },
             providers: { providers: [
                 { id: 'local', name: 'Local', remote: false, configured: true, blocked: false, privacy_notice: '' },
-                { id: 'fireworks', name: 'Fireworks AI', remote: true, configured: state !== 'menu' && state !== 'menuInfo' && state !== 'menuSwitching', blocked: false, privacy_notice: '' },
+                { id: 'fireworks', name: 'Fireworks AI', remote: true, configured: state !== 'menu' && state !== 'menuInfo' && state !== 'menuSwitching' && state !== 'menuNeverStarted', blocked: false, privacy_notice: CLOUD_NOTICE },
             ] },
         });
         return base;
@@ -100,9 +131,10 @@ export function ComposerMenusGallery({ state }: { state: ComposerMenuState }) {
     }, [state]);
     const usage = state === 'warning' ? { ...USAGE, used: 61000, at_risk: ['What did the vendor contract say about renewal?', 'Summarize the board notes'] } : USAGE;
     return (
-        <UIProvider>
-            <QueryClientProvider client={queryClient}>
-                <GaiaClientProvider client={client}>
+        <QueryClientProvider client={queryClient}>
+            <GaiaClientProvider client={client}>
+                <UIProvider>
+                  <SheetScope>
                     <Screen>
                         <Stack gap="md" justify="end" flex={1}>
                             {state === 'warning' ? <HistoryNotice text="Older messages are now out of the model's view (6 turns). Ask me to recall them if you need them." /> : null}
@@ -110,18 +142,24 @@ export function ComposerMenusGallery({ state }: { state: ComposerMenuState }) {
                             <Composer
                                 onSend={noop}
                                 onStop={noop}
+                                attachments={state === 'attachPaste' ? NO_ATTACHMENTS : undefined}
+                                attachMenu={state === 'attachPaste' ? { open: true, paste: true } : undefined}
+                                leftControls={chipScene ? <LeftChip state={state} /> : undefined}
                                 rightControls={
+                                    chipScene ? undefined : (
                                     <>
-                                        <SpendMeter sessionId="dev" busy={false} initialOpen={state === 'spend'} />
-                                        <ContextMeter usage={usage} initialOpen={state === 'context'} onDetails={noop} />
-                                        <ModelChip initialOpen={state === 'menu' || state === 'menuInfo' || state === 'menuEmpty' || state === 'menuSwitching'} initialInfoRow={state === 'menuInfo' ? 'Qwen3.6-35B-A3B-GGUF' : undefined} forceSwitching={state === 'menuSwitching' ? 'Qwen3-4B-Instruct-GGUF' : undefined} />
+                                        <SpendMeter sessionId="dev" busy={false} initialOpen={state === 'spendOpen'} />
+                                        {spendScene ? null : <ContextMeter usage={usage} initialOpen={state === 'context'} onDetails={noop} />}
+                                        <ModelChip initialOpen={state === 'menu' || state === 'menuInfo' || state === 'menuEmpty' || state === 'menuSwitching' || state === 'menuCloud' || state === 'menuNeverStarted'} initialInfoRow={state === 'menuInfo' ? 'Qwen3.6-35B-A3B-GGUF' : undefined} initialSwitchError={state === 'menuNeverStarted' ? t('modelMenu.downloadNeverStarted', { name: 'Qwen3.6-35B-A3B' }) : undefined} forceSwitching={state === 'menuSwitching' ? 'Qwen3-4B-Instruct-GGUF' : undefined} />
                                     </>
+                                    )
                                 }
                             />
                         </Stack>
                     </Screen>
-                </GaiaClientProvider>
-            </QueryClientProvider>
-        </UIProvider>
+                  </SheetScope>
+                </UIProvider>
+            </GaiaClientProvider>
+        </QueryClientProvider>
     );
 }

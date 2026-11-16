@@ -10,6 +10,7 @@ import { dateLocale, useT } from '@/i18n/useT';
 import { Badge, Button, Divider, Row, Spinner, Stack, Text } from '@/ui';
 
 import { SectionFailed } from '../SectionFailed';
+import { ContentText } from '../../ContentText';
 
 /** One conversation's turns, read-only and oldest first; long text wraps and each message follows its own script's direction. */
 export function ConversationTurns({ turns, onOpenChat }: { turns: UseQueryResult<MemoryTurn[]>; onOpenChat?: () => void }) {
@@ -39,9 +40,9 @@ export function ConversationTurns({ turns, onOpenChat }: { turns: UseQueryResult
                                 {formatDateFull(turn.timestamp, locale)}
                             </Text>
                         </Row>
-                        <Text dir="auto" selectable>
+                        <ContentText selectable>
                             {turn.content}
-                        </Text>
+                        </ContentText>
                     </Stack>
                 ))
             )}

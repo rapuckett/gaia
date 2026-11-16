@@ -37,5 +37,7 @@ export function notificationText(n: GaiaNotification, t: Translate): { title: st
     if (n.type === 'policy_alert') {
         return { title: t('activity.policy.blocked', { tool: n.tool ?? t('activity.policy.unknownTool') }), message: n.message };
     }
+    // An error's message is the PC's English reason.
+    if (n.type === 'error') return { title: n.title, message: isolate(n.message, 'ltr') };
     return { title: n.title, message: n.message };
 }

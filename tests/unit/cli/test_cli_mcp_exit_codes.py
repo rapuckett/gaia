@@ -26,6 +26,8 @@ CLOSED_PORT = "1"
 def _run_main(monkeypatch, *argv):
     """Run ``gaia <argv>`` through ``main()``; return its exit status."""
     monkeypatch.setattr(sys, "argv", ["gaia", *argv])
+    # Some tests fake sys.platform; startup's PATH lookup must not run under it.
+    monkeypatch.setattr(cli, "expose_shipped_gaia", lambda *_args: None)
     try:
         cli.main()
     except SystemExit as exc:

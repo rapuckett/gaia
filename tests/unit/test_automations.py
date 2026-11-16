@@ -441,6 +441,7 @@ def test_run_now_makes_it_due_at_once():
         ({"name": "x", "prompt": "p"}, "Say when"),
         ({"name": "x", "at": "10m"}, "--say or --prompt"),
         ({"name": "x", "every": "1h", "say": "hi"}, "one-time"),
+        ({"name": "x", "every": "1h", "say": "hi"}, "use --prompt instead"),
         (
             {"name": "x", "every": "1h", "prompt": "p", "check": "rm -rf x"},
             "GitHub read",

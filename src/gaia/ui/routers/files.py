@@ -103,10 +103,17 @@ SEARCH_SETUP_ALLOWANCE_SEC = 1.0
 REMOTE_PREVIEW_MAX_LINES = 50
 
 _AWAY_FROM_PC = (
-    "Away from the PC, GAIA shows files only from the folders a chat was given."
+    "A paired device can open files only from the folders its chat was given."
 )
 
 router = APIRouter(tags=["files"])
+
+
+def _device_refusal(code: str, message: str, **extra: str) -> HTTPException:
+    """A 403 whose `detail` carries a stable `code` the phone translates."""
+    return HTTPException(
+        status_code=403, detail={"code": code, "message": message, **extra}
+    )
 
 
 class OpenFileResponse(WireModel):
@@ -125,9 +132,8 @@ def _remote_read_roots(request: Request, session_id: Optional[str]):
     if is_local_pc(request):
         return None
     if not session_id:
-        raise HTTPException(
-            status_code=403,
-            detail=f"{_AWAY_FROM_PC} Name the chat with session_id.",
+        raise _device_refusal(
+            "session_required", f"{_AWAY_FROM_PC} Name the chat with session_id."
         )
     db = request.app.state.db
     session = db.get_session(session_id)
@@ -143,9 +149,9 @@ def _remote_read_roots(request: Request, session_id: Optional[str]):
 def _refuse_remote_secret(resolved: Path) -> None:
     """403 when *resolved* holds credentials; only for callers away from the PC."""
     if secret_read_refusal(resolved):
-        raise HTTPException(
-            status_code=403,
-            detail="GAIA doesn't show this away from the PC: it holds "
+        raise _device_refusal(
+            "credentials_withheld",
+            "GAIA doesn't show this to a paired device: it holds "
             "credentials or keys.",
         )
 
@@ -164,10 +170,13 @@ def _refuse_remote_read(resolved: Path, roots) -> None:
         return
     _refuse_remote_secret(resolved)
     if not _within_roots(resolved, roots):
-        raise HTTPException(
-            status_code=403,
-            detail=f"{_AWAY_FROM_PC} {resolved.name or resolved} isn't in this "
-            "chat's folders.",
+        name = resolved.name or str(resolved)
+        raise _device_refusal(
+            "not_in_chat_folders",
+            f"{_AWAY_FROM_PC} {name} isn't in this "
+            "chat's folders: add its folder to the chat on your PC, or open it "
+            "on your PC.",
+            name=name,
         )
 
 
@@ -392,9 +401,9 @@ async def browse_files(
     if roots is not None and not path:
         path = next((root for root in roots if Path(root).is_dir()), None)
         if path is None:
-            raise HTTPException(
-                status_code=403,
-                detail=f"{_AWAY_FROM_PC} This chat has no folders yet; add one "
+            raise _device_refusal(
+                "no_chat_folders",
+                f"{_AWAY_FROM_PC} This chat has no folders yet; add one "
                 "in its session panel.",
             )
     quick_links = (
