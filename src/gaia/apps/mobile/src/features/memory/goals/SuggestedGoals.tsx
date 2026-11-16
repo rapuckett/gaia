@@ -14,7 +14,7 @@ interface SuggestedGoalsProps {
     onReject: (goal: Goal) => void;
 }
 
-/** Goals GAIA suggested, each with Accept and Reject at full width so neither is a stretch for a thumb. */
+/** Goals GAIA suggested, each with compact Accept and Reject buttons that stack at large text. */
 export function SuggestedGoals({ goals, busyId, onAccept, onReject }: SuggestedGoalsProps) {
     const t = useT();
     if (goals.length === 0) return null;
@@ -42,27 +42,25 @@ export function SuggestedGoals({ goals, busyId, onAccept, onReject }: SuggestedG
                                     </Text>
                                 ) : null}
                             </Stack>
-                            <Row gap="sm" stack>
-                                <Stack flex={1}>
-                                    <Button
-                                        label={t.bare('mem.goals.reject')}
-                                        accessibilityLabel={`${t('mem.goals.reject')}: ${goal.title}`}
-                                        variant="danger"
-                                        disabled={busyId === goal.id}
-                                        onPress={() => onReject(goal)}
-                                        testID={`goals-reject-${goal.id}`}
-                                    />
-                                </Stack>
-                                <Stack flex={1}>
-                                    <Button
-                                        label={t.bare('mem.goals.accept')}
-                                        accessibilityLabel={`${t('mem.goals.accept')}: ${goal.title}`}
-                                        variant="primary"
-                                        busy={busyId === goal.id}
-                                        onPress={() => onAccept(goal)}
-                                        testID={`goals-accept-${goal.id}`}
-                                    />
-                                </Stack>
+                            <Row gap="sm" wrap stack>
+                                <Button
+                                    label={t.bare('mem.goals.accept')}
+                                    accessibilityLabel={`${t('mem.goals.accept')}: ${goal.title}`}
+                                    variant="secondary"
+                                    size="sm"
+                                    busy={busyId === goal.id}
+                                    onPress={() => onAccept(goal)}
+                                    testID={`goals-accept-${goal.id}`}
+                                />
+                                <Button
+                                    label={t.bare('mem.goals.reject')}
+                                    accessibilityLabel={`${t('mem.goals.reject')}: ${goal.title}`}
+                                    variant="danger"
+                                    size="sm"
+                                    disabled={busyId === goal.id}
+                                    onPress={() => onReject(goal)}
+                                    testID={`goals-reject-${goal.id}`}
+                                />
                             </Row>
                         </Stack>
                     </Surface>

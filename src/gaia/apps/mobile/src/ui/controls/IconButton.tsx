@@ -13,7 +13,7 @@ export interface IconButtonProps {
     icon: LucideIcon;
     label: string;
     onPress?: () => void;
-    variant?: 'ghost' | 'filled' | 'primary' | 'danger' | 'raised';
+    variant?: 'ghost' | 'filled' | 'outlined' | 'primary' | 'danger' | 'raised';
     size?: 'md' | 'sm';
     busy?: boolean;
     disabled?: boolean;
@@ -34,6 +34,7 @@ export function IconButton({
     const look: Record<NonNullable<IconButtonProps['variant']>, { bg: string; tone: Tone }> = {
         ghost: { bg: 'transparent', tone: 'secondary' },
         filled: { bg: colors.bgTertiary, tone: 'primary' },
+        outlined: { bg: colors.bgTertiary, tone: 'primary' },
         primary: { bg: colors.accentFill, tone: 'onAccent' },
         danger: { bg: colors.dangerDim, tone: 'danger' },
         raised: { bg: colors.bgSecondary, tone: 'primary' },
@@ -58,6 +59,7 @@ export function IconButton({
                     borderRadius: radius.md,
                     backgroundColor: v.bg,
                     ...(variant === 'raised' ? { borderWidth: 1, borderColor: colors.border, boxShadow: shadows.sm } : null),
+                    ...(variant === 'outlined' ? { borderWidth: 1, borderColor: colors.border } : null),
                     alignItems: 'center',
                     justifyContent: 'center',
                 }}
