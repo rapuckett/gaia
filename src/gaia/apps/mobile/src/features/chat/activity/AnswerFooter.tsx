@@ -3,10 +3,11 @@
 
 import type { InferenceStats } from '@webui/types';
 import type { TurnEnding } from '@webui/utils/turnEnding.core';
+import { shortModelName } from '@webui/utils/modelList.core';
 import { useState } from 'react';
 
 import { useT } from '@/i18n/useT';
-import { Disclosure, Stack, Text } from '@/ui';
+import { Disclosure, Ltr, Notice, Stack, Text } from '@/ui';
 
 import { answerFooterText } from './footerText';
 
@@ -21,16 +22,34 @@ export function AnswerFooter({ latencyMs, stats, ended }: AnswerFooterProps) {
     const t = useT();
     const [open, setOpen] = useState(false);
     const { summary, exact } = answerFooterText(latencyMs, stats, ended, t);
-    if (!summary && exact.length === 0) return null;
+    // A retried answer names its own model elsewhere, so the router's pick is not shown.
+    const route = stats?.retried ? undefined : stats?.route;
+    const notice = stats?.route?.degraded && stats.route.notice ? stats.route.notice : null;
+    if (!summary && exact.length === 0 && !route?.model && !notice) return null;
     return (
-        <Disclosure title={summary ?? t('answer.details')} open={open} onToggle={() => setOpen((v) => !v)} testID="answer-footer">
-            <Stack gap="xs">
-                {exact.map((line) => (
-                    <Text key={line} role="caption" tone="muted">
-                        {line}
-                    </Text>
-                ))}
-            </Stack>
-        </Disclosure>
+        <Stack gap="xs">
+            {route?.model ? (
+                <Text role="caption" tone="muted" testID="answer-route">
+                    <Ltr>{shortModelName(route.model)}</Ltr>
+                </Text>
+            ) : null}
+            {summary || exact.length > 0 || route?.model ? (
+                <Disclosure title={summary ?? t('answer.details')} open={open} onToggle={() => setOpen((v) => !v)} testID="answer-footer" headerTestID="answer-footer-toggle">
+                    <Stack gap="xs">
+                        {route?.model ? (
+                            <Text role="caption" tone="muted">
+                                {t('msg.route', { reason: route.reason ?? '' })}
+                            </Text>
+                        ) : null}
+                        {exact.map((line) => (
+                            <Text key={line} role="caption" tone="muted">
+                                {line}
+                            </Text>
+                        ))}
+                    </Stack>
+                </Disclosure>
+            ) : null}
+            {notice ? <Notice tone="warning" message={notice} testID="answer-route-notice" /> : null}
+        </Stack>
     );
 }
