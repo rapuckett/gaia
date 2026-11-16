@@ -69,6 +69,18 @@ describeNative('controls at AX5', () => {
         expect(styleOf(screen.getByTestId('first-line')).minHeight).toBeCloseTo(firstLine);
     });
 
+    it('caps titles at 2x and lets body text scale fully', async () => {
+        await render(
+            <>
+                <Text role="title">Model</Text>
+                <Text role="body">Runs on your PC</Text>
+            </>,
+            { wrapper: wrap },
+        );
+        expect(screen.getByText('Model').props.maxFontSizeMultiplier).toBe(2);
+        expect(screen.getByText('Runs on your PC').props.maxFontSizeMultiplier).toBeUndefined();
+    });
+
     it('keeps a chat title to two lines', async () => {
         await render(<ListRow title="A chat with a very long title" titleLargeLines={2} onPress={() => {}} />, { wrapper: wrap });
         expect(screen.getByText('A chat with a very long title').props.numberOfLines).toBe(2);

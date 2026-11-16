@@ -7,7 +7,7 @@ import { glossParts } from '@webui/i18n/registry';
 import { useDirection } from '@/i18n/useT';
 import { metrics } from '../tokens/generated';
 import { fontFamily, type Weight } from '../theme/fonts';
-import { COMPACT_MAX_FONT_SCALE, useLargeText } from '../theme/a11y';
+import { COMPACT_MAX_FONT_SCALE, TITLE_MAX_FONT_SCALE, useLargeText } from '../theme/a11y';
 import { useTheme } from '../theme/ThemeProvider';
 import { toneColor, type Tone } from '../theme/tone';
 import { contentDir } from './direction';
@@ -43,6 +43,12 @@ export interface TextProps {
 }
 
 const InsideText = createContext(false);
+
+/** The largest text-size multiplier a role follows: titles cap at 2x, compact labels at 1.3x, the rest scale fully. */
+export function maxScaleFor(role: TypeRole | undefined, compact?: boolean): number | undefined {
+    if (compact) return COMPACT_MAX_FONT_SCALE;
+    return role === 'title' || role === 'display' ? TITLE_MAX_FONT_SCALE : undefined;
+}
 
 /** A role's line height in points before the person's text size applies. */
 export function lineHeightOf(size: number, role: TypeRole, rtl: boolean): number {
@@ -139,7 +145,7 @@ export function Text({
             <RNText
                 style={style}
                 numberOfLines={lines}
-                maxFontSizeMultiplier={compact ? COMPACT_MAX_FONT_SCALE : undefined}
+                maxFontSizeMultiplier={maxScaleFor(role, compact)}
                 ellipsizeMode={ellipsize ?? 'tail'}
                 selectable={selectable}
                 onPress={onPress}

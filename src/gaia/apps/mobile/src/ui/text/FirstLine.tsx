@@ -7,7 +7,7 @@ import { useDirection } from '@/i18n/useT';
 import { useLargeText } from '../theme/a11y';
 import { useTheme } from '../theme/ThemeProvider';
 import type { TypeRole } from '../tokens/type';
-import { lineHeightOf } from './Text';
+import { lineHeightOf, maxScaleFor } from './Text';
 
 export interface FirstLineProps {
     /** The role of the text the icon sits beside. */
@@ -27,8 +27,9 @@ export function FirstLine({ role = 'body', inset = 0, children }: FirstLineProps
     const { type } = useTheme();
     const rtl = useDirection() === 'rtl';
     if (!largeText) return <>{children}</>;
+    const scale = Math.min(fontScale, maxScaleFor(role) ?? fontScale);
     return (
-        <View testID="first-line" style={{ minHeight: lineHeightOf(type[role], role, rtl) * fontScale, marginTop: inset, justifyContent: 'center' }}>
+        <View testID="first-line" style={{ minHeight: lineHeightOf(type[role], role, rtl) * scale, marginTop: inset, justifyContent: 'center' }}>
             {children}
         </View>
     );
