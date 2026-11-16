@@ -1,6 +1,7 @@
 // Copyright(C) 2025-2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
+import { useT } from '../../i18n/useT';
 import { unsupportedView } from '../../utils/renderCards.core';
 
 export interface UnsupportedCardProps {
@@ -21,21 +22,20 @@ export interface UnsupportedCardProps {
  * debuggable, not silently dropped.
  */
 export function UnsupportedCard({ variant, render, data }: UnsupportedCardProps) {
+    const t = useT();
     const { pretty, bytes } = unsupportedView(variant, data);
     const tooLarge = pretty === null;
 
-    const message = variant === 'unknown'
-        ? `Unsupported card type: "${render}"`
-        : `Invalid ${render} payload`;
+    const message = t(variant === 'unknown' ? 'cards.unsupported.unknown' : 'cards.unsupported.invalid', { render });
 
     return (
         <div className="render-unsupported">
             <p className="render-unsupported__message">{message}</p>
             <details className="render-unsupported__details">
-                <summary>Raw payload</summary>
+                <summary>{t('cards.unsupported.raw')}</summary>
                 {tooLarge ? (
                     <p className="render-unsupported__too-large">
-                        Payload too large to display ({bytes} bytes)
+                        {t('cards.unsupported.tooLarge', { size: String(bytes) })}
                     </p>
                 ) : (
                     <pre className="render-unsupported__json">{pretty}</pre>

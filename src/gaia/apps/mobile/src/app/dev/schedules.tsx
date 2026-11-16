@@ -35,7 +35,7 @@ function SchedulesView({ state }: { state: string }) {
             <GaiaClientProvider client={client}>
                 <UIProvider>
                     <ScreenBannerProvider banner={null}>
-                        <SchedulesScreen onOpenChat={noop} dev={found.dev} />
+                        <SchedulesScreen onOpenChat={noop} onOpenAutomations={noop} dev={found.dev} />
                     </ScreenBannerProvider>
                 </UIProvider>
             </GaiaClientProvider>

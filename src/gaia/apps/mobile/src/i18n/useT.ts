@@ -41,6 +41,21 @@ export function describeFailureWith(error: unknown, say: Say): string {
     return describeErrorWith(error, say);
 }
 
+/** Server text we didn't write (a PC's reason, a plain Error's message), or undefined when the error is our own translated wording. */
+export function serverText(error: unknown): string | undefined {
+    if (error instanceof GaiaApiError) return error.detail || undefined;
+    if (error instanceof GaiaError) return undefined;
+    return error instanceof Error ? error.message || undefined : undefined;
+}
+
+/** A PC's HTTP error as our reason-free sentence plus its raw text for `detail`; any other error reads as `describeError`. */
+export function describeHttpFailure(error: unknown, t: Translate): { text: string; detail?: string } {
+    if (error instanceof GaiaApiError && error.messageKey === 'mobileApp.error.http' && error.detail) {
+        return { text: t('mobileApp.error.httpNoDetail', { status: error.status }), detail: error.detail };
+    }
+    return { text: describeError(error, t) };
+}
+
 /** The raw cause for a Details disclosure; never part of the sentence a person reads. */
 export function technicalDetail(error: unknown): string {
     if (error instanceof GaiaNetworkError) return `${error.params.url}: ${error.params.reason}`;

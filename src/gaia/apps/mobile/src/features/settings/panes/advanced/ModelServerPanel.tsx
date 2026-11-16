@@ -8,7 +8,7 @@ import { isolate } from '@webui/i18n/registry';
 import { backendLabel, loadedModelDetail, modelKindLabel, OWNER_LABELS, runsOn } from '@webui/utils/modelServer.core';
 
 import { modelServerKeys, useModelActions, useModelServer, useSetModelServerBackend } from '@/data';
-import { describeError, useT } from '@/i18n/useT';
+import { technicalDetail, useT } from '@/i18n/useT';
 import { Button, Ltr, Notice, Row, SegmentedControl, Spinner, Stack, Text } from '@/ui';
 
 import { modelLabel } from '@/features/composer/ModelMenu';
@@ -66,7 +66,7 @@ export function ModelServerPanel() {
         return (
             <Stack gap="sm">
                 <Notice tone="warning" message={t('settings.errors.serverDownTitle')} testID="advanced-server-unreachable" />
-                <RawDetails text={describeError(query.error, t)} />
+                <RawDetails text={technicalDetail(query.error)} />
             </Stack>
         );
     }

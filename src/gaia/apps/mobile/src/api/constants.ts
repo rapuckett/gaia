@@ -3,6 +3,8 @@
 
 import { parseMediaSrc } from '@webui/utils/renderCards.core';
 
+import type { AutomationAction } from './client.types';
+
 // Not importable from webui (they live in services/api.ts and ChatView.tsx, with
 // their logger and stores); api/constants.test.ts fails if any of these drifts.
 export const UI_HEADERS = {
@@ -14,6 +16,9 @@ export const ENDPOINTS = {
     agentInstallStatus: '/api/agents/{agent_id}/install-status',
     agents: '/api/agents',
     agentsInstall: '/api/agents/install',
+    automation: '/api/automations/{ref}',
+    automationAction: '/api/automations/{ref}/{action}',
+    automations: '/api/automations',
     goal: '/api/goals/{goal_id}',
     goalApprove: '/api/goals/{goal_id}/approve',
     goalCancel: '/api/goals/{goal_id}/cancel',
@@ -250,6 +255,14 @@ export function memoryStreamInferencePath(includeBrowser: boolean): string {
 
 export function memoryUpcomingPath(days: number): string {
     return `${ENDPOINTS.memoryUpcoming}?days=${days}`;
+}
+
+export function automationPath(ref: string): string {
+    return ENDPOINTS.automation.replace('{ref}', encodeURIComponent(ref));
+}
+
+export function automationActionPath(ref: string, action: AutomationAction): string {
+    return ENDPOINTS.automationAction.replace('{ref}', encodeURIComponent(ref)).replace('{action}', action);
 }
 
 export function schedulePath(name: string): string {
