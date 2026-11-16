@@ -90,7 +90,7 @@ export function UploadErrorToast({ filename, error, status, kind, onDismiss, tim
         };
     }, [onDismiss, timeout]);
 
-    const { title, detail, icon, report } = describeUploadError(t, { filename, error, status, kind });
+    const { title, detail, icon, report } = describeUploadError(t, { filename, error, status, kind, canDrop: true });
     const Icon = icon === 'warning' ? AlertTriangle : icon === 'alert' ? AlertCircle : Bug;
     const issueUrl = report === null ? null : report.kind === 'feature' ? featureRequestUrl(report.title) : bugReportUrl(report.title);
 
