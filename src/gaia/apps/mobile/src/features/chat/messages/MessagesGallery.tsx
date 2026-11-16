@@ -9,7 +9,7 @@ import { RecordingProgress } from '../recording/RecordingProgress';
 import { EmailPreScanCard } from '../cards/EmailPreScanCard';
 import { GuideCard } from '../cards/GuideCard';
 import { FIXTURES, GUIDE_WORKOUT, PRESCAN_PAYLOAD, type MessagesFixture } from './__fixtures__/messages';
-import { Screen } from '@/ui';
+import { Screen, Stack } from '@/ui';
 
 /** Developer gallery of the message list in each state; not part of the shipped screens. */
 export type MessagesGalleryState = MessagesFixture | StartOpen | 'guided' | 'prescan-dismissing' | 'prescan-done';
@@ -33,11 +33,13 @@ export function MessagesGallery({ state }: { state: MessagesGalleryState }) {
     if (state === 'prescan-dismissing' || state === 'prescan-done') {
         return (
             <Screen>
-                <EmailPreScanCard
-                    data={{ ok: true, data: PRESCAN_PAYLOAD }}
-                    startPending={state === 'prescan-dismissing' ? 'm1' : undefined}
-                    startNotice={state === 'prescan-done'}
-                />
+                <Stack paddingX="gutter">
+                    <EmailPreScanCard
+                        data={{ ok: true, data: PRESCAN_PAYLOAD }}
+                        startPending={state === 'prescan-dismissing' ? 'm1' : undefined}
+                        startNotice={state === 'prescan-done'}
+                    />
+                </Stack>
             </Screen>
         );
     }
