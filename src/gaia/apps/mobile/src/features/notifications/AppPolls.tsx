@@ -4,6 +4,7 @@
 import { useEffect, useRef } from 'react';
 
 import { isolate } from '@webui/i18n/registry';
+import { plainPreview } from '@webui/utils/plainPreview';
 import type { GaiaNotification } from '@webui/types/agent';
 import type { Schedule } from '@webui/types';
 
@@ -39,6 +40,22 @@ function raiseScheduleFailure(failed: Schedule, t: Translate): void {
     }
 }
 
+function raiseScheduleFinished(done: Schedule, t: Translate): void {
+    addNotification({
+        id: `schedule-done-${done.id}-${done.run_count - (done.running ? 1 : 0)}`,
+        type: 'info',
+        agentId: 'scheduler',
+        agentName: 'GAIA',
+        title: t('schedules.finished', { name: done.name }),
+        message: plainPreview(done.last_result ?? ''),
+        timestamp: Date.now(),
+        read: false,
+        dismissed: false,
+        priority: 'medium',
+        ...(done.session_id ? { sessionId: done.session_id } : {}),
+    });
+}
+
 function raiseGoalStoreFailure(error: string, count: number, t: Translate): void {
     addNotification({
         id: `${GOAL_STORE_NOTIFICATION_ID}${count}`,
@@ -63,6 +80,7 @@ function readGoalStoreFailures(): void {
 /**
  * The app-wide reads the web makes: the schedules and the running chats, every 30 s while the app is active.
  * A scheduled task that failed, including while the app was closed, raises one alert in the center and the banner.
+ * One that finished while the app was open raises one alert in the center.
  * An unreadable goal store raises one alert per failure, read again once the store opens.
  */
 export function AppPolls() {
@@ -76,7 +94,10 @@ export function AppPolls() {
     const announcer = useRef<ReturnType<typeof createScheduleAnnouncer> | null>(null);
     useEffect(() => {
         if (!schedules) return;
-        announcer.current ??= createScheduleAnnouncer((failed) => raiseScheduleFailure(failed, liveT.current));
+        announcer.current ??= createScheduleAnnouncer(
+            (failed) => raiseScheduleFailure(failed, liveT.current),
+            (done) => raiseScheduleFinished(done, liveT.current),
+        );
         void announcer.current(schedules);
     }, [schedules]);
     const goalStoreError = useGoalStoreHealth().data?.error;

@@ -2,7 +2,7 @@
 name: automations
 description: Reminders, alerts, triggers, summaries and the heartbeat — work GAIA does on its own and reports later. "Remind me at 5pm", "alert me if main breaks", "tell me when a good weather window opens", "summarize my inbox every morning", "check in every 30 minutes", "what are you watching?", "pause that", "stop those updates". Use whenever the user wants something done later, repeatedly, or only when something changes, or wants to see or change what is set up.
 license: MIT
-version: 2.0.0
+version: 2.0.1
 metadata:
   gaia:
     security_tier: community
@@ -27,6 +27,7 @@ Discord under Settings → Messaging in the GAIA app.
 | The user says | Kind | How |
 |---|---|---|
 | "remind me in 10 minutes / at 5pm / tomorrow 9am to …" | **reminder**, once | `--at` with `--say` (exact text, no AI) or `--prompt` (something to look up then) |
+| "remind me every day at 9 / every 2 hours to …" — a reminder that repeats | **summary**, always speaks | `--every` with `--prompt "Remind the user: …"`; `--at 9am` sets the time of day, `--days` the days. Never `--say`: it is for one-time reminders only |
 | "summarize … every morning at 8 / every 3 hours / every weekday" | **summary**, always speaks | `--every` with `--prompt`; `--at 8am` sets the time of day, `--days mon-fri` the days |
 | "alert me if CI breaks", "tell me when PR 12 is approved" — a GitHub fact | **trigger**: a cheap check, speaks only when its output changes | `--every` with `--check` and `--prompt` |
 | "let me know when a good weather window opens", "if anything urgent lands in my inbox" — needs judgment | **alert**: GAIA checks and stays silent unless something needs the user | `--every` with `--alert` and `--prompt` |
@@ -43,6 +44,7 @@ use an alert when it takes reading the web, mail or files and judging.
 |---|---|
 | List everything | `gaia automation list` |
 | One-time reminder | `gaia automation add --name "Stretch" --at 10m --say "Time to stretch"` |
+| Repeating reminder | `gaia automation add --name "Water" --every 1d --at 9am --prompt "Remind the user: time to drink water."` |
 | Summary | `gaia automation add --name "Morning inbox" --every 1d --at 8am --prompt "..."` |
 | Trigger | `gaia automation add --name "main CI" --every 10m --check "gaia automation ci-status --repo amd/gaia --branch main" --prompt "..."` |
 | Alert | `gaia automation add --name "Rainier window" --every 6h --alert --prompt "..."` |

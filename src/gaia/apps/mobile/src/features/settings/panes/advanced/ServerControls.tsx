@@ -30,7 +30,7 @@ function SettingCard({ title, hint, open, onToggle, trailing, testID, children }
         <Card padding="lg" testID={testID}>
             <Stack gap="md">
                 <Stack gap="xs">
-                    <Disclosure title={title} open={open} onToggle={onToggle} trailing={trailing} />
+                    <Disclosure title={title} open={open} onToggle={onToggle} trailing={trailing} headerTestID={`${testID}-toggle`} />
                     {hint ? <Text role="caption" tone="muted">{hint}</Text> : null}
                 </Stack>
                 {open ? children : null}

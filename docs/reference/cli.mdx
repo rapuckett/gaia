@@ -3512,6 +3512,7 @@ these commands through the `automations` skill, asking before every change.
 
 ```bash
 gaia automation add --name "Stretch" --at 10m --say "Time to stretch"
+gaia automation add --name "Water" --every 1d --at 9am --prompt "Remind the user: time to drink water."
 gaia automation add --name "main CI" --every 10m --check "gaia automation ci-status --repo amd/gaia --branch main" --prompt "Say what broke, with links"
 gaia automation add --name "Heartbeat" --every 30m --alert --quiet 22:00-07:00 --prompt "Check my inbox and calendar; tell me only what needs me"
 gaia automation list --plain
@@ -3521,6 +3522,7 @@ gaia automation edit "main CI" --every 30m
 | Kind | Made with | GAIA speaks |
 |---|---|---|
 | reminder | `--at` and `--say` or `--prompt` | once, at that time |
+| repeating reminder (a summary) | `--every`, `--at` or `--days`, and `--prompt`; `--say` is refused | every time |
 | summary | `--every` and `--prompt` | every time |
 | trigger | `--every`, `--check` and `--prompt` | only when the check's output changes |
 | alert | `--every`, `--alert` and `--prompt` | only when it finds something that needs you, and never twice about the same thing |
