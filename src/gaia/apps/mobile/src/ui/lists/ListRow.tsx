@@ -51,8 +51,6 @@ export function ListRow({
                 paddingHorizontal: space.lg,
                 paddingVertical: space.sm,
                 backgroundColor: selected ? colors.bgActive : 'transparent',
-                borderStartWidth: 3,
-                borderStartColor: selected ? colors.accentSolid : 'transparent',
                 justifyContent: 'center',
             }}
         >
