@@ -4037,6 +4037,7 @@ const messages: Messages = {
     'mobileApp.yourPc.setup.found.noticed': 'لاحظ الإعداد أمرًا بشأن الكمبيوتر لديك',
     'mobileApp.yourPc.setup.key.step3': 'أدخله في GAIA على الكمبيوتر لديك. يختبره GAIA قبل حفظه.',
     'mobileApp.yourPc.setup.key.where': 'يبقى مفتاحك على الكمبيوتر لديك، في التخزين الآمن لنظامك.',
+    'mobileApp.yourPc.settings.privacy.reportNote': 'عندما يفشل نموذج، يحفظ GAIA ما رآه على الكمبيوتر لديك، ولا يُرسَل أي شيء. للإبلاغ عن مشكلة، احفظ تقريرًا يضم هذه السجلات وسجلات GAIA وتفاصيل الكمبيوتر لديك، وراجعه، ثم أرفقه بنفسك.',
     'mobileApp.yourPc.setup.logs.reportNote': 'سجلات الإعداد وسجلات GAIA وتفاصيل الكمبيوتر لديك في ملف واحد. تُحذف المفاتيح والأسرار الأخرى، لكن قد تقتبس السجلات من محادثاتك، فراجعه قبل إرفاقه بالبلاغ.',
     'mobileApp.yourPc.setup.models.fit.ok': 'يحتاج إلى نحو {need} من الذاكرة، وفي الكمبيوتر لديك {have} للنماذج.',
     'mobileApp.yourPc.setup.models.fit.unknown': 'تعذّر على GAIA قراءة ذاكرة الكمبيوتر لديك، لذا لا يستطيع معرفة ما إذا كان هذا النموذج مناسبًا.',
