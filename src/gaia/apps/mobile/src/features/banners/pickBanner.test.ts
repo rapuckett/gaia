@@ -1,8 +1,10 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
+import { STATUS_LOST_MS } from '@/api/constants';
 import { GaiaApiError, GaiaNetworkError } from '@/api/errors';
 import type { SystemStatus } from '@/api/client.types';
+import { createStatusHealth } from '@/data/statusHealth';
 import { translator } from '@/i18n/useT';
 
 import { pickBanner } from './pickBanner';
@@ -81,5 +83,34 @@ describe('backend errors read as one sentence', () => {
         expect(id(withStatus({ download_progress: download }), slow)).toBe('download');
         expect(pickBanner(undefined, slow, t, null, { load: { model: 'M', seconds: 3 } as never })?.id).toBe('pickLoad');
         expect(id(OK)).toBeNull();
+    });
+
+    it('follows the status streak: nothing for the first two slow answers, slow at three, unreachable when lost', () => {
+        const h = createStatusHealth();
+        const timeout = new Error('aborted');
+        const pick = () => ({ ...h.get() });
+        const shown = (e: unknown) => pickBanner(undefined, e, t, null, pick())?.id ?? null;
+        h.record('slow');
+        expect(shown(timeout)).toBeNull();
+        expect(shown(new GaiaApiError(504, 'gateway'))).toBeNull();
+        h.record('slow');
+        expect(shown(timeout)).toBeNull();
+        h.record('slow');
+        expect(shown(timeout)).toBe('slow');
+        expect(shown(new GaiaApiError(500, 'boom'))).toBe('slow');
+    });
+
+    it('still shows unreachable for a real network failure, a 502 and five silent minutes', () => {
+        let now = 0;
+        const h = createStatusHealth(() => now);
+        h.record('slow');
+        h.record('unreachable');
+        expect(pickBanner(undefined, new GaiaNetworkError('u', new Error('r')), t, null, h.get())?.id).toBe('unreachable');
+        h.record('ok');
+        h.record('slow');
+        now = STATUS_LOST_MS;
+        h.record('slow');
+        expect(pickBanner(undefined, new GaiaApiError(504, 'gateway'), t, null, h.get())?.id).toBe('unreachable');
+        expect(pickBanner(undefined, new Error('aborted'), t, null, h.get())?.id).toBe('unreachable');
     });
 });
