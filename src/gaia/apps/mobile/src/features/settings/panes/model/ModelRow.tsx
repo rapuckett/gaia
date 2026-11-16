@@ -8,7 +8,7 @@ import { measuredText, modelFacts, RANK_NOTES } from '@webui/utils/modelList.cor
 
 import type { ProviderModel } from '@/api/client.types';
 import { useT } from '@/i18n/useT';
-import { Badge, Button, Card, Disclosure, Icon, Ltr, ProgressLine, Row, Spinner, Stack, Text } from '@/ui';
+import { Badge, Button, Disclosure, Icon, Ltr, ProgressLine, Row, Spinner, Stack, Surface, Text } from '@/ui';
 import { Check } from '@/ui/icons';
 
 import { NpuNotReady } from '../../../setup/npu/NpuNotReady';
@@ -39,14 +39,25 @@ export function ModelRow({ model: m, label, current, remote, busy, onUse, onDown
     const blocked = m.available === false;
 
     return (
-        <Card padding="md">
+        <Surface tone={current ? 'accent' : 'primary'} radius="md" padding="sm">
             <Stack gap="sm" testID={`model-row-${m.id}`}>
-                <Text role="ui" weight="semibold"><Ltr>{label}</Ltr></Text>
+                <Row gap="sm" justify="between" align="start">
+                    <Stack flex={1}>
+                        <Text role="ui" weight="semibold"><Ltr>{label}</Ltr></Text>
+                    </Stack>
+                    {current && !blocked ? (
+                        <Row gap="xs">
+                            <Icon icon={Check} size="sm" tone="success" />
+                            <Text role="label" tone="success" weight="semibold">{t.bare('settings.model.inUse')}</Text>
+                        </Row>
+                    ) : null}
+                </Row>
                 <Row gap="xs" wrap>
                     {m.placement?.device ? <Badge label={m.placement.device.toUpperCase()} /> : null}
                     {m.rank ? (
                         <Badge
                             label={`#${m.rank}${m.note ? ` ${RANK_NOTES[m.note] ? t.bare(RANK_NOTES[m.note]!) : m.note}` : ''}`}
+                            accessibilityLabel={`#${m.rank}${m.note ? ` ${RANK_NOTES[m.note] ? t(RANK_NOTES[m.note]!) : m.note}` : ''}`}
                             tone="accent"
                         />
                     ) : null}
@@ -101,12 +112,7 @@ export function ModelRow({ model: m, label, current, remote, busy, onUse, onDown
                 <Row gap="sm" wrap>
                     {current && blocked ? (
                         <Text role="label" tone="danger">{t('settings.model.inUseBlocked')}</Text>
-                    ) : current ? (
-                        <Row gap="xs">
-                            <Icon icon={Check} size="sm" tone="accent" />
-                            <Text role="label" tone="accent" weight="semibold">{t.bare('settings.model.inUse')}</Text>
-                        </Row>
-                    ) : blocked || progress ? null : !m.downloaded ? (
+                    ) : current ? null : blocked || progress ? null : !m.downloaded ? (
                         <Button
                             label={t.bare('settings.model.download')}
                             accessibilityLabel={t('settings.model.downloadAria', { name: label })}
@@ -140,6 +146,6 @@ export function ModelRow({ model: m, label, current, remote, busy, onUse, onDown
                     ) : null}
                 </Row>
             </Stack>
-        </Card>
+        </Surface>
     );
 }

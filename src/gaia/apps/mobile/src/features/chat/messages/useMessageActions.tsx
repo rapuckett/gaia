@@ -146,8 +146,12 @@ export function useMessageActions(
         ...(canChange ? [{ label: t('msg.delete'), icon: Trash2, destructive: true, onPress: () => setConfirmDelete(true) }] : []),
     ];
 
-    const when = formatFullTimestamp(message.created_at, t);
-    const title = when ? t(message.role === 'user' ? 'msg.sent' : 'msg.replied', { time: when }) : undefined;
+    // Each language half formats its own date, so the bracketed English isn't an Arabic date.
+    const title = Number.isNaN(new Date(message.created_at).getTime())
+        ? undefined
+        : t.compose((say, code) =>
+              say(message.role === 'user' ? 'msg.sent' : 'msg.replied', { time: formatFullTimestamp(message.created_at, t, code) }),
+          );
 
     const confirm = (heading: string, detail: string | null, go: string, onGo: () => void, onClose: () => void, destructive = false) => (
         <Sheet open onClose={onClose} title={heading}>

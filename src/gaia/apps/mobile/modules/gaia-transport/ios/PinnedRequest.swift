@@ -49,14 +49,17 @@ final class PinnedRequest: NSObject, URLSessionDataDelegate, @unchecked Sendable
   private var ended = false
   private var failure: Exception?
   private var waiting: Read?
+  private var temporary: URL?
 
   init(pin: Data) {
     self.pin = pin
   }
 
+  /// With `upload`, the body is sent from its file, and a temporary one is deleted when the request ends.
   func start(
     _ request: URLRequest,
     idleSeconds: TimeInterval,
+    upload: UploadBody? = nil,
     onResponse: @escaping (Result<HTTPURLResponse, Exception>) -> Void
   ) {
     let config = URLSessionConfiguration.ephemeral
@@ -72,12 +75,20 @@ final class PinnedRequest: NSObject, URLSessionDataDelegate, @unchecked Sendable
     let session = URLSession(configuration: config, delegate: self, delegateQueue: queue)
     var request = request
     request.httpShouldHandleCookies = false
-    let task = session.dataTask(with: request)
-    lock.withLock {
+    let task: URLSessionDataTask
+    if let upload {
+      task = session.uploadTask(with: request, fromFile: upload.file)
+    } else {
+      task = session.dataTask(with: request)
+    }
+    let cancelledEarly = lock.withLock { () -> Bool in
       self.onResponse = onResponse
       self.task = task
+      self.temporary = upload?.temporary
+      return cancelled
     }
     task.resume()
+    if cancelledEarly { task.cancel() }
     // The session keeps its delegate until it is invalidated; this lets it go once the task ends.
     session.finishTasksAndInvalidate()
   }
@@ -198,7 +209,10 @@ final class PinnedRequest: NSObject, URLSessionDataDelegate, @unchecked Sendable
     onResponse = nil
     let waiting = self.waiting
     self.waiting = nil
+    let temporary = self.temporary
+    self.temporary = nil
     lock.unlock()
+    if let temporary { removeTemporary(temporary) }
     callback?(.failure(failure ?? transportError("network", "The PC closed the connection without answering.")))
     waiting?(failure.map { .failure($0) } ?? .success(nil))
   }

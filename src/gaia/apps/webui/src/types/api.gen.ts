@@ -247,6 +247,7 @@ export interface ApiSchemas {
   ProviderRestoreNotice: ProviderRestoreNotice;
   ProviderSummary: ProviderSummary;
   ProviderSummaryList: ProviderSummaryList;
+  ProviderSummaryNetwork: ProviderSummaryNetwork;
   ProviderView: ProviderView;
   PullRequestRequest: PullRequestRequest;
   PutAwayContext: PutAwayContext;
@@ -353,6 +354,7 @@ export interface ApiSchemas {
   TurnChangesList: TurnChangesList;
   TurnDiff: TurnDiff;
   TurnFileChange: TurnFileChange;
+  TurnRouteResponse: TurnRouteResponse;
   TurnSummaryCost: TurnSummaryCost;
   TurnSummaryDocument: TurnSummaryDocument;
   TurnSummaryFile: TurnSummaryFile;
@@ -573,6 +575,7 @@ export interface AgentStepResponse {
   mcpServerLabel?: string | null;
   mcpTool?: string | null;
   narration?: string | null;
+  needsModel?: string | null;
   planNarrations?: string[] | null;
   planSteps?: string[] | null;
   policyVersion?: string | null;
@@ -1935,10 +1938,20 @@ export interface InferenceStatsResponse {
   output_tokens?: number;
   place?: string | null;
   retried?: boolean | null;
+  route?: TurnRouteResponse | null;
   seconds?: number | null;
   steps?: number | null;
   time_to_first_token?: number;
   tokens_per_second?: number;
+}
+/**
+ * The model a ``hybrid`` turn was routed to, and why.
+ */
+export interface TurnRouteResponse {
+  degraded?: boolean;
+  model: string;
+  notice?: string;
+  reason?: string;
 }
 /**
  * Summary of a boot-time initialization task (embedded in SystemStatus).
@@ -1946,6 +1959,7 @@ export interface InferenceStatsResponse {
 export interface InitTaskInfo {
   name: string;
   status: string;
+  step?: string | null;
 }
 /**
  * Body for ``POST /api/agents/install``.
@@ -2888,7 +2902,9 @@ export interface SessionPermissionsResponse {
  * Structured Local only notice translated by the Agent UI.
  */
 export interface PolicyNotice {
+  cause?: string | null;
   code: string;
+  models?: string[] | null;
   reason?: string | null;
   severity: "info" | "warning";
   url?: string | null;
@@ -3104,8 +3120,15 @@ export interface ProviderSummary {
   configured: boolean;
   id: string;
   name: string;
+  network?: ProviderSummaryNetwork | null;
   privacy_notice: string;
   remote: boolean;
+}
+/**
+ * ``reachable`` is None when the check doesn't apply to this PC.
+ */
+export interface ProviderSummaryNetwork {
+  reachable: boolean | null;
 }
 export interface ProviderSummaryList {
   lemonade_error?: string | null;

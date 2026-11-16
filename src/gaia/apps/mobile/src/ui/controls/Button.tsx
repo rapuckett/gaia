@@ -47,28 +47,31 @@ export function Button({
     const largeText = useLargeText();
     const look: Record<NonNullable<ButtonProps['variant']>, { bg: string; border: string; tone: Tone }> = {
         primary: { bg: colors.accentFill, border: 'transparent', tone: 'onAccent' },
-        secondary: { bg: colors.bgCard, border: colors.borderLight, tone: 'primary' },
-        ghost: { bg: 'transparent', border: 'transparent', tone: 'accent' },
+        secondary: { bg: colors.bgTertiary, border: size === 'sm' ? colors.border : colors.borderLight, tone: 'primary' },
+        ghost: { bg: 'transparent', border: colors.border, tone: 'accent' },
         danger: { bg: colors.dangerDim, border: 'transparent', tone: 'danger' },
     };
+    const pressedBg = { primary: colors.accentSolid, secondary: colors.bgActive, ghost: colors.bgTertiary, danger: colors.dangerDim };
     const v = look[variant];
     return (
         <View style={full ? { alignSelf: 'stretch' } : { alignSelf: 'flex-start' }}>
             <Pressable
                 onPress={busy ? undefined : onPress}
                 disabled={disabled}
+                minSize={size === 'sm' ? 44 : undefined}
                 accessibilityLabel={accessibilityLabel ?? label}
                 accessibilityState={{ busy: !!busy }}
                 testID={testID}
             >
+                {({ pressed }) => (
                 <View
                     style={{
-                        minHeight: size === 'sm' ? 36 : 48,
-                        paddingHorizontal: size === 'sm' ? 12 : 16,
-                        borderRadius: radius.md,
+                        minHeight: size === 'sm' ? 28 : 48,
+                        paddingHorizontal: size === 'sm' ? 10 : 16,
+                        borderRadius: size === 'sm' ? radius.sm : radius.md,
                         borderWidth: 1,
                         borderColor: v.border,
-                        backgroundColor: v.bg,
+                        backgroundColor: pressed ? pressedBg[variant] : v.bg,
                         alignItems: 'center',
                         justifyContent: 'center',
                     }}
@@ -81,18 +84,19 @@ export function Button({
                         ) : null}
                         {wrap || largeText ? (
                             <View style={{ flexShrink: 1, paddingVertical: 10 }}>
-                                <Text role="ui" weight="medium" tone={v.tone} align="center">
+                                <Text role={size === 'sm' ? 'caption' : 'ui'} weight="medium" tone={v.tone} align="center">
                                     {label}
                                 </Text>
                             </View>
                         ) : (
-                            <Text role="ui" weight="medium" tone={v.tone} numberOfLines={1}>
+                            <Text role={size === 'sm' ? 'caption' : 'ui'} weight="medium" tone={v.tone} numberOfLines={1}>
                                 {label}
                             </Text>
                         )}
                         {iconEnd && !busy ? <Icon icon={iconEnd} size="sm" tone={v.tone} /> : null}
                     </Row>
                 </View>
+                )}
             </Pressable>
         </View>
     );

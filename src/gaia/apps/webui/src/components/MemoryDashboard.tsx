@@ -22,7 +22,7 @@ import {
     confidenceLevel, formatDate, formatDateFull, formatDateRange, formatDuration, formatRelativeDate, isOverdue, successRateClass, todayCount,
     type ActivityDay, type ConvSession, type ConvTurn, type EntityInfo, type KnowledgeEntry, type TemporalItem, type ToolStat,
 } from '../utils/memoryFormat.core';
-import { MemoryDashboardAboutYou } from './MemoryDashboardAboutYou';
+import { MEMORY_SOURCE_KEYS, MemoryDashboardAboutYou } from './MemoryDashboardAboutYou';
 import './MemoryDashboard.css';
 
 // ── Type definitions ─────────────────────────────────────────────────────
@@ -109,6 +109,8 @@ const GOAL_SOURCE_KEYS: Record<string, MessageKey> = {
 const DOMAIN_KEYS: Record<string, MessageKey> = {
     work: 'mem.domain.work', technical: 'mem.domain.technical', personal: 'mem.domain.personal', general: 'mem.domain.general',
 };
+
+const CONTEXT_KEYS: Record<string, MessageKey> = { ...DOMAIN_KEYS, global: 'mem.context.global' };
 
 /** A server-side code in the user's language; one the UI has no words for stays as sent. */
 function Code({ value, keys }: { value: string; keys: Record<string, MessageKey> }) {
@@ -222,10 +224,17 @@ export function MemoryDashboard() {
     const [goalStats, setGoalStats] = useState<GoalStats | null>(null);
     const [goalsLoading, setGoalsLoading] = useState(false);
     const goalStoreError = useGoalHealthStore((s) => s.error);
+    const goalStoreDamaged = useGoalHealthStore((s) => s.damaged);
+    const [goalsLoadError, setGoalsLoadError] = useState<string | null>(null);
+    const [goalFormError, setGoalFormError] = useState<string | null>(null);
+    const [resettingGoalStore, setResettingGoalStore] = useState(false);
     const [expandedGoalId, setExpandedGoalId] = useState<string | null>(null);
     const [confirmGoalDeleteId, setConfirmGoalDeleteId] = useState<string | null>(null);
     const [showAddGoalForm, setShowAddGoalForm] = useState(false);
     const [goalForm, setGoalForm] = useState({ title: '', description: '', priority: 'medium' as memoryApi.Priority });
+
+    // The server refused a PC-only call (scan, save, refresh, reset): this window isn't on the PC.
+    const [pcOnly, setPcOnly] = useState(false);
 
     // Profile Setup — Discovery
     const [discPhase, setDiscPhase] = useState<ProfilePhase>('idle');
@@ -423,8 +432,10 @@ export function MemoryDashboard() {
             ]);
             setGoals(goalsRes.goals);
             setGoalStats(statsRes);
+            setGoalsLoadError(null);
         } catch (err) {
             log.system.warn('Failed to load goals', err);
+            setGoalsLoadError(errorText(err));
         } finally {
             setGoalsLoading(false);
         }
@@ -438,6 +449,41 @@ export function MemoryDashboard() {
             log.system.error(`Goal action failed (${failure})`, err);
             showToast(t('mem.goals.failed', { what: ref(failure), error: errorText(err) }), 'error');
             return;
+        }
+        loadGoals();
+    }, [loadGoals, showToast, t]);
+
+    const createGoal = useCallback(async () => {
+        if (!goalForm.title.trim()) return;
+        setGoalFormError(null);
+        try {
+            await memoryApi.createGoal(goalForm);
+        } catch (err) {
+            log.system.error('Goal create failed', err);
+            // Said on the form itself: a toast is gone before anyone reads it.
+            setGoalFormError(t('mem.goals.failed', { what: ref('mem.goals.createFailed'), error: errorText(err) }));
+            return;
+        }
+        setGoalForm({ title: '', description: '', priority: 'medium' });
+        setShowAddGoalForm(false);
+        loadGoals();
+    }, [goalForm, loadGoals, t]);
+
+    // A goal list that reads again makes a "list is damaged" form error stale.
+    useEffect(() => {
+        if (!goalStoreError) setGoalFormError(null);
+    }, [goalStoreError]);
+
+    const startNewGoalList = useCallback(async () => {
+        setResettingGoalStore(true);
+        try {
+            const { kept } = await memoryApi.resetGoalStore();
+            showToast(t('mem.goals.newListStarted', { file: kept }), 'success');
+        } catch (err) {
+            log.system.error('Starting a new goal list failed', err);
+            showToast(t('mem.goals.failed', { what: ref('mem.goals.startNewListFailed'), error: errorText(err) }), 'error');
+        } finally {
+            setResettingGoalStore(false);
         }
         loadGoals();
     }, [loadGoals, showToast, t]);
@@ -763,7 +809,10 @@ export function MemoryDashboard() {
             }
         } catch (err) {
             log.system.error('Failed to refresh system context', err);
-            showToast(t('mem.toast.systemFailed', { error: errorText(err) }), 'error');
+            if (memoryApi.isPcOnlyRefusal(err)) {
+                setPcOnly(true);
+                showToast(t('mem.toast.pcOnly'), 'error');
+            } else showToast(t('mem.toast.systemFailed', { error: errorText(err) }), 'error');
         } finally {
             setRefreshingSystem(false);
         }
@@ -780,6 +829,9 @@ export function MemoryDashboard() {
         setDiscSavedCount(null);
 
         const es = memoryApi.openDiscoveryStream();
+        // A refused stream never opens; only then is it worth asking why it failed.
+        let opened = false;
+        es.onopen = () => { opened = true; };
         discEsRef.current = es;
 
         es.onmessage = (event) => {
@@ -809,11 +861,15 @@ export function MemoryDashboard() {
         es.onerror = () => {
             es.close();
             discEsRef.current = null;
-            setDiscLogs(prev => [...prev, { text: t('mem.log.discoveryConnection'), kind: 'error' }]);
             // Only go to review if items were found; otherwise stay idle so user can retry
             setDiscItems(prev => {
                 setDiscPhase(prev.length > 0 ? 'review' : 'idle');
                 return prev;
+            });
+            const refused = opened ? Promise.resolve(false) : memoryApi.streamRefusedAsPcOnly('discovery');
+            void refused.then(isRefused => {
+                if (isRefused) setPcOnly(true);
+                else setDiscLogs(prev => [...prev, { text: t('mem.log.discoveryConnection'), kind: 'error' }]);
             });
         };
     }, [t]);
@@ -832,7 +888,8 @@ export function MemoryDashboard() {
             showToast(t('mem.disc.saved', { n: result.stored }), 'success');
         } catch (err) {
             log.system.error('Failed to commit discovery items', err);
-            showToast(t('mem.disc.saveFailed', { error: errorText(err) }), 'error');
+            if (memoryApi.isPcOnlyRefusal(err)) setPcOnly(true);
+            else showToast(t('mem.disc.saveFailed', { error: errorText(err) }), 'error');
             setDiscPhase('review');
         }
     }, [discItems, refreshKnowledgeViews, showToast, t]);
@@ -846,6 +903,9 @@ export function MemoryDashboard() {
         setInfSavedCount(null);
 
         const es = memoryApi.openInferenceStream(infIncludeBrowser);
+        // A refused stream never opens; only then is it worth asking why it failed.
+        let opened = false;
+        es.onopen = () => { opened = true; };
         infEsRef.current = es;
 
         es.onmessage = (event) => {
@@ -874,10 +934,14 @@ export function MemoryDashboard() {
         es.onerror = () => {
             es.close();
             infEsRef.current = null;
-            setInfLogs(prev => [...prev, { text: t('mem.log.inferenceConnection'), kind: 'error' }]);
             setInfItems(prev => {
                 setInfPhase(prev.length > 0 ? 'review' : 'idle');
                 return prev;
+            });
+            const refused = opened ? Promise.resolve(false) : memoryApi.streamRefusedAsPcOnly('inference', infIncludeBrowser);
+            void refused.then(isRefused => {
+                if (isRefused) setPcOnly(true);
+                else setInfLogs(prev => [...prev, { text: t('mem.log.inferenceConnection'), kind: 'error' }]);
             });
         };
     }, [infIncludeBrowser, t]);
@@ -895,7 +959,8 @@ export function MemoryDashboard() {
             showToast(t('mem.inf.saved', { n: result.stored }), 'success');
         } catch (err) {
             log.system.error('Failed to commit inference insights', err);
-            showToast(t('mem.inf.saveFailed', { error: errorText(err) }), 'error');
+            if (memoryApi.isPcOnlyRefusal(err)) setPcOnly(true);
+            else showToast(t('mem.inf.saveFailed', { error: errorText(err) }), 'error');
             setInfPhase('review');
         }
     }, [infItems, refreshKnowledgeViews, showToast, t]);
@@ -1018,7 +1083,7 @@ export function MemoryDashboard() {
                                     <button
                                         className="mem-maintenance-item"
                                         onClick={handleRefreshSystemContext}
-                                        disabled={refreshingSystem}
+                                        disabled={refreshingSystem || pcOnly}
                                         role="menuitem"
                                     >
                                         <RefreshCw size={14} />
@@ -1321,7 +1386,7 @@ export function MemoryDashboard() {
                                         aria-label={t('mem.knowledge.filterContext')}>
                                         <option value="">{t.bare('mem.knowledge.allContexts')}</option>
                                         {contexts.map(c => (
-                                            <option key={c} value={c}>{c}</option>
+                                            <option key={c} value={c}>{CONTEXT_KEYS[c] ? t.bare(CONTEXT_KEYS[c]) : c}</option>
                                         ))}
                                     </select>
                                     <select className="mem-filter-select" value={kEntity}
@@ -1340,7 +1405,7 @@ export function MemoryDashboard() {
                                         )}
                                         <input className="mem-filter-search"
                                             type="text"
-                                            placeholder={t('mem.knowledge.searchPlaceholder')}
+                                            placeholder={t.bare('mem.knowledge.searchPlaceholder')}
                                             value={kSearch}
                                             onChange={e => handleSearchChange(e.target.value)}
                                             aria-label={t('mem.knowledge.search')}
@@ -1508,7 +1573,7 @@ export function MemoryDashboard() {
                                                                 </div>
                                                             </td>
                                                             <td>
-                                                                <bdi className="mem-date-cell">{entry.context}</bdi>
+                                                                <span className="mem-date-cell"><Code value={entry.context} keys={CONTEXT_KEYS} /></span>
                                                             </td>
                                                             <td>
                                                                 {entry.entity ? (
@@ -1531,7 +1596,7 @@ export function MemoryDashboard() {
                                                                 </div>
                                                             </td>
                                                             <td>
-                                                                <bdi className="mem-date-cell">{entry.source || '\u2014'}</bdi>
+                                                                <span className="mem-date-cell">{entry.source ? <Code value={entry.source} keys={MEMORY_SOURCE_KEYS} /> : '\u2014'}</span>
                                                             </td>
                                                             <td>
                                                                 <span className="mem-date-cell" title={formatDateFull(entry.updated_at, dateLocale(t))}>
@@ -1757,7 +1822,7 @@ export function MemoryDashboard() {
                                                             <div className="mem-temporal-text"><bdi>{item.content}</bdi></div>
                                                             <div className="mem-temporal-date">
                                                                 {t(overdue ? 'mem.upcoming.overdue' : 'mem.upcoming.due', { when: formatRelativeDate(item.due_at, t) })}
-                                                                {item.context !== 'global' && <> {'\u00B7'} <bdi>{item.context}</bdi></>}
+                                                                {item.context !== 'global' && <> {'\u00B7'} <Code value={item.context} keys={CONTEXT_KEYS} /></>}
                                                             </div>
                                                         </div>
                                                     </div>
@@ -1782,7 +1847,7 @@ export function MemoryDashboard() {
                                     <Search size={13} className="search-icon" />
                                     <input
                                         type="text"
-                                        placeholder={t('mem.conv.searchPlaceholder')}
+                                        placeholder={t.bare('mem.conv.searchPlaceholder')}
                                         value={convSearch}
                                         onChange={e => handleConvSearchChange(e.target.value)}
                                         aria-label={t('mem.conv.search')}
@@ -2037,7 +2102,10 @@ export function MemoryDashboard() {
                                                             await cfg.onConfirm();
                                                         } catch (err) {
                                                             log.system.warn('Failed to update setting', err);
-                                                            showToast(t('mem.toast.settingFailed', { error: errorText(err) }), 'error');
+                                                            if (memoryApi.isPcOnlyRefusal(err)) {
+                                                                setPcOnly(true);
+                                                                showToast(t('mem.toast.pcOnly'), 'error');
+                                                            } else showToast(t('mem.toast.settingFailed', { error: errorText(err) }), 'error');
                                                         } finally {
                                                             setSettingsLoading(false);
                                                             setBetaConfirm(null);
@@ -2094,7 +2162,7 @@ export function MemoryDashboard() {
                                     </div>
                                     <button
                                         className={`mem-toggle${systemDiscoveryConsent ? ' mem-toggle-on' : ''}`}
-                                        disabled={settingsLoading}
+                                        disabled={settingsLoading || (pcOnly && !systemDiscoveryConsent)}
                                         onClick={async () => {
                                             if (!systemDiscoveryConsent) {
                                                 setBetaConfirm('discovery');
@@ -2145,7 +2213,10 @@ export function MemoryDashboard() {
                                                         loadAll();
                                                     } catch (err) {
                                                         log.system.warn('Failed to reinitialize memory', err);
-                                                        showToast(t('mem.toast.reinitFailed', { error: errorText(err) }), 'error');
+                                                        if (memoryApi.isPcOnlyRefusal(err)) {
+                                                            setPcOnly(true);
+                                                            showToast(t('mem.toast.pcOnly'), 'error');
+                                                        } else showToast(t('mem.toast.reinitFailed', { error: errorText(err) }), 'error');
                                                     } finally {
                                                         setSettingsLoading(false);
                                                         setReinitConfirm(false);
@@ -2165,7 +2236,7 @@ export function MemoryDashboard() {
                                     ) : (
                                         <button
                                             className="mem-btn-danger"
-                                            disabled={settingsLoading}
+                                            disabled={settingsLoading || pcOnly}
                                             onClick={() => setReinitConfirm(true)}
                                         >
                                             {t('mem.settings.reinitButton')}
@@ -2247,6 +2318,7 @@ export function MemoryDashboard() {
                     {activeTab === 'profile' && (
                         <div className="mem-profile-grid">
                             <p className="mem-tab-intro">{t('mem.profile.intro')}</p>
+                            {pcOnly && <div className="mem-advanced-error" role="alert">{t('mem.profile.pcOnly')}</div>}
                             {/* Card A: System Discovery */}
                             <div className="mem-profile-card">
                                 <div className="mem-profile-card-title">
@@ -2255,7 +2327,7 @@ export function MemoryDashboard() {
                                 <p className="mem-profile-desc">{t('mem.disc.desc')}</p>
                                 <button
                                     className="btn-primary mem-profile-run-btn"
-                                    disabled={discPhase === 'running' || discPhase === 'saving'}
+                                    disabled={pcOnly || discPhase === 'running' || discPhase === 'saving'}
                                     onClick={runDiscovery}
                                 >
                                     {discPhase === 'running' ? (
@@ -2302,7 +2374,7 @@ export function MemoryDashboard() {
                                         <div className="mem-review-actions">
                                             <button
                                                 className="btn-primary"
-                                                disabled={discPhase === 'saving' || discPhase === 'done' || discItems.filter(i => i._checked).length === 0}
+                                                disabled={pcOnly || discPhase === 'saving' || discPhase === 'done' || discItems.filter(i => i._checked).length === 0}
                                                 onClick={saveDiscoveryItems}
                                             >
                                                 {discPhase === 'saving' ? (
@@ -2353,7 +2425,7 @@ export function MemoryDashboard() {
                                 </label>
                                 <button
                                     className="btn-primary mem-profile-run-btn"
-                                    disabled={infPhase === 'running' || infPhase === 'saving'}
+                                    disabled={pcOnly || infPhase === 'running' || infPhase === 'saving'}
                                     onClick={runInference}
                                 >
                                     {infPhase === 'running' ? (
@@ -2400,7 +2472,7 @@ export function MemoryDashboard() {
                                         <div className="mem-review-actions">
                                             <button
                                                 className="btn-primary"
-                                                disabled={infPhase === 'saving' || infPhase === 'done' || infItems.filter(i => i._checked).length === 0}
+                                                disabled={pcOnly || infPhase === 'saving' || infPhase === 'done' || infItems.filter(i => i._checked).length === 0}
                                                 onClick={saveInferenceItems}
                                             >
                                                 {infPhase === 'saving' ? (
@@ -2439,11 +2511,18 @@ export function MemoryDashboard() {
                     {activeTab === 'goals' && (
                         <div className="mem-goals-tab">
                             <p className="mem-tab-intro">{t('mem.goals.intro')}</p>
-                            {goalStoreError && (
+                            {goalStoreError && (goalStoreDamaged ? (
+                                <div className="mem-advanced-error" role="alert">
+                                    <AlertTriangle size={14} /> {t('mem.goals.storeDamaged')}{' '}
+                                    <button type="button" className="link-btn" disabled={resettingGoalStore} onClick={startNewGoalList}>
+                                        {t('mem.goals.startNewList')}
+                                    </button>
+                                </div>
+                            ) : (
                                 <div className="mem-advanced-error" role="alert">
                                     <AlertTriangle size={14} /> {t('mem.goals.storeError')}: <bdi>{goalStoreError}</bdi>
                                 </div>
-                            )}
+                            ))}
                             {/* Header stat row */}
                             <div className="mem-goals-stats-row">
                                 {(['queued','in_progress','completed','failed'] as const).map(s => (
@@ -2481,7 +2560,7 @@ export function MemoryDashboard() {
 
                             {/* Add goal button */}
                             <div className="mem-goals-toolbar">
-                                <button className="btn-primary" onClick={() => setShowAddGoalForm(v => !v)}>
+                                <button className="btn-primary" onClick={() => { setGoalFormError(null); setShowAddGoalForm(v => !v); }}>
                                     <Plus size={14} /> {t('mem.goals.new')}
                                 </button>
                             </div>
@@ -2512,21 +2591,18 @@ export function MemoryDashboard() {
                                             <option value="medium">{t.bare('mem.goals.priorityMedium')}</option>
                                             <option value="high">{t.bare('mem.goals.priorityHigh')}</option>
                                         </select>
-                                        <button className="btn-primary" disabled={!goalForm.title.trim()} onClick={() => {
-                                            runGoalAction(async () => {
-                                                await memoryApi.createGoal(goalForm);
-                                                setGoalForm({ title: '', description: '', priority: 'medium' });
-                                                setShowAddGoalForm(false);
-                                            }, 'mem.goals.createFailed');
-                                        }}>{t('mem.goals.create')}</button>
-                                        <button className="btn-secondary" onClick={() => setShowAddGoalForm(false)}>{t('mem.cancel')}</button>
+                                        <button className="btn-primary" disabled={!goalForm.title.trim()} onClick={createGoal}>{t('mem.goals.create')}</button>
+                                        <button className="btn-secondary" onClick={() => { setGoalFormError(null); setShowAddGoalForm(false); }}>{t('mem.cancel')}</button>
                                     </div>
+                                    {goalFormError && <p className="mem-form-error" role="alert"><bdi>{goalFormError}</bdi></p>}
                                 </div>
                             )}
 
                             {/* Goal list */}
                             {goalsLoading ? (
                                 <div className="mem-loading"><div className="mem-spinner" /> {t('mem.goals.loading')}</div>
+                            ) : goalsLoadError ? (
+                                <p className="mem-form-error" role="alert">{t('mem.goals.loadFailed')} <bdi>{goalsLoadError}</bdi></p>
                             ) : goals.filter(g => g.status !== 'pending_approval' && g.status !== 'rejected').length === 0 ? (
                                 <div className="mem-empty">
                                     <div className="mem-empty-icon"><Target size={32} /></div>

@@ -12,7 +12,7 @@ import type { SetupCatalogEntry, SetupModelProgress, SetupPlan } from '@webui/ty
 
 import { useRemoveSetupModel, useSaveModelChoices, useSetupPlan, useSetupStatus } from '@/data';
 import { describeErrorWith, useLocaleCode, useT } from '@/i18n/useT';
-import { Badge, Button, Disclosure, Notice, Row, Select, Spinner, Stack, Text } from '@/ui';
+import { Badge, Button, Disclosure, Notice, Row, Select, SettingsGroup, Spinner, Stack, Text } from '@/ui';
 
 import { SelectionSummary } from '../../../setup/steps/Checklist';
 import { MarkedRow, Warn } from '../../../setup/steps/ModelRows';
@@ -199,7 +199,7 @@ export function LocalModels() {
 
     return (
         <Stack gap="xs" testID="local-models">
-            <Disclosure title={t.bare('settings.models.manage')} open={open} onToggle={() => setPicked(!open)} headerTestID="local-models-toggle">
+            <SettingsGroup title={t.bare('settings.models.manage')} hint={t('mobileApp.settings.models.manageHint')} open={open} onToggle={() => setPicked(!open)} headerTestID="local-models-toggle">
                 <Stack gap="md">
                     <Text role="caption" tone="muted">{t('mobileApp.settings.models.lede')}</Text>
                     {planQuery.error ? (
@@ -249,8 +249,7 @@ export function LocalModels() {
                     {notice?.ok ? <Notice tone="success" message={notice.text} testID="local-notice-ok" /> : null}
                     {notice && !notice.ok ? <LocalError error={notice.error} /> : null}
                 </Stack>
-            </Disclosure>
-            {!open ? <Stack paddingX="xl"><Text role="caption" tone="muted">{t('mobileApp.settings.models.manageHint')}</Text></Stack> : null}
+            </SettingsGroup>
             {sheet}
         </Stack>
     );

@@ -16,10 +16,12 @@ interface LibraryDocumentsProps {
     attachedIds: readonly string[];
     onAttach: (ids: string[]) => void;
     onRemove: (id: string) => void;
+    // Opens the document library to pick which ones.
+    onChoose: () => void;
 }
 
 // A chat searches only the documents attached to it: show what this one gets and offer the rest.
-export function LibraryDocuments({ documents, attachedIds, onAttach, onRemove }: LibraryDocumentsProps) {
+export function LibraryDocuments({ documents, attachedIds, onAttach, onRemove, onChoose }: LibraryDocumentsProps) {
     const t = useT();
     const [expanded, setExpanded] = useState(false);
     const { attached, offered } = splitDocuments(documents, attachedIds);
@@ -62,12 +64,15 @@ export function LibraryDocuments({ documents, attachedIds, onAttach, onRemove }:
                     <Text role="label" tone="secondary">
                         {attached.length ? t.plural('newChat.docs.more', n) : t.plural('newChat.docs.library', n)}
                     </Text>
-                    <Button
-                        variant="ghost"
-                        size="sm"
-                        label={n === 1 ? t('newChat.docs.attachIt') : t('newChat.docs.attachAll', { n })}
-                        onPress={() => onAttach(offered.map((d) => d.id))}
-                    />
+                    <Row gap="xs" wrap>
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            label={n === 1 ? t('newChat.docs.attachIt') : t('newChat.docs.attachAll', { n })}
+                            onPress={() => onAttach(offered.map((d) => d.id))}
+                        />
+                        {n > 1 && <Button variant="ghost" size="sm" label={t('newChat.docs.choose')} onPress={onChoose} />}
+                    </Row>
                 </Stack>
             )}
         </Stack>

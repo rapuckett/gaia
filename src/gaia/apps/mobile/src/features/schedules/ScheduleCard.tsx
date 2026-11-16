@@ -5,7 +5,6 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { View } from 'react-native';
 
 import type { MessageKey, Say } from '@webui/i18n/registry';
-import { dateLocale, translator } from '@webui/i18n/translator';
 
 import type { Schedule } from '@/api/client.types';
 import { CONFIRM_DELETE_MS } from '@/api/constants';
@@ -15,7 +14,7 @@ import { Disclosure, Icon, Notice, Row, Stack, Surface, Text, useTheme } from '@
 import { Clock, MessageSquare, Pause, Play, Trash2, Zap } from '@/ui/icons';
 
 import { ChipButton } from './ChipButton';
-import { describeSchedule, formatNextRun, formatTime } from './scheduleText';
+import { composeDateLocale, describeSchedule, formatNextRun, formatTime } from './scheduleText';
 
 const STATUS: Record<Schedule['status'], { label: MessageKey; tone: 'success' | 'warning' | 'muted' }> = {
     active: { label: 'schedules.status.active', tone: 'success' },
@@ -36,11 +35,11 @@ function StatusTag({ label, tone }: { label: string; tone: 'success' | 'warning'
     );
 }
 
-/** The desktop's `.schedule-card-error`: a tinted strip with a danger rule on the reading-start edge. */
+/** The desktop's `.schedule-card-error`: a tinted strip with a danger hairline border. */
 function ErrorStrip({ children }: { children: ReactNode }) {
     const { colors } = useTheme();
     return (
-        <View style={{ borderStartWidth: 2, borderStartColor: colors.danger, backgroundColor: colors.dangerDim, paddingHorizontal: 8, paddingVertical: 6 }}>
+        <View style={{ borderWidth: 1, borderColor: colors.danger, borderRadius: 6, backgroundColor: colors.dangerDim, paddingHorizontal: 8, paddingVertical: 6 }}>
             {children}
         </View>
     );
@@ -74,7 +73,7 @@ export function ScheduleCard({ schedule, now, runPending, onOpenChat, onRunNow, 
     const running = schedule.running === true || runPending;
     const status = STATUS[schedule.status];
     const when = (fmt: (say: Say, locale: string | undefined) => string) =>
-        t.compose((say, code) => fmt(say, dateLocale(translator(code))));
+        t.compose((say, code) => fmt(say, composeDateLocale(code, t)));
 
     return (
         <Surface tone="secondary" radius="sm" border padding="md">
@@ -145,7 +144,7 @@ export function ScheduleCard({ schedule, now, runPending, onOpenChat, onRunNow, 
                     <ChipButton
                         variant="danger"
                         icon={Trash2}
-                        label={t(confirmDelete ? 'schedules.card.confirmDelete' : 'schedules.card.delete')}
+                        label={t(confirmDelete ? 'mobileApp.schedules.card.confirmDelete' : 'schedules.card.delete')}
                         onPress={() => (confirmDelete ? onDelete() : setConfirmDelete(true))}
                     />
                 </Row>

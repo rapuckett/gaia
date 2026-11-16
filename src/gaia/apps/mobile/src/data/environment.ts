@@ -39,6 +39,10 @@ export function useEnvironmentActions(sessionId: string) {
     const queryClient = useQueryClient();
     const key = environmentKeys.session(sessionId);
     const share = (env: SessionEnvironment) => queryClient.setQueryData(key, env);
+    const addFolder = useMutation<SessionEnvironment, Error, string>({
+        mutationFn: (path) => requireClient(client).addEnvironmentFolder(sessionId, path),
+        onSuccess: share,
+    });
     const removeFolder = useMutation<SessionEnvironment, Error, string>({
         mutationFn: (path) => requireClient(client).removeEnvironmentFolder(sessionId, path),
         onSuccess: share,
@@ -49,5 +53,5 @@ export function useEnvironmentActions(sessionId: string) {
         // The PC saves the switch even when it can't tell the running reply, so show what was saved.
         onError: () => queryClient.invalidateQueries({ queryKey: key }),
     });
-    return { removeFolder, setInternet };
+    return { addFolder, removeFolder, setInternet };
 }

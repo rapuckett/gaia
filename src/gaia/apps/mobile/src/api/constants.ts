@@ -78,16 +78,24 @@ export const ENDPOINTS = {
     sessionCapabilities: '/api/sessions/{session_id}/capabilities',
     sessionChanges: '/api/sessions/{session_id}/changes',
     sessionChangesDiff: '/api/sessions/{session_id}/changes/{turn_id}/diff',
+    sessionChangesGit: '/api/sessions/{session_id}/changes/git',
+    sessionChangesGitCommit: '/api/sessions/{session_id}/changes/git/commit',
+    sessionChangesGitPr: '/api/sessions/{session_id}/changes/git/pr',
+    sessionChangesTotal: '/api/sessions/{session_id}/changes/total',
     sessionChangesUndo: '/api/sessions/{session_id}/changes/{turn_id}/undo',
+    sessionChangesUndoAll: '/api/sessions/{session_id}/changes/undo',
     sessionDocument: '/api/sessions/{session_id}/documents/{doc_id}',
     sessionDocuments: '/api/sessions/{session_id}/documents',
     sessionEnvironment: '/api/sessions/{session_id}/environment',
     sessionEnvironmentFolderRemove: '/api/sessions/{session_id}/environment/folders/remove',
+    sessionEnvironmentFolders: '/api/sessions/{session_id}/environment/folders',
     sessionEnvironmentInternet: '/api/sessions/{session_id}/environment/internet',
     sessionEvents: '/api/sessions/events',
+    sessionExport: '/api/sessions/{session_id}/export',
     sessionMessage: '/api/sessions/{session_id}/messages/{message_id}',
     sessionMessages: '/api/sessions/{session_id}/messages',
     sessionMessagesAndBelow: '/api/sessions/{session_id}/messages/{message_id}/and-below',
+    sessionOutputs: '/api/sessions/{session_id}/outputs',
     sessionPin: '/api/sessions/{session_id}/pin',
     sessionPrivate: '/api/sessions/{session_id}/private',
     sessionRead: '/api/sessions/{session_id}/read',
@@ -114,7 +122,9 @@ export const ENDPOINTS = {
     speechSettings: '/api/speech/settings',
     spending: '/api/spending',
     spendingAllowMonth: '/api/spending/allow-month',
+    spendingChat: '/api/spending/chat/{session_id}',
     spendingLimit: '/api/spending/limit',
+    chatActive: '/api/chat/active',
     chatSend: '/api/chat/send',
     chatAttach: '/api/chat/attach',
     chatCancel: '/api/chat/cancel',
@@ -154,6 +164,7 @@ export const ENDPOINTS = {
     filesImage: '/api/files/image',
     filesPreview: '/api/files/preview',
     filesSearch: '/api/files/search',
+    filesStatus: '/api/files/status',
     filesUpload: '/api/files/upload',
     filesUploadMedia: '/api/files/upload-media',
     onboardingPreflight: '/api/onboarding/preflight',
@@ -270,6 +281,12 @@ export function chatPermissionGrantsPath(sessionId: string, key?: string): strin
     return key === undefined ? path : `${path}?key=${encodeURIComponent(key)}`;
 }
 
+export function chatSpendingPath(sessionId: string, since: string, model: string | null): string {
+    const query = new URLSearchParams({ since });
+    if (model) query.set('model', model);
+    return `${ENDPOINTS.spendingChat.replace('{session_id}', encodeURIComponent(sessionId))}?${query}`;
+}
+
 export function cloudPricesPath(provider: string): string {
     return ENDPOINTS.cloudPrices.replace('{provider}', encodeURIComponent(provider));
 }
@@ -300,18 +317,39 @@ export function sessionDocumentsPath(sessionId: string): string {
     return ENDPOINTS.sessionDocuments.replace('{session_id}', encodeURIComponent(sessionId));
 }
 
+export function sessionOutputsPath(sessionId: string): string {
+    return ENDPOINTS.sessionOutputs.replace('{session_id}', encodeURIComponent(sessionId));
+}
+
 export function sessionCapabilitiesPath(sessionId: string): string {
     return ENDPOINTS.sessionCapabilities.replace('{session_id}', encodeURIComponent(sessionId));
 }
 
-export function sessionEnvironmentPath(sessionId: string, part?: 'folderRemove' | 'internet'): string {
+export function sessionEnvironmentPath(sessionId: string, part?: 'folderRemove' | 'folders' | 'internet'): string {
     const template =
-        part === 'folderRemove' ? ENDPOINTS.sessionEnvironmentFolderRemove : part === 'internet' ? ENDPOINTS.sessionEnvironmentInternet : ENDPOINTS.sessionEnvironment;
+        part === 'folderRemove'
+            ? ENDPOINTS.sessionEnvironmentFolderRemove
+            : part === 'folders'
+              ? ENDPOINTS.sessionEnvironmentFolders
+              : part === 'internet' ? ENDPOINTS.sessionEnvironmentInternet : ENDPOINTS.sessionEnvironment;
     return template.replace('{session_id}', encodeURIComponent(sessionId));
 }
 
 export function sessionChangesPath(sessionId: string): string {
     return ENDPOINTS.sessionChanges.replace('{session_id}', encodeURIComponent(sessionId));
+}
+
+const CHANGES_PARTS = {
+    git: ENDPOINTS.sessionChangesGit,
+    gitCommit: ENDPOINTS.sessionChangesGitCommit,
+    gitPr: ENDPOINTS.sessionChangesGitPr,
+    total: ENDPOINTS.sessionChangesTotal,
+    undoAll: ENDPOINTS.sessionChangesUndoAll,
+};
+
+/** The chat-wide Changes calls: the running total, Undo all and the git actions. */
+export function sessionChangesPartPath(sessionId: string, part: keyof typeof CHANGES_PARTS): string {
+    return CHANGES_PARTS[part].replace('{session_id}', encodeURIComponent(sessionId));
 }
 
 export function sessionChangesDiffPath(sessionId: string, turnId: string): string {
@@ -320,6 +358,10 @@ export function sessionChangesDiffPath(sessionId: string, turnId: string): strin
 
 export function sessionChangesUndoPath(sessionId: string, turnId: string): string {
     return ENDPOINTS.sessionChangesUndo.replace('{session_id}', encodeURIComponent(sessionId)).replace('{turn_id}', encodeURIComponent(turnId));
+}
+
+export function sessionExportPath(sessionId: string): string {
+    return ENDPOINTS.sessionExport.replace('{session_id}', encodeURIComponent(sessionId));
 }
 
 export function sessionPinPath(sessionId: string): string {
@@ -407,6 +449,8 @@ export const SCHEDULE_RESULTS_LIMIT = 20;
 
 /** How often to re-read the schedules while their screen is open, so counts and times follow the PC. */
 export const SCHEDULES_POLL_MS = 10_000;
+/** How often the app, while open, re-reads the schedules and which chats are running, as the web's app-wide poll does (30 s). */
+export const APP_POLL_MS = 30_000;
 /** How often the goal store's health is re-read, as the web's does (30 s). */
 export const GOAL_HEALTH_POLL_MS = 30_000;
 
@@ -418,7 +462,7 @@ export const DISCORD_LIVE_STATES: ReadonlySet<string> = new Set(['starting', 'pa
 export const PROFILE_STREAM_IDLE_MS = 5 * 60_000;
 export const MEMORY_NOTICE_MS = 4_000;
 export const MEMORY_ERROR_NOTICE_MS = 8_000;
-/** How long a Delete button waits for its "Confirm?" press; the web UI's CONFIRM_DELETE_MS. */
+/** How long a Delete button waits for its "Confirm?" press; the web UI now confirms in a dialog. */
 export const CONFIRM_DELETE_MS = 8000;
 /** How often the model status pill re-reads the model server while its sheet is open, and while it is closed. */
 export const MODEL_STATUS_OPEN_POLL_MS = 3_000;

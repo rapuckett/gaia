@@ -19,6 +19,7 @@ import {
     ListSkeleton,
     LoadingState,
     Notice,
+    SettingsGroup,
     ProgressLine,
     Screen,
     SectionHeader,
@@ -78,7 +79,7 @@ export function ListsGallery() {
                     <ListRow title={long} subtitle={t('logs.hint.service')} onPress={() => {}} selected />
                     <ListRow title={t('modelStatus.model')} subtitle={t('chatError.connection')} subtitleTone="danger" onPress={() => {}} />
                     <ListRow title="quarterly-report.pdf" subtitle={t('row.status.running')} selected trailing={<Icon icon={Copy} />} onPress={() => {}} />
-                    <ListRow title={long} titleLines={2} subtitle={t('env.offline')} trailing={<Badge label="12" />} />
+                    <ListRow title={long} titleLines={2} subtitle={t('env.offline')} trailing={<Badge label="12" shape="pill" />} />
                 </Section>
 
                 <Section title="StatusDot">
@@ -93,7 +94,7 @@ export function ListsGallery() {
                         <Badge label={t('modelMenu.ready')} tone="success" />
                         <Badge label={t('settings.custom.warning')} tone="warning" />
                         <Badge label={t('activity.filter.error')} tone="danger" />
-                        <Badge label="9" />
+                        <Badge label="9" shape="pill" />
                     </Row>
                 </Section>
 
@@ -102,7 +103,7 @@ export function ListsGallery() {
                         <SectionList
                             sections={sections}
                             keyExtractor={(item, i) => `${item}${i}`}
-                            renderSectionHeader={({ section }) => <SectionHeader title={section.title} trailing={<Badge label={String(section.data.length)} />} />}
+                            renderSectionHeader={({ section }) => <SectionHeader title={section.title} trailing={<Badge shape="pill" label={String(section.data.length)} />} />}
                             renderItem={({ item }) => <ListRow title={item} onPress={() => {}} />}
                         />
                     </View>
@@ -131,6 +132,7 @@ export function ListsGallery() {
                 <Section title="Notice">
                     <Notice tone="info" title={t('notifications.filter.info')} message={t('logs.privacy')} />
                     <Notice tone="warning" title={t('settings.custom.warning')} message={long} action={{ label: t('docs.retry'), onPress: () => {} }} />
+                    <Notice variant="card" tone="warning" title={t('settings.custom.warning')} message={t('chatError.connection')} />
                     <Notice tone="danger" title={t('activity.filter.error')} message={t('logs.reason.notRunning')} />
                     <Notice tone="success" title={t('activity.filter.success')} />
                     {noticeOpen ? <Notice tone="info" title={t('notifications.filter.info')} message={long} onDismiss={() => setNoticeOpen(false)} /> : null}
@@ -158,7 +160,10 @@ export function ListsGallery() {
                 </Section>
 
                 <Section title="Disclosure">
-                    <Disclosure title={t('code.collapse')} open={open} onToggle={() => setOpen(!open)} trailing={<Badge label="2" />}>
+                    <SettingsGroup title={t('modelStatus.model')} hint={t('logs.hint.service')} count={3} open={open} onToggle={() => setOpen(!open)}>
+                        <Text tone="secondary">{t('logs.privacy')}</Text>
+                    </SettingsGroup>
+                    <Disclosure title={t('code.collapse')} open={open} onToggle={() => setOpen(!open)} trailing={<Badge label="2" shape="pill" />}>
                         <Text tone="secondary">{t('logs.hint.service')}</Text>
                     </Disclosure>
                     <Disclosure title={long} open={closed} onToggle={() => setClosed(!closed)}>

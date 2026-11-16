@@ -18,6 +18,7 @@ import { AnswerCards } from './cards/RenderCard';
 import { chatErrorText, isModelServerDown } from './chatErrors';
 import { StoppedNote } from './EndingNotes';
 import { Markdown } from './markdown/Markdown';
+import { RecordingProgress } from './recording/RecordingProgress';
 import type { TurnTail as Tail } from './tailState';
 
 export interface TurnTailProps {
@@ -42,6 +43,7 @@ export function TurnTail({ tail, line, awaitingUser = false, onTryAgain, onConti
     return (
         <Stack gap="sm" paddingX="lg" paddingY="xs" testID="turn-tail">
             <ActivityTimeline steps={steps} running={tail.live} awaitingUser={awaitingUser} answer={tail.text} />
+            {tail.live ? <RecordingProgress events={tail.events} /> : null}
             <AnswerCards cards={cards} />
             {tail.text ? <Markdown text={tail.text} streaming={tail.live} /> : null}
             {showLine ? (
