@@ -3,7 +3,6 @@
 
 import { useState } from 'react';
 
-import { formatSize } from '@webui/components/setup/format';
 import { isolate } from '@webui/i18n/registry';
 import type { SetupTest } from '@webui/types';
 
@@ -16,7 +15,7 @@ import { SetupFooter } from '../SetupFooter';
 import type { SetupStepContext } from '../SetupScreen';
 import { useConfirmSheet } from '../sheets/ConfirmSheet';
 import { SetupLogs } from '../sheets/SetupLogs';
-import { rerunOptions, testView, whyKey } from './testView';
+import { redownloadBody, rerunOptions, testView, whyKey } from './testView';
 
 type Shown = SetupTest['state'] | 'waiting';
 
@@ -93,7 +92,7 @@ export function TestStep({ ctx }: { ctx: SetupStepContext }) {
         const name = nameOf(id);
         const yes = await ask({
             title: t('setup.redownload.title', { name }),
-            body: [t('setup.redownload.body', { name, size: size != null ? isolate(formatSize(size), 'ltr') : '' })],
+            body: [redownloadBody(t, name, size ?? null)],
             confirmLabel: t('setup.redownload.confirm'),
             cancelLabel: t('setup.redownload.keep'),
             danger: true,

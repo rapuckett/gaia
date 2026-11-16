@@ -1,12 +1,13 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { render, screen } from '@testing-library/react-native';
+import { render, screen, within } from '@testing-library/react-native';
 import type { ReactNode } from 'react';
 import { Platform } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import type { DocumentListResponse } from '@/api/client.types';
+import { AX_FONT_SCALE, atFontScale } from '@/test-support/fontScale';
 import { Text, ThemeProvider } from '@/ui';
 
 import { DocumentRow } from './DocumentRow';
@@ -57,5 +58,43 @@ describeNative('DocumentRow indexing progress', () => {
             { wrapper: wrap },
         );
         expect(screen.getByText(/\u206638%\u2069/)).toBeTruthy();
+    });
+});
+
+const complete = {
+    id: 'c',
+    filename: 'd4-demo-trip-planning-notes-final.txt',
+    filepath: '/docs/d4-demo-trip-planning-notes-final.txt',
+    file_size: 2048,
+    chunk_count: 3,
+    indexed_at: null,
+    indexing_status: 'complete',
+} as unknown as Doc;
+
+const renderComplete = () =>
+    render(<DocumentRow document={complete} now={Date.now()} retrying={false} onPreview={jest.fn()} onCancel={jest.fn()} onRetry={jest.fn()} onRemove={jest.fn()} />, { wrapper: wrap });
+
+describeNative('DocumentRow name and actions', () => {
+    afterEach(() => jest.restoreAllMocks());
+
+    it('caps the name at two lines and ellipsizes in the middle so the extension stays', async () => {
+        await renderComplete();
+        const name = screen.getByText(/\.txt/) as unknown as { props: { numberOfLines?: number; ellipsizeMode?: string } };
+        expect(name.props.numberOfLines).toBe(2);
+        expect(name.props.ellipsizeMode).toBe('middle');
+    });
+
+    it('at normal size the actions sit beside the name', async () => {
+        await renderComplete();
+        expect(within(screen.getByTestId('doc-row-main')).queryByTestId('doc-actions')).not.toBeNull();
+    });
+
+    it('at large text the actions move to their own row after the name', async () => {
+        atFontScale(AX_FONT_SCALE);
+        await renderComplete();
+        expect(within(screen.getByTestId('doc-row-main')).queryByTestId('doc-actions')).toBeNull();
+        expect(screen.getByTestId('doc-actions')).toBeTruthy();
+        const name = screen.getByText(/\.txt/) as unknown as { props: { numberOfLines?: number } };
+        expect(name.props.numberOfLines).toBe(2);
     });
 });

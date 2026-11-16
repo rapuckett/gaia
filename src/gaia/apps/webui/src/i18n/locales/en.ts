@@ -3996,6 +3996,7 @@ export const enMessages = {
     'mobileApp.setup.check.title': 'Check your PC',
     'mobileApp.setup.lostContactNoReason': 'Lost contact with GAIA.',
     'mobileApp.setup.pc.step': 'Your PC',
+    'mobileApp.setup.redownload.body': '{name} downloaded but didn’t load. GAIA deletes the copy on your PC and downloads it again {size}.',
     'mobileApp.settings.pcOnly': 'Change this on the PC running GAIA.',
     'mobileApp.settings.on': 'On',
     'mobileApp.settings.off': 'Off',
