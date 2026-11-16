@@ -3855,7 +3855,7 @@ const messages: Messages = {
     'mobileApp.settings.comingSoon': 'هذا القسم قادم إلى الهاتف قريبًا. في الوقت الحالي، غيّره من الكمبيوتر الذي يشغّل GAIA.',
     'mobileApp.settings.automations.body': 'لا يعرض تطبيق الهاتف الأتمتة ولا يغيّرها. راجعها على الكمبيوتر لديك.',
     'mobileApp.android.title': 'GAIA على أندرويد قادم لاحقًا',
-    'mobileApp.android.body': 'الاقتران مع جهاز الكمبيوتر يعمل على آيفون اليوم. الدعم لأندرويد في الطريق.',
+    'mobileApp.android.body': 'يعمل الاقتران مع الكمبيوتر لديك على آيفون حاليًا، ودعم أندرويد في الطريق.',
     'mobileApp.about.links': 'الروابط',
     'mobileApp.about.whatsNew': 'ما الجديد',
     'mobileApp.about.docs': 'التوثيق',
