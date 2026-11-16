@@ -20,6 +20,8 @@ export interface ListRowProps {
     onLongPress?: () => void;
     selected?: boolean;
     titleLines?: number;
+    /** Let a long subtitle wrap to this many lines instead of truncating. */
+    subtitleLines?: number;
     /** Semibold title, e.g. an unread chat. */
     emphasized?: boolean;
     accessibilityLabel?: string;
@@ -36,6 +38,7 @@ export function ListRow({
     onLongPress,
     selected,
     titleLines = 1,
+    subtitleLines = 1,
     emphasized,
     accessibilityLabel,
     testID,
@@ -48,8 +51,6 @@ export function ListRow({
                 paddingHorizontal: space.lg,
                 paddingVertical: space.sm,
                 backgroundColor: selected ? colors.bgActive : 'transparent',
-                borderStartWidth: 3,
-                borderStartColor: selected ? colors.accentSolid : 'transparent',
                 justifyContent: 'center',
             }}
         >
@@ -60,7 +61,7 @@ export function ListRow({
                         {title}
                     </Text>
                     {subtitle ? (
-                        <Text role="caption" tone={subtitleTone} numberOfLines={1}>
+                        <Text role="caption" tone={subtitleTone} numberOfLines={subtitleLines}>
                             {subtitle}
                         </Text>
                     ) : null}

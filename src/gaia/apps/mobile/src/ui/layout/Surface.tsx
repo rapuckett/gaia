@@ -7,7 +7,7 @@ import { useTheme, type Theme } from '../theme/ThemeProvider';
 import type { Space } from '../tokens/space';
 import { Pressable } from '../controls/Pressable';
 
-export type SurfaceTone = 'primary' | 'secondary' | 'card' | 'recessed' | 'userMsg';
+export type SurfaceTone = 'primary' | 'secondary' | 'card' | 'recessed' | 'userMsg' | 'accent';
 export type Elevation = 'none' | 'sm' | 'md' | 'lg';
 
 export interface SurfaceProps {
@@ -32,6 +32,7 @@ export function useSurfaceStyle({ tone = 'primary', radius, padding, border, ele
         card: colors.bgCard,
         recessed: colors.bgRecessed,
         userMsg: colors.bgUserMsg,
+        accent: colors.accentDim,
     }[tone];
     return {
         backgroundColor: bg,
@@ -62,13 +63,19 @@ export function Surface(props: SurfaceProps) {
 export interface CardProps {
     children?: ReactNode;
     padding?: Space;
+    /** `flat` is the desktop's bordered content card; `raised` keeps a soft shadow for a card that floats. */
+    variant?: 'flat' | 'raised';
     onPress?: () => void;
     accessibilityLabel?: string;
     testID?: string;
 }
 
-export function Card({ children, padding = 'lg', onPress, accessibilityLabel, testID }: CardProps) {
-    const style = useSurfaceStyle({ tone: 'card', radius: 'lg', padding, elevation: 'sm' });
+export function Card({ children, padding = 'lg', variant = 'flat', onPress, accessibilityLabel, testID }: CardProps) {
+    const style = useSurfaceStyle(
+        variant === 'raised'
+            ? { tone: 'card', radius: 'lg', padding, elevation: 'sm' }
+            : { tone: 'card', radius: 'lg', padding, border: true },
+    );
     if (!onPress) {
         return (
             <View style={style} testID={testID}>
@@ -83,8 +90,10 @@ export function Card({ children, padding = 'lg', onPress, accessibilityLabel, te
     );
 }
 
-export function Divider({ inset = false, vertical = false }: { inset?: boolean; vertical?: boolean }) {
+/** `accent` and `clear` are the 2 px underline of a tab strip: drawn in the accent color, or kept as empty space. */
+export function Divider({ inset = false, vertical = false, line }: { inset?: boolean; vertical?: boolean; line?: 'accent' | 'clear' }) {
     const { colors, space } = useTheme();
+    if (line) return <View style={{ height: 2, backgroundColor: line === 'accent' ? colors.accent : 'transparent' }} />;
     if (vertical) return <View style={{ width: 3, alignSelf: 'stretch', borderRadius: 2, backgroundColor: colors.border }} />;
     return <View style={{ height: 1, backgroundColor: colors.borderLight, marginStart: inset ? space.lg : 0 }} />;
 }

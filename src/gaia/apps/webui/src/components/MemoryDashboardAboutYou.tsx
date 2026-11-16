@@ -19,7 +19,7 @@ import {
 } from '../utils/memoryFormat.core';
 
 // Re-exported for the callers and tests that read them from here.
-export { dueLabel, FORGOTTEN_QUOTE_CHARS, oneLineQuote, sourceKey, type AboutYouItem } from '../utils/memoryFormat.core';
+export { dueLabel, FORGOTTEN_QUOTE_CHARS, MEMORY_SOURCE_KEYS, oneLineQuote, sourceKey, type AboutYouItem } from '../utils/memoryFormat.core';
 
 interface Props {
     memoryEnabled: boolean;
@@ -216,7 +216,7 @@ export function MemoryDashboardAboutYou({ memoryEnabled, reloadKey, onChanged, o
             >
                 <input
                     className="mem-input"
-                    placeholder={t('mem.about.addPlaceholder')}
+                    placeholder={t.bare('mem.about.addPlaceholder')}
                     aria-label={t('mem.about.addLabel')}
                     value={newText}
                     onChange={e => setNewText(e.target.value)}

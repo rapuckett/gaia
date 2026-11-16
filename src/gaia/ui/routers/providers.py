@@ -29,6 +29,7 @@ import requests
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
+from gaia.llm.hybrid import HybridConfigError, is_hybrid_model
 from gaia.llm.local_only import (
     blocked_reason,
     cloud_blocked,
@@ -180,22 +181,44 @@ def _lemonade(
 
 
 def _cloud_error(
-    provider: str, status: int, body: Dict[str, Any], echo_body: bool = True
+    provider: str,
+    status: int,
+    body: Dict[str, Any],
+    echo_body: bool = True,
+    *,
+    install: bool = False,
 ) -> ProviderError:
-    """*echo_body* False for calls that carried a key: Lemonade may echo the request."""
+    """*echo_body* False for calls that carried a key: Lemonade may echo the request.
+
+    *install* is set for ``POST /install``, where a 404 means the endpoint is
+    missing and the version hint is always right. On the auth routes a 404 can
+    also mean the provider was never registered, which needs a registration hint.
+    """
     name = _NAMES[provider]
     if status in (401, 403):
         return ProviderError(f"{name} rejected the key. Check it and try again.", 401)
+    detail = body.get("error")
+    detail = detail if isinstance(detail, dict) else {}
+    message = detail.get("message")
+    error_type = detail.get("type")
     if status == 404:
         from gaia.llm.lemonade_launcher import describe_upgrade_hint
         from gaia.version import LEMONADE_MIN_VERSION
 
-        return ProviderError(
-            "This Lemonade cannot register cloud providers, so it is older than "
-            f"v{LEMONADE_MIN_VERSION}, the oldest version GAIA supports. "
-            f"{describe_upgrade_hint()}",
-            409,
-        )
+        if not install and isinstance(message, str) and "is not installed" in message:
+            return ProviderError(
+                f"Lemonade has no cloud provider registered for {name}, so it "
+                "cannot accept a key yet. Open Settings > Model and connect it "
+                "again, then try again.",
+                409,
+            )
+        if install or not error_type or error_type == "not_found":
+            return ProviderError(
+                "This Lemonade cannot register cloud providers, so it is older than "
+                f"v{LEMONADE_MIN_VERSION}, the oldest version GAIA supports. "
+                f"{describe_upgrade_hint()}",
+                409,
+            )
     if status == 409:
         from gaia.llm.cloud_keys import env_var_for
 
@@ -205,8 +228,7 @@ def _cloud_error(
             "the key blank to keep using it.",
             409,
         )
-    detail = (body.get("error") or {}) if isinstance(body.get("error"), dict) else {}
-    message = (detail.get("message") if echo_body else None) or f"HTTP {status}"
+    message = (message if echo_body else None) or f"HTTP {status}"
     return ProviderError(f"Lemonade could not configure {name}: {message}.", 502)
 
 
@@ -458,19 +480,22 @@ def _gateway_check_applies() -> bool:
     return local and not urllib.request.getproxies()
 
 
-def _with_network(view: Dict[str, Any]) -> Dict[str, Any]:
-    """Say whether the AMD gateway can be reached, before anyone picks it."""
+def _gateway_network(base_url: Optional[str]) -> Dict[str, Any]:
+    """Whether the AMD gateway can be reached, and why not; ``None`` when unchecked."""
     from gaia.llm.gateway import GatewayUnreachable
 
     if not _gateway_check_applies():
-        view["network"] = {"reachable": None, "detail": None}
-        return view
+        return {"reachable": None, "detail": None}
     try:
-        check_gateway_reachable(view.get("base_url"))
+        check_gateway_reachable(base_url)
     except (GatewayUnreachable, ValueError) as e:
-        view["network"] = {"reachable": False, "detail": str(e)}
-    else:
-        view["network"] = {"reachable": True, "detail": None}
+        return {"reachable": False, "detail": str(e)}
+    return {"reachable": True, "detail": None}
+
+
+def _with_network(view: Dict[str, Any]) -> Dict[str, Any]:
+    """Say whether the AMD gateway can be reached, before anyone picks it."""
+    view["network"] = _gateway_network(view.get("base_url"))
     return view
 
 
@@ -501,6 +526,7 @@ def _suggested_local_models() -> set:
 
 def _list_models(provider: str, *, offer_optional: bool = True) -> List[Dict[str, Any]]:
     """Chat models for *provider*; *offer_optional* adds the optional ones that fit."""
+    from gaia.installer import model_choice
     from gaia.llm.lemonade_client import (
         NPU_MODEL_LADDER,
         _model_ids_match,
@@ -516,6 +542,7 @@ def _list_models(provider: str, *, offer_optional: bool = True) -> List[Dict[str
     if status >= 400:
         failed = _ModelListFailed if status >= 500 else ProviderError
         raise failed(f"Lemonade answered /models with HTTP {status}.")
+    listed = _model_entries(body)
     offered: List[str] = []
     if provider == LOCAL:
         offered = [*_suggested_local_models()]
@@ -525,7 +552,7 @@ def _list_models(provider: str, *, offer_optional: bool = True) -> List[Dict[str
     offered += [e["id"] for e in added]
     npu_kept = [*NPU_MODEL_LADDER, *offered, *_last_local_model()]
     out: List[Dict[str, Any]] = []
-    for m in body.get("data") or []:
+    for m in listed:
         model_id = str(m.get("id") or "")
         if not model_id or not _is_chat_model(m):
             continue
@@ -551,7 +578,7 @@ def _list_models(provider: str, *, offer_optional: bool = True) -> List[Dict[str
                 "downloaded": bool(m.get("downloaded")) or is_cloud,
                 "labels": list(m.get("labels") or []),
                 "recipe": m.get("recipe"),
-                "size_gb": m.get("size"),
+                "size_gb": model_choice.download_size_gb(model_id, m.get("size")),
                 "rank": ranked[0] if ranked else None,
                 "note": ranked[1].note if ranked else None,
                 "evidence": ranked[1].evidence if ranked else None,
@@ -574,7 +601,7 @@ def _list_models(provider: str, *, offer_optional: bool = True) -> List[Dict[str
                     "labels": [],
                     "recipe": (req.recipe if req else None)
                     or ("flm" if runs_on_npu(model_id) else None),
-                    "size_gb": req.size_gb if req else None,
+                    "size_gb": model_choice.download_size_gb(model_id, None),
                     "rank": None,
                     "note": None,
                     "evidence": None,
@@ -589,6 +616,16 @@ def _list_models(provider: str, *, offer_optional: bool = True) -> List[Dict[str
         _rank_gateway_models(out)
     out.sort(key=lambda x: (x["rank"] is None, x["rank"] or 0, x["id"].lower()))
     return out
+
+
+def _model_entries(body: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """The model entries of a ``/models`` answer; a malformed one is named, not a 500."""
+    from .system import _catalog_entries
+
+    try:
+        return _catalog_entries(body)
+    except ValueError as e:
+        raise ProviderError(str(e)) from e
 
 
 def _last_local_model() -> List[str]:
@@ -667,7 +704,8 @@ def cloud_provider_name(model_id: str) -> Optional[str]:
     provider = provider_of(model_id)
     if provider != LOCAL:
         return _NAMES[provider]
-    return _ui_cloud_provider(model_id)
+    cloud = _ui_cloud_provider(model_id)
+    return _NAMES.get(cloud, cloud) if cloud else None
 
 
 def _is_cloud_model(model_id: str) -> bool:
@@ -699,13 +737,15 @@ def model_label(model_id: str) -> str:
     cloud = cloud_provider_name(model_id)
     if cloud is None:
         return f"{model_id} · local"
-    return f"{model_id.split('.', 1)[1].rsplit('/', 1)[-1]} · {cloud}"
+    return f"{display_name(model_id)} · {cloud}"
 
 
 def display_name(model_id: str) -> str:
     """The name a person reads: friendly for local models, bare for cloud ones."""
     from ..local_models import friendly_name
 
+    if is_hybrid_model(model_id):
+        return "Hybrid"
     if cloud_provider_name(model_id) is None:
         return friendly_name(model_id)
     return model_id.split(".", 1)[1].rsplit("/", 1)[-1]
@@ -720,7 +760,9 @@ def _active_view(db: ChatDatabase) -> Dict[str, Any]:
     try:
         # The model a new chat starts on, so the chip never names another.
         model = chosen or resolved_default_model()
-    except GaiaConfigError as e:
+        _learn_cloud_models(model)
+        cloud = cloud_provider_name(model)
+    except (GaiaConfigError, HybridConfigError) as e:
         # A new chat cannot start either; say why rather than name a model.
         return {
             "provider": LOCAL,
@@ -732,8 +774,6 @@ def _active_view(db: ChatDatabase) -> Dict[str, Any]:
             "is_default": True,
             "config_error": str(e),
         }
-    _learn_cloud_models(model)
-    cloud = cloud_provider_name(model)
     return {
         # The provider tab; ``local`` for a cloud provider GAIA has no tab for.
         "provider": provider_of(model),
@@ -884,7 +924,8 @@ def _check_model_available(model_id: str) -> Optional[str]:
     except ProviderError as e:
         if e.status == 503 or isinstance(e, _ModelListFailed):
             raise _ServerNotReady(str(e)) from e
-        return str(e)
+        # Callers end the sentence themselves.
+        return str(e).rstrip(".")
     except CloudKeyError as e:
         if "not reachable" in str(e):
             raise _ServerNotReady(str(e)) from e
@@ -1336,6 +1377,12 @@ def list_providers(db: ChatDatabase = Depends(get_db)) -> Dict[str, Any]:
     }
 
 
+class ProviderSummaryNetwork(BaseModel):
+    """``reachable`` is None when the check doesn't apply to this PC."""
+
+    reachable: Optional[bool]
+
+
 class ProviderSummary(BaseModel):
     """A provider as a paired device may see it: no key, key hint or address."""
 
@@ -1347,6 +1394,8 @@ class ProviderSummary(BaseModel):
     configured: bool
     #: Local only is on, so this cloud provider can't be used.
     blocked: bool
+    #: AMD only: whether its gateway answers; no detail, which can name the address.
+    network: Optional[ProviderSummaryNetwork] = None
 
 
 class ProviderSummaryList(BaseModel):
@@ -1382,6 +1431,15 @@ def list_provider_summaries() -> Dict[str, Any]:
                 "configured": provider == LOCAL
                 or bool(entry and entry.get("models_discovered")),
                 "blocked": provider != LOCAL and blocked,
+                "network": (
+                    {
+                        "reachable": _gateway_network(
+                            entry.get("base_url") if entry else None
+                        )["reachable"]
+                    }
+                    if provider == AMD
+                    else None
+                ),
             }
         )
     return {"providers": summaries, "lemonade_error": lemonade_error}
@@ -1443,7 +1501,7 @@ def _install(provider: str, registration: Dict[str, Any]) -> None:
         },
     )
     if status >= 400:
-        raise _cloud_error(provider, status, result)
+        raise _cloud_error(provider, status, result, install=True)
 
 
 # Can restore and persist the last model, so a cross-site GET must not reach it.
@@ -2139,7 +2197,7 @@ def _trained_window(model_id: str) -> Optional[int]:
             f"the context sizes {model_id} was trained for. Try again once the "
             "local model server is answering."
         )
-    for m in body.get("data") or []:
+    for m in _model_entries(body):
         if _model_ids_match(str(m.get("id") or ""), model_id):
             # ``context_length`` is the configured window; this is the trained one.
             window = m.get("max_context_window")
@@ -2304,7 +2362,7 @@ def _lemonade_catalog() -> List[Dict[str, Any]]:
     status, body = _lemonade("GET", "models?show_all=true")
     if status >= 400:
         raise ProviderError(f"Lemonade answered /models with HTTP {status}.")
-    return list(body.get("data") or [])
+    return _model_entries(body)
 
 
 def _catalog_recipes(model_id: str) -> List[Optional[str]]:
@@ -2518,6 +2576,8 @@ def local_status(db: ChatDatabase = Depends(get_db)) -> Dict[str, Any]:
         "memory_error": None,
         "error": None,
         "error_detail": None,
+        # "model_server_down" lets the UI word that failure in its own language.
+        "error_cause": None,
         "base_url": None,
         "owner": None,
         "busy": False,
@@ -2543,6 +2603,7 @@ def local_status(db: ChatDatabase = Depends(get_db)) -> Dict[str, Any]:
             else str(e)
         )
         view["error_detail"] = str(e)
+        view["error_cause"] = "model_server_down" if down else None
         return view
     entry = _chat_entry(health)
     warming = warmup.warm_up_status().get("state") == warmup.WARMING

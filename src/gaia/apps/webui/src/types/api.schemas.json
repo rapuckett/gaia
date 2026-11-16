@@ -748,6 +748,17 @@
         ],
         "title": "Narration"
       },
+      "needsModel": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Needsmodel"
+      },
       "planNarrations": {
         "anyOf": [
           {
@@ -6291,6 +6302,16 @@
         ],
         "title": "Retried"
       },
+      "route": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/TurnRouteResponse"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
       "seconds": {
         "anyOf": [
           {
@@ -6337,6 +6358,17 @@
       "status": {
         "title": "Status",
         "type": "string"
+      },
+      "step": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Step"
       }
     },
     "required": [
@@ -9987,9 +10019,34 @@
   "PolicyNotice": {
     "description": "Structured Local only notice translated by the Agent UI.",
     "properties": {
+      "cause": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Cause"
+      },
       "code": {
         "title": "Code",
         "type": "string"
+      },
+      "models": {
+        "anyOf": [
+          {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Models"
       },
       "reason": {
         "anyOf": [
@@ -11219,6 +11276,16 @@
         "title": "Name",
         "type": "string"
       },
+      "network": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/ProviderSummaryNetwork"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
       "privacy_notice": {
         "title": "Privacy Notice",
         "type": "string"
@@ -11264,6 +11331,27 @@
       "providers"
     ],
     "title": "ProviderSummaryList",
+    "type": "object"
+  },
+  "ProviderSummaryNetwork": {
+    "description": "``reachable`` is None when the check doesn't apply to this PC.",
+    "properties": {
+      "reachable": {
+        "anyOf": [
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Reachable"
+      }
+    },
+    "required": [
+      "reachable"
+    ],
+    "title": "ProviderSummaryNetwork",
     "type": "object"
   },
   "ProviderView": {
@@ -17193,6 +17281,35 @@
       "tool"
     ],
     "title": "TurnFileChange",
+    "type": "object"
+  },
+  "TurnRouteResponse": {
+    "description": "The model a ``hybrid`` turn was routed to, and why.",
+    "properties": {
+      "degraded": {
+        "default": false,
+        "title": "Degraded",
+        "type": "boolean"
+      },
+      "model": {
+        "title": "Model",
+        "type": "string"
+      },
+      "notice": {
+        "default": "",
+        "title": "Notice",
+        "type": "string"
+      },
+      "reason": {
+        "default": "",
+        "title": "Reason",
+        "type": "string"
+      }
+    },
+    "required": [
+      "model"
+    ],
+    "title": "TurnRouteResponse",
     "type": "object"
   },
   "TurnSummaryCost": {

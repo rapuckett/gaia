@@ -18,7 +18,10 @@ export interface NativePairAnswer {
     body: string;
 }
 
-/** Rejections carry `code`: pin_mismatch, unreachable, not_home_network, network, aborted, not_paired, origin_mismatch, keychain, invalid_pin, bad_response, unknown_request. */
+/** A piece of a request body: text sent as UTF-8, or a `file://` file on this device sent from disk. */
+export type NativeBodySegment = { text: string } | { file: string };
+
+/** Rejections carry `code`: pin_mismatch, unreachable, not_home_network, not_home_origin, network, aborted, not_paired, origin_mismatch, keychain, invalid_pin, bad_response, unknown_request, upload_file. */
 export interface GaiaTransportNative {
     pair(pcId: string, origins: string[], pin: string, headers: Record<string, string>, body: string): Promise<NativePairAnswer>;
     start(
@@ -29,11 +32,24 @@ export interface GaiaTransportNative {
         headers: Record<string, string>,
         body: string | null,
     ): Promise<NativeResponseHead>;
+    /** As `start`, with the body the segments joined in order. Missing from builds made before uploads. */
+    upload?(
+        id: string,
+        pcId: string,
+        method: string,
+        url: string,
+        headers: Record<string, string>,
+        segments: NativeBodySegment[],
+    ): Promise<NativeResponseHead>;
     /** The body received since the last read; null once it has all arrived. */
     read(id: string): Promise<Uint8Array | null>;
     cancel(id: string): void;
     isPaired(pcId: string): boolean;
     drop(pcId: string): Promise<void>;
+    /** Deletes every paired-PC secret this app holds, whatever its id. */
+    dropAll(): Promise<void>;
+    /** Moves the secret `pair` saved under `stagedId` to `pcId`, replacing what `pcId` had. */
+    promote(stagedId: string, pcId: string): Promise<void>;
 }
 
 const UNSUPPORTED =
@@ -48,10 +64,13 @@ function unsupported(): never {
 const STUB: GaiaTransportNative = {
     pair: async () => unsupported(),
     start: async () => unsupported(),
+    upload: async () => unsupported(),
     read: async () => unsupported(),
     cancel: () => unsupported(),
     isPaired: () => unsupported(),
     drop: async () => unsupported(),
+    dropAll: async () => unsupported(),
+    promote: async () => unsupported(),
 };
 
 const native = Platform.OS === 'ios' ? requireOptionalNativeModule<GaiaTransportNative>('GaiaTransport') : null;

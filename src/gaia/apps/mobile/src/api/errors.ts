@@ -58,12 +58,19 @@ export class GaiaPinMismatchError extends GaiaError {
     }
 }
 
-/** A file upload to a paired PC: the pinned transport sends text bodies only for now. */
+/** A file upload to a paired PC this app can't send: the app build predates uploads, or the file isn't on disk. */
 export class GaiaUploadUnsupportedError extends GaiaError {
     readonly code = 'unsupported_body';
 
     constructor() {
         super('mobileApp.pairing.uploadUnsupported', {});
+    }
+}
+
+/** A production build has no pinned transport, and the app won't send a request to the PC without it. */
+export class GaiaTransportMissingError extends GaiaError {
+    constructor() {
+        super('mobileApp.pairing.transportMissing', {});
     }
 }
 

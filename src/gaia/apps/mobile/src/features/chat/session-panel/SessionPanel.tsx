@@ -23,12 +23,12 @@ export function SessionPanel({ sessionId, open, onClose, wrap }: SessionPanelPro
     const t = useT();
     return (
         <Sheet open={open} onClose={onClose} title={t('sp.title')}>
-            {wrap ? wrap(<PanelBody sessionId={sessionId} />) : <PanelBody sessionId={sessionId} />}
+            {wrap ? wrap(<PanelBody sessionId={sessionId} close={onClose} />) : <PanelBody sessionId={sessionId} close={onClose} />}
         </Sheet>
     );
 }
 
-function PanelBody({ sessionId }: { sessionId: string }) {
+function PanelBody({ sessionId, close }: { sessionId: string; close: () => void }) {
     const t = useT();
     const { height } = useWindowDimensions();
     const live = useChatStream(sessionId).status !== 'idle';
@@ -42,7 +42,7 @@ function PanelBody({ sessionId }: { sessionId: string }) {
                             {t(DETAILS_HEADING)}
                         </Text>
                     ) : null}
-                    {section.render({ sessionId, live })}
+                    {section.render({ sessionId, live, close })}
                 </Fragment>
             ))}
         </Stack>

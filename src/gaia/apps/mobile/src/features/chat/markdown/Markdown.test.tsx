@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import { render, screen } from '@testing-library/react-native';
-import { Linking } from 'react-native';
+import { Alert, Linking } from 'react-native';
 
 import { CODE_COLLAPSE_LINES } from '@webui/utils/longContent';
 import { translator } from '@/i18n/useT';
@@ -40,8 +40,12 @@ describe('Markdown', () => {
         expect(screen.queryByText(/line 24/)).toBeNull();
         expect(screen.getByText('apples')).toBeTruthy();
 
-        // javascript: shows as plain text and has no press handler; https: opens.
-        expect(screen.getAllByText(/bad/).every((el) => el.props.onPress === undefined)).toBe(true);
+        // javascript: opens nothing and tells the person why; https: opens.
+        const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+        jest.spyOn(console, 'error').mockImplementation(() => undefined);
+        screen.getAllByText(/bad/).forEach((el) => el.props.onPress?.());
+        expect(alert).toHaveBeenCalledWith(t('mobileApp.link.blockedTitle'), expect.stringContaining('javascript'));
+        expect(open).not.toHaveBeenCalled();
         screen.getByText('good').props.onPress();
         expect(open).toHaveBeenCalledWith('https://example.com');
         expect(open).toHaveBeenCalledTimes(1);

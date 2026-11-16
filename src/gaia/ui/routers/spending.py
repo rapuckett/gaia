@@ -7,13 +7,14 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Literal, Optional, Union
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from .. import spending
 from ..database import ChatDatabase
 from ..dependencies import get_db
 from ..models import WireModel
+from ..security import audit_approval
 
 router = APIRouter(tags=["spending"])
 
@@ -163,13 +164,14 @@ class LimitRequest(BaseModel):
     response_model_exclude_unset=True,
 )
 def set_spending_limit(
-    body: LimitRequest, db: ChatDatabase = Depends(get_db)
+    body: LimitRequest, http_request: Request, db: ChatDatabase = Depends(get_db)
 ) -> Dict[str, Any]:
     """Set or clear the monthly limit for cloud chats."""
     try:
         spending.set_limit(db, body.limit_usd)
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e)) from e
+    audit_approval(http_request, f"cloud spending limit set to {body.limit_usd} USD")
     return _report(db)
 
 
@@ -178,9 +180,12 @@ def set_spending_limit(
     response_model=SpendingReport,
     response_model_exclude_unset=True,
 )
-def allow_spending_this_month(db: ChatDatabase = Depends(get_db)) -> Dict[str, Any]:
+def allow_spending_this_month(
+    http_request: Request, db: ChatDatabase = Depends(get_db)
+) -> Dict[str, Any]:
     """Let cloud chats go on past the limit until the month ends."""
     spending.allow_this_month(db)
+    audit_approval(http_request, "cloud spending allowed past the limit this month")
     return _report(db)
 
 
