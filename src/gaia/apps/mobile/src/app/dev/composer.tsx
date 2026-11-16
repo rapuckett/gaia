@@ -16,7 +16,7 @@ import { Divider, Screen, Stack, UIProvider } from '@/ui';
 import { Cpu } from '@/ui/icons';
 
 const FIXTURE: Attachments['items'] = [
-    { id: 'a', key: 'a', name: 'quarterly-report-final-v3.pdf', uri: '', isImage: false, isMedia: false, status: 'uploading' },
+    { id: 'a', key: 'a', name: 'quarterly-report-final-v3.pdf', uri: '', isImage: false, isMedia: false, status: 'uploading', progress: 40 },
     { id: 'b', key: 'b', name: 'standup-recording.m4a', uri: '', isImage: false, isMedia: true, status: 'uploaded' },
     { id: 'c', key: 'c', name: 'notes.doc', uri: '', isImage: false, isMedia: false, status: 'failed', error: 'This file is empty.' },
     { id: 'd', key: 'd', name: 'IMG_2041.jpg', uri: 'https://picsum.photos/id/237/48', isImage: true, isMedia: false, status: 'uploaded' },

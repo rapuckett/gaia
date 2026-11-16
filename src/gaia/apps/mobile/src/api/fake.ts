@@ -110,6 +110,13 @@ function cloneNested<T>(source: Record<string, Record<string, T>> | undefined): 
     return Object.fromEntries(Object.entries(source ?? {}).map(([key, inner]) => [key, { ...inner }]));
 }
 
+/** Half the body, then all of it, as the pinned transport reports a real upload. */
+function reportProgress(total: number, onUploadProgress?: (sent: number, total: number) => void): void {
+    if (!onUploadProgress || total <= 0) return;
+    onUploadProgress(Math.floor(total / 2), total);
+    onUploadProgress(total, total);
+}
+
 const EMPTY_PERFORMANCE: ChatPerformance = {
     latest_message_id: null,
     turns: [],
@@ -684,8 +691,9 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             sessions.unshift(session);
             return session;
         },
-        async uploadFile(file, name) {
+        async uploadFile(file, name, options) {
             if (data.uploadError) throw data.uploadError;
+            reportProgress(file.size, options?.onUploadProgress);
             uploads.push({ name, size: file.size });
             return { filename: name, original_name: name, url: `/api/files/uploads/${name}`, size: file.size, content_type: file.type, is_image: file.type.startsWith('image/') };
         },
@@ -1305,8 +1313,9 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             schedules.splice(schedules.indexOf(schedule), 1);
             return { deleted: true };
         },
-        async uploadDocument(file) {
+        async uploadDocument(file, options) {
             if (data.documentUploadError) throw data.documentUploadError;
+            reportProgress(file.size ?? 0, options?.onUploadProgress);
             uploaded.push(file);
             const doc = {
                 id: `doc-${uploaded.length}`,
