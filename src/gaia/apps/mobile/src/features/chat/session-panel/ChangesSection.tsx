@@ -103,7 +103,14 @@ function ChangesBody({ sessionId, live, changes, onUndone }: { sessionId: string
                         <Text weight="medium">{isolate(baseName(file.path), 'ltr')}</Text>
                         <Text role="caption" tone="muted" dir="auto">
                             {t(`chg.${file.change}`)}
-                            {file.additions != null ? ` · ${countsText(file.additions, file.deletions ?? 0)}` : ''}
+                            {file.additions != null ? (
+                                <>
+                                    {' · '}
+                                    <Text dir="ltr" testID={`changes-counts-${file.path}`}>
+                                        {countsText(file.additions, file.deletions ?? 0)}
+                                    </Text>
+                                </>
+                            ) : null}
                             {file.message_ids.length > 1 ? ` · ${t('chg.turns', { n: file.message_ids.length })}` : ''}
                         </Text>
                         {file.changed_since ? <Text role="caption" tone="warning" dir="auto">{t('chg.outside', { when: file.changed_since })}</Text> : null}

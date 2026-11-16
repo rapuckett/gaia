@@ -8,10 +8,11 @@ import { groupUntracked, untrackedWarning } from '@webui/utils/untrackedWork';
 import type { TurnChanges as Turn, UndoResult } from '@/api/client.types';
 import { GaiaApiError } from '@/api/errors';
 import { useTurnChanges, useUndoTurn } from '@/data';
-import { describeError, describeErrorWith, useT, type Translate } from '@/i18n/useT';
+import { describeError, useT, type Translate } from '@/i18n/useT';
 import { Button, Notice, Row, Stack, Text } from '@/ui';
 
 import { ChangesReview } from './ChangesReview';
+import { loadFailure } from './changesText';
 
 type Phase = 'idle' | 'confirm' | 'working' | 'conflict' | 'done';
 
@@ -34,9 +35,10 @@ export function TurnChanges({ sessionId, messageId, reportError = true }: { sess
 
 function LoadError({ error }: { error: unknown }) {
     const t = useT();
+    const failure = loadFailure(error, t, { withReason: 'turnChanges.loadError', noReason: 'turnChanges.loadErrorNoReason' });
     return (
         <Stack paddingY="xs">
-            <Notice tone="warning" role="note" message={t.compose((say) => say('turnChanges.loadError', { error: describeErrorWith(error, say) }))} />
+            <Notice tone="warning" role="note" message={failure.text} detail={failure.detail} testID="turn-changes-load-error" />
         </Stack>
     );
 }

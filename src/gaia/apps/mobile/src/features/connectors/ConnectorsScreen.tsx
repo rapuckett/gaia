@@ -199,7 +199,7 @@ export function ConnectorsBody({ initialExpanded }: { initialExpanded?: string }
 }
 
 /** The desktop's `.connector-tile`: a bordered row that opens a detail panel under a rule. */
-function Tile({ header, open, children }: { header: ReactNode; open?: boolean; children?: ReactNode }) {
+function Tile({ header, open, children, overlays }: { header: ReactNode; open?: boolean; children?: ReactNode; overlays?: ReactNode }) {
     const { colors, space } = useTheme();
     return (
         <Surface tone="secondary" radius="md" border>
@@ -209,6 +209,7 @@ function Tile({ header, open, children }: { header: ReactNode; open?: boolean; c
                     {children}
                 </View>
             ) : null}
+            {overlays}
         </Surface>
     );
 }
@@ -357,6 +358,7 @@ function ConnectorTile({
                                 icon={Ellipsis}
                                 size="sm"
                                 label={t('settings.connectors.actions')}
+                                testID={`connector-actions-${connector.id}`}
                                 disabled={action.isPending}
                                 onPress={() => setMenuOpen(true)}
                             />
@@ -369,6 +371,31 @@ function ConnectorTile({
                         </>
                     }
                 />
+            }
+            overlays={
+                <>
+                    {server ? (
+                        <ActionSheet
+                            open={menuOpen}
+                            onClose={() => setMenuOpen(false)}
+                            title={connector.display_name}
+                            actions={[
+                                paused
+                                    ? { label: t('settings.connectors.enable'), icon: Play, onPress: () => refuse('enablePcOnly') }
+                                    : { label: t('settings.connectors.disable'), icon: Pause, onPress: () => run('disable') },
+                                { label: t('settings.connectors.disconnect'), icon: Trash2, destructive: true, onPress: () => setConfirmOpen(true) },
+                            ]}
+                        />
+                    ) : null}
+                    <ActionSheet
+                        open={confirmOpen}
+                        onClose={() => setConfirmOpen(false)}
+                        title={t('mobileApp.connectors.disconnectConfirm', {
+                            name: connector.account_id ? `${connector.display_name} (${connector.account_id})` : connector.display_name,
+                        })}
+                        actions={[{ label: t('settings.connectors.disconnect'), icon: Trash2, destructive: true, onPress: () => run('disconnect') }]}
+                    />
+                </>
             }
         >
             <Stack gap="sm">
@@ -429,27 +456,6 @@ function ConnectorTile({
                     </>
                 )}
             </Stack>
-            {server ? (
-                <ActionSheet
-                    open={menuOpen}
-                    onClose={() => setMenuOpen(false)}
-                    title={connector.display_name}
-                    actions={[
-                        paused
-                            ? { label: t('settings.connectors.enable'), icon: Play, onPress: () => refuse('enablePcOnly') }
-                            : { label: t('settings.connectors.disable'), icon: Pause, onPress: () => run('disable') },
-                        { label: t('settings.connectors.disconnect'), icon: Trash2, destructive: true, onPress: () => setConfirmOpen(true) },
-                    ]}
-                />
-            ) : null}
-            <ActionSheet
-                open={confirmOpen}
-                onClose={() => setConfirmOpen(false)}
-                title={t('mobileApp.connectors.disconnectConfirm', {
-                    name: connector.account_id ? `${connector.display_name} (${connector.account_id})` : connector.display_name,
-                })}
-                actions={[{ label: t('settings.connectors.disconnect'), icon: Trash2, destructive: true, onPress: () => run('disconnect') }]}
-            />
         </Tile>
     );
 }

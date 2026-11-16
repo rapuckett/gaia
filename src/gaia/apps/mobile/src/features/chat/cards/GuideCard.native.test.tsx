@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import { fireEvent, render, screen } from '@testing-library/react-native';
-import { Platform } from 'react-native';
+import { Platform, StyleSheet } from 'react-native';
 
 import { translator } from '@/i18n/useT';
 import { useLocaleStore } from '@/state/locale';
@@ -76,5 +76,11 @@ describeNative('guide card in the Arabic UI', () => {
     it('wraps an ingredient amount in an LTR isolate so it stays whole', async () => {
         await show('guide', { ...RECIPE, items: ['1 1/2 cups all-purpose flour'] });
         expect(screen.getByText(/\u2066.*1 1\/2.*\u2069/)).toBeTruthy();
+    });
+
+    it('left-aligns an English ingredient row next to its bullet', async () => {
+        await show('guide', { ...RECIPE, items: ['2 large eggs'] });
+        const row = screen.getByText(/large eggs/);
+        expect(StyleSheet.flatten(row.props.style).textAlign).toBe('left');
     });
 });

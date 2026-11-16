@@ -9,7 +9,7 @@ import { describeError, useT } from '@/i18n/useT';
 import { Button, Notice, Stack } from '@/ui';
 import { ExternalLink } from '@/ui/icons';
 
-import { DeviceCodeBlock, signInEndedMessage } from './DeviceCodeSignIn';
+import { DeviceCodeBlock, signInEndedNotice } from './DeviceCodeSignIn';
 
 export interface ProviderConnectProps {
     connectorId: string;
@@ -46,14 +46,14 @@ function PcOnlyConnect({ connectorId, label }: ProviderConnectProps) {
 
 function CodeConnect({ connectorId, row, label, againLabel, scopes, onEnded, onStarted }: ProviderConnectProps & { row: ConnectorRow }) {
     const t = useT();
-    const { signIn, start } = useDeviceSignIn(row, scopes);
+    const { signIn, start, cancel } = useDeviceSignIn(row, scopes);
     const [tried, setTried] = useState(false);
     const why = signIn.state === 'expired' ? 'failed' : signIn.state === 'ended' ? signIn.why : null;
     useEffect(() => {
         if (why) onEnded?.(why);
     }, [why, onEnded]);
 
-    if (signIn.state === 'waiting') return <DeviceCodeBlock code={signIn.code} />;
+    if (signIn.state === 'waiting') return <DeviceCodeBlock code={signIn.code} onCancel={cancel} />;
     return (
         <Stack gap="sm">
             <Stack align="start">
@@ -73,7 +73,7 @@ function CodeConnect({ connectorId, row, label, againLabel, scopes, onEnded, onS
                 />
             </Stack>
             {signIn.state === 'failed' ? <Notice tone="danger" message={describeError(signIn.error, t)} /> : null}
-            {signIn.state === 'ended' && (signIn.error || !onEnded) ? <Notice tone="danger" message={signInEndedMessage(signIn, t)} /> : null}
+            {signIn.state === 'ended' && (signIn.error || !onEnded) ? <Notice tone="danger" {...signInEndedNotice(signIn, t)} /> : null}
             {signIn.state === 'expired' && !onEnded ? <Notice tone="danger" message={t('connectCard.failed')} /> : null}
         </Stack>
     );

@@ -17,11 +17,16 @@ import { SeedOpenDetails } from '@/features/settings/panes/model/ModelRow';
 import { SETTINGS_SECTIONS } from '@/features/settings/sections';
 import { SETTINGS_SCENES, settingsSceneClient, type SettingsScene } from '@/features/settings/devScenes';
 import { SettingsTargets } from '@/features/settings/targets';
-import { Screen, ScreenBannerProvider, Stack, Text, UIProvider } from '@/ui';
+import { Screen, ScreenBannerProvider, Stack, Text, UIProvider, useAppearance } from '@/ui';
+import { DEFAULT_CUSTOM } from '@webui/utils/palette.core';
 
 function SettingsView({ found }: { found: SettingsScene }) {
     const [queryClient] = useState(() => new QueryClient({ defaultOptions: { queries: { retry: false } } }));
-    const [client] = useState(() => settingsSceneClient(found));
+    const [client] = useState(() => {
+        // Palette only, so a scene that saved a custom one doesn't leak into the next; the color scheme stays as it was.
+        useAppearance.setState(found.appearance ?? { palette: 'default', custom: DEFAULT_CUSTOM });
+        return settingsSceneClient(found);
+    });
     const scrollRef = useRef<ComponentRef<typeof ScrollView>>(null);
     const Pane = SETTINGS_SECTIONS[found.section].pane;
     return (

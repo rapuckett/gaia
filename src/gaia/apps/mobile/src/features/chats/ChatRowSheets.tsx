@@ -9,7 +9,7 @@ import { useT } from '@/i18n/useT';
 import { ActionSheet, Button, Row, Sheet, Stack, TextField, type SheetAction } from '@/ui';
 import { Pencil, Pin, PinOff, Trash2 } from '@/ui/icons';
 
-import { renamedTitle, rowActions, type ChatRow, type RowAction } from './chatList';
+import { deleteConfirmLabel, renamedTitle, rowActions, type ChatRow, type RowAction } from './chatList';
 
 export type RowSheet = { row: ChatRow; mode: 'menu' | 'rename' | 'delete' };
 
@@ -47,7 +47,7 @@ export function ChatRowSheets({ target, onTarget, onRename, onSetPinned, onDelet
         destructive: a === 'delete',
         onPress: run[a],
     }));
-    const confirmLabel = row.unsent > 0 ? t.plural('row.deleteUnsent', row.unsent) : t('row.deleteConfirm');
+    const confirmLabel = deleteConfirmLabel(row, t);
 
     return (
         <>
@@ -55,10 +55,10 @@ export function ChatRowSheets({ target, onTarget, onRename, onSetPinned, onDelet
             <ActionSheet
                 open={target.mode === 'delete'}
                 onClose={close}
-                title={t('row.deleteMemoryNote')}
+                message={t('row.deleteMemoryNote')}
                 actions={[
                     {
-                        label: t('row.tapAgain', { label: confirmLabel }),
+                        label: confirmLabel,
                         icon: Trash2,
                         destructive: true,
                         onPress: () => onDelete(row.id),

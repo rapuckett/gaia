@@ -3,7 +3,7 @@
 
 import type { CommandOutput } from '@webui/types';
 import { isolate } from '@webui/i18n/registry';
-import { lineCount, countLines } from '@webui/utils/longContent';
+import { countLines } from '@webui/utils/longContent';
 import * as Clipboard from 'expo-clipboard';
 import { useEffect, useRef, useState } from 'react';
 
@@ -11,6 +11,7 @@ import { useT } from '@/i18n/useT';
 import { HScroll, Icon, Pressable, Row, Stack, Surface, Text } from '@/ui';
 import { Check, Copy, Terminal } from '@/ui/icons';
 
+import { expandLabel } from '../markdown/expandLabel';
 import { terminalWindow } from './terminalText';
 
 const COPIED_MS = 2000;
@@ -98,11 +99,11 @@ export function TerminalOutput({ output }: { output: CommandOutput }) {
                     <Pressable
                         onPress={() => setExpanded((v) => !v)}
                         aria-expanded={expanded}
-                        accessibilityLabel={expanded ? t('code.collapse') : t('code.expand', { size: lineCount(t, countLines(text)) })}
+                        accessibilityLabel={expanded ? t('code.collapse') : expandLabel(t, countLines(text))}
                     >
                         <Stack paddingX="md" paddingY="xs">
                             <Text role="caption" tone="secondary">
-                                {expanded ? t('code.collapse') : t('code.expand', { size: lineCount(t, countLines(text)) })}
+                                {expanded ? t('code.collapse') : expandLabel(t, countLines(text))}
                             </Text>
                         </Stack>
                     </Pressable>
