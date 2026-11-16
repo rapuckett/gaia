@@ -1,6 +1,8 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
+import { CUT_OFF_NOTICE_TEXT } from '@webui/utils/constants';
+
 import type { Message, StreamEvent } from '@/api/client.types';
 
 let nextId = 1;
@@ -168,6 +170,9 @@ const MEDIA = [
 
 export type MessagesFixture =
     | 'activity'
+    | 'cutoff-schedule-deleted'
+    | 'cutoff-schedule-paused'
+    | 'failed-report'
     | 'badCards'
     | 'cards'
     | 'guide'
@@ -177,10 +182,13 @@ export type MessagesFixture =
     | 'many'
     | 'media'
     | 'policy'
+    | 'policy-receipt'
     | 'prescan'
     | 'prescan-empty'
     | 'prescan-invalid'
     | 'recording'
+    | 'route'
+    | 'route-degraded'
     | 'short'
     | 'streaming';
 
@@ -246,6 +254,21 @@ const POLICY = [
     } as Message,
 ];
 
+const ROUTED = (content: string, route: Record<string, unknown>): Message[] => [
+    msg('user', 'Which of these two plans costs less over three years?', 0),
+    { ...msg('assistant', content, 1), stats: { seconds: 6.4, place: 'on your GPU', route } } as Message,
+];
+
+const CUT_OFF = (notice: string): Message[] => [
+    msg('user', 'Check the build every hour and tell me when it breaks.', 0),
+    msg('assistant', `The build passed at 09:00.\n\n${notice}`, 1),
+];
+
+const FAILED_WITH_REPORT: Message[] = [
+    msg('user', 'Summarize the quarterly report.', 0),
+    { ...msg('assistant', 'The model stopped while answering. GAIA saved a problem report: GF-20261116-101500-ab12', 1), failed: true } as Message,
+];
+
 const LIBRARY_NOTICES = [
     msg('user', 'Add these to my documents: notes.md, run.exe and budget.xlsx.', 0),
     {
@@ -262,6 +285,9 @@ export const FIXTURES: Record<MessagesFixture, { messages: Message[]; live?: Mes
     activity: { messages: ACTIVITY },
     badCards: { messages: BAD_CARDS },
     cards: { messages: CARDS },
+    'cutoff-schedule-deleted': { messages: CUT_OFF(CUT_OFF_NOTICE_TEXT.scheduleDeleted) },
+    'cutoff-schedule-paused': { messages: CUT_OFF(CUT_OFF_NOTICE_TEXT.schedulePaused) },
+    'failed-report': { messages: FAILED_WITH_REPORT },
     guide: { messages: GUIDE },
     loading: { messages: [] },
     'library-notices': { messages: LIBRARY_NOTICES },
@@ -269,6 +295,7 @@ export const FIXTURES: Record<MessagesFixture, { messages: Message[]; live?: Mes
     many: { messages: MANY },
     media: { messages: MEDIA },
     policy: { messages: POLICY },
+    'policy-receipt': { messages: POLICY },
     prescan: { messages: prescanMessages('Scan my inbox.', 'Three emails need a look; the rest can wait.', { ok: true, data: PRESCAN_PAYLOAD }) },
     'prescan-empty': {
         messages: prescanMessages('Scan my inbox.', 'Nothing needs you right now.', {
@@ -277,6 +304,15 @@ export const FIXTURES: Record<MessagesFixture, { messages: Message[]; live?: Mes
         }),
     },
     'prescan-invalid': { messages: prescanMessages('Scan my inbox.', 'The scan result was unreadable.', { ok: true, data: { kind: 'email_pre_scan' } }) },
+    route: { messages: ROUTED('The three-year total is lower on the annual plan.', { model: 'Qwen3.6-35B-A3B-GGUF', reason: 'Needs careful comparison, so the larger model answered.' }) },
+    'route-degraded': {
+        messages: ROUTED('The three-year total is lower on the annual plan.', {
+            model: 'Gemma-4-E4B-it-GGUF',
+            reason: 'The router could not classify this turn.',
+            degraded: true,
+            notice: 'Hybrid routing is struggling: the last few turns went to the default model.',
+        }),
+    },
     recording: {
         messages: [msg('user', 'Summarize the team meeting recording.', 0)],
         events: [
