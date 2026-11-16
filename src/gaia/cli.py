@@ -21,7 +21,7 @@ from gaia.agents.install_hints import (
     pip_install_hint,
 )
 from gaia.config import gaia_agents_dir
-from gaia.env import load_env
+from gaia.env import expose_shipped_gaia, load_env
 from gaia.eval.config import DEFAULT_AGENT_TYPE, DEFAULT_CLAUDE_MODEL
 from gaia.home import gaia_home
 from gaia.llm import create_client
@@ -5167,6 +5167,7 @@ def main():
 
     args = parser.parse_args()
     apply_login_path()  # after parsing, so --version and -h skip the shell
+    expose_shipped_gaia()
     if args.action == "engineering":
         from gaia.engineering.cli import run as run_engineering
 
