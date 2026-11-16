@@ -3,6 +3,7 @@
 
 import { isolate } from '@webui/i18n/registry';
 import type { Translate } from '@webui/i18n/translator';
+import { formatDate } from '@webui/utils/memoryFormat.core';
 
 import { composeDateLocale } from '@/features/schedules/scheduleText';
 
@@ -28,8 +29,8 @@ export function pcCaption(pc: PairedPc, all: PairedPc[], t: Translate): string {
     const address = isolate(homeAddress(pc), 'ltr');
     if (!pc.pairedAt || Number.isNaN(Date.parse(pc.pairedAt))) return address;
     const paired = t.compose((say, code) => {
-        const date = new Date(pc.pairedAt!).toLocaleDateString(composeDateLocale(code, t), { year: 'numeric', month: 'short', day: 'numeric' });
-        return say('mobileApp.pairing.pcs.pairedOn', { date: isolate(date, 'ltr') });
+        // compose's `say` wraps the date in a first-strong isolate, so each half keeps it whole.
+        return say('mobileApp.pairing.pcs.pairedOn', { date: formatDate(pc.pairedAt!, composeDateLocale(code, t)) });
     });
     const sameDay = all.some((o) => o.id !== pc.id && o.pairedAt && !Number.isNaN(Date.parse(o.pairedAt)) && dayKey(o.pairedAt) === dayKey(pc.pairedAt!));
     return sameDay ? `${paired}\n${address}` : paired;
