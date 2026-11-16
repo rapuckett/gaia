@@ -95,6 +95,12 @@ describeNative('/dev/settings', () => {
         ['adv-target-env', /set by LEMONADE_BASE_URL/],
         ['adv-target-env-ignored', /GAIA ignores the address set outside the app/],
         ['adv-target-error', 'Could not read which model server GAIA uses'],
+        ['adv-not-downloaded', 'Model not downloaded.'],
+        ['adv-wrong-model', 'Wrong model loaded.'],
+        ['adv-small-context', 'Context window too small.'],
+        ['adv-unreachable', /Could not reach GAIA.s assistant/],
+        ['skills-skipped', /bare couldn.t be loaded: it has no description/],
+        ['privacy-delete-none', 'No chats to delete yet.'],
     ])('%s shows its key text', async (name, text) => {
         mockState = name;
         await mount();
@@ -116,6 +122,25 @@ describeNative('/dev/settings', () => {
         await mount();
         if (toggle) await fireEvent.press(await screen.findByTestId(toggle, { includeHiddenElements: true }));
         expect((await screen.findAllByText(text, { includeHiddenElements: true })).length).toBeGreaterThan(0);
+    });
+
+    it.each([
+        ['adv-details', 'Capabilities', /chat, vision, tool calling/],
+        ['adv-details-warn', 'Device', 'CPU'],
+    ])('%s lists the detail rows once More details is opened', async (name, label, value) => {
+        mockState = name;
+        await mount();
+        await fireEvent.press(await screen.findByLabelText('More details', { includeHiddenElements: true }));
+        expect((await screen.findAllByText(label, { includeHiddenElements: true })).length).toBeGreaterThan(0);
+        expect((await screen.findAllByText(value, { includeHiddenElements: true })).length).toBeGreaterThan(0);
+    });
+
+    it('privacy-delete asks with the chat count before deleting', async () => {
+        mockState = 'privacy-delete';
+        await mount();
+        await screen.findByText(/^Deletes every chat/, undefined, { timeout: 5000 });
+        await fireEvent.press(await screen.findByTestId('privacy-delete-all'));
+        expect(await screen.findByText('Delete all 3 chats?')).toBeTruthy();
     });
 
     it('msg-load-failed says the status could not be read once the retries are spent', async () => {

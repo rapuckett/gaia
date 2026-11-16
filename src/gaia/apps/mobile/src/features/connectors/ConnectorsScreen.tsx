@@ -357,6 +357,7 @@ function ConnectorTile({
                                 icon={Ellipsis}
                                 size="sm"
                                 label={t('settings.connectors.actions')}
+                                testID={`connector-actions-${connector.id}`}
                                 disabled={action.isPending}
                                 onPress={() => setMenuOpen(true)}
                             />

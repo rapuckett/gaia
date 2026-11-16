@@ -4,16 +4,16 @@
 import { createFakeClient, type FakeClientData } from '@/api/fake';
 import type { SystemStatus } from '@webui/types';
 
-import type { ContextChoice, DiscordStatus, GaiaClient, CustomModelReport, GpuMemoryStatus, LemonadeTarget, MCPServerStatus, ModelServerInfo, ProviderModel, Settings, SpendingReport } from '@/api/client.types';
+import type { ContextChoice, Session, SkillInfo, DiscordStatus, GaiaClient, CustomModelReport, GpuMemoryStatus, LemonadeTarget, MCPServerStatus, ModelServerInfo, ProviderModel, Settings, SpendingReport } from '@/api/client.types';
 import { PC_ONLY_REFUSAL } from '@/api/constants';
-import { GaiaApiError } from '@/api/errors';
+import { GaiaApiError, GaiaNetworkError } from '@/api/errors';
 import { COMMON, GPU } from '@/features/setup/devScenes';
 
 import type { SectionId } from './sections';
 
 /** A settings pane on a fake PC: which section, and the anchor it opens on. */
 export interface SettingsScene {
-    section: Extract<SectionId, 'advanced' | 'messaging' | 'model' | 'setup'>;
+    section: Extract<SectionId, 'advanced' | 'messaging' | 'model' | 'privacy' | 'setup' | 'skills'>;
     target?: string;
     gpuMemory: GpuMemoryStatus | Error;
     status?: FakeClientData['status'];
@@ -147,6 +147,19 @@ const MCP_FAILED: MCPServerStatus[] = [
     { name: 'jira', connected: false, tool_count: 0, error: 'spawn jira-mcp ENOENT' },
 ];
 
+// The Advanced status card on a running PC; each ADV scene changes only what it shows.
+const RUNNING = {
+    lemonade_running: true, lemonade_error: null, lemonade_version: '10.8.1', start_command: null, start_instruction: null, version: '0.26.0',
+    model_loaded: CHAT_MODEL, expected_model_loaded: true, context_size_sufficient: true, model_context_size: 65536, embedding_model_loaded: true,
+    disk_space_gb: 120, memory_available_gb: 40, initialized: true, download_progress: null, default_model_name: CHAT_MODEL, default_model_size_gb: 5.97,
+    model_downloaded: true, model_size_gb: 5.97, model_device: 'gpu', model_labels: ['chat', 'vision', 'tool-calling'], gpu_name: 'AMD Radeon 8060S',
+    gpu_vram_gb: 32, processor_name: 'AMD Ryzen AI Max+ 395',
+} as unknown as SystemStatus;
+const running = (patch: Partial<SystemStatus>): SettingsScene => ({ section: 'advanced', gpuMemory: GPU, status: { ...RUNNING, ...patch } as SystemStatus });
+
+const chat = (id: string): Session => ({ id, title: `Chat ${id}`, created_at: '2026-11-13T00:00:00Z', updated_at: '2026-11-13T00:00:00Z' }) as Session;
+const skill = (name: string): SkillInfo => ({ name, description: 'Summarize a document.', version: '1.0', tier: null, tools: [], path: `skills/${name}`, source: 'agent-bundled' }) as SkillInfo;
+
 export const SETTINGS_SCENES: Record<string, SettingsScene> = {
     'advanced-not-installed': { section: 'advanced', gpuMemory: GPU, status: NOT_INSTALLED },
     'gpu-adjustable': { section: 'model', target: 'gpu-memory', gpuMemory: GPU },
@@ -236,6 +249,34 @@ export const SETTINGS_SCENES: Record<string, SettingsScene> = {
     // SET-ADV-22: MCP servers: open when one failed, and closed until tapped when all connected (`#tap=advanced-mcp-toggle`).
     'adv-mcp-failed': advanced({}, MCP_FAILED),
     'adv-mcp-ok': advanced({}, MCP_OK),
+
+    // SET-ADV-06, 07: the status card's model actions: not downloaded (Download), another model loaded or a window too small (Load model).
+    'adv-not-downloaded': running({ model_loaded: null, model_downloaded: false }),
+    'adv-wrong-model': running({ model_loaded: 'Llama-3.2-3B-Instruct-GGUF', expected_model_loaded: false }),
+    'adv-small-context': running({ context_size_sufficient: false, model_context_size: 4096 }),
+    // SET-ADV-08: More details is closed until opened (`#expand`); the second warns on a CPU device and a small window.
+    'adv-details': running({}),
+    'adv-details-warn': running({ model_device: 'cpu', context_size_sufficient: false, model_context_size: 4096 }),
+    // SET-ADV-10: the PC doesn't answer the status read.
+    'adv-unreachable': { ...running({}), override: { getSystemStatus: () => Promise.reject(new GaiaNetworkError('http://pc.local:4200', new Error('Network request failed'))) } },
+
+    // SET-SKILL-11: skills the PC could not read, under the list.
+    'skills-skipped': {
+        section: 'skills', gpuMemory: GPU,
+        data: {
+            skills: {
+                skills: [skill('summarize')],
+                invalid: {
+                    'skills/long-one/SKILL.md': 'description is 2048 characters, over the limit',
+                    'skills/bare/SKILL.md': "'description' is missing",
+                    'skills/odd/SKILL.md': 'not valid YAML',
+                },
+            },
+        },
+    },
+    // SET-PRIV-06: the Delete chats card with chats (`#tap=privacy-delete-all` opens the confirm sheet), and with none.
+    'privacy-delete': { section: 'privacy', gpuMemory: GPU, data: { settings: SETTINGS, sessions: [chat('a'), chat('b'), chat('c')] } },
+    'privacy-delete-none': { section: 'privacy', gpuMemory: GPU, data: { settings: SETTINGS, sessions: [] } },
 };
 
 export function settingsSceneClient(scene: SettingsScene): GaiaClient {

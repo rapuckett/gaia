@@ -13,6 +13,7 @@ import { GaiaClientProvider } from '@/data';
 import { ThemeProvider } from '@/ui';
 import { SheetHost } from '@/ui/overlays/SheetHost';
 
+import { ConnectorsGallery, type ConnectorScene } from './ConnectorsGallery';
 import { ConnectorsScreen } from './ConnectorsScreen';
 
 jest.mock('@/features/nav/ScreenHeader', () => ({ ScreenHeader: () => null }));
@@ -121,5 +122,41 @@ describeNative('ConnectorsScreen MCP server', () => {
         fireEvent.press((await screen.findAllByLabelText('Disconnect')).at(-1)!);
         await waitFor(async () => expect(((await client.listConnectors()).connectors[0] as ConnectorRow).configured).toBe(false));
         queryClient.clear();
+    });
+});
+
+describeNative('ConnectorsGallery list states', () => {
+    const scene = async (state: ConnectorScene) => {
+        const { queryClient, wrap } = setup([]);
+        await render(<ConnectorsGallery state={state} />, { wrapper: ({ children }: { children: ReactNode }) => wrap({ children }) });
+        return queryClient;
+    };
+
+    it.each([
+        ['loading', 'Connect accounts and MCP servers so GAIA can use them on your behalf. Choose what GAIA may do with each one.'],
+        ['none', 'No connectors are available.'],
+        ['error', /connectors service is not running/],
+        ['groups', 'Unavailable'],
+        ['code', 'Sign in with a code'],
+    ] as const)('%s shows its key text', async (state, text) => {
+        await scene(state);
+        expect(await screen.findByText(text)).toBeTruthy();
+    });
+
+    it('menu opens the actions sheet from the tile trigger', async () => {
+        await scene('menu');
+        fireEvent.press(await screen.findByTestId('connector-actions-linear'));
+        expect(await screen.findByText('Disable')).toBeTruthy();
+    });
+
+    it('groups lists the folded groups', async () => {
+        await scene('groups');
+        for (const title of ['Connected', 'Accounts', 'MCP servers', 'Custom agent servers']) expect(await screen.findByText(title)).toBeTruthy();
+    });
+
+    it('codeFailed ends the sign-in with the failure text', async () => {
+        await scene('codeFailed');
+        fireEvent.press(await screen.findByTestId('device-sign-in-microsoft'));
+        expect(await screen.findByText(/Sign-in did not finish/)).toBeTruthy();
     });
 });

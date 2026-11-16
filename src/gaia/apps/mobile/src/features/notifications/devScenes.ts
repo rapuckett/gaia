@@ -83,6 +83,8 @@ export const NOTIFICATION_SCENES: Record<string, NotificationScene> = {
     'schedule-failed': { view: 'center', items: [FAILED], filter: null },
     'schedule-finished': { view: 'center', items: [FINISHED] },
     'setup-check-failed': { view: 'gate', data: { setupChecks: [new GaiaApiError(500, 'The setup check crashed.')] } },
+    // NTF-15: the embedded server's update stopped (`Try again`); the restore-model notices are `/dev/model-server?state=restore-failed` and `restore-ok`.
+    'setup-upgrading-failed': { view: 'gate', data: { setupChecks: [{ ready: false, stage: 'upgrade', steps: [] } as unknown as SetupCheck], setupStatus: { state: 'failed', error: 'The download was interrupted.' } as never } },
     'setup-server-down': { view: 'gate', data: check({ stage: 'server', initialized: true } as Partial<SetupCheck>) },
     'setup-server-down-list-unread': { view: 'gate', data: check({ stage: 'server', initialized: true, model_list_unread: true } as Partial<SetupCheck>) },
 };
