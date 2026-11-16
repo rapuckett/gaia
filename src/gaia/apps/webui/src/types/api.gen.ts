@@ -28,6 +28,7 @@ export interface ApiSchemas {
   AuthorizeRequest: AuthorizeRequest;
   AutomationList: AutomationList;
   AutomationRow: AutomationRow;
+  AwayRouteStatus: AwayRouteStatus;
   BackendOption: BackendOption;
   Body_upload_document_blob_api_documents_upload_post: BodyUploadDocumentBlobApiDocumentsUploadPost;
   Body_upload_file_api_files_upload_post: BodyUploadFileApiFilesUploadPost;
@@ -77,9 +78,11 @@ export interface ApiSchemas {
   CustomModelVariant: CustomModelVariant;
   DefaultPermissionModeResponse: DefaultPermissionModeResponse;
   DeviceAccessStatus: DeviceAccessStatus;
+  DeviceOrigin: DeviceOrigin;
   DevicePairRequest: DevicePairRequest;
   DevicePairResponse: DevicePairResponse;
   DevicePairingOffer: DevicePairingOffer;
+  DeviceRoutes: DeviceRoutes;
   DeviceUsage: DeviceUsage;
   DiscordConnectRequest: DiscordConnectRequest;
   DiscordConnectResponse: DiscordConnectResponse;
@@ -351,6 +354,7 @@ export interface ApiSchemas {
   TurnChangesList: TurnChangesList;
   TurnDiff: TurnDiff;
   TurnFileChange: TurnFileChange;
+  TurnRouteResponse: TurnRouteResponse;
   TurnSummaryCost: TurnSummaryCost;
   TurnSummaryDocument: TurnSummaryDocument;
   TurnSummaryFile: TurnSummaryFile;
@@ -556,6 +560,7 @@ export interface AgentMcpsResponse {
  */
 export interface AgentStepResponse {
   active?: boolean;
+  autoDeclined?: boolean | null;
   commandOutput?: CommandOutputResponse | null;
   currentStep?: number | null;
   data?: unknown;
@@ -564,6 +569,7 @@ export interface AgentStepResponse {
   detail?: string | null;
   fileList?: FileListResponse | null;
   id: number;
+  kept?: boolean | null;
   label: string;
   latencyMs?: number | null;
   mcpOutput?: McpOutputResponse | null;
@@ -571,6 +577,7 @@ export interface AgentStepResponse {
   mcpServerLabel?: string | null;
   mcpTool?: string | null;
   narration?: string | null;
+  needsModel?: string | null;
   planNarrations?: string[] | null;
   planSteps?: string[] | null;
   policyVersion?: string | null;
@@ -671,6 +678,15 @@ export interface AutomationRow {
   runs: number;
   say: string;
   [k: string]: unknown | undefined;
+}
+/**
+ * An away route as the PC sees it: on or off, and why it failed.
+ */
+export interface AwayRouteStatus {
+  error_code?: string | null;
+  kind: "tailnet" | "relay";
+  on: boolean;
+  origin?: string | null;
 }
 /**
  * A llama.cpp backend this machine can run, with Lemonade's state for it.
@@ -1254,6 +1270,7 @@ export interface DeviceAccessStatus {
   pairing_open: boolean;
   pending_expiry_minutes: number;
   port: number;
+  routes?: AwayRouteStatus[];
 }
 /**
  * A pairing attempt that failed, and why; the device saw one refusal.
@@ -1262,6 +1279,13 @@ export interface FailedRedemption {
   address: string;
   at: string;
   reason: "expired" | "used" | "wrong" | "closed" | "rate_limited";
+}
+/**
+ * One origin a paired device may reach this PC at.
+ */
+export interface DeviceOrigin {
+  kind: "home" | "tailnet" | "relay";
+  origin: string;
 }
 /**
  * A device redeeming the invitation it scanned.
@@ -1317,6 +1341,12 @@ export interface DevicePairingOffer {
    * Format version
    */
   v: number;
+}
+/**
+ * Every origin a paired device may reach this PC at now.
+ */
+export interface DeviceRoutes {
+  origins: DeviceOrigin[];
 }
 export interface DeviceUsage {
   /**
@@ -1910,10 +1940,20 @@ export interface InferenceStatsResponse {
   output_tokens?: number;
   place?: string | null;
   retried?: boolean | null;
+  route?: TurnRouteResponse | null;
   seconds?: number | null;
   steps?: number | null;
   time_to_first_token?: number;
   tokens_per_second?: number;
+}
+/**
+ * The model a ``hybrid`` turn was routed to, and why.
+ */
+export interface TurnRouteResponse {
+  degraded?: boolean;
+  model: string;
+  notice?: string;
+  reason?: string;
 }
 /**
  * Summary of a boot-time initialization task (embedded in SystemStatus).
@@ -1921,6 +1961,7 @@ export interface InferenceStatsResponse {
 export interface InitTaskInfo {
   name: string;
   status: string;
+  step?: string | null;
 }
 /**
  * Body for ``POST /api/agents/install``.
@@ -2863,7 +2904,9 @@ export interface SessionPermissionsResponse {
  * Structured Local only notice translated by the Agent UI.
  */
 export interface PolicyNotice {
+  cause?: string | null;
   code: string;
+  models?: string[] | null;
   reason?: string | null;
   severity: "info" | "warning";
   url?: string | null;

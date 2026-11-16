@@ -24,13 +24,21 @@ from gaia.logger import get_logger
 from ..devices import (
     DEVICE_PAIRED_ACTIONS,
     DEVICE_PAIRED_EVENT,
+    HOME_ROUTE,
     PAIR_LOCKOUT_SECONDS,
     PAIR_ROUTE,
     PAIRING_LOCKOUT_ALERT,
+    ROUTES_ROUTE,
     SECURITY_ALERT_EVENT,
     SELF_ROUTE,
+    AwayRouteKind,
 )
-from ..devices.access import DeviceAccess, PairingUnavailable, iso
+from ..devices.access import (
+    AwayRouteRefused,
+    DeviceAccess,
+    PairingUnavailable,
+    iso,
+)
 from ..devices.listener import ListenerError
 from ..devices.pairing import PairingRefused
 from ..devices.storage import DeviceCertificateError, UnsafeDeviceFolderError
@@ -39,11 +47,14 @@ from ..models import (
     DevicePairingOffer,
     DevicePairRequest,
     DevicePairResponse,
+    DeviceRoutes,
     PairedDevice,
     PairedDeviceList,
 )
 from ..security import (
+    ROUTE_SCOPE_KEY,
     audit_approval,
+    require_allowed_device,
     require_device,
     require_device_listener,
     require_local_pc,
@@ -134,6 +145,34 @@ async def turn_off_listener(request: Request) -> Dict[str, Any]:
     return access.status()
 
 
+@router.post(
+    "/routes/{kind}", response_model=DeviceAccessStatus, dependencies=_AT_THE_PC
+)
+async def turn_on_route(request: Request, kind: AwayRouteKind) -> Dict[str, Any]:
+    """Also let paired devices reach this PC over an away route, such as Tailscale."""
+    access = _access(request)
+    try:
+        await access.set_route(kind, True)
+    except KeyError as e:
+        raise HTTPException(status_code=404, detail="Not Found") from e
+    except AwayRouteRefused as e:
+        raise _refused(e.code, e.detail) from e
+    return access.status()
+
+
+@router.delete(
+    "/routes/{kind}", response_model=DeviceAccessStatus, dependencies=_AT_THE_PC
+)
+async def turn_off_route(request: Request, kind: AwayRouteKind) -> Dict[str, Any]:
+    """Stop serving an away route, and keep it off across restarts."""
+    access = _access(request)
+    try:
+        await access.set_route(kind, False)
+    except KeyError as e:
+        raise HTTPException(status_code=404, detail="Not Found") from e
+    return access.status()
+
+
 @router.post("/pairing", response_model=DevicePairingOffer, dependencies=_AT_THE_PC)
 def open_pairing(request: Request) -> Dict[str, Any]:
     """Open the pairing window: the code for the PC to show as a QR code."""
@@ -175,6 +214,8 @@ async def reset_pairing(request: Request) -> Dict[str, Any]:
 )
 async def pair_device(request: Request, body: DevicePairRequest) -> Dict[str, Any]:
     """Redeem the invitation from the PC's code; the device's token, once."""
+    if request.scope.get(ROUTE_SCOPE_KEY) != HOME_ROUTE:
+        raise HTTPException(status_code=404, detail="Not Found")
     access = _access(request)
     peer = request.client.host if request.client else ""
     try:
@@ -208,6 +249,16 @@ async def pair_device(request: Request, body: DevicePairRequest) -> Dict[str, An
         }
     )
     return paired
+
+
+@router.get(
+    ROUTES_ROUTE.removeprefix("/api/devices"),
+    response_model=DeviceRoutes,
+    dependencies=[Depends(require_allowed_device)],
+)
+def device_routes(request: Request) -> Dict[str, Any]:
+    """Every origin this device may reach the PC at: home, then each away route on."""
+    return {"origins": _access(request).route_origins()}
 
 
 @router.delete(SELF_ROUTE.removeprefix("/api/devices"), status_code=204)

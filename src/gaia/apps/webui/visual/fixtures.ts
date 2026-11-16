@@ -148,9 +148,9 @@ export const SYSTEM_STATUS = {
     default_model_is_cloud: false, default_model_size_gb: 4.9, lemonade_url: 'http://127.0.0.1:13305',
     expected_model_loaded: true, download_progress: null, init_state: 'ready',
     init_tasks: [
-        { name: 'Checking LLM server', status: 'done' },
-        { name: 'Loading ML libraries', status: 'done' },
-        { name: 'Loading AI model', status: 'done' },
+        { name: 'Checking LLM server', step: 'check_server', status: 'done' },
+        { name: 'Loading ML libraries', step: 'load_libraries', status: 'done' },
+        { name: 'Loading AI model', step: 'load_model', status: 'done' },
     ],
     warm_up: { state: 'done', elapsed_seconds: 2.0, prompt_tokens: 1800, cached_tokens: 1800, error: null },
     detected_devices: ['gpu'], active_profile: 'chat', config_error: null, probe_warnings: [],
@@ -492,7 +492,7 @@ const DISCORD_BOT = {
 export const DISCORD_STATES: Record<string, Record<string, unknown>> = {
     none: DISCORD_BASE,
     pairing: { ...DISCORD_BASE, ...DISCORD_BOT, state: 'pairing', pairing_code: 'K7QX4M9P', pairing_expires_at: 1e10, detail: 'DM the code to the bot to pair it with your Discord account.' },
-    connected: { ...DISCORD_BASE, ...DISCORD_BOT, state: 'connected', paired: true, owner_name: 'someone_with_a_long_name', model: 'Qwen3.6-35B-A3B-GGUF', always_allowed: ['write_file on files in C:/Users/someone_with_a_long_name/Documents/projects/quarterly-report', 'dir'] },
+    connected: { ...DISCORD_BASE, ...DISCORD_BOT, state: 'connected', paired: true, owner_name: 'someone_with_a_long_name', model: 'Qwen3.6-35B-A3B-GGUF', always_allowed: ['changes to files in C:/Users/someone_with_a_long_name/Documents/projects/quarterly-report', 'dir'] },
     crashed: { ...DISCORD_BASE, ...DISCORD_BOT, state: 'stopped', running: false, paired: true, owner_name: 'kalin', detail: 'The Discord bridge stopped unexpectedly.' },
     taken_over: { ...DISCORD_BASE, ...DISCORD_BOT, state: 'taken_over', paired: true, owner_name: 'kalin', detail: 'Another PC is answering this Discord bot.' },
     token_invalid: { ...DISCORD_BASE, ...DISCORD_BOT, state: 'token_invalid', paired: true, owner_name: 'kalin', detail: 'Discord rejected the bot token (HTTP 401). Reset the token in the Developer Portal and paste the new one.' },
@@ -501,6 +501,7 @@ export const DISCORD_STATES: Record<string, Record<string, unknown>> = {
 const DEVICE_STATUS_BASE = {
     listening: true, port: 4243, error_code: null, error_detail: null, pairing_open: false, pairing_expires_at: null,
     idle_expiry_days: 90, pending_expiry_minutes: 10, failed_redemptions: [],
+    routes: [{ kind: 'tailnet', on: false, origin: null, error_code: null }],
 };
 const AT_ISO = (minutesAgo: number) => new Date(NOW.getTime() - minutesAgo * 60_000).toISOString();
 const IPAD = { id: 'dev-ipad', name: "Someone's iPad Pro with a rather long name", platform: 'ipados', status: 'allowed', created_at: AT_ISO(9000), last_seen_at: AT_ISO(1500), expires_at: null };
@@ -519,6 +520,8 @@ export const DEVICE_STATES: Record<string, { status: Record<string, unknown>; de
         devices: [IPAD],
     },
     portInUse: { status: { ...DEVICE_STATUS_BASE, listening: false, error_code: 'port_in_use', error_detail: 'Port 4243 is in use.' }, devices: [IPAD] },
+    tailnetOn: { status: { ...DEVICE_STATUS_BASE, routes: [{ kind: 'tailnet', on: true, origin: 'https://100.101.102.103:4243', error_code: null }] }, devices: [IPAD] },
+    tailnetMissing: { status: { ...DEVICE_STATUS_BASE, routes: [{ kind: 'tailnet', on: false, origin: null, error_code: 'no_tailscale_address' }] }, devices: [IPAD] },
 };
 
 /** A pairing code as the PC shows it; never a real invitation. */

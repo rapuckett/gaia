@@ -7,7 +7,6 @@ import type { ReactNode } from 'react';
 import { Platform } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-import { PC_ONLY_REFUSAL } from '@/api/constants';
 import { createFakeClient } from '@/api/fake';
 import type { ConnectorRow, DisconnectOutcome } from '@/api/client.types';
 import { GaiaClientProvider } from '@/data';
@@ -97,7 +96,7 @@ describeNative('ConnectorsScreen MCP server', () => {
         await waitFor(async () => expect(((await client.listConnectors()).connectors[0] as ConnectorRow).enabled).toBe(false));
 
         fireEvent.press(await screen.findByText('Enable this MCP server'));
-        expect(await screen.findByText(new RegExp(`^${PC_ONLY_REFUSAL.slice(0, 30)}`))).toBeTruthy();
+        expect(await screen.findByText(/^Do this on your PC\./)).toBeTruthy();
         expect(((await client.listConnectors()).connectors[0] as ConnectorRow).enabled).toBe(false);
         queryClient.clear();
     });

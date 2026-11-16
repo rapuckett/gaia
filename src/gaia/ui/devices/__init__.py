@@ -25,6 +25,24 @@ DEVICE_LISTENER_HOST = "0.0.0.0"
 #: pending device may still call: unpairing itself.
 PAIR_ROUTE = "/api/devices/pair"
 SELF_ROUTE = "/api/devices/me"
+#: Where a device learns every origin it may reach this PC at.
+ROUTES_ROUTE = "/api/devices/me/routes"
+
+#: How a device reached the listener: the home network, or an away route the
+#: PC turned on. Only ``home`` may pair.
+RouteKind = Literal["home", "tailnet", "relay"]
+AwayRouteKind = Literal["tailnet", "relay"]
+HOME_ROUTE: RouteKind = "home"
+TAILNET_ROUTE: AwayRouteKind = "tailnet"
+#: Why an away route isn't on, as the PC sees it: the listener is off, this
+#: PC has no Tailscale address, or the route failed to start.
+AwayRouteErrorCode = Literal["listener_off", "no_tailscale_address", "start_failed"]
+
+#: Tailscale's IPv4 range, and the interfaces that carry it: ``Tailscale`` on
+#: Windows, ``tailscale0`` on Linux, a point-to-point ``utun`` on macOS.
+TAILNET_NETWORK = "100.64.0.0/10"
+TAILNET_INTERFACES = frozenset({"Tailscale", "tailscale0"})
+TAILNET_UTUN_PREFIX = "utun"
 
 #: Peers the listener answers, and the subset a pairing code offers.
 HOME_NETWORKS = ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "169.254.0.0/16")

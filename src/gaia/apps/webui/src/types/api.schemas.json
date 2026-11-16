@@ -602,6 +602,17 @@
         "title": "Active",
         "type": "boolean"
       },
+      "autoDeclined": {
+        "anyOf": [
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Autodeclined"
+      },
       "commandOutput": {
         "anyOf": [
           {
@@ -679,6 +690,17 @@
         "title": "Id",
         "type": "integer"
       },
+      "kept": {
+        "anyOf": [
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Kept"
+      },
       "label": {
         "title": "Label",
         "type": "string"
@@ -747,6 +769,17 @@
           }
         ],
         "title": "Narration"
+      },
+      "needsModel": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Needsmodel"
       },
       "planNarrations": {
         "anyOf": [
@@ -1129,6 +1162,51 @@
       "failures"
     ],
     "title": "AutomationRow",
+    "type": "object"
+  },
+  "AwayRouteStatus": {
+    "description": "An away route as the PC sees it: on or off, and why it failed.",
+    "properties": {
+      "error_code": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Error Code"
+      },
+      "kind": {
+        "enum": [
+          "tailnet",
+          "relay"
+        ],
+        "title": "Kind",
+        "type": "string"
+      },
+      "on": {
+        "title": "On",
+        "type": "boolean"
+      },
+      "origin": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Origin"
+      }
+    },
+    "required": [
+      "kind",
+      "on"
+    ],
+    "title": "AwayRouteStatus",
     "type": "object"
   },
   "BackendOption": {
@@ -3555,6 +3633,13 @@
       "port": {
         "title": "Port",
         "type": "integer"
+      },
+      "routes": {
+        "items": {
+          "$ref": "#/components/schemas/AwayRouteStatus"
+        },
+        "title": "Routes",
+        "type": "array"
       }
     },
     "required": [
@@ -3565,6 +3650,30 @@
       "pending_expiry_minutes"
     ],
     "title": "DeviceAccessStatus",
+    "type": "object"
+  },
+  "DeviceOrigin": {
+    "description": "One origin a paired device may reach this PC at.",
+    "properties": {
+      "kind": {
+        "enum": [
+          "home",
+          "tailnet",
+          "relay"
+        ],
+        "title": "Kind",
+        "type": "string"
+      },
+      "origin": {
+        "title": "Origin",
+        "type": "string"
+      }
+    },
+    "required": [
+      "kind",
+      "origin"
+    ],
+    "title": "DeviceOrigin",
     "type": "object"
   },
   "DevicePairRequest": {
@@ -3695,6 +3804,23 @@
       "exp"
     ],
     "title": "DevicePairingOffer",
+    "type": "object"
+  },
+  "DeviceRoutes": {
+    "description": "Every origin a paired device may reach this PC at now.",
+    "properties": {
+      "origins": {
+        "items": {
+          "$ref": "#/components/schemas/DeviceOrigin"
+        },
+        "title": "Origins",
+        "type": "array"
+      }
+    },
+    "required": [
+      "origins"
+    ],
+    "title": "DeviceRoutes",
     "type": "object"
   },
   "DeviceUsage": {
@@ -6198,6 +6324,16 @@
         ],
         "title": "Retried"
       },
+      "route": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/TurnRouteResponse"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
       "seconds": {
         "anyOf": [
           {
@@ -6244,6 +6380,17 @@
       "status": {
         "title": "Status",
         "type": "string"
+      },
+      "step": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Step"
       }
     },
     "required": [
@@ -9894,9 +10041,34 @@
   "PolicyNotice": {
     "description": "Structured Local only notice translated by the Agent UI.",
     "properties": {
+      "cause": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Cause"
+      },
       "code": {
         "title": "Code",
         "type": "string"
+      },
+      "models": {
+        "anyOf": [
+          {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Models"
       },
       "reason": {
         "anyOf": [
@@ -12781,6 +12953,7 @@
       "custom_model": {
         "anyOf": [
           {
+            "maxLength": 256,
             "type": "string"
           },
           {
@@ -17131,6 +17304,35 @@
       "tool"
     ],
     "title": "TurnFileChange",
+    "type": "object"
+  },
+  "TurnRouteResponse": {
+    "description": "The model a ``hybrid`` turn was routed to, and why.",
+    "properties": {
+      "degraded": {
+        "default": false,
+        "title": "Degraded",
+        "type": "boolean"
+      },
+      "model": {
+        "title": "Model",
+        "type": "string"
+      },
+      "notice": {
+        "default": "",
+        "title": "Notice",
+        "type": "string"
+      },
+      "reason": {
+        "default": "",
+        "title": "Reason",
+        "type": "string"
+      }
+    },
+    "required": [
+      "model"
+    ],
+    "title": "TurnRouteResponse",
     "type": "object"
   },
   "TurnSummaryCost": {

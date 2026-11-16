@@ -4,7 +4,7 @@
 // Generated from the backend's route guards; do not edit.
 // Regenerate from the repo root: python -m gaia.ui.export_route_access
 
-export type RouteAccessClass = 'device_self' | 'not_on_listener' | 'pair' | 'pc' | 'pc_or_device' | 'remote';
+export type RouteAccessClass = 'device' | 'device_self' | 'not_on_listener' | 'pair' | 'pc' | 'pc_or_device' | 'remote';
 
 export const ROUTE_ACCESS: Readonly<Record<string, RouteAccessClass>> = {
     'DELETE /api/agents/{agent_id}': 'pc',
@@ -17,6 +17,7 @@ export const ROUTE_ACCESS: Readonly<Record<string, RouteAccessClass>> = {
     'DELETE /api/devices/listener': 'pc',
     'DELETE /api/devices/me': 'device_self',
     'DELETE /api/devices/pairing': 'pc',
+    'DELETE /api/devices/routes/{kind}': 'pc',
     'DELETE /api/devices/{device_id}': 'pc',
     'DELETE /api/documents/{doc_id}': 'remote',
     'DELETE /api/goals/{goal_id}': 'remote',
@@ -54,6 +55,7 @@ export const ROUTE_ACCESS: Readonly<Record<string, RouteAccessClass>> = {
     'GET /api/connectors/{connector_id}/activations': 'remote',
     'GET /api/connectors/{connector_id}/grants': 'remote',
     'GET /api/devices': 'pc',
+    'GET /api/devices/me/routes': 'device',
     'GET /api/devices/status': 'pc',
     'GET /api/documents': 'remote',
     'GET /api/documents/{doc_id}/file': 'remote',
@@ -167,6 +169,7 @@ export const ROUTE_ACCESS: Readonly<Record<string, RouteAccessClass>> = {
     'POST /api/devices/pair': 'pair',
     'POST /api/devices/pairing': 'pc',
     'POST /api/devices/pairing/reset': 'pc',
+    'POST /api/devices/routes/{kind}': 'pc',
     'POST /api/devices/{device_id}/allow': 'pc',
     'POST /api/documents/index-folder': 'remote',
     'POST /api/documents/upload': 'remote',
@@ -180,6 +183,7 @@ export const ROUTE_ACCESS: Readonly<Record<string, RouteAccessClass>> = {
     'POST /api/files/upload': 'remote',
     'POST /api/files/upload-media': 'remote',
     'POST /api/goals': 'remote',
+    'POST /api/goals/store/reset': 'remote',
     'POST /api/goals/{goal_id}/tasks': 'remote',
     'POST /api/gpu-memory/apply': 'pc',
     'POST /api/gpu-memory/pending': 'remote',

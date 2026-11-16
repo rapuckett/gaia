@@ -1,9 +1,21 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import {
+    Children,
+    Fragment,
+    cloneElement,
+    createContext,
+    isValidElement,
+    useContext,
+    useEffect,
+    useState,
+    type ReactElement,
+    type ReactNode,
+} from 'react';
+import { View } from 'react-native';
 
-import { Row } from '@/ui';
+import { Button, Row, Stack, type ButtonProps } from '@/ui';
 
 type Register = (content: ReactNode) => void;
 
@@ -21,15 +33,38 @@ export function SetupFooterProvider({ children }: { children: ReactNode }) {
     );
 }
 
+function actionsOf(children: ReactNode): ReactNode[] {
+    return Children.toArray(children).flatMap((child) =>
+        isValidElement<{ children?: ReactNode }>(child) && child.type === Fragment ? actionsOf(child.props.children) : [child],
+    );
+}
+
+function filled(action: ReactNode): ReactNode {
+    return isValidElement(action) && action.type === Button
+        ? cloneElement(action as ReactElement<ButtonProps>, { full: true, wrap: true })
+        : action;
+}
+
+/** Up to two actions share the row equally, so long labels wrap rather than spill; more stack. */
+function FooterActions({ children }: { children: ReactNode }) {
+    const actions = actionsOf(children);
+    if (actions.length > 2) return <Stack gap="sm">{actions.map(filled)}</Stack>;
+    return (
+        <Row gap="sm">
+            {actions.map((action, i) => (
+                <View key={i} testID="setup-footer-slot" style={{ flex: 1, minWidth: 0 }}>
+                    {filled(action)}
+                </View>
+            ))}
+        </Row>
+    );
+}
+
 /** The bar itself: Back at the start and the step's main action at the end; empty until a step fills it. */
 export function SetupFooterBar() {
     const content = useContext(Content);
     if (content == null) return null;
-    return (
-        <Row gap="md" justify="between">
-            {content}
-        </Row>
-    );
+    return <FooterActions>{content}</FooterActions>;
 }
 
 /**
@@ -43,7 +78,7 @@ export function SetupFooter({ children }: { children: ReactNode }) {
         register(children);
         return () => register(null);
     }, [register, children]);
-    if (!register) return <Row gap="md" justify="between">{children}</Row>;
+    if (!register) return <FooterActions>{children}</FooterActions>;
     return null;
 }
 

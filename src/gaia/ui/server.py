@@ -589,6 +589,9 @@ def create_app(db_path: str = None, webui_dist: str = None) -> FastAPI:
 
         queue = DispatchQueue(max_workers=4)
         app.state.dispatch_queue = queue
+        from gaia.ui import dispatch as dispatch_mod
+
+        dispatch_mod.BOOT_QUEUE = queue
 
         # ── Model-slot broker (#2248) ───────────────────────────────────
         # The daemon exports the broker URL into its own environment, so only
@@ -698,6 +701,17 @@ def create_app(db_path: str = None, webui_dist: str = None) -> FastAPI:
                 logger.info("Model preload skipped: %s", low_memory)
                 return
 
+            # The TUI may have picked another model since this app last ran.
+            from gaia.ui.routers.providers import restore_last_model
+
+            try:
+                restore_last_model(db, load=False)
+            except Exception as exc:  # noqa: BLE001 - the model list reports it
+                # /api/providers/active runs the restore again and shows why.
+                logger.warning(
+                    "Could not restore the last model before the preload: %s", exc
+                )
+
             # Check if a chat model is already loaded.
             # Let exceptions propagate so the DispatchQueue marks the job as
             # FAILED (not DONE) — the frontend will show "degraded" state.
@@ -759,15 +773,22 @@ def create_app(db_path: str = None, webui_dist: str = None) -> FastAPI:
 
         # Dispatch startup tasks.  Jobs A and B run in parallel; Job C
         # waits for A (needs Lemonade reachable) before loading the model.
+        # A visible job's `step` needs banner.boot.<step> in every UI locale.
         lemonade_id = queue.dispatch(
-            "Checking LLM server", _check_lemonade, visible=True
+            "Checking LLM server", _check_lemonade, visible=True, step="check_server"
         )
-        queue.dispatch("Loading ML libraries", _import_modules, visible=True)
+        queue.dispatch(
+            "Loading ML libraries",
+            _import_modules,
+            visible=True,
+            step="load_libraries",
+        )
         model_job = queue.dispatch(
             "Loading AI model",
             _load_model,
             visible=True,
             depends_on=lemonade_id,
+            step="load_model",
         )
         from gaia.ui import warmup
         from gaia.ui.dispatch import JobStatus
@@ -897,6 +918,8 @@ def create_app(db_path: str = None, webui_dist: str = None) -> FastAPI:
         await agent_loop.stop()
         logger.info("AgentLoop stopped")
         await queue.shutdown()
+        if dispatch_mod.BOOT_QUEUE is queue:
+            dispatch_mod.BOOT_QUEUE = None
         await monitor.stop()
         logger.info("Document file monitor stopped")
         from gaia.connectors.activation_watcher import stop_watcher

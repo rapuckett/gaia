@@ -45,7 +45,7 @@ import { StepResult } from './LongContent';
 import { isMessageKey, ref, type MessageKey } from '../i18n/registry';
 import {
     FILTER_MIN_TOOL_ROWS, matchesStepFilter, MCP_OUTPUT_PREVIEW_LINES, SKILL_USE_TOOLS, consolidateSteps, failureText, foldThoughts, thoughtLabel,
-    formatElapsed, formatToolLatency, compactNarration, argRows, getToolLabels, isTurnError, isWarning, say, shownWhenDone, stepsSummary, thoughtDurations,
+    formatElapsed, formatToolLatency, compactNarration, argRows, getToolLabels, isKept, isTurnError, isWarning, say, shownWhenDone, stepsSummary, thoughtDurations,
     toTimeline, toolRowText,
     type ActivityRow, type PlanItemStatus, type TimelineItem, type ToolLabels,
 } from '../utils/agentActivity.core';
@@ -177,6 +177,21 @@ interface AgentActivityProps {
     answer?: string;
 }
 
+const needsVision = (step: AgentStep) => step.type === 'tool' && step.needsModel === 'vision' && !step.active;
+
+/** The download an image step needs, offered where the user is looking. */
+function VisionOffer() {
+    const t = useT();
+    return (
+        <div className="flow-tool-offer">
+            <span>{t('activity.visionNeeded')}</span>
+            <button type="button" className="btn-secondary" onClick={() => { void ensureModel('vision'); }}>
+                {t('activity.getVisionModel')}
+            </button>
+        </div>
+    );
+}
+
 /** The turn as a timeline: the agent's notes in full, the steps between them folded once done. */
 export function AgentActivity({ steps, isActive, running = isActive, awaitingUser = false, liveLine, toolStatus = null, answer }: AgentActivityProps) {
     const t = useT();
@@ -230,7 +245,7 @@ export function AgentActivity({ steps, isActive, running = isActive, awaitingUse
             // While the turn runs, the live checklist below stands in for it.
             return step === livePlan ? null : <PlanChecklist key={step.id} step={step} />;
         }
-        if (step.type === 'status') return <FlowWarning key={step.id} step={step} />;
+        if (step.type === 'status') return step.kept ? <FlowDone key={step.id} step={step} /> : <FlowWarning key={step.id} step={step} />;
         if (step.type === 'error') return <FlowError key={step.id} step={step} />;
         if (step.type === 'policy_alert') return <FlowPolicyAlert key={step.id} step={step} />;
         return null;
@@ -242,7 +257,7 @@ export function AgentActivity({ steps, isActive, running = isActive, awaitingUse
 
     const lastIndex = timeline.length - 1;
     const visibleRows = (rows: ActivityRow[]) =>
-        foldThoughts(rows.filter((r) => (shownWhenDone(r) || isWarning(r)) && !isPlanShownLive(r, livePlan)));
+        foldThoughts(rows.filter((r) => (shownWhenDone(r) || isWarning(r) || isKept(r)) && !isPlanShownLive(r, livePlan)));
     // Calls in the runs that are open; folded runs and lone rows have nothing to sift.
     const openCalls = timeline.reduce((n, item, i) => {
         if (item.kind !== 'steps') return n;
@@ -282,7 +297,7 @@ export function AgentActivity({ steps, isActive, running = isActive, awaitingUse
                                 >
                                     {failed
                                         ? <AlertCircle size={13} className="agent-icon-error" />
-                                        : visible.some((r) => r.type === 'tool' && r.declined)
+                                        : visible.some((r) => r.type === 'tool' && (r.declined || r.autoDeclined))
                                             ? <Ban size={13} className="flow-steps-done" />
                                             : <CheckCircle2 size={13} className="flow-steps-done" />}
                                     <span className="flow-steps-text">{stepsSummary(visible, t)}</span>
@@ -292,6 +307,8 @@ export function AgentActivity({ steps, isActive, running = isActive, awaitingUse
                             {open && <div className="flow-steps-rows">{shown.map(renderRow)}</div>}
                             {/* A warning never hides behind the fold. */}
                             {!open && visible.filter(isWarning).map(renderRow)}
+                            {/* Nor does the download an image step asked for. */}
+                            {!open && !live && visible.some(needsVision) && <VisionOffer />}
                         </div>
                     );
                 })}
@@ -338,6 +355,17 @@ function FlowWarning({ step }: { step: AgentStep }) {
         <div className="flow-warning" role="status">
             <AlertCircle size={13} />
             <span>{step.label}</span>
+        </div>
+    );
+}
+
+function FlowDone({ step }: { step: AgentStep }) {
+    const t = useT();
+    return (
+        <div className="flow-done" role="status">
+            <Check size={13} aria-hidden="true" />
+            {/* Saved in English; translated when drawn so a reopened chat follows the language. */}
+            <span>{localizeLiveStatus(t, step.label)}</span>
         </div>
     );
 }
@@ -501,8 +529,9 @@ function FlowToolCard({ step, isExpanded, onToggle, now, awaitingUser = false, s
     const line = waiting ? t('activity.waiting') : live || toolRowText(step, t);
     const count = step.count ?? 1;
     // A failed call's reason belongs on its row; a success's output stays one click deeper.
-    const notRun = (!!step.declined || !!step.timedOut) && !step.active;
-    const failure = step.success === false && step.result && !notRun ? failureText(step, t) : '';
+    const notRun = (!!step.declined || !!step.timedOut || !!step.autoDeclined) && !step.active;
+    // A missing vision model is said by the offer under the row, not by the tool's raw error.
+    const failure = step.success === false && step.result && !notRun && !step.needsModel ? failureText(step, t) : '';
     const timing = waiting
         ? ''
         : step.active
@@ -552,14 +581,7 @@ function FlowToolCard({ step, isExpanded, onToggle, now, awaitingUser = false, s
                 </div>
             </button>
 
-            {step.needsModel === 'vision' && !step.active && (
-                <div className="flow-tool-offer">
-                    <span>{t('activity.visionNeeded')}</span>
-                    <button type="button" className="btn-secondary" onClick={() => { void ensureModel('vision'); }}>
-                        {t('activity.getVisionModel')}
-                    </button>
-                </div>
-            )}
+            {step.needsModel === 'vision' && !step.active && <VisionOffer />}
 
             {isExpanded && (
                 <div className="flow-tool-detail">
