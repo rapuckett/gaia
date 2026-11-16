@@ -158,6 +158,7 @@ export const ENDPOINTS = {
     document: '/api/documents/{doc_id}',
     documentCancel: '/api/documents/{doc_id}/cancel',
     documentFile: '/api/documents/{doc_id}/file',
+    documentIndexFolder: '/api/documents/index-folder',
     documentReindex: '/api/documents/{doc_id}/reindex',
     documentStatus: '/api/documents/{doc_id}/status',
     documentUpload: '/api/documents/upload',
@@ -528,4 +529,9 @@ export function filesSearchPath(sessionId: string, query: string, fileTypes: str
 /** Indexes a file that is already on the PC, naming the chat that may read it. */
 export function documentUploadPathPath(sessionId: string): string {
     return `${ENDPOINTS.documentUploadPath}?session_id=${encodeURIComponent(sessionId)}`;
+}
+
+/** Indexes a folder that is on the PC, naming the chat that may read it. */
+export function documentIndexFolderPath(sessionId: string): string {
+    return `${ENDPOINTS.documentIndexFolder}?session_id=${encodeURIComponent(sessionId)}`;
 }

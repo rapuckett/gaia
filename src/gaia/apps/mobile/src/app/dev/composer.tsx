@@ -11,6 +11,7 @@ import { MAX_MESSAGE_CHARS } from '@webui/utils/messageLimits';
 import { COMPOSER_MENU_STATES, ComposerMenusGallery, type ComposerMenuState } from '@/features/composer/ComposerMenusGallery';
 import { Composer, type Attachments, FolderChip, PermissionChip, PrivateChip } from '@/features/composer';
 import { ControlChip } from '@/features/composer/ControlChip';
+import { HeldGallery } from '@/features/new-chat/HeldGallery';
 import { useT } from '@/i18n/useT';
 import { Divider, Screen, Stack, UIProvider } from '@/ui';
 import { Cpu } from '@/ui/icons';
@@ -47,6 +48,7 @@ export default function ComposerGalleryRoute() {
             </UIProvider>
         );
     }
+    if (state === 'held') return <HeldGallery />;
     if (state && (COMPOSER_MENU_STATES as readonly string[]).includes(state)) return <ComposerMenusGallery key={state} state={state as ComposerMenuState} />;
     const folder = { path: '/Users/avery/Projects/gaia', name: 'gaia-notes', gaia_folder: false, choosable: false };
     const chipRow = (running = false, value?: string) => (

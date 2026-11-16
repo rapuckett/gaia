@@ -245,6 +245,7 @@ describe('endpoints', () => {
         document: ['DELETE'],
         documentCancel: ['POST'],
         documentFile: ['GET'],
+        documentIndexFolder: ['POST'],
         documentReindex: ['POST'],
         documentStatus: ['GET'],
         documentUpload: ['POST'],

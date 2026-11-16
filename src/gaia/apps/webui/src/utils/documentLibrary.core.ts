@@ -3,8 +3,9 @@
 
 /** Library formatting shared by the web UI and the phone app; no DOM. */
 
-import { isolate, type MessageKey, type PluralKey } from '../i18n/registry';
+import { isolate, pluralKey, type MessageKey, type PluralKey } from '../i18n/registry';
 import { dateLocale, type Translate } from '../i18n/translator';
+import type { IndexFolderResponse } from '../types';
 
 /** How far a running index has got: PDF pages read, then chunks embedded. */
 export interface IndexProgress {
@@ -129,4 +130,30 @@ export function formatFullTimestamp(isoString: string, t: Translate): string {
     } catch {
         return '';
     }
+}
+
+/** One sentence on what folder indexing added, skipped and couldn't read. */
+export function describeFolderResult(t: Translate, folderName: string, result: IndexFolderResponse): string {
+    const skipped = result.skipped ?? 0;
+    return t.compose((say) => {
+        const parts: string[] = [];
+        if (result.indexed > 0) {
+            parts.push(say(pluralKey('docs.folder.indexed', result.indexed), { n: result.indexed, name: folderName }));
+        } else if (result.failed === 0) {
+            parts.push(say('docs.folder.none', { name: folderName }));
+        }
+        if (skipped > 0) {
+            parts.push(say(pluralKey('docs.folder.skipped', skipped), { n: skipped }));
+        }
+        const images = result.skipped_images ?? 0;
+        if (images > 0) {
+            parts.push(say(pluralKey('docs.folder.images', images), { n: images }));
+        }
+        if (result.failed > 0) {
+            parts.push(say(pluralKey('docs.folder.failed', result.failed), { n: result.failed }));
+            if (result.errors[0]) parts.push(result.errors[0].split('\n')[0]);
+        }
+        parts.push(say('docs.folder.noSubfolders'));
+        return parts.join(' ');
+    });
 }
