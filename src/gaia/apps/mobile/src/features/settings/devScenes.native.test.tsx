@@ -49,7 +49,7 @@ describeNative('/dev/settings', () => {
     it.each([
         ['model-key-disconnected', 'Reconnect'],
         ['model-search-empty', 'No models match.'],
-        ['model-hf-checking', 'Needs 64 GB'],
+        ['model-hf-checking', /Needs 64 GB/],
         ['model-hf-ready', /Add .*Demo Chat/],
         ['model-search-miss', 'No models match.'],
         ['model-details', 'Gemma-4-E4B-it-GGUF'],
