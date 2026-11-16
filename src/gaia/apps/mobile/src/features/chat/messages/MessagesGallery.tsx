@@ -35,7 +35,7 @@ export function MessagesGallery({ state }: { state: MessagesGalleryState }) {
             <Screen>
                 <EmailPreScanCard
                     data={{ ok: true, data: PRESCAN_PAYLOAD }}
-                    startPending={state === 'prescan-dismissing' ? 'm2' : undefined}
+                    startPending={state === 'prescan-dismissing' ? 'm1' : undefined}
                     startNotice={state === 'prescan-done'}
                 />
             </Screen>

@@ -52,7 +52,7 @@ describeNative('email pre-scan card', () => {
     it.each([
         ['prescan', { name: 'prescan' as const }, () => expect(screen.getByText('Review the Q4 budget draft')).toBeTruthy()],
         ['prescan-empty', { name: 'prescan-empty' as const }, () => expect(screen.getByText(t('mobileApp.emailPreScan.empty'))).toBeTruthy()],
-        ['prescan-dismissing', { name: 'prescan' as const, startPending: 'm2' }, () => expect(screen.getByLabelText(t.bare('mobileApp.emailPreScan.replyFor', { subject: 'Lunch on Thursday?' }))).toBeDisabled()],
+        ['prescan-dismissing', { name: 'prescan' as const, startPending: 'm1' }, () => expect(screen.getByLabelText(t.bare('mobileApp.emailPreScan.replyFor', { subject: 'Review the Q4 budget draft' }))).toBeDisabled()],
         ['prescan-done', { name: 'prescan' as const, startNotice: true }, () => expect(screen.getByText(t('mobileApp.emailPreScan.noChat'))).toBeTruthy()],
     ])('draws the %s gallery scene', async (_scene, { name, ...seed }, check) => {
         await render(

@@ -189,12 +189,10 @@ export const PRESCAN_PAYLOAD = {
     ],
     actionable: [
         { message_id: 'm2', sender: 'Grace Hopper <grace@example.com>', subject: 'Review the Q4 budget draft', why: 'Asks for your feedback by Friday' },
-        { message_id: 'm3', sender: 'Alan Turing <alan@example.com>', subject: 'Lunch on Thursday?', why: 'Needs a yes or no' },
     ],
     informational_count: 14,
     suggested_archives: [
         { message_id: 'm4', sender: 'Weekly Digest <news@example.com>', subject: 'Your weekly digest is here', reason: 'Newsletter you never open' },
-        { message_id: 'm5', sender: 'Shop <orders@example.com>', subject: 'Your order has shipped', reason: 'Order update, nothing to do' },
     ],
     suggested_drafts: [],
     preferences_applied: { priority_senders: ['ada@example.com'], low_priority_senders: ['news@example.com'], category_defaults: { promotions: 'archive' } },
@@ -241,7 +239,7 @@ export const FIXTURES: Record<MessagesFixture, { messages: Message[]; live?: Mes
     long: { messages: [...SHORT.slice(0, 2), msg('user', LONG_USER, 4), msg('assistant', ANSWER, 5)] },
     many: { messages: MANY },
     media: { messages: MEDIA },
-    prescan: { messages: prescanMessages('Scan my inbox.', 'Five emails need a look; the rest can wait.', { ok: true, data: PRESCAN_PAYLOAD }) },
+    prescan: { messages: prescanMessages('Scan my inbox.', 'Three emails need a look; the rest can wait.', { ok: true, data: PRESCAN_PAYLOAD }) },
     'prescan-empty': {
         messages: prescanMessages('Scan my inbox.', 'Nothing needs you right now.', {
             ok: true,
