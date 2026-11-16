@@ -87,7 +87,8 @@ export function useModelActions(modelName: string | null, status: SystemStatus |
     );
 
     const load = useCallback(
-        (anyway = false) => (modelName ? run('load', () => requireClient(client).loadModel(modelName, anyway)) : Promise.resolve()),
+        (anyway = false, ctxSize?: number) =>
+            modelName ? run('load', () => requireClient(client).loadModel(modelName, anyway, { ctxSize })) : Promise.resolve(),
         [client, modelName, run],
     );
 

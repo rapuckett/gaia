@@ -16,6 +16,7 @@ import { InfoBubble } from './InfoBubble';
 import { formatPrice } from './settings/cloudPrice';
 import { useT } from '../i18n/useT';
 import { providerName, providerNotice } from '../utils/providerText';
+import { needsCloudConsent } from '../utils/cloudConsent.core';
 import { MarkedText, markLtr } from './MarkedText';
 import type { ProviderInfo, ProviderModel } from '../types';
 
@@ -290,7 +291,7 @@ export function ModelChip() {
 
     /** Switch to *model*; returns why it failed, or null. */
     const choose = useCallback(async (model: string, provider: ProviderInfo): Promise<string | null> => {
-        if (provider.remote && !active?.remote && pendingCloud?.model !== model) {
+        if (needsCloudConsent(provider, active, model, pendingCloud?.model)) {
             setPendingCloud({ model, provider });
             return null;
         }
