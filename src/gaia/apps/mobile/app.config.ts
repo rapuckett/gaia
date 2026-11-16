@@ -62,8 +62,10 @@ export default function appConfig(): ExpoConfig {
             bundleIdentifier: iosId,
             supportsTablet: true,
             infoPlist: {
-                // Every build reaches the paired PC at its home-network address; the native transport pins its certificate.
-                NSAppTransportSecurity: { NSAllowsArbitraryLoads: false, NSAllowsLocalNetworking: true },
+                // Only the dev client needs plain HTTP (Metro on the home network); the paired PC is pinned https in every build.
+                NSAppTransportSecurity: dev
+                    ? { NSAllowsArbitraryLoads: false, NSAllowsLocalNetworking: true }
+                    : { NSAllowsArbitraryLoads: false },
                 NSLocalNetworkUsageDescription: LOCAL_NETWORK_USE,
                 NSPhotoLibraryAddUsageDescription: PHOTOS_ADD_USE,
             },

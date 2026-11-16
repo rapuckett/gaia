@@ -292,7 +292,7 @@ export function FileBrowserScreen({ chatId, onClose, onPreview, onAsk, initial }
                 {denied ? <Notice tone="danger" message={t(pcIsMac ? 'fileBrowser.deniedMac' : 'fileBrowser.denied', { name: denied })} /> : null}
                 {failed ? <Notice tone="danger" message={failed} action={{ label: t('docs.loadRetry'), onPress: () => void (searching ? search.refetch() : browse.refetch()) }} /> : null}
             </Stack>
-            {loading && items.length === 0 ? <ListSkeleton rows={4} /> : null}
+            {loading && items.length === 0 ? <ListSkeleton rows={4} label={t('fileBrowser.loading')} /> : null}
             {!loading && !failed && !denied && items.length === 0 ? <EmptyState title={t(emptyKey(searching, entries.length - shown.length))} /> : null}
             {items.length > 0 ? (
                 <List
