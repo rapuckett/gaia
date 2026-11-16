@@ -13,6 +13,29 @@ export interface ConnectAccountPayload {
     agent_id?: string;
     /** Providers connected already, whose fault is something signing in again fixes. */
     reconnect?: string[];
+    /** Per provider, the access the failed call needs. */
+    scopes?: Record<string, string[]>;
+}
+
+function isScopeMap(value: unknown, providers: unknown[]): boolean {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    return Object.entries(value as Record<string, unknown>).every(
+        ([p, s]) =>
+            providers.includes(p)
+            && Array.isArray(s)
+            && s.length > 0
+            && s.every((x) => typeof x === 'string' && x.length > 0),
+    );
+}
+
+/**
+ * What a Connect press asks for: what the call needs, plus what the connection
+ * already carries, so signing in again never takes access away. Empty when the
+ * card names nothing, so the backend asks for what the agent declares.
+ */
+export function requestScopes(needed: string[] | undefined, held: string[] | undefined): string[] {
+    if (!needed?.length) return [];
+    return [...new Set([...(held ?? []), ...needed])];
 }
 
 export function isConnectAccountPayload(value: unknown): value is ConnectAccountPayload {
@@ -25,7 +48,8 @@ export function isConnectAccountPayload(value: unknown): value is ConnectAccount
         v.providers.every((p) => typeof p === 'string' && p.length > 0) &&
         (v.agent_id === undefined || typeof v.agent_id === 'string') &&
         (v.reconnect === undefined
-            || (Array.isArray(v.reconnect) && v.reconnect.every((p) => typeof p === 'string')))
+            || (Array.isArray(v.reconnect) && v.reconnect.every((p) => typeof p === 'string'))) &&
+        (v.scopes === undefined || isScopeMap(v.scopes, v.providers))
     );
 }
 

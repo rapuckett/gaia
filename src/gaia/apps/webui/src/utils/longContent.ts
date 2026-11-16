@@ -32,6 +32,27 @@ export function isLongUserMessage(text: string): boolean {
     return countLines(text) > USER_COLLAPSE_LINES || text.length > USER_COLLAPSE_CHARS;
 }
 
+/** Lines a collapsed user message keeps at each end. */
+export const USER_EXCERPT_LINES = 3;
+/** A kept line is cut past this, so one huge pasted line cannot fill the preview. */
+export const USER_EXCERPT_LINE_CHARS = 300;
+
+const clipLine = (line: string) => (line.length > USER_EXCERPT_LINE_CHARS ? `${line.slice(0, USER_EXCERPT_LINE_CHARS)}…` : line);
+
+/**
+ * The start and end of a long message, so a question typed after a pasted
+ * block still shows; null when it is long in characters, not lines.
+ */
+export function messageExcerpt(text: string): { head: string; tail: string; hidden: number } | null {
+    const lines = text.split('\n');
+    if (lines.length <= USER_COLLAPSE_LINES) return null;
+    return {
+        head: lines.slice(0, USER_EXCERPT_LINES).map(clipLine).join('\n'),
+        tail: lines.slice(-USER_EXCERPT_LINES).map(clipLine).join('\n'),
+        hidden: lines.length - 2 * USER_EXCERPT_LINES,
+    };
+}
+
 /** "700 lines", or "60,000 characters" when the length is in a few very long lines. */
 export function sizeLabel(t: Translate, text: string, lineThreshold = USER_COLLAPSE_LINES): string {
     const lines = countLines(text);

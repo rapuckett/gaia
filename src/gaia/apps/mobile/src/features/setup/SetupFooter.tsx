@@ -3,9 +3,9 @@
 
 import {
     Children,
+    Fragment,
     cloneElement,
     createContext,
-    Fragment,
     isValidElement,
     useContext,
     useEffect,
@@ -13,6 +13,7 @@ import {
     type ReactElement,
     type ReactNode,
 } from 'react';
+import { View } from 'react-native';
 
 import { Button, Row, Stack, type ButtonProps } from '@/ui';
 
@@ -32,22 +33,28 @@ export function SetupFooterProvider({ children }: { children: ReactNode }) {
     );
 }
 
-function flatten(nodes: ReactNode): ReactNode[] {
-    return Children.toArray(nodes).flatMap((n) =>
-        isValidElement(n) && n.type === Fragment ? flatten((n as ReactElement<{ children?: ReactNode }>).props.children) : [n],
+function actionsOf(children: ReactNode): ReactNode[] {
+    return Children.toArray(children).flatMap((child) =>
+        isValidElement<{ children?: ReactNode }>(child) && child.type === Fragment ? actionsOf(child.props.children) : [child],
     );
 }
 
-/** Actions share the line while they fit, then wrap onto the next; a label too long for the screen wraps too. */
-function ActionRow({ children }: { children: ReactNode }) {
+function filled(action: ReactNode): ReactNode {
+    return isValidElement(action) && action.type === Button
+        ? cloneElement(action as ReactElement<ButtonProps>, { full: true, wrap: true })
+        : action;
+}
+
+/** Up to two actions share the row equally, so long labels wrap rather than spill; more stack. */
+function FooterActions({ children }: { children: ReactNode }) {
+    const actions = actionsOf(children);
+    if (actions.length > 2) return <Stack gap="sm">{actions.map(filled)}</Stack>;
     return (
-        <Row gap="md" wrap justify="between">
-            {flatten(children).map((child, i) => (
-                <Stack key={isValidElement(child) && child.key != null ? child.key : i} maxWidth="100%">
-                    {isValidElement(child) && child.type === Button
-                        ? cloneElement(child as ReactElement<ButtonProps>, { wrap: true })
-                        : child}
-                </Stack>
+        <Row gap="sm">
+            {actions.map((action, i) => (
+                <View key={i} testID="setup-footer-slot" style={{ flex: 1, minWidth: 0 }}>
+                    {filled(action)}
+                </View>
             ))}
         </Row>
     );
@@ -57,7 +64,7 @@ function ActionRow({ children }: { children: ReactNode }) {
 export function SetupFooterBar() {
     const content = useContext(Content);
     if (content == null) return null;
-    return <ActionRow>{content}</ActionRow>;
+    return <FooterActions>{content}</FooterActions>;
 }
 
 /**
@@ -71,7 +78,7 @@ export function SetupFooter({ children }: { children: ReactNode }) {
         register(children);
         return () => register(null);
     }, [register, children]);
-    if (!register) return <ActionRow>{children}</ActionRow>;
+    if (!register) return <FooterActions>{children}</FooterActions>;
     return null;
 }
 

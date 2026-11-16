@@ -159,7 +159,7 @@ export function ModelServerPanel() {
                         disabled={reloading}
                         onPress={() => {
                             setReloaded(true);
-                            void actions.load();
+                            void actions.load(false, chat.ctx_size ?? undefined);
                         }}
                         testID="advanced-reload"
                     />
@@ -173,10 +173,13 @@ export function ModelServerPanel() {
             <LoadAnywaySheet
                 open={actions.loadBlocked !== null}
                 name={chat?.name ?? ''}
-                onClose={actions.dismissLoadBlocked}
+                onClose={() => {
+                    setReloaded(false);
+                    actions.dismissLoadBlocked();
+                }}
                 onConfirm={() => {
                     actions.dismissLoadBlocked();
-                    void actions.load(true);
+                    void actions.load(true, chat?.ctx_size ?? undefined);
                 }}
             />
         </Stack>

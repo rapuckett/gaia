@@ -107,7 +107,7 @@ export function Screen({
             {footer ? (
                 <View testID="screen-footer" style={[
                         footerBleed ? undefined : { paddingHorizontal: space.gutter, paddingVertical: footerDivider ? space.md : space.sm },
-                        footerDivider ? { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border } : undefined,
+                        footerDivider ? { borderTopWidth: 1, borderTopColor: colors.border } : undefined,
                     ]}>
                     {footer}
                 </View>
