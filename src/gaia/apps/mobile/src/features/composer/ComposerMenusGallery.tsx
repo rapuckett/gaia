@@ -10,7 +10,7 @@ import { GaiaClientProvider } from '@/data';
 import { HistoryNotice } from '@/features/chat/HistoryNotice';
 import { useT } from '@/i18n/useT';
 import { usePickLoadStore } from '@/state/pickLoad';
-import { Screen, Stack, UIProvider } from '@/ui';
+import { Screen, SheetScope, Stack, UIProvider } from '@/ui';
 
 import { Composer } from './Composer';
 import type { Attachments } from './useAttachments';
@@ -112,6 +112,7 @@ export function ComposerMenusGallery({ state }: { state: ComposerMenuState }) {
         <QueryClientProvider client={queryClient}>
             <GaiaClientProvider client={client}>
                 <UIProvider>
+                  <SheetScope>
                     <Screen>
                         <Stack gap="md" justify="end" flex={1}>
                             {state === 'warning' ? <HistoryNotice text="Older messages are now out of the model's view (6 turns). Ask me to recall them if you need them." /> : null}
@@ -131,6 +132,7 @@ export function ComposerMenusGallery({ state }: { state: ComposerMenuState }) {
                             />
                         </Stack>
                     </Screen>
+                  </SheetScope>
                 </UIProvider>
             </GaiaClientProvider>
         </QueryClientProvider>

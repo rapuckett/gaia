@@ -69,22 +69,22 @@ import { DeviceCodeSignIn } from './DeviceCodeSignIn';
 
 type Translator = ReturnType<typeof useT>;
 
-export function ConnectorsScreen() {
+export function ConnectorsScreen({ initialExpanded }: { initialExpanded?: string }) {
     const t = useT();
     return (
         <Screen scroll header={<ScreenHeader title={t('settings.section.connectors')} />}>
-            <ConnectorsBody />
+            <ConnectorsBody initialExpanded={initialExpanded} />
         </Screen>
     );
 }
 
 /** The connector list, for the screen and for the Settings pane. */
-export function ConnectorsBody() {
+export function ConnectorsBody({ initialExpanded }: { initialExpanded?: string }) {
     const t = useT();
     const connectors = useConnectors();
     const agentMcps = useAgentMcps();
     const [query, setQuery] = useState('');
-    const [expanded, setExpanded] = useState<string | null>(null);
+    const [expanded, setExpanded] = useState<string | null>(initialExpanded ?? null);
     const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
     const [notice, setNotice] = useState<string | null>(null);
 
