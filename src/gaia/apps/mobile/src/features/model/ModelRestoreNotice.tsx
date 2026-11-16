@@ -3,6 +3,8 @@
 
 import { useEffect, useState } from 'react';
 
+import { isolateUnit } from '@webui/i18n/registry';
+
 import { useActiveModel } from '@/data';
 import { openSettings } from '@/features/settings/openSettings';
 import { useT } from '@/i18n/useT';
@@ -22,6 +24,9 @@ export function ModelRestoreNotice({ onPick = () => openSettings('model') }: { o
     const [rechecks, setRechecks] = useState(0);
     const ok = restore?.status === 'restored';
     const message = restore && restore.status !== 'none' ? restore.message : null;
+    const name = active.data?.display_name ?? active.data?.label;
+    // The PC words the sentence; the name inside it must wrap as one unit.
+    const shown = message && name && message.includes(name) ? message.replace(name, isolateUnit(name)) : message;
     const recheck = restore?.status === 'pending' || (restore?.status === 'failed' && !!restore.retry);
     const { refetch } = active;
 
@@ -44,7 +49,7 @@ export function ModelRestoreNotice({ onPick = () => openSettings('model') }: { o
     return (
         <Notice
             tone={ok ? 'info' : 'warning'}
-            message={message}
+            message={shown ?? message}
             action={ok ? undefined : { label: t('startup.pickModel'), onPress: () => { setDismissed(message); onPick(); } }}
             onDismiss={() => setDismissed(message)}
             dismissLabel={t('banner.dismiss')}
