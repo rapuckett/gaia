@@ -503,8 +503,9 @@ class FailedRedemption(BaseModel):
 
 class DeviceAccessStatus(BaseModel):
     listening: bool
+    waiting_for_home: bool = False  # left on; starts once the PC has a home network
     port: int
-    error_code: Optional[Literal["port_in_use", "unsafe_folder", "certificate", "start_failed"]] = None
+    error_code: Optional[Literal["port_in_use", "unsafe_folder", "certificate", "no_home_network", "start_failed"]] = None
     error_detail: Optional[str] = None
     pairing_open: bool
     pairing_expires_at: Optional[str] = None
@@ -1885,7 +1886,11 @@ else's:
   <Accordion title="GET /api/devices/status">
     `DeviceAccessStatus`: whether GAIA is listening and on which port, why it
     isn't when it failed (`error_code` `port_in_use`, `unsafe_folder`,
-    `certificate` or `start_failed`, with `error_detail`), whether a pairing
+    `certificate`, `no_home_network` or `start_failed`, with `error_detail`).
+    `waiting_for_home` is true while a listener left on waits for the PC to
+    join a home network after a restart, with `error_code` `no_home_network`
+    and the reason; it retries every 15 seconds, and `DELETE /api/devices/listener`
+    ends the wait. Then whether a pairing
     window is open and when it closes, the expiry settings, and the last 20
     failed redemptions with their `reason`: `expired` (the code timed out),
     `used` (it was already redeemed, or the window closed after the first
@@ -1908,13 +1913,14 @@ else's:
     Returns the status. **409** with `detail` `{"code", "message"}` when it
     can't: `port_in_use` (on macOS also when another program holds the port on
     just one of the PC's addresses), `unsafe_folder` (someone else can reach
-    `~/.gaia/devices`; use Reset pairing), `certificate` or `start_failed`
-    (also when the PC has no IPv4 default route, or its interface has no
-    home-network address; `message` says which). PC-only.
+    `~/.gaia/devices`; use Reset pairing), `certificate`, `no_home_network`
+    (the PC has no IPv4 default route, or its interface has no home-network
+    address; `message` says which) or `start_failed`. PC-only.
   </Accordion>
 
   <Accordion title="DELETE /api/devices/listener">
-    Stop listening, and stay off after a restart. Pairing closes. PC-only.
+    Stop listening, or stop waiting for a home network, and stay off after a
+    restart. Pairing closes. PC-only.
   </Accordion>
 
   <Accordion title="POST /api/devices/routes/{kind}">
