@@ -43,7 +43,7 @@ export function ModelStatusPill({ onOpenSettings }: ModelStatusPillProps) {
                         </FirstLine>
                         <Stack flex={1}>
                             {place ? <Text role="caption" tone="muted" numberOfLines={1}>{place}</Text> : null}
-                            <Text role="label" tone="secondary" numberOfLines={1} dir="auto">
+                            <Text role="label" tone="secondary" numberOfLines={1} dir={pill.name ? 'ltr' : 'auto'}>
                                 {pill.name ?? pill.text}
                             </Text>
                         </Stack>
