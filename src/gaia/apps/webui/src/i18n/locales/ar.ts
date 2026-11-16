@@ -1395,6 +1395,7 @@ const messages: Messages = {
     'perm.rereadFailed': 'تعذّرت إعادة قراءة الوضع المحفوظ: {error}',
 
     // The permission prompt above the composer
+    'countdown.left': 'متبقٍّ {time}',
     'prompt.allowOnce': 'السماح مرة واحدة',
     'prompt.allowForChat': 'السماح في هذه المحادثة',
     'prompt.alwaysAllow': 'السماح دائمًا بـ {scope} في هذه المحادثة',
