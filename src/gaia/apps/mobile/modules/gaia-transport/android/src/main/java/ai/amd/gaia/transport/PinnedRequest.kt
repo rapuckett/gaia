@@ -13,6 +13,7 @@ import java.util.Locale
 import java.util.concurrent.Executor
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 import javax.net.ssl.HostnameVerifier
 import javax.net.ssl.SSLContext
 import javax.net.ssl.SSLPeerUnverifiedException
@@ -24,6 +25,7 @@ import okhttp3.ConnectionPool
 import okhttp3.ConnectionSpec
 import okhttp3.Headers
 import okhttp3.HttpUrl
+import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody
@@ -101,7 +103,20 @@ internal class PinHostnameVerifier(private val pin: ByteArray, private val onMis
   }
 }
 
-/** A client for one request: TLS 1.2+ pinned to `pin`, no plain HTTP, redirects, retries, cookies, cache or reused connections. */
+/**
+ * Lets a call reach the network once. OkHttp follows some answers by itself even with retries off
+ * (a 503 with `Retry-After: 0`), which would send a single-use pairing request twice.
+ */
+internal class OneNetworkAttempt : Interceptor {
+  private val attempts = AtomicInteger(0)
+
+  override fun intercept(chain: Interceptor.Chain): Response {
+    if (attempts.incrementAndGet() > 1) throw IOException("follow-up refused")
+    return chain.proceed(chain.request())
+  }
+}
+
+/** A client for one request: TLS 1.2+ pinned to `pin`, one network attempt, no plain HTTP, redirects, cookies, cache or reused connections. */
 internal fun pinnedClient(pin: ByteArray, idleSeconds: Long, onMismatch: () -> Unit): OkHttpClient {
   val trust = PinTrustManager(pin, onMismatch)
   val tls = SSLContext.getInstance("TLS")
@@ -114,6 +129,7 @@ internal fun pinnedClient(pin: ByteArray, idleSeconds: Long, onMismatch: () -> U
     .followRedirects(false)
     .followSslRedirects(false)
     .retryOnConnectionFailure(false)
+    .addNetworkInterceptor(OneNetworkAttempt())
     .connectTimeout(idleSeconds, TimeUnit.SECONDS)
     .readTimeout(idleSeconds, TimeUnit.SECONDS)
     .writeTimeout(idleSeconds, TimeUnit.SECONDS)

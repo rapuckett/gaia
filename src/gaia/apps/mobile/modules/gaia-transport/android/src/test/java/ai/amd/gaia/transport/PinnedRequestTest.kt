@@ -100,6 +100,16 @@ class PinnedRequestTest {
   }
 
   @Test
+  fun anAnswerOkHttpWouldFollowIsNotSentAgain() {
+    server.enqueue(MockResponse().setResponseCode(503).setHeader("Retry-After", "0"))
+    server.enqueue(MockResponse().setBody("sent twice"))
+    val request = PinnedRequest(sha256(leaf.certificate))
+    val head = startAndWait(request, server.url("/api/devices/pair"), Outgoing(server.url("/api/devices/pair"), "POST", body = "{}".toByteArray()))
+    assertEquals("network", (head as Outcome.Failed).error.code)
+    assertEquals(1, server.requestCount)
+  }
+
+  @Test
   fun plainHttpIsNeverSent() {
     val plain = MockWebServer()
     plain.start()
@@ -118,10 +128,14 @@ class PinnedRequestTest {
     .signedBy(root)
     .build()
 
-  private fun startAndWait(request: PinnedRequest, url: HttpUrl = server.url("/api/health")): Outcome<ResponseHead> {
+  private fun startAndWait(
+    request: PinnedRequest,
+    url: HttpUrl = server.url("/api/health"),
+    outgoing: Outgoing = Outgoing(url),
+  ): Outcome<ResponseHead> {
     val done = CountDownLatch(1)
     var outcome: Outcome<ResponseHead>? = null
-    request.start(Outgoing(url), 5) {
+    request.start(outgoing, 5) {
       outcome = it
       done.countDown()
     }

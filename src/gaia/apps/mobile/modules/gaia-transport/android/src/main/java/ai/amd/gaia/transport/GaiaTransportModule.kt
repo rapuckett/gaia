@@ -13,6 +13,7 @@ import expo.modules.kotlin.exception.Exceptions
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import java.io.File
+import java.io.IOException
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 import okhttp3.Headers
@@ -23,7 +24,6 @@ import org.json.JSONObject
 
 private const val PAIR_ROUTE = "/api/devices/pair"
 private const val PROBE_ROUTE = "/api/health"
-private const val TOKEN_PREFIX = "gaiad_"
 private const val PROBE_SECONDS = 5L
 private const val REDEEM_SECONDS = 30L
 // Longer than the app's own longest wait for a quiet stream (a turn queued for the model).
@@ -58,6 +58,10 @@ class GaiaTransportModule : Module() {
 
   override fun definition() = ModuleDefinition {
     Name("GaiaTransport")
+
+    OnCreate {
+      sweepUploadTemporaries(context.cacheDir)
+    }
 
     // An upload's bytes sent so far, by request id; never its body.
     Events("onUploadProgress")
@@ -151,10 +155,14 @@ class GaiaTransportModule : Module() {
     val pinned = PinnedRequest(authorized.pin)
     requests.add(id, pinned)
     val body = try {
-      UploadBody.make(segments, context.cacheDir)
+      UploadBody.make(segments, UploadRoots(context.cacheDir, context.filesDir, context.noBackupFilesDir))
     } catch (e: TransportException) {
       requests.remove(id)
       promise.reject(e)
+      return
+    } catch (e: IOException) {
+      requests.remove(id)
+      promise.reject(transportError("upload_file", "Couldn't read the file to send: ${e.message}"))
       return
     }
     send(id, pinned, Outgoing(authorized.url, method, authorized.headers), body, promise) { sent, total ->
@@ -184,6 +192,10 @@ class GaiaTransportModule : Module() {
     val pin = pinBytes(secret.pin)
     if (pin == null) {
       promise.reject(transportError("keychain", "The paired PC's saved pin is damaged. Pair the phone again."))
+      return null
+    }
+    if (!isDeviceToken(secret.token)) {
+      promise.reject(transportError("keychain", "The paired PC's saved token is damaged. Pair the phone again."))
       return null
     }
     val sent = try {
@@ -391,7 +403,7 @@ private class Pairing(
       null
     }
     val token = answer?.opt("token") as? String
-    if (answer == null || token == null || !token.startsWith(TOKEN_PREFIX)) {
+    if (answer == null || token == null || !isDeviceToken(token)) {
       promise.reject(transportError("bad_response", "The PC's pairing answer had no device token."))
       return
     }

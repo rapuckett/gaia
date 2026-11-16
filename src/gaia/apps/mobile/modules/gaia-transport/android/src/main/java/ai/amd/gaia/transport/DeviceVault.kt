@@ -16,6 +16,12 @@ import org.json.JSONException
 import org.json.JSONObject
 
 private const val SERVICE = "ai.amd.gaia.paired-pc"
+private const val TOKEN_PREFIX = "gaiad_"
+private val TOKEN_CHARACTERS = Regex("^[A-Za-z0-9_-]+$")
+
+/** Whether `token` is a device token as the PC issues them; anything else is refused before it is saved or sent. */
+internal fun isDeviceToken(token: String): Boolean =
+  token.length > TOKEN_PREFIX.length && token.startsWith(TOKEN_PREFIX) && TOKEN_CHARACTERS.matches(token)
 
 /** One address the paired PC answers at, and the route it is on: home, tailnet or relay. */
 internal data class RouteOrigin(val kind: String, val origin: String)
