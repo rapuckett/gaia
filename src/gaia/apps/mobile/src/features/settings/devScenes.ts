@@ -13,7 +13,7 @@ import type { SectionId } from './sections';
 
 /** A settings pane on a fake PC: which section, and the anchor it opens on. */
 export interface SettingsScene {
-    section: Extract<SectionId, 'advanced' | 'messaging' | 'model' | 'privacy' | 'setup' | 'skills'>;
+    section: Extract<SectionId, 'advanced' | 'general' | 'messaging' | 'model' | 'privacy' | 'setup' | 'skills'>;
     target?: string;
     gpuMemory: GpuMemoryStatus | Error;
     status?: FakeClientData['status'];
@@ -25,6 +25,8 @@ export interface SettingsScene {
     hang?: 'download' | 'select';
     /** Client calls the scene answers itself (a hang or a PC refusal), over the fake's. */
     override?: Partial<GaiaClient>;
+    /** The device's saved palette; scenes without one open on the default palette. */
+    appearance?: { palette: 'default' | 'custom'; custom: { accent: string; base: string } };
 }
 
 const PENDING: GpuMemoryStatus = {
@@ -267,13 +269,15 @@ export const SETTINGS_SCENES: Record<string, SettingsScene> = {
             skills: {
                 skills: [skill('summarize')],
                 invalid: {
-                    'skills/long-one/SKILL.md': 'description is 2048 characters, over the limit',
-                    'skills/bare/SKILL.md': "'description' is missing",
-                    'skills/odd/SKILL.md': 'not valid YAML',
+                    'skills/long-one': 'description is 2048 characters, over the limit',
+                    'skills/bare': "'description' is missing",
+                    'skills/odd': 'not valid YAML',
                 },
             },
         },
     },
+    // SET-GEN-04 to 07: a saved custom accent and tint, so Custom is selected and the Colors disclosure opens with Accent, Background tint and Reset.
+    'general-custom-colors': { section: 'general', gpuMemory: GPU, appearance: { palette: 'custom', custom: { accent: '#C2410C', base: '#44403C' } } },
     // SET-PRIV-06: the Delete chats card with chats (`#tap=privacy-delete-all` opens the confirm sheet), and with none.
     'privacy-delete': { section: 'privacy', gpuMemory: GPU, data: { settings: SETTINGS, sessions: [chat('a'), chat('b'), chat('c')] } },
     'privacy-delete-none': { section: 'privacy', gpuMemory: GPU, data: { settings: SETTINGS, sessions: [] } },

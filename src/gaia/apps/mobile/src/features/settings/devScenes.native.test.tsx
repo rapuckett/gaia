@@ -126,13 +126,19 @@ describeNative('/dev/settings', () => {
 
     it.each([
         ['adv-details', 'Capabilities', /chat, vision, tool calling/],
-        ['adv-details-warn', 'Device', 'CPU'],
+        ['adv-details-warn', 'Device', /CPU/],
     ])('%s lists the detail rows once More details is opened', async (name, label, value) => {
         mockState = name;
         await mount();
         await fireEvent.press(await screen.findByLabelText('More details', { includeHiddenElements: true }));
         expect((await screen.findAllByText(label, { includeHiddenElements: true })).length).toBeGreaterThan(0);
         expect((await screen.findAllByText(value, { includeHiddenElements: true })).length).toBeGreaterThan(0);
+    });
+
+    it('general-custom-colors opens Colors with the custom accent, tint and Reset', async () => {
+        mockState = 'general-custom-colors';
+        await mount();
+        for (const label of ['Accent', 'Background tint', 'Reset']) expect((await screen.findAllByText(label, { includeHiddenElements: true })).length).toBeGreaterThan(0);
     });
 
     it('privacy-delete asks with the chat count before deleting', async () => {

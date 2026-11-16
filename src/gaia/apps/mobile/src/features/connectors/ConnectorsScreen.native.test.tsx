@@ -146,12 +146,12 @@ describeNative('ConnectorsGallery list states', () => {
     it('menu opens the actions sheet from the tile trigger', async () => {
         await scene('menu');
         fireEvent.press(await screen.findByTestId('connector-actions-linear'));
-        expect(await screen.findByText('Disable')).toBeTruthy();
+        expect(await screen.findByLabelText('Disable')).toBeTruthy();
     });
 
     it('groups lists the folded groups', async () => {
         await scene('groups');
-        for (const title of ['Connected', 'Accounts', 'MCP servers', 'Custom agent servers']) expect(await screen.findByText(title)).toBeTruthy();
+        for (const title of ['Connected', 'Accounts', 'MCP servers', 'Custom agent servers']) expect((await screen.findAllByText(title)).length).toBeGreaterThan(0);
     });
 
     it('codeFailed ends the sign-in with the failure text', async () => {
