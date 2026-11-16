@@ -856,7 +856,9 @@ class TestSidecarRegistrationEndToEnd:
         )
         monkeypatch.setattr("gaia.connectors.start_authorization", mock_start)
 
-        with TestClient(create_app(db_path=":memory:")) as client:
+        with TestClient(
+            create_app(db_path=":memory:"), client=("127.0.0.1", 50000)
+        ) as client:
             resp = client.post(
                 f"/api/connectors/{connector_id}/authorize",
                 json={"scopes": [read_scope], "grant_agents": ["installed:gaia"]},
