@@ -192,7 +192,7 @@ export const SETTINGS_SCENES: Record<string, SettingsScene> = {
     'model-many': { section: 'model', target: 'models-on-pc', gpuMemory: GPU, data: local(MANY) },
     'model-search-miss': { section: 'model', target: 'models-on-pc', gpuMemory: GPU, search: 'zzz-no-such-model', data: local(MANY) },
     // SET-MODEL-24: a model row with its Details section expanded.
-    'model-details': { section: 'model', target: 'models-on-pc', gpuMemory: GPU, openDetails: HAVE.id, data: local([HAVE, WANT, WANT_SMALL]) },
+    'model-details': { section: 'model', target: 'models-on-pc', gpuMemory: GPU, openDetails: MINE_CUSTOM.id, data: local([HAVE, MINE_CUSTOM]) },
     // SET-MODEL-26: a Use tap that hangs (`#tap=model-use-user.my-tuned-GGUF`).
     'model-switching': { section: 'model', target: 'models-on-pc', gpuMemory: GPU, hang: 'select', data: local([HAVE, MINE_CUSTOM]) },
     // SET-MODEL-24, 28: a custom model with Remove and its Details (`#tap=model-remove-user.my-tuned-GGUF` opens the confirm sheet); the custom model in use has none.

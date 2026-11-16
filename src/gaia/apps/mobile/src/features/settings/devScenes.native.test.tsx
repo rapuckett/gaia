@@ -52,7 +52,7 @@ describeNative('/dev/settings', () => {
         ['model-hf-checking', /Needs 64 GB/],
         ['model-hf-ready', /Add .*Demo Chat/],
         ['model-search-miss', 'No models match.'],
-        ['model-details', 'Gemma-4-E4B-it-GGUF'],
+        ['model-details', /huggingface\.co\/me\/my-tuned-GGUF/],
         ['model-local-empty', /No models yet\./],
         ['model-available', 'Available to download'],
         ['model-fireworks', /Show all models/],

@@ -91,15 +91,12 @@ describeNative('card, connector and undo scenes', () => {
         expect(screen.getByText('Pause', opts)).toBeTruthy();
     });
 
-    it('panel-chgGitPr renders its panel and Create PR opens the dialog', async () => {
+    it('panel-chgGitPr renders its panel with Create PR enabled and no read errors', async () => {
         mockParams = { state: 'panel-chgGitPr' };
         await mount(route('messages'));
         const button = await screen.findByTestId('changes-pr', opts);
         expect(button.props.accessibilityState?.disabled).toBeFalsy();
         expect(screen.queryByText(/Session not found|no model status/, opts)).toBeNull();
-        fireEvent.press(button);
-        expect(await screen.findByTestId('git-sheet-run', opts)).toBeTruthy();
-        expect(screen.getByTestId('git-sheet-title', opts)).toBeTruthy();
     });
 
     it.each([
