@@ -1082,6 +1082,7 @@ export const enMessages = {
     'docs.removeAria': 'Remove {name}',
     'docs.dismissFolder': 'Dismiss folder indexing result',
     'docs.loadFailed': 'Couldn\'t load your documents: {error}',
+    'docs.loadFailedNoReason': 'Couldn\'t load your documents.',
     'fileBrowser.selected.one': '{n} item selected',
     'fileBrowser.selected.other': '{n} items selected',
     'fileBrowser.denied': 'GAIA cannot open the folder "{name}". Check that your account is allowed to read it, then try again.',

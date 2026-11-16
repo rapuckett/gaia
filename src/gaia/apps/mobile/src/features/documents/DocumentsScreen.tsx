@@ -138,7 +138,7 @@ function Library({ chat, onBrowseFiles, onPreview, initial }: { chat: OpenChat |
                 </Stack>
             ) : null}
             {query.isPending ? <ListSkeleton rows={4} /> : null}
-            {loadFailed && documents.length === 0 ? <ErrorState title={loadFailed} action={retry} /> : null}
+            {loadFailed && documents.length === 0 ? <ErrorState title={loadFailed.text} detail={loadFailed.detail} action={retry} /> : null}
             {query.data && documents.length === 0 ? <EmptyState title={t('docs.empty')} message={t('docs.emptyHintPhone')} /> : null}
             {removal.pending ? (
                 <Stack paddingX="lg" paddingY="sm">
@@ -159,7 +159,7 @@ function Library({ chat, onBrowseFiles, onPreview, initial }: { chat: OpenChat |
                     ListHeaderComponent={
                         <Stack gap="sm" paddingX="lg" paddingY="sm">
                             {note ? <Notice tone="success" role="note" message={note} onDismiss={() => setNote(null)} /> : null}
-                            {loadFailed ? <Notice tone="danger" message={loadFailed} action={retry} /> : null}
+                            {loadFailed ? <Notice tone="danger" message={loadFailed.text} detail={loadFailed.detail} action={retry} /> : null}
                             {action.error ? (
                                 <Row gap="sm" align="start">
                                     <Stack flex={1}>
