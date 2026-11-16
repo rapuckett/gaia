@@ -18,6 +18,7 @@ import type {
     CustomModelReport,
     FeaturedLibrary,
     GpuMemoryStatus,
+    IndexFolderResponse,
     LemonadeFound,
     LemonadeTarget,
     LemonadeTargetBody,
@@ -94,6 +95,7 @@ export type {
     CustomModelReport,
     FeaturedLibrary,
     GpuMemoryStatus,
+    IndexFolderResponse,
     LemonadeFound,
     LemonadeTarget,
     LemonadeTargetBody,
@@ -676,6 +678,8 @@ export interface GaiaClient {
     uploadDocument(file: PickedFile, options?: UploadOptions): Promise<DocumentResponse>;
     /** Indexes a file that is on the PC, as the chat's folders allow; resolves once GAIA has read it or failed to. */
     uploadDocumentByPath(filepath: string, sessionId: string, options?: RequestOptions): Promise<DocumentResponse>;
+    /** Indexes the documents in a folder on the PC (inside it only, unless `recursive`), as the chat's folders allow. */
+    indexFolder(folderPath: string, recursive: boolean, sessionId: string, options?: RequestOptions): Promise<IndexFolderResponse>;
     /** A folder on the PC, as the chat's folders allow; with no `path` it opens the chat's first folder. 403 with `status: 'os_denied'` for a folder the PC's account can't read. */
     browseFiles(sessionId: string, path: string | undefined, options?: RequestOptions): Promise<BrowseResponse>;
     /** Looks for files by name in the chat's folders; `fileTypes` is a comma list of extensions. */
