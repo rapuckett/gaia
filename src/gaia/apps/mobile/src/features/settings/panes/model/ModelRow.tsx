@@ -90,7 +90,10 @@ export function ModelRow({ model: m, label, current, remote, busy, onUse, onDown
                             {facts ? <Text role="caption" tone="muted">{facts}</Text> : null}
                             {m.evidence ? <Text role="caption" tone="muted">{measuredText(t, m.evidence)}</Text> : null}
                             {m.custom && m.source_url ? (
-                                <Text role="caption" tone="muted">{t('settings.model.from', { url: isolate(m.source_url) })}</Text>
+                                <Stack gap="xs">
+                                    <Text role="caption" tone="muted">{t('mobileApp.settings.model.from')}</Text>
+                                    <Text role="caption" tone="muted" dir="ltr" selectable>{m.source_url}</Text>
+                                </Stack>
                             ) : null}
                         </Stack>
                     </Disclosure>
