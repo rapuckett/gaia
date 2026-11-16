@@ -41,7 +41,7 @@ export function ModelRow({ model: m, label, current, remote, busy, onUse, onDown
     return (
         <Surface tone={current ? 'accent' : 'primary'} radius="md" padding="sm">
             <Stack gap="sm" testID={`model-row-${m.id}`}>
-                <Row gap="sm" justify="between" align="start">
+                <Row gap="sm" justify="between" align="start" stack>
                     <Stack flex={1}>
                         <Text role="ui" weight="semibold"><Ltr>{label}</Ltr></Text>
                     </Stack>
@@ -109,7 +109,7 @@ export function ModelRow({ model: m, label, current, remote, busy, onUse, onDown
                         </Row>
                     </Stack>
                 ) : null}
-                <Row gap="sm" wrap>
+                <Row gap="sm" wrap stack>
                     {current && blocked ? (
                         <Text role="label" tone="danger">{t('settings.model.inUseBlocked')}</Text>
                     ) : current ? null : blocked || progress ? null : !m.downloaded ? (

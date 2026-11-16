@@ -8,6 +8,8 @@ import { Icon } from '../controls/Icon';
 import { IconButton } from '../controls/IconButton';
 import { Check, CircleAlert, Info, TriangleAlert, X } from '../icons';
 import { Row } from '../layout/layout';
+import { FirstLine } from '../text/FirstLine';
+import { useLargeText } from '../theme/a11y';
 import { useTheme } from '../theme/ThemeProvider';
 import { Text } from '../text/Text';
 import type { Tone } from '../theme/tone';
@@ -41,6 +43,7 @@ function withAlpha(hex: string, alpha: number): string {
 export function Notice({ tone, title, message, action, onDismiss, role, variant = 'tint', testID }: NoticeProps) {
     const t = useT();
     const { colors, radius, space } = useTheme();
+    const largeText = useLargeText();
     const bar = { info: colors.accentSolid, warning: colors.accentYellow, danger: colors.danger, success: colors.accentGreen }[tone];
     const bg = { info: colors.accentDim2, warning: colors.accentYellowDim, danger: colors.dangerDim, success: colors.accentGreenDim }[tone];
     const card = variant === 'card';
@@ -65,7 +68,9 @@ export function Notice({ tone, title, message, action, onDismiss, role, variant 
             }}
         >
             <Row gap="md" align="start">
-                <Icon icon={ICONS[tone]} size="md" tone={ICON_TONE[tone]} />
+                <FirstLine role={title ? 'ui' : 'label'}>
+                    <Icon icon={ICONS[tone]} size="md" tone={ICON_TONE[tone]} />
+                </FirstLine>
                 <View style={{ flex: 1, minWidth: 0, gap: space.xs }}>
                     <View {...(hasControls ? semantics : {})} style={{ gap: space.xs }}>
                         {title ? (
@@ -79,7 +84,7 @@ export function Notice({ tone, title, message, action, onDismiss, role, variant 
                             </Text>
                         ) : null}
                     </View>
-                    {action ? <Button variant="secondary" label={action.label} onPress={action.onPress} /> : null}
+                    {action ? <Button variant="secondary" label={action.label} onPress={action.onPress} full={largeText} /> : null}
                 </View>
                 {onDismiss ? <IconButton icon={X} size="sm" label={t('banner.dismiss')} onPress={onDismiss} /> : null}
             </Row>

@@ -139,7 +139,7 @@ export function ModelStatusSheet({ open, onClose, onOpenSettings }: ModelStatusS
                                 url: s.base_url ?? '—',
                             })}
                         />
-                        <Row gap="sm">
+                        <Row gap="sm" stack>
                             <Button label={t('modelStatus.cancel')} onPress={() => setConfirming(false)} />
                             <Button label={t('modelStatus.reloadIt')} variant="primary" onPress={() => reload(true)} />
                         </Row>

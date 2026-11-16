@@ -166,7 +166,7 @@ export function GuidedView({ open, doc, state, timers, onClose }: { open: boolea
                         <Text role="display" mono tone={bigView.status === 'done' ? 'success' : 'primary'} accessibilityRole="timer">
                             {bigView.status === 'done' ? t.bare('cards.done') : <Ltr>{formatClock(bigView.remainingSeconds)}</Ltr>}
                         </Text>
-                        <Row gap="sm">
+                        <Row gap="sm" stack>
                             <Button
                                 variant="primary"
                                 icon={bigView.status === 'running' ? Pause : Play}

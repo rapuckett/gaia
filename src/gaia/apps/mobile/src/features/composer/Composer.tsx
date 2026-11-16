@@ -10,6 +10,7 @@ import { MAX_MESSAGE_CHARS } from '@webui/utils/messageLimits';
 import { useT } from '@/i18n/useT';
 import { IconButton, Notice, Row, Stack, Surface, TextField } from '@/ui';
 import { ArrowUp, Square } from '@/ui/icons';
+import { INPUT_MAX_FONT_SCALE } from '@/ui/theme/a11y';
 
 import { AttachButton } from './AttachButton';
 import { AttachmentChips } from './AttachmentChips';
@@ -167,6 +168,7 @@ export function Composer({
                         maxLines={MAX_LINES}
                         disabled={!!disabledReason}
                         bare
+                        maxFontSizeMultiplier={INPUT_MAX_FONT_SCALE}
                         testID="composer-input"
                     />
                     <Row gap="sm" align="center">

@@ -40,7 +40,7 @@ export function MessageEditor({ original, onSend, onCancel, disabled = false }: 
                     ))}
                 </Stack>
             ) : null}
-            <Row gap="sm" justify="end">
+            <Row gap="sm" justify="end" stack>
                 <Button label={t('msg.editCancel')} variant="secondary" size="sm" onPress={onCancel} />
                 <Button
                     label={t('msg.editSend')}
