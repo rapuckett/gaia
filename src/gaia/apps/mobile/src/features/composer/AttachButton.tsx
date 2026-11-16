@@ -15,9 +15,9 @@ export function attachPasted(onPick: (files: PickedFile[]) => void, onError: (na
 }
 
 /** The + button: a menu to attach a photo or a file. */
-export function AttachButton({ onPick, onError, disabled }: { onPick(files: PickedFile[]): void; onError(name: string, message: string): void; disabled?: boolean }) {
+export function AttachButton({ onPick, onError, disabled, initialOpen = false, showPaste = false }: { onPick(files: PickedFile[]): void; onError(name: string, message: string): void; disabled?: boolean; initialOpen?: boolean; showPaste?: boolean }) {
     const t = useT();
-    const [open, setOpen] = useState(false);
+    const [open, setOpen] = useState(initialOpen);
     const [canPaste, setCanPaste] = useState(false);
     // Asked when the menu opens, so Paste shows only while the clipboard holds an image.
     useEffect(() => {
@@ -53,7 +53,7 @@ export function AttachButton({ onPick, onError, disabled }: { onPick(files: Pick
                     },
                     { label: t('composer.attachPhoto'), icon: Image, onPress: () => void pickPhotos().then(onPick) },
                     { label: t('composer.attachFile'), icon: FileText, onPress: () => void pickDocuments().then(onPick) },
-                    ...(canPaste ? [{ label: t('mobileApp.composer.attachPaste'), icon: ClipboardPaste, onPress: () => void attachPasted(onPick, onError, t) }] : []),
+                    ...(canPaste || showPaste ? [{ label: t('mobileApp.composer.attachPaste'), icon: ClipboardPaste, onPress: () => void attachPasted(onPick, onError, t) }] : []),
                 ]}
             />
         </>
