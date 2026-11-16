@@ -462,7 +462,7 @@ export const DISCORD_LIVE_STATES: ReadonlySet<string> = new Set(['starting', 'pa
 export const PROFILE_STREAM_IDLE_MS = 5 * 60_000;
 export const MEMORY_NOTICE_MS = 4_000;
 export const MEMORY_ERROR_NOTICE_MS = 8_000;
-/** How long a Delete button waits for its "Confirm?" press; the web UI's CONFIRM_DELETE_MS. */
+/** How long a Delete button waits for its "Confirm?" press; the web UI now confirms in a dialog. */
 export const CONFIRM_DELETE_MS = 8000;
 /** How often the model status pill re-reads the model server while its sheet is open, and while it is closed. */
 export const MODEL_STATUS_OPEN_POLL_MS = 3_000;

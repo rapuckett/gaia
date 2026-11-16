@@ -29,6 +29,7 @@ from . import (
     DEVICE_LISTENER_HOST,
     DEVICE_LISTENER_PORT,
     DEVICE_PORT_ENV,
+    HOME_ROUTE,
     HOUSEKEEPING_SECONDS,
     OFFERED_NETWORKS,
     PAIRING_OFFER_VERSION,
@@ -42,6 +43,7 @@ from .listener import (
     local_ipv4_addresses,
 )
 from .pairing import PairingWindow, sanitize_device_name
+from .routes import AwayRoutes
 from .storage import (
     TABLE_NAME,
     DeviceCertificateError,
@@ -135,6 +137,7 @@ class DeviceAccess:
         self._clock = clock
         self.pairing = PairingWindow(clock=clock)
         self.requests = OpenRequests()
+        self.routes = AwayRoutes()
         self._store: Optional[DeviceStore] = None
         self._listener: Optional[DeviceListener] = None
         self._pin: Optional[str] = None
@@ -224,6 +227,7 @@ class DeviceAccess:
         if housekeeping is not None and housekeeping is not asyncio.current_task():
             housekeeping.cancel()
         self.pairing.close()
+        await self.routes.stop_all()
         if self._listener is not None:
             await self._listener.stop()
             self._listener = None
@@ -302,7 +306,16 @@ class DeviceAccess:
             "idle_expiry_days": DEVICE_IDLE_DAYS,
             "pending_expiry_minutes": PENDING_DEVICE_SECONDS // 60,
             "failed_redemptions": self.pairing.failures(),
+            "routes": self.routes.status(),
         }
+
+    def route_origins(self) -> List[dict]:
+        """Every origin a device may reach this PC at now: home, then away."""
+        port = self._listener.port if self.listening and self._listener else None
+        home = home_network_origins(self._host, port) if port else []
+        return [
+            {"kind": HOME_ROUTE, "origin": origin} for origin in home
+        ] + self.routes.origins()
 
     def devices(self) -> List[Device]:
         store = self._existing_store()
