@@ -8427,7 +8427,6 @@ def _cache_folder_usage(folder: Path) -> tuple:
 
 def _print_cache_folders() -> None:
     """Print each folder under GAIA's cache root, largest first, with its size."""
-    from gaia.home import gaia_home
     from gaia.security import _format_size
 
     root = gaia_home() / "cache"

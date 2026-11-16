@@ -166,7 +166,7 @@ export function DownloadStep({ ctx }: { ctx: SetupStepContext }) {
     if (lost) {
         footer = <Button label={t('setup.reconnect')} variant="primary" busy={status.isFetching} onPress={() => void status.refetch()} />;
     } else if (view?.active) {
-        footer = <Button label={t('setup.progress.cancel')} disabled={busy} onPress={() => void stop()} />;
+        footer = <Button label={t('setup.progress.cancel')} disabled={busy} onPress={() => void stop()} testID="download-stop" />;
     } else if (view && view.cancelled.length > 0) {
         footer = <Button label={t('setup.progress.resumeAll')} variant="primary" busy={start.isPending} disabled={busy} onPress={() => void act(() => startRun())} />;
     } else if (stoppedBeforeCheck) {
