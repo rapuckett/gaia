@@ -28,6 +28,8 @@ export function ModelChip({ turnRunning = false, initialOpen = false, initialInf
     }, [turnRunning, queued, mutate]);
     const pill = pillText(data, t);
     const label = pill.name ?? t.bare('modelStatus.fallbackName');
+    // As the desktop's chip: the provider for a cloud model, "Local" where the PC says a chat runs on it.
+    const place = active?.remote ? active.provider_name || null : active?.inference_remote === false ? t.bare('modelStatus.local') : null;
     const notDownloaded = active?.downloaded === false;
     const warning = notDownloaded || !!switchError;
     const hint = switchError
@@ -45,6 +47,7 @@ export function ModelChip({ turnRunning = false, initialOpen = false, initialInf
         <>
             <ControlChip
                 label={queued ? `${label} → ${queued}` : label}
+                place={queued ? null : place}
                 icon={switchError ? TriangleAlert : notDownloaded ? Download : pill.remote ? Cloud : Cpu}
                 warning={warning}
                 accessibilityHint={hint}
