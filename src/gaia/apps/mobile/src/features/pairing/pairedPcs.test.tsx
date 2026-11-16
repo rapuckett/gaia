@@ -11,7 +11,7 @@ import { useForgetPc } from './pairedPcs';
 import { setPairingService } from './registry';
 import type { PairedPc, PairingService } from './service';
 
-const pc = (id: string, baseUrl: string): PairedPc => ({ id, name: id, connection: { baseUrl } });
+const pc = (id: string, baseUrl: string): PairedPc => ({ id, name: id, connection: { baseUrl, pcId: id } });
 
 describe('useForgetPc', () => {
     afterEach(() => setPairingService(null));
@@ -24,7 +24,7 @@ describe('useForgetPc', () => {
         );
         const { result } = await renderHook(() => useForgetPc(), { wrapper });
 
-        useConnectionStore.getState().setConnection({ baseUrl: 'https://192.168.1.20:4243' });
+        useConnectionStore.getState().setConnection({ baseUrl: 'https://192.168.1.20:4243', pcId: 'mine' });
         await act(async () => { await result.current.mutateAsync(pc('other', 'https://192.168.1.30:4243')); });
         expect(useConnectionStore.getState().connection).not.toBeNull();
 
