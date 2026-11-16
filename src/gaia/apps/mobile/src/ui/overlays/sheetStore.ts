@@ -11,6 +11,8 @@ export interface SheetEntry {
     children?: ReactNode;
     footer?: ReactNode;
     dismissible: boolean;
+    /** The SheetScope that hosts it; unset for the app's own host. */
+    scope?: string;
 }
 
 export interface SheetState {

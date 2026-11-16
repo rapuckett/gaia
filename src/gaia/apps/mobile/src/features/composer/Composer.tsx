@@ -142,7 +142,7 @@ export function Composer({
     const placeholder = disabledReason ? '' : bracketParts(spoken)[0];
 
     return (
-        <Stack gap="sm" padding="md">
+        <Stack gap="sm" paddingX="gutter" paddingY="md">
             {tooLong ? (
                 <Notice
                     tone="danger"
