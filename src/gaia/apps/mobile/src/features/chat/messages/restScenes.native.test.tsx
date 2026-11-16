@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: MIT
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen } from '@testing-library/react-native';
-import { Platform } from 'react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { BackHandler, Platform } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { translator } from '@/i18n/useT';
@@ -192,6 +192,30 @@ describeNative('card, connector and undo scenes', () => {
         const button = await screen.findByTestId('changes-pr', opts);
         expect(button.props.accessibilityState?.disabled).toBeFalsy();
         expect(screen.queryByText(/Session not found|no model status/, opts)).toBeNull();
+    });
+
+    it.each([
+        ['panel-chgGitPr', 'changes-pr', t('mobileApp.changes.git.prTitle')],
+        ['panel-chgList', 'changes-review', t('mobileApp.changes.chat.reviewTitle')],
+    ])('%s opens the %s sheet over the panel, and Android back closes only that sheet', async (state, button, title) => {
+        // Android calls the newest back handler first and stops at the first that returns true.
+        const handlers: (() => boolean | null | undefined)[] = [];
+        const spy = jest.spyOn(BackHandler, 'addEventListener').mockImplementation((_event, handler) => {
+            handlers.push(handler);
+            return { remove: () => void handlers.splice(handlers.indexOf(handler), 1) };
+        });
+        mockParams = { state };
+        await mount(route('messages'));
+        fireEvent.press(await screen.findByTestId(button, opts));
+        expect(await screen.findByText(title, opts)).toBeTruthy();
+        expect(screen.getByTestId(button, opts)).toBeTruthy();
+
+        act(() => {
+            [...handlers].reverse().some((h) => h());
+        });
+        await waitFor(() => expect(screen.queryByText(title, opts)).toBeNull());
+        expect(screen.getByTestId(button, opts)).toBeTruthy();
+        spy.mockRestore();
     });
 
     it.each([

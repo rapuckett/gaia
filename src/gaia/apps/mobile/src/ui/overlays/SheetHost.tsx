@@ -22,6 +22,12 @@ const DISMISS_DISTANCE = 100;
 const DISMISS_VELOCITY = 900;
 
 const SheetScopeContext = createContext<string | undefined>(undefined);
+const ParentSheetContext = createContext<string | undefined>(undefined);
+
+/** The sheet whose content renders here, if any. */
+export function useParentSheet() {
+    return useContext(ParentSheetContext);
+}
 
 /** The scope a `Sheet` rendered here belongs to; undefined under the app's own host. */
 export function useSheetScope() {
@@ -43,6 +49,7 @@ export function SheetHost({ children, scope }: { children: ReactNode; scope?: st
     const state = useSyncExternalStore(sheetStore.subscribe, sheetStore.getState);
     const shown = state.active ? state.entries[state.active] : undefined;
     const active = shown && shown.scope === scope ? shown : undefined;
+    const layers = active ? [active, ...state.stacked.flatMap((id) => state.entries[id] ?? [])] : [];
     return (
         <View style={{ flex: 1 }}>
             <View
@@ -51,12 +58,14 @@ export function SheetHost({ children, scope }: { children: ReactNode; scope?: st
             >
                 {children}
             </View>
-            {active ? <ActiveSheet key={active.id} entry={active} /> : null}
+            {layers.map((entry, i) => (
+                <ActiveSheet key={entry.id} entry={entry} covered={i < layers.length - 1} />
+            ))}
         </View>
     );
 }
 
-function ActiveSheet({ entry }: { entry: SheetEntry }) {
+function ActiveSheet({ entry, covered }: { entry: SheetEntry; covered: boolean }) {
     const t = useT();
     const { colors, radius, space, shadows } = useTheme();
     const { width, height } = useWindowDimensions();
@@ -74,7 +83,7 @@ function ActiveSheet({ entry }: { entry: SheetEntry }) {
         if (latest.current.dismissible && latest.current.open) latest.current.onClose();
     };
 
-    // Android back closes this sheet and stops there, so navigation doesn't also pop.
+    // Android back closes this sheet and stops there, so navigation doesn't also pop; a sheet opened over it registers later and so goes first.
     useEffect(() => {
         const sub = BackHandler.addEventListener('hardwareBackPress', () => {
             dismiss();
@@ -138,11 +147,13 @@ function ActiveSheet({ entry }: { entry: SheetEntry }) {
     );
 
     return (
+        <ParentSheetContext.Provider value={entry.id}>
         <View
             style={StyleSheet.absoluteFill}
-            accessibilityViewIsModal
+            accessibilityViewIsModal={!covered}
             onAccessibilityEscape={dismiss}
             testID="sheet-host-overlay"
+            {...a11yVisibility({ accessibilityElementsHidden: covered, importantForAccessibility: covered ? 'no-hide-descendants' : 'auto' })}
         >
             <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: colors.bgModalOverlay }, scrimStyle]}>
                 <RNPressable
@@ -184,5 +195,6 @@ function ActiveSheet({ entry }: { entry: SheetEntry }) {
                 </Animated.View>
             </KeyboardAvoidingView>
         </View>
+        </ParentSheetContext.Provider>
     );
 }
