@@ -68,7 +68,7 @@ describe('app config', () => {
         expect(() => readAppEnv('staging')).toThrow(/"staging"/);
     });
 
-    it('allows plain HTTP only in development, and every build reaches the home network', () => {
+    it('allows plain HTTP only in development', () => {
         const dev = configFor('development');
         const prod = configFor('production');
 
@@ -78,11 +78,8 @@ describe('app config', () => {
         });
         expect(pluginOptions(dev, './plugins/withCleartextHosts').hosts).toEqual(['10.0.2.2', '127.0.0.1', 'localhost']);
 
-        // The paired PC is a home-network address in production too; arbitrary loads stay off.
-        expect(prod.ios?.infoPlist?.NSAppTransportSecurity).toEqual({
-            NSAllowsArbitraryLoads: false,
-            NSAllowsLocalNetworking: true,
-        });
+        // Production reaches the paired PC only over pinned https, which needs no ATS exception.
+        expect(prod.ios?.infoPlist?.NSAppTransportSecurity).toEqual({ NSAllowsArbitraryLoads: false });
         expect(pluginOptions(prod, './plugins/withCleartextHosts').hosts).toEqual([]);
     });
 
