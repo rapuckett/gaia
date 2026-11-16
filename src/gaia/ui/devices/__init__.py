@@ -74,9 +74,10 @@ CLOSED_INVITATIONS_KEPT = 8
 #: sees one refusal for the first four, and a 429 for ``rate_limited``.
 PairFailureReason = Literal["expired", "used", "wrong", "closed", "rate_limited"]
 PAIR_FAILURE_REASONS = get_args(PairFailureReason)
-#: Why the listener isn't serving, as the PC sees it.
+#: Why the listener isn't serving, as the PC sees it. ``no_home_network``:
+#: the PC has no home network, so the listener can't tell home peers apart.
 ListenerErrorCode = Literal[
-    "port_in_use", "unsafe_folder", "certificate", "start_failed"
+    "port_in_use", "unsafe_folder", "certificate", "no_home_network", "start_failed"
 ]
 LISTENER_ERROR_CODES = get_args(ListenerErrorCode)
 #: Why the PC can't show a pairing code: the listener is off, or the PC has
@@ -123,6 +124,9 @@ LISTENER_HANDSHAKE_SECONDS = 10
 LISTENER_SHUTDOWN_SECONDS = 5
 #: How often the running listener expires idle and pending devices.
 HOUSEKEEPING_SECONDS = 60
+#: How often a listener left on, resumed before the PC has a home network,
+#: tries again.
+LISTENER_HOME_RETRY_SECONDS = 15
 
 #: The certificate: EC P-256, valid this long; its SHA-256 is the pin.
 CERTIFICATE_DAYS = 10 * 365

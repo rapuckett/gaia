@@ -1117,6 +1117,8 @@ class DeviceAccessStatus(BaseModel):
     """What the PC shows about access from the home network. Carries no secret."""
 
     listening: bool
+    #: Left on, but waiting for a home network to start; ``error_detail`` says why.
+    waiting_for_home: bool = False
     port: int
     error_code: Optional[ListenerErrorCode] = None
     error_detail: Optional[str] = None

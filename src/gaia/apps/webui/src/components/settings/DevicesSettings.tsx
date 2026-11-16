@@ -130,6 +130,8 @@ export function DevicesSettings() {
     const allowed = devices.filter((d) => d.status === 'allowed');
     const now = useNow(offer !== null || pending.length > 0);
     const listening = status?.listening === true;
+    // Left on before this PC had a home network: the switch stays on, and the backend starts it on its own.
+    const waiting = status?.waiting_for_home === true;
 
     // The window closes on the first pairing (or on the PC's Cancel): the code must vanish with it.
     useEffect(() => {
@@ -169,9 +171,15 @@ export function DevicesSettings() {
         setStatus(await (tailnet?.on ? stopAwayRoute('tailnet') : startAwayRoute('tailnet')));
     });
 
+    useEffect(() => {
+        if (!waiting) return;
+        const timer = setInterval(() => void refresh(), 5000);
+        return () => clearInterval(timer);
+    }, [waiting, refresh]);
+
     const toggle = () => act(async () => {
         if (listening) setOffer(null);
-        setStatus(await (listening ? stopDeviceListener() : startDeviceListener()));
+        setStatus(await (listening || waiting ? stopDeviceListener() : startDeviceListener()));
     });
     const pair = () => act(async () => {
         setExpired(false);
@@ -204,7 +212,7 @@ export function DevicesSettings() {
     }
 
     const connectLabel = t('settings.devices.connect');
-    const listenError = status.error_code === 'port_in_use'
+    const listenError = waiting ? null : status.error_code === 'port_in_use'
         ? t('settings.devices.portInUse', { port: markLtr(String(status.port)) })
         : status.error_code ? t('settings.devices.listenFailed', { detail: status.error_detail ?? status.error_code }) : null;
     const failed = status.failed_redemptions ?? [];
@@ -222,7 +230,7 @@ export function DevicesSettings() {
                             <input
                                 type="checkbox"
                                 role="switch"
-                                checked={listening}
+                                checked={listening || waiting}
                                 aria-describedby="devices-connect-hint"
                                 onChange={() => void toggle()}
                                 aria-busy={busy}
@@ -232,6 +240,15 @@ export function DevicesSettings() {
                     </label>
                     <p className="settings-hint" id="devices-connect-hint">{t('settings.devices.connectHint')}</p>
                 </div>
+                {waiting && (
+                    <div className="devices-waiting" role="status">
+                        <Hourglass size={16} aria-hidden="true" className="devices-row-icon" />
+                        <div>
+                            <p className="settings-note">{t('settings.devices.waitingForHome')}</p>
+                            <p className="settings-hint">{t('settings.devices.waitingForHomeHint')}</p>
+                        </div>
+                    </div>
+                )}
                 {listenError && <p className="settings-error" role="alert"><MarkedText text={listenError} /></p>}
                 {tailnet && (
                     <div>
@@ -271,7 +288,7 @@ export function DevicesSettings() {
                             </button>
                         </div>
                         {expired && <p className="settings-hint" role="status">{t('settings.devices.expired')}</p>}
-                        {!listening && <p className="settings-hint">{t('settings.devices.pairOffHint', { label: connectLabel })}</p>}
+                        {!listening && !waiting && <p className="settings-hint">{t('settings.devices.pairOffHint', { label: connectLabel })}</p>}
                     </div>
                 )}
                 {offer && (

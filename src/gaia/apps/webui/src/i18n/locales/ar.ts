@@ -1903,6 +1903,8 @@ const messages: Messages = {
     'settings.devices.connectHint': 'عبر الشبكة المحلية التي يتصل بها هذا الحاسوب. ما دام متوقفًا لا يمكن لأي جهاز الاتصال، مقترنًا كان أو لا.',
     'settings.devices.portInUse': 'المنفذ {port} يستخدمه تطبيق آخر، لذا لا يمكن للأجهزة الاتصال. أغلق ذلك التطبيق، ثم شغّل هذا الخيار مرة أخرى.',
     'settings.devices.listenFailed': 'لا يمكن للأجهزة الاتصال: {detail}',
+    'settings.devices.waitingForHome': 'في انتظار شبكتك المنزلية…',
+    'settings.devices.waitingForHomeHint': 'هذا الحاسوب ليس متصلًا بشبكتك المنزلية بعد. يمكن للأجهزة الاتصال بمجرد اتصاله بشبكة Wi-Fi أو Ethernet؛ يتحقق GAIA من ذلك كل بضع ثوانٍ. إذا كانت شبكة VPN تنقل كل حركة بيانات هذا الحاسوب، فأوقفها.',
     'settings.devices.tailnet': 'السماح أيضًا من شبكة Tailscale الخاصة بي',
     'settings.devices.tailnetHint': 'يمكن للأجهزة المقترنة الوصول إلى هذا الحاسوب من أي مكان عبر Tailscale. يحتاج كل جهاز إلى تشغيل Tailscale وتسجيل الدخول إلى الحساب نفسه.',
     'settings.devices.tailnetOnHint': 'يمكن للأجهزة المقترنة الوصول إلى هذا الحاسوب من أي مكان عبر Tailscale، على {address}. يحتاج كل جهاز إلى تشغيل Tailscale وتسجيل الدخول إلى الحساب نفسه.',
