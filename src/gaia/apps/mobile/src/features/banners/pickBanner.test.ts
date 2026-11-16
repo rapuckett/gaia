@@ -39,4 +39,18 @@ describe('pickBanner', () => {
         expect(banner?.progress?.label).toBe('50% · 5.00 / 10.00 GB');
         expect(id(withStatus({ download_progress: { ...download, state: 'error' } }))).toBe('download');
     });
+
+describe('backend errors read as one sentence', () => {
+    it.each([[502, 'down', '502 down'], [503, '', '503']])('%i puts the status once in the title and the raw cause in details', (status, body, details) => {
+        const banner = pickBanner(undefined, new GaiaApiError(status, body), t);
+        expect(banner?.title).toBe(t('mobileApp.error.backend', { status }));
+        expect(banner?.title).not.toMatch(/answered with an error/);
+        expect(banner?.details).toBe(details);
+    });
+
+    it('a network error keeps its own message and has no details', () => {
+        const banner = pickBanner(undefined, new GaiaNetworkError('http://pc', new Error('x')), t);
+        expect(banner?.title).toBe(t('mobileApp.pairing.off.title'));
+        expect(banner?.details).toBeUndefined();
+    });
 });
