@@ -5,6 +5,7 @@ import { fireEvent, render, screen } from '@testing-library/react-native';
 import { Platform } from 'react-native';
 
 import { translator } from '@/i18n/useT';
+import { useLocaleStore } from '@/state/locale';
 import { ThemeProvider } from '@/ui';
 
 import { RenderCard } from './RenderCard';
@@ -65,5 +66,15 @@ describeNative('calculator card', () => {
         expect(screen.getByText(/\$60\.00/)).toBeTruthy();
         await fireEvent.changeText(screen.getByTestId('calc-input-tipPercent'), '10');
         expect(screen.getByText(/\$55\.00/)).toBeTruthy();
+    });
+});
+
+describeNative('guide card in the Arabic UI', () => {
+    beforeEach(() => useLocaleStore.getState().setLocale('ar'));
+    afterEach(() => useLocaleStore.getState().setLocale(null));
+
+    it('wraps an ingredient amount in an LTR isolate so it stays whole', async () => {
+        await show('guide', { ...RECIPE, items: ['1 1/2 cups all-purpose flour'] });
+        expect(screen.getByText(/\u2066.*1 1\/2.*\u2069/)).toBeTruthy();
     });
 });
