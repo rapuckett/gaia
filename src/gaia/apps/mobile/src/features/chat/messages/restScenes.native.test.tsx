@@ -6,6 +6,7 @@ import { fireEvent, render, screen } from '@testing-library/react-native';
 import { Platform } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { translator } from '@/i18n/useT';
 import { sheetStore } from '@/ui/overlays/sheetStore';
 
 // Required inside the tests: the web project can't load these routes' SVG and font modules.
@@ -22,7 +23,16 @@ jest.mock('expo-router', () => ({
     useNavigation: () => ({ openDrawer: jest.fn() }),
     usePathname: () => '/dev',
 }));
-jest.mock('@/features/nav/ScreenHeader', () => ({ ScreenHeader: () => null }));
+jest.mock('@/features/nav/ScreenHeader', () => ({
+    ScreenHeader: ({ titleNode, end }: { titleNode?: React.ReactNode; end?: React.ReactNode }) => (
+        <>
+            {titleNode}
+            {end}
+        </>
+    ),
+}));
+
+const t = translator('en');
 
 jest.setTimeout(30000);
 
@@ -79,6 +89,86 @@ describeNative('card, connector and undo scenes', () => {
         await mount(route('messages'));
         expect(await screen.findByTestId('guide-tip', opts)).toBeTruthy();
         expect(screen.getByTestId('guide-tip-dismiss', opts)).toBeTruthy();
+    });
+
+    it('turn-changes shows the summary, Review changes and the undo confirm', async () => {
+        mockParams = { state: 'turn-changes' };
+        await mount(route('messages'));
+        expect(await screen.findByText(t.plural('mobileApp.changes.summary', 2), opts)).toBeTruthy();
+        expect(screen.getByText('Review changes', opts)).toBeTruthy();
+        fireEvent.press(screen.getByTestId('turn-changes-undo', opts));
+        expect(await screen.findByText(t.plural('mobileApp.changes.confirm', 2), opts)).toBeTruthy();
+    });
+
+    it('turn-changes-undone marks the summary undone and drops the undo button', async () => {
+        mockParams = { state: 'turn-changes-undone' };
+        await mount(route('messages'));
+        expect(await screen.findByText(`${t.plural('mobileApp.changes.summary', 2)} · ${t('mobileApp.changes.undone')}`, opts)).toBeTruthy();
+        expect(screen.queryByTestId('turn-changes-undo', opts)).toBeNull();
+    });
+
+    it('turn-changes-error puts the PC reason on its own line, outside the sentence', async () => {
+        mockParams = { state: 'turn-changes-error' };
+        await mount(route('messages'));
+        expect(await screen.findByText(t('turnChanges.loadErrorNoReason'), opts)).toBeTruthy();
+        expect(screen.getByText('database is locked', opts)).toBeTruthy();
+    });
+
+    it('turn-review lists each file with its badge and notes', async () => {
+        mockParams = { state: 'turn-review' };
+        await mount(route('messages'));
+        expect(await screen.findByText(t('mobileApp.changes.reviewTitle'), opts)).toBeTruthy();
+        expect(await screen.findByText(t('chg.deleted'), opts)).toBeTruthy();
+        expect(screen.getByText(t('mobileApp.changes.truncated'), opts)).toBeTruthy();
+    });
+
+    it('turn-review-loading and turn-review-error show their states', async () => {
+        mockParams = { state: 'turn-review-loading' };
+        await mount(route('messages'));
+        expect(await screen.findByText(t('mobileApp.changes.loading'), opts)).toBeTruthy();
+    });
+
+    it('turn-review-error keeps the PC reason out of the sentence', async () => {
+        mockParams = { state: 'turn-review-error' };
+        await mount(route('messages'));
+        expect(await screen.findByText(t('mobileApp.changes.loadFailedNoReason'), opts)).toBeTruthy();
+        expect(screen.getByText('diff store unreadable', opts)).toBeTruthy();
+    });
+
+    it('turn-undo-hang shows Undoing… after the confirm tap', async () => {
+        mockParams = { state: 'turn-undo-hang' };
+        await mount(route('messages'));
+        fireEvent.press(await screen.findByTestId('turn-changes-undo', opts));
+        fireEvent.press(await screen.findByTestId('turn-changes-confirm', opts));
+        expect(await screen.findByText(t('chg.undoing'), opts)).toBeTruthy();
+    });
+
+    it('turn-undo-conflict offers Undo anyway after the confirm tap', async () => {
+        mockParams = { state: 'turn-undo-conflict' };
+        await mount(route('messages'));
+        fireEvent.press(await screen.findByTestId('turn-changes-undo', opts));
+        fireEvent.press(await screen.findByTestId('turn-changes-confirm', opts));
+        expect(await screen.findByText('q3-summary.md changed after this turn', opts)).toBeTruthy();
+        expect(screen.getByTestId('turn-changes-force', opts)).toBeTruthy();
+    });
+
+    it.each([
+        ['export-error-http', t('mobileApp.share.exportHttp', { status: 500 })],
+        ['export-error-unreachable', t('mobileApp.share.exportUnreachable')],
+    ])('%s shows the export error after the Export tap', async (state, text) => {
+        mockParams = { state };
+        await mount(route('messages'));
+        fireEvent.press(await screen.findByTestId('export-chat', opts));
+        expect(await screen.findByText(text, opts)).toBeTruthy();
+    });
+
+    it.each([
+        ['docs-past-cap', t('docsBar.pastCap', { limit: 100, n: 101 })],
+        ['docs-past-size', t('docsBar.pastSize', { passages: '10,000', n: 3 })],
+    ])('%s shows the documents bar notice', async (state, text) => {
+        mockParams = { state };
+        await mount(route('messages'));
+        expect(await screen.findByText(text, opts)).toBeTruthy();
     });
 
     it('drop opens the later-messages question with its two buttons', async () => {

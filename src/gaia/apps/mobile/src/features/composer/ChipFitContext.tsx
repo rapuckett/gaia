@@ -6,22 +6,22 @@ import { View } from 'react-native';
 
 import { a11yVisibility } from '@/ui/theme/a11y';
 
-import type { ChipId } from './chipRoom';
+import type { RoomId } from './chipRoom';
 
 interface ChipFit {
-    collapsed: readonly ChipId[];
-    report(id: ChipId, width: number): void;
+    collapsed: readonly RoomId[];
+    report(id: RoomId, width: number): void;
 }
 
 /** What the composer's chip row tells its chips: who shows an icon alone, and where to report full widths. */
 export const ChipFitContext = createContext<ChipFit>({ collapsed: [], report: () => undefined });
 
-export function useChipCollapsed(id: ChipId): boolean {
+export function useChipCollapsed(id: RoomId): boolean {
     return useContext(ChipFitContext).collapsed.includes(id);
 }
 
 /** An off-screen copy of a chip at its full width, so the row can tell what fits. */
-export function ChipMeasure({ id, children }: { id: ChipId; children: ReactNode }) {
+export function ChipMeasure({ id, children }: { id: RoomId; children: ReactNode }) {
     const { report } = useContext(ChipFitContext);
     // A chip that unmounts (no meter yet) must stop counting.
     useEffect(() => () => report(id, 0), [id, report]);

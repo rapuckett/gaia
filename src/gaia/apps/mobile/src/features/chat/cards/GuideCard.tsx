@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { isGuideWire, parseGuideDoc, type GuideWire } from '@webui/components/render/guide/guideDoc';
 import { formatGuideText, itemDisplay, stepText, stepTitle, type GuideViewState } from '@webui/components/render/guide/guideText';
 import type { UnitSystem } from '@webui/components/render/guide/units';
-import { pluralKey } from '@webui/i18n/registry';
+import { isolate, pluralKey } from '@webui/i18n/registry';
 
 import { useDirection, useT } from '@/i18n/useT';
 import { contentDir, Button, Icon, IconButton, Ltr, Pressable, Row, SegmentedControl, Spacer, Stack, Surface, Text } from '@/ui';
@@ -161,11 +161,12 @@ function Guide({ wire, startGuided }: { wire: GuideWire; startGuided: boolean })
                         </Text>
                         {doc.items.map((_, i) => {
                             const { qty, text } = itemDisplay(doc, i, state);
+                            const itemDir = contentDir(text, uiDir);
                             const content = (
-                                <Text role="body" dir="auto" strike={features.checkItems && checked.has(i)} tone={features.checkItems && checked.has(i) ? 'muted' : 'primary'}>
+                                <Text role="body" dir="auto" align={itemDir} strike={features.checkItems && checked.has(i)} tone={features.checkItems && checked.has(i) ? 'muted' : 'primary'}>
                                     {qty ? (
                                         <Text role="body" weight="semibold" dir="ltr">
-                                            {`${qty} `}
+                                            {`${isolate(qty, 'ltr')} `}
                                         </Text>
                                     ) : null}
                                     {stepText(doc, text, system)}
@@ -180,13 +181,13 @@ function Guide({ wire, startGuided }: { wire: GuideWire; startGuided: boolean })
                                     accessibilityLabel={qty ? `${qty} ${text}` : text}
                                     testID={`guide-item-${i}`}
                                 >
-                                    <Row gap="sm" dir={dir}>
+                                    <Row gap="sm" dir={itemDir}>
                                         <Icon icon={checked.has(i) ? CircleCheck : Circle} tone={checked.has(i) ? 'accent' : 'muted'} />
                                         <Stack flex={1}>{content}</Stack>
                                     </Row>
                                 </Pressable>
                             ) : (
-                                <Row key={i} gap="sm" align="start" dir={dir}>
+                                <Row key={i} gap="sm" align="start" dir={itemDir}>
                                     <Text role="body" tone="secondary">
                                         •
                                     </Text>
@@ -205,8 +206,9 @@ function Guide({ wire, startGuided }: { wire: GuideWire; startGuided: boolean })
                         {doc.steps.map((step, i) => {
                             const title = stepTitle(doc, i, (n) => t('cards.dayN', { n }));
                             const body = stepText(doc, step.body, system);
+                            const stepDir = contentDir(`${title ?? ''} ${body}`, uiDir);
                             return (
-                                <Row key={i} gap="sm" align="start" dir={dir}>
+                                <Row key={i} gap="sm" align="start" dir={stepDir}>
                                     <Text role="label" weight="semibold" tone="accent">
                                         {features.timeline ? '•' : <Ltr>{`${i + 1}.`}</Ltr>}
                                     </Text>

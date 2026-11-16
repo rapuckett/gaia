@@ -3,6 +3,7 @@
 
 import { facts, installed, JOB_KEYS, specText, deviceText } from '@webui/components/setup/detected';
 import { formatSize } from '@webui/components/setup/format';
+import { isolate } from '@webui/i18n/registry';
 import * as Clipboard from 'expo-clipboard';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 
@@ -71,7 +72,7 @@ export function CheckFound({ plan, hardware, onChangeMemory }: {
                 </Fact>
                 <Fact label={t('setup.found.memory')}>
                     {plan.capacity_gb != null && f.totalMemory
-                        ? <Text>{t('setup.found.memoryOf', { size: formatSize(plan.capacity_gb), total: f.totalMemory })}</Text>
+                        ? <Text>{t('setup.found.memoryOf', { size: isolate(formatSize(plan.capacity_gb), 'ltr'), total: isolate(f.totalMemory, 'ltr') })}</Text>
                         : plan.capacity_gb != null ? <Ltr>{formatSize(plan.capacity_gb)}</Ltr>
                             : f.totalMemory ? <Ltr>{f.totalMemory}</Ltr> : unknown}
                     {onChangeMemory ? <Button variant="ghost" size="sm" label={t('setup.found.changeMemory')} onPress={onChangeMemory} /> : null}
@@ -112,8 +113,7 @@ export function CheckFound({ plan, hardware, onChangeMemory }: {
                         {f.runtimes.length ? f.runtimes.map(({ name, b }) => (
                             <Stack key={b.recipe} gap="xs">
                                 <Row gap="sm" wrap align="center">
-                                    <Ltr>{name}</Ltr>
-                                    <Ltr>{[b.backend, b.version].filter(Boolean).join(' ')}</Ltr>
+                                    <Ltr>{[name, b.backend, b.version].filter(Boolean).join(' ')}</Ltr>
                                 </Row>
                                 <Text role="caption" tone={installed(b) ? 'success' : 'secondary'}>
                                     {t(installed(b) ? 'setup.pc.backend.installed' : 'setup.pc.backend.available')}

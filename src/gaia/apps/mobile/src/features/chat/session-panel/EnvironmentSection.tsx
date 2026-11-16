@@ -4,6 +4,7 @@
 import { useState, type ReactNode } from 'react';
 
 import type { ActiveModel, LocalModelStatus, PermissionMode, ScopeEntry, Session, SessionEnvironment } from '@/api/client.types';
+import { GaiaApiError } from '@/api/errors';
 import { sessionEnvironmentPath } from '@/api/constants';
 import { useDeviceRefused } from '@/api/routeAccess';
 import { useActiveModel, useEnvironmentActions, useLocalModelStatus, usePermissionMode, useSession, useSessionEnvironment } from '@/data';
@@ -37,9 +38,13 @@ function baseName(path: string): string {
 }
 
 export function EnvironmentSection({ sessionId, live }: SectionProps) {
+    const t = useT();
     const { data: env, error } = useSessionEnvironment(sessionId, { enabled: true, live });
     return (
         <Stack gap="lg">
+            <Text weight="semibold" accessibilityRole="header">
+                {t('env.title')}
+            </Text>
             <Folders sessionId={sessionId} env={env} error={error} />
             <Permission sessionId={sessionId} />
             <Internet sessionId={sessionId} env={env} />
@@ -105,7 +110,11 @@ function Folders({ sessionId, env, error }: { sessionId: string; env: SessionEnv
         <Group label={label}>
             {!env && !error ? <Text tone="muted">{t('sp.checking')}</Text> : null}
             {env && !env.enforced ? <Text role="caption" tone="muted">{t(session?.agent_type === 'gaia' ? 'env.flagshipScope' : 'env.agentScope')}</Text> : null}
-            {error ? <Notice tone="danger" message={t.compose((say) => say('env.foldersError', { error: failureReasonWith(error, say) }))} /> : null}
+            {error instanceof GaiaApiError ? (
+                <Notice tone="danger" message={t('mobileApp.env.foldersErrorShort')} detail={error.detail} testID="environment-error" />
+            ) : error ? (
+                <Notice tone="danger" message={t.compose((say) => say('env.foldersError', { error: failureReasonWith(error, say) }))} testID="environment-error" />
+            ) : null}
             {env ? (
                 <>
                     {env.folders.length === 0 ? <Text tone="secondary">{t('env.nothing')}</Text> : null}
