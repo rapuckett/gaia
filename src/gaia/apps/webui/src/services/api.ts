@@ -9,9 +9,15 @@ import type { FileDiff, TurnChanges, UndoResult, UndoSettings } from '../types/c
 import { getApiBase } from '../utils/apiBase';
 import { log } from '../utils/logger';
 import { chatDraftKey, clearSavedDraft } from '../utils/savedDraft';
-import { ApiError, getFriendlyError, isBareInternalError, parseErrorBody, parseErrorDetail, parseErrorFields, parseErrorStatus, StreamDroppedError, StreamStalledError, StreamTimeoutError } from './apiErrors';
+import { getT, type Translate } from '../i18n/useT';
+import { ApiError, getFriendlyError as friendlyError, isBareInternalError, parseErrorBody, parseErrorDetail, parseErrorFields, parseErrorStatus, StreamDroppedError, StreamStalledError, StreamTimeoutError } from './apiErrors';
 
-export { ApiError, getFriendlyError, parseErrorDetail, parseErrorFields, parseErrorStatus, StreamDroppedError, StreamStalledError, StreamTimeoutError } from './apiErrors';
+export { ApiError, parseErrorDetail, parseErrorFields, parseErrorStatus, StreamDroppedError, StreamStalledError, StreamTimeoutError } from './apiErrors';
+
+/** `getFriendlyError` in the interface language chosen now, unless `t` is given. */
+export function getFriendlyError(status: number, detail: string, t: Translate = getT()): string {
+    return friendlyError(status, detail, t);
+}
 
 /**
  * CSRF marker required by the backend on every mutating request.

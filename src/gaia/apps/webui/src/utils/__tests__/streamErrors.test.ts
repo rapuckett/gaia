@@ -4,7 +4,8 @@
 import { describe, expect, it } from 'vitest';
 import { ApiError, StreamDroppedError, StreamTimeoutError } from '../../services/api';
 import { classifyChatError, mayStillFinish } from '../streamErrors';
-import { translator } from '../../i18n/useT';
+import { stripIsolates } from '../../i18n/registry';
+import { tEn, translator } from '../../i18n/useT';
 
 const kind = (err: Error) => classifyChatError(err).kind;
 
@@ -44,8 +45,25 @@ describe('classifyChatError (#599)', () => {
     it('keeps the stream-specific wording for errors the client can name', () => {
         const { kind: k, text } = classifyChatError(new StreamTimeoutError('send', 30_000));
         expect(k).toBe('stream');
-        expect(text).toContain('within 30 seconds');
+        expect(text).toBe(tEn('chatError.sendTimeout', { seconds: 30 }));
         expect(classifyChatError(new ApiError('busy', 429, '', null)).kind).toBe('stream');
+    });
+
+    it('keeps the backend\'s words off the sentence, on a detail line', () => {
+        const err = new ApiError('x', 502, 'Lemonade said: model crashed', null);
+        const en = classifyChatError(err);
+        expect(en.detail).toBe('Lemonade said: model crashed');
+        expect(stripIsolates(en.text)).toBe('GAIA could not take this message (HTTP 502).');
+        const ar = classifyChatError(err, translator('ar'));
+        expect(ar.detail).toBe('Lemonade said: model crashed');
+        expect(ar.text).not.toContain('Lemonade');
+        expect(ar.text).toContain('HTTP 502');
+        expect(classifyChatError(new ApiError('busy', 429, 'x', null)).detail).toBeUndefined();
+    });
+
+    it('names the 409 reason alone, or says the chat is already answering', () => {
+        expect(classifyChatError(new ApiError('x', 409, '', null)).text).toBe(tEn('chatError.alreadyAnswering'));
+        expect(classifyChatError(new ApiError('x', 409, 'Another turn is running', null)).text).toBe('Another turn is running');
     });
 
     it('never shows the raw error text', () => {

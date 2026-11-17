@@ -3,6 +3,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { uploadFile } from '../api';
+import { tEn } from '../../i18n/translator';
 
 function fail(status: number, body: string) {
     (fetch as ReturnType<typeof vi.fn>).mockResolvedValue(
@@ -34,7 +35,7 @@ describe('a refused attachment upload', () => {
         fail(500, 'Internal Server Error');
         await expect(uploadFile(new File(['x'], 'a.txt'))).rejects.toHaveProperty(
             'message',
-            'Server error. Please try again.',
+            tEn('apiError.serverError'),
         );
     });
 });
