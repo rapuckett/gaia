@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import { useFlagshipAgent, type FlagshipInstallState } from '@/data';
-import { describeError, useT } from '@/i18n/useT';
+import { technicalDetail, useT } from '@/i18n/useT';
 import { Notice } from '@/ui';
 
 /** Shown above a chat while the PC has no GAIA agent: says why chat can't start, and offers the install. */
@@ -24,7 +24,8 @@ export function FlagshipAgentBanner({ initialState }: { /** Dev gallery only. */
     return (
         <Notice
             tone="warning"
-            message={failed ? t('agentNotice.failed', { error: describeError(state.error, t) }) : t('agentNotice.missing')}
+            message={failed ? t('mobileApp.error.agentInstallFailed') : t('agentNotice.missing')}
+            detail={failed ? technicalDetail(state.error) : undefined}
             action={{ label: failed ? t('agentNotice.retry') : t('agentNotice.install'), onPress: () => void install() }}
             testID="flagship-notice"
         />

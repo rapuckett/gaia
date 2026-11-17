@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import type { CloudPriceList } from '@webui/types';
 import type { ReactNode } from 'react';
+import { StyleSheet } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import type { ProviderSummary } from '@/api/client.types';
@@ -83,6 +84,14 @@ describe('KeyScreen', () => {
         const reads = jest.spyOn(client, 'listProviderSummaries');
         fireEvent.press(screen.getByLabelText('Check the AMD gateway again'));
         await waitFor(() => expect(reads).toHaveBeenCalled());
+    });
+
+    it('keeps the PC\'s reason off the price-load sentence and shows it left to right below', async () => {
+        await mount([provider({ configured: true })], { cloudPrices: {} });
+        const sentence = await screen.findByText('Prices could not be loaded.');
+        expect(sentence.props.children).not.toContain('no prices');
+        const detail = screen.getByText(/no prices for fireworks/);
+        expect(StyleSheet.flatten(detail.props.style)).toMatchObject({ writingDirection: 'ltr' });
     });
 });
 

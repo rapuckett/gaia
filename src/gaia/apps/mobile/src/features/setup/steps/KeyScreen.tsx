@@ -8,7 +8,7 @@ import { useState } from 'react';
 
 import { GaiaApiError } from '@/api/errors';
 import { useActiveModel, useCloudPrices, useCloudProviders, useConnectCloud, useLemonadeTarget } from '@/data';
-import { describeError, useLocaleCode, useT, type Translate } from '@/i18n/useT';
+import { describeError, technicalDetail, useLocaleCode, useT, type Translate } from '@/i18n/useT';
 import { openLinkFromPress } from '@/platform/openLink';
 import { Button, Card, ChoiceList, Notice, Spinner, Stack, Row, Text, TextField, type ChoiceOption } from '@/ui';
 
@@ -46,7 +46,7 @@ function Prices({ provider, picked, onPick, disabled, inUse }: {
     const locale = useLocaleCode();
     const prices = useCloudPrices(provider, true);
     if (prices.error) {
-        return <Notice tone="danger" message={t('settings.price.loadFailed', { reason: describeError(prices.error, t) })} />;
+        return <Notice tone="danger" message={t('mobileApp.error.pricesFailed')} detail={technicalDetail(prices.error)} />;
     }
     const list = prices.data;
     if (!list) {

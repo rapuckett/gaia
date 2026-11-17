@@ -5,6 +5,7 @@ import { useEffect, useRef, useState, type ReactElement } from 'react';
 import { View } from 'react-native';
 
 import { isDownloading, modelState } from '@webui/components/modelMeta';
+import { isolate } from '@webui/i18n/registry';
 
 import { needsCloudConsent } from '@webui/utils/cloudConsent.core';
 import { providerName, providerNotice } from '@webui/utils/providerText';
@@ -12,7 +13,7 @@ import { providerName, providerNotice } from '@webui/utils/providerText';
 import type { ProviderModel } from '@webui/types';
 import { useActiveModel, useDownloadModel, useProviderModels, useProviders, useSelectModel, type ProviderRow } from '@/data';
 import { openSettings } from '@/features/settings/openSettings';
-import { describeError, useT } from '@/i18n/useT';
+import { describeError, technicalDetail, useT, type Translate } from '@/i18n/useT';
 import { Button, Divider, Icon, IconButton, ListRow, Ltr, Notice, Row, Sheet, Spinner, Stack, StatusDot, Text } from '@/ui';
 import { Check, Download, Info, KeyRound } from '@/ui/icons';
 
@@ -59,6 +60,17 @@ function CloudGroup({ provider, open, row }: { provider: ProviderRow; open: bool
 const sameModel = (a: string | null | undefined, b: string | null | undefined) =>
     !!a && !!b && a.toLowerCase().replace(/^user\./, '') === b.toLowerCase().replace(/^user\./, '');
 
+export interface SwitchNotice {
+    message: string;
+    /** The PC's own words, shown on their own line. */
+    detail?: string;
+}
+
+/** The sentence names the model; the PC's reason goes on its own line. */
+export function switchAfterFailed(model: string, err: unknown, t: Translate): SwitchNotice {
+    return { message: t('mobileApp.error.switchAfterDownloadFailed', { model: isolate(model, 'ltr') }), detail: technicalDetail(err) };
+}
+
 export interface ModelMenuProps {
     open: boolean;
     onClose: () => void;
@@ -68,8 +80,8 @@ export interface ModelMenuProps {
     queued: string | null;
     onQueue: (model: string | null) => void;
     /** Why the switch after a download failed; the chip shows a warning while it is set. */
-    switchError: string | null;
-    onSwitchError: (message: string | null) => void;
+    switchError: SwitchNotice | null;
+    onSwitchError: (message: string | null, detail?: string) => void;
     /** Starts with this row's facts open (developer gallery). */
     initialInfoRow?: string;
     /** Shows this row as being switched to (developer gallery). */
@@ -128,7 +140,10 @@ export function ModelMenu({ open, onClose, turnRunning, queued, onQueue, switchE
         select.mutate(model, {
             onSuccess: onClose,
             onError: (err) => {
-                if (afterDownload) onSwitchError(t('modelMenu.switchAfterFailed', { model: afterDownload, reason: describeError(err, t) }));
+                if (afterDownload) {
+                    const failed = switchAfterFailed(afterDownload, err, t);
+                    onSwitchError(failed.message, failed.detail);
+                }
                 else setError(describeError(err, t));
             },
         });
@@ -323,7 +338,7 @@ export function ModelMenu({ open, onClose, turnRunning, queued, onQueue, switchE
                             : t('modelMenu.keepsItsModel')}
                     </Text>
                 ) : null}
-                {switchError ? <Notice tone="danger" message={switchError} onDismiss={() => onSwitchError(null)} /> : null}
+                {switchError ? <Notice tone="danger" message={switchError.message} detail={switchError.detail} onDismiss={() => onSwitchError(null)} /> : null}
                 {error ? <Notice tone="danger" message={error} /> : null}
                 {local.isLoading ? (
                     <Row gap="sm">

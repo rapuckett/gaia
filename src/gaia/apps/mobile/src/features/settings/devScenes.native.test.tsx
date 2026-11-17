@@ -53,7 +53,7 @@ describeNative('/dev/settings', () => {
         ['model-hf-warnings', /Not tested on the NPU/],
         ['model-details-npu', /Measured:.*17\/20 tasks/],
         ['model-details-npu', /\(expected\)/],
-        ['model-details-unfit', /Can.t run here: needs 320 GB of memory/],
+        ['model-details-unfit', /needs 320 GB of memory/],
         ['model-hf-ready', /Add .*Demo Chat/],
         ['model-search-miss', 'No models match.'],
         ['model-details', /huggingface\.co\/me\/my-tuned-GGUF/],
