@@ -6,7 +6,13 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChangesSection, totalText } from '../ChangesSection';
+import { isolate } from '../../../i18n/registry';
+import { translator } from '../../../i18n/translator';
+import { tEn } from '../../../i18n/useT';
+import { useChatStore } from '../../../stores/chatStore';
 import type { ChatFileChange, GitRepo, SessionChanges } from '../../../types/sessionPanel';
+import { undoneText } from '../../../utils/undoneText';
+import { untrackedWarning } from '../../../utils/untrackedWork';
 import { NO_CHANGES, resetPanelState, SID, stubPanelApi } from './testUtils';
 
 vi.mock('../../../services/api');
@@ -57,6 +63,8 @@ const REPO: GitRepo = {
     pr_blocked: null,
 };
 
+const escapeRe = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 function conflictError(detail: string) {
     // The real ApiError is mocked away; the section only reads these fields.
     return Object.assign(new Error(detail), { detail, reason: 'conflict', httpStatus: 409 });
@@ -84,23 +92,23 @@ describe('ChangesSection', () => {
     it('says GAIA cannot be reached instead of the raw "Failed to fetch" (#6588)', async () => {
         mocked.getSessionChanges.mockRejectedValue(new TypeError('Failed to fetch'));
         renderSection();
-        expect(await screen.findByText(/Couldn't total this chat's changes: GAIA can't be reached right now/)).toBeInTheDocument();
+        expect(await screen.findByText(new RegExp(escapeRe(tEn('chg.error', { error: tEn('request.gaiaUnreachable') }))))).toBeInTheDocument();
         expect(screen.queryByText(/Failed to fetch/)).not.toBeInTheDocument();
     });
 
     it('totals the chat and lists each file with its lines and turns', async () => {
         renderSection();
-        expect(await screen.findByText('3 files changed, +13 −4')).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: /^Changes/ })).toHaveTextContent('3 files · +13 −4');
-        expect(screen.getByText('app.py').closest('li')).toHaveTextContent('Edited · +1 −1 · 2 turns');
-        expect(screen.getByText('util.py').closest('li')).toHaveTextContent('Created');
-        expect(screen.getByText('old.txt').closest('li')).toHaveTextContent('Deleted');
+        expect(await screen.findByText(totalText(CHANGES, tEn))).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /^Changes/ })).toHaveTextContent(tEn('chg.summary', { files: tEn('chg.files.other', { n: 3 }), add: 13, del: 4 }));
+        expect(screen.getByText('app.py').closest('li')).toHaveTextContent(`${tEn('chg.edited')} · +1 −1 · ${tEn('chg.turns', { n: 2 })}`);
+        expect(screen.getByText('util.py').closest('li')).toHaveTextContent(tEn('chg.created'));
+        expect(screen.getByText('old.txt').closest('li')).toHaveTextContent(tEn('chg.deleted'));
     });
 
     it('jumps to the last turn that changed a file', async () => {
         const jump = vi.fn(() => true);
         renderSection(jump);
-        fireEvent.click(await screen.findByRole('button', { name: 'Go to the last turn that changed app.py' }));
+        fireEvent.click(await screen.findByRole('button', { name: tEn('chg.goToLast', { name: 'app.py' }) }));
         expect(jump).toHaveBeenCalledWith(4);
     });
 
@@ -110,13 +118,13 @@ describe('ChangesSection', () => {
             files: [file({ changed_since: 'changed after this turn' })],
         });
         renderSection();
-        expect(await screen.findByText(/Changed outside GAIA: changed after this turn/)).toBeInTheDocument();
+        expect(await screen.findByText(tEn('chg.outside', { when: 'changed after this turn' }), { exact: false })).toBeInTheDocument();
     });
 
     it('reviews every file as one diff across turns', async () => {
         renderSection();
-        fireEvent.click(await screen.findByRole('button', { name: /Review changes/ }));
-        const dialog = screen.getByRole('dialog', { name: "Review this chat's changes" });
+        fireEvent.click(await screen.findByRole('button', { name: tEn('chg.review') }));
+        const dialog = screen.getByRole('dialog', { name: tEn('mobileApp.changes.chat.reviewTitle') });
         expect(dialog).toHaveTextContent('C:\\repo\\app.py');
         expect(dialog).toHaveTextContent('x = 2');
         expect(dialog).toHaveTextContent('C:\\repo\\util.py');
@@ -131,13 +139,13 @@ describe('ChangesSection', () => {
         const onUndo = (e: Event) => undone.push((e as CustomEvent<string>).detail);
         window.addEventListener('gaia:changes-undone', onUndo);
         renderSection();
-        fireEvent.click(await screen.findByRole('button', { name: /Undo all/ }));
+        fireEvent.click(await screen.findByRole('button', { name: tEn('chg.undoAll') }));
         expect(mocked.undoAllChanges).not.toHaveBeenCalled();
-        const confirm = screen.getByRole('group', { name: 'Confirm undo all' });
-        expect(confirm).toHaveTextContent('Put 3 files back');
-        fireEvent.click(within(confirm).getByRole('button', { name: 'Undo all' }));
+        const confirm = screen.getByRole('group', { name: tEn('chg.confirmLabel') });
+        expect(confirm).toHaveTextContent(tEn('chg.confirm.other', { files: tEn('chg.files.other', { n: 3 }) }));
+        fireEvent.click(within(confirm).getByRole('button', { name: tEn('chg.undoAll') }));
         await waitFor(() => expect(mocked.undoAllChanges).toHaveBeenCalledWith(SID, false));
-        expect(await screen.findByRole('status')).toHaveTextContent('Undone: restored 2 files, removed 1 new file.');
+        expect(await screen.findByRole('status')).toHaveTextContent(undoneText({ restored: ['a', 'b'], removed: ['c'], kept_folders: [] }, tEn));
         expect(undone).toEqual([SID]);
         expect(mocked.listTurnChanges).toHaveBeenCalledWith(SID);
         window.removeEventListener('gaia:changes-undone', onUndo);
@@ -145,13 +153,13 @@ describe('ChangesSection', () => {
         mocked.getSessionChanges.mockResolvedValue(NO_CHANGES);
         act(() => { window.dispatchEvent(new CustomEvent('gaia:changes-undone', { detail: SID })); });
         await waitFor(() => expect(screen.queryByText('app.py')).not.toBeInTheDocument());
-        expect(screen.getByRole('status')).toHaveTextContent('Undone: restored 2 files');
+        expect(screen.getByRole('status')).toHaveTextContent(tEn('mobileApp.changes.done.restored.other', { n: 2 }));
     });
 
     it('cancelling Undo all runs nothing', async () => {
         renderSection();
-        fireEvent.click(await screen.findByRole('button', { name: /Undo all/ }));
-        fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+        fireEvent.click(await screen.findByRole('button', { name: tEn('chg.undoAll') }));
+        fireEvent.click(screen.getByRole('button', { name: tEn('sp.cancel') }));
         expect(mocked.undoAllChanges).not.toHaveBeenCalled();
     });
 
@@ -161,17 +169,17 @@ describe('ChangesSection', () => {
             .mockResolvedValueOnce({ turn_ids: [], restored: ['app.py'], removed: [], kept_folders: [], untracked: [], incomplete: false });
         mocked.listTurnChanges.mockResolvedValue({ turns: [] });
         renderSection();
-        fireEvent.click(await screen.findByRole('button', { name: /Undo all/ }));
-        fireEvent.click(within(screen.getByRole('group', { name: 'Confirm undo all' })).getByRole('button', { name: 'Undo all' }));
+        fireEvent.click(await screen.findByRole('button', { name: tEn('chg.undoAll') }));
+        fireEvent.click(within(screen.getByRole('group', { name: tEn('chg.confirmLabel') })).getByRole('button', { name: tEn('chg.undoAll') }));
         expect(await screen.findByRole('alert')).toHaveTextContent('changed after this chat last changed them');
         expect(mocked.undoAllChanges).toHaveBeenCalledTimes(1);
-        fireEvent.click(screen.getByRole('button', { name: 'Undo anyway and lose those changes' }));
+        fireEvent.click(screen.getByRole('button', { name: tEn('chg.undoAnyway') }));
         await waitFor(() => expect(mocked.undoAllChanges).toHaveBeenLastCalledWith(SID, true));
     });
 
     it("can't undo while a reply is running", async () => {
         renderSection(vi.fn(() => true), true);
-        expect(await screen.findByRole('button', { name: /Undo all/ })).toBeDisabled();
+        expect(await screen.findByRole('button', { name: tEn('chg.undoAll') })).toBeDisabled();
     });
 
     it('notes commands that may have changed files it cannot see', async () => {
@@ -186,7 +194,11 @@ describe('ChangesSection', () => {
         });
         renderSection();
         expect(await screen.findByRole('note')).toHaveTextContent(
-            "In this chat, GAIA ran 2 Python snippets and 1 command it can't track. If they changed any files, Undo all won't restore them.",
+            untrackedWarning([
+                { kind: 'run_python', detail: 'save totals', paths: [] },
+                { kind: 'shell', detail: 'npm run build', paths: [] },
+                { kind: 'run_python', detail: 'write the chart', paths: [] },
+            ], tEn, { inChat: true, undo: 'chg.undoAll' }),
         );
     });
 
@@ -207,17 +219,17 @@ describe('ChangesSection git', () => {
     it('commits only after the drafted message is shown and confirmed, with the user’s edits', async () => {
         mocked.commitChanges.mockResolvedValue({ root: REPO.root, commit: 'abc1234', files: ['app.py', 'util.py', 'old.txt'], ignored: [] });
         renderSection();
-        fireEvent.click(await screen.findByRole('button', { name: /Commit…/ }));
+        fireEvent.click(await screen.findByRole('button', { name: tEn('mobileApp.changes.git.commit') }));
         expect(mocked.commitChanges).not.toHaveBeenCalled();
-        const dialog = screen.getByRole('dialog', { name: 'Commit this chat’s changes' });
-        const summary = within(dialog).getByLabelText('Summary');
+        const dialog = screen.getByRole('dialog', { name: tEn('mobileApp.changes.git.commitTitle') });
+        const summary = within(dialog).getByLabelText(tEn('mobileApp.changes.git.summary'));
         expect(summary).toHaveValue('Add a helper for the totals');
         fireEvent.change(summary, { target: { value: 'Add totals helper' } });
-        fireEvent.click(within(dialog).getByRole('button', { name: 'Commit 3 files' }));
+        fireEvent.click(within(dialog).getByRole('button', { name: tEn('mobileApp.changes.git.commitGo.other', { n: 3 }) }));
         await waitFor(() => expect(mocked.commitChanges).toHaveBeenCalledWith(
             SID, 'C:\\repo', 'Add totals helper\n\nFiles:\n- app.py\n- util.py\n- old.txt',
         ));
-        expect(await screen.findByText('Committed 3 files as abc1234.')).toBeInTheDocument();
+        expect(await screen.findByText(tEn('mobileApp.changes.git.committedAs.other', { n: 3, hash: isolate('abc1234', 'ltr') }), { exact: false })).toBeInTheDocument();
     });
 
     it('names the files git ignores as left out of the commit', async () => {
@@ -226,10 +238,11 @@ describe('ChangesSection git', () => {
             repos: [{ ...REPO, files: ['app.py'], uncommitted: ['app.py'], ignored: ['out/summary.csv'] }],
         });
         renderSection();
-        fireEvent.click(await screen.findByRole('button', { name: /Commit…/ }));
-        const dialog = screen.getByRole('dialog', { name: 'Commit this chat’s changes' });
-        expect(within(dialog).getByText(/Left out, because git ignores it: out\/summary\.csv/)).toBeInTheDocument();
-        expect(within(dialog).getByRole('button', { name: 'Commit 1 file' })).toBeInTheDocument();
+        fireEvent.click(await screen.findByRole('button', { name: tEn('mobileApp.changes.git.commit') }));
+        const dialog = screen.getByRole('dialog', { name: tEn('mobileApp.changes.git.commitTitle') });
+        expect(within(dialog).getByText(tEn('mobileApp.changes.git.ignored.one'))).toBeInTheDocument();
+        expect(within(dialog).getByText('out/summary.csv')).toBeInTheDocument();
+        expect(within(dialog).getByRole('button', { name: tEn('mobileApp.changes.git.commitGo.one', { n: 1 }) })).toBeInTheDocument();
     });
 
     it('a repo whose only changes are ignored is not shown as committed', async () => {
@@ -238,14 +251,14 @@ describe('ChangesSection git', () => {
             repos: [{ ...REPO, files: [], uncommitted: [], ignored: ['build/a.bin'] }],
         });
         renderSection();
-        expect(await screen.findByRole('button', { name: /Commit…/ })).toBeDisabled();
-        expect(screen.queryByText(/· committed/)).not.toBeInTheDocument();
+        expect(await screen.findByRole('button', { name: tEn('mobileApp.changes.git.commit') })).toBeDisabled();
+        expect(screen.queryByText(new RegExp(`· ${tEn('mobileApp.changes.git.committed')}`))).not.toBeInTheDocument();
     });
 
     it('closing the commit dialog runs nothing', async () => {
         renderSection();
-        fireEvent.click(await screen.findByRole('button', { name: /Commit…/ }));
-        fireEvent.click(within(screen.getByRole('dialog', { name: 'Commit this chat’s changes' })).getByRole('button', { name: 'Cancel' }));
+        fireEvent.click(await screen.findByRole('button', { name: tEn('mobileApp.changes.git.commit') }));
+        fireEvent.click(within(screen.getByRole('dialog', { name: tEn('mobileApp.changes.git.commitTitle') })).getByRole('button', { name: tEn('sp.cancel') }));
         expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
         expect(mocked.commitChanges).not.toHaveBeenCalled();
     });
@@ -253,13 +266,13 @@ describe('ChangesSection git', () => {
     it('opens a pull request only after confirmation, and shows where', async () => {
         mocked.createPullRequest.mockResolvedValue({ root: REPO.root, url: 'https://github.com/o/r/pull/7' });
         renderSection();
-        fireEvent.click(await screen.findByRole('button', { name: /Create PR…/ }));
-        const dialog = screen.getByRole('dialog', { name: 'Create a pull request' });
-        expect(dialog).toHaveTextContent('Pushes feature/totals to origin (never forced)');
+        fireEvent.click(await screen.findByRole('button', { name: tEn('mobileApp.changes.git.pr') }));
+        const dialog = screen.getByRole('dialog', { name: tEn('mobileApp.changes.git.prTitle') });
+        expect(dialog).toHaveTextContent(tEn('chg.git.prNote', { branch: isolate('feature/totals', 'ltr'), remote: isolate('origin', 'ltr') }));
         expect(mocked.createPullRequest).not.toHaveBeenCalled();
-        fireEvent.click(within(dialog).getByRole('button', { name: 'Push and open PR' }));
+        fireEvent.click(within(dialog).getByRole('button', { name: tEn('mobileApp.changes.git.prGo') }));
         await waitFor(() => expect(mocked.createPullRequest).toHaveBeenCalledWith(SID, 'C:\\repo', REPO.draft.title, REPO.draft.body));
-        expect(await screen.findByText('Opened https://github.com/o/r/pull/7')).toBeInTheDocument();
+        expect(await screen.findByText(tEn('mobileApp.changes.git.opened', { url: isolate('https://github.com/o/r/pull/7', 'ltr') }), { exact: false })).toBeInTheDocument();
     });
 
     it('explains why a PR cannot be opened from here', async () => {
@@ -268,16 +281,16 @@ describe('ChangesSection git', () => {
             repos: [{ ...REPO, branch: 'main', pr_blocked: "You're on main. Switch to a new branch to open a pull request." }],
         });
         renderSection();
-        expect(await screen.findByRole('button', { name: /Create PR…/ })).toBeDisabled();
+        expect(await screen.findByRole('button', { name: tEn('mobileApp.changes.git.pr') })).toBeDisabled();
         expect(screen.getByText(/Switch to a new branch/)).toBeInTheDocument();
     });
 
     it('shows a refused commit in the dialog and keeps it open', async () => {
         mocked.commitChanges.mockRejectedValue(new Error('`git commit -F` failed: pre-commit hook failed'));
         renderSection();
-        fireEvent.click(await screen.findByRole('button', { name: /Commit…/ }));
-        const dialog = screen.getByRole('dialog', { name: 'Commit this chat’s changes' });
-        await act(async () => { fireEvent.click(within(dialog).getByRole('button', { name: 'Commit 3 files' })); });
+        fireEvent.click(await screen.findByRole('button', { name: tEn('mobileApp.changes.git.commit') }));
+        const dialog = screen.getByRole('dialog', { name: tEn('mobileApp.changes.git.commitTitle') });
+        await act(async () => { fireEvent.click(within(dialog).getByRole('button', { name: tEn('mobileApp.changes.git.commitGo.other', { n: 3 }) })); });
         expect(within(dialog).getByRole('alert')).toHaveTextContent('pre-commit hook failed');
     });
 
@@ -285,13 +298,30 @@ describe('ChangesSection git', () => {
         mocked.getSessionGit.mockResolvedValue({ available: true, repos: [] });
         renderSection();
         await screen.findByText('3 files changed, +13 −4');
-        expect(screen.queryByRole('button', { name: /Commit…/ })).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: tEn('mobileApp.changes.git.commit') })).not.toBeInTheDocument();
+    });
+});
+
+describe('ChangesSection in Arabic', () => {
+    it('renders the section, its git row and the commit dialog in Arabic', async () => {
+        mocked.getSessionGit.mockResolvedValue({ available: true, repos: [REPO] });
+        useChatStore.setState({ locale: 'ar' });
+        try {
+            const ar = translator('ar');
+            renderSection();
+            fireEvent.click(await screen.findByRole('button', { name: ar('mobileApp.changes.git.commit') }));
+            const dialog = screen.getByRole('dialog', { name: ar('mobileApp.changes.git.commitTitle') });
+            expect(dialog).toHaveTextContent(ar('chg.git.commitNote', { root: isolate(REPO.root, 'ltr'), branch: isolate(REPO.branch, 'ltr') }));
+            expect(within(dialog).getByRole('button', { name: ar.plural('mobileApp.changes.git.commitGo', 3) })).toBeInTheDocument();
+        } finally {
+            useChatStore.setState({ locale: 'en' });
+        }
     });
 });
 
 describe('totalText', () => {
     it('reads like a sentence', () => {
-        expect(totalText(CHANGES)).toBe('3 files changed, +13 −4');
-        expect(totalText({ ...CHANGES, totals: { files: 1, additions: 0, deletions: 2, uncounted: 0 } })).toBe('1 file changed, +0 −2');
+        expect(totalText(CHANGES)).toBe(tEn('chg.total', { files: '3 files', add: 13, del: 4 }));
+        expect(totalText({ ...CHANGES, totals: { files: 1, additions: 0, deletions: 2, uncounted: 0 } })).toBe(tEn('chg.total', { files: '1 file', add: 0, del: 2 }));
     });
 });

@@ -1433,6 +1433,8 @@ const messages: Messages = {
     'chg.undoAnyway': 'التراجع على أي حال وفقدان تلك التغييرات',
     'chg.keep': 'الإبقاء عليها',
     'chg.gitError': 'تعذّر التحقق من وجود مستودع git: {error}',
+    'chg.git.commitNote': 'في {root} على الفرع {branch}. تُودَع الملفات أدناه فقط؛ وكل ما غيّرته سواها يبقى كما هو.',
+    'chg.git.prNote': 'يُدفع الفرع {branch} إلى {remote} (دون فرض أبدًا)، ثم يُفتح طلب سحب بأداة gh الخاصة بـ GitHub.',
     'untracked.shell.one': 'أوامر: {n}',
     'untracked.shell.other': 'أوامر: {n}',
     'untracked.shell.name.one': 'أمر',
