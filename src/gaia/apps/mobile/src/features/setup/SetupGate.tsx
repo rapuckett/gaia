@@ -5,6 +5,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 
 import { GaiaApiError, GaiaNetworkError, GaiaPinMismatchError } from '@/api/errors';
 import { useGaiaClient, useSetupGate } from '@/data';
+import { galleryBuild } from '@/features/dev/devGallery';
 import { PinMismatchScreen, usePairAgain } from '@/features/pairing';
 import { hasTailnetRoute } from '@/features/pairing/routes';
 import { describeErrorWith, serverText, technicalDetail, useT } from '@/i18n/useT';
@@ -26,8 +27,17 @@ export function reopenSetup(): void {
  * The first-run gate around the app: "Starting GAIA…" until the check answers, the setup screen in
  * place of the app when setup is needed, and the app, with a notice above it, when the PC's model
  * server is down or the check couldn't be answered. With no PC connected the app shows its own state.
+ * `route` is the root layout's path: a gallery build lets its `/dev/*` scenes past the gate, which need no PC.
  */
-export function SetupGate({ children, renderStep }: { children: ReactNode; renderStep?: SetupScreenProps['renderStep'] }) {
+export function SetupGate({
+    children,
+    renderStep,
+    route,
+}: {
+    children: ReactNode;
+    renderStep?: SetupScreenProps['renderStep'];
+    route?: string;
+}) {
     const client = useGaiaClient();
     const t = useT();
     const { gate, recheck, finish, open } = useSetupGate();
@@ -41,7 +51,7 @@ export function SetupGate({ children, renderStep }: { children: ReactNode; rende
         };
     }, [open]);
 
-    if (!client) return <>{children}</>;
+    if (!client || (route?.startsWith('/dev/') && galleryBuild())) return <>{children}</>;
     if (gate.state === 'checking') return <StartupScreen />;
     if (gate.state === 'upgrading') return <StartupScreen upgrading />;
     if (gate.state === 'needed') return <SetupScreen onReady={finish} renderStep={renderStep} />;
