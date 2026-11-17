@@ -109,11 +109,9 @@ describe('Popover sideways shift', () => {
             { top: 700, bottom: 730 } as DOMRect,
         );
         vi.spyOn(HTMLDivElement.prototype, 'scrollHeight', 'get').mockReturnValue(300);
-        vi.spyOn(HTMLDivElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
-            const applied = parseFloat(/translateX\((-?[\d.]+)px\)/.exec(this.style.transform)?.[1] ?? '0');
-            const left = naturalLeft.value + applied;
-            return { left, right: left + width } as DOMRect;
-        });
+        vi.spyOn(HTMLElement.prototype, 'offsetParent', 'get').mockReturnValue(document.body);
+        vi.spyOn(HTMLElement.prototype, 'offsetLeft', 'get').mockImplementation(() => naturalLeft.value);
+        vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(width);
         document.documentElement.dir = dir;
     }
 
@@ -132,6 +130,17 @@ describe('Popover sideways shift', () => {
             window.dispatchEvent(new Event('resize'));
         });
         expect(menu.style.transform).toBe('translateX(-82px)');
+    });
+
+    it('keeps its shift when the painted box still carries the old one', () => {
+        const natural = { value: 64 };
+        place(natural);
+        // A running transition paints the previous shift, whatever the inline style says.
+        vi.spyOn(HTMLDivElement.prototype, 'getBoundingClientRect').mockReturnValue({ left: 18, right: 376 } as DOMRect);
+        render(<Harness />);
+        const menu = screen.getByRole('dialog', { name: 'Menu' });
+        act(() => { window.dispatchEvent(new Event('resize')); });
+        expect(menu.style.transform).toBe('translateX(-46px)');
     });
 
     it.each(['ltr', 'rtl'])('pulls a box past either window edge inside the gutter (%s)', (dir) => {

@@ -42,43 +42,33 @@ export function Popover({ open, onClose, anchor, label, placement = 'above', ali
             setSide(flip ? (placement === 'above' ? 'below' : 'above') : placement);
             setRoom(Math.max(0, Math.floor(flip ? other : preferred)));
             // Slide sideways so a wide panel anchored near one edge stays inside the window.
-            // Measure unshifted: the transform on screen may lag the last shift requested.
-            const worn = el.style.transform;
-            el.style.transform = '';
-            const natural = el.getBoundingClientRect();
-            el.style.transform = worn;
+            // Measure the layout box, which ignores transforms: the painted one can still carry an
+            // old shift mid-transition, even after the inline transform is cleared.
+            const parent = el.offsetParent;
+            if (!parent) return;
+            const naturalLeft = parent.getBoundingClientRect().left + parent.clientLeft - parent.scrollLeft + el.offsetLeft;
             // Keep the box inside the window gutter; one too wide for it keeps its inline start.
-            const width = natural.right - natural.left;
+            const width = el.offsetWidth;
             const usable = window.innerWidth - 2 * EDGE_GAP;
             const rtl = getComputedStyle(el).direction === 'rtl';
             const left = width > usable
                 ? (rtl ? window.innerWidth - EDGE_GAP - width : EDGE_GAP)
-                : Math.min(Math.max(natural.left, EDGE_GAP), window.innerWidth - EDGE_GAP - width);
-            const next = left - natural.left;
-            setShift(next);
+                : Math.min(Math.max(naturalLeft, EDGE_GAP), window.innerWidth - EDGE_GAP - width);
+            setShift(left - naturalLeft);
         };
         place();
         // Content arrives after open (e.g. the model list), so re-measure when it changes.
         const observer = new MutationObserver(place);
         if (ref.current) observer.observe(ref.current, { childList: true, subtree: true });
-        // Its anchor can move, and its width can change, with no DOM edit (layout shifts, a font arriving).
-        let frame = 0;
-        let seen = '';
-        const watch = () => {
-            const a = anchor.current?.getBoundingClientRect();
-            const el = ref.current;
-            const now = a && el ? `${a.left},${a.top},${a.bottom},${el.offsetWidth},${el.scrollHeight}` : '';
-            if (now !== seen) {
-                seen = now;
-                place();
-            }
-            frame = requestAnimationFrame(watch);
-        };
-        frame = requestAnimationFrame(watch);
+        // Sizes can change with no DOM edit (a font arriving), and the box it hangs from moves it.
+        const sized = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(place);
+        for (const target of [ref.current, anchor.current, ref.current?.offsetParent]) {
+            if (target) sized?.observe(target);
+        }
         window.addEventListener('resize', place);
         return () => {
             observer.disconnect();
-            cancelAnimationFrame(frame);
+            sized?.disconnect();
             window.removeEventListener('resize', place);
         };
     }, [open, placement, anchor]);
