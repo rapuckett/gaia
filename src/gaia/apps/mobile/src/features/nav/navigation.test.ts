@@ -3,7 +3,15 @@
 
 import { IDLE_TURN, beginTurn, type ChatTurn } from '@/state/chatStreams';
 
-import { activeChatId, liveRunsFromTurns, openChat, openNewChat } from './navigation';
+import {
+    activeChatId,
+    drawerScreenOptions,
+    liveRunsFromTurns,
+    openChat,
+    openNewChat,
+    PERMANENT_DRAWER_MIN_WIDTH,
+    PERMANENT_DRAWER_WIDTH,
+} from './navigation';
 
 describe('drawer navigation', () => {
     it('opens a chat by replacing the current screen, and New chat goes to /new', () => {
@@ -25,5 +33,33 @@ describe('drawer navigation', () => {
         const live = liveRunsFromTurns({ a: beginTurn(), b: IDLE_TURN, c: blocked });
         expect(live.running).toEqual(['a', 'c']);
         expect(Object.keys(live.awaiting)).toEqual(['c']);
+    });
+});
+
+describe('drawer options by width', () => {
+    const at = (width: number, largeText = false) => drawerScreenOptions({ width, largeText, webRtl: false });
+
+    it('is an overlay below 1024, including the old 768 breakpoint', () => {
+        for (const width of [320, 390, 768, 1023]) expect(at(width).drawerType).toBe('front');
+        expect(at(768).drawerStyle).toBeUndefined();
+    });
+
+    it('is a permanent 320 wide sidebar from 1024 up', () => {
+        expect(PERMANENT_DRAWER_MIN_WIDTH).toBe(1024);
+        for (const width of [1024, 1180, 1366]) {
+            expect(at(width).drawerType).toBe('permanent');
+            expect(at(width).drawerStyle).toEqual({ width: PERMANENT_DRAWER_WIDTH });
+        }
+        expect(PERMANENT_DRAWER_WIDTH).toBe(320);
+    });
+
+    it('keeps the full-width overlay at large text below the breakpoint only', () => {
+        expect(at(768, true).drawerStyle).toEqual({ width: '100%' });
+        expect(at(1024, true).drawerStyle).toEqual({ width: PERMANENT_DRAWER_WIDTH });
+    });
+
+    it('updates when a rotation crosses 1024', () => {
+        expect(at(1024).drawerType).toBe('permanent');
+        expect(at(768).drawerType).toBe('front');
     });
 });

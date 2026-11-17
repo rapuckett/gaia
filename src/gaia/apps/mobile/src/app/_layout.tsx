@@ -18,7 +18,7 @@ import { AppPolls } from '@/features/notifications/AppPolls';
 import { NotificationFeed } from '@/features/notifications';
 import { AppDrawer } from '@/features/nav/AppDrawer';
 import { RoutingEffects } from '@/features/nav/RoutingEffects';
-import { INITIAL_ROUTE, PERMANENT_DRAWER_MIN_WIDTH } from '@/features/nav/navigation';
+import { drawerScreenOptions, INITIAL_ROUTE } from '@/features/nav/navigation';
 import { ROUTES } from '@/features/nav/routes';
 import { sweepTempFiles } from '@/features/files/shareTemp';
 import { installPinnedPairing, PairingGate } from '@/features/pairing';
@@ -110,15 +110,7 @@ export default function RootLayout() {
                                     </AppErrorBoundary>
                                 )}
                                 backBehavior="initialRoute"
-                                screenOptions={{
-                                    headerShown: false,
-                                    freezeOnBlur: true,
-                                    // At large text sizes one word of a label is wider than the default drawer.
-                                    drawerStyle: largeText && width < PERMANENT_DRAWER_MIN_WIDTH ? { width: '100%' } : undefined,
-                                    drawerType: width >= PERMANENT_DRAWER_MIN_WIDTH ? 'permanent' : 'front',
-                                    // react-navigation reads I18nManager, which stays LTR on web, so the closed drawer would sit inside the page.
-                                    drawerPosition: Platform.OS === 'web' && dir === 'rtl' ? 'right' : undefined,
-                                }}
+                                screenOptions={drawerScreenOptions({ width, largeText, webRtl: Platform.OS === 'web' && dir === 'rtl' })}
                             >
                                 {ROUTES.map((name) => (
                                     <Drawer.Screen key={name} name={name} />
