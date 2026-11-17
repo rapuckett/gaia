@@ -11,7 +11,7 @@ import type { SessionPermissions } from '@/api/client.types';
 import { useAllPermissions, usePermissionActions, useSessions } from '@/data';
 import { describeHttpFailure, useT } from '@/i18n/useT';
 import {
-    ActionSheet, Badge, Button, Card, Disclosure, Divider, ErrorState, IconButton, ListSkeleton, Ltr, Notice, Row, Sheet, Stack, Switch, Text,
+    ActionSheet, Badge, Button, Card, Disclosure, Divider, ErrorState, IconButton, ListSkeleton, Ltr, Notice, PRESSABLE_MIN_SIZE, Row, Sheet, Stack, Switch, Text,
 } from '@/ui';
 import { Ellipsis } from '@/ui/icons';
 
@@ -110,7 +110,7 @@ export default function Permissions() {
                                                     onPress={() => setMenuFor(r)}
                                                 />
                                             ) : (
-                                                <View style={{ width: 44 }} testID="permissions-row-menu-slot" />
+                                                <View style={{ width: PRESSABLE_MIN_SIZE }} testID="permissions-row-menu-slot" />
                                             )}
                                         </Row>
                                         {r.grants.map((g, gi) => (

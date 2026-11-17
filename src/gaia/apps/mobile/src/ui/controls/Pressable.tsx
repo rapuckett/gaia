@@ -9,6 +9,8 @@ import {
     type AccessibilityRole,
 } from 'react-native';
 
+export const PRESSABLE_MIN_SIZE = 48;
+
 export interface PressableProps {
     children?: ReactNode | ((state: { pressed: boolean }) => ReactNode);
     onPress?: () => void;
@@ -20,7 +22,7 @@ export interface PressableProps {
     'aria-busy'?: boolean;
     'aria-checked'?: boolean | 'mixed';
     'aria-expanded'?: boolean;
-    'aria-haspopup'?: 'listbox' | 'menu';
+    'aria-haspopup'?: 'dialog' | 'listbox' | 'menu';
     'aria-selected'?: boolean;
     /** Extra screen-reader actions, e.g. what a long-press does. */
     accessibilityActions?: readonly AccessibilityActionInfo[];
@@ -50,7 +52,7 @@ export function Pressable({
     accessibilityActions,
     onAccessibilityAction,
     accessible,
-    minSize = 48,
+    minSize = PRESSABLE_MIN_SIZE,
     inline,
     testID,
 }: PressableProps) {

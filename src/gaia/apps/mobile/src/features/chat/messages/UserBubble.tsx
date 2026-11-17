@@ -4,11 +4,14 @@
 import { useState } from 'react';
 
 import { isolate } from '@webui/i18n/registry';
+import { middleTruncate } from '@webui/utils/format';
 import { isLongUserMessage, sizeLabel, USER_COLLAPSE_LINES } from '@webui/utils/longContent';
 import type { Message } from '@/api/client.types';
 import { useDirection, useT } from '@/i18n/useT';
-import { contentDir, Pressable, Stack, Surface, Text } from '@/ui';
+import { contentDir, Icon, Pressable, Row, Stack, Surface, Text } from '@/ui';
+import { FileText, Image as ImageIcon } from '@/ui/icons';
 
+import { splitAttachmentLinks } from './attachedLinks';
 import { useMessageActions, type MessageContext, type StartOpen } from './useMessageActions';
 
 export interface UserBubbleProps {
@@ -23,7 +26,8 @@ export function UserBubble({ message, onCollapse, context, startOpen }: UserBubb
     const t = useT();
     const uiDir = useDirection();
     const actions = useMessageActions(message, message.content, context, startOpen);
-    const long = isLongUserMessage(message.content);
+    const { text, files } = splitAttachmentLinks(message.content);
+    const long = isLongUserMessage(text);
     const [expanded, setExpanded] = useState(false);
     const collapsed = long && !expanded;
 
@@ -37,18 +41,28 @@ export function UserBubble({ message, onCollapse, context, startOpen }: UserBubb
             <Stack self="end" maxWidth="85%">
                 <Surface tone="userMsg" radius="lg" padding="md">
                     <Stack gap="sm">
-                        {actions.editor ?? (
+                        {actions.editor ?? (text || files.length === 0 ? (
                             <Pressable onLongPress={actions.openSheet} accessibilityRole="text" minSize={0} {...actions.a11y}>
                                 <Text
                                     role="body"
-                                    dir={contentDir(message.content, uiDir)}
-                                    align={contentDir(message.content, uiDir)}
+                                    dir={contentDir(text, uiDir)}
+                                    align={contentDir(text, uiDir)}
                                     numberOfLines={collapsed ? USER_COLLAPSE_LINES : undefined}
                                 >
-                                    {message.content}
+                                    {text}
                                 </Text>
                             </Pressable>
-                        )}
+                        ) : null)}
+                        {!actions.editor
+                            ? files.map((f) => (
+                                  <Row key={f.url} gap="sm" testID="user-attachment">
+                                      <Icon icon={f.isImage ? ImageIcon : FileText} size="sm" tone="secondary" />
+                                      <Text role="label" numberOfLines={1} compact dir="ltr" accessibilityLabel={f.name}>
+                                          {middleTruncate(f.name)}
+                                      </Text>
+                                  </Row>
+                              ))
+                            : null}
                         {long && !actions.editor ? (
                             <Pressable
                                 onPress={toggle}
@@ -58,13 +72,13 @@ export function UserBubble({ message, onCollapse, context, startOpen }: UserBubb
                                 accessibilityLabel={
                                     expanded
                                         ? t('msg.showLess')
-                                        : t.hint(t('msg.showAll'), sizeLabel(t, message.content))
+                                        : t.hint(t('msg.showAll'), sizeLabel(t, text))
                                 }
                             >
                                 <Text role="label" tone="accent" weight="medium">
                                     {expanded
                                         ? t('msg.showLess')
-                                        : t.hint(t('msg.showAll'), isolate(sizeLabel(t, message.content), 'ltr'))}
+                                        : t.hint(t('msg.showAll'), isolate(sizeLabel(t, text), 'ltr'))}
                                 </Text>
                             </Pressable>
                         ) : null}

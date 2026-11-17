@@ -75,7 +75,13 @@ export function ToolStepRow({ step, awaitingUser = false, now, testID }: ToolSte
     const line = waiting ? t('activity.waiting') : toolRowText(step, t);
     const count = step.count ?? 1;
     const notRun = (!!step.declined || !!step.timedOut || !!step.autoDeclined) && !step.active;
-    const failure = step.success === false && step.result && !notRun && step.needsModel !== 'vision' ? failureText(step, t) : '';
+    const exitCode = step.commandOutput && step.commandOutput.returnCode !== 0 ? step.commandOutput.returnCode : null;
+    const failure =
+        step.success === false && step.result && !notRun && step.needsModel !== 'vision'
+            ? exitCode !== null
+                ? t('activity.exit', { code: isolate(String(exitCode), 'ltr') })
+                : failureText(step, t)
+            : '';
     const timing = waiting
         ? ''
         : step.active

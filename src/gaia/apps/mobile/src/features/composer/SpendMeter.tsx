@@ -52,6 +52,7 @@ export function SpendMeter({ sessionId, busy, initialOpen = false }: SpendMeterP
                 accessibilityLabel={t('spend.aria', { chat: floor(chat), today: floor(today) })}
                 accessibilityHint={t(excluded ? 'spend.titleExcluded' : 'spend.title')}
                 aria-expanded={open}
+                aria-haspopup="dialog"
                 testID="spend-meter"
             >
                 <Row gap="xs">

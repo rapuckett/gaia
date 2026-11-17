@@ -184,6 +184,13 @@ describeNative('chat, new-chat, composer and permission scenes', () => {
         }
     });
 
+    it('new-chat-assistant Details reports expanded state to assistive tech', async () => {
+        await open('composer', { state: 'new-chat-assistant' });
+        const name = t('newChat.details');
+        fireEvent.press(await screen.findByRole('button', { name, expanded: false, ...opts }));
+        expect(await screen.findByRole('button', { name, expanded: true, ...opts })).toBeTruthy();
+    });
+
     it('chat question waits for an answer', async () => {
         await open('chat', { state: 'question' });
         expect(await screen.findByText('Which folder should I tidy?', opts)).toBeTruthy();

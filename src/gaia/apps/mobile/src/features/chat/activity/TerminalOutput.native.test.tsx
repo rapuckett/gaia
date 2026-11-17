@@ -22,4 +22,13 @@ describeNative('Terminal header', () => {
         const badge = screen.getByTestId('terminal-exit');
         expect(StyleSheet.flatten(badge.props.style)).toMatchObject({ flexShrink: 0 });
     });
+
+    it('gives the title the free width, so the gloss wraps whole words', async () => {
+        await render(
+            <ThemeProvider>
+                <TerminalOutput output={{ command: 'false', stdout: 'x', stderr: '', returnCode: 2, truncated: false } as never} />
+            </ThemeProvider>,
+        );
+        expect(StyleSheet.flatten(screen.getByTestId('terminal-title').props.style)).toMatchObject({ flex: 1, minWidth: 0 });
+    });
 });
