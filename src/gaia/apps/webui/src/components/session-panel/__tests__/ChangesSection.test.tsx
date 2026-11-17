@@ -6,13 +6,14 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChangesSection, totalText } from '../ChangesSection';
-import { isolate } from '../../../i18n/registry';
+import { isolate, stripIsolates } from '../../../i18n/registry';
 import { translator } from '../../../i18n/translator';
 import { tEn } from '../../../i18n/useT';
 import { useChatStore } from '../../../stores/chatStore';
 import type { ChatFileChange, GitRepo, SessionChanges } from '../../../types/sessionPanel';
 import { undoneText } from '../../../utils/undoneText';
 import { untrackedWarning } from '../../../utils/untrackedWork';
+import { readsAs } from '../../../test/readsAs';
 import { NO_CHANGES, resetPanelState, SID, stubPanelApi } from './testUtils';
 
 vi.mock('../../../services/api');
@@ -99,7 +100,7 @@ describe('ChangesSection', () => {
     it('totals the chat and lists each file with its lines and turns', async () => {
         renderSection();
         expect(await screen.findByText(totalText(CHANGES, tEn))).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: /^Changes/ })).toHaveTextContent(tEn('chg.summary', { files: tEn('chg.files.other', { n: 3 }), add: 13, del: 4 }));
+        expect(screen.getByRole('button', { name: /^Changes/ })).toHaveTextContent(tEn('chg.summary', { files: tEn('chg.files.other', { n: 3 }), counts: isolate('+13 \u22124', 'ltr') }));
         expect(screen.getByText('app.py').closest('li')).toHaveTextContent(`${tEn('chg.edited')} · +1 −1 · ${tEn('chg.turns', { n: 2 })}`);
         expect(screen.getByText('util.py').closest('li')).toHaveTextContent(tEn('chg.created'));
         expect(screen.getByText('old.txt').closest('li')).toHaveTextContent(tEn('chg.deleted'));
@@ -297,7 +298,7 @@ describe('ChangesSection git', () => {
     it('offers nothing when the changed files are not in a git repository', async () => {
         mocked.getSessionGit.mockResolvedValue({ available: true, repos: [] });
         renderSection();
-        await screen.findByText('3 files changed, +13 −4');
+        await screen.findByText(readsAs('3 files changed, +13 −4'));
         expect(screen.queryByRole('button', { name: tEn('mobileApp.changes.git.commit') })).not.toBeInTheDocument();
     });
 });
@@ -320,8 +321,12 @@ describe('ChangesSection in Arabic', () => {
 });
 
 describe('totalText', () => {
+    it('keeps the signed counts as one left-to-right value in Arabic', () => {
+        expect(totalText(CHANGES, translator('ar'))).toContain(isolate('+13 \u22124', 'ltr'));
+    });
+
     it('reads like a sentence', () => {
-        expect(totalText(CHANGES)).toBe(tEn('chg.total', { files: '3 files', add: 13, del: 4 }));
-        expect(totalText({ ...CHANGES, totals: { files: 1, additions: 0, deletions: 2, uncounted: 0 } })).toBe(tEn('chg.total', { files: '1 file', add: 0, del: 2 }));
+        expect(stripIsolates(totalText(CHANGES))).toBe('3 files changed, +13 \u22124');
+        expect(stripIsolates(totalText({ ...CHANGES, totals: { files: 1, additions: 0, deletions: 2, uncounted: 0 } }))).toBe('1 file changed, +0 \u22122');
     });
 });

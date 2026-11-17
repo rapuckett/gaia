@@ -3,7 +3,7 @@
 
 /** The agent activity timeline's pure logic, shared by the Agent UI and the phone app. */
 
-import { isMessageKey, ref, type MessageKey, type MessageRef } from '../i18n/registry';
+import { isMessageKey, isolateUnit, ref, type MessageKey, type MessageRef } from '../i18n/registry';
 import { tEn, type Translate } from '../i18n/translator';
 import type { AgentStep } from '../types';
 import { spokenDuration, type Mark, type Variant } from './spokenDuration.core';
@@ -429,6 +429,18 @@ export interface DurationWords {
     mark: Mark;
     variant: Variant;
 }
+
+const UNIT_WORDS: Partial<Record<MessageKey, MessageKey>> = {
+    'answer.duration.sec': 'mobileApp.answer.duration.sec',
+    'answer.duration.min': 'mobileApp.answer.duration.min',
+    'answer.duration.minSec': 'mobileApp.answer.duration.minSec',
+    'answer.duration.ms': 'mobileApp.answer.duration.ms',
+};
+
+const ACTIVITY_DURATION: DurationWords = { mark: isolateUnit, variant: (key) => UNIT_WORDS[key] ?? key };
+
+/** The thinking header's duration words for a language: English keeps "8s"; Arabic spells the units (the phone's keys). */
+export const durationWordsFor = (t: Translate): DurationWords | undefined => (t.locale === 'en' ? undefined : ACTIVITY_DURATION);
 
 /** "Thinking · 4s" while it runs, "Thought for 8s" once it is over and its length is known. */
 export function thoughtLabel(live: boolean, durationMs?: number, t: Translate = tEn, words?: DurationWords): string {

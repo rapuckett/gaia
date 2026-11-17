@@ -128,7 +128,7 @@ describe('startup before the backend listens', () => {
         );
         render(<App />);
         await advance(500);
-        expect(text()).toMatch(/Could not check whether GAIA is set up: Server error/);
+        expect(text()).toMatch(/Could not check whether GAIA is set up\.[\s\S]*Server error/);
     });
 
     it('shows the setup banner when the backend never starts', async () => {
@@ -136,7 +136,7 @@ describe('startup before the backend listens', () => {
         await advance(30_000);
         expect(text()).toContain('Starting GAIA');
         await advance(60_000);
-        expect(text()).toMatch(/Could not check whether GAIA is set up: Failed to fetch/);
+        expect(text()).toMatch(/Could not check whether GAIA is set up\.[\s\S]*Failed to fetch/);
     });
 });
 
@@ -144,7 +144,7 @@ describe('"Check again" on the setup banner', () => {
     async function bannerAfterNeverStarting() {
         render(<App />);
         await advance(61_000);
-        expect(text()).toMatch(/Could not check whether GAIA is set up: Failed to fetch/);
+        expect(text()).toMatch(/Could not check whether GAIA is set up\.[\s\S]*Failed to fetch/);
     }
 
     it('answers at once while the backend is still down, instead of waiting another 60 s', async () => {
@@ -152,7 +152,7 @@ describe('"Check again" on the setup banner', () => {
         const before = mocked.checkSetup.mock.calls.length;
         fireEvent.click(screen.getByRole('button', { name: 'Check again' }));
         await advance(500);
-        expect(text()).toMatch(/Could not check whether GAIA is set up: Failed to fetch/);
+        expect(text()).toMatch(/Could not check whether GAIA is set up\.[\s\S]*Failed to fetch/);
         await advance(5_000);
         // One click is one request; it does not start a background retry loop.
         expect(mocked.checkSetup.mock.calls.length).toBe(before + 1);

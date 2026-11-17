@@ -18,6 +18,7 @@ import * as memoryApi from '../services/memoryApi';
 import { useChatStore } from '../stores/chatStore';
 import { useModelStore } from '../stores/modelStore';
 import { translator } from '../i18n/useT';
+import { stripIsolates } from '../i18n/registry';
 import { requestPersonalize } from '../utils/connectorPersonalize';
 import { FLAGSHIP_AGENT_ID } from '../utils/newTask';
 import type { AgentInfo, BrowseResponse, SetupCheck } from '../types';
@@ -179,6 +180,6 @@ describe.each(LANGS)('a first message refused for want of the GAIA agent (%s)', 
         await waitFor(() => expect(mocked.createSession).toHaveBeenCalledOnce());
         await waitFor(() => expect(useChatStore.getState().showFileBrowser).toBe(false));
         expect(useChatStore.getState().draftDocumentIds).toEqual(['doc-1']);
-        await expectHintUntilInstalled(lang, translator(lang)('mobileApp.files.askOne', { name: 'notes.txt' }));
+        await expectHintUntilInstalled(lang, stripIsolates(translator(lang).bare('mobileApp.files.askOne', { name: 'notes.txt' })));
     });
 });

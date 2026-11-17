@@ -1,7 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { isolate, type MessageKey } from '@webui/i18n/registry';
+import { isolate, stripIsolates, type MessageKey } from '@webui/i18n/registry';
 import type { Translate } from '@webui/i18n/translator';
 
 import type { FileEntry } from '@/api/client.types';
@@ -64,6 +64,6 @@ export const canAct = (selected: number, adding: boolean) => selected > 0 && !ad
 
 /** The question sent into the chat; the wording is localized, never hard-coded. */
 export function askPrompt(names: readonly string[], t: Translate): string {
-    if (names.length === 1) return t('mobileApp.files.askOne', { name: names[0]! });
-    return t('mobileApp.files.askMany', { list: names.map((n) => `- ${n}`).join('\n') });
+    if (names.length === 1) return stripIsolates(t.bare('mobileApp.files.askOne', { name: names[0]! }));
+    return stripIsolates(t.bare('mobileApp.files.askMany', { list: names.map((n) => `- ${n}`).join('\n') }));
 }

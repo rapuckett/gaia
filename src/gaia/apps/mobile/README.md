@@ -127,7 +127,7 @@ APP_ENV=development npm run export:web    # expo export --platform web
 - **A gallery APK** checks the scenes on a device with no Metro and no PC:
 
   ```bash
-  EXPO_PUBLIC_DEV_GALLERY=1 EXPO_PUBLIC_GAIA_URL=http://127.0.0.1:9 dk-android build <worktree> --variant release
+  EXPO_PUBLIC_DEV_GALLERY=1 EXPO_PUBLIC_GAIA_URL=http://127.0.0.1:9 dk-android build <worktree> release
   ```
 
   Only a build whose config is `APP_ENV=development` (the `ai.amd.gaia.mobile.dev` scheme, read
