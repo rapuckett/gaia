@@ -1,6 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
+import type { Translate } from '@webui/i18n/translator';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Redirect, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
@@ -10,7 +11,7 @@ import { ChatAlertNotice, ConnectionBanner } from '@/features/banners/Connection
 import { devGalleryEnabled } from '@/features/dev/devGallery';
 import { KeyedScene } from '@/features/dev/KeyedScene';
 import { NotificationCenterScreen } from '@/features/notifications';
-import { chatAlertBanner, NOTIFICATION_SCENES, notificationSceneClient, type NotificationScene } from '@/features/notifications/devScenes';
+import { chatAlertBanner, goalStoreNotification, NOTIFICATION_SCENES, notificationSceneClient, type NotificationScene } from '@/features/notifications/devScenes';
 import NotificationsPane from '@/features/settings/panes/Notifications';
 import { useT } from '@/i18n/useT';
 import { SetupGate } from '@/features/setup/SetupGate';
@@ -22,8 +23,9 @@ import { Screen, ScreenBannerProvider, Stack, Text, UIProvider } from '@/ui';
 const noop = () => undefined;
 
 /** The app's notification stores hold the scene: a pending approval is a chat turn blocked on it. */
-function seed(scene: NotificationScene) {
-    useNotificationStore.setState({ items: scene.items ?? [], filter: scene.filter ?? null });
+function seed(scene: NotificationScene, t: Translate) {
+    const items = [...(scene.goalStore ? [goalStoreNotification(t)] : []), ...(scene.items ?? [])];
+    useNotificationStore.setState({ items, filter: scene.filter ?? null });
     setNotificationFilter(scene.filter ?? null);
     useChatAlertBannerStore.setState({ alert: null });
     const turns = Object.fromEntries(
@@ -81,9 +83,10 @@ function Body({ scene }: { scene: NotificationScene }) {
 }
 
 function NotificationsView({ found }: { found: NotificationScene }) {
+    const t = useT();
     const [queryClient] = useState(() => new QueryClient({ defaultOptions: { queries: { retry: false } } }));
     const [client] = useState(() => {
-        seed(found);
+        seed(found, t);
         return notificationSceneClient(found);
     });
     return (

@@ -111,6 +111,7 @@ export function ConnectorsBody({ initialExpanded }: { initialExpanded?: string }
                 count={count}
                 open={groupOpen(id, byDefault)}
                 onToggle={setGroup(id, byDefault)}
+                headerTestID={`connectors-group-${id}`}
             >
                 {body}
             </SettingsGroup>
