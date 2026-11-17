@@ -39,7 +39,8 @@ EXPO_PUBLIC_GAIA_URL=http://localhost:4200 APP_ENV=development npx expo start --
 ```
 
 A development build with `EXPO_PUBLIC_GAIA_URL` set is already connected over plain HTTP, so it
-skips the pairing screens. Native production builds ignore the variable; a web export reads it.
+skips the pairing screens. Native production builds ignore the variable; a web export reads it,
+and so does a gallery build (below).
 
 **Paired with a real PC.** Leave `EXPO_PUBLIC_GAIA_URL` unset so the app shows the pairing screens
 and uses the pinned transport. On the PC, turn on phone access as the guide describes (the
@@ -123,6 +124,17 @@ APP_ENV=development npm run export:web    # expo export --platform web
   page. It is available in development builds and in a native build or web export built with
   `EXPO_PUBLIC_DEV_GALLERY=1`. Declare each new dev page in `src/features/nav/routes.ts`;
   `routes.test.ts` fails for one that is missing.
+- **A gallery APK** checks the scenes on a device with no Metro and no PC:
+
+  ```bash
+  EXPO_PUBLIC_DEV_GALLERY=1 EXPO_PUBLIC_GAIA_URL=http://127.0.0.1:9 dk-android build <worktree> --variant release
+  ```
+
+  Only a build whose config is `APP_ENV=development` (the `ai.amd.gaia.mobile.dev` scheme, read
+  from the config built into the app) takes `EXPO_PUBLIC_GAIA_URL` and opens `/dev/*` past the
+  setup check. A production build ignores both, flag or not. The address only gets the app past
+  pairing: it is loopback, inside the development build's cleartext list, nothing listens on port
+  9, and a release build's unpinned fetch refuses every request anyway.
 - **End to end.** `e2e/` runs Playwright against the web export and a real Agent UI backend with
   a scripted fake LLM (`gaia.testing.dev_backend`), in headless Chromium:
   `GAIA_E2E_PYTHON=<venv>/bin/python GAIA_VISUAL_CHROMIUM=<chromium> npm run test:e2e-web`.

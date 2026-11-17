@@ -5,6 +5,7 @@ import { Platform } from 'react-native';
 import { create } from 'zustand';
 
 import { normalizeBaseUrl } from '@/api/http';
+import { galleryBuild } from '@/features/dev/devGallery';
 import type { RouteOrigin } from '@/features/pairing/homeNetwork';
 
 export interface ConnectionConfig {
@@ -36,11 +37,12 @@ interface ConnectionState {
 }
 
 // The PC's address for development, inlined by Expo when Metro starts; GAIA's port changes at every launch.
-// A production phone build ignores it: it reaches a PC only by pairing, over pinned TLS.
+// A production phone build ignores it: it reaches a PC only by pairing, over pinned TLS. A gallery build of the
+// development app (galleryBuild) takes it too, for device checks without Metro.
 export function seedUrl(env: string | undefined, dev: boolean, os: string): string | null {
     return env && (dev || os === 'web') ? env : null;
 }
-const SEED_URL = seedUrl(process.env.EXPO_PUBLIC_GAIA_URL, __DEV__, Platform.OS);
+const SEED_URL = seedUrl(process.env.EXPO_PUBLIC_GAIA_URL, __DEV__ || galleryBuild(), Platform.OS);
 
 export const useConnectionStore = create<ConnectionState>((set) => ({
     connection: SEED_URL ? { baseUrl: normalizeBaseUrl(SEED_URL) } : null,

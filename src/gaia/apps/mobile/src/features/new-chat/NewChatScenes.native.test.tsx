@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
-import { Platform } from 'react-native';
+import { Platform, StyleSheet } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { NewChatScenes, type NewChatScene } from './NewChatScenes';
@@ -42,5 +42,13 @@ describeNative('/dev/composer new-chat scenes', () => {
     it('skill-prompt lands the Try it prompt under the unsent draft', async () => {
         await mount('skill-prompt');
         await waitFor(() => expect(screen.getByTestId('composer-input').props.value).toBe('Compare these two quotes\n\nLoad the summarize skill, then tell me briefly what it lets you do.'));
+    });
+
+    it('new-chat-setup-failed shows the PC error as the notice detail, apart from the remedy', async () => {
+        await mount('new-chat-setup-failed');
+        const error = await screen.findByText('The model download stopped at 41%.');
+        expect(StyleSheet.flatten(error.props.style).writingDirection).toBe('ltr');
+        expect(screen.queryByText(/stopped at 41%\.\s*\n/)).toBeNull();
+        expect(screen.getByText(/Use a cloud model, or pick a smaller one/)).toBeTruthy();
     });
 });
