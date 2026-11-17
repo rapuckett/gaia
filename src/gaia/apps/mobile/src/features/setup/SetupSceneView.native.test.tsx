@@ -6,6 +6,7 @@ import type { ReactNode } from 'react';
 import { Platform } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { contentWidth } from '@/ui/tokens/space';
 import { sheetStore } from '@/ui/overlays/sheetStore';
 
 import { SETUP_SCENES } from './devScenes';
@@ -60,5 +61,10 @@ describeNative('setup gallery scenes', () => {
         expect(found).toBeDefined();
         await render(<SetupSceneView found={found!} />, { wrapper: wrap });
         expect((await screen.findAllByText(new RegExp(text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), undefined, { timeout: 4000 })).length).toBeGreaterThan(0);
+    });
+
+    it('lays a step out in the flow column', async () => {
+        await render(<SetupSceneView found={SETUP_SCENES['gate/check']!} />, { wrapper: wrap });
+        expect(screen.getByTestId('screen-content').props.dataSet).toEqual({ contentWidth: String(contentWidth.flow) });
     });
 });

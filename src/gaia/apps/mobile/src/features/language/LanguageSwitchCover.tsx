@@ -39,6 +39,7 @@ export function LanguageSwitchCover({ target, platform, onCancel }: CoverProps) 
     return (
         <View style={StyleSheet.absoluteFill} testID="language-switch-cover" accessibilityViewIsModal>
             <Screen
+                width="flow"
                 banner={null}
                 footer={
                     <Stack gap="sm">
