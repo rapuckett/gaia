@@ -213,7 +213,7 @@ describeNative('/dev/settings', () => {
     it('perm-chats offers Revoke all on a chat holding two grants', async () => {
         mockState = 'perm-chats';
         await mount();
-        expect((await screen.findAllByText('npm test', { includeHiddenElements: true })).length).toBeGreaterThan(0);
+        expect((await screen.findAllByText('Chat b', { includeHiddenElements: true })).length).toBeGreaterThan(0);
         expect((await screen.findAllByLabelText(/More actions/, { includeHiddenElements: true })).length).toBe(2);
     });
 
