@@ -29,6 +29,8 @@ export function HScroll({ children, dir, testID, hint = false }: HScrollProps) {
         <View style={dir ? { direction: dir } : undefined} {...(dir ? dirProp(dir) : {})}>
             <ScrollView
                 horizontal
+                style={dir ? { direction: dir } : undefined}
+                contentContainerStyle={dir ? { direction: dir } : undefined}
                 showsHorizontalScrollIndicator
                 nestedScrollEnabled
                 onLayout={(e) => setBox((b) => ({ ...b, view: e.nativeEvent.layout.width }))}
