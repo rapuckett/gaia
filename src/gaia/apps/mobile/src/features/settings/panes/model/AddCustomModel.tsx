@@ -16,6 +16,9 @@ const EXAMPLE_LINK = 'https://huggingface.co/unsloth/Qwen3-4B-Instruct-2507-GGUF
 /** Dev scenes only: a link already checked as the section opens. */
 export const SeedCustomReport = createContext<CustomModelReport | null>(null);
 
+/** Dev scenes only: a link whose check is still in flight as the section opens. */
+export const SeedCheckPending = createContext<string | null>(null);
+
 export interface AddCustomModelProps {
     open: boolean;
     onToggle: () => void;
@@ -30,7 +33,8 @@ export function AddCustomModel({ open, onToggle, onClose, onAdded }: AddCustomMo
     const check = useCheckCustomModel();
     const add = useAddCustomModel();
     const seed = useContext(SeedCustomReport);
-    const [url, setUrl] = useState(seed?.url ?? '');
+    const pending = useContext(SeedCheckPending);
+    const [url, setUrl] = useState(seed?.url ?? pending ?? '');
     // A quantization's first file: unique even when two variants share a quant name.
     const [file, setFile] = useState(seed?.file ?? '');
     const [report, setReport] = useState<CustomModelReport | null>(seed);
@@ -38,7 +42,8 @@ export function AddCustomModel({ open, onToggle, onClose, onAdded }: AddCustomMo
     const [passedOpen, setPassedOpen] = useState(false);
     // The link the newest check was for; an older answer is dropped.
     const asked = useRef('');
-    const busy = check.isPending || add.isPending;
+    const checking = check.isPending || !!pending;
+    const busy = checking || add.isPending;
 
     const fail = (err: unknown) => setError(refusedOnPhone(err) ? t('mobileApp.settings.pcOnly') : errorText(err, t));
 
@@ -107,7 +112,7 @@ export function AddCustomModel({ open, onToggle, onClose, onAdded }: AddCustomMo
                     label={t.bare('settings.custom.check')}
                     accessibilityLabel={t('settings.custom.check')}
                     onPress={() => runCheck('')}
-                    busy={check.isPending}
+                    busy={checking}
                     disabled={busy || !url.trim()}
                     testID="custom-model-check"
                 />
@@ -130,15 +135,18 @@ export function AddCustomModel({ open, onToggle, onClose, onAdded }: AddCustomMo
                     </Stack>
                 ) : null}
                 {report && report.variants.length > 1 ? (
-                    <ChoiceList
-                        accessibilityLabel={t('settings.custom.quantization')}
-                        options={report.variants.map((v) => ({
-                            value: v.file,
-                            label: `${v.quant} · ${isolate(`${v.size_gb} GB`)}${v.fits ? '' : ` · ${t.bare('mobileApp.settings.custom.tooLarge')}`}`,
-                        }))}
-                        value={file}
-                        onChange={(v) => { if (!busy) runCheck(v as string); }}
-                    />
+                    <Stack gap="xs">
+                        <Text role="caption" weight="semibold" tone="secondary" accessibilityRole="header">{t('settings.custom.quantization')}</Text>
+                        <ChoiceList
+                            accessibilityLabel={t('settings.custom.quantization')}
+                            options={report.variants.map((v) => ({
+                                value: v.file,
+                                label: `${v.quant} · ${isolate(`${v.size_gb} GB`)}${v.fits ? '' : ` · ${t.bare('mobileApp.settings.custom.tooLarge')}`}`,
+                            }))}
+                            value={file}
+                            onChange={(v) => { if (!busy) runCheck(v as string); }}
+                        />
+                    </Stack>
                 ) : null}
                 {report?.ok ? (
                     <Stack gap="xs">

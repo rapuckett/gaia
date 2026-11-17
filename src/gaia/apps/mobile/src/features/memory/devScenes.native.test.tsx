@@ -1,7 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { render, screen } from '@testing-library/react-native';
+import { fireEvent, render, screen } from '@testing-library/react-native';
 import { Platform } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
@@ -36,5 +36,12 @@ const mount = () =>
         await screen.findByTestId('memory-tab-advanced');
         expect(screen.queryByTestId('memory-pane-advanced')).toBeNull();
         expect(screen.queryByText('Failed to load memory data. Is the backend running?')).toBeNull();
+    });
+
+    it('discoveryOff leaves discovery consent off, so its switch opens the consent dialog', async () => {
+        mockScene = 'discoveryOff';
+        await mount();
+        fireEvent.press(await screen.findByTestId('memory-switch-discovery'));
+        expect(await screen.findByText('Enable System Discovery?')).toBeTruthy();
     });
 });

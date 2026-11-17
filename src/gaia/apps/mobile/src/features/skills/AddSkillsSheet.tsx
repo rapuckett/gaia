@@ -1,6 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
+import { isolate } from '@webui/i18n/registry';
 import { useEffect, useState } from 'react';
 import { Share, View } from 'react-native';
 
@@ -101,7 +102,13 @@ export function AddSkillsSheet({ open, onClose }: { open: boolean; onClose: () =
                     url
                     placeholder={t.bare('settings.skills.link.placeholder')}
                     accessibilityLabel={t('settings.skills.link.aria')}
-                    hint={t('settings.skills.link.hint')}
+                    hint={t('mobileApp.skills.linkHint', {
+                        github: isolate('GitHub', 'ltr'),
+                        repo: isolate('owner/repo', 'ltr'),
+                        skills: isolate('skills.sh', 'ltr'),
+                        https: isolate('https', 'ltr'),
+                        zip: isolate('.zip', 'ltr'),
+                    })}
                     returnKeyType="go"
                     onSubmitEditing={() => void read(url)}
                     disabled={busy}

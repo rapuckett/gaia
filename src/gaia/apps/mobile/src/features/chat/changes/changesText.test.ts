@@ -3,14 +3,35 @@
 
 import { stripIsolates } from '@webui/i18n/registry';
 
+import type { SessionChanges } from '@/api/client.types';
 import { translator } from '@/i18n/useT';
 
-import { undoneText } from './changesText';
+import { summaryText, totalText, undoneText } from './changesText';
+
+const changes = { totals: { files: 4, additions: 52, deletions: 22, uncounted: 0 } } as SessionChanges;
+
+describe('Changes totals in Arabic', () => {
+    it.each([
+        ['total', totalText],
+        ['summary', summaryText],
+    ])('keep the %s signed counts as one left-to-right run', (_name, build) => {
+        const text = build(changes, translator('ar'));
+        expect(text).toContain('⁦+52 −22⁩');
+    });
+});
 
 const files = (n: number) => Array.from({ length: n }, (_, i) => `f${i}`);
 const result = (restored: number, removed: number, kept = 0) => ({ restored: files(restored), removed: files(removed), kept_folders: files(kept) });
 
 describe('undoneText', () => {
+    const saved = Intl.PluralRules;
+    beforeAll(() => {
+        delete (Intl as any).PluralRules;
+    });
+    afterAll(() => {
+        (Intl as any).PluralRules = saved;
+    });
+
     it('keeps the English sentence unchanged', () => {
         expect(undoneText(result(1, 1), translator('en'))).toBe('Undone: restored 1 file, removed 1 new file.');
     });

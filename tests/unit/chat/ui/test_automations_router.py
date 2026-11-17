@@ -206,3 +206,46 @@ def test_a_pending_device_is_refused(method, path):
     client = make_device_client(allowed=False)
     assert getattr(client, method)(path.replace("/x", f"/{item.id}")).status_code == 403
     assert store.find(store.load(), item.id).paused is False
+
+
+def _unreadable(monkeypatch):
+    from gaia.automations import files
+
+    def boom(*a, **k):
+        raise files.CorruptStateFile(f"{store.path()} is not usable")
+
+    monkeypatch.setattr(store, "load", boom)
+    monkeypatch.setattr(store, "update", boom)
+    monkeypatch.setattr(store, "remove", boom)
+
+
+@pytest.mark.parametrize(
+    "method,path",
+    [
+        ("get", "/api/automations"),
+        ("post", "/api/automations/x/pause"),
+        ("delete", "/api/automations/x"),
+    ],
+)
+def test_an_unreadable_store_keeps_the_pc_path_from_a_device(monkeypatch, method, path):
+    _unreadable(monkeypatch)
+    home = str(store.path().parent)
+    resp = getattr(make_device_client(), method)(path)
+    detail = resp.json()["detail"]
+    assert resp.status_code == 500
+    assert home not in detail and "/" not in detail and "\\" not in detail
+
+
+@pytest.mark.parametrize(
+    "method,path",
+    [
+        ("get", "/api/automations"),
+        ("post", "/api/automations/x/pause"),
+        ("delete", "/api/automations/x"),
+    ],
+)
+def test_an_unreadable_store_still_tells_the_pc_the_path(monkeypatch, method, path):
+    _unreadable(monkeypatch)
+    resp = getattr(make_client(), method)(path)
+    assert resp.status_code == 500
+    assert str(store.path()) in resp.json()["detail"]

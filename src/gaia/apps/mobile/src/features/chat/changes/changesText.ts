@@ -3,6 +3,7 @@
 
 import type { SessionChanges } from '@/api/client.types';
 import { GaiaApiError } from '@/api/errors';
+import { pluralCategory } from '@/i18n/plural';
 import { describeFailureWith, type Translate } from '@/i18n/useT';
 import { isMessageKey, isolate, ref, type MessageKey } from '@webui/i18n/registry';
 
@@ -34,7 +35,7 @@ export function loadFailure(error: unknown, t: Translate, keys: { withReason: 't
 
 /** `base.<CLDR plural form>` in one language half, so Arabic agrees with 2, 3-10 and 11+. */
 function countedKey(base: string, n: number, code: string): MessageKey {
-    const key = `${base}.${new Intl.PluralRules(code).select(n)}`;
+    const key = `${base}.${pluralCategory(code, n)}`;
     if (!isMessageKey(key)) throw new Error(`No "${key}" message for ${n} in ${code}; add every plural form to locales/${code}.ts.`);
     return key;
 }

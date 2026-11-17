@@ -27,6 +27,8 @@ export interface SettingsScene {
     search?: string;
     /** Opens this model's Details section expanded. */
     openDetails?: string;
+    /** Opens Add a model from Hugging Face with this link typed and its check still running. */
+    checkPending?: string;
     /** Opens Add a model from Hugging Face with this link already checked. */
     customReport?: CustomModelReport;
     /** Opens the Messaging status with the just-paired line showing. */
@@ -82,6 +84,7 @@ const NPU_MODEL = model('gemma4-it-e4b-FLM', {
         { code: 'memlock', title: '', fix: '', params: { limit: '8 MB', fix: 'apply' } },
     ],
 });
+const NPU_READY = { ...NPU_MODEL, npu_problems: undefined, evidence: '17/20 tasks · quality 4.4/5 · $0.00 per 20-task run' };
 const FIREWORKS_MODELS = [
     model('fireworks.qwen3p6', {
         display_name: 'Qwen3.6', rank: 1, note: 'best overall, fastest', evidence: '18/20 tasks · quality 4.6/5 · $0.42 per 20-task run',
@@ -224,6 +227,12 @@ export const SETTINGS_SCENES: Record<string, SettingsScene> = {
     'model-search-miss': { section: 'model', target: 'models-on-pc', gpuMemory: GPU, search: 'zzz-no-such-model', data: local(MANY) },
     // SET-MODEL-24: a model row with its Details section expanded.
     'model-details': { section: 'model', target: 'models-on-pc', gpuMemory: GPU, openDetails: MINE_CUSTOM.id, data: local([HAVE, MINE_CUSTOM]) },
+    // SET-MODEL-24: an NPU model's Details (placement marked expected, then the measured figures); and a model the PC can't run, its group held open by a search.
+    'model-details-npu': {
+        section: 'model', target: 'models-on-pc', gpuMemory: GPU, openDetails: NPU_READY.id,
+        data: local([HAVE, NPU_READY]),
+    },
+    'model-details-unfit': { section: 'model', target: 'models-on-pc', gpuMemory: GPU, openDetails: NEVER.id, search: 'Coder', data: local([HAVE, NEVER]) },
     // SET-MODEL-26: a Use tap that hangs (`#tap=model-use-user.my-tuned-GGUF`).
     'model-switching': { section: 'model', target: 'models-on-pc', gpuMemory: GPU, hang: 'select', data: local([HAVE, MINE_CUSTOM]) },
     // SET-MODEL-24, 28: a custom model with Remove and its Details (`#tap=model-remove-user.my-tuned-GGUF` opens the confirm sheet); the custom model in use has none.
@@ -243,6 +252,13 @@ export const SETTINGS_SCENES: Record<string, SettingsScene> = {
         section: 'model', target: 'models-on-pc', gpuMemory: GPU, customReport: HF_CHECKING,
         data: local([HAVE]),
     },
+    // SET-MODEL-30: the Check spinner, with the check in flight and nothing listed yet.
+    'model-hf-check-running': { section: 'model', target: 'models-on-pc', gpuMemory: GPU, checkPending: HF_URL, data: local([HAVE]) },
+    // SET-MODEL-30: the checks done and passing, with a non-blocking Warnings list under them.
+    'model-hf-warnings': {
+        section: 'model', target: 'models-on-pc', gpuMemory: GPU, data: local([HAVE]),
+        customReport: { ...HF_REPORT, warnings: ['Not tested on the NPU', 'The file is larger than most chat models'], variants: HF_VARIANTS },
+    },
     'model-hf-ready': {
         section: 'model', target: 'models-on-pc', gpuMemory: GPU, customReport: { ...HF_REPORT, variants: HF_VARIANTS },
         data: local([HAVE]),
@@ -260,6 +276,11 @@ export const SETTINGS_SCENES: Record<string, SettingsScene> = {
     'automations-empty': autos({ automations: [], delivers: false }),
     'automations-load-failed': autos(new GaiaApiError(500, 'automations.json is not usable: Expecting value: line 1 column 1 (char 0)')),
     'automations-pc-refused': autos(new GaiaApiError(403, PC_ONLY_REFUSAL)),
+    'automations-loading': autos({ automations: [], delivers: true }, { override: { listAutomations: never } }),
+    // Pause on Call Sam never finishes: tap `#tap=automation-toggle-a1b2c3d4` and its button shows busy while Remove is disabled.
+    'automations-busy': autos({ automations: AUTOMATIONS, delivers: true }, { override: { automationAction: never } }),
+    // Pause on Call Sam fails: tap `#tap=automation-toggle-a1b2c3d4` and the danger notice shows with the PC's text on its own detail line.
+    'automations-action-error': autos({ automations: AUTOMATIONS, delivers: true }, { override: { automationAction: () => Promise.reject(new GaiaApiError(500, 'scheduler.json is locked by another process')) } }),
 
     // SET-MSG-01: the card before the PC has answered, and when the read fails (`Try again`).
     'msg-loading': msg(discord({}), { override: { getDiscordStatus: never } }),

@@ -1,7 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { Platform } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
@@ -50,6 +50,10 @@ describeNative('/dev/settings', () => {
         ['model-key-disconnected', 'Reconnect'],
         ['model-search-empty', 'No models match.'],
         ['model-hf-checking', /Needs 64 GB/],
+        ['model-hf-warnings', /Not tested on the NPU/],
+        ['model-details-npu', /Measured:.*17\/20 tasks/],
+        ['model-details-npu', /\(expected\)/],
+        ['model-details-unfit', /Can.t run here: needs 320 GB of memory/],
         ['model-hf-ready', /Add .*Demo Chat/],
         ['model-search-miss', 'No models match.'],
         ['model-details', /huggingface\.co\/me\/my-tuned-GGUF/],
@@ -155,6 +159,28 @@ describeNative('/dev/settings', () => {
         expect((await screen.findAllByText(text, { includeHiddenElements: true })).length).toBeGreaterThan(0);
     });
 
+    it('automations-loading shows the loading line and no cards', async () => {
+        mockState = 'automations-loading';
+        await mount();
+        expect((await screen.findAllByText('Loading…', { includeHiddenElements: true })).length).toBeGreaterThan(0);
+        expect(screen.queryByTestId('automation-a1b2c3d4', { includeHiddenElements: true })).toBeNull();
+    });
+
+    it('automations-busy disables Remove while Pause is in flight', async () => {
+        mockState = 'automations-busy';
+        await mount();
+        await fireEvent.press(await screen.findByTestId('automation-toggle-a1b2c3d4', { includeHiddenElements: true }));
+        await waitFor(() => expect(screen.getByTestId('automation-remove-a1b2c3d4', { includeHiddenElements: true })).toBeDisabled());
+    });
+
+    it('automations-action-error shows the failure sentence and the PC text', async () => {
+        mockState = 'automations-action-error';
+        await mount();
+        await fireEvent.press(await screen.findByTestId('automation-toggle-a1b2c3d4', { includeHiddenElements: true }));
+        expect(await screen.findByTestId('automations-action-failed', { includeHiddenElements: true })).toBeTruthy();
+        expect((await screen.findAllByText(/scheduler.json is locked/, { includeHiddenElements: true })).length).toBeGreaterThan(0);
+    });
+
     it('general-custom-colors opens Colors with the custom accent, tint and Reset', async () => {
         mockState = 'general-custom-colors';
         await mount();
@@ -186,6 +212,13 @@ describeNative('/dev/settings', () => {
         await mount();
         expect(await screen.findByTestId('model-remove-user.my-tuned-GGUF', { includeHiddenElements: true })).toBeTruthy();
         expect(screen.queryByTestId('model-remove-user.in-use-GGUF', { includeHiddenElements: true })).toBeNull();
+    });
+
+    it('model-hf-check-running holds the Check button busy with the link typed', async () => {
+        mockState = 'model-hf-check-running';
+        await mount();
+        expect(await screen.findByDisplayValue(/Demo-Chat-GGUF/, undefined, { timeout: 3000 })).toBeTruthy();
+        expect(screen.getByTestId('custom-model-check', { includeHiddenElements: true })).toBeDisabled();
     });
 
     it('model-hf-added opens on the success notice with no typing', async () => {

@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: MIT
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen } from '@testing-library/react-native';
-import { Platform } from 'react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { BackHandler, Platform } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { translator } from '@/i18n/useT';
@@ -192,6 +192,34 @@ describeNative('card, connector and undo scenes', () => {
         const button = await screen.findByTestId('changes-pr', opts);
         expect(button.props.accessibilityState?.disabled).toBeFalsy();
         expect(screen.queryByText(/Session not found|no model status/, opts)).toBeNull();
+    });
+
+    it('panel-chgReview shows the review over the panel', async () => {
+        mockParams = { state: 'panel-chgReview' };
+        await mount(route('messages'));
+        expect(await screen.findByText(t('mobileApp.changes.chat.reviewTitle'), opts)).toBeTruthy();
+    });
+
+    it('Create PR opens its sheet over the panel, and Android back closes only that sheet', async () => {
+        const [state, button, title] = ['panel-chgGitPr', 'changes-pr', t('mobileApp.changes.git.prTitle')];
+        // Android calls the newest back handler first and stops at the first that returns true.
+        const handlers: Parameters<typeof BackHandler.addEventListener>[1][] = [];
+        const spy = jest.spyOn(BackHandler, 'addEventListener').mockImplementation((_event, handler) => {
+            handlers.push(handler);
+            return { remove: () => void handlers.splice(handlers.indexOf(handler), 1) };
+        });
+        mockParams = { state };
+        await mount(route('messages'));
+        fireEvent.press(await screen.findByTestId(button, opts));
+        expect(await screen.findByText(title, opts)).toBeTruthy();
+        expect(screen.getByTestId(button, opts)).toBeTruthy();
+
+        await act(async () => {
+            [...handlers].reverse().some((h) => h({} as never));
+        });
+        await waitFor(() => expect(screen.queryByText(title, opts)).toBeNull());
+        expect(screen.getByTestId(button, opts)).toBeTruthy();
+        spy.mockRestore();
     });
 
     it.each([
