@@ -117,3 +117,12 @@ describe('offerState', () => {
         expect(offerSettled(silent)).toBe(false);
     });
 });
+
+describe('checkRows detail', () => {
+    it('carries the PC\'s own words on the device row, only when the read failed', () => {
+        const failed = checkRows({ hardware: null, hardwareError: 'boom', hardwareErrorDetail: 'Internal error', plan: null, serverRun: null, awaitingChoice: false }, t);
+        expect(failed[0]!.detail).toBe('Internal error');
+        const ok = checkRows({ hardware: hardware(), hardwareError: null, hardwareErrorDetail: 'stale', plan: plan(), serverRun: null, awaitingChoice: false }, t);
+        expect(ok[0]!.detail).toBeUndefined();
+    });
+});

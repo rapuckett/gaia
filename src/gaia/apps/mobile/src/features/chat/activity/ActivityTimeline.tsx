@@ -70,7 +70,7 @@ export function ActivityTimeline({ steps, running = false, awaitingUser = false,
             case 'thinking':
                 return <Thought key={row.id} step={row} live={running && !!row.active} durationMs={durations.get(row.id)} now={now} />;
             case 'tool':
-                return <ToolStepRow key={row.id} step={row} now={now} awaitingUser={running && awaitingUser} testID={`step-row-${rows.indexOf(row)}`} />;
+                return <ToolStepRow key={row.id} step={row} now={now} awaitingUser={running && awaitingUser} testID={`step-row-${rows.findIndex((r) => r.id === row.id)}`} />;
             case 'plan':
                 return row === livePlan ? null : <PlanChecklist key={row.id} step={row} />;
             case 'status':
