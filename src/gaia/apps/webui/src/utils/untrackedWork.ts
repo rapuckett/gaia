@@ -3,33 +3,35 @@
 
 /** Wording for work a turn ran that GAIA could not copy for undo (#5225). */
 
+import { isolate, pluralKey, ref, type MessageKey, type MessageRef, type PluralKey } from '../i18n/registry';
+import type { Translate } from '../i18n/translator';
 import type { UntrackedWork } from '../types/changes';
 
-interface KindWords {
-    one: string;
-    many: string;
+interface KindMessages {
+    /** "{n} commands", `.one` / `.other`. */
+    count: PluralKey;
+    /** "Command" / "Commands", for a title that has no entry label. */
+    name: PluralKey;
     /** Prefix for a single entry's label. */
-    prefix: string;
+    prefix: MessageKey;
 }
 
-const KINDS: Record<string, KindWords> = {
-    shell: { one: 'command', many: 'commands', prefix: 'Command' },
-    run_python: { one: 'Python snippet', many: 'Python snippets', prefix: 'Python' },
-    execute_python_file: { one: 'Python script', many: 'Python scripts', prefix: 'Python script' },
-    mcp: { one: 'connected tool call', many: 'connected tool calls', prefix: 'Connected tool' },
-    install_cli: { one: 'install command', many: 'install commands', prefix: 'Install' },
-    late_write: { one: 'late file write', many: 'late file writes', prefix: 'File write' },
+const kind = (id: string) => ({
+    count: `untracked.${id}` as PluralKey,
+    name: `untracked.${id}.name` as PluralKey,
+    prefix: `untracked.${id}.prefix` as MessageKey,
+});
+
+const KINDS: Record<string, KindMessages> = {
+    shell: kind('shell'),
+    run_python: kind('run_python'),
+    execute_python_file: kind('execute_python_file'),
+    mcp: kind('mcp'),
+    install_cli: kind('install_cli'),
+    late_write: kind('late_write'),
 };
 
 const MAX_LABEL = 120;
-
-function words(kind: string): KindWords {
-    return KINDS[kind] ?? { one: kind, many: kind, prefix: kind };
-}
-
-function capitalize(text: string): string {
-    return text.charAt(0).toUpperCase() + text.slice(1);
-}
 
 function truncate(text: string): string {
     const flat = text.replace(/\s+/g, ' ').trim();
@@ -53,12 +55,14 @@ export interface UntrackedGroup {
     entries: UntrackedEntry[];
 }
 
-function countOf(n: number, w: KindWords): string {
-    return `${n} ${n === 1 ? w.one : w.many}`;
+function countRef(k: string, n: number): MessageRef {
+    const known = KINDS[k];
+    return known
+        ? ref(pluralKey(known.count, n), { n })
+        : ref('untracked.unknown', { n, kind: isolate(k, 'ltr') });
 }
 
-/** Untracked work by kind, in the order it ran, identical entries merged. */
-export function groupUntracked(list: UntrackedWork[]): UntrackedGroup[] {
+function collect(list: UntrackedWork[]) {
     const groups = new Map<string, { kind: string; count: number; entries: Map<string, UntrackedEntry> }>();
     for (const u of list) {
         let group = groups.get(u.kind);
@@ -72,27 +76,41 @@ export function groupUntracked(list: UntrackedWork[]): UntrackedGroup[] {
         if (entry) entry.count += 1;
         else group.entries.set(detail, { label: truncate(detail), detail, count: 1 });
     }
-    return [...groups.values()].map(({ kind, count, entries }) => {
-        const w = words(kind);
+    return [...groups.values()];
+}
+
+/** Untracked work by kind, in the order it ran, identical entries merged. */
+export function groupUntracked(list: UntrackedWork[], t: Translate): UntrackedGroup[] {
+    return collect(list).map(({ kind, count, entries }) => {
+        const known = KINDS[kind];
         const distinct = [...entries.values()];
-        let title: string;
-        if (distinct.length === 1) {
+        const title = t.compose((say) => {
+            const name = (n: number) => (known ? say(pluralKey(known.name, n)) : isolate(kind, 'ltr'));
+            if (distinct.length !== 1) return say('untracked.times', { title: name(2), n: count });
             const only = distinct[0];
-            title = only.label ? `${w.prefix}: ${only.label}` : capitalize(w.one);
-            if (only.count > 1) title += ` ×${only.count}`;
-        } else {
-            title = `${capitalize(w.many)} ×${count}`;
-        }
+            const text = only.label
+                ? say('untracked.titleOf', { prefix: known ? ref(known.prefix) : isolate(kind, 'ltr'), label: only.label })
+                : name(1);
+            return only.count > 1 ? say('untracked.times', { title: text, n: only.count }) : text;
+        });
         return { kind, title, count, entries: distinct };
     });
 }
 
+function workRef(list: UntrackedWork[]): MessageRef {
+    const parts = collect(list).map((g) => countRef(g.kind, g.count));
+    if (parts.length === 0) return ref('untracked.none');
+    let joined = parts[0];
+    parts.slice(1, -1).forEach((next) => {
+        joined = ref('untracked.join.comma', { head: joined, next });
+    });
+    return parts.length > 1 ? ref('untracked.join.and', { head: joined, last: parts[parts.length - 1] }) : joined;
+}
+
 /** "7 Python snippets", "2 commands and 3 Python snippets". */
-export function describeUntracked(list: UntrackedWork[]): string {
-    const parts = groupUntracked(list).map((g) => countOf(g.count, words(g.kind)));
-    if (parts.length === 0) return 'work';
-    if (parts.length === 1) return parts[0];
-    return `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`;
+export function describeUntracked(list: UntrackedWork[], t: Translate): string {
+    const work = workRef(list);
+    return t.compose((say) => say(work.ref, work.params));
 }
 
 /**
@@ -100,15 +118,15 @@ export function describeUntracked(list: UntrackedWork[]): string {
  *
  * @param also   the turn changed tracked files too, so this is in addition.
  * @param inChat the warning covers the whole chat, not one turn.
- * @param undo   the button the sentence refers to.
+ * @param undo   the message naming the button the sentence refers to.
  */
 export function untrackedWarning(
     list: UntrackedWork[],
-    { also = false, inChat = false, undo = 'Undo' }: { also?: boolean; inChat?: boolean; undo?: string } = {},
+    t: Translate,
+    { also = false, inChat = false, undo = 'untracked.undo' }: { also?: boolean; inChat?: boolean; undo?: MessageKey } = {},
 ): string {
-    const one = list.length === 1;
-    return (
-        `${inChat ? 'In this chat, GAIA' : 'GAIA'} ${also ? 'also ran' : 'ran'} ${describeUntracked(list)} it can't track. ` +
-        `If ${one ? 'it' : 'they'} changed any files, ${undo} won't restore them.`
-    );
+    const lead: MessageKey = inChat ? (also ? 'untracked.lead.chatAlso' : 'untracked.lead.chat') : also ? 'untracked.lead.also' : 'untracked.lead.ran';
+    const work = workRef(list);
+    const key: PluralKey = 'untracked.warning';
+    return t.compose((say) => say(pluralKey(key, list.length), { lead: ref(lead), work, undo: ref(undo) }));
 }

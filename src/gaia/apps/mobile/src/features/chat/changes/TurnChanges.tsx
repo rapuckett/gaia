@@ -45,7 +45,7 @@ function TurnChangesRow({ sessionId, turn }: { sessionId: string; turn: Turn }) 
 
     const count = turn.files.length;
     const undone = Boolean(turn.restored_at);
-    const groups = groupUntracked(turn.untracked);
+    const groups = groupUntracked(turn.untracked, t);
 
     const undo = async (force: boolean) => {
         setPhase('working');
@@ -109,7 +109,7 @@ function TurnChangesRow({ sessionId, turn }: { sessionId: string; turn: Turn }) 
                     tone="warning"
                     role="note"
                     message={
-                        untrackedWarning(turn.untracked, { also: count > 0 }) +
+                        untrackedWarning(turn.untracked, t, { also: count > 0 }) +
                         groups.map((g) => `\n${g.title}${g.entries.length > 1 ? `: ${g.entries.map((e) => `${e.label || 'No description'}${e.count > 1 ? ` ×${e.count}` : ''}`).join('; ')}` : ''}`).join('')
                     }
                 />
