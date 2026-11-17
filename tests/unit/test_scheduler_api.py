@@ -55,7 +55,7 @@ def app_with_scheduler():
 def client(app_with_scheduler):
     """FastAPI test client."""
     app, _, _ = app_with_scheduler
-    return TestClient(app)
+    return TestClient(app, client=("127.0.0.1", 50000))
 
 
 # ── POST /api/schedules tests ────────────────────────────────────────────────
@@ -304,7 +304,7 @@ class TestRunScheduleNow:
 
     def test_run_now_while_running_is_409(self, app_with_scheduler):
         _, scheduler, _ = app_with_scheduler
-        client = TestClient(app_with_scheduler[0])
+        client = TestClient(app_with_scheduler[0], client=("127.0.0.1", 50000))
         client.post(
             "/api/schedules",
             json={"name": "busy", "interval": "every 1h", "prompt": "B"},
@@ -363,7 +363,7 @@ def legacy_client():
     app = FastAPI(lifespan=lifespan)
     app.include_router(router)
     app.dependency_overrides[get_scheduler] = lambda: scheduler
-    with TestClient(app) as client:
+    with TestClient(app, client=("127.0.0.1", 50000)) as client:
         yield client, scheduler
     db.close()
 

@@ -9,7 +9,7 @@ import threading
 import time
 from typing import Callable, Dict, List, Optional, get_args
 
-from fastapi import APIRouter, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.routing import APIRoute
 from pydantic import BaseModel, field_validator
 
@@ -24,7 +24,7 @@ from gaia.agents.base.goal_store import (
 )
 from gaia.ui.models import WireModel
 
-from ..security import audit_approval
+from ..security import audit_approval, require_pc_or_allowed_device
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +61,9 @@ class _GoalStoreRoute(APIRoute):
 
 
 router = APIRouter(tags=["goals"], route_class=_GoalStoreRoute)
+
+#: Changing a goal: the PC and allowed paired devices; mobile access only reads.
+PC_OR_DEVICE = [Depends(require_pc_or_allowed_device)]
 
 # ---------------------------------------------------------------------------
 # GoalStore singleton  (same double-checked locking pattern as memory.py)
@@ -294,7 +297,7 @@ def get_goal_store_health():
     return {"error": None, "damaged": False}
 
 
-@router.post("/api/goals/store/reset")
+@router.post("/api/goals/store/reset", dependencies=PC_OR_DEVICE)
 def start_new_goal_list():
     """Move a damaged goals.db aside and start an empty goal list in its place."""
     from gaia.config import gaia_home
@@ -377,6 +380,7 @@ def list_goals(
 @router.post(
     "/api/goals",
     status_code=201,
+    dependencies=PC_OR_DEVICE,
     response_model=GoalResponse,
     response_model_exclude_unset=True,
 )
@@ -407,6 +411,7 @@ def get_goal(goal_id: str):
 
 @router.put(
     "/api/goals/{goal_id}/approve",
+    dependencies=PC_OR_DEVICE,
     response_model=GoalResponse,
     response_model_exclude_unset=True,
 )
@@ -424,6 +429,7 @@ def approve_goal(goal_id: str, http_request: Request):
 
 @router.put(
     "/api/goals/{goal_id}/reject",
+    dependencies=PC_OR_DEVICE,
     response_model=GoalResponse,
     response_model_exclude_unset=True,
 )
@@ -441,6 +447,7 @@ def reject_goal(goal_id: str, http_request: Request):
 
 @router.put(
     "/api/goals/{goal_id}/cancel",
+    dependencies=PC_OR_DEVICE,
     response_model=GoalResponse,
     response_model_exclude_unset=True,
 )
@@ -461,6 +468,7 @@ def cancel_goal(goal_id: str):
 
 @router.put(
     "/api/goals/{goal_id}/status",
+    dependencies=PC_OR_DEVICE,
     response_model=GoalResponse,
     response_model_exclude_unset=True,
 )
@@ -474,7 +482,7 @@ def update_goal_status(goal_id: str, body: GoalStatusUpdate):
     return _goal_to_dict(goal)
 
 
-@router.delete("/api/goals/{goal_id}", status_code=204)
+@router.delete("/api/goals/{goal_id}", status_code=204, dependencies=PC_OR_DEVICE)
 def delete_goal(goal_id: str):
     """Hard-delete a goal and all its tasks."""
     if not _get_store().delete_goal(goal_id):
@@ -485,6 +493,7 @@ def delete_goal(goal_id: str):
 @router.post(
     "/api/goals/{goal_id}/tasks",
     status_code=201,
+    dependencies=PC_OR_DEVICE,
     response_model=GoalTaskResponse,
     response_model_exclude_unset=True,
 )
@@ -499,6 +508,7 @@ def add_task(goal_id: str, body: TaskCreate):
 
 @router.put(
     "/api/goals/{goal_id}/tasks/{task_id}",
+    dependencies=PC_OR_DEVICE,
     response_model=GoalTaskResponse,
     response_model_exclude_unset=True,
 )

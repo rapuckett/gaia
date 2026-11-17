@@ -7,9 +7,9 @@ Every route is in exactly one class, and ``test_every_route_is_classified``
 fails for a route nobody has decided about:
 
 * ``pc``: the PC running GAIA only (``require_local_pc``).
-* ``pc_or_device``: first-run setup, device-code sign-in and Automations; the
-  PC or an allowed paired device, never mobile access (``require_pc_or_device``,
-  ``require_pc_or_allowed_device``).
+* ``pc_or_device``: first-run setup, device-code sign-in, Automations and changes
+  to schedules and goals; the PC or an allowed paired device, never mobile
+  access (``require_pc_or_device``, ``require_pc_or_allowed_device``).
 * ``not_on_listener``: a read with side effects on the PC; the PC and mobile
   access, never a paired device (``refuse_on_device_listener``).
 * ``remote``: the PC, mobile access with its token, and allowed devices.
@@ -109,9 +109,16 @@ PC_ONLY = {
 
 PC_OR_DEVICE = {
     "DELETE /api/automations/{ref}",
+    "DELETE /api/goals/{goal_id}",
+    "DELETE /api/schedules/{name:path}",
     "GET /api/automations",
     "POST /api/automations/{ref}/{action}",
     "POST /api/connectors/{connector_id}/authorize-device",
+    "POST /api/goals",
+    "POST /api/goals/store/reset",
+    "POST /api/goals/{goal_id}/tasks",
+    "POST /api/schedules",
+    "POST /api/schedules/{name:path}/run",
     "POST /api/setup/cancel",
     "POST /api/setup/chat-model",
     "POST /api/setup/models/download",
@@ -121,6 +128,12 @@ PC_OR_DEVICE = {
     "POST /api/setup/run",
     "POST /api/setup/vision-model",
     "POST /api/system/download-model",
+    "PUT /api/goals/{goal_id}/approve",
+    "PUT /api/goals/{goal_id}/cancel",
+    "PUT /api/goals/{goal_id}/reject",
+    "PUT /api/goals/{goal_id}/status",
+    "PUT /api/goals/{goal_id}/tasks/{task_id}",
+    "PUT /api/schedules/{name:path}",
     "PUT /api/system/model-server/backend",
 }
 
@@ -155,12 +168,10 @@ REMOTE = {
     "DELETE /api/connectors/{connector_id}",
     "DELETE /api/connectors/{connector_id}/grants/{agent_id:path}",
     "DELETE /api/documents/{doc_id}",
-    "DELETE /api/goals/{goal_id}",
     "DELETE /api/gpu-memory/pending",
     "DELETE /api/memory/all",
     "DELETE /api/memory/knowledge/{knowledge_id}",
     "DELETE /api/providers/local/custom/{model_id}",
-    "DELETE /api/schedules/{name:path}",
     "DELETE /api/sessions/{session_id}",
     "DELETE /api/sessions/{session_id}/documents/{doc_id}",
     "DELETE /api/sessions/{session_id}/messages/{message_id}",
@@ -288,9 +299,6 @@ REMOTE = {
     "POST /api/files/status",
     "POST /api/files/upload",
     "POST /api/files/upload-media",
-    "POST /api/goals",
-    "POST /api/goals/store/reset",
-    "POST /api/goals/{goal_id}/tasks",
     "POST /api/gpu-memory/pending",
     "POST /api/memory/consolidate",
     "POST /api/memory/knowledge",
@@ -303,9 +311,7 @@ REMOTE = {
     "POST /api/providers/local/restart",
     "POST /api/providers/select",
     "POST /api/providers/{provider}/connect",
-    "POST /api/schedules",
     "POST /api/schedules/parse",
-    "POST /api/schedules/{name:path}/run",
     "POST /api/sessions",
     "POST /api/sessions/{session_id}/activate",
     "POST /api/sessions/{session_id}/changes/git/commit",
@@ -338,15 +344,9 @@ REMOTE = {
     "POST /v1/email/unarchive",
     "POST /v1/email/unquarantine",
     "PUT /api/chat/permissions/{session_id}",
-    "PUT /api/goals/{goal_id}/approve",
-    "PUT /api/goals/{goal_id}/cancel",
-    "PUT /api/goals/{goal_id}/reject",
-    "PUT /api/goals/{goal_id}/status",
-    "PUT /api/goals/{goal_id}/tasks/{task_id}",
     "PUT /api/memory/knowledge/{knowledge_id}",
     "PUT /api/memory/settings",
     "PUT /api/providers/local/context",
-    "PUT /api/schedules/{name:path}",
     "PUT /api/sessions/{session_id}",
     "PUT /api/sessions/{session_id}/environment/internet",
     "PUT /api/sessions/{session_id}/pin",
@@ -886,3 +886,60 @@ def test_spending_changes_from_a_phone_are_audited(setup):
         audit_logger.setLevel(level)
     by = f"by {security.DEVICE_PRINCIPAL_PREFIX}{device.device_id}"
     assert len(lines) == 2 and all(by in line for line in lines), lines
+
+
+class _Scheduler:
+    def list_tasks(self):
+        return []
+
+    async def run_task_now(self, name):
+        return {
+            "id": "1",
+            "name": name,
+            "interval_seconds": 3600,
+            "prompt": "p",
+            "status": "active",
+            "description": "every hour",
+            "description_parts": {"kind": "every", "count": 1},
+            "running": True,
+        }
+
+
+class _GoalStore:
+    def list_goals(self, **_):
+        return []
+
+    def approve_goal(self, goal_id):
+        return None
+
+
+def test_schedules_and_goals_are_read_only_over_mobile_access(setup, monkeypatch):
+    """Mobile access reads schedules and goals; only the PC and a paired device change them."""
+    from gaia.ui.routers import goals
+
+    app, clients, _ = setup
+    monkeypatch.setattr(app.state, "scheduler", _Scheduler(), raising=False)
+    monkeypatch.setattr(goals, "_get_store", lambda: _GoalStore())
+    ui = {"X-Gaia-UI": "1"}
+
+    for path in ("/api/schedules", "/api/goals"):
+        resp = clients["tunnel"].get(path, headers=ui)
+        assert resp.status_code == 200, (path, resp.text)
+
+    refused = security.require_pc_or_allowed_device
+    for method, path in (
+        ("POST", "/api/schedules/daily/run"),
+        ("PUT", "/api/goals/g1/approve"),
+    ):
+        resp = clients["tunnel"].request(method, path, headers=ui)
+        assert resp.status_code == 403, (path, resp.text)
+        with pytest.raises(HTTPException) as e:
+            refused(_request_for("tunnel", None))
+        assert resp.json()["detail"] == e.value.detail
+
+    for caller in ("pc", "device"):
+        resp = clients[caller].post("/api/schedules/daily/run", headers=ui)
+        assert resp.status_code == 200, (caller, resp.text)
+        assert resp.json()["name"] == "daily"
+        resp = clients[caller].put("/api/goals/g1/approve", headers=ui)
+        assert resp.status_code == 404, (caller, resp.text)

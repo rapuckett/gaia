@@ -47,7 +47,7 @@ def client(goal_store):
     app.include_router(goals_router_mod.router)
     goals_router_mod._store = goal_store
 
-    with TestClient(app) as c:
+    with TestClient(app, client=("127.0.0.1", 50000)) as c:
         yield c
 
     goals_router_mod._store = None
@@ -111,7 +111,7 @@ def damaged_home(tmp_path, monkeypatch):
     app = FastAPI()
     app.include_router(goals_router_mod.router)
     goals_router_mod._store = None
-    with TestClient(app) as c:
+    with TestClient(app, client=("127.0.0.1", 50000)) as c:
         yield home, c
     goals_router_mod.close_store()
 
