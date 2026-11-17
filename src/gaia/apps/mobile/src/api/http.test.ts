@@ -4,7 +4,7 @@
 import { createRecordingFetch, jsonResponse, streamResponse, textResponse } from '@/test-support/fakeFetch';
 
 import type { GaiaClient, StreamEvent } from './client.types';
-import { SEND_HEADER_TIMEOUT_MS } from './constants';
+import { SEND_HEADER_TIMEOUT_MS, SETUP_CHECK_HEADER_TIMEOUT_MS } from './constants';
 import {
     GaiaApiError,
     GaiaAuthError,
@@ -252,6 +252,15 @@ describe('createHttpClient stream connections', () => {
         const err = await outcome;
         expect(err).toBeInstanceOf(GaiaStreamTimeoutError);
         expect([err.endpoint, err.params]).toEqual(['send', { seconds: SEND_HEADER_TIMEOUT_MS / 1000 }]);
+        expect(calls[0]!.signal?.aborted).toBe(true);
+    });
+
+    it('a setup check GAIA never answers raises a network error and drops the request', async () => {
+        jest.useFakeTimers({ doNotFake: ['nextTick', 'queueMicrotask'] });
+        const { fetch, calls } = createRecordingFetch(() => new Promise<never>(() => {}));
+        const outcome = createHttpClient({ baseUrl: BASE, fetch }).checkSetup(false).catch((e) => e);
+        await jest.advanceTimersByTimeAsync(SETUP_CHECK_HEADER_TIMEOUT_MS);
+        expect(await outcome).toBeInstanceOf(GaiaNetworkError);
         expect(calls[0]!.signal?.aborted).toBe(true);
     });
 

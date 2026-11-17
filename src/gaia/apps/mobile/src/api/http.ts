@@ -183,6 +183,7 @@ import {
     scheduleResultsPath,
     scheduleRunPath,
     SEND_HEADER_TIMEOUT_MS,
+    SETUP_CHECK_HEADER_TIMEOUT_MS,
     SESSION_EVENTS_IDLE_MS,
     SESSION_PAGE_SIZE,
     sessionCapabilitiesPath,
@@ -385,6 +386,21 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
     async function getJson<T>(path: string, signal?: AbortSignal): Promise<T> {
         return readJson<T>(await request('GET', path, undefined, signal), path);
+    }
+
+    /** A JSON call that gives up when no response starts in time, as the network error the app shows as "can't reach your PC". */
+    async function setupJson<T>(method: string, path: string, body: unknown, signal?: AbortSignal): Promise<T> {
+        const ctl = new AbortController();
+        if (signal?.aborted) ctl.abort();
+        else signal?.addEventListener('abort', () => ctl.abort(), { once: true });
+        const limit: HeaderLimit = { endpoint: 'attach', ms: SETUP_CHECK_HEADER_TIMEOUT_MS, abort: () => ctl.abort() };
+        try {
+            return await readJson<T>(await request(method, path, body, ctl.signal, limit), path);
+        } catch (err) {
+            if (!(err instanceof GaiaStreamTimeoutError)) throw err;
+            const seconds = Math.round(SETUP_CHECK_HEADER_TIMEOUT_MS / 1000);
+            throw new GaiaNetworkError(`${base}${path}`, new Error(`no answer within ${seconds} s`));
+        }
     }
 
     async function postJson<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
@@ -1246,7 +1262,7 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
         },
 
         getSetupStatus(options) {
-            return getJson<SetupRunStatus>(ENDPOINTS.setupStatus, options?.signal);
+            return setupJson<SetupRunStatus>('GET', ENDPOINTS.setupStatus, undefined, options?.signal);
         },
 
         cancelSetup(modelId, options) {
@@ -1258,7 +1274,7 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
         },
 
         checkSetup(skipChatModel, options) {
-            return getJson<SetupCheck>(`${ENDPOINTS.setupCheck}?skip_chat_model=${skipChatModel}`, options?.signal);
+            return setupJson<SetupCheck>('GET', `${ENDPOINTS.setupCheck}?skip_chat_model=${skipChatModel}`, undefined, options?.signal);
         },
 
         listProviderSummaries(options) {
@@ -1327,7 +1343,8 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
         },
 
         startSetup(skipChatModel, gaiaLemonade = false, options = {}) {
-            return postJson<SetupRunStatus>(
+            return setupJson<SetupRunStatus>(
+                'POST',
                 ENDPOINTS.setupRun,
                 {
                     skip_chat_model: skipChatModel,
