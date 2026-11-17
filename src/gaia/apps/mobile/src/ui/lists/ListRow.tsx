@@ -24,6 +24,8 @@ export interface ListRowProps {
     titleLines?: number;
     /** For long user content (a chat title): the lines it keeps at large sizes, where other titles show in full. */
     titleLargeLines?: number;
+    /** Where a clipped title loses its characters: `middle` keeps a file's extension visible. */
+    titleEllipsize?: 'tail' | 'middle';
     /** Where the title stops growing with the person's text size: for navigation labels. */
     titleMaxScale?: number;
     /** Let a long subtitle wrap to this many lines instead of truncating. */
@@ -45,6 +47,7 @@ export function ListRow({
     selected,
     titleLines = 1,
     titleLargeLines,
+    titleEllipsize,
     titleMaxScale,
     subtitleLines = 1,
     emphasized,
@@ -66,7 +69,7 @@ export function ListRow({
             <Row gap="md" align={largeText ? 'start' : 'center'}>
                 {leading ? <FirstLine role="ui" maxScale={titleMaxScale}>{leading}</FirstLine> : null}
                 <View style={{ flex: 1, minWidth: 0 }}>
-                    <Text role="ui" weight={selected || emphasized ? 'semibold' : 'medium'} numberOfLines={titleLines} largeLines={titleLargeLines} maxScale={titleMaxScale}>
+                    <Text role="ui" weight={selected || emphasized ? 'semibold' : 'medium'} numberOfLines={titleLines} largeLines={titleLargeLines} ellipsize={titleEllipsize} maxScale={titleMaxScale}>
                         {title}
                     </Text>
                     {subtitle ? (

@@ -18,6 +18,7 @@ import { formatSize, middleTruncate } from '@webui/utils/format';
 
 import type { DocumentListResponse, IndexProgress } from '@/api/client.types';
 import { useT } from '@/i18n/useT';
+import { useLargeText } from '@/ui/theme/a11y';
 import { Badge, Button, Disclosure, Icon, IconButton, ListRow, ProgressLine, Row, Stack, Text } from '@/ui';
 import { Eye, FileText, Link2, RotateCcw, Square, Trash2 } from '@/ui/icons';
 
@@ -41,6 +42,7 @@ interface DocumentRowProps {
 // Name (extension kept), then the state: size and when it was indexed, how far indexing has got, or why it failed.
 export function DocumentRow({ document: doc, progress, startedAt, now, retrying, attach, onPreview, onCancel, onRetry, onRemove }: DocumentRowProps) {
     const t = useT();
+    const largeText = useLargeText();
     const [reasonOpen, setReasonOpen] = useState(false);
     const status = doc.indexing_status || 'complete';
     const indexed = doc.indexed_at ? formatTimestamp(doc.indexed_at, t) : '';
@@ -65,10 +67,10 @@ export function DocumentRow({ document: doc, progress, startedAt, now, retrying,
             <Badge tone="warning" label={t('docs.missing')} />
         ) : null;
 
-    const trailing = running ? (
+    const actions = running ? (
         <Button size="sm" variant="secondary" icon={Square} label={t('docs.cancel')} accessibilityLabel={t('docs.cancelIndexingAria', { name: doc.filename })} onPress={() => onCancel(doc.id)} />
     ) : (
-        <Row gap="xs">
+        <Row gap="xs" wrap={largeText} testID="doc-actions">
             {status === 'failed' ? (
                 <Button
                     size="sm"
@@ -93,12 +95,21 @@ export function DocumentRow({ document: doc, progress, startedAt, now, retrying,
                 title={isolate(middleTruncate(doc.filename), 'ltr')}
                 subtitle={running || badge ? undefined : indexed ? `${size} · ${indexed}` : size}
                 leading={<Icon icon={FileText} size="md" tone="secondary" />}
-                trailing={trailing}
+                titleLines={2}
+                titleLargeLines={2}
+                titleEllipsize="middle"
+                trailing={largeText ? undefined : actions}
+                testID="doc-row-main"
                 accessibilityLabel={full ? `${doc.filename}, ${size}, ${t('docs.indexedAt', { time: full })}` : doc.filename}
             />
             {badge ? (
                 <Stack paddingX="lg" paddingY="xs">
                     {badge}
+                </Stack>
+            ) : null}
+            {largeText ? (
+                <Stack paddingX="lg" paddingY="xs" align="start">
+                    {actions}
                 </Stack>
             ) : null}
             {attach && status === 'complete' ? (

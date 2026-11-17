@@ -1,9 +1,10 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
+import { translator } from '@webui/i18n/translator';
 import type { SetupCatalogEntry, SetupRunStatus, SetupTest } from '@webui/types';
 
-import { expectedTests, rerunOptions, testView, whyKey } from './testView';
+import { expectedTests, redownloadBody, rerunOptions, testView, whyKey } from './testView';
 
 const test = (over: Partial<SetupTest>): SetupTest => ({ job: 'chat', subject: 'm1', state: 'failed', error: 'boom', kind: null, seconds: null, ...over });
 const entry = (id: string, roles: SetupCatalogEntry['roles']): SetupCatalogEntry => ({ id, roles, support: 'verified' } as SetupCatalogEntry);
@@ -53,5 +54,11 @@ describe('Test again', () => {
         const run: SetupRunStatus = { state: 'failed', models: [{ id: 'chat1', roles: ['chat'] }, { id: 'tts', roles: ['voice'] }] as never };
         const catalog = [entry('chat1', ['chat']), { ...entry('tts', ['voice']), support: null }];
         expect(rerunOptions(run, catalog).extraModels).toEqual(['tts']);
+    });
+});
+
+describe('re-download wording', () => {
+    it('in Arabic the size sits in one isolate with its parentheses and a no-break space', () => {
+        expect(redownloadBody(translator('ar'), 'Qwen3 4B', 6)).toContain('⁨(6.0 GB)⁩');
     });
 });

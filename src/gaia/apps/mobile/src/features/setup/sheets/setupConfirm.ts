@@ -4,7 +4,7 @@
 import { GaiaApiError } from '@/api/errors';
 import type { Translate } from '@/i18n/useT';
 import { formatBytes, formatSize } from '@webui/components/setup/format';
-import { getLocale, isolate, isolateUnit } from '@webui/i18n/registry';
+import { getLocale, isolate, isolateUnit, keepTogether } from '@webui/i18n/registry';
 import type { SetupConfirm } from '@webui/types';
 
 /** What a confirm sheet asks: the caller learns the answer from `useConfirmSheet().ask`. */
@@ -60,7 +60,7 @@ export function noFitRequest(models: { name: string; why: string }[], t: Transla
 export function redownloadRequest(name: string, bytesTotal: number, t: Translate): ConfirmRequest {
     return {
         title: t('setup.redownload.title', { name: isolateUnit(name) }),
-        body: [t.compose((say) => say('setup.redownload.body', { name: isolateUnit(name), size: isolateUnit(formatBytes(bytesTotal)) }))],
+        body: [t.compose((say) => say('mobileApp.setup.redownload.body', { name: isolateUnit(name), size: keepTogether(`(${formatBytes(bytesTotal)})`) }))],
         confirmLabel: t('setup.redownload.confirm'),
         cancelLabel: t('setup.redownload.keep'),
         danger: true,
