@@ -18,9 +18,10 @@ import { FIXTURES } from './messages/__fixtures__/messages';
  * Developer gallery (`/dev/chat?state=`): the chat screen with a turn running on the PC.
  * `question` (RC-08, CMP-10): a question card waits and the box says Send answer. `approval` (RC-07): the approval-needed card after the run.
  * `queue` (CMP-12, CMP-13): a queued text with Add to this reply, a failed one with Send again.
+ * `env-offline` (SP-17): the chat's internet is off and the session panel is closed, so the offline notice shows above the composer.
  * `queue-stop` (CMP-15): the same queue; `#tap=composer-stop` ends the turn and the queued texts return to the box.
  */
-export const CHAT_STATES = ['running-empty', 'running-status', 'question', 'approval', 'queue', 'queue-stop'] as const;
+export const CHAT_STATES = ['running-empty', 'running-status', 'question', 'approval', 'queue', 'queue-stop', 'env-offline'] as const;
 export type ChatGalleryState = (typeof CHAT_STATES)[number];
 
 const SESSION = {
@@ -57,7 +58,12 @@ const STATUS: StreamEvent = { type: 'status', phase: 'reading', message: 'Readin
 export function ChatGallery({ state }: { state: ChatGalleryState }) {
     const [queryClient] = useState(() => new QueryClient({ defaultOptions: { queries: { retry: false } } }));
     const [client] = useState(() => {
-        const base = createFakeClient({ sessions: [SESSION], messages: { dev: [FIXTURES.short.messages[0]!] } });
+        const base = createFakeClient({
+            sessions: [SESSION],
+            messages: { dev: [FIXTURES.short.messages[0]!] },
+            environments: state === 'env-offline' ? { dev: { session_id: 'dev', folders: [], removed: [], internet: false, enforced: true, internet_enforced: true } } : undefined,
+        });
+        if (state === 'env-offline') return base;
         // The turn never ends here, so the running state written below stays.
         if (state === 'queue-stop') {
             // The turn ends once GAIA is asked to stop, as it does on the PC.
@@ -81,6 +87,7 @@ export function ChatGallery({ state }: { state: ChatGalleryState }) {
         return base;
     });
     useEffect(() => {
+        if (state === 'env-offline') return undefined;
         if (state === 'approval') writeTurn('dev', { ...IDLE_TURN, pendingConfirmation: CONFIRMATION as typeof IDLE_TURN.pendingConfirmation });
         else {
             writeTurn('dev', {

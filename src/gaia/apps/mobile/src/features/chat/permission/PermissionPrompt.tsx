@@ -28,7 +28,7 @@ import { CHANGE_PREVIEW_LINES, fileChange, fileText, fileUnseen } from '@webui/u
 
 import { useT } from '@/i18n/useT';
 import { dirProp } from '@/platform/dirProp';
-import { Button, Disclosure, HScroll, Icon, Notice, Pressable, Row, ScrollBox, Stack, Surface, Text } from '@/ui';
+import { Button, Disclosure, HScroll, Icon, Notice, Pressable, Row, ScrollBox, Stack, Surface, Text, useTheme } from '@/ui';
 import { ShieldQuestion } from '@/ui/icons';
 
 import { useCountdown } from './useCountdown';
@@ -276,6 +276,7 @@ export function PermissionPrompt({
     onExpired,
 }: PermissionPromptProps) {
     const t = useT();
+    const { space } = useTheme();
     const { width, height } = useWindowDimensions();
     // While the person types a queued message, only the question and its answers fit above the keyboard.
     const typing = useKeyboardState((k) => k.isVisible);
@@ -352,18 +353,20 @@ export function PermissionPrompt({
                     </Row>
                     {typing ? null : (
                         <ScrollBox maxHeight={bodyMax} hint testID="perm-details-scroll">
-                            <Stack gap="md">
-                                <CallDetails prompt={prompt} />
-                                {fullAccessPending ? <Notice tone="info" message={t('perm.fullPendingNote')} testID="perm-full-pending" /> : null}
-                                {suggestAlways && !expired ? (
-                                    <Text role="caption" tone="secondary">
-                                        {t.compose(
-                                            (say) =>
-                                                `${say(pluralKey('prompt.repeated', repeats), { n: repeats })} ${say('prompt.alwaysHint', { scope: scopeIn(say) })}`,
-                                        )}
-                                    </Text>
-                                ) : null}
-                            </Stack>
+                            <View style={{ paddingBottom: space.xl }} testID="perm-details-body">
+                                <Stack gap="md">
+                                    <CallDetails prompt={prompt} />
+                                    {fullAccessPending ? <Notice tone="info" message={t('perm.fullPendingNote')} testID="perm-full-pending" /> : null}
+                                    {suggestAlways && !expired ? (
+                                        <Text role="caption" tone="secondary">
+                                            {t.compose(
+                                                (say) =>
+                                                    `${say(pluralKey('prompt.repeated', repeats), { n: repeats })} ${say('prompt.alwaysHint', { scope: scopeIn(say) })}`,
+                                            )}
+                                        </Text>
+                                    ) : null}
+                                </Stack>
+                            </View>
                         </ScrollBox>
                     )}
                     {expired ? (

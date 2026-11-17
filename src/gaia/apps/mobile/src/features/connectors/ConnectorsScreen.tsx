@@ -20,9 +20,11 @@ import {
 import { ScreenHeader } from '@/features/nav/ScreenHeader';
 import { ChipButton } from '@/features/schedules/ChipButton';
 import { SettingsGroup } from '@/features/skills/SettingsGroup';
-import { describeErrorWith, describeHttpFailure, useDirection, useT } from '@/i18n/useT';
+import { failureNoticeProps } from '@/features/chat/header/failureText';
+import { describeHttpFailure, useDirection, useT } from '@/i18n/useT';
 import {
     ActionSheet,
+    Button,
     EmptyState,
     ErrorState,
     Icon,
@@ -69,17 +71,17 @@ import { DeviceCodeSignIn } from './DeviceCodeSignIn';
 
 type Translator = ReturnType<typeof useT>;
 
-export function ConnectorsScreen({ initialExpanded }: { initialExpanded?: string }) {
+export function ConnectorsScreen({ initialExpanded, initialJustConnected }: { initialExpanded?: string; initialJustConnected?: string }) {
     const t = useT();
     return (
         <Screen scroll header={<ScreenHeader title={t('settings.section.connectors')} />}>
-            <ConnectorsBody initialExpanded={initialExpanded} />
+            <ConnectorsBody initialExpanded={initialExpanded} initialJustConnected={initialJustConnected} />
         </Screen>
     );
 }
 
 /** The connector list, for the screen and for the Settings pane. */
-export function ConnectorsBody({ initialExpanded }: { initialExpanded?: string }) {
+export function ConnectorsBody({ initialExpanded, initialJustConnected }: { initialExpanded?: string; initialJustConnected?: string }) {
     const t = useT();
     const connectors = useConnectors();
     const agentMcps = useAgentMcps();
@@ -87,11 +89,32 @@ export function ConnectorsBody({ initialExpanded }: { initialExpanded?: string }
     const [expanded, setExpanded] = useState<string | null>(initialExpanded ?? null);
     const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
     const [notice, setNotice] = useState<string | null>(null);
+    const [justConnected, setJustConnected] = useState<string | null>(initialJustConnected ?? null);
+    const [seen, setSeen] = useState<unknown>(null);
+    const [seenConfigured, setSeenConfigured] = useState<Map<string, boolean> | null>(null);
 
     const rows = connectors.data?.connectors ?? [];
     const servers = agentMcps.data?.agent_mcps ?? [];
     const q = query.trim();
     const groups = useMemo(() => groupConnectors(rows, query, t), [rows, query, t]);
+
+    // A connector that turns connected while the list is open gets the one Personalize offer, and its tile opens unless another is being read.
+    if (connectors.data && connectors.data !== seen) {
+        const before = seenConfigured;
+        const now = new Map<string, boolean>();
+        for (const c of connectors.data.connectors) if ('configured' in c) now.set(c.id, c.configured);
+        setSeen(connectors.data);
+        setSeenConfigured(now);
+        for (const c of connectors.data.connectors) {
+            if (!('configured' in c)) continue;
+            if (before && before.get(c.id) === false && c.configured) {
+                setJustConnected(c.id);
+                setExpanded((prev) => prev ?? c.id);
+            } else if (!c.configured || ('enabled' in c && c.enabled === false)) {
+                setJustConnected((prev) => (prev === c.id ? null : prev));
+            }
+        }
+    }
 
     const failure = connectors.error ?? agentMcps.error;
     const loading = connectors.isPending || agentMcps.isPending;
@@ -111,6 +134,7 @@ export function ConnectorsBody({ initialExpanded }: { initialExpanded?: string }
                 count={count}
                 open={groupOpen(id, byDefault)}
                 onToggle={setGroup(id, byDefault)}
+                headerTestID={`connectors-group-${id}`}
             >
                 {body}
             </SettingsGroup>
@@ -119,7 +143,15 @@ export function ConnectorsBody({ initialExpanded }: { initialExpanded?: string }
 
     const tiles = (list: ConnectorRow[]) =>
         list.map((c) => (
-            <ConnectorTile key={c.id} connector={c} expanded={expanded === c.id} onToggle={() => toggle(c.id)} onDisconnected={setNotice} />
+            <ConnectorTile
+                key={c.id}
+                connector={c}
+                expanded={expanded === c.id}
+                onToggle={() => toggle(c.id)}
+                onDisconnected={setNotice}
+                justConnected={justConnected === c.id}
+                onPersonalizeStarted={() => setJustConnected(null)}
+            />
         ));
 
     return (
@@ -307,11 +339,15 @@ function ConnectorTile({
     expanded,
     onToggle,
     onDisconnected,
+    justConnected,
+    onPersonalizeStarted,
 }: {
     connector: ConnectorRow;
     expanded: boolean;
     onToggle: () => void;
     onDisconnected: (notice: string | null) => void;
+    justConnected: boolean;
+    onPersonalizeStarted: () => void;
 }) {
     const t = useT();
     const [menuOpen, setMenuOpen] = useState(false);
@@ -448,6 +484,8 @@ function ConnectorTile({
                         {message ? <Notice tone={message.tone} message={message.text} detail={message.detail} /> : null}
                         <ConnectorAccess
                             connector={connector}
+                            offer={justConnected}
+                            onPersonalizeStarted={onPersonalizeStarted}
                             serverSwitch={
                                 server
                                     ? {
@@ -471,7 +509,7 @@ interface ServerSwitch {
     onEnableRefused: () => void;
 }
 
-function ConnectorAccess({ connector, serverSwitch }: { connector: ConnectorRow; serverSwitch?: ServerSwitch }) {
+function ConnectorAccess({ connector, serverSwitch, offer, onPersonalizeStarted }: { connector: ConnectorRow; serverSwitch?: ServerSwitch; offer: boolean; onPersonalizeStarted: () => void }) {
     const t = useT();
     const agents = useAgents();
     const grants = useConnectorGrants(connector.id, true);
@@ -492,7 +530,7 @@ function ConnectorAccess({ connector, serverSwitch }: { connector: ConnectorRow;
 
     return (
         <Stack gap="sm">
-            {connector.enabled !== false ? <PersonalizeOffer connector={connector} /> : null}
+            {connector.enabled !== false ? <PersonalizeOffer connector={connector} offer={offer} onStarted={onPersonalizeStarted} /> : null}
             {sole ? (
                 <Switch
                     label={t('settings.connectors.agentCanUse', { agent: sole.name, name: connector.display_name })}
@@ -587,13 +625,13 @@ function ConnectorAccess({ connector, serverSwitch }: { connector: ConnectorRow;
     );
 }
 
-function PersonalizeOffer({ connector }: { connector: ConnectorRow }) {
+function PersonalizeOffer({ connector, offer, onStarted }: { connector: ConnectorRow; offer: boolean; onStarted: () => void }) {
     const t = useT();
     const router = useRouter();
     const agents = useAgents();
     const change = useChangeConnectorAccess(connector.id);
     const [busy, setBusy] = useState(false);
-    const [error, setError] = useState<string | null>(null);
+    const [error, setError] = useState<{ message: string; detail?: string } | null>(null);
     const kind = personalizeSourceKind(connector.id);
     const source = kind
         ? ref(`settings.connectors.personalize.source.${kind}`)
@@ -605,14 +643,18 @@ function PersonalizeOffer({ connector }: { connector: ConnectorRow }) {
         try {
             if (connector.type === 'mcp_server') {
                 const flagship = flagshipAgentId(agents.data?.agents ?? []);
-                if (!flagship) throw new Error(t('settings.connectors.personalize.noAgent', { name: connector.display_name }));
+                if (!flagship) {
+                    setError({ message: t('settings.connectors.personalize.noAgent', { name: connector.display_name }) });
+                    return;
+                }
                 if (!connector.activations?.[flagship]) {
                     await change.mutateAsync({ kind: 'activate', agentId: flagship, scopes: [...MCP_DEFAULT_GRANT_SCOPES] });
                 }
             }
+            onStarted();
             router.push(personalizeRoute(connector));
         } catch (e) {
-            setError(t.compose((say) => say('settings.connectors.personalize.failed', { error: describeErrorWith(e, say) })));
+            setError(failureNoticeProps(e, t, { withReason: 'settings.connectors.personalize.failed', noReason: 'mobileApp.connectors.personalizeFailedShort' }));
         } finally {
             setBusy(false);
         }
@@ -621,10 +663,20 @@ function PersonalizeOffer({ connector }: { connector: ConnectorRow }) {
     return (
         <Stack gap="xs">
             <Text role="label" tone="secondary">
-                {t('settings.connectors.personalize.tile', { source, name: connector.display_name })}
+                {t(offer ? 'settings.connectors.personalize.offer' : 'settings.connectors.personalize.tile', { source, name: connector.display_name })}
             </Text>
-            <ChipButton label={t('settings.connectors.personalize.button')} onPress={() => void start()} disabled={busy} />
-            {error ? <Notice tone="danger" message={error} /> : null}
+            <Stack align="start">
+                <Button
+                    size="sm"
+                    variant={offer ? 'primary' : 'secondary'}
+                    wrap
+                    label={t('settings.connectors.personalize.button')}
+                    busy={busy}
+                    onPress={() => void start()}
+                    testID={`personalize-${connector.id}`}
+                />
+            </Stack>
+            {error ? <Notice tone="danger" message={error.message} detail={error.detail} /> : null}
         </Stack>
     );
 }

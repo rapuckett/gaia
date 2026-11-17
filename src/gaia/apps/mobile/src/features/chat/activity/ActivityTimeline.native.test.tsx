@@ -76,6 +76,15 @@ describeNative('a failed shell step in Arabic', () => {
     });
 });
 
+describeNative('an open failed shell step', () => {
+    it('says its exit code once, in the terminal card', async () => {
+        const steps = [call(1, { success: false, result: 'exit 2', commandOutput: { command: 'ls', stdout: '', stderr: 'x', returnCode: 2 } as never })];
+        await render(<ActivityTimeline steps={steps} />, { wrapper: ThemeProvider });
+        await fireEvent.press(screen.getAllByRole('button')[0]);
+        expect(screen.getAllByText(/exit/i)).toHaveLength(1);
+    });
+});
+
 describeNative('step rows with a folded thought', () => {
     it('each get their own testID', async () => {
         const thought = (id: number): AgentStep => ({ id, type: 'thinking', label: 'Thinking', detail: `plan ${id}`, active: false, timestamp: id });

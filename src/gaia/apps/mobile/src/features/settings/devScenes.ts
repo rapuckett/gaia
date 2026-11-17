@@ -275,6 +275,11 @@ export const SETTINGS_SCENES: Record<string, SettingsScene> = {
         section: 'model', target: 'models-on-pc', gpuMemory: GPU,
         data: { ...local([MINE_IN_USE, MINE_CUSTOM, HAVE]), activeModel: { ...COMMON.activeModel!, model: MINE_IN_USE.id, display_name: MINE_IN_USE.display_name } },
     },
+    // SET-MODEL-33: Qwen is downloaded and is not the chat default, so its Remove shows: `#tap=local-models-toggle,local-remove-Qwen3.6-35B-A3B-GGUF` opens the confirm.
+    'model-local-remove': {
+        section: 'model', target: 'models-on-pc', gpuMemory: GPU,
+        data: { ...local([HAVE, WANT]), setupPlan: { ...COMMON.setupPlan!, catalog: (COMMON.setupPlan!.catalog ?? []).map((e) => (e.id === WANT.id ? { ...e, downloaded: true, fits: true } : e)) } },
+    },
     // SET-MODEL-29: an NPU model whose setup is not ready.
     'model-npu-not-ready': { section: 'model', target: 'models-on-pc', gpuMemory: GPU, data: local([HAVE, NPU_MODEL]) },
     // SET-MODEL-30: opens on the success notice after a Hugging Face add, the section open and the new row listed.

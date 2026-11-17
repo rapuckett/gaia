@@ -4,7 +4,7 @@
 /** Which files the library can take, and what to tell the person when an upload fails; no DOM. */
 
 import type { MessageKey } from '../i18n/registry';
-import type { Translate } from '../i18n/translator';
+import { tEn, type Translate } from '../i18n/translator';
 import { failureHint } from './documentLibrary.core';
 import { serverFailureText } from './documentFailure';
 import { AUDIO_EXTENSIONS, VIDEO_EXTENSIONS } from './mediaFiles';
@@ -17,7 +17,6 @@ export interface FileTypeCategory {
     /** What a person reads: the category's title and `message`, translated. */
     titleKey: MessageKey;
     detailKey: MessageKey;
-    alternatives: string[];
     featureTitle: string;
 }
 
@@ -27,10 +26,7 @@ const UNSUPPORTED_FILE_CATEGORIES: FileTypeCategory[] = [
         titleKey: 'docs.unsupported.image',
         detailKey: 'docs.unsupported.imageDetail',
         extensions: new Set(['.ico', '.heic', '.heif']),
-        message: 'This image format cannot be indexed.',
-        alternatives: [
-            'Convert it to PNG or JPEG — GAIA reads the text in those images',
-        ],
+        message: tEn('docs.unsupported.imageDetail'),
         featureTitle: 'Support HEIC and ICO image indexing',
     },
     {
@@ -38,10 +34,7 @@ const UNSUPPORTED_FILE_CATEGORIES: FileTypeCategory[] = [
         titleKey: 'docs.unsupported.video',
         detailKey: 'docs.unsupported.videoDetail',
         extensions: VIDEO_EXTENSIONS,
-        message: 'Video files can\'t go in the document library.',
-        alternatives: [
-            'Attach the video to a chat, and GAIA will transcribe it',
-        ],
+        message: tEn('docs.unsupported.videoDetail'),
         featureTitle: 'Support video files in the document library',
     },
     {
@@ -49,10 +42,7 @@ const UNSUPPORTED_FILE_CATEGORIES: FileTypeCategory[] = [
         titleKey: 'docs.unsupported.audio',
         detailKey: 'docs.unsupported.audioDetail',
         extensions: AUDIO_EXTENSIONS,
-        message: 'Audio files can\'t go in the document library.',
-        alternatives: [
-            'Attach the recording to a chat, and GAIA will transcribe it',
-        ],
+        message: tEn('docs.unsupported.audioDetail'),
         featureTitle: 'Support audio files in the document library',
     },
     {
@@ -60,11 +50,7 @@ const UNSUPPORTED_FILE_CATEGORIES: FileTypeCategory[] = [
         titleKey: 'docs.unsupported.archive',
         detailKey: 'docs.unsupported.archiveDetail',
         extensions: new Set(['.zip', '.rar', '.7z', '.tar', '.gz', '.bz2', '.xz', '.tgz']),
-        message: 'Archive files must be extracted before indexing.',
-        alternatives: [
-            'Extract the archive contents to a folder',
-            'Then index the folder or individual files from the Document Library',
-        ],
+        message: tEn('docs.unsupported.archiveDetail'),
         featureTitle: 'Support automatic archive extraction for indexing',
     },
     {
@@ -72,11 +58,7 @@ const UNSUPPORTED_FILE_CATEGORIES: FileTypeCategory[] = [
         titleKey: 'docs.unsupported.executable',
         detailKey: 'docs.unsupported.executableDetail',
         extensions: new Set(['.exe', '.msi', '.dll', '.so', '.app', '.dmg', '.bin', '.com']),
-        message: 'Executable and binary files cannot be indexed.',
-        alternatives: [
-            'Index source code files (.py, .js, .ts, .java, etc.) instead',
-            'Index documentation or README files from the project',
-        ],
+        message: tEn('docs.unsupported.executableDetail'),
         featureTitle: 'Support binary file analysis',
     },
     {
@@ -84,11 +66,7 @@ const UNSUPPORTED_FILE_CATEGORIES: FileTypeCategory[] = [
         titleKey: 'docs.unsupported.database',
         detailKey: 'docs.unsupported.databaseDetail',
         extensions: new Set(['.sqlite', '.db', '.mdb', '.accdb', '.dbf']),
-        message: 'Database files are not supported for direct indexing.',
-        alternatives: [
-            'Export data to CSV or JSON format, then index those files',
-            'Use SQL queries to extract relevant data to a text file',
-        ],
+        message: tEn('docs.unsupported.databaseDetail'),
         featureTitle: 'Support database file indexing',
     },
     {
@@ -96,16 +74,7 @@ const UNSUPPORTED_FILE_CATEGORIES: FileTypeCategory[] = [
         titleKey: 'docs.unsupported.office',
         detailKey: 'docs.unsupported.officeDetail',
         extensions: new Set(['.doc', '.ppt', '.xls']),
-        message:
-            'Legacy Office formats (.doc, legacy PowerPoint .ppt, legacy Excel ' +
-            '.xls) are not supported — GAIA reads only the modern XML-based ' +
-            'formats. Modern Word (.docx), PowerPoint (.pptx), and Excel (.xlsx) ' +
-            'are supported.',
-        alternatives: [
-            'Re-save as .docx — GAIA indexes modern Word documents directly',
-            'Save modern PowerPoint as .pptx — GAIA indexes .pptx directly',
-            'Re-save legacy .xls workbooks as .xlsx — GAIA supports modern Excel files',
-        ],
+        message: tEn('docs.unsupported.officeDetail'),
         featureTitle: 'Support legacy Microsoft Office (doc, ppt, xls) indexing',
     },
 ];
