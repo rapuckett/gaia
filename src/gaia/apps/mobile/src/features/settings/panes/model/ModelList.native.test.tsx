@@ -4,7 +4,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen } from '@testing-library/react-native';
 import type { ReactNode } from 'react';
-import { Platform } from 'react-native';
+import { Platform, StyleSheet } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import type { ProviderModel } from '@/api/client.types';
@@ -15,6 +15,7 @@ import { ThemeProvider } from '@/ui';
 import { SheetHost } from '@/ui/overlays/SheetHost';
 
 import { ModelList } from './ModelList';
+import { SeedOpenDetails } from './ModelRow';
 
 // The web project's renderer can't mount react-native-web's DOM or the sheet host.
 const describeNative = Platform.OS === 'web' ? describe.skip : describe;
@@ -70,6 +71,34 @@ describeNative('Model list', () => {
         await screen.findByText('Change this on the PC running GAIA.');
         expect(screen.getByTestId('model-download-Want-GGUF')).toBeTruthy();
         expect(client.modelDownloads).toEqual([]);
+        queryClient.clear();
+    });
+    it('shows a custom model\'s source URL on its own left-to-right line, outside the translated sentence', async () => {
+        const url = 'https://huggingface.co/me/my-tuned-GGUF';
+        const client = createFakeClient({});
+        const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+        const wrap = ({ children }: { children: ReactNode }) => (
+            <QueryClientProvider client={queryClient}>
+                <GaiaClientProvider client={client}>
+                    <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 800 }, insets: { top: 0, left: 0, right: 0, bottom: 0 } }}>
+                        <ThemeProvider>
+                            <SeedOpenDetails.Provider value="user.my-tuned-GGUF">
+                                <SheetHost>{children}</SheetHost>
+                            </SeedOpenDetails.Provider>
+                        </ThemeProvider>
+                    </SafeAreaProvider>
+                </GaiaClientProvider>
+            </QueryClientProvider>
+        );
+        const mine = model('user.my-tuned-GGUF', { downloaded: true, custom: true, source_url: url });
+        await render(
+            <ModelList provider="local" remote={false} models={[mine]} activeModel="" switching={null} onUse={jest.fn()} onRefresh={jest.fn()} />,
+            { wrapper: wrap },
+        );
+
+        const line = screen.getByText(url);
+        expect(StyleSheet.flatten(line.props.style).writingDirection).toBe('ltr');
+        expect(screen.getByText('From').props.children).not.toContain(url);
         queryClient.clear();
     });
 });

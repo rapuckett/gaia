@@ -8,6 +8,7 @@ import type { BrowseResponse, ChatPerformance, ContextUsage, LocalModelStatus, M
 import { createFakeClient } from '@/api/fake';
 import { GaiaApiError } from '@/api/errors';
 import { GaiaClientProvider } from '@/data';
+import { ChatChangesReview } from '@/features/chat/changes/ChatChangesReview';
 import { FIXTURES } from '@/features/chat/messages/__fixtures__/messages';
 import { MessageListView } from '@/features/chat/messages/MessageList';
 import { Screen } from '@/ui';
@@ -429,10 +430,8 @@ export function SessionPanelGallery({ state }: { state: SessionPanelGalleryState
             state === 'chgConfirm'
                 ? { phase: 'confirm' }
                 : state === 'chgConflict'
-                  ? { phase: 'conflict', message: UNDO_CONFLICT }
-                  : state === 'chgReview'
-                    ? { review: true }
-                    : null,
+                  ? { phase: 'conflict', detail: UNDO_CONFLICT }
+                  : null,
         );
         writeTurn('dev', state === 'ansPending' ? { ...IDLE_TURN, status: 'streaming' } : null);
         store.setSection('context', ctx);
@@ -443,12 +442,17 @@ export function SessionPanelGallery({ state }: { state: SessionPanelGalleryState
     }, [state]);
     return (
         <>
-            <Screen>
-                <MessageListView messages={FIXTURES.short.messages} />
-            </Screen>
+            <QueryClientProvider client={queryClient}>
+                <GaiaClientProvider client={client}>
+                    <Screen>
+                        <MessageListView messages={FIXTURES.short.messages} />
+                    </Screen>
+                    {state === 'chgReview' ? <ChatChangesReview changes={CHANGES} onClose={() => undefined} /> : null}
+                </GaiaClientProvider>
+            </QueryClientProvider>
             <SessionPanel
                 sessionId="dev"
-                open
+                open={state !== 'chgReview'}
                 onClose={() => undefined}
                 wrap={(body) => (
                     <QueryClientProvider client={queryClient}>

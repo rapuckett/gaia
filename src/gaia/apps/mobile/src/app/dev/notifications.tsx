@@ -6,7 +6,7 @@ import { Redirect, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 
 import { GaiaClientProvider } from '@/data';
-import { ConnectionBanner } from '@/features/banners/ConnectionBanner';
+import { ChatAlertNotice, ConnectionBanner } from '@/features/banners/ConnectionBanner';
 import { devGalleryEnabled } from '@/features/dev/devGallery';
 import { KeyedScene } from '@/features/dev/KeyedScene';
 import { NotificationCenterScreen } from '@/features/notifications';
@@ -24,7 +24,7 @@ const noop = () => undefined;
 function seed(scene: NotificationScene) {
     useNotificationStore.setState({ items: scene.items ?? [], filter: scene.filter ?? null });
     setNotificationFilter(scene.filter ?? null);
-    useChatAlertBannerStore.setState({ alert: scene.chatAlert ?? null });
+    useChatAlertBannerStore.setState({ alert: null });
     const turns = Object.fromEntries(
         (scene.waiting ?? []).map((confirmId, i) => [
             `dev-chat-${i}`,
@@ -64,7 +64,15 @@ function Body({ scene }: { scene: NotificationScene }) {
         );
     }
     return (
-        <ScreenBannerProvider banner={<ConnectionBanner />}>
+        <ScreenBannerProvider
+            banner={
+                // The root ChatAlertFeed clears the store's alert (turn seeding, 8 s timer), so the scene hosts its own.
+                <Stack gap="sm">
+                    {scene.chatAlert ? <ChatAlertNotice alert={scene.chatAlert} /> : null}
+                    <ConnectionBanner />
+                </Stack>
+            }
+        >
             <Screen scroll>{placeholder}</Screen>
         </ScreenBannerProvider>
     );

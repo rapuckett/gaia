@@ -3,8 +3,8 @@
 
 import { GaiaApiError } from '@/api/errors';
 import type { Translate } from '@/i18n/useT';
-import { formatSize } from '@webui/components/setup/format';
-import { isolate } from '@webui/i18n/registry';
+import { formatBytes, formatSize } from '@webui/components/setup/format';
+import { getLocale, isolate, isolateUnit, keepTogether } from '@webui/i18n/registry';
 import type { SetupConfirm } from '@webui/types';
 
 /** What a confirm sheet asks: the caller learns the answer from `useConfirmSheet().ask`. */
@@ -27,19 +27,19 @@ export function setupConfirmFrom(err: unknown): SetupConfirm | null {
     return null;
 }
 
-const ltr = (text: string) => isolate(text, 'ltr');
-
 /** The chosen models need more disk than is free: "Not enough free disk space". */
 export function lowDiskRequest(short: { needGb: number; freeGb: number; freeUpGb: number }, t: Translate): ConfirmRequest {
     return {
         title: t('setup.confirm.lowDiskTitle'),
         body: [
-            t('setup.summary.short', {
-                need: ltr(formatSize(short.needGb)),
-                free: ltr(formatSize(short.freeGb)),
-                drive: t('setup.summary.theDrive'),
-                freeUp: ltr(formatSize(short.freeUpGb)),
-            }),
+            t.compose((say, code) =>
+                say('setup.summary.short', {
+                    need: isolateUnit(formatSize(short.needGb)),
+                    free: isolateUnit(formatSize(short.freeGb)),
+                    drive: isolate(say('setup.summary.theDrive'), getLocale(code).meta.dir),
+                    freeUp: isolateUnit(formatSize(short.freeUpGb)),
+                }),
+            ),
         ],
         confirmLabel: t('setup.confirm.downloadAnyway'),
         cancelLabel: t('setup.confirm.changeModels'),
@@ -49,10 +49,21 @@ export function lowDiskRequest(short: { needGb: number; freeGb: number; freeUpGb
 /** Chosen models may not fit this PC's memory; `why` is each one's reason, as the model list words it. */
 export function noFitRequest(models: { name: string; why: string }[], t: Translate): ConfirmRequest {
     return {
-        title: models.length === 1 ? t('setup.confirm.noFitOne', { name: models[0].name }) : t('setup.confirm.noFitMany'),
+        title: models.length === 1 ? t('setup.confirm.noFitOne', { name: isolateUnit(models[0].name) }) : t('setup.confirm.noFitMany'),
         body: models.map((m) => `${m.name}: ${m.why}`),
         confirmLabel: t('setup.confirm.downloadAnyway'),
         cancelLabel: t('setup.confirm.pickSmaller'),
+    };
+}
+
+/** The model downloaded but failed its check: delete the copy and fetch it again. */
+export function redownloadRequest(name: string, bytesTotal: number, t: Translate): ConfirmRequest {
+    return {
+        title: t('setup.redownload.title', { name: isolateUnit(name) }),
+        body: [t.compose((say) => say('mobileApp.setup.redownload.body', { name: isolateUnit(name), size: keepTogether(`(${formatBytes(bytesTotal)})`) }))],
+        confirmLabel: t('setup.redownload.confirm'),
+        cancelLabel: t('setup.redownload.keep'),
+        danger: true,
     };
 }
 

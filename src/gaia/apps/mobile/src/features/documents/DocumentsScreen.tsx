@@ -130,19 +130,16 @@ function Library({ chat, onBrowseFiles, onPreview, initial }: { chat: OpenChat |
     const adder = <AddDocuments chatId={targetChat?.id ?? null} chatName={chat?.name ?? null} onStart={action.dismiss} onBrowse={onBrowseFiles} pcChatId={chat?.id ?? null} initialLine={initial?.add} initialPath={initial?.path} />;
     const retry = { label: t('docs.loadRetry'), onPress: () => void query.refetch() };
 
-    return (
-        <Screen header={<ScreenHeader title={t('docs.title')} />}>
+    const top = (
+        <>
             {query.data ? (
-                <Stack gap="md" paddingX="lg" paddingY="sm">
+                <Stack gap="md" paddingX="gutter" paddingY="sm" testID="docs-top">
                     <TargetChooser chatTitle={chat?.title ?? null} target={target} onChange={setTarget} />
                     {adder}
                 </Stack>
             ) : null}
-            {query.isPending ? <ListSkeleton rows={4} /> : null}
-            {loadFailed && documents.length === 0 ? <ErrorState title={loadFailed.text} detail={loadFailed.detail} action={retry} /> : null}
-            {query.data && documents.length === 0 ? <EmptyState title={t('docs.empty')} message={t('docs.emptyHintPhone')} /> : null}
             {removal.pending ? (
-                <Stack paddingX="lg" paddingY="sm">
+                <Stack paddingX="gutter" paddingY="sm">
                     <Notice
                         tone="info"
                         role="note"
@@ -151,16 +148,32 @@ function Library({ chat, onBrowseFiles, onPreview, initial }: { chat: OpenChat |
                     />
                 </Stack>
             ) : null}
-            {documents.length > 0 ? (
-                <List
-                    data={documents}
-                    keyExtractor={(d) => d.id}
-                    accessibilityLabel={t('docs.title')}
-                    contentContainerStyle={{ paddingBottom: space.xl }}
-                    ListHeaderComponent={
-                        <Stack gap="sm" paddingX="lg" paddingY="sm">
+        </>
+    );
+    const header = <ScreenHeader title={t('docs.title')} />;
+
+    const empty = documents.length === 0;
+
+    return (
+        <Screen header={header}>
+            <List
+                data={documents}
+                keyExtractor={(d) => d.id}
+                accessibilityLabel={t('docs.title')}
+                contentContainerStyle={{ paddingBottom: space.xl, flexGrow: empty ? 1 : undefined }}
+                ListEmptyComponent={
+                    <>
+                        {query.isPending ? <ListSkeleton rows={4} /> : null}
+                        {loadFailed ? <ErrorState title={loadFailed.text} detail={loadFailed.detail} action={retry} /> : null}
+                        {query.data ? <EmptyState title={t('docs.empty')} message={t('docs.emptyHintPhone')} /> : null}
+                    </>
+                }
+                ListHeaderComponent={
+                    <>
+                        {top}
+                        <Stack gap="sm" paddingX="gutter" paddingY="sm">
                             {note ? <Notice tone="success" role="note" message={note} onDismiss={() => setNote(null)} /> : null}
-                            {loadFailed ? <Notice tone="danger" message={loadFailed.text} detail={loadFailed.detail} action={retry} /> : null}
+                            {loadFailed && !empty ? <Notice tone="danger" message={loadFailed.text} detail={loadFailed.detail} action={retry} /> : null}
                             {action.error ? <Notice tone="danger" message={action.error} onDismiss={action.dismiss} dismissLabel={t('docs.dismissError')} /> : null}
                             {stats ? (
                                 <Row gap="sm" wrap>
@@ -175,23 +188,23 @@ function Library({ chat, onBrowseFiles, onPreview, initial }: { chat: OpenChat |
                                 </Row>
                             ) : null}
                         </Stack>
-                    }
-                    renderItem={({ item }) => (
-                        <DocumentRow
-                            document={item}
-                            progress={view.progress[item.id]}
-                            startedAt={view.startedAt[item.id]}
-                            now={view.now}
-                            retrying={reindex.isPending && reindex.variables === item.id}
-                            attach={attachedIds.includes(item.id) ? undefined : { chatName: targetChat?.name ?? null, onAttach }}
-                            onPreview={chat && onPreview ? (docId, name) => onPreview(chat.id, docId, name) : undefined}
-                            onCancel={onCancel}
-                            onRetry={onRetry}
-                            onRemove={onRemove}
-                        />
-                    )}
-                />
-            ) : null}
+                    </>
+                }
+                renderItem={({ item }) => (
+                    <DocumentRow
+                        document={item}
+                        progress={view.progress[item.id]}
+                        startedAt={view.startedAt[item.id]}
+                        now={view.now}
+                        retrying={reindex.isPending && reindex.variables === item.id}
+                        attach={attachedIds.includes(item.id) ? undefined : { chatName: targetChat?.name ?? null, onAttach }}
+                        onPreview={chat && onPreview ? (docId, name) => onPreview(chat.id, docId, name) : undefined}
+                        onCancel={onCancel}
+                        onRetry={onRetry}
+                        onRemove={onRemove}
+                    />
+                )}
+            />
         </Screen>
     );
 }

@@ -62,6 +62,7 @@ export const NOTIFICATION_SCENES: Record<string, NotificationScene> = {
     'alert-settings': { view: 'alerts' },
     'banner-backend-error': { view: 'banner', data: {} },
     'banner-chat-finished': { view: 'banner', data: status({}), chatAlert: { sessionId: 's-sched', event: 'finished', tone: 'success', title: 'Morning summary finished', message: 'Three new emails need a reply.' } },
+    'banner-chat-failed': { view: 'banner', data: status({}), chatAlert: { sessionId: 's-sched', event: 'finished', tone: 'danger', title: 'Morning summary failed', message: 'GAIA could not reach your email.' } },
     'banner-chat-needs-approval': { view: 'banner', data: status({}), chatAlert: { sessionId: 's-chat', event: 'needs_approval', tone: 'warning', title: 'Weekly report needs your approval', message: 'GAIA wants to run a command.' } },
     'banner-config-error': { view: 'banner', data: status({ config_error: 'The settings file is not valid JSON (line 12).' } as Partial<SystemStatus>) },
     'banner-context-small': { view: 'banner', data: status({ context_size_sufficient: false, model_context_size: 4096 }) },

@@ -72,3 +72,20 @@ describe('composeDateLocale', () => {
         expect(composeDateLocale('en', tEn)).toBeUndefined();
     });
 });
+
+describe('describeSchedule without Intl.PluralRules (Hermes on iOS)', () => {
+    const none = { count: null, unit: null, days: null, time: null, start_hour: null, end_hour: null } as const;
+    const saved = Intl.PluralRules;
+    beforeAll(() => {
+        delete (Intl as any).PluralRules;
+    });
+    afterAll(() => {
+        (Intl as any).PluralRules = saved;
+    });
+
+    it('words an interval in English and Arabic', () => {
+        const parts = { ...none, kind: 'every', count: 30, unit: 'minute' } as const;
+        expect(describeSchedule(parts, tEn)).toBe('Every 30 minutes');
+        expect(describeSchedule(parts, translator('ar'))).toBeTruthy();
+    });
+});

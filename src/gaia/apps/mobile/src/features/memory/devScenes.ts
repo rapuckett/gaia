@@ -5,7 +5,7 @@ import { createFakeClient, type ProfileScript } from '@/api/fake';
 import type { GaiaClient, Goal, MemoryActivityDay, MemoryConversation, MemoryKnowledgeEntry, MemoryKnowledgeItem, MemoryStats, MemoryToolStat, MemoryTurn, MemoryUpcomingItem, ProfileStreamEvent } from '@/api/client.types';
 import { GaiaApiError, GaiaNetworkError } from '@/api/errors';
 
-export type MemoryScene = 'on' | 'off' | 'loading' | 'failed' | 'actionFails' | 'statsEmpty' | 'statsManyTools' | 'aboutEmpty' | 'aboutFailed' | 'aboutMany' | 'goalsEmpty' | 'goalsFailed' | 'goalsStoreError' | 'goalsStoreDamaged' | 'knowledgeRich' | 'knowledgeEmpty' | 'knowledgeFailed' | 'knowledgeMany' | 'profileIdle' | 'profileScanning' | 'profileReview' | 'profileSaved' | 'profileInferring' | 'profileInferenceReview' | 'profileFailed' | 'profileOff';
+export type MemoryScene = 'on' | 'off' | 'loading' | 'failed' | 'actionFails' | 'statsEmpty' | 'statsManyTools' | 'aboutEmpty' | 'aboutFailed' | 'aboutMany' | 'aboutShowMore' | 'goalsEmpty' | 'goalsFailed' | 'goalsStoreError' | 'goalsStoreDamaged' | 'knowledgeRich' | 'knowledgeEmpty' | 'knowledgeFailed' | 'knowledgeMany' | 'profileIdle' | 'profileScanning' | 'profileReview' | 'profileSaved' | 'profileInferring' | 'profileInferenceReview' | 'profileFailed' | 'profileOff' | 'discoveryOff';
 
 export const SAMPLE_MEMORY_STATS: MemoryStats = {
     knowledge: {
@@ -208,17 +208,22 @@ export function profileSceneStart(scene: MemoryScene): { kind: 'discovery' | 'in
     return null;
 }
 
+/** The stats scenes read what only the Advanced tab shows, so they open there unless the URL names a tab. */
+export const sceneDefaultTab = (scene: MemoryScene): 'advanced' | undefined =>
+    scene === 'loading' || scene === 'failed' || scene === 'actionFails' || scene === 'statsEmpty' || scene === 'statsManyTools' || scene === 'discoveryOff' ? 'advanced' : undefined;
+
 /** A fake PC for the dev gallery route, one per state the screen has to show. */
 export function memoryScene(scene: MemoryScene): GaiaClient {
     const empty = scene === 'statsEmpty';
     const client = createFakeClient({
         profileStreams: PROFILE_SCRIPTS[scene] ?? { discovery: DISCOVERY_DONE, inference: INSIGHTS_DONE },
-        memorySettings: { memory_enabled: scene !== 'off' && scene !== 'profileOff', mcp_memory_enabled: false, system_discovery_consent: true },
+        memorySettings: { memory_enabled: scene !== 'off' && scene !== 'profileOff', mcp_memory_enabled: false, system_discovery_consent: scene !== 'discoveryOff' },
         memoryStats: scene === 'failed' ? [new GaiaApiError(503, 'The backend is not running')] : [empty ? EMPTY_MEMORY_STATS : SAMPLE_MEMORY_STATS],
         memoryActivity: (days) => (empty ? [] : sampleActivity(days)),
         memoryTools: empty ? [] : scene === 'statsManyTools' ? MANY_TOOLS : SAMPLE_TOOLS,
         memoryUpcoming: empty ? [] : SAMPLE_UPCOMING,
         memoryKnowledge: knowledgeFor(scene),
+        memoryKnowledgeTotal: scene === 'aboutShowMore' ? MANY_KNOWLEDGE.length : undefined,
         memoryConversations: scene === 'knowledgeFailed' ? new GaiaApiError(503, 'The backend is not running') : scene === 'knowledgeEmpty' ? { sessions: [], turns: {} } : BROWSER_CONVERSATIONS,
         goals: scene === 'goalsFailed' ? new GaiaApiError(503, 'The backend is not running') : scene === 'goalsEmpty' ? [] : SAMPLE_GOALS,
         goalStoreError: scene === 'goalsStoreError' || scene === 'goalsStoreDamaged' ? 'The goal list is unreadable: unexpected end of JSON input.' : null,

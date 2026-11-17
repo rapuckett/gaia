@@ -13,17 +13,21 @@ export interface SheetEntry {
     dismissible: boolean;
     /** The SheetScope that hosts it; unset for the app's own host. */
     scope?: string;
+    /** The sheet whose content opened it; such a sheet shows over that one instead of waiting. */
+    parent?: string;
 }
 
 export interface SheetState {
     /** The sheet on screen, including while it animates out. */
     active?: string;
+    /** Sheets opened from inside the active one (or from each other), drawn over it, last on top. */
+    stacked: string[];
     /** Sheets that asked to open and are waiting for the active one to go. */
     queue: string[];
     entries: Record<string, SheetEntry>;
 }
 
-const EMPTY: SheetState = { queue: [], entries: {} };
+const EMPTY: SheetState = { stacked: [], queue: [], entries: {} };
 
 let state: SheetState = EMPTY;
 const listeners = new Set<() => void>();
@@ -31,6 +35,20 @@ const listeners = new Set<() => void>();
 function set(next: SheetState) {
     state = next;
     listeners.forEach((l) => l());
+}
+
+/** `id` and every stacked sheet opened, directly or not, from it. */
+function withChildren(s: SheetState, id: string): Set<string> {
+    const ids = new Set([id]);
+    for (const child of s.stacked) {
+        const parent = s.entries[child]?.parent;
+        if (parent && ids.has(parent)) ids.add(child);
+    }
+    return ids;
+}
+
+function without(entries: SheetState['entries'], ids: Set<string>): SheetState['entries'] {
+    return Object.fromEntries(Object.entries(entries).filter(([id]) => !ids.has(id)));
 }
 
 function promote(s: SheetState): SheetState {
@@ -48,19 +66,23 @@ export const sheetStore = {
     },
     getState: () => state,
 
-    /** A `Sheet` with `open` set: shows it now, or after the sheet on screen has fully gone. */
+    /** A `Sheet` with `open` set: shows it now, over its parent sheet, or after the sheet on screen has fully gone. */
     present(entry: SheetEntry) {
         const known = state.entries[entry.id];
         const entries = { ...state.entries, [entry.id]: entry };
         if (known) return set({ ...state, entries });
+        const { parent } = entry;
+        if (parent && (parent === state.active || state.stacked.includes(parent))) {
+            return set({ ...state, entries, stacked: [...state.stacked, entry.id] });
+        }
         set(promote({ ...state, entries, queue: [...state.queue, entry.id] }));
     },
 
-    /** A `Sheet` closed or unmounted. The active one keeps its place until `finished`. */
+    /** A `Sheet` closed or unmounted. One on screen keeps its place until `finished`. */
     release(id: string) {
         const entry = state.entries[id];
         if (!entry) return;
-        if (state.active === id) {
+        if (state.active === id || state.stacked.includes(id)) {
             if (entry.open) set({ ...state, entries: { ...state.entries, [id]: { ...entry, open: false } } });
             return;
         }
@@ -68,11 +90,15 @@ export const sheetStore = {
         set({ ...state, entries, queue: state.queue.filter((q) => q !== id) });
     },
 
-    /** The active sheet has finished animating out: the next one may open. */
+    /** A sheet on screen has finished animating out, taking the sheets opened from it along; after the active one, the next may open. */
     finished(id: string) {
+        if (state.stacked.includes(id)) {
+            const gone = withChildren(state, id);
+            return set({ ...state, entries: without(state.entries, gone), stacked: state.stacked.filter((s) => !gone.has(s)) });
+        }
         if (state.active !== id) return;
-        const { [id]: _gone, ...entries } = state.entries;
-        set(promote({ ...state, entries, active: undefined }));
+        const gone = withChildren(state, id);
+        set(promote({ ...state, entries: without(state.entries, gone), active: undefined, stacked: [] }));
     },
 
     reset() {

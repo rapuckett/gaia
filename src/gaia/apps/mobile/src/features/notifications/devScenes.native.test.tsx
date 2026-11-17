@@ -35,11 +35,27 @@ describeNative('/dev/notifications', () => {
         expect(screen.queryByText(/^No notifications scene/)).toBeNull();
     });
 
+    it.each([
+        ['banner-chat-finished', 'Morning summary finished'],
+        ['banner-chat-needs-approval', 'Weekly report needs your approval'],
+    ])('%s shows its own chat banner', async (name, title) => {
+        mockState = name;
+        await mount();
+        expect(await screen.findByText(title)).toBeTruthy();
+    });
+
     it('setup-upgrading-failed says the server update stopped, with Try again', async () => {
         mockState = 'setup-upgrading-failed';
         await mount();
         expect(await screen.findByText(/couldn.t update its local model server/)).toBeTruthy();
         expect(screen.getByText('Try again')).toBeTruthy();
+    });
+
+    it('banner-chat-failed shows the failed chat alert', async () => {
+        mockState = 'banner-chat-failed';
+        await mount();
+        expect(await screen.findByText('Morning summary failed')).toBeTruthy();
+        expect(screen.getByTestId('banner-chat-alert')).toBeTruthy();
     });
 
     it('names an unknown scene and lists the known ones', async () => {
