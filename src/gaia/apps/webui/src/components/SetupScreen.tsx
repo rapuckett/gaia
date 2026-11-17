@@ -972,10 +972,9 @@ export function SetupScreen({ onReady, onClose }: SetupScreenProps) {
         checkNotes.push(note((say, place) => say('setup.checks.log.pcFailed', { reason: place(hardwareError) })));
     }
     if (lemonadeFound) {
-        checkNotes.push(note((say, place) => say('setup.checks.log.foundLemonade', {
-            version: lemonadeFound.version ? ` ${place(lemonadeFound.version)}` : '',
-            url: place(lemonadeFound.url),
-        })));
+        checkNotes.push(note((say, place) => lemonadeFound.version
+            ? say('setup.checks.log.foundLemonadeVersion', { version: place(lemonadeFound.version), url: place(lemonadeFound.url) })
+            : say('setup.checks.log.foundLemonade', { url: place(lemonadeFound.url) })));
         checkNotes.push(note((say) => say(lemonadeChoice === 'external' ? 'setup.checks.log.choseOwn'
             : lemonadeChoice === 'gaia' ? 'setup.checks.log.choseGaia'
                 : 'setup.checks.log.waitingChoice')));
