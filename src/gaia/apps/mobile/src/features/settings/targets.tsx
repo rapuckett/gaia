@@ -45,16 +45,20 @@ export function SettingsTargets({ section, target, scrollRef, children }: {
     const entries = useRef(new Map<string, Entry>());
     const landed = useRef(false);
     const [flash, setFlash] = useState<TargetsValue['flash']>(null);
+    const settle = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
     useEffect(() => {
         landed.current = false;
     }, [target]);
 
+    useEffect(() => () => clearTimeout(settle.current), []);
+
     const land = useCallback((name: string, entry: Entry) => {
         landed.current = true;
         entry.onTarget?.();
         // Lets the opened parent lay out before measuring.
-        setTimeout(() => {
+        clearTimeout(settle.current);
+        settle.current = setTimeout(() => {
             const scroll = scrollRef.current;
             const node = entry.ref.current;
             const inner = scroll?.getInnerViewRef?.() ?? scroll?.getInnerViewNode?.();

@@ -4020,6 +4020,7 @@ export const enMessages = {
     'mobileApp.mem.whenHint': 'Year-month-day and time, like 2026-11-20 09:00',
     'mobileApp.logs.reportNote': 'Setup’s logs, GAIA’s logs and your PC’s details in one file. Keys and other secrets are removed, but a log can quote your chats, so look it over before you attach it to a report.',
     'mobileApp.connectors.checkPcOnly': "Your PC starts the server to check it, so run Check on the PC running GAIA.",
+    'mobileApp.connectors.personalizeFailedShort': "Couldn't start personalization.",
     'mobileApp.connectors.disconnectConfirm': "Disconnect {name}? Its saved sign-in or token is deleted from your PC, and you can only set it up again there.",
     'mobileApp.connectors.connectPcOnly': "Your PC finishes this sign-in and keeps the account. Connect this on your PC.",
     'mobileApp.connectors.codeExpired': "The code expired before sign-in finished. Sign in with a code again to get a new one.",
