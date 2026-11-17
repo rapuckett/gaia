@@ -6092,3 +6092,19 @@ for (const locale of ['ar', 'en'] as const) {
         await expect(page.getByRole('textbox', { name: ar ? /عنوان المحادثة/ : 'Chat title' })).toBeVisible();
     });
 }
+
+// Pins the audit's icon rule both ways, so a change that under- or over-reports fails here.
+test('the icon-touches-label audit flags real overlaps and ignores clipped text', async ({ page }) => {
+    const row = (dir: string, label: string) =>
+        `<button dir="${dir}" style="display:flex;align-items:center;gap:0;padding:0;border:0;font:14px sans-serif">` +
+        `<svg width="16" height="16" style="flex:none"></svg>${label}</button>`;
+    const text = 'A long label that runs on';
+    const flagged = async (html: string) => {
+        await page.setContent(html);
+        return (await audit(page)).some((p) => p.startsWith('icon touches its label'));
+    };
+
+    expect(await flagged(row('ltr', `<span>${text}</span>`))).toBe(true);
+    expect(await flagged(row('rtl', `<span style="display:block;width:60px;overflow:hidden;white-space:nowrap">${text}</span>`))).toBe(true);
+    expect(await flagged(row('ltr', `<span style="display:block;width:80px;margin-inline-start:5px;text-indent:-5px;overflow:hidden;white-space:nowrap">${text}</span>`))).toBe(false);
+});
