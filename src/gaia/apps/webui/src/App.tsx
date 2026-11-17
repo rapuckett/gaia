@@ -47,7 +47,6 @@ import { runWhileVisible } from './utils/visibleInterval';
 import { RETRY_INITIAL_MS, retryUntilOk, type Retrier } from './utils/retry';
 import { shouldShowStartupScreen } from './utils/startupGate';
 import { getT, useT } from './i18n/useT';
-import { isolate } from './i18n/registry';
 import type { SetupCheck, StartCard } from './types';
 
 // Heavy, occasional screens load on first use.
@@ -68,7 +67,7 @@ type SetupGate =
     | { state: 'serverDown'; modelListUnread?: boolean }
     | { state: 'addingLocal' }
     /** `upgradeFailed`: the check answered, but updating GAIA's own model server failed. */
-    | { state: 'unknown'; error: string; upgradeFailed?: boolean };
+    | { state: 'unknown'; error: string; upgradeFailed?: boolean; modelUnread?: boolean };
 
 const LEMONADE_FAIL_THRESHOLD = 3;
 /** A backend that has answered no status request for this long is treated as gone. */
@@ -86,11 +85,7 @@ const UPGRADE_WAIT_MS = 5 * 60_000;
 class UpgradeFailed extends Error {}
 
 /** The model in use could not be read, so a setup check can't be trusted to say "not set up". */
-class ModelUnread extends Error {
-    constructor(reason: string) {
-        super(`${getT().bare('setup.unknown.modelUnread')}\n${isolate(reason, 'ltr')}`);
-    }
-}
+class ModelUnread extends Error {}
 
 async function waitForEmbeddedUpgrade(): Promise<void> {
     const deadline = Date.now() + UPGRADE_WAIT_MS;
@@ -241,7 +236,7 @@ function App() {
                 return;
             }
             log.system.warn('Setup check could not be answered', err);
-            setSetup({ state: 'unknown', error });
+            setSetup({ state: 'unknown', error, modelUnread: err instanceof ModelUnread });
         }
     }, []);
 
@@ -908,7 +903,10 @@ function App() {
                     </div>
                 ) : (
                     <div className="app-notice is-warning" role="status">
-                        <span>{t('setup.unknown.failed', { error: setup.error })}</span>
+                        <span>
+                            {t('setup.unknown.failedNoReason')}{setup.modelUnread && ` ${t('setup.unknown.modelUnread')}`}
+                            <bdi dir="ltr" className="app-notice-reason">{setup.error}</bdi>
+                        </span>
                         <button type="button" className="link-btn" onClick={() => void checkSetup()}>{t('setup.unknown.retry')}</button>
                     </div>
                 ))}

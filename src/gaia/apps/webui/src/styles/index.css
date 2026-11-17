@@ -735,6 +735,11 @@ textarea:focus-visible {
     min-width: 0;
 }
 
+.app-notice-reason {
+    display: block;
+    overflow-wrap: anywhere;
+}
+
 .app-notice-close {
     display: inline-flex;
     padding: 4px;

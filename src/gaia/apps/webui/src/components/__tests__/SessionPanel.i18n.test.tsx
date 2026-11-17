@@ -82,7 +82,7 @@ describe('panel helpers', () => {
         expect(whenText('2026-01-01 00:07:00', now)).toBe('3 min ago');
         expect(stripIsolates(whenText('2026-01-01 00:07:00', now, ar))).toBe('قبل 3 د (3 min ago)');
         const changes = { totals: { files: 4, additions: 120, deletions: 8, uncounted: 0 } } as unknown as SessionChanges;
-        expect(totalText(changes)).toBe('4 files changed, +120 −8');
+        expect(stripIsolates(totalText(changes))).toBe('4 files changed, +120 −8');
         expect(stripIsolates(totalText(changes, ar))).toBe('الملفات: 4 تغيّرت، +120 −8 (4 files changed, +120 −8)');
     });
 });
