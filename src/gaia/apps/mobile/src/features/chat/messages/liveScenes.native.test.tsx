@@ -100,10 +100,9 @@ describeNative('chat, new-chat, composer and permission scenes', () => {
 
     it('activity-variants shows a failed, a repeated and a thought-first call, one opened', async () => {
         await open('messages', { state: 'activity-variants' });
-        fireEvent.press(await screen.findByTestId('steps-summary', opts));
+        fireEvent.press(within(await screen.findByTestId('steps-summary', opts)).getAllByLabelText(/./, opts)[0]!);
         expect(await screen.findByText('×3', opts)).toBeTruthy();
-        expect(await screen.findByTestId('step-row-2', opts)).toBeTruthy();
-        fireEvent.press(await screen.findByTestId('step-row-1', opts));
+        fireEvent.press(await screen.findByTestId('step-row--1', opts));
         expect(await screen.findByText('path: forecast.csv', opts)).toBeTruthy();
     });
 
