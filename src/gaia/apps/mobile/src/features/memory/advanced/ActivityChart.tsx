@@ -4,7 +4,7 @@
 import { useState } from 'react';
 import { Pressable as BarPress, View } from 'react-native';
 
-import { isolate } from '@webui/i18n/registry';
+import { isolate, keepTogether } from '@webui/i18n/registry';
 import { dateLocale, translator, type Translate } from '@webui/i18n/translator';
 import { ACTIVITY_RANGE_LABELS, ACTIVITY_RANGES, type ActivityDay } from '@webui/utils/memoryFormat.core';
 
@@ -49,7 +49,7 @@ export function ActivityChart({ days, onDaysChange, activity, failure }: Activit
               say('mobileApp.mem.activitySummary', {
                   total: isolate(String(total), 'ltr'),
                   peak: isolate(String(dayTotal(peak)), 'ltr'),
-                  date: dayLabel(peak.date, translator(code)),
+                  date: keepTogether(dayLabel(peak.date, translator(code))),
               }),
           )
         : t('mem.activity.empty');
