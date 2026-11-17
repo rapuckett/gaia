@@ -103,6 +103,7 @@ const messages: Messages = {
     'modelStatus.runsHere': 'يعمل على هذا الجهاز',
     'modelStatus.local': 'محلي',
     'modelStatus.localNotice': 'يستخدم {model} على هذا الجهاز. لا يرسل GAIA هذه المحادثة إلى أي مزوّد سحابي.',
+    'modelStatus.unknownPlace': 'لا يستطيع GAIA تحديد ما إذا كانت هذه المحادثة تُجاب على هذا الجهاز أم لدى مزوّد سحابي، لذلك لا يدّعي أيًّا منهما.',
     'modelStatus.runsRemote': 'يعمل على {name}، ويغادر سجل المحادثة هذا الجهاز',
     'providers.local.name': 'محلي',
     'providers.local.notice': 'يعمل على هذا الجهاز. لا يغادر أي شيء جهازك.',
@@ -594,6 +595,7 @@ const messages: Messages = {
     'modelMenu.speed': "{n} رمز/ث",
     'modelMenu.switchAfterFailed': "تم تنزيل {model} لكن التبديل إليه فشل: {reason}",
     'modelMenu.switchFailed': "فشل تبديل النموذج",
+    'modelMenu.queueSwitchFailed': 'تعذّر التبديل إلى {model}:',
     'modelMenu.usedNext': "سيُستخدم {name} من رسالتك التالية.",
     'modelMenu.downloadedReady': 'تم التنزيل، جاهز للتحميل',
     'modelMenu.downloadingPct': 'جارٍ التنزيل، {pct}%',
@@ -737,6 +739,8 @@ const messages: Messages = {
 
     // Agent activity while GAIA works
     'activity.thinking': 'جارٍ التفكير',
+    'activity.commentary': 'تعليق',
+    'activity.working': 'جارٍ العمل',
     'activity.thought': 'فكّر',
     'activity.thoughtFor': 'فكّر لمدة {time}',
     'activity.thinkingFor': 'جارٍ التفكير · {time}',
