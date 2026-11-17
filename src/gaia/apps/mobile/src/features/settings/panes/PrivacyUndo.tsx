@@ -5,7 +5,7 @@ import { useState } from 'react';
 
 import { GaiaApiError } from '@/api/errors';
 import { useUndoSettings, useUpdateUndoSettings } from '@/data';
-import { describeError, describeFailureWith, useT } from '@/i18n/useT';
+import { describeHttpFailure, describeFailureWith, useT } from '@/i18n/useT';
 import { Button, Disclosure, Ltr, Notice, Stack, Text, TextField } from '@/ui';
 
 import { isPcRefusal, PcOnlyNotice } from '../PcOnlyNotice';
@@ -111,7 +111,7 @@ export function PrivacyUndo({ initialOpen = false }: { initialOpen?: boolean }) 
                             />
                             {saved ? <Notice tone="success" message={t('settings.undo.saved')} testID="undo-saved" /> : null}
                             {rejected ? <Notice tone="danger" message={t('settings.undo.fix')} testID="undo-rejected" /> : null}
-                            {save.error && !rejected && !isPcRefusal(save.error) ? <Notice tone="danger" message={describeError(save.error, t)} testID="undo-error" /> : null}
+                            {save.error && !rejected && !isPcRefusal(save.error) ? <Notice tone="danger" message={describeHttpFailure(save.error, t).text} detail={describeHttpFailure(save.error, t).detail} testID="undo-error" /> : null}
                         </>
                     ) : null}
                 </Stack>

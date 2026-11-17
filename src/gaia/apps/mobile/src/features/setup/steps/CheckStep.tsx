@@ -17,7 +17,7 @@ import {
     useSetupStatus,
     useStartSetupServer,
 } from '@/data';
-import { describeError, useT } from '@/i18n/useT';
+import { describeError, describeHttpFailure, useT } from '@/i18n/useT';
 import { Button, Card, Disclosure, Icon, Ltr, Notice, ProgressLine, Row, Spinner, Stack, Text } from '@/ui';
 import { Check, Clock, ShieldQuestion, X } from '@/ui/icons';
 
@@ -165,7 +165,7 @@ export function CheckStep({ ctx }: { ctx: SetupStepContext }) {
     const serverFailed = serverRun?.state === 'failed' || serverRun?.state === 'cancelled';
     const planData = plan.data ?? null;
     const hardware = preflight.data ?? null;
-    const hardwareError = preflight.isError ? describeError(preflight.error, t) : null;
+    const hardwareError = preflight.isError ? describeHttpFailure(preflight.error, t).text : null;
 
     const [wasOffered, setWasOffered] = useState(false);
     const [carryOn, setCarryOn] = useState(false);

@@ -6,6 +6,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-
 import { Platform } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { GaiaApiError, GaiaAuthError } from '@/api/errors';
 import { createFakeClient } from '@/api/fake';
 import { GaiaClientProvider } from '@/data';
 import { translator } from '@/i18n/useT';
@@ -77,5 +78,49 @@ describeNative('Your PCs with two PCs of the same name on one host', () => {
         expect(use).toHaveBeenCalledWith(FIRST.id);
         expect(useConnectionStore.getState().connection).toMatchObject({ pcId: FIRST.id, baseUrl: FIRST.connection.baseUrl });
         expect(screen.queryByTestId(`pc-row-${FIRST.id}-use`)).toBeNull();
+    });
+});
+
+describeNative('Your PCs when listing fails', () => {
+    afterEach(() => setPairingService(null));
+
+    it("keeps the PC's text out of the sentence and on a left-to-right detail line", async () => {
+        setPairingService({ list: async () => Promise.reject(new GaiaApiError(500, 'disk full on the PC')) } as unknown as PairingService);
+        await render(
+            <SafeAreaProvider initialMetrics={METRICS}>
+                <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+                    <GaiaClientProvider client={createFakeClient()}>
+                        <UIProvider>
+                            <ScreenBannerProvider banner={null}>
+                                <PairedPcsScreen onAdd={() => undefined} />
+                            </ScreenBannerProvider>
+                        </UIProvider>
+                    </GaiaClientProvider>
+                </QueryClientProvider>
+            </SafeAreaProvider>,
+        );
+        expect(await screen.findByText(t('mobileApp.error.httpNoDetail', { status: 500 }))).toBeTruthy();
+        const detail = screen.getByText('disk full on the PC') as unknown as { props: { style: { writingDirection?: string } } };
+        expect(detail.props.style.writingDirection).toBe('ltr');
+    });
+
+    it("keeps the PC's text out of a pairing-refused sentence too", async () => {
+        setPairingService({ list: async () => Promise.reject(new GaiaAuthError('token revoked by the PC')) } as unknown as PairingService);
+        await render(
+            <SafeAreaProvider initialMetrics={METRICS}>
+                <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+                    <GaiaClientProvider client={createFakeClient()}>
+                        <UIProvider>
+                            <ScreenBannerProvider banner={null}>
+                                <PairedPcsScreen onAdd={() => undefined} />
+                            </ScreenBannerProvider>
+                        </UIProvider>
+                    </GaiaClientProvider>
+                </QueryClientProvider>
+            </SafeAreaProvider>,
+        );
+        expect(await screen.findByText(t('mobileApp.error.authNoDetail'))).toBeTruthy();
+        const detail = screen.getByText('token revoked by the PC') as unknown as { props: { style: { writingDirection?: string } } };
+        expect(detail.props.style.writingDirection).toBe('ltr');
     });
 });

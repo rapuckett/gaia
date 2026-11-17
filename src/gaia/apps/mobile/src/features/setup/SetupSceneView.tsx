@@ -13,6 +13,7 @@ import type { SetupStage } from './flow';
 import { DownloadChip } from './DownloadChip';
 import { useConfirmSheet } from './sheets/ConfirmSheet';
 import { lowDiskRequest, noFitRequest, serverConfirmRequest, type ConfirmRequest } from './sheets/setupConfirm';
+import { useQueuedModels } from './optionalModels';
 import { SetupFooterBar, SetupFooterProvider } from './SetupFooter';
 import { SetupScreen, type SetupStepContext } from './SetupScreen';
 import { SETUP_STEPS } from './steps';
@@ -66,6 +67,7 @@ export function SetupSceneView({ found }: { found: SetupScene }) {
     const [queryClient] = useState(() => new QueryClient({ defaultOptions: { queries: { retry: false } } }));
     const [client] = useState(() => {
         // The plan step opens this screen on arrival, as it does when another step asks for it.
+        useQueuedModels.setState({ ids: found.queued ?? [] });
         if (found.screen) usePlanScreenRequest.getState().request({ screen: found.screen, from: 'check' });
         return setupSceneClient(found);
     });

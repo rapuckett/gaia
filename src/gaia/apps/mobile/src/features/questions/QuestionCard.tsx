@@ -4,7 +4,7 @@
 import { useEffect, useState } from 'react';
 
 import { useAnswerQuestion } from '@/data';
-import { describeError, useT } from '@/i18n/useT';
+import { describeHttpFailure, useT } from '@/i18n/useT';
 import { Badge, Button, Notice, Row, Stack, Surface, Text, TextField } from '@/ui';
 
 import {
@@ -28,6 +28,7 @@ export interface QuestionViewProps {
     /** Live only: an answer is on its way. */
     submittingValue?: string | null;
     error?: string | null;
+    errorDetail?: string;
     /** Live only: ms until GAIA stops waiting. */
     leftMs?: number | null;
     onPick: (option: QuestionOption) => void;
@@ -35,7 +36,7 @@ export interface QuestionViewProps {
 }
 
 /** The card's looks for each state; QuestionCard feeds it. */
-export function QuestionCardView({ data, state, answer, submittingValue = null, error, leftMs = null, onPick, onSend }: QuestionViewProps) {
+export function QuestionCardView({ data, state, answer, submittingValue = null, error, errorDetail, leftMs = null, onPick, onSend }: QuestionViewProps) {
     const t = useT();
     const [secret, setSecret] = useState('');
     const submitting = submittingValue !== null;
@@ -129,7 +130,7 @@ export function QuestionCardView({ data, state, answer, submittingValue = null, 
                         {timeLeftText(leftMs, t)}
                     </Text>
                 ) : null}
-                {error ? <Notice tone="danger" title={t('question.sendFailed')} message={error} /> : null}
+                {error ? <Notice tone="danger" title={t('question.sendFailed')} message={error} detail={errorDetail} /> : null}
             </Stack>
         </Surface>
     );
@@ -156,7 +157,7 @@ export function QuestionCard({ data }: QuestionCardProps) {
     const resolved = useResolvedPrompt(data.sessionId, data.requestId);
     const [gone, setGone] = useState(false);
     const [submittingValue, setSubmittingValue] = useState<string | null>(null);
-    const [error, setError] = useState<string | null>(null);
+    const [error, setError] = useState<{ text: string; detail?: string } | null>(null);
     const ticking = !resolved && !gone && data.expiresAt !== null;
     const now = useNow(ticking);
     // The countdown shows expiry before the turn ends and the store says so.
@@ -170,7 +171,7 @@ export function QuestionCard({ data }: QuestionCardProps) {
             .mutateAsync({ session_id: data.sessionId, request_id: data.requestId, value, display: shown })
             .catch((err: unknown) => {
                 if (isQuestionGone(err)) setGone(true);
-                else setError(describeError(err, t));
+                else setError(describeHttpFailure(err, t));
             })
             .finally(() => setSubmittingValue(null));
     };
@@ -185,7 +186,8 @@ export function QuestionCard({ data }: QuestionCardProps) {
             state={state}
             answer={resolved?.answer}
             submittingValue={submittingValue}
-            error={error}
+            error={error?.text}
+            errorDetail={error?.detail}
             leftMs={data.expiresAt === null ? null : Math.max(0, data.expiresAt - now)}
             onPick={(option) => submit(option.value, option.label)}
             onSend={(text) => submit(text, text)}

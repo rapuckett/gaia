@@ -30,6 +30,7 @@ const NEW_SCENES: Record<string, string> = {
     'confirm/server-no-fit': 'Use it anyway',
     'download/finish': 'Finish setup',
     'download/finish-cancelled': 'Finish setup',
+    'download/optional-added': 'Added',
     'download/lost': 'Lost contact with GAIA',
     'download/verify-failed': 'Retry deletes it and downloads it again.',
     'gate/again': 'Back to GAIA',
