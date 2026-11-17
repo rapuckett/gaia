@@ -20,7 +20,7 @@ export interface AnswerComparisonControls {
     close(): void;
 }
 
-function failureOf(error: unknown, t: Translate): { error: string; detail?: string } {
+export function failureOf(error: unknown, t: Translate): { error: string; detail?: string } {
     const failed = describeHttpFailure(error, t);
     return { error: failed.text, detail: failed.detail };
 }

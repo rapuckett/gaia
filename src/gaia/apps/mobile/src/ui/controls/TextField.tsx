@@ -107,6 +107,11 @@ export function TextField({
     const grownHeight = lineHeight * maxLines * Math.min(fontScale, maxFontSizeMultiplier ?? fontScale) + 24;
     // At large sizes a tall field would push everything else off screen, so it scrolls sooner.
     const maxHeight = largeText ? Math.min(grownHeight, windowHeight * 0.25) : grownHeight;
+    // A programmatic value (a restored or prefilled draft) fires no change event, so the box is sized from its own line breaks and, where the platform reports it, the measured text.
+    const paddingV = bare ? 8 : 12;
+    const [contentHeight, setContentHeight] = useState(0);
+    const typedLines = multiline ? Math.min(maxLines, (value ?? '').split('\n').length) : 1;
+    const wantHeight = multiline ? Math.min(maxHeight, Math.max(lineHeight * typedLines, contentHeight) + paddingV * 2) : 0;
     const borderColor = error ? colors.danger : focused ? colors.accent : colors.border;
     return (
         <View style={{ gap: 6 }}>
@@ -126,6 +131,7 @@ export function TextField({
                 placeholderTextColor={colors.textMuted}
                 editable={!disabled}
                 multiline={multiline}
+                onContentSizeChange={multiline ? (e) => setContentHeight(Math.ceil(e.nativeEvent.contentSize.height)) : undefined}
                 returnKeyType={returnKeyType}
                 keyboardType={url ? 'url' : keyboardType}
                 onSubmitEditing={onSubmitEditing}
@@ -148,13 +154,13 @@ export function TextField({
                 maxFontSizeMultiplier={maxFontSizeMultiplier}
                 testID={testID}
                 style={{
-                    minHeight: bare ? 40 : 48,
+                    minHeight: multiline ? Math.max(bare ? 40 : 48, wantHeight) : bare ? 40 : 48,
                     ...(multiline
                         ? { maxHeight, textAlignVertical: 'top' as const }
                         : null),
                     paddingStart: leading ? 40 : bare ? 4 : 12,
                     paddingEnd: end ? 48 : bare ? 4 : 12,
-                    paddingVertical: bare ? 8 : 12,
+                    paddingVertical: paddingV,
                     borderRadius: radius.md,
                     borderWidth: bare ? 0 : 1,
                     borderColor,
