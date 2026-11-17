@@ -1,8 +1,11 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import type { MessageKey } from '@webui/i18n/registry';
+import { formatSize } from '@webui/components/setup/format';
+import { keepTogether, type MessageKey } from '@webui/i18n/registry';
 import type { SetupCatalogEntry, SetupRunStatus, SetupTest } from '@webui/types';
+
+import type { Translate } from '@/i18n/useT';
 
 type Job = SetupTest['job'];
 
@@ -91,4 +94,10 @@ export function testView(run: SetupRunStatus, catalog: SetupCatalogEntry[], canR
 export function rerunOptions(run: SetupRunStatus, catalog: SetupCatalogEntry[]): { keepTrying: false; extraModels: string[] } {
     const optional = new Set(catalog.filter((e) => e.support === null).map((e) => e.id));
     return { keepTrying: false, extraModels: (run.models ?? []).map((m) => m.id).filter((id) => optional.has(id)) };
+}
+
+/** The size carries its parentheses, as one unbreakable unit, so it never splits across lines in Arabic. */
+export function redownloadBody(t: Translate, name: string, sizeGb: number | null): string {
+    const size = sizeGb != null ? keepTogether(`(${formatSize(sizeGb)})`) : '';
+    return t.compose((say) => say('mobileApp.setup.redownload.body', { name, size }));
 }
