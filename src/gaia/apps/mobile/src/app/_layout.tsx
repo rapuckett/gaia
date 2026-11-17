@@ -18,7 +18,7 @@ import { AppPolls } from '@/features/notifications/AppPolls';
 import { NotificationFeed } from '@/features/notifications';
 import { AppDrawer } from '@/features/nav/AppDrawer';
 import { RoutingEffects } from '@/features/nav/RoutingEffects';
-import { drawerScreenOptions, FULL_SCREEN_OPTIONS, FULL_SCREEN_ROUTES, INITIAL_ROUTE } from '@/features/nav/navigation';
+import { drawerScreenOptions, FULL_SCREEN_ROUTES, fullScreenOptions, INITIAL_ROUTE } from '@/features/nav/navigation';
 import { ROUTES } from '@/features/nav/routes';
 import { sweepTempFiles } from '@/features/files/shareTemp';
 import { installPinnedPairing, PairingGate } from '@/features/pairing';
@@ -59,6 +59,7 @@ export default function RootLayout() {
     const lang = useLocaleCode();
     const { width } = useWindowDimensions();
     const largeText = useLargeText();
+    const webRtl = Platform.OS === 'web' && dir === 'rtl';
     const connection = useConnectionStore((s) => s.connection);
     const client = useMemo(
         () => (connection ? createHttpClient({ ...connection, fetch: platformFetch }) : null),
@@ -110,10 +111,10 @@ export default function RootLayout() {
                                     </AppErrorBoundary>
                                 )}
                                 backBehavior="initialRoute"
-                                screenOptions={drawerScreenOptions({ width, largeText, webRtl: Platform.OS === 'web' && dir === 'rtl' })}
+                                screenOptions={drawerScreenOptions({ width, largeText, webRtl })}
                             >
                                 {ROUTES.map((name) => (
-                                    <Drawer.Screen key={name} name={name} options={FULL_SCREEN_ROUTES.includes(name) ? FULL_SCREEN_OPTIONS : undefined} />
+                                    <Drawer.Screen key={name} name={name} options={FULL_SCREEN_ROUTES.includes(name) ? fullScreenOptions(webRtl) : undefined} />
                                 ))}
                             </Drawer>
                             <ModelNeededHost />

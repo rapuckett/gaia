@@ -31,7 +31,10 @@ export function drawerPosition(permanent: boolean, webRtl: boolean) {
 /** Setup and the startup wait are full screen at every width: no sidebar, no swipe-in drawer. */
 export const FULL_SCREEN_ROUTES: readonly string[] = ['dev/boot', 'dev/setup'];
 
-export const FULL_SCREEN_OPTIONS = { drawerType: 'front' as const, swipeEnabled: false };
+/** A closed front drawer must take the overlay's side: the permanent side would park it off the wrong edge and widen an rtl web page. */
+export function fullScreenOptions(webRtl: boolean) {
+    return { drawerType: 'front' as const, swipeEnabled: false, drawerPosition: drawerPosition(false, webRtl) };
+}
 
 export function drawerScreenOptions({ width, largeText, webRtl }: DrawerOptionsInput) {
     const permanent = width >= PERMANENT_DRAWER_MIN_WIDTH;
@@ -41,7 +44,7 @@ export function drawerScreenOptions({ width, largeText, webRtl }: DrawerOptionsI
         drawerType: permanent ? ('permanent' as const) : ('front' as const),
         // At large text sizes one word of a label is wider than the default drawer.
         drawerStyle: permanent
-            ? { width: PERMANENT_DRAWER_WIDTH, ...(webRtl ? { borderRightWidth: 0 } : null) }
+            ? { width: PERMANENT_DRAWER_WIDTH, borderLeftWidth: 0, borderRightWidth: 0 }
             : largeText
               ? { width: '100%' as const }
               : undefined,
