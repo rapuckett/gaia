@@ -18,7 +18,7 @@ import { AppPolls } from '@/features/notifications/AppPolls';
 import { NotificationFeed } from '@/features/notifications';
 import { AppDrawer } from '@/features/nav/AppDrawer';
 import { RoutingEffects } from '@/features/nav/RoutingEffects';
-import { drawerScreenOptions, INITIAL_ROUTE } from '@/features/nav/navigation';
+import { drawerScreenOptions, FULL_SCREEN_OPTIONS, FULL_SCREEN_ROUTES, INITIAL_ROUTE } from '@/features/nav/navigation';
 import { ROUTES } from '@/features/nav/routes';
 import { sweepTempFiles } from '@/features/files/shareTemp';
 import { installPinnedPairing, PairingGate } from '@/features/pairing';
@@ -113,7 +113,7 @@ export default function RootLayout() {
                                 screenOptions={drawerScreenOptions({ width, largeText, webRtl: Platform.OS === 'web' && dir === 'rtl' })}
                             >
                                 {ROUTES.map((name) => (
-                                    <Drawer.Screen key={name} name={name} />
+                                    <Drawer.Screen key={name} name={name} options={FULL_SCREEN_ROUTES.includes(name) ? FULL_SCREEN_OPTIONS : undefined} />
                                 ))}
                             </Drawer>
                             <ModelNeededHost />
