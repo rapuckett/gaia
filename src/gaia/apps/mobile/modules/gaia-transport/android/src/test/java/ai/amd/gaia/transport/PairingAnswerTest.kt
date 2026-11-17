@@ -11,16 +11,17 @@ import org.junit.Test
 class PairingAnswerTest {
   @Test
   fun removesTheTokenAndKeepsTheRestOnEveryStatus() {
-    for (answer in listOf(
-      """{"token":"gaiad_FAKE","device_id":"d1","pc_name":"Desk"}""",
-      """{"token":"gaiad_FAKE","detail":"Invitation expired"}""",
-    )) {
-      val kept = JSONObject(withoutToken(answer))
-      assertFalse(kept.has("token"))
-      val original = JSONObject(answer).apply { remove("token") }
-      assertEquals(original.keySet(), kept.keySet())
-      for (key in original.keySet()) assertEquals(original.get(key), kept.get(key))
-    }
+    val paired = JSONObject(withoutToken("""{"token":"gaiad_FAKE","device_id":"d1","pc_name":"Desk"}"""))
+    assertFalse(paired.has("token"))
+    assertEquals("d1", paired.getString("device_id"))
+    assertEquals("Desk", paired.getString("pc_name"))
+    assertEquals(2, paired.length())
+
+    val refused = JSONObject(withoutToken("""{"token":"gaiad_FAKE","detail":"Invitation expired","retry":3}"""))
+    assertFalse(refused.has("token"))
+    assertEquals("Invitation expired", refused.getString("detail"))
+    assertEquals(3, refused.getInt("retry"))
+    assertEquals(2, refused.length())
   }
 
   @Test
