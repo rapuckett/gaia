@@ -11,7 +11,7 @@ import { ChatAlertNotice, ConnectionBanner } from '@/features/banners/Connection
 import { devGalleryEnabled } from '@/features/dev/devGallery';
 import { KeyedScene } from '@/features/dev/KeyedScene';
 import { NotificationCenterScreen } from '@/features/notifications';
-import { chatAlertBanner, goalStoreNotification, NOTIFICATION_SCENES, notificationSceneClient, type NotificationScene } from '@/features/notifications/devScenes';
+import { chatAlertBanner, goalStoreNotification, NOTIFICATION_SCENES, notificationSceneClient, resolveSceneItems, type NotificationScene } from '@/features/notifications/devScenes';
 import NotificationsPane from '@/features/settings/panes/Notifications';
 import { useT } from '@/i18n/useT';
 import { SetupGate } from '@/features/setup/SetupGate';
@@ -24,7 +24,7 @@ const noop = () => undefined;
 
 /** The app's notification stores hold the scene: a pending approval is a chat turn blocked on it. */
 function seed(scene: NotificationScene, t: Translate) {
-    const items = [...(scene.goalStore ? [goalStoreNotification(t)] : []), ...(scene.items ?? [])];
+    const items = [...(scene.goalStore ? [goalStoreNotification(t)] : []), ...resolveSceneItems(scene, t)];
     useNotificationStore.setState({ items, filter: scene.filter ?? null });
     setNotificationFilter(scene.filter ?? null);
     useChatAlertBannerStore.setState({ alert: null });
