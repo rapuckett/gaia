@@ -5,10 +5,11 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useEffect, useMemo } from 'react';
 
 import type { StartScreen, SystemStatus } from '@webui/types';
-import { GaiaApiError } from '@/api/errors';
+import { GaiaApiError, GaiaNetworkError } from '@/api/errors';
 import { createFakeClient } from '@/api/fake';
 import { GaiaClientProvider } from '@/data';
 import { useNextChatDocs } from '@/features/documents';
+import { useT } from '@/i18n/useT';
 import { UIProvider } from '@/ui';
 
 import { NewChatScreen } from './NewChatScreen';
@@ -18,8 +19,10 @@ import { NewChatScreen } from './NewChatScreen';
  * `new-chat-setup-failed` (NC-03), `new-chat-library` (NC-08: two documents attached, the rest of the library offered),
  * `new-chat-warmup` (NC-09), `new-chat-send-error` (NC-10: the opening message fails to start a chat),
  * `new-chat-assistant` (NC-13: tap Details for the reason; Try again asks again).
+ * APP-20 `create-failed`: a draft in the box and a PC that can't be reached; `#tap=composer-send` shows the failure notice.
+ * APP-21 `skill-prompt`: a skill's Try it prompt arriving under an unsent draft, as the Skills screen sends it.
  */
-export const NEW_CHAT_SCENES = ['new-chat-setup-failed', 'new-chat-library', 'new-chat-warmup', 'new-chat-send-error', 'new-chat-assistant'] as const;
+export const NEW_CHAT_SCENES = ['new-chat-setup-failed', 'new-chat-library', 'new-chat-warmup', 'new-chat-send-error', 'new-chat-assistant', 'create-failed', 'skill-prompt'] as const;
 export type NewChatScene = (typeof NEW_CHAT_SCENES)[number];
 
 const READY = {
@@ -50,10 +53,14 @@ function clientFor(state: NewChatScene) {
         return createFakeClient({ ...base, start: { ...START, skills_error: 'Could not list skills: agent process exited with code 1' } });
     }
     const fake = createFakeClient(base);
+    if (state === 'create-failed') {
+        return { ...fake, createSession: () => Promise.reject(new GaiaNetworkError('http://pc.local:4200/api/sessions', new Error('Network request failed'))) };
+    }
     return { ...fake, createSession: () => Promise.reject(new GaiaApiError(500, 'database is locked')) };
 }
 
 export function NewChatScenes({ state }: { state: NewChatScene }) {
+    const t = useT();
     const client = useMemo(() => clientFor(state), [state]);
     const queryClient = useMemo(() => new QueryClient({ defaultOptions: { queries: { retry: false } } }), []);
     const noop = () => undefined;
@@ -66,7 +73,13 @@ export function NewChatScenes({ state }: { state: NewChatScene }) {
         <QueryClientProvider client={queryClient}>
             <GaiaClientProvider client={client}>
                 <UIProvider>
-                    <NewChatScreen onOpen={noop} onChooseDocuments={noop} initialHeld={state === 'new-chat-send-error' ? 'Summarize the board notes for me' : undefined} />
+                    <NewChatScreen
+                        onOpen={noop}
+                        onChooseDocuments={noop}
+                        initialHeld={state === 'new-chat-send-error' ? 'Summarize the board notes for me' : undefined}
+                        initialText={state === 'create-failed' ? 'Draft a status update for the team' : state === 'skill-prompt' ? 'Compare these two quotes' : undefined}
+                        prompt={state === 'skill-prompt' ? { id: 'skill:summarize', text: t('settings.skills.tryPrompt', { name: 'summarize' }) } : undefined}
+                    />
                 </UIProvider>
             </GaiaClientProvider>
         </QueryClientProvider>

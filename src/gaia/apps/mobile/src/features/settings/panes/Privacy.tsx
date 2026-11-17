@@ -10,7 +10,7 @@ import type { Settings } from '@/api/client.types';
 import { GaiaApiError } from '@/api/errors';
 import { usePinned } from '@/api/routeAccess';
 import { useActiveModel, useSessions, useSetNetworkPolicy, useSettings, useSystemStatus } from '@/data';
-import { describeError, useT } from '@/i18n/useT';
+import { describeHttpFailure, useT } from '@/i18n/useT';
 import { Card, Disclosure, IconButton, Ltr, Notice, Row, Stack, Switch, Text } from '@/ui';
 import { Archive, Check, Copy } from '@/ui/icons';
 
@@ -98,7 +98,7 @@ function LocalOnly() {
                     {refused ? (
                         <Notice tone="info" message={t('mobileApp.settings.pcOnly')} testID="privacy-pc-only" />
                     ) : error ? (
-                        <Notice tone="danger" message={describeError(error, t)} testID="privacy-policy-error" />
+                        <Notice tone="danger" message={describeHttpFailure(error, t).text} detail={describeHttpFailure(error, t).detail} testID="privacy-policy-error" />
                     ) : result ? (
                         <Stack gap="sm">
                             <Notice tone={result.tone} message={result.text} testID="privacy-policy-result" />

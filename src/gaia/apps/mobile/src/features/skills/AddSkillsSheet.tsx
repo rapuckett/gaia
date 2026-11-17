@@ -7,7 +7,7 @@ import { Share, View } from 'react-native';
 
 import type { FeaturedLibrary, LinkPreview, LinkSkill } from '@/api/client.types';
 import { useGaiaClient } from '@/data';
-import { describeError, technicalDetail, useT } from '@/i18n/useT';
+import { describeHttpFailure, technicalDetail, useT } from '@/i18n/useT';
 import { Badge, Button, Disclosure, Divider, Ltr, Notice, Row, Sheet, Stack, TextField, Text } from '@/ui';
 
 import { ChipButton } from '../schedules/ChipButton';
@@ -18,7 +18,7 @@ export function AddSkillsSheet({ open, onClose }: { open: boolean; onClose: () =
     const client = useGaiaClient();
     const [url, setUrl] = useState('');
     const [busy, setBusy] = useState(false);
-    const [error, setError] = useState<string | null>(null);
+    const [error, setError] = useState<{ text: string; detail?: string } | null>(null);
     const [preview, setPreview] = useState<LinkPreview | null>(null);
     const [featured, setFeatured] = useState<FeaturedLibrary[]>([]);
     const [featuredError, setFeaturedError] = useState<string | null>(null);
@@ -44,7 +44,7 @@ export function AddSkillsSheet({ open, onClose }: { open: boolean; onClose: () =
         try {
             setPreview(await client.previewSkillLink(trimmed));
         } catch (err) {
-            setError(describeError(err, t));
+            setError(describeHttpFailure(err, t));
         } finally {
             setBusy(false);
         }
@@ -120,7 +120,7 @@ export function AddSkillsSheet({ open, onClose }: { open: boolean; onClose: () =
                     disabled={!url.trim() || busy}
                     onPress={() => void read(url)}
                 />
-                {error ? <Notice tone="danger" message={error} /> : null}
+                {error ? <Notice tone="danger" message={error.text} detail={error.detail} /> : null}
                 {preview ? (
                     <Stack gap="md">
                         <Notice tone="warning" title={t('settings.skills.link.trust')} message={t('mobileApp.skills.trustBody')} />

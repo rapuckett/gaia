@@ -11,7 +11,7 @@ import type { SetupRunOptions } from '@/api/client.types';
 
 import { GaiaApiError } from '@/api/errors';
 import { useApplyTestedBackend, useCloudProviders, useSetupPlan, useSetupPreflight, useStartSetup } from '@/data';
-import { describeError, useLocaleCode, useT, type Translate } from '@/i18n/useT';
+import { describeHttpFailure, useLocaleCode, useT, type Translate } from '@/i18n/useT';
 import { Button, Card, Disclosure, Ltr, Notice, Pressable, Row, Spinner, Stack, Text } from '@/ui';
 
 import { SetupFooter } from '../SetupFooter';
@@ -216,7 +216,7 @@ export function PlanStep({ ctx }: { ctx: SetupStepContext }) {
     if (!plan && planQuery.error) {
         return (
             <Stack gap="md">
-                <Notice tone="danger" message={describeError(planQuery.error, t)} />
+                <Notice tone="danger" message={describeHttpFailure(planQuery.error, t).text} detail={describeHttpFailure(planQuery.error, t).detail} />
                 <SetupFooter>
                     <Button variant="secondary" label={t('setup.models.useRecommended')} disabled={start.isPending} onPress={() => goStart({ keepTrying })} />
                     <Button variant="primary" label={t('setup.tryAgain')} onPress={() => void planQuery.refetch()} />
@@ -300,5 +300,5 @@ export function PlanStep({ ctx }: { ctx: SetupStepContext }) {
 function StartError({ error }: { error: Error }) {
     const t = useT();
     if (error instanceof GaiaApiError && error.status === 403) return <Notice tone="info" message={t('setup.plan.pcOnly')} />;
-    return <Notice tone="danger" message={describeError(error, t)} />;
+    return <Notice tone="danger" message={describeHttpFailure(error, t).text} detail={describeHttpFailure(error, t).detail} />;
 }

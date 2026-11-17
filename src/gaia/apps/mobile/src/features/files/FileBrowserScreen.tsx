@@ -12,7 +12,7 @@ import { isExtensionSupported } from '@webui/utils/uploadErrors.core';
 import type { FileEntry, QuickLink } from '@/api/client.types';
 import { GaiaApiError } from '@/api/errors';
 import { useAddPcFiles, useBrowseFiles, useSearchFiles, useSetupPreflight } from '@/data';
-import { describeError, useDirection, useT } from '@/i18n/useT';
+import { describeHttpFailure, useDirection, useT } from '@/i18n/useT';
 import {
     ActionSheet,
     Badge,
@@ -111,7 +111,7 @@ export function FileBrowserScreen({ chatId, onClose, onPreview, onAsk, initial }
     const [showHidden, setShowHidden] = useState(false);
     const [selected, setSelected] = useState<ReadonlySet<string>>(new Set(initial?.selected));
     const [quickLinks, setQuickLinks] = useState<QuickLink[]>([]);
-    const [result, setResult] = useState<{ tone: 'success' | 'danger'; message: string } | null>(null);
+    const [result, setResult] = useState<{ tone: 'success' | 'danger'; message: string; detail?: string } | null>(null);
 
     const browse = useBrowseFiles(chatId, path);
     const search = useSearchFiles(chatId, submitted, typeFilter);
@@ -123,8 +123,8 @@ export function FileBrowserScreen({ chatId, onClose, onPreview, onAsk, initial }
     if (listedLinks && listedLinks.length > 0 && listedLinks !== quickLinks) setQuickLinks(listedLinks);
 
     const denied = path && browse.error instanceof GaiaApiError && browse.error.body?.status === 'os_denied' ? folderName(path) : null;
-    const browseError = browse.isError && !denied ? describeError(browse.error, t) : null;
-    const searchError = search.isError ? describeError(search.error, t) : null;
+    const browseError = browse.isError && !denied ? describeHttpFailure(browse.error, t) : null;
+    const searchError = search.isError ? describeHttpFailure(search.error, t) : null;
     const currentPath = browse.data?.current_path ?? path ?? '';
     const parentPath = browse.data?.parent_path ?? null;
 
@@ -181,7 +181,10 @@ export function FileBrowserScreen({ chatId, onClose, onPreview, onAsk, initial }
                         setSelected(new Set());
                     }
                 },
-                onError: (e) => setResult({ tone: 'danger', message: describeError(e, t) }),
+                onError: (e) => {
+                    const f = describeHttpFailure(e, t);
+                    setResult({ tone: 'danger', message: f.text, detail: f.detail });
+                },
             },
         );
     };
@@ -215,7 +218,7 @@ export function FileBrowserScreen({ chatId, onClose, onPreview, onAsk, initial }
             }
             footer={
                 <Stack gap="sm">
-                    {result ? <Notice tone={result.tone} role="note" message={result.message} onDismiss={() => setResult(null)} /> : null}
+                    {result ? <Notice tone={result.tone} role="note" message={result.message} detail={result.detail} onDismiss={() => setResult(null)} /> : null}
                     <Text role="caption" tone="secondary">
                         {add.isPending ? t.plural('fileBrowser.adding', chosen.length) : chosen.length > 0 ? t.plural('fileBrowser.selected', chosen.length) : t('fileBrowser.selectHint')}
                     </Text>
@@ -294,7 +297,7 @@ export function FileBrowserScreen({ chatId, onClose, onPreview, onAsk, initial }
                     </Stack>
                 )}
                 {denied ? <Notice tone="danger" message={t(pcIsMac ? 'fileBrowser.deniedMac' : 'fileBrowser.denied', { name: denied })} /> : null}
-                {failed ? <Notice tone="danger" message={failed} action={{ label: t('docs.loadRetry'), onPress: () => void (searching ? search.refetch() : browse.refetch()) }} /> : null}
+                {failed ? <Notice tone="danger" message={failed.text} detail={failed.detail} action={{ label: t('docs.loadRetry'), onPress: () => void (searching ? search.refetch() : browse.refetch()) }} /> : null}
             </Stack>
             {loading && items.length === 0 ? <ListSkeleton rows={4} label={t('fileBrowser.loading')} /> : null}
             {!loading && !failed && !denied && items.length === 0 ? <EmptyState title={t(emptyKey(searching, entries.length - shown.length))} /> : null}
