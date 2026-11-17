@@ -3,7 +3,7 @@
 
 /** Which files the library can take, and what to tell the person when an upload fails; no DOM. */
 
-import type { MessageKey } from '../i18n/registry';
+import { isolate, type MessageKey } from '../i18n/registry';
 import { tEn, type Translate } from '../i18n/translator';
 import { failureHint } from './documentLibrary.core';
 import { serverFailureText } from './documentFailure';
@@ -215,7 +215,7 @@ export function describeUploadError(t: Translate, { filename, error, status, kin
     }
     if (isFileTypeError) {
         return {
-            title: t('docs.fileTypeUnsupported', { ext }),
+            title: t('docs.fileTypeUnsupported', { ext: isolate(ext, 'ltr') }),
             detail: t('docs.fileTypeUnsupportedDetail'),
             icon: 'warning',
             report: { kind: 'feature', title: `Support ${ext} file indexing` }, // english: GitHub issue title, filed in English

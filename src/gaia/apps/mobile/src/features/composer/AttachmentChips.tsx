@@ -52,12 +52,12 @@ export function AttachmentChips({ attachments }: { attachments: Attachments }) {
                   <Icon icon={FileText} size="sm" tone="secondary" />
                 )}
                 <View style={{ flex: 1 }}>
-                  <Text role="label" numberOfLines={1} compact dir="ltr">
+                  <Text role="label" numberOfLines={1} compact glossInline dir="ltr">
                     {middleTruncate(a.name)}
                   </Text>
                   {a.status === "uploading" && a.progress !== undefined ? (
                     <Stack gap="xs">
-                      <Text role="caption" tone="secondary">
+                      <Text role="caption" tone="secondary" glossInline>
                         {t.bare("composer.uploadingPercent", {
                           percent: isolate(String(a.progress), "ltr"),
                         })}
@@ -65,19 +65,20 @@ export function AttachmentChips({ attachments }: { attachments: Attachments }) {
                       <ProgressLine value={a.progress / 100} />
                     </Stack>
                   ) : a.status === "uploading" ? (
-                    <Text role="caption" tone="secondary">
+                    <Text role="caption" tone="secondary" glossInline>
                       {t.bare("composer.uploading")}
                     </Text>
                   ) : a.status === "failed" ? (
                     <Text
                       role="caption"
                       tone="danger"
+                      glossInline
                       accessibilityRole="alert"
                     >
                       {a.error}
                     </Text>
                   ) : a.isMedia ? (
-                    <Text role="caption" tone="secondary">
+                    <Text role="caption" tone="secondary" glossInline>
                       {t.bare("composer.mediaReady")}
                     </Text>
                   ) : null}
