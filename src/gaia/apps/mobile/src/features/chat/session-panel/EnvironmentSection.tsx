@@ -4,7 +4,6 @@
 import { useState, type ReactNode } from 'react';
 
 import type { ActiveModel, LocalModelStatus, PermissionMode, ScopeEntry, Session, SessionEnvironment } from '@/api/client.types';
-import { GaiaApiError } from '@/api/errors';
 import { sessionEnvironmentPath } from '@/api/constants';
 import { useDeviceRefused } from '@/api/routeAccess';
 import { useActiveModel, useEnvironmentActions, useLocalModelStatus, usePermissionMode, useSession, useSessionEnvironment } from '@/data';
@@ -14,7 +13,7 @@ import { Button, Icon, IconButton, Notice, Row, SegmentedControl, Stack, Switch,
 import { Cloud, FileText, Folder, FolderPlus, Monitor, X } from '@/ui/icons';
 import { isolate } from '@webui/i18n/registry';
 
-import { failureReason, failureReasonWith } from '../header/failureText';
+import { failureNoticeProps, failureReason } from '../header/failureText';
 import { FolderPicker } from './FolderPicker';
 import { useSessionPanelStore } from './panelStore';
 import type { SectionProps } from './sections';
@@ -110,10 +109,12 @@ function Folders({ sessionId, env, error }: { sessionId: string; env: SessionEnv
         <Group label={label}>
             {!env && !error ? <Text tone="muted">{t('sp.checking')}</Text> : null}
             {env && !env.enforced ? <Text role="caption" tone="muted">{t(session?.agent_type === 'gaia' ? 'env.flagshipScope' : 'env.agentScope')}</Text> : null}
-            {error instanceof GaiaApiError ? (
-                <Notice tone="danger" message={t('mobileApp.env.foldersErrorShort')} detail={error.detail} testID="environment-error" />
-            ) : error ? (
-                <Notice tone="danger" message={t.compose((say) => say('env.foldersError', { error: failureReasonWith(error, say) }))} testID="environment-error" />
+            {error ? (
+                <Notice
+                    tone="danger"
+                    {...failureNoticeProps(error, t, { withReason: 'env.foldersError', noReason: 'mobileApp.env.foldersErrorShort' })}
+                    testID="environment-error"
+                />
             ) : null}
             {env ? (
                 <>

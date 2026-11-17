@@ -6,6 +6,7 @@ import { formatSize, STALL_STUCK_S, type Estimate } from '@webui/components/setu
 import { isolate, type MessageKey } from '@webui/i18n/registry';
 import type { SetupComponent, SetupModelProgress, SetupPlan, SetupRunStatus } from '@webui/types';
 import { useState } from 'react';
+import { View } from 'react-native';
 
 import { useT } from '@/i18n/useT';
 import { Button, Card, Disclosure, Icon, IconButton, Ltr, ProgressLine, Row, Spinner, Stack, Text } from '@/ui';
@@ -64,10 +65,14 @@ export function ModelRow({ model: m, name, estimate, now, freeGb, checking, chec
             <Row gap="sm" align="center">
                 {mark}
                 <Stack flex={1}>
-                    <Text weight="medium" dir="auto">{name}</Text>
+                    <Text weight="medium" dir="ltr" numberOfLines={2} ellipsize="middle" testID="download-row-name">{name}</Text>
                 </Stack>
-                <Text role="caption" tone={m.state === 'failed' ? 'danger' : 'secondary'}>{t(STATE_KEY[m.state])}</Text>
-                {m.state === 'downloading' ? <Ltr>{`${Math.floor(pct)}%`}</Ltr> : null}
+                <View style={{ flexShrink: 0 }} testID="download-row-state">
+                    <Row gap="sm" align="center">
+                        <Text role="caption" tone={m.state === 'failed' ? 'danger' : 'secondary'}>{t(STATE_KEY[m.state])}</Text>
+                        {m.state === 'downloading' ? <Ltr>{`${Math.floor(pct)}%`}</Ltr> : null}
+                    </Row>
+                </View>
                 {logs ? (
                     <IconButton
                         icon={showLog ? ChevronUp : ChevronDown}
