@@ -1,9 +1,13 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-/** The `dev/*` gallery routes render in development builds, and in a build or web export made with EXPO_PUBLIC_DEV_GALLERY=1 (for design shots and device checks); shipping builds never set it. */
+import { Platform } from 'react-native';
+
+/** The `dev/*` gallery routes render in development builds, in a web export made with EXPO_PUBLIC_DEV_GALLERY=1, and in a native gallery build (the flag plus the development config). */
 export function devGalleryEnabled(): boolean {
-    return __DEV__ || process.env.EXPO_PUBLIC_DEV_GALLERY === '1';
+    if (__DEV__) return true;
+    // On a native binary the flag alone is not enough: a production binary built with it by mistake stays closed.
+    return Platform.OS === 'web' ? process.env.EXPO_PUBLIC_DEV_GALLERY === '1' : galleryBuild();
 }
 
 /** app.config.ts's URL scheme for APP_ENV=development; it is the same id on both platforms and never changes. */
