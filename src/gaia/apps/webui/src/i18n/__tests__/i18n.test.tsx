@@ -173,8 +173,10 @@ describe('useT and the language setting', () => {
         expect(screen.getByText(readsAs('رمادي دافئ (Warm gray)'))).toBeInTheDocument();
     });
 
-    it('names every palette in English exactly as the palette list does', () => {
-        for (const p of PALETTES) expect(translate('en', `palette.${p.id}` as MessageKey)).toBe(p.name);
+    it('names every palette in both languages', () => {
+        for (const p of PALETTES) {
+            for (const code of ['en', 'ar'] as const) expect(translate(code, `palette.${p.id}` as MessageKey)).not.toBe(`palette.${p.id}`);
+        }
     });
 });
 

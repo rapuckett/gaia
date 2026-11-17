@@ -103,6 +103,7 @@ export const enMessages = {
     'modelStatus.runsHere': 'Runs on this PC',
     'modelStatus.local': 'Local',
     'modelStatus.localNotice': 'Using {model} on this machine. GAIA is not sending this conversation to any cloud provider.',
+    'modelStatus.unknownPlace': "GAIA can't tell whether this chat is answered on this PC or by a cloud provider, so it isn't claiming either.",
     'modelStatus.runsRemote': 'Runs on {name} — chat history leaves this PC',
     'providers.local.name': 'Local',
     'providers.local.notice': 'Runs on this PC. Nothing leaves your machine.',
@@ -594,6 +595,7 @@ export const enMessages = {
     'modelMenu.speed': "{n} tok/s",
     'modelMenu.switchAfterFailed': "{model} downloaded, but switching to it failed: {reason}",
     'modelMenu.switchFailed': "Model switch failed",
+    'modelMenu.queueSwitchFailed': "Couldn't switch to {model}:",
     'modelMenu.usedNext': "{name} is used from your next message.",
     'modelMenu.downloadedReady': 'Downloaded, ready to load',
     'modelMenu.downloadingPct': 'Downloading, {pct}%',
@@ -737,6 +739,8 @@ export const enMessages = {
 
     // Agent activity while GAIA works
     'activity.thinking': 'Thinking',
+    'activity.commentary': 'Commentary',
+    'activity.working': 'Working',
     'activity.thought': 'Thought',
     'activity.thoughtFor': 'Thought for {time}',
     'activity.thinkingFor': 'Thinking · {time}',

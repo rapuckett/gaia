@@ -1,6 +1,7 @@
 // Copyright(C) 2025-2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
+import { isolate } from '../i18n/registry';
 import type { Translate } from '../i18n/translator';
 import { PROGRESS_TICK_PREFIX } from './constants';
 import type { StreamEvent, AgentStep } from '../types';
@@ -37,12 +38,12 @@ export function agentEventToStep(event: StreamEvent, stepIdRef: { current: numbe
     switch (event.type) {
         case 'thinking':
             return {
-                id, type: 'thinking', label: 'Thinking',
+                id, type: 'thinking', label: t('activity.thinking'),
                 detail: event.content, active: true, timestamp: ts,
             };
         case 'commentary':
             return {
-                id, type: 'commentary', label: 'Commentary',
+                id, type: 'commentary', label: t('activity.commentary'),
                 detail: event.content, active: false, timestamp: ts,
             };
         case 'tool_start':
@@ -61,7 +62,7 @@ export function agentEventToStep(event: StreamEvent, stepIdRef: { current: numbe
         case 'skill_use':
             return {
                 id, type: 'tool', label: t('tool.default.active'), tool: 'use_skill',
-                detail: event.skill, narration: `Using skill: ${event.skill}`,
+                detail: event.skill, narration: t('activity.usingSkill', { name: isolate(event.skill ?? '', 'ltr') }),
                 active: false, success: true, timestamp: ts,
             };
         case 'plan':
@@ -83,14 +84,14 @@ export function agentEventToStep(event: StreamEvent, stepIdRef: { current: numbe
             if (event.message?.startsWith('Agent: ')) return null;
             return {
                 id, type: 'status',
-                label: event.message || event.status || 'Working',
+                label: event.message || event.status || t('activity.working'),
                 active: event.status === 'working',
                 ...(event.status === 'warning' ? { success: false } : {}),
                 timestamp: ts,
             };
         case 'agent_error':
             return {
-                id, type: 'error', label: 'Error',
+                id, type: 'error', label: t('activity.detail.error'),
                 detail: event.content, success: false,
                 active: false, timestamp: ts,
             };

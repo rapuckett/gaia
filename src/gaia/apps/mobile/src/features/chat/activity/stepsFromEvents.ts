@@ -119,8 +119,8 @@ export function stepsFromEvents(events: readonly StreamEvent[], t: Translate): A
                 const text = statusText(event, t);
                 if (isSilentStatus(event, text)) break;
                 const last = steps[steps.length - 1];
-                if (last?.type === 'status' && last.active && event.status !== 'warning') updateLast({ label: text || 'Working', detail: text });
-                else if (last?.type === 'thinking' && last.active) updateLast({ label: text || 'Thinking' });
+                if (last?.type === 'status' && last.active && event.status !== 'warning') updateLast({ label: text || t('activity.working'), detail: text });
+                else if (last?.type === 'thinking' && last.active) updateLast({ label: text || t('activity.thinking') });
                 else add(agentEventToStep({ ...event, message: text }, ids, t));
                 break;
             }

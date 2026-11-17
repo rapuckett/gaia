@@ -14,7 +14,7 @@ import * as api from '../../services/api';
 import { expectShape } from '../../utils/responseShape';
 import { requestErrorText } from '../../utils/requestErrors';
 import { log } from '../../utils/logger';
-import { useInferencePlace, useModelStore, selectChipModel, displayModelName, UNKNOWN_PLACE_TITLE } from '../../stores/modelStore';
+import { useInferencePlace, useModelStore, selectChipModel, displayModelName } from '../../stores/modelStore';
 import { useChatStore } from '../../stores/chatStore';
 import { useNotificationStore, selectSessionPermissionPrompt } from '../../stores/notificationStore';
 import { useFolderPicker } from '../../hooks/useFolderPicker';
@@ -115,7 +115,7 @@ function RunsOn({ sessionId, busy }: { sessionId: string; busy: boolean }) {
         );
     }
     if (!place) {
-        return <Row label={t('env.runsOn')}><span className="sp-meta" title={UNKNOWN_PLACE_TITLE}>{t('env.notKnownYet')}</span></Row>;
+        return <Row label={t('env.runsOn')}><span className="sp-meta" title={t('modelStatus.unknownPlace')}>{t('env.notKnownYet')}</span></Row>;
     }
     // The server may have another chat's model loaded; only describe it when it is this chat's.
     const other = !!(status?.model && chatModel && !sameModel(status.model, chatModel));
