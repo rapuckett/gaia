@@ -15,7 +15,8 @@ import { GOAL_STORE_NOTIFICATION_ID } from '@/state/goalAlerts';
 /** What a notifications scene shows: the center, the connection banner, the setup gate's notice, or the alert settings. */
 export interface NotificationScene {
     view: 'center' | 'banner' | 'gate' | 'alerts';
-    items?: GaiaNotification[];
+    /** Titles built with the live translator resolve through a function; see resolveSceneItems. */
+    items?: GaiaNotification[] | ((t: Translate) => GaiaNotification[]);
     /** Adds the goal-store alert to the items, built with the live translator. */
     goalStore?: boolean;
     filter?: NotificationType | null;
@@ -49,8 +50,10 @@ const note = (over: Partial<GaiaNotification> & { id: string; type: GaiaNotifica
     agentId: 'gaia', agentName: 'GAIA', title: '', message: '', timestamp: ago(5 * MIN), read: false, dismissed: false, priority: 'medium', ...over,
 });
 
-const FINISHED = note({ id: 'n-finished', type: 'info', title: 'Scheduled task "Morning summary" finished', message: 'Three new emails need a reply, and the 2 PM meeting moved to 3 PM.', sessionId: 's-sched', timestamp: ago(3 * MIN) });
-const FAILED = note({ id: 'n-failed', type: 'error', title: 'Scheduled task "Weekly backup" failed', message: 'The backup folder D:\\Backups is not reachable.', sessionId: 's-backup', priority: 'high', timestamp: ago(52 * MIN) });
+/** AppPolls builds this title with `t('schedules.finished')`; the scene does the same so it follows the viewer's language. */
+const finishedNote = (t: Translate): GaiaNotification => note({ id: 'n-finished', type: 'info', title: t('schedules.finished', { name: 'Morning summary' }), message: 'Three new emails need a reply, and the 2 PM meeting moved to 3 PM.', sessionId: 's-sched', timestamp: ago(3 * MIN) });
+/** AppPolls builds this title with `t('schedules.failed')`; see finishedNote. */
+const failedNote = (t: Translate): GaiaNotification => note({ id: 'n-failed', type: 'error', title: t('schedules.failed', { name: 'Weekly backup' }), message: 'The backup folder D:\\Backups is not reachable.', sessionId: 's-backup', priority: 'high', timestamp: ago(52 * MIN) });
 const ASK = note({
     id: 'confirm-1', type: 'permission_request', title: 'Run a command?', message: 'GAIA needs your OK to run a command.', tool: 'run_shell_command', toolLabel: 'run a command',
     toolArgs: { command: 'git status' }, sessionId: 's-chat', confirmId: 'confirm-1', priority: 'high', timestamp: ago(MIN),
@@ -68,7 +71,11 @@ export const goalStoreNotification = (t: Translate): GaiaNotification => note({
     message: 'The goal list is unreadable: unexpected end of JSON input.', priority: 'high', timestamp: ago(MIN),
 });
 
-const MIXED = [ASK, FINISHED, FAILED, POLICY, SECURITY, INFO];
+const mixed = (t: Translate) => [ASK, finishedNote(t), failedNote(t), POLICY, SECURITY, INFO];
+
+/** The scene's items, with titles built by `t`. */
+export const resolveSceneItems = (scene: NotificationScene, t: Translate): GaiaNotification[] =>
+    typeof scene.items === 'function' ? scene.items(t) : (scene.items ?? []);
 
 const STATUS_OK = {
     lemonade_running: true, context_size_sufficient: true, model_context_size: 65536, download_progress: null, init_state: 'ready',
@@ -83,7 +90,7 @@ const DOWNLOAD = {
 const check = (patch: Partial<SetupCheck>) => ({ setupChecks: [{ ready: false, steps: [], ...patch } as SetupCheck] });
 
 export const NOTIFICATION_SCENES: Record<string, NotificationScene> = {
-    'all-read': { view: 'center', items: MIXED.map((n) => ({ ...n, read: true })) },
+    'all-read': { view: 'center', items: (t) => mixed(t).map((n) => ({ ...n, read: true })) },
     'alert-settings': { view: 'alerts' },
     'banner-backend-error': { view: 'banner', data: {} },
     'banner-chat-finished': { view: 'banner', data: status({}), chatAlert: { event: 'finished', tone: 'success', title: 'Quarterly plan', status: 'done' } },
@@ -100,15 +107,15 @@ export const NOTIFICATION_SCENES: Record<string, NotificationScene> = {
     'banner-starting': { view: 'banner', data: status({ init_state: 'initializing', init_tasks: [{ name: 'Loading the model', status: 'running' }] } as Partial<SystemStatus>) },
     'banner-unreachable': { view: 'banner', unreachable: true },
     empty: { view: 'center', items: [] },
-    'goal-store-error': { view: 'center', items: [FINISHED], goalStore: true },
-    'errors-filter': { view: 'center', items: MIXED, filter: 'error' },
-    mixed: { view: 'center', items: MIXED },
+    'goal-store-error': { view: 'center', items: (t) => [finishedNote(t)], goalStore: true },
+    'errors-filter': { view: 'center', items: mixed, filter: 'error' },
+    mixed: { view: 'center', items: mixed },
     'permission-answered': { view: 'center', items: [{ ...ASK, response: 'allow', read: true }, { ...ASK, id: 'n-ask-2', confirmId: 'confirm-2', response: 'deny', read: true, timestamp: ago(40 * MIN) }] },
     'permission-expired': { view: 'center', items: [ASK] },
-    'permission-pending': { view: 'center', items: [ASK, FINISHED], waiting: ['confirm-1'] },
+    'permission-pending': { view: 'center', items: (t) => [ASK, finishedNote(t)], waiting: ['confirm-1'] },
     'policy-alert': { view: 'center', items: [POLICY, { ...POLICY, id: 'n-policy-2', receiptId: undefined, ruleIds: undefined, policyVersion: undefined, timestamp: ago(30 * 3_600_000) }] },
-    'schedule-failed': { view: 'center', items: [FAILED], filter: null },
-    'schedule-finished': { view: 'center', items: [FINISHED] },
+    'schedule-failed': { view: 'center', items: (t) => [failedNote(t)], filter: null },
+    'schedule-finished': { view: 'center', items: (t) => [finishedNote(t)] },
     'setup-check-failed': { view: 'gate', data: { setupChecks: [new GaiaApiError(500, 'The setup check crashed.')] } },
     // NTF-15: the embedded server's update stopped (`Try again`); the restore-model notices are `/dev/model-server?state=restore-failed` and `restore-ok`.
     'setup-upgrading-failed': { view: 'gate', data: { setupChecks: [{ ready: false, stage: 'upgrade', steps: [] } as unknown as SetupCheck], setupStatus: { state: 'failed', error: 'The download was interrupted.' } as never } },

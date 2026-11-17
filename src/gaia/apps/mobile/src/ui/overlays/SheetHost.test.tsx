@@ -97,6 +97,17 @@ describe('SheetHost', () => {
         // The first render transforms React Native's lazy components on a cold cache (about 1.6 s measured, 25 ms warm), which a loaded machine stretches past 5 s.
     }, 20_000);
 
+    it('caps a sheet at the 560 point sheet width', async () => {
+        const r = createRoot({ textComponentTypes: ['Text', 'RCTText'] });
+        await act(async () => {
+            r.render(<Screen a b={false} onCloseA={jest.fn()} onCloseB={jest.fn()} />);
+        });
+        expect(shown(r)).toContain('"width":560');
+        await act(async () => {
+            r.unmount();
+        });
+    }, 20_000);
+
     it('a host that unmounts mid-sheet does not hold the next host\'s sheet back', async () => {
         const noop = jest.fn();
         const first = createRoot({ textComponentTypes: ['Text', 'RCTText'] });

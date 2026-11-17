@@ -1,10 +1,14 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
+import { existsSync, readFileSync } from 'fs';
+import { resolve } from 'path';
+
 import type { ExpoConfig } from 'expo/config';
 
 import { DEVELOPMENT_SCHEME } from '@/features/dev/devGallery';
 import { LOCALES } from '@webui/i18n/registry';
+import { colors } from '@/ui/tokens/generated';
 
 import appConfig, { readIosBundleId, readAppEnv, type AppEnv } from '../app.config';
 
@@ -99,5 +103,60 @@ describe('app config', () => {
         expect(pluginOptions(configFor('development'), 'expo-localization').supportedLocales).toEqual(
             LOCALES.map((locale) => locale.meta.code),
         );
+    });
+
+    it('uses existing icon files, an opaque iOS icon, and the theme backgrounds', () => {
+        const config = configFor('production');
+        const file = (path: string | undefined): string => {
+            const full = resolve(__dirname, '..', path ?? '');
+            expect(existsSync(full)).toBe(true);
+            return full;
+        };
+        // IHDR colour type, byte 25: 2 is RGB with no alpha, 6 is RGBA.
+        const colorType = (full: string): number => readFileSync(full)[25];
+
+        expect(config.icon).toBe(config.ios?.icon);
+        expect(colorType(file(config.icon))).toBe(2);
+        const adaptive = config.android?.adaptiveIcon;
+        expect(colorType(file(adaptive?.foregroundImage))).toBe(6);
+        expect(adaptive?.backgroundColor).toBe(colors.dark.bgPrimary);
+
+        const splash = pluginOptions(config, 'expo-splash-screen') as {
+            image: string;
+            backgroundColor: string;
+            dark: { backgroundColor: string };
+        };
+        expect(colorType(file(splash.image))).toBe(6);
+        expect(splash.backgroundColor).toBe(colors.light.bgPrimary);
+        expect(splash.dark.backgroundColor).toBe(colors.dark.bgPrimary);
+    });
+
+    it('localizes every iOS permission prompt and the app name in Arabic', () => {
+        const config = configFor('development');
+        const file = (config.locales as Record<string, string> | undefined)?.ar;
+        expect(file).toBeDefined();
+        const path = resolve(__dirname, '..', file as string);
+        expect(existsSync(path)).toBe(true);
+        const arabic = JSON.parse(readFileSync(path, 'utf8')) as Record<string, string>;
+
+        const keys = new Set<string>(['CFBundleDisplayName']);
+        for (const key of Object.keys(config.ios?.infoPlist ?? {})) {
+            if (/^NS\w+UsageDescription$/.test(key)) keys.add(key);
+        }
+        const pluginKeys: Record<string, string> = {
+            cameraPermission: 'NSCameraUsageDescription',
+            microphonePermission: 'NSMicrophoneUsageDescription',
+            photosPermission: 'NSPhotoLibraryUsageDescription',
+        };
+        for (const plugin of ['expo-camera', 'expo-image-picker', 'expo-audio']) {
+            for (const option of Object.keys(pluginOptions(config, plugin))) {
+                if (pluginKeys[option]) keys.add(pluginKeys[option]);
+            }
+        }
+        expect(Object.keys(arabic).sort()).toEqual([...keys].sort());
+        for (const [key, value] of Object.entries(arabic)) {
+            expect({ key, ok: value.trim() !== '' }).toEqual({ key, ok: true });
+            expect({ key, latin: value.replace(/GAIA/g, '').match(/[A-Za-z]/g) }).toEqual({ key, latin: null });
+        }
     });
 });

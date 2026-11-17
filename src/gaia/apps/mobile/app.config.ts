@@ -22,6 +22,10 @@ const CAMERA_USE = 'GAIA uses the camera to scan the pairing code on your PC and
 const MICROPHONE_USE = 'GAIA uses the microphone to record voice messages.';
 const PHOTOS_USE = 'GAIA opens your photo library so you can attach photos to a chat.';
 const PHOTOS_ADD_USE = 'GAIA saves the images you choose to your photo library.';
+// bgPrimary light and dark in src/ui/tokens/generated.ts; Expo's config loader can't import it, so src/appConfig.test.ts checks the copies.
+const BACKGROUND_LIGHT = '#FAF9F7';
+const BACKGROUND_DARK = '#1A1917';
+
 const LOCAL_NETWORK_USE = 'GAIA uses your local network to connect to GAIA on your PC.';
 
 export function readAppEnv(value: string | undefined): AppEnv {
@@ -58,7 +62,11 @@ export default function appConfig(): ExpoConfig {
         version: '0.1.0',
         scheme: id,
         userInterfaceStyle: 'automatic',
+        icon: './assets/icon.png',
+        // iOS permission prompts and the app name in Arabic; Expo writes ar.lproj/InfoPlist.strings from it.
+        locales: { ar: './locales/ios/ar.json' },
         ios: {
+            icon: './assets/icon.png',
             bundleIdentifier: iosId,
             supportsTablet: true,
             infoPlist: {
@@ -74,6 +82,7 @@ export default function appConfig(): ExpoConfig {
         },
         android: {
             package: id,
+            adaptiveIcon: { foregroundImage: './assets/adaptive-icon-foreground.png', backgroundColor: BACKGROUND_DARK },
             // No cloud backup. plugins/withBackupExclusions also keeps every app file out of device-to-device
             // transfer, so a paired PC's records never reach another phone, where its Keystore key can't follow.
             allowBackup: false,
@@ -97,6 +106,16 @@ export default function appConfig(): ExpoConfig {
                 { microphonePermission: MICROPHONE_USE, enableBackgroundPlayback: true, enableBackgroundRecording: false },
             ],
             'expo-background-task',
+            [
+                'expo-splash-screen',
+                {
+                    image: './assets/splash-logo.png',
+                    imageWidth: 200,
+                    resizeMode: 'contain',
+                    backgroundColor: BACKGROUND_LIGHT,
+                    dark: { backgroundColor: BACKGROUND_DARK },
+                },
+            ],
             // Without the system's contrast scrim, the transparent button bar takes the style GAIA's theme sets.
             ['expo-navigation-bar', { enforceContrast: false }],
             ['./plugins/withCleartextHosts', { hosts: dev ? DEV_HTTP_HOSTS : [] }],
