@@ -64,7 +64,8 @@ const TERMINAL: AgentStep[] = [
     }),
 ];
 
-const PLAN: AgentStep[] = [
+const LIVE_SINCE = 64_000;
+const PLAN = (): AgentStep[] => [
     step(1, {
         type: 'plan',
         label: 'Plan',
@@ -72,11 +73,12 @@ const PLAN: AgentStep[] = [
         planNarrations: ['Finding the Q3 files', 'Reading the summary', 'Drafting the update', 'Saving it to the folder'],
         currentStep: 2,
         active: true,
+        timestamp: Date.now() - LIVE_SINCE,
     }),
-    step(2, { tool: 'write_file', narration: 'Drafting the update', active: true, success: undefined }),
+    step(2, { tool: 'write_file', narration: 'Drafting the update', active: true, success: undefined, timestamp: Date.now() - LIVE_SINCE }),
 ];
 
-const THINKING_LIVE: AgentStep[] = [step(1, { type: 'thinking', label: 'Thinking', detail: 'The summary mentions two forecasts, so I should compare them before drafting.', active: true, success: undefined })];
+const THINKING_LIVE = (): AgentStep[] => [step(1, { type: 'thinking', label: 'Thinking', detail: 'The summary mentions two forecasts, so I should compare them before drafting.', active: true, success: undefined, timestamp: Date.now() - LIVE_SINCE })];
 const THINKING_DONE: AgentStep[] = [
     step(1, { type: 'thinking', label: 'Thinking', detail: 'The file is small enough to read whole, so I will skip searching.', timestamp: 1000 }),
     step(2, { tool: 'read_file', narration: 'Reading forecast.csv', detail: 'path: forecast.csv', result: 'done', timestamp: 4000 }),
@@ -126,13 +128,13 @@ function Body({ state }: { state: LiveScene }) {
     if (state === 'activity-thinking') {
         return (
             <Stack gap="md">
-                <ActivityTimeline steps={THINKING_LIVE} running />
+                <ActivityTimeline steps={THINKING_LIVE()} running />
                 <Divider />
                 <ActivityTimeline steps={THINKING_DONE} />
             </Stack>
         );
     }
-    const steps = state === 'activity-terminal' ? TERMINAL : state === 'activity-plan' ? PLAN : state === 'activity-filter' ? FILTER : VISION;
+    const steps = state === 'activity-terminal' ? TERMINAL : state === 'activity-plan' ? PLAN() : state === 'activity-filter' ? FILTER : VISION;
     return <ActivityTimeline steps={steps} running={state === 'activity-plan'} />;
 }
 

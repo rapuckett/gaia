@@ -91,6 +91,13 @@ describeNative('chat, new-chat, composer and permission scenes', () => {
         expect((await screen.findAllByTestId('activity-timeline', opts)).length).toBe(2);
     });
 
+    it.each(['activity-plan', 'activity-thinking'])('%s reads an elapsed time under an hour', async (state) => {
+        await open('messages', { state });
+        await screen.findAllByTestId('activity-timeline', opts);
+        expect(screen.queryByText(/\d{3,}m \d+s/, opts)).toBeNull();
+        expect(screen.queryByText(/\b\d{2,}m \d+s/, opts)).toBeNull();
+    });
+
     it('activity-filter shows the step filter once the seven calls are open', async () => {
         await open('messages', { state: 'activity-filter' });
         fireEvent.press(within(await screen.findByTestId('steps-summary', opts)).getAllByLabelText(/./, opts)[0]!);
