@@ -6,7 +6,7 @@ import { stripIsolates } from '@webui/i18n/registry';
 import type { SessionChanges } from '@/api/client.types';
 import { translator } from '@/i18n/useT';
 
-import { summaryText, totalText, undoneText } from './changesText';
+import { reviewHeadingText, summaryText, totalText, undoneText } from './changesText';
 
 const changes = { totals: { files: 4, additions: 52, deletions: 22, uncounted: 0 } } as SessionChanges;
 
@@ -54,5 +54,39 @@ describe('undoneText', () => {
         [11, 'أُعيد 11 ملفًا'],
     ])('ar agrees with %i restored files', (n, phrase) => {
         expect(stripIsolates(undoneText(result(n, 0), translator('ar')))).toContain(phrase);
+    });
+});
+
+describe('chat totals', () => {
+    const saved = Intl.PluralRules;
+    beforeAll(() => {
+        delete (Intl as any).PluralRules;
+    });
+    afterAll(() => {
+        (Intl as any).PluralRules = saved;
+    });
+    const of = (n: number) => ({ totals: { files: n, additions: 52, deletions: 22, uncounted: 0 } }) as SessionChanges;
+
+    it.each([totalText, summaryText, reviewHeadingText])('ar is one sentence with one gloss and the counts in one isolate', (build) => {
+        const text = build(of(4), translator('ar'));
+        const flat = stripIsolates(text);
+        expect(flat).not.toContain('))');
+        expect(flat.match(/\(/g)).toHaveLength(1);
+        expect(flat.match(/\)/g)).toHaveLength(1);
+        expect(text.match(/⁦\+52 −22⁩/g)).toHaveLength(2);
+    });
+
+    it('keeps the English line unchanged', () => {
+        expect(totalText(of(4), translator('en'))).toBe('4 files changed, ⁦+52 −22⁩');
+        expect(summaryText(of(1), translator('en'))).toBe('1 file · ⁦+52 −22⁩');
+    });
+
+    it.each([
+        [1, 'ملف واحد'],
+        [2, 'ملفان'],
+        [3, '3 ملفات'],
+        [11, '11 ملفًا'],
+    ])('ar agrees with %i files', (n, phrase) => {
+        expect(stripIsolates(summaryText(of(n), translator('ar')))).toContain(phrase);
     });
 });
