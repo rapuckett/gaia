@@ -97,4 +97,24 @@ describeNative('Permissions pane', () => {
         expect(detail.props.style.writingDirection).toBe('ltr');
         queryClient.clear();
     });
+
+    it('a chat without a menu keeps the trailing slot, so titles line up', async () => {
+        const client = createFakeClient({ permissionGrants: { c: [{ key: 'k', label: 'ls' }] } });
+        const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+        await render(<Permissions />, {
+            wrapper: ({ children }: { children: ReactNode }) => (
+                <QueryClientProvider client={queryClient}>
+                    <GaiaClientProvider client={client}>
+                        <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 800 }, insets: { top: 0, left: 0, right: 0, bottom: 0 } }}>
+                            <ThemeProvider>
+                                <SheetHost>{children}</SheetHost>
+                            </ThemeProvider>
+                        </SafeAreaProvider>
+                    </GaiaClientProvider>
+                </QueryClientProvider>
+            ),
+        });
+        expect(await screen.findByTestId('permissions-row-menu-slot')).toBeTruthy();
+        queryClient.clear();
+    });
 });
