@@ -15,7 +15,7 @@ import { RotateCcw } from '@/ui/icons';
 import { ActivityTimeline } from './activity/ActivityTimeline';
 import { stepsFromEvents } from './activity/stepsFromEvents';
 import { AnswerCards } from './cards/RenderCard';
-import { chatErrorText, isModelServerDown } from './chatErrors';
+import { chatErrorInfo, isModelServerDown } from './chatErrors';
 import { StoppedNote } from './EndingNotes';
 import { LibraryNotices, libraryNoticesFromEvents } from './LibraryNotices';
 import { Markdown } from './markdown/Markdown';
@@ -41,6 +41,7 @@ export function TurnTail({ tail, line, awaitingUser = false, onTryAgain, onConti
     // A running step row already says what is happening.
     const rowRuns = steps.some((s) => s.active && s.type !== 'status');
     const showLine = tail.live && !rowRuns && (line !== null || !tail.text);
+    const errorInfo = useMemo(() => (tail.error ? chatErrorInfo(tail.error, t) : null), [tail.error, t]);
     useAnnounce(showLine ? (line ?? t('msg.thinking')) : null);
     return (
         <Stack gap="sm" paddingX="lg" paddingY="xs" testID="turn-tail">
@@ -59,7 +60,7 @@ export function TurnTail({ tail, line, awaitingUser = false, onTryAgain, onConti
                     </Row>
                 </View>
             ) : null}
-            {tail.error ? <Notice tone="danger" title={t('msg.error')} message={chatErrorText(tail.error, t)} testID="reply-error" /> : null}
+            {errorInfo ? <Notice tone="danger" title={t('msg.error')} message={errorInfo.text} detail={errorInfo.detail} testID="reply-error" /> : null}
             {tail.error && !tail.live && isModelServerDown(tail.error, t) ? <ModelServerDownNotice /> : null}
             {tail.stop ? <StoppedNote stop={tail.stop} /> : null}
             {tail.canContinue || tail.canTryAgain ? (

@@ -4,7 +4,7 @@
 import { ApiError } from '@webui/services/apiErrors';
 import { requestErrorParam, requestErrorText } from '@webui/utils/requestErrors.core';
 import type { Say } from '@webui/i18n/registry';
-import { classifyChatError, failureRecordId, type ChatErrorKind } from '@webui/utils/streamErrors.core';
+import { classifyChatError, failureRecordId, type ChatErrorInfo } from '@webui/utils/streamErrors.core';
 
 import {
     GaiaApiError,
@@ -27,16 +27,12 @@ function webError(error: GaiaError): Error {
 }
 
 /** A failed turn in plain words with a next step: the web UI's `chatError.*` text, and what kind of failure it is. */
-export function chatErrorInfo(error: GaiaError, t: Translate): { kind: ChatErrorKind; text: string } {
+export function chatErrorInfo(error: GaiaError, t: Translate): ChatErrorInfo {
     // These carry their own text: pairing, setup, and a lost view of a turn that may still finish on the PC.
     if (error instanceof GaiaStreamError || error instanceof GaiaUnreachableError || error instanceof GaiaConfigError || error instanceof GaiaAuthError) {
         return { kind: 'stream', text: describeError(error, t) };
     }
     return classifyChatError(webError(error), t);
-}
-
-export function chatErrorText(error: GaiaError, t: Translate): string {
-    return chatErrorInfo(error, t).text;
 }
 
 /** The title of the GitHub report the web UI prefills for an unexpected error. */

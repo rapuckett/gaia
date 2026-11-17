@@ -1,6 +1,9 @@
 // Copyright(C) 2025-2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
+import { isolate } from '../i18n/registry';
+import type { Translate } from '../i18n/translator';
+
 /** The API's error types and error-body parsing, free of fetch and the DOM so any client can share them. */
 
 /**
@@ -92,25 +95,25 @@ function hasUsefulServerDetail(detail: string): boolean {
     return text !== '' && !isBareInternalError(text) && !/^[<{[]/.test(text);
 }
 
-export function getFriendlyError(status: number, detail: string): string {
+export function getFriendlyError(status: number, detail: string, t: Translate): string {
     switch (status) {
-        case 403: return detail || 'Access denied.';
+        case 403: return detail || t('apiError.accessDenied');
         // The backend's detail first: a canned "moved or deleted" hid a malformed path (#728).
-        case 404: return detail || 'The requested item was not found.';
-        case 413: return detail || 'File too large to process.';
-        case 500: return hasUsefulServerDetail(detail) ? detail : 'Server error. Please try again.';
+        case 404: return detail || t('apiError.notFound');
+        case 413: return detail || t('apiError.tooLarge');
+        case 500: return hasUsefulServerDetail(detail) ? detail : t('apiError.serverError');
         // GAIA's own 502 says what the model server did; a proxy's carries no sentence.
         case 502: return hasUsefulServerDetail(detail) && !/^(502\s+)?bad gateway\.?$/i.test(detail.trim())
-            ? detail : 'Service unavailable. Is the backend running?';
-        case 503: return detail || 'Service unavailable.';
-        default: return detail || `Request failed (HTTP ${status})`;
+            ? detail : t('apiError.backendDown');
+        case 503: return detail || t('apiError.unavailable');
+        default: return detail || t('apiError.requestFailed', { http: isolate(`HTTP ${status}`, 'ltr') });
     }
 }
 
 /** The stream went silent past STREAM_IDLE_MS; the run may still be going server-side. */
 export class StreamStalledError extends Error {
     constructor(readonly idleMs: number) {
-        super(`The connection to GAIA went silent for ${Math.round(idleMs / 1000)} s.`);
+        super(`The connection to GAIA went silent for ${Math.round(idleMs / 1000)} s.`); // english: log and bug-report text; people read describeStreamError's translation
         this.name = 'StreamStalledError';
     }
 }
@@ -119,7 +122,7 @@ export class StreamStalledError extends Error {
 export class StreamDroppedError extends Error {
     /** `unreachable`: the request never reached GAIA, so nothing there is still answering. */
     constructor(readonly cause: unknown, readonly unreachable = false) {
-        super(`The connection to GAIA was cut: ${cause instanceof Error ? cause.message : String(cause)}`);
+        super(`The connection to GAIA was cut: ${cause instanceof Error ? cause.message : String(cause)}`); // english: log and bug-report text; people read describeStreamError's translation
         this.name = 'StreamDroppedError';
     }
 }
@@ -127,7 +130,7 @@ export class StreamDroppedError extends Error {
 /** The backend never started answering the request. */
 export class StreamTimeoutError extends Error {
     constructor(readonly endpoint: 'send' | 'attach', readonly timeoutMs: number) {
-        super(`GAIA did not start answering within ${Math.round(timeoutMs / 1000)} s.`);
+        super(`GAIA did not start answering within ${Math.round(timeoutMs / 1000)} s.`); // english: log and bug-report text; people read describeStreamError's translation
         this.name = 'StreamTimeoutError';
     }
 }

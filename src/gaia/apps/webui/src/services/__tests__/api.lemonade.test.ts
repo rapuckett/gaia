@@ -3,6 +3,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError, detectLemonade, getLemonadeTarget, listProviderModels, redactSecrets, setLemonadeTarget } from '../api';
+import { tEn } from '../../i18n/translator';
 
 function jsonResponse(body: unknown, status = 200): Response {
     return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
@@ -71,7 +72,7 @@ describe('Lemonade target API', () => {
 
     it.each(['', 'Bad Gateway', '502 Bad Gateway', 'bad gateway.', '  ', 'Internal Server Error', '<html><body>502</body></html>', '{"detail": ""}'])('still calls a 502 with no sentence (%j) unavailable', async (text) => {
         fetchMock().mockResolvedValue(new Response(text, { status: 502 }));
-        await expect(listProviderModels('local')).rejects.toThrow('Service unavailable. Is the backend running?');
+        await expect(listProviderModels('local')).rejects.toThrow(tEn('apiError.backendDown'));
     });
 
     it('keeps the named fields when it rewords a 502', async () => {

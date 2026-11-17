@@ -4,6 +4,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { waitFor } from '@testing-library/react';
 import { ApiError, sendMessageStream, type StreamCallbacks } from '../api';
+import { tEn } from '../../i18n/translator';
 
 function fail(status: number, body: string) {
     (fetch as ReturnType<typeof vi.fn>).mockResolvedValue(
@@ -33,7 +34,7 @@ describe('a refused send', () => {
     it('turns a bare 500 into a plain sentence', async () => {
         fail(500, JSON.stringify({ detail: 'Internal Server Error' }));
         const err = await sendAndCatch();
-        expect(err.message).toBe('Server error. Please try again.');
+        expect(err.message).toBe(tEn('apiError.serverError'));
         expect(err.message).not.toContain('{');
     });
 

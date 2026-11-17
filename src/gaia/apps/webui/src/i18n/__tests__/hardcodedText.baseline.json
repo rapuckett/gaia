@@ -14,7 +14,6 @@
   "hooks/useChatExport.ts": 2,
   "hooks/useWindowTitle.ts": 1,
   "services/api.ts": 3,
-  "services/apiErrors.ts": 10,
   "services/queueDispatch.ts": 2,
   "stores/readAloudStore.ts": 1,
   "stores/setupDownloadsStore.ts": 1,
@@ -26,6 +25,5 @@
   "utils/newTask.ts": 2,
   "utils/sessionCleanup.ts": 2,
   "utils/statusEvents.ts": 2,
-  "utils/streamErrors.core.ts": 7,
   "utils/trayActivity.ts": 1
 }
