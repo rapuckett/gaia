@@ -6,6 +6,7 @@
 import { isMessageKey, ref, type MessageKey, type MessageRef } from '../i18n/registry';
 import { tEn, type Translate } from '../i18n/translator';
 import type { AgentStep } from '../types';
+import { spokenDuration, type Mark, type Variant } from './spokenDuration.core';
 
 export const SKILL_USE_TOOLS = new Set(['load_skill', 'use_skill']);
 
@@ -423,15 +424,23 @@ export function thoughtDurations(steps: AgentStep[]): Map<number, number> {
 /** Live reasoning shorter than this needs no clock. */
 const THINKING_ELAPSED_MIN_MS = 3000;
 
+/** How a surface words a duration: the phone's unit keys and its direction marks. */
+export interface DurationWords {
+    mark: Mark;
+    variant: Variant;
+}
+
 /** "Thinking · 4s" while it runs, "Thought for 8s" once it is over and its length is known. */
-export function thoughtLabel(live: boolean, durationMs?: number, t: Translate = tEn): string {
+export function thoughtLabel(live: boolean, durationMs?: number, t: Translate = tEn, words?: DurationWords): string {
+    const time = (key: MessageKey, ms: number): string =>
+        words
+            ? t.compose((say) => say(key, { time: spokenDuration(ms, say, words.mark, words.variant) }))
+            : t(key, { time: formatElapsed(ms / 1000) });
     if (live) {
-        return durationMs != null && durationMs >= THINKING_ELAPSED_MIN_MS
-            ? t('activity.thinkingFor', { time: formatElapsed(durationMs / 1000) })
-            : t('activity.thinking');
+        return durationMs != null && durationMs >= THINKING_ELAPSED_MIN_MS ? time('activity.thinkingFor', durationMs) : t('activity.thinking');
     }
     if (durationMs == null || durationMs < 1000) return t('activity.thought');
-    return t('activity.thoughtFor', { time: formatElapsed(durationMs / 1000) });
+    return time('activity.thoughtFor', durationMs);
 }
 
 export function formatToolLatency(ms: number): string {
