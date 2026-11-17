@@ -14,10 +14,8 @@ import { useTheme } from '../theme/ThemeProvider';
 
 export const PRESSABLE_MIN_SIZE = 48;
 
-/** Android shows press feedback as the Material ripple, bounded to the Pressable (a rounded parent clips it); iOS and web a highlight. */
+/** Android shows press feedback as the Material ripple (the `ripple` color token); iOS and web a highlight. */
 export const RIPPLE = Platform.OS === 'android';
-// The ripple draws over the label, so it is a light state layer of the text color, as the tint tokens are.
-const RIPPLE_ALPHA = 0.12;
 
 export interface PressState {
     pressed: boolean;
@@ -47,12 +45,13 @@ export interface PressableProps {
     minSize?: number;
     /** Sizes to its content (a short label in a row of text); a horizontal hit slop keeps the target `minSize` wide. */
     inline?: boolean;
+    /** Android: an icon-only control's borderless ripple, a circle of half the target. */
+    round?: boolean;
     /**
-     * A touchable ring around a shape smaller than its target: this much space on every side, in points. With `radius`
-     * (the shape's corners) Android's ripple is clipped to the shape; leave `radius` unset for a shape with a shadow.
+     * Android: clip the ripple to a drawn shape smaller than the target, with these corners. `hug` keeps the shape at
+     * its content's width at the start; otherwise it fills the target's width.
      */
-    slop?: number;
-    radius?: number;
+    shape?: { radius: number; hug?: boolean };
     testID?: string;
 }
 
@@ -74,14 +73,19 @@ export function Pressable({
     accessible,
     minSize = PRESSABLE_MIN_SIZE,
     inline,
-    radius,
-    slop: ring = 0,
+    round,
+    shape,
     testID,
 }: PressableProps) {
     const { colors } = useTheme();
     const [width, setWidth] = useState(0);
+    const [box, setBox] = useState<{ width: number; height: number } | null>(null);
+    const clip = RIPPLE && shape != null;
     const slop = inline ? Math.max(0, Math.ceil((minSize - width) / 2)) : 0;
-    const hitSlop = slop || ring ? { left: slop + ring, right: slop + ring, top: ring, bottom: ring } : undefined;
+    // A clipped shape keeps the full target through hit slop, since its own bounds are smaller.
+    const ringX = clip && box ? Math.max(0, Math.ceil((minSize - box.width) / 2)) : 0;
+    const ringY = clip && box ? Math.max(0, Math.ceil((minSize - box.height) / 2)) : 0;
+    const hitSlop = slop || ringX || ringY ? { left: slop + ringX, right: slop + ringX, top: ringY, bottom: ringY } : undefined;
     const pressable = (
         <RNPressable
             onPress={onPress}
@@ -101,11 +105,17 @@ export function Pressable({
             aria-selected={ariaSelected}
             testID={testID}
             hitSlop={hitSlop}
-            android_ripple={RIPPLE ? { color: colors.textPrimary, alpha: RIPPLE_ALPHA, borderless: false, foreground: true } : undefined}
+            android_ripple={
+                RIPPLE
+                    ? round
+                        ? { color: colors.ripple, borderless: true, radius: minSize / 2, foreground: true }
+                        : { color: colors.ripple, borderless: false, foreground: true }
+                    : undefined
+            }
             onLayout={inline ? (e) => setWidth(e.nativeEvent.layout.width) : undefined}
             style={({ pressed }) => ({
-                minWidth: inline ? undefined : minSize,
-                minHeight: minSize,
+                minWidth: inline || clip ? undefined : minSize,
+                minHeight: clip ? undefined : minSize,
                 justifyContent: 'center',
                 opacity: disabled ? 0.45 : pressed && !RIPPLE ? 0.72 : 1,
             })}
@@ -113,13 +123,19 @@ export function Pressable({
             {({ pressed }) => (typeof children === 'function' ? children({ pressed, highlight: pressed && !RIPPLE }) : children)}
         </RNPressable>
     );
-    if (!ring) return pressable;
-    if (!RIPPLE || radius == null) return <View style={{ padding: ring }}>{pressable}</View>;
+    if (!clip) return pressable;
     // A view's own overflow doesn't clip its foreground, where the ripple draws, so the shape is clipped from outside;
-    // the ring is a transparent border because touches outside a clipping view's bounds never reach it.
+    // the clipping view takes the same hit slop, because touches outside its bounds never reach its children.
     return (
-        <View style={{ overflow: 'hidden', borderWidth: ring, borderColor: 'transparent', borderRadius: radius + ring }}>
-            {pressable}
+        <View testID={testID ? `${testID}-target` : undefined} style={{ minHeight: minSize, justifyContent: 'center', alignItems: shape.hug ? 'flex-start' : 'stretch' }}>
+            <View
+                testID={testID ? `${testID}-clip` : undefined}
+                hitSlop={hitSlop}
+                onLayout={(e) => setBox({ width: e.nativeEvent.layout.width, height: e.nativeEvent.layout.height })}
+                style={{ overflow: 'hidden', borderRadius: shape.radius }}
+            >
+                {pressable}
+            </View>
         </View>
     );
 }

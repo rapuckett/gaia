@@ -49,14 +49,13 @@ export function IconButton({
                 accessibilityLabel={label}
                 aria-busy={!!busy}
                 testID={testID}
-                minSize={box}
-                radius={variant === 'raised' ? undefined : radius.md}
-                slop={(PRESSABLE_MIN_SIZE - box) / 2}
+                round
             >
                 <View
                     style={{
                         width: box,
                         height: box,
+                        alignSelf: 'center',
                         borderRadius: radius.md,
                         backgroundColor: v.bg,
                         ...(variant === 'raised' ? { borderWidth: 1, borderColor: colors.border, boxShadow: shadows.sm } : null),

@@ -63,7 +63,7 @@ export function Button({
         <View
             style={[
                 full ? { alignSelf: 'stretch' } : shrink ? { alignSelf: 'flex-start', flexShrink: 1, minWidth: BUTTON_MIN_WIDTH, maxWidth: '100%' } : { alignSelf: 'flex-start', flexShrink: 0 },
-                // The ripple fills the Pressable, which a regular button's shape fills too.
+                // A regular button's shape fills its target, so the ripple is clipped here; a small one clips its own shape.
                 RIPPLE && size !== 'sm' ? { borderRadius: radius.md, overflow: 'hidden' } : null,
             ]}
         >
@@ -71,6 +71,7 @@ export function Button({
                 onPress={busy ? undefined : onPress}
                 disabled={disabled}
                 minSize={size === 'sm' ? 44 : undefined}
+                shape={size === 'sm' ? { radius: radius.sm } : undefined}
                 accessibilityLabel={accessibilityLabel ?? label}
                 aria-busy={!!busy}
                 testID={testID}
