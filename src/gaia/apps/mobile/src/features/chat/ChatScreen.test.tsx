@@ -4,6 +4,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import type { ReactNode } from 'react';
+import { AppState } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { item, type QueuedMessage } from '@webui/utils/messageQueue';
@@ -272,6 +273,90 @@ describe('ChatScreen', () => {
             await waitFor(() => expect(useChatStreamStore.getState().resolved[CHAT]?.c1).toEqual({ state: 'expired' }));
             expect(screen.queryByTestId('perm-card')).toBeNull();
             expect(useChatStreamStore.getState().turns[CHAT]?.pendingPermission).toBeNull();
+        });
+    });
+
+    describe('back from the background', () => {
+        let appState: ((state: string) => void)[] = [];
+        beforeEach(() => {
+            appState = [];
+            jest.spyOn(AppState, 'addEventListener').mockImplementation(((type: string, handler: (state: string) => void) => {
+                if (type === 'change') appState.push(handler);
+                return { remove: () => (appState = appState.filter((h) => h !== handler)) };
+            }) as unknown as typeof AppState.addEventListener);
+        });
+        afterEach(() => jest.restoreAllMocks());
+
+        async function backgroundThenForeground() {
+            await act(async () => [...appState].forEach((h) => h('background')));
+            await act(async () => [...appState].forEach((h) => h('active')));
+        }
+
+        const READING: StreamEvent = { type: 'status', status: 'working', message: 'Reading your request' };
+
+        it('keeps a quiet running turn running, with its status and Stop, until GAIA ends it', async () => {
+            const replay = gate();
+            const lostView = gate();
+            const messages = { [CHAT]: [message(1, 'user', 'Write a guide')] };
+            const base = createFakeClient({
+                sessions: [SESSION],
+                messages,
+                replies: async function* (): AsyncGenerator<StreamEvent> {
+                    yield READING;
+                    await lostView.opened;
+                },
+            });
+            const client = {
+                ...base,
+                // The re-attach answers late, as over a phone's freshly woken connection.
+                attachToRun: async function* (): AsyncGenerator<StreamEvent> {
+                    await replay.opened;
+                    yield READING;
+                    yield { type: 'done', message_id: 2, content: 'Step 1. Dig.' };
+                },
+            } as typeof base;
+            await mount(client);
+
+            await sendText('Write a guide');
+            expect(await screen.findByText(t('live.readingRequest'))).toBeTruthy();
+            await backgroundThenForeground();
+
+            expect(screen.getByText(t('live.readingRequest'))).toBeTruthy();
+            expect(screen.getByTestId('composer-stop')).toBeTruthy();
+            expect(screen.queryByTestId('composer-send')).toBeNull();
+
+            messages[CHAT].push(message(2, 'assistant', 'Step 1. Dig.'));
+            await act(async () => replay.open());
+            expect(await screen.findByText('Step 1. Dig.')).toBeTruthy();
+            await waitFor(() => expect(screen.queryByTestId('composer-stop')).toBeNull());
+            expect(screen.queryByText(t('live.readingRequest'))).toBeNull();
+            expect(client.sent.map((s) => s.message)).toEqual(['Write a guide']);
+            await act(async () => lostView.open());
+        });
+
+        it('shows a turn that ended while away as finished', async () => {
+            const lostView = gate();
+            const messages = { [CHAT]: [message(1, 'user', 'Write a guide')] };
+            // No turn is running when the phone re-attaches, so the attach replays nothing.
+            const client = createFakeClient({
+                sessions: [SESSION],
+                messages,
+                replies: async function* (): AsyncGenerator<StreamEvent> {
+                    yield READING;
+                    await lostView.opened;
+                },
+            });
+            await mount(client);
+
+            await sendText('Write a guide');
+            expect(await screen.findByText(t('live.readingRequest'))).toBeTruthy();
+            messages[CHAT].push(message(2, 'assistant', 'All ten steps.'));
+            await backgroundThenForeground();
+
+            expect(await screen.findByText('All ten steps.')).toBeTruthy();
+            await waitFor(() => expect(screen.queryByTestId('composer-stop')).toBeNull());
+            expect(screen.queryByText(t('live.readingRequest'))).toBeNull();
+            await act(async () => lostView.open());
         });
     });
 });
