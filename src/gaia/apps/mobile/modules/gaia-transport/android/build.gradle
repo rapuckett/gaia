@@ -15,6 +15,10 @@ android {
     versionCode 1
     versionName '0.1.0'
   }
+  testOptions {
+    // android.util.Log is a stub in local unit tests; the transport's log lines become no-ops there.
+    unitTests.returnDefaultValues = true
+  }
 }
 
 dependencies {

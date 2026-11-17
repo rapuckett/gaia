@@ -140,7 +140,7 @@ class GaiaTransportModule : Module() {
     id: String, pcId: String, method: String, url: String, headers: Map<String, String>, body: String?, promise: Promise,
   ) {
     val authorized = authorized(pcId, url, headers, promise) ?: return
-    val pinned = PinnedRequest(authorized.pin)
+    val pinned = PinnedRequest(authorized.pin, label = RequestLabel(id, authorized.route))
     requests.add(id, pinned)
     val outgoing = Outgoing(authorized.url, method, authorized.headers, body?.toByteArray(Charsets.UTF_8))
     send(id, pinned, outgoing, null, promise, null)
@@ -152,7 +152,7 @@ class GaiaTransportModule : Module() {
   ) {
     val authorized = authorized(pcId, url, headers, promise) ?: return
     // Open before the body is written, so a cancel while a large file is copied still lands.
-    val pinned = PinnedRequest(authorized.pin)
+    val pinned = PinnedRequest(authorized.pin, label = RequestLabel(id, authorized.route))
     requests.add(id, pinned)
     val body = try {
       UploadBody.make(segments, UploadRoots(context.cacheDir, context.filesDir, context.noBackupFilesDir))
@@ -170,7 +170,8 @@ class GaiaTransportModule : Module() {
     }
   }
 
-  private class Authorized(val url: HttpUrl, val headers: Headers, val pin: ByteArray)
+  /** `route` is the kind of the paired PC's address the request goes to: home, tailnet or relay. */
+  private class Authorized(val url: HttpUrl, val headers: Headers, val pin: ByteArray, val route: String)
 
   /** The request to the paired PC with its device token, or null once the promise is rejected. */
   private fun authorized(pcId: String, url: String, headers: Map<String, String>, promise: Promise): Authorized? {
@@ -185,7 +186,8 @@ class GaiaTransportModule : Module() {
       return null
     }
     val target = url.toHttpUrlOrNull()
-    if (target == null || secret.origins.none { sameOrigin(target, it.origin) }) {
+    val route = target?.let { secret.origins.firstOrNull { origin -> sameOrigin(it, origin.origin) } }
+    if (target == null || route == null) {
       promise.reject(transportError("origin_mismatch", "That address isn't the paired PC's, so the request wasn't sent."))
       return null
     }
@@ -206,7 +208,7 @@ class GaiaTransportModule : Module() {
       promise.reject(e)
       return null
     }
-    return Authorized(target, sent, pin)
+    return Authorized(target, sent, pin, route.kind)
   }
 
   private fun send(
@@ -317,7 +319,7 @@ private class Pairing(
     homeOrigins = targets.map { it.first }
     synchronized(lock) { pending = targets.size }
     for ((origin, url) in targets) {
-      val probe = PinnedRequest(pin)
+      val probe = PinnedRequest(pin, label = RequestLabel("pair-probe", "home"))
       synchronized(lock) { probes.add(probe) }
       probe.start(Outgoing(url), PROBE_SECONDS) { result -> probed(origin, pin, result) }
     }
@@ -377,7 +379,7 @@ private class Pairing(
       promise.reject(e)
       return
     }
-    val pinned = PinnedRequest(pin)
+    val pinned = PinnedRequest(pin, label = RequestLabel("pair-redeem", "home"))
     pinned.start(Outgoing(url, "POST", sent, body.toByteArray(Charsets.UTF_8)), REDEEM_SECONDS) { result ->
       when (result) {
         is Outcome.Failed -> promise.reject(result.error)
