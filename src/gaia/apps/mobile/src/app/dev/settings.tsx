@@ -10,6 +10,7 @@ import type { ScrollView } from 'react-native';
 import { GaiaClientProvider } from '@/data';
 import { devGalleryEnabled } from '@/features/dev/devGallery';
 import { KeyedScene } from '@/features/dev/KeyedScene';
+import { SeedSkillsAdd } from '@/features/skills';
 import { SeedConfirmFullAccess } from '@/features/settings/panes/Permissions';
 import { SeedAutomationRemove } from '@/features/settings/panes/Automations';
 import { SeedJustPaired } from '@/features/settings/panes/Messaging';
@@ -52,6 +53,7 @@ function SettingsView({ found }: { found: SettingsScene }) {
                                                 <SeedCustomReport.Provider value={found.customReport ?? null}>
                                                     <SeedAutomationRemove.Provider value={found.confirmRemove ?? null}>
                                                         <SeedConfirmFullAccess.Provider value={!!found.confirmFullAccess}>
+                                                        <SeedSkillsAdd.Provider value={!!found.skillsAdd}>
                                                             {found.crash ? (
                                                                 <SectionErrorBoundary area={`settings.${found.section}`} onReload={() => void queryClient.resetQueries()}>
                                                                     <Thrower />
@@ -59,6 +61,7 @@ function SettingsView({ found }: { found: SettingsScene }) {
                                                             ) : (
                                                                 <Pane provider={found.provider ?? 'local'} />
                                                             )}
+                                                        </SeedSkillsAdd.Provider>
                                                         </SeedConfirmFullAccess.Provider>
                                                     </SeedAutomationRemove.Provider>
                                                 </SeedCustomReport.Provider>
