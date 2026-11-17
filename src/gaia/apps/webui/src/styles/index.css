@@ -355,6 +355,11 @@ a:hover { text-decoration: underline; }
     }
 }
 
+/* On a tinted notice the lightened gloss falls under 4.5:1; it keeps the notice's own color and differs by size. */
+:is(.app-notice, .connection-banner, .connector-retry-banner, .server-down-notice, .error-banner, .msg-route-notice, .settings-notice, .gpu-notice) .i18n-gloss.i18n-gloss {
+    color: inherit;
+}
+
 .main-content { display: flex; flex-direction: column; flex: 1; min-width: 0; overflow: hidden; position: relative; }
 
 /* ── View transitions ───────────────────────────────────────────── */
