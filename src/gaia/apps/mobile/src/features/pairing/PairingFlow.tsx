@@ -7,7 +7,7 @@ import { Platform } from 'react-native';
 import { GaiaPinMismatchError } from '@/api/errors';
 import { describeHttpFailure, useT } from '@/i18n/useT';
 import { useConnectionStore } from '@/state/connection';
-import { Button, Card, Icon, Notice, Row, Screen, Spinner, Stack, Text, TextField, UpButton, useBackStep } from '@/ui';
+import { Button, Card, Icon, Notice, NumberMarker, Row, Screen, Spinner, Stack, Text, TextField, UpButton, useBackStep } from '@/ui';
 import { CircleAlert, Clock, Monitor, Smartphone } from '@/ui/icons';
 
 import { parseInvite, type PairingInvite } from './invite';
@@ -275,9 +275,9 @@ export function PairingFlow({ initialStep = 'welcome', onPaired, onScan, onExit 
                     <Stack gap="md">
                         {steps.map((step, i) => (
                             <Row key={step} gap="md" align="start">
-                                <Text role="body" weight="semibold" tone="accent">
+                                <NumberMarker role="body" weight="semibold" tone="accent">
                                     {i + 1}
-                                </Text>
+                                </NumberMarker>
                                 <Stack flex={1}>
                                     <Text role="body">{t(`mobileApp.pairing.how.${step}`)}</Text>
                                 </Stack>
@@ -350,7 +350,7 @@ function Page({
                 ) : undefined
             }
         >
-            <Stack flex={1} gap="lg" padding="xl" justify="center" maxWidth={560} self="center">
+            <Stack flex={1} gap="lg" padding="xl" justify="center" width="100%" maxWidth={560} self="center" testID="pairing-page">
                 {icon ? (
                     <Stack align="center">
                         <Icon icon={icon} size="lg" tone="accent" />

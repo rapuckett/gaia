@@ -3,7 +3,7 @@
 
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import type { ReactNode } from 'react';
-import { BackHandler, Platform } from 'react-native';
+import { BackHandler, Platform, StyleSheet } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { GaiaPinMismatchError } from '@/api/errors';
@@ -81,6 +81,13 @@ describeNative('PairingFlow', () => {
         expect(screen.queryByText(t('mobileApp.pairing.manual.back'))).toBeNull();
         await fireEvent.press(screen.getByLabelText(label));
         expect(onExit).toHaveBeenCalledTimes(1);
+    });
+
+    it('stretches the how-to-pair page to the gutter in English, not to its text', async () => {
+        setPairingService(createFakePairingService());
+        await render(<PairingFlow initialStep="how" />, { wrapper: wrap });
+        await screen.findByText(t('mobileApp.pairing.how.step4'));
+        expect(StyleSheet.flatten(screen.getByTestId('pairing-page').props.style)).toMatchObject({ width: '100%', maxWidth: 560, alignSelf: 'center' });
     });
 
     it('has no up control on first run', async () => {

@@ -28,6 +28,7 @@ export type { ListProps, SectionListComponentProps } from './lists/List';
 export { ListRow, type ListRowProps } from './lists/ListRow';
 export { SectionHeader } from './lists/SectionHeader';
 export { StatusDot, type StatusDotProps, type StatusTone } from './lists/StatusDot';
+export { NumberMarker, type NumberMarkerProps } from './lists/NumberMarker';
 export { Badge, type BadgeProps, type BadgeTone } from './lists/Badge';
 export { Skeleton, ListSkeleton, type SkeletonProps } from './lists/Skeleton';
 export { EmptyState, ErrorState, LoadingState, type StateAction } from './lists/states';
