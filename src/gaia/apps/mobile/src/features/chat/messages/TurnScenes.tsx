@@ -61,7 +61,7 @@ const TURN = (restored: boolean, untracked: TurnChanges['untracked'] = []): Turn
         { path: '/Users/avery/Documents/Quarterly reports/forecast.csv', change: 'created', tool: 'write_file' },
     ],
     untracked,
-    incomplete: false,
+    incomplete: untracked.length > 0,
 });
 
 const UNTRACKED: TurnChanges['untracked'] = [

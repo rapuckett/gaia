@@ -67,7 +67,9 @@ export function ChatGallery({ state }: { state: ChatGalleryState }) {
                 release();
                 return { status: 'ok', cancelled: true };
             };
+            // Stop reaches the PC only once the run has seen an event, so one arrives first.
             base.attachToRun = async function* () {
+                await new Promise((resolve) => setTimeout(resolve, 50));
                 yield STATUS;
                 await gate;
                 yield { type: 'done' } as StreamEvent;
@@ -80,7 +82,7 @@ export function ChatGallery({ state }: { state: ChatGalleryState }) {
     });
     useEffect(() => {
         if (state === 'approval') writeTurn('dev', { ...IDLE_TURN, pendingConfirmation: CONFIRMATION as typeof IDLE_TURN.pendingConfirmation });
-        else if (state !== 'queue-stop') {
+        else {
             writeTurn('dev', {
                 ...IDLE_TURN,
                 status: 'streaming',

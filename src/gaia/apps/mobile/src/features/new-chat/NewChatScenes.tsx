@@ -2,19 +2,20 @@
 // SPDX-License-Identifier: MIT
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 
 import type { StartScreen, SystemStatus } from '@webui/types';
 import { GaiaApiError } from '@/api/errors';
 import { createFakeClient } from '@/api/fake';
 import { GaiaClientProvider } from '@/data';
+import { useNextChatDocs } from '@/features/documents';
 import { UIProvider } from '@/ui';
 
 import { NewChatScreen } from './NewChatScreen';
 
 /**
  * Developer scenes (`/dev/composer?state=`) for the new-chat screen.
- * `new-chat-setup-failed` (NC-03), `new-chat-library` (NC-08: the Documents for this chat panel),
+ * `new-chat-setup-failed` (NC-03), `new-chat-library` (NC-08: two documents attached, the rest of the library offered),
  * `new-chat-warmup` (NC-09), `new-chat-send-error` (NC-10: the opening message fails to start a chat),
  * `new-chat-assistant` (NC-13: tap Details for the reason; Try again asks again).
  */
@@ -56,6 +57,11 @@ export function NewChatScenes({ state }: { state: NewChatScene }) {
     const client = useMemo(() => clientFor(state), [state]);
     const queryClient = useMemo(() => new QueryClient({ defaultOptions: { queries: { retry: false } } }), []);
     const noop = () => undefined;
+    useEffect(() => {
+        if (state !== 'new-chat-library') return undefined;
+        useNextChatDocs.getState().add(['d1', 'd2']);
+        return () => useNextChatDocs.getState().clear();
+    }, [state]);
     return (
         <QueryClientProvider client={queryClient}>
             <GaiaClientProvider client={client}>

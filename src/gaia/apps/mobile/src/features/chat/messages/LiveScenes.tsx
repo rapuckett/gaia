@@ -24,7 +24,7 @@ import { TurnTail } from '../TurnTail';
  * `stopped` (CV-33): stopped, unconfirmed and stop-failed notes; the first has Continue and Try again.
  * `reply-errors` (CV-40): one failed turn per error kind (stream, context, model server, connection, timeout, unknown).
  * `activity-terminal` (CV-43): `#tap=step-row-0` opens the shell step with its exit code and Copy output.
- * `activity-plan` (CV-44): a live turn with the plan checklist. `activity-thinking` (CV-45): a live thought, then a finished one folded into its call (`#tap=step-row-0`).
+ * `activity-plan` (CV-44): a live turn with the plan checklist. `activity-thinking` (CV-45): a live thought, then a finished one folded into its call.
  * `activity-filter` (CV-48): `#tap=steps-summary` opens the seven finished calls and shows the filter.
  * `activity-vision` (CV-49): the vision offer under a tool step. `many-scrolled-up` (CV-09): the many-messages list with the jump button showing.
  */

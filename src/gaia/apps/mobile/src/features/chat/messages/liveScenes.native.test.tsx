@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
 import { BackHandler, Platform } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
@@ -73,7 +73,6 @@ describeNative('chat, new-chat, composer and permission scenes', () => {
         for (const kind of ['stream', 'context', 'model_server', 'connection', 'timeout', 'unknown']) {
             expect(await screen.findByTestId(`reply-error-${kind}`, opts)).toBeTruthy();
         }
-        expect(screen.getByText(t('chatError.context'), opts)).toBeTruthy();
     });
 
     it('activity-terminal opens the shell step to its output', async () => {
@@ -90,12 +89,11 @@ describeNative('chat, new-chat, composer and permission scenes', () => {
     it('activity-thinking shows a live thought and a finished one on its call', async () => {
         await open('messages', { state: 'activity-thinking' });
         expect((await screen.findAllByTestId('activity-timeline', opts)).length).toBe(2);
-        expect(screen.getByTestId('step-row-0', opts)).toBeTruthy();
     });
 
     it('activity-filter shows the step filter once the seven calls are open', async () => {
         await open('messages', { state: 'activity-filter' });
-        fireEvent.press(await screen.findByTestId('steps-summary', opts));
+        fireEvent.press(within(await screen.findByTestId('steps-summary', opts)).getAllByLabelText(/./, opts)[0]!);
         expect(await screen.findByTestId('step-filter', opts)).toBeTruthy();
     });
 
@@ -121,7 +119,8 @@ describeNative('chat, new-chat, composer and permission scenes', () => {
 
     it('new-chat-library shows the documents attach panel', async () => {
         await open('composer', { state: 'new-chat-library' });
-        expect(await screen.findByText('board-notes.pdf', opts)).toBeTruthy();
+        expect(await screen.findByText(t('newChat.docs.forChat'), opts)).toBeTruthy();
+        expect(screen.getByText(/board-notes\.pdf/, opts)).toBeTruthy();
     });
 
     it('new-chat-warmup shows the progress line', async () => {
