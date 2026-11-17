@@ -40,7 +40,8 @@ export function HScroll({ children, dir, testID, hint = false }: HScrollProps) {
                 scrollEventThrottle={64}
                 testID={testID}
             >
-                <ForcedDirection.Provider value={dir ?? null}>{children}</ForcedDirection.Provider>
+                {/* Only a pinned-LTR block is verified to keep left and right literal on native; RTL keeps the swap. */}
+                <ForcedDirection.Provider value={dir === 'ltr' ? 'ltr' : null}>{children}</ForcedDirection.Provider>
             </ScrollView>
             {more ? (
                 <View
