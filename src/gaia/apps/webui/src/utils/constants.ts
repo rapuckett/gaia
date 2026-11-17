@@ -30,18 +30,18 @@ export const APP_NAME = 'GAIA';
 export const GB_UNIT = 'GB';
 
 /** The title a chat is created with until it is named; `isPlaceholderTitle` and the draft cleanup match it. */
-export const NEW_CHAT_TITLE = 'New chat';
+export const NEW_CHAT_TITLE = 'New chat'; // english: matched against the backend's chat title
 
 /** How the backend's periodic "still working" status tick starts (`gaia/ui/run_manager.py`). */
-export const PROGRESS_TICK_PREFIX = 'Model is processing';
+export const PROGRESS_TICK_PREFIX = 'Model is processing'; // english: matched against the backend's status text
 
 /** The notices the server stores in a turn cut off before its answer. Must match `gaia/ui/restart_recovery.py` and `gaia/ui/scheduler.py`. */
 export const CUT_OFF_NOTICE_TEXT = {
-    interrupted: 'This answer was interrupted when GAIA closed. Send again to retry.',
-    cancelled: 'This answer was interrupted before it finished. Send again to retry.',
-    noReply: 'This answer ended before GAIA could save a reply. Send again to retry.',
-    scheduleDeleted: 'This run was stopped because its schedule was deleted.',
-    schedulePaused: 'This run was stopped because its schedule was paused.',
+    interrupted: 'This answer was interrupted when GAIA closed. Send again to retry.', // english: matched against the backend's stored notice
+    cancelled: 'This answer was interrupted before it finished. Send again to retry.', // english: matched against the backend's stored notice
+    noReply: 'This answer ended before GAIA could save a reply. Send again to retry.', // english: matched against the backend's stored notice
+    scheduleDeleted: 'This run was stopped because its schedule was deleted.', // english: matched against the backend's stored notice
+    schedulePaused: 'This run was stopped because its schedule was paused.', // english: matched against the backend's stored notice
 } as const;
 
 /** The live line's phase while a dead stream is being re-attached; the line's own words are the user's language. */

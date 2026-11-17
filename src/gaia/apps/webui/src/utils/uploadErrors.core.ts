@@ -22,52 +22,52 @@ export interface FileTypeCategory {
 
 const UNSUPPORTED_FILE_CATEGORIES: FileTypeCategory[] = [
     {
-        label: 'Image',
+        label: 'Image', // english: category id, never shown
         titleKey: 'docs.unsupported.image',
         detailKey: 'docs.unsupported.imageDetail',
         extensions: new Set(['.ico', '.heic', '.heif']),
         message: tEn('docs.unsupported.imageDetail'),
-        featureTitle: 'Support HEIC and ICO image indexing',
+        featureTitle: 'Support HEIC and ICO image indexing', // english: GitHub issue title, filed in English
     },
     {
-        label: 'Video',
+        label: 'Video', // english: category id, never shown
         titleKey: 'docs.unsupported.video',
         detailKey: 'docs.unsupported.videoDetail',
         extensions: VIDEO_EXTENSIONS,
         message: tEn('docs.unsupported.videoDetail'),
-        featureTitle: 'Support video files in the document library',
+        featureTitle: 'Support video files in the document library', // english: GitHub issue title, filed in English
     },
     {
-        label: 'Audio',
+        label: 'Audio', // english: category id, never shown
         titleKey: 'docs.unsupported.audio',
         detailKey: 'docs.unsupported.audioDetail',
         extensions: AUDIO_EXTENSIONS,
         message: tEn('docs.unsupported.audioDetail'),
-        featureTitle: 'Support audio files in the document library',
+        featureTitle: 'Support audio files in the document library', // english: GitHub issue title, filed in English
     },
     {
-        label: 'Archive',
+        label: 'Archive', // english: category id, never shown
         titleKey: 'docs.unsupported.archive',
         detailKey: 'docs.unsupported.archiveDetail',
         extensions: new Set(['.zip', '.rar', '.7z', '.tar', '.gz', '.bz2', '.xz', '.tgz']),
         message: tEn('docs.unsupported.archiveDetail'),
-        featureTitle: 'Support automatic archive extraction for indexing',
+        featureTitle: 'Support automatic archive extraction for indexing', // english: GitHub issue title, filed in English
     },
     {
-        label: 'Executable',
+        label: 'Executable', // english: category id, never shown
         titleKey: 'docs.unsupported.executable',
         detailKey: 'docs.unsupported.executableDetail',
         extensions: new Set(['.exe', '.msi', '.dll', '.so', '.app', '.dmg', '.bin', '.com']),
         message: tEn('docs.unsupported.executableDetail'),
-        featureTitle: 'Support binary file analysis',
+        featureTitle: 'Support binary file analysis', // english: GitHub issue title, filed in English
     },
     {
-        label: 'Database',
+        label: 'Database', // english: category id, never shown
         titleKey: 'docs.unsupported.database',
         detailKey: 'docs.unsupported.databaseDetail',
         extensions: new Set(['.sqlite', '.db', '.mdb', '.accdb', '.dbf']),
         message: tEn('docs.unsupported.databaseDetail'),
-        featureTitle: 'Support database file indexing',
+        featureTitle: 'Support database file indexing', // english: GitHub issue title, filed in English
     },
     {
         label: 'Microsoft Office',
@@ -75,7 +75,7 @@ const UNSUPPORTED_FILE_CATEGORIES: FileTypeCategory[] = [
         detailKey: 'docs.unsupported.officeDetail',
         extensions: new Set(['.doc', '.ppt', '.xls']),
         message: tEn('docs.unsupported.officeDetail'),
-        featureTitle: 'Support legacy Microsoft Office (doc, ppt, xls) indexing',
+        featureTitle: 'Support legacy Microsoft Office (doc, ppt, xls) indexing', // english: GitHub issue title, filed in English
     },
 ];
 
@@ -137,7 +137,7 @@ export function fileExtension(filename: string): string {
 export function unsupportedTypeMessage(filename: string): string | null {
     const ext = fileExtension(filename);
     if (!ext || isExtensionSupported(ext)) return null;
-    return getUnsupportedCategory(ext)?.message ?? `The file type "${ext}" is not supported for indexing.`;
+    return getUnsupportedCategory(ext)?.message ?? `The file type "${ext}" is not supported for indexing.`; // english: matched against the backend's error text
 }
 
 export interface UploadErrorInput {
@@ -208,7 +208,7 @@ export function describeUploadError(t: Translate, { filename, error, status, kin
     if (isFileTypeError && !ext) {
         return {
             title: t('docs.noExtension', { name: filename }),
-            detail: stripPrefix(error, 'File type not allowed:'),
+            detail: stripPrefix(error, 'File type not allowed:'), // english: matched against the backend's error text
             icon: 'warning',
             report: null,
         };
@@ -218,7 +218,7 @@ export function describeUploadError(t: Translate, { filename, error, status, kin
             title: t('docs.fileTypeUnsupported', { ext }),
             detail: t('docs.fileTypeUnsupportedDetail'),
             icon: 'warning',
-            report: { kind: 'feature', title: `Support ${ext} file indexing` },
+            report: { kind: 'feature', title: `Support ${ext} file indexing` }, // english: GitHub issue title, filed in English
         };
     }
     if (isConnectionError) {
@@ -226,13 +226,13 @@ export function describeUploadError(t: Translate, { filename, error, status, kin
             title: t('docs.connectionError'),
             detail: t('docs.connectionErrorDetail'),
             icon: 'alert',
-            report: { kind: 'bug', title: `Upload connection error for ${filename}` },
+            report: { kind: 'bug', title: `Upload connection error for ${filename}` }, // english: GitHub issue title, filed in English
         };
     }
     return {
         title: t('docs.indexFailed', { name: filename }),
         detail: error || t('docs.indexFailedDetail'),
         icon: 'bug',
-        report: { kind: 'bug', title: `Indexing error: ${error.slice(0, 80)}` },
+        report: { kind: 'bug', title: `Indexing error: ${error.slice(0, 80)}` }, // english: GitHub issue title, filed in English
     };
 }

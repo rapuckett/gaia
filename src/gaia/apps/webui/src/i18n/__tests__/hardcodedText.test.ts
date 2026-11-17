@@ -71,6 +71,23 @@ describe('English written outside the catalogs', () => {
         expect(found(code, 'x.ts')).toEqual([]);
     });
 
+    it('skips values passed to keepTogether and isolate', () => {
+        const code = `const a = { newApp: keepTogether('New Application') }; const b = isolate('Some Value Here', 'ltr');`;
+        expect(found(code, 'x.ts')).toEqual([]);
+    });
+
+    it('excludes literals on a line marked // english: with a reason', () => {
+        const code = `const a = { title: 'Support HEIC files' }; // english: GitHub issue title
+            // english: matched against the backend's text
+            const b = { label: 'Image', c: 'Support video files' };
+            const c = { title: 'Still counted' };`;
+        expect(found(code, 'x.ts')).toEqual(['title="Still counted"']);
+    });
+
+    it('fails on // english: with no reason', () => {
+        expect(() => scanSource(`const a = { title: 'Support HEIC files' }; // english:   `, 'x.ts')).toThrow(/needs a reason/);
+    });
+
     it('does not grow in any file', () => {
         const skipped: Skipped = {};
         const hits = scanAll(skipped);

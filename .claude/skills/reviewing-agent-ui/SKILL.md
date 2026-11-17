@@ -36,9 +36,10 @@ setters and toasts, copy properties such as `label:` and `message:`, switch-case
 returns, and capitalized sentences, including both arms of a ternary and template
 strings. It reports `file:line`; add a key in `en.ts` and `ar.ts` and use `useT`. When
 you translate strings, lower the baseline (`UPDATE_I18N_BASELINE=1 npx vitest run
-hardcodedText`); raise it only for text that stays English in every language, and say
-why in the PR. Product names are skipped. It can't see text built in variables
-or sent by the backend, so those still need the screenshot.
+hardcodedText`); never raise it. Text that stays English by design takes a
+`// english: <reason>` comment on its line (or alone on the line above); an empty reason
+fails the test, and `keepTogether()` / `isolate()` values are skipped.
+Product names are skipped. It can't see text built in variables or sent by the backend, so those still need the screenshot.
 
 **Every option on a screen must be one GAIA has proven.** A backend, device, model or
 setting the user can pick is a promise; list only what passed evals on that hardware
