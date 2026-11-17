@@ -7,7 +7,7 @@ import type { SetupPlan, SetupRunStatus } from '@/api/client.types';
 import { useSetupPlan, useSetupStatus } from '@/data';
 import { DirectionNotice } from '@/features/language/DirectionNotice';
 import { useT } from '@/i18n/useT';
-import { Button, IconButton, Notice, Row, Screen, Stack, Text } from '@/ui';
+import { Button, IconButton, Notice, Row, Screen, Stack, Text, useBackStep } from '@/ui';
 import { ChevronLeft, ChevronRight } from '@/ui/icons';
 
 import {
@@ -109,6 +109,19 @@ export function SetupScreen({ onReady, onClose, renderStep, initialViewing }: Se
         setViewing(null);
         setPhase('download');
     };
+
+    // Android's back goes to the step before, as the on-screen back control does; on the first step it leaves setup reopened from Settings.
+    useBackStep(() => {
+        if (prev) {
+            goTo(prev);
+            return true;
+        }
+        if (onClose && !running) {
+            onClose();
+            return true;
+        }
+        return false;
+    });
 
     const locked = viewing != null && running && (shown === 'check' || shown === 'plan');
     const at = SETUP_STAGES.indexOf(shown);
