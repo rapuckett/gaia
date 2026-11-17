@@ -49,7 +49,7 @@ export function GitSheet({
     try {
       onDone(await onRun({ title, body }));
     } catch (err) {
-      setError(failureNoticeProps(err, t, "mobileApp.chg.gitFailedShort"));
+      setError(failureNoticeProps(err, t, { withReason: 'mobileApp.chg.gitFailed', noReason: 'mobileApp.chg.gitFailedShort' }));
       setRunning(false);
     }
   };

@@ -12,14 +12,11 @@ interface KindMessages {
     count: PluralKey;
     /** "Command" / "Commands", for a title that has no entry label. */
     name: PluralKey;
-    /** Prefix for a single entry's label. */
-    prefix: MessageKey;
 }
 
 const kind = (id: string) => ({
     count: `untracked.${id}` as PluralKey,
     name: `untracked.${id}.name` as PluralKey,
-    prefix: `untracked.${id}.prefix` as MessageKey,
 });
 
 const KINDS: Record<string, KindMessages> = {
@@ -48,7 +45,7 @@ export interface UntrackedEntry {
 
 export interface UntrackedGroup {
     kind: string;
-    /** "Python snippets ×7", or "Python: counts errors by hour" for one entry. */
+    /** "Python snippets ×7" or "Command"; never the entries' own text. */
     title: string;
     count: number;
     /** Distinct entries, identical ones counted once. */
@@ -88,10 +85,7 @@ export function groupUntracked(list: UntrackedWork[], t: Translate): UntrackedGr
             const name = (n: number) => (known ? say(pluralKey(known.name, n)) : isolate(kind, 'ltr'));
             if (distinct.length !== 1) return say('untracked.times', { title: name(2), n: count });
             const only = distinct[0];
-            const text = only.label
-                ? say('untracked.titleOf', { prefix: known ? ref(known.prefix) : isolate(kind, 'ltr'), label: only.label })
-                : name(1);
-            return only.count > 1 ? say('untracked.times', { title: text, n: only.count }) : text;
+            return only.count > 1 ? say('untracked.times', { title: name(1), n: only.count }) : name(1);
         });
         return { kind, title, count, entries: distinct };
     });

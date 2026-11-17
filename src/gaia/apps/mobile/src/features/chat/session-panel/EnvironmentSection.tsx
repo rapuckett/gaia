@@ -4,7 +4,6 @@
 import { useState, type ReactNode } from 'react';
 
 import type { ActiveModel, LocalModelStatus, PermissionMode, ScopeEntry, Session, SessionEnvironment } from '@/api/client.types';
-import { GaiaApiError } from '@/api/errors';
 import { sessionEnvironmentPath } from '@/api/constants';
 import { useDeviceRefused } from '@/api/routeAccess';
 import { useActiveModel, useEnvironmentActions, useLocalModelStatus, usePermissionMode, useSession, useSessionEnvironment } from '@/data';
@@ -14,7 +13,7 @@ import { Button, Icon, IconButton, Notice, Row, SegmentedControl, Stack, Switch,
 import { Cloud, FileText, Folder, FolderPlus, Monitor, X } from '@/ui/icons';
 import { isolate } from '@webui/i18n/registry';
 
-import { failureNoticeProps, failureReasonWith } from '../header/failureText';
+import { failureNoticeProps } from '../header/failureText';
 import { FolderPicker } from './FolderPicker';
 import { useSessionPanelStore } from './panelStore';
 import type { SectionProps } from './sections';
@@ -110,10 +109,12 @@ function Folders({ sessionId, env, error }: { sessionId: string; env: SessionEnv
         <Group label={label}>
             {!env && !error ? <Text tone="muted">{t('sp.checking')}</Text> : null}
             {env && !env.enforced ? <Text role="caption" tone="muted">{t(session?.agent_type === 'gaia' ? 'env.flagshipScope' : 'env.agentScope')}</Text> : null}
-            {error instanceof GaiaApiError ? (
-                <Notice tone="danger" message={t('mobileApp.env.foldersErrorShort')} detail={error.detail} testID="environment-error" />
-            ) : error ? (
-                <Notice tone="danger" message={t.compose((say) => say('env.foldersError', { error: failureReasonWith(error, say) }))} testID="environment-error" />
+            {error ? (
+                <Notice
+                    tone="danger"
+                    {...failureNoticeProps(error, t, { withReason: 'env.foldersError', noReason: 'mobileApp.env.foldersErrorShort' })}
+                    testID="environment-error"
+                />
             ) : null}
             {env ? (
                 <>
@@ -160,7 +161,7 @@ function Folders({ sessionId, env, error }: { sessionId: string; env: SessionEnv
             ) : null}
             {isPcRefusal(addFolder.error) ? <PcOnlyNotice testID="environment-add-pc-only" /> : null}
             {removeFolder.error ? (
-                isPcRefusal(removeFolder.error) ? <PcOnlyNotice testID="environment-remove-pc-only" /> : <Notice tone="danger" {...failureNoticeProps(removeFolder.error, t, 'mobileApp.env.removeFolderFailedShort')} testID="environment-remove-error" />
+                isPcRefusal(removeFolder.error) ? <PcOnlyNotice testID="environment-remove-pc-only" /> : <Notice tone="danger" {...failureNoticeProps(removeFolder.error, t, { withReason: 'mobileApp.env.removeFolderFailed', noReason: 'mobileApp.env.removeFolderFailedShort' })} testID="environment-remove-error" />
             ) : null}
         </Group>
     );
@@ -239,7 +240,7 @@ function Internet({ sessionId, env }: { sessionId: string; env: SessionEnvironme
                         description={state}
                         testID="environment-internet"
                     />
-                    {setInternet.error ? <Notice tone="danger" {...failureNoticeProps(setInternet.error, t, 'mobileApp.env.internetFailedShort')} testID="environment-internet-error" /> : null}
+                    {setInternet.error ? <Notice tone="danger" {...failureNoticeProps(setInternet.error, t, { withReason: 'mobileApp.env.internetFailed', noReason: 'mobileApp.env.internetFailedShort' })} testID="environment-internet-error" /> : null}
                 </>
             )}
         </Group>
@@ -298,7 +299,7 @@ function Permission({ sessionId }: { sessionId: string }) {
                     </Row>
                 </Stack>
             ) : null}
-            {set.error ? (isPcRefusal(set.error) ? <PcOnlyNotice testID="environment-mode-pc-only" /> : <Notice tone="danger" {...failureNoticeProps(set.error, t, 'mobileApp.env.modeFailedShort')} testID="environment-mode-error" />) : null}
+            {set.error ? (isPcRefusal(set.error) ? <PcOnlyNotice testID="environment-mode-pc-only" /> : <Notice tone="danger" {...failureNoticeProps(set.error, t, { withReason: 'mobileApp.env.modeFailed', noReason: 'mobileApp.env.modeFailedShort' })} testID="environment-mode-error" />) : null}
         </Group>
     );
 }
@@ -381,7 +382,7 @@ function LocalPlace({ status, error, chatModel, t }: { status: LocalModelStatus 
                     {memory.free_gb != null ? ` · ${t('env.free', { gb: isolate(memory.free_gb.toFixed(1), 'ltr') })}` : ''}
                 </Text>
             ) : null}
-            {error ? <Notice tone="danger" {...failureNoticeProps(error, t, 'mobileApp.env.statusErrorShort')} testID="environment-status-error" /> : status?.error ? <Notice tone="danger" message={status.error} /> : null}
+            {error ? <Notice tone="danger" {...failureNoticeProps(error, t, { withReason: 'mobileApp.env.statusError', noReason: 'mobileApp.env.statusErrorShort' })} testID="environment-status-error" /> : status?.error ? <Notice tone="danger" message={status.error} /> : null}
             {!status && !error ? <Text role="caption" tone="muted">{t('sp.checking')}</Text> : null}
         </Stack>
     );
