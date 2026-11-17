@@ -19,10 +19,11 @@ import { NewChatScreen } from './NewChatScreen';
  * `new-chat-setup-failed` (NC-03), `new-chat-library` (NC-08: two documents attached, the rest of the library offered),
  * `new-chat-warmup` (NC-09), `new-chat-send-error` (NC-10: the opening message fails to start a chat),
  * `new-chat-assistant` (NC-13: tap Details for the reason; Try again asks again).
+ * DOC-23 `new-chat-doc-brief`: the library has documents and the PC offers the "Ask about your documents" card (`document-brief-card`).
  * APP-20 `create-failed`: a draft in the box and a PC that can't be reached; `#tap=composer-send` shows the failure notice.
  * APP-21 `skill-prompt`: a skill's Try it prompt arriving under an unsent draft, as the Skills screen sends it.
  */
-export const NEW_CHAT_SCENES = ['new-chat-setup-failed', 'new-chat-library', 'new-chat-warmup', 'new-chat-send-error', 'new-chat-assistant', 'create-failed', 'skill-prompt'] as const;
+export const NEW_CHAT_SCENES = ['new-chat-setup-failed', 'new-chat-library', 'new-chat-warmup', 'new-chat-send-error', 'new-chat-assistant', 'new-chat-doc-brief', 'create-failed', 'skill-prompt'] as const;
 export type NewChatScene = (typeof NEW_CHAT_SCENES)[number];
 
 const READY = {
@@ -45,6 +46,10 @@ function clientFor(state: NewChatScene) {
     }
     if (state === 'new-chat-library') {
         return createFakeClient({ ...base, documents: { documents: DOCUMENTS, total: 3, total_chunks: 15, total_size_bytes: 60_000 } } as Parameters<typeof createFakeClient>[0]);
+    }
+    if (state === 'new-chat-doc-brief') {
+        const card = { skill: 'document-brief', title: 'Ask about your documents', note: 'Attach your library and ask.', prompt: 'What do my documents say?', needs_input: false };
+        return createFakeClient({ ...base, start: { ...START, cards: [card] }, documents: { documents: DOCUMENTS, total: 3, total_chunks: 15, total_size_bytes: 60_000 } } as Parameters<typeof createFakeClient>[0]);
     }
     if (state === 'new-chat-warmup') {
         return createFakeClient({ ...base, status: { ...READY, warm_up: { state: 'warming', elapsed_seconds: 12, model: 'Gemma-4-E4B-it-GGUF', device: 'gpu' } } as unknown as SystemStatus });

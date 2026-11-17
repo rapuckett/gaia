@@ -146,6 +146,43 @@ describeNative('chat, new-chat, composer and permission scenes', () => {
         expect(screen.getByText(t('newChat.tryAgain'), opts)).toBeTruthy();
     });
 
+    it('new-chat-doc-brief shows the Ask about your documents card', async () => {
+        await open('composer', { state: 'new-chat-doc-brief' });
+        expect(await screen.findByTestId('document-brief-card', opts)).toBeTruthy();
+    });
+
+    it('reply-server-down shows the model-server notice and Try again under a failed reply', async () => {
+        await open('messages', { state: 'reply-server-down' });
+        expect(await screen.findByTestId('server-down-notice', opts)).toBeTruthy();
+        expect(screen.getByTestId('try-again', opts)).toBeTruthy();
+    });
+
+    it('failed-report shows Try again on the failed latest reply', async () => {
+        await open('messages', { state: 'failed-report' });
+        expect(await screen.findByTestId('try-again', opts)).toBeTruthy();
+    });
+
+    it('reply-errors shows the unexpected-error report link', async () => {
+        await open('messages', { state: 'reply-errors' });
+        expect((await screen.findAllByTestId('report-github', opts)).length).toBeGreaterThan(0);
+    });
+
+    it('reply-errors shows each kind\'s own classified text', async () => {
+        await open('messages', { state: 'reply-errors' });
+        const expected: Record<string, string> = {
+            stream: t('chatError.liveViewLost', { n: 4 }),
+            context: t('chatError.context'),
+            model_server: t('chatError.modelServer'),
+            connection: t('chatError.connection'),
+            timeout: t('chatError.timeout'),
+            unknown: t('chatError.unknown'),
+        };
+        for (const [kind, text] of Object.entries(expected)) {
+            const turn = await screen.findByTestId(`reply-error-${kind}`, opts);
+            expect(within(turn).getAllByText(text, opts).length).toBeGreaterThan(0);
+        }
+    });
+
     it('chat question waits for an answer', async () => {
         await open('chat', { state: 'question' });
         expect(await screen.findByText('Which folder should I tidy?', opts)).toBeTruthy();

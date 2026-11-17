@@ -74,7 +74,7 @@ export function DocsBar({ sessionId, onFailed, onManage }: { sessionId: string; 
             </Row>
             <Row gap="xs" wrap>
                 {onManage ? (
-                    <Button variant="secondary" size="sm" label={t('docsBar.manage')} onPress={onManage} />
+                    <Button variant="secondary" size="sm" label={t('docsBar.manage')} onPress={onManage} testID="docs-manage" />
                 ) : null}
                 {visible.map((doc) => {
                     const failed = doc.indexing_status === 'failed';

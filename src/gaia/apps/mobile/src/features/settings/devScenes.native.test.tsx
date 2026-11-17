@@ -62,6 +62,7 @@ describeNative('/dev/settings', () => {
         ['model-fireworks', /Show all models/],
         ['model-unavailable', 'Not available on your PC'],
         ['model-downloading', /Downloading Qwen3\.6 35B A3B|42%/],
+        ['model-setup-downloads', /Downloads/],
         ['model-switching', /My tuned model/],
         ['model-custom', 'Remove'],
         ['model-npu-not-ready', /NPU/],

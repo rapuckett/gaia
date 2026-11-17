@@ -7,7 +7,7 @@ import type { SystemStatus } from '@webui/types';
 import type { Automation, AutomationList, ContextChoice, Session, SkillInfo, DiscordStatus, GaiaClient, CustomModelReport, GpuMemoryStatus, LemonadeTarget, MCPServerStatus, ModelServerInfo, ProviderModel, Settings, SpendingReport } from '@/api/client.types';
 import { PC_ONLY_REFUSAL } from '@/api/constants';
 import { GaiaApiError, GaiaNetworkError } from '@/api/errors';
-import { COMMON, GPU } from '@/features/setup/devScenes';
+import { COMMON, GPU, RUN } from '@/features/setup/devScenes';
 
 import type { SectionId } from './sections';
 
@@ -249,6 +249,8 @@ export const SETTINGS_SCENES: Record<string, SettingsScene> = {
     'model-fireworks': { section: 'model', target: 'models-on-pc', provider: 'fireworks', gpuMemory: GPU, data: cloud(FIREWORKS_MODELS) },
     // SET-MODEL-23: the group is closed until tapped (`#tap=model-group-header-unavailable`).
     'model-unavailable': { section: 'model', target: 'models-on-pc', gpuMemory: GPU, data: local([HAVE, NEVER]) },
+    // SET-MODEL-31: the Downloads panel (`local-downloads`) while a setup download runs.
+    'model-setup-downloads': { section: 'model', target: 'models-on-pc', gpuMemory: GPU, data: { ...local([HAVE, WANT]), setupStatus: RUN } },
     // SET-MODEL-24, 25: a row downloading, and a Download tap that hangs (`#tap=model-download-Llama-3.2-3B-Instruct-GGUF`) with every button disabled.
     'model-downloading': {
         section: 'model', target: 'models-on-pc', gpuMemory: GPU, hang: 'download',
