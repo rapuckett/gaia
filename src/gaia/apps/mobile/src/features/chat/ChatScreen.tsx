@@ -193,7 +193,11 @@ export function ChatScreen({ sessionId, onManageDocuments }: { sessionId: string
                         </Stack>
                     ) : null}
                     {connectorError ? <ConnectorRetry content={connectorError.content} providers={connectProviders} onRetry={() => tryAgain(connectorError.id)} /> : null}
-                    {permission ? <PermissionPrompt key={permission.prompt.id} {...permission} /> : null}
+                    {permission ? (
+                        <Stack paddingX="gutter">
+                            <PermissionPrompt key={permission.prompt.id} {...permission} />
+                        </Stack>
+                    ) : null}
                     <QueuedMessages
                         items={queue.held}
                         replying={busy}

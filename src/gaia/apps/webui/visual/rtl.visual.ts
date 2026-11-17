@@ -10,7 +10,7 @@
  *   npm run test:rtl
  */
 
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 
 import { ANSWER_SESSION, AUTOMATIONS, DEVICE_STATES, DISCORD_STATES, MESSAGES, MODEL_LIST, NOW, RESOURCES, SESSIONS, SYSTEM_STATUS, TOOL_STATUS, holdOnToolStatus, mockApi, shownText, useLocale, useTheme, withAutomations, withConnectors, withCrashedBackend, withDesktopBridges, withDevices, withDiscord, withMemory, withModelPage, withSettingsPanes, withoutFlagship, type MemoryState } from './fixtures';
 import { NARROW_SCENES, SETUP_SCENES, scene, withSetup } from './setup-scenes';
@@ -61,6 +61,21 @@ async function open(page: Page, hash = '', locale = 'ar', before?: (page: Page) 
     await page.goto(`/${hash}`);
     await page.evaluate(() => document.fonts.ready);
 }
+
+/** Resolves once the element's box has held still for several frames: a popover re-places itself after it opens. */
+const settled = (target: Locator): Promise<void> =>
+    target.evaluate((el) => new Promise<void>((resolve) => {
+        const key = () => { const b = el.getBoundingClientRect(); return [b.left, b.top, b.width, b.height].join(); };
+        let last = key();
+        let still = 0;
+        const frame = () => {
+            const now = key();
+            still = now === last ? still + 1 : 0;
+            last = now;
+            if (still >= 5) resolve(); else requestAnimationFrame(frame);
+        };
+        requestAnimationFrame(frame);
+    }));
 
 /** Every rule break on the page, as readable lines. */
 const audit = (page: Page): Promise<string[]> =>
@@ -887,6 +902,7 @@ for (const locale of ['ar', 'en']) {
             await page.locator('.composer-chip').filter({ hasText: 'glm-5p3-flash' }).click();
             const menu = page.getByRole('dialog');
             await expect(menu.locator('.popover-heading').first()).toBeVisible();
+            await settled(menu);
             await page.screenshot({ path: info.outputPath(`model-chip-menu-${locale}-${width}.png`) });
             // The closed sidebar drawer waits off screen at phone width; judge the menu.
             const menuProblems = (await audit(page)).filter((p) => !p.startsWith('popover opens scrolled') && (width > 500 || /popover|model|composer|scrolls sideways/.test(p)));
