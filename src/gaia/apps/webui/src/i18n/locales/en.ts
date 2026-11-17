@@ -4052,6 +4052,7 @@ export const enMessages = {
     'mobileApp.skills.yoursEmpty': 'None yet. Add a folder with a SKILL.md file to {path} on your PC and it shows up here.',
     'mobileApp.skills.pcTitle': 'Add these on your PC',
     'mobileApp.skills.linkHint': 'A {github} repo or folder, {repo}, a {skills} page, or an {https} {zip} link. A library adds every skill in it.',
+    'mobileApp.skills.linkPlaceholder': 'Paste a {github}, {skills} or {zip} link',
     'mobileApp.skills.pcBody': 'Skills are saved on your PC, so adding them is confirmed there. Open GAIA on your PC and paste this link, or share it to your PC from here.',
     'mobileApp.skills.pcBodyCode': 'Skills that ship code run on your PC with your permissions. You choose to include them there.',
     'mobileApp.skills.shareLink': 'Share the link',
