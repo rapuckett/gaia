@@ -6,6 +6,8 @@ import { IDLE_TURN, beginTurn, type ChatTurn } from '@/state/chatStreams';
 import {
     activeChatId,
     drawerScreenOptions,
+    FULL_SCREEN_OPTIONS,
+    FULL_SCREEN_ROUTES,
     liveRunsFromTurns,
     openChat,
     openNewChat,
@@ -61,5 +63,24 @@ describe('drawer options by width', () => {
     it('updates when a rotation crosses 1024', () => {
         expect(at(1024).drawerType).toBe('permanent');
         expect(at(768).drawerType).toBe('front');
+    });
+});
+
+describe('drawer side', () => {
+    const opts = (width: number, webRtl: boolean) => drawerScreenOptions({ width, largeText: false, webRtl });
+
+    it('leaves the side to the navigator in ltr and on native, where it follows the layout direction', () => {
+        for (const width of [768, 1024]) expect(opts(width, false).drawerPosition).toBeUndefined();
+    });
+
+    it('puts the web sidebar on the right in rtl: overlay by physical side, permanent through the reversed row', () => {
+        expect(opts(768, true).drawerPosition).toBe('right');
+        expect(opts(1024, true).drawerPosition).toBe('left');
+        expect(opts(1024, true).drawerStyle).toEqual({ width: PERMANENT_DRAWER_WIDTH, borderRightWidth: 0 });
+    });
+
+    it('shows setup and the startup wait with no sidebar at any width', () => {
+        expect(FULL_SCREEN_ROUTES).toEqual(['dev/boot', 'dev/setup']);
+        expect(FULL_SCREEN_OPTIONS).toEqual({ drawerType: 'front', swipeEnabled: false });
     });
 });

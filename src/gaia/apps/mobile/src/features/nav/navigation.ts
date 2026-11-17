@@ -17,6 +17,22 @@ export interface DrawerOptionsInput {
     webRtl: boolean;
 }
 
+/**
+ * The sidebar sits on the inline-start side. Native: `drawerPosition` is a physical side that defaults from
+ * I18nManager.isRTL, so leave it unset (an explicit value could only disagree with the flipped layout).
+ * Web: the overlay slides in by physical `left`/`right`, so rtl needs 'right'; the permanent one is a flex
+ * row that the page's dir="rtl" already reverses, so 'left' puts it on the right.
+ */
+export function drawerPosition(permanent: boolean, webRtl: boolean) {
+    if (!webRtl) return undefined;
+    return permanent ? ('left' as const) : ('right' as const);
+}
+
+/** Setup and the startup wait are full screen at every width: no sidebar, no swipe-in drawer. */
+export const FULL_SCREEN_ROUTES: readonly string[] = ['dev/boot', 'dev/setup'];
+
+export const FULL_SCREEN_OPTIONS = { drawerType: 'front' as const, swipeEnabled: false };
+
 export function drawerScreenOptions({ width, largeText, webRtl }: DrawerOptionsInput) {
     const permanent = width >= PERMANENT_DRAWER_MIN_WIDTH;
     return {
@@ -24,8 +40,12 @@ export function drawerScreenOptions({ width, largeText, webRtl }: DrawerOptionsI
         freezeOnBlur: true,
         drawerType: permanent ? ('permanent' as const) : ('front' as const),
         // At large text sizes one word of a label is wider than the default drawer.
-        drawerStyle: permanent ? { width: PERMANENT_DRAWER_WIDTH } : largeText ? { width: '100%' as const } : undefined,
-        drawerPosition: webRtl ? ('right' as const) : undefined,
+        drawerStyle: permanent
+            ? { width: PERMANENT_DRAWER_WIDTH, ...(webRtl ? { borderRightWidth: 0 } : null) }
+            : largeText
+              ? { width: '100%' as const }
+              : undefined,
+        drawerPosition: drawerPosition(permanent, webRtl),
     };
 }
 
