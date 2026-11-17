@@ -3,9 +3,9 @@
 
 import Foundation
 
-/// Where a file to send may be: the app's caches, where pickers, the camera and a paste copy files, and its tmp.
+/// Where a file to send may be: the app's caches, where pickers, the camera and a paste copy files.
 func appUploadRoots() -> [URL] {
-  FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask) + [FileManager.default.temporaryDirectory]
+  FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)
 }
 
 enum UploadFileCheck: Equatable {
