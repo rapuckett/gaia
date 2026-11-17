@@ -7,7 +7,7 @@ import { Sheet, Stack, Text } from '@/ui';
 
 import { DiffCard } from '../cards/DiffCard';
 import { noteOf } from './ChangesReview';
-import { totalText } from './changesText';
+import { reviewHeadingText } from './changesText';
 
 /** Every file the chat changed, from before its first turn to after its last, built from the loaded totals. */
 export function ChatChangesReview({ changes, onClose }: { changes: SessionChanges; onClose: () => void }) {
@@ -17,7 +17,7 @@ export function ChatChangesReview({ changes, onClose }: { changes: SessionChange
         <Sheet open onClose={onClose} title={t('mobileApp.changes.chat.reviewTitle')}>
             <Stack gap="md" paddingX="lg" paddingY="md">
                 <Text role="caption" tone="secondary" dir="auto">
-                    {t('mobileApp.changes.chat.reviewHeading', { total: totalText(changes, t) })}
+                    {reviewHeadingText(changes, t)}
                 </Text>
                 {changes.files.map((file) => (
                     <DiffCard
