@@ -18,7 +18,7 @@ import { formatSize } from '../utils/format';
 import { isMacPlatform } from '../utils/platform';
 import { dateLocale, useT, type Translate } from '../i18n/useT';
 import type { MessageKey, Param } from '../i18n/registry';
-import { ref } from '../i18n/registry';
+import { ref, stripIsolates } from '../i18n/registry';
 import { requestErrorParam } from '../utils/requestErrors';
 import { unsupportedTypeMessage } from '../utils/uploadErrors.core';
 import { UploadErrorToast, isExtensionSupported } from './UnsupportedFeature';
@@ -456,8 +456,8 @@ export function FileBrowser({ onStartChat }: FileBrowserProps) {
             const fileNames = (result.succeededFiles.length > 0 ? result.succeededFiles : result.supported)
                 .map(f => f.split(/[\\/]/).pop() || f);
             const prompt = fileNames.length === 1
-                ? t('mobileApp.files.askOne', { name: fileNames[0] })
-                : t('mobileApp.files.askMany', { list: fileNames.map(n => `- ${n}`).join('\n') });
+                ? stripIsolates(t.bare('mobileApp.files.askOne', { name: fileNames[0] }))
+                : stripIsolates(t.bare('mobileApp.files.askMany', { list: fileNames.map(n => `- ${n}`).join('\n') }));
 
             if (currentSessionId) {
                 setPendingPrompt({ sessionId: currentSessionId, text: prompt });
