@@ -1,7 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { Platform } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
@@ -157,6 +157,28 @@ describeNative('/dev/settings', () => {
         mockState = name;
         await mount();
         expect((await screen.findAllByText(text, { includeHiddenElements: true })).length).toBeGreaterThan(0);
+    });
+
+    it('automations-loading shows the loading line and no cards', async () => {
+        mockState = 'automations-loading';
+        await mount();
+        expect((await screen.findAllByText('Loading…', { includeHiddenElements: true })).length).toBeGreaterThan(0);
+        expect(screen.queryByTestId('automation-a1b2c3d4', { includeHiddenElements: true })).toBeNull();
+    });
+
+    it('automations-busy disables Remove while Pause is in flight', async () => {
+        mockState = 'automations-busy';
+        await mount();
+        await fireEvent.press(await screen.findByTestId('automation-toggle-a1b2c3d4', { includeHiddenElements: true }));
+        await waitFor(() => expect(screen.getByTestId('automation-remove-a1b2c3d4', { includeHiddenElements: true })).toBeDisabled());
+    });
+
+    it('automations-action-error shows the failure sentence and the PC text', async () => {
+        mockState = 'automations-action-error';
+        await mount();
+        await fireEvent.press(await screen.findByTestId('automation-toggle-a1b2c3d4', { includeHiddenElements: true }));
+        expect(await screen.findByTestId('automations-action-failed', { includeHiddenElements: true })).toBeTruthy();
+        expect((await screen.findAllByText(/scheduler.json is locked/, { includeHiddenElements: true })).length).toBeGreaterThan(0);
     });
 
     it('general-custom-colors opens Colors with the custom accent, tint and Reset', async () => {

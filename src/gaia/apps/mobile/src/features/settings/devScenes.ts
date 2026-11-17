@@ -276,6 +276,11 @@ export const SETTINGS_SCENES: Record<string, SettingsScene> = {
     'automations-empty': autos({ automations: [], delivers: false }),
     'automations-load-failed': autos(new GaiaApiError(500, 'automations.json is not usable: Expecting value: line 1 column 1 (char 0)')),
     'automations-pc-refused': autos(new GaiaApiError(403, PC_ONLY_REFUSAL)),
+    'automations-loading': autos({ automations: [], delivers: true }, { override: { listAutomations: never } }),
+    // Pause on Call Sam never finishes: tap `#tap=automation-toggle-a1b2c3d4` and its button shows busy while Remove is disabled.
+    'automations-busy': autos({ automations: AUTOMATIONS, delivers: true }, { override: { automationAction: never } }),
+    // Pause on Call Sam fails: tap `#tap=automation-toggle-a1b2c3d4` and the danger notice shows with the PC's text on its own detail line.
+    'automations-action-error': autos({ automations: AUTOMATIONS, delivers: true }, { override: { automationAction: () => Promise.reject(new GaiaApiError(500, 'scheduler.json is locked by another process')) } }),
 
     // SET-MSG-01: the card before the PC has answered, and when the read fails (`Try again`).
     'msg-loading': msg(discord({}), { override: { getDiscordStatus: never } }),
