@@ -5,7 +5,7 @@ import { createFakeClient } from '@/api/fake';
 import type { ModelServerInfo, SetupCheck } from '@/api/client.types';
 import { GaiaNetworkError } from '@/api/errors';
 
-import { applyTestedBackend, gateFromCheck, runSetupCheck } from './setup';
+import { applyTestedBackend, BACKEND_START_WAIT_MS, gateFromCheck, runSetupCheck } from './setup';
 
 const check = (c: Partial<SetupCheck>): SetupCheck => ({ ready: false, steps: [], ...c });
 const instant = async () => {};
@@ -36,6 +36,25 @@ describe('runSetupCheck', () => {
 
         const again = createFakeClient({ setupChecks: [refused, check({ ready: true })] });
         expect((await runSetupCheck(again, { sleep: instant })).state).toBe('unknown');
+    });
+
+    it('counts a check that timed out against the launch wait, so the wait stays bounded', async () => {
+        jest.useFakeTimers({ doNotFake: ['nextTick', 'queueMicrotask'] });
+        try {
+            const hung = new GaiaNetworkError('http://pc', new Error('no answer within 20 s'));
+            const client = createFakeClient({ setupChecks: Array.from({ length: 50 }, () => hung) });
+            const spy = jest.spyOn(client, 'checkSetup').mockImplementation(
+                () => new Promise((_, reject) => setTimeout(() => reject(hung), 20_000)),
+            );
+            const outcome = runSetupCheck(client, { waitForStart: true, sleep: instant });
+            await jest.advanceTimersByTimeAsync(BACKEND_START_WAIT_MS + 20_000);
+            expect(await outcome).toMatchObject({ state: 'unknown', upgradeFailed: false });
+            expect((await outcome as { error: unknown }).error).toBe(hung);
+            expect(spy.mock.calls.length).toBeLessThanOrEqual(4);
+        } finally {
+            jest.clearAllTimers();
+            jest.useRealTimers();
+        }
     });
 
     it('reports a check it could not ask as unknown, never as not set up', async () => {
