@@ -4,10 +4,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { BackHandler, Platform } from 'react-native';
 
+import { GaiaPinMismatchError } from '@/api/errors';
 import { describeHttpFailure, useT } from '@/i18n/useT';
 import { useConnectionStore } from '@/state/connection';
-import { Button, Card, Icon, Notice, Row, Screen, Spinner, Stack, Text, TextField } from '@/ui';
-import { CircleAlert, Clock, Monitor, Smartphone } from '@/ui/icons';
+import { Button, Card, Icon, IconButton, Notice, Row, Screen, Spinner, Stack, Text, TextField } from '@/ui';
+import { ArrowLeft, CircleAlert, Clock, Monitor, Smartphone } from '@/ui/icons';
 
 import { parseInvite, type PairingInvite } from './invite';
 import { PairingScanner } from './PairingScanner';
@@ -31,10 +32,12 @@ export interface PairingFlowProps {
     onPaired?: () => void;
     /** Replaces the built-in camera step behind "Scan the code". */
     onScan?: () => void;
+    /** Where the first step goes back to when it was opened from another screen; its Back button and Android's back both use it. */
+    onExit?: () => void;
 }
 
 /** First launch: welcome, how to pair, paste a link or code, wait for Allow, and the two ways it can fail. */
-export function PairingFlow({ initialStep = 'welcome', onPaired, onScan }: PairingFlowProps) {
+export function PairingFlow({ initialStep = 'welcome', onPaired, onScan, onExit }: PairingFlowProps) {
     const t = useT();
     const setConnection = useConnectionStore((s) => s.setConnection);
     const removedFrom = useConnectionStore((s) => s.removedFrom);
@@ -121,7 +124,7 @@ export function PairingFlow({ initialStep = 'welcome', onPaired, onScan }: Pairi
         }
     };
 
-    const redeem = async (invite: PairingInvite) => {
+    const redeem = async (invite: PairingInvite, replaces: boolean) => {
         setError(null);
         setBusy(true);
         const attempt = ++redeeming.current;
@@ -135,7 +138,10 @@ export function PairingFlow({ initialStep = 'welcome', onPaired, onScan }: Pairi
             }
             settle(result);
         } catch (e) {
-            if (alive.current && !abandoned()) setError(describeHttpFailure(e, t));
+            if (alive.current && !abandoned()) {
+                // A first pairing never connected, so "stopped connecting" would be wrong.
+                setError(e instanceof GaiaPinMismatchError && !replaces ? { text: t('mobileApp.pairing.pinMismatch.first') } : describeHttpFailure(e, t));
+            }
         } finally {
             if (alive.current && !abandoned()) setBusy(false);
         }
@@ -151,7 +157,7 @@ export function PairingFlow({ initialStep = 'welcome', onPaired, onScan }: Pairi
         setView('how');
     };
 
-    // Android's back walks the flow one step back, as its own back controls do; on the first step it leaves.
+    // Android's back walks the flow one step back, as its own back controls do; on the first step it leaves, or goes to `onExit`.
     useEffect(() => {
         const back = (): boolean => {
             if (typeof view === 'object') {
@@ -178,6 +184,10 @@ export function PairingFlow({ initialStep = 'welcome', onPaired, onScan }: Pairi
                 setView('welcome');
                 return true;
             }
+            if (view === 'how' && onExit) {
+                onExit();
+                return true;
+            }
             return false;
         };
         const subscription = BackHandler.addEventListener('hardwareBackPress', back);
@@ -194,7 +204,7 @@ export function PairingFlow({ initialStep = 'welcome', onPaired, onScan }: Pairi
                 body={t('mobileApp.pairing.confirm.body')}
                 footer={
                     <>
-                        <Button variant="primary" label={t('mobileApp.pairing.confirm.pair')} onPress={() => void redeem(invite)} busy={busy} full testID="pairing-confirm" />
+                        <Button variant="primary" label={t('mobileApp.pairing.confirm.pair')} onPress={() => void redeem(invite, replaces)} busy={busy} full testID="pairing-confirm" />
                         <Button variant="secondary" label={t('mobileApp.pairing.confirm.cancel')} onPress={() => setView(back)} disabled={busy} full />
                     </>
                 }
@@ -261,7 +271,10 @@ export function PairingFlow({ initialStep = 'welcome', onPaired, onScan }: Pairi
     if (view === 'how') {
         const steps = ['step1', 'step2', 'step3', 'step4'] as const;
         return (
-            <Page title={t('mobileApp.pairing.how.title')}>
+            <Page
+                title={t('mobileApp.pairing.how.title')}
+                up={onExit ? <IconButton icon={ArrowLeft} label={t(Platform.OS === 'ios' ? 'mobileApp.nav.back' : 'mobileApp.nav.up')} onPress={onExit} testID="pairing-up" /> : undefined}
+            >
                 <Card>
                     <Stack gap="md">
                         {steps.map((step, i) => (
@@ -314,6 +327,7 @@ function Page({
     body,
     busy,
     footer,
+    up,
     children,
 }: {
     icon?: typeof Clock;
@@ -322,6 +336,8 @@ function Page({
     busy?: boolean;
     /** Actions pinned to the bottom of the screen, in thumb reach. */
     footer?: React.ReactNode;
+    /** A leading up control in a bare top bar, for a screen opened from another one. */
+    up?: React.ReactNode;
     children?: React.ReactNode;
 }) {
     return (
@@ -329,6 +345,7 @@ function Page({
             banner={null}
             keyboard="avoid"
             scroll
+            header={up ? <Stack paddingX="lg" paddingY="sm"><Row>{up}</Row></Stack> : undefined}
             footer={
                 footer ? (
                     <Stack gap="sm">

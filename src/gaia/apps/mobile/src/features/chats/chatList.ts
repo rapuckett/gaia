@@ -176,7 +176,7 @@ const ROW_ERROR_KEY: Record<Exclude<RowErrorKind, 'markRead'>, MessageKey> = {
 export function rowFailure(kind: RowErrorKind, error: unknown, t: Translate): { message: string; detail?: string } {
     const message = t(kind === 'markRead' ? 'mobileApp.chats.markReadFailed' : ROW_ERROR_KEY[kind]);
     const detail = serverText(error);
-    if (detail) return { message, detail };
+    if (detail && detail !== message) return { message, detail };
     return error instanceof GaiaError ? { message: describeErrorWith(error, t) } : { message };
 }
 

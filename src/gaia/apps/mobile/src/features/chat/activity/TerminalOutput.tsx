@@ -50,12 +50,12 @@ export function TerminalOutput({ output }: { output: CommandOutput }) {
         <Surface tone="recessed" radius="md" border>
             <Stack dir="ltr" gap="xs" testID="terminal-output">
                 <Row dir="ltr" gap="sm" justify="between">
-                    <Row dir="ltr" gap="xs" flex={1}>
-                        <View style={{ flexShrink: 1, minWidth: 0 }}>
+                    <Stack dir="ltr" gap="xs" flex={1}>
+                        <View style={{ flex: 1, minWidth: 0 }} testID="terminal-title">
                             <Stack paddingX="md">
                                 <Row dir="ltr" gap="xs">
                                     <Icon icon={Terminal} size="sm" tone="muted" />
-                                    <View style={{ flexShrink: 1, minWidth: 0 }}>
+                                    <View style={{ flex: 1, minWidth: 0 }}>
                                         <Text role="caption" tone="muted" weight="medium">
                                             {t('activity.terminal')}
                                         </Text>
@@ -65,12 +65,14 @@ export function TerminalOutput({ output }: { output: CommandOutput }) {
                         </View>
                         {output.returnCode !== 0 ? (
                             <View style={{ flexShrink: 0 }} testID="terminal-exit" accessible accessibilityLabel={t('activity.exit', { code: output.returnCode })}>
-                                <Text role="caption" tone={isError ? 'danger' : 'muted'} numberOfLines={1}>
-                                    {isolate(t.bare('activity.exit', { code: output.returnCode }), 'ltr')}
-                                </Text>
+                                <Stack paddingX="md">
+                                    <Text role="caption" tone={isError ? 'danger' : 'muted'} numberOfLines={1}>
+                                        {isolate(t.bare('activity.exit', { code: output.returnCode }), 'ltr')}
+                                    </Text>
+                                </Stack>
                             </View>
                         ) : null}
-                    </Row>
+                    </Stack>
                     {hasOutput ? (
                         <Pressable onPress={copy} accessibilityLabel={copied ? t('msg.copiedAria') : t('activity.copyOutputAria')}>
                             <Stack paddingX="md">
