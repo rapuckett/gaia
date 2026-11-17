@@ -1,13 +1,14 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { render, screen } from '@testing-library/react-native';
+import { render, screen, within } from '@testing-library/react-native';
 import type { ReactNode } from 'react';
 import { Platform } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import type { SetupModelProgress } from '@webui/types';
 
+import { keepTogether } from '@webui/i18n/registry';
 import { ThemeProvider } from '@/ui';
 
 import { ModelRow } from './DownloadRows';
@@ -37,7 +38,7 @@ const model = {
 } as SetupModelProgress;
 
 describeNative('ModelRow name', () => {
-    it('keeps the model name whole and left to right, and the state beside it from shrinking', async () => {
+    it('keeps the model name whole on its own line, with the state on a separate line', async () => {
         await render(
             <ModelRow
                 model={model}
@@ -58,9 +59,12 @@ describeNative('ModelRow name', () => {
             { wrapper: wrap },
         );
         const name = screen.getByTestId('download-row-name') as unknown as { props: { numberOfLines?: number; ellipsizeMode?: string; style?: unknown } };
-        expect(name.props.numberOfLines).toBe(2);
-        expect(name.props.ellipsizeMode).toBe('middle');
-        const state = screen.getByTestId('download-row-state') as unknown as { props: { style: { flexShrink: number } } };
-        expect(state.props.style.flexShrink).toBe(0);
+        expect(name.props.numberOfLines).toBe(1);
+        expect(name.props.ellipsizeMode).toBe('tail');
+        expect(screen.getByTestId('download-row-name').props.children).toBe(keepTogether('EmbeddingGemma-300M-GGUF'));
+        expect(screen.getByTestId('download-row-name').props.children).toContain('\u2068');
+        const state = screen.getByTestId('download-row-state');
+        expect(state).toBeTruthy();
+        expect(within(state).queryByTestId('download-row-name')).toBeNull();
     });
 });
