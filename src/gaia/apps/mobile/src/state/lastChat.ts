@@ -4,6 +4,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 
+import { useConnectionStore } from './connection';
 import { readNewChatDraft } from './newChatDraft';
 
 // The key webui keeps its copy under (utils/sessionNav.ts).
@@ -29,14 +30,14 @@ export const useLastChatStore = create<LastChatState>((set, get) => ({
     choseNewChat: false,
     hasNewChatDraft: false,
     async load() {
+        const draft = await readNewChatDraft(useConnectionStore.getState().connection?.pcId);
         try {
             const saved = await AsyncStorage.getItem(LAST_CHAT_KEY);
-            const draft = await readNewChatDraft();
             // A chat opened while this was reading is newer than the saved one.
             if (!get().loaded) set({ lastChatId: saved, hasNewChatDraft: draft !== '', loaded: true });
         } catch (err) {
             console.warn('Could not read the chat open at last launch', err);
-            if (!get().loaded) set({ loaded: true });
+            if (!get().loaded) set({ hasNewChatDraft: draft !== '', loaded: true });
         }
     },
     remember(id) {
