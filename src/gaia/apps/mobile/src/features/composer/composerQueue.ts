@@ -21,23 +21,47 @@ import {
 } from '@webui/utils/messageQueue';
 
 import type { GaiaClient, StreamEvent } from '@/api/client.types';
-import { GaiaApiError, GaiaConfigError } from '@/api/errors';
+import { GaiaApiError, GaiaConfigError, GaiaError } from '@/api/errors';
+import type { MessageKey, Params } from '@webui/i18n/registry';
 import { sendTurn, useGaiaClient } from '@/data';
 
 /** Where text typed before its chat exists waits. */
 const NEW_CHAT = '';
 
-const NONE: QueuedMessage[] = [];
+/** A failed send as plain data: the catalog key and params (and the PC's status and reason), so the row is translated when it is drawn. */
+export interface QueueFailure {
+    messageKey: MessageKey;
+    params: Params;
+    status?: number;
+    detail?: string;
+}
+
+export type HeldMessage = QueuedMessage & { failure?: QueueFailure };
+
+const NONE: HeldMessage[] = [];
+
+/** Our own errors keep their key and params; any other error is just its message, shown as the detail. */
+export function failureOf(err: unknown): { error: string; failure?: QueueFailure } {
+    if (err instanceof GaiaApiError) {
+        return { error: err.detail, failure: { messageKey: err.messageKey, params: err.params, status: err.status, detail: err.detail } };
+    }
+    if (err instanceof GaiaError) return { error: '', failure: { messageKey: err.messageKey, params: err.params } };
+    return { error: err instanceof Error ? err.message : String(err) };
+}
+
+function markFailure(items: HeldMessage[], id: number, failure: QueueFailure | undefined): HeldMessage[] {
+    return failure ? items.map((m) => (m.id === id && m.state === 'failed' ? { ...m, failure } : m)) : items;
+}
 
 interface QueueState {
-    byChat: Readonly<Record<string, QueuedMessage[]>>;
+    byChat: Readonly<Record<string, HeldMessage[]>>;
     /** What is typed in a chat's box; Stop appends the queued texts to it. */
     drafts: Readonly<Record<string, string>>;
 }
 
 export const useComposerQueueStore = create<QueueState>(() => ({ byChat: {}, drafts: {} }));
 
-function change(chat: string, edit: (items: QueuedMessage[]) => QueuedMessage[]): void {
+function change(chat: string, edit: (items: HeldMessage[]) => HeldMessage[]): void {
     useComposerQueueStore.setState((state) => ({ byChat: { ...state.byChat, [chat]: edit(state.byChat[chat] ?? NONE) } }));
 }
 
@@ -67,8 +91,8 @@ export async function flushHeld(sessionId: string, send: SendHeld): Promise<void
                 return;
             }
         } catch (err) {
-            const error = err instanceof Error ? err.message : String(err);
-            change(sessionId, (items) => notStarted(items, id, error));
+            const { error, failure } = failureOf(err);
+            change(sessionId, (items) => markFailure(notStarted(items, id, error), id, failure));
             return;
         }
         change(sessionId, (items) => remove(items, id));
@@ -86,8 +110,11 @@ export async function settleOffered(client: GaiaClient, sessionId: string): Prom
         change(sessionId, (items) => reconcile(items, outcome));
     } catch (err) {
         if (err instanceof GaiaApiError && err.status === 409) return;
-        const reason = err instanceof Error ? err.message : String(err);
-        change(sessionId, (items) => failDelivered(items, reason));
+        const { error, failure } = failureOf(err);
+        change(sessionId, (items) => {
+            const delivered = new Set(items.filter((m) => m.state === 'delivered').map((m) => m.id));
+            return failDelivered(items, error).map((m) => (delivered.has(m.id) ? { ...m, failure } : m));
+        });
     }
 }
 
@@ -104,7 +131,7 @@ export function applyFollowUpEvent(sessionId: string, event: StreamEvent): void 
 }
 
 export interface ComposerQueue {
-    held: QueuedMessage[];
+    held: HeldMessage[];
     /** Keeps text typed while the chat is being created. */
     hold(text: string): void;
     /** Drops one item. */
@@ -119,9 +146,9 @@ export interface ComposerQueue {
     /** Empties the chat's queue into the end of its box, joined by blank lines. */
     giveBack(): void;
     /** Removes and returns the items held before their chat existed. */
-    takeHeld(): QueuedMessage[];
+    takeHeld(): HeldMessage[];
     /** Puts in items that already failed to send. */
-    queueHeld(sessionId: string, items: QueuedMessage[]): void;
+    queueHeld(sessionId: string, items: HeldMessage[]): void;
     /** Sends now as the chat's next turn; false when a turn is already running. */
     deliver(sessionId: string, text: string): Promise<boolean | void>;
     /** Sends the held items in order once the chat exists. */
@@ -137,7 +164,7 @@ export function useComposerQueue(sessionId: string | null): ComposerQueue {
 
     const hold = useCallback((text: string) => change(key, (items) => enqueue(items, text, 'queued')), [key]);
 
-    const queueHeld = useCallback((chat: string, items: QueuedMessage[]) => change(chat, (list) => [...list, ...items]), []);
+    const queueHeld = useCallback((chat: string, items: HeldMessage[]) => change(chat, (list) => [...list, ...items]), []);
 
     const deliver = useCallback(
         async (chat: string, text: string) => {
