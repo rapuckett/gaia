@@ -3,9 +3,13 @@
 
 package ai.amd.gaia.transport
 
+import java.net.InetAddress
+import java.net.ServerSocket
+import java.net.Socket
 import java.security.MessageDigest
 import java.security.cert.CertificateException
 import java.security.cert.X509Certificate
+import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import okhttp3.HttpUrl
@@ -119,6 +123,90 @@ class PinnedRequestTest {
       assertEquals(0, plain.requestCount)
     } finally {
       plain.shutdown()
+    }
+  }
+
+  @Test
+  fun aPinnedCertificateWithNoNameOrCaFlagIsTrustedByItsPinAlone() {
+    // A bare self-signed leaf: no subject alternative name, not a CA.
+    val bare = HeldCertificate.Builder().commonName("GAIA PC").build()
+    val bareServer = MockWebServer()
+    bareServer.useHttps(HandshakeCertificates.Builder().heldCertificate(bare).build().sslSocketFactory(), false)
+    bareServer.start()
+    try {
+      bareServer.enqueue(MockResponse().setBody("hello pc"))
+      val head = startAndWait(PinnedRequest(sha256(bare.certificate)), bareServer.url("/api/health"))
+      assertEquals(200, (head as Outcome.Ok).value.status)
+    } finally {
+      bareServer.shutdown()
+    }
+
+    // The same name with a valid SAN, from a CA, still isn't the pinned PC.
+    val wellFormed = leafSignedByRoot("GAIA PC")
+    val wellFormedServer = MockWebServer()
+    wellFormedServer.useHttps(
+      HandshakeCertificates.Builder().heldCertificate(wellFormed, root.certificate).build().sslSocketFactory(),
+      false,
+    )
+    wellFormedServer.start()
+    try {
+      wellFormedServer.enqueue(MockResponse().setBody("not the pc"))
+      val head = startAndWait(PinnedRequest(sha256(bare.certificate)), wellFormedServer.url("/api/health"))
+      assertEquals("pin_mismatch", (head as Outcome.Failed).error.code)
+      assertEquals(0, wellFormedServer.requestCount)
+    } finally {
+      wellFormedServer.shutdown()
+    }
+  }
+
+  @Test
+  fun aHandshakeThatNeverFinishesIsStoppedAsANetworkFailureAndReported() {
+    val listener = ServerSocket(0, 1, InetAddress.getLoopbackAddress())
+    val accepted = CopyOnWriteArrayList<Socket>()
+    // Accepts TCP and then says nothing, so the TLS handshake waits.
+    val acceptor = Thread { runCatching { accepted.add(listener.accept()) } }.apply {
+      isDaemon = true
+      start()
+    }
+    val log = RecordingLog()
+    try {
+      val url = HttpUrl.Builder().scheme("https").host("127.0.0.1").port(listener.localPort).encodedPath("/api/health").build()
+      val request = PinnedRequest(sha256(leaf.certificate), label = RequestLabel("pinned-7", "home"), log = log)
+      val done = CountDownLatch(1)
+      var outcome: Outcome<ResponseHead>? = null
+      val startedAt = System.nanoTime()
+      request.start(Outgoing(url), idleSeconds = 600, setupSeconds = 2) {
+        outcome = it
+        done.countDown()
+      }
+      assertTrue("still waiting 8 s after a 2 s budget", done.await(8, TimeUnit.SECONDS))
+      val waitedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAt)
+      assertTrue("stopped after ${waitedMs} ms, before its budget", waitedMs >= 1_800)
+      assertEquals("network", (outcome as Outcome.Failed).error.code)
+
+      val origin = "https://127.0.0.1:${listener.localPort}"
+      assertEquals(1, log.warnings.size)
+      val line = log.warnings[0]
+      assertTrue(line, line.startsWith("setup_failed id=pinned-7 route=home origin=$origin phase=secureConnectStart reused=false elapsed_ms="))
+      assertTrue(line, line.endsWith(" error=watchdog"))
+      assertTrue(log.debugs.toString(), log.debugs.any { it.startsWith("connect_start id=pinned-7 ") })
+    } finally {
+      accepted.forEach { it.close() }
+      listener.close()
+      acceptor.join(1_000)
+    }
+  }
+
+  private class RecordingLog : TransportLog {
+    val warnings = CopyOnWriteArrayList<String>()
+    val debugs = CopyOnWriteArrayList<String>()
+
+    override fun warn(line: String) {
+      warnings.add(line)
+    }
+
+    override fun debug(line: String) {
+      debugs.add(line)
     }
   }
 

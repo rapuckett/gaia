@@ -16,6 +16,8 @@ let mockHealth = 403;
 let mockRoutes: { status: number; body: string } = { status: 404, body: '{"detail":"Not Found"}' };
 let mockPcName = 'Office PC';
 const mockSent: { vaultId: string; url: string }[] = [];
+// While set, health checks wait for it, as a slow network makes them.
+let mockHold: Promise<void> | null = null;
 
 jest.mock('expo/fetch', () => ({ fetch: jest.fn() }));
 jest.mock('expo-device', () => ({ deviceName: 'Test phone', modelName: 'iPhone' }));
@@ -29,6 +31,7 @@ jest.mock('../../../modules/gaia-transport', () => ({
         dropAll: async () => void mockVault.clear(),
         drop: async (vaultId: string) => void mockVault.delete(vaultId),
         promote: async (from: string, to: string) => {
+            if (!mockVault.has(from)) throw Object.assign(new Error('not paired'), { code: 'not_paired' });
             mockVault.set(to, mockVault.get(from)!);
             mockVault.delete(from);
         },
@@ -45,6 +48,7 @@ jest.mock('@/platform/pinnedFetch', () => ({
     },
     pinnedFetch: async (vaultId: string, url: string) => {
         mockSent.push({ vaultId, url });
+        if (mockHold && url.endsWith('/api/health')) await mockHold;
         if (!mockVault.has(vaultId)) throw Object.assign(new Error('not paired'), { code: 'not_paired' });
         if (url.endsWith('/api/devices/me/routes')) return { ok: mockRoutes.status === 200, status: mockRoutes.status, text: async () => mockRoutes.body };
         const body = mockHealth === 403 ? JSON.stringify({ code: 'device_pending' }) : '{}';
@@ -68,6 +72,7 @@ beforeEach(async () => {
     mockVault.clear();
     mockNativeOrigins.clear();
     mockSent.length = 0;
+    mockHold = null;
     mockPcName = 'Office PC';
     useConnectionStore.getState().clearConnection();
     mockVault.set(PC_ID, 'working secret');
@@ -99,6 +104,38 @@ describe('re-pairing a PC this phone is already paired with', () => {
         expect((await service.status()).state).toBe('paired');
         expect([...mockVault.entries()]).toEqual([[PC_ID, 'secret from https://192.168.1.99:4243']]);
         expect((await service.list()).map((pc) => pc.connection.baseUrl)).toEqual(['https://192.168.1.99:4243']);
+    });
+});
+
+describe('a pairing check that a slow network stretches out', () => {
+    it('is shared by callers that ask while it is out, so the PC is promoted once', async () => {
+        const service = createPinnedPairingService();
+        mockHealth = 403;
+        await service.redeem(invite);
+        mockHealth = 200;
+        mockSent.length = 0;
+        const [first, second] = await Promise.all([service.status(), service.status()]);
+        expect([first.state, second.state]).toEqual(['paired', 'paired']);
+        expect(mockSent.filter((s) => s.url.endsWith('/api/health'))).toHaveLength(1);
+        expect([...mockVault.entries()]).toEqual([[PC_ID, 'secret from https://192.168.1.99:4243']]);
+    });
+
+    it('reads saved state again when its staged key is gone, keeping what changed meanwhile', async () => {
+        const service = createPinnedPairingService();
+        mockHealth = 403;
+        await service.redeem(invite);
+        let release = () => {};
+        mockHold = new Promise((resolve) => (release = resolve));
+        const checking = service.status();
+        mockRoutes = { status: 200, body: JSON.stringify({ origins: [{ kind: 'home', origin: 'https://192.168.1.21:4243' }] }) };
+        await service.refreshRoutes(PC_ID, 'https://192.168.1.20:4243');
+        mockRoutes = { status: 404, body: '{"detail":"Not Found"}' };
+        mockVault.delete(`${PC_ID}.pending`);
+        release();
+
+        expect((await checking).state).toBe('refused');
+        expect((await service.origins(PC_ID)).map((o) => o.origin)).toEqual(['https://192.168.1.21:4243']);
+        expect((await service.status()).state).toBe('none');
     });
 });
 

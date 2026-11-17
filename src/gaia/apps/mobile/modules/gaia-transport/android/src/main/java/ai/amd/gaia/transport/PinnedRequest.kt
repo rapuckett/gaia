@@ -23,6 +23,7 @@ import javax.net.ssl.X509TrustManager
 import okhttp3.Call
 import okhttp3.ConnectionPool
 import okhttp3.ConnectionSpec
+import okhttp3.EventListener
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.Interceptor
@@ -116,8 +117,17 @@ internal class OneNetworkAttempt : Interceptor {
   }
 }
 
-/** A client for one request: TLS 1.2+ pinned to `pin`, one network attempt, no plain HTTP, redirects, cookies, cache or reused connections. */
-internal fun pinnedClient(pin: ByteArray, idleSeconds: Long, onMismatch: () -> Unit): OkHttpClient {
+/**
+ * A client for one request: TLS 1.2+ pinned to `pin`, one network attempt, no plain HTTP, redirects, cookies, cache or
+ * reused connections. TCP gets `connectSeconds`; reads and writes may idle `idleSeconds`, so streams aren't cut.
+ */
+internal fun pinnedClient(
+  pin: ByteArray,
+  idleSeconds: Long,
+  connectSeconds: Long,
+  events: EventListener,
+  onMismatch: () -> Unit,
+): OkHttpClient {
   val trust = PinTrustManager(pin, onMismatch)
   val tls = SSLContext.getInstance("TLS")
   tls.init(null, arrayOf<TrustManager>(trust), null)
@@ -130,7 +140,8 @@ internal fun pinnedClient(pin: ByteArray, idleSeconds: Long, onMismatch: () -> U
     .followSslRedirects(false)
     .retryOnConnectionFailure(false)
     .addNetworkInterceptor(OneNetworkAttempt())
-    .connectTimeout(idleSeconds, TimeUnit.SECONDS)
+    .eventListener(events)
+    .connectTimeout(connectSeconds, TimeUnit.SECONDS)
     .readTimeout(idleSeconds, TimeUnit.SECONDS)
     .writeTimeout(idleSeconds, TimeUnit.SECONDS)
     .build()
@@ -157,23 +168,34 @@ internal val transportExecutor: Executor = Executors.newCachedThreadPool { runna
  * One request over TLS pinned to a PC's certificate. `start` hears the response head; the body then
  * arrives in the background and `read` hands it out as it comes.
  */
-internal class PinnedRequest(private val pin: ByteArray, private val executor: Executor = transportExecutor) {
+internal class PinnedRequest(
+  private val pin: ByteArray,
+  private val executor: Executor = transportExecutor,
+  private val label: RequestLabel = RequestLabel("request", "unknown"),
+  private val log: TransportLog = AndroidTransportLog,
+) {
   private val lock = Any()
   private var call: Call? = null
   private var cancelled = false
+  private var stalled = false
   private var pinMismatch = false
+  private var onHead: ((Outcome<ResponseHead>) -> Unit)? = null
   private val buffer = ArrayList<ByteArray>()
   private var ended = false
   private var failure: TransportException? = null
   private var waiting: ((Outcome<ByteArray?>) -> Unit)? = null
   private var temporary: File? = null
 
-  /** With `upload`, the body is sent from its file, and a temporary one is deleted when the request ends. */
+  /**
+   * With `upload`, the body is sent from its file, and a temporary one is deleted when the request ends. A request
+   * without a connection `setupSeconds` after it starts is stopped as a network failure.
+   */
   fun start(
     outgoing: Outgoing,
     idleSeconds: Long,
     upload: UploadBody? = null,
     onProgress: ((Long, Long) -> Unit)? = null,
+    setupSeconds: Long = minOf(idleSeconds, SETUP_SECONDS),
     onResponse: (Outcome<ResponseHead>) -> Unit,
   ) {
     synchronized(lock) { temporary = upload?.temporary }
@@ -191,14 +213,48 @@ internal class PinnedRequest(private val pin: ByteArray, private val executor: E
       onResponse(Outcome.Failed(error))
       return
     }
-    val client = pinnedClient(pin, idleSeconds) { synchronized(lock) { pinMismatch = true } }
+    synchronized(lock) { onHead = onResponse }
+    val watch = SetupWatch(
+      label,
+      if (label.route == "relay") originWithoutHost(outgoing.url) else originOf(outgoing.url),
+      TimeUnit.SECONDS.toMillis(setupSeconds),
+      log,
+      canceledByApp = { synchronized(lock) { cancelled } },
+    ) { stall(setupSeconds) }
+    // Armed before the client is built, so a stall anywhere before the connection still answers JavaScript.
+    watch.arm()
+    val client = pinnedClient(pin, idleSeconds, setupSeconds, watch) { synchronized(lock) { pinMismatch = true } }
     val newCall = client.newCall(request)
     val cancelledEarly = synchronized(lock) {
       call = newCall
-      cancelled
+      cancelled || stalled
     }
     if (cancelledEarly) newCall.cancel()
-    executor.execute { run(newCall, onResponse) }
+    executor.execute { run(newCall) }
+  }
+
+  private fun stall(setupSeconds: Long) {
+    val started = synchronized(lock) {
+      // The head may have arrived just as the budget ran out; that request stands.
+      if (cancelled || ended || onHead == null) return
+      stalled = true
+      call
+    }
+    val error = transportError("network", "The PC didn't finish connecting within $setupSeconds s, so the request was stopped.")
+    finish(error)
+    answer(Outcome.Failed(error))
+    started?.cancel()
+  }
+
+  /** Hands `outcome` to the start callback, once; false when it already had an answer. */
+  private fun answer(outcome: Outcome<ResponseHead>): Boolean {
+    val callback = synchronized(lock) {
+      val callback = onHead
+      onHead = null
+      callback
+    } ?: return false
+    callback(outcome)
+    return true
   }
 
   fun cancel() {
@@ -249,12 +305,10 @@ internal class PinnedRequest(private val pin: ByteArray, private val executor: E
     next()
   }
 
-  private fun run(call: Call, onResponse: (Outcome<ResponseHead>) -> Unit) {
-    var responded = false
+  private fun run(call: Call) {
     try {
       call.execute().use { response ->
-        responded = true
-        onResponse(Outcome.Ok(head(response)))
+        if (!answer(Outcome.Ok(head(response)))) return
         val source = response.body?.source()
         if (source != null) {
           val chunk = ByteArray(READ_CHUNK_BYTES)
@@ -267,16 +321,16 @@ internal class PinnedRequest(private val pin: ByteArray, private val executor: E
       }
       finish(null)
     } catch (e: IOException) {
-      fail(e, responded, onResponse)
+      fail(e)
     } catch (e: RuntimeException) {
-      fail(e, responded, onResponse)
+      fail(e)
     }
   }
 
-  private fun fail(e: Exception, responded: Boolean, onResponse: (Outcome<ResponseHead>) -> Unit) {
+  private fun fail(e: Exception) {
     val error = describe(e)
     finish(error)
-    if (!responded) onResponse(Outcome.Failed(error))
+    answer(Outcome.Failed(error))
   }
 
   private fun deliver(data: ByteArray) {
@@ -294,6 +348,7 @@ internal class PinnedRequest(private val pin: ByteArray, private val executor: E
 
   private fun finish(error: TransportException?) {
     val (waiting, temporary) = synchronized(lock) {
+      if (ended) return
       ended = true
       failure = error
       val pair = this.waiting to this.temporary
@@ -311,6 +366,7 @@ internal class PinnedRequest(private val pin: ByteArray, private val executor: E
         "pin_mismatch",
         "The PC's certificate doesn't match the one this phone paired with. Pair the phone again from the PC.",
       )
+      stalled -> transportError("network", "The PC didn't finish connecting in time, so the request was stopped.")
       cancelled || call?.isCanceled() == true -> transportError("aborted", "The request was canceled.")
       else -> transportError("network", "Couldn't reach the PC: ${e.message ?: e.javaClass.simpleName}")
     }
