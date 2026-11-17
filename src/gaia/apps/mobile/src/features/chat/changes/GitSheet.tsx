@@ -40,8 +40,8 @@ export function GitSheet({
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const commit = kind === "commit";
+  const where = commit ? repo.root : repo.remote;
   const files = commit ? repo.uncommitted : repo.files;
-  const names = isolate(files.join(", "), "ltr");
 
   const run = async () => {
     setRunning(true);
@@ -96,14 +96,17 @@ export function GitSheet({
         <Text role="caption" tone="secondary" dir="auto">
           {commit
             ? t("mobileApp.changes.git.commitNote", {
-                root: isolate(repo.root, "ltr"),
                 branch: isolate(repo.branch, "ltr"),
               })
             : t("mobileApp.changes.git.prNote", {
                 branch: isolate(repo.branch, "ltr"),
-                remote: isolate(repo.remote ?? "", "ltr"),
               })}
         </Text>
+        {where ? (
+          <Text role="caption" tone="muted" dir="ltr" align="ltr" testID="git-sheet-root">
+            {where}
+          </Text>
+        ) : null}
         <TextField
           label={t(
             commit
@@ -129,13 +132,19 @@ export function GitSheet({
           testID="git-sheet-body"
         />
         <Text role="caption" tone="muted" dir="auto">
-          {t.plural("mobileApp.changes.git.files", files.length, { names })}
+          {t.plural("mobileApp.changes.git.files", files.length)}
+        </Text>
+        <Text role="caption" tone="muted" dir="ltr" align="ltr" testID="git-sheet-files">
+          {files.join(", ")}
         </Text>
         {commit && repo.ignored.length > 0 ? (
           <Text role="caption" tone="muted" dir="auto">
-            {t.plural("mobileApp.changes.git.ignored", repo.ignored.length, {
-              names: isolate(repo.ignored.join(", "), "ltr"),
-            })}
+            {t.plural("mobileApp.changes.git.ignored", repo.ignored.length)}
+          </Text>
+        ) : null}
+        {commit && repo.ignored.length > 0 ? (
+          <Text role="caption" tone="muted" dir="ltr" align="ltr" testID="git-sheet-ignored">
+            {repo.ignored.join(", ")}
           </Text>
         ) : null}
         {error ? (
