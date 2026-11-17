@@ -1,10 +1,14 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
+import { existsSync, readFileSync } from 'fs';
+import { resolve } from 'path';
+
 import type { ExpoConfig } from 'expo/config';
 
 import { DEVELOPMENT_SCHEME } from '@/features/dev/devGallery';
 import { LOCALES } from '@webui/i18n/registry';
+import { colors } from '@/ui/tokens/generated';
 
 import appConfig, { readIosBundleId, readAppEnv, type AppEnv } from '../app.config';
 
@@ -99,5 +103,31 @@ describe('app config', () => {
         expect(pluginOptions(configFor('development'), 'expo-localization').supportedLocales).toEqual(
             LOCALES.map((locale) => locale.meta.code),
         );
+    });
+
+    it('uses existing icon files, an opaque iOS icon, and the theme backgrounds', () => {
+        const config = configFor('production');
+        const file = (path: string | undefined): string => {
+            const full = resolve(__dirname, '..', path ?? '');
+            expect(existsSync(full)).toBe(true);
+            return full;
+        };
+        // IHDR colour type, byte 25: 2 is RGB with no alpha, 6 is RGBA.
+        const colorType = (full: string): number => readFileSync(full)[25];
+
+        expect(config.icon).toBe(config.ios?.icon);
+        expect(colorType(file(config.icon))).toBe(2);
+        const adaptive = config.android?.adaptiveIcon;
+        expect(colorType(file(adaptive?.foregroundImage))).toBe(6);
+        expect(adaptive?.backgroundColor).toBe(colors.dark.bgPrimary);
+
+        const splash = pluginOptions(config, 'expo-splash-screen') as {
+            image: string;
+            backgroundColor: string;
+            dark: { backgroundColor: string };
+        };
+        expect(colorType(file(splash.image))).toBe(6);
+        expect(splash.backgroundColor).toBe(colors.light.bgPrimary);
+        expect(splash.dark.backgroundColor).toBe(colors.dark.bgPrimary);
     });
 });
