@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import { alertText } from '@webui/utils/chatAlerts.core';
-import { translator } from '@webui/i18n/translator';
+import type { Translate } from '@webui/i18n/translator';
 import type { Session } from '@webui/types';
 import type { GaiaNotification, NotificationType } from '@webui/types/agent';
 
@@ -18,7 +18,7 @@ export interface NotificationScene {
     filter?: NotificationType | null;
     /** Approvals whose chat is still blocked on the answer, by confirm id. */
     waiting?: string[];
-    chatAlert?: ChatAlertBanner;
+    chatAlert?: ChatAlertSpec;
     /** The status request fails like a PC that doesn't answer. */
     unreachable?: boolean;
     /** The status request answers a gateway 504, the phone's only "slow to answer" signal. */
@@ -26,10 +26,17 @@ export interface NotificationScene {
     data?: FakeClientData;
 }
 
-/** The banner the chat-alert feed raises: the catalog's headline, with the chat's own title as the body. */
-const chatAlert = (event: ChatAlertBanner['event'], tone: ChatAlertBanner['tone'], title: string, status?: Session['last_run_status']): ChatAlertBanner => {
-    const { title: headline, body } = alertText(event, { title, last_run_status: status } as Session, translator('en'));
-    return { sessionId: 's-chat', event, tone, title: headline, message: body };
+export interface ChatAlertSpec {
+    event: ChatAlertBanner['event'];
+    tone: ChatAlertBanner['tone'];
+    title: string;
+    status?: Session['last_run_status'];
+}
+
+/** The banner the chat-alert feed raises, in the viewer's language: the catalog's headline, with the chat's own title as the body. */
+export const chatAlertBanner = (spec: ChatAlertSpec, t: Translate): ChatAlertBanner => {
+    const { title: headline, body } = alertText(spec.event, { title: spec.title, last_run_status: spec.status } as Session, t);
+    return { sessionId: 's-chat', event: spec.event, tone: spec.tone, title: headline, message: body };
 };
 
 const MIN = 60_000;
@@ -70,9 +77,9 @@ export const NOTIFICATION_SCENES: Record<string, NotificationScene> = {
     'all-read': { view: 'center', items: MIXED.map((n) => ({ ...n, read: true })) },
     'alert-settings': { view: 'alerts' },
     'banner-backend-error': { view: 'banner', data: {} },
-    'banner-chat-finished': { view: 'banner', data: status({}), chatAlert: chatAlert('finished', 'success', 'Quarterly plan', 'done') },
-    'banner-chat-failed': { view: 'banner', data: status({}), chatAlert: chatAlert('finished', 'danger', 'Quarterly plan', 'failed') },
-    'banner-chat-needs-approval': { view: 'banner', data: status({}), chatAlert: chatAlert('needs_approval', 'warning', 'Weekly report') },
+    'banner-chat-finished': { view: 'banner', data: status({}), chatAlert: { event: 'finished', tone: 'success', title: 'Quarterly plan', status: 'done' } },
+    'banner-chat-failed': { view: 'banner', data: status({}), chatAlert: { event: 'finished', tone: 'danger', title: 'Quarterly plan', status: 'failed' } },
+    'banner-chat-needs-approval': { view: 'banner', data: status({}), chatAlert: { event: 'needs_approval', tone: 'warning', title: 'Weekly report' } },
     'banner-config-error': { view: 'banner', data: status({ config_error: 'The settings file is not valid JSON (line 12).' } as Partial<SystemStatus>) },
     'banner-context-small': { view: 'banner', data: status({ context_size_sufficient: false, model_context_size: 4096 }) },
     'banner-download': { view: 'banner', data: status({ download_progress: DOWNLOAD }) },

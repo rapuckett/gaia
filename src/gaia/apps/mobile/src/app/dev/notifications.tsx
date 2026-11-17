@@ -10,8 +10,9 @@ import { ChatAlertNotice, ConnectionBanner } from '@/features/banners/Connection
 import { devGalleryEnabled } from '@/features/dev/devGallery';
 import { KeyedScene } from '@/features/dev/KeyedScene';
 import { NotificationCenterScreen } from '@/features/notifications';
-import { NOTIFICATION_SCENES, notificationSceneClient, type NotificationScene } from '@/features/notifications/devScenes';
+import { chatAlertBanner, NOTIFICATION_SCENES, notificationSceneClient, type NotificationScene } from '@/features/notifications/devScenes';
 import NotificationsPane from '@/features/settings/panes/Notifications';
+import { useT } from '@/i18n/useT';
 import { SetupGate } from '@/features/setup/SetupGate';
 import { IDLE_TURN, useChatStreamStore } from '@/state/chatStreams';
 import { useChatAlertBannerStore } from '@/state/chatAlertBanner';
@@ -35,6 +36,7 @@ function seed(scene: NotificationScene) {
 }
 
 function Body({ scene }: { scene: NotificationScene }) {
+    const t = useT();
     if (scene.view === 'center') {
         return (
             <ScreenBannerProvider banner={null}>
@@ -68,7 +70,7 @@ function Body({ scene }: { scene: NotificationScene }) {
             banner={
                 // The root ChatAlertFeed clears the store's alert (turn seeding, 8 s timer), so the scene hosts its own.
                 <Stack gap="sm">
-                    {scene.chatAlert ? <ChatAlertNotice alert={scene.chatAlert} /> : null}
+                    {scene.chatAlert ? <ChatAlertNotice alert={chatAlertBanner(scene.chatAlert, t)} /> : null}
                     <ConnectionBanner />
                 </Stack>
             }

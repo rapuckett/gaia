@@ -7,6 +7,8 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import NotificationsGalleryRoute from '@/app/dev/notifications';
 
+import { useLocaleStore } from '@/state/locale';
+
 import { NOTIFICATION_SCENES } from './devScenes';
 
 jest.mock('expo-font', () => ({ useFonts: () => [true, null] }));
@@ -57,6 +59,18 @@ describeNative('/dev/notifications', () => {
         await mount();
         expect(await screen.findByText('GAIA hit a problem')).toBeTruthy();
         expect(screen.getByTestId('banner-chat-alert')).toBeTruthy();
+    });
+
+    it('banner-chat-finished headline is Arabic in the Arabic UI', async () => {
+        useLocaleStore.getState().setLocale('ar');
+        try {
+            mockState = 'banner-chat-finished';
+            await mount();
+            expect(await screen.findByText(/انتهى GAIA/)).toBeTruthy();
+            expect(screen.queryByText('GAIA finished')).toBeNull();
+        } finally {
+            useLocaleStore.getState().setLocale(null);
+        }
     });
 
     it('names an unknown scene and lists the known ones', async () => {
