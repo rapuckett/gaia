@@ -5,13 +5,16 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useMemo } from 'react';
 
 import type { ActiveModel, Message, ProviderModel, RetryResult } from '@/api/client.types';
+import { GaiaApiError } from '@/api/errors';
 import { createFakeClient } from '@/api/fake';
 import { GaiaClientProvider } from '@/data';
 import type { Comparison } from '@/state/answerComparison';
+import { useT } from '@/i18n/useT';
 import { Screen, UIProvider } from '@/ui';
 
 import { AnswerComparison } from './AnswerComparison';
 import { RetrySheet } from './RetrySheet';
+import { failureOf } from './useAnswerComparison';
 
 /** Developer gallery (`/dev/messages?state=`): the retry sheet and the answer comparison in each state. */
 export const COMPARE_STATES = ['retry-sheet', 'retry-loading', 'retry-error', 'compare-ready', 'compare-running', 'compare-failed'] as const;
@@ -60,6 +63,7 @@ function client(state: CompareState) {
 }
 
 export function CompareGallery({ state }: { state: CompareState }) {
+    const t = useT();
     const fake = useMemo(() => client(state), [state]);
     const queryClient = useMemo(() => new QueryClient({ defaultOptions: { queries: { retry: false } } }), []);
     const noop = () => undefined;
@@ -79,7 +83,7 @@ export function CompareGallery({ state }: { state: CompareState }) {
                                     state === 'compare-running'
                                         ? { status: 'running', model: 'Gemma-4-E4B-it-GGUF' }
                                         : state === 'compare-failed'
-                                          ? { status: 'failed', model: 'Gemma-4-E4B-it-GGUF', error: 'Not enough free memory to load the model.' }
+                                          ? { status: 'failed', model: 'Gemma-4-E4B-it-GGUF', ...failureOf(new GaiaApiError(500, 'Not enough free memory to load the model.'), t) }
                                           : { status: 'ready', result: RESULT },
                                 )}
                                 onKeep={noop}

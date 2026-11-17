@@ -9,7 +9,7 @@ import type { ModelNeed } from '@/api/client.types';
 import { DOWNLOAD_MISS_LIMIT, DOWNLOAD_NO_ROW_LIMIT, DOWNLOAD_POLL_MS } from '@/api/constants';
 import { GaiaApiError } from '@/api/errors';
 import { requireClient, useGaiaClient } from '@/data';
-import { describeError, useT } from '@/i18n/useT';
+import { describeHttpFailure, useT } from '@/i18n/useT';
 import { useModelNeededStore } from '@/state/modelNeeded';
 import { Button, Notice, ProgressLine, Row, Sheet, Spinner, Stack, Text } from '@/ui';
 
@@ -45,7 +45,7 @@ export function NeedPrompt({ need, initial }: { need: ModelNeed; initial?: NeedP
     const live = useRef(true);
     const [percent, setPercent] = useState<number | null>(initial?.percent ?? null);
     const [downloading, setDownloading] = useState(initial?.downloading ?? false);
-    const [error, setError] = useState<string | null>(initial?.failed ? t('modelNeeded.failed') : null);
+    const [error, setError] = useState<{ text: string; detail?: string } | null>(initial?.failed ? { text: t('modelNeeded.failed') } : null);
     const [serverShort, setServerShort] = useState(false);
 
     const stop = useCallback(() => {
@@ -84,7 +84,7 @@ export function NeedPrompt({ need, initial }: { need: ModelNeed; initial?: NeedP
         } catch (err) {
             if (!live.current) return;
             setDownloading(false);
-            setError(err instanceof GaiaApiError ? err.detail : describeError(err, t));
+            setError(describeHttpFailure(err, t));
             if (err instanceof GaiaApiError && err.status === 409) setServerShort(true);
             return;
         }
@@ -103,7 +103,7 @@ export function NeedPrompt({ need, initial }: { need: ModelNeed; initial?: NeedP
                         if (++noRow.current < DOWNLOAD_NO_ROW_LIMIT) return;
                         stop();
                         setDownloading(false);
-                        setError(t('modelNeeded.failed'));
+                        setError({ text: t('modelNeeded.failed') });
                         return;
                     }
                     if (row.bytes_total > 0) setPercent(Math.floor((row.bytes_done * 100) / row.bytes_total));
@@ -113,7 +113,7 @@ export function NeedPrompt({ need, initial }: { need: ModelNeed; initial?: NeedP
                     } else if (row.state === 'failed' || row.state === 'cancelled') {
                         stop();
                         setDownloading(false);
-                        setError(row.error ?? t('modelNeeded.failed'));
+                        setError({ text: t('modelNeeded.failed'), detail: row.error ?? undefined });
                     }
                 })
                 .catch((err) => {
@@ -122,7 +122,7 @@ export function NeedPrompt({ need, initial }: { need: ModelNeed; initial?: NeedP
                     if (++misses.current < DOWNLOAD_MISS_LIMIT) return;
                     stop();
                     setDownloading(false);
-                    setError(describeError(err, t));
+                    setError(describeHttpFailure(err, t));
                 });
         }, DOWNLOAD_POLL_MS);
     };
@@ -203,7 +203,7 @@ export function NeedPrompt({ need, initial }: { need: ModelNeed; initial?: NeedP
                         })}
                     />
                 ) : null}
-                {error ? <Notice tone="danger" message={error} /> : null}
+                {error ? <Notice tone="danger" message={error.text} detail={error.detail} /> : null}
             </Stack>
         </Sheet>
     );

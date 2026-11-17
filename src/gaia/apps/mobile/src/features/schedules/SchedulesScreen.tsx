@@ -4,10 +4,9 @@
 import { useEffect, useState } from 'react';
 
 import type { Schedule } from '@/api/client.types';
-import { GaiaApiError } from '@/api/errors';
 import { useDeleteSchedule, useRunSchedule, useQueryFailure, useSchedules, useUpdateScheduleStatus } from '@/data';
 import { ScreenHeader } from '@/features/nav/ScreenHeader';
-import { describeError, useT } from '@/i18n/useT';
+import { describeHttpFailure, useT } from '@/i18n/useT';
 import { ErrorState, IconButton, List, ListSkeleton, Notice, Row, Screen, Stack, Text, useTheme } from '@/ui';
 import { Clock, Plus, X } from '@/ui/icons';
 
@@ -75,7 +74,7 @@ export function SchedulesScreen({ onOpenChat, onOpenAutomations, dev }: Schedule
     const update = useUpdateScheduleStatus();
     const run = useRunSchedule();
     const remove = useDeleteSchedule();
-    const [actionError, setActionError] = useState<string | null>(dev?.error ?? null);
+    const [actionError, setActionError] = useState<{ text: string; detail?: string } | null>(dev?.error ? { text: dev.error } : null);
     const [creating, setCreating] = useState(dev?.form !== undefined);
     const schedules = query.data?.schedules ?? [];
     const now = useClock(schedules);
@@ -83,7 +82,7 @@ export function SchedulesScreen({ onOpenChat, onOpenAutomations, dev }: Schedule
 
     const callbacks = {
         onSuccess: () => setActionError(null),
-        onError: (error: Error) => setActionError(error instanceof GaiaApiError ? error.detail : describeError(error, t)),
+        onError: (error: Error) => setActionError(describeHttpFailure(error, t)),
     };
 
     return (
@@ -103,7 +102,7 @@ export function SchedulesScreen({ onOpenChat, onOpenAutomations, dev }: Schedule
             </Stack>
             {query.isPending && !failure.failed ? <ListSkeleton rows={4} /> : null}
             {failure.failed ? (
-                <ErrorState title={t('schedules.loadFailed')} message={describeError(failure.error, t)} onRetry={() => void query.refetch()} />
+                <ErrorState title={t('schedules.loadFailed')} message={describeHttpFailure(failure.error, t).text} detail={describeHttpFailure(failure.error, t).detail} onRetry={() => void query.refetch()} />
             ) : null}
             {query.data && schedules.length === 0 ? (
                 <>
@@ -128,7 +127,7 @@ export function SchedulesScreen({ onOpenChat, onOpenAutomations, dev }: Schedule
                             {actionError ? (
                                 <Row gap="sm" align="start">
                                     <Stack flex={1}>
-                                        <Notice tone="danger" message={actionError} />
+                                        <Notice tone="danger" message={actionError.text} detail={actionError.detail} />
                                     </Stack>
                                     <IconButton icon={X} label={t('schedules.dismissError')} onPress={() => setActionError(null)} />
                                 </Row>

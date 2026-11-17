@@ -171,6 +171,12 @@ describeNative('card, connector and undo scenes', () => {
         expect(await screen.findByText(text, opts)).toBeTruthy();
     });
 
+    it('docs-past-cap has a Manage button', async () => {
+        mockParams = { state: 'docs-past-cap' };
+        await mount(route('messages'));
+        expect(await screen.findByTestId('docs-manage', opts)).toBeTruthy();
+    });
+
     it('drop opens the later-messages question with its two buttons', async () => {
         mockParams = { state: 'drop' };
         await mount(route('messages'));
@@ -241,6 +247,21 @@ describeNative('card, connector and undo scenes', () => {
         mockParams = {};
         await mount(route('markdown'));
         expect((await screen.findAllByRole('link', opts)).length).toBeGreaterThan(0);
+    });
+
+    it('a citation tap reports the document it opens', async () => {
+        mockParams = {};
+        await mount(route('markdown'));
+        fireEvent.press((await screen.findAllByTestId('citation-link', opts))[0]!);
+        expect(await screen.findByTestId('citation-opened', opts)).toBeTruthy();
+    });
+
+    it('memory maintenance menu actions have test IDs and the failure shows a notice', async () => {
+        mockParams = { scene: 'actionFails' };
+        await mount(route('memory-gallery'));
+        fireEvent.press(await screen.findByTestId('memory-maintenance', opts));
+        fireEvent.press(await screen.findByTestId('memory-action-consolidate', opts));
+        expect(await screen.findByTestId('memory-notice', opts)).toBeTruthy();
     });
 
     it.each([

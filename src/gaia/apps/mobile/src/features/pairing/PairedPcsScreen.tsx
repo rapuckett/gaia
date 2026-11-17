@@ -4,7 +4,7 @@
 import { useState } from 'react';
 
 import { ScreenHeader } from '@/features/nav/ScreenHeader';
-import { describeError, useT } from '@/i18n/useT';
+import { describeHttpFailure, useT } from '@/i18n/useT';
 import { ActionSheet, Badge, Button, EmptyState, ErrorState, Icon, IconButton, ListRow, ListSkeleton, Notice, Row, Screen, Sheet, Stack, Text } from '@/ui';
 import { Cpu, Ellipsis, Plus, Trash2 } from '@/ui/icons';
 
@@ -32,11 +32,11 @@ export function PairedPcsScreen({ onAdd }: { onAdd: () => void }) {
             <Stack gap="md" paddingY="md">
                 {failure ? (
                     <Stack paddingX="lg">
-                        <Notice tone="danger" message={describeError(failure, t)} />
+                        <Notice tone="danger" message={describeHttpFailure(failure, t).text} detail={describeHttpFailure(failure, t).detail} />
                     </Stack>
                 ) : null}
                 {pcs.isPending ? <ListSkeleton rows={3} /> : null}
-                {pcs.error ? <ErrorState title={describeError(pcs.error, t)} onRetry={() => void pcs.refetch()} /> : null}
+                {pcs.error ? <ErrorState title={describeHttpFailure(pcs.error, t).text} detail={describeHttpFailure(pcs.error, t).detail} onRetry={() => void pcs.refetch()} /> : null}
                 {pcs.data?.length === 0 ? <EmptyState title={t('mobileApp.pairing.pcs.empty')} /> : null}
                 {pcs.data?.map((item) => {
                     const current = isCurrentPc(item, connection);

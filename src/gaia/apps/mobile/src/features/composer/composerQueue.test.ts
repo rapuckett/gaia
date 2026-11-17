@@ -3,6 +3,8 @@
 
 import { enqueue } from '@webui/utils/messageQueue';
 
+import { GaiaNetworkError } from '@/api/errors';
+
 import { flushHeld, useComposerQueueStore } from './composerQueue';
 
 const NEW_CHAT = '';
@@ -35,5 +37,15 @@ describe('flushHeld', () => {
             ['first', 'failed', 'no connection'],
             ['second', 'queued', undefined],
         ]);
+    });
+
+    it('keeps a failed send as translatable data, not the error message text', async () => {
+        hold(NEW_CHAT, 'first');
+        await flushHeld('chat-1', jest.fn().mockRejectedValue(new GaiaNetworkError('http://pc:4200', new Error('refused'))));
+        const [failed] = queue('chat-1');
+        expect(failed.state).toBe('failed');
+        expect(failed.error).not.toMatch(/mobileApp\.|\{/);
+        expect(failed.failure).toMatchObject({ messageKey: 'mobileApp.error.network', params: { url: 'http://pc:4200', reason: 'refused' } });
+        expect(JSON.parse(JSON.stringify(failed)).failure.messageKey).toBe('mobileApp.error.network');
     });
 });

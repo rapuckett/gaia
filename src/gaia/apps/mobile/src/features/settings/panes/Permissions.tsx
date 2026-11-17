@@ -2,13 +2,14 @@
 // SPDX-License-Identifier: MIT
 
 import { createContext, useContext, useState } from 'react';
+import { View } from 'react-native';
 
 import { ENDPOINTS } from '@/api/constants';
 import { GaiaApiError } from '@/api/errors';
 import { useDeviceRefused } from '@/api/routeAccess';
 import type { SessionPermissions } from '@/api/client.types';
 import { useAllPermissions, usePermissionActions, useSessions } from '@/data';
-import { describeError, useT } from '@/i18n/useT';
+import { describeHttpFailure, useT } from '@/i18n/useT';
 import {
     ActionSheet, Badge, Button, Card, Disclosure, Divider, ErrorState, IconButton, ListSkeleton, Ltr, Notice, Row, Sheet, Stack, Switch, Text,
 } from '@/ui';
@@ -28,12 +29,12 @@ export default function Permissions() {
     const { setDefault, setChatMode, revoke } = usePermissionActions();
     const defaultRefused = useDeviceRefused('PUT', ENDPOINTS.chatPermissionsDefault);
     const [confirming, setConfirming] = useState(useContext(SeedConfirmFullAccess));
-    const [error, setError] = useState<string | null>(null);
+    const [error, setError] = useState<{ text: string; detail?: string; info?: boolean } | null>(null);
     const [howOpen, setHowOpen] = useState(false);
     const [chatsOpen, setChatsOpen] = useState(true);
     const [menuFor, setMenuFor] = useState<SessionPermissions | null>(null);
 
-    const fail = (err: unknown) => setError(err instanceof GaiaApiError && err.status === 403 ? t('mobileApp.settings.pcOnly') : describeError(err, t));
+    const fail = (err: unknown) => setError(err instanceof GaiaApiError && err.status === 403 ? { text: t('mobileApp.settings.pcOnly'), info: true } : describeHttpFailure(err, t));
     const run = (pending: Promise<unknown>) => {
         setError(null);
         pending.catch(fail);
@@ -74,12 +75,12 @@ export default function Permissions() {
                     </Stack>
                 </Card>
 
-                {error ? <Notice tone={error === t('mobileApp.settings.pcOnly') ? 'info' : 'danger'} message={error} testID="permissions-error" /> : null}
+                {error ? <Notice tone={error.info ? 'info' : 'danger'} message={error.text} detail={error.detail} testID="permissions-error" /> : null}
 
                 {all.isError && isPcRefusal(all.error) ? (
                     <PcOnlyNotice testID="permissions-pc-only" />
                 ) : all.isError ? (
-                    <ErrorState title={describeError(all.error, t)} onRetry={() => void all.refetch()} />
+                    <ErrorState title={describeHttpFailure(all.error, t).text} detail={describeHttpFailure(all.error, t).detail} onRetry={() => void all.refetch()} />
                 ) : all.isPending ? (
                     <ListSkeleton rows={2} />
                 ) : rows.length === 0 ? (
@@ -105,11 +106,14 @@ export default function Permissions() {
                                                     icon={Ellipsis}
                                                     variant="ghost"
                                                     label={t('row.moreActions', { title: titleOf(r.session_id) })}
+                                                    testID={`perm-chat-menu-${r.session_id}`}
                                                     onPress={() => setMenuFor(r)}
                                                 />
-                                            ) : null}
+                                            ) : (
+                                                <View style={{ width: 44 }} testID="permissions-row-menu-slot" />
+                                            )}
                                         </Row>
-                                        {r.grants.map((g) => (
+                                        {r.grants.map((g, gi) => (
                                             <Stack key={g.key} gap="xs">
                                                 <Divider />
                                                 <Row gap="sm">
@@ -120,6 +124,7 @@ export default function Permissions() {
                                                         variant="ghost"
                                                         size="sm"
                                                         shrink={false}
+                                                        testID={`perm-grant-revoke-${r.session_id}-${gi}`}
                                                         onPress={() => run(revoke.mutateAsync({ sessionId: r.session_id, key: g.key }))}
                                                     />
                                                 </Row>
@@ -141,6 +146,7 @@ export default function Permissions() {
                     <Stack gap="sm">
                         <Button
                             label={t('settings.permissions.turnOn')}
+                            testID="perm-confirm"
                             variant="danger"
                             full
                             onPress={() => {
@@ -161,10 +167,10 @@ export default function Permissions() {
                 title={menuFor ? titleOf(menuFor.session_id) : undefined}
                 actions={[
                     ...(menuFor?.mode === 'full_access'
-                        ? [{ label: t('settings.permissions.turnOff'), onPress: () => run(setChatMode.mutateAsync({ sessionId: menuFor.session_id, mode: 'ask' })) }]
+                        ? [{ label: t('settings.permissions.turnOff'), testID: 'perm-chat-turn-off-full', onPress: () => run(setChatMode.mutateAsync({ sessionId: menuFor.session_id, mode: 'ask' })) }]
                         : []),
                     ...(menuFor && menuFor.grants.length > 1
-                        ? [{ label: t('settings.permissions.revokeAll'), destructive: true, onPress: () => run(revoke.mutateAsync({ sessionId: menuFor.session_id })) }]
+                        ? [{ label: t('settings.permissions.revokeAll'), testID: 'perm-chat-revoke-all', destructive: true, onPress: () => run(revoke.mutateAsync({ sessionId: menuFor.session_id })) }]
                         : []),
                 ]}
             />

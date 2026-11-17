@@ -82,6 +82,7 @@ function citation(doc: LibraryDoc, page: number | undefined, ctx: InlineContext,
             key={key}
             tone="accent"
             accessibilityRole="link"
+            testID="citation-link"
             accessibilityLabel={page ? t('citation.openPage', { page }) : t('citation.open', { name: doc.filename })}
             onPress={() => onOpenCitation(doc, page)}
         >
@@ -98,6 +99,7 @@ function pageLink(doc: LibraryDoc, page: number, label: string, ctx: InlineConte
             key={key}
             tone="accent"
             accessibilityRole="link"
+            testID="citation-link"
             accessibilityLabel={t('citation.openPage', { page })}
             onPress={() => onOpenCitation(doc, page)}
         >

@@ -14,7 +14,7 @@
   "components/UnsupportedFeature.tsx": 4,
   "components/VersionPicker.tsx": 2,
   "components/email/EmailConnectCta.tsx": 7,
-  "components/session-panel/ChangesSection.tsx": 29,
+  "components/session-panel/ChangesSection.tsx": 28,
   "components/settings/AboutSettings.tsx": 1,
   "components/settings/MessagingSettings.tsx": 5,
   "components/setup/detected.ts": 4,
@@ -41,6 +41,5 @@
   "utils/streamErrors.core.ts": 7,
   "utils/streamSteps.core.ts": 5,
   "utils/trayActivity.ts": 1,
-  "utils/untrackedWork.ts": 9,
   "utils/uploadErrors.core.ts": 35
 }

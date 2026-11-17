@@ -132,7 +132,7 @@ const row = (id: string, roles: SetupRole[], state: SetupModelProgress['state'],
 });
 const test = (job: SetupTest['job'], state: SetupTest['state'], over: Partial<SetupTest> = {}): SetupTest => ({ job, subject: null, state, error: null, kind: null, seconds: null, ...over });
 
-const RUN: SetupRunStatus = {
+export const RUN: SetupRunStatus = {
     state: 'running', text: 'Downloading the models', chat_model: GEMMA_ID, skip_chat_model: false,
     steps: [], log_tail: [], command: 'gaia init --profile gaia',
     components: { server: 'done', backend: 'active' },
@@ -152,6 +152,14 @@ const RUN_ROW_FAILED: SetupRunStatus = {
         row(QWEN_ID, ['chat'], 'downloading', 7.6e9, 23.3e9),
     ],
     overall: { bytes_done: 9.93e9, bytes_total: 29.6e9, speed_bps: 0, eta_s: null, percent: 33, failed: 1 },
+};
+const RUN_ROW_ACTIONS: SetupRunStatus = {
+    ...RUN, state: 'failed', text: 'Setup stopped',
+    models: [
+        row(GEMMA_ID, ['chat', 'vision'], 'failed', 2e9, 5.97e9, { error: 'Connection reset by peer', error_kind: 'network' }),
+        row(QWEN_ID, ['chat'], 'cancelled', 7.6e9, 23.3e9),
+    ],
+    overall: { bytes_done: 9.6e9, bytes_total: 29.3e9, speed_bps: 0, eta_s: null, percent: 33, failed: 1 },
 };
 const DONE_ROWS = [row(EMBED_ID, ['embedding'], 'ready', 330e6, 330e6), row(GEMMA_ID, ['chat', 'vision'], 'verifying', 5.97e9, 5.97e9)];
 const RUN_AGENT_COMPONENT_FAILED: SetupRunStatus = {
@@ -321,6 +329,8 @@ export const SETUP_SCENES: Record<string, SetupScene> = {
     'download/lost': scene('download', { setupStatuses: [RUN, new GaiaNetworkError('http://127.0.0.1:4217/api/setup/status', new Error('Network request failed'))] }),
     'download/parts': scene('download', { setupStatus: RUN_PARTS }),
     'download/optional-added': scene('download', { setupStatus: RUN }, { queued: [SPEECH.id, IMAGES.id] }),
+    // FR-DL-06: a failed row (Retry, Skip this model) beside a cancelled one (Resume) once nothing is moving.
+    'download/row-actions': scene('download', { setupStatus: RUN_ROW_ACTIONS }),
     'download/running': scene('download', { setupStatus: RUN }),
     'download/verify-failed': scene('download', { setupStatus: RUN_VERIFY_FAILED }),
     'gate/again': scene('check', {}, { shell: { again: true } }),

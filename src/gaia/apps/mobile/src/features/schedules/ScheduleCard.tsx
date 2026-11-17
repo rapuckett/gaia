@@ -9,7 +9,7 @@ import type { MessageKey, Say } from '@webui/i18n/registry';
 import type { Schedule } from '@/api/client.types';
 import { CONFIRM_DELETE_MS } from '@/api/constants';
 import { useScheduleResults } from '@/data';
-import { describeError, useT } from '@/i18n/useT';
+import { describeHttpFailure, useT } from '@/i18n/useT';
 import { Disclosure, Icon, Notice, Row, Stack, Surface, Text, useTheme } from '@/ui';
 import { Clock, MessageSquare, Pause, Play, Trash2, Zap } from '@/ui/icons';
 
@@ -157,7 +157,7 @@ export function ScheduleCard({ schedule, now, runPending, onOpenChat, onRunNow, 
                 <Disclosure title={t('schedules.history')} open={historyOpen} onToggle={() => setHistoryOpen((open) => !open)}>
                     <Stack gap="sm">
                         {history.isPending ? <Text tone="muted">{t('schedules.historyLoading')}</Text> : null}
-                        {history.isError ? <Notice tone="danger" message={describeError(history.error, t)} /> : null}
+                        {history.isError ? <Notice tone="danger" message={describeHttpFailure(history.error, t).text} detail={describeHttpFailure(history.error, t).detail} /> : null}
                         {history.data && runs.length === 0 ? <Text tone="muted">{t('schedules.historyEmpty')}</Text> : null}
                         {runs.map((run) => (
                             <Stack key={run.id} gap="xs">
