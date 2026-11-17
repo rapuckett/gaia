@@ -10,6 +10,7 @@ import { queryKeys } from '@/data';
 import { ChatDrawerContent } from '@/features/chats/ChatDrawerContent';
 import { useChatStreamStore } from '@/state/chatStreams';
 
+import { useIsPermanentDrawer } from './ScreenHeader';
 import { activeChatId, liveRunsFromTurns, openChat, openNewChat } from './navigation';
 
 // Queues are empty until the composer queue is wired to the drawer.
@@ -23,6 +24,11 @@ export function AppDrawer({ navigation, state }: DrawerContentComponentProps) {
     useEffect(() => {
         if (drawerStatus === 'open') void queryClient.invalidateQueries({ queryKey: queryKeys.sessions });
     }, [drawerStatus, queryClient]);
+    // Rotating into the permanent sidebar must not leave an overlay open for when it rotates back.
+    const permanent = useIsPermanentDrawer();
+    useEffect(() => {
+        if (permanent) navigation.closeDrawer();
+    }, [permanent, navigation]);
     const turns = useChatStreamStore((s) => s.turns);
     const live = useMemo(() => liveRunsFromTurns(turns), [turns]);
     return (

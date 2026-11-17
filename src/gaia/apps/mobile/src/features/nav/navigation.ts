@@ -4,8 +4,30 @@
 import type { LiveRuns } from '@/features/chats/chatList';
 import type { ChatTurn } from '@/state/chatStreams';
 
-/** From this width the chat list stays on screen beside the page, as the web sidebar does. */
-export const PERMANENT_DRAWER_MIN_WIDTH = 768;
+/** From this width (iPad landscape and up) the chat list stays on screen beside the page; below it the drawer is an overlay. */
+export const PERMANENT_DRAWER_MIN_WIDTH = 1024;
+
+/** The permanent sidebar's width. */
+export const PERMANENT_DRAWER_WIDTH = 320;
+
+export interface DrawerOptionsInput {
+    width: number;
+    largeText: boolean;
+    /** The web build reads a left-to-right layout manager, so a right-to-left page needs the drawer placed explicitly. */
+    webRtl: boolean;
+}
+
+export function drawerScreenOptions({ width, largeText, webRtl }: DrawerOptionsInput) {
+    const permanent = width >= PERMANENT_DRAWER_MIN_WIDTH;
+    return {
+        headerShown: false,
+        freezeOnBlur: true,
+        drawerType: permanent ? ('permanent' as const) : ('front' as const),
+        // At large text sizes one word of a label is wider than the default drawer.
+        drawerStyle: permanent ? { width: PERMANENT_DRAWER_WIDTH } : largeText ? { width: '100%' as const } : undefined,
+        drawerPosition: webRtl ? ('right' as const) : undefined,
+    };
+}
 
 /** Where back lands from a chat opened cold; also the drawer navigator's first route. */
 export const INITIAL_ROUTE = 'index';

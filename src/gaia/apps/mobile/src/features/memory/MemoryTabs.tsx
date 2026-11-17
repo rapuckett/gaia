@@ -18,7 +18,7 @@ export function MemoryTabs({ value, onChange }: { value: MemoryTabKey; onChange:
     return (
         <Stack gap="none">
             <HScroll dir={dir} testID="memory-tabs">
-                <Stack paddingX="md" accessibilityRole="tablist">
+                <Stack paddingX="gutter" accessibilityRole="tablist" testID="memory-tablist">
                     <Row>
                         {MEMORY_TABS.map((tab) => {
                             const selected = tab.key === value;
