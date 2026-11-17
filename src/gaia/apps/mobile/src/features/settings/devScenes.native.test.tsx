@@ -88,6 +88,13 @@ describeNative('/dev/settings', () => {
         expect((await screen.findAllByText(text, { includeHiddenElements: true })).length).toBeGreaterThan(0);
     });
 
+    it('lang-switch-system-ar has Close and no Cancel', async () => {
+        mockState = 'lang-switch-system-ar';
+        await mount();
+        expect(await screen.findByTestId('language-switch-close')).toBeTruthy();
+        expect(screen.queryByTestId('language-switch-cancel')).toBeNull();
+    });
+
     it.each([
         ['lang-switch-ar-android', true],
         ['lang-switch-en-android', true],

@@ -26,6 +26,7 @@ import { SetupGate } from '@/features/setup/SetupGate';
 import { LanguageSwitchHost } from '@/features/language/LanguageSwitchCover';
 import { useDirection, useLocaleCode } from '@/i18n/useT';
 import { applyDirection } from '@/platform/direction';
+import { checkSystemLanguage } from '@/state/systemLanguage';
 import { platformFetch } from '@/platform/fetch';
 import { useConnectionStore } from '@/state/connection';
 import { useLocaleStore } from '@/state/locale';
@@ -77,6 +78,16 @@ export default function RootLayout() {
     useEffect(() => {
         if (localeLoaded) applyDirection(dir, lang, picked);
     }, [dir, lang, picked, localeLoaded]);
+
+    // Android's per-app language can change under the running app; the layout only follows after a restart.
+    useEffect(() => {
+        if (!localeLoaded) return;
+        void checkSystemLanguage();
+        const sub = AppState.addEventListener('change', (state) => {
+            if (state === 'active') void checkSystemLanguage();
+        });
+        return () => sub.remove();
+    }, [localeLoaded]);
 
     if (!localeLoaded) return null;
 

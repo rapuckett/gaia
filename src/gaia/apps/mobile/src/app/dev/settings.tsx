@@ -78,7 +78,7 @@ function SettingsView({ found }: { found: SettingsScene }) {
                                 </SeedAddedModel.Provider>
                             </SettingsTargets>
                         </Screen>
-                        <SeedLanguageSwitch.Provider value={found.languageSwitch ? { target: found.languageSwitchTo ?? 'ar', platform: found.languageSwitch } : null}>
+                        <SeedLanguageSwitch.Provider value={found.languageSwitch ? { target: found.languageSwitchTo ?? 'ar', platform: found.languageSwitch, system: found.languageSwitchSystem } : null}>
                             <LanguageSwitchHost />
                         </SeedLanguageSwitch.Provider>
                     </ScreenBannerProvider>

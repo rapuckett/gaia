@@ -8,6 +8,7 @@ import { ref, type MessageKey } from '@webui/i18n/registry';
 
 import { translator } from '@/i18n/useT';
 import { useLanguageSwitch } from '@/state/languageSwitch';
+import { useSystemSwitch } from '@/state/systemLanguage';
 import { Button, Screen, Stack, Text, useBackStep } from '@/ui';
 
 export type CoverPlatform = 'android' | 'ios';
@@ -18,12 +19,13 @@ const LANGUAGE_NAME: Record<string, MessageKey> = {
 };
 
 /** Dev scenes only: shows the cover for this language on this platform, whatever the device is. */
-export const SeedLanguageSwitch = createContext<{ target: string; platform: CoverPlatform } | null>(null);
+export const SeedLanguageSwitch = createContext<{ target: string; platform: CoverPlatform; system?: boolean } | null>(null);
 
 interface CoverProps {
     target: string;
     platform: CoverPlatform;
-    onCancel: () => void;
+    /** Absent for a switch made in system Settings, which can't be undone from here. */
+    onCancel?: () => void;
 }
 
 /** Full-screen: the layout flips only after a restart, so until then the half-mirrored app must not show. Worded in the language being switched to. */
@@ -49,7 +51,9 @@ export function LanguageSwitchCover({ target, platform, onCancel }: CoverProps) 
                                 testID="language-switch-close"
                             />
                         ) : null}
-                        <Button full label={t('mobileApp.settings.languageSwitch.cancel')} onPress={onCancel} testID="language-switch-cancel" />
+                        {onCancel ? (
+                            <Button full label={t('mobileApp.settings.languageSwitch.cancel')} onPress={onCancel} testID="language-switch-cancel" />
+                        ) : null}
                     </Stack>
                 }
             >
@@ -68,10 +72,11 @@ export function LanguageSwitchCover({ target, platform, onCancel }: CoverProps) 
     );
 }
 
-/** Android back on the cover is Cancel: the newest handler runs first, so it beats the screens beneath. */
-function AndroidBack({ onCancel }: { onCancel: () => void }) {
+/** Android back on the cover is Cancel, or Close when there is no Cancel: the newest handler runs first, so it beats the screens beneath. */
+function AndroidBack({ onCancel }: { onCancel?: () => void }) {
     useBackStep(() => {
-        onCancel();
+        if (onCancel) onCancel();
+        else BackHandler.exitApp();
         return true;
     });
     return null;
@@ -82,13 +87,16 @@ export function LanguageSwitchHost() {
     const seed = useContext(SeedLanguageSwitch);
     const target = useLanguageSwitch((s) => s.target);
     const cancel = useLanguageSwitch((s) => s.cancel);
-    const shown = seed?.target ?? target;
+    const systemTarget = useSystemSwitch((s) => s.target);
+    const shown = seed?.target ?? target ?? systemTarget;
     if (!shown) return null;
     const platform = seed?.platform ?? (Platform.OS === 'android' ? 'android' : 'ios');
+    const systemChange = seed ? seed.system === true : target === null;
+    const onCancel = systemChange ? undefined : cancel;
     return (
         <>
-            {platform === 'android' && !seed ? <AndroidBack onCancel={cancel} /> : null}
-            <LanguageSwitchCover target={shown} platform={platform} onCancel={cancel} />
+            {platform === 'android' && !seed ? <AndroidBack onCancel={onCancel} /> : null}
+            <LanguageSwitchCover target={shown} platform={platform} onCancel={onCancel} />
         </>
     );
 }
