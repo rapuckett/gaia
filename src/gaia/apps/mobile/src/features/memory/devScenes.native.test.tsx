@@ -30,6 +30,13 @@ const mount = () =>
         expect(await screen.findByText('Failed to load memory data. Is the backend running?')).toBeTruthy();
     });
 
+    it('failed keeps the PC\'s reason off the sentence and shows it on its own line', async () => {
+        mockScene = 'failed';
+        await mount();
+        expect(await screen.findByText('The backend is not running')).toBeTruthy();
+        expect(screen.queryByText(/\(503\).*The backend is not running/)).toBeNull();
+    });
+
     it('loading shows no load-failed state', async () => {
         mockScene = 'loading';
         await mount();

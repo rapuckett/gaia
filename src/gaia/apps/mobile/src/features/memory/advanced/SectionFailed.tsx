@@ -2,19 +2,25 @@
 // SPDX-License-Identifier: MIT
 
 import { isPcRefusal, PcOnlyNotice } from '@/features/settings/PcOnlyNotice';
-import { describeError, useT } from '@/i18n/useT';
+import { describeHttpFailure, useT } from '@/i18n/useT';
 import { Button, Stack, Text } from '@/ui';
 
 /** One section couldn't load: say why and let the person retry just that read; one the PC refuses says to look there. */
 export function SectionFailed({ error, onRetry }: { error: unknown; onRetry: () => void }) {
     const t = useT();
     if (isPcRefusal(error)) return <PcOnlyNotice testID="memory-section-pc-only" />;
+    const failure = describeHttpFailure(error, t);
     return (
         <Stack gap="sm" align="start" paddingY="sm">
             <Text tone="danger">{t('mobileApp.mem.sectionFailed')}</Text>
             <Text role="caption" tone="muted">
-                {describeError(error, t)}
+                {failure.text}
             </Text>
+            {failure.detail ? (
+                <Text role="caption" tone="muted" dir="ltr">
+                    {failure.detail}
+                </Text>
+            ) : null}
             <Button label={t('mem.retry')} variant="secondary" size="sm" onPress={onRetry} />
         </Stack>
     );

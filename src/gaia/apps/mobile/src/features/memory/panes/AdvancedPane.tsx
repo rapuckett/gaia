@@ -3,7 +3,7 @@
 
 import { useMemorySettings, useMemoryStats } from '@/data';
 import { isPcRefusal, PcOnlyNotice } from '@/features/settings/PcOnlyNotice';
-import { describeError, useT } from '@/i18n/useT';
+import { describeHttpFailure, useT } from '@/i18n/useT';
 import { EmptyState, ErrorState, LoadingState, Stack } from '@/ui';
 import { Brain } from '@/ui/icons';
 
@@ -20,6 +20,7 @@ export function AdvancedPane({ notify, onOpenChat }: MemoryPaneProps) {
 
     const failed = (stats.isError && !stats.data) || (settings.isError && !settings.data);
     const loading = !failed && (!stats.data || !settings.data);
+    const failure = describeHttpFailure(stats.error ?? settings.error, t);
     const retry = () => {
         if (stats.isError) void stats.refetch();
         if (settings.isError) void settings.refetch();
@@ -37,7 +38,8 @@ export function AdvancedPane({ notify, onOpenChat }: MemoryPaneProps) {
             ) : failed ? (
                 <ErrorState
                     title={t('mem.loadFailed')}
-                    message={describeError(stats.error ?? settings.error, t)}
+                    message={failure.text}
+                    detail={failure.detail}
                     action={{ label: t('mem.retry'), onPress: retry }}
                 />
             ) : settings.data && !settings.data.memory_enabled ? (
