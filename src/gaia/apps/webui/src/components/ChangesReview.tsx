@@ -8,18 +8,22 @@ import * as api from '../services/api';
 import { useEscapeToClose } from '../hooks/useEscapeToClose';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 import type { FileDiff, TurnChanges } from '../types/changes';
+import { requestErrorParam } from '../utils/requestErrors';
+import { isolate, type MessageKey, type Param } from '../i18n/registry';
+import { useT, type Translate } from '../i18n/useT';
 import { DiffCard } from './render/DiffCard';
 
-const CHANGE_LABEL: Record<FileDiff['change'], string> = {
-    edited: 'Edited',
-    created: 'Created',
-    deleted: 'Deleted',
+const CHANGE_LABEL: Record<FileDiff['change'], MessageKey> = {
+    edited: 'chg.edited',
+    created: 'chg.created',
+    deleted: 'chg.deleted',
 };
 
-function note(file: FileDiff): string | undefined {
-    if (file.too_large) return `Too large to show: ${file.before_size} → ${file.after_size} bytes.`;
-    if (file.binary) return `Binary file: ${file.before_size} → ${file.after_size} bytes. No text diff.`;
-    if (file.truncated) return 'Diff shortened: the change is too long to show in full.';
+function note(file: FileDiff, t: Translate): string | undefined {
+    const sizes = { before: isolate(String(file.before_size), 'ltr'), after: isolate(String(file.after_size), 'ltr') };
+    if (file.too_large) return t('mobileApp.changes.tooLarge', sizes);
+    if (file.binary) return t('mobileApp.changes.binary', sizes);
+    if (file.truncated) return t('mobileApp.changes.truncated');
     return undefined;
 }
 
@@ -29,8 +33,9 @@ export function ChangesReview({ sessionId, turn, onClose }: {
     turn: TurnChanges;
     onClose: () => void;
 }) {
+    const t = useT();
     const [files, setFiles] = useState<FileDiff[] | null>(null);
-    const [error, setError] = useState<string | null>(null);
+    const [error, setError] = useState<Param | null>(null);
     useEscapeToClose(true, onClose);
     const dialogRef = useRef<HTMLDivElement>(null);
     useFocusTrap(dialogRef, true);
@@ -39,7 +44,7 @@ export function ChangesReview({ sessionId, turn, onClose }: {
         let live = true;
         api.getTurnDiff(sessionId, turn.turn_id).then(
             (res) => { if (live) setFiles(res.files); },
-            (err: unknown) => { if (live) setError(err instanceof Error ? err.message : String(err)); },
+            (err: unknown) => { if (live) setError(requestErrorParam(err)); },
         );
         return () => { live = false; };
     }, [sessionId, turn.turn_id]);
@@ -47,33 +52,38 @@ export function ChangesReview({ sessionId, turn, onClose }: {
     // Portaled: opened from a message, a transformed ancestor would otherwise
     // clip the fixed backdrop to the chat column.
     return createPortal(
-        <div ref={dialogRef} className="modal-overlay" onClick={onClose} role="dialog" aria-modal="true" aria-label="Review changes">
+        <div ref={dialogRef} className="modal-overlay" onClick={onClose} role="dialog" aria-modal="true" aria-label={t('chg.review')}>
             <div className="modal-panel changes-review" onClick={(e) => e.stopPropagation()}>
                 <div className="modal-header">
-                    <h3>Changes in this turn</h3>
-                    <button type="button" className="btn-icon" onClick={onClose} aria-label="Close">
+                    <h3>{t('mobileApp.changes.reviewTitle')}</h3>
+                    <button type="button" className="btn-icon" onClick={onClose} aria-label={t('sp.closeShort')}>
                         <X size={18} />
                     </button>
                 </div>
                 <div className="modal-body changes-review-body">
-                    {error && <p className="settings-error" role="alert">Could not load the changes: {error}</p>}
+                    {error && (
+                        <div className="settings-error" role="alert">
+                            <p>{t('mobileApp.changes.loadFailedNoReason')}</p>
+                            {typeof error === 'object' ? <p>{t(error.ref, error.params)}</p> : <p dir="ltr">{error}</p>}
+                        </div>
+                    )}
                     {!files && !error && (
-                        <p className="changes-review-loading"><Loader2 size={13} className="spin" /> Loading changes…</p>
+                        <p className="changes-review-loading"><Loader2 size={13} className="spin" /> {t('mobileApp.changes.loading')}</p>
                     )}
                     {files?.map((file) => (
                         <section key={file.path} className="changes-review-file">
                             <DiffCard
                                 data={{
                                     path: file.path,
-                                    badge: CHANGE_LABEL[file.change],
-                                    note: note(file),
+                                    badge: t(CHANGE_LABEL[file.change]),
+                                    note: note(file, t),
                                     unified: file.binary || file.too_large ? '' : file.unified,
                                 }}
                             />
                         </section>
                     ))}
                     {turn.restored_at && (
-                        <p className="settings-hint">This turn was undone; these are the changes it had made.</p>
+                        <p className="settings-hint">{t('mobileApp.changes.wasUndone')}</p>
                     )}
                 </div>
             </div>

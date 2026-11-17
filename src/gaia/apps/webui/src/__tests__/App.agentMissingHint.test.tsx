@@ -179,6 +179,6 @@ describe.each(LANGS)('a first message refused for want of the GAIA agent (%s)', 
         await waitFor(() => expect(mocked.createSession).toHaveBeenCalledOnce());
         await waitFor(() => expect(useChatStore.getState().showFileBrowser).toBe(false));
         expect(useChatStore.getState().draftDocumentIds).toEqual(['doc-1']);
-        await expectHintUntilInstalled(lang, 'Please analyze this document for me: notes.txt');
+        await expectHintUntilInstalled(lang, translator(lang)('mobileApp.files.askOne', { name: 'notes.txt' }));
     });
 });
