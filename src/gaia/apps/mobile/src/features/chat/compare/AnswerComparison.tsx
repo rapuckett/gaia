@@ -65,7 +65,7 @@ export function AnswerComparison({ original, originalModel, originalLatencyMs, c
                             <Text role="body" tone="muted">{t('compare.loading', { model: shortModelName(model) })}</Text>
                         </Row>
                     ) : null}
-                    {state.status === 'failed' ? <Notice tone="danger" message={state.error} /> : null}
+                    {state.status === 'failed' ? <Notice tone="danger" message={state.error} detail={state.detail} /> : null}
                     {state.status === 'ready' ? (
                         <>
                             <Meta

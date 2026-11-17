@@ -7,7 +7,7 @@ import type { RetryResult } from '@/api/client.types';
 
 export type ComparisonState =
     | { status: 'running'; model: string }
-    | { status: 'failed'; model: string; error: string }
+    | { status: 'failed'; model: string; error: string; detail?: string }
     | { status: 'ready'; result: RetryResult };
 
 export interface Comparison {
