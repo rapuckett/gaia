@@ -7,10 +7,8 @@ import { View } from 'react-native';
 import { LOCALES, localeOptionLabel, type MessageKey } from '@webui/i18n/registry';
 import { DEFAULT_CUSTOM, PALETTES, isHexColor } from '@webui/utils/palette.core';
 
-import { DirectionNotice } from '@/features/language/DirectionNotice';
 import { useLocaleCode, useT } from '@/i18n/useT';
-import { notifyDirectionChange } from '@/state/direction';
-import { useLocaleStore } from '@/state/locale';
+import { pickLanguage } from '@/state/languageSwitch';
 import { Button, Disclosure, Icon, Pressable, Row, SegmentedControl, Select, Stack, Switch, Text, TextField, useAppearance, useTheme } from '@/ui';
 import { Check } from '@/ui/icons';
 import { useLargeText } from '@/ui/theme/a11y';
@@ -130,7 +128,6 @@ export default function General() {
     const t = useT();
     const { scheme } = useTheme();
     const locale = useLocaleCode();
-    const setLocale = useLocaleStore((s) => s.setLocale);
     const { scheme: preference, palette, custom, showResources, setScheme, setPalette, setCustom, setShowResources } = useAppearance();
     const [colorsOpen, setColorsOpen] = useState(palette === 'custom');
 
@@ -143,15 +140,12 @@ export default function General() {
                         value={locale}
                         options={LOCALES.map(({ meta }) => ({ value: meta.code, label: localeOptionLabel(meta) }))}
                         onChange={(code) => {
-                            setLocale(code);
-                            const picked = LOCALES.find(({ meta }) => meta.code === code);
-                            if (picked) notifyDirectionChange(picked.meta.dir);
+                            pickLanguage(code);
                         }}
                     />
                     <Text role="label" tone="muted">
                         {t('settings.languageHint')}
                     </Text>
-                    <DirectionNotice />
                 </Stack>
             </SettingsAnchor>
 
