@@ -217,7 +217,8 @@ export function Text({
     );
     if (!blocks?.length) return main;
     return (
-        <View>
+        // Shrinks inside a row like the Text it replaces.
+        <View style={{ flexShrink: 1 }}>
             {main}
             {blocks.map((english, i) => (
                 <RNText key={i} style={blockStyle} maxFontSizeMultiplier={maxScale ?? maxScaleFor(role, compact)} testID={testID ? `${testID}-gloss` : undefined}>
