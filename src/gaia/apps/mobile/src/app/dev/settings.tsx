@@ -10,6 +10,7 @@ import type { ScrollView } from 'react-native';
 import { GaiaClientProvider } from '@/data';
 import { devGalleryEnabled } from '@/features/dev/devGallery';
 import { KeyedScene } from '@/features/dev/KeyedScene';
+import { LanguageSwitchHost, SeedLanguageSwitch } from '@/features/language/LanguageSwitchCover';
 import { SeedSkillsAdd } from '@/features/skills';
 import { SeedConfirmFullAccess } from '@/features/settings/panes/Permissions';
 import { SeedAutomationRemove } from '@/features/settings/panes/Automations';
@@ -72,6 +73,9 @@ function SettingsView({ found }: { found: SettingsScene }) {
                                 </SeedAddedModel.Provider>
                             </SettingsTargets>
                         </Screen>
+                        <SeedLanguageSwitch.Provider value={found.languageSwitch ? { target: found.languageSwitchTo ?? 'ar', platform: found.languageSwitch } : null}>
+                            <LanguageSwitchHost />
+                        </SeedLanguageSwitch.Provider>
                     </ScreenBannerProvider>
                 </UIProvider>
             </GaiaClientProvider>
