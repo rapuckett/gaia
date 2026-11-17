@@ -3,6 +3,7 @@
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Check, Copy, ExternalLink, Loader2 } from 'lucide-react';
+import { ref } from '../../i18n/registry';
 import { useT } from '../../i18n/useT';
 import { ApiError } from '../../services/api';
 import {
@@ -29,15 +30,15 @@ const SHOW_DETAIL = new Set(['error', 'credentials_unavailable']);
 
 /** Button names exactly as Discord shows them, so the user can find what they read. */
 const PORTAL = {
-    newApp: 'New Application',
-    create: 'Create',
-    bot: 'Bot',
-    reset: 'Reset Token',
-    copy: 'Copy',
-    publicBot: 'Public Bot',
-    message: 'Message',
-    createOwn: 'Create My Own',
-    forFriends: 'For me and my friends',
+    newApp: ref('settings.messaging.portal.newApp'),
+    create: ref('settings.messaging.portal.create'),
+    bot: ref('settings.messaging.portal.bot'),
+    reset: ref('settings.messaging.portal.reset'),
+    copy: ref('settings.messaging.portal.copy'),
+    publicBot: ref('settings.messaging.portal.publicBot'),
+    message: ref('settings.messaging.portal.message'),
+    createOwn: ref('settings.messaging.portal.createOwn'),
+    forFriends: ref('settings.messaging.portal.forFriends'),
 };
 
 type Action = 'connect' | 'start' | 'takeOver' | 'stop' | 'restart' | 'forget' | 'pair' | 'disconnect';

@@ -15,7 +15,7 @@ import { useDeviceStore } from '../stores/deviceStore';
 import * as api from '../services/api';
 import { log } from '../utils/logger';
 import {
-    groupSessionsForList, hiddenAutomatedCount, sessionRowStatus, type ListGroup, type LiveRuns, type RowStatus,
+    groupSessionsForList, hiddenAutomatedCount, sessionRowStatus, type LiveRuns, type RowStatus,
 } from '../utils/sessionGrouping';
 import { ordinal } from '../utils/chatAlerts';
 import { formatShortcut } from '../utils/platform';
@@ -47,16 +47,6 @@ const STATUS_LABEL: Record<RowStatus, MessageKey> = {
     waiting: 'row.status.waiting',
     done: 'row.status.done',
     failed: 'row.status.failed',
-};
-
-const GROUP_LABEL: Record<ListGroup['label'], MessageKey> = {
-    'Needs you': 'sidebar.group.needsYou',
-    Pinned: 'sidebar.group.pinned',
-    Today: 'sidebar.group.today',
-    Yesterday: 'sidebar.group.yesterday',
-    'Previous 7 days': 'sidebar.group.prev7',
-    'Previous 30 days': 'sidebar.group.prev30',
-    Older: 'sidebar.group.older',
 };
 
 const SHOW_AUTOMATED_KEY = 'gaia-show-automated-runs';
@@ -645,8 +635,8 @@ export function Sidebar({ onNewChat, onMobileAccess, tunnelActive }: SidebarProp
                         <p className="sb-empty">{q ? (pending ? t('sidebar.searching') : t('sidebar.noMatch')) : t('sidebar.empty')}</p>
                     )}
                     {groups.map((g) => (
-                        <section key={g.label} className={`sb-group${g.label === 'Needs you' ? ' is-needs-you' : ''}`}>
-                            <h2 className="sb-group-label">{t(GROUP_LABEL[g.label])}</h2>
+                        <section key={g.label} className={`sb-group${g.label === 'sidebar.group.needsYou' ? ' is-needs-you' : ''}`}>
+                            <h2 className="sb-group-label">{t(g.label)}</h2>
                             <ul>
                                 {g.sessions.map((s) => (
                                     <SessionRow
