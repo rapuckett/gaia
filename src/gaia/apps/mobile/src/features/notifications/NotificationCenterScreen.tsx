@@ -8,7 +8,7 @@ import { useShallow } from 'zustand/react/shallow';
 import type { GaiaNotification, NotificationType } from '@webui/types/agent';
 
 import { useConfirmTool } from '@/data';
-import { describeError, useLocaleCode, useT } from '@/i18n/useT';
+import { describeHttpFailure, useLocaleCode, useT } from '@/i18n/useT';
 import { useChatStreamStore } from '@/state/chatStreams';
 import {
     clearNotifications,
@@ -147,7 +147,7 @@ function NotificationItem({ n, now, locale, waiting, answered, onOpenChat, onLai
     const { icon, tone } = ICONS[n.type];
     const { title, message } = useMemo(() => notificationText(n, t), [n, t]);
     const approval = n.type === 'permission_request';
-    const failed = confirm.isError ? describeError(confirm.error, t) : null;
+    const failed = confirm.isError ? describeHttpFailure(confirm.error, t) : null;
     // At large text sizes the time goes under the agent's name, which it would otherwise squeeze to nothing.
     const largeText = useLargeText();
     const time = <Text role="caption" tone="muted">{relativeTime(n.timestamp, now, t, locale)}</Text>;
@@ -202,7 +202,7 @@ function NotificationItem({ n, now, locale, waiting, answered, onOpenChat, onLai
                         <Badge label={answered === 'allow' ? t('notifications.approved') : t('notifications.denied')} tone={answered === 'allow' ? 'success' : 'danger'} />
                     ) : null}
                     {approval && !answered && !waiting ? <Text role="caption" tone="muted">{t('prompt.expired')}</Text> : null}
-                    {failed ? <Notice tone="danger" message={failed} /> : null}
+                    {failed ? <Notice tone="danger" message={failed.text} detail={failed.detail} /> : null}
                 </Stack>
             </Pressable>
         </View>

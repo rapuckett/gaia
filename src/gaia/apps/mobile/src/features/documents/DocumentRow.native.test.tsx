@@ -98,3 +98,15 @@ describeNative('DocumentRow name and actions', () => {
         expect(name.props.numberOfLines).toBe(2);
     });
 });
+
+describeNative('DocumentRow reason alignment', () => {
+    it('left-aligns the PC reason like a log line, so it does not hug the right in Arabic', async () => {
+        await render(
+            <DocumentRow document={failed('RAG indexing failed for bad.pdf: the file is damaged')} now={Date.now()} retrying={false} onCancel={jest.fn()} onRetry={jest.fn()} onRemove={jest.fn()} />,
+            { wrapper: wrap },
+        );
+        const reason = screen.getByText('the file is damaged') as unknown as { props: { style: { writingDirection?: string; textAlign?: string } } };
+        expect(reason.props.style.writingDirection).toBe('ltr');
+        expect(reason.props.style.textAlign).toBe('left');
+    });
+});

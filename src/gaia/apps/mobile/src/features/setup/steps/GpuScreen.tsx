@@ -9,7 +9,7 @@ import { copyableCommand, gpuGbAtSetting, osName, splitFigures } from '@webui/co
 import type { GpuMemoryStatus } from '@webui/types';
 
 import { useActiveModel, useGpuMemory, useGpuMemoryPending } from '@/data';
-import { describeError, useLocaleCode, useT } from '@/i18n/useT';
+import { describeHttpFailure, useLocaleCode, useT } from '@/i18n/useT';
 import { Button, ChoiceList, Ltr, Notice, Row, Spinner, Stack, Surface, Text } from '@/ui';
 import { Check, Copy } from '@/ui/icons';
 
@@ -80,7 +80,7 @@ export const GpuScreen: PlanScreen = ({ ctx, close }) => {
             <Stack gap="md">
                 <Text role="title" weight="semibold" accessibilityRole="header">{t('setup.gpu.title')}</Text>
                 {read.error ? (
-                    <Notice tone="danger" message={describeError(read.error, t)} action={{ label: t('setup.tryAgain'), onPress: () => void read.refetch() }} />
+                    <Notice tone="danger" message={describeHttpFailure(read.error, t).text} detail={describeHttpFailure(read.error, t).detail} action={{ label: t('setup.tryAgain'), onPress: () => void read.refetch() }} />
                 ) : (
                     <Row gap="sm">
                         <Spinner size="sm" />
@@ -133,7 +133,7 @@ export const GpuScreen: PlanScreen = ({ ctx, close }) => {
     const body = guided ? (
         <Stack gap="md">
             {preset ? <Text tone="secondary">{t('gpu.guided.lede', { gb: gb(preset.gpu_gb) })}</Text> : null}
-            {steps.error ? <Notice tone="danger" message={describeError(steps.error, t)} /> : null}
+            {steps.error ? <Notice tone="danger" message={describeHttpFailure(steps.error, t).text} detail={describeHttpFailure(steps.error, t).detail} /> : null}
             {steps.isPending ? (
                 <Row gap="sm">
                     <Spinner size="sm" />
@@ -171,7 +171,7 @@ export const GpuScreen: PlanScreen = ({ ctx, close }) => {
                 </Stack>
             )}
             {copyError ? <Notice tone="danger" message={copyError} /> : null}
-            {pendingChange.error ? <Notice tone="danger" message={describeError(pendingChange.error, t)} /> : null}
+            {pendingChange.error ? <Notice tone="danger" message={describeHttpFailure(pendingChange.error, t).text} detail={describeHttpFailure(pendingChange.error, t).detail} /> : null}
             <Notice tone="info" message={t('setup.plan.pcOnly')} />
         </Stack>
     ) : (
@@ -192,7 +192,7 @@ export const GpuScreen: PlanScreen = ({ ctx, close }) => {
                 />
             ) : null}
             {pending?.state === 'not_applied' ? <Notice tone="warning" message={t('gpu.pending.notApplied', { gb: nowGb })} action={keepAction} /> : null}
-            {pendingChange.error && !guided ? <Notice tone="danger" message={describeError(pendingChange.error, t)} /> : null}
+            {pendingChange.error && !guided ? <Notice tone="danger" message={describeHttpFailure(pendingChange.error, t).text} detail={describeHttpFailure(pendingChange.error, t).detail} /> : null}
 
             {!restartPending && presets.length > 0 ? (
                 <Stack gap="md">

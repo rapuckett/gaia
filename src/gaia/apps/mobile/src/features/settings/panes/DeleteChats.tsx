@@ -4,7 +4,7 @@
 import { useState } from 'react';
 
 import { useDeleteAllChats, useSessions } from '@/data';
-import { describeError, describeFailureWith, useT } from '@/i18n/useT';
+import { describeFailureWith, describeHttpFailure, useT } from '@/i18n/useT';
 import { Button, Card, Notice, Sheet, Stack, Text } from '@/ui';
 
 
@@ -15,7 +15,7 @@ export function DeleteChats() {
     const deleteAll = useDeleteAllChats();
     // The count is read when the sheet opens, so the buttons say what the person agreed to.
     const [asking, setAsking] = useState<number | null>(null);
-    const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
+    const [result, setResult] = useState<{ ok: boolean; text: string; detail?: string } | null>(null);
 
     const confirm = async () => {
         setAsking(null);
@@ -28,7 +28,7 @@ export function DeleteChats() {
                     : { ok: true, text: t('settings.privacy.deleted') },
             );
         } catch (error) {
-            setResult({ ok: false, text: describeError(error, t) });
+            setResult({ ok: false, ...describeHttpFailure(error, t) });
         }
     };
 
@@ -47,7 +47,7 @@ export function DeleteChats() {
                     onPress={() => setAsking(sessions.length)}
                     testID="privacy-delete-all"
                 />
-                {result ? <Notice tone={result.ok ? 'success' : 'danger'} message={result.text} testID="privacy-delete-result" /> : null}
+                {result ? <Notice tone={result.ok ? 'success' : 'danger'} message={result.text} detail={result.detail} testID="privacy-delete-result" /> : null}
             </Stack>
             <Sheet
                 open={asking !== null}

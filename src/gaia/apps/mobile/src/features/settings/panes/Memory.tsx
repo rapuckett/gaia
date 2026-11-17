@@ -5,7 +5,7 @@ import { useRouter } from 'expo-router';
 
 import { GaiaApiError } from '@/api/errors';
 import { useMemorySettings, useUpdateMemorySettings } from '@/data';
-import { describeError, useT } from '@/i18n/useT';
+import { describeHttpFailure, useT } from '@/i18n/useT';
 import { Card, Notice, SmallButton, Stack, Switch, Text } from '@/ui';
 
 import { SettingsAnchor } from '../targets';
@@ -37,7 +37,7 @@ export default function Memory() {
                         {refused ? (
                             <Notice tone="info" message={t('mobileApp.settings.pcOnly')} testID="memory-pc-only" />
                         ) : error ? (
-                            <Notice tone="danger" message={describeError(error, t)} testID="memory-error" />
+                            <Notice tone="danger" message={describeHttpFailure(error, t).text} detail={describeHttpFailure(error, t).detail} testID="memory-error" />
                         ) : null}
                         <Stack gap="sm">
                             <Text role="label" tone="muted">
