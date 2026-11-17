@@ -7,6 +7,7 @@ import * as api from '../../services/api';
 import { useChatStore } from '../../stores/chatStore';
 import type { TunnelStatus } from '../../types';
 import { MobileAccessModal } from '../MobileAccessModal';
+import { tEn } from '../../i18n/translator';
 
 vi.mock('../../services/api');
 vi.mock('qrcode', () => ({ default: { toCanvas: vi.fn().mockResolvedValue(undefined) } }));
@@ -65,7 +66,7 @@ describe('MobileAccessModal home-screen hint', () => {
     it('stays hidden while the tunnel is still starting, with no link to install yet', async () => {
         vi.mocked(api.getTunnelStatus).mockResolvedValue(STARTING);
         render(<MobileAccessModal isOpen onClose={vi.fn()} />);
-        expect(await screen.findByText('Starting tunnel...')).toBeInTheDocument();
+        expect(await screen.findByText(tEn('mobileAccess.starting'))).toBeInTheDocument();
         expect(screen.queryByText('Keep GAIA on your phone')).toBeNull();
     });
 
@@ -79,7 +80,7 @@ describe('MobileAccessModal home-screen hint', () => {
         vi.mocked(api.getTunnelStatus).mockRejectedValue(new Error('offline'));
         render(<MobileAccessModal isOpen onClose={vi.fn()} />);
         await waitFor(() => expect(api.getTunnelStatus).toHaveBeenCalled());
-        expect(screen.getByText('Starting tunnel...')).toBeInTheDocument();
+        expect(screen.getByText(tEn('mobileAccess.starting'))).toBeInTheDocument();
         expect(screen.queryByText('Keep GAIA on your phone')).toBeNull();
     });
 });
