@@ -32,6 +32,13 @@ describeNative('/dev/composer new-chat scenes', () => {
         expect(screen.getByDisplayValue('Draft a status update for the team')).toBeTruthy();
     });
 
+    it('create-failed mounts exactly one composer with one composer-send', async () => {
+        await mount('create-failed');
+        await screen.findByTestId('composer-send');
+        expect(screen.getAllByTestId('composer-send', { includeHiddenElements: true })).toHaveLength(1);
+        expect(screen.getAllByTestId('composer-input', { includeHiddenElements: true })).toHaveLength(1);
+    });
+
     it('skill-prompt lands the Try it prompt under the unsent draft', async () => {
         await mount('skill-prompt');
         await waitFor(() => expect(screen.getByTestId('composer-input').props.value).toBe('Compare these two quotes\n\nLoad the summarize skill, then tell me briefly what it lets you do.'));
