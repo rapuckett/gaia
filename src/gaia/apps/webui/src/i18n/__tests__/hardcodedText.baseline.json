@@ -1,9 +1,7 @@
 {
   "components/AgentActivity.tsx": 2,
-  "components/ChangesReview.tsx": 9,
   "components/ConnectorRetryBanner.tsx": 3,
   "components/DocumentLibrary.tsx": 3,
-  "components/FileBrowser.tsx": 11,
   "components/FolderChip.tsx": 2,
   "components/MemoryDashboard.tsx": 1,
   "components/MessageBubble.tsx": 1,
