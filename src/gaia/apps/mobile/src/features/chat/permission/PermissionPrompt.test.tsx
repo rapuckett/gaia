@@ -35,13 +35,14 @@ jest.mock('@/ui', () => {
         Disclosure: ({ children }: { children?: unknown }) => children ?? null,
         HScroll: Pass,
         Icon: () => null,
-        Notice: ({ message }: { message: string }) => <RNText>{message}</RNText>,
+        Notice: ({ message, testID }: { message: string; testID?: string }) => <RNText testID={testID}>{message}</RNText>,
         Pressable: Pass,
         Row: Pass,
         ScrollBox: Pass,
         Stack: Pass,
         Surface: Pass,
         Text: RNText,
+        useTheme: () => ({ space: { xl: 24 } }),
     };
 });
 jest.mock('@/ui/icons', () => ({ ShieldQuestion: () => null }));
@@ -127,5 +128,25 @@ describe('PermissionPrompt', () => {
         expect(event.shown()).toContain('Lunch');
         expect(event.shown()).toContain('Nobody is notified');
         expect(event.shown()).not.toContain('What will be saved');
+    });
+
+    it('pads the scrolling body past the chevron and sets no cutting height on the boxes', async () => {
+        const { shown } = await mount(
+            prompt({ toolArgs: { file_path: 'a.txt', old_content: 'one\n', new_content: 'two\nan added line\n' } }),
+        );
+        const tree = shown();
+        expect(tree).toContain('"style":{"paddingBottom":24},"testID":"perm-details-body"');
+        expect(tree).not.toContain('maxHeight');
+        expect(tree).not.toContain('"height"');
+    });
+
+    it('keeps the full-access note inside the padded body', async () => {
+        const r = createRoot({ textComponentTypes: ['Text', 'RCTText'] });
+        await act(async () => {
+            r.render(<PermissionPrompt prompt={prompt({})} fullAccessPending onAnswer={jest.fn()} />);
+        });
+        const tree = JSON.stringify(r.container.toJSON());
+        expect(tree.indexOf('perm-details-body')).toBeGreaterThan(-1);
+        expect(tree.indexOf('perm-details-body')).toBeLessThan(tree.indexOf('perm-full-pending'));
     });
 });

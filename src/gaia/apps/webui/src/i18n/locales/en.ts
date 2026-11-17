@@ -1433,6 +1433,8 @@ export const enMessages = {
     'chg.undoAnyway': 'Undo anyway and lose those changes',
     'chg.keep': 'Keep them',
     'chg.gitError': 'Couldn\'t check for a git repository: {error}',
+    'chg.git.commitNote': 'In {root} on {branch}. Only the files below are committed; anything else you changed stays as it is.',
+    'chg.git.prNote': 'Pushes {branch} to {remote} (never forced), then opens a pull request with GitHub\'s gh tool.',
     'untracked.shell.one': '{n} command',
     'untracked.shell.other': '{n} commands',
     'untracked.shell.name.one': 'Command',
