@@ -4,8 +4,9 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, render } from '@testing-library/react-native';
 import type { ComponentProps } from 'react';
-import { Dimensions } from 'react-native';
+import { Dimensions, Platform, StyleSheet } from 'react-native';
 
+import * as useT from '@/i18n/useT';
 import { ThemeProvider } from '@/ui';
 
 import { AppDrawer } from './AppDrawer';
@@ -39,5 +40,20 @@ describe('AppDrawer rotation', () => {
     it('marks the sidebar container for audits', async () => {
         const { getByTestId } = await mount(1024, { closeDrawer: jest.fn() });
         expect(getByTestId('app-sidebar')).toBeTruthy();
+    });
+
+    it('draws the web rtl divider on the inline-end edge, facing the main pane', async () => {
+        const os = Platform.OS;
+        Platform.OS = 'web';
+        jest.spyOn(useT, 'useDirection').mockReturnValue('rtl');
+        try {
+            const { getByTestId } = await mount(1024, { closeDrawer: jest.fn() });
+            const style = StyleSheet.flatten(getByTestId('app-sidebar').props.style);
+            expect(style.borderEndWidth).toBe(StyleSheet.hairlineWidth);
+            expect(style.borderStartWidth).toBeUndefined();
+        } finally {
+            Platform.OS = os;
+            jest.restoreAllMocks();
+        }
     });
 });

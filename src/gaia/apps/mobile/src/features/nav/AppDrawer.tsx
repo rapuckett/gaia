@@ -35,13 +35,13 @@ export function AppDrawer({ navigation, state }: DrawerContentComponentProps) {
     const turns = useChatStreamStore((s) => s.turns);
     const live = useMemo(() => liveRunsFromTurns(turns), [turns]);
     const { colors } = useTheme();
-    // The web navigator draws a permanent sidebar's divider on the wrong side in rtl; navigation.ts clears it.
+    // The divider goes on the side facing the main pane (inline-end of a start-side sidebar); the web navigator draws it on the outer edge in rtl, so navigation.ts clears that one.
     const dir = useDirection();
     const rtlDivider = permanent && Platform.OS === 'web' && dir === 'rtl';
     return (
         <View
             testID="app-sidebar"
-            style={[{ flex: 1 }, rtlDivider && { borderStartWidth: StyleSheet.hairlineWidth, borderStartColor: colors.border }]}
+            style={[{ flex: 1 }, rtlDivider && { borderEndWidth: StyleSheet.hairlineWidth, borderEndColor: colors.border }]}
         >
             <ChatDrawerContent
                 activeId={activeChatId(pathname)}
