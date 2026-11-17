@@ -6,6 +6,7 @@ import { ScrollView, View } from 'react-native';
 import { useDirection } from '@/i18n/useT';
 import { dirProp } from '@/platform/dirProp';
 import { Icon } from '../controls/Icon';
+import { ForcedDirection } from '../text/ForcedDirection';
 import { ChevronRight } from '../icons';
 import { useTheme } from '../theme/ThemeProvider';
 
@@ -39,7 +40,7 @@ export function HScroll({ children, dir, testID, hint = false }: HScrollProps) {
                 scrollEventThrottle={64}
                 testID={testID}
             >
-                {children}
+                <ForcedDirection.Provider value={dir ?? null}>{children}</ForcedDirection.Provider>
             </ScrollView>
             {more ? (
                 <View

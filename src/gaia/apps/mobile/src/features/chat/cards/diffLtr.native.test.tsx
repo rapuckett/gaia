@@ -3,7 +3,7 @@
 
 import { render, screen } from '@testing-library/react-native';
 import type { ReactNode } from 'react';
-import { Platform, StyleSheet } from 'react-native';
+import { I18nManager, Platform, StyleSheet } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { useLocaleStore } from '@/state/locale';
@@ -33,6 +33,13 @@ describeNative('a diff is left to right in Arabic', () => {
         expect(directionOf(scroll)).toBe('ltr');
         expect(StyleSheet.flatten(scroll.props.contentContainerStyle)?.direction).toBe('ltr');
         expect(screen.getByText('an added line')).toBeTruthy();
+    });
+
+    it('aligns diff rows to the physical left, since native does not swap sides inside a pinned block', async () => {
+        jest.spyOn(I18nManager, 'getConstants').mockReturnValue({ isRTL: true, doLeftAndRightSwapInRTL: true, localeIdentifier: 'ar' });
+        await render(<DiffCard data={{ path: 'a.txt', unified: '@@ -1 +1,2 @@\n-one\n+two\n+an added line\n' }} />, { wrapper: wrap });
+        expect(StyleSheet.flatten(screen.getByText('an added line').props.style).textAlign).toBe('left');
+        jest.restoreAllMocks();
     });
 
     it('leaves a scroller with no dir on the UI direction', async () => {
