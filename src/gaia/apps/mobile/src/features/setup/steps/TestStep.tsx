@@ -7,7 +7,7 @@ import { isolate } from '@webui/i18n/registry';
 import type { SetupTest } from '@webui/types';
 
 import { useCancelSetup, useRedownloadSetupModel, useStartSetup } from '@/data';
-import { describeError, useT, type Translate } from '@/i18n/useT';
+import { describeHttpFailure, useT, type Translate } from '@/i18n/useT';
 import { Button, Card, Disclosure, Icon, Ltr, Notice, ProgressLine, Row, Spinner, Stack, Text } from '@/ui';
 import { Check, Clock, Minus, X } from '@/ui/icons';
 
@@ -174,7 +174,7 @@ export function TestStep({ ctx }: { ctx: SetupStepContext }) {
             {view.stopped && run.error && !rowErrors ? (
                 <Details text={run.error} open={errorOpen} onToggle={() => setErrorOpen((o) => !o)} />
             ) : null}
-            {actionError ? <Notice tone="danger" message={describeError(actionError, t)} /> : null}
+            {actionError ? <Notice tone="danger" message={describeHttpFailure(actionError, t).text} detail={describeHttpFailure(actionError, t).detail} /> : null}
             {view.stopped ? <SetupLogs run={run} failed={run.state === 'failed'} /> : null}
             {footer ? <SetupFooter>{footer}</SetupFooter> : null}
             {sheet}

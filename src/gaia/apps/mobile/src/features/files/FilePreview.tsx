@@ -11,7 +11,7 @@ import { useGaiaClient } from '@/data/GaiaClientProvider';
 import { Markdown } from '@/features/chat/markdown/Markdown';
 import { shareFile } from '@/features/share/shareFile';
 import { GaiaApiError } from '@/api/errors';
-import { describeError, technicalDetail, useT } from '@/i18n/useT';
+import { describeHttpFailure, technicalDetail, useT } from '@/i18n/useT';
 import { Button, Ltr, Notice, ScrollBox, Row, Sheet, Spinner, Stack, Text } from '@/ui';
 
 import { cachePcFile, extensionOf, type CachedFile } from './cache';
@@ -132,7 +132,7 @@ export function Body({ target, state }: { target: PreviewTarget; state: State })
     if (state.status === 'error') {
         // The PC's refusal is its own plain sentence with a next step, not an error on the phone.
         if (state.error instanceof GaiaApiError && state.error.status === 403) return <Notice tone="info" message={fileRefusalText(state.error, t)} testID="file-refused" />;
-        return <Notice tone="danger" message={describeError(state.error, t)} />;
+        return <Notice tone="danger" message={describeHttpFailure(state.error, t).text} detail={describeHttpFailure(state.error, t).detail} />;
     }
     const { loaded } = state;
     if (loaded.kind === 'text') return <TextBody preview={loaded.preview} name={name} />;

@@ -16,7 +16,7 @@ import { useDownloadQueue } from '@/features/settings/panes/model/downloadQueue'
 import { chipView } from '@/features/setup/steps/downloadState';
 import { NotificationsEntry } from '@/features/notifications';
 import { GaiaApiError } from '@/api/errors';
-import { describeError, describeErrorWith, ltr, useT } from '@/i18n/useT';
+import { describeErrorWith, describeHttpFailure, ltr, useT } from '@/i18n/useT';
 import {
     Chip,
     EmptyState,
@@ -178,7 +178,7 @@ export function ChatDrawerContent({ activeId, onSelect, onClose, onNewChat, onPc
                 <Notice tone="danger" message={rowErrorMessage(alert.kind, alert.error, t)} />
             ) : null}
             {state === 'loading' ? <ListSkeleton rows={8} /> : null}
-            {state === 'error' ? <ErrorState title={describeError(sessions.error, t)} onRetry={() => void sessions.refetch()} /> : null}
+            {state === 'error' ? <ErrorState title={describeHttpFailure(sessions.error, t).text} detail={describeHttpFailure(sessions.error, t).detail} onRetry={() => void sessions.refetch()} /> : null}
             {state === 'empty' && q === '' ? <EmptyState title={t('sidebar.empty')} /> : null}
             {q !== '' && searchFailed ? (
                 <Notice

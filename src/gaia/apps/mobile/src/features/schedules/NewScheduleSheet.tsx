@@ -6,7 +6,7 @@ import { useEffect, useState } from 'react';
 import type { ParsedSchedule } from '@/api/client.types';
 import { GaiaApiError } from '@/api/errors';
 import { useCreateSchedule, useGaiaClient } from '@/data';
-import { describeError, useT } from '@/i18n/useT';
+import { describeHttpFailure, useT } from '@/i18n/useT';
 import { Button, Notice, Row, Sheet, Stack, Text, TextField } from '@/ui';
 
 import { composeDateLocale, describeSchedule, formatNextRun } from './scheduleText';
@@ -58,7 +58,7 @@ export function NewScheduleSheet({ open, onClose, initial }: NewScheduleSheetPro
     const parsed = preview.status === 'done' ? preview.parsed : null;
     const rejected = parsed !== null && !parsed.valid;
     const nameTaken = create.error instanceof GaiaApiError && create.error.status === 409;
-    const formError = create.isError && !nameTaken ? describeError(create.error, t) : null;
+    const formError = create.isError && !nameTaken ? describeHttpFailure(create.error, t) : null;
     // The backend validates on create, so only a parse that says no blocks it.
     const canCreate = when.trim() !== '' && name.trim() !== '' && prompt.trim() !== '' && !rejected && !create.isPending;
 
@@ -152,7 +152,7 @@ export function NewScheduleSheet({ open, onClose, initial }: NewScheduleSheetPro
                     accessibilityLabel={t('schedules.promptPlaceholder')}
                     multiline
                 />
-                {formError ? <Notice tone="danger" message={formError} /> : null}
+                {formError ? <Notice tone="danger" message={formError.text} detail={formError.detail} /> : null}
             </Stack>
         </Sheet>
     );

@@ -8,7 +8,7 @@ import { GaiaApiError } from '@/api/errors';
 import { useDeviceRefused } from '@/api/routeAccess';
 import type { SessionPermissions } from '@/api/client.types';
 import { useAllPermissions, usePermissionActions, useSessions } from '@/data';
-import { describeError, useT } from '@/i18n/useT';
+import { describeHttpFailure, useT } from '@/i18n/useT';
 import {
     ActionSheet, Badge, Button, Card, Disclosure, Divider, ErrorState, IconButton, ListSkeleton, Ltr, Notice, Row, Sheet, Stack, Switch, Text,
 } from '@/ui';
@@ -28,12 +28,12 @@ export default function Permissions() {
     const { setDefault, setChatMode, revoke } = usePermissionActions();
     const defaultRefused = useDeviceRefused('PUT', ENDPOINTS.chatPermissionsDefault);
     const [confirming, setConfirming] = useState(useContext(SeedConfirmFullAccess));
-    const [error, setError] = useState<string | null>(null);
+    const [error, setError] = useState<{ text: string; detail?: string; info?: boolean } | null>(null);
     const [howOpen, setHowOpen] = useState(false);
     const [chatsOpen, setChatsOpen] = useState(true);
     const [menuFor, setMenuFor] = useState<SessionPermissions | null>(null);
 
-    const fail = (err: unknown) => setError(err instanceof GaiaApiError && err.status === 403 ? t('mobileApp.settings.pcOnly') : describeError(err, t));
+    const fail = (err: unknown) => setError(err instanceof GaiaApiError && err.status === 403 ? { text: t('mobileApp.settings.pcOnly'), info: true } : describeHttpFailure(err, t));
     const run = (pending: Promise<unknown>) => {
         setError(null);
         pending.catch(fail);
@@ -74,12 +74,12 @@ export default function Permissions() {
                     </Stack>
                 </Card>
 
-                {error ? <Notice tone={error === t('mobileApp.settings.pcOnly') ? 'info' : 'danger'} message={error} testID="permissions-error" /> : null}
+                {error ? <Notice tone={error.info ? 'info' : 'danger'} message={error.text} detail={error.detail} testID="permissions-error" /> : null}
 
                 {all.isError && isPcRefusal(all.error) ? (
                     <PcOnlyNotice testID="permissions-pc-only" />
                 ) : all.isError ? (
-                    <ErrorState title={describeError(all.error, t)} onRetry={() => void all.refetch()} />
+                    <ErrorState title={describeHttpFailure(all.error, t).text} detail={describeHttpFailure(all.error, t).detail} onRetry={() => void all.refetch()} />
                 ) : all.isPending ? (
                     <ListSkeleton rows={2} />
                 ) : rows.length === 0 ? (

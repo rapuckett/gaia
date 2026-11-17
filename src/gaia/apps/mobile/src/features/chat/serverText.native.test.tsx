@@ -8,8 +8,9 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { item, type QueuedMessage } from '@webui/utils/messageQueue';
 
-import { GaiaApiError } from '@/api/errors';
+import { GaiaApiError, GaiaNetworkError } from '@/api/errors';
 import type { Message } from '@/api/client.types';
+import { failureOf, type HeldMessage } from '@/features/composer/composerQueue';
 import { QueuedMessages } from '@/features/composer/QueuedMessages';
 import { createFirstSend } from '@/features/new-chat/firstSend';
 import { describeHttpFailure, translator } from '@/i18n/useT';
@@ -36,6 +37,29 @@ describeNative('server text stays off the sentence in the chat area', () => {
         expect(screen.getByTestId(`queued-retry-${failed.id}`)).toBeTruthy();
         const detail = screen.getByText(SERVER_TEXT);
         expect(StyleSheet.flatten(detail.props.style)).toMatchObject({ writingDirection: 'ltr' });
+    });
+
+    const failedRow = (err: unknown): HeldMessage => ({ ...item('hello', 'failed'), ...failureOf(err) });
+    const drawRow = (row: HeldMessage) =>
+        render(<QueuedMessages items={[row]} replying={false} onRemove={() => undefined} onRetry={() => undefined} />, { wrapper: wrap });
+
+    it('shows a failed network send as a translated sentence, with no catalog key or params', async () => {
+        await drawRow(failedRow(new GaiaNetworkError('http://pc:4200', new Error('refused'))));
+        expect(screen.getByText(t('queue.notSent'))).toBeTruthy();
+        expect(screen.getByText(t('mobileApp.error.network', { url: 'http://pc:4200', reason: 'refused' }))).toBeTruthy();
+        expect(screen.queryByText(/mobileApp\.|\{/)).toBeNull();
+    });
+
+    it('shows a failed PC error as "Not sent." with the PC reason as a left-to-right detail', async () => {
+        await drawRow(failedRow(new GaiaApiError(500, 'disk full')));
+        expect(screen.getByText(t('queue.notSent'))).toBeTruthy();
+        expect(screen.getByText(t('mobileApp.error.httpNoDetail', { status: 500 }))).toBeTruthy();
+        expect(StyleSheet.flatten(screen.getByText('disk full').props.style)).toMatchObject({ writingDirection: 'ltr' });
+    });
+
+    it('keeps the text of a plain Error as the detail', async () => {
+        await drawRow(failedRow(new Error('no connection')));
+        expect(screen.getByText('no connection')).toBeTruthy();
     });
 
     it('shows a failed comparison as our sentence with the PC reason as a left-to-right detail', async () => {

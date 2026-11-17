@@ -47,7 +47,7 @@ describe('ModelRestoreNotice', () => {
 
     it('a restore that worked says so without a Pick a model action', async () => {
         await mount({ status: 'restored', message: 'Restored Gemma.' });
-        expect(await screen.findByText('Restored Gemma.')).toBeTruthy();
+        expect(await screen.findByText(t('mobileApp.model.restored', { name: keepTogether('Gemma 4 E4B') }))).toBeTruthy();
         expect(screen.queryByText(t('startup.pickModel'))).toBeNull();
     });
 
@@ -68,9 +68,9 @@ describe('ModelRestoreNotice', () => {
         expect(StyleSheet.flatten(screen.getByText('API key is missing.').props.style)).toMatchObject({ writingDirection: 'ltr' });
     });
 
-    it("a restore that worked names the model in our sentence and keeps the PC's sentence on the detail line", async () => {
+    it("a restore that worked names the model in our sentence and shows no detail line", async () => {
         await mount({ status: 'restored', message: 'Put back the saved model.' });
         expect(await screen.findByText(t('mobileApp.model.restored', { name: keepTogether('Gemma 4 E4B') }))).toBeTruthy();
-        expect(StyleSheet.flatten(screen.getByText('Put back the saved model.').props.style)).toMatchObject({ writingDirection: 'ltr' });
+        expect(screen.queryByText('Put back the saved model.')).toBeNull();
     });
 });
