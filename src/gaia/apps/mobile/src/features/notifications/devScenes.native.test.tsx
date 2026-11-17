@@ -7,6 +7,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import NotificationsGalleryRoute from '@/app/dev/notifications';
 
+import { translator } from '@/i18n/useT';
 import { useLocaleStore } from '@/state/locale';
 
 import { NOTIFICATION_SCENES } from './devScenes';
@@ -74,6 +75,20 @@ describeNative('/dev/notifications', () => {
             await mount();
             expect(await screen.findByText(/انتهى GAIA/)).toBeTruthy();
             expect(screen.queryByText('GAIA finished')).toBeNull();
+        } finally {
+            useLocaleStore.getState().setLocale(null);
+        }
+    });
+
+    it.each([
+        ['schedule-failed', 'schedules.failed', 'Weekly backup'],
+        ['schedule-finished', 'schedules.finished', 'Morning summary'],
+    ] as const)('%s builds its title with the live translator in Arabic', async (name, key, task) => {
+        useLocaleStore.getState().setLocale('ar');
+        try {
+            mockState = name;
+            await mount();
+            expect(await screen.findByText(translator('ar')(key, { name: task }))).toBeTruthy();
         } finally {
             useLocaleStore.getState().setLocale(null);
         }
