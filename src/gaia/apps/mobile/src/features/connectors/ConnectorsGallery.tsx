@@ -8,6 +8,7 @@ import type { AgentInfo, AgentMcpServer, ConnectorListEntry, ConnectorRow, GaiaC
 import { createFakeClient, type FakeClientData } from '@/api/fake';
 import { GaiaApiError } from '@/api/errors';
 import { GaiaClientProvider } from '@/data';
+import { useConnectionStore } from '@/state/connection';
 import { ScreenBannerProvider, UIProvider } from '@/ui';
 
 import { ConnectorsScreen } from './ConnectorsScreen';
@@ -19,9 +20,9 @@ import { ConnectorsScreen } from './ConnectorsScreen';
  * (`#tap=device-sign-in-microsoft` shows the code), `codeFailed` (the same tap, then the failure).
  * CON-02: `many` (8 connectors, so the search field shows). CON-11: `disconnected` and `revoked` open Microsoft Personal;
  * `#tap=connector-disconnect-microsoft,connector-disconnect-confirm`: `disconnected` answers that the provider has no revoke API, `revoked`
- * that the provider did not confirm the revoke (reason on the notice). CON-16: `personalize` opens a just-connected Gmail tile with the after-connect Personalize GAIA offer, `personalizeTile` the plain per-tile offer, and `personalizeFailed` a just-connected server whose offer fails (`#tap=personalize-linear`: the sentence plus the PC's reason).
+ * that the provider did not confirm the revoke (reason on the notice). CON-16: `personalize` opens a just-connected Gmail tile with the after-connect Personalize GAIA offer, `personalizeTile` the plain per-tile offer, and `personalizeFailed` a just-connected server whose offer fails (`#tap=personalize-linear`: the sentence plus the PC's reason), `personalizeMcp` a just-connected server on a paired phone (the PC-only line in place of the button).
  */
-export const CONNECTOR_SCENES = ['serverOn', 'serverOff', 'grants', 'loading', 'error', 'none', 'groups', 'menu', 'code', 'codeFailed', 'many', 'disconnected', 'revoked', 'personalize', 'personalizeTile', 'personalizeFailed'] as const;
+export const CONNECTOR_SCENES = ['serverOn', 'serverOff', 'grants', 'loading', 'error', 'none', 'groups', 'menu', 'code', 'codeFailed', 'many', 'disconnected', 'revoked', 'personalize', 'personalizeTile', 'personalizeFailed', 'personalizeMcp'] as const;
 export type ConnectorScene = (typeof CONNECTOR_SCENES)[number];
 
 const server = (over: Partial<ConnectorRow> = {}) =>
@@ -68,6 +69,7 @@ const LIST_SCENES: Partial<Record<ConnectorScene, { data: FakeClientData; expand
         expanded: 'linear',
         override: { activateConnectorAgent: () => Promise.reject(new GaiaApiError(500, 'The keyring is locked.')) },
     },
+    personalizeMcp: { data: { connectors: [server()], grants: { linear: {} }, activations: { linear: {} } }, expanded: 'linear' },
     menu: { data: { connectors: [server()], activations: { linear: { gaia: true } } } },
     code: { data: { connectors: [account('microsoft', 'Microsoft Personal')], deviceSignIn: DEVICE_CODE }, expanded: 'microsoft' },
     codeFailed: { data: { connectors: [account('microsoft', 'Microsoft Personal')], deviceSignIn: DEVICE_CODE, signInEnd: { outcome: 'failed' } }, expanded: 'microsoft' },
@@ -80,6 +82,9 @@ const TRIAGE = agent('triage', 'Issue triage', { required_connections: [{ connec
 export function ConnectorsGallery({ state }: { state: ConnectorScene }) {
     const [queryClient] = useState(() => new QueryClient({ defaultOptions: { queries: { retry: false } } }));
     const listScene = LIST_SCENES[state];
+    useState(() => {
+        if (state === 'personalizeMcp') useConnectionStore.setState({ connection: { baseUrl: 'https://pc.local:4443', pcId: 'pc-1', pinned: true } });
+    });
     const [client] = useState(() =>
         listScene
             ? { ...createFakeClient({ agents: [GAIA, RESEARCH], ...listScene.data }), ...listScene.override }
@@ -97,7 +102,7 @@ export function ConnectorsGallery({ state }: { state: ConnectorScene }) {
                     <ScreenBannerProvider banner={null}>
                         <ConnectorsScreen
                             initialExpanded={listScene ? listScene.expanded : 'linear'}
-                            initialJustConnected={state === 'personalize' ? 'gmail' : state === 'personalizeFailed' ? 'linear' : undefined}
+                            initialJustConnected={state === 'personalize' ? 'gmail' : state === 'personalizeFailed' || state === 'personalizeMcp' ? 'linear' : undefined}
                         />
                     </ScreenBannerProvider>
                 </UIProvider>
