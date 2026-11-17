@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 
 import type { ConnectorRow } from '@/api/client.types';
 import { useDeviceSignIn } from '@/data';
-import { describeError, useT } from '@/i18n/useT';
+import { describeHttpFailure, useT } from '@/i18n/useT';
 import { Button, Notice, Stack } from '@/ui';
 import { ExternalLink } from '@/ui/icons';
 
@@ -72,7 +72,7 @@ function CodeConnect({ connectorId, row, label, againLabel, scopes, onEnded, onS
                     testID={`connect-${connectorId}`}
                 />
             </Stack>
-            {signIn.state === 'failed' ? <Notice tone="danger" message={describeError(signIn.error, t)} /> : null}
+            {signIn.state === 'failed' ? <Notice tone="danger" message={describeHttpFailure(signIn.error, t).text} detail={describeHttpFailure(signIn.error, t).detail} /> : null}
             {signIn.state === 'ended' && (signIn.error || !onEnded) ? <Notice tone="danger" {...signInEndedNotice(signIn, t)} /> : null}
             {signIn.state === 'expired' && !onEnded ? <Notice tone="danger" message={t('connectCard.failed')} /> : null}
         </Stack>

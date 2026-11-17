@@ -11,7 +11,7 @@ import { useGaiaClient } from '@/data/GaiaClientProvider';
 import { Markdown } from '@/features/chat/markdown/Markdown';
 import { shareFile } from '@/features/share/shareFile';
 import { GaiaApiError } from '@/api/errors';
-import { describeError, useT } from '@/i18n/useT';
+import { describeError, technicalDetail, useT } from '@/i18n/useT';
 import { Button, Ltr, Notice, ScrollBox, Row, Sheet, Spinner, Stack, Text } from '@/ui';
 
 import { cachePcFile, extensionOf, type CachedFile } from './cache';
@@ -171,7 +171,7 @@ function OpenPreview({ target, onClose }: { target: PreviewTarget; onClose: () =
             <Stack gap="md">
                 {target.kind === 'path' ? <Ltr>{target.path}</Ltr> : null}
                 <Body target={target} state={state} />
-                {shareError ? <Notice tone="danger" message={t('cards.shareFailed', { error: describeError(shareError, t) })} /> : null}
+                {shareError ? <Notice tone="danger" message={t('mobileApp.error.shareFailed')} detail={technicalDetail(shareError)} /> : null}
             </Stack>
         </Sheet>
     );

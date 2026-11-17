@@ -6,7 +6,7 @@ import { Share, View } from 'react-native';
 
 import type { FeaturedLibrary, LinkPreview, LinkSkill } from '@/api/client.types';
 import { useGaiaClient } from '@/data';
-import { describeError, useT } from '@/i18n/useT';
+import { describeError, technicalDetail, useT } from '@/i18n/useT';
 import { Badge, Button, Disclosure, Divider, Ltr, Notice, Row, Sheet, Stack, TextField, Text } from '@/ui';
 
 import { ChipButton } from '../schedules/ChipButton';
@@ -29,7 +29,7 @@ export function AddSkillsSheet({ open, onClose }: { open: boolean; onClose: () =
             .listFeaturedSkillLibraries({ signal: controller.signal })
             .then((r) => setFeatured(r.libraries))
             .catch((err) => {
-                if (!controller.signal.aborted) setFeaturedError(t('settings.skills.link.featuredFailed', { error: describeError(err, t) }));
+                if (!controller.signal.aborted) setFeaturedError(technicalDetail(err));
             });
         return () => controller.abort();
     }, [open, client, t]);
@@ -92,7 +92,9 @@ export function AddSkillsSheet({ open, onClose }: { open: boolean; onClose: () =
                         ))}
                     </Row>
                 ) : null}
-                {featuredError ? <Text role="label" tone="danger">{featuredError}</Text> : null}
+                {featuredError ? (
+                    <Notice tone="danger" message={t('mobileApp.error.featuredLibrariesFailed')} detail={featuredError} />
+                ) : null}
                 <TextField
                     value={url}
                     onChangeText={setUrl}

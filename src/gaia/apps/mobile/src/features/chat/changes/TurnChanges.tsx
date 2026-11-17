@@ -8,7 +8,7 @@ import { groupUntracked, untrackedWarning } from '@webui/utils/untrackedWork';
 import type { TurnChanges as Turn, UndoResult } from '@/api/client.types';
 import { GaiaApiError } from '@/api/errors';
 import { useTurnChanges, useUndoTurn } from '@/data';
-import { describeError, useT, type Translate } from '@/i18n/useT';
+import { describeHttpFailure, useT, type Translate } from '@/i18n/useT';
 import { Button, Notice, Row, Stack, Text } from '@/ui';
 
 import { ChangesReview } from './ChangesReview';
@@ -48,6 +48,7 @@ function TurnChangesRow({ sessionId, turn }: { sessionId: string; turn: Turn }) 
     const undoTurn = useUndoTurn(sessionId);
     const [phase, setPhase] = useState<Phase>('idle');
     const [message, setMessage] = useState<string | null>(null);
+    const [detail, setDetail] = useState<string | undefined>(undefined);
     const [reviewing, setReviewing] = useState(false);
 
     const count = turn.files.length;
@@ -57,13 +58,21 @@ function TurnChangesRow({ sessionId, turn }: { sessionId: string; turn: Turn }) 
     const undo = async (force: boolean) => {
         setPhase('working');
         setMessage(null);
+        setDetail(undefined);
         try {
             const result = await undoTurn(turn.turn_id, force);
             setMessage(undoneText(result, t));
             setPhase('done');
         } catch (err) {
             const conflict = err instanceof GaiaApiError && err.status === 409 && err.body?.status === 'conflict';
-            setMessage(err instanceof GaiaApiError ? err.detail : describeError(err, t));
+            if (conflict) {
+                setMessage(t('mobileApp.changes.undoTurnConflict'));
+                setDetail((err as GaiaApiError).detail);
+            } else {
+                const split = describeHttpFailure(err, t);
+                setMessage(split.text);
+                setDetail(split.detail);
+            }
             setPhase(conflict ? 'conflict' : 'idle');
         }
     };
@@ -117,6 +126,7 @@ function TurnChangesRow({ sessionId, turn }: { sessionId: string; turn: Turn }) 
                 <Notice
                     tone={phase === 'done' ? 'success' : 'danger'}
                     message={message}
+                    detail={detail}
                     testID="turn-changes-message"
                 />
             ) : null}
@@ -130,6 +140,7 @@ function TurnChangesRow({ sessionId, turn }: { sessionId: string; turn: Turn }) 
                         onPress={() => {
                             setPhase('idle');
                             setMessage(null);
+                            setDetail(undefined);
                         }}
                     />
                 </Row>

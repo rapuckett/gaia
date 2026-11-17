@@ -4,9 +4,10 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import type { ReactNode } from 'react';
-import { Platform } from 'react-native';
+import { Platform, StyleSheet } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { GaiaApiError } from '@/api/errors';
 import { createFakeClient, type FakeClientData } from '@/api/fake';
 import type { ConnectorRow, DisconnectOutcome } from '@/api/client.types';
 import { GaiaClientProvider } from '@/data';
@@ -166,5 +167,56 @@ describeNative('ConnectorsGallery list states', () => {
         fireEvent.press(await screen.findByTestId('device-code-cancel'));
         expect(await screen.findByTestId('device-sign-in-microsoft')).toBeTruthy();
         expect(screen.queryByTestId('device-code-block')).toBeNull();
+    });
+});
+
+describeNative('ConnectorsScreen server text', () => {
+    const SENTENCE = 'GAIA answered with an error (500).';
+    const gaia = { id: 'gaia', name: 'GAIA', namespaced_agent_id: 'gaia', description: '', source: 'builtin', conversation_starters: [], models: [], consumes_mcp_servers: true };
+    const expectSplit = async (reason: string) => {
+        expect((await screen.findByText(SENTENCE)).props.children).not.toContain(reason);
+        const detail = await screen.findByText(reason);
+        expect(StyleSheet.flatten(detail.props.style)).toMatchObject({ writingDirection: 'ltr' });
+    };
+    const open = async (prepare: (client: ReturnType<typeof setup>['client']) => void, withAgent = true) => {
+        const { client, data, queryClient, wrap } = setup([slack]);
+        if (withAgent) data.agents = [gaia as never];
+        prepare(client);
+        await render(<ConnectorsScreen />, { wrapper: wrap });
+        fireEvent.press(await screen.findByLabelText('Slack'));
+        return queryClient;
+    };
+
+    it('a failed pause keeps the PC reason off the sentence', async () => {
+        await open((client) => {
+            client.disableConnector = () => Promise.reject(new GaiaApiError(500, 'mcp process crashed'));
+        }, false);
+        fireEvent.press(await screen.findByLabelText('Disable this MCP server'));
+        await expectSplit('mcp process crashed');
+    });
+
+    it('a failed access load keeps the PC reason off the sentence', async () => {
+        await open((client) => {
+            client.listConnectorGrants = () => Promise.reject(new GaiaApiError(500, 'grant store locked'));
+        });
+        await expectSplit('grant store locked');
+    });
+
+    it('a failed access change keeps the PC reason off the sentence', async () => {
+        await open((client) => {
+            client.deactivateConnectorAgent = () => Promise.reject(new GaiaApiError(500, 'activation write failed'));
+            client.listConnectorActivations = () => Promise.resolve({ activations: { gaia: true } });
+        });
+        fireEvent.press(await screen.findByRole('switch'));
+        await expectSplit('activation write failed');
+    });
+
+    it('a failed sign-in start keeps the PC reason off the sentence', async () => {
+        const { client, wrap } = setup([microsoft], undefined, { user_code: 'ABCD-EFGH', verification_uri: 'https://microsoft.com/devicelogin', expires_in: 900, interval: 1, message: '' });
+        client.startConnectorDeviceSignIn = () => Promise.reject(new GaiaApiError(500, 'provider unreachable'));
+        await render(<ConnectorsScreen />, { wrapper: wrap });
+        fireEvent.press(await screen.findByLabelText('Microsoft'));
+        fireEvent.press(await screen.findByText('Sign in with a code'));
+        await expectSplit('provider unreachable');
     });
 });

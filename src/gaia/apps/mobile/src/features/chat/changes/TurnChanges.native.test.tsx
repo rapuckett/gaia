@@ -3,7 +3,7 @@
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen } from '@testing-library/react-native';
-import { Platform } from 'react-native';
+import { Platform, StyleSheet } from 'react-native';
 
 import type { TurnChanges as Turn } from '@/api/client.types';
 import { GaiaApiError } from '@/api/errors';
@@ -47,7 +47,10 @@ const turn: Turn = {
         await screen.findByText(t.plural('mobileApp.changes.summary', 1));
         await fireEvent.press(screen.getByTestId('turn-changes-undo'));
         await fireEvent.press(screen.getByTestId('turn-changes-confirm'));
-        await screen.findByText('a.txt changed after this turn');
+        const sentence = await screen.findByText(t('mobileApp.changes.undoTurnConflict'));
+        expect(sentence.props.children).not.toContain('a.txt changed after this turn');
+        const detail = await screen.findByText('a.txt changed after this turn');
+        expect(StyleSheet.flatten(detail.props.style)).toMatchObject({ writingDirection: 'ltr' });
         expect(client.undone).toEqual([{ sessionId: 's1', turnId: 't1', force: false }]);
 
         await fireEvent.press(screen.getByTestId('turn-changes-force'));

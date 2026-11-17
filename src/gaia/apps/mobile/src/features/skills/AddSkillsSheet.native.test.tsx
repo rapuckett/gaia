@@ -3,7 +3,9 @@
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import type { ReactNode } from 'react';
-import { Platform } from 'react-native';
+import { Platform, StyleSheet } from 'react-native';
+
+import { GaiaApiError } from '@/api/errors';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import type { LinkPreview } from '@/api/client.types';
@@ -49,5 +51,28 @@ describeNative('AddSkillsSheet', () => {
         expect(screen.getByText('Add these on your PC')).toBeTruthy();
         expect(screen.getByText('Share the link')).toBeTruthy();
         expect(screen.queryByText(/^Add \d/)).toBeNull();
+    });
+
+    it("keeps the PC's reason off the suggested-libraries sentence, on its own left-to-right line", async () => {
+        const client = {
+            ...createFakeClient(),
+            listFeaturedSkillLibraries: async () => {
+                throw new GaiaApiError(500, 'index offline');
+            },
+        };
+        await render(
+            <GaiaClientProvider client={client}>
+                <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 800 }, insets: { top: 0, left: 0, right: 0, bottom: 0 } }}>
+                    <ThemeProvider>
+                        <SheetHost>
+                            <AddSkillsSheet open onClose={() => {}} />
+                        </SheetHost>
+                    </ThemeProvider>
+                </SafeAreaProvider>
+            </GaiaClientProvider>,
+        );
+        const sentence = await screen.findByText('Could not load suggested libraries.');
+        expect(sentence.props.children).not.toContain('index offline');
+        expect(StyleSheet.flatten(screen.getByText('500 index offline').props.style)).toMatchObject({ writingDirection: 'ltr' });
     });
 });
