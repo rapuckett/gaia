@@ -239,6 +239,15 @@ describeNative('/dev/settings', () => {
         expect(await screen.findByTestId('model-search', { includeHiddenElements: true })).toBeTruthy();
     });
 
+    it('model-local-remove shows Remove on the downloaded non-default model and asks before deleting', async () => {
+        mockState = 'model-local-remove';
+        await mount();
+        fireEvent.press(await screen.findByTestId('local-models-toggle'));
+        expect(screen.queryByTestId('local-remove-Gemma-4-E4B-it-GGUF')).toBeNull();
+        fireEvent.press(await screen.findByTestId('local-remove-Qwen3.6-35B-A3B-GGUF'));
+        expect(await screen.findByTestId('confirm-ok')).toBeTruthy();
+    });
+
     it('model-custom hides Remove for the model in use', async () => {
         mockState = 'model-custom';
         await mount();

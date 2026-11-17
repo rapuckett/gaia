@@ -8,7 +8,7 @@ import { useT } from "@/i18n/useT";
 import { Button, Notice, Row, Sheet, Stack, Text, TextField } from "@/ui";
 import { isolate } from "@webui/i18n/registry";
 
-import { failureReason } from "../header/failureText";
+import { failureNoticeProps } from "../header/failureText";
 
 export type GitKind = "commit" | "pr";
 
@@ -38,7 +38,7 @@ export function GitSheet({
   const [title, setTitle] = useState(repo.draft.title);
   const [body, setBody] = useState(repo.draft.body);
   const [running, setRunning] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<{ message: string; detail?: string } | null>(null);
   const commit = kind === "commit";
   const where = commit ? repo.root : repo.remote;
   const files = commit ? repo.uncommitted : repo.files;
@@ -49,7 +49,7 @@ export function GitSheet({
     try {
       onDone(await onRun({ title, body }));
     } catch (err) {
-      setError(failureReason(err, t));
+      setError(failureNoticeProps(err, t, { withReason: 'mobileApp.chg.gitFailed', noReason: 'mobileApp.chg.gitFailedShort' }));
       setRunning(false);
     }
   };
@@ -148,7 +148,7 @@ export function GitSheet({
           </Text>
         ) : null}
         {error ? (
-          <Notice tone="danger" message={error} testID="git-sheet-error" />
+          <Notice tone="danger" message={error.message} detail={error.detail} testID="git-sheet-error" />
         ) : null}
       </Stack>
     </Sheet>

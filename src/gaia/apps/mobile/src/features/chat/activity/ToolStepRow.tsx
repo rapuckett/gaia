@@ -64,10 +64,12 @@ export interface ToolStepRowProps {
     /** Wall-clock ms, for a running call's timer. */
     now: number;
     testID?: string;
+    /** Test ID of the folded thought's text inside the open row. */
+    thoughtTestID?: string;
 }
 
 /** One tool call: a line that opens to its tool, arguments and output. */
-export function ToolStepRow({ step, awaitingUser = false, now, testID }: ToolStepRowProps) {
+export function ToolStepRow({ step, awaitingUser = false, now, testID, thoughtTestID }: ToolStepRowProps) {
     const t = useT();
     const ensureModel = useEnsureModel();
     const [open, setOpen] = useState(false);
@@ -76,12 +78,9 @@ export function ToolStepRow({ step, awaitingUser = false, now, testID }: ToolSte
     const count = step.count ?? 1;
     const notRun = (!!step.declined || !!step.timedOut || !!step.autoDeclined) && !step.active;
     const exitCode = step.commandOutput && step.commandOutput.returnCode !== 0 ? step.commandOutput.returnCode : null;
+    // The terminal card's header already says a shell step's exit code.
     const failure =
-        step.success === false && step.result && !notRun && step.needsModel !== 'vision'
-            ? exitCode !== null
-                ? t('activity.exit', { code: isolate(String(exitCode), 'ltr') })
-                : failureText(step, t)
-            : '';
+        step.success === false && step.result && !notRun && step.needsModel !== 'vision' && exitCode === null ? failureText(step, t) : '';
     const timing = waiting
         ? ''
         : step.active
@@ -119,7 +118,7 @@ export function ToolStepRow({ step, awaitingUser = false, now, testID }: ToolSte
                 <Stack gap="sm">
                     {step.thought?.detail ? (
                         <Section label={thoughtLabel(false, undefined, t)}>
-                            <Text role="label" dir="auto" tone="secondary">
+                            <Text role="label" dir="auto" tone="secondary" testID={thoughtTestID}>
                                 {step.thought.detail.trim()}
                             </Text>
                         </Section>

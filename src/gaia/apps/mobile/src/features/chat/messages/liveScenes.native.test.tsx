@@ -97,8 +97,9 @@ describeNative('chat, new-chat, composer and permission scenes', () => {
         expect(screen.queryByText(/compare them before drafting/, opts)).toBeNull();
         screen.getAllByLabelText(/^Thinking/, opts).forEach((header) => fireEvent.press(header));
         expect(await screen.findByText(/compare them before drafting/, opts)).toBeTruthy();
-        fireEvent.press(await screen.findByTestId('step-row--1', opts));
+        fireEvent.press(await screen.findByTestId('step-row-1', opts));
         expect(await screen.findByText(/skip searching/, opts)).toBeTruthy();
+        expect(await screen.findByTestId('step-thought-1', opts)).toBeTruthy();
     });
 
     it.each(['activity-plan', 'activity-thinking'])('%s reads an elapsed time under an hour', async (state) => {
@@ -106,6 +107,14 @@ describeNative('chat, new-chat, composer and permission scenes', () => {
         await screen.findAllByTestId('activity-timeline', opts);
         expect(screen.queryByText(/\d{3,}m \d+s/, opts)).toBeNull();
         expect(screen.queryByText(/\b\d{2,}m \d+s/, opts)).toBeNull();
+    });
+
+    it('activity-variants shows a failed, a repeated and a thought-first call, one opened', async () => {
+        await open('messages', { state: 'activity-variants' });
+        fireEvent.press(within(await screen.findByTestId('steps-summary', opts)).getAllByLabelText(/./, opts)[0]!);
+        expect(await screen.findByText('×3', opts)).toBeTruthy();
+        fireEvent.press(await screen.findByTestId('step-row-1', opts));
+        expect(await screen.findByText('path: forecast.csv', opts)).toBeTruthy();
     });
 
     it('activity-filter shows the step filter once the seven calls are open', async () => {
@@ -203,6 +212,11 @@ describeNative('chat, new-chat, composer and permission scenes', () => {
             const turn = await screen.findByTestId(`reply-error-${kind}`, opts);
             expect(within(turn).getAllByText(text, opts).length).toBeGreaterThan(0);
         }
+    });
+
+    it('chat env-offline shows the offline notice above the composer', async () => {
+        await open('chat', { state: 'env-offline' });
+        expect(await screen.findByTestId('offline-notice', opts)).toBeTruthy();
     });
 
     it('new-chat-assistant Details reports expanded state to assistive tech', async () => {

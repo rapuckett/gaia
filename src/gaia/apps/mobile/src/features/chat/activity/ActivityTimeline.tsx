@@ -38,13 +38,13 @@ function useNow(ticking: boolean): number {
     return now;
 }
 
-function Thought({ step, live, durationMs, now }: { step: ActivityRow; live: boolean; durationMs?: number; now: number }) {
+function Thought({ step, live, durationMs, now, testID }: { step: ActivityRow; live: boolean; durationMs?: number; now: number; testID?: string }) {
     const t = useT();
     const [open, setOpen] = useState(false);
     const text = (step.detail ?? '').trim();
     if (!text) return null;
     return (
-        <Disclosure title={thoughtLabel(live, live ? now - step.timestamp : durationMs, t)} open={open} onToggle={() => setOpen((v) => !v)}>
+        <Disclosure title={thoughtLabel(live, live ? now - step.timestamp : durationMs, t)} open={open} onToggle={() => setOpen((v) => !v)} headerTestID={testID}>
             <Text role="label" dir="auto" tone="secondary">
                 {text}
             </Text>
@@ -66,11 +66,12 @@ export function ActivityTimeline({ steps, running = false, awaitingUser = false,
     const livePlan = running ? [...rows].reverse().find((s) => s.type === 'plan' && s.planSteps?.length) : undefined;
 
     const renderRow = (row: ActivityRow) => {
+        const index = rows.findIndex((r) => r.id === row.id);
         switch (row.type) {
             case 'thinking':
-                return <Thought key={row.id} step={row} live={running && !!row.active} durationMs={durations.get(row.id)} now={now} />;
+                return <Thought key={row.id} step={row} live={running && !!row.active} durationMs={durations.get(row.id)} now={now} testID={`step-thought-${index}`} />;
             case 'tool':
-                return <ToolStepRow key={row.id} step={row} now={now} awaitingUser={running && awaitingUser} testID={`step-row-${rows.indexOf(row)}`} />;
+                return <ToolStepRow key={row.id} step={row} now={now} awaitingUser={running && awaitingUser} testID={`step-row-${index}`} thoughtTestID={`step-thought-${index}`} />;
             case 'plan':
                 return row === livePlan ? null : <PlanChecklist key={row.id} step={row} />;
             case 'status':

@@ -14,7 +14,7 @@ import { ConnectorsScreen } from './ConnectorsScreen';
 
 /**
  * Developer gallery (`/dev/connectors?state=`): one MCP server's open detail, and the list's own states.
- * CON-01: `loading`, `error`, `none`. CON-03: `groups` (`#expand` opens the folded groups).
+ * CON-01: `loading`, `error`, `none`. CON-03: `groups` (`#expand` opens the folded groups). CON-17: `groups#tap=connectors-group-agentServers` opens Custom agent servers.
  * CON-06: `menu` (`#tap=connector-actions-linear` opens the actions sheet). CON-08: `code`
  * (`#tap=device-sign-in-microsoft` shows the code), `codeFailed` (the same tap, then the failure).
  * CON-02: `many` (8 connectors, so the search field shows). CON-11: `disconnected` and `revoked` open Microsoft Personal;

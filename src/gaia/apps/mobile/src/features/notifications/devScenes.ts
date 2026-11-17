@@ -10,11 +10,14 @@ import { createFakeClient, type FakeClientData } from '@/api/fake';
 import type { GaiaClient, SetupCheck, SystemStatus } from '@/api/client.types';
 import { GaiaApiError, GaiaNetworkError } from '@/api/errors';
 import type { ChatAlertBanner } from '@/state/chatAlertBanner';
+import { GOAL_STORE_NOTIFICATION_ID } from '@/state/goalAlerts';
 
 /** What a notifications scene shows: the center, the connection banner, the setup gate's notice, or the alert settings. */
 export interface NotificationScene {
     view: 'center' | 'banner' | 'gate' | 'alerts';
     items?: GaiaNotification[];
+    /** Adds the goal-store alert to the items, built with the live translator. */
+    goalStore?: boolean;
     filter?: NotificationType | null;
     /** Approvals whose chat is still blocked on the answer, by confirm id. */
     waiting?: string[];
@@ -59,6 +62,12 @@ const POLICY = note({
 const SECURITY = note({ id: 'n-security', type: 'security_alert', title: 'Unusual sign-in', message: 'A new device asked to pair with your PC.', priority: 'critical', timestamp: ago(26 * 3_600_000), read: true });
 const INFO = note({ id: 'n-info', type: 'info', title: 'GAIA updated', message: 'GAIA 0.26 is ready. Restart it on your PC to finish.', timestamp: ago(3 * 24 * 3_600_000), read: true });
 
+/** APP-14: the alert AppPolls raises when the goal store is unreadable, titled in the viewer's language (`?state=goal-store-error`). */
+export const goalStoreNotification = (t: Translate): GaiaNotification => note({
+    id: `${GOAL_STORE_NOTIFICATION_ID}1`, type: 'error', agentId: 'goals', title: t('mem.goals.storeError'),
+    message: 'The goal list is unreadable: unexpected end of JSON input.', priority: 'high', timestamp: ago(MIN),
+});
+
 const MIXED = [ASK, FINISHED, FAILED, POLICY, SECURITY, INFO];
 
 const STATUS_OK = {
@@ -91,6 +100,7 @@ export const NOTIFICATION_SCENES: Record<string, NotificationScene> = {
     'banner-starting': { view: 'banner', data: status({ init_state: 'initializing', init_tasks: [{ name: 'Loading the model', status: 'running' }] } as Partial<SystemStatus>) },
     'banner-unreachable': { view: 'banner', unreachable: true },
     empty: { view: 'center', items: [] },
+    'goal-store-error': { view: 'center', items: [FINISHED], goalStore: true },
     'errors-filter': { view: 'center', items: MIXED, filter: 'error' },
     mixed: { view: 'center', items: MIXED },
     'permission-answered': { view: 'center', items: [{ ...ASK, response: 'allow', read: true }, { ...ASK, id: 'n-ask-2', confirmId: 'confirm-2', response: 'deny', read: true, timestamp: ago(40 * MIN) }] },
