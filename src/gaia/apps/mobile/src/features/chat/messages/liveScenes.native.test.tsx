@@ -144,6 +144,7 @@ describeNative('chat, new-chat, composer and permission scenes', () => {
         await open('composer', { state: 'new-chat-assistant' });
         expect(await screen.findByText(t('newChat.assistantUnavailable'), opts)).toBeTruthy();
         expect(screen.getByText(t('newChat.tryAgain'), opts)).toBeTruthy();
+        expect(screen.getByTestId('new-chat-details', opts)).toBeTruthy();
     });
 
     it('new-chat-doc-brief shows the Ask about your documents card', async () => {

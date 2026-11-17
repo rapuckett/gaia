@@ -18,7 +18,7 @@ import { NewChatScreen } from './NewChatScreen';
  * Developer scenes (`/dev/composer?state=`) for the new-chat screen.
  * `new-chat-setup-failed` (NC-03), `new-chat-library` (NC-08: two documents attached, the rest of the library offered),
  * `new-chat-warmup` (NC-09), `new-chat-send-error` (NC-10: the opening message fails to start a chat),
- * `new-chat-assistant` (NC-13: tap Details for the reason; Try again asks again).
+ * `new-chat-assistant` (NC-13: `#tap=new-chat-details` opens Details for the reason; Try again asks again).
  * DOC-23 `new-chat-doc-brief`: the library has documents and the PC offers the "Ask about your documents" card (`document-brief-card`).
  * APP-20 `create-failed`: a draft in the box and a PC that can't be reached; `#tap=composer-send` shows the failure notice.
  * APP-21 `skill-prompt`: a skill's Try it prompt arriving under an unsent draft, as the Skills screen sends it.
