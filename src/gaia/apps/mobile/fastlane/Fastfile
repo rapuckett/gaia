@@ -84,6 +84,9 @@ end
 
 # app.config.ts reads APP_ENV at prebuild and again in Xcode's bundle phase, so it stays set for the lane.
 def prebuild(app_env)
+  if app_env == 'production' && !env_value('EXPO_PUBLIC_DEV_GALLERY').empty?
+    UI.user_error!('EXPO_PUBLIC_DEV_GALLERY is set, and a production build must not have it: it would include the developer gallery. Unset it (`unset EXPO_PUBLIC_DEV_GALLERY`) and run the lane again.')
+  end
   ENV['APP_ENV'] = app_env
   Dir.chdir(app_dir) { sh('npx', 'expo', 'prebuild', '--platform', 'ios', '--clean') }
   workspace = Dir[File.join(app_dir, 'ios', '*.xcworkspace')].first
