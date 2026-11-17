@@ -11,7 +11,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import type { LinkPreview } from '@/api/client.types';
 import { createFakeClient } from '@/api/fake';
 import { GaiaClientProvider } from '@/data';
-import { glossParts, translate } from '@webui/i18n/registry';
+import { glossParts, isolate, translate } from '@webui/i18n/registry';
 import { ThemeProvider } from '@/ui';
 import { SheetHost } from '@/ui/overlays/SheetHost';
 
@@ -58,6 +58,20 @@ describeNative('AddSkillsSheet', () => {
         const hint = translate('ar', 'mobileApp.skills.linkHint', { github: 'GitHub', repo: 'owner/repo', skills: 'skills.sh', https: 'https', zip: '.zip' });
         expect(glossParts(hint)?.filter((p) => p.gloss)).toHaveLength(1);
         expect(hint).not.toContain('..');
+    });
+
+    it('isolates every Arabic value and never ends the sentence next to the .zip island', () => {
+        const zip = isolate('.zip', 'ltr');
+        const hint = translate('ar', 'mobileApp.skills.linkHint', { github: isolate('GitHub', 'ltr'), repo: isolate('owner/repo', 'ltr'), skills: isolate('skills.sh', 'ltr'), https: isolate('https', 'ltr'), zip });
+        const placeholder = translate('ar', 'mobileApp.skills.linkPlaceholder', { github: isolate('GitHub', 'ltr'), skills: isolate('skills.sh', 'ltr'), zip });
+        for (const full of [hint, placeholder]) {
+            const text = (glossParts(full)?.filter((p) => !p.gloss).map((p) => p.text).join('') ?? full);
+            expect(text).toContain(zip);
+            expect(text.replace(zip, '')).not.toContain('.zip');
+            expect(text).not.toContain(`${zip}.`);
+        }
+        expect(hint).toContain(isolate('https', 'ltr'));
+        expect(placeholder).toContain(isolate('skills.sh', 'ltr'));
     });
 
     it("keeps the PC's reason off the suggested-libraries sentence, on its own left-to-right line", async () => {
