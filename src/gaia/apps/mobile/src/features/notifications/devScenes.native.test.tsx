@@ -51,6 +51,13 @@ describeNative('/dev/notifications', () => {
         expect(screen.getByText('Try again')).toBeTruthy();
     });
 
+    it('banner-chat-failed shows the failed chat alert', async () => {
+        mockState = 'banner-chat-failed';
+        await mount();
+        expect(await screen.findByText('Morning summary failed')).toBeTruthy();
+        expect(screen.getByTestId('banner-chat-alert')).toBeTruthy();
+    });
+
     it('names an unknown scene and lists the known ones', async () => {
         mockState = 'nope';
         await mount();
