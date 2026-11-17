@@ -1,11 +1,12 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { Platform } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import SettingsGalleryRoute from '@/app/dev/settings';
+import { sheetStore } from '@/ui/overlays/sheetStore';
 
 import { SETTINGS_SCENES } from './devScenes';
 
@@ -29,6 +30,8 @@ const mount = () =>
     );
 
 describeNative('/dev/settings', () => {
+    afterEach(() => act(() => sheetStore.reset()));
+
     it.each(Object.keys(SETTINGS_SCENES))('renders the %s scene', async (name) => {
         mockState = name;
         await mount();
@@ -118,6 +121,7 @@ describeNative('/dev/settings', () => {
         ['adv-wrong-model', 'Wrong model loaded.'],
         ['adv-small-context', 'Context window too small.'],
         ['adv-unreachable', /Could not reach GAIA.s assistant/],
+        ['skills-add', 'Add skills'],
         ['skills-skipped', /bare couldn.t be loaded: it has no description/],
         ['privacy-delete-none', 'No chats to delete yet.'],
         ['perm-default', 'Start new chats in full access'],

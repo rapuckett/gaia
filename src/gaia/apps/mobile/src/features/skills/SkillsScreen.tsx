@@ -1,7 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { useState } from 'react';
+import { createContext, useContext, useState } from 'react';
 import { View } from 'react-native';
 
 import type { SkillInfo } from '@/api/client.types';
@@ -43,13 +43,16 @@ export function SkillsScreen({ onTry }: { onTry: (name: string, prompt: string) 
     );
 }
 
+/** Dev scenes only: opens the Add skills sheet on arrival. */
+export const SeedSkillsAdd = createContext(false);
+
 /** The skills list and its add sheet, for the screen and for the Settings pane. */
 export function SkillsBody({ onTry }: { onTry: (name: string, prompt: string) => void }) {
     const t = useT();
     const skills = useSkills();
     const [query, setQuery] = useState('');
     const [howOpen, setHowOpen] = useState(false);
-    const [adding, setAdding] = useState(false);
+    const [adding, setAdding] = useState(useContext(SeedSkillsAdd));
     const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
 
     const all = skills.data?.skills ?? [];

@@ -46,6 +46,8 @@ export interface SettingsScene {
     confirmFullAccess?: boolean;
     /** Opens Automations already asking to remove the automation with this id. */
     confirmRemove?: string;
+    /** Opens Skills with the Add skills sheet already up. */
+    skillsAdd?: boolean;
     /** The device's saved palette; scenes without one open on the default palette. */
     appearance?: { palette: 'default' | 'custom'; custom: { accent: string; base: string } };
 }
@@ -419,6 +421,7 @@ export const SETTINGS_SCENES: Record<string, SettingsScene> = {
             },
         },
     },
+    'skills-add': { section: 'skills', gpuMemory: GPU, skillsAdd: true, data: { skills: { skills: [skill('summarize')], invalid: {} } } },
     // SET-GEN-04 to 07: a saved custom accent and tint, so Custom is selected and the Colors disclosure opens with Accent, Background tint and Reset.
     'general-custom-colors': { section: 'general', gpuMemory: GPU, appearance: { palette: 'custom', custom: { accent: '#C2410C', base: '#44403C' } } },
     // SET-PRIV-06: the Delete chats card with chats (`#tap=privacy-delete-all` opens the confirm sheet), and with none.
