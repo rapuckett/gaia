@@ -120,7 +120,7 @@ export class GaiaTurnError extends GaiaError {
     readonly detail: string;
 
     constructor(detail: string) {
-        super('mobileApp.error.turnFailed', { detail });
+        super(detail ? 'mobileApp.error.turnFailed' : 'mobileApp.error.turnFailedNoDetail', { detail });
         this.detail = detail;
     }
 }

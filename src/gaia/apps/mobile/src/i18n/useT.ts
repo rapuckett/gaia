@@ -6,7 +6,7 @@ import { getLocales } from 'expo-localization';
 import { DEFAULT_LOCALE, getLocale, isLocaleCode, isolate, setVariantPrefix, type Say } from '@webui/i18n/registry';
 import { dateLocale, translator, type Translate } from '@webui/i18n/translator';
 
-import { GaiaApiError, GaiaError, GaiaNetworkError } from '@/api/errors';
+import { GaiaApiError, GaiaError, GaiaNetworkError, GaiaTurnError } from '@/api/errors';
 import { useLocaleStore } from '@/state/locale';
 
 // The phone says "your PC" where the shared catalog says "this PC".
@@ -48,13 +48,16 @@ export function serverText(error: unknown): string | undefined {
     return error instanceof Error ? error.message || undefined : undefined;
 }
 
-/** A PC's HTTP or pairing-auth error as our reason-free sentence plus its raw text for `detail`; any other error reads as `describeError`. */
+/** A PC's HTTP error, pairing-auth error or failed turn as our reason-free sentence plus its raw text for `detail`; any other error reads as `describeError`. */
 export function describeHttpFailure(error: unknown, t: Translate): { text: string; detail?: string } {
     if (error instanceof GaiaApiError && error.messageKey === 'mobileApp.error.http' && error.detail) {
         return { text: t('mobileApp.error.httpNoDetail', { status: error.status }), detail: error.detail };
     }
     if (error instanceof GaiaApiError && error.messageKey === 'mobileApp.error.auth') {
         return { text: t('mobileApp.error.authNoDetail'), detail: error.detail || undefined };
+    }
+    if (error instanceof GaiaTurnError && error.detail) {
+        return { text: t('mobileApp.error.turnFailedNoDetail'), detail: error.detail };
     }
     return { text: describeError(error, t) };
 }
