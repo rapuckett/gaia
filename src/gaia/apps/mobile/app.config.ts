@@ -99,6 +99,7 @@ export default function appConfig(): ExpoConfig {
             './plugins/withBackupExclusions',
             ['./plugins/withRelayDomain', { domain: relayDomain || null }],
             './plugins/withNinjaJobs',
+            './plugins/withWorkManagerKeep',
         ],
     };
 }
