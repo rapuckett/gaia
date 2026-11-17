@@ -26,6 +26,7 @@ export const enMessages = {
     'sidebar.matchCount.other': '{n} chats match',
     'sidebar.empty': 'No chats yet.',
     'sidebar.searchFailed': 'Could not search inside chats: {error}',
+    'mobileApp.chats.markReadFailed': 'Could not mark the chat read.',
     'mobileApp.chats.searchFailedLabel': 'Could not search inside chats',
     'sidebar.markReadFailed': 'Could not mark the chat read: {error}',
     'sidebar.pinFailed': 'Could not pin the chat.',

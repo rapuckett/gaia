@@ -14,6 +14,8 @@ import {
 
 import { foldText } from '@webui/utils/chatSearch';
 
+import { GaiaError } from '@/api/errors';
+import { describeErrorWith, serverText } from '@/i18n/useT';
 import type { Session, SessionSearchResult } from '@/api/client.types';
 
 export type { LiveRuns, RowStatus };
@@ -170,11 +172,12 @@ const ROW_ERROR_KEY: Record<Exclude<RowErrorKind, 'markRead'>, MessageKey> = {
     unpin: 'sidebar.unpinFailed',
 };
 
-/** A server message wins; marking read always names the cause. */
-export function rowErrorMessage(kind: RowErrorKind, error: unknown, t: Say): string {
-    const cause = error instanceof Error ? error.message : String(error);
-    if (kind === 'markRead') return t('sidebar.markReadFailed', { error: cause });
-    return error instanceof Error && cause ? cause : t(ROW_ERROR_KEY[kind]);
+/** The reason-free sentence for a failed row action, plus the PC's own text for the detail line. */
+export function rowFailure(kind: RowErrorKind, error: unknown, t: Translate): { message: string; detail?: string } {
+    const message = t(kind === 'markRead' ? 'mobileApp.chats.markReadFailed' : ROW_ERROR_KEY[kind]);
+    const detail = serverText(error);
+    if (detail) return { message, detail };
+    return error instanceof GaiaError ? { message: describeErrorWith(error, t) } : { message };
 }
 
 /** Chats whose title holds `query` or whose messages the backend matched, in the list's own order. */
