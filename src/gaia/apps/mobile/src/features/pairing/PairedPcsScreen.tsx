@@ -52,7 +52,9 @@ export function PairedPcsScreen({ onAdd }: { onAdd: () => void }) {
                             trailing={
                                 <Row gap="xs">
                                     {current ? (
-                                        <Badge tone="success" label={t('mobileApp.pairing.pcs.inUse')} />
+                                        <Stack self="center">
+                                            <Badge tone="success" label={t('mobileApp.pairing.pcs.inUse')} />
+                                        </Stack>
                                     ) : (
                                         <Button
                                             label={t.bare('mobileApp.pairing.pcs.use')}
