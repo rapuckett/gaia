@@ -10,6 +10,7 @@
   "components/UnsupportedFeature.tsx": 4,
   "components/VersionPicker.tsx": 2,
   "components/settings/AboutSettings.tsx": 1,
+  "components/settings/MessagingSettings.tsx": 5,
   "components/setup/detected.ts": 4,
   "hooks/useChatExport.ts": 2,
   "hooks/useWindowTitle.ts": 1,

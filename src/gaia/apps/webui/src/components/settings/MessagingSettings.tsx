@@ -3,7 +3,7 @@
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Check, Copy, ExternalLink, Loader2 } from 'lucide-react';
-import { ref } from '../../i18n/registry';
+import { keepTogether } from '../../i18n/registry';
 import { useT } from '../../i18n/useT';
 import { ApiError } from '../../services/api';
 import {
@@ -30,15 +30,15 @@ const SHOW_DETAIL = new Set(['error', 'credentials_unavailable']);
 
 /** Button names exactly as Discord shows them, so the user can find what they read. */
 const PORTAL = {
-    newApp: ref('settings.messaging.portal.newApp'),
-    create: ref('settings.messaging.portal.create'),
-    bot: ref('settings.messaging.portal.bot'),
-    reset: ref('settings.messaging.portal.reset'),
-    copy: ref('settings.messaging.portal.copy'),
-    publicBot: ref('settings.messaging.portal.publicBot'),
-    message: ref('settings.messaging.portal.message'),
-    createOwn: ref('settings.messaging.portal.createOwn'),
-    forFriends: ref('settings.messaging.portal.forFriends'),
+    newApp: keepTogether('New Application'),
+    create: keepTogether('Create'),
+    bot: keepTogether('Bot'),
+    reset: keepTogether('Reset Token'),
+    copy: keepTogether('Copy'),
+    publicBot: keepTogether('Public Bot'),
+    message: keepTogether('Message'),
+    createOwn: keepTogether('Create My Own'),
+    forFriends: keepTogether('For me and my friends'),
 };
 
 type Action = 'connect' | 'start' | 'takeOver' | 'stop' | 'restart' | 'forget' | 'pair' | 'disconnect';
