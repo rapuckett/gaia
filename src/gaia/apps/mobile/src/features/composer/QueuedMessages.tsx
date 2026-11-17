@@ -1,14 +1,15 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import type { QueuedMessage } from '@webui/utils/messageQueue';
-
-import { useT, type Translate } from '@/i18n/useT';
+import { GaiaApiError, GaiaError } from '@/api/errors';
+import { describeHttpFailure, useT, type Translate } from '@/i18n/useT';
 import { Button, IconButton, Row, Stack, Surface, Text } from '@/ui';
 import { RotateCcw, X } from '@/ui/icons';
 
+import type { HeldMessage } from './composerQueue';
+
 export interface QueuedMessagesProps {
-    items: readonly QueuedMessage[];
+    items: readonly HeldMessage[];
     onRemove(id: number): void;
     onRetry(id: number): void;
     /** Absent when no running reply can take a message. */
@@ -17,7 +18,7 @@ export interface QueuedMessagesProps {
     replying: boolean;
 }
 
-function stateLine(item: QueuedMessage, replying: boolean, t: Translate): string {
+function stateLine(item: HeldMessage, replying: boolean, t: Translate): string {
     switch (item.state) {
         case 'failed':
             return t('queue.notSent');
@@ -29,6 +30,33 @@ function stateLine(item: QueuedMessage, replying: boolean, t: Translate): string
         default:
             return t('queue.delivered');
     }
+}
+
+/** Our own wording for a failure (when it has any) and the PC's or the system's raw text. Rows saved as a plain string show it as the detail. */
+function failureLines(item: HeldMessage, t: Translate): { text?: string; detail?: string } {
+    const f = item.failure;
+    if (!f) return { detail: item.error };
+    const error = f.status === undefined ? new GaiaError(f.messageKey, f.params) : new GaiaApiError(f.status, f.detail ?? '', f.messageKey, f.params);
+    const { text, detail } = describeHttpFailure(error, t);
+    return { text, detail };
+}
+
+function FailureDetail({ item, t }: { item: HeldMessage; t: Translate }) {
+    const { text, detail } = failureLines(item, t);
+    return (
+        <>
+            {text ? (
+                <Text role="caption" tone="muted" testID={`queued-reason-${item.id}`}>
+                    {text}
+                </Text>
+            ) : null}
+            {detail ? (
+                <Text role="caption" tone="muted" dir="ltr" align="ltr" testID={`queued-error-${item.id}`}>
+                    {detail}
+                </Text>
+            ) : null}
+        </>
+    );
 }
 
 /** Messages typed while GAIA answers, oldest first. */
@@ -61,11 +89,7 @@ export function QueuedMessages({ items, onRemove, onRetry, onSteer, replying }: 
                         <Text role="caption" tone={item.state === 'failed' ? 'danger' : 'secondary'}>
                             {stateLine(item, replying, t)}
                         </Text>
-                        {item.state === 'failed' && item.error ? (
-                            <Text role="caption" tone="muted" dir="ltr" align="ltr" testID={`queued-error-${item.id}`}>
-                                {item.error}
-                            </Text>
-                        ) : null}
+                        {item.state === 'failed' ? <FailureDetail item={item} t={t} /> : null}
                         {item.state === 'failed' ? (
                             <Button
                                 label={t('queue.sendAgain')}
