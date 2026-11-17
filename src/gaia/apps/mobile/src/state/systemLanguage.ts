@@ -5,9 +5,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import { create } from 'zustand';
 
-import { getLocale } from '@webui/i18n/registry';
+import { getLocale, isLocaleCode } from '@webui/i18n/registry';
 
-import { deviceLocaleCode } from '@/i18n/useT';
+import { deviceLanguageCode, deviceLocaleCode } from '@/i18n/useT';
 import { layoutDirection } from '@/platform/direction';
 import { useLanguageSwitch } from '@/state/languageSwitch';
 import { useLocaleStore } from '@/state/locale';
@@ -45,12 +45,14 @@ export async function checkSystemLanguage(): Promise<void> {
     firstCheck = false;
     try {
         const device = deviceLocaleCode();
+        const reported = deviceLanguageCode();
         const [seen, shown] = await Promise.all([AsyncStorage.getItem(SEEN_KEY), AsyncStorage.getItem(SHOWN_KEY)]);
-        if (seen !== device) {
-            await AsyncStorage.setItem(SEEN_KEY, device);
+        if (seen !== reported) {
+            await AsyncStorage.setItem(SEEN_KEY, reported);
             // The phone's setting is the newer word: drop an older in-app pick so it can't fight it on the next launch.
+            // A language GAIA doesn't ship can't replace the pick.
             const pick = useLocaleStore.getState().locale;
-            if (seen !== null && pick !== null && pick !== device) useLocaleStore.getState().setLocale(null);
+            if (seen !== null && pick !== null && pick !== device && isLocaleCode(reported)) useLocaleStore.getState().setLocale(null);
         }
         const language = useLocaleStore.getState().locale ?? device;
         if (getLocale(language).meta.dir === layoutDirection()) {

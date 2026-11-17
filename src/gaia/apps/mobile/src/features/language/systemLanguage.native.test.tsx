@@ -7,7 +7,7 @@ import type { ReactNode } from 'react';
 import { BackHandler, Platform } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-import { deviceLocaleCode } from '@/i18n/useT';
+import { deviceLanguageCode, deviceLocaleCode } from '@/i18n/useT';
 import { layoutDirection } from '@/platform/direction';
 import { useLanguageSwitch } from '@/state/languageSwitch';
 import { useLocaleStore } from '@/state/locale';
@@ -18,7 +18,11 @@ import { LanguageSwitchHost } from './LanguageSwitchCover';
 
 jest.mock('expo-font', () => ({ useFonts: () => [true, null] }));
 jest.mock('@/platform/direction', () => ({ applyDirection: jest.fn(), layoutDirection: jest.fn(() => 'ltr') }));
-jest.mock('@/i18n/useT', () => ({ ...jest.requireActual('@/i18n/useT'), deviceLocaleCode: jest.fn(() => 'en') }));
+jest.mock('@/i18n/useT', () => ({
+    ...jest.requireActual('@/i18n/useT'),
+    deviceLocaleCode: jest.fn(() => 'en'),
+    deviceLanguageCode: jest.fn(() => 'en'),
+}));
 
 const wrap = ({ children }: { children: ReactNode }) => (
     <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 800 }, insets: { top: 0, left: 0, right: 0, bottom: 0 } }}>
@@ -35,6 +39,7 @@ beforeEach(async () => {
     useLanguageSwitch.setState({ target: null, previousPick: null });
     useLocaleStore.setState({ locale: null, hydrated: true });
     jest.mocked(deviceLocaleCode).mockReturnValue('en');
+    jest.mocked(deviceLanguageCode).mockReturnValue('en');
     jest.mocked(layoutDirection).mockReturnValue('ltr');
     jest.spyOn(BackHandler, 'addEventListener').mockImplementation((_e, h) => {
         backHandlers.push(h as () => boolean);
@@ -50,6 +55,7 @@ const describeNative = Platform.OS === 'web' ? describe.skip : describe;
 /** The phone is now Arabic while the layout is still left to right. */
 function phoneSwitchedToArabic() {
     jest.mocked(deviceLocaleCode).mockReturnValue('ar');
+    jest.mocked(deviceLanguageCode).mockReturnValue('ar');
 }
 
 describeNative('system language change', () => {
@@ -95,6 +101,17 @@ describeNative('system language change', () => {
             await act(async () => checkSystemLanguage());
             expect(useLocaleStore.getState().locale).toBeNull();
             expect(await AsyncStorage.getItem('gaia.deviceLocale')).toBe('ar');
+        });
+
+        it('keeps the in-app pick when the phone moves to a language GAIA does not ship', async () => {
+            await AsyncStorage.setItem('gaia.deviceLocale', 'ar');
+            useLocaleStore.setState({ locale: 'ar' });
+            jest.mocked(deviceLanguageCode).mockReturnValue('de');
+            jest.mocked(deviceLocaleCode).mockReturnValue('en');
+            jest.mocked(layoutDirection).mockReturnValue('rtl');
+            await act(async () => checkSystemLanguage());
+            expect(useLocaleStore.getState().locale).toBe('ar');
+            expect(await AsyncStorage.getItem('gaia.deviceLocale')).toBe('de');
         });
 
         it('keeps the in-app pick when the phone did not change', async () => {

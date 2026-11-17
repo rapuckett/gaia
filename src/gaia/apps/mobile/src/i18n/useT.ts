@@ -14,8 +14,13 @@ setVariantPrefix('mobileApp.yourPc.');
 
 export { dateLocale, translator, type Translate };
 
+/** The phone's language as it reports it, shipped by GAIA or not. */
+export function deviceLanguageCode(): string {
+    return getLocales()[0]?.languageCode ?? DEFAULT_LOCALE;
+}
+
 export function deviceLocaleCode(): string {
-    const code = getLocales()[0]?.languageCode;
+    const code = deviceLanguageCode();
     return isLocaleCode(code) ? code : DEFAULT_LOCALE;
 }
 
