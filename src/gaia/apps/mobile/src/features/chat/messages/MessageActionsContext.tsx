@@ -6,6 +6,8 @@ import { createContext, useContext } from 'react';
 /** What a bubble needs from the chat's live turn; changes only when a turn starts or ends. */
 export interface MessageActionsValue {
     send(text: string): boolean;
+    /** Asks the latest question again; replaces the saved reply with this id. */
+    retry?(replyId: number | null): Promise<boolean>;
     busy: boolean;
     /** A chat made by a retired agent: Edit, Resend and Retry with another model are withheld. */
     readOnly?: boolean;

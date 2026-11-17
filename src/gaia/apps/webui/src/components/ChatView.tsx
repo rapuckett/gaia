@@ -4,7 +4,7 @@
 import { useEffect, useRef, useCallback, useState, useMemo, type CSSProperties } from 'react';
 import { Activity, Edit3, Download, Upload, ArrowDown, FolderSearch, Clock } from 'lucide-react';
 import { TurnAnnouncer } from './TurnAnnouncer';
-import { MessageBubble, cleanToolCallContent, isErrorContent, turnEnding } from './MessageBubble';
+import { MessageBubble, cleanToolCallContent, turnEnding } from './MessageBubble';
 import { toolRowText } from './AgentActivity';
 import { agentEventToStep } from '../utils/streamSteps';
 import { latencyByMessage } from '../utils/answerStats.core';
@@ -75,7 +75,7 @@ import { useChatDraft } from '../hooks/useSavedDraft';
 import { chatDraftKey, clearSavedDraft } from '../utils/savedDraft';
 import { useOpeningMessage } from '../hooks/useOpeningMessage';
 import { getT, useT } from '../i18n/useT';
-import { STOP_GRACE_MS } from '../utils/turnEnding.core';
+import { STOP_GRACE_MS, canRegenerate } from '../utils/turnEnding.core';
 
 /** Events that only come after the agent got past a permission prompt. */
 const RESOLVES_PROMPTS = new Set(['tool_start', 'tool_end', 'tool_result']);
@@ -1687,9 +1687,9 @@ export function ChatView({ sessionId }: ChatViewProps) {
                         const stopped = msg.role === 'assistant' && msg.stopState === 'stopped' && !msg.stopError;
                         const canTryAgain = (msg.failed === true || cutOff || stopped) && !busy && !retiredAgent
                             && idx === messages.length - 1;
-                        const canRetry = !canTryAgain && !busy && !comparison && !retiredAgent
-                            && msg.role === 'assistant' && idx === messages.length - 1
-                            && !msg.stopState && !msg.failed && !isErrorContent(msg.content);
+                        const canRetry = !canTryAgain && canRegenerate(msg, {
+                            latest: idx === messages.length - 1, busy: !!busy, comparing: !!comparison, retiredAgent: !!retiredAgent,
+                        });
                         const latency = msg.stats?.seconds != null ? msg.stats.seconds * 1000 : latencyByMsgId.get(msg.id);
                         const serverDown = msg.failure === 'model_server_down' && idx === messages.length - 1 && !busy;
                         const unsent = isUnsent(msg);

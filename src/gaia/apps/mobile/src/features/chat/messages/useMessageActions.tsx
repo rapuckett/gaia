@@ -8,6 +8,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import type { Message } from '@/api/client.types';
 import { GaiaConfigError } from '@/api/errors';
 import { isErrorContent } from '@webui/utils/answerErrors.core';
+import { canRegenerate } from '@webui/utils/turnEnding.core';
 
 import { queryKeys, useGaiaClient } from '@/data';
 import { describeError, describeHttpFailure, useT } from '@/i18n/useT';
@@ -47,6 +48,8 @@ export interface MessageActions {
         accessibilityActions: readonly { name: string; label: string }[];
         onAccessibilityAction: (event: { nativeEvent: { actionName: string } }) => void;
     };
+    /** Try again on the latest finished answer; null when it isn't offered. */
+    regenerate: (() => void) | null;
     /** The edit box, shown in place of the text while the message is being edited. */
     editor: ReactNode;
     /** Shown when an action failed. */
@@ -64,7 +67,7 @@ export function useMessageActions(
     const t = useT();
     const client = useGaiaClient();
     const queryClient = useQueryClient();
-    const { send, busy, readOnly } = useMessageActionsContext();
+    const { send, retry, busy, readOnly } = useMessageActionsContext();
     const { comparison, retryWith } = useAnswerComparison(message.session_id);
     const [retryOpen, setRetryOpen] = useState(false);
     const [open, setOpen] = useState(startOpen === 'actions');
@@ -133,6 +136,14 @@ export function useMessageActions(
     const canChange = saved && !busy;
     const isUser = message.role === 'user';
     const canRetry = !isUser && canChange && !readOnly && !!context.latest && !comparison && message.failed !== true && !isErrorContent(message.content);
+    const regenerable =
+        !!retry && saved && canRegenerate(message, { latest: !!context.latest, busy, comparing: !!comparison, retiredAgent: !!readOnly });
+    const regenerate = regenerable
+        ? () => {
+              setFailure(null);
+              retry(message.id).catch((error: unknown) => setFailure(describeHttpFailure(error, t)));
+          }
+        : null;
     const actions: SheetAction[] = [
         ...(isUser && canChange && !readOnly
             ? [
@@ -167,6 +178,7 @@ export function useMessageActions(
         copy,
         copied,
         openSheet,
+        regenerate,
         a11y: {
             accessibilityActions: [{ name: 'activate', label: t('msg.actions') }],
             onAccessibilityAction: (event) => {
