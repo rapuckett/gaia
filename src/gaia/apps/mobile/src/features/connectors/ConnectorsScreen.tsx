@@ -8,6 +8,8 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { useWindowDimensions, View } from 'react-native';
 
 import type { AgentMcpServer, ConnectorRow, UnavailableConnectorRow } from '@/api/client.types';
+import { ENDPOINTS } from '@/api/constants';
+import { useDeviceRefused } from '@/api/routeAccess';
 import {
     useAgentMcps,
     useAgents,
@@ -19,6 +21,7 @@ import {
 } from '@/data';
 import { ScreenHeader } from '@/features/nav/ScreenHeader';
 import { ChipButton } from '@/features/schedules/ChipButton';
+import { PcOnlyNotice } from '@/features/settings/PcOnlyNotice';
 import { SettingsGroup } from '@/features/skills/SettingsGroup';
 import { failureNoticeProps } from '@/features/chat/header/failureText';
 import { describeHttpFailure, useDirection, useT } from '@/i18n/useT';
@@ -630,6 +633,8 @@ function PersonalizeOffer({ connector, offer, onStarted }: { connector: Connecto
     const router = useRouter();
     const agents = useAgents();
     const change = useChangeConnectorAccess(connector.id);
+    const activateRefused = useDeviceRefused('PUT', ENDPOINTS.connectorActivation);
+    const pcOnly = connector.type === 'mcp_server' && activateRefused;
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<{ message: string; detail?: string } | null>(null);
     const kind = personalizeSourceKind(connector.id);
@@ -665,17 +670,21 @@ function PersonalizeOffer({ connector, offer, onStarted }: { connector: Connecto
             <Text role="label" tone="secondary">
                 {t(offer ? 'settings.connectors.personalize.offer' : 'settings.connectors.personalize.tile', { source, name: connector.display_name })}
             </Text>
-            <Stack align="start">
-                <Button
-                    size="sm"
-                    variant={offer ? 'primary' : 'secondary'}
-                    wrap
-                    label={t('settings.connectors.personalize.button')}
-                    busy={busy}
-                    onPress={() => void start()}
-                    testID={`personalize-${connector.id}`}
-                />
-            </Stack>
+            {pcOnly ? (
+                <PcOnlyNotice testID={`personalize-pc-only-${connector.id}`} />
+            ) : (
+                <Stack align="start">
+                    <Button
+                        size="sm"
+                        variant={offer ? 'primary' : 'secondary'}
+                        wrap
+                        label={t('settings.connectors.personalize.button')}
+                        busy={busy}
+                        onPress={() => void start()}
+                        testID={`personalize-${connector.id}`}
+                    />
+                </Stack>
+            )}
             {error ? <Notice tone="danger" message={error.message} detail={error.detail} /> : null}
         </Stack>
     );

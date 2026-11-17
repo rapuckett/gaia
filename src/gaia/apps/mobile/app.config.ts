@@ -77,6 +77,8 @@ export default function appConfig(): ExpoConfig {
             // No cloud backup. plugins/withBackupExclusions also keeps every app file out of device-to-device
             // transfer, so a paired PC's records never reach another phone, where its Keystore key can't follow.
             allowBackup: false,
+            // Android 14+ previews where back leads; React Native's BackHandler runs through OnBackPressedDispatcher.
+            predictiveBackGestureEnabled: true,
         },
         plugins: [
             'expo-router',

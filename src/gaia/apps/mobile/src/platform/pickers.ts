@@ -5,7 +5,6 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 
 import type { PickedFile } from '@/api/client.types';
-import { GaiaError } from '@/api/errors';
 
 export type { PickedFile };
 
@@ -16,10 +15,8 @@ function photoName(asset: ImagePicker.ImagePickerAsset): string {
     return last.includes('.') ? last : `photo-${Date.now()}.${asset.mimeType?.split('/')[1] ?? 'jpg'}`;
 }
 
-/** Photos the person chose from the library; `[]` when they cancel. Throws a GaiaError when access is denied. */
+/** Photos the person chose from the library; `[]` when they cancel. The system picker needs no photo permission. */
 export async function pickPhotos(): Promise<PickedFile[]> {
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) throw new GaiaError('mobileApp.error.photosDenied');
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsMultipleSelection: true });
     if (result.canceled) return [];
     return result.assets.map((asset) => ({
