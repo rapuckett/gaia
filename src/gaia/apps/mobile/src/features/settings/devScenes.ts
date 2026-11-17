@@ -3,6 +3,7 @@
 
 import { createFakeClient, type FakeClientData } from '@/api/fake';
 import type { SystemStatus } from '@webui/types';
+import { tEn } from '@webui/i18n/translator';
 
 import type { Automation, AutomationList, ContextChoice, Session, SkillInfo, DiscordStatus, GaiaClient, CustomModelReport, GpuMemoryStatus, LemonadeTarget, MCPServerStatus, ModelServerInfo, ProviderModel, Settings, SpendingReport } from '@/api/client.types';
 import { PC_ONLY_REFUSAL } from '@/api/constants';
@@ -107,8 +108,8 @@ const FIREWORKS_MODELS = [
 const providers = (fireworksConfigured: boolean): NonNullable<FakeClientData['providers']> => ({
     providers: [
         { id: 'local', name: 'Local', remote: false, privacy_notice: '', configured: true, blocked: false },
-        { id: 'fireworks', name: 'Fireworks AI', remote: true, privacy_notice: '', configured: fireworksConfigured, blocked: false },
-        { id: 'amd', name: 'AMD LLM Gateway', remote: true, privacy_notice: '', configured: false, blocked: false },
+        { id: 'fireworks', name: 'Fireworks AI', remote: true, privacy_notice: tEn('providers.fireworks.notice'), configured: fireworksConfigured, blocked: false },
+        { id: 'amd', name: 'AMD LLM Gateway', remote: true, privacy_notice: tEn('providers.amd.notice'), configured: false, blocked: false },
     ],
     lemonade_error: null,
 });
@@ -143,7 +144,7 @@ const SPEECH: NonNullable<FakeClientData['speechSettings']> = {
 const blockedProviders: NonNullable<FakeClientData['providers']> = {
     providers: [
         { id: 'local', name: 'Local', remote: false, privacy_notice: '', configured: true, blocked: false },
-        { id: 'fireworks', name: 'Fireworks AI', remote: true, privacy_notice: '', configured: true, blocked: true },
+        { id: 'fireworks', name: 'Fireworks AI', remote: true, privacy_notice: tEn('providers.fireworks.notice'), configured: true, blocked: true },
     ],
     lemonade_error: null,
 };
@@ -422,7 +423,7 @@ export const SETTINGS_SCENES: Record<string, SettingsScene> = {
 
 export function settingsSceneClient(scene: SettingsScene): GaiaClient {
     const client = createFakeClient({
-        ...COMMON, contexts: { [CHAT_MODEL]: CONTEXT }, gpuMemory: scene.gpuMemory, ...(scene.status ? { status: scene.status } : {}), ...scene.data,
+        ...COMMON, spending: spent({}), contexts: { [CHAT_MODEL]: CONTEXT }, gpuMemory: scene.gpuMemory, ...(scene.status ? { status: scene.status } : {}), ...scene.data,
     });
     const hung = scene.hang ? (scene.hang === 'download' ? { downloadModel: never } : { selectModel: never }) : {};
     return { ...client, ...hung, ...scene.override };

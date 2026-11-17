@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
-import { Platform } from 'react-native';
+import { Platform, StyleSheet } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import SettingsGalleryRoute from '@/app/dev/settings';
@@ -33,6 +33,15 @@ describeNative('/dev/settings', () => {
         mockState = name;
         await mount();
         expect(screen.queryByText(/^No settings scene/)).toBeNull();
+    });
+
+    it('nav-back-link flashes its target row on arrival', async () => {
+        mockState = 'nav-back-link';
+        await mount();
+        await waitFor(() => {
+            const overlay = screen.getByTestId('settings-flash-cloud-key', { includeHiddenElements: true });
+            expect(StyleSheet.flatten(overlay.props.style).opacity).toBeGreaterThan(0);
+        }, { timeout: 4000 });
     });
 
     it.each([
