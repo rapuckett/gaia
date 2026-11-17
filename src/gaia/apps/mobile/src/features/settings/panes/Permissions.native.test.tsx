@@ -66,11 +66,12 @@ describeNative('Permissions pane', () => {
         await render(<Permissions />, { wrapper: wrap });
         expect(await screen.findByTestId('perm-grant-revoke-a-0')).toBeTruthy();
         expect(screen.getByTestId('perm-grant-revoke-a-1')).toBeTruthy();
-        fireEvent.press(screen.getByTestId('perm-chat-menu-a'));
-        expect(await screen.findByTestId('perm-chat-turn-off-full')).toBeTruthy();
-        expect(screen.getByTestId('perm-chat-revoke-all')).toBeTruthy();
         fireEvent.press(screen.getByTestId('permissions-default-switch'));
         expect(await screen.findByTestId('perm-confirm')).toBeTruthy();
+        fireEvent.press(screen.getByTestId('perm-confirm'));
+        fireEvent.press(await screen.findByTestId('perm-chat-menu-a'));
+        expect(await screen.findByTestId('perm-chat-turn-off-full')).toBeTruthy();
+        expect(screen.getByTestId('perm-chat-revoke-all')).toBeTruthy();
         queryClient.clear();
     });
 });
