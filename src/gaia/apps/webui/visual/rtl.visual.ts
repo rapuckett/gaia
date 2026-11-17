@@ -513,9 +513,9 @@ const BIG_LIBRARY = Array.from({ length: 600 }, (_, i) => ({
 for (const locale of ['en', 'ar']) {
     // 600 attached documents drew 600 chips and pushed the message box off the screen.
     test(`a new chat with a whole large library attached keeps the message box on screen (${locale})`, async ({ page }) => {
-        await open(page, '', locale, (p) => p.route('**/api/documents', (route) => route.fulfill({
+        await open(page, '', locale, async (p) => { await p.route('**/api/documents', (route) => route.fulfill({
             json: { documents: BIG_LIBRARY, total: 600, total_size_bytes: 307_200, total_chunks: 600 },
-        })));
+        })); });
         const box = page.locator('.new-chat textarea').first();
         const onScreen = async (why: string) => {
             const r = (await box.boundingBox())!;
@@ -536,9 +536,9 @@ for (const locale of ['en', 'ar']) {
 
 for (const locale of ['en', 'ar']) {
     test(`the folder control says what it does, not GAIA's own folder name (${locale})`, async ({ page }) => {
-        await open(page, '', locale, (p) => p.route('**/api/onboarding/start', (route) => route.fulfill({
+        await open(page, '', locale, async (p) => { await p.route('**/api/onboarding/start', (route) => route.fulfill({
             json: { cards: [], working_folder: { path: '/home/you/.gaia/documents', name: 'documents', gaia_folder: true, choosable: true } },
-        })));
+        })); });
         const add = page.locator('.new-chat-meta button.new-chat-folder');
         await expect(add).toBeVisible();
         await expect(page.locator('.new-chat-meta')).not.toContainText('documents');
@@ -1315,8 +1315,8 @@ const FILE_URL_ANSWER_PATH = 'file:///home/test/notes/plan.md';
 
 for (const locale of ['ar', 'en']) {
     test(`a POSIX path in inline code is a chip (${locale})`, async ({ page }, info) => {
-        await open(page, `#${ANSWER_SESSION}`, locale, (p) =>
-            p.route((url) => url.pathname === `/api/sessions/${ANSWER_SESSION}/messages`, (route) =>
+        await open(page, `#${ANSWER_SESSION}`, locale, async (p) => {
+            await p.route((url) => url.pathname === `/api/sessions/${ANSWER_SESSION}/messages`, (route) =>
                 route.fulfill({
                     json: {
                         messages: [
@@ -1325,8 +1325,8 @@ for (const locale of ['ar', 'en']) {
                         ],
                     },
                 }),
-            ),
-        );
+            );
+        });
         const chips = page.locator('.file-path-link');
         await expect(chips).toHaveText([POSIX_ANSWER_PATH, FILE_URL_ANSWER_PATH]);
         expect(await audit(page)).toEqual([]);
@@ -2070,8 +2070,8 @@ const holdStreamOn = (page: Page, event: object) =>
 
 for (const [locale, wording] of [['ar', 'جارٍ تحميل المزيد من الأدوات'], ['en', 'Loading more tools']]) {
     test(`a tool re-read is worded in ${locale}`, async ({ page }) => {
-        await open(page, `#${ANSWER_SESSION}`, locale, (p) =>
-            holdStreamOn(p, { type: 'status', status: 'working', phase: 'loading_tools', message: 'backend words' }));
+        await open(page, `#${ANSWER_SESSION}`, locale, async (p) => {
+            await holdStreamOn(p, { type: 'status', status: 'working', phase: 'loading_tools', message: 'backend words' }); });
         const box = page.locator('textarea').first();
         await box.fill('hello');
         await box.press('Enter');
@@ -2286,13 +2286,13 @@ for (const locale of ['ar', 'en'] as const) {
     for (const checked of [true, false]) {
         const state = checked ? 'unlisted' : 'unchecked';
         test(`a saved custom model the server ${checked ? 'does not list' : 'could not check'} gets a note (${locale})`, async ({ page }) => {
-            await open(page, '', locale, (p) => p.route((url) => url.pathname === '/api/settings', (route) => {
+            await open(page, '', locale, async (p) => { await p.route((url) => url.pathname === '/api/settings', (route) => {
                 if (route.request().method() !== 'PUT') return route.fallback();
                 return route.fulfill({ json: {
                     custom_model: UNLISTED_ID, context_size: null, agent_mode: 'goal_driven', dynamic_tools: false, dynamic_tools_locked: false,
                     model_status: { found: false, downloaded: false, loaded: false, checked },
                 } });
-            }));
+            }); });
             await page.getByRole('button', { name: /Settings/ }).first().click();
             const dialog = page.getByRole('dialog');
             await dialog.locator('[data-section="advanced"]').click();
@@ -2567,7 +2567,7 @@ for (const locale of ['ar', 'en']) {
     test(`Mobile access starts on Start; without ngrok it asks for setup (${locale})`, async ({ page }) => {
         const missing = { active: false, url: null, token: null, startedAt: null, publicIp: null, reason: 'ngrok_not_installed', installCommands: ['choco install ngrok'], error: 'ngrok is not installed. Install it from https://ngrok.com/download or run:\n    choco install ngrok' };
         let started = 0;
-        await open(page, '', locale, (p) => p.route('**/api/tunnel/start', (route) => { started += 1; return route.fulfill({ json: missing }); }));
+        await open(page, '', locale, async (p) => { await p.route('**/api/tunnel/start', (route) => { started += 1; return route.fulfill({ json: missing }); }); });
         await page.locator('.sb-icon-btn').filter({ has: page.locator('.lucide-smartphone') }).click();
         const dialog = page.locator('.mobile-modal');
         // Opening starts nothing: one privacy line and a Start button, until it is pressed.
@@ -5067,8 +5067,8 @@ const REPEATED_PROMPTS = ['c1', 'c2', 'c3'].map((id) => ({
 for (const locale of ['ar', 'en']) {
     test(`the third identical prompt counts two earlier allows (${locale})`, async ({ page }) => {
         await page.addInitScript(streamThenWait, REPEATED_PROMPTS);
-        await open(page, `#${ANSWER_SESSION}`, locale, (p) =>
-            p.route('**/api/chat/confirm-tool', (route) => route.fulfill({ json: { status: 'ok', approved: true, granted: null } })));
+        await open(page, `#${ANSWER_SESSION}`, locale, async (p) => {
+            await p.route('**/api/chat/confirm-tool', (route) => route.fulfill({ json: { status: 'ok', approved: true, granted: null } })); });
         await page.locator('textarea').first().fill('count the characters in my notes');
         await page.keyboard.press('Enter');
         for (const answered of [1, 2]) {
@@ -5299,8 +5299,8 @@ for (const locale of ['ar', 'en']) {
 for (const locale of ['en', 'ar']) {
     test(`the context meter explains a fresh chat's fill and shows a dash before it is measured (${locale})`, async ({ page }) => {
         const fresh = { ...MEASURED_CONTEXT, system: 7700, tools: 16000, documents: 0, history: 300, used: 24000, at_risk: [], at_risk_tokens: 0 };
-        await open(page, `#${ANSWER_SESSION}`, locale, (p) =>
-            p.route(`**/api/chat/context/${ANSWER_SESSION}`, (route) => route.fulfill({ json: fresh })));
+        await open(page, `#${ANSWER_SESSION}`, locale, async (p) => {
+            await p.route(`**/api/chat/context/${ANSWER_SESSION}`, (route) => route.fulfill({ json: fresh })); });
         await page.locator('button.context-meter').click();
         await expect(page.locator('.context-meter-note.is-setup')).toBeVisible();
         await shot(page, `context-meter-setup-${locale}`);
@@ -5308,10 +5308,10 @@ for (const locale of ['en', 'ar']) {
     });
 
     test(`a reopened chat's context meter shows a dash, not an empty bar (${locale})`, async ({ page }) => {
-        await open(page, `#${ANSWER_SESSION}`, locale, (p) =>
-            p.route(`**/api/chat/context/${ANSWER_SESSION}`, (route) => route.fulfill({
+        await open(page, `#${ANSWER_SESSION}`, locale, async (p) => {
+            await p.route(`**/api/chat/context/${ANSWER_SESSION}`, (route) => route.fulfill({
                 json: { available: false, reason: "Measured again with your next message: GAIA restarted or switched models since this chat's last answer." },
-            })));
+            })); });
         const meter = page.locator('.context-meter.is-empty');
         await expect(meter).toBeVisible();
         await expect(meter.locator('.context-meter-bar')).toHaveCount(0);
@@ -5390,8 +5390,8 @@ test('each line of an email being approved takes its own direction', async ({ pa
     const text = 'To: dana@example.com\nSubject: Hello\n\nمرحبا، هذا اختبار.';
     const event = { type: 'permission_request', tool: 'send_now', args: { _exact_text: text }, confirm_id: 'c1' };
     // The prompt lasts only while its stream is open, which a routed response can't do.
-    await open(page, `#${ANSWER_SESSION}`, 'ar', (p) =>
-        p.addInitScript((line) => {
+    await open(page, `#${ANSWER_SESSION}`, 'ar', async (p) => {
+        await p.addInitScript((line) => {
             const realFetch = window.fetch;
             window.fetch = (input, init) =>
                 String(input).endsWith('/chat/send')
@@ -5399,8 +5399,8 @@ test('each line of an email being approved takes its own direction', async ({ pa
                         start: (controller) => controller.enqueue(new TextEncoder().encode(line)),
                     }), { headers: { 'Content-Type': 'text/event-stream' } }))
                     : realFetch(input, init);
-        }, `data: ${JSON.stringify(event)}\n\n`),
-    );
+        }, `data: ${JSON.stringify(event)}\n\n`);
+    });
     await page.locator('textarea').last().fill('send it');
     await page.keyboard.press('Enter');
     const pre = page.getByTestId('perm-exact-text');
@@ -5857,18 +5857,18 @@ const BROKEN = { not: 'text' };
 const CRASHES: Record<'main' | 'sidebar' | 'window', { hash: string; before: (page: Page) => Promise<void> }> = {
     main: {
         hash: `#${ANSWER_SESSION}`,
-        before: (page) => page.route((url) => url.pathname === `/api/sessions/${ANSWER_SESSION}/messages`, (route) =>
-            route.fulfill({ json: { messages: [{ id: 1, session_id: ANSWER_SESSION, role: 'user', content: BROKEN, created_at: NOW.toISOString(), rag_sources: null }] } })),
+        before: async (page) => { await page.route((url) => url.pathname === `/api/sessions/${ANSWER_SESSION}/messages`, (route) =>
+            route.fulfill({ json: { messages: [{ id: 1, session_id: ANSWER_SESSION, role: 'user', content: BROKEN, created_at: NOW.toISOString(), rag_sources: null }] } })); },
     },
     sidebar: {
         hash: '',
-        before: (page) => page.route((url) => url.pathname === '/api/sessions', (route) =>
-            route.fulfill({ json: { sessions: [{ ...SESSIONS[0], title: BROKEN }], total: 1 } })),
+        before: async (page) => { await page.route((url) => url.pathname === '/api/sessions', (route) =>
+            route.fulfill({ json: { sessions: [{ ...SESSIONS[0], title: BROKEN }], total: 1 } })); },
     },
     window: {
         hash: '',
-        before: (page) => page.route((url) => url.pathname === '/api/providers/active', (route) =>
-            route.fulfill({ json: { provider: 'local', model: 'Gemma-4-E4B-it-GGUF', label: 'Gemma-4-E4B-it-GGUF · local', remote: false, is_default: true, restore: { status: 'failed', message: BROKEN } } })),
+        before: async (page) => { await page.route((url) => url.pathname === '/api/providers/active', (route) =>
+            route.fulfill({ json: { provider: 'local', model: 'Gemma-4-E4B-it-GGUF', label: 'Gemma-4-E4B-it-GGUF · local', remote: false, is_default: true, restore: { status: 'failed', message: BROKEN } } })); },
     },
 };
 

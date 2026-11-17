@@ -137,6 +137,7 @@ for (const locale of ['en', 'ar']) {
         await streamingChat(page, locale);
         // A point on the list's own scrollbar that nothing else (a resize handle) covers.
         const grip = await list(page).evaluate((el) => {
+            if (!(el instanceof HTMLElement)) throw new Error('the message list is not an HTML element');
             const box = el.getBoundingClientRect();
             const gutter = el.offsetWidth - el.clientWidth;
             const rtl = getComputedStyle(el).direction === 'rtl';
