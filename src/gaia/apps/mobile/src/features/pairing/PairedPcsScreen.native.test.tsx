@@ -6,7 +6,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-
 import { Platform } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-import { GaiaApiError } from '@/api/errors';
+import { GaiaApiError, GaiaAuthError } from '@/api/errors';
 import { createFakeClient } from '@/api/fake';
 import { GaiaClientProvider } from '@/data';
 import { translator } from '@/i18n/useT';
@@ -101,6 +101,26 @@ describeNative('Your PCs when listing fails', () => {
         );
         expect(await screen.findByText(t('mobileApp.error.httpNoDetail', { status: 500 }))).toBeTruthy();
         const detail = screen.getByText('disk full on the PC') as unknown as { props: { style: { writingDirection?: string } } };
+        expect(detail.props.style.writingDirection).toBe('ltr');
+    });
+
+    it("keeps the PC's text out of a pairing-refused sentence too", async () => {
+        setPairingService({ list: async () => Promise.reject(new GaiaAuthError('token revoked by the PC')) } as unknown as PairingService);
+        await render(
+            <SafeAreaProvider initialMetrics={METRICS}>
+                <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+                    <GaiaClientProvider client={createFakeClient()}>
+                        <UIProvider>
+                            <ScreenBannerProvider banner={null}>
+                                <PairedPcsScreen onAdd={() => undefined} />
+                            </ScreenBannerProvider>
+                        </UIProvider>
+                    </GaiaClientProvider>
+                </QueryClientProvider>
+            </SafeAreaProvider>,
+        );
+        expect(await screen.findByText(t('mobileApp.error.authNoDetail'))).toBeTruthy();
+        const detail = screen.getByText('token revoked by the PC') as unknown as { props: { style: { writingDirection?: string } } };
         expect(detail.props.style.writingDirection).toBe('ltr');
     });
 });

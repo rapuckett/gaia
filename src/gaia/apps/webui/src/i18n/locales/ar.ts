@@ -3817,6 +3817,7 @@ const messages: Messages = {
     'mobileApp.error.badScheme': 'يجب أن يبدأ عنوان GAIA "{address}" بـ http:// أو https://.',
     'mobileApp.error.network': 'تعذّر الوصول إلى GAIA على الكمبيوتر. تأكد من أن الكمبيوتر يعمل ويمكن الوصول إليه من هذا الهاتف.',
     'mobileApp.error.auth': 'لم يقبل GAIA اقتران هذا الهاتف: {detail}. اقرن هذا الهاتف بالكمبيوتر مرة أخرى.',
+    'mobileApp.error.authNoDetail': 'لم يقبل GAIA اقتران هذا الهاتف. اقرن هذا الهاتف بالكمبيوتر مرة أخرى.',
     'mobileApp.error.http': 'ردّ GAIA بخطأ ({status}): {detail}',
     'mobileApp.error.httpNoDetail': 'ردّ GAIA بخطأ ({status}).',
     'mobileApp.error.agentInstallFailed': 'تعذّر تثبيت وكيل GAIA.',
