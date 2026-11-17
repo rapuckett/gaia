@@ -78,12 +78,9 @@ export function ToolStepRow({ step, awaitingUser = false, now, testID, thoughtTe
     const count = step.count ?? 1;
     const notRun = (!!step.declined || !!step.timedOut || !!step.autoDeclined) && !step.active;
     const exitCode = step.commandOutput && step.commandOutput.returnCode !== 0 ? step.commandOutput.returnCode : null;
+    // The terminal card's header already says a shell step's exit code.
     const failure =
-        step.success === false && step.result && !notRun && step.needsModel !== 'vision'
-            ? exitCode !== null
-                ? t('activity.exit', { code: isolate(String(exitCode), 'ltr') })
-                : failureText(step, t)
-            : '';
+        step.success === false && step.result && !notRun && step.needsModel !== 'vision' && exitCode === null ? failureText(step, t) : '';
     const timing = waiting
         ? ''
         : step.active
