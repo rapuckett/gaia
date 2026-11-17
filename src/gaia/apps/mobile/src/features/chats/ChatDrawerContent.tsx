@@ -48,7 +48,7 @@ import { useNow } from './useNow';
 import {
     buildChatSections,
     chatListState,
-    rowErrorMessage,
+    rowFailure,
     rowText,
     searchedSessions,
     statusTone,
@@ -175,7 +175,9 @@ export function ChatDrawerContent({ activeId, onSelect, onClose, onNewChat, onPc
     const notices = (
         <>
             {alert ? (
-                <Notice tone="danger" message={rowErrorMessage(alert.kind, alert.error, t)} />
+                <Stack paddingX="gutter" paddingY="xs">
+                    <Notice tone="danger" {...rowFailure(alert.kind, alert.error, t)} />
+                </Stack>
             ) : null}
             {state === 'loading' ? <ListSkeleton rows={8} /> : null}
             {state === 'error' ? <ErrorState title={describeHttpFailure(sessions.error, t).text} detail={describeHttpFailure(sessions.error, t).detail} onRetry={() => void sessions.refetch()} /> : null}

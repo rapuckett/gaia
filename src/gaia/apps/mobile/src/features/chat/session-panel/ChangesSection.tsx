@@ -64,7 +64,7 @@ function ChangesBody({ sessionId, live, changes, onUndone }: { sessionId: string
     const [detail, setDetail] = useState<string | undefined>(seed?.detail);
     const [reviewing, setReviewing] = useState(false);
     const count = changes.files.length;
-    const groups = groupUntracked(changes.untracked);
+    const groups = groupUntracked(changes.untracked, t);
 
     const run = async (force: boolean) => {
         setPhase('working');
@@ -121,7 +121,7 @@ function ChangesBody({ sessionId, live, changes, onUndone }: { sessionId: string
                     tone="warning"
                     role="note"
                     message={
-                        untrackedWarning(changes.untracked, { inChat: true, undo: t('chg.undoAll') }) +
+                        untrackedWarning(changes.untracked, t, { inChat: true, undo: 'chg.undoAll' }) +
                         groups.map((g) => `\n${g.title}${g.entries.length > 1 ? `: ${g.entries.map((e) => `${e.label || 'No description'}${e.count > 1 ? ` ×${e.count}` : ''}`).join('; ')}` : ''}`).join('')
                     }
                 />

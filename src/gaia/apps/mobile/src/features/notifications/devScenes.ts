@@ -1,6 +1,9 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
+import { alertText } from '@webui/utils/chatAlerts.core';
+import { translator } from '@webui/i18n/translator';
+import type { Session } from '@webui/types';
 import type { GaiaNotification, NotificationType } from '@webui/types/agent';
 
 import { createFakeClient, type FakeClientData } from '@/api/fake';
@@ -22,6 +25,12 @@ export interface NotificationScene {
     slow?: boolean;
     data?: FakeClientData;
 }
+
+/** The banner the chat-alert feed raises: the catalog's headline, with the chat's own title as the body. */
+const chatAlert = (event: ChatAlertBanner['event'], tone: ChatAlertBanner['tone'], title: string, status?: Session['last_run_status']): ChatAlertBanner => {
+    const { title: headline, body } = alertText(event, { title, last_run_status: status } as Session, translator('en'));
+    return { sessionId: 's-chat', event, tone, title: headline, message: body };
+};
 
 const MIN = 60_000;
 const ago = (ms: number) => Date.now() - ms;
@@ -61,9 +70,9 @@ export const NOTIFICATION_SCENES: Record<string, NotificationScene> = {
     'all-read': { view: 'center', items: MIXED.map((n) => ({ ...n, read: true })) },
     'alert-settings': { view: 'alerts' },
     'banner-backend-error': { view: 'banner', data: {} },
-    'banner-chat-finished': { view: 'banner', data: status({}), chatAlert: { sessionId: 's-sched', event: 'finished', tone: 'success', title: 'Morning summary finished', message: 'Three new emails need a reply.' } },
-    'banner-chat-failed': { view: 'banner', data: status({}), chatAlert: { sessionId: 's-sched', event: 'finished', tone: 'danger', title: 'Morning summary failed', message: 'GAIA could not reach your email.' } },
-    'banner-chat-needs-approval': { view: 'banner', data: status({}), chatAlert: { sessionId: 's-chat', event: 'needs_approval', tone: 'warning', title: 'Weekly report needs your approval', message: 'GAIA wants to run a command.' } },
+    'banner-chat-finished': { view: 'banner', data: status({}), chatAlert: chatAlert('finished', 'success', 'Quarterly plan', 'done') },
+    'banner-chat-failed': { view: 'banner', data: status({}), chatAlert: chatAlert('finished', 'danger', 'Quarterly plan', 'failed') },
+    'banner-chat-needs-approval': { view: 'banner', data: status({}), chatAlert: chatAlert('needs_approval', 'warning', 'Weekly report') },
     'banner-config-error': { view: 'banner', data: status({ config_error: 'The settings file is not valid JSON (line 12).' } as Partial<SystemStatus>) },
     'banner-context-small': { view: 'banner', data: status({ context_size_sufficient: false, model_context_size: 4096 }) },
     'banner-download': { view: 'banner', data: status({ download_progress: DOWNLOAD }) },

@@ -91,6 +91,13 @@ describeNative('chat, new-chat, composer and permission scenes', () => {
         expect((await screen.findAllByTestId('activity-timeline', opts)).length).toBe(2);
     });
 
+    it.each(['activity-plan', 'activity-thinking'])('%s reads an elapsed time under an hour', async (state) => {
+        await open('messages', { state });
+        await screen.findAllByTestId('activity-timeline', opts);
+        expect(screen.queryByText(/\d{3,}m \d+s/, opts)).toBeNull();
+        expect(screen.queryByText(/\b\d{2,}m \d+s/, opts)).toBeNull();
+    });
+
     it('activity-filter shows the step filter once the seven calls are open', async () => {
         await open('messages', { state: 'activity-filter' });
         fireEvent.press(within(await screen.findByTestId('steps-summary', opts)).getAllByLabelText(/./, opts)[0]!);
@@ -137,6 +144,44 @@ describeNative('chat, new-chat, composer and permission scenes', () => {
         await open('composer', { state: 'new-chat-assistant' });
         expect(await screen.findByText(t('newChat.assistantUnavailable'), opts)).toBeTruthy();
         expect(screen.getByText(t('newChat.tryAgain'), opts)).toBeTruthy();
+        expect(screen.getByTestId('new-chat-details', opts)).toBeTruthy();
+    });
+
+    it('new-chat-doc-brief shows the Ask about your documents card', async () => {
+        await open('composer', { state: 'new-chat-doc-brief' });
+        expect(await screen.findByTestId('document-brief-card', opts)).toBeTruthy();
+    });
+
+    it('reply-server-down shows the model-server notice and Try again under a failed reply', async () => {
+        await open('messages', { state: 'reply-server-down' });
+        expect(await screen.findByTestId('server-down-notice', opts)).toBeTruthy();
+        expect(screen.getByTestId('try-again', opts)).toBeTruthy();
+    });
+
+    it('failed-report shows Try again on the failed latest reply', async () => {
+        await open('messages', { state: 'failed-report' });
+        expect(await screen.findByTestId('try-again', opts)).toBeTruthy();
+    });
+
+    it('reply-errors shows the unexpected-error report link', async () => {
+        await open('messages', { state: 'reply-errors' });
+        expect((await screen.findAllByTestId('report-github', opts)).length).toBeGreaterThan(0);
+    });
+
+    it('reply-errors shows each kind\'s own classified text', async () => {
+        await open('messages', { state: 'reply-errors' });
+        const expected: Record<string, string> = {
+            stream: t('mobileApp.error.streamBroke'),
+            context: t('chatError.context'),
+            model_server: t('chatError.modelServer'),
+            connection: t('chatError.connection'),
+            timeout: t('chatError.timeout'),
+            unknown: t('chatError.unknown'),
+        };
+        for (const [kind, text] of Object.entries(expected)) {
+            const turn = await screen.findByTestId(`reply-error-${kind}`, opts);
+            expect(within(turn).getAllByText(text, opts).length).toBeGreaterThan(0);
+        }
     });
 
     it('new-chat-assistant Details reports expanded state to assistive tech', async () => {

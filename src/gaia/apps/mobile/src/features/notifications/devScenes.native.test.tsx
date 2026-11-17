@@ -36,12 +36,13 @@ describeNative('/dev/notifications', () => {
     });
 
     it.each([
-        ['banner-chat-finished', 'Morning summary finished'],
-        ['banner-chat-needs-approval', 'Weekly report needs your approval'],
-    ])('%s shows its own chat banner', async (name, title) => {
+        ['banner-chat-finished', 'GAIA finished', 'Quarterly plan'],
+        ['banner-chat-needs-approval', 'GAIA needs your approval', 'Weekly report'],
+    ])('%s shows the catalog headline over the chat title', async (name, headline, chat) => {
         mockState = name;
         await mount();
-        expect(await screen.findByText(title)).toBeTruthy();
+        expect(await screen.findByText(headline)).toBeTruthy();
+        expect(screen.getByText(chat)).toBeTruthy();
     });
 
     it('setup-upgrading-failed says the server update stopped, with Try again', async () => {
@@ -54,7 +55,7 @@ describeNative('/dev/notifications', () => {
     it('banner-chat-failed shows the failed chat alert', async () => {
         mockState = 'banner-chat-failed';
         await mount();
-        expect(await screen.findByText('Morning summary failed')).toBeTruthy();
+        expect(await screen.findByText('GAIA hit a problem')).toBeTruthy();
         expect(screen.getByTestId('banner-chat-alert')).toBeTruthy();
     });
 

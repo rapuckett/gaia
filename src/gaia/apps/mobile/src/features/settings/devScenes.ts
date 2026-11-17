@@ -3,11 +3,12 @@
 
 import { createFakeClient, type FakeClientData } from '@/api/fake';
 import type { SystemStatus } from '@webui/types';
+import { tEn } from '@webui/i18n/translator';
 
 import type { Automation, AutomationList, ContextChoice, Session, SkillInfo, DiscordStatus, GaiaClient, CustomModelReport, GpuMemoryStatus, LemonadeTarget, MCPServerStatus, ModelServerInfo, ProviderModel, Settings, SpendingReport } from '@/api/client.types';
 import { PC_ONLY_REFUSAL } from '@/api/constants';
 import { GaiaApiError, GaiaNetworkError } from '@/api/errors';
-import { COMMON, GPU } from '@/features/setup/devScenes';
+import { COMMON, GPU, RUN } from '@/features/setup/devScenes';
 
 import type { SectionId } from './sections';
 
@@ -107,8 +108,8 @@ const FIREWORKS_MODELS = [
 const providers = (fireworksConfigured: boolean): NonNullable<FakeClientData['providers']> => ({
     providers: [
         { id: 'local', name: 'Local', remote: false, privacy_notice: '', configured: true, blocked: false },
-        { id: 'fireworks', name: 'Fireworks AI', remote: true, privacy_notice: '', configured: fireworksConfigured, blocked: false },
-        { id: 'amd', name: 'AMD LLM Gateway', remote: true, privacy_notice: '', configured: false, blocked: false },
+        { id: 'fireworks', name: 'Fireworks AI', remote: true, privacy_notice: tEn('providers.fireworks.notice'), configured: fireworksConfigured, blocked: false },
+        { id: 'amd', name: 'AMD LLM Gateway', remote: true, privacy_notice: tEn('providers.amd.notice'), configured: false, blocked: false },
     ],
     lemonade_error: null,
 });
@@ -143,7 +144,7 @@ const SPEECH: NonNullable<FakeClientData['speechSettings']> = {
 const blockedProviders: NonNullable<FakeClientData['providers']> = {
     providers: [
         { id: 'local', name: 'Local', remote: false, privacy_notice: '', configured: true, blocked: false },
-        { id: 'fireworks', name: 'Fireworks AI', remote: true, privacy_notice: '', configured: true, blocked: true },
+        { id: 'fireworks', name: 'Fireworks AI', remote: true, privacy_notice: tEn('providers.fireworks.notice'), configured: true, blocked: true },
     ],
     lemonade_error: null,
 };
@@ -249,6 +250,8 @@ export const SETTINGS_SCENES: Record<string, SettingsScene> = {
     'model-fireworks': { section: 'model', target: 'models-on-pc', provider: 'fireworks', gpuMemory: GPU, data: cloud(FIREWORKS_MODELS) },
     // SET-MODEL-23: the group is closed until tapped (`#tap=model-group-header-unavailable`).
     'model-unavailable': { section: 'model', target: 'models-on-pc', gpuMemory: GPU, data: local([HAVE, NEVER]) },
+    // SET-MODEL-31: the Downloads panel (`local-downloads`) while a setup download runs.
+    'model-setup-downloads': { section: 'model', target: 'models-on-pc', gpuMemory: GPU, data: { ...local([HAVE, WANT]), setupStatus: RUN } },
     // SET-MODEL-24, 25: a row downloading, and a Download tap that hangs (`#tap=model-download-Llama-3.2-3B-Instruct-GGUF`) with every button disabled.
     'model-downloading': {
         section: 'model', target: 'models-on-pc', gpuMemory: GPU, hang: 'download',
@@ -420,7 +423,7 @@ export const SETTINGS_SCENES: Record<string, SettingsScene> = {
 
 export function settingsSceneClient(scene: SettingsScene): GaiaClient {
     const client = createFakeClient({
-        ...COMMON, contexts: { [CHAT_MODEL]: CONTEXT }, gpuMemory: scene.gpuMemory, ...(scene.status ? { status: scene.status } : {}), ...scene.data,
+        ...COMMON, spending: spent({}), contexts: { [CHAT_MODEL]: CONTEXT }, gpuMemory: scene.gpuMemory, ...(scene.status ? { status: scene.status } : {}), ...scene.data,
     });
     const hung = scene.hang ? (scene.hang === 'download' ? { downloadModel: never } : { selectModel: never }) : {};
     return { ...client, ...hung, ...scene.override };

@@ -35,6 +35,15 @@ describeNative('/dev/settings', () => {
         expect(screen.queryByText(/^No settings scene/)).toBeNull();
     });
 
+    it('nav-back-link flashes its target row on arrival', async () => {
+        // The jest reanimated mock drops animated styles, so the fade-out call is what shows the flash started.
+        const fade = jest.spyOn(jest.requireMock('react-native-reanimated'), 'withTiming');
+        mockState = 'nav-back-link';
+        await mount();
+        await waitFor(() => expect(fade).toHaveBeenCalledWith(0, { duration: 1600 }), { timeout: 4000 });
+        fade.mockRestore();
+    });
+
     it.each([
         ['gpu-adjustable', 'gpu-memory'],
         ['gpu-adjustable-setup', 'setup-gpu'],
@@ -62,6 +71,7 @@ describeNative('/dev/settings', () => {
         ['model-fireworks', /Show all models/],
         ['model-unavailable', 'Not available on your PC'],
         ['model-downloading', /Downloading Qwen3\.6 35B A3B|42%/],
+        ['model-setup-downloads', /Downloads/],
         ['model-switching', /My tuned model/],
         ['model-custom', 'Remove'],
         ['model-npu-not-ready', /NPU/],

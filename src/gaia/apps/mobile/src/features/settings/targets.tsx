@@ -107,6 +107,7 @@ export function SettingsAnchor({ name, onTarget, children }: { name: string; onT
             {children}
             <Animated.View
                 pointerEvents="none"
+                testID={`settings-flash-${name}`}
                 style={[StyleSheet.absoluteFill, { backgroundColor: colors.accentDim, borderRadius: radius.md }, style]}
             />
         </View>

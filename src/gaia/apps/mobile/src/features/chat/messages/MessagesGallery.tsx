@@ -6,11 +6,16 @@ import { MessageListView } from './MessageList';
 import { UserBubble } from './UserBubble';
 import type { StartOpen } from './useMessageActions';
 import { TailIssues } from '../ReplyErrors';
+import { buildTail } from '../tailState';
+import { TurnTail } from '../TurnTail';
 import { RecordingProgress } from '../recording/RecordingProgress';
 import { EmailPreScanCard } from '../cards/EmailPreScanCard';
 import { GuideCard } from '../cards/GuideCard';
 import { FIXTURES, GUIDE_SETS, GUIDE_WORKOUT, PRESCAN_PAYLOAD, type MessagesFixture } from './__fixtures__/messages';
 import { Screen, Stack } from '@/ui';
+
+const noop = () => undefined;
+const IDLE = { status: 'idle', liveText: '', events: [], error: null, failed: undefined, failure: undefined, policyAlert: undefined, stopState: undefined, stopError: undefined } as const;
 
 /** Developer gallery of the message list in each state; not part of the shipped screens. */
 export type MessagesGalleryState = MessagesFixture | StartOpen | 'guided' | 'guided-sets' | 'prescan-dismissing' | 'prescan-done';
@@ -45,13 +50,14 @@ export function MessagesGallery({ state }: { state: MessagesGalleryState }) {
         );
     }
     const fixture = FIXTURES[state];
+    const tail = state === 'failed-report' ? buildTail(fixture.messages, IDLE) : null;
     const policyTail = { live: false, text: '', events: [], replyId: null, canTryAgain: false, canContinue: false, policyAlert: { tool: 'delete_file', seq: 1, ...(state === 'policy-receipt' ? { receiptId: 'rcpt-4f2a' } : {}) } };
     return (
         <Screen>
             <MessageListView
                 messages={fixture.messages}
                 loading={state === 'loading'}
-                live={state === 'policy' || state === 'policy-receipt' ? <TailIssues tail={policyTail} local={false} /> : fixture.live ? <AssistantBubble message={fixture.live} streaming /> : fixture.events ? <RecordingProgress events={fixture.events} /> : undefined}
+                live={tail ? <TurnTail tail={tail} line={null} onTryAgain={noop} onContinue={noop} /> : state === 'policy' || state === 'policy-receipt' ? <TailIssues tail={policyTail} local={false} /> : fixture.live ? <AssistantBubble message={fixture.live} streaming /> : fixture.events ? <RecordingProgress events={fixture.events} /> : undefined}
             />
         </Screen>
     );
