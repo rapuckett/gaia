@@ -20,6 +20,8 @@ export interface SetupScene {
     confirm?: ConfirmScene;
     /** The download chip above the step. */
     chip?: boolean;
+    /** Optional models already added, so their buttons read Added (FR-DL-08). */
+    queued?: string[];
 }
 
 export type ConfirmScene = 'low-disk' | 'no-fit-many' | 'no-fit-one' | 'server-low-disk' | 'server-no-fit';
@@ -288,7 +290,7 @@ const START_CARDS: NonNullable<FakeClientData['start']> = {
     working_folder: { path: '/home/you', name: 'you', gaia_folder: false, choosable: true },
 };
 type Step = 'check' | 'plan' | 'gpu' | 'models' | 'key' | 'download' | 'test' | 'ready';
-const scene = (step: Step, data: FakeClientData = {}, extra: Pick<SetupScene, 'shell' | 'confirm' | 'chip'> = {}): SetupScene => {
+const scene = (step: Step, data: FakeClientData = {}, extra: Pick<SetupScene, 'shell' | 'confirm' | 'chip' | 'queued'> = {}): SetupScene => {
     const stage: SetupStage = step === 'gpu' || step === 'models' || step === 'key' ? 'plan' : step;
     return { stage, screen: step === 'gpu' || step === 'models' || step === 'key' ? step : undefined, data, ...extra };
 };
@@ -318,6 +320,7 @@ export const SETUP_SCENES: Record<string, SetupScene> = {
     'download/long': scene('download', { setupStatus: RUN_LONG, setupPlan: PLAN_LONG }),
     'download/lost': scene('download', { setupStatuses: [RUN, new GaiaNetworkError('http://127.0.0.1:4217/api/setup/status', new Error('Network request failed'))] }),
     'download/parts': scene('download', { setupStatus: RUN_PARTS }),
+    'download/optional-added': scene('download', { setupStatus: RUN }, { queued: [SPEECH.id, IMAGES.id] }),
     'download/running': scene('download', { setupStatus: RUN }),
     'download/verify-failed': scene('download', { setupStatus: RUN_VERIFY_FAILED }),
     'gate/again': scene('check', {}, { shell: { again: true } }),
