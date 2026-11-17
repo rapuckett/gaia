@@ -4,13 +4,13 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen } from '@testing-library/react-native';
 import type { ReactNode } from 'react';
-import { Platform } from 'react-native';
+import { Platform, StyleSheet } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { GaiaApiError } from '@/api/errors';
 import { createFakeClient } from '@/api/fake';
 import { GaiaClientProvider } from '@/data';
-import { ThemeProvider } from '@/ui';
+import { PRESSABLE_MIN_SIZE, ThemeProvider } from '@/ui';
 import { SheetHost } from '@/ui/overlays/SheetHost';
 
 import Permissions from './Permissions';
@@ -99,7 +99,9 @@ describeNative('Permissions pane', () => {
     });
 
     it('a chat without a menu keeps the trailing slot, so titles line up', async () => {
-        const client = createFakeClient({ permissionGrants: { c: [{ key: 'k', label: 'ls' }] } });
+        const client = createFakeClient({
+            permissionGrants: { a: [{ key: 'k1', label: 'ls' }, { key: 'k2', label: 'pwd' }], c: [{ key: 'k', label: 'ls' }] },
+        });
         const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
         await render(<Permissions />, {
             wrapper: ({ children }: { children: ReactNode }) => (
@@ -114,7 +116,8 @@ describeNative('Permissions pane', () => {
                 </QueryClientProvider>
             ),
         });
-        expect(await screen.findByTestId('permissions-row-menu-slot')).toBeTruthy();
+        const slot = await screen.findByTestId('permissions-row-menu-slot');
+        expect(StyleSheet.flatten(slot.props.style).width).toBe(PRESSABLE_MIN_SIZE);
         queryClient.clear();
     });
 });

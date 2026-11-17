@@ -9,6 +9,8 @@ import {
     type AccessibilityRole,
 } from 'react-native';
 
+export const PRESSABLE_MIN_SIZE = 48;
+
 export interface PressableProps {
     children?: ReactNode | ((state: { pressed: boolean }) => ReactNode);
     onPress?: () => void;
@@ -50,7 +52,7 @@ export function Pressable({
     accessibilityActions,
     onAccessibilityAction,
     accessible,
-    minSize = 48,
+    minSize = PRESSABLE_MIN_SIZE,
     inline,
     testID,
 }: PressableProps) {

@@ -7,6 +7,7 @@ import { Platform } from 'react-native';
 
 import type { StreamEvent } from '@/api/client.types';
 import { translator } from '@/i18n/useT';
+import { useLocaleStore } from '@/state/locale';
 import { ThemeProvider } from '@/ui';
 
 import { ActivityTimeline } from './ActivityTimeline';
@@ -59,5 +60,18 @@ describeNative('a gated call GAIA turned down unasked', () => {
         ] as StreamEvent[];
         expect(stepsFromEvents(events, translator('en'))[0]).toMatchObject({ autoDeclined: true });
         expect(stepsFromEvents(events, translator('en'))[0]!.declined).toBeFalsy();
+    });
+});
+
+describeNative('a failed shell step in Arabic', () => {
+    afterEach(() => useLocaleStore.getState().setLocale(null));
+
+    it('translates the exit line above the terminal card', async () => {
+        useLocaleStore.getState().setLocale('ar');
+        const steps = [call(1, { success: false, result: 'exit 2', commandOutput: { command: 'ls', stdout: '', stderr: 'x', returnCode: 2 } as never })];
+        await render(<ActivityTimeline steps={steps} />, { wrapper: ThemeProvider });
+        await fireEvent.press(screen.getAllByRole('button')[0]);
+        expect(screen.queryByText('exit 2')).toBeNull();
+        expect(screen.getAllByText(/رمز الخروج/).length).toBeGreaterThan(0);
     });
 });
