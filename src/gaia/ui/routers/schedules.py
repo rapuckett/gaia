@@ -14,11 +14,14 @@ from pydantic import BaseModel, Field
 
 from ..models import WireModel
 from ..scheduler import DuplicateScheduleName, Scheduler
-from ..security import audit_approval
+from ..security import audit_approval, require_pc_or_allowed_device
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["schedules"])
+
+#: Changing a schedule: the PC and allowed paired devices; mobile access only reads.
+PC_OR_DEVICE = [Depends(require_pc_or_allowed_device)]
 
 
 # ── Request/Response Models ──────────────────────────────────────────────────
@@ -192,7 +195,9 @@ async def parse_schedule(request: ParseScheduleRequest):
     )
 
 
-@router.post("/api/schedules", response_model=ScheduleResponse)
+@router.post(
+    "/api/schedules", response_model=ScheduleResponse, dependencies=PC_OR_DEVICE
+)
 async def create_schedule(
     request: CreateScheduleRequest,
     http_request: Request,
@@ -257,7 +262,11 @@ async def get_schedule(
     return task
 
 
-@router.put("/api/schedules/{name:path}", response_model=ScheduleResponse)
+@router.put(
+    "/api/schedules/{name:path}",
+    response_model=ScheduleResponse,
+    dependencies=PC_OR_DEVICE,
+)
 async def update_schedule(
     name: str,
     request: UpdateScheduleRequest,
@@ -285,7 +294,11 @@ async def update_schedule(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.post("/api/schedules/{name:path}/run", response_model=ScheduleResponse)
+@router.post(
+    "/api/schedules/{name:path}/run",
+    response_model=ScheduleResponse,
+    dependencies=PC_OR_DEVICE,
+)
 async def run_schedule_now(
     name: str,
     http_request: Request,
@@ -305,6 +318,7 @@ async def run_schedule_now(
 @router.delete(
     "/api/schedules/{name:path}",
     response_model=ScheduleDeleteResponse,
+    dependencies=PC_OR_DEVICE,
     response_model_exclude_unset=True,
 )
 async def delete_schedule(
