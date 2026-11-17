@@ -383,8 +383,8 @@ export const SETTINGS_SCENES: Record<string, SettingsScene> = {
     // SET-PERM-03: the full-access warning confirm, open on arrival (the same sheet `#tap=permissions-default-switch` opens).
     'perm-full-confirm': { section: 'permissions', gpuMemory: GPU, confirmFullAccess: true, data: { sessions: [], defaultPermissionMode: 'ask' } },
     // SET-PERM-05: Chats with extra access, seeded with a full-access chat, a chat with two grants and one with one grant.
-    // SET-PERM-06: `#tap=row.moreActions` on Chat a (its "More actions" button), then "Turn off full access". SET-PERM-07: tap "Revoke" on a grant row.
-    // SET-PERM-08: "More actions" on Chat b, then "Revoke all in this chat".
+    // SET-PERM-06: `#tap=perm-chat-menu-a,perm-chat-turn-off-full`. SET-PERM-07: `#tap=perm-grant-revoke-a-0` (grant index within the chat; Chat b's second is `perm-grant-revoke-b-1`).
+    // SET-PERM-08: `#tap=perm-chat-menu-b,perm-chat-revoke-all`.
     'perm-chats': { section: 'permissions', gpuMemory: GPU, data: PERM_CHATS },
     // SET-VOICE-03: Preview; `#tap=read-aloud-preview` starts a preview that never finishes, so the button reads Stop reading beside a spinner (no audio plays).
     'voice-preview': { section: 'voice', gpuMemory: GPU, data: { speechSettings: SPEECH }, override: { speak: never } },

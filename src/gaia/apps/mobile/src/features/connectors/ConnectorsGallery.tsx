@@ -18,7 +18,7 @@ import { ConnectorsScreen } from './ConnectorsScreen';
  * CON-06: `menu` (`#tap=connector-actions-linear` opens the actions sheet). CON-08: `code`
  * (`#tap=device-sign-in-microsoft` shows the code), `codeFailed` (the same tap, then the failure).
  * CON-02: `many` (8 connectors, so the search field shows). CON-11: `disconnected` and `revoked` open Microsoft Personal;
- * tap its Disconnect chip, then Disconnect in the sheet: `disconnected` answers that the provider has no revoke API, `revoked`
+ * `#tap=connector-disconnect-microsoft,connector-disconnect-confirm`: `disconnected` answers that the provider has no revoke API, `revoked`
  * that the provider did not confirm the revoke (reason on the notice). CON-16: `personalize` opens a connected Gmail tile with the Personalize GAIA offer.
  */
 export const CONNECTOR_SCENES = ['serverOn', 'serverOff', 'grants', 'loading', 'error', 'none', 'groups', 'menu', 'code', 'codeFailed', 'many', 'disconnected', 'revoked', 'personalize'] as const;

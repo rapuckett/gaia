@@ -61,6 +61,15 @@ export function requestFailureWith(error: GaiaError, say: Say): string {
     return typeof reason === 'object' ? say(reason.ref, reason.params) : String(reason);
 }
 
+/** The PC's own words for a failed request or turn (never our translated wording), for a detail line; undefined when there are none. */
+export function requestFailureServerText(error: unknown): string | undefined {
+    if (error instanceof GaiaApiError || error instanceof GaiaTurnError) {
+        if (typeof requestErrorParam(webError(error)) === 'object') return undefined;
+        return error.detail || undefined;
+    }
+    return undefined;
+}
+
 /** A stream failure leaves the answer possibly still running on the PC, so asking again would ask twice. */
 export function mayStillFinish(error: GaiaError): boolean {
     return error instanceof GaiaStreamError;
