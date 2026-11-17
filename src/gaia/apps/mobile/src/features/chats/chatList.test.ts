@@ -4,10 +4,11 @@
 import { translate } from '@webui/i18n/registry';
 import { translator } from '@webui/i18n/translator';
 
+import { GaiaApiError } from '@/api/errors';
 import { createFakeClient } from '@/api/fake';
 import type { Session } from '@/api/client.types';
 
-import { buildChatSections, chatListState, deleteConfirmLabel, msUntilNextMidnight, NO_LIVE_RUNS, rowErrorMessage, rowText, searchedSessions, type ChatRow } from './chatList';
+import { buildChatSections, chatListState, deleteConfirmLabel, msUntilNextMidnight, NO_LIVE_RUNS, rowFailure, rowText, searchedSessions, type ChatRow } from './chatList';
 
 const t = (key: Parameters<typeof translate>[1], params?: Parameters<typeof translate>[2]) => translate('en', key, params);
 
@@ -125,15 +126,17 @@ describe('chatListState', () => {
     });
 });
 
-describe('rowErrorMessage', () => {
-    // These keys come from design/i18n-p1; the echo stub keeps this test independent of that branch landing.
-    const echo = ((key: string, params?: { error?: string }) => (params?.error ? `${key} ${params.error}` : key)) as typeof t;
+describe('rowFailure', () => {
+    const en = translator('en');
 
-    it('shows the server message, else the fixed sentence; mark read always names the cause', () => {
-        expect(rowErrorMessage('delete', new Error('Chat is running'), echo)).toBe('Chat is running');
-        expect(rowErrorMessage('rename', 'boom', echo)).toBe('sidebar.renameFailed');
-        expect(rowErrorMessage('unpin', new Error(''), echo)).toBe('sidebar.unpinFailed');
-        expect(rowErrorMessage('markRead', new Error('offline'), echo)).toBe('sidebar.markReadFailed offline');
+    it('keeps the PC text off the sentence, and never shows a raw key or JSON', () => {
+        expect(rowFailure('delete', new Error('Chat is running'), en)).toEqual({ message: 'Could not delete the chat.', detail: 'Chat is running' });
+        expect(rowFailure('rename', 'boom', en)).toEqual({ message: 'Could not rename the chat.' });
+        expect(rowFailure('unpin', new Error(''), en).detail).toBeUndefined();
+        expect(rowFailure('markRead', new Error('offline'), en)).toEqual({ message: 'Could not mark the chat read.', detail: 'offline' });
+        const http = rowFailure('delete', new GaiaApiError(409, 'Could not delete the chat.'), en);
+        expect(http.detail).toBe('Could not delete the chat.');
+        expect(`${http.message}${http.detail}`).not.toMatch(/mobileApp\.error|\{/);
     });
 });
 
