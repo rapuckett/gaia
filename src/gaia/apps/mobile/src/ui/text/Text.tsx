@@ -77,10 +77,10 @@ function hasGloss(children: ReactNode): boolean {
     return found;
 }
 
-/** A gloss that is a sentence (or several), or over 40 characters, wraps badly inline, so it gets its own block. */
-export function isLongGloss(english: string): boolean {
+/** A gloss that is a sentence (or several), or longer than `limit` characters, wraps badly inline, so it gets its own block. */
+export function isLongGloss(english: string, limit = LONG_GLOSS_LENGTH): boolean {
     const sentence = /[.!?]$/.test(english) && english.split(/\s+/).length > 3;
-    return english.length > LONG_GLOSS_LENGTH || sentence || /[.!?]\s+\S/.test(english);
+    return english.length > limit || sentence || /[.!?]\s+\S/.test(english);
 }
 
 /** The English of a gloss part, without its isolates and brackets. */
@@ -89,7 +89,7 @@ function glossEnglish(part: string): string {
 }
 
 /** Splits each string child at its English glosses and sets them small and muted, as the web's `.i18n-gloss` does; with `blocks`, long glosses are moved into it instead. */
-function withGlosses(children: ReactNode, size: number, color: string, blocks: string[] | null): ReactNode {
+function withGlosses(children: ReactNode, size: number, color: string, blocks: string[] | null, limit = LONG_GLOSS_LENGTH): ReactNode {
     const gloss = Math.max(size * 0.8, GLOSS_MIN_SIZE);
     const style = { fontSize: gloss, lineHeight: Math.round(gloss * GLOSS_LINE_HEIGHT), fontWeight: '400' as const, color, writingDirection: 'ltr' as const };
     let changed = false;
@@ -101,10 +101,10 @@ function withGlosses(children: ReactNode, size: number, color: string, blocks: s
         return parts.map((part, j) => {
             if (!part.gloss) {
                 const next = parts[j + 1];
-                return blocks && next?.gloss && isLongGloss(glossEnglish(next.text)) ? part.text.trimEnd() : part.text;
+                return blocks && next?.gloss && isLongGloss(glossEnglish(next.text), limit) ? part.text.trimEnd() : part.text;
             }
             const english = glossEnglish(part.text);
-            if (blocks && isLongGloss(english)) {
+            if (blocks && isLongGloss(english, limit)) {
                 blocks.push(english);
                 return null;
             }
@@ -188,7 +188,9 @@ export function Text({
     if (rtl) style.letterSpacing = 0;
 
     const blocks: string[] | null = !nested && !glossInline && !compact && numberOfLines === undefined ? [] : null;
-    const body = withGlosses(children, baseSize, toneColor(colors, 'muted'), blocks);
+    // Larger type wraps sooner, so headings move a shorter gloss to its own line.
+    const glossLimit = Math.round((LONG_GLOSS_LENGTH * type.body) / baseSize);
+    const body = withGlosses(children, baseSize, toneColor(colors, 'muted'), blocks, glossLimit);
     const glossSize = Math.max(baseSize * 0.8, GLOSS_MIN_SIZE);
     const blockStyle: TextStyle = {
         fontFamily: fontFamily({ weight: 'regular', mono: false, display: false }),
@@ -196,7 +198,7 @@ export function Text({
         lineHeight: Math.round(glossSize * GLOSS_LINE_HEIGHT),
         color: toneColor(colors, 'muted'),
         writingDirection: 'ltr',
-        textAlign: side(false),
+        textAlign: align === 'center' ? 'center' : side(false),
         marginTop: space.xs,
     };
     const main = (

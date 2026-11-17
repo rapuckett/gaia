@@ -32,6 +32,8 @@ describe('isLongGloss', () => {
         expect(isLongGloss('x'.repeat(41))).toBe(true);
         expect(isLongGloss('Add skills.')).toBe(false);
         expect(isLongGloss('Change this on the PC running GAIA.')).toBe(true);
+        expect(isLongGloss('Close GAIA to finish switching to Arabic')).toBe(false);
+        expect(isLongGloss('Close GAIA to finish switching to Arabic', 29)).toBe(true);
         expect(isLongGloss(SHORT)).toBe(false);
     });
 });

@@ -54,7 +54,7 @@ export function LanguageSwitchCover({ target, platform, onCancel }: CoverProps) 
                 }
             >
                 <View style={{ flex: 1, justifyContent: 'center' }}>
-                    <Stack gap="md">
+                    <Stack gap="md" paddingX="gutter" testID="language-switch-content">
                         <Text role="title" weight="semibold" align="center" accessibilityRole="header">
                             {t(android ? 'mobileApp.settings.languageSwitch.androidTitle' : 'mobileApp.settings.languageSwitch.iosTitle', { language })}
                         </Text>

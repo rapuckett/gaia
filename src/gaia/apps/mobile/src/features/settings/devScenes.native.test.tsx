@@ -6,6 +6,7 @@ import { Platform } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import SettingsGalleryRoute from '@/app/dev/settings';
+import { useAppearance } from '@/ui';
 import { sheetStore } from '@/ui/overlays/sheetStore';
 
 import { SETTINGS_SCENES } from './devScenes';
@@ -218,6 +219,20 @@ describeNative('/dev/settings', () => {
         mockState = 'general-custom-colors';
         await mount();
         for (const label of ['Accent', 'Background tint', 'Reset']) expect((await screen.findAllByText(label, { includeHiddenElements: true })).length).toBeGreaterThan(0);
+    });
+
+    it('seeding a custom appearance does not update the theme during render', async () => {
+        const spy = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+        try {
+            mockState = 'general-custom-colors';
+            await mount();
+            await screen.findAllByText('Accent', { includeHiddenElements: true });
+            expect(useAppearance.getState().palette).toBe('custom');
+            const messages = spy.mock.calls.map((c) => String(c[0]));
+            expect(messages.filter((m) => m.includes('Cannot update a component'))).toEqual([]);
+        } finally {
+            spy.mockRestore();
+        }
     });
 
     it('privacy-delete asks with the chat count before deleting', async () => {

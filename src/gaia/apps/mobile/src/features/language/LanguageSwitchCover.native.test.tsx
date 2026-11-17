@@ -3,7 +3,7 @@
 
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import type { ReactNode } from 'react';
-import { BackHandler, Platform } from 'react-native';
+import { BackHandler, Platform, StyleSheet } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { applyDirection } from '@/platform/direction';
@@ -74,6 +74,13 @@ describeNative('language switch cover', () => {
         await act(async () => pickLanguage('ar'));
         fireEvent.press(await screen.findByTestId('language-switch-cancel'));
         expect(useLocaleStore.getState().locale).toBeNull();
+    });
+
+    it('pads the title and body by the screen gutter', async () => {
+        await mountHost();
+        await act(async () => pickLanguage('ar'));
+        const content = await screen.findByTestId('language-switch-content');
+        expect(StyleSheet.flatten(content.props.style)).toMatchObject({ paddingHorizontal: 16 });
     });
 
     describe('on Android', () => {
