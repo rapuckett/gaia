@@ -14,6 +14,8 @@ export interface CheckRow {
     id: 'device' | 'memory' | 'disk' | 'server' | 'models';
     label: MessageKey;
     value: string | null;
+    /** The PC's own words for a failure, shown under the value. */
+    detail?: string;
     state: CheckRowState;
 }
 
@@ -21,6 +23,8 @@ export interface CheckInputs {
     hardware: PreflightReport | null;
     /** Why the hardware couldn't be read, already in words. */
     hardwareError: string | null;
+    /** The PC's own words behind `hardwareError`. */
+    hardwareErrorDetail?: string | null;
     plan: SetupPlan | null;
     serverRun: SetupRunStatus | null;
     /** The PC's own model server was found and the PC has yet to choose. */
@@ -28,7 +32,7 @@ export interface CheckInputs {
 }
 
 /** The five checks of "Check this PC", as webui's `SetupChecks` computes them. */
-export function checkRows({ hardware, hardwareError, plan, serverRun, awaitingChoice }: CheckInputs, t: Translate): CheckRow[] {
+export function checkRows({ hardware, hardwareError, hardwareErrorDetail, plan, serverRun, awaitingChoice }: CheckInputs, t: Translate): CheckRow[] {
     const serverUp = !!plan?.lemonade.reachable;
     const serverFailed = serverRun?.state === 'failed' || serverRun?.state === 'cancelled';
     const whose = t(plan?.lemonade.mode === 'external' ? 'setup.found.serverYours' : 'setup.found.serverOwn');
@@ -60,6 +64,7 @@ export function checkRows({ hardware, hardwareError, plan, serverRun, awaitingCh
             id: 'device',
             label: 'setup.checks.device',
             value: hardwareError ? `${t('setup.system.unread')} ${hardwareError}` : device || null,
+            detail: hardwareError && hardwareErrorDetail ? hardwareErrorDetail : undefined,
             state: hwState,
         },
         { id: 'memory', label: 'setup.found.memory', value: modelMemory, state: memoryState },

@@ -46,6 +46,11 @@ function RowList({ rows }: { rows: CheckRow[] }) {
                     <Stack flex={1} gap="xs">
                         <Text weight="medium">{t(r.label)}</Text>
                         {r.value ? <Ltr>{r.value}</Ltr> : null}
+                        {r.detail ? (
+                            <Text role="caption" tone="muted" dir="ltr" align="ltr" testID={`check-detail-${r.id}`}>
+                                {r.detail}
+                            </Text>
+                        ) : null}
                     </Stack>
                 </Row>
             ))}
@@ -165,7 +170,8 @@ export function CheckStep({ ctx }: { ctx: SetupStepContext }) {
     const serverFailed = serverRun?.state === 'failed' || serverRun?.state === 'cancelled';
     const planData = plan.data ?? null;
     const hardware = preflight.data ?? null;
-    const hardwareError = preflight.isError ? describeHttpFailure(preflight.error, t).text : null;
+    const hardwareFailure = preflight.isError ? describeHttpFailure(preflight.error, t) : null;
+    const hardwareError = hardwareFailure?.text ?? null;
 
     const [wasOffered, setWasOffered] = useState(false);
     const [carryOn, setCarryOn] = useState(false);
@@ -202,7 +208,7 @@ export function CheckStep({ ctx }: { ctx: SetupStepContext }) {
     }, [serverReady, chosen, refetchHardware, refetchPlan]);
 
     const checksDone = !!(planData?.catalog && planData.lemonade.reachable && (hardware || hardwareError));
-    const rows = checkRows({ hardware, hardwareError, plan: planData, serverRun, awaitingChoice }, t);
+    const rows = checkRows({ hardware, hardwareError, hardwareErrorDetail: hardwareFailure?.detail, plan: planData, serverRun, awaitingChoice }, t);
     const ticked = planData ? initialSelection(planData).ticked : new Set<string>();
     const canInstallOwn = !!planData && !planData.lemonade.reachable && !serverRun;
     const startError = start.isError ? describeError(start.error, t) : null;

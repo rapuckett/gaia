@@ -10,7 +10,7 @@ import { Button, Chip, Icon, IconButton, ListRow, Notice, Row, Stack, Switch, Te
 import { ArrowUp, Folder, X } from '@/ui/icons';
 import { isolate } from '@webui/i18n/registry';
 
-import { failureReason } from '../header/failureText';
+import { failureNoticeProps } from '../header/failureText';
 
 interface FolderPickerProps {
     sessionId: string;
@@ -92,9 +92,9 @@ export function FolderPicker({ sessionId, onPick, onClose, error, busy }: Folder
                 {browse.isPending ? <Text tone="muted">{t('pick.loading')}</Text> : null}
                 {listing && folders.length === 0 ? <Text tone="muted">{t(all.length > 0 ? 'pick.onlyHidden' : 'pick.none')}</Text> : null}
             </Stack>
-            {browse.error ? <Notice tone="danger" message={failureReason(browse.error, t)} /> : null}
+            {browse.error ? <Notice tone="danger" {...failureNoticeProps(browse.error, t, 'mobileApp.env.browseFailedShort')} testID="folder-picker-browse-error" /> : null}
             {listing?.folder_refusal ? <Notice tone="warning" message={listing.folder_refusal} /> : null}
-            {error ? <Notice tone="danger" message={failureReason(error, t)} /> : null}
+            {error ? <Notice tone="danger" {...failureNoticeProps(error, t, 'mobileApp.env.folderChangeFailedShort')} testID="folder-picker-error" /> : null}
             <Row gap="sm" stack>
                 <Button label={t('sp.cancel')} variant="ghost" onPress={onClose} />
                 <Button

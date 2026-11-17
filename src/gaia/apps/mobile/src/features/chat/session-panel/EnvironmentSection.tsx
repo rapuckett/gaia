@@ -14,7 +14,7 @@ import { Button, Icon, IconButton, Notice, Row, SegmentedControl, Stack, Switch,
 import { Cloud, FileText, Folder, FolderPlus, Monitor, X } from '@/ui/icons';
 import { isolate } from '@webui/i18n/registry';
 
-import { failureReason, failureReasonWith } from '../header/failureText';
+import { failureNoticeProps, failureReasonWith } from '../header/failureText';
 import { FolderPicker } from './FolderPicker';
 import { useSessionPanelStore } from './panelStore';
 import type { SectionProps } from './sections';
@@ -160,7 +160,7 @@ function Folders({ sessionId, env, error }: { sessionId: string; env: SessionEnv
             ) : null}
             {isPcRefusal(addFolder.error) ? <PcOnlyNotice testID="environment-add-pc-only" /> : null}
             {removeFolder.error ? (
-                isPcRefusal(removeFolder.error) ? <PcOnlyNotice testID="environment-remove-pc-only" /> : <Notice tone="danger" message={failureReason(removeFolder.error, t)} />
+                isPcRefusal(removeFolder.error) ? <PcOnlyNotice testID="environment-remove-pc-only" /> : <Notice tone="danger" {...failureNoticeProps(removeFolder.error, t, 'mobileApp.env.removeFolderFailedShort')} testID="environment-remove-error" />
             ) : null}
         </Group>
     );
@@ -239,7 +239,7 @@ function Internet({ sessionId, env }: { sessionId: string; env: SessionEnvironme
                         description={state}
                         testID="environment-internet"
                     />
-                    {setInternet.error ? <Notice tone="danger" message={failureReason(setInternet.error, t)} /> : null}
+                    {setInternet.error ? <Notice tone="danger" {...failureNoticeProps(setInternet.error, t, 'mobileApp.env.internetFailedShort')} testID="environment-internet-error" /> : null}
                 </>
             )}
         </Group>
@@ -298,7 +298,7 @@ function Permission({ sessionId }: { sessionId: string }) {
                     </Row>
                 </Stack>
             ) : null}
-            {set.error ? (isPcRefusal(set.error) ? <PcOnlyNotice testID="environment-mode-pc-only" /> : <Notice tone="danger" message={failureReason(set.error, t)} />) : null}
+            {set.error ? (isPcRefusal(set.error) ? <PcOnlyNotice testID="environment-mode-pc-only" /> : <Notice tone="danger" {...failureNoticeProps(set.error, t, 'mobileApp.env.modeFailedShort')} testID="environment-mode-error" />) : null}
         </Group>
     );
 }
@@ -381,7 +381,7 @@ function LocalPlace({ status, error, chatModel, t }: { status: LocalModelStatus 
                     {memory.free_gb != null ? ` · ${t('env.free', { gb: isolate(memory.free_gb.toFixed(1), 'ltr') })}` : ''}
                 </Text>
             ) : null}
-            {error ? <Notice tone="danger" message={failureReason(error, t)} /> : status?.error ? <Notice tone="danger" message={status.error} /> : null}
+            {error ? <Notice tone="danger" {...failureNoticeProps(error, t, 'mobileApp.env.statusErrorShort')} testID="environment-status-error" /> : status?.error ? <Notice tone="danger" message={status.error} /> : null}
             {!status && !error ? <Text role="caption" tone="muted">{t('sp.checking')}</Text> : null}
         </Stack>
     );

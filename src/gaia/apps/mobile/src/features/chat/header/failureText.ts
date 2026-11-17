@@ -29,3 +29,10 @@ export function failureNotice(
     if (detail) return { text: t(keys.noReason, params), detail };
     return { text: t.compose((say) => say(keys.withReason, { ...params, error: failureReasonWith(error, say) })) };
 }
+
+/** `Notice` props for a failure with no sentence of its own: the PC's words on the detail line under a reason-free sentence, or our own reason inline. */
+export function failureNoticeProps(error: unknown, t: Translate, noReason: MessageKey): { message: string; detail?: string } {
+    const detail = requestFailureServerText(error);
+    if (detail) return { message: t(noReason), detail };
+    return { message: failureReason(error, t) };
+}
