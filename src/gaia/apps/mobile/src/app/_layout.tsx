@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: MIT
 
 import { focusManager, QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { usePathname } from 'expo-router';
 import { Drawer } from 'expo-router/drawer';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { AppState, Platform, useWindowDimensions } from 'react-native';
 
 import { createHttpClient } from '@/api/http';
@@ -45,6 +46,11 @@ if (Platform.OS !== 'web') {
 // A chat opened cold (deep link, notification) has the home screen beneath it.
 export const unstable_settings = { anchor: INITIAL_ROUTE };
 
+// Only the root gate gets the route, so a navigation re-renders it alone; dev scenes that show the gate render their own.
+function RootSetupGate({ children }: { children: ReactNode }) {
+    return <SetupGate route={usePathname()}>{children}</SetupGate>;
+}
+
 export default function RootLayout() {
     const [queryClient] = useState(() => new QueryClient({ defaultOptions: { queries: { retry: shouldRetryQuery } } }));
     const dir = useDirection();
@@ -80,7 +86,7 @@ export default function RootLayout() {
                     <AppErrorBoundary variant="window">
                     <ScreenBannerProvider banner={<AppBanner />}>
                         <PairingGate>
-                        <SetupGate>
+                        <RootSetupGate>
                             <RoutingEffects />
                             <NotificationFeed />
                             <AppPolls />
@@ -107,7 +113,7 @@ export default function RootLayout() {
                                 ))}
                             </Drawer>
                             <ModelNeededHost />
-                        </SetupGate>
+                        </RootSetupGate>
                         </PairingGate>
                     </ScreenBannerProvider>
                     </AppErrorBoundary>
