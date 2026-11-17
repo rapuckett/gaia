@@ -45,6 +45,7 @@ export function Popover({ open, onClose, anchor, label, placement = 'above', ali
             // Measure the layout box, which ignores transforms: the painted one can still carry an
             // old shift mid-transition, even after the inline transform is cleared.
             const parent = el.offsetParent;
+            // The panel is position: absolute (Popover.css), so offsetParent is null only while it is closed or hidden.
             if (!parent) return;
             const naturalLeft = parent.getBoundingClientRect().left + parent.clientLeft - parent.scrollLeft + el.offsetLeft;
             // Keep the box inside the window gutter; one too wide for it keeps its inline start.
