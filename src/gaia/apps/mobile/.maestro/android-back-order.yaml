@@ -1,0 +1,46 @@
+# Android system back walks one step per press: the keyboard, then the step flow, then out of the app.
+# Runs on an unpaired build (APP_ENV=development's package), whose first screens are the pairing flow.
+# Needs the on-screen keyboard (an AVD with hw.keyboard=no), or the first back has no keyboard to close.
+appId: ai.amd.gaia.mobile.dev
+name: Android back order
+---
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible:
+      id: pairing-start
+    timeout: 30000
+
+# Into the flow: welcome, then how to pair, then the manual code step.
+- tapOn:
+    id: pairing-start
+- assertVisible:
+    id: pairing-paste
+- tapOn:
+    id: pairing-paste
+- tapOn:
+    id: pairing-input
+- inputText: abc
+
+# Back 1 closes the keyboard and stays on the step.
+- back
+- assertVisible:
+    id: pairing-input
+- assertVisible: abc
+
+# Back 2 goes one step back, to how to pair.
+- back
+- assertVisible:
+    id: pairing-paste
+- assertNotVisible:
+    id: pairing-input
+
+# Back 3 goes back to the welcome.
+- back
+- assertVisible:
+    id: pairing-start
+
+# Back 4, at the root, leaves the app for the launcher.
+- back
+- assertNotVisible:
+    id: pairing-start
