@@ -41,6 +41,7 @@ export interface PermissionPromptProps {
     repeats?: number;
     busy?: boolean;
     error?: string | null;
+    errorDetail?: string | null;
     fullAccessPending?: boolean;
     onAnswer(choice: PermissionChoice): void;
     onExpired?(): void;
@@ -269,6 +270,7 @@ export function PermissionPrompt({
     repeats = 0,
     busy = false,
     error = null,
+    errorDetail = null,
     fullAccessPending = false,
     onAnswer,
     onExpired,
@@ -384,7 +386,7 @@ export function PermissionPrompt({
                             ) : null}
                         </Stack>
                     )}
-                    {error ? <Notice tone="danger" message={error} /> : null}
+                    {error ? <Notice tone="danger" message={error} detail={errorDetail ?? undefined} /> : null}
                 </Stack>
             </Surface>
         </Animated.View>

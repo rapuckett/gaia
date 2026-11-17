@@ -4,7 +4,7 @@
 import { isolate } from '@webui/i18n/registry';
 
 import { useActiveModel, useRetryChoices, type RetryModel } from '@/data';
-import { describeError, useT } from '@/i18n/useT';
+import { describeHttpFailure, useT } from '@/i18n/useT';
 import { ListRow, Notice, Row, Sheet, Spinner, Stack, Text } from '@/ui';
 
 export interface RetrySheetProps {
@@ -39,7 +39,7 @@ export function RetrySheet({ open, onClose, answeredBy, onPick }: RetrySheetProp
     return (
         <Sheet open={open} onClose={onClose} title={t('retry.head')}>
             <Stack gap="sm">
-                {choices.isError ? <Notice tone="danger" message={describeError(choices.error, t)} /> : null}
+                {choices.isError ? <Notice tone="danger" message={describeHttpFailure(choices.error, t).text} detail={describeHttpFailure(choices.error, t).detail} /> : null}
                 {choices.isPending && !choices.isError ? <Row gap="sm"><Spinner size="sm" /><Text role="body" tone="muted">{t('retry.loading')}</Text></Row> : null}
                 {cloud.length > 0 && cloudName ? <Text role="caption" tone="muted">{t('retry.onProvider', { provider: cloudName })}</Text> : null}
                 {cloud.map((m) => row(m, t('retry.cloudHint')))}

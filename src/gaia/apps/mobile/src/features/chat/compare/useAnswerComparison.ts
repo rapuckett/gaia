@@ -7,7 +7,7 @@ import { useCallback } from 'react';
 import type { Message } from '@/api/client.types';
 import { GaiaConfigError } from '@/api/errors';
 import { queryKeys, useGaiaClient } from '@/data';
-import { describeError, useT } from '@/i18n/useT';
+import { describeHttpFailure, useT, type Translate } from '@/i18n/useT';
 import { retryModel, useComparisonStore, type Comparison } from '@/state/answerComparison';
 
 export interface AnswerComparisonControls {
@@ -18,6 +18,11 @@ export interface AnswerComparisonControls {
     keep(which: 'original' | 'retry'): Promise<void>;
     /** Closing a finished comparison keeps the original answer. */
     close(): void;
+}
+
+function failureOf(error: unknown, t: Translate): { error: string; detail?: string } {
+    const failed = describeHttpFailure(error, t);
+    return { error: failed.text, detail: failed.detail };
 }
 
 /** "Retry with another model": one answer set against another model's, and the person's pick. */
@@ -40,7 +45,7 @@ export function useAnswerComparison(sessionId: string): AnswerComparisonControls
                     const result = await client.retryWith(sessionId, message.id, model);
                     settle(sessionId, message.id, { status: 'ready', result });
                 } catch (error) {
-                    settle(sessionId, message.id, { status: 'failed', model, error: describeError(error, t) });
+                    settle(sessionId, message.id, { status: 'failed', model, ...failureOf(error, t) });
                 }
             })();
         },
@@ -64,7 +69,7 @@ export function useAnswerComparison(sessionId: string): AnswerComparisonControls
                 store().settle(sessionId, open.messageId, {
                     status: 'failed',
                     model: retryModel(open.state),
-                    error: describeError(error, t),
+                    ...failureOf(error, t),
                 });
             }
         },

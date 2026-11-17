@@ -4,7 +4,7 @@
 import { useState } from 'react';
 
 import type { PermissionMode } from '@/api/client.types';
-import { describeError, describeErrorWith, useT } from '@/i18n/useT';
+import { describeErrorWith, describeHttpFailure, useT } from '@/i18n/useT';
 import { Button, Icon, ListRow, Notice, Sheet, Stack } from '@/ui';
 import { Check, ShieldAlert, ShieldCheck } from '@/ui/icons';
 
@@ -28,7 +28,7 @@ export function PermissionChip({ mode, onChange, onReread, promptWaiting, disabl
     const t = useT();
     const [open, setOpen] = useState(initialOpen);
     const [confirming, setConfirming] = useState(false);
-    const [error, setError] = useState<string | null>(null);
+    const [error, setError] = useState<{ text: string; detail?: string } | null>(null);
     const full = mode === 'full_access';
     const modes = [
         { mode: 'ask' as const, label: t('perm.ask'), note: t('perm.askNote') },
@@ -46,7 +46,8 @@ export function PermissionChip({ mode, onChange, onReread, promptWaiting, disabl
             // Keep the menu up so the note about the question already waiting is seen.
             if (!(next === 'full_access' && promptWaiting)) setOpen(false);
         } catch (err) {
-            let message = describeError(err, t);
+            const failed = describeHttpFailure(err, t);
+            let message = failed.text;
             if (onReread) {
                 try {
                     await onReread();
@@ -54,7 +55,7 @@ export function PermissionChip({ mode, onChange, onReread, promptWaiting, disabl
                     message = `${message} ${t.compose((say) => say('perm.rereadFailed', { error: describeErrorWith(e, say) }))}`;
                 }
             }
-            setError(message);
+            setError({ text: message, detail: failed.detail });
         }
     };
     return (
@@ -97,7 +98,7 @@ export function PermissionChip({ mode, onChange, onReread, promptWaiting, disabl
                         />
                     ) : null}
                     {full && promptWaiting && !confirming ? <Notice tone="info" role="note" message={t('perm.fullPendingNote')} testID="permission-pending" /> : null}
-                    {error ? <Notice tone="danger" message={error} testID="permission-error" /> : null}
+                    {error ? <Notice tone="danger" message={error.text} detail={error.detail} testID="permission-error" /> : null}
                     <Button variant="secondary" label={t('modelMenu.cancel')} onPress={() => setOpen(false)} />
                 </Stack>
             </Sheet>

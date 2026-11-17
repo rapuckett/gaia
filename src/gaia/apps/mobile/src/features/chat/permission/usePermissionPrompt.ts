@@ -8,7 +8,7 @@ import { repeatedAllowCount } from '@webui/utils/permissionPrompts.core';
 import { permissionRequestNotification } from '@webui/utils/toolEvents.core';
 
 import { useConfirmTool } from '@/data';
-import { describeError, useT } from '@/i18n/useT';
+import { describeHttpFailure, useT } from '@/i18n/useT';
 import { deadlineFor, recordAnsweredPrompt, useAnsweredPrompts } from '@/state/permissionPrompts';
 import { markPromptResolved, permissionAnswered, updateTurn, useChatStreamStore } from '@/state/chatStreams';
 
@@ -19,6 +19,7 @@ export interface PermissionPromptState {
     repeats: number;
     busy: boolean;
     error: string | null;
+    errorDetail: string | null;
     onAnswer(choice: PermissionChoice): void;
     onExpired(): void;
 }
@@ -59,7 +60,8 @@ export function usePermissionPrompt(sessionId: string): PermissionPromptState | 
         prompt,
         repeats: repeatedAllowCount([...history], prompt),
         busy: confirm.isPending,
-        error: failed ? describeError(confirm.error, t) : null,
+        error: failed ? describeHttpFailure(confirm.error, t).text : null,
+        errorDetail: failed ? (describeHttpFailure(confirm.error, t).detail ?? null) : null,
         onAnswer,
         onExpired,
     };

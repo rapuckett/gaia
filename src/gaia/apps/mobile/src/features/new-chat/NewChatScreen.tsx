@@ -277,7 +277,7 @@ export function NewChatScreen({ onOpen, onChooseDocuments, initialText = '', pro
                         </Surface>
                     </Stack>
                 )}
-                {state.error !== null && <Notice tone="danger" message={state.error} />}
+                {state.error !== null && <Notice tone="danger" message={state.error} detail={state.errorDetail} />}
                 {!state.sending && startingReason(status, t) === null && <TryChips onPick={fillExample} />}
                 {assistant.problem !== null && (
                     <Stack gap="sm">
