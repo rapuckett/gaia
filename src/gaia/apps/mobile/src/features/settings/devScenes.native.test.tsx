@@ -88,6 +88,16 @@ describeNative('/dev/settings', () => {
     });
 
     it.each([
+        ['lang-switch-ar-android', true],
+        ['lang-switch-ar-ios', false],
+    ])('%s covers the screen, with Close only on Android', async (name, hasClose) => {
+        mockState = name;
+        await mount();
+        expect(await screen.findByTestId('language-switch-cancel')).toBeTruthy();
+        expect(!!screen.queryByTestId('language-switch-close')).toBe(hasClose);
+    });
+
+    it.each([
         ['msg-loading', 'Loading…'],
         ['msg-pc-refused', 'Change this on the PC running GAIA.'],
         ['msg-needs-token', 'Create a bot'],
