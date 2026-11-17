@@ -52,4 +52,21 @@ describe('UserBubble', () => {
         await fireEvent.press(screen.getByLabelText(t('msg.copy')));
         expect(Clipboard.setStringAsync).toHaveBeenCalledWith(content);
     });
+
+    it('shows an uploaded file as a chip, not as its markdown link', async () => {
+        const sent: Message = { ...message, content: 'Summarize this\n\n[smoke-notes.txt](/api/files/uploads/smoke-notes.txt)' };
+        await render(
+            <QueryClientProvider client={new QueryClient()}>
+                <ThemeProvider>
+                    <SheetHost>
+                        <UserBubble message={sent} />
+                    </SheetHost>
+                </ThemeProvider>
+            </QueryClientProvider>,
+        );
+        expect(screen.getByText('Summarize this')).toBeTruthy();
+        expect(screen.getByTestId('user-attachment')).toBeTruthy();
+        expect(screen.getByText('smoke-notes.txt')).toBeTruthy();
+        expect(screen.queryByText(/api\/files\/uploads/)).toBeNull();
+    });
 });
