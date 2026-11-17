@@ -17,8 +17,11 @@ import { ConnectorsScreen } from './ConnectorsScreen';
  * CON-01: `loading`, `error`, `none`. CON-03: `groups` (`#expand` opens the folded groups).
  * CON-06: `menu` (`#tap=connector-actions-linear` opens the actions sheet). CON-08: `code`
  * (`#tap=device-sign-in-microsoft` shows the code), `codeFailed` (the same tap, then the failure).
+ * CON-02: `many` (8 connectors, so the search field shows). CON-11: `disconnected` and `revoked` open Microsoft Personal;
+ * tap its Disconnect chip, then Disconnect in the sheet: `disconnected` answers that the provider has no revoke API, `revoked`
+ * that the provider did not confirm the revoke (reason on the notice). CON-16: `personalize` opens a connected Gmail tile with the Personalize GAIA offer.
  */
-export const CONNECTOR_SCENES = ['serverOn', 'serverOff', 'grants', 'loading', 'error', 'none', 'groups', 'menu', 'code', 'codeFailed'] as const;
+export const CONNECTOR_SCENES = ['serverOn', 'serverOff', 'grants', 'loading', 'error', 'none', 'groups', 'menu', 'code', 'codeFailed', 'many', 'disconnected', 'revoked', 'personalize'] as const;
 export type ConnectorScene = (typeof CONNECTOR_SCENES)[number];
 
 const server = (over: Partial<ConnectorRow> = {}) =>
@@ -29,6 +32,7 @@ const agent = (id: string, name: string, over: Partial<AgentInfo> = {}): AgentIn
 
 const account = (id: string, display_name: string, over: Partial<ConnectorRow> = {}) =>
     server({ id, display_name, type: 'oauth_pkce', configured: false, supports_device_code: true, oauth_setup_fields: [], ...over } as Partial<ConnectorRow>);
+const signedIn = () => account('microsoft', 'Microsoft Personal', { configured: true, account_id: 'avery@example.com' });
 const unavailable = (): ConnectorListEntry => ({ id: 'jira', display_name: 'Jira', error: 'unavailable' });
 
 const AGENT_MCP: AgentMcpServer = {
@@ -52,6 +56,10 @@ const LIST_SCENES: Partial<Record<ConnectorScene, { data: FakeClientData; expand
             agentMcps: [AGENT_MCP],
         },
     },
+    many: { data: { connectors: ['Slack', 'GitHub', 'Notion', 'Linear', 'Jira', 'Asana', 'Figma', 'Stripe'].map((name) => server({ id: name.toLowerCase(), display_name: name })) } },
+    disconnected: { data: { connectors: [signedIn()], disconnectOutcome: { revoke_supported: false, revoked_remotely: false, revoke_error: null } }, expanded: 'microsoft' },
+    revoked: { data: { connectors: [signedIn()], disconnectOutcome: { revoke_supported: true, revoked_remotely: false, revoke_error: 'invalid_grant' } }, expanded: 'microsoft' },
+    personalize: { data: { connectors: [server({ id: 'gmail', display_name: 'Gmail', type: 'oauth_pkce', account_id: 'avery@example.com' })] }, expanded: 'gmail' },
     menu: { data: { connectors: [server()], activations: { linear: { gaia: true } } } },
     code: { data: { connectors: [account('microsoft', 'Microsoft Personal')], deviceSignIn: DEVICE_CODE }, expanded: 'microsoft' },
     codeFailed: { data: { connectors: [account('microsoft', 'Microsoft Personal')], deviceSignIn: DEVICE_CODE, signInEnd: { outcome: 'failed' } }, expanded: 'microsoft' },
