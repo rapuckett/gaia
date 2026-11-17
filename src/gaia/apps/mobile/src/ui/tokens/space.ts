@@ -14,4 +14,10 @@ export const space = {
     gutter: 16,
 } as const;
 
+// The widest a screen's content column gets on a tablet: reading screens, then forms and flows.
+export const contentWidth = { reading: 680, flow: 560 } as const;
+
+// The widest a sheet or dialog gets, centered.
+export const sheetMaxWidth = 560;
+
 export type Space = keyof typeof space;
