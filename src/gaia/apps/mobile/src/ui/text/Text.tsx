@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: MIT
 
 import { Children, createContext, useContext, type ReactNode } from 'react';
-import { Text as RNText, type AccessibilityRole, type TextStyle } from 'react-native';
-import { glossParts } from '@webui/i18n/registry';
+import { Text as RNText, View, type AccessibilityRole, type TextStyle } from 'react-native';
+import { glossParts, stripIsolates } from '@webui/i18n/registry';
 import { useDirection } from '@/i18n/useT';
 import { metrics } from '../tokens/generated';
 import { fontFamily, type Weight } from '../theme/fonts';
@@ -42,6 +42,8 @@ export interface TextProps {
     code?: boolean;
     /** Writing direction of this run; explicit `ltr`/`rtl` never move the line, `auto` aligns the block to its content. Content whose language differs from the UI's. `auto` follows the first strong letter of a string child. */
     dir?: 'ltr' | 'rtl' | 'auto';
+    /** Keeps a long English gloss inline in brackets instead of a block under the text: for labels inside a control. */
+    glossInline?: boolean;
     onPress?: () => void;
     accessibilityLabel?: string;
     accessibilityRole?: AccessibilityRole;
@@ -64,6 +66,7 @@ export function lineHeightOf(size: number, role: TypeRole, rtl: boolean): number
 
 const GLOSS_MIN_SIZE = 11;
 const GLOSS_LINE_HEIGHT = 1.3;
+const LONG_GLOSS_LENGTH = 40;
 
 /** Whether a string child carries an English gloss, which roughly doubles its length. */
 function hasGloss(children: ReactNode): boolean {
@@ -74,8 +77,18 @@ function hasGloss(children: ReactNode): boolean {
     return found;
 }
 
-/** Splits each string child at its English glosses and sets them small and muted, as the web's `.i18n-gloss` does. */
-function withGlosses(children: ReactNode, size: number, color: string): ReactNode {
+/** A gloss of two or more sentences, or over 40 characters, wraps badly inline, so it gets its own block. */
+export function isLongGloss(english: string): boolean {
+    return english.length > LONG_GLOSS_LENGTH || /[.!?]\s+\S/.test(english);
+}
+
+/** The English of a gloss part, without its isolates and brackets. */
+function glossEnglish(part: string): string {
+    return stripIsolates(part).trim().replace(/^\(/, '').replace(/\)$/, '');
+}
+
+/** Splits each string child at its English glosses and sets them small and muted, as the web's `.i18n-gloss` does; with `blocks`, long glosses are moved into it instead. */
+function withGlosses(children: ReactNode, size: number, color: string, blocks: string[] | null): ReactNode {
     const gloss = Math.max(size * 0.8, GLOSS_MIN_SIZE);
     const style = { fontSize: gloss, lineHeight: Math.round(gloss * GLOSS_LINE_HEIGHT), fontWeight: '400' as const, color, writingDirection: 'ltr' as const };
     let changed = false;
@@ -84,15 +97,22 @@ function withGlosses(children: ReactNode, size: number, color: string): ReactNod
         const parts = glossParts(child);
         if (!parts) return child;
         changed = true;
-        return parts.map((part, j) =>
-            part.gloss ? (
+        return parts.map((part, j) => {
+            if (!part.gloss) {
+                const next = parts[j + 1];
+                return blocks && next?.gloss && isLongGloss(glossEnglish(next.text)) ? part.text.trimEnd() : part.text;
+            }
+            const english = glossEnglish(part.text);
+            if (blocks && isLongGloss(english)) {
+                blocks.push(english);
+                return null;
+            }
+            return (
                 <RNText key={`${i}.${j}`} style={style}>
                     {part.text}
                 </RNText>
-            ) : (
-                part.text
-            ),
-        );
+            );
+        });
     });
     return changed ? mapped : children;
 }
@@ -116,12 +136,13 @@ export function Text({
     tabular,
     code,
     dir: dirProp,
+    glossInline,
     onPress,
     accessibilityLabel,
     accessibilityRole,
     testID,
 }: TextProps) {
-    const { colors, type } = useTheme();
+    const { colors, type, space } = useTheme();
     const uiDir = useDirection();
     const rtl = uiDir === 'rtl';
     const dir = dirProp === 'auto' ? (typeof children === 'string' ? contentDir(children, uiDir) : uiDir) : dirProp;
@@ -165,7 +186,19 @@ export function Text({
     else if (align === 'start' || !nested) style.textAlign = side(pinnedStartsRight);
     if (rtl) style.letterSpacing = 0;
 
-    return (
+    const blocks: string[] | null = !nested && !glossInline && !compact && numberOfLines === undefined ? [] : null;
+    const body = withGlosses(children, baseSize, toneColor(colors, 'muted'), blocks);
+    const glossSize = Math.max(baseSize * 0.8, GLOSS_MIN_SIZE);
+    const blockStyle: TextStyle = {
+        fontFamily: fontFamily({ weight: 'regular', mono: false, display: false }),
+        fontSize: glossSize,
+        lineHeight: Math.round(glossSize * GLOSS_LINE_HEIGHT),
+        color: toneColor(colors, 'muted'),
+        writingDirection: 'ltr',
+        textAlign: side(false),
+        marginTop: space.xs,
+    };
+    const main = (
         <InsideText.Provider value>
             <RNText
                 style={style}
@@ -178,8 +211,19 @@ export function Text({
                 accessibilityRole={accessibilityRole}
                 testID={testID}
             >
-                {withGlosses(children, baseSize, toneColor(colors, 'muted'))}
+                {body}
             </RNText>
         </InsideText.Provider>
+    );
+    if (!blocks?.length) return main;
+    return (
+        <View>
+            {main}
+            {blocks.map((english, i) => (
+                <RNText key={i} style={blockStyle} maxFontSizeMultiplier={maxScale ?? maxScaleFor(role, compact)} testID={testID ? `${testID}-gloss` : undefined}>
+                    {english}
+                </RNText>
+            ))}
+        </View>
     );
 }

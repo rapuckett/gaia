@@ -96,7 +96,7 @@ export function Button({
                             <Icon icon={icon} size="sm" tone={v.tone} />
                         ) : null}
                         <View style={{ flexShrink: 1, minWidth: 0, paddingVertical: wrap || largeText ? 10 : size === 'sm' ? 2 : 4 }}>
-                            <Text role={size === 'sm' ? 'caption' : 'ui'} weight="medium" tone={v.tone} align="center">
+                            <Text role={size === 'sm' ? 'caption' : 'ui'} weight="medium" tone={v.tone} align="center" glossInline>
                                 {label}
                             </Text>
                         </View>
