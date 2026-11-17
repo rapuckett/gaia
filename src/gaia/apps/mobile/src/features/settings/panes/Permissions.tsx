@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import { createContext, useContext, useState } from 'react';
+import { View } from 'react-native';
 
 import { ENDPOINTS } from '@/api/constants';
 import { GaiaApiError } from '@/api/errors';
@@ -107,7 +108,9 @@ export default function Permissions() {
                                                     label={t('row.moreActions', { title: titleOf(r.session_id) })}
                                                     onPress={() => setMenuFor(r)}
                                                 />
-                                            ) : null}
+                                            ) : (
+                                                <View style={{ width: 44 }} testID="permissions-row-menu-slot" />
+                                            )}
                                         </Row>
                                         {r.grants.map((g) => (
                                             <Stack key={g.key} gap="xs">
