@@ -13,7 +13,7 @@ import type { SectionId } from './sections';
 
 /** A settings pane on a fake PC: which section, and the anchor it opens on. */
 export interface SettingsScene {
-    section: Extract<SectionId, 'advanced' | 'automations' | 'general' | 'messaging' | 'model' | 'privacy' | 'setup' | 'skills'>;
+    section: Extract<SectionId, 'advanced' | 'automations' | 'general' | 'messaging' | 'model' | 'permissions' | 'privacy' | 'setup' | 'skills' | 'voice'>;
     target?: string;
     gpuMemory: GpuMemoryStatus | Error;
     status?: FakeClientData['status'];
@@ -37,6 +37,12 @@ export interface SettingsScene {
     hang?: 'download' | 'select';
     /** Client calls the scene answers itself (a hang or a PC refusal), over the fake's. */
     override?: Partial<GaiaClient>;
+    /** Shows the "Back to {section}" link a deep link from that section gets (needs `target`). */
+    from?: SectionId;
+    /** Renders the pane inside the section's error boundary, with a pane that throws. */
+    crash?: boolean;
+    /** Opens Permissions with the full-access confirm sheet already up. */
+    confirmFullAccess?: boolean;
     /** Opens Automations already asking to remove the automation with this id. */
     confirmRemove?: string;
     /** The device's saved palette; scenes without one open on the default palette. */
@@ -126,6 +132,22 @@ const HF_CHECKING: CustomModelReport = {
     checks: [{ id: 'chat', label: 'Chat model', ok: true, detail: 'Has a chat template' }, { id: 'fit', label: 'Fits this PC', ok: false, detail: 'Needs 64 GB' }],
 };
 
+const SPEECH: NonNullable<FakeClientData['speechSettings']> = {
+    voice: 'af_heart', speed: 100, auto: false, min_speed: 50, max_speed: 200,
+    voices: [
+        { id: 'af_heart', name: 'Heart', accent: 'american', gender: 'female', quality: 'A' },
+        { id: 'am_adam', name: 'Adam', accent: 'american', gender: 'male', quality: 'B' },
+        { id: 'bf_emma', name: 'Emma', accent: 'british', gender: 'female', quality: 'A' },
+    ],
+};
+const blockedProviders: NonNullable<FakeClientData['providers']> = {
+    providers: [
+        { id: 'local', name: 'Local', remote: false, privacy_notice: '', configured: true, blocked: false },
+        { id: 'fireworks', name: 'Fireworks AI', remote: true, privacy_notice: '', configured: true, blocked: true },
+    ],
+    lemonade_error: null,
+};
+
 const never = () => new Promise<never>(() => undefined);
 const refused = () => Promise.reject(new GaiaApiError(403, PC_ONLY_REFUSAL));
 
@@ -200,6 +222,16 @@ const running = (patch: Partial<SystemStatus>): SettingsScene => ({ section: 'ad
 const chat = (id: string): Session => ({ id, title: `Chat ${id}`, created_at: '2026-11-13T00:00:00Z', updated_at: '2026-11-13T00:00:00Z' }) as Session;
 const skill = (name: string): SkillInfo => ({ name, description: 'Summarize a document.', version: '1.0', tier: null, tools: [], path: `skills/${name}`, source: 'agent-bundled' }) as SkillInfo;
 
+const PERM_CHATS: FakeClientData = {
+    sessions: [chat('a'), chat('b'), chat('c')],
+    permissions: { a: 'full_access', b: 'ask', c: 'ask' },
+    permissionGrants: {
+        a: [{ key: 'shell:git status', label: 'git status' }],
+        b: [{ key: 'shell:npm test', label: 'npm test' }, { key: 'shell:ls', label: 'ls' }],
+        c: [{ key: 'write:notes.md', label: 'notes.md' }],
+    },
+    defaultPermissionMode: 'ask',
+};
 export const SETTINGS_SCENES: Record<string, SettingsScene> = {
     'advanced-not-installed': { section: 'advanced', gpuMemory: GPU, status: NOT_INSTALLED },
     'gpu-adjustable': { section: 'model', target: 'gpu-memory', gpuMemory: GPU },
@@ -345,6 +377,25 @@ export const SETTINGS_SCENES: Record<string, SettingsScene> = {
     'adv-details-warn': running({ model_device: 'cpu', context_size_sufficient: false, model_context_size: 4096 }),
     // SET-ADV-10: the PC doesn't answer the status read.
     'adv-unreachable': { ...running({}), override: { getSystemStatus: () => Promise.reject(new GaiaNetworkError('http://pc.local:4200', new Error('Network request failed'))) } },
+
+    // SET-PERM-01, PRM-24: the lede and the default-mode switch. `#tap=permissions-default-switch`, then "Turn on full access for new chats": the PC refuses a phone, so the switch stays off and the PC-only notice shows.
+    'perm-default': { section: 'permissions', gpuMemory: GPU, data: { sessions: [], defaultPermissionMode: 'ask', defaultModePcOnly: true } },
+    // SET-PERM-03: the full-access warning confirm, open on arrival (the same sheet `#tap=permissions-default-switch` opens).
+    'perm-full-confirm': { section: 'permissions', gpuMemory: GPU, confirmFullAccess: true, data: { sessions: [], defaultPermissionMode: 'ask' } },
+    // SET-PERM-05: Chats with extra access, seeded with a full-access chat, a chat with two grants and one with one grant.
+    // SET-PERM-06: `#tap=row.moreActions` on Chat a (its "More actions" button), then "Turn off full access". SET-PERM-07: tap "Revoke" on a grant row.
+    // SET-PERM-08: "More actions" on Chat b, then "Revoke all in this chat".
+    'perm-chats': { section: 'permissions', gpuMemory: GPU, data: PERM_CHATS },
+    // SET-VOICE-03: Preview; `#tap=read-aloud-preview` starts a preview that never finishes, so the button reads Stop reading beside a spinner (no audio plays).
+    'voice-preview': { section: 'voice', gpuMemory: GPU, data: { speechSettings: SPEECH }, override: { speak: never } },
+    // SET-MODEL-08: Fireworks blocked by Local only, shown on its own tab.
+    'model-local-only-blocked': { section: 'model', provider: 'fireworks', gpuMemory: GPU, data: { providers: blockedProviders } },
+    // SET-MODEL-09: the providers call fails; the notice has Check again.
+    'model-providers-offline': { section: 'model', gpuMemory: GPU, override: { listProviderSummaries: () => Promise.reject(new GaiaNetworkError('http://pc.local:4200/api/providers', new Error('Network request failed'))) } },
+    // SET-NAV-04: Model opened from Privacy on the Cloud key row: "Back to Privacy" shows under the header and the target flashes.
+    'nav-back-link': { section: 'model', target: 'cloud-key', provider: 'fireworks', from: 'privacy', gpuMemory: GPU },
+    // SET-NAV-05: a pane that throws: the section's error fallback with Try again and Reload.
+    'nav-crash': { section: 'general', crash: true, gpuMemory: GPU },
 
     // SET-SKILL-11: skills the PC could not read, under the list.
     'skills-skipped': {

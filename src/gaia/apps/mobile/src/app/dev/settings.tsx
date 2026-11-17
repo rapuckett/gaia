@@ -10,16 +10,23 @@ import type { ScrollView } from 'react-native';
 import { GaiaClientProvider } from '@/data';
 import { devGalleryEnabled } from '@/features/dev/devGallery';
 import { KeyedScene } from '@/features/dev/KeyedScene';
+import { SeedConfirmFullAccess } from '@/features/settings/panes/Permissions';
 import { SeedAutomationRemove } from '@/features/settings/panes/Automations';
 import { SeedJustPaired } from '@/features/settings/panes/Messaging';
 import { SeedCheckPending, SeedCustomReport } from '@/features/settings/panes/model/AddCustomModel';
 import { SeedAddedModel, SeedModelSearch } from '@/features/settings/panes/model/ModelList';
 import { SeedOpenDetails } from '@/features/settings/panes/model/ModelRow';
+import { SectionErrorBoundary } from '@/features/settings/SectionErrorBoundary';
+import { BackToSection } from '@/features/settings/SettingsSectionScreen';
 import { SETTINGS_SECTIONS } from '@/features/settings/sections';
 import { SETTINGS_SCENES, settingsSceneClient, type SettingsScene } from '@/features/settings/devScenes';
 import { SettingsTargets } from '@/features/settings/targets';
 import { Screen, ScreenBannerProvider, Stack, Text, UIProvider, useAppearance } from '@/ui';
 import { DEFAULT_CUSTOM } from '@webui/utils/palette.core';
+
+function Thrower(): never {
+    throw new Error('Forced settings crash (dev scene)');
+}
 
 function SettingsView({ found }: { found: SettingsScene }) {
     const [queryClient] = useState(() => new QueryClient({ defaultOptions: { queries: { retry: false } } }));
@@ -35,7 +42,7 @@ function SettingsView({ found }: { found: SettingsScene }) {
             <GaiaClientProvider client={client}>
                 <UIProvider>
                     <ScreenBannerProvider banner={null}>
-                        <Screen scroll scrollRef={scrollRef}>
+                        <Screen scroll scrollRef={scrollRef} header={found.from ? <BackToSection from={found.from} /> : undefined}>
                             <SettingsTargets section={found.section} target={found.target} scrollRef={scrollRef}>
                                 <SeedAddedModel.Provider value={found.addedModel ?? null}>
                                     <SeedModelSearch.Provider value={found.search ?? ''}>
@@ -44,7 +51,15 @@ function SettingsView({ found }: { found: SettingsScene }) {
                                                 <SeedCheckPending.Provider value={found.checkPending ?? null}>
                                                 <SeedCustomReport.Provider value={found.customReport ?? null}>
                                                     <SeedAutomationRemove.Provider value={found.confirmRemove ?? null}>
-                                                        <Pane provider={found.provider ?? 'local'} />
+                                                        <SeedConfirmFullAccess.Provider value={!!found.confirmFullAccess}>
+                                                            {found.crash ? (
+                                                                <SectionErrorBoundary area={`settings.${found.section}`} onReload={() => void queryClient.resetQueries()}>
+                                                                    <Thrower />
+                                                                </SectionErrorBoundary>
+                                                            ) : (
+                                                                <Pane provider={found.provider ?? 'local'} />
+                                                            )}
+                                                        </SeedConfirmFullAccess.Provider>
                                                     </SeedAutomationRemove.Provider>
                                                 </SeedCustomReport.Provider>
                                                 </SeedCheckPending.Provider>
