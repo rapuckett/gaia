@@ -4612,7 +4612,10 @@ for (const locale of ['ar', 'en']) {
             await page.locator('.fb-entry').first().click();
             await page.locator('.fb-action-btn.primary').click();
             await expect(page.getByRole('dialog')).toHaveCount(0);
-            await expectHintLeavesWithNotice(page, locale, 'files', `Please analyze this document for me: ${OLD_FILE.name}`);
+            const askSent = locale === 'ar'
+                ? new RegExp(`^\\p{Script=Arabic}.*${OLD_FILE.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'u')
+                : `Please analyze this document for me: ${OLD_FILE.name}`;
+            await expectHintLeavesWithNotice(page, locale, 'files', askSent);
         });
     });
 }

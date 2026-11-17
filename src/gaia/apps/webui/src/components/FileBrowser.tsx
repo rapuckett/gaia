@@ -17,8 +17,11 @@ import { log } from '../utils/logger';
 import { formatSize } from '../utils/format';
 import { isMacPlatform } from '../utils/platform';
 import { dateLocale, useT, type Translate } from '../i18n/useT';
-import type { MessageKey } from '../i18n/registry';
-import { UploadErrorToast, isExtensionSupported, getUnsupportedCategory } from './UnsupportedFeature';
+import type { MessageKey, Param } from '../i18n/registry';
+import { ref } from '../i18n/registry';
+import { requestErrorParam } from '../utils/requestErrors';
+import { unsupportedTypeMessage } from '../utils/uploadErrors.core';
+import { UploadErrorToast, isExtensionSupported } from './UnsupportedFeature';
 import type { FileEntry, BrowseResponse, QuickLink } from '../types';
 import './FileBrowser.css';
 import './UnsupportedFeature.css';
@@ -117,6 +120,7 @@ async function indexAndAttachFiles(
     entries: FileEntry[],
     sessionId: string | null,
     updateSessionInList: (id: string, patch: Record<string, unknown>) => void,
+    t: Translate,
 ): Promise<IndexResult> {
     const supported: string[] = [];
     const unsupported: string[] = [];
@@ -168,7 +172,7 @@ async function indexAndAttachFiles(
             }
         } catch (err) {
             failed++;
-            lastError = err instanceof Error ? err.message : 'Unknown error';
+            lastError = err instanceof Error ? err.message : t('chat.unknownError');
             lastErrorKind = (err as { reason?: string | null } | null)?.reason ?? null;
         }
     }
@@ -229,7 +233,7 @@ export function FileBrowser({ onStartChat }: FileBrowserProps) {
     const [entries, setEntries] = useState<FileEntry[]>([]);
     const [quickLinks, setQuickLinks] = useState<QuickLink[]>([]);
     const [loading, setLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
+    const [error, setError] = useState<Param | null>(null);
     const [deniedName, setDeniedName] = useState<string | null>(null);
     const [showHidden, setShowHidden] = useState(false);
 
@@ -278,7 +282,7 @@ export function FileBrowser({ onStartChat }: FileBrowserProps) {
                 setEntries([]);
                 setDeniedName(name);
             } else {
-                setError(err instanceof Error ? err.message : 'Failed to load directory');
+                setError(err instanceof Error ? requestErrorParam(err) : ref('fileBrowser.loadFailed'));
             }
             log.ui.error('Browse failed', err);
         } finally {
@@ -313,8 +317,7 @@ export function FileBrowser({ onStartChat }: FileBrowserProps) {
             setSearchTruncated(data.truncated === true);
             log.ui.info(`Search "${searchQuery}": ${data.total} results`);
         } catch (err) {
-            const msg = err instanceof Error ? err.message : 'Search failed';
-            setError(msg);
+            setError(err instanceof Error ? requestErrorParam(err) : ref('fileBrowser.searchFailed'));
             log.ui.error('Search failed', err);
         } finally {
             setIsSearching(false);
@@ -366,16 +369,11 @@ export function FileBrowser({ onStartChat }: FileBrowserProps) {
         });
         if (!hasSupported) {
             const firstFile = files[0];
-            const dotIdx = firstFile.lastIndexOf('.');
-            const ext = dotIdx > 0 ? firstFile.slice(dotIdx).toLowerCase() : '';
-            const category = getUnsupportedCategory(ext);
             setIndexError({
                 filename: files.length === 1
                     ? firstFile.split(/[\\/]/).pop() || firstFile
-                    : `${files.length} files`,
-                error: category
-                    ? category.message
-                    : `File type "${ext}" is not supported for indexing.`,
+                    : t.plural('chg.files', files.length),
+                error: unsupportedTypeMessage(firstFile) ?? t('fileBrowser.unexpectedError'),
             });
             return;
         }
@@ -384,13 +382,13 @@ export function FileBrowser({ onStartChat }: FileBrowserProps) {
         setIndexStatus(t.plural('fileBrowser.adding', files.length));
 
         try {
-            const result = await indexAndAttachFiles(files, entries, currentSessionId, updateSessionInList);
+            const result = await indexAndAttachFiles(files, entries, currentSessionId, updateSessionInList, t);
 
             if (result.failed > 0) {
                 setIndexStatus(t('fileBrowser.addedWithFailures', { added: result.docIds.length, failed: result.failed }));
                 setIndexError({
-                    filename: `${result.failed} file(s)`,
-                    error: result.lastError || 'Indexing failed for some files',
+                    filename: t.plural('chg.files', result.failed),
+                    error: result.lastError || t('fileBrowser.indexFailedSome'),
                     kind: result.lastErrorKind,
                 });
             } else {
@@ -410,8 +408,8 @@ export function FileBrowser({ onStartChat }: FileBrowserProps) {
         } catch (err) {
             log.doc.error('Index selected failed', err);
             setIndexError({
-                filename: files.length === 1 ? files[0].split(/[\\/]/).pop() || files[0] : `${files.length} files`,
-                error: err instanceof Error ? err.message : 'An unexpected error occurred.',
+                filename: files.length === 1 ? files[0].split(/[\\/]/).pop() || files[0] : t.plural('chg.files', files.length),
+                error: err instanceof Error ? err.message : t('fileBrowser.unexpectedError'),
             });
         } finally {
             setIndexingFiles(new Set());
@@ -429,15 +427,12 @@ export function FileBrowser({ onStartChat }: FileBrowserProps) {
         setIndexStatus(t.plural('fileBrowser.adding', files.length));
 
         try {
-            const result = await indexAndAttachFiles(files, entries, currentSessionId, updateSessionInList);
+            const result = await indexAndAttachFiles(files, entries, currentSessionId, updateSessionInList, t);
 
             if (result.supported.length === 0) {
-                const dotIdx = files[0].lastIndexOf('.');
-                const ext = dotIdx > 0 ? files[0].slice(dotIdx).toLowerCase() : '';
-                const category = getUnsupportedCategory(ext);
                 setIndexError({
-                    filename: files.length === 1 ? files[0].split(/[\\/]/).pop() || files[0] : `${files.length} files`,
-                    error: category?.message ?? `File type "${ext}" is not supported for indexing.`,
+                    filename: files.length === 1 ? files[0].split(/[\\/]/).pop() || files[0] : t.plural('chg.files', files.length),
+                    error: unsupportedTypeMessage(files[0]) ?? t('fileBrowser.unexpectedError'),
                 });
                 return;
             }
@@ -446,8 +441,8 @@ export function FileBrowser({ onStartChat }: FileBrowserProps) {
                 setIndexError({
                     filename: result.supported.length === 1
                         ? result.supported[0].split(/[\\/]/).pop() || result.supported[0]
-                        : `${result.supported.length} files`,
-                    error: 'Failed to index selected file(s). Please try again.',
+                        : t.plural('chg.files', result.supported.length),
+                    error: t('fileBrowser.indexFailedSelected'),
                 });
                 return;
             }
@@ -461,8 +456,8 @@ export function FileBrowser({ onStartChat }: FileBrowserProps) {
             const fileNames = (result.succeededFiles.length > 0 ? result.succeededFiles : result.supported)
                 .map(f => f.split(/[\\/]/).pop() || f);
             const prompt = fileNames.length === 1
-                ? `Please analyze this document for me: ${fileNames[0]}`
-                : `Please analyze these documents for me:\n${fileNames.map(n => `- ${n}`).join('\n')}`;
+                ? t('mobileApp.files.askOne', { name: fileNames[0] })
+                : t('mobileApp.files.askMany', { list: fileNames.map(n => `- ${n}`).join('\n') });
 
             if (currentSessionId) {
                 setPendingPrompt({ sessionId: currentSessionId, text: prompt });
@@ -474,8 +469,8 @@ export function FileBrowser({ onStartChat }: FileBrowserProps) {
         } catch (err) {
             log.doc.error('Ask Agent failed', err);
             setIndexError({
-                filename: files.length === 1 ? files[0].split(/[\\/]/).pop() || files[0] : `${files.length} files`,
-                error: err instanceof Error ? err.message : 'An unexpected error occurred.',
+                filename: files.length === 1 ? files[0].split(/[\\/]/).pop() || files[0] : t.plural('chg.files', files.length),
+                error: err instanceof Error ? err.message : t('fileBrowser.unexpectedError'),
             });
         } finally {
             askingRef.current = false;
@@ -649,7 +644,11 @@ export function FileBrowser({ onStartChat }: FileBrowserProps) {
                     {/* Error */}
                     {(error || deniedName) && (
                         <div className="fb-error">
-                            {deniedName ? t(isMacPlatform() ? 'fileBrowser.deniedMac' : 'fileBrowser.denied', { name: deniedName }) : error}
+                            {deniedName
+                                ? t(isMacPlatform() ? 'fileBrowser.deniedMac' : 'fileBrowser.denied', { name: deniedName })
+                                : typeof error === 'object' && error
+                                    ? t(error.ref, error.params)
+                                    : <span dir="ltr">{error}</span>}
                         </div>
                     )}
 

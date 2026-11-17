@@ -8,6 +8,7 @@ import { useChatStore } from '../../stores/chatStore';
 import * as api from '../../services/api';
 import type { BrowseResponse } from '../../types';
 import { stripIsolates } from '../../i18n/registry';
+import { tEn } from '../../i18n/useT';
 import { ARABIC_MONTH, ENGLISH_MONTH, resetUiLocale, setUiLocale } from '../../test/dates';
 
 vi.mock('../../services/api');
@@ -291,7 +292,7 @@ describe('FileBrowser Ask Agent', () => {
     it('starts a new chat about the file from the new-chat screen (#5924)', async () => {
         useChatStore.setState({ currentSessionId: null });
         const onStartChat = await askAboutNotes();
-        expect(onStartChat).toHaveBeenCalledWith('Please analyze this document for me: notes.txt');
+        expect(onStartChat).toHaveBeenCalledWith(tEn('mobileApp.files.askOne', { name: 'notes.txt' }));
         // Nothing is left waiting to fire into whichever chat opens next.
         expect(useChatStore.getState().pendingPrompt).toBeNull();
         expect(useChatStore.getState().draftDocumentIds).toEqual(['doc-1']);
@@ -301,7 +302,7 @@ describe('FileBrowser Ask Agent', () => {
         const onStartChat = await askAboutNotes();
         expect(onStartChat).not.toHaveBeenCalled();
         expect(useChatStore.getState().pendingPrompt).toEqual({
-            sessionId: 'session-1', text: 'Please analyze this document for me: notes.txt',
+            sessionId: 'session-1', text: tEn('mobileApp.files.askOne', { name: 'notes.txt' }),
         });
     });
 });
