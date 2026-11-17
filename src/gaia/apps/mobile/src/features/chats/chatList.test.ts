@@ -46,11 +46,11 @@ describe('buildChatSections', () => {
         const live = { ...NO_LIVE_RUNS, awaiting: { ask: {} } };
         const sections = buildChatSections({ sessions, live, now: NOW });
         expect(sections.map((s) => [s.key, s.data.map((r) => r.id)])).toEqual([
-            ['Needs you', ['ask']],
-            ['Pinned', ['pin']],
-            ['Today', ['today']],
-            ['Yesterday', ['yday']],
-            ['Older', ['old']],
+            ['sidebar.group.needsYou', ['ask']],
+            ['sidebar.group.pinned', ['pin']],
+            ['sidebar.group.today', ['today']],
+            ['sidebar.group.yesterday', ['yday']],
+            ['sidebar.group.older', ['old']],
         ]);
         expect(sections[0].titleKey).toBe('sidebar.group.needsYou');
     });
@@ -153,10 +153,10 @@ describe('day rollover', () => {
         const evening = new Date(2026, 10, 12, 23, 59, 0);
         const chat = session('a', { updated_at: new Date(2026, 10, 12, 20, 0, 0).toISOString() });
         const titles = (now: Date) => buildChatSections({ sessions: [chat], now }).map((s) => s.key);
-        expect(titles(evening)).toEqual(['Today']);
+        expect(titles(evening)).toEqual(['sidebar.group.today']);
         const wait = msUntilNextMidnight(evening);
         expect(wait).toBe(60_000);
-        expect(titles(new Date(evening.getTime() + wait))).toEqual(['Yesterday']);
+        expect(titles(new Date(evening.getTime() + wait))).toEqual(['sidebar.group.yesterday']);
     });
 });
 

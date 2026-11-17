@@ -30,16 +30,6 @@ export interface QueuedMessage {
 
 export type StatusTone = 'idle' | 'running' | 'attention' | 'error' | 'success';
 
-export const GROUP_TITLE: Record<ListGroup['label'], MessageKey> = {
-    'Needs you': 'sidebar.group.needsYou',
-    Pinned: 'sidebar.group.pinned',
-    Today: 'sidebar.group.today',
-    Yesterday: 'sidebar.group.yesterday',
-    'Previous 7 days': 'sidebar.group.prev7',
-    'Previous 30 days': 'sidebar.group.prev30',
-    Older: 'sidebar.group.older',
-};
-
 const STATUS_TITLE: Record<RowStatus, MessageKey> = {
     running: 'row.status.running',
     queued: 'row.status.queued',
@@ -98,7 +88,7 @@ export function buildChatSections({
 }: ChatListInput): ChatSection[] {
     return groupSessionsForList([...sessions], live, { now, showAutomated }).map((group) => ({
         key: group.label,
-        titleKey: GROUP_TITLE[group.label],
+        titleKey: group.label,
         data: group.sessions.map((s): ChatRow => {
             const active = s.id === activeId;
             const unread = !!s.unread && !active;
