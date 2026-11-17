@@ -4,6 +4,7 @@
 import type { ConfirmationRequest, QuestionRequest } from '@/data';
 import { ConfirmationCard, confirmationProps, QuestionCard, questionCardData } from '@/features/questions';
 import { confirmationDismissed, updateTurn } from '@/state/chatStreams';
+import { Stack } from '@/ui';
 
 /**
  * Where a question (qst-cards) or an approval-needed card renders. The turn waits on a question, so
@@ -20,10 +21,11 @@ export function ChatPrompts({
 }) {
     const data = question ? questionCardData(sessionId, question) : null;
     const card = confirmation ? confirmationProps(confirmation) : null;
+    if (!data && !card) return null;
     return (
-        <>
+        <Stack paddingX="gutter" gap="md">
             {data ? <QuestionCard data={data} /> : null}
             {card ? <ConfirmationCard {...card} onDismiss={() => updateTurn(sessionId, confirmationDismissed)} /> : null}
-        </>
+        </Stack>
     );
 }
