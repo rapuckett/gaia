@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: MIT
 
 // Finds English a person would read that is written outside the en/ar catalogs.
+// Skipped: values passed to keepTogether() or isolate(), and any literal on a line
+// marked `// english: <reason>` (trailing, or alone on the line above). An empty reason throws.
 
 import { readdirSync, readFileSync } from 'fs';
 import { join, relative, resolve, sep } from 'path';
@@ -32,6 +34,8 @@ const LABEL_PROPS = new Set(['label', 'title', 'heading', 'placeholder', 'toolti
 const MESSAGE_CALL = /(^|\.)(set\w*(Error|Message|Notice|Status|Text|Label|Hint|Title|Toast|Banner|Warning)|toast|showToast|addToast|notify|showError|showNotice|alert|confirm)$/;
 const TRANSLATE_CALL = /^(t|tp|tr|translate|t\.plural|i18n\.t|getT\(\)|getT\(\)\.plural)$/;
 const LOG_CALL = /^(console|logger|log)\./;
+const VALUE_CALL = /(^|\.)(keepTogether|isolate)$/;
+const ENGLISH_MARKER = /\/\/\s*english:(.*)$/;
 const WRAPPERS = new Set(['ParenthesizedExpression', 'TSAsExpression', 'TSNonNullExpression', 'TSSatisfiesExpression']);
 
 /** Two letters in a row is English prose; all-caps names and units (GAIA, NPU, MB) are not. */
@@ -122,6 +126,7 @@ function silentRule(stack: Node[], text: string): string | null {
             const name = calleeName(a.callee as Node);
             if (TRANSLATE_CALL.test(name)) return 'translated';
             if (LOG_CALL.test(name)) return 'log';
+            if (VALUE_CALL.test(name)) return 'value-wrapper';
             if (/^(describe|it|test|expect)$/.test(name)) return 'test';
             return null;
         }
@@ -168,7 +173,19 @@ export function scanSource(code: string, file = 'x.tsx', skipped: Skipped = {}):
     const hits: Hit[] = [];
     const lineAt = (offset: number) => code.slice(0, offset).split('\n').length;
     const skip = (rule: string) => { skipped[rule] = (skipped[rule] ?? 0) + 1; };
-    const add = (kind: string, text: string, node: Node) => hits.push({ line: lineAt(node.start ?? 0), kind, text });
+    const marked = new Set<number>();
+    code.split('\n').forEach((text, i) => {
+        const m = ENGLISH_MARKER.exec(text);
+        if (!m) return;
+        if (!m[1].trim()) throw new Error(`${file}:${i + 1}: "// english:" needs a reason`);
+        marked.add(i + 1);
+        if (text.slice(0, m.index).trim() === '') marked.add(i + 2);
+    });
+    const add = (kind: string, text: string, node: Node) => {
+        const line = lineAt(node.start ?? 0);
+        if (marked.has(line)) return skip('english-marker');
+        hits.push({ line, kind, text });
+    };
 
     const visitString = (stack: Node[], text: string) => {
         const node = stack[stack.length - 1];

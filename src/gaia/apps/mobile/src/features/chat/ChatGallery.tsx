@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 
 import type { Session, StreamEvent } from '@/api/client.types';
+import { GaiaApiError } from '@/api/errors';
 import { createFakeClient } from '@/api/fake';
 import { GaiaClientProvider } from '@/data';
 import { IDLE_TURN, writeTurn } from '@/state/chatStreams';
@@ -17,11 +18,12 @@ import { FIXTURES } from './messages/__fixtures__/messages';
 /**
  * Developer gallery (`/dev/chat?state=`): the chat screen with a turn running on the PC.
  * `question` (RC-08, CMP-10): a question card waits and the box says Send answer. `approval` (RC-07): the approval-needed card after the run.
+ * `question-answered`, `question-answer-failed` (CMP-10): the same question with "Downloads" typed in the box; tap Send answer, and the answer goes through (the card resolves) or the PC refuses it (the error shows and the text returns to the box).
  * `queue` (CMP-12, CMP-13): a queued text with Add to this reply, a failed one with Send again.
  * `env-offline` (SP-17): the chat's internet is off and the session panel is closed, so the offline notice shows above the composer.
  * `queue-stop` (CMP-15): the same queue; `#tap=composer-stop` ends the turn and the queued texts return to the box.
  */
-export const CHAT_STATES = ['running-empty', 'running-status', 'question', 'approval', 'queue', 'queue-stop', 'env-offline'] as const;
+export const CHAT_STATES = ['running-empty', 'running-status', 'question', 'question-answered', 'question-answer-failed', 'approval', 'queue', 'queue-stop', 'env-offline'] as const;
 export type ChatGalleryState = (typeof CHAT_STATES)[number];
 
 const SESSION = {
@@ -83,6 +85,11 @@ export function ChatGallery({ state }: { state: ChatGalleryState }) {
             return base;
         }
         if (state === 'approval') return base;
+        if (state === 'question-answer-failed') {
+            base.sendUserInput = async () => {
+                throw new GaiaApiError(500, 'Database is locked');
+            };
+        }
         base.attachToRun = () => ({ [Symbol.asyncIterator]: () => ({ next: () => new Promise<IteratorResult<StreamEvent>>(() => undefined) }) });
         return base;
     });
@@ -94,10 +101,11 @@ export function ChatGallery({ state }: { state: ChatGalleryState }) {
                 ...IDLE_TURN,
                 status: 'streaming',
                 events: state === 'running-status' ? [STATUS] : [],
-                pendingQuestion: state === 'question' ? (QUESTION as typeof IDLE_TURN.pendingQuestion) : null,
+                pendingQuestion: state.startsWith('question') ? (QUESTION as typeof IDLE_TURN.pendingQuestion) : null,
             });
         }
         if (state === 'queue' || state === 'queue-stop') useComposerQueueStore.setState({ byChat: { dev: QUEUED }, drafts: {} });
+        if (state === 'question-answered' || state === 'question-answer-failed') useComposerQueueStore.setState({ byChat: {}, drafts: { dev: 'Downloads' } });
         return () => {
             writeTurn('dev', null);
             useComposerQueueStore.setState({ byChat: {}, drafts: {} });
