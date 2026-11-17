@@ -1,7 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
 import type { ReactNode } from 'react';
 import { BackHandler, Platform, StyleSheet } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -10,6 +10,7 @@ import { applyDirection } from '@/platform/direction';
 import { pickLanguage, useLanguageSwitch } from '@/state/languageSwitch';
 import { useLocaleStore } from '@/state/locale';
 import { UIProvider } from '@/ui';
+import { contentWidth } from '@/ui/tokens/space';
 
 import { LanguageSwitchHost } from './LanguageSwitchCover';
 
@@ -81,6 +82,13 @@ describeNative('language switch cover', () => {
         await act(async () => pickLanguage('ar'));
         const content = await screen.findByTestId('language-switch-content');
         expect(StyleSheet.flatten(content.props.style)).toMatchObject({ paddingHorizontal: 16 });
+    });
+
+    it('caps its column at the flow width', async () => {
+        await mountHost();
+        await act(async () => pickLanguage('ar'));
+        const cover = await screen.findByTestId('language-switch-cover');
+        expect(within(cover).getByTestId('screen-content').props.dataSet).toEqual({ contentWidth: String(contentWidth.flow) });
     });
 
     describe('on Android', () => {

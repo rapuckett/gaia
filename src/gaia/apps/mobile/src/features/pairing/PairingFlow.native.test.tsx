@@ -10,6 +10,7 @@ import { GaiaPinMismatchError } from '@/api/errors';
 import { translator } from '@/i18n/useT';
 import { useConnectionStore } from '@/state/connection';
 import { UIProvider } from '@/ui';
+import { contentWidth } from '@/ui/tokens/space';
 
 import { createFakePairingService } from './fakePairingService';
 import { PairingFlow } from './PairingFlow';
@@ -87,7 +88,8 @@ describeNative('PairingFlow', () => {
         setPairingService(createFakePairingService());
         await render(<PairingFlow initialStep="how" />, { wrapper: wrap });
         await screen.findByText(t('mobileApp.pairing.how.step4'));
-        expect(StyleSheet.flatten(screen.getByTestId('pairing-page').props.style)).toMatchObject({ width: '100%', maxWidth: 560, alignSelf: 'center' });
+        expect(StyleSheet.flatten(screen.getByTestId('pairing-page').props.style)).toMatchObject({ width: '100%' });
+        expect(screen.getByTestId('screen-content').props.dataSet).toEqual({ contentWidth: String(contentWidth.flow) });
     });
 
     it('has no up control on first run', async () => {
