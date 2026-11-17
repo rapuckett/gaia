@@ -15,7 +15,7 @@ import { IconButton, Notice, Pressable, Row, Stack, Text, TextField } from '@/ui
 import { Activity, Check, Download, Eye, EyeOff, PanelRight, X } from '@/ui/icons';
 
 import { DocsBar } from './DocsBar';
-import { failureReasonWith } from './failureText';
+import { failureNotice } from './failureText';
 import { ResourceStrip } from './ResourceStrip';
 
 export interface ChatHeaderProps {
@@ -54,13 +54,13 @@ export function ChatHeader({ sessionId, onOpenSessionPanel, onManageDocuments }:
         setError(null);
         rename.mutate(
             { sessionId, title: next },
-            { onError: (err) => setError({ text: t.compose((say) => say('chat.renameFailed', { error: failureReasonWith(err, say) })) }) },
+            { onError: (err) => setError(failureNotice(err, t, { withReason: 'chat.renameFailed', noReason: 'mobileApp.chat.renameFailedShort' })) },
         );
     };
     const flipPrivate = () => {
         setError(null);
         togglePrivate.mutate(sessionId, {
-            onError: (err) => setError({ text: t.compose((say) => say('chat.privateFailed', { error: failureReasonWith(err, say) })) }),
+            onError: (err) => setError(failureNotice(err, t, { withReason: 'chat.privateFailed', noReason: 'mobileApp.chat.privateFailedShort' })),
         });
     };
 
@@ -151,7 +151,7 @@ export function ChatHeader({ sessionId, onOpenSessionPanel, onManageDocuments }:
                 </Stack>
             ) : null}
             {resources ? <ResourceStrip onClose={() => setResources(false)} /> : null}
-            <DocsBar sessionId={sessionId} onFailed={(text) => setError({ text })} onManage={onManageDocuments} />
+            <DocsBar sessionId={sessionId} onFailed={setError} onManage={onManageDocuments} />
         </>
     );
 }
