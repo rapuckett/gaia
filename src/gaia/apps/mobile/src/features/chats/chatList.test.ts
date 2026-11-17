@@ -134,9 +134,17 @@ describe('rowFailure', () => {
         expect(rowFailure('rename', 'boom', en)).toEqual({ message: 'Could not rename the chat.' });
         expect(rowFailure('unpin', new Error(''), en).detail).toBeUndefined();
         expect(rowFailure('markRead', new Error('offline'), en)).toEqual({ message: 'Could not mark the chat read.', detail: 'offline' });
-        const http = rowFailure('delete', new GaiaApiError(409, 'Could not delete the chat.'), en);
-        expect(http.detail).toBe('Could not delete the chat.');
+        const http = rowFailure('delete', new GaiaApiError(409, 'Chat is running'), en);
+        expect(http.detail).toBe('Chat is running');
         expect(`${http.message}${http.detail}`).not.toMatch(/mobileApp\.error|\{/);
+    });
+});
+
+describe('rowFailure detail', () => {
+    it('never repeats the sentence as its own detail', () => {
+        const en = translator('en');
+        const same = rowFailure('delete', new GaiaApiError(409, 'Could not delete the chat.'), en);
+        expect(same.detail).not.toBe(same.message);
     });
 });
 

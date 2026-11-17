@@ -13,7 +13,7 @@ export { Stack, Row, Spacer, type StackProps, type RowProps } from './layout/lay
 export { Floating, type FloatingProps } from './layout/Floating';
 export { HScroll } from './layout/HScroll';
 export { Surface, Card, Divider, type SurfaceProps, type CardProps } from './layout/Surface';
-export { Pressable, type PressableProps } from './controls/Pressable';
+export { PRESSABLE_MIN_SIZE, Pressable, type PressableProps } from './controls/Pressable';
 export { Button, type ButtonProps } from './controls/Button';
 export { SmallButton, type SmallButtonProps } from './controls/SmallButton';
 export { IconButton, type IconButtonProps } from './controls/IconButton';
