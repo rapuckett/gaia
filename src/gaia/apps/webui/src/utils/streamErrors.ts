@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import { getT, type Translate } from '../i18n/useT';
-import { classifyChatError as classify, describeStreamError as describe, type ChatErrorKind } from './streamErrors.core';
+import { classifyChatError as classify, describeStreamError as describe, type ChatErrorInfo } from './streamErrors.core';
 
 export * from './streamErrors.core';
 
@@ -12,6 +12,6 @@ export function describeStreamError(err: Error, t: Translate = getT()): string |
 }
 
 /** `classifyChatError` in the interface language chosen now, unless `t` is given. */
-export function classifyChatError(err: Error, t: Translate = getT()): { kind: ChatErrorKind; text: string } {
+export function classifyChatError(err: Error, t: Translate = getT()): ChatErrorInfo {
     return classify(err, t);
 }

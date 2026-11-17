@@ -13,6 +13,7 @@ import { ChatView } from '../ChatView';
 import { useChatStore } from '../../stores/chatStore';
 import type { Message, Session } from '../../types';
 import * as api from '../../services/api';
+import { tEn } from '../../i18n/translator';
 
 // The error classes stay real: streamErrors matches them against services/apiErrors, which api re-exports.
 vi.mock('../../services/api', async (importOriginal) => {
@@ -271,7 +272,7 @@ describe('Try again on a failed turn', () => {
             sends[0].cbs.onError(timedOut);
         });
         const last = () => useChatStore.getState().messages[useChatStore.getState().messages.length - 1];
-        await waitFor(() => expect(last()?.content).toContain('did not start this answer'));
+        await waitFor(() => expect(last()?.content).toContain(tEn('chatError.sendTimeout', { seconds: 30 })));
         expect(last()?.failed).toBe(false);
         // The failed-turn button; the answer's own retry icon shares its name.
         expect(document.querySelector('.msg-try-again')).toBeNull();

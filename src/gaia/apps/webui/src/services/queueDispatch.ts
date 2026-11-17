@@ -18,7 +18,7 @@ import { wakeActiveRunsPoll } from './activeRuns';
 import { isStarting } from './statusPoll';
 import { useChatStore } from '../stores/chatStore';
 import * as messageQueue from '../utils/messageQueue';
-import { describeStreamError, isStreamInterrupted } from '../utils/streamErrors';
+import { describeStreamError, isStreamInterrupted, streamErrorDetail, withDetail } from '../utils/streamErrors';
 import { log } from '../utils/logger';
 
 /** How long a queued message waits after finding its chat busy before it is sent again. */
@@ -64,7 +64,10 @@ export function claimView(sessionId: string): () => void {
 }
 
 function errorText(err: unknown): string {
-    if (err instanceof Error) return describeStreamError(err) ?? (err.message || 'Unknown error');
+    if (err instanceof Error) {
+        const text = describeStreamError(err);
+        return text ? withDetail(text, streamErrorDetail(err)) : err.message || 'Unknown error';
+    }
     return String(err);
 }
 

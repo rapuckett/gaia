@@ -3,6 +3,7 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { listConnectors, disconnectConnector, authorizeConnector, uploadDocumentBlob } from '../api';
+import { tEn } from '../../i18n/translator';
 
 /**
  * Regression tests for `apiFetch`'s non-JSON handling (issue #983).
@@ -118,7 +119,7 @@ describe('authorizeConnector grant_agents', () => {
  * because the 500's `detail` (the real cause) was thrown away.
  */
 describe('HTTP 500 error messages', () => {
-    const generic = 'Server error. Please try again.';
+    const generic = tEn('apiError.serverError');
 
     beforeEach(() => {
         vi.stubGlobal('fetch', vi.fn());

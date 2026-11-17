@@ -26,7 +26,7 @@ import { claimView, dispatchNext, idleByPoll, isBusyError, markActivity, requeue
 import { log } from '../utils/logger';
 import { isMediaFile } from '../utils/mediaFiles';
 import { bugReportUrl } from './UnsupportedFeature';
-import { classifyChatError, isStreamInterrupted, mayStillFinish, MAX_STREAM_RECONNECTS, RECONNECT_DELAYS_MS, RUN_LOST_TEXT } from '../utils/streamErrors';
+import { classifyChatError, isStreamInterrupted, mayStillFinish, MAX_STREAM_RECONNECTS, RECONNECT_DELAYS_MS, withDetail } from '../utils/streamErrors';
 import { isAuthRequiredMessage } from './email/EmailConnectCta';
 import { connectCardProviders, hasConnectCard } from './render/ConnectAccountCard';
 import { ConnectorRetryBanner } from './ConnectorRetryBanner';
@@ -84,6 +84,7 @@ export { STOP_GRACE_MS };
 
 export { QUEUE_BUSY_WAIT_MS } from '../services/queueDispatch';
 
+const FENCE = '`' + '`' + '`';
 const NO_QUEUE: QueuedMessage[] = [];
 const NO_STEPS: AgentStep[] = [];
 const NO_CARDS: RenderCardData[] = [];
@@ -1085,7 +1086,7 @@ export function ChatView({ sessionId }: ChatViewProps) {
                                     id: Date.now() + 2,
                                     session_id: sessionId,
                                     role: 'assistant',
-                                    content: RUN_LOST_TEXT,
+                                    content: getT()('chatError.runLost'),
                                     created_at: new Date().toISOString(),
                                     rag_sources: null,
                                 });
@@ -1104,9 +1105,10 @@ export function ChatView({ sessionId }: ChatViewProps) {
                     if (interrupted) {
                         accepted();
                     } else {
+                        const cause = classifyChatError(err);
                         settleQueued(isBusyError(err)
                             ? { kind: 'busy' }
-                            : { kind: 'failed', error: classifyChatError(err).text });
+                            : { kind: 'failed', error: withDetail(cause.text, cause.detail) });
                         streamEndedAtRef.current = Date.now();
                         endStopWait();
                         if (streamRafRef.current !== null) {
@@ -1194,7 +1196,9 @@ export function ChatView({ sessionId }: ChatViewProps) {
                     return;
                 }
                 // Plain cause + next step; the raw text stays in the log above.
-                const { kind, text } = classifyChatError(err);
+                const { kind, text: cause, detail } = classifyChatError(err);
+                // The backend's words get their own code block, which reads left to right in any language.
+                const text = detail ? cause + '\n\n' + FENCE + 'text\n' + detail.split(FENCE).join("'''") + '\n' + FENCE : cause;
                 const errorContent = kind === 'stream'
                     ? text
                     : text + '\n\n---\n*Unexpected error?* '
