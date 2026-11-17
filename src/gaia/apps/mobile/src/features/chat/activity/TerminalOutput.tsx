@@ -6,6 +6,7 @@ import { isolate } from '@webui/i18n/registry';
 import { countLines } from '@webui/utils/longContent';
 import * as Clipboard from 'expo-clipboard';
 import { useEffect, useRef, useState } from 'react';
+import { View } from 'react-native';
 
 import { useT } from '@/i18n/useT';
 import { HScroll, Icon, Pressable, Row, Stack, Surface, Text } from '@/ui';
@@ -50,18 +51,24 @@ export function TerminalOutput({ output }: { output: CommandOutput }) {
             <Stack dir="ltr" gap="xs" testID="terminal-output">
                 <Row dir="ltr" gap="sm" justify="between">
                     <Row dir="ltr" gap="xs" flex={1}>
-                        <Stack paddingX="md">
-                            <Row dir="ltr" gap="xs">
-                                <Icon icon={Terminal} size="sm" tone="muted" />
-                                <Text role="caption" tone="muted" weight="medium">
-                                    {t('activity.terminal')}
-                                </Text>
-                            </Row>
-                        </Stack>
+                        <View style={{ flexShrink: 1, minWidth: 0 }}>
+                            <Stack paddingX="md">
+                                <Row dir="ltr" gap="xs">
+                                    <Icon icon={Terminal} size="sm" tone="muted" />
+                                    <View style={{ flexShrink: 1, minWidth: 0 }}>
+                                        <Text role="caption" tone="muted" weight="medium">
+                                            {t('activity.terminal')}
+                                        </Text>
+                                    </View>
+                                </Row>
+                            </Stack>
+                        </View>
                         {output.returnCode !== 0 ? (
-                            <Text role="caption" tone={isError ? 'danger' : 'muted'}>
-                                {isolate(t('activity.exit', { code: output.returnCode }), 'ltr')}
-                            </Text>
+                            <View style={{ flexShrink: 0 }} testID="terminal-exit" accessible accessibilityLabel={t('activity.exit', { code: output.returnCode })}>
+                                <Text role="caption" tone={isError ? 'danger' : 'muted'} numberOfLines={1}>
+                                    {isolate(t.bare('activity.exit', { code: output.returnCode }), 'ltr')}
+                                </Text>
+                            </View>
                         ) : null}
                     </Row>
                     {hasOutput ? (

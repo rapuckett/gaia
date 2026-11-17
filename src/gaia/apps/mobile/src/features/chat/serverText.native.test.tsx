@@ -8,9 +8,10 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { item, type QueuedMessage } from '@webui/utils/messageQueue';
 
-import { GaiaApiError, GaiaNetworkError } from '@/api/errors';
+import { GaiaApiError, GaiaNetworkError, GaiaTurnError } from '@/api/errors';
 import type { Message } from '@/api/client.types';
 import { failureOf, type HeldMessage } from '@/features/composer/composerQueue';
+import { StoppedNote } from '@/features/chat/EndingNotes';
 import { QueuedMessages } from '@/features/composer/QueuedMessages';
 import { createFirstSend } from '@/features/new-chat/firstSend';
 import { describeHttpFailure, translator } from '@/i18n/useT';
@@ -92,5 +93,11 @@ describeNative('server text stays off the sentence in the chat area', () => {
         await flow.submit('hi', () => undefined);
         expect(flow.getState().error).toBe(t('mobileApp.error.httpNoDetail', { status: 500 }));
         expect(flow.getState().errorDetail).toBe(SERVER_TEXT);
+    });
+
+    it('shows an error while stopping as a reason-free sentence with the PC text as a left-to-right detail', async () => {
+        await render(<StoppedNote stop={{ state: 'stopped', error: new GaiaTurnError(SERVER_TEXT) }} />, { wrapper: wrap });
+        expect(screen.getByText(t('mobileApp.chat.stoppedErrorShort'))).toBeTruthy();
+        expect(StyleSheet.flatten(screen.getByText(SERVER_TEXT).props.style)).toMatchObject({ writingDirection: 'ltr' });
     });
 });

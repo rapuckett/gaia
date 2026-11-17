@@ -17,6 +17,7 @@ export interface SheetAction {
     icon?: LucideIcon;
     destructive?: boolean;
     disabled?: boolean;
+    testID?: string;
     onPress: () => void;
 }
 
@@ -45,6 +46,7 @@ export function ActionSheet({ open, onClose, actions, title, message }: ActionSh
                     <Pressable
                         key={a.label}
                         accessibilityLabel={a.label}
+                        testID={a.testID}
                         aria-disabled={!!a.disabled}
                         disabled={a.disabled}
                         onPress={() => {

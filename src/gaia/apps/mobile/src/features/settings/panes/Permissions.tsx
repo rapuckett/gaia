@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import { createContext, useContext, useState } from 'react';
+import { View } from 'react-native';
 
 import { ENDPOINTS } from '@/api/constants';
 import { GaiaApiError } from '@/api/errors';
@@ -105,11 +106,14 @@ export default function Permissions() {
                                                     icon={Ellipsis}
                                                     variant="ghost"
                                                     label={t('row.moreActions', { title: titleOf(r.session_id) })}
+                                                    testID={`perm-chat-menu-${r.session_id}`}
                                                     onPress={() => setMenuFor(r)}
                                                 />
-                                            ) : null}
+                                            ) : (
+                                                <View style={{ width: 44 }} testID="permissions-row-menu-slot" />
+                                            )}
                                         </Row>
-                                        {r.grants.map((g) => (
+                                        {r.grants.map((g, gi) => (
                                             <Stack key={g.key} gap="xs">
                                                 <Divider />
                                                 <Row gap="sm">
@@ -120,6 +124,7 @@ export default function Permissions() {
                                                         variant="ghost"
                                                         size="sm"
                                                         shrink={false}
+                                                        testID={`perm-grant-revoke-${r.session_id}-${gi}`}
                                                         onPress={() => run(revoke.mutateAsync({ sessionId: r.session_id, key: g.key }))}
                                                     />
                                                 </Row>
@@ -141,6 +146,7 @@ export default function Permissions() {
                     <Stack gap="sm">
                         <Button
                             label={t('settings.permissions.turnOn')}
+                            testID="perm-confirm"
                             variant="danger"
                             full
                             onPress={() => {
@@ -161,10 +167,10 @@ export default function Permissions() {
                 title={menuFor ? titleOf(menuFor.session_id) : undefined}
                 actions={[
                     ...(menuFor?.mode === 'full_access'
-                        ? [{ label: t('settings.permissions.turnOff'), onPress: () => run(setChatMode.mutateAsync({ sessionId: menuFor.session_id, mode: 'ask' })) }]
+                        ? [{ label: t('settings.permissions.turnOff'), testID: 'perm-chat-turn-off-full', onPress: () => run(setChatMode.mutateAsync({ sessionId: menuFor.session_id, mode: 'ask' })) }]
                         : []),
                     ...(menuFor && menuFor.grants.length > 1
-                        ? [{ label: t('settings.permissions.revokeAll'), destructive: true, onPress: () => run(revoke.mutateAsync({ sessionId: menuFor.session_id })) }]
+                        ? [{ label: t('settings.permissions.revokeAll'), testID: 'perm-chat-revoke-all', destructive: true, onPress: () => run(revoke.mutateAsync({ sessionId: menuFor.session_id })) }]
                         : []),
                 ]}
             />

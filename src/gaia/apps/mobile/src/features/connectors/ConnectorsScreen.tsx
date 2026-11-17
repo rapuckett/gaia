@@ -397,7 +397,7 @@ function ConnectorTile({
                         title={t('mobileApp.connectors.disconnectConfirm', {
                             name: connector.account_id ? `${connector.display_name} (${connector.account_id})` : connector.display_name,
                         })}
-                        actions={[{ label: t('settings.connectors.disconnect'), icon: Trash2, destructive: true, onPress: () => run('disconnect') }]}
+                        actions={[{ label: t('settings.connectors.disconnect'), icon: Trash2, destructive: true, testID: 'connector-disconnect-confirm', onPress: () => run('disconnect') }]}
                     />
                 </>
             }
@@ -433,6 +433,7 @@ function ConnectorTile({
                             <ChipButton
                                 label={t('settings.connectors.disconnect')}
                                 variant="danger"
+                                testID={`connector-disconnect-${connector.id}`}
                                 disabled={action.isPending}
                                 onPress={() => setConfirmOpen(true)}
                             />
