@@ -77,9 +77,10 @@ function hasGloss(children: ReactNode): boolean {
     return found;
 }
 
-/** A gloss of two or more sentences, or over 40 characters, wraps badly inline, so it gets its own block. */
+/** A gloss that is a sentence (or several), or over 40 characters, wraps badly inline, so it gets its own block. */
 export function isLongGloss(english: string): boolean {
-    return english.length > LONG_GLOSS_LENGTH || /[.!?]\s+\S/.test(english);
+    const sentence = /[.!?]$/.test(english) && english.split(/\s+/).length > 3;
+    return english.length > LONG_GLOSS_LENGTH || sentence || /[.!?]\s+\S/.test(english);
 }
 
 /** The English of a gloss part, without its isolates and brackets. */

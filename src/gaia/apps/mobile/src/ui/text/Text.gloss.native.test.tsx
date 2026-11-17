@@ -31,6 +31,7 @@ describe('isLongGloss', () => {
         expect(isLongGloss('Do this. Then that')).toBe(true);
         expect(isLongGloss('x'.repeat(41))).toBe(true);
         expect(isLongGloss('Add skills.')).toBe(false);
+        expect(isLongGloss('Change this on the PC running GAIA.')).toBe(true);
         expect(isLongGloss(SHORT)).toBe(false);
     });
 });
