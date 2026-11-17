@@ -3995,6 +3995,7 @@ const messages: Messages = {
     'mobileApp.setup.check.title': 'فحص الكمبيوتر لديك',
     'mobileApp.setup.lostContactNoReason': 'انقطع الاتصال بـ GAIA.',
     'mobileApp.setup.pc.step': 'الكمبيوتر لديك',
+    'mobileApp.setup.redownload.body': 'نُزّل {name} لكنه لم يُحمَّل. يحذف GAIA النسخة الموجودة على الكمبيوتر لديك وينزّله من جديد {size}.',
     'mobileApp.settings.pcOnly': 'غيّر هذا من الكمبيوتر الذي يشغّل GAIA.',
     'mobileApp.settings.on': 'مفعّل',
     'mobileApp.settings.off': 'متوقف',
