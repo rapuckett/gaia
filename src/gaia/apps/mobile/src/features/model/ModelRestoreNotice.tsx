@@ -25,8 +25,10 @@ export function ModelRestoreNotice({ onPick = () => openSettings('model'), holdO
     const ok = restore?.status === 'restored';
     const message = restore && restore.status !== 'none' ? restore.message : null;
     const name = active.data?.display_name ?? active.data?.label;
-    // The PC words the sentence; the name inside it must wrap as one unit.
-    const shown = message && name && message.includes(name) ? message.replace(name, keepTogether(name)) : message;
+    // The PC's own sentence stays off ours: it goes on the detail line.
+    const failed = restore?.status === 'failed';
+    const sentence = failed ? t('mobileApp.model.restoreFailed') : ok && name ? t('mobileApp.model.restored', { name: keepTogether(name) }) : message;
+    const detail = sentence === message ? undefined : message;
     const recheck = restore?.status === 'pending' || (restore?.status === 'failed' && !!restore.retry);
     const { refetch } = active;
 
@@ -49,7 +51,8 @@ export function ModelRestoreNotice({ onPick = () => openSettings('model'), holdO
     return (
         <Notice
             tone={ok ? 'info' : 'warning'}
-            message={shown ?? message}
+            message={sentence ?? message}
+            detail={detail ?? undefined}
             action={ok ? undefined : { label: t('startup.pickModel'), onPress: () => { setDismissed(message); onPick(); } }}
             onDismiss={() => setDismissed(message)}
             dismissLabel={t('banner.dismiss')}

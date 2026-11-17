@@ -11,7 +11,7 @@ import type { SetupModelProgress } from '@webui/types';
 
 import { GaiaApiError } from '@/api/errors';
 import { useGpuMemory, useSaveModelChoices, useSetupPlan } from '@/data';
-import { describeError, useLocaleCode, useT } from '@/i18n/useT';
+import { describeError, technicalDetail, useLocaleCode, useT } from '@/i18n/useT';
 import { Button, Notice, Pressable, Row, Spinner, Stack, Text } from '@/ui';
 
 import { NpuNotReady } from '../npu/NpuNotReady';
@@ -95,7 +95,7 @@ export function ModelsScreen({ ctx, close }: { ctx: SetupStepContext; close: () 
     if (!plan?.catalog || !selection) {
         return planQuery.error ? (
             <Stack gap="md">
-                <Notice tone="danger" message={t('setup.models.listFailed', { reason: describeError(planQuery.error, t) })} />
+                <Notice tone="danger" message={t('mobileApp.error.modelListFailed')} detail={technicalDetail(planQuery.error)} />
                 <Row gap="sm" stack>
                     <Button variant="primary" label={t('setup.tryAgain')} onPress={() => void planQuery.refetch()} />
                     <Button variant="secondary" label={t('setup.back')} onPress={close} />

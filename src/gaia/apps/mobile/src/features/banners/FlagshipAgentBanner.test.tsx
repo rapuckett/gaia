@@ -4,6 +4,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import type { ReactNode } from 'react';
+import { StyleSheet } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { FLAGSHIP_AGENT_ID } from '@webui/utils/newTask';
@@ -49,7 +50,9 @@ describe('FlagshipAgentBanner', () => {
     it('shows the PC reason when the install fails, and offers Try again', async () => {
         await mount({ installStatuses: [status({ status: 'failed', error: 'disk full' })] });
         fireEvent.press(await screen.findByText(t('agentNotice.install')));
-        expect(await screen.findByText(t('agentNotice.failed', { error: 'disk full' }))).toBeTruthy();
+        expect(await screen.findByText(t('mobileApp.error.agentInstallFailed'))).toBeTruthy();
+        const detail = screen.getByText('disk full');
+        expect(StyleSheet.flatten(detail.props.style)).toMatchObject({ writingDirection: 'ltr' });
         expect(screen.getByText(t('agentNotice.retry'))).toBeTruthy();
     });
 
