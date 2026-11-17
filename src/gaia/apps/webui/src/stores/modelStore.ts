@@ -21,8 +21,8 @@ interface ModelState {
     restoreNotice: { ok: boolean; message: string } | null;
     /** A model picked while a reply was running; applied when that reply ends. */
     queued: string | null;
-    /** Why applying the queued model failed, shown on the chip. */
-    queueError: string | null;
+    /** The queued model that could not be applied, and the server's reason, shown on the chip. */
+    queueError: { model: string; reason: string } | null;
     /** Friendly names the backend gave, by model id. */
     names: Record<string, string>;
     pickLoad: PickLoad | null;
@@ -196,7 +196,7 @@ export const useModelStore = create<ModelState>((set, get) => ({
         } catch (err) {
             set({
                 queued: null,
-                queueError: `Couldn't switch to ${displayModelName(model)}: ${err instanceof Error ? err.message : String(err)}`,
+                queueError: { model, reason: err instanceof Error ? err.message : String(err) },
             });
         }
     },
@@ -316,14 +316,14 @@ export function inferencePlace(
     if (active?.remote && !(pickIsStale && location?.inference_remote !== undefined)) {
         return {
             remote: true,
-            label: active.provider_name || 'a cloud provider',
+            label: active.provider_name || t.bare('mobileApp.settings.privacy.cloudProvider'),
             description: null,
         };
     }
     if (location?.inference_remote === true) {
         return {
             remote: true,
-            label: location.inference_provider_name || 'a cloud provider',
+            label: location.inference_provider_name || t.bare('mobileApp.settings.privacy.cloudProvider'),
             description: location.inference_description ?? null,
         };
     }
@@ -336,9 +336,6 @@ export function inferencePlace(
     }
     return null;
 }
-
-export const UNKNOWN_PLACE_TITLE =
-    "GAIA can't tell whether this chat is answered on this PC or by a cloud provider, so it isn't claiming either.";
 
 /** Place of inference for the open chat, from the backend's session location and the picked model. */
 export function useInferencePlace(): InferencePlace | null {

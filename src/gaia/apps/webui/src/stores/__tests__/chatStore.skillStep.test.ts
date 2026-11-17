@@ -7,6 +7,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { useChatStore } from '../chatStore';
 import { agentEventToStep } from '../../utils/streamSteps';
+import { stripIsolates } from '../../i18n/registry';
 import type { AgentStep } from '../../types';
 
 const call = (id: number, active: boolean): AgentStep => ({
@@ -22,10 +23,9 @@ describe('addSkillStep', () => {
     beforeEach(() => useChatStore.setState({ agentSteps: [], skillUses: 0 }));
 
     it('maps skill_use to a finished use_skill row naming the skill', () => {
-        expect(skillStep()).toMatchObject({
-            type: 'tool', tool: 'use_skill', detail: 'analyze-recording',
-            narration: 'Using skill: analyze-recording', active: false, success: true,
-        });
+        const step = skillStep();
+        expect(step).toMatchObject({ type: 'tool', tool: 'use_skill', detail: 'analyze-recording', active: false, success: true });
+        expect(stripIsolates(step?.narration ?? '')).toBe('Using skill: analyze-recording');
     });
 
     it('puts the row before the running call, which still gets its result', () => {
