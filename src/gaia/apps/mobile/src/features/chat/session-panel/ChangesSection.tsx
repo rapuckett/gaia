@@ -13,7 +13,7 @@ import { describeErrorWith, useT } from '@/i18n/useT';
 import { Button, Notice, Row, Stack, Text } from '@/ui';
 
 import { ChatChangesReview } from '../changes/ChatChangesReview';
-import { countsText, filesRef, summaryText, totalText, undoneText } from '../changes/changesText';
+import { countsText, filesRef, summaryText, totalText, undoneText, untrackedNotice } from '../changes/changesText';
 import { GitSheet, repoName, type GitKind } from '../changes/GitSheet';
 import { failureReason, failureReasonWith } from '../header/failureText';
 import { PanelSection } from './PanelSection';
@@ -117,14 +117,7 @@ function ChangesBody({ sessionId, live, changes, onUndone }: { sessionId: string
                 ))}
             </Stack>
             {changes.incomplete ? (
-                <Notice
-                    tone="warning"
-                    role="note"
-                    message={
-                        untrackedWarning(changes.untracked, t, { inChat: true, undo: 'chg.undoAll' }) +
-                        groups.map((g) => `\n${g.title}${g.entries.length > 1 ? `: ${g.entries.map((e) => `${e.label || 'No description'}${e.count > 1 ? ` ×${e.count}` : ''}`).join('; ')}` : ''}`).join('')
-                    }
-                />
+                <Notice tone="warning" role="note" {...untrackedNotice(untrackedWarning(changes.untracked, t, { inChat: true, undo: 'chg.undoAll' }), groups)} />
             ) : null}
             <Row gap="sm" wrap stack>
                 <Button size="sm" variant="secondary" label={t('chg.review')} onPress={() => setReviewing(true)} testID="changes-review" />
