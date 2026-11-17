@@ -5,6 +5,8 @@ import { fireEvent, render, screen } from '@testing-library/react-native';
 import { Platform } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { useConnectionStore } from '@/state/connection';
+
 import { ConnectorsGallery, type ConnectorScene } from './ConnectorsGallery';
 
 // The real provider waits on font files the test environment doesn't have.
@@ -26,6 +28,8 @@ const mount = (state: ConnectorScene) =>
     );
 
 describeNative('/dev/connectors scenes', () => {
+    afterEach(() => useConnectionStore.setState({ connection: null }));
+
     it('many shows the search field', async () => {
         await mount('many');
         expect(await screen.findByLabelText('Search connectors')).toBeTruthy();
@@ -54,6 +58,13 @@ describeNative('/dev/connectors scenes', () => {
         await fireEvent.press(await screen.findByTestId('personalize-linear'));
         expect(await screen.findByText("Couldn't start personalization.")).toBeTruthy();
         expect(screen.getByText('The keyring is locked.')).toBeTruthy();
+    });
+
+    it('personalizeMcp shows the PC-only line and the connector name, no button', async () => {
+        await mount('personalizeMcp');
+        expect(await screen.findByTestId('personalize-pc-only-linear')).toBeTruthy();
+        expect(screen.getAllByText(/Linear/).length).toBeGreaterThan(0);
+        expect(screen.queryByTestId('personalize-linear')).toBeNull();
     });
 
     it.each([
