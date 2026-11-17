@@ -1656,11 +1656,11 @@ describe('SetupScreen: a Lemonade the user already runs', () => {
         await screen.findByRole('form', { name: FORM });
         fireEvent.click(screen.getByRole('button', { name: 'Having trouble?' }));
         fireEvent.click(screen.getByRole('button', { name: 'Checks log' }));
-        await screen.findByText(/Waiting for you to choose which Lemonade GAIA uses/);
+        await screen.findByText(tEn('setup.checks.log.waitingChoice'), { exact: false });
         const text = document.querySelector('.setup-log-pre')?.textContent ?? '';
-        expect(text).toMatch(/^This PC: AMD Radeon 8060S/);
+        expect(text.startsWith(tEn('setup.checks.log.pc', { hardware: 'AMD Radeon 8060S', more: '' }).trimEnd())).toBe(true);
         expect(text).not.toMatch(/\?/);
-        expect(text).not.toMatch(/No model server answering yet/);
+        expect(text).not.toContain(tEn('setup.checks.log.serverDown'));
     });
 
     it('reads the device and the models again from their server', async () => {
