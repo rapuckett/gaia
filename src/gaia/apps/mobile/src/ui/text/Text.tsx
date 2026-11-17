@@ -36,6 +36,8 @@ export interface TextProps {
     ellipsize?: 'tail' | 'middle';
     strike?: boolean;
     underline?: boolean;
+    /** Equal-width digits, so numbers in a column line up. */
+    tabular?: boolean;
     /** Inline code: mono on the code surface. */
     code?: boolean;
     /** Writing direction of this run; explicit `ltr`/`rtl` never move the line, `auto` aligns the block to its content. Content whose language differs from the UI's. `auto` follows the first strong letter of a string child. */
@@ -111,6 +113,7 @@ export function Text({
     ellipsize,
     strike,
     underline,
+    tabular,
     code,
     dir: dirProp,
     onPress,
@@ -144,6 +147,7 @@ export function Text({
     }
     if (!nested || tone) style.color = toneColor(colors, tone ?? 'primary');
     if (italic) style.fontStyle = 'italic';
+    if (tabular) style.fontVariant = ['tabular-nums'];
     if (code) {
         style.backgroundColor = colors.bgCode;
         style.color = colors.textCode;

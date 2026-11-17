@@ -9,7 +9,7 @@ import { isolate } from '@webui/i18n/registry';
 import { useDirection, useT } from '@/i18n/useT';
 import { openPcFile } from '@/features/files/openPcFile';
 import { useFileScope } from '@/features/files/scopeContext';
-import { contentDir, Divider, HScroll, Icon, Notice, Row, Stack, Surface, Text } from '@/ui';
+import { contentDir, Divider, HScroll, Icon, Notice, NumberMarker, Row, Stack, Surface, Text } from '@/ui';
 import { Check, Square } from '@/ui/icons';
 
 import { CodeBlock } from './CodeBlock';
@@ -85,7 +85,7 @@ function renderList(node: Extract<RootContent, { type: 'list' }>, ctx: RenderCon
                 const checked = item.checked;
                 const marker =
                     checked === null || checked === undefined ? (
-                        <Text role="prose">{node.ordered ? isolate(`${first + i}.`, 'ltr') : '•'}</Text>
+                        node.ordered ? <NumberMarker role="prose" suffix>{isolate(`${first + i}.`, 'ltr')}</NumberMarker> : <Text role="prose">•</Text>
                     ) : (
                         <Icon icon={checked ? Check : Square} size="sm" tone={checked ? 'accent' : 'muted'} />
                     );
