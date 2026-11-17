@@ -97,6 +97,15 @@ describeNative('PairingFlow', () => {
         expect(screen.queryByTestId('pairing-up')).toBeNull();
     });
 
+    it('leaves back unhandled while another drawer route is in front, even with an exit set', async () => {
+        setPairingService(createFakePairingService());
+        const onExit = jest.fn();
+        await render(<PairingFlow initialStep="how" onExit={onExit} backActive={false} />, { wrapper: wrap });
+        await screen.findByText(t('mobileApp.pairing.how.title'));
+        expect(await pressBack()).toBe(false);
+        expect(onExit).not.toHaveBeenCalled();
+    });
+
     it('leaves back to the system when nothing opened it', async () => {
         setPairingService(createFakePairingService());
         await render(<PairingFlow initialStep="how" />, { wrapper: wrap });

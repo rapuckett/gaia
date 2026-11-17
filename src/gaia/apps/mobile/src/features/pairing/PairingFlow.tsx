@@ -35,10 +35,12 @@ export interface PairingFlowProps {
     onScan?: () => void;
     /** Where the first step goes back to when it was opened from another screen; its Back button and Android's back both use it. */
     onExit?: () => void;
+    /** False while a drawer route keeps this flow mounted behind another screen, so its Android back stays out of the way. */
+    backActive?: boolean;
 }
 
 /** First launch: welcome, how to pair, paste a link or code, wait for Allow, and the two ways it can fail. */
-export function PairingFlow({ initialStep = 'welcome', onPaired, onScan, onExit }: PairingFlowProps) {
+export function PairingFlow({ initialStep = 'welcome', onPaired, onScan, onExit, backActive = true }: PairingFlowProps) {
     const t = useT();
     const setConnection = useConnectionStore((s) => s.setConnection);
     const removedFrom = useConnectionStore((s) => s.removedFrom);
@@ -167,6 +169,7 @@ export function PairingFlow({ initialStep = 'welcome', onPaired, onScan, onExit 
 
     // Android's back walks the flow one step back, as its own back controls do; on the first step it leaves, or goes to `onExit`.
     useBackStep(() => {
+        if (!backActive) return false;
         if (typeof view === 'object') {
             if (view.at === 'confirm') {
                 if (busy) {
