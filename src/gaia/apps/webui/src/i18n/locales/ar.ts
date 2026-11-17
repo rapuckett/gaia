@@ -3999,6 +3999,7 @@ const messages: Messages = {
     'mobileApp.mem.whenHint': 'السنة-الشهر-اليوم والوقت، مثل 2026-11-20 09:00',
     'mobileApp.logs.reportNote': 'سجلات الإعداد وسجلات GAIA وتفاصيل كمبيوترك في ملف واحد. تُحذف المفاتيح والأسرار الأخرى، لكن قد تقتبس السجلات من محادثاتك، فراجعه قبل إرفاقه بالبلاغ.',
     'mobileApp.connectors.checkPcOnly': 'يشغّل الكمبيوتر الخادم للتحقق منه، لذا شغّل «فحص» من الكمبيوتر الذي يشغّل GAIA.',
+    'mobileApp.connectors.personalizeFailedShort': 'تعذّر بدء التخصيص.',
     'mobileApp.connectors.disconnectConfirm': 'فصل {name}؟ سيُحذف تسجيل الدخول أو الرمز المحفوظ من الكمبيوتر، ولا يمكن إعداده من جديد إلا هناك.',
     'mobileApp.connectors.connectPcOnly': 'يُكمل الكمبيوتر تسجيل الدخول هذا ويحتفظ بالحساب. اربطه من الكمبيوتر.',
     'mobileApp.connectors.codeExpired': 'انتهت صلاحية الرمز قبل اكتمال تسجيل الدخول. سجّل الدخول برمز مرة أخرى للحصول على رمز جديد.',
