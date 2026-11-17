@@ -75,7 +75,7 @@ const messages: Messages = {
     'mobileAccess.starting': 'جارٍ بدء النفق...',
     'mobileAccess.connecting': 'جارٍ الاتصال...',
     'mobileAccess.qrUnavailable': 'رمز QR غير متاح في هذا الإصدار. استخدم الرابط أدناه بدلًا منه.',
-    'mobileAccess.qrThemeFailed': 'رمز QR غير متاح — لم يتم تحميل السمة. استخدم الرابط أدناه بدلًا منه.',
+    'mobileAccess.qrThemeFailed': 'رمز QR غير متاح — لم يتم تحميل المظهر. استخدم الرابط أدناه بدلًا منه.',
     'mobileAccess.qrDrawFailed': 'تعذّر رسم رمز QR. استخدم الرابط أدناه بدلًا منه.',
     'mobileAccess.urlLabel': 'رابط الهاتف',
     'mobileAccess.copyUrl': 'نسخ الرابط',
