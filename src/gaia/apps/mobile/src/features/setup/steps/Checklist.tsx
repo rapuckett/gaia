@@ -90,16 +90,22 @@ export function SelectionSummary({ plan, selection }: { plan: SetupPlan; selecti
         <Card accessibilityLabel={t('setup.summary.label')}>
             <Stack gap="sm">
                 <Row gap="sm" justify="between">
-                    <Text role="label" tone="secondary">{t('setup.summary.download')}</Text>
+                    <Stack flex={1}>
+                        <Text role="label" tone="secondary">{t('setup.summary.download')}</Text>
+                    </Stack>
                     <Text role="label" dir="ltr">{downloadGb == null ? t('setup.summary.sizeUnknown') : formatSize(downloadGb)}</Text>
                 </Row>
                 <Row gap="sm" justify="between">
-                    <Text role="label" tone="secondary">{drive ? `${t('setup.summary.freeOn')} ${ltrIn(locale, drive)}` : t('setup.summary.free')}</Text>
+                    <Stack flex={1}>
+                        <Text role="label" tone="secondary">{drive ? `${t('setup.summary.freeOn')} ${ltrIn(locale, drive)}` : t('setup.summary.free')}</Text>
+                    </Stack>
                     <Text role="label" dir="ltr">{freeGb == null ? t('setup.summary.freeUnknown') : formatSize(freeGb)}</Text>
                 </Row>
                 {afterGb != null && !short ? (
                     <Row gap="sm" justify="between">
-                        <Text role="label" tone="secondary">{t('setup.summary.after')}</Text>
+                        <Stack flex={1}>
+                            <Text role="label" tone="secondary">{t('setup.summary.after')}</Text>
+                        </Stack>
                         <Text role="label" dir="ltr">{formatSize(Math.max(0, afterGb))}</Text>
                     </Row>
                 ) : null}
