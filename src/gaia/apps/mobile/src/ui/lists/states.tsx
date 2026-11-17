@@ -69,7 +69,7 @@ export function ErrorState({ title, message, detail, action, onRetry }: StatePro
                     </Text>
                 ) : null}
                 {detail ? (
-                    <Text role="caption" tone="muted" dir="ltr">
+                    <Text role="caption" tone="muted" dir="ltr" align="center">
                         {detail}
                     </Text>
                 ) : null}
