@@ -13,7 +13,7 @@ const pc = (id: string, port: number, pairedAt?: string): PairedPc => {
     const origin = `https://192.168.1.20:${port}`;
     return { id, name: 'air', pairedAt, connection: { baseUrl: origin, pcId: id, routes: [{ kind: 'home', origin }] } };
 };
-const caption = (p: PairedPc, all: PairedPc[]) => stripIsolates(pcCaption(p, all, t));
+const caption = (p: PairedPc, all: PairedPc[]) => stripIsolates(pcCaption(p, all, t)).replace(/\u00A0/g, ' ');
 
 describe('pcCaption', () => {
     it('shows the pairing date alone when no other PC was paired that day', () => {
@@ -44,13 +44,13 @@ describe('pcCaption', () => {
     it('wraps the date in a first-strong isolate in both halves of the Arabic caption', () => {
         const a = pc('a', 4243, '2020-11-10T09:00:00');
         const text = pcCaption(a, [a], translator('ar'));
-        expect(text.match(/\u2068[^\u2068\u2069]*\u2069/g)).toHaveLength(2);
-        expect(text).toContain('\u2068Nov 10, 2020\u2069');
+        expect(text.match(/\u2068\u2068[^\u2068\u2069]*\u2069\u2069/g)).toHaveLength(2);
+        expect(text).toContain('\u2068\u2068Nov\u00A010,\u00A02020\u2069\u2069');
     });
 
     it('writes the Arabic half in Arabic and its English gloss with the English date', () => {
         const a = pc('a', 4243, '2020-11-10T09:00:00');
-        const text = stripIsolates(pcCaption(a, [a], translator('ar')));
+        const text = stripIsolates(pcCaption(a, [a], translator('ar'))).replace(/\u00A0/g, ' ');
         expect(text).toContain('(Paired Nov 10, 2020)');
         expect(text).toMatch(/نوفمبر/);
     });

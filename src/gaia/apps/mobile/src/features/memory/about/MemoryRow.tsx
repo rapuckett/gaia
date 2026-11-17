@@ -3,7 +3,7 @@
 
 import { useState } from 'react';
 
-import { ref, type MessageKey, type Params, type Say } from '@webui/i18n/registry';
+import { keepTogether, ref, type MessageKey, type Params, type Say } from '@webui/i18n/registry';
 import { dueInputValue, dueLabel, relativeDay, sourceKey, type AboutYouItem } from '@webui/utils/memoryFormat.core';
 
 import { useEditMemory } from '@/data';
@@ -26,6 +26,17 @@ interface MemoryRowProps extends Pick<MemoryPaneProps, 'notify'> {
     onForget: (item: AboutYouItem) => void;
 }
 
+/** A formatted date stays whole when the line wraps; the "yesterday" and "3 days ago" refs are prose. */
+const whenLabel = (when: ReturnType<typeof relativeDay>): string => (typeof when === 'string' ? keepTogether(when) : (when as unknown as string));
+
+/** The small line under a memory: where it came from and when, each half in its own language. */
+export function memoryMeta(item: AboutYouItem, t: Translate): string {
+    const source = ref(sourceKey(item.source));
+    return relativeDay(item.updated_at, t) === null
+        ? t(sourceKey(item.source))
+        : t.compose((say, code) => say('mem.about.meta', { source, when: whenLabel(relativeDay(item.updated_at, translator(code))) }));
+}
+
 /** One memory: its text (hidden when sensitive until tapped), what it came from and when, and Edit and Forget. */
 export function MemoryRow({ item, forgetting, onForget, notify }: MemoryRowProps) {
     const t = useT();
@@ -38,11 +49,7 @@ export function MemoryRow({ item, forgetting, onForget, notify }: MemoryRowProps
     const reminder = item.category === 'reminder';
     const due = item.due_at ? dueLabel(item.due_at, new Date(), t) : null;
     const dueText = item.due_at ? t.compose((say, code) => dueLabel(item.due_at as string, new Date(), sayAs(say, code))?.text ?? '') : null;
-    const source = ref(sourceKey(item.source));
-    const meta =
-        relativeDay(item.updated_at, t) === null
-            ? t(sourceKey(item.source))
-            : t.compose((say, code) => say('mem.about.meta', { source, when: relativeDay(item.updated_at, translator(code)) as string }));
+    const meta = memoryMeta(item, t);
     const name = hidden ? t.bare('mem.about.sensitiveMemory') : item.content;
 
     const open = () => {
