@@ -3,6 +3,7 @@
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, render } from '@testing-library/react-native';
+import type { ComponentProps } from 'react';
 import { Dimensions } from 'react-native';
 
 import { AppDrawer } from './AppDrawer';
@@ -13,7 +14,7 @@ jest.mock('@/features/chats/ChatDrawerContent', () => ({ ChatDrawerContent: () =
 
 function mount(width: number, navigation: { closeDrawer: jest.Mock }) {
     Dimensions.set({ window: { width, height: 800, scale: 2, fontScale: 1 } });
-    const props = { navigation, state: { routeNames: [] } } as never;
+    const props = { navigation, state: { routeNames: [] } } as unknown as ComponentProps<typeof AppDrawer>;
     const ui = (
         <QueryClientProvider client={new QueryClient()}>
             <AppDrawer {...props} />
