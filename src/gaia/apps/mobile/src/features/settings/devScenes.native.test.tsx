@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
-import { Platform, StyleSheet } from 'react-native';
+import { Platform } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import SettingsGalleryRoute from '@/app/dev/settings';
@@ -36,12 +36,12 @@ describeNative('/dev/settings', () => {
     });
 
     it('nav-back-link flashes its target row on arrival', async () => {
+        // The jest reanimated mock drops animated styles, so the fade-out call is what shows the flash started.
+        const fade = jest.spyOn(jest.requireMock('react-native-reanimated'), 'withTiming');
         mockState = 'nav-back-link';
         await mount();
-        await waitFor(() => {
-            const overlay = screen.getByTestId('settings-flash-cloud-key', { includeHiddenElements: true });
-            expect(StyleSheet.flatten(overlay.props.style).opacity).toBeGreaterThan(0);
-        }, { timeout: 4000 });
+        await waitFor(() => expect(fade).toHaveBeenCalledWith(0, { duration: 1600 }), { timeout: 4000 });
+        fade.mockRestore();
     });
 
     it.each([

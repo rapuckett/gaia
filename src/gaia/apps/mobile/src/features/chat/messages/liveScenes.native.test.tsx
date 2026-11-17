@@ -171,7 +171,7 @@ describeNative('chat, new-chat, composer and permission scenes', () => {
     it('reply-errors shows each kind\'s own classified text', async () => {
         await open('messages', { state: 'reply-errors' });
         const expected: Record<string, string> = {
-            stream: t('chatError.liveViewLost', { n: 4 }),
+            stream: t('mobileApp.error.streamBroke'),
             context: t('chatError.context'),
             model_server: t('chatError.modelServer'),
             connection: t('chatError.connection'),
