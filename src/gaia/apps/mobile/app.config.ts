@@ -58,6 +58,8 @@ export default function appConfig(): ExpoConfig {
         version: '0.1.0',
         scheme: id,
         userInterfaceStyle: 'automatic',
+        // iOS permission prompts and the app name in Arabic; Expo writes ar.lproj/InfoPlist.strings from it.
+        locales: { ar: './locales/ios/ar.json' },
         ios: {
             bundleIdentifier: iosId,
             supportsTablet: true,

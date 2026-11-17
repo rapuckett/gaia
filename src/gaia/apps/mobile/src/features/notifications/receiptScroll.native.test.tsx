@@ -10,7 +10,7 @@ import { translator } from '@/i18n/useT';
 import { useNotificationStore } from '@/state/notifications';
 import { ThemeProvider } from '@/ui';
 
-import { NOTIFICATION_SCENES } from './devScenes';
+import { NOTIFICATION_SCENES, resolveSceneItems } from './devScenes';
 import { NotificationCenterScreen } from './NotificationCenterScreen';
 
 jest.mock('expo-font', () => ({ useFonts: () => [true, null] }));
@@ -21,7 +21,7 @@ const t = translator('en');
 let scrollTo: jest.Mock;
 
 const mount = async (receiptId?: string) => {
-    const items = NOTIFICATION_SCENES['policy-alert'].items ?? [];
+    const items = resolveSceneItems(NOTIFICATION_SCENES['policy-alert'], t);
     useNotificationStore.setState({ items, filter: 'policy_alert' });
     await render(
         <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 800 }, insets: { top: 0, left: 0, right: 0, bottom: 0 } }}>
@@ -61,5 +61,5 @@ describeNative('notification center receipt scroll', () => {
 });
 
 function items0(): string {
-    return NOTIFICATION_SCENES['policy-alert'].items!.find((n) => n.receiptId)!.receiptId!;
+    return resolveSceneItems(NOTIFICATION_SCENES['policy-alert'], t).find((n) => n.receiptId)!.receiptId!;
 }
