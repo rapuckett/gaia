@@ -1,0 +1,9 @@
+{
+  "platforms": ["apple", "android"],
+  "apple": {
+    "modules": ["GaiaAppLanguageModule"]
+  },
+  "android": {
+    "modules": ["ai.amd.gaia.applanguage.GaiaAppLanguageModule"]
+  }
+}
