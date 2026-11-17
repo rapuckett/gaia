@@ -64,10 +64,12 @@ export interface ToolStepRowProps {
     /** Wall-clock ms, for a running call's timer. */
     now: number;
     testID?: string;
+    /** Test ID of the folded thought's text inside the open row. */
+    thoughtTestID?: string;
 }
 
 /** One tool call: a line that opens to its tool, arguments and output. */
-export function ToolStepRow({ step, awaitingUser = false, now, testID }: ToolStepRowProps) {
+export function ToolStepRow({ step, awaitingUser = false, now, testID, thoughtTestID }: ToolStepRowProps) {
     const t = useT();
     const ensureModel = useEnsureModel();
     const [open, setOpen] = useState(false);
@@ -116,7 +118,7 @@ export function ToolStepRow({ step, awaitingUser = false, now, testID }: ToolSte
                 <Stack gap="sm">
                     {step.thought?.detail ? (
                         <Section label={thoughtLabel(false, undefined, t)}>
-                            <Text role="label" dir="auto" tone="secondary">
+                            <Text role="label" dir="auto" tone="secondary" testID={thoughtTestID}>
                                 {step.thought.detail.trim()}
                             </Text>
                         </Section>
