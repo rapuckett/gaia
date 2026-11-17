@@ -3,6 +3,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { groupSessionsByRecency, groupSessionsForList, sessionRowStatus, type LiveRuns } from '../sessionGrouping';
+import { tEn } from '../../i18n/translator';
 import type { Session } from '../../types';
 
 // Local time, so day boundaries match the function's calendar-day math in any TZ.
@@ -33,7 +34,7 @@ describe('groupSessionsByRecency', () => {
             at('ninety-days', daysAgo(90)),
         ], NOW);
 
-        expect(groups.map((g) => [g.label, g.sessions.map((s) => s.id)])).toEqual([
+        expect(groups.map((g) => [tEn(g.label), g.sessions.map((s) => s.id)])).toEqual([
             ['Today', ['today-early']],
             ['Yesterday', ['yesterday-late']],
             ['Previous 7 days', ['three-days']],
@@ -47,7 +48,7 @@ describe('groupSessionsByRecency', () => {
             at('seven', daysAgo(7, 0)),
             at('thirty', daysAgo(30, 0)),
         ], NOW);
-        expect(groups.map((g) => g.label)).toEqual(['Previous 7 days', 'Previous 30 days']);
+        expect(groups.map((g) => tEn(g.label))).toEqual(['Previous 7 days', 'Previous 30 days']);
     });
 
     it('orders newest first within a bucket', () => {
@@ -61,12 +62,12 @@ describe('groupSessionsByRecency', () => {
 
     it('drops empty buckets and handles no chats', () => {
         expect(groupSessionsByRecency([], NOW)).toEqual([]);
-        expect(groupSessionsByRecency([at('a', daysAgo(2))], NOW).map((g) => g.label)).toEqual(['Previous 7 days']);
+        expect(groupSessionsByRecency([at('a', daysAgo(2))], NOW).map((g) => tEn(g.label))).toEqual(['Previous 7 days']);
     });
 
     it('files an unparseable timestamp under Older', () => {
         const groups = groupSessionsByRecency([at('bad', 'not a date')], NOW);
-        expect(groups).toEqual([{ label: 'Older', sessions: [expect.objectContaining({ id: 'bad' })] }]);
+        expect(groups.map((g) => [tEn(g.label), g.sessions.map((s) => s.id)])).toEqual([['Older', ['bad']]]);
     });
 
     it('does not mutate the input order', () => {
@@ -84,7 +85,7 @@ describe('groupSessionsForList (#5221)', () => {
             { ...at('waiting-pinned', NOW), pinned: true }, { ...at('pinned', NOW), pinned: true }, at('plain', NOW),
         ];
         const groups = groupSessionsForList(sessions, { ...idle, awaiting: { 'waiting-pinned': 'permission' } }, { now: NOW });
-        expect(groups.map((g) => [g.label, g.sessions.map((s) => s.id)])).toEqual([
+        expect(groups.map((g) => [tEn(g.label), g.sessions.map((s) => s.id)])).toEqual([
             ['Needs you', ['waiting-pinned']],
             ['Pinned', ['pinned']],
             ['Today', ['plain']],

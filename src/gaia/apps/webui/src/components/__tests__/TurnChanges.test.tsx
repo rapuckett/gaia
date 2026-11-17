@@ -9,6 +9,7 @@ import { TurnChanges } from '../TurnChanges';
 import { DiffCard } from '../render/DiffCard';
 import { UndoHistorySettings } from '../settings/UndoHistorySettings';
 import { resetTurnChangesCache } from '../../hooks/useTurnChanges';
+import { isolate, stripIsolates } from '../../i18n/registry';
 import { tEn } from '../../i18n/translator';
 import * as api from '../../services/api';
 import { useChatStore } from '../../stores/chatStore';
@@ -204,13 +205,13 @@ describe('TurnChanges', () => {
         });
         render(<TurnChanges sessionId="s1" messageId={7} />);
         fireEvent.click(await screen.findByRole('button', { name: new RegExp(tEn('chg.review')) }));
-        expect(await screen.findByRole('dialog', { name: 'Review changes' })).toBeInTheDocument();
+        expect(await screen.findByRole('dialog', { name: tEn('chg.review') })).toBeInTheDocument();
         await waitFor(() => expect(diff).toHaveBeenCalledWith('s1', 't1'));
         expect(await screen.findByText('-old')).toHaveClass('render-diff__line--removed');
         expect(screen.getByText('+new')).toHaveClass('render-diff__line--added');
-        expect(screen.getByText(/Binary file: 0 → 120 bytes/)).toBeInTheDocument();
-        expect(screen.getByText(/Too large to show: 9000000 → 9000100 bytes/)).toBeInTheDocument();
-        expect(screen.getAllByText('Edited')).toHaveLength(2);
+        expect(screen.getByText(stripIsolates(tEn('mobileApp.changes.binary', { before: isolate('0', 'ltr'), after: isolate('120', 'ltr') })), { normalizer: stripIsolates })).toBeInTheDocument();
+        expect(screen.getByText(stripIsolates(tEn('mobileApp.changes.tooLarge', { before: isolate('9000000', 'ltr'), after: isolate('9000100', 'ltr') })), { normalizer: stripIsolates })).toBeInTheDocument();
+        expect(screen.getAllByText(tEn('chg.edited'))).toHaveLength(2);
     });
 });
 
