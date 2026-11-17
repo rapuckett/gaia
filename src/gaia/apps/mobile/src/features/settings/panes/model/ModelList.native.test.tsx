@@ -13,6 +13,7 @@ import { createFakeClient } from '@/api/fake';
 import { GaiaClientProvider } from '@/data';
 import { ThemeProvider } from '@/ui';
 import { SheetHost } from '@/ui/overlays/SheetHost';
+import { translator } from '@/i18n/useT';
 
 import { ModelList } from './ModelList';
 import { SeedOpenDetails } from './ModelRow';
@@ -99,6 +100,31 @@ describeNative('Model list', () => {
         const line = screen.getByText(url);
         expect(StyleSheet.flatten(line.props.style).writingDirection).toBe('ltr');
         expect(screen.getByText('From').props.children).not.toContain(url);
+        queryClient.clear();
+    });
+
+    it("keeps the PC's reason a model can't run off the sentence, on its own left-to-right line", async () => {
+        const client = createFakeClient({});
+        const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+        const wrap = ({ children }: { children: ReactNode }) => (
+            <QueryClientProvider client={queryClient}>
+                <GaiaClientProvider client={client}>
+                    <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 800 }, insets: { top: 0, left: 0, right: 0, bottom: 0 } }}>
+                        <ThemeProvider>
+                            <SheetHost>{children}</SheetHost>
+                        </ThemeProvider>
+                    </SafeAreaProvider>
+                </GaiaClientProvider>
+            </QueryClientProvider>
+        );
+        const models = [model('Have-GGUF', { downloaded: true }), model('Never-GGUF', { available: false, unavailable_reason: 'needs 64 GB' })];
+        await render(
+            <ModelList provider="local" remote={false} models={models} activeModel="Have-GGUF" switching={null} onUse={jest.fn()} onRefresh={jest.fn()} />,
+            { wrapper: wrap },
+        );
+        await fireEvent.press(screen.getByLabelText(translator('en')('mobileApp.settings.model.groupUnavailable')));
+        expect((await screen.findByText("Can't run here")).props.children).not.toContain('64 GB');
+        expect(StyleSheet.flatten(screen.getByText('needs 64 GB').props.style)).toMatchObject({ writingDirection: 'ltr' });
         queryClient.clear();
     });
 });

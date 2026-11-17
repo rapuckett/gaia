@@ -11,7 +11,10 @@ import type { ActiveModel, ProviderModel, ProviderSummary } from '@/api/client.t
 import { createFakeClient } from '@/api/fake';
 import { GaiaClientProvider } from '@/data/GaiaClientProvider';
 
-import { ModelMenu } from './ModelMenu';
+import { GaiaApiError } from '@/api/errors';
+import { translator as appTranslator } from '@/i18n/useT';
+
+import { ModelMenu, switchAfterFailed } from './ModelMenu';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -123,5 +126,14 @@ describe('model menu cloud consent', () => {
         expect(byId(r, `model-row-${CLOUD}`)).toBeUndefined();
         expect(client.selected).toEqual([]);
         await done();
+    });
+});
+
+describe('switchAfterFailed', () => {
+    it("keeps the PC's reason off the sentence and hands it over as the detail line", () => {
+        const failed = switchAfterFailed('Qwen3-4B-GGUF', new GaiaApiError(500, 'out of memory'), appTranslator('en'));
+        expect(failed.message).not.toContain('out of memory');
+        expect(failed.message).toContain('Qwen3-4B-GGUF');
+        expect(failed.detail).toBe('500 out of memory');
     });
 });

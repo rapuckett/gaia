@@ -102,7 +102,10 @@ export function ModelRow({ model: m, label, current, remote, busy, onUse, onDown
                 {m.npu_problems?.length ? (
                     <NpuNotReady problems={m.npu_problems} disabled={anyBusy} onReady={onNpuRecheck} />
                 ) : m.unavailable_reason ? (
-                    <Text role="caption" tone="muted">{t('settings.model.cantRun', { reason: m.unavailable_reason })}</Text>
+                    <Stack gap="xs">
+                        <Text role="caption" tone="muted">{t('mobileApp.settings.model.cantRunNoReason')}</Text>
+                        <Text role="caption" tone="muted" dir="ltr">{m.unavailable_reason}</Text>
+                    </Stack>
                 ) : null}
                 {progress ? (
                     <Stack gap="xs">

@@ -20,7 +20,7 @@ import {
 import { ScreenHeader } from '@/features/nav/ScreenHeader';
 import { ChipButton } from '@/features/schedules/ChipButton';
 import { SettingsGroup } from '@/features/skills/SettingsGroup';
-import { describeError, describeErrorWith, describeHttpFailure, useDirection, useT } from '@/i18n/useT';
+import { describeErrorWith, describeHttpFailure, useDirection, useT } from '@/i18n/useT';
 import {
     ActionSheet,
     EmptyState,
@@ -316,14 +316,14 @@ function ConnectorTile({
     const t = useT();
     const [menuOpen, setMenuOpen] = useState(false);
     const [confirmOpen, setConfirmOpen] = useState(false);
-    const [message, setMessage] = useState<{ tone: 'info' | 'danger'; text: string } | null>(null);
+    const [message, setMessage] = useState<{ tone: 'info' | 'danger'; text: string; detail?: string } | null>(null);
     const action = useConnectorServerAction(connector.id, (outcome) => onDisconnected(disconnectNotice(outcome, connector, t)));
     const google = connector.id === GOOGLE_CONNECTOR_ID;
     const server = connector.type === 'mcp_server';
     const paused = connector.enabled === false;
 
     // A result shown inside the tile opens it, so a menu pick is never silent.
-    function show(next: { tone: 'info' | 'danger'; text: string }) {
+    function show(next: { tone: 'info' | 'danger'; text: string; detail?: string }) {
         setMessage(next);
         if (!expanded) onToggle();
     }
@@ -341,7 +341,10 @@ function ConnectorTile({
         setMessage(null);
         if (kind === 'disconnect') onDisconnected(null);
         action.mutate(kind, {
-            onError: (e) => show({ tone: 'danger', text: describeError(e, t) }),
+            onError: (e) => {
+                const { text, detail } = describeHttpFailure(e, t);
+                show({ tone: 'danger', text, detail });
+            },
         });
     }
 
@@ -407,7 +410,7 @@ function ConnectorTile({
                     ) : server ? (
                         <>
                             <ChipButton label={t('settings.key.connect')} variant="accent" onPress={() => refuse('configurePcOnly')} />
-                            {message ? <Notice tone={message.tone} message={message.text} /> : null}
+                            {message ? <Notice tone={message.tone} message={message.text} detail={message.detail} /> : null}
                         </>
                     ) : !connector.configurable && connector.oauth_setup_fields.length > 0 ? (
                         <Notice tone="info" message={t('mobileApp.connectors.setupPcOnly', { name: connector.display_name })} />
@@ -420,7 +423,7 @@ function ConnectorTile({
                                     {connectChip}
                                 </Row>
                             )}
-                            {message ? <Notice tone={message.tone} message={message.text} /> : null}
+                            {message ? <Notice tone={message.tone} message={message.text} detail={message.detail} /> : null}
                         </>
                     )
                 ) : (
@@ -441,7 +444,7 @@ function ConnectorTile({
                                 <Text role="label" tone="muted">{t('mobileApp.connectors.clientPcOnly')}</Text>
                             </Stack>
                         ) : null}
-                        {message ? <Notice tone={message.tone} message={message.text} /> : null}
+                        {message ? <Notice tone={message.tone} message={message.text} detail={message.detail} /> : null}
                         <ConnectorAccess
                             connector={connector}
                             serverSwitch={
@@ -475,7 +478,7 @@ function ConnectorAccess({ connector, serverSwitch }: { connector: ConnectorRow;
     const change = useChangeConnectorAccess(connector.id);
 
     const failure = agents.error ?? grants.error ?? activations.error;
-    if (failure) return <Notice tone="danger" message={describeError(failure, t)} />;
+    if (failure) return <Notice tone="danger" message={describeHttpFailure(failure, t).text} detail={describeHttpFailure(failure, t).detail} />;
     if (!agents.data || !grants.data || !activations.data) return null;
 
     const list = agents.data.agents;
@@ -578,7 +581,7 @@ function ConnectorAccess({ connector, serverSwitch }: { connector: ConnectorRow;
                     onValueChange={(on) => (on ? serverSwitch.onEnableRefused() : serverSwitch.onDisable())}
                 />
             ) : null}
-            {change.error ? <Notice tone="danger" message={describeError(change.error, t)} /> : null}
+            {change.error ? <Notice tone="danger" message={describeHttpFailure(change.error, t).text} detail={describeHttpFailure(change.error, t).detail} /> : null}
         </Stack>
     );
 }

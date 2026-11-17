@@ -4,6 +4,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import type { ReactNode } from 'react';
+import { StyleSheet } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { keepTogether } from '@webui/i18n/registry';
@@ -58,5 +59,18 @@ describe('ModelRestoreNotice', () => {
     it('shows nothing when there is nothing to report', async () => {
         await mount({ status: 'none', message: null });
         expect(screen.queryByTestId('model-restore-notice')).toBeNull();
+    });
+
+    it("keeps the PC's failure text off the sentence, on its own left-to-right line", async () => {
+        await mount({ status: 'failed', message: 'API key is missing.' });
+        const sentence = await screen.findByText(t('mobileApp.model.restoreFailed'));
+        expect(sentence.props.children).not.toContain('API key');
+        expect(StyleSheet.flatten(screen.getByText('API key is missing.').props.style)).toMatchObject({ writingDirection: 'ltr' });
+    });
+
+    it("a restore that worked names the model in our sentence and keeps the PC's sentence on the detail line", async () => {
+        await mount({ status: 'restored', message: 'Put back the saved model.' });
+        expect(await screen.findByText(t('mobileApp.model.restored', { name: keepTogether('Gemma 4 E4B') }))).toBeTruthy();
+        expect(StyleSheet.flatten(screen.getByText('Put back the saved model.').props.style)).toMatchObject({ writingDirection: 'ltr' });
     });
 });

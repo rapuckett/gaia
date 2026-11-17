@@ -7,7 +7,7 @@ import { useState, type ReactNode } from 'react';
 import type { ConnectorDeviceAuthResponse, ConnectorRow } from '@/api/client.types';
 import { useDeviceSignIn } from '@/data';
 import { ChipButton } from '@/features/schedules/ChipButton';
-import { describeError, useT } from '@/i18n/useT';
+import { describeHttpFailure, useT } from '@/i18n/useT';
 import { openLinkFromPress } from '@/platform/openLink';
 import { Button, Ltr, Notice, Row, Spinner, Stack, Surface, Text } from '@/ui';
 import { Check, Copy, ExternalLink } from '@/ui/icons';
@@ -46,7 +46,7 @@ export function DeviceCodeSignIn({
                     </Row>
                     {signIn.state === 'starting' ? <Spinner size="sm" /> : null}
                     {signIn.state === 'expired' ? <Notice tone="danger" message={t('mobileApp.connectors.codeExpired')} /> : null}
-                    {signIn.state === 'failed' ? <Notice tone="danger" message={describeError(signIn.error, t)} /> : null}
+                    {signIn.state === 'failed' ? <Notice tone="danger" message={describeHttpFailure(signIn.error, t).text} detail={describeHttpFailure(signIn.error, t).detail} /> : null}
                     {signIn.state === 'ended' ? <Notice tone="danger" {...signInEndedNotice(signIn, t)} /> : null}
                 </Stack>
             );
