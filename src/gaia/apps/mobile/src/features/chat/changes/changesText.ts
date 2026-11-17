@@ -6,6 +6,7 @@ import { GaiaApiError } from '@/api/errors';
 import { pluralCategory } from '@/i18n/plural';
 import { describeFailureWith, type Translate } from '@/i18n/useT';
 import { isMessageKey, isolate, ref, type MessageKey, type Say } from '@webui/i18n/registry';
+import type { UntrackedGroup } from '@webui/utils/untrackedWork';
 
 /** "4 files" as a message param, so each language words its own count. */
 export const filesRef = (n: number) => ref(n === 1 ? 'chg.files.one' : 'chg.files.other', { n });
@@ -65,4 +66,15 @@ export function reviewHeadingText(changes: SessionChanges, t: Translate): string
             total: say('mobileApp.changes.chat.total', { files: filesPart(say, code, files), counts: countsText(additions, deletions) }),
         }),
     );
+}
+
+/** The incomplete-undo warning: our sentence and group titles as the message, the PC's descriptions as the LTR detail. */
+export function untrackedNotice(warning: string, groups: UntrackedGroup[]): { message: string; detail?: string } {
+    const lines = groups
+        .map((g) => g.entries.filter((e) => e.label).map((e) => (e.count > 1 && g.entries.length > 1 ? `${e.label} \u00d7${e.count}` : e.label)).join('; '))
+        .filter(Boolean);
+    return {
+        message: [warning, ...groups.map((g) => g.title)].join('\n'),
+        detail: lines.length ? lines.join('\n') : undefined,
+    };
 }

@@ -13,7 +13,7 @@ const sh = (detail: string): UntrackedWork => ({ kind: 'shell', detail, paths: [
 describe('groupUntracked', () => {
     it('merges identical entries and keeps the order they ran in', () => {
         const groups = groupUntracked([sh('npm test'), py('count errors'), py('count errors'), sh('npm test')], tEn);
-        expect(groups.map((g) => g.title)).toEqual(['Command: npm test ×2', 'Python: count errors ×2']);
+        expect(groups.map((g) => g.title)).toEqual(['Command ×2', 'Python snippet ×2']);
         expect(groups.map((g) => g.count)).toEqual([2, 2]);
     });
 
@@ -26,9 +26,13 @@ describe('groupUntracked', () => {
         ]);
     });
 
+    it('never puts an entry description in the title', () => {
+        expect(groupUntracked([sh('npm test')], tEn)[0].title).toBe('Command');
+    });
+
     it('names an entry without a description by its kind', () => {
         expect(groupUntracked([py('')], tEn)[0].title).toBe('Python snippet');
-        expect(stripIsolates(groupUntracked([{ kind: 'something_new', detail: 'x', paths: [] }], tEn)[0].title)).toBe('something_new: x');
+        expect(stripIsolates(groupUntracked([{ kind: 'something_new', detail: 'x', paths: [] }], tEn)[0].title)).toBe('something_new');
     });
 
     it('cuts a long entry to one line and keeps the full text', () => {

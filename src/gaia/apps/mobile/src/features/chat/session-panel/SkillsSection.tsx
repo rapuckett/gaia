@@ -38,9 +38,9 @@ function SkillList({ skills, error }: { skills: ActiveSkill[] | undefined; error
     const t = useT();
     if (isPcRefusal(error)) return <PcOnlyNotice testID="skills-pc-only" />;
     if (error) {
-        const failure = capabilityFailure(error, t, 'skills.listError');
+        const failure = capabilityFailure(error, t, 'skills.listError', 'mobileApp.skills.listErrorShort');
         if (failure.notRunning) return <Text tone="secondary">{t('skills.notRunning')}</Text>;
-        return <Notice tone="danger" message={failure.text} />;
+        return <Notice tone="danger" message={failure.text} detail={failure.detail} />;
     }
     if (!skills) return <Text tone="muted">{t('sp.checking')}</Text>;
     if (skills.length === 0) return <Text tone="secondary">{t('skills.empty')}</Text>;

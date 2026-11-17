@@ -29,3 +29,13 @@ export function failureNotice(
     if (detail) return { text: t(keys.noReason, params), detail };
     return { text: t.compose((say) => say(keys.withReason, { ...params, error: failureReasonWith(error, say) })) };
 }
+
+/** `failureNotice` shaped as `<Notice>` props. */
+export function failureNoticeProps(
+    error: unknown,
+    t: Translate,
+    keys: { withReason: MessageKey; noReason: MessageKey },
+): { message: string; detail?: string } {
+    const { text, detail } = failureNotice(error, t, keys);
+    return { message: text, detail };
+}

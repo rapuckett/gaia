@@ -11,7 +11,7 @@ import { useMemo } from 'react';
 
 import { useT } from '@/i18n/useT';
 import { IconButton, Pressable, Row, Stack } from '@/ui';
-import { Check, Copy, Ellipsis, Square, Volume2 } from '@/ui/icons';
+import { Check, Copy, Ellipsis, RotateCcw, Square, Volume2 } from '@/ui/icons';
 import { ReadAloudButton, ReadAloudErrorNotice, ReadAloudNote, useReadAloud } from '@/features/audio/ReadAloud';
 import { readAloudId } from '@/features/audio/useChatReadAloud';
 
@@ -99,6 +99,9 @@ export function AssistantBubble({ message, streaming = false, latencyMs, context
                         size="sm"
                         onPress={actions.copy}
                     />
+                    {actions.regenerate ? (
+                        <IconButton icon={RotateCcw} label={t('msg.tryAgain')} size="sm" onPress={actions.regenerate} testID="regenerate" />
+                    ) : null}
                     <IconButton icon={Ellipsis} label={t('msg.actions')} size="sm" onPress={actions.openSheet} />
                 </Row>
             ) : null}

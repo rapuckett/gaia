@@ -5,6 +5,7 @@
 
 import type { MessageKey } from '../i18n/registry';
 import type { Message } from '../types';
+import { isErrorContent } from './answerErrors.core';
 import { CUT_OFF_NOTICE_TEXT } from './constants';
 
 /** How a turn that never finished its answer ended. */
@@ -51,4 +52,13 @@ export function turnEnding(content: string, stopState: Message['stopState'], fai
     if (stopState) return 'stopped';
     if (splitCutOff(content)) return 'interrupted';
     return failed ? 'failed' : undefined;
+}
+
+/** Whether the latest assistant answer offers Try again (ask its question afresh): it finished, and no turn, comparison or retired agent is in the way. */
+export function canRegenerate(
+    message: Pick<Message, 'role' | 'content' | 'stopState' | 'failed'>,
+    state: { latest: boolean; busy: boolean; comparing: boolean; retiredAgent: boolean },
+): boolean {
+    return message.role === 'assistant' && state.latest && !state.busy && !state.comparing && !state.retiredAgent
+        && !turnEnding(message.content, message.stopState, message.failed === true) && !isErrorContent(message.content);
 }
