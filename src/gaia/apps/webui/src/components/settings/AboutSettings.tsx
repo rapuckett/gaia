@@ -18,7 +18,7 @@ const LINKS: Array<{ label: MessageKey; href: string }> = [
 export function AboutSettings() {
     const t = useT();
     const openSettings = useChatStore((s) => s.openSettings);
-    // A name and a number, the same in every language.
+    // english: the product name and a version number, the same in every language
     const versionLabel = `GAIA v${__APP_VERSION__}`;
     const [copied, setCopied] = useState(false);
     const [copyError, setCopyError] = useState<string | null>(null);

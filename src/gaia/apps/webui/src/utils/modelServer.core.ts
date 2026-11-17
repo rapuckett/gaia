@@ -13,7 +13,6 @@ const BACKEND_LABELS: Record<string, string> = {
     metal: 'Metal',
     cpu: 'CPU',
     npu: 'NPU',
-    remote: 'Remote (cloud)',
 };
 
 export const OWNER_LABELS: Record<string, MessageKey> = {
@@ -22,20 +21,21 @@ export const OWNER_LABELS: Record<string, MessageKey> = {
     remote: 'settings.server.ownerRemote',
 };
 
-export function backendLabel(backend: string | null | undefined): string {
-    if (!backend) return 'unknown';
+export function backendLabel(backend: string | null | undefined, t: Translate): string {
+    if (!backend) return t('settings.advanced.unknown');
+    if (backend === 'remote') return t('settings.server.backendRemote');
     return BACKEND_LABELS[backend] ?? backend;
 }
 
 /** "Vulkan", "Vulkan (Lemonade's default)", "Remote (cloud)", or "unknown". */
-export function runsOn(model: LoadedModelInfo | null | undefined): string {
-    if (!model) return 'unknown';
-    const label = backendLabel(model.backend);
-    return model.backend_source === 'lemonade_default' ? `${label} (Lemonade's default)` : label;
+export function runsOn(model: LoadedModelInfo | null | undefined, t: Translate): string {
+    if (!model) return t('settings.advanced.unknown');
+    const label = backendLabel(model.backend, t);
+    return model.backend_source === 'lemonade_default' ? t('settings.server.lemonadeDefault', { backend: label }) : label;
 }
 
-export function ctxLabel(ctx: number | null | undefined): string {
-    return ctx ? `${Math.round(ctx / 1024)}K tokens` : 'unknown';
+export function ctxLabel(ctx: number | null | undefined, t: Translate): string {
+    return ctx ? t('settings.ctx.tokens', { size: `${Math.round(ctx / 1024)}K` }) : t('settings.advanced.unknown');
 }
 
 const MODEL_KIND_LABELS: Record<string, MessageKey> = {
@@ -62,8 +62,8 @@ export function modelKindLabel(model: LoadedModelInfo, t: Translate): string {
 /** "Name · Vulkan · 64K tokens"; `displayName` turns a model id into what the person sees. */
 export function loadedModelDetail(model: LoadedModelInfo, t: Translate, displayName: (id: string) => string): string {
     const name = model.name ? displayName(model.name) : t.bare('settings.server.unknownModel');
-    const detail = [name, runsOn(model)];
-    if (model.backend !== 'remote' && model.ctx_size) detail.push(ctxLabel(model.ctx_size));
+    const detail = [name, runsOn(model, t)];
+    if (model.backend !== 'remote' && model.ctx_size) detail.push(ctxLabel(model.ctx_size, t));
     return detail.join(' · ');
 }
 

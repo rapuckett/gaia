@@ -63,10 +63,12 @@ export function resolvePreScanPayload(data: unknown): unknown {
 // SECURITY: row actions pass the opaque message id only. Sender and subject come from email headers and are
 // untrusted; putting them in a chat message would let a sender inject instructions into the model.
 export function archiveCommand(item: PreScanItem): string {
+    // english: sent to the model as the chat message that runs the action
     return `Archive message id ${item.message_id}.`;
 }
 
 export function replyCommand(item: PreScanItem): string {
+    // english: sent to the model as the chat message that runs the action
     return `Draft a reply to message id ${item.message_id}.`;
 }
 

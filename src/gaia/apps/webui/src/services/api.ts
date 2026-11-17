@@ -169,9 +169,7 @@ export async function loadModelAskingFirst(
         return true;
     } catch (err) {
         if (!(err instanceof ApiError) || err.httpStatus !== 409) throw err;
-        if (!confirmLoad(`${err.detail}
-
-Load ${modelName} anyway?`)) return false;
+        if (!confirmLoad(`${err.detail}\n\n${getT()('settings.server.loadAnyway', { name: modelName })}`)) return false;
         await loadModel(modelName, ctxSize, true);
         return true;
     }
@@ -610,6 +608,7 @@ export const QUEUED_IDLE_MS = 10 * 60_000;
 export const SEND_HEADER_TIMEOUT_MS = 90_000;
 /** When a send not yet started by the backend begins showing as waiting. */
 export const SEND_WAITING_NOTICE_MS = 3_000;
+// english: wire text that liveStatus.ts matches whole and shows in the chosen language
 export const SEND_WAITING_NOTICE_TEXT = 'Waiting for GAIA to start this answer…';
 /** An attach replays at once; a slower answer means the backend is stuck or unreachable. */
 export const ATTACH_HEADER_TIMEOUT_MS = 30_000;
@@ -1052,6 +1051,7 @@ export function uploadMedia(file: File, onProgress: (percent: number) => void, s
             if (event.lengthComputable) onProgress(Math.floor((event.loaded / event.total) * 100));
         };
         request.onerror = () => reject(new ApiError(getFriendlyError(0, 'network error'), 0, 'network error', null));
+        // english: callers match the AbortError name; this message is never shown
         request.onabort = () => reject(new DOMException('Upload cancelled', 'AbortError'));
         signal?.addEventListener('abort', () => request.abort());
         request.onload = () => {

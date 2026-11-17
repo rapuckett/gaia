@@ -92,6 +92,7 @@ function play(r: Run, blob: Blob): Promise<void> {
             resolve();
         };
         audio.onended = done;
+        // english: the browser's own media-error code, shown on the detail line under the translated message
         audio.onerror = () => reject(new PlaybackError(audio.error?.message || `media error ${audio.error?.code ?? ''}`.trim()));
         r.abort.signal.addEventListener('abort', done);
         audio.play().catch(reject);

@@ -140,9 +140,10 @@ function SessionRow({ session, active, phone, moved, focusPin, status, queuePlac
     const unread = !!session.unread && !active;
     // Done is news only until read; failed stays until the next turn.
     const dot = status === 'done' && !unread ? null : status;
-    const place = queuePlace > 0 ? `${ordinal(queuePlace)} in line` : null;
+    // English counts places as "1st"; Arabic says "رقم 1".
+    const place = queuePlace > 0 ? t.compose((say, code) => say('row.inLinePlace', { n: code === 'en' ? ordinal(queuePlace) : String(queuePlace) })) : null;
     const label = dot ? [t(STATUS_LABEL[dot]), place].filter(Boolean).join(', ') : undefined;
-    const waiting = failed > 0 ? `${failed} not sent` : unsent > 0 ? `${unsent} to send` : null;
+    const waiting = failed > 0 ? t('row.notSent', { n: failed }) : unsent > 0 ? t('row.toSend', { n: unsent }) : null;
     const note = [place, waiting].filter(Boolean).join(' · ');
     const snippetText = snippet ? `${snippet.before}${snippet.match}${snippet.after}` : null;
     const title = <span className="sb-row-title" dir="auto">{titleMatch ? <Highlight parts={titleMatch} /> : session.title}</span>;

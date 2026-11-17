@@ -114,7 +114,7 @@ export function ModelServerPanel() {
     // A saved choice GAIA no longer offers stays visible so it can be switched off.
     if (preferred && !choices.includes(preferred)) choices.push(preferred);
     const selected = preferred ?? info.default_backend ?? null;
-    const installable = available.filter((b) => b.state === 'installable').map((b) => backendLabel(b.name));
+    const installable = available.filter((b) => b.state === 'installable').map((b) => backendLabel(b.name, t));
     const chatIsLocalLlamacpp = !!chat?.name && chat.recipe === 'llamacpp';
 
     return (
@@ -131,12 +131,12 @@ export function ModelServerPanel() {
                     value={chat?.name ? displayModelName(chat.name) : t('settings.advanced.noneLoaded')}
                     title={chat?.name ?? undefined}
                 />
-                {chat && <Row label={t('settings.server.runsOn')} value={runsOn(chat)} />}
-                {chat && chat.backend !== 'remote' && <Row label={t('settings.advanced.context')} value={ctxLabel(chat.ctx_size)} />}
+                {chat && <Row label={t('settings.server.runsOn')} value={runsOn(chat, t)} />}
+                {chat && chat.backend !== 'remote' && <Row label={t('settings.advanced.context')} value={ctxLabel(chat.ctx_size, t)} />}
                 <Row
                     label={t('settings.advanced.embedding')}
                     value={info.embedding_model?.name
-                        ? `${info.embedding_model.name} · ${runsOn(info.embedding_model)}`
+                        ? `${info.embedding_model.name} · ${runsOn(info.embedding_model, t)}`
                         : t('settings.advanced.noneLoaded')}
                 />
                 {(info.loaded_models ?? []).map((model, index) => (
@@ -171,7 +171,7 @@ export function ModelServerPanel() {
                                     onClick={() => { if (name !== selected) void choose(name); }}
                                 >
                                     {saving === name ? <Loader2 size={12} className="spin" /> : null}
-                                    {backendLabel(name)}
+                                    {backendLabel(name, t)}
                                 </button>
                             ))}
                         </RadioGroup>

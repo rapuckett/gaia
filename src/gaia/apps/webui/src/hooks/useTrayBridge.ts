@@ -6,6 +6,7 @@ import { useChatStore } from '../stores/chatStore';
 import { useNotificationStore } from '../stores/notificationStore';
 import { buildTrayActivity, type TrayActivityInput } from '../utils/trayActivity';
 import { log } from '../utils/logger';
+import { getT } from '../i18n/useT';
 import type { TrayCommand } from '../types/agent';
 
 interface TrayBridgeActions {
@@ -42,6 +43,7 @@ export function useTrayBridge(actions: TrayBridgeActions): void {
                 liveStatus: chat.liveStatus,
                 livePhase: chat.livePhase,
                 notifications: useNotificationStore.getState().notifications,
+                untitledChat: getT()('docs.untitledChat'),
             };
             // Streamed text changes the store every frame; skip when nothing the tray reads moved.
             const prev = lastInput;

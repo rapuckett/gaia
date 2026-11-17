@@ -46,7 +46,7 @@ export function VersionPicker({ onClose, manualInstall = false }: VersionPickerP
     useEffect(() => {
         const bridge = getUpdaterBridge();
         if (!bridge) {
-            setView({ kind: 'error', message: "Couldn't reach GitHub to list releases — check your connection; you can still download installers from the Releases page." });
+            setView({ kind: 'error', message: t('update.picker.githubUnreachable') });
             return;
         }
 
@@ -60,7 +60,7 @@ export function VersionPicker({ onClose, manualInstall = false }: VersionPickerP
                 }
             })
             .catch(() => {
-                setView({ kind: 'error', message: "Couldn't reach GitHub to list releases — check your connection; you can still download installers from the Releases page." });
+                setView({ kind: 'error', message: t('update.picker.githubUnreachable') });
             });
     }, []);
 

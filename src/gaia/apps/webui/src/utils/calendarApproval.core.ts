@@ -143,6 +143,7 @@ export function visibleWith(kept: ReadonlySet<string>, value: string, multiline:
 }
 
 /** `HIDDEN_NOTE` plus what `calendar_tools.py` adds to it; a Python test keeps them equal. */
+// english: must equal the backend's note, which the approval card compares against
 const UNSEEN_NOTE = "This text holds characters that don't show. Those that hide or reorder text " +
     'appear as [U+XXXX]; ideograph variant marks are kept as written. They are saved as written.';
 
