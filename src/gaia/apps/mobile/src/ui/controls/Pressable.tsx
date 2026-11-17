@@ -16,6 +16,8 @@ export const PRESSABLE_MIN_SIZE = 48;
 
 /** Android shows press feedback as the Material ripple, bounded to the Pressable (a rounded parent clips it); iOS and web a highlight. */
 export const RIPPLE = Platform.OS === 'android';
+// The ripple draws over the label, so it is a light state layer of the text color, as the tint tokens are.
+const RIPPLE_ALPHA = 0.12;
 
 export interface PressState {
     pressed: boolean;
@@ -99,7 +101,7 @@ export function Pressable({
             aria-selected={ariaSelected}
             testID={testID}
             hitSlop={hitSlop}
-            android_ripple={RIPPLE ? { color: colors.bgActive, borderless: false, foreground: true } : undefined}
+            android_ripple={RIPPLE ? { color: colors.textPrimary, alpha: RIPPLE_ALPHA, borderless: false, foreground: true } : undefined}
             onLayout={inline ? (e) => setWidth(e.nativeEvent.layout.width) : undefined}
             style={({ pressed }) => ({
                 minWidth: inline ? undefined : minSize,
