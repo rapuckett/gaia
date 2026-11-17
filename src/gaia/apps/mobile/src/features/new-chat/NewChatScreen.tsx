@@ -288,6 +288,7 @@ export function NewChatScreen({ onOpen, onChooseDocuments, initialText = '', pro
                         />
                         <Disclosure
                             title={t('newChat.details')}
+                            headerTestID="new-chat-details"
                             open={detailsOpen}
                             onToggle={() => setDetailsOpen((v) => !v)}
                         >

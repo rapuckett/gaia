@@ -55,10 +55,11 @@ export function MemoryScreen({ onBack, onOpenChat, initialTab = 'about' }: Memor
     };
 
     const actions: SheetAction[] = [
-        { label: t('mem.refresh'), onPress: () => void pullToRefresh() },
+        { label: t('mem.refresh'), testID: 'memory-action-refresh', onPress: () => void pullToRefresh() },
         ...MAINTENANCE_ACTIONS.map((action) => ({
             label: t(MAINTENANCE_LABELS[action][running === action ? 'busy' : 'idle']),
             disabled: action === 'refreshSystemContext' && systemContextRefused,
+            testID: `memory-action-${action}`,
             onPress: () => run(action),
         })),
     ];
