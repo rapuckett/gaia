@@ -51,7 +51,7 @@ export function SmallButton({ label, accessibilityLabel, icon, variant = 'defaul
             >
                 <Row gap="xs" justify="center">
                     {icon ? <Icon icon={icon} size="sm" tone={tone} /> : null}
-                    <Text role={accent ? 'ui' : 'caption'} weight={accent ? 'semibold' : 'medium'} tone={tone} numberOfLines={largeText ? undefined : 1} compact>
+                    <Text role={accent ? 'ui' : 'caption'} weight={accent ? 'semibold' : 'medium'} tone={tone} numberOfLines={largeText ? undefined : 1} compact glossInline>
                         {label}
                     </Text>
                 </Row>
