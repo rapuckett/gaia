@@ -97,6 +97,8 @@ export default function appConfig(): ExpoConfig {
                 { microphonePermission: MICROPHONE_USE, enableBackgroundPlayback: true, enableBackgroundRecording: false },
             ],
             'expo-background-task',
+            // Without the system's contrast scrim, the transparent button bar takes the style GAIA's theme sets.
+            ['expo-navigation-bar', { enforceContrast: false }],
             ['./plugins/withCleartextHosts', { hosts: dev ? DEV_HTTP_HOSTS : [] }],
             './plugins/withBackupExclusions',
             ['./plugins/withRelayDomain', { domain: relayDomain || null }],
