@@ -47,6 +47,8 @@ const WRITE = prompt('write', {
     risk: 'write',
 });
 const PATH = prompt('path', { tool: PATH_ACCESS_TOOL, toolArgs: { path: '/Users/alex/Documents/Team Docs', kind: 'folder' } });
+const CALENDAR = (id: string, tool: string, toolArgs: Record<string, unknown>) =>
+    prompt(id, { tool: `calendar/${tool}`, toolLabel: 'changing your calendar', toolArgs, alwaysScope: `calendar/${tool}` });
 const LONG_ARGS = Object.fromEntries(Array.from({ length: 20 }, (_, i) => [`option_${i + 1}`, `value ${i + 1} for a long call`]));
 
 interface Fixture {
@@ -96,6 +98,36 @@ function useFixtures(): Fixture[] {
                         },
                         summary: '~/Projects/notes/plan.txt',
                         alwaysScope: 'edit_file on plan.txt',
+                    }),
+                },
+            },
+            {
+                id: 'calendar-create',
+                label: 'Calendar: create an event, two people notified',
+                props: {
+                    prompt: CALENDAR('cal-create', 'create_calendar_event', {
+                        title: 'Quarterly review', start: '2026-11-20T15:00:00-08:00', end: '2026-11-20T16:00:00-08:00', calendar_account: 'avery@example.com',
+                        location: 'Room 4', description: 'Walk through the Q3 numbers.', notify_attendees: ['ada@example.com', 'grace@example.com'],
+                    }),
+                },
+            },
+            {
+                id: 'calendar-update',
+                label: 'Calendar: update an event',
+                props: {
+                    prompt: CALENDAR('cal-update', 'update_calendar_event', {
+                        expected_title: 'Quarterly review', expected_start: '2026-11-20T15:00:00-08:00', calendar_account: 'avery@example.com',
+                        new_title: 'Q3 review', new_start: '2026-11-21T10:00:00-08:00', new_end: '2026-11-21T11:00:00-08:00', new_location: 'Room 7',
+                        notify_attendees: [],
+                    }),
+                },
+            },
+            {
+                id: 'calendar-cancel',
+                label: 'Calendar: cancel an event, one person notified',
+                props: {
+                    prompt: CALENDAR('cal-cancel', 'cancel_calendar_event', {
+                        expected_title: 'Quarterly review', expected_start: '2026-11-20T15:00:00-08:00', calendar_account: 'avery@example.com', notify_attendees: ['ada@example.com'],
                     }),
                 },
             },
