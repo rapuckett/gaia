@@ -6,6 +6,7 @@
 
 import { act, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { durationWordsFor } from '../../utils/agentActivity.core';
 import { AgentActivity, stepsSummary, thoughtLabel, toolRowText, type ActivityRow } from '../AgentActivity';
 import { stripIsolates } from '../../i18n/registry';
 import { readsAs } from '../../test/readsAs';
@@ -91,6 +92,10 @@ describe('thought label', () => {
         [false, 400, 'فكّر (Thought)'],
     ])('live %s, %s ms', (live, ms, label) => {
         expect(plain(thoughtLabel(live, ms, ar))).toBe(label);
+    });
+
+    it('spells the duration in Arabic on the desktop too', () => {
+        expect(plain(thoughtLabel(false, 70_000, ar, durationWordsFor(ar)))).toContain('1 د 10 ث');
     });
 });
 

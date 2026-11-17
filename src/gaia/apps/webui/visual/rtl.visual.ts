@@ -333,9 +333,28 @@ const audit = (page: Page): Promise<string[]> =>
             const icon = button.querySelector(':scope > svg');
             if (!icon || !shown(button) || !button.textContent?.trim()) continue;
             const iconBox = icon.getBoundingClientRect();
-            const range = document.createRange();
-            range.selectNodeContents(button);
-            const gaps = [...range.getClientRects()]
+            // A label cut by its own overflow keeps laying out its hidden text; only the visible part can touch.
+            const visibleRects: { left: number; right: number }[] = [];
+            const words = document.createTreeWalker(button, NodeFilter.SHOW_TEXT);
+            for (let node = words.nextNode(); node; node = words.nextNode()) {
+                if (!node.textContent?.trim()) continue;
+                let clipLeft = -Infinity;
+                let clipRight = Infinity;
+                for (let up = node.parentElement; up && up !== button.parentElement; up = up.parentElement) {
+                    if (getComputedStyle(up).overflowX === 'visible') continue;
+                    const box = up.getBoundingClientRect();
+                    clipLeft = Math.max(clipLeft, box.left);
+                    clipRight = Math.min(clipRight, box.right);
+                }
+                const range = document.createRange();
+                range.selectNodeContents(node);
+                for (const r of range.getClientRects()) {
+                    const left = Math.max(r.left, clipLeft);
+                    const right = Math.min(r.right, clipRight);
+                    if (right > left) visibleRects.push({ left, right });
+                }
+            }
+            const gaps = visibleRects
                 .filter((r) => r.left >= iconBox.right - 1 || r.right <= iconBox.left + 1)
                 .map((r) => Math.max(r.left - iconBox.right, iconBox.left - r.right));
             if (gaps.length && Math.min(...gaps) < 3) problems.push(`icon touches its label: ${label(button)}`);

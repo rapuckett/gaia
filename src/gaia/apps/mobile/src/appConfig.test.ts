@@ -3,6 +3,7 @@
 
 import type { ExpoConfig } from 'expo/config';
 
+import { DEVELOPMENT_SCHEME } from '@/features/dev/devGallery';
 import { LOCALES } from '@webui/i18n/registry';
 
 import appConfig, { readIosBundleId, readAppEnv, type AppEnv } from '../app.config';
@@ -42,6 +43,11 @@ describe('app config', () => {
             if (saved === undefined) delete process.env.GAIA_IOS_BUNDLE_ID;
             else process.env.GAIA_IOS_BUNDLE_ID = saved;
         }
+    });
+
+    it('gives the development build the scheme a gallery build checks for', () => {
+        expect(configFor('development').scheme).toBe(DEVELOPMENT_SCHEME);
+        expect(configFor('production').scheme).not.toBe(DEVELOPMENT_SCHEME);
     });
 
     it('refuses to load without a known APP_ENV', () => {

@@ -396,6 +396,15 @@
     color: var(--danger);
 }
 
+/* Muted text and its gloss fall under 4.5:1 on the selected row's fill. */
+.sb-row.is-active .sb-row-queue:not(.is-failed) {
+    color: var(--text-secondary);
+}
+
+.sb-row .sb-row-queue .i18n-gloss.i18n-gloss {
+    color: inherit;
+}
+
 .sb-group.is-needs-you .sb-group-label {
     color: var(--accent-yellow);
 }

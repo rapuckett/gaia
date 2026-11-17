@@ -44,7 +44,7 @@ import { log } from '../utils/logger';
 import { StepResult } from './LongContent';
 import { isMessageKey, ref, type MessageKey } from '../i18n/registry';
 import {
-    FILTER_MIN_TOOL_ROWS, matchesStepFilter, MCP_OUTPUT_PREVIEW_LINES, SKILL_USE_TOOLS, consolidateSteps, failureText, foldThoughts, thoughtLabel,
+    durationWordsFor, FILTER_MIN_TOOL_ROWS, matchesStepFilter, MCP_OUTPUT_PREVIEW_LINES, SKILL_USE_TOOLS, consolidateSteps, failureText, foldThoughts, thoughtLabel,
     formatElapsed, formatToolLatency, compactNarration, argRows, getToolLabels, isKept, isTurnError, isWarning, say, shownWhenDone, stepsSummary, thoughtDurations,
     toTimeline, toolRowText,
     type ActivityRow, type PlanItemStatus, type TimelineItem, type ToolLabels,
@@ -404,7 +404,7 @@ function FlowThought({ step, live, durationMs, now }: { step: AgentStep; live: b
                 aria-expanded={open}
             >
                 {live ? <Loader2 size={13} className="flow-tool-spinner" /> : <Brain size={13} className="flow-tool-icon" />}
-                <span>{thoughtLabel(live, live ? now - step.timestamp : durationMs, t)}</span>
+                <span>{thoughtLabel(live, live ? now - step.timestamp : durationMs, t, durationWordsFor(t))}</span>
                 <ChevronRight size={12} className={`flow-tool-chevron ${open ? 'expanded' : ''}`} />
             </button>
             {open && <div className="flow-thought-hacker">{text}</div>}
@@ -587,7 +587,7 @@ function FlowToolCard({ step, isExpanded, onToggle, now, awaitingUser = false, s
                 <div className="flow-tool-detail">
                     {step.thought?.detail && (
                         <div className="flow-tool-thought">
-                            <span className="detail-section-label">{thoughtLabel(false, thoughtMs, t)}</span>
+                            <span className="detail-section-label">{thoughtLabel(false, thoughtMs, t, durationWordsFor(t))}</span>
                             <div className="flow-thought-hacker">{step.thought.detail.trim()}</div>
                         </div>
                     )}
