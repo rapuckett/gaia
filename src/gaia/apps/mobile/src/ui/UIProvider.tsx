@@ -30,9 +30,9 @@ function Frame({ children }: { children: ReactNode }) {
         <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.bgPrimary }}>
             <SafeAreaProvider>
                 <KeyboardProvider>
-                    {/* Both bars follow GAIA's theme, not the phone's; a `dark` navigation bar has light buttons. */}
+                    {/* Both bars follow GAIA's theme, not the phone's; the navigation bar's style names its buttons' color. */}
                     <StatusBar barStyle={scheme === 'dark' ? 'light-content' : 'dark-content'} />
-                    {Platform.OS === 'android' ? <NavigationBar style={scheme} /> : null}
+                    {Platform.OS === 'android' ? <NavigationBar style={scheme === 'dark' ? 'light' : 'dark'} /> : null}
                     <View style={{ flex: 1 }} {...dirProp(direction)}>
                         <SheetHost>{children}</SheetHost>
                     </View>
