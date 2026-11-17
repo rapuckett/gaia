@@ -86,6 +86,7 @@ export function TextField({
     const uiRtl = useDirection() === 'rtl';
     // Typed text sets its own side, like a bubble; secrets and empty fields follow the UI.
     const rtl = secureTextEntry ? uiRtl : contentDir(value, uiRtl ? 'rtl' : 'ltr') === 'rtl';
+    const valueRtl = url && !value ? uiRtl : false;
     const [focused, setFocused] = useState(false);
     const [revealed, setRevealed] = useState(false);
     const canReveal = !!secureTextEntry && !!revealable;
@@ -169,8 +170,10 @@ export function TextField({
                     fontFamily: fontFamily({ weight: 'regular', mono: false, display: false }),
                     fontSize: size,
                     lineHeight,
-                    // A web address stays on the typed text's side.
-                    ...(url ? { textAlign: 'auto' as const } : { textAlign: inputAlign(rtl), writingDirection: rtl ? ('rtl' as const) : ('ltr' as const) }),
+                    // A web address types LTR; its empty placeholder follows the UI.
+                    ...(url
+                        ? { textAlign: inputAlign(valueRtl), writingDirection: valueRtl ? ('rtl' as const) : ('ltr' as const) }
+                        : { textAlign: inputAlign(rtl), writingDirection: rtl ? ('rtl' as const) : ('ltr' as const) }),
                     ...(focused && !error && !bare ? { boxShadow: `0 0 0 3px ${colors.accentRing}` } : null),
                 }}
             />

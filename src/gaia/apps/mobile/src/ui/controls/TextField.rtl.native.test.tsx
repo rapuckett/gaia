@@ -46,8 +46,14 @@ describeNative('TextField alignment in the Arabic UI', () => {
         expect(await styleOf('hello', { secureTextEntry: true })).toMatchObject({ writingDirection: 'rtl', textAlign: 'right' });
     });
 
-    it('leaves a web address on auto', async () => {
+    it('types a web address left to right, with an empty placeholder on the UI side', async () => {
         nativeLayout(true);
-        expect(await styleOf('https://x.test', { url: true })).toMatchObject({ textAlign: 'auto' });
+        expect(await styleOf('https://x.test', { url: true })).toMatchObject({ writingDirection: 'ltr', textAlign: 'left' });
+        expect(await styleOf('', { url: true })).toMatchObject({ writingDirection: 'rtl', textAlign: 'right' });
+    });
+
+    it('keeps an empty web address field left to right in English', async () => {
+        useLocaleStore.getState().setLocale('en');
+        expect(await styleOf('', { url: true })).toMatchObject({ writingDirection: 'ltr', textAlign: 'left' });
     });
 });
