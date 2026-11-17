@@ -20,7 +20,7 @@ export interface QueuedMessagesProps {
 function stateLine(item: QueuedMessage, replying: boolean, t: Translate): string {
     switch (item.state) {
         case 'failed':
-            return item.error ? t('queue.notSentWhy', { error: item.error }) : t('queue.notSent');
+            return t('queue.notSent');
         case 'queued':
             if (item.note) return t('queue.steerRefused');
             return t(replying ? 'queue.waiting' : 'queue.sendingNext');
@@ -61,6 +61,11 @@ export function QueuedMessages({ items, onRemove, onRetry, onSteer, replying }: 
                         <Text role="caption" tone={item.state === 'failed' ? 'danger' : 'secondary'}>
                             {stateLine(item, replying, t)}
                         </Text>
+                        {item.state === 'failed' && item.error ? (
+                            <Text role="caption" tone="muted" dir="ltr" align="ltr" testID={`queued-error-${item.id}`}>
+                                {item.error}
+                            </Text>
+                        ) : null}
                         {item.state === 'failed' ? (
                             <Button
                                 label={t('queue.sendAgain')}

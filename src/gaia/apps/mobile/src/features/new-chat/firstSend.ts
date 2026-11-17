@@ -15,6 +15,8 @@ export interface FirstSendDeps {
     flush: (sessionId: string) => Promise<void>;
     queueHeld: (sessionId: string, items: messageQueue.QueuedMessage[]) => void;
     describeError: (err: unknown) => string;
+    // The PC's own words for the failure, kept off the sentence `describeError` gives.
+    describeDetail?: (err: unknown) => string | undefined;
     firstNotSent: string;
 }
 
@@ -23,6 +25,7 @@ export interface FirstSendState {
     // From the first Send until the chat's first turn is under way.
     sending: boolean;
     error: string | null;
+    errorDetail?: string;
     // The first message, shown at once while its chat is made.
     opening: string | null;
     // The chat to open once its first turn is under way.
@@ -53,9 +56,9 @@ export function createFirstSend(initialDeps: FirstSendDeps, initialText = ''): F
         listeners.forEach((l) => l());
     };
 
-    const putBack = (message: string, error: string) => {
+    const putBack = (message: string, error: string, errorDetail?: string) => {
         // Nothing was sent, so every message goes back in the box.
-        set({ text: [message, ...deps.takeHeld()].join('\n\n'), error, sending: false, opening: null, waiting: null });
+        set({ text: [message, ...deps.takeHeld()].join('\n\n'), error, errorDetail, sending: false, opening: null, waiting: null });
     };
 
     return {
@@ -75,7 +78,7 @@ export function createFirstSend(initialDeps: FirstSendDeps, initialText = ''): F
                 set({ text: '' });
                 return;
             }
-            set({ sending: true, opening: message, error: null, text: '' });
+            set({ sending: true, opening: message, error: null, errorDetail: undefined, text: '' });
             try {
                 const session = await deps.createSession();
                 const sent = await deps.deliver(session.id, message);
@@ -90,7 +93,7 @@ export function createFirstSend(initialDeps: FirstSendDeps, initialText = ''): F
                 pending = { id: session.id, message };
                 set({ waiting: session.id });
             } catch (err) {
-                putBack(message, deps.describeError(err));
+                putBack(message, deps.describeError(err), deps.describeDetail?.(err));
             }
         },
         observe: (turn) => {
@@ -98,7 +101,7 @@ export function createFirstSend(initialDeps: FirstSendDeps, initialText = ''): F
             const { id, message } = pending;
             pending = null;
             if (turn?.error && turn.status === 'idle') {
-                putBack(message, deps.describeError(turn.error));
+                putBack(message, deps.describeError(turn.error), deps.describeDetail?.(turn.error));
                 return;
             }
             void deps.flush(id);

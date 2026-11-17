@@ -110,7 +110,8 @@ function CardAudio({ src, caption, path, duration_seconds }: AudioPayload) {
                     <Notice
                         tone="danger"
                         title={t('media.audioUnplayable')}
-                        message={error instanceof GaiaApiError ? error.detail || undefined : describeError(error, t)}
+                        message={error instanceof GaiaApiError ? undefined : describeError(error, t)}
+                        detail={error instanceof GaiaApiError ? error.detail || undefined : undefined}
                         onDismiss={() => setError(null)}
                         testID="card-audio-failed"
                     />

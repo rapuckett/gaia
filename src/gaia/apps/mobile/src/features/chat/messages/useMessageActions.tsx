@@ -10,7 +10,7 @@ import { GaiaConfigError } from '@/api/errors';
 import { isErrorContent } from '@webui/utils/answerErrors.core';
 
 import { queryKeys, useGaiaClient } from '@/data';
-import { describeError, useT } from '@/i18n/useT';
+import { describeError, describeHttpFailure, useT } from '@/i18n/useT';
 import { ActionSheet, Button, Notice, Sheet, Stack, Text, type SheetAction } from '@/ui';
 import { Copy, Pencil, RefreshCw, Shuffle, Trash2 } from '@/ui/icons';
 
@@ -69,7 +69,7 @@ export function useMessageActions(
     const [retryOpen, setRetryOpen] = useState(false);
     const [open, setOpen] = useState(startOpen === 'actions');
     const [copied, setCopied] = useState(false);
-    const [failure, setFailure] = useState<string | null>(null);
+    const [failure, setFailure] = useState<{ text: string; detail?: string } | null>(null);
     const [editing, setEditing] = useState(startOpen === 'edit');
     const [sending, setSending] = useState(false);
     const [confirmDelete, setConfirmDelete] = useState(startOpen === 'delete');
@@ -91,7 +91,7 @@ export function useMessageActions(
                 if (timer.current) clearTimeout(timer.current);
                 timer.current = setTimeout(() => setCopied(false), COPIED_MS);
             },
-            (error: unknown) => setFailure(describeError(error, t)),
+            (error: unknown) => setFailure({ text: describeError(error, t) }),
         );
     }, [copyText, t]);
 
@@ -111,7 +111,7 @@ export function useMessageActions(
             if (text !== undefined) send(text);
             return true;
         } catch (error) {
-            setFailure(describeError(error, t));
+            setFailure(describeHttpFailure(error, t));
             void queryClient.invalidateQueries({ queryKey: queryKeys.messages(sessionId) });
             return false;
         }
@@ -213,6 +213,6 @@ export function useMessageActions(
                 disabled={busy || sending}
             />
         ) : null,
-        notice: failure ? <Notice tone="danger" message={failure} /> : null,
+        notice: failure ? <Notice tone="danger" message={failure.text} detail={failure.detail} /> : null,
     };
 }

@@ -7,7 +7,7 @@ import { latencyByMessage } from '@webui/utils/answerStats.core';
 
 import type { Message } from '@/api/client.types';
 import { useChatStream, useMessages } from '@/data';
-import { describeError, useT } from '@/i18n/useT';
+import { describeHttpFailure, useT } from '@/i18n/useT';
 import { ErrorState, List, ListSkeleton, Stack } from '@/ui';
 
 import { useAnswerComparison } from '../compare/useAnswerComparison';
@@ -65,7 +65,10 @@ export function MessageListView({ messages, loading = false, error, onRetry, liv
     );
 
     if (loading) return <ListSkeleton rows={6} label={t('chat.loadingMessages')} />;
-    if (error) return <ErrorState title={describeError(error, t)} onRetry={onRetry} />;
+    if (error) {
+        const failure = describeHttpFailure(error, t);
+        return <ErrorState title={failure.text} detail={failure.detail} onRetry={onRetry} />;
+    }
 
     return (
         <Stack flex={1}>
