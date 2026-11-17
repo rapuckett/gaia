@@ -118,9 +118,9 @@ export function MessageList({
     fixShownBelowId?: number | null;
 }) {
     const query = useMessages(sessionId);
-    const { send, status } = useChatStream(sessionId);
+    const { send, retry, status } = useChatStream(sessionId);
     const { comparing } = useAnswerComparison(sessionId);
-    const actions = useMemo(() => ({ send, busy: status !== 'idle' || comparing, readOnly }), [send, status, comparing, readOnly]);
+    const actions = useMemo(() => ({ send, retry, busy: status !== 'idle' || comparing, readOnly }), [send, retry, status, comparing, readOnly]);
     return (
         <MessageActionsContext.Provider value={actions}>
             <MessageListView

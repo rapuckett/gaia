@@ -270,8 +270,10 @@ const CUT_OFF = (notice: string): Message[] => [
 ];
 
 const FAILED_WITH_REPORT: Message[] = [
-    msg('user', 'Summarize the quarterly report.', 0),
-    { ...msg('assistant', 'The model stopped while answering. GAIA saved a problem report: GF-20261116-101500-ab12', 1), failed: true } as Message,
+    msg('user', 'What changed in the roadmap this week?', 0),
+    msg('assistant', 'Two items moved: the phone app to Friday and the docs refresh to next week.', 1),
+    msg('user', 'Summarize the quarterly report.', 2),
+    { ...msg('assistant', 'The model stopped while answering. GAIA saved a problem report: GF-20261116-101500-ab12', 3), failed: true } as Message,
 ];
 
 const LIBRARY_NOTICES = [

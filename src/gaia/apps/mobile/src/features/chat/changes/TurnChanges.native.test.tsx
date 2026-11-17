@@ -10,6 +10,7 @@ import { GaiaApiError } from '@/api/errors';
 import { createFakeClient } from '@/api/fake';
 import { GaiaClientProvider } from '@/data';
 import { translator } from '@/i18n/useT';
+import { useLocaleStore } from '@/state/locale';
 import { ThemeProvider } from '@/ui';
 
 import { TurnChanges } from './TurnChanges';
@@ -56,5 +57,38 @@ const turn: Turn = {
         await fireEvent.press(screen.getByTestId('turn-changes-force'));
         await screen.findByText(t('mobileApp.changes.done', { parts: t.plural('mobileApp.changes.done.restored', 1) }));
         expect(client.undone.map((u) => u.force)).toEqual([false, true]);
+    });
+});
+
+(Platform.OS === 'web' ? describe.skip : describe)('Incomplete turn notice', () => {
+    afterEach(() => useLocaleStore.getState().setLocale(null));
+
+    it("keeps the PC's descriptions in the LTR detail, out of the Arabic message", async () => {
+        useLocaleStore.getState().setLocale('ar');
+        const incomplete: Turn = {
+            ...turn,
+            files: [],
+            incomplete: true,
+            untracked: [
+                { kind: 'run_python', detail: 'save totals to totals.csv', paths: [] },
+                { kind: 'run_python', detail: 'write the chart', paths: [] },
+                { kind: 'run_python', detail: 'write the chart', paths: [] },
+            ],
+        };
+        const client = createFakeClient({ turnChanges: { s1: [incomplete] } });
+        await render(
+            <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+                <GaiaClientProvider client={client}>
+                    <ThemeProvider>
+                        <TurnChanges sessionId="s1" messageId={7} />
+                    </ThemeProvider>
+                </GaiaClientProvider>
+            </QueryClientProvider>,
+        );
+
+        const detail = await screen.findByText('save totals to totals.csv; write the chart \u00d72');
+        expect(StyleSheet.flatten(detail.props.style)).toMatchObject({ writingDirection: 'ltr' });
+        expect(screen.queryByText(/write the chart/, { exact: false })).toBe(detail);
+        expect(screen.queryByText(/No description/)).toBeNull();
     });
 });

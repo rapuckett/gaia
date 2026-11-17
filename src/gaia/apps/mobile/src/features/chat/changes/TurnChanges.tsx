@@ -12,7 +12,7 @@ import { describeHttpFailure, useT } from '@/i18n/useT';
 import { Button, Notice, Row, Stack, Text } from '@/ui';
 
 import { ChangesReview } from './ChangesReview';
-import { loadFailure, undoneText } from './changesText';
+import { loadFailure, undoneText, untrackedNotice } from './changesText';
 
 type Phase = 'idle' | 'confirm' | 'working' | 'conflict' | 'done';
 
@@ -105,14 +105,7 @@ function TurnChangesRow({ sessionId, turn }: { sessionId: string; turn: Turn }) 
                 </Stack>
             ) : null}
             {turn.incomplete ? (
-                <Notice
-                    tone="warning"
-                    role="note"
-                    message={
-                        untrackedWarning(turn.untracked, t, { also: count > 0 }) +
-                        groups.map((g) => `\n${g.title}${g.entries.length > 1 ? `: ${g.entries.map((e) => `${e.label || 'No description'}${e.count > 1 ? ` ×${e.count}` : ''}`).join('; ')}` : ''}`).join('')
-                    }
-                />
+                <Notice tone="warning" role="note" {...untrackedNotice(untrackedWarning(turn.untracked, t, { also: count > 0 }), groups)} />
             ) : null}
             {message ? (
                 <Notice
