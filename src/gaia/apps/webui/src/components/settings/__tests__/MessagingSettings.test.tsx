@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MessagingSettings, formatPairingCode } from '../MessagingSettings';
 import { useChatStore } from '../../../stores/chatStore';
 import type { DiscordStatus } from '../../../services/messagingApi';
+import { readsAs } from '../../../test/readsAs';
 
 const BASE: DiscordStatus = {
     connected: false, paired: false, running: false, state: 'stopped', detail: '',
@@ -77,7 +78,7 @@ describe('MessagingSettings', () => {
         expect(screen.getByText(/Only you can use it/)).toBeInTheDocument();
         expect(link('Open Discord Developer Portal')).toHaveAttribute('href', BASE.portal_url);
         expect(link('Open Discord Developer Portal')).toHaveAttribute('target', '_blank');
-        expect(screen.getByText('Click “New Application”.')).toBeInTheDocument();
+        expect(screen.getByText(readsAs('Click “New Application”.'))).toBeInTheDocument();
         expect(screen.getByLabelText('Bot token')).toHaveAttribute('type', 'password');
         expect(screen.getByRole('button', { name: 'Connect' })).toBeDisabled();
         expect(screen.queryByRole('button', { name: 'Disconnect' })).not.toBeInTheDocument();

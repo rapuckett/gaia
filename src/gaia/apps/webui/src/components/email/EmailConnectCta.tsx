@@ -25,6 +25,7 @@
 
 import { useCallback, useState } from 'react';
 import { AlertCircle, ExternalLink, Loader2 } from 'lucide-react';
+import { useT } from '../../i18n/useT';
 import * as api from '../../services/api';
 import { useChatStore } from '../../stores/chatStore';
 import './EmailConnectCta.css';
@@ -103,6 +104,7 @@ function ProviderButton({
     done: boolean;
     onDone: () => void;
 }) {
+    const t = useT();
     const [busy, setBusy] = useState(false);
     const [err, setErr] = useState<string | null>(null);
 
@@ -133,14 +135,14 @@ function ProviderButton({
                 className="email-connect-cta__button"
                 onClick={() => void handleConnect()}
                 disabled={busy}
-                aria-label={done ? `Reopen ${label} sign-in` : `Connect ${label}`}
+                aria-label={done ? t('mobileApp.emailConnect.reopen', { name: label }) : t('connectCard.connect', { name: label })}
             >
                 {busy ? (
                     <Loader2 size={12} className="email-connect-cta__spinner" />
                 ) : (
                     <ExternalLink size={12} />
                 )}
-                <span>{done ? `Reopen ${label} sign-in` : `Connect ${label}`}</span>
+                <span>{done ? t('mobileApp.emailConnect.reopen', { name: label }) : t('connectCard.connect', { name: label })}</span>
             </button>
             {err && (
                 <div className="email-connect-cta__error" role="alert">
@@ -166,6 +168,7 @@ export function EmailConnectCta({
      */
     connectorId?: string;
 }) {
+    const t = useT();
     const [googleDone, setGoogleDone] = useState(false);
     const [microsoftDone, setMicrosoftDone] = useState(false);
     const [microsoftWorkDone, setMicrosoftWorkDone] = useState(false);
@@ -199,14 +202,14 @@ export function EmailConnectCta({
         <div
             className="email-connect-cta"
             role="region"
-            aria-label="Connect email account"
+            aria-label={t('mobileApp.emailConnect.region')}
         >
             <div className="email-connect-cta__text">
                 <AlertCircle size={14} className="email-connect-cta__icon" />
                 <span>
                     {anyDone
-                        ? 'A browser tab opened for sign-in. Return here when finished.'
-                        : 'Connect your email account to use Email Triage.'}
+                        ? t('emailConnect.opened')
+                        : t('mobileApp.emailConnect.prompt')}
                 </span>
             </div>
             <div className="email-connect-cta__buttons">

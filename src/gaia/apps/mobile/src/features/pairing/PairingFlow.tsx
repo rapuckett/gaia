@@ -2,12 +2,12 @@
 // SPDX-License-Identifier: MIT
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { BackHandler, Platform } from 'react-native';
+import { Platform } from 'react-native';
 
 import { GaiaPinMismatchError } from '@/api/errors';
 import { describeHttpFailure, useT } from '@/i18n/useT';
 import { useConnectionStore } from '@/state/connection';
-import { Button, Card, Icon, Notice, Row, Screen, Spinner, Stack, Text, TextField, UpButton } from '@/ui';
+import { Button, Card, Icon, Notice, Row, Screen, Spinner, Stack, Text, TextField, UpButton, useBackStep } from '@/ui';
 import { CircleAlert, Clock, Monitor, Smartphone } from '@/ui/icons';
 
 import { parseInvite, type PairingInvite } from './invite';
@@ -158,40 +158,36 @@ export function PairingFlow({ initialStep = 'welcome', onPaired, onScan, onExit 
     };
 
     // Android's back walks the flow one step back, as its own back controls do; on the first step it leaves, or goes to `onExit`.
-    useEffect(() => {
-        const back = (): boolean => {
-            if (typeof view === 'object') {
-                if (view.at === 'confirm') {
-                    if (busy) {
-                        redeeming.current++;
-                        setBusy(false);
-                    }
-                    setError(null);
-                    setView(view.back);
-                } else if (view.at === 'waiting') {
-                    cancel();
-                } else {
-                    retry();
+    useBackStep(() => {
+        if (typeof view === 'object') {
+            if (view.at === 'confirm') {
+                if (busy) {
+                    redeeming.current++;
+                    setBusy(false);
                 }
-                return true;
-            }
-            if (view === 'scan' || view === 'manual') {
                 setError(null);
-                setView('how');
-                return true;
+                setView(view.back);
+            } else if (view.at === 'waiting') {
+                cancel();
+            } else {
+                retry();
             }
-            if (view === 'how' && initialStep === 'welcome') {
-                setView('welcome');
-                return true;
-            }
-            if (view === 'how' && onExit) {
-                onExit();
-                return true;
-            }
-            return false;
-        };
-        const subscription = BackHandler.addEventListener('hardwareBackPress', back);
-        return () => subscription.remove();
+            return true;
+        }
+        if (view === 'scan' || view === 'manual') {
+            setError(null);
+            setView('how');
+            return true;
+        }
+        if (view === 'how' && initialStep === 'welcome') {
+            setView('welcome');
+            return true;
+        }
+        if (view === 'how' && onExit) {
+            onExit();
+            return true;
+        }
+        return false;
     });
 
     if (typeof view === 'object' && view.at === 'confirm') {
@@ -253,7 +249,7 @@ export function PairingFlow({ initialStep = 'welcome', onPaired, onScan, onExit 
         return (
             <Page icon={Smartphone} title={t('mobileApp.pairing.welcome.title')} body={t('mobileApp.pairing.welcome.body')}>
                 {removedFrom ? <Notice tone="warning" message={t('mobileApp.pairing.removed', { pc: removedFrom })} testID="pairing-removed" /> : null}
-                <Button variant="primary" label={t('mobileApp.pairing.welcome.start')} onPress={() => setView('how')} full />
+                <Button variant="primary" label={t('mobileApp.pairing.welcome.start')} onPress={() => setView('how')} full testID="pairing-start" />
             </Page>
         );
     }
@@ -290,7 +286,7 @@ export function PairingFlow({ initialStep = 'welcome', onPaired, onScan, onExit 
                     </Stack>
                 </Card>
                 {canScan ? <Button variant="primary" label={t('mobileApp.pairing.how.scan')} onPress={onScan ?? (() => setView('scan'))} full /> : null}
-                <Button variant={canScan ? 'secondary' : 'primary'} label={t('mobileApp.pairing.how.paste')} onPress={() => setView('manual')} full />
+                <Button variant={canScan ? 'secondary' : 'primary'} label={t('mobileApp.pairing.how.paste')} onPress={() => setView('manual')} full testID="pairing-paste" />
             </Page>
         );
     }

@@ -3,10 +3,14 @@
 
 /** Group sidebar chats: what needs you, what is pinned, then how recently they were used. */
 
+import type { MessageKey } from '../i18n/registry';
 import type { Session } from '../types';
 
+type RecencyKey = Extract<MessageKey, 'sidebar.group.today' | 'sidebar.group.yesterday' | 'sidebar.group.prev7' | 'sidebar.group.prev30' | 'sidebar.group.older'>;
+
 export interface RecencyGroup {
-    label: 'Today' | 'Yesterday' | 'Previous 7 days' | 'Previous 30 days' | 'Older';
+    /** The catalog key of the group's heading. */
+    label: RecencyKey;
     sessions: Session[];
 }
 
@@ -20,11 +24,11 @@ export function groupSessionsByRecency(sessions: Session[], now: Date = new Date
     const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
     const day = 24 * 60 * 60 * 1000;
     const buckets: RecencyGroup[] = [
-        { label: 'Today', sessions: [] },
-        { label: 'Yesterday', sessions: [] },
-        { label: 'Previous 7 days', sessions: [] },
-        { label: 'Previous 30 days', sessions: [] },
-        { label: 'Older', sessions: [] },
+        { label: 'sidebar.group.today', sessions: [] },
+        { label: 'sidebar.group.yesterday', sessions: [] },
+        { label: 'sidebar.group.prev7', sessions: [] },
+        { label: 'sidebar.group.prev30', sessions: [] },
+        { label: 'sidebar.group.older', sessions: [] },
     ];
     const sorted = [...sessions].sort((a, b) => updatedAtMs(b) - updatedAtMs(a));
     for (const s of sorted) {
@@ -67,7 +71,8 @@ export function isAutomated(s: Session): boolean {
 }
 
 export interface ListGroup {
-    label: 'Needs you' | 'Pinned' | RecencyGroup['label'];
+    /** The catalog key of the group's heading. */
+    label: Extract<MessageKey, 'sidebar.group.needsYou' | 'sidebar.group.pinned'> | RecencyGroup['label'];
     sessions: Session[];
 }
 
@@ -86,8 +91,8 @@ export function groupSessionsForList(
     const pinned = visible.filter((s) => s.pinned && !needsYou.includes(s)).sort(byRecency);
     const rest = visible.filter((s) => !needsYou.includes(s) && !pinned.includes(s));
     const groups: ListGroup[] = [];
-    if (needsYou.length) groups.push({ label: 'Needs you', sessions: needsYou });
-    if (pinned.length) groups.push({ label: 'Pinned', sessions: pinned });
+    if (needsYou.length) groups.push({ label: 'sidebar.group.needsYou', sessions: needsYou });
+    if (pinned.length) groups.push({ label: 'sidebar.group.pinned', sessions: pinned });
     return [...groups, ...groupSessionsByRecency(rest, now)];
 }
 
