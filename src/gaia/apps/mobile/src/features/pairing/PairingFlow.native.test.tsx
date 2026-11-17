@@ -104,6 +104,18 @@ describeNative('PairingFlow', () => {
         expect(await pressBack()).toBe(false);
     });
 
+    it('leaves the waiting screen when nothing waits for Allow any more', async () => {
+        const service = createFakePairingService();
+        let calls = 0;
+        // Waiting when it opens; then the request is gone, as when it was canceled elsewhere.
+        service.status = async () => (++calls === 1 ? { state: 'pending', pcName: 'Office PC' } : { state: 'none' });
+        setPairingService(service);
+        await render(<PairingFlow initialStep="how" />, { wrapper: wrap });
+        await screen.findByText(t('mobileApp.pairing.waiting.title'));
+        expect(await screen.findByText(t('mobileApp.pairing.refused.title'), {}, { timeout: 6000 })).toBeTruthy();
+        expect(calls).toBe(2);
+    });
+
     it('says a first pairing with a wrong pin did not pair, not that the phone stopped connecting', async () => {
         const service = createFakePairingService();
         service.list = async () => [];

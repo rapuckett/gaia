@@ -216,7 +216,7 @@ internal class PinnedRequest(
     synchronized(lock) { onHead = onResponse }
     val watch = SetupWatch(
       label,
-      originOf(outgoing.url),
+      if (label.route == "relay") originWithoutHost(outgoing.url) else originOf(outgoing.url),
       TimeUnit.SECONDS.toMillis(setupSeconds),
       log,
       canceledByApp = { synchronized(lock) { cancelled } },
@@ -235,7 +235,8 @@ internal class PinnedRequest(
 
   private fun stall(setupSeconds: Long) {
     val started = synchronized(lock) {
-      if (cancelled || ended) return
+      // The head may have arrived just as the budget ran out; that request stands.
+      if (cancelled || ended || onHead == null) return
       stalled = true
       call
     }

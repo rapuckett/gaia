@@ -1,7 +1,9 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { pollSettled } from './pollSettled';
+import { GaiaApiError, GaiaNetworkError, GaiaPinMismatchError } from '@/api/errors';
+
+import { isNetworkFailure, pollSettled } from './pollSettled';
 
 beforeEach(() => jest.useFakeTimers());
 afterEach(() => jest.useRealTimers());
@@ -54,5 +56,15 @@ describe('pollSettled', () => {
         late.answer('pending');
         await jest.advanceTimersByTimeAsync(10_000);
         expect(late.check).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe('isNetworkFailure', () => {
+    it('tries again after the network failed, never after the PC or its certificate answered', () => {
+        expect(isNetworkFailure(new GaiaNetworkError('https://192.168.1.20:4243/api/health', new Error('timeout')))).toBe(true);
+        expect(isNetworkFailure(Object.assign(new Error("Couldn't reach the PC"), { code: 'network' }))).toBe(true);
+        expect(isNetworkFailure(new GaiaPinMismatchError())).toBe(false);
+        expect(isNetworkFailure(new GaiaApiError(500, 'boom'))).toBe(false);
+        expect(isNetworkFailure(Object.assign(new Error('damaged'), { code: 'keychain' }))).toBe(false);
     });
 });

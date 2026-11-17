@@ -49,6 +49,10 @@ internal fun originOf(url: HttpUrl): String {
   return "${url.scheme}://$host:${url.port}"
 }
 
+/** As originOf without the host, so a relay's host stays out of logs. */
+internal fun originWithoutHost(url: HttpUrl): String = "${url.scheme}://-:${url.port}"
+
+
 private val watchdogTimer = ScheduledThreadPoolExecutor(1) { runnable ->
   Thread(runnable, "GaiaTransportWatchdog").apply { isDaemon = true }
 }.apply { removeOnCancelPolicy = true }
