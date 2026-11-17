@@ -1,7 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { chatToRestore } from './launch';
+import { chatFromLink, chatToRestore } from './launch';
 
 const sessions = [{ id: 'aaaaaaaa-1111' }, { id: 'bbbbbbbb-2222' }];
 const launch = { lastChatId: 'bbbbbbbb-2222', sessions, choseNewChat: false, pathname: '/' };
@@ -17,5 +17,25 @@ describe('launch restore', () => {
     it('stays on New chat when unsent text was saved there, as the web UI does', () => {
         expect(chatToRestore({ ...launch, hasNewChatDraft: true })).toBeNull();
         expect(chatToRestore({ ...launch, hasNewChatDraft: false })).toBe('bbbbbbbb-2222');
+    });
+});
+
+describe('chatFromLink', () => {
+    it('selects a chat named by its full id or by the web UI short hash', () => {
+        expect(chatFromLink('bbbbbbbb-2222', sessions)).toBe('bbbbbbbb-2222');
+        expect(chatFromLink('#aaaaaaa', sessions)).toBe('aaaaaaaa-1111');
+    });
+
+    it('returns null for an unknown id, so the not-found notice shows', () => {
+        expect(chatFromLink('cccccccc-3333', sessions)).toBeNull();
+        expect(chatFromLink('aaaaaaaa-1111', [])).toBeNull();
+    });
+
+    it('returns null for a malformed or empty link', () => {
+        expect(chatFromLink('', sessions)).toBeNull();
+        expect(chatFromLink(null, sessions)).toBeNull();
+        expect(chatFromLink(undefined, sessions)).toBeNull();
+        expect(chatFromLink('a', sessions)).toBeNull();
+        expect(chatFromLink('../../etc', sessions)).toBeNull();
     });
 });
