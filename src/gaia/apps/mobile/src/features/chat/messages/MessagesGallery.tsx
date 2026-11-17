@@ -15,7 +15,7 @@ import { FIXTURES, GUIDE_SETS, GUIDE_WORKOUT, PRESCAN_PAYLOAD, type MessagesFixt
 import { Screen, Stack } from '@/ui';
 
 const noop = () => undefined;
-const IDLE = { status: 'idle', liveText: '', events: [] } as const;
+const IDLE = { status: 'idle', liveText: '', events: [], error: null, failed: undefined, failure: undefined, policyAlert: undefined, stopState: undefined, stopError: undefined } as const;
 
 /** Developer gallery of the message list in each state; not part of the shipped screens. */
 export type MessagesGalleryState = MessagesFixture | StartOpen | 'guided' | 'guided-sets' | 'prescan-dismissing' | 'prescan-done';

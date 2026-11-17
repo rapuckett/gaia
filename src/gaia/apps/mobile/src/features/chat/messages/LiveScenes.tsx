@@ -123,7 +123,7 @@ function Body({ state }: { state: LiveScene }) {
     }
     if (state === 'reply-server-down') {
         const messages = FIXTURES['failed-report'].messages;
-        const tail = buildTail(messages, { status: 'idle', liveText: '', events: [], failed: true, failure: 'model_server_down' });
+        const tail = buildTail(messages, { status: 'idle', liveText: '', events: [], error: null, failed: true, failure: 'model_server_down', policyAlert: undefined, stopState: undefined, stopError: undefined });
         return (
             <MessageListView
                 messages={messages}
