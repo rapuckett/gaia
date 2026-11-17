@@ -4,9 +4,8 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, render } from '@testing-library/react-native';
 import type { ComponentProps } from 'react';
-import { Dimensions, Platform, StyleSheet } from 'react-native';
+import { Dimensions, StyleSheet } from 'react-native';
 
-import * as useT from '@/i18n/useT';
 import { ThemeProvider } from '@/ui';
 
 import { AppDrawer } from './AppDrawer';
@@ -42,18 +41,14 @@ describe('AppDrawer rotation', () => {
         expect(getByTestId('app-sidebar')).toBeTruthy();
     });
 
-    it('draws the web rtl divider on the inline-end edge, facing the main pane', async () => {
-        const os = Platform.OS;
-        Platform.OS = 'web';
-        jest.spyOn(useT, 'useDirection').mockReturnValue('rtl');
-        try {
-            const { getByTestId } = await mount(1024, { closeDrawer: jest.fn() });
-            const style = StyleSheet.flatten(getByTestId('app-sidebar').props.style);
-            expect(style.borderEndWidth).toBe(StyleSheet.hairlineWidth);
-            expect(style.borderStartWidth).toBeUndefined();
-        } finally {
-            Platform.OS = os;
-            jest.restoreAllMocks();
-        }
+    it('draws our themed divider on the inline-end edge whenever the sidebar is permanent, and none on the overlay', async () => {
+        const permanent = await mount(1024, { closeDrawer: jest.fn() });
+        const style = StyleSheet.flatten(permanent.getByTestId('app-sidebar').props.style);
+        expect(style.borderEndWidth).toBe(StyleSheet.hairlineWidth);
+        expect(style.borderEndColor).toBeTruthy();
+        expect(style.borderStartWidth).toBeUndefined();
+        await permanent.unmount();
+        const overlay = await mount(768, { closeDrawer: jest.fn() });
+        expect(StyleSheet.flatten(overlay.getByTestId('app-sidebar').props.style).borderEndWidth).toBeUndefined();
     });
 });
