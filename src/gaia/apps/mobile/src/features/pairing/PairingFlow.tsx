@@ -12,6 +12,7 @@ import { CircleAlert, Clock, Monitor, Smartphone } from '@/ui/icons';
 
 import { parseInvite, type PairingInvite } from './invite';
 import { PairingScanner } from './PairingScanner';
+import { pollSettled } from './pollSettled';
 import { getPairingService } from './registry';
 import type { PairingStatus, RedeemResult } from './service';
 
@@ -91,15 +92,21 @@ export function PairingFlow({ initialStep = 'welcome', onPaired, onScan, onExit 
     // The camera exists on a phone build only; the web build pastes.
     const canScan = onScan !== undefined || Platform.OS !== 'web';
     const waiting = typeof view === 'object' && view.at === 'waiting';
+    // Checks until the PC answers: allowed, refused or gone. A failed check is tried again.
     useEffect(() => {
         if (!waiting) return;
-        const timer = setInterval(() => {
-            getPairingService()
-                .status()
-                .then(settle)
-                .catch((e) => alive.current && setError(describeHttpFailure(e, t)));
-        }, POLL_MS);
-        return () => clearInterval(timer);
+        return pollSettled(
+            () => getPairingService().status(),
+            POLL_MS,
+            (result) => {
+                settle(result);
+                return result.state === 'pending';
+            },
+            (e) => {
+                if (alive.current) setError(describeHttpFailure(e, t));
+                return true;
+            },
+        );
     }, [waiting, settle, t]);
 
     // A code only names a PC; the person confirms it before this phone sends the invitation.

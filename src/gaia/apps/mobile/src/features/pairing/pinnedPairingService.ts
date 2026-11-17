@@ -7,6 +7,7 @@ import { Platform } from 'react-native';
 
 import { ENDPOINTS, UI_HEADERS } from '@/api/constants';
 import { GaiaApiError, GaiaPinMismatchError, parseErrorDetail } from '@/api/errors';
+import { normalizeBaseUrl } from '@/api/http';
 import { onDeviceGone, pinnedFetch, transportError } from '@/platform/pinnedFetch';
 import { useConnectionStore, type ConnectionConfig } from '@/state/connection';
 
@@ -45,8 +46,10 @@ interface Saved {
     pcs: SavedPc[];
     currentId: string | null;
     /** Redeemed, and waiting for Allow on the PC. */
-    pending: (SavedPc & { expiresAt?: number }) | null;
+    pending: Pending | null;
 }
+
+type Pending = SavedPc & { expiresAt?: number };
 
 interface PairAnswer {
     device_id: string;
@@ -56,6 +59,10 @@ interface PairAnswer {
 
 function connectionOf(pc: SavedPc): ConnectionConfig {
     return { baseUrl: pc.origin, pcId: pc.id, pinned: true, origins: pc.origins.map((o) => o.origin), routes: pc.origins };
+}
+
+function sameAddresses(a: ConnectionConfig, b: ConnectionConfig): boolean {
+    return normalizeBaseUrl(a.baseUrl) === normalizeBaseUrl(b.baseUrl) && JSON.stringify(a.routes ?? null) === JSON.stringify(b.routes ?? null);
 }
 
 function withOrigins<T extends Omit<SavedPc, 'origins'> & { origins?: RouteOrigin[] }>(pc: T): T & SavedPc {
@@ -95,6 +102,8 @@ export interface PinnedPairingService extends PairingService {
 /** `onAllowed` hears each PC that has just allowed this phone, so its routes are fetched even when it was already the one in use. */
 export function createPinnedPairingService(onAllowed?: (pcId: string) => void): PinnedPairingService {
     let saved: Saved | null = null;
+    // Callers of status() while a check is out share its answer, so one redemption is never promoted twice.
+    let checking: Promise<PairingStatus> | null = null;
 
     async function load(): Promise<Saved> {
         if (!saved) {
@@ -135,8 +144,57 @@ export function createPinnedPairingService(onAllowed?: (pcId: string) => void): 
         const next = change(pc);
         await save({ ...state, pcs: state.pcs.map((p) => (p.id === pcId ? next : p)) });
         const connection = useConnectionStore.getState();
-        if (connection.connection?.pcId === pcId) connection.setConnection(connectionOf(next));
+        const updated = connectionOf(next);
+        // Setting an unchanged connection would restart everything that watches it, the setup check among them.
+        if (connection.connection?.pcId === pcId && !sameAddresses(connection.connection, updated)) connection.setConnection(updated);
         return next;
+    }
+
+    /** Ends a redemption the PC no longer knows, read afresh so a change saved during the check is kept. */
+    async function dropPending(pending: Pending): Promise<PairingStatus> {
+        const latest = await load();
+        // A newer code replaced this one while it was checked; that one stands.
+        if (latest.pending && latest.pending.deviceId !== pending.deviceId) return { state: 'pending', pcName: latest.pending.name, expiresAt: latest.pending.expiresAt };
+        if (!latest.pending) return { state: 'none' };
+        await GaiaTransport.drop(stagedId(pending.id));
+        await save({ ...latest, pending: null });
+        return { state: 'refused' };
+    }
+
+    /** The staged key went away during the check: promoted already, or this redemption can't finish. */
+    async function stagedKeyGone(pending: Pending): Promise<PairingStatus> {
+        const promoted = (await load()).pcs.find((p) => p.id === pending.id && p.deviceId === pending.deviceId);
+        if (promoted) return { state: 'paired', pc: pairedOf(promoted) };
+        return dropPending(pending);
+    }
+
+    async function checkStatus(): Promise<PairingStatus> {
+        const { pending } = await load();
+        if (!pending) return { state: 'none' };
+        let answer;
+        try {
+            answer = await check(pending);
+        } catch (err) {
+            if (err instanceof GaiaPinMismatchError || err instanceof GaiaApiError) throw err;
+            const code = String((err as { code?: unknown }).code);
+            if (NO_ANSWER.has(code)) return { state: 'unreachable' };
+            if (code !== 'not_paired') throw err;
+            return stagedKeyGone(pending);
+        }
+        if (answer === 'pending') return { state: 'pending', pcName: pending.name, expiresAt: pending.expiresAt };
+        if (answer === 'unknown') return dropPending(pending);
+        try {
+            await GaiaTransport.promote(stagedId(pending.id), pending.id);
+        } catch (err) {
+            if (String((err as { code?: unknown }).code) !== 'not_paired') throw err;
+            return stagedKeyGone(pending);
+        }
+        const pc: SavedPc = { id: pending.id, name: pending.name, origin: pending.origin, origins: pending.origins, deviceId: pending.deviceId, pairedAt: new Date().toISOString() };
+        // Read again: the other PCs' routes may have been refreshed while this one was being checked.
+        const latest = await load();
+        await save({ pcs: [...latest.pcs.filter((p) => p.id !== pc.id), pc], currentId: pc.id, pending: null });
+        onAllowed?.(pc.id);
+        return { state: 'paired', pc: pairedOf(pc) };
     }
 
     /** A reinstalled app finds the old install's secrets in the Keychain; a fresh install has no marker and no saved PCs. */
@@ -229,34 +287,11 @@ export function createPinnedPairingService(onAllowed?: (pcId: string) => void): 
             return { state: 'pending', pcName: pending.name, expiresAt };
         },
 
-        async status(): Promise<PairingStatus> {
-            const state = await load();
-            const { pending } = state;
-            if (!pending) return { state: 'none' };
-            let answer;
-            try {
-                answer = await check(pending);
-            } catch (err) {
-                if (err instanceof GaiaPinMismatchError || err instanceof GaiaApiError) throw err;
-                const code = String((err as { code?: unknown }).code);
-                if (NO_ANSWER.has(code)) return { state: 'unreachable' };
-                // The new key isn't on this phone, so this redemption can't finish.
-                if (code !== 'not_paired') throw err;
-                answer = 'unknown' as const;
-            }
-            if (answer === 'pending') return { state: 'pending', pcName: pending.name, expiresAt: pending.expiresAt };
-            if (answer === 'unknown') {
-                await GaiaTransport.drop(stagedId(pending.id));
-                await save({ ...state, pending: null });
-                return { state: 'refused' };
-            }
-            await GaiaTransport.promote(stagedId(pending.id), pending.id);
-            const pc: SavedPc = { id: pending.id, name: pending.name, origin: pending.origin, origins: pending.origins, deviceId: pending.deviceId, pairedAt: new Date().toISOString() };
-            // Read again: the other PCs' routes may have been refreshed while this one was being checked.
-            const latest = await load();
-            await save({ pcs: [...latest.pcs.filter((p) => p.id !== pc.id), pc], currentId: pc.id, pending: null });
-            onAllowed?.(pc.id);
-            return { state: 'paired', pc: pairedOf(pc) };
+        status() {
+            checking ??= checkStatus().finally(() => {
+                checking = null;
+            });
+            return checking;
         },
 
         async cancel() {
