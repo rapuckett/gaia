@@ -10,18 +10,18 @@ import { middleTruncate } from '@webui/utils/format';
 
 import type { DocumentListResponse } from '@/api/client.types';
 import { useDetachDocument, useDocuments, useSession } from '@/data';
-import { useT } from '@/i18n/useT';
+import { ltr, useT } from '@/i18n/useT';
 import { Button, Icon, IconButton, Ltr, Notice, Pressable, Row, Stack, Surface, Text } from '@/ui';
 import { CircleAlert, CircleCheck, FileText, X } from '@/ui/icons';
 
-import { failureReasonWith } from './failureText';
+import { failureNotice } from './failureText';
 
 type LibraryDocument = DocumentListResponse['documents'][number];
 
 const COLLAPSED_PILLS = 3;
 
 /** The documents in this chat, under the header; renders nothing when there are none. */
-export function DocsBar({ sessionId, onFailed, onManage }: { sessionId: string; onFailed: (message: string) => void; onManage?: () => void }) {
+export function DocsBar({ sessionId, onFailed, onManage }: { sessionId: string; onFailed: (failure: { text: string; detail?: string }) => void; onManage?: () => void }) {
     const t = useT();
     const session = useSession(sessionId);
     const library = useDocuments();
@@ -60,7 +60,7 @@ export function DocsBar({ sessionId, onFailed, onManage }: { sessionId: string; 
                 onSuccess: () => {
                     if (docs.length - 1 <= COLLAPSED_PILLS) setExpanded(false);
                 },
-                onError: (err) => onFailed(t.compose((say) => say('chat.detachFailed', { name: doc.filename, error: failureReasonWith(err, say) }))),
+                onError: (err) => onFailed(failureNotice(err, t, { withReason: 'chat.detachFailed', noReason: 'mobileApp.chat.detachFailedShort' }, { name: ltr(doc.filename) })),
             },
         );
 

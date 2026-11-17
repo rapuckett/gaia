@@ -7,6 +7,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { ActiveModel, ChatSpending, PermissionMode, ContextUsage, LocalModelStatus, ProviderModel } from '@/api/client.types';
 import { createFakeClient } from '@/api/fake';
 import { GaiaClientProvider } from '@/data';
+import { ConnectionBanner } from '@/features/banners/ConnectionBanner';
 import { HistoryNotice } from '@/features/chat/HistoryNotice';
 import { useT } from '@/i18n/useT';
 import { tEn } from '@webui/i18n/translator';
@@ -138,6 +139,7 @@ export function ComposerMenusGallery({ state }: { state: ComposerMenuState }) {
                     <Screen>
                         <Stack gap="md" justify="end" flex={1}>
                             {state === 'warning' ? <HistoryNotice text="Older messages are now out of the model's view (6 turns). Ask me to recall them if you need them." /> : null}
+                            {state === 'pickLoading' || state === 'pickFailed' ? <ConnectionBanner /> : null}
                             <ContextWarning usage={state === 'warning' ? usage : null} />
                             <Composer
                                 onSend={noop}

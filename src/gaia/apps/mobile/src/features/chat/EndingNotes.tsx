@@ -8,27 +8,37 @@ import { useT, type Translate } from '@/i18n/useT';
 import { Icon, Row, Stack, Text } from '@/ui';
 import { Square } from '@/ui/icons';
 
-import { requestFailureText } from './chatErrors';
+import { requestFailureServerText, requestFailureText } from './chatErrors';
 
 export interface Stop {
     state: 'stopped' | 'unconfirmed';
     error?: GaiaError;
 }
 
-function stopText(stop: Stop, t: Translate): string {
-    if (stop.state === 'unconfirmed') return t('msg.stoppedUnconfirmed');
-    return stop.error ? t('msg.stoppedError', { error: requestFailureText(stop.error, t) }) : t('msg.stopped');
+function stopText(stop: Stop, t: Translate): { text: string; detail?: string } {
+    if (stop.state === 'unconfirmed') return { text: t('msg.stoppedUnconfirmed') };
+    if (!stop.error) return { text: t('msg.stopped') };
+    const detail = requestFailureServerText(stop.error);
+    return detail
+        ? { text: t('mobileApp.chat.stoppedErrorShort'), detail }
+        : { text: t('msg.stoppedError', { error: requestFailureText(stop.error, t) }) };
 }
 
 export function StoppedNote({ stop }: { stop: Stop }) {
     const t = useT();
+    const { text, detail } = stopText(stop, t);
     return (
         <Row gap="sm" align="start" accessibilityRole="text" testID="stopped-note">
             <Icon icon={Square} size="sm" tone="secondary" />
             <Stack flex={1}>
                 <Text role="label" tone="secondary">
-                    {stopText(stop, t)}
+                    {text}
                 </Text>
+                {detail ? (
+                    <Text role="caption" tone="muted" dir="ltr" align="ltr" testID="stopped-note-detail">
+                        {detail}
+                    </Text>
+                ) : null}
             </Stack>
         </Row>
     );

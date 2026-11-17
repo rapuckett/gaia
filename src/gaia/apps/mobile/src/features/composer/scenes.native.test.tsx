@@ -6,6 +6,7 @@ import { Platform } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { COMPARE_STATES } from '@/features/chat/compare/CompareGallery';
+import { translator } from '@/i18n/useT';
 import { sheetStore } from '@/ui/overlays/sheetStore';
 
 // Required inside the tests: the web project can't load the new-chat backdrop's SVG.
@@ -107,5 +108,18 @@ describeNative('composer and retry scenes', () => {
         mockState = name as string;
         await mount(messagesRoute());
         expect(await screen.findByText(text, opts)).toBeTruthy();
+    });
+
+    it('pickFailed shows the load failure at rest', async () => {
+        mockState = 'pickFailed';
+        await mount(composerRoute());
+        expect(await screen.findByText(/Couldn't load/, opts)).toBeTruthy();
+    });
+
+    it('compare-failed shows our sentence with the PC text on its own line', async () => {
+        mockState = 'compare-failed';
+        await mount(messagesRoute());
+        expect(await screen.findByText(translator('en')('mobileApp.error.httpNoDetail', { status: 500 }), opts)).toBeTruthy();
+        expect(screen.getByText('Not enough free memory to load the model.', opts)).toBeTruthy();
     });
 });
