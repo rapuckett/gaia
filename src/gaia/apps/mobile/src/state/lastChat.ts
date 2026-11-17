@@ -4,6 +4,9 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 
+import { useConnectionStore } from './connection';
+import { readNewChatDraft } from './newChatDraft';
+
 // The key webui keeps its copy under (utils/sessionNav.ts).
 const LAST_CHAT_KEY = 'gaia:last-session';
 
@@ -13,6 +16,8 @@ interface LastChatState {
     lastChatId: string | null;
     /** The person went to New chat this launch, so the next launch restore must not pull them away. */
     choseNewChat: boolean;
+    /** Unsent text was saved in the new-chat box, so the launch restore must not move the person. */
+    hasNewChatDraft: boolean;
     load(): Promise<void>;
     /** null, from New chat, forgets the chat. */
     remember(id: string | null): void;
@@ -23,14 +28,16 @@ export const useLastChatStore = create<LastChatState>((set, get) => ({
     loaded: false,
     lastChatId: null,
     choseNewChat: false,
+    hasNewChatDraft: false,
     async load() {
+        const draft = await readNewChatDraft(useConnectionStore.getState().connection?.pcId);
         try {
             const saved = await AsyncStorage.getItem(LAST_CHAT_KEY);
             // A chat opened while this was reading is newer than the saved one.
-            if (!get().loaded) set({ lastChatId: saved, loaded: true });
+            if (!get().loaded) set({ lastChatId: saved, hasNewChatDraft: draft !== '', loaded: true });
         } catch (err) {
             console.warn('Could not read the chat open at last launch', err);
-            if (!get().loaded) set({ loaded: true });
+            if (!get().loaded) set({ hasNewChatDraft: draft !== '', loaded: true });
         }
     },
     remember(id) {

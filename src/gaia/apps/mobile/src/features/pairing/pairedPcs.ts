@@ -4,6 +4,7 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 
 import { useConnectionStore, type ConnectionConfig } from '@/state/connection';
+import { clearNewChatDraft } from '@/state/newChatDraft';
 
 import { getPairingService } from './registry';
 import { useActiveConnection } from './routes';
@@ -48,6 +49,7 @@ export function useForgetPc() {
     return useMutation({
         mutationFn: async (pc: PairedPc) => {
             await getPairingService().forget(pc.id);
+            await clearNewChatDraft(pc.id);
             if (isCurrentPc(pc, useConnectionStore.getState().connection)) {
                 useConnectionStore.getState().clearConnection();
                 dropPcData(queryClient);

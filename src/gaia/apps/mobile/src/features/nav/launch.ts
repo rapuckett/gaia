@@ -11,16 +11,18 @@ export interface LaunchState {
     lastChatId: string | null;
     sessions: { id: string }[];
     choseNewChat: boolean;
+    /** Unsent text is saved in the new-chat box. */
+    hasNewChatDraft?: boolean;
     /** The path on screen; only Home is replaced by the saved chat. */
     pathname: string;
 }
 
 /**
  * The chat to reopen at launch, as webui's first-load rule in App.tsx: nothing when the person
- * is already somewhere, went to New chat, or the saved chat no longer exists.
+ * is already somewhere, went to New chat or left a draft there, or the saved chat no longer exists.
  */
 export function chatToRestore(state: LaunchState): string | null {
-    if (state.pathname !== '/' || state.choseNewChat) return null;
+    if (state.pathname !== '/' || state.choseNewChat || state.hasNewChatDraft) return null;
     return resolveUrlNavTarget(state.lastChatId, null, state.sessions);
 }
 
