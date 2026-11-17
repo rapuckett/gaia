@@ -1,7 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { useState } from 'react';
+import { createContext, useContext, useState } from 'react';
 
 import { ENDPOINTS } from '@/api/constants';
 import { GaiaApiError } from '@/api/errors';
@@ -17,6 +17,9 @@ import { Ellipsis } from '@/ui/icons';
 import { isPcRefusal, PcOnlyNotice } from '../PcOnlyNotice';
 import { SettingsAnchor } from '../targets';
 
+/** Dev scenes only: opens the full-access confirm sheet on arrival. */
+export const SeedConfirmFullAccess = createContext(false);
+
 /** Settings > Permissions: the default mode for new chats, and every chat holding full access or "always allow" grants. */
 export default function Permissions() {
     const t = useT();
@@ -24,7 +27,7 @@ export default function Permissions() {
     const sessions = useSessions();
     const { setDefault, setChatMode, revoke } = usePermissionActions();
     const defaultRefused = useDeviceRefused('PUT', ENDPOINTS.chatPermissionsDefault);
-    const [confirming, setConfirming] = useState(false);
+    const [confirming, setConfirming] = useState(useContext(SeedConfirmFullAccess));
     const [error, setError] = useState<{ text: string; detail?: string; info?: boolean } | null>(null);
     const [howOpen, setHowOpen] = useState(false);
     const [chatsOpen, setChatsOpen] = useState(true);
