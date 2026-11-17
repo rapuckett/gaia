@@ -20,7 +20,7 @@ export function RoutingEffects() {
     const pathname = usePathname();
     const { session: linked } = useGlobalSearchParams<{ session?: string }>();
     const sessions = useSessions().data?.sessions;
-    const { loaded, lastChatId, choseNewChat, load, remember, markNewChatChosen } = useLastChatStore();
+    const { loaded, lastChatId, choseNewChat, hasNewChatDraft, load, remember, markNewChatChosen } = useLastChatStore();
     const settled = useRef(false);
 
     useEffect(() => {
@@ -50,9 +50,9 @@ export function RoutingEffects() {
             }
             return;
         }
-        const id = chatToRestore({ lastChatId, sessions, choseNewChat, pathname });
+        const id = chatToRestore({ lastChatId, sessions, choseNewChat, hasNewChatDraft, pathname });
         if (id) openChat(router, id);
-    }, [loaded, sessions, linked, lastChatId, choseNewChat, pathname, router]);
+    }, [loaded, sessions, linked, lastChatId, choseNewChat, hasNewChatDraft, pathname, router]);
 
     return null;
 }
