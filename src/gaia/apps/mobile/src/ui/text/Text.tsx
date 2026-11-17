@@ -10,6 +10,7 @@ import { fontFamily, type Weight } from '../theme/fonts';
 import { COMPACT_MAX_FONT_SCALE, TITLE_MAX_FONT_SCALE, useLargeText } from '../theme/a11y';
 import { useTheme } from '../theme/ThemeProvider';
 import { toneColor, type Tone } from '../theme/tone';
+import { ForcedDirection } from './ForcedDirection';
 import { contentDir, physicalAlign } from './direction';
 import type { TypeRole } from '../tokens/type';
 
@@ -122,6 +123,7 @@ export function Text({
     const rtl = uiDir === 'rtl';
     const dir = dirProp === 'auto' ? (typeof children === 'string' ? contentDir(children, uiDir) : uiDir) : dirProp;
     const nested = useContext(InsideText);
+    const forced = useContext(ForcedDirection);
     const largeText = useLargeText();
     const capped = !compact && largeText && numberOfLines !== undefined && numberOfLines <= 3 ? largeLines : numberOfLines;
     // A cap sized for English would cut the gloss off a translated line, at the wrong end in RTL.
@@ -150,10 +152,13 @@ export function Text({
     if (dir) style.writingDirection = dir;
     // `auto` is a block that follows its own content, as the web's dir="auto" does; explicit ltr/rtl only set the run.
     const startsRight = dirProp === 'auto' ? dir === 'rtl' : rtl;
+    // Inside a pinned-direction block native does not swap left and right, so the side is taken literally.
+    const side = (right: boolean): 'left' | 'right' => (forced ? (right ? 'right' : 'left') : physicalAlign(right));
+    const pinnedStartsRight = forced ? (dirProp === 'auto' ? dir === 'rtl' : forced === 'rtl') : startsRight;
     if (align === 'center') style.textAlign = 'center';
-    else if (align === 'ltr' || align === 'rtl') style.textAlign = physicalAlign(align === 'rtl');
-    else if (align === 'end') style.textAlign = physicalAlign(!startsRight);
-    else if (align === 'start' || !nested) style.textAlign = physicalAlign(startsRight);
+    else if (align === 'ltr' || align === 'rtl') style.textAlign = side(align === 'rtl');
+    else if (align === 'end') style.textAlign = side(!pinnedStartsRight);
+    else if (align === 'start' || !nested) style.textAlign = side(pinnedStartsRight);
     if (rtl) style.letterSpacing = 0;
 
     return (

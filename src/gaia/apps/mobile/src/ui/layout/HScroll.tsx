@@ -6,6 +6,7 @@ import { ScrollView, View } from 'react-native';
 import { useDirection } from '@/i18n/useT';
 import { dirProp } from '@/platform/dirProp';
 import { Icon } from '../controls/Icon';
+import { ForcedDirection } from '../text/ForcedDirection';
 import { ChevronRight } from '../icons';
 import { useTheme } from '../theme/ThemeProvider';
 
@@ -29,6 +30,8 @@ export function HScroll({ children, dir, testID, hint = false }: HScrollProps) {
         <View style={dir ? { direction: dir } : undefined} {...(dir ? dirProp(dir) : {})}>
             <ScrollView
                 horizontal
+                style={dir ? { direction: dir } : undefined}
+                contentContainerStyle={dir ? { direction: dir } : undefined}
                 showsHorizontalScrollIndicator
                 nestedScrollEnabled
                 onLayout={(e) => setBox((b) => ({ ...b, view: e.nativeEvent.layout.width }))}
@@ -37,7 +40,8 @@ export function HScroll({ children, dir, testID, hint = false }: HScrollProps) {
                 scrollEventThrottle={64}
                 testID={testID}
             >
-                {children}
+                {/* Only a pinned-LTR block is verified to keep left and right literal on native; RTL keeps the swap. */}
+                <ForcedDirection.Provider value={dir === 'ltr' ? 'ltr' : null}>{children}</ForcedDirection.Provider>
             </ScrollView>
             {more ? (
                 <View
