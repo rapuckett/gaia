@@ -7,8 +7,10 @@ import { KeyboardAvoidingView, KeyboardAwareScrollView, useKeyboardState } from 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useDirection } from '@/i18n/useT';
 import { useTheme } from '../theme/ThemeProvider';
-import { space } from '../tokens/space';
+import { contentWidth, space } from '../tokens/space';
 import { ScreenBannerSlot, useScreenBanner } from './ScreenBanner';
+
+export type ScreenWidth = 'reading' | 'flow' | 'full';
 
 export type ScreenEdge = 'top' | 'bottom' | 'start' | 'end';
 
@@ -30,6 +32,8 @@ export interface ScreenProps {
     footerBleed?: boolean;
     /** A hairline above the footer, as the desktop setup bar has. */
     footerDivider?: boolean;
+    /** The content column's cap on wide screens: reading (680), flow (560) or full (none). */
+    width?: ScreenWidth;
     background?: 'primary' | 'secondary' | 'recessed';
     /** Drawn behind everything else, edge to edge. */
     backdrop?: ReactNode;
@@ -51,6 +55,7 @@ export function Screen({
     footer,
     footerBleed = false,
     footerDivider = false,
+    width = 'reading',
     background = 'primary',
     backdrop,
     testID,
@@ -71,6 +76,18 @@ export function Screen({
     // The keyboard covers the bottom inset, so it applies only while the keyboard is down.
     const bottom = has('bottom') && !(avoid && keyboardUp) ? insets.bottom : 0;
 
+    const cap = width === 'full' ? undefined : contentWidth[width];
+    const column = (node: ReactNode) => (
+        <View
+            testID="screen-content"
+            style={[{ flexGrow: 1, width: '100%', alignSelf: 'center' }, cap ? { maxWidth: cap } : undefined]}
+            // @ts-expect-error dataSet is a react-native-web prop, absent from the native View types
+            dataSet={{ contentWidth: cap ? String(cap) : 'full' }}
+        >
+            {node}
+        </View>
+    );
+
     const body = scroll ? (
         avoid ? (
             <KeyboardAwareScrollView
@@ -82,7 +99,7 @@ export function Screen({
                 bottomOffset={16}
                 refreshControl={refreshControl}
             >
-                {children}
+                {column(children)}
             </KeyboardAwareScrollView>
         ) : (
             <ScrollView
@@ -92,11 +109,11 @@ export function Screen({
                 keyboardShouldPersistTaps="handled"
                 refreshControl={refreshControl}
             >
-                {children}
+                {column(children)}
             </ScrollView>
         )
     ) : (
-        <View style={{ flex: 1 }}>{children}</View>
+        <View style={{ flex: 1 }}>{column(children)}</View>
     );
 
     const content = (
@@ -109,7 +126,7 @@ export function Screen({
                         footerBleed ? undefined : { paddingHorizontal: space.gutter, paddingVertical: footerDivider ? space.md : space.sm },
                         footerDivider ? { borderTopWidth: 1, borderTopColor: colors.border } : undefined,
                     ]}>
-                    {footer}
+                    <View style={[{ width: '100%', alignSelf: 'center' }, cap ? { maxWidth: cap } : undefined]}>{footer}</View>
                 </View>
             ) : null}
         </>

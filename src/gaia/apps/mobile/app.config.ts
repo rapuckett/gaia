@@ -63,6 +63,8 @@ export default function appConfig(): ExpoConfig {
         scheme: id,
         userInterfaceStyle: 'automatic',
         icon: './assets/icon.png',
+        // iOS permission prompts and the app name in Arabic; Expo writes ar.lproj/InfoPlist.strings from it.
+        locales: { ar: './locales/ios/ar.json' },
         ios: {
             icon: './assets/icon.png',
             bundleIdentifier: iosId,

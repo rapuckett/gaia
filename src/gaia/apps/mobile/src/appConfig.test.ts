@@ -130,4 +130,33 @@ describe('app config', () => {
         expect(splash.backgroundColor).toBe(colors.light.bgPrimary);
         expect(splash.dark.backgroundColor).toBe(colors.dark.bgPrimary);
     });
+
+    it('localizes every iOS permission prompt and the app name in Arabic', () => {
+        const config = configFor('development');
+        const file = (config.locales as Record<string, string> | undefined)?.ar;
+        expect(file).toBeDefined();
+        const path = resolve(__dirname, '..', file as string);
+        expect(existsSync(path)).toBe(true);
+        const arabic = JSON.parse(readFileSync(path, 'utf8')) as Record<string, string>;
+
+        const keys = new Set<string>(['CFBundleDisplayName']);
+        for (const key of Object.keys(config.ios?.infoPlist ?? {})) {
+            if (/^NS\w+UsageDescription$/.test(key)) keys.add(key);
+        }
+        const pluginKeys: Record<string, string> = {
+            cameraPermission: 'NSCameraUsageDescription',
+            microphonePermission: 'NSMicrophoneUsageDescription',
+            photosPermission: 'NSPhotoLibraryUsageDescription',
+        };
+        for (const plugin of ['expo-camera', 'expo-image-picker', 'expo-audio']) {
+            for (const option of Object.keys(pluginOptions(config, plugin))) {
+                if (pluginKeys[option]) keys.add(pluginKeys[option]);
+            }
+        }
+        expect(Object.keys(arabic).sort()).toEqual([...keys].sort());
+        for (const [key, value] of Object.entries(arabic)) {
+            expect({ key, ok: value.trim() !== '' }).toEqual({ key, ok: true });
+            expect({ key, latin: value.replace(/GAIA/g, '').match(/[A-Za-z]/g) }).toEqual({ key, latin: null });
+        }
+    });
 });

@@ -14,6 +14,7 @@ import { Row } from '../layout/layout';
 import { useTheme } from '../theme/ThemeProvider';
 import { Text } from '../text/Text';
 import { motion } from '../tokens/generated';
+import { sheetMaxWidth } from '../tokens/space';
 import { a11yVisibility } from '../theme/a11y';
 import { sheetStore, type SheetEntry } from './sheetStore';
 
@@ -190,8 +191,11 @@ function ActiveSheet({ entry, covered }: { entry: SheetEntry; covered: boolean }
                         {
                             backgroundColor: colors.bgPrimary,
                             maxHeight: height * 0.9,
+                            width: '100%',
+                            maxWidth: sheetMaxWidth,
+                            alignSelf: 'center',
                             ...(wide
-                                ? { width: 520, maxWidth: '100%', borderRadius: radius.xl }
+                                ? { width: sheetMaxWidth, maxWidth: '100%', borderRadius: radius.xl }
                                 : { borderTopStartRadius: radius.xl, borderTopEndRadius: radius.xl, paddingBottom: insets.bottom }),
                             boxShadow: shadows.lg,
                         },
