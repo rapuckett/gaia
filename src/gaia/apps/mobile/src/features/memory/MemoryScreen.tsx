@@ -8,8 +8,8 @@ import { ENDPOINTS } from '@/api/constants';
 import { useDeviceRefused } from '@/api/routeAccess';
 import { useMemoryMaintenance, useMemorySettings, useRefreshMemory, type MemoryMaintenanceAction } from '@/data';
 import { useT } from '@/i18n/useT';
-import { ActionSheet, Badge, IconButton, Notice, Row, Screen, Stack, Text, type SheetAction } from '@/ui';
-import { ArrowLeft, Ellipsis, RefreshCw } from '@/ui/icons';
+import { ActionSheet, Badge, IconButton, Notice, Row, Screen, Stack, Text, UpButton, type SheetAction } from '@/ui';
+import { Ellipsis, RefreshCw } from '@/ui/icons';
 
 import { failureNotice, MAINTENANCE_ACTIONS, MAINTENANCE_LABELS, outcomeNotice } from './maintenance';
 import { MemoryTabs } from './MemoryTabs';
@@ -69,7 +69,7 @@ export function MemoryScreen({ onBack, onOpenChat, initialTab = 'about' }: Memor
         <Stack gap="sm" paddingY="sm">
             <Stack paddingX="lg">
                 <Row gap="sm" accessibilityRole="header">
-                    <IconButton icon={ArrowLeft} label={t('mem.back')} onPress={onBack} />
+                    <UpButton label={t('mem.back')} onPress={onBack} />
                     <Stack flex={1}>
                         <Row gap="sm" wrap>
                             <Text role="title" weight="semibold" accessibilityRole="header">
