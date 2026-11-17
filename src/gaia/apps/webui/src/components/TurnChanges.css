@@ -118,3 +118,12 @@
 .undo-history-input {
     max-width: 120px;
 }
+
+.turn-changes-detail {
+    display: block;
+    margin-top: 2px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    text-align: left;
+    word-break: break-all;
+}
