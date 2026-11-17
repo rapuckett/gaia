@@ -421,7 +421,7 @@ export const SETTINGS_SCENES: Record<string, SettingsScene> = {
             },
         },
     },
-    'skills-add': { section: 'skills', gpuMemory: GPU, skillsAdd: true, data: { skills: { skills: [skill('summarize')] } } },
+    'skills-add': { section: 'skills', gpuMemory: GPU, skillsAdd: true, data: { skills: { skills: [skill('summarize')], invalid: {} } } },
     // SET-GEN-04 to 07: a saved custom accent and tint, so Custom is selected and the Colors disclosure opens with Accent, Background tint and Reset.
     'general-custom-colors': { section: 'general', gpuMemory: GPU, appearance: { palette: 'custom', custom: { accent: '#C2410C', base: '#44403C' } } },
     // SET-PRIV-06: the Delete chats card with chats (`#tap=privacy-delete-all` opens the confirm sheet), and with none.
