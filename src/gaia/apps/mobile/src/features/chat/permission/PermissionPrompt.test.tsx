@@ -135,7 +135,7 @@ describe('PermissionPrompt', () => {
             prompt({ toolArgs: { file_path: 'a.txt', old_content: 'one\n', new_content: 'two\nan added line\n' } }),
         );
         const tree = shown();
-        expect(tree).toMatch(/"testID":"perm-details-body"[^}]*"paddingBottom":24|"paddingBottom":24[^}]*"testID":"perm-details-body"/);
+        expect(tree).toContain('"style":{"paddingBottom":24},"testID":"perm-details-body"');
         expect(tree).not.toContain('maxHeight');
         expect(tree).not.toContain('"height"');
     });
