@@ -68,7 +68,8 @@ function ChangesBody({ sessionId, live, changes, onUndone }: { sessionId: string
     const { undoAll } = useChangesActions(sessionId);
     const seed = useSessionPanelStore((s) => s.changesSeed);
     const [phase, setPhase] = useState<UndoPhase>(seed ? seed.phase : 'idle');
-    const [message, setMessage] = useState<string | null>(seed?.message ?? null);
+    const [message, setMessage] = useState<string | null>(seed?.phase === 'conflict' ? t('mobileApp.changes.undoConflict') : null);
+    const [detail, setDetail] = useState<string | undefined>(seed?.detail);
     const [reviewing, setReviewing] = useState(false);
     const count = changes.files.length;
     const groups = groupUntracked(changes.untracked);
@@ -76,6 +77,7 @@ function ChangesBody({ sessionId, live, changes, onUndone }: { sessionId: string
     const run = async (force: boolean) => {
         setPhase('working');
         setMessage(null);
+        setDetail(undefined);
         try {
             const text = undoneText(await undoAll.mutateAsync(force), t);
             setMessage(text);
@@ -83,7 +85,12 @@ function ChangesBody({ sessionId, live, changes, onUndone }: { sessionId: string
             onUndone(text);
         } catch (err) {
             const conflict = err instanceof GaiaApiError && err.status === 409 && err.body?.status === 'conflict';
-            setMessage(failureReason(err, t));
+            if (conflict) {
+                setMessage(t('mobileApp.changes.undoConflict'));
+                setDetail((err as GaiaApiError).detail);
+            } else {
+                setMessage(failureReason(err, t));
+            }
             setPhase(conflict ? 'conflict' : 'idle');
         }
     };
@@ -151,7 +158,7 @@ function ChangesBody({ sessionId, live, changes, onUndone }: { sessionId: string
                     </Row>
                 </Stack>
             ) : null}
-            {message ? <Notice tone={phase === 'done' ? 'success' : 'danger'} message={message} testID="changes-undo-message" /> : null}
+            {message ? <Notice tone={phase === 'done' ? 'success' : 'danger'} message={message} detail={detail} testID="changes-undo-message" /> : null}
             {phase === 'conflict' ? (
                 <Row gap="sm" wrap stack>
                     <Button size="sm" variant="danger" label={t('chg.undoAnyway')} onPress={() => void run(true)} testID="changes-undo-force" />
@@ -162,6 +169,7 @@ function ChangesBody({ sessionId, live, changes, onUndone }: { sessionId: string
                         onPress={() => {
                             setPhase('idle');
                             setMessage(null);
+                            setDetail(undefined);
                         }}
                     />
                 </Row>

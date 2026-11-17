@@ -23,6 +23,7 @@ from gaia.logger import get_logger
 
 from ..models import WireModel
 from ..security import (
+    is_local_pc,
     require_local_pc,
     require_pc_or_allowed_device,
     require_ui_header,
@@ -110,16 +111,30 @@ def _delivers() -> Optional[bool]:
         return None
 
 
-def _load():
+DEVICE_STORE_ERROR = (
+    "GAIA couldn't read its automations on the PC. "
+    "Open Settings \u203a Automations on the PC to see why."
+)
+
+
+def _store_failure(request: Request, e: files.StateFileError) -> HTTPException:
+    """A 500 whose detail names the PC's file path only for the PC itself."""
+    if is_local_pc(request):
+        return HTTPException(status_code=500, detail=str(e))
+    log.error("Automations store unreadable: %s", e, exc_info=True)
+    return HTTPException(status_code=500, detail=DEVICE_STORE_ERROR)
+
+
+def _load(request: Request):
     try:
         return store.load()
     except files.StateFileError as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise _store_failure(request, e) from e
 
 
 @router.get("", response_model=AutomationList, response_model_exclude_unset=True)
-def list_automations() -> Dict[str, Any]:
-    items = _load()
+def list_automations(request: Request) -> Dict[str, Any]:
+    items = _load(request)
     return {"automations": [_row(a) for a in items], "delivers": _delivers()}
 
 
@@ -129,13 +144,15 @@ def list_automations() -> Dict[str, Any]:
     response_model=AutomationRow,
     response_model_exclude_unset=True,
 )
-def set_automation(ref: str, action: Literal["pause", "resume"]) -> Dict[str, Any]:
+def set_automation(
+    request: Request, ref: str, action: Literal["pause", "resume"]
+) -> Dict[str, Any]:
     try:
         item = store.update(ref, paused=action == "pause")
     except store.AutomationError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except files.StateFileError as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise _store_failure(request, e) from e
     return _row(item)
 
 
@@ -145,11 +162,11 @@ def set_automation(ref: str, action: Literal["pause", "resume"]) -> Dict[str, An
     response_model=AutomationRow,
     response_model_exclude_unset=True,
 )
-def remove_automation(ref: str) -> Dict[str, Any]:
+def remove_automation(request: Request, ref: str) -> Dict[str, Any]:
     try:
         item = store.remove(ref)
     except store.AutomationError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except files.StateFileError as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise _store_failure(request, e) from e
     return _row(item)

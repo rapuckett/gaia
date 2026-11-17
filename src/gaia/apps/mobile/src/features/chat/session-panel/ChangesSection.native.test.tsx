@@ -66,3 +66,26 @@ const changes: SessionChanges = {
         expect(client.undone.map((u) => u.force)).toEqual([false, true]);
     });
 });
+
+(Platform.OS === 'web' ? describe.skip : describe)('Undo all conflict', () => {
+    it('keeps the PC reason out of the sentence, on its own left-to-right line', async () => {
+        const reason = 'a.txt changed after this chat';
+        const client = createFakeClient({ sessionChanges: { s1: changes }, undoConflict: new GaiaApiError(409, reason, undefined, undefined, { status: 'conflict' }) });
+        await render(
+            <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+                <GaiaClientProvider client={client}>
+                    <ThemeProvider>
+                        <ChangesSection sessionId="s1" live={false} />
+                    </ThemeProvider>
+                </GaiaClientProvider>
+            </QueryClientProvider>,
+        );
+
+        await fireEvent.press(await screen.findByTestId('changes-undo-all'));
+        await fireEvent.press(screen.getByTestId('changes-undo-confirm'));
+        const sentence = await screen.findByText(t('mobileApp.changes.undoConflict'));
+        expect(sentence.props.children).not.toContain(reason);
+        const detail = (await screen.findByText(reason)) as unknown as { props: { style: { writingDirection?: string } } };
+        expect(detail.props.style.writingDirection).toBe('ltr');
+    });
+});
