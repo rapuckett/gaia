@@ -147,4 +147,17 @@ describe('useSessionSync', () => {
         expect(signals[1]!.aborted).toBe(true);
         expect(remove).toHaveBeenCalledTimes(1);
     });
+
+    it('does not refetch the chat list while the app stays active', async () => {
+        const client = clientWith(async function* (options) {
+            await new Promise<void>((resolve) => options!.signal!.addEventListener('abort', () => resolve()));
+        });
+        const { invalidate, wrapper } = setup(client, () => {});
+        const view = await renderHook(() => useSessionSync(() => {}), { wrapper });
+        await act(async () => {});
+        await act(async () => appStateHandler!('active'));
+        await act(async () => appStateHandler!('inactive'));
+        expect(invalidate).toHaveBeenCalledTimes(1);
+        await view.unmount();
+    });
 });
