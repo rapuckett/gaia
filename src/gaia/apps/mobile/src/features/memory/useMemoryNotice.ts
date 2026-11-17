@@ -8,6 +8,8 @@ import { MEMORY_ERROR_NOTICE_MS, MEMORY_NOTICE_MS } from '@/api/constants';
 export interface MemoryNotice {
     tone: 'success' | 'danger' | 'info';
     text: string;
+    /** The PC's own words, on a line of their own. */
+    detail?: string;
     /** Stays until replaced or dismissed, e.g. while an operation runs. */
     sticky?: boolean;
     /** A button on the notice, e.g. Undo. */

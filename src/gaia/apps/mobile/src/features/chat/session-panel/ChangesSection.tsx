@@ -13,9 +13,9 @@ import { describeErrorWith, useT } from '@/i18n/useT';
 import { Button, Notice, Row, Stack, Text } from '@/ui';
 
 import { ChatChangesReview } from '../changes/ChatChangesReview';
-import { countsText, filesRef, summaryText, totalText, undoneText } from '../changes/changesText';
+import { countsText, filesRef, summaryText, totalText, undoneText, untrackedNotice } from '../changes/changesText';
 import { GitSheet, repoName, type GitKind } from '../changes/GitSheet';
-import { failureReason, failureReasonWith } from '../header/failureText';
+import { failureNoticeProps, failureReason } from '../header/failureText';
 import { PanelSection } from './PanelSection';
 import { useSessionPanelStore } from './panelStore';
 import type { SectionProps } from './sections';
@@ -46,7 +46,7 @@ export function ChangesSection({ sessionId, live }: SectionProps) {
             }
         >
             <Stack gap="md">
-                {error ? <Notice tone="danger" message={t.compose((say) => say('chg.error', { error: failureReasonWith(error, say) }))} testID="changes-error" /> : null}
+                {error ? <Notice tone="danger" {...failureNoticeProps(error, t, { withReason: 'chg.error', noReason: 'mobileApp.chg.errorShort' })} testID="changes-error" /> : null}
                 {changes && !empty ? <ChangesBody sessionId={sessionId} live={live} changes={changes} onUndone={setUndone} /> : null}
                 {empty && undone ? <Notice tone="success" message={undone} testID="changes-undone" /> : null}
                 {changes && !empty ? <GitActions sessionId={sessionId} live={live} /> : null}
@@ -117,14 +117,7 @@ function ChangesBody({ sessionId, live, changes, onUndone }: { sessionId: string
                 ))}
             </Stack>
             {changes.incomplete ? (
-                <Notice
-                    tone="warning"
-                    role="note"
-                    message={
-                        untrackedWarning(changes.untracked, t, { inChat: true, undo: 'chg.undoAll' }) +
-                        groups.map((g) => `\n${g.title}${g.entries.length > 1 ? `: ${g.entries.map((e) => `${e.label || 'No description'}${e.count > 1 ? ` ×${e.count}` : ''}`).join('; ')}` : ''}`).join('')
-                    }
-                />
+                <Notice tone="warning" role="note" {...untrackedNotice(untrackedWarning(changes.untracked, t, { inChat: true, undo: 'chg.undoAll' }), groups)} />
             ) : null}
             <Row gap="sm" wrap stack>
                 <Button size="sm" variant="secondary" label={t('chg.review')} onPress={() => setReviewing(true)} testID="changes-review" />

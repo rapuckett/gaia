@@ -6,7 +6,7 @@ import { PcOnlyNotice, isPcRefusal } from '@/features/settings/PcOnlyNotice';
 import { useT } from '@/i18n/useT';
 import { Notice, Stack } from '@/ui';
 
-import { failureReasonWith } from '../header/failureText';
+import { failureNotice } from '../header/failureText';
 
 /** Above the composer while the chat's internet is off, with a way back on. `live` re-reads when a reply ends. */
 export function OfflineNotice({ sessionId, live = false }: { sessionId: string; live?: boolean }) {
@@ -21,16 +21,16 @@ export function OfflineNotice({ sessionId, live = false }: { sessionId: string; 
             </Stack>
         );
     }
-    const error = setInternet.error;
+    const failure = setInternet.error
+        ? failureNotice(setInternet.error, t, { withReason: 'offline.error', noReason: 'mobileApp.offline.errorShort' })
+        : null;
     return (
         <Stack paddingX="lg">
             <Notice
                 tone="info"
                 testID="offline-notice"
-                message={
-                    t('offline.text') +
-                    (error ? ` ${t.compose((say) => say('offline.error', { error: failureReasonWith(error, say) }))}` : '')
-                }
+                message={failure ? `${t('offline.text')} ${failure.text}` : t('offline.text')}
+                detail={failure?.detail}
                 action={{ label: t('offline.turnOn'), onPress: () => setInternet.mutate(true) }}
             />
         </Stack>

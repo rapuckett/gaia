@@ -5,7 +5,7 @@ import type { MessageKey } from '@webui/i18n/registry';
 
 import type { MemoryMaintenanceAction, MemoryMaintenanceOutcome } from '@/data';
 import type { Translate } from '@/i18n/useT';
-import { describeFailureWith } from '@/i18n/useT';
+import { failureNotice as failureSentence } from '@/features/chat/header/failureText';
 
 import type { MemoryNotice } from './useMemoryNotice';
 
@@ -18,12 +18,12 @@ export const MAINTENANCE_ACTIONS: readonly MemoryMaintenanceAction[] = [
     'rebuildFts',
 ];
 
-export const MAINTENANCE_LABELS: Record<MemoryMaintenanceAction, { idle: MessageKey; busy: MessageKey; failed: MessageKey }> = {
-    consolidate: { idle: 'mem.maint.consolidate', busy: 'mem.maint.consolidating', failed: 'mem.toast.consolidateFailed' },
-    rebuildEmbeddings: { idle: 'mem.maint.rebuildEmbeddings', busy: 'mem.maint.rebuilding', failed: 'mem.toast.rebuildFailed' },
-    reconcile: { idle: 'mem.maint.reconcile', busy: 'mem.maint.reconciling', failed: 'mem.toast.reconcileFailed' },
-    refreshSystemContext: { idle: 'mem.maint.refreshSystem', busy: 'mem.maint.refreshing', failed: 'mem.toast.systemFailed' },
-    rebuildFts: { idle: 'mem.maint.rebuildFts', busy: 'mem.maint.rebuilding', failed: 'mem.toast.ftsFailed' },
+export const MAINTENANCE_LABELS: Record<MemoryMaintenanceAction, { idle: MessageKey; busy: MessageKey; failed: MessageKey; failedShort: MessageKey }> = {
+    consolidate: { idle: 'mem.maint.consolidate', busy: 'mem.maint.consolidating', failed: 'mem.toast.consolidateFailed', failedShort: 'mobileApp.mem.consolidateFailedShort' },
+    rebuildEmbeddings: { idle: 'mem.maint.rebuildEmbeddings', busy: 'mem.maint.rebuilding', failed: 'mem.toast.rebuildFailed', failedShort: 'mobileApp.mem.rebuildFailedShort' },
+    reconcile: { idle: 'mem.maint.reconcile', busy: 'mem.maint.reconciling', failed: 'mem.toast.reconcileFailed', failedShort: 'mobileApp.mem.reconcileFailedShort' },
+    refreshSystemContext: { idle: 'mem.maint.refreshSystem', busy: 'mem.maint.refreshing', failed: 'mem.toast.systemFailed', failedShort: 'mobileApp.mem.systemFailedShort' },
+    rebuildFts: { idle: 'mem.maint.rebuildFts', busy: 'mem.maint.rebuilding', failed: 'mem.toast.ftsFailed', failedShort: 'mobileApp.mem.ftsFailedShort' },
 };
 
 /** The result line the web's toast shows for a finished action. */
@@ -62,5 +62,6 @@ export function outcomeNotice(outcome: MemoryMaintenanceOutcome, t: Translate): 
 }
 
 export function failureNotice(action: MemoryMaintenanceAction, error: Error, t: Translate): MemoryNotice {
-    return { tone: 'danger', text: t.compose((say) => say(MAINTENANCE_LABELS[action].failed, { error: describeFailureWith(error, say) })) };
+    const { failed, failedShort } = MAINTENANCE_LABELS[action];
+    return { tone: 'danger', ...failureSentence(error, t, { withReason: failed, noReason: failedShort }) };
 }
