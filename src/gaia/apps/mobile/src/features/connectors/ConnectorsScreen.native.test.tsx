@@ -116,8 +116,9 @@ describeNative('ConnectorsScreen MCP server', () => {
         const { client, queryClient, wrap } = setup([slack]);
         await render(<ConnectorsScreen />, { wrapper: wrap });
         fireEvent.press(await screen.findByLabelText('Slack'));
-        fireEvent.press(await screen.findByLabelText('Disconnect'));
+        fireEvent.press(await screen.findByTestId('connector-disconnect-slack'));
         expect(await screen.findByText(/^Disconnect Slack\?/)).toBeTruthy();
+        expect(screen.getByTestId('connector-disconnect-confirm')).toBeTruthy();
         expect(((await client.listConnectors()).connectors[0] as ConnectorRow).configured).toBe(true);
 
         fireEvent.press((await screen.findAllByLabelText('Disconnect')).at(-1)!);
