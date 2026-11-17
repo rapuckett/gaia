@@ -7,7 +7,6 @@
   "components/FolderChip.tsx": 2,
   "components/MemoryDashboard.tsx": 1,
   "components/MessageBubble.tsx": 1,
-  "components/MobileAccessModal.tsx": 20,
   "components/SetupScreen.tsx": 11,
   "components/Sidebar.tsx": 3,
   "components/UnsupportedFeature.tsx": 4,

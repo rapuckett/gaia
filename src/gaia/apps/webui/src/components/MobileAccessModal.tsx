@@ -33,6 +33,8 @@ interface MobileAccessModalProps {
 
 const NGROK_DOWNLOAD_URL = 'https://ngrok.com/download';
 
+type MobileAccessKey = 'mobileAccess.qrUnavailable' | 'mobileAccess.qrThemeFailed' | 'mobileAccess.qrDrawFailed';
+
 export function MobileAccessModal({ isOpen, onClose, onStop, error, setupCommands, onRetry, awaitingStart, onStart }: MobileAccessModalProps) {
     const [status, setStatus] = useState<TunnelStatus | null>(null);
     const [copied, setCopied] = useState(false);
@@ -41,7 +43,7 @@ export function MobileAccessModal({ isOpen, onClose, onStop, error, setupCommand
     // Nothing to poll for or scan while the tunnel cannot start.
     const idle = !!awaitingStart && !!onStart;
     const halted = !!error || needsSetup || idle;
-    const [qrError, setQrError] = useState<string | null>(null);
+    const [qrError, setQrError] = useState<MobileAccessKey | null>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
     useEscapeToClose(isOpen, onClose);
     const dialogRef = useRef<HTMLDivElement>(null);
@@ -94,7 +96,7 @@ export function MobileAccessModal({ isOpen, onClose, onStop, error, setupCommand
                     QRCodeLib = mod.default || mod;
                 } catch {
                     log.system.error('QR code library not available - install with: npm install qrcode');
-                    setQrError('QR code unavailable on this build. Use the link below instead.');
+                    setQrError('mobileAccess.qrUnavailable');
                     return;
                 }
             }
@@ -110,7 +112,7 @@ export function MobileAccessModal({ isOpen, onClose, onStop, error, setupCommand
                     'QR code skipped: --text-primary/--bg-primary did not resolve. ' +
                         'styles/index.css must be loaded before this modal renders.',
                 );
-                setQrError('QR code unavailable — the theme did not load. Use the link below instead.');
+                setQrError('mobileAccess.qrThemeFailed');
                 return;
             }
 
@@ -123,7 +125,7 @@ export function MobileAccessModal({ isOpen, onClose, onStop, error, setupCommand
                 });
             } catch (err) {
                 log.system.error('QR code generation failed', err);
-                setQrError('QR code could not be drawn. Use the link below instead.');
+                setQrError('mobileAccess.qrDrawFailed');
             }
         };
 
@@ -179,12 +181,12 @@ export function MobileAccessModal({ isOpen, onClose, onStop, error, setupCommand
                         }`} />
                         <span>
                             {status?.active
-                                ? 'Tunnel active'
+                                ? t('mobileAccess.tunnelActive')
                                 : needsSetup
                                     ? t('mobile.ngrokRequired')
                                     : error
-                                        ? "Couldn't start mobile access"
-                                        : 'Starting tunnel...'}
+                                        ? t('mobileAccess.couldntStart')
+                                        : t('mobileAccess.starting')}
                         </span>
                         {!status?.active && !halted && <span className="tunnel-spinner" />}
                     </div>}
@@ -221,12 +223,12 @@ export function MobileAccessModal({ isOpen, onClose, onStop, error, setupCommand
                                 <>
                                     {/* Stays mounted while errored so a later retry still has its ref. */}
                                     <canvas ref={canvasRef} hidden={!!qrError} />
-                                    {qrError && <div className="qr-placeholder error">{qrError}</div>}
+                                    {qrError && <div className="qr-placeholder error">{t(qrError)}</div>}
                                 </>
                             ) : (
                                 <div className="qr-placeholder">
                                     <div className="placeholder-spinner" />
-                                    <span>Connecting...</span>
+                                    <span>{t('mobileAccess.connecting')}</span>
                                 </div>
                             )}
                         </div>
@@ -235,16 +237,16 @@ export function MobileAccessModal({ isOpen, onClose, onStop, error, setupCommand
                     {/* URL display */}
                     {status?.active && mobileUrl && (
                         <div className="tunnel-url-area">
-                            <label>Mobile URL</label>
+                            <label>{t('mobileAccess.urlLabel')}</label>
                             <div className="tunnel-url-row">
-                                <input type="text" readOnly value={mobileUrl} />
+                                <input type="text" dir="ltr" readOnly value={mobileUrl} />
                                 <button
                                     className={`copy-url-btn ${copied ? 'copied' : ''}`}
                                     onClick={copyUrl}
-                                    title="Copy URL"
+                                    title={t('mobileAccess.copyUrl')}
                                 >
                                     {copied ? <Check size={13} /> : <Copy size={13} />}
-                                    {copied ? 'Copied' : 'Copy'}
+                                    {copied ? t('code.copied') : t('code.copy')}
                                 </button>
                             </div>
                         </div>
@@ -254,10 +256,10 @@ export function MobileAccessModal({ isOpen, onClose, onStop, error, setupCommand
                     {status?.active && status?.publicIp && status?.url &&
                      !status.url.includes('ngrok-free.app') && (
                         <div className="tunnel-password-hint">
-                            <label>Tunnel password</label>
-                            <div className="tunnel-password-value">{status.publicIp}</div>
+                            <label>{t('mobileAccess.passwordLabel')}</label>
+                            <div className="tunnel-password-value" dir="ltr">{status.publicIp}</div>
                             <span className="tunnel-password-note">
-                                Enter this when the tunnel page asks for a password
+                                {t('mobileAccess.passwordNote')}
                             </span>
                         </div>
                     )}
@@ -268,14 +270,14 @@ export function MobileAccessModal({ isOpen, onClose, onStop, error, setupCommand
                             <ol>
                                 <li>
                                     {qrError
-                                        ? 'Open the mobile URL above on your phone'
-                                        : "Scan the QR code with your phone's camera"}
+                                        ? t('mobileAccess.stepOpenUrl')
+                                        : t('mobileAccess.stepScan')}
                                 </li>
                                 {status?.url && !status.url.includes('ngrok-free.app') && (
-                                    <li>Enter the tunnel password shown above when prompted</li>
+                                    <li>{t('mobileAccess.stepPassword')}</li>
                                 )}
-                                <li>Chat with GAIA from your mobile device</li>
-                                <li>Your data stays secure via encrypted tunnel</li>
+                                <li>{t('mobileAccess.stepChat')}</li>
+                                <li>{t('mobileAccess.stepSecure')}</li>
                             </ol>
                         </div>
                     )}
@@ -294,9 +296,9 @@ export function MobileAccessModal({ isOpen, onClose, onStop, error, setupCommand
                             <button
                                 className="btn-danger"
                                 onClick={onStop}
-                                title="Close the tunnel and revoke the mobile URL"
+                                title={t('mobileAccess.stopHint')}
                             >
-                                Stop tunnel
+                                {t('mobileAccess.stop')}
                             </button>
                         )}
                         {idle && (
