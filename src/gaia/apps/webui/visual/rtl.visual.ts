@@ -4542,6 +4542,30 @@ for (const [locale, theme] of [['ar', 'light'], ['en', 'light'], ['ar', 'dark']]
     });
 }
 
+for (const locale of ['ar', 'en']) {
+    // A failed PC check once squeezed the first row's label to one letter a line at 1280 px.
+    test(`the failed PC check keeps its first row's label readable (${locale})`, async ({ page }) => {
+        await page.setViewportSize({ width: 1280, height: 800 });
+        await open(page, '', locale, async (p) => {
+            await p.route('**/api/setup/check*', (route) => route.fulfill({
+                json: { ready: false, stage: 'server', initialized: false, steps: [] },
+            }));
+            await p.route('**/api/onboarding/preflight', (route) => route.fulfill({ status: 500, json: { detail: 'timed out' } }));
+            await p.route('**/api/setup/plan*', (route) => route.fulfill({ status: 500, json: { detail: 'timed out' } }));
+        });
+        const label = page.locator('.setup-result.is-failed .setup-result-label').first();
+        await expect(label).toBeAttached();
+        await shot(page, `checks-failed-${locale}-1280`);
+        const m = await label.evaluate((el) => ({
+            width: el.getBoundingClientRect().width,
+            height: el.getBoundingClientRect().height,
+            line: parseFloat(getComputedStyle(el).lineHeight) || parseFloat(getComputedStyle(el).fontSize) * 1.5,
+        }));
+        expect(m.width, 'the label collapsed').toBeGreaterThan(80);
+        expect(m.height, 'the label wraps a letter a line').toBeLessThan(m.line * 3);
+    });
+}
+
 /** No GAIA agent until the notice installs it; until then a new chat is refused as the backend refuses it. */
 async function withAgentToInstall(page: Page): Promise<void> {
     let installed = false;
