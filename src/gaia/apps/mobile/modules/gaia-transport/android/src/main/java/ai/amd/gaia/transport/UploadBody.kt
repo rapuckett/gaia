@@ -7,6 +7,7 @@ import android.net.Uri
 import android.util.Log
 import expo.modules.kotlin.records.Field
 import expo.modules.kotlin.records.Record
+import expo.modules.kotlin.types.OptimizedRecord
 import java.io.File
 import java.io.FileFilter
 import java.io.FileOutputStream
@@ -23,6 +24,7 @@ private const val TEMPORARY_PREFIX = "gaia-upload-"
 private const val PROGRESS_NANOS = 100_000_000L
 
 /** A piece of a request body from JavaScript: text sent as UTF-8, or a file on this device sent from disk. */
+@OptimizedRecord
 class BodySegment : Record {
   @Field var text: String? = null
 

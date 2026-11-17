@@ -20,7 +20,7 @@ export interface PressableProps {
     'aria-busy'?: boolean;
     'aria-checked'?: boolean | 'mixed';
     'aria-expanded'?: boolean;
-    'aria-haspopup'?: 'listbox' | 'menu';
+    'aria-haspopup'?: 'dialog' | 'listbox' | 'menu';
     'aria-selected'?: boolean;
     /** Extra screen-reader actions, e.g. what a long-press does. */
     accessibilityActions?: readonly AccessibilityActionInfo[];
