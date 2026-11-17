@@ -11,7 +11,7 @@ import { useT } from '@/i18n/useT';
 import { Button, ErrorState, Screen, Stack } from '@/ui';
 import { ArrowLeft } from '@/ui/icons';
 
-import { isSectionId, SETTINGS_SECTIONS } from './sections';
+import { isSectionId, SETTINGS_SECTIONS, type SectionId } from './sections';
 import { SectionErrorBoundary } from './SectionErrorBoundary';
 import { SettingsHeader } from './SettingsHeader';
 import { SettingsTargets } from './targets';
@@ -21,6 +21,23 @@ const CRASH_ENABLED = __DEV__ || process.env.EXPO_PUBLIC_SETTINGS_CRASH === '1';
 
 function Crash(): never {
     throw new Error('Forced settings crash (?crash=1)');
+}
+
+/** The "Back to {section}" link a deep link from another section shows under the header. */
+export function BackToSection({ from }: { from: SectionId }) {
+    const t = useT();
+    const router = useRouter();
+    return (
+        <Stack paddingX="lg" align="start">
+            <Button
+                variant="ghost"
+                size="sm"
+                icon={ArrowLeft}
+                label={t.compose((say) => say('settings.backTo', { section: say(SETTINGS_SECTIONS[from].titleKey) }))}
+                onPress={() => router.replace({ pathname: '/settings/[section]', params: { section: from } })}
+            />
+        </Stack>
+    );
 }
 
 export function SettingsSectionScreen() {
@@ -50,17 +67,7 @@ export function SettingsSectionScreen() {
             header={
                 <>
                     <SettingsHeader title={t(SETTINGS_SECTIONS[section].titleKey)} backLabel={t('setup.back')} onBack={goBack} />
-                    {from ? (
-                        <Stack paddingX="lg" align="start">
-                            <Button
-                                variant="ghost"
-                                size="sm"
-                                icon={ArrowLeft}
-                                label={t.compose((say) => say('settings.backTo', { section: say(SETTINGS_SECTIONS[from].titleKey) }))}
-                                onPress={() => router.replace({ pathname: '/settings/[section]', params: { section: from } })}
-                            />
-                        </Stack>
-                    ) : null}
+                    {from ? <BackToSection from={from} /> : null}
                 </>
             }
         >

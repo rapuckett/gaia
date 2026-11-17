@@ -110,6 +110,14 @@ describeNative('/dev/settings', () => {
         ['adv-unreachable', /Could not reach GAIA.s assistant/],
         ['skills-skipped', /bare couldn.t be loaded: it has no description/],
         ['privacy-delete-none', 'No chats to delete yet.'],
+        ['perm-default', 'Start new chats in full access'],
+        ['perm-full-confirm', 'Turn on full access for new chats'],
+        ['perm-chats', 'Chat b'],
+        ['voice-preview', 'Preview'],
+        ['model-local-only-blocked', /Blocked by Local only/],
+        ['model-providers-offline', 'Check again'],
+        ['nav-back-link', 'Back to Privacy'],
+        ['nav-crash', 'Try again'],
     ])('%s shows its key text', async (name, text) => {
         mockState = name;
         await mount();
@@ -193,6 +201,20 @@ describeNative('/dev/settings', () => {
         await screen.findByText(/^Deletes every chat/, undefined, { timeout: 5000 });
         await fireEvent.press(await screen.findByTestId('privacy-delete-all'));
         expect(await screen.findByText('Delete all 3 chats?')).toBeTruthy();
+    });
+
+    it('voice-preview reads Stop while the preview is in flight', async () => {
+        mockState = 'voice-preview';
+        await mount();
+        await fireEvent.press(await screen.findByTestId('read-aloud-preview', { includeHiddenElements: true }));
+        expect((await screen.findAllByText('Stop reading', { includeHiddenElements: true })).length).toBeGreaterThan(0);
+    });
+
+    it('perm-chats offers Revoke all on a chat holding two grants', async () => {
+        mockState = 'perm-chats';
+        await mount();
+        expect((await screen.findAllByText('Chat b', { includeHiddenElements: true })).length).toBeGreaterThan(0);
+        expect((await screen.findAllByLabelText(/More actions/, { includeHiddenElements: true })).length).toBe(2);
     });
 
     it('msg-load-failed says the status could not be read once the retries are spent', async () => {
