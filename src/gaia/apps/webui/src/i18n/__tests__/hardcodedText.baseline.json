@@ -10,7 +10,6 @@
   "components/UnsupportedFeature.tsx": 4,
   "components/VersionPicker.tsx": 2,
   "components/settings/AboutSettings.tsx": 1,
-  "components/settings/MessagingSettings.tsx": 5,
   "components/setup/detected.ts": 4,
   "hooks/useChatExport.ts": 2,
   "hooks/useWindowTitle.ts": 1,
@@ -20,8 +19,6 @@
   "stores/readAloudStore.ts": 1,
   "stores/setupDownloadsStore.ts": 1,
   "utils/calendarApproval.core.ts": 1,
-  "utils/connectorPersonalize.ts": 5,
-  "utils/constants.ts": 7,
   "utils/emailPreScan.core.ts": 2,
   "utils/failedTurn.ts": 1,
   "utils/messageQueue.ts": 3,
@@ -30,6 +27,5 @@
   "utils/sessionCleanup.ts": 2,
   "utils/statusEvents.ts": 2,
   "utils/streamErrors.core.ts": 7,
-  "utils/trayActivity.ts": 1,
-  "utils/uploadErrors.core.ts": 18
+  "utils/trayActivity.ts": 1
 }
