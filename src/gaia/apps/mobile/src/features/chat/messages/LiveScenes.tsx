@@ -6,7 +6,7 @@ import { useState } from 'react';
 
 import type { AgentStep } from '@webui/types';
 
-import { GaiaApiError, GaiaNetworkError, GaiaStreamDroppedError, type GaiaError } from '@/api/errors';
+import { GaiaApiError, GaiaNetworkError, GaiaStreamDroppedError, GaiaTurnError, type GaiaError } from '@/api/errors';
 import { createFakeClient } from '@/api/fake';
 import { GaiaClientProvider } from '@/data';
 import { Divider, Screen, Stack, UIProvider } from '@/ui';
@@ -16,6 +16,7 @@ import { FIXTURES } from './__fixtures__/messages';
 import { MessageListView } from './MessageList';
 import { JumpButton } from './JumpButton';
 import { TailIssues } from '../ReplyErrors';
+import { buildTail, serverDownReplyId } from '../tailState';
 import type { TurnTail as Tail } from '../tailState';
 import { TurnTail } from '../TurnTail';
 
@@ -26,6 +27,7 @@ import { TurnTail } from '../TurnTail';
  * `activity-terminal` (CV-43): `#tap=step-row-0` opens the shell step with its exit code and Copy output.
  * `activity-plan` (CV-44): a live turn with the plan checklist. `activity-thinking` (CV-45): a live thought, then a finished one folded into its call.
  * `activity-filter` (CV-48): `#tap=steps-summary` opens the seven finished calls and shows the filter.
+ * `reply-server-down` (CV-14): a failed latest reply with the model-server fix under it and Try again; `reply-errors` also shows the unexpected-error "Report it on GitHub" link (CV-30, `report-github`).
  * `activity-vision` (CV-49): the vision offer under a tool step. `many-scrolled-up` (CV-09): the many-messages list with the jump button showing.
  */
 export const LIVE_SCENES = [
@@ -37,9 +39,11 @@ export const LIVE_SCENES = [
     'activity-filter',
     'activity-vision',
     'many-scrolled-up',
+    'reply-server-down',
 ] as const;
 export type LiveScene = (typeof LIVE_SCENES)[number];
 
+const LISTS: readonly LiveScene[] = ['many-scrolled-up', 'reply-server-down'];
 const noop = () => undefined;
 const step = (id: number, extra: Partial<AgentStep>): AgentStep => ({ id, type: 'tool', label: 'Using tool', active: false, success: true, timestamp: id, ...extra });
 
@@ -47,11 +51,11 @@ const TAIL: Tail = { live: false, text: '', events: [], replyId: 1, canTryAgain:
 
 const ERRORS: [string, GaiaError][] = [
     ['stream', new GaiaStreamDroppedError(new Error('socket closed'))],
-    ['context', new GaiaApiError(500, 'request exceeds the available context size')],
-    ['model_server', new GaiaApiError(502, 'Lemonade server is not reachable')],
+    ['context', new GaiaTurnError('request exceeds the available context size')],
+    ['model_server', new GaiaTurnError('Lemonade server is not reachable')],
     ['connection', new GaiaNetworkError('http://pc.local', new TypeError('Failed to fetch'))],
-    ['timeout', new GaiaApiError(504, 'The request timed out')],
-    ['unknown', new GaiaApiError(500, 'Something unexpected')],
+    ['timeout', new GaiaTurnError('The request timed out')],
+    ['unknown', new GaiaTurnError('Something unexpected')],
 ];
 
 const TERMINAL: AgentStep[] = [
@@ -64,7 +68,8 @@ const TERMINAL: AgentStep[] = [
     }),
 ];
 
-const PLAN: AgentStep[] = [
+const LIVE_SINCE = 64_000;
+const PLAN = (): AgentStep[] => [
     step(1, {
         type: 'plan',
         label: 'Plan',
@@ -72,11 +77,12 @@ const PLAN: AgentStep[] = [
         planNarrations: ['Finding the Q3 files', 'Reading the summary', 'Drafting the update', 'Saving it to the folder'],
         currentStep: 2,
         active: true,
+        timestamp: Date.now() - LIVE_SINCE,
     }),
-    step(2, { tool: 'write_file', narration: 'Drafting the update', active: true, success: undefined }),
+    step(2, { tool: 'write_file', narration: 'Drafting the update', active: true, success: undefined, timestamp: Date.now() - LIVE_SINCE }),
 ];
 
-const THINKING_LIVE: AgentStep[] = [step(1, { type: 'thinking', label: 'Thinking', detail: 'The summary mentions two forecasts, so I should compare them before drafting.', active: true, success: undefined })];
+const THINKING_LIVE = (): AgentStep[] => [step(1, { type: 'thinking', label: 'Thinking', detail: 'The summary mentions two forecasts, so I should compare them before drafting.', active: true, success: undefined, timestamp: Date.now() - LIVE_SINCE })];
 const THINKING_DONE: AgentStep[] = [
     step(1, { type: 'thinking', label: 'Thinking', detail: 'The file is small enough to read whole, so I will skip searching.', timestamp: 1000 }),
     step(2, { tool: 'read_file', narration: 'Reading forecast.csv', detail: 'path: forecast.csv', result: 'done', timestamp: 4000 }),
@@ -115,6 +121,25 @@ function Body({ state }: { state: LiveScene }) {
             </Stack>
         );
     }
+    if (state === 'reply-server-down') {
+        const messages = FIXTURES['failed-report'].messages;
+        const tail = buildTail(messages, { status: 'idle', liveText: '', events: [], error: null, failed: true, failure: 'model_server_down', policyAlert: undefined, stopState: undefined, stopError: undefined });
+        return (
+            <MessageListView
+                messages={messages}
+                loading={false}
+                fixShownBelowId={serverDownReplyId(tail)}
+                live={
+                    tail ? (
+                        <>
+                            <TurnTail tail={tail} line={null} onTryAgain={noop} onContinue={noop} />
+                            <TailIssues tail={tail} local={false} />
+                        </>
+                    ) : undefined
+                }
+            />
+        );
+    }
     if (state === 'many-scrolled-up') {
         return (
             <Stack flex={1}>
@@ -126,13 +151,13 @@ function Body({ state }: { state: LiveScene }) {
     if (state === 'activity-thinking') {
         return (
             <Stack gap="md">
-                <ActivityTimeline steps={THINKING_LIVE} running />
+                <ActivityTimeline steps={THINKING_LIVE()} running />
                 <Divider />
                 <ActivityTimeline steps={THINKING_DONE} />
             </Stack>
         );
     }
-    const steps = state === 'activity-terminal' ? TERMINAL : state === 'activity-plan' ? PLAN : state === 'activity-filter' ? FILTER : VISION;
+    const steps = state === 'activity-terminal' ? TERMINAL : state === 'activity-plan' ? PLAN() : state === 'activity-filter' ? FILTER : VISION;
     return <ActivityTimeline steps={steps} running={state === 'activity-plan'} />;
 }
 
@@ -143,8 +168,8 @@ export function LiveScenes({ state }: { state: LiveScene }) {
         <QueryClientProvider client={queryClient}>
             <GaiaClientProvider client={client}>
                 <UIProvider>
-                    <Screen scroll={state !== 'many-scrolled-up'}>
-                        <Stack gap="md" paddingX="gutter" paddingY="md" flex={state === 'many-scrolled-up' ? 1 : undefined}>
+                    <Screen scroll={!LISTS.includes(state)}>
+                        <Stack gap="md" paddingX="gutter" paddingY="md" flex={LISTS.includes(state) ? 1 : undefined}>
                             <Body state={state} />
                         </Stack>
                     </Screen>

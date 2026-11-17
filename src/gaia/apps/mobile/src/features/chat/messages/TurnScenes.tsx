@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { useRouter } from 'expo-router';
 import { useState } from 'react';
 
 import type { FileDiff, Session, TurnChanges } from '@/api/client.types';
@@ -17,6 +18,7 @@ import { DocsBar } from '../header/DocsBar';
 
 /**
  * Developer scenes (`/dev/messages?state=`) for what a turn changed (PRM-13 to 16, CV-60; `turn-changes-untracked` is PRM-18, the untracked-work warning), the export-chat error (CV-05) and the documents bar limit notices (CV-63).
+ * CMP-27: `#tap=docs-manage` on `docs-past-cap` opens the document library for the chat.
  * Taps: `turn-changes` and `turn-changes-undone` open the review with `#tap=turn-changes-review`; `turn-changes` shows the undo confirm after `#tap=turn-changes-undo`;
  * `turn-undo-conflict` shows the conflict (Undo anyway, Keep) after the same two taps; `turn-undo-hang` shows "Undoing…" after `#tap=turn-changes-undo` then `#tap=turn-changes-confirm`; the export errors show after `#tap=export-chat`.
  */
@@ -117,7 +119,10 @@ function clientFor(state: TurnScene) {
 }
 
 function Body({ state }: { state: TurnScene }) {
-    if (state === 'docs-past-cap' || state === 'docs-past-size') return <DocsBar sessionId="s1" onFailed={() => undefined} />;
+    const router = useRouter();
+    if (state === 'docs-past-cap' || state === 'docs-past-size') {
+        return <DocsBar sessionId="s1" onFailed={() => undefined} onManage={() => router.push({ pathname: '/documents', params: { chat: 's1' } })} />;
+    }
     if (state === 'export-error-http' || state === 'export-error-unreachable') return <ChatHeader sessionId="s1" />;
     if (state === 'turn-review' || state === 'turn-review-loading' || state === 'turn-review-error') return <ChangesReview sessionId="s1" turn={TURN(false)} onClose={() => undefined} />;
     return <TurnChangesRow sessionId="s1" messageId={7} />;
