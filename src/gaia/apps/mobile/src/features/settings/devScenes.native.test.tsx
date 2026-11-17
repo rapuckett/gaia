@@ -89,6 +89,7 @@ describeNative('/dev/settings', () => {
 
     it.each([
         ['lang-switch-ar-android', true],
+        ['lang-switch-en-android', true],
         ['lang-switch-ar-ios', false],
     ])('%s covers the screen, with Close only on Android', async (name, hasClose) => {
         mockState = name;

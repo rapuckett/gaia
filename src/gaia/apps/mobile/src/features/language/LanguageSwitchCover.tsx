@@ -59,7 +59,7 @@ export function LanguageSwitchCover({ target, platform, onCancel }: CoverProps) 
                             {t(android ? 'mobileApp.settings.languageSwitch.androidTitle' : 'mobileApp.settings.languageSwitch.iosTitle', { language })}
                         </Text>
                         <Text tone="secondary" align="center">
-                            {t(android ? 'mobileApp.settings.languageSwitch.androidBody' : 'mobileApp.settings.languageSwitch.iosBody')}
+                            {t(android ? 'mobileApp.settings.languageSwitch.androidBody' : 'mobileApp.settings.languageSwitch.iosBody', { language })}
                         </Text>
                     </Stack>
                 </View>

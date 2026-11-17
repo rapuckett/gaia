@@ -50,6 +50,8 @@ export interface SettingsScene {
     skillsAdd?: boolean;
     /** Covers the screen as an English to Arabic pick would, with this platform's buttons, whatever the device is. */
     languageSwitch?: 'android' | 'ios';
+    /** The language the cover is for; Arabic when unset. */
+    languageSwitchTo?: string;
     /** The device's saved palette; scenes without one open on the default palette. */
     appearance?: { palette: 'default' | 'custom'; custom: { accent: string; base: string } };
 }
@@ -428,6 +430,7 @@ export const SETTINGS_SCENES: Record<string, SettingsScene> = {
     'general-custom-colors': { section: 'general', gpuMemory: GPU, appearance: { palette: 'custom', custom: { accent: '#C2410C', base: '#44403C' } } },
     // The full-screen cover after an English to Arabic pick (Android has Close and Cancel; iOS only Cancel).
     'lang-switch-ar-android': { section: 'general', gpuMemory: GPU, languageSwitch: 'android' },
+    'lang-switch-en-android': { section: 'general', gpuMemory: GPU, languageSwitch: 'android', languageSwitchTo: 'en' },
     'lang-switch-ar-ios': { section: 'general', gpuMemory: GPU, languageSwitch: 'ios' },
     // SET-PRIV-06: the Delete chats card with chats (`#tap=privacy-delete-all` opens the confirm sheet), and with none.
     'privacy-delete': { section: 'privacy', gpuMemory: GPU, data: { settings: SETTINGS, sessions: [chat('a'), chat('b'), chat('c')] } },
