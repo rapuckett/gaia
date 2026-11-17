@@ -91,6 +91,16 @@ describeNative('chat, new-chat, composer and permission scenes', () => {
         expect((await screen.findAllByTestId('activity-timeline', opts)).length).toBe(2);
     });
 
+    it('activity-thinking shows both thought texts once their headers open', async () => {
+        await open('messages', { state: 'activity-thinking' });
+        await screen.findAllByTestId('activity-timeline', opts);
+        expect(screen.queryByText(/compare them before drafting/, opts)).toBeNull();
+        screen.getAllByLabelText(/^Thinking/, opts).forEach((header) => fireEvent.press(header));
+        expect(await screen.findByText(/compare them before drafting/, opts)).toBeTruthy();
+        fireEvent.press(await screen.findByTestId('step-row--1', opts));
+        expect(await screen.findByText(/skip searching/, opts)).toBeTruthy();
+    });
+
     it.each(['activity-plan', 'activity-thinking'])('%s reads an elapsed time under an hour', async (state) => {
         await open('messages', { state });
         await screen.findAllByTestId('activity-timeline', opts);
@@ -168,6 +178,11 @@ describeNative('chat, new-chat, composer and permission scenes', () => {
 
     it('failed-report shows Try again on the failed latest reply', async () => {
         await open('messages', { state: 'failed-report' });
+        expect(await screen.findByTestId('try-again', opts)).toBeTruthy();
+    });
+
+    it('cutoff-schedule-paused shows Try again on the cut-off latest reply', async () => {
+        await open('messages', { state: 'cutoff-schedule-paused' });
         expect(await screen.findByTestId('try-again', opts)).toBeTruthy();
     });
 
