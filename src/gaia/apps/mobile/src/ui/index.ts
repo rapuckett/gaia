@@ -17,6 +17,7 @@ export { PRESSABLE_MIN_SIZE, Pressable, type PressableProps } from './controls/P
 export { Button, type ButtonProps } from './controls/Button';
 export { SmallButton, type SmallButtonProps } from './controls/SmallButton';
 export { IconButton, type IconButtonProps } from './controls/IconButton';
+export { UpButton, type UpButtonProps } from './controls/UpButton';
 export { Icon, type IconProps } from './controls/Icon';
 export { Screen, type ScreenProps } from './controls/Screen';
 export { ScreenBannerProvider, useScreenBanner } from './controls/ScreenBanner';
