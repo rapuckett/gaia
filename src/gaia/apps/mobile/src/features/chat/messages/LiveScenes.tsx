@@ -15,6 +15,7 @@ import { ActivityTimeline } from '../activity/ActivityTimeline';
 import { FIXTURES } from './__fixtures__/messages';
 import { MessageListView } from './MessageList';
 import { JumpButton } from './JumpButton';
+import { MessageActionsContext } from './MessageActionsContext';
 import { TailIssues } from '../ReplyErrors';
 import { buildTail, serverDownReplyId } from '../tailState';
 import type { TurnTail as Tail } from '../tailState';
@@ -28,6 +29,7 @@ import { TurnTail } from '../TurnTail';
  * `activity-plan` (CV-44): a live turn with the plan checklist. `activity-thinking` (CV-45): a live thought, then a finished one folded into its call. The live thought opens with `#expand` (its header has no test ID); the folded one opens with `#tap=step-row-1`.
  * `activity-filter` (CV-48): `#tap=steps-summary` opens the seven finished calls and shows the filter.
  * `reply-server-down` (CV-14): a failed latest reply with the model-server fix under it and Try again; `reply-errors` also shows the unexpected-error "Report it on GitHub" link (CV-30, `report-github`).
+ * `latest-answer` (regenerate): a short exchange; only the latest answer has Try again (`regenerate`), and its retry does nothing.
  * `activity-vision` (CV-49): the vision offer under a tool step. `many-scrolled-up` (CV-09): the many-messages list with the jump button showing.
  */
 export const LIVE_SCENES = [
@@ -40,11 +42,13 @@ export const LIVE_SCENES = [
     'activity-vision',
     'many-scrolled-up',
     'reply-server-down',
+    'latest-answer',
 ] as const;
 export type LiveScene = (typeof LIVE_SCENES)[number];
 
-const LISTS: readonly LiveScene[] = ['many-scrolled-up', 'reply-server-down'];
+const LISTS: readonly LiveScene[] = ['many-scrolled-up', 'reply-server-down', 'latest-answer'];
 const noop = () => undefined;
+const LATEST_ANSWER_ACTIONS = { send: () => false, retry: () => Promise.resolve(true), busy: false };
 const step = (id: number, extra: Partial<AgentStep>): AgentStep => ({ id, type: 'tool', label: 'Using tool', active: false, success: true, timestamp: id, ...extra });
 
 const TAIL: Tail = { live: false, text: '', events: [], replyId: 1, canTryAgain: false, canContinue: false };
@@ -138,6 +142,13 @@ function Body({ state }: { state: LiveScene }) {
                     ) : undefined
                 }
             />
+        );
+    }
+    if (state === 'latest-answer') {
+        return (
+            <MessageActionsContext.Provider value={LATEST_ANSWER_ACTIONS}>
+                <MessageListView messages={FIXTURES.short.messages} loading={false} />
+            </MessageActionsContext.Provider>
         );
     }
     if (state === 'many-scrolled-up') {
