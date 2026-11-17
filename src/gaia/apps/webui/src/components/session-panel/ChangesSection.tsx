@@ -35,10 +35,13 @@ function baseName(path: string): string {
 /** "4 files" as a message param, so each language words its own count. */
 const filesRef = (n: number) => ref(n === 1 ? 'chg.files.one' : 'chg.files.other', { n });
 
+/** "+120 −8" as one left-to-right value, so the signs stay with their numbers in Arabic. */
+const countsValue = (additions: number, deletions: number) => isolate(`+${additions} \u2212${deletions}`, 'ltr');
+
 /** "4 files changed, +120 −8". */
 export function totalText(changes: SessionChanges, t: Translate = tEn): string {
     const { files, additions, deletions } = changes.totals;
-    return t('chg.total', { files: filesRef(files), add: additions, del: deletions });
+    return t('chg.total', { files: filesRef(files), counts: countsValue(additions, deletions) });
 }
 
 const CHANGE_LABEL: Record<ChatFileChange['change'], MessageKey> = {
@@ -84,7 +87,7 @@ export function ChangesSection({ sessionId, busy, onJumpToMessage }: ChangesSect
             id="changes"
             title={t('chg.title')}
             summary={changes && !empty
-                ? t('chg.summary', { files: filesRef(changes.totals.files), add: changes.totals.additions, del: changes.totals.deletions })
+                ? t('chg.summary', { files: filesRef(changes.totals.files), counts: countsValue(changes.totals.additions, changes.totals.deletions) })
                 : null}
         >
             {error && <p className="sp-error">{t('chg.error', { error })}</p>}
@@ -244,7 +247,7 @@ function ChatChangesReview({ changes, onClose }: { changes: SessionChanges; onCl
         <div ref={dialogRef} className="modal-overlay" onClick={onClose} role="dialog" aria-modal="true" aria-label={t('mobileApp.changes.chat.reviewTitle')}>
             <div className="modal-panel changes-review" onClick={(e) => e.stopPropagation()}>
                 <div className="modal-header">
-                    <h3>{t('mobileApp.changes.chat.reviewHeading', { total: ref('chg.total', { files: filesRef(changes.totals.files), add: changes.totals.additions, del: changes.totals.deletions }) })}</h3>
+                    <h3>{t('mobileApp.changes.chat.reviewHeading', { total: ref('chg.total', { files: filesRef(changes.totals.files), counts: countsValue(changes.totals.additions, changes.totals.deletions) }) })}</h3>
                     <button type="button" className="btn-icon" onClick={onClose} aria-label={t('sp.closeShort')}>
                         <X size={18} />
                     </button>

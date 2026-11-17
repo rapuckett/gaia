@@ -4,7 +4,8 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { tEn } from '../../i18n/translator';
+import { isolate } from '../../i18n/registry';
+import { tEn, translator } from '../../i18n/translator';
 import { describeUploadError } from '../../utils/uploadErrors.core';
 import {
     getUnsupportedCategory,
@@ -208,5 +209,12 @@ describe('describeUploadError drop hint', () => {
     it('offers dropping the file on the desktop only', () => {
         expect(describeUploadError(tEn, { ...refused, canDrop: true }).detail).toContain(tEn('docs.dropInstead'));
         expect(describeUploadError(tEn, refused).detail).toBe(refused.error);
+    });
+});
+
+describe('describeUploadError file type', () => {
+    it('isolates the extension inside the Arabic sentence', () => {
+        const view = describeUploadError(translator('ar'), { filename: 'a.xyz', error: 'Unsupported file type', status: 400 });
+        expect(view.title).toContain(isolate('.xyz', 'ltr'));
     });
 });
