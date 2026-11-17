@@ -1,7 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { GaiaApiError, GaiaNetworkError } from '@/api/errors';
+import { GaiaApiError, GaiaNetworkError, GaiaTurnError } from '@/api/errors';
 
 import { describeErrorWith, describeHttpFailure, serverText, technicalDetail, translator } from './useT';
 
@@ -25,6 +25,19 @@ describe('server text stays out of the sentence', () => {
         expect(detail).toBe('The connectors service is not running.');
         expect(text).not.toContain('connectors service');
         expect(text).toContain('500');
+    });
+
+    it.each(['en', 'ar'])('a failed turn in %s gives a reason-free sentence and the PC text as detail', (code) => {
+        const t = translator(code);
+        const { text, detail } = describeHttpFailure(new GaiaTurnError('llama-server exited with code 3'), t);
+        expect(detail).toBe('llama-server exited with code 3');
+        expect(text).not.toContain('llama-server');
+        expect(text).toBe(t('mobileApp.error.turnFailedNoDetail'));
+    });
+
+    it('a failed turn with no detail is the sentence alone', () => {
+        const t = translator('en');
+        expect(describeHttpFailure(new GaiaTurnError(''), t)).toEqual({ text: t('mobileApp.error.turnFailedNoDetail') });
     });
 
     it('serverText is the raw text only for errors we did not write', () => {
