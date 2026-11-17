@@ -13,6 +13,7 @@ import { useT } from '@/i18n/useT';
 import { Disclosure, Icon, Notice, Row, Stack, Text } from '@/ui';
 import { Check } from '@/ui/icons';
 
+import { PHONE_DURATION } from './footerText';
 import { PlanChecklist } from './PlanChecklist';
 import { PolicyAlert } from './PolicyAlert';
 import { StepFilter } from './StepFilter';
@@ -44,7 +45,7 @@ function Thought({ step, live, durationMs, now, testID }: { step: ActivityRow; l
     const text = (step.detail ?? '').trim();
     if (!text) return null;
     return (
-        <Disclosure title={thoughtLabel(live, live ? now - step.timestamp : durationMs, t)} open={open} onToggle={() => setOpen((v) => !v)} headerTestID={testID}>
+        <Disclosure title={thoughtLabel(live, live ? now - step.timestamp : durationMs, t, PHONE_DURATION)} open={open} onToggle={() => setOpen((v) => !v)} headerTestID={testID}>
             <Text role="label" dir="auto" tone="secondary">
                 {text}
             </Text>

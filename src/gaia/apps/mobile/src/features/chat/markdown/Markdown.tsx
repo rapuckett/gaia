@@ -11,6 +11,7 @@ import { openPcFile } from '@/features/files/openPcFile';
 import { useFileScope } from '@/features/files/scopeContext';
 import { contentDir, Divider, HScroll, Icon, Notice, NumberMarker, Row, Stack, Surface, Text } from '@/ui';
 import { Check, Square } from '@/ui/icons';
+import { ForcedDirection } from '@/ui/text/ForcedDirection';
 
 import { CodeBlock } from './CodeBlock';
 import { Caret, plainText, renderInline, type InlineContext } from './inline';
@@ -91,12 +92,14 @@ function renderList(node: Extract<RootContent, { type: 'list' }>, ctx: RenderCon
                     );
                 const itemDir: Dir = contentDir(plainText(item), ctx.uiDir);
                 return (
-                    <Row key={i} gap="sm" align="start" dir={itemDir}>
-                        {marker}
-                        <Stack flex={1} gap="xs">
-                            {renderBlocks(item.children, ctx, `${key}.${i}`)}
-                        </Stack>
-                    </Row>
+                    <ForcedDirection.Provider key={i} value={itemDir === ctx.uiDir ? null : itemDir}>
+                        <Row gap="sm" align="start" dir={itemDir}>
+                            {marker}
+                            <Stack flex={1} gap="xs">
+                                {renderBlocks(item.children, ctx, `${key}.${i}`)}
+                            </Stack>
+                        </Row>
+                    </ForcedDirection.Provider>
                 );
             })}
         </Stack>

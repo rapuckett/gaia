@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import { isolateUnit, type MessageKey } from '@webui/i18n/registry';
+import type { DurationWords } from '@webui/utils/agentActivity.core';
 import { composeSummary, exactStats } from '@webui/utils/answerStats.core';
 import type { InferenceStats } from '@webui/types';
 import type { TurnEnding } from '@webui/utils/turnEnding.core';
@@ -27,6 +28,9 @@ const phone = (key: MessageKey): MessageKey => PHONE_WORDS[key] ?? key;
 
 /** Latin units stay left to right inside right-to-left text; Arabic units read naturally. */
 const ltr = isolateUnit;
+
+/** The same duration words for the thinking header. */
+export const PHONE_DURATION: DurationWords = { mark: ltr, variant: phone };
 
 export function answerFooterText(
     latencyMs: number | undefined,
