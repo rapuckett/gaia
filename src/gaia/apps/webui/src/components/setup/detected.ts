@@ -96,9 +96,10 @@ export const JOB_KEYS: Record<SetupRole, MessageKey> = {
 /** The summary as plain text, in English, for pasting into a bug report or a chat. */
 export function specText(plan: SetupPlan, hardware: PreflightReport | null): string {
     const f = facts(plan, hardware);
-    const server = plan.lemonade.mode === 'external' ? "the user's own" : "GAIA's own";
+    const server = plan.lemonade.mode === 'external' ? "the user's own" : "GAIA's own"; // english: bug-report text, always English
     return [
         `GAIA: ${f.gaia ?? 'unknown'}${f.build ? `, ${BUILD_WORDS[f.build]}` : ''} (agent ${f.sys?.agent_version ?? 'not installed yet'})`,
+        // english: bug-report text, always English
         `Model server: ${server} Lemonade ${f.sys?.lemonade_version ?? '(version not reported)'}${plan.lemonade.url ? ` at ${plan.lemonade.url}` : ''}`,
         ...f.runtimes.map(({ name, b }) => `${name}: ${b.backend}${b.version ? ` ${b.version}` : ''} (${STATE_WORDS[b.state ?? ''] ?? 'not installed'})`),
         `OS: ${f.sys?.os ?? hardware?.os ?? 'unknown'}`,
@@ -106,7 +107,9 @@ export function specText(plan: SetupPlan, hardware: PreflightReport | null): str
         `Graphics: ${f.graphics ?? 'none found'}`,
         `NPU: ${f.npus.map(deviceText).join('; ') || 'none found'}`,
         `Memory: ${f.totalMemory ?? 'unknown'}${plan.capacity_gb != null ? `, ${formatSize(plan.capacity_gb)} for models${plan.memory_source ? ` (${plan.memory_source})` : ''}` : ''}`,
+        // english: bug-report text, always English
         `Models folder: ${f.modelsPath ?? 'unknown'}${f.freeGb != null ? ` (${formatSize(f.freeGb)} free)` : ''}`,
+        // english: bug-report text, always English
         `GAIA data and logs: ${f.gaiaHome ?? 'unknown'}`,
     ].join('\n');
 }

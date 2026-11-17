@@ -19,7 +19,7 @@ import { DownloadContents } from './setup/DownloadContents';
 import { FIREWORKS_KEYS_URL, GATEWAY_GUIDE_URL } from './setup/keyLinks';
 import { DownloadProgress, downloadsActive } from './setup/DownloadProgress';
 import { RunActivity } from './setup/RunActivity';
-import { formatFitGb, formatSize, totalMemory } from './setup/format';
+import { formatFitGb, formatSize, ltrIn, totalMemory } from './setup/format';
 import { GpuMemoryPanel } from './setup/GpuMemoryPanel';
 import { tooBigText } from './setup/ModelChecklist';
 import { StageLogs } from './setup/StageLogs';
@@ -953,30 +953,37 @@ export function SetupScreen({ onReady, onClose }: SetupScreenProps) {
     const runStep = (id: Stage) => id === 'download' || id === 'test' || id === 'ready';
     // What the checks did before any run printed a line, so the Checks log is never empty.
     const checkNotes: string[] = [];
+    const place = (text: string) => ltrIn(t.locale, text);
     if (hardware) {
-        const memory = [
-            plan?.system?.physical_memory ? `${totalMemory(plan.system.physical_memory, null)} installed` : null,
-            hardware.ram_gb != null ? `${hardware.ram_gb} GB the OS can use` : null,
-        ].filter(Boolean).join(', ');
-        const disk = hardware.disk_free_gb != null ? `${Math.round(hardware.disk_free_gb)} GB free on disk` : null;
-        checkNotes.push(`This PC: ${[hardware.gpu_name, hardware.npu_detected ? 'NPU' : null].filter(Boolean).join(', ') || 'no GPU reported'}`
-            + [memory, disk].filter(Boolean).map((part) => `; ${part}`).join(''));
+        const parts = [
+            plan?.system?.physical_memory ? t('setup.checks.log.installed', { size: place(totalMemory(plan.system.physical_memory, null) ?? '') }) : null,
+            hardware.ram_gb != null ? t('setup.checks.log.osCanUse', { size: place(`${hardware.ram_gb} GB`) }) : null,
+            hardware.disk_free_gb != null ? t('setup.checks.log.diskFree', { size: place(`${Math.round(hardware.disk_free_gb)} GB`) }) : null,
+        ].filter((x): x is string => !!x);
+        const devices = [hardware.gpu_name ? place(hardware.gpu_name) : null, hardware.npu_detected ? 'NPU' : null].filter(Boolean).join(t('mem.listSeparator'));
+        checkNotes.push(t('setup.checks.log.pc', {
+            hardware: devices || t('setup.checks.log.noGpu'),
+            more: parts.map((part) => `${t('setup.checks.log.sep')}${part}`).join(''),
+        }));
     } else if (hardwareError) {
-        checkNotes.push(`Couldn't read this PC: ${hardwareError}`);
+        checkNotes.push(t('setup.checks.log.pcFailed', { reason: place(hardwareError) }));
     }
     if (lemonadeFound) {
-        checkNotes.push(`Found your Lemonade${lemonadeFound.version ? ` ${lemonadeFound.version}` : ''} at ${lemonadeFound.url}`);
-        checkNotes.push(lemonadeChoice === 'external' ? 'You chose your own Lemonade'
-            : lemonadeChoice === 'gaia' ? "You chose GAIA's own Lemonade"
-                : 'Waiting for you to choose which Lemonade GAIA uses');
+        checkNotes.push(t('setup.checks.log.foundLemonade', {
+            version: lemonadeFound.version ? ` ${place(lemonadeFound.version)}` : '',
+            url: place(lemonadeFound.url),
+        }));
+        checkNotes.push(lemonadeChoice === 'external' ? t('setup.checks.log.choseOwn')
+            : lemonadeChoice === 'gaia' ? t('setup.checks.log.choseGaia')
+                : t('setup.checks.log.waitingChoice'));
     }
     // Until the user picks a server, GAIA has none of its own to report on.
     if (plan && !(lemonadeFound && !lemonadeChoice)) {
         checkNotes.push(plan.lemonade.reachable
-            ? `Model server answering at ${plan.lemonade.url ?? 'its address'}`
-            : 'No model server answering yet');
+            ? t('setup.checks.log.serverUp', { url: plan.lemonade.url ? place(plan.lemonade.url) : t('setup.checks.log.itsAddress') })
+            : t('setup.checks.log.serverDown'));
     } else if (planError) {
-        checkNotes.push(`Couldn't read the model list: ${planError}`);
+        checkNotes.push(t('setup.checks.log.listFailed', { reason: place(planError) }));
     }
     const reachable = (id: Stage, i: number) => i <= at || (visited.has(id) && !runStep(id));
     const railSteps: RailStep[] = trail.map((s, i) => ({
