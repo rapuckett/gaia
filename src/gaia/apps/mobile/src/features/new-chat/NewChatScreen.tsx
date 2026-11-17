@@ -264,7 +264,8 @@ export function NewChatScreen({ onOpen, onChooseDocuments, initialText = '', pro
                     <Notice
                         tone="danger"
                         title={t('newChat.setupFailed.title')}
-                        message={`${failedSetup}\n\n${t('newChat.setupFailed.hint')}`}
+                        message={t('newChat.setupFailed.hint')}
+                        detail={failedSetup}
                     />
                 )}
                 {!state.sending && <FolderChip folder={startScreen?.working_folder} />}
