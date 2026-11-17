@@ -6,7 +6,7 @@ import { Drawer } from 'expo-router/drawer';
 import { createContext, useContext } from 'react';
 import { Platform, useWindowDimensions } from 'react-native';
 
-import { galleryBuild } from '@/features/dev/devGallery';
+import { devGalleryEnabled } from '@/features/dev/devGallery';
 import { useDirection } from '@/i18n/useT';
 import { useConnectionStore } from '@/state/connection';
 import { useLargeText } from '@/ui/theme/a11y';
@@ -26,7 +26,7 @@ export function useDrawerPresent(): boolean {
 /**
  * The app's navigator. With no PC paired every menu destination is out of reach, so the screens render
  * with no drawer at any width, as on the welcome screen; pairing a PC brings the drawer in, and unpairing
- * the last one removes it, open or not. A gallery build's `/dev/*` scenes keep the drawer.
+ * the last one removes it, open or not. `/dev/*` scenes keep the drawer wherever the gallery is enabled (dev builds, a web export with the gallery flag, a native gallery build).
  */
 export function AppNavigator() {
     const paired = useConnectionStore((s) => s.connection !== null);
@@ -35,7 +35,7 @@ export function AppNavigator() {
     const largeText = useLargeText();
     const dir = useDirection();
     const webRtl = Platform.OS === 'web' && dir === 'rtl';
-    const drawer = paired || (route.startsWith('/dev/') && galleryBuild());
+    const drawer = paired || (route.startsWith('/dev/') && devGalleryEnabled());
 
     if (!drawer) {
         return (

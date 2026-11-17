@@ -32,7 +32,7 @@ jest.mock('expo-router/drawer', () => {
     };
     return { Drawer, useDrawerStatus: () => 'closed' };
 });
-jest.mock('@/features/dev/devGallery', () => ({ galleryBuild: () => mockGallery }));
+jest.mock('@/features/dev/devGallery', () => ({ devGalleryEnabled: () => mockGallery }));
 jest.mock('./AppDrawer', () => ({ AppDrawer: () => null }));
 
 function mount(width = 390) {
@@ -79,10 +79,17 @@ describeNative('AppNavigator', () => {
         expect(screen.getByText('Home')).toBeTruthy();
     });
 
-    it('keeps the drawer for a gallery build scene with no PC', async () => {
+    it('keeps the drawer for a /dev scene with no PC wherever the gallery is enabled (dev, web flag, native gallery build)', async () => {
         mockGallery = true;
         mockPath = '/dev/messages';
         await mount();
         expect(screen.getByText('drawer')).toBeTruthy();
+    });
+
+    it('draws no drawer on a non-dev route with no PC even where the gallery is enabled', async () => {
+        mockGallery = true;
+        mockPath = '/settings';
+        await mount();
+        expect(screen.queryByText('drawer')).toBeNull();
     });
 });
