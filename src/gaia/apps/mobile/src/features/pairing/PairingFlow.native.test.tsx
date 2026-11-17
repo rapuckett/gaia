@@ -72,6 +72,24 @@ describeNative('PairingFlow', () => {
         expect(onExit).toHaveBeenCalledTimes(1);
     });
 
+    it('shows a platform-labeled up control at step 1 only when opened from another screen, and it returns there', async () => {
+        setPairingService(createFakePairingService());
+        const onExit = jest.fn();
+        const label = t(Platform.OS === 'ios' ? 'mobileApp.nav.back' : 'mobileApp.nav.up');
+        await render(<PairingFlow initialStep="how" onExit={onExit} />, { wrapper: wrap });
+        await screen.findByText(t('mobileApp.pairing.how.title'));
+        expect(screen.queryByText(t('mobileApp.pairing.manual.back'))).toBeNull();
+        await fireEvent.press(screen.getByLabelText(label));
+        expect(onExit).toHaveBeenCalledTimes(1);
+    });
+
+    it('has no up control on first run', async () => {
+        setPairingService(createFakePairingService());
+        await render(<PairingFlow initialStep="how" />, { wrapper: wrap });
+        await screen.findByText(t('mobileApp.pairing.how.title'));
+        expect(screen.queryByTestId('pairing-up')).toBeNull();
+    });
+
     it('leaves back to the system when nothing opened it', async () => {
         setPairingService(createFakePairingService());
         await render(<PairingFlow initialStep="how" />, { wrapper: wrap });

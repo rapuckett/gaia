@@ -3931,6 +3931,8 @@ export const enMessages = {
     'mobileApp.files.refused.noChatFolders': "A paired phone can open files only from the folders its chat was given. This chat has no folders yet: add one on your PC.",
     'mobileApp.files.refused.notInChatFolders': "A paired phone can open files only from the folders its chat was given. {name} isn't in this chat's folders: add its folder to the chat on your PC, or open it on your PC.",
     'mobileApp.files.refused.sessionRequired': "A paired phone can open files only from the folders its chat was given. Open the file from a chat.",
+    'mobileApp.nav.back': 'Back',
+    'mobileApp.nav.up': 'Navigate up',
     'mobileApp.pairing.pinMismatch.title': 'Pair again',
     'mobileApp.pairing.pinMismatch.first': "This PC's security certificate doesn't match the code, so the phone didn't pair. Make a new code on your PC and try again.",
     'mobileApp.pairing.pinMismatch.action': 'Pair again',

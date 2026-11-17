@@ -7,8 +7,8 @@ import { BackHandler, Platform } from 'react-native';
 import { GaiaPinMismatchError } from '@/api/errors';
 import { describeHttpFailure, useT } from '@/i18n/useT';
 import { useConnectionStore } from '@/state/connection';
-import { Button, Card, Icon, Notice, Row, Screen, Spinner, Stack, Text, TextField } from '@/ui';
-import { CircleAlert, Clock, Monitor, Smartphone } from '@/ui/icons';
+import { Button, Card, Icon, IconButton, Notice, Row, Screen, Spinner, Stack, Text, TextField } from '@/ui';
+import { ArrowLeft, CircleAlert, Clock, Monitor, Smartphone } from '@/ui/icons';
 
 import { parseInvite, type PairingInvite } from './invite';
 import { PairingScanner } from './PairingScanner';
@@ -271,7 +271,10 @@ export function PairingFlow({ initialStep = 'welcome', onPaired, onScan, onExit 
     if (view === 'how') {
         const steps = ['step1', 'step2', 'step3', 'step4'] as const;
         return (
-            <Page title={t('mobileApp.pairing.how.title')}>
+            <Page
+                title={t('mobileApp.pairing.how.title')}
+                up={onExit ? <IconButton icon={ArrowLeft} label={t(Platform.OS === 'ios' ? 'mobileApp.nav.back' : 'mobileApp.nav.up')} onPress={onExit} testID="pairing-up" /> : undefined}
+            >
                 <Card>
                     <Stack gap="md">
                         {steps.map((step, i) => (
@@ -288,7 +291,6 @@ export function PairingFlow({ initialStep = 'welcome', onPaired, onScan, onExit 
                 </Card>
                 {canScan ? <Button variant="primary" label={t('mobileApp.pairing.how.scan')} onPress={onScan ?? (() => setView('scan'))} full /> : null}
                 <Button variant={canScan ? 'secondary' : 'primary'} label={t('mobileApp.pairing.how.paste')} onPress={() => setView('manual')} full />
-                {onExit ? <Button variant="ghost" label={t('mobileApp.pairing.manual.back')} onPress={onExit} full /> : null}
             </Page>
         );
     }
@@ -325,6 +327,7 @@ function Page({
     body,
     busy,
     footer,
+    up,
     children,
 }: {
     icon?: typeof Clock;
@@ -333,6 +336,8 @@ function Page({
     busy?: boolean;
     /** Actions pinned to the bottom of the screen, in thumb reach. */
     footer?: React.ReactNode;
+    /** A leading up control in a bare top bar, for a screen opened from another one. */
+    up?: React.ReactNode;
     children?: React.ReactNode;
 }) {
     return (
@@ -340,6 +345,7 @@ function Page({
             banner={null}
             keyboard="avoid"
             scroll
+            header={up ? <Stack paddingX="lg" paddingY="sm"><Row>{up}</Row></Stack> : undefined}
             footer={
                 footer ? (
                     <Stack gap="sm">

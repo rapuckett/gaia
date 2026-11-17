@@ -3930,6 +3930,8 @@ const messages: Messages = {
     'mobileApp.files.refused.noChatFolders': "يستطيع الهاتف المقترن فتح الملفات من المجلدات التي مُنحت لمحادثته فقط. ليس لهذه المحادثة أي مجلدات بعد: أضف مجلدًا من الكمبيوتر.",
     'mobileApp.files.refused.notInChatFolders': "يستطيع الهاتف المقترن فتح الملفات من المجلدات التي مُنحت لمحادثته فقط. الملف {name} ليس في مجلدات هذه المحادثة: أضف مجلده إلى المحادثة من الكمبيوتر، أو افتحه على الكمبيوتر.",
     'mobileApp.files.refused.sessionRequired': "يستطيع الهاتف المقترن فتح الملفات من المجلدات التي مُنحت لمحادثته فقط. افتح الملف من داخل محادثة.",
+    'mobileApp.nav.back': 'رجوع',
+    'mobileApp.nav.up': 'التنقل للأعلى',
     'mobileApp.pairing.pinMismatch.title': 'أعد الاقتران',
     'mobileApp.pairing.pinMismatch.first': 'شهادة الأمان على هذا الكمبيوتر لا تطابق الرمز، لذا لم يتم اقتران الهاتف. أنشئ رمزًا جديدًا على جهاز الكمبيوتر وحاول مرة أخرى.',
     'mobileApp.pairing.pinMismatch.action': 'أعد الاقتران',
