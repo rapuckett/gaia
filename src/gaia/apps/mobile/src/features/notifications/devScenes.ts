@@ -9,7 +9,6 @@ import type { GaiaNotification, NotificationType } from '@webui/types/agent';
 import { createFakeClient, type FakeClientData } from '@/api/fake';
 import type { GaiaClient, SetupCheck, SystemStatus } from '@/api/client.types';
 import { GaiaApiError, GaiaNetworkError } from '@/api/errors';
-import { translator } from '@/i18n/useT';
 import type { ChatAlertBanner } from '@/state/chatAlertBanner';
 import { GOAL_STORE_NOTIFICATION_ID } from '@/state/goalAlerts';
 
