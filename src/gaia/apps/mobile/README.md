@@ -120,7 +120,7 @@ APP_ENV=development npm run export:web    # expo export --platform web
 - **Dev scenes.** `src/app/dev/*` is a gallery of screens on fake data, reached at `/dev/<name>`
   with a query parameter naming the scene: most pages read `?state=`, a few (`file-preview`,
   `files`, `memory-gallery`) read `?scene=`, and some show every scene on one page; check the
-  page. It is available in development builds and in a web export built with
+  page. It is available in development builds and in a native build or web export built with
   `EXPO_PUBLIC_DEV_GALLERY=1`. Declare each new dev page in `src/features/nav/routes.ts`;
   `routes.test.ts` fails for one that is missing.
 - **End to end.** `e2e/` runs Playwright against the web export and a real Agent UI backend with
