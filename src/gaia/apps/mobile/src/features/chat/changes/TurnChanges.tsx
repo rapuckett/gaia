@@ -5,24 +5,16 @@ import { useState } from 'react';
 
 import { groupUntracked, untrackedWarning } from '@webui/utils/untrackedWork';
 
-import type { TurnChanges as Turn, UndoResult } from '@/api/client.types';
+import type { TurnChanges as Turn } from '@/api/client.types';
 import { GaiaApiError } from '@/api/errors';
 import { useTurnChanges, useUndoTurn } from '@/data';
-import { describeHttpFailure, useT, type Translate } from '@/i18n/useT';
+import { describeHttpFailure, useT } from '@/i18n/useT';
 import { Button, Notice, Row, Stack, Text } from '@/ui';
 
 import { ChangesReview } from './ChangesReview';
-import { loadFailure } from './changesText';
+import { loadFailure, undoneText } from './changesText';
 
 type Phase = 'idle' | 'confirm' | 'working' | 'conflict' | 'done';
-
-function undoneText(result: UndoResult, t: Translate): string {
-    const parts: string[] = [];
-    if (result.restored.length) parts.push(t.plural('mobileApp.changes.done.restored', result.restored.length));
-    if (result.removed.length) parts.push(t.plural('mobileApp.changes.done.removed', result.removed.length));
-    const text = t('mobileApp.changes.done', { parts: parts.join(t('mobileApp.changes.done.join')) || t('mobileApp.changes.done.none') });
-    return result.kept_folders.length ? `${text} ${t.plural('mobileApp.changes.done.kept', result.kept_folders.length)}` : text;
-}
 
 /** "Review changes" and "Undo this turn" under an answer whose turn changed files. `reportError` is false on all but one answer, so a failed listing is said once. */
 export function TurnChanges({ sessionId, messageId, reportError = true }: { sessionId: string; messageId: number; reportError?: boolean }) {

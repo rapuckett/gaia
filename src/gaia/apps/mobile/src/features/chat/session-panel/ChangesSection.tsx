@@ -6,14 +6,14 @@ import { useState } from 'react';
 import { groupUntracked, untrackedWarning } from '@webui/utils/untrackedWork';
 import { isolate } from '@webui/i18n/registry';
 
-import type { GitRepo, SessionChanges, UndoAllResult } from '@/api/client.types';
+import type { GitRepo, SessionChanges } from '@/api/client.types';
 import { GaiaApiError } from '@/api/errors';
 import { useChangesActions, useSessionChanges, useSessionGit } from '@/data';
-import { describeErrorWith, useT, type Translate } from '@/i18n/useT';
+import { describeErrorWith, useT } from '@/i18n/useT';
 import { Button, Notice, Row, Stack, Text } from '@/ui';
 
 import { ChatChangesReview } from '../changes/ChatChangesReview';
-import { countsText, filesRef, summaryText, totalText } from '../changes/changesText';
+import { countsText, filesRef, summaryText, totalText, undoneText } from '../changes/changesText';
 import { GitSheet, repoName, type GitKind } from '../changes/GitSheet';
 import { failureReason, failureReasonWith } from '../header/failureText';
 import { PanelSection } from './PanelSection';
@@ -25,14 +25,6 @@ type UndoPhase = 'idle' | 'confirm' | 'working' | 'conflict' | 'done';
 function baseName(path: string): string {
     const parts = path.split(/[\\/]/).filter(Boolean);
     return parts[parts.length - 1] ?? path;
-}
-
-function undoneText(result: UndoAllResult, t: Translate): string {
-    const parts: string[] = [];
-    if (result.restored.length) parts.push(t.plural('mobileApp.changes.done.restored', result.restored.length));
-    if (result.removed.length) parts.push(t.plural('mobileApp.changes.done.removed', result.removed.length));
-    const text = t('mobileApp.changes.done', { parts: parts.join(t('mobileApp.changes.done.join')) || t('mobileApp.changes.done.none') });
-    return result.kept_folders.length ? `${text} ${t.plural('mobileApp.changes.done.kept', result.kept_folders.length)}` : text;
 }
 
 /** What this chat changed on disk: totals, a review, Undo all, and in a git folder Commit and Create PR. Shows nothing for a chat that changed no files. */
