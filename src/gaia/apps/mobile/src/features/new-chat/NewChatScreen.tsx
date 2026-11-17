@@ -15,6 +15,7 @@ import { QueuedMessages } from '@/features/composer/QueuedMessages';
 import { ScreenHeader } from '@/features/nav/ScreenHeader';
 import { useT } from '@/i18n/useT';
 import { useLastChatStore } from '@/state/lastChat';
+import { readNewChatDraft, writeNewChatDraft } from '@/state/newChatDraft';
 import { useRouteNoticeStore } from '@/state/routeNotice';
 import { Disclosure, IconButton, Notice, ProgressLine, Row, Screen, Stack, Surface, Text } from '@/ui';
 import { DotGrid, type DimRect, type DotGridHandle } from '@/ui/controls/DotGrid';
@@ -101,6 +102,25 @@ export function NewChatScreen({ onOpen, onChooseDocuments, initialText = '', pro
     useEffect(() => {
         if (hasText) useLastChatStore.getState().markNewChatChosen();
     }, [hasText]);
+
+    // The unsent text survives a restart; sending empties the box, which forgets it. The gallery's seeded text isn't kept.
+    const keepDraft = initialText === '';
+    const draftRead = useRef(false);
+    useEffect(() => {
+        if (!keepDraft) return undefined;
+        let live = true;
+        void readNewChatDraft().then((saved) => {
+            if (live && saved) setText((current) => current || saved);
+            if (live) draftRead.current = true;
+        });
+        return () => {
+            live = false;
+        };
+    }, [keepDraft, setText]);
+    const draftText = state.text;
+    useEffect(() => {
+        if (keepDraft && draftRead.current) writeNewChatDraft(draftText);
+    }, [keepDraft, draftText]);
 
     useEffect(() => {
         if (state.open) onOpen(state.open);
