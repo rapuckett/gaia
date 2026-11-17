@@ -5,7 +5,10 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, renderHook } from '@testing-library/react-native';
 import type { ReactNode } from 'react';
 
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
 import { useConnectionStore } from '@/state/connection';
+import { readNewChatDraft, writeNewChatDraft } from '@/state/newChatDraft';
 
 import { useForgetPc } from './pairedPcs';
 import { setPairingService } from './registry';
@@ -31,5 +34,19 @@ describe('useForgetPc', () => {
         await act(async () => { await result.current.mutateAsync(pc('mine', 'https://192.168.1.20:4243')); });
         expect(forget).toHaveBeenCalledTimes(2);
         expect(useConnectionStore.getState().connection).toBeNull();
+    });
+
+    it("removes the forgotten PC's unsent new-chat draft and keeps the others'", async () => {
+        await AsyncStorage.clear();
+        setPairingService({ forget: jest.fn(async () => {}) } as unknown as PairingService);
+        const wrapper = ({ children }: { children: ReactNode }) => (
+            <QueryClientProvider client={new QueryClient()}>{children}</QueryClientProvider>
+        );
+        const { result } = await renderHook(() => useForgetPc(), { wrapper });
+        writeNewChatDraft('pc-a', 'for A');
+        writeNewChatDraft('pc-b', 'for B');
+        await act(async () => { await result.current.mutateAsync(pc('pc-a', 'https://192.168.1.20:4243')); });
+        expect(await readNewChatDraft('pc-a')).toBe('');
+        expect(await readNewChatDraft('pc-b')).toBe('for B');
     });
 });

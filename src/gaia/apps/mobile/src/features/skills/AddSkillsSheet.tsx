@@ -100,7 +100,11 @@ export function AddSkillsSheet({ open, onClose }: { open: boolean; onClose: () =
                     value={url}
                     onChangeText={setUrl}
                     url
-                    placeholder={t.bare('settings.skills.link.placeholder')}
+                    placeholder={t.bare('mobileApp.skills.linkPlaceholder', {
+                        github: isolate('GitHub', 'ltr'),
+                        skills: isolate('skills.sh', 'ltr'),
+                        zip: isolate('.zip', 'ltr'),
+                    })}
                     accessibilityLabel={t('settings.skills.link.aria')}
                     hint={t('mobileApp.skills.linkHint', {
                         github: isolate('GitHub', 'ltr'),

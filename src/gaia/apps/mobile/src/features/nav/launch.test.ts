@@ -13,4 +13,9 @@ describe('launch restore', () => {
         expect(chatToRestore({ ...launch, pathname: '/chat/aaaaaaaa-1111' })).toBeNull();
         expect(chatToRestore({ ...launch, lastChatId: 'gone' })).toBeNull();
     });
+
+    it('stays on New chat when unsent text was saved there, as the web UI does', () => {
+        expect(chatToRestore({ ...launch, hasNewChatDraft: true })).toBeNull();
+        expect(chatToRestore({ ...launch, hasNewChatDraft: false })).toBe('bbbbbbbb-2222');
+    });
 });
