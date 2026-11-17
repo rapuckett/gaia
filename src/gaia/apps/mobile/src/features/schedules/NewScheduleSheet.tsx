@@ -9,7 +9,7 @@ import { useCreateSchedule, useGaiaClient } from '@/data';
 import { describeHttpFailure, useT } from '@/i18n/useT';
 import { Button, Notice, Row, Sheet, Stack, Text, TextField } from '@/ui';
 
-import { composeDateLocale, describeSchedule, formatNextRun } from './scheduleText';
+import { composeDateLocale, describeSchedule, formatNextClock, formatTime } from './scheduleText';
 
 const PARSE_DEBOUNCE_MS = 400;
 
@@ -57,6 +57,7 @@ export function NewScheduleSheet({ open, onClose, initial }: NewScheduleSheetPro
     const preview = usePreview(when);
     const parsed = preview.status === 'done' ? preview.parsed : null;
     const rejected = parsed !== null && !parsed.valid;
+    const nextClock = parsed?.valid ? formatNextClock(parsed.next_run_at, new Date(), composeDateLocale(t.locale, t)) : null;
     const nameTaken = create.error instanceof GaiaApiError && create.error.status === 409;
     const formError = create.isError && !nameTaken ? describeHttpFailure(create.error, t) : null;
     // The backend validates on create, so only a parse that says no blocks it.
@@ -116,13 +117,20 @@ export function NewScheduleSheet({ open, onClose, initial }: NewScheduleSheetPro
                     <Stack gap="xs">
                         <Text role="body">{describeSchedule(parsed.description_parts, t) ?? parsed.description}</Text>
                         {parsed.next_run_at ? (
-                            <Text role="caption" tone="muted">
-                                {t.compose((say, code) =>
-                                    say('schedules.nextRun', {
-                                        when: formatNextRun(parsed.next_run_at, say, new Date(), composeDateLocale(code, t)),
-                                    }),
-                                )}
-                            </Text>
+                            <Row gap="md" wrap>
+                                <Text role="caption" tone="muted">
+                                    {t.compose((say, code) =>
+                                        say('schedules.nextRun', {
+                                            when: formatTime(parsed.next_run_at, say, new Date(), composeDateLocale(code, t)),
+                                        }),
+                                    )}
+                                </Text>
+                                {nextClock ? (
+                                    <Text role="caption" tone="muted">
+                                        {nextClock}
+                                    </Text>
+                                ) : null}
+                            </Row>
                         ) : null}
                     </Stack>
                 ) : null}
