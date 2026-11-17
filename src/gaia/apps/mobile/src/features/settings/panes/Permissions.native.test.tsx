@@ -64,7 +64,6 @@ describeNative('Permissions pane', () => {
             </QueryClientProvider>
         );
         await render(<Permissions />, { wrapper: wrap });
-        fireEvent.press(await screen.findByText('Chats with extra access'));
         expect(await screen.findByTestId('perm-grant-revoke-a-0')).toBeTruthy();
         expect(screen.getByTestId('perm-grant-revoke-a-1')).toBeTruthy();
         fireEvent.press(screen.getByTestId('perm-chat-menu-a'));
