@@ -97,8 +97,9 @@ describeNative('chat, new-chat, composer and permission scenes', () => {
         expect(screen.queryByText(/compare them before drafting/, opts)).toBeNull();
         screen.getAllByLabelText(/^Thinking/, opts).forEach((header) => fireEvent.press(header));
         expect(await screen.findByText(/compare them before drafting/, opts)).toBeTruthy();
-        fireEvent.press(await screen.findByTestId('step-row--1', opts));
+        fireEvent.press(await screen.findByTestId('step-row-1', opts));
         expect(await screen.findByText(/skip searching/, opts)).toBeTruthy();
+        expect(await screen.findByTestId('step-thought-1', opts)).toBeTruthy();
     });
 
     it.each(['activity-plan', 'activity-thinking'])('%s reads an elapsed time under an hour', async (state) => {
