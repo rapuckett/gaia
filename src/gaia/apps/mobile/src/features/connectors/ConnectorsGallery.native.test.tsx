@@ -5,6 +5,8 @@ import { fireEvent, render, screen } from '@testing-library/react-native';
 import { Platform } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { useConnectionStore } from '@/state/connection';
+
 import { ConnectorsGallery, type ConnectorScene } from './ConnectorsGallery';
 
 // The real provider waits on font files the test environment doesn't have.
@@ -26,6 +28,8 @@ const mount = (state: ConnectorScene) =>
     );
 
 describeNative('/dev/connectors scenes', () => {
+    afterEach(() => useConnectionStore.setState({ connection: null }));
+
     it('many shows the search field', async () => {
         await mount('many');
         expect(await screen.findByLabelText('Search connectors')).toBeTruthy();
@@ -38,9 +42,29 @@ describeNative('/dev/connectors scenes', () => {
         expect(await screen.findByText('filesystem')).toBeTruthy();
     });
 
-    it('personalize shows the offer on the open tile', async () => {
+    it('personalize shows the after-connect offer', async () => {
         await mount('personalize');
-        expect(await screen.findByText('Personalize GAIA')).toBeTruthy();
+        expect(await screen.findByText(/^Want GAIA to read your recent activity in Gmail/)).toBeTruthy();
+        expect(screen.getByText('Personalize GAIA')).toBeTruthy();
+    });
+
+    it('personalizeTile shows the plain per-tile offer', async () => {
+        await mount('personalizeTile');
+        expect(await screen.findByText(/^Optional: let GAIA read/)).toBeTruthy();
+    });
+
+    it('personalizeFailed says it could not start, with the PC reason on its own line', async () => {
+        await mount('personalizeFailed');
+        await fireEvent.press(await screen.findByTestId('personalize-linear'));
+        expect(await screen.findByText("Couldn't start personalization.")).toBeTruthy();
+        expect(screen.getByText('The keyring is locked.')).toBeTruthy();
+    });
+
+    it('personalizeMcp shows the PC-only line and the connector name, no button', async () => {
+        await mount('personalizeMcp');
+        expect(await screen.findByTestId('personalize-pc-only-linear')).toBeTruthy();
+        expect(screen.getAllByText(/Linear/).length).toBeGreaterThan(0);
+        expect(screen.queryByTestId('personalize-linear')).toBeNull();
     });
 
     it.each([

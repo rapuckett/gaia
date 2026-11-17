@@ -221,3 +221,33 @@ describeNative('ConnectorsScreen server text', () => {
         await expectSplit('provider unreachable');
     });
 });
+
+describeNative('ConnectorsScreen after-connect Personalize offer', () => {
+    it('offers Personalize once the PC reports the connect, and drops the offer when the pass starts', async () => {
+        const code = { user_code: 'ABCD-EFGH', verification_uri: 'https://microsoft.com/devicelogin', expires_in: 900, interval: 1, message: '' };
+        const { data, queryClient, wrap } = setup([microsoft], undefined, code);
+        await render(<ConnectorsScreen />, { wrapper: wrap });
+        fireEvent.press(await screen.findByLabelText('Microsoft'));
+        fireEvent.press(await screen.findByText('Sign in with a code'));
+        await screen.findByText(/ABCD-EFGH/);
+        expect(screen.queryByText('Personalize GAIA')).toBeNull();
+
+        data.connectors = [{ ...microsoft, configured: true, account_id: 'me@example.com' } as ConnectorRow];
+        expect(await screen.findByText(/^Want GAIA to read your last two weeks of Outlook mail/, {}, { timeout: 3000 })).toBeTruthy();
+        fireEvent.press(screen.getByText('Personalize GAIA'));
+        expect(await screen.findByText(/^Optional: let GAIA read/)).toBeTruthy();
+        queryClient.clear();
+    });
+
+    it('says it could not start, with the PC reason on its own line, and keeps the offer', async () => {
+        const { client, data, queryClient, wrap } = setup([slack]);
+        data.agents = [{ id: 'gaia', name: 'GAIA', namespaced_agent_id: 'gaia', description: '', source: 'builtin', conversation_starters: [], models: [] }] as never;
+        client.activateConnectorAgent = () => Promise.reject(new GaiaApiError(500, 'keyring locked'));
+        await render(<ConnectorsScreen initialExpanded="slack" initialJustConnected="slack" />, { wrapper: wrap });
+        fireEvent.press(await screen.findByText('Personalize GAIA'));
+        expect(await screen.findByText("Couldn't start personalization.")).toBeTruthy();
+        expect(screen.getByText('keyring locked')).toBeTruthy();
+        expect(screen.getByText(/^Want GAIA to read/)).toBeTruthy();
+        queryClient.clear();
+    });
+});

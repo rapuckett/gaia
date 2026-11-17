@@ -18,7 +18,19 @@ export const INSTALL_POLL_MS = 1_500;
 
 const setupCheckKey = ['setupCheck'] as const;
 
-const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+/** Waits `ms`, or less when `signal` aborts first; the timer never outlives the abort. */
+function delay(ms: number, signal?: AbortSignal): Promise<void> {
+    return new Promise<void>((resolve) => {
+        if (signal?.aborted) return resolve();
+        const done = () => {
+            clearTimeout(timer);
+            signal?.removeEventListener('abort', done);
+            resolve();
+        };
+        const timer = setTimeout(done, ms);
+        signal?.addEventListener('abort', done);
+    });
+}
 
 /**
  * Installs the GAIA agent on the PC and waits for it to finish. Resolves on `completed`, throws with the
@@ -29,9 +41,9 @@ export async function installFlagshipAgent(
     client: GaiaClient,
     {
         onProgress,
-        isCancelled = () => false,
+        signal,
         pollMs = INSTALL_POLL_MS,
-    }: { onProgress?: (status: AgentInstallStatus) => void; isCancelled?: () => boolean; pollMs?: number } = {},
+    }: { onProgress?: (status: AgentInstallStatus) => void; signal?: AbortSignal; pollMs?: number } = {},
 ): Promise<void> {
     try {
         await client.installAgent(FLAGSHIP_AGENT_ID);
@@ -41,12 +53,12 @@ export async function installFlagshipAgent(
         const first = await client.getAgentInstallStatus(FLAGSHIP_AGENT_ID).catch(() => null);
         if (!first || first.status === 'completed' || first.status === 'failed') throw err;
     }
-    while (!isCancelled()) {
+    while (!signal?.aborted) {
         const status = await client.getAgentInstallStatus(FLAGSHIP_AGENT_ID);
         onProgress?.(status);
         if (status.status === 'completed') return;
         if (status.status === 'failed') throw new Error(status.error || 'The GAIA agent could not be installed.');
-        await delay(pollMs);
+        await delay(pollMs, signal);
     }
 }
 
@@ -71,29 +83,30 @@ export function useFlagshipAgent(initialState?: FlagshipInstallState) {
         queryFn: ({ signal }) => requireClient(client).checkSetup(false, { signal }),
     });
     const [state, setState] = useState<FlagshipInstallState>(initialState ?? { kind: 'idle' });
-    const cancelled = useRef(false);
+    // Aborted on unmount, so an install's poll stops waiting with the screen.
+    const mounted = useRef(new AbortController());
     useEffect(() => {
-        cancelled.current = false;
-        return () => {
-            cancelled.current = true;
-        };
+        const controller = new AbortController();
+        mounted.current = controller;
+        return () => controller.abort();
     }, []);
 
     const install = useCallback(async () => {
         const live = requireClient(client);
+        const { signal } = mounted.current;
         setState({ kind: 'installing', percent: 0 });
         try {
             await installFlagshipAgent(live, {
-                isCancelled: () => cancelled.current,
+                signal,
                 onProgress: (s) => {
-                    if (!cancelled.current) setState({ kind: 'installing', percent: s.percent ?? 0 });
+                    if (!signal.aborted) setState({ kind: 'installing', percent: s.percent ?? 0 });
                 },
             });
-            if (cancelled.current) return;
+            if (signal.aborted) return;
             await queryClient.invalidateQueries({ queryKey: queryKeys.agents });
-            if (!cancelled.current) setState({ kind: 'idle' });
+            if (!signal.aborted) setState({ kind: 'idle' });
         } catch (error) {
-            if (!cancelled.current) setState({ kind: 'failed', error });
+            if (!signal.aborted) setState({ kind: 'failed', error });
         }
     }, [client, queryClient]);
 
