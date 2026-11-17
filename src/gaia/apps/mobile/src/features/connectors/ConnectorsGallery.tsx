@@ -19,9 +19,9 @@ import { ConnectorsScreen } from './ConnectorsScreen';
  * (`#tap=device-sign-in-microsoft` shows the code), `codeFailed` (the same tap, then the failure).
  * CON-02: `many` (8 connectors, so the search field shows). CON-11: `disconnected` and `revoked` open Microsoft Personal;
  * `#tap=connector-disconnect-microsoft,connector-disconnect-confirm`: `disconnected` answers that the provider has no revoke API, `revoked`
- * that the provider did not confirm the revoke (reason on the notice). CON-16: `personalize` opens a connected Gmail tile with the Personalize GAIA offer.
+ * that the provider did not confirm the revoke (reason on the notice). CON-16: `personalize` opens a just-connected Gmail tile with the after-connect Personalize GAIA offer, `personalizeTile` the plain per-tile offer, and `personalizeFailed` a just-connected server whose offer fails (`#tap=personalize-linear`: the sentence plus the PC's reason).
  */
-export const CONNECTOR_SCENES = ['serverOn', 'serverOff', 'grants', 'loading', 'error', 'none', 'groups', 'menu', 'code', 'codeFailed', 'many', 'disconnected', 'revoked', 'personalize'] as const;
+export const CONNECTOR_SCENES = ['serverOn', 'serverOff', 'grants', 'loading', 'error', 'none', 'groups', 'menu', 'code', 'codeFailed', 'many', 'disconnected', 'revoked', 'personalize', 'personalizeTile', 'personalizeFailed'] as const;
 export type ConnectorScene = (typeof CONNECTOR_SCENES)[number];
 
 const server = (over: Partial<ConnectorRow> = {}) =>
@@ -39,6 +39,8 @@ const AGENT_MCP: AgentMcpServer = {
     agent_id: 'research', agent_name: 'Research', config_path: '/home/you/.gaia/agents/research/mcp.json', server_name: 'filesystem', command: 'npx', args: ['-y', 'server-filesystem'], disabled: false,
 };
 const DEVICE_CODE = { user_code: 'ABCD-EFGH', verification_uri: 'https://microsoft.com/devicelogin', expires_in: 900, interval: 5, message: '' };
+
+const GMAIL = server({ id: 'gmail', display_name: 'Gmail', type: 'oauth_pkce', account_id: 'avery@example.com' });
 
 /** What each list-state scene gives the fake PC, and the calls it answers itself. */
 const LIST_SCENES: Partial<Record<ConnectorScene, { data: FakeClientData; expanded?: string; override?: Partial<GaiaClient> }>> = {
@@ -59,7 +61,13 @@ const LIST_SCENES: Partial<Record<ConnectorScene, { data: FakeClientData; expand
     many: { data: { connectors: ['Slack', 'GitHub', 'Notion', 'Linear', 'Jira', 'Asana', 'Figma', 'Stripe'].map((name) => server({ id: name.toLowerCase(), display_name: name })) } },
     disconnected: { data: { connectors: [signedIn()], disconnectOutcome: { revoke_supported: false, revoked_remotely: false, revoke_error: null } }, expanded: 'microsoft' },
     revoked: { data: { connectors: [signedIn()], disconnectOutcome: { revoke_supported: true, revoked_remotely: false, revoke_error: 'invalid_grant' } }, expanded: 'microsoft' },
-    personalize: { data: { connectors: [server({ id: 'gmail', display_name: 'Gmail', type: 'oauth_pkce', account_id: 'avery@example.com' })] }, expanded: 'gmail' },
+    personalize: { data: { connectors: [GMAIL] }, expanded: 'gmail' },
+    personalizeTile: { data: { connectors: [GMAIL] }, expanded: 'gmail' },
+    personalizeFailed: {
+        data: { connectors: [server()], grants: { linear: {} }, activations: { linear: {} } },
+        expanded: 'linear',
+        override: { activateConnectorAgent: () => Promise.reject(new GaiaApiError(500, 'The keyring is locked.')) },
+    },
     menu: { data: { connectors: [server()], activations: { linear: { gaia: true } } } },
     code: { data: { connectors: [account('microsoft', 'Microsoft Personal')], deviceSignIn: DEVICE_CODE }, expanded: 'microsoft' },
     codeFailed: { data: { connectors: [account('microsoft', 'Microsoft Personal')], deviceSignIn: DEVICE_CODE, signInEnd: { outcome: 'failed' } }, expanded: 'microsoft' },
@@ -87,7 +95,10 @@ export function ConnectorsGallery({ state }: { state: ConnectorScene }) {
             <GaiaClientProvider client={client}>
                 <UIProvider>
                     <ScreenBannerProvider banner={null}>
-                        <ConnectorsScreen initialExpanded={listScene ? listScene.expanded : 'linear'} />
+                        <ConnectorsScreen
+                            initialExpanded={listScene ? listScene.expanded : 'linear'}
+                            initialJustConnected={state === 'personalize' ? 'gmail' : state === 'personalizeFailed' ? 'linear' : undefined}
+                        />
                     </ScreenBannerProvider>
                 </UIProvider>
             </GaiaClientProvider>

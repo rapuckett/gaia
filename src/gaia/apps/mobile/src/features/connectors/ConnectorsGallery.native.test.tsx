@@ -38,9 +38,22 @@ describeNative('/dev/connectors scenes', () => {
         expect(await screen.findByText('filesystem')).toBeTruthy();
     });
 
-    it('personalize shows the offer on the open tile', async () => {
+    it('personalize shows the after-connect offer', async () => {
         await mount('personalize');
-        expect(await screen.findByText('Personalize GAIA')).toBeTruthy();
+        expect(await screen.findByText(/^Want GAIA to read your recent activity in Gmail/)).toBeTruthy();
+        expect(screen.getByText('Personalize GAIA')).toBeTruthy();
+    });
+
+    it('personalizeTile shows the plain per-tile offer', async () => {
+        await mount('personalizeTile');
+        expect(await screen.findByText(/^Optional: let GAIA read/)).toBeTruthy();
+    });
+
+    it('personalizeFailed says it could not start, with the PC reason on its own line', async () => {
+        await mount('personalizeFailed');
+        await fireEvent.press(await screen.findByTestId('personalize-linear'));
+        expect(await screen.findByText("Couldn't start personalization.")).toBeTruthy();
+        expect(screen.getByText('The keyring is locked.')).toBeTruthy();
     });
 
     it.each([
