@@ -13,7 +13,7 @@ import { ModelsStep, ReadySummary } from './SetupSteps';
 import { StartCards } from './StartCards';
 import { useGatewayNetwork } from '../hooks/useGatewayNetwork';
 import { useT, type Translate } from '../i18n/useT';
-import { isMessageKey, type MessageKey } from '../i18n/registry';
+import { isMessageKey, type MessageKey, type Say } from '../i18n/registry';
 import { ConfirmSheet } from './setup/ConfirmSheet';
 import { DownloadContents } from './setup/DownloadContents';
 import { FIREWORKS_KEYS_URL, GATEWAY_GUIDE_URL } from './setup/keyLinks';
@@ -953,37 +953,39 @@ export function SetupScreen({ onReady, onClose }: SetupScreenProps) {
     const runStep = (id: Stage) => id === 'download' || id === 'test' || id === 'ready';
     // What the checks did before any run printed a line, so the Checks log is never empty.
     const checkNotes: string[] = [];
-    const place = (text: string) => ltrIn(t.locale, text);
+    // One compose per line: its values are isolated islands and the English gloss comes once, after the whole line.
+    const note = (build: (say: Say, place: (text: string) => string) => string) => t.compose((say, code) => build(say, (text) => ltrIn(code, text)));
     if (hardware) {
-        const parts = [
-            plan?.system?.physical_memory ? t('setup.checks.log.installed', { size: place(totalMemory(plan.system.physical_memory, null) ?? '') }) : null,
-            hardware.ram_gb != null ? t('setup.checks.log.osCanUse', { size: place(`${hardware.ram_gb} GB`) }) : null,
-            hardware.disk_free_gb != null ? t('setup.checks.log.diskFree', { size: place(`${Math.round(hardware.disk_free_gb)} GB`) }) : null,
-        ].filter((x): x is string => !!x);
-        const devices = [hardware.gpu_name ? place(hardware.gpu_name) : null, hardware.npu_detected ? 'NPU' : null].filter(Boolean).join(t('mem.listSeparator'));
-        checkNotes.push(t('setup.checks.log.pc', {
-            hardware: devices || t('setup.checks.log.noGpu'),
-            more: parts.map((part) => `${t('setup.checks.log.sep')}${part}`).join(''),
+        checkNotes.push(note((say, place) => {
+            const parts = [
+                plan?.system?.physical_memory ? say('setup.checks.log.installed', { size: place(totalMemory(plan.system.physical_memory, null) ?? '') }) : null,
+                hardware.ram_gb != null ? say('setup.checks.log.osCanUse', { size: place(`${hardware.ram_gb} GB`) }) : null,
+                hardware.disk_free_gb != null ? say('setup.checks.log.diskFree', { size: place(`${Math.round(hardware.disk_free_gb)} GB`) }) : null,
+            ].filter((x): x is string => !!x);
+            const devices = [hardware.gpu_name ? place(hardware.gpu_name) : null, hardware.npu_detected ? place('NPU') : null].filter(Boolean).join(say('mem.listSeparator'));
+            return say('setup.checks.log.pc', {
+                hardware: devices || say('setup.checks.log.noGpu'),
+                more: parts.map((part) => `${say('setup.checks.log.sep')}${part}`).join(''),
+            });
         }));
     } else if (hardwareError) {
-        checkNotes.push(t('setup.checks.log.pcFailed', { reason: place(hardwareError) }));
+        checkNotes.push(note((say, place) => say('setup.checks.log.pcFailed', { reason: place(hardwareError) })));
     }
     if (lemonadeFound) {
-        checkNotes.push(t('setup.checks.log.foundLemonade', {
-            version: lemonadeFound.version ? ` ${place(lemonadeFound.version)}` : '',
-            url: place(lemonadeFound.url),
-        }));
-        checkNotes.push(lemonadeChoice === 'external' ? t('setup.checks.log.choseOwn')
-            : lemonadeChoice === 'gaia' ? t('setup.checks.log.choseGaia')
-                : t('setup.checks.log.waitingChoice'));
+        checkNotes.push(note((say, place) => lemonadeFound.version
+            ? say('setup.checks.log.foundLemonadeVersion', { version: place(lemonadeFound.version), url: place(lemonadeFound.url) })
+            : say('setup.checks.log.foundLemonade', { url: place(lemonadeFound.url) })));
+        checkNotes.push(note((say) => say(lemonadeChoice === 'external' ? 'setup.checks.log.choseOwn'
+            : lemonadeChoice === 'gaia' ? 'setup.checks.log.choseGaia'
+                : 'setup.checks.log.waitingChoice')));
     }
     // Until the user picks a server, GAIA has none of its own to report on.
     if (plan && !(lemonadeFound && !lemonadeChoice)) {
-        checkNotes.push(plan.lemonade.reachable
-            ? t('setup.checks.log.serverUp', { url: plan.lemonade.url ? place(plan.lemonade.url) : t('setup.checks.log.itsAddress') })
-            : t('setup.checks.log.serverDown'));
+        checkNotes.push(note((say, place) => (plan.lemonade.reachable
+            ? say('setup.checks.log.serverUp', { url: plan.lemonade.url ? place(plan.lemonade.url) : say('setup.checks.log.itsAddress') })
+            : say('setup.checks.log.serverDown'))));
     } else if (planError) {
-        checkNotes.push(t('setup.checks.log.listFailed', { reason: place(planError) }));
+        checkNotes.push(note((say, place) => say('setup.checks.log.listFailed', { reason: place(planError) })));
     }
     const reachable = (id: Stage, i: number) => i <= at || (visited.has(id) && !runStep(id));
     const railSteps: RailStep[] = trail.map((s, i) => ({

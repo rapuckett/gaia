@@ -55,6 +55,8 @@ interface Run {
     stopRequested: boolean;
     /** Re-attaches since the live view was last whole; 0 for a run the person started. */
     reconnects: number;
+    /** Picks up a turn this phone was showing; it stays on screen, running, until the PC says otherwise. */
+    readonly resumed: boolean;
     /** Waits out the backoff before a re-attach. */
     retryTimer?: ReturnType<typeof setTimeout>;
     /** Ends the turn here when GAIA never confirms a stop. */
@@ -89,8 +91,8 @@ function finishRun(sessionId: string): void {
     runs.delete(sessionId);
 }
 
-function newRun(kind: Run['kind'], reconnects = 0): Run {
-    return { kind, view: new AbortController(), sawEvent: false, stopRequested: false, reconnects };
+function newRun(kind: Run['kind'], reconnects = 0, resumed = false): Run {
+    return { kind, view: new AbortController(), sawEvent: false, stopRequested: false, reconnects, resumed };
 }
 
 function refreshChat(queryClient: QueryClient, sessionId: string): Promise<void> {
@@ -245,7 +247,9 @@ async function follow(deps: ChatStreamDeps, sessionId: string, run: Run, stream:
         if (!isCurrent(sessionId, run)) return;
         // A re-attach that can't reach GAIA is another lost view, not yet a failed turn.
         const lostView =
-            err instanceof GaiaStreamDroppedError || err instanceof GaiaStreamStalledError || (run.reconnects > 0 && err instanceof GaiaNetworkError);
+            err instanceof GaiaStreamDroppedError ||
+            err instanceof GaiaStreamStalledError ||
+            ((run.reconnects > 0 || run.resumed) && err instanceof GaiaNetworkError);
         if (lostView && !run.stopRequested && run.reconnects < MAX_STREAM_RECONNECTS) {
             reconnect(deps, sessionId, run);
             return;
@@ -271,7 +275,7 @@ async function follow(deps: ChatStreamDeps, sessionId: string, run: Run, stream:
     }
     if (!isCurrent(sessionId, run)) return;
     // A re-attach that finds no turn means it ended while the phone was away; the transcript has its answer.
-    if (!run.sawEvent && run.reconnects === 0) {
+    if (!run.sawEvent && run.reconnects === 0 && !run.resumed) {
         finishRun(sessionId);
         // No turn is running, but one that ended just now may be missing from a transcript read before it.
         void deps.queryClient.invalidateQueries({ queryKey: queryKeys.messages(sessionId) }, { cancelRefetch: false });
@@ -315,8 +319,8 @@ export function sendTurn(deps: ChatStreamDeps, sessionId: string, text: string):
     const message = text.trim();
     if (!message) return false;
     const existing = runs.get(sessionId);
-    // A reattach that hasn't found a running turn gives way to a new one.
-    if (existing && (existing.kind !== 'attach' || existing.sawEvent)) return false;
+    // A reattach that hasn't found a running turn gives way to a new one; a resumed turn is running until the PC says it ended.
+    if (existing && (existing.kind !== 'attach' || existing.sawEvent || existing.resumed)) return false;
     existing?.view.abort();
     const run = newRun('send');
     runs.set(sessionId, run);
@@ -404,6 +408,33 @@ export function detachTurn(sessionId: string): void {
     writeTurn(sessionId, pendingConfirmation ? { ...IDLE_TURN, pendingConfirmation } : null);
 }
 
+/**
+ * The app is back in the foreground and its connection to the chat's turn is likely gone:
+ * follow the turn again. A turn this phone shows as running stays as it is until the
+ * replay replaces it, or the re-attach finds it ended and the transcript takes over.
+ */
+function resumeTurn(deps: ChatStreamDeps, sessionId: string): void {
+    const old = runs.get(sessionId);
+    // Its stream already closed; the turn ends on its own once the transcript is read.
+    if (old?.ending) return;
+    if (!old || readTurn(sessionId).status === 'idle') {
+        detachTurn(sessionId);
+        attachTurn(deps, sessionId);
+        return;
+    }
+    old.view.abort();
+    clearTimeout(old.retryTimer);
+    clearTimeout(old.graceTimer);
+    const run = newRun('attach', 0, true);
+    runs.set(sessionId, run);
+    // A stop already asked for goes out again with the replay; GAIA ignores a repeat.
+    if (old.stopRequested) {
+        run.stopRequested = true;
+        run.graceTimer = setTimeout(() => closeUnconfirmed(sessionId, run), STOP_GRACE_MS);
+    }
+    void follow(deps, sessionId, run, deps.client.attachToRun(sessionId, { signal: run.view.signal }));
+}
+
 function subscribe(deps: ChatStreamDeps, sessionId: string): () => void {
     const first = !subscribers.has(sessionId);
     subscribers.set(sessionId, (subscribers.get(sessionId) ?? 0) + 1);
@@ -417,8 +448,7 @@ function subscribe(deps: ChatStreamDeps, sessionId: string): () => void {
                 if (state === 'background') wasBackgrounded = true;
                 if (state !== 'active' || !wasBackgrounded) return;
                 wasBackgrounded = false;
-                detachTurn(sessionId);
-                attachTurn(deps, sessionId);
+                resumeTurn(deps, sessionId);
             }),
         );
     }
