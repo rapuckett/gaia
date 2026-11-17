@@ -7,8 +7,8 @@ import { BackHandler, Platform } from 'react-native';
 import { GaiaPinMismatchError } from '@/api/errors';
 import { describeHttpFailure, useT } from '@/i18n/useT';
 import { useConnectionStore } from '@/state/connection';
-import { Button, Card, Icon, IconButton, Notice, Row, Screen, Spinner, Stack, Text, TextField } from '@/ui';
-import { ArrowLeft, CircleAlert, Clock, Monitor, Smartphone } from '@/ui/icons';
+import { Button, Card, Icon, Notice, Row, Screen, Spinner, Stack, Text, TextField, UpButton } from '@/ui';
+import { CircleAlert, Clock, Monitor, Smartphone } from '@/ui/icons';
 
 import { parseInvite, type PairingInvite } from './invite';
 import { PairingScanner } from './PairingScanner';
@@ -273,7 +273,7 @@ export function PairingFlow({ initialStep = 'welcome', onPaired, onScan, onExit 
         return (
             <Page
                 title={t('mobileApp.pairing.how.title')}
-                up={onExit ? <IconButton icon={ArrowLeft} label={t(Platform.OS === 'ios' ? 'mobileApp.nav.back' : 'mobileApp.nav.up')} onPress={onExit} testID="pairing-up" /> : undefined}
+                up={onExit ? <UpButton onPress={onExit} testID="pairing-up" /> : undefined}
             >
                 <Card>
                     <Stack gap="md">

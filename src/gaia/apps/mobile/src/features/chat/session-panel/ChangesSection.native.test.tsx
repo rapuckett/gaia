@@ -89,3 +89,25 @@ const changes: SessionChanges = {
         expect(detail.props.style.writingDirection).toBe('ltr');
     });
 });
+
+(Platform.OS === 'web' ? describe.skip : describe)('Undo all failure', () => {
+    it('keeps the PC reason out of the sentence, on its own line', async () => {
+        const reason = 'disk is read-only';
+        const client = createFakeClient({ sessionChanges: { s1: changes }, undoConflict: new GaiaApiError(500, reason) });
+        await render(
+            <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+                <GaiaClientProvider client={client}>
+                    <ThemeProvider>
+                        <ChangesSection sessionId="s1" live={false} />
+                    </ThemeProvider>
+                </GaiaClientProvider>
+            </QueryClientProvider>,
+        );
+
+        await fireEvent.press(await screen.findByTestId('changes-undo-all'));
+        await fireEvent.press(screen.getByTestId('changes-undo-confirm'));
+        const sentence = await screen.findByText(t('mobileApp.chg.undoFailedShort'));
+        expect(sentence.props.children).not.toContain(reason);
+        expect(await screen.findByText(reason)).toBeTruthy();
+    });
+});

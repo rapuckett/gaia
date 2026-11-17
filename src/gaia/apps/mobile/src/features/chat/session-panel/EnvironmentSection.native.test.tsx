@@ -2,12 +2,13 @@
 // SPDX-License-Identifier: MIT
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
 import type { ReactNode } from 'react';
 import { Platform } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import type { SessionEnvironment } from '@/api/client.types';
+import { GaiaApiError } from '@/api/errors';
 import { createFakeClient } from '@/api/fake';
 import { GaiaClientProvider } from '@/data';
 import { ThemeProvider } from '@/ui';
@@ -85,5 +86,21 @@ describeNative('Environment: a failed folder read', () => {
         await render(<EnvironmentSection sessionId="missing" live={false} />, { wrapper: wrapper(client) });
         expect(await screen.findByText(/^.?Couldn't read this chat's folders\..?$/)).toBeTruthy();
         expect(screen.getByText('Session not found')).toBeTruthy();
+    });
+});
+
+describeNative('Environment: a failed folder removal', () => {
+    it('puts the PC\'s raw reason on its own line, under a sentence without it', async () => {
+        const client = createFakeClient({ environments: { s1: ENV } });
+        client.removeEnvironmentFolder = async () => {
+            throw new GaiaApiError(500, 'disk is read-only');
+        };
+        await render(<EnvironmentSection sessionId="s1" live={false} />, { wrapper: wrapper(client) });
+        await fireEvent.press(await screen.findByTestId('environment-remove-/Users/me/Reports'));
+        await fireEvent.press(screen.getByTestId('environment-remove-confirm'));
+        const notice = await screen.findByTestId('environment-remove-error');
+        expect(within(notice).getByText(/Couldn't remove that folder\./)).toBeTruthy();
+        expect(within(notice).getByText('disk is read-only')).toBeTruthy();
+        expect(within(notice).queryByText(/Couldn't remove that folder\..*disk is read-only/)).toBeNull();
     });
 });

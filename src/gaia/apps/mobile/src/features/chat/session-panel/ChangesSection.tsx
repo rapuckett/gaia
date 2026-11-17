@@ -15,7 +15,7 @@ import { Button, Notice, Row, Stack, Text } from '@/ui';
 import { ChatChangesReview } from '../changes/ChatChangesReview';
 import { countsText, filesRef, summaryText, totalText, undoneText, untrackedNotice } from '../changes/changesText';
 import { GitSheet, repoName, type GitKind } from '../changes/GitSheet';
-import { failureNoticeProps, failureReason } from '../header/failureText';
+import { failureNoticeProps } from '../header/failureText';
 import { PanelSection } from './PanelSection';
 import { useSessionPanelStore } from './panelStore';
 import type { SectionProps } from './sections';
@@ -81,7 +81,9 @@ function ChangesBody({ sessionId, live, changes, onUndone }: { sessionId: string
                 setMessage(t('mobileApp.changes.undoConflict'));
                 setDetail((err as GaiaApiError).detail);
             } else {
-                setMessage(failureReason(err, t));
+                const failure = failureNoticeProps(err, t, { withReason: 'mobileApp.chg.undoFailed', noReason: 'mobileApp.chg.undoFailedShort' });
+                setMessage(failure.message);
+                setDetail(failure.detail);
             }
             setPhase(conflict ? 'conflict' : 'idle');
         }

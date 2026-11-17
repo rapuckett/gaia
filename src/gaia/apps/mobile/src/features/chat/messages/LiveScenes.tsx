@@ -26,7 +26,7 @@ import { TurnTail } from '../TurnTail';
  * `stopped` (CV-33): stopped, unconfirmed and stop-failed notes; the first has Continue and Try again.
  * `reply-errors` (CV-40): one failed turn per error kind (stream, context, model server, connection, timeout, unknown).
  * `activity-terminal` (CV-43): `#tap=step-row-0` opens the shell step with its exit code and Copy output.
- * `activity-plan` (CV-44): a live turn with the plan checklist. `activity-thinking` (CV-45): a live thought, then a finished one folded into its call. The live thought opens with `#expand` (its header has no test ID); the folded one opens with `#tap=step-row--1`.
+ * `activity-plan` (CV-44): a live turn with the plan checklist. `activity-thinking` (CV-45): a live thought, then a finished one folded into its call. The live thought opens with `#expand` (its header has no test ID); the folded one opens with `#tap=step-row-1`.
  * `activity-filter` (CV-48): `#tap=steps-summary` opens the seven finished calls and shows the filter.
  * `reply-server-down` (CV-14): a failed latest reply with the model-server fix under it and Try again; `reply-errors` also shows the unexpected-error "Report it on GitHub" link (CV-30, `report-github`).
 <<<<<<< HEAD
