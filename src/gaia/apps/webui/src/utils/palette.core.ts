@@ -9,21 +9,20 @@ export type PaletteId =
 
 export interface PaletteInfo {
     id: PaletteId;
-    name: string;
     /** Canvas and accent in light, accent in dark: enough to recognize it in a picker. */
     swatch: [string, string, string];
 }
 
 export const PALETTES: PaletteInfo[] = [
-    { id: 'default', name: 'Warm gray', swatch: ['#FAF9F7', '#B08D57', '#D4B47E'] },
-    { id: 'stone', name: 'Stone and ink', swatch: ['#FAFAF9', '#2B2B29', '#E4E4E0'] },
-    { id: 'marble', name: 'Blue marble', swatch: ['#F8FAFC', '#1F5FA8', '#5B9BE6'] },
-    { id: 'glacier', name: 'Glacier', swatch: ['#F7FAFA', '#2C6E78', '#5FB4BF'] },
-    { id: 'forest', name: 'Forest floor', swatch: ['#F8F9F7', '#3A6B48', '#7DBA8C'] },
-    { id: 'sage', name: 'Sage and mist', swatch: ['#F9F9F7', '#5E7A63', '#9BB5A0'] },
-    { id: 'basalt', name: 'Basalt and lichen', swatch: ['#F8F8F6', '#6B7A2E', '#B4C36A'] },
-    { id: 'gold', name: 'Graphite and gold', swatch: ['#F7F7F8', '#D9A300', '#F2C230'] },
-    { id: 'dusk', name: 'Dusk', swatch: ['#F9F9FB', '#4F5A9C', '#97A1E0'] },
+    { id: 'default', swatch: ['#FAF9F7', '#B08D57', '#D4B47E'] },
+    { id: 'stone', swatch: ['#FAFAF9', '#2B2B29', '#E4E4E0'] },
+    { id: 'marble', swatch: ['#F8FAFC', '#1F5FA8', '#5B9BE6'] },
+    { id: 'glacier', swatch: ['#F7FAFA', '#2C6E78', '#5FB4BF'] },
+    { id: 'forest', swatch: ['#F8F9F7', '#3A6B48', '#7DBA8C'] },
+    { id: 'sage', swatch: ['#F9F9F7', '#5E7A63', '#9BB5A0'] },
+    { id: 'basalt', swatch: ['#F8F8F6', '#6B7A2E', '#B4C36A'] },
+    { id: 'gold', swatch: ['#F7F7F8', '#D9A300', '#F2C230'] },
+    { id: 'dusk', swatch: ['#F9F9FB', '#4F5A9C', '#97A1E0'] },
 ];
 
 export const PALETTE_IDS = new Set<string>([...PALETTES.map((p) => p.id), 'custom']);

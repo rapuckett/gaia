@@ -9,12 +9,13 @@ import * as api from '../services/api';
 import { requestErrorText } from '../utils/requestErrors';
 import { useChatStore } from '../stores/chatStore';
 import {
-    useModelStore, useInferencePlace, selectChipModel, displayModelName, distinctModelLabels, sameModelId, UNKNOWN_PLACE_TITLE,
+    useModelStore, useInferencePlace, selectChipModel, displayModelName, distinctModelLabels, sameModelId,
 } from '../stores/modelStore';
 import { isDownloading, modelState, placementText } from './modelMeta';
 import { InfoBubble } from './InfoBubble';
 import { formatPrice } from './settings/cloudPrice';
 import { useT, type Translate } from '../i18n/useT';
+import { isolate, keepTogether } from '../i18n/registry';
 import { providerName, providerNotice } from '../utils/providerText';
 import { needsCloudConsent } from '../utils/cloudConsent.core';
 import { MarkedText, markLtr } from './MarkedText';
@@ -397,7 +398,7 @@ export function ModelChip() {
     const title = autoSwitchError
         ? autoSwitchError
         : queueError
-        ? queueError
+        ? `${t('modelMenu.queueSwitchFailed', { model: keepTogether(displayModelName(queueError.model)) })}\n${isolate(queueError.reason, 'ltr')}`
         : queued
             ? t('modelMenu.usedNext', { name: displayModelName(queued) })
             : active?.config_error
@@ -405,7 +406,7 @@ export function ModelChip() {
                 : notDownloaded
                     ? t('modelMenu.notDownloadedTitle', { name })
                     : !place
-                        ? UNKNOWN_PLACE_TITLE
+                        ? t('modelStatus.unknownPlace')
                         // The server writes the model name as Markdown code; a tooltip shows backticks literally.
                         : place.description?.replace(/`/g, '')
                             ?? (place.remote ? t('modelStatus.runsRemote', { name: place.label }) : t('modelStatus.runsHere'));
@@ -437,7 +438,12 @@ export function ModelChip() {
                     </div>
                 )}
                 {autoSwitchError && <div className="popover-message is-error" role="alert">{autoSwitchError}</div>}
-                {queueError && <div className="popover-message is-error" role="alert">{queueError}</div>}
+                {queueError && (
+                    <div className="popover-message is-error" role="alert">
+                        {t('modelMenu.queueSwitchFailed', { model: keepTogether(displayModelName(queueError.model)) })}
+                        <div dir="ltr">{queueError.reason}</div>
+                    </div>
+                )}
                 {error && <div className="popover-message is-error" role="alert">{error}</div>}
                 {!groups && !error && (
                     <div className="popover-message"><Loader2 size={13} className="spin" /> {t('modelMenu.loading')}</div>

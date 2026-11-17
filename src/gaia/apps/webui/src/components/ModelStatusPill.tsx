@@ -7,7 +7,7 @@ import { Popover } from './Popover';
 import * as api from '../services/api';
 import { useChatStore } from '../stores/chatStore';
 import { useLogsStore } from '../stores/logsStore';
-import { useModelStore, useInferencePlace, displayModelName, sameModelId, UNKNOWN_PLACE_TITLE } from '../stores/modelStore';
+import { useModelStore, useInferencePlace, displayModelName, sameModelId } from '../stores/modelStore';
 import { ctxLabel } from './modelMeta';
 import { LocalStatusError } from './LocalStatusError';
 import { useT, type Translate } from '../i18n/useT';
@@ -107,7 +107,7 @@ export function ModelStatusPill() {
     const name = active?.model ? displayModelName(active.model) : null;
     const text = [place?.label, name].filter(Boolean).join(' · ') || t('modelStatus.fallbackName');
     const title = !place
-        ? UNKNOWN_PLACE_TITLE
+        ? t('modelStatus.unknownPlace')
         : place.description ?? (place.remote ? t('modelStatus.sentTo', { name: place.label }) : t('modelStatus.runsHere'));
 
     const s = status;

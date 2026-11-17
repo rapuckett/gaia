@@ -110,7 +110,7 @@ describe('ModelChip during a turn', () => {
         useModelStore.setState({ queued: 'Qwen3-4B-GGUF', names: { 'Qwen3-4B-GGUF': 'Qwen3 4B' } });
         useChatStore.setState({ isStreaming: true });
         act(() => useChatStore.setState({ isStreaming: false }));
-        await waitFor(() => expect(useModelStore.getState().queueError).toMatch(/Couldn't switch to Qwen3 4B/));
+        await waitFor(() => expect(useModelStore.getState().queueError).toEqual({ model: 'Qwen3-4B-GGUF', reason: 'the model is not downloaded' }));
     });
 
     it('switches at once when no reply is running', async () => {

@@ -67,7 +67,7 @@ import { isPlaceholderTitle } from '../utils/sessionTitle';
 import { laterTurns, lastSentMessage } from '../utils/editLast';
 import { addDroppedFiles, showAddedDocuments } from '../utils/chatDocuments';
 import { requestErrorParam } from '../utils/requestErrors';
-import { MAX_SESSION_TITLE_CHARS, RECONNECTING_PHASE, STARTING_REASON } from '../utils/constants';
+import { MAX_SESSION_TITLE_CHARS, RECONNECTING_PHASE } from '../utils/constants';
 import { scrollBehavior } from '../utils/motion';
 import { setVisibleInterval } from '../utils/visibleInterval';
 import { ModelServerDownNotice } from './ModelServerDownNotice';
@@ -1599,7 +1599,7 @@ export function ChatView({ sessionId }: ChatViewProps) {
     const composerBlocked = retiredAgent
         ? t('chat.retiredReadOnly', { agent: retiredAgent })
         : isStarting(systemStatus)
-            ? STARTING_REASON
+            ? t('composer.starting')
             : null;
 
     return (
