@@ -176,6 +176,12 @@ describeNative('chat, new-chat, composer and permission scenes', () => {
         expect(screen.getByTestId('try-again', opts)).toBeTruthy();
     });
 
+    it('latest-answer shows Try again on the latest answer only', async () => {
+        await open('messages', { state: 'latest-answer' });
+        expect(await screen.findAllByTestId('regenerate', opts)).toHaveLength(1);
+        expect(screen.getAllByLabelText(t('msg.copy'), opts).length).toBeGreaterThan(1);
+    });
+
     it('failed-report shows Try again on the failed latest reply', async () => {
         await open('messages', { state: 'failed-report' });
         expect(await screen.findByTestId('try-again', opts)).toBeTruthy();
