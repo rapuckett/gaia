@@ -30,7 +30,7 @@ import { TurnTail } from '../TurnTail';
  * `activity-filter` (CV-48): `#tap=steps-summary` opens the seven finished calls and shows the filter.
  * `reply-server-down` (CV-14): a failed latest reply with the model-server fix under it and Try again; `reply-errors` also shows the unexpected-error "Report it on GitHub" link (CV-30, `report-github`).
 <<<<<<< HEAD
- * `activity-variants` (CV-42): `#tap=steps-summary` opens a thought-first call, a failed call and a repeated one (x3); `#tap=steps-summary,step-row--1` expands the thought-first call to its thought, tool and arguments (its id is -1 because a folded thought's row is a copy); `#tap=steps-summary,step-row-2` expands the failed one.
+ * `activity-variants` (CV-42): `#tap=steps-summary` opens a thought-first call, a failed call and a repeated one (x3); `#tap=steps-summary,step-row-1` expands the thought-first call to its thought, tool and arguments (the thought is row 0); `#tap=steps-summary,step-row-2` expands the failed one.
 =======
  * `latest-answer` (regenerate): a short exchange; only the latest answer has Try again (`regenerate`), and its retry does nothing.
 >>>>>>> origin/integration/rapuckett

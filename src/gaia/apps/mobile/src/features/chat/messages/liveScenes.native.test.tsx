@@ -112,7 +112,7 @@ describeNative('chat, new-chat, composer and permission scenes', () => {
         await open('messages', { state: 'activity-variants' });
         fireEvent.press(within(await screen.findByTestId('steps-summary', opts)).getAllByLabelText(/./, opts)[0]!);
         expect(await screen.findByText('×3', opts)).toBeTruthy();
-        fireEvent.press(await screen.findByTestId('step-row--1', opts));
+        fireEvent.press(await screen.findByTestId('step-row-1', opts));
         expect(await screen.findByText('path: forecast.csv', opts)).toBeTruthy();
     });
 
