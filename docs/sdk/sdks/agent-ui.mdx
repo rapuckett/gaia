@@ -2752,6 +2752,10 @@ Autonomous goal/task tracking (`GoalStore`) behind the Agent UI's Goals panel.
 When the goal store can't be read or written, every route below answers `503`
 with a `detail` that says why and what the user can do.
 
+Mobile access may only read goals: creating, approving, rejecting, cancelling,
+changing or deleting one, adding or updating a task, and starting a new goal
+list are for the PC and an allowed paired device, and mobile access gets a `403`.
+
 <AccordionGroup>
   <Accordion title="GET /api/goals">
     List goals. Optional `status`, `source`, and `approved_only` query
@@ -2828,6 +2832,10 @@ with a `detail` that says why and what the user can do.
 ### Schedules
 
 Recurring prompts run on a cron-like interval — see [`gaia schedule`](/reference/cli#schedule) for the CLI equivalent. The scheduler runs *prompts* only; it cannot yet run a *skill* directly (`gaia schedule add --skill` is rejected).
+
+Mobile access may only read schedules and preview one (`POST /api/schedules/parse`):
+creating, running, pausing, resuming or deleting one is for the PC and an allowed
+paired device, and mobile access gets a `403`.
 
 <AccordionGroup>
   <Accordion title="GET /api/schedules">
