@@ -593,7 +593,7 @@ function FlowToolCard({ step, isExpanded, onToggle, now, awaitingUser = false, s
                     )}
                     <div className="flow-tool-raw">
                         <span className="detail-section-label">{t('activity.detail.tool')}</span>
-                        <code className="flow-tool-badge">{step.tool || 'unknown'}</code>
+                        <code className="flow-tool-badge">{step.tool || t('modelStatus.unknown')}</code>
                         {step.mcpServer && (
                             <span className="flow-tool-mcp-server">{t('activity.detail.via', { server: step.mcpServer })}</span>
                         )}
@@ -724,7 +724,7 @@ function FlowPolicyAlert({ step }: { step: AgentStep }) {
             <div className="flow-policy-alert-body">
                 <div className="flow-policy-alert-line">
                     <span>{t('activity.policy.tool')}</span>
-                    <code>{step.tool || 'unknown tool'}</code>
+                    <code>{step.tool || t('activity.policy.unknownTool')}</code>
                 </div>
                 <div className="flow-policy-alert-reason">{step.reason || step.detail}</div>
                 {step.ruleIds && step.ruleIds.length > 0 && (

@@ -353,7 +353,7 @@ export function DocumentLibrary() {
                 ? t('docs.tooLargeDetail', { max: String(body?.max_mb) })
                 : serverFailureText(reason, t) ?? (httpStatus === 400 && unsupportedMessage
                     ? unsupportedMessage
-                    : err instanceof Error ? err.message : 'Upload failed');
+                    : err instanceof Error ? err.message : t('composer.uploadFailed'));
             setUploadError({ filename, error: errMsg, status: httpStatus, kind: reason });
             setUploadStatus('');
             return false;
@@ -376,7 +376,7 @@ export function DocumentLibrary() {
             return true;
         } catch (err) {
             log.doc.error(`Failed to index folder "${folder}"`, err);
-            const errMsg = err instanceof Error ? err.message : 'Folder indexing failed';
+            const errMsg = err instanceof Error ? err.message : t('docs.folderIndexFailed');
             const { httpStatus } = (err ?? {}) as { httpStatus?: number };
             setUploadError({ filename: folderName, error: errMsg, status: httpStatus });
             return false;
@@ -548,7 +548,7 @@ export function DocumentLibrary() {
             log.doc.error(`Failed to attach ${name} to ${targetChatName}`, err);
             setUploadError({
                 filename: name,
-                error: `Not attached to ${targetChatName}: ${err instanceof Error ? err.message : err}`,
+                error: t('docs.notAttached', { chat: targetChatName, error: err instanceof Error ? err.message : String(err) }),
             });
         }
     }, [documents, attachToTarget, targetChatName]);

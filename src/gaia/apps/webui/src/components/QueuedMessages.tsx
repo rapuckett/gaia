@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import { AlertCircle, Clock, CornerDownRight, RotateCw, X } from 'lucide-react';
-import type { QueuedMessage } from '../utils/messageQueue';
+import { localizeQueueError, type QueuedMessage } from '../utils/messageQueue';
 import { useT, type Translate } from '../i18n/useT';
 import type { MessageKey } from '../i18n/registry';
 import './QueuedMessages.css';
@@ -48,9 +48,9 @@ export function QueuedMessages({ items, onRemove, onSteer, onRetry, replying = t
                             ? <Clock size={12} aria-hidden="true" />
                             : <CornerDownRight size={12} aria-hidden="true" />}
                     <span className="queued-message-text" title={item.text}><bdi>{item.text}</bdi></span>
-                    <span className="queued-message-state" title={item.error}>
+                    <span className="queued-message-state" title={item.error ? localizeQueueError(t, item.error) : undefined}>
                         {item.state === 'failed'
-                            ? (item.error ? t('queue.notSentWhy', { error: item.error }) : t('queue.notSent'))
+                            ? (item.error ? t('queue.notSentWhy', { error: localizeQueueError(t, item.error) }) : t('queue.notSent'))
                             : item.state === 'queued'
                                 ? (replying && item.note) || queuedLabel(t, replying, busyRetry)
                                 : t(STATE_LABEL[item.state as keyof typeof STATE_LABEL])}

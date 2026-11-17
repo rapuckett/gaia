@@ -28,6 +28,7 @@ export function featureRequestUrl(title: string, context?: string): string {
     const body = [
         '## Feature Description',
         '',
+        // english: text of a GitHub issue filed for the maintainers, who read English
         context || `I would like GAIA to support: **${title}**`,
         '',
         '## Use Case',
@@ -104,16 +105,16 @@ export function UploadErrorToast({ filename, error, status, kind, onDismiss, tim
                     {issueUrl && ' '}
                     {issueUrl === null ? null : report?.kind === 'feature' ? (
                         <a href={issueUrl} target="_blank" rel="noopener noreferrer">
-                            Request this feature →
+                            {t('docs.requestFeature')}
                         </a>
                     ) : (
                         <a href={issueUrl} target="_blank" rel="noopener noreferrer">
-                            Report this issue →
+                            {t('docs.reportIssue')}
                         </a>
                     )}
                 </div>
             </div>
-            <button className="upload-error-dismiss" onClick={onDismiss} aria-label="Dismiss">
+            <button className="upload-error-dismiss" onClick={onDismiss} aria-label={t('banner.dismiss')}>
                 <X size={14} />
             </button>
         </div>

@@ -24,6 +24,7 @@ import * as api from '../services/api';
 import { log } from './logger';
 
 /** The title a new chat is created with; "New Task" is what older versions used. */
+// english: the titles the backend gives a new chat, matched against saved titles
 const DRAFT_TITLES = new Set(['New chat', 'New Task']);
 
 interface DraftCheckState {

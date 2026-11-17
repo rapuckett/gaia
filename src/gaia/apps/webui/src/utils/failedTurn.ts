@@ -21,6 +21,7 @@ const NAMED_SETTINGS: Array<{ re: RegExp; section: SettingsSection; target: stri
     { re: /Settings\s*(?:>|›|→)\s*Advanced\s*(?:>|›|→)\s*Custom model ID/i, section: 'advanced', target: '[data-settings-target="custom-model"]' },
 ];
 
+// english: the backend's own prefix, matched against saved error text
 const START_PREFIX = 'Failed to start the query run:';
 const RAW_RE = /^(?:[A-Za-z_.]*(?:Error|Exception):|Failed to (?:preload|load|auto-download)\b)|Traceback \(most recent/;
 const RAW_MAX_CHARS = 1500;

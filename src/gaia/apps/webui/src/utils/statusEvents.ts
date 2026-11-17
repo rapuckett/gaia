@@ -4,6 +4,7 @@
 /** A `status` event's effect on the live line and the turn's timeline. */
 
 import { useChatStore } from '../stores/chatStore';
+import { getT } from '../i18n/useT';
 import type { StreamEvent } from '../types';
 import { RECONNECTING_PHASE } from './constants';
 import { agentEventToStep, isProgressTick, statusText } from './streamSteps';
@@ -63,12 +64,12 @@ export function applyStatusEvent(event: StreamEvent, stepIdRef: { current: numbe
     const lastStep = store.agentSteps[store.agentSteps.length - 1];
     // A warning is its own row; written over a progress row, the next progress line erases it.
     if (lastStep && lastStep.type === 'status' && lastStep.active && status !== 'warning') {
-        store.updateLastAgentStep({ label: msg || 'Working', detail: msg });
+        store.updateLastAgentStep({ label: msg || getT()('activity.working'), detail: msg });
         return;
     }
     // Only the label: a thinking step's detail holds the reasoning so far.
     if (lastStep && lastStep.type === 'thinking' && lastStep.active) {
-        store.updateLastAgentStep({ label: msg || 'Thinking' });
+        store.updateLastAgentStep({ label: msg || getT()('activity.thinking') });
         return;
     }
     const step = agentEventToStep({ ...event, message: msg }, stepIdRef);

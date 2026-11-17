@@ -86,7 +86,7 @@ export function ModelServerPanel() {
     const choices = available.map((b) => b.name);
     if (preferred && !choices.includes(preferred)) choices.push(preferred);
     const selected = preferred ?? info.default_backend ?? null;
-    const installable = available.filter((b) => b.state === 'installable').map((b) => backendLabel(b.name));
+    const installable = available.filter((b) => b.state === 'installable').map((b) => backendLabel(b.name, t));
     const chatIsLocalLlamacpp = !!chat?.name && chat.recipe === 'llamacpp';
     const owner = OWNER_LABELS[info.owner] ? t.bare(OWNER_LABELS[info.owner]!) : info.owner;
     const reloading = actions.pending === 'load';
@@ -103,7 +103,7 @@ export function ModelServerPanel() {
                 <InfoRow label={t('settings.server.chatModel')}>
                     {chat?.name ? <Ltr>{modelLabel({ id: chat.name })}</Ltr> : t.bare('settings.advanced.noneLoaded')}
                 </InfoRow>
-                {chat ? <InfoRow label={t('settings.server.runsOn')}><Ltr>{runsOn(chat)}</Ltr></InfoRow> : null}
+                {chat ? <InfoRow label={t('settings.server.runsOn')}><Ltr>{runsOn(chat, t)}</Ltr></InfoRow> : null}
                 {chat && chat.backend !== 'remote' ? (
                     <InfoRow label={t('settings.advanced.context')}>
                         {chat.ctx_size
@@ -112,7 +112,7 @@ export function ModelServerPanel() {
                     </InfoRow>
                 ) : null}
                 <InfoRow label={t('settings.advanced.embedding')}>
-                    {info.embedding_model?.name ? <Ltr>{`${modelLabel({ id: info.embedding_model.name })} · ${runsOn(info.embedding_model)}`}</Ltr> : t.bare('settings.advanced.noneLoaded')}
+                    {info.embedding_model?.name ? <Ltr>{`${modelLabel({ id: info.embedding_model.name })} · ${runsOn(info.embedding_model, t)}`}</Ltr> : t.bare('settings.advanced.noneLoaded')}
                 </InfoRow>
                 {extra.map((model, index) => (
                     <InfoRow key={`${model.name ?? 'unknown'}-${index}`} label={modelKindLabel(model, t)}>
@@ -130,7 +130,7 @@ export function ModelServerPanel() {
                 ) : (
                     <>
                         <SegmentedControl
-                            options={choices.map((name) => ({ value: name, label: backendLabel(name) }))}
+                            options={choices.map((name) => ({ value: name, label: backendLabel(name, t) }))}
                             value={selected ?? ''}
                             accessibilityLabel={t('settings.server.backendShort')}
                             onChange={(name) => {

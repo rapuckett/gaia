@@ -694,7 +694,7 @@ function CodeBlock({ lang, code }: { lang: string; code: string }) {
         // Code reads left to right even inside an Arabic answer.
         <div className={`code-block${collapsed ? ' is-collapsed' : ''}`} dir="ltr">
             <div className="code-header">
-                <span className="code-lang">{lang || 'code'}</span>
+                <span className="code-lang">{lang || t('code.lang')}</span>
                 <button
                     className={`code-copy ${copied ? 'copied' : ''}`}
                     onClick={handleCopy}

@@ -1443,7 +1443,7 @@ export function MemoryDashboard() {
                                             <label>{t('mem.col.context')}</label>
                                             <input type="text" value={formData.context}
                                                 onChange={e => setFormData(prev => ({ ...prev, context: e.target.value }))}
-                                                placeholder="global" />
+                                                placeholder={t('mem.context.global')} />
                                         </div>
                                         <div className="mem-inline-form-row">
                                             <label>{t('mem.detail.domain')}</label>

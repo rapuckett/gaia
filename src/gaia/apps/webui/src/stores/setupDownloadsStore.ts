@@ -9,6 +9,7 @@
  */
 
 import { create } from 'zustand';
+import { getT } from '../i18n/useT';
 import * as api from '../services/api';
 import type { SetupRunStatus } from '../types';
 import { isMoving, scopedStatus } from '../components/setup/downloadModel';
@@ -75,7 +76,7 @@ export const useSetupDownloads = create<SetupDownloadsState>((set, get) => {
             try {
                 set({ status: await api.getSetupStatus(), error: null });
             } catch (err) {
-                set({ error: `Lost contact with GAIA: ${errorText(err)}` });
+                set({ error: getT()('setup.lostContact', { error: errorText(err) }) });
             }
             await next();
             schedule();

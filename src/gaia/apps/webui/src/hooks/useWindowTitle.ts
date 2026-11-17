@@ -5,6 +5,7 @@ import { useEffect } from 'react';
 import { useChatStore } from '../stores/chatStore';
 
 /** The title index.html ships, shown when no chat is open. */
+// english: the product name, as index.html ships it
 const APP_TITLE = 'GAIA Agent UI';
 
 /** Names the open chat in the window and tab title, so chats can be told apart in a window list. */

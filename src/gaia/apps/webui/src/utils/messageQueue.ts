@@ -1,6 +1,8 @@
 // Copyright(C) 2025-2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
+import type { Translate } from '../i18n/translator';
+
 /**
  * Messages typed while GAIA is answering. Each waits here and goes out, in
  * order, as the next message once the reply ends; the user can instead offer
@@ -93,6 +95,7 @@ export function needsOutcome(items: QueuedMessage[]): boolean {
     return items.some((m) => m.state === 'delivered');
 }
 
+// english: the stored id of this failure; localizeQueueError shows it in the chosen language
 export const UNCONFIRMED_ERROR = 'GAIA could not confirm it read this message.';
 
 /**
@@ -140,8 +143,16 @@ export function nextToSend(items: QueuedMessage[]): QueuedMessage | undefined {
     return first?.state === 'queued' ? first : undefined;
 }
 
+// english: the stored id of this failure; localizeQueueError shows it in the chosen language
 export const INTERRUPTED_ERROR = 'GAIA closed while this was being sent, so it may not have gone out. '
-    + 'Check the chat above before sending it again.';
+    + 'Check the chat above before sending it again.'; // english: part of the stored id above
+
+/** A failed message's saved error in the chosen language; text from anywhere else is shown as written. */
+export function localizeQueueError(t: Translate, error: string): string {
+    if (error === UNCONFIRMED_ERROR) return t('queue.err.unconfirmed');
+    if (error === INTERRUPTED_ERROR) return t('queue.err.interrupted');
+    return error;
+}
 
 /**
  * Queues read back after a reload. A message whose offer to the reply was in

@@ -20,6 +20,7 @@ import { useChatStore } from '../stores/chatStore';
 import * as messageQueue from '../utils/messageQueue';
 import { describeStreamError, isStreamInterrupted, streamErrorDetail, withDetail } from '../utils/streamErrors';
 import { log } from '../utils/logger';
+import { getT } from '../i18n/useT';
 
 /** How long a queued message waits after finding its chat busy before it is sent again. */
 export const QUEUE_BUSY_WAIT_MS = 3_000;
@@ -66,7 +67,7 @@ export function claimView(sessionId: string): () => void {
 function errorText(err: unknown): string {
     if (err instanceof Error) {
         const text = describeStreamError(err);
-        return text ? withDetail(text, streamErrorDetail(err)) : err.message || 'Unknown error';
+        return text ? withDetail(text, streamErrorDetail(err)) : err.message || getT()('chat.unknownError');
     }
     return String(err);
 }
@@ -137,7 +138,7 @@ export async function dispatchNext(sessionId: string, send: QueuedSend, canSend:
                 }
                 log.chat.error(`Could not learn what chat ${sessionId}'s last reply did with the messages added to it`, err);
                 store().updateQueue(sessionId, (q) => messageQueue.failDelivered(
-                    q, `GAIA could not say whether it read this message: ${errorText(err)}`,
+                    q, getT()('queue.err.unread', { error: errorText(err) }),
                 ));
                 return;
             }

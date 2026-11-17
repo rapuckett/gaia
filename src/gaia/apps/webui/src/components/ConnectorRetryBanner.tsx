@@ -19,6 +19,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { CheckCircle2, RefreshCw } from 'lucide-react';
 import * as api from '../services/api';
 import { log } from '../utils/logger';
+import { useT } from '../i18n/useT';
 import type { ConnectorListEntry } from '../types';
 import { connectedProviderLabel, referencedProviderConnected } from '../utils/connectorRetry.core';
 import './ConnectorRetryBanner.css';
@@ -39,6 +40,7 @@ export function ConnectorRetryBanner({
     /** Re-run the previous question. */
     onRetry: () => void;
 }) {
+    const t = useT();
     const [connectors, setConnectors] = useState<ConnectorListEntry[]>([]);
     const [dismissed, setDismissed] = useState(false);
 
@@ -73,7 +75,7 @@ export function ConnectorRetryBanner({
         <div className="connector-retry-banner" role="status">
             <CheckCircle2 size={14} className="connector-retry-banner__icon" />
             <span className="connector-retry-banner__text">
-                {label} connected since this reply — ask again to run it now.
+                {t('chat.connectorRetry', { name: label })}
             </span>
             <button
                 type="button"
@@ -81,13 +83,13 @@ export function ConnectorRetryBanner({
                 onClick={() => { setDismissed(true); onRetry(); }}
             >
                 <RefreshCw size={12} />
-                <span>Ask again</span>
+                <span>{t('mobileApp.connectorRetry.askAgain')}</span>
             </button>
             <button
                 type="button"
                 className="connector-retry-banner__dismiss"
                 onClick={() => setDismissed(true)}
-                aria-label="Dismiss"
+                aria-label={t('banner.dismiss')}
             >
                 ×
             </button>
