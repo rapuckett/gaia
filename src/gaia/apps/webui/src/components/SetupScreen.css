@@ -728,6 +728,11 @@ label.setup-choice {
     white-space: pre-wrap;
 }
 
+.follow-log-line {
+    min-height: 1.2em;
+    text-align: start;
+}
+
 .setup-done {
     display: flex;
     flex-direction: column;
