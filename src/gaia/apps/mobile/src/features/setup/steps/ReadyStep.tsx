@@ -10,7 +10,7 @@ import { useState } from 'react';
 
 import { useGpuMemory, useSelectModel, useStartScreen } from '@/data';
 import { shortModelName } from '@/features/new-chat/warmUp';
-import { describeError, useLocaleCode, useT } from '@/i18n/useT';
+import { describeHttpFailure, useLocaleCode, useT } from '@/i18n/useT';
 import { Button, Card, Icon, Notice, Row, Stack, Text } from '@/ui';
 
 import { SetupFooter } from '../SetupFooter';
@@ -47,7 +47,7 @@ export function ReadyStep({ ctx }: { ctx: SetupStepContext }) {
     const select = useSelectModel();
     const gpu = useGpuMemory().data;
     const cards = starterCards(useStartScreen().data?.cards, ctx.again);
-    const [error, setError] = useState<string | null>(null);
+    const [error, setError] = useState<{ text: string; detail?: string } | null>(null);
     const view = readyView(ctx.run, ctx.plan);
     const names = new Map((ctx.plan?.catalog ?? []).map((e) => [e.id, e.name]));
     const model = view.answering ? (view.cloud ? shortModelName(view.answering) : names.get(view.answering) ?? shortModelName(view.answering)) : null;
@@ -58,7 +58,7 @@ export function ReadyStep({ ctx }: { ctx: SetupStepContext }) {
         try {
             if (!view.cloud && view.answering) await select.mutateAsync(view.answering);
         } catch (err) {
-            setError(describeError(err, t));
+            setError(describeHttpFailure(err, t));
             return;
         }
         ctx.finish();
@@ -86,7 +86,7 @@ export function ReadyStep({ ctx }: { ctx: SetupStepContext }) {
                     })}
                 </Stack>
             ) : null}
-            {error ? <Notice tone="danger" message={error} /> : null}
+            {error ? <Notice tone="danger" message={error.text} detail={error.detail} /> : null}
             {view.failedJobs.map((job) => (
                 <Notice key={job} tone="warning" message={t('setup.ready.extraFailed', { job: t(`setup.test.job.${job}`) })} />
             ))}

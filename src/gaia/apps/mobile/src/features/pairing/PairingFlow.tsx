@@ -4,7 +4,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { BackHandler, Platform } from 'react-native';
 
-import { describeError, useT } from '@/i18n/useT';
+import { describeHttpFailure, useT } from '@/i18n/useT';
 import { useConnectionStore } from '@/state/connection';
 import { Button, Card, Icon, Notice, Row, Screen, Spinner, Stack, Text, TextField } from '@/ui';
 import { CircleAlert, Clock, Monitor, Smartphone } from '@/ui/icons';
@@ -40,7 +40,7 @@ export function PairingFlow({ initialStep = 'welcome', onPaired, onScan }: Pairi
     const removedFrom = useConnectionStore((s) => s.removedFrom);
     const [view, setView] = useState<View>(initialStep);
     const [text, setText] = useState('');
-    const [error, setError] = useState<string | null>(null);
+    const [error, setError] = useState<{ text: string; detail?: string } | null>(null);
     const [busy, setBusy] = useState(false);
     const alive = useRef(true);
     // Bumped when the person backs out of Pair while a code is being redeemed, so that answer is taken back.
@@ -82,7 +82,7 @@ export function PairingFlow({ initialStep = 'welcome', onPaired, onScan }: Pairi
         getPairingService()
             .status()
             .then(settle)
-            .catch((e) => alive.current && setError(describeError(e, t)));
+            .catch((e) => alive.current && setError(describeHttpFailure(e, t)));
     }, [settle, t]);
 
     // The camera exists on a phone build only; the web build pastes.
@@ -94,7 +94,7 @@ export function PairingFlow({ initialStep = 'welcome', onPaired, onScan }: Pairi
             getPairingService()
                 .status()
                 .then(settle)
-                .catch((e) => alive.current && setError(describeError(e, t)));
+                .catch((e) => alive.current && setError(describeHttpFailure(e, t)));
         }, POLL_MS);
         return () => clearInterval(timer);
     }, [waiting, settle, t]);
@@ -106,7 +106,7 @@ export function PairingFlow({ initialStep = 'welcome', onPaired, onScan }: Pairi
         try {
             invite = parseInvite(code);
         } catch (e) {
-            setError(describeError(e, t));
+            setError(describeHttpFailure(e, t));
             return;
         }
         setBusy(true);
@@ -115,7 +115,7 @@ export function PairingFlow({ initialStep = 'welcome', onPaired, onScan }: Pairi
             if (!alive.current) return;
             setView({ at: 'confirm', invite, replaces: paired.some((pc) => pc.id === invite.pc_id), back: view === 'scan' ? 'scan' : 'manual' });
         } catch (e) {
-            if (alive.current) setError(describeError(e, t));
+            if (alive.current) setError(describeHttpFailure(e, t));
         } finally {
             if (alive.current) setBusy(false);
         }
@@ -135,7 +135,7 @@ export function PairingFlow({ initialStep = 'welcome', onPaired, onScan }: Pairi
             }
             settle(result);
         } catch (e) {
-            if (alive.current && !abandoned()) setError(describeError(e, t));
+            if (alive.current && !abandoned()) setError(describeHttpFailure(e, t));
         } finally {
             if (alive.current && !abandoned()) setBusy(false);
         }
@@ -210,7 +210,7 @@ export function PairingFlow({ initialStep = 'welcome', onPaired, onScan }: Pairi
                     </Stack>
                 </Card>
                 {replaces ? <Notice tone="warning" message={t('mobileApp.pairing.confirm.replaces', { pc: invite.name })} /> : null}
-                {error ? <Notice tone="danger" message={error} /> : null}
+                {error ? <Notice tone="danger" message={error.text} detail={error.detail} /> : null}
             </Page>
         );
     }
@@ -252,7 +252,7 @@ export function PairingFlow({ initialStep = 'welcome', onPaired, onScan }: Pairi
             <Page title={t('mobileApp.pairing.how.scan')}>
                 <PairingScanner onCode={(code) => void submit(code)} testID="pairing-scanner" />
                 {busy ? <Spinner /> : null}
-                {error ? <Notice tone="danger" message={error} /> : null}
+                {error ? <Notice tone="danger" message={error.text} detail={error.detail} /> : null}
                 <Button variant="secondary" label={t('mobileApp.pairing.how.paste')} onPress={() => setView('manual')} full />
                 <Button variant="ghost" label={t('mobileApp.pairing.manual.back')} onPress={() => setView('how')} full />
             </Page>
@@ -290,13 +290,18 @@ export function PairingFlow({ initialStep = 'welcome', onPaired, onScan }: Pairi
                     setText(v);
                     setError(null);
                 }}
-                error={error ?? undefined}
+                error={error?.text}
                 multiline
                 maxLines={4}
                 returnKeyType="done"
                 disabled={busy}
                 testID="pairing-input"
             />
+            {error?.detail ? (
+                <Text role="caption" tone="muted" dir="ltr" align="ltr">
+                    {error.detail}
+                </Text>
+            ) : null}
             <Button variant="primary" label={t('mobileApp.pairing.manual.submit')} onPress={() => void submit()} busy={busy} full />
             <Button variant="ghost" label={t('mobileApp.pairing.manual.back')} onPress={() => setView('how')} full />
         </Page>

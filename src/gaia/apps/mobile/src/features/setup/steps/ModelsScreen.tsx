@@ -11,7 +11,7 @@ import type { SetupModelProgress } from '@webui/types';
 
 import { GaiaApiError } from '@/api/errors';
 import { useGpuMemory, useSaveModelChoices, useSetupPlan } from '@/data';
-import { describeError, technicalDetail, useLocaleCode, useT } from '@/i18n/useT';
+import { describeHttpFailure, technicalDetail, useLocaleCode, useT } from '@/i18n/useT';
 import { Button, Notice, Pressable, Row, Spinner, Stack, Text } from '@/ui';
 
 import { NpuNotReady } from '../npu/NpuNotReady';
@@ -194,5 +194,5 @@ export function ModelsScreen({ ctx, close }: { ctx: SetupStepContext; close: () 
 function SaveError({ error }: { error: Error }) {
     const t = useT();
     if (error instanceof GaiaApiError && error.status === 403) return <Notice tone="info" message={t('setup.plan.pcOnly')} />;
-    return <Notice tone="danger" message={describeError(error, t)} />;
+    return <Notice tone="danger" message={describeHttpFailure(error, t).text} detail={describeHttpFailure(error, t).detail} />;
 }

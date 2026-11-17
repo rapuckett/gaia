@@ -7,6 +7,7 @@ import type { ReactNode } from 'react';
 import { Platform } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { GaiaApiError } from '@/api/errors';
 import { createFakeClient } from '@/api/fake';
 import { GaiaClientProvider } from '@/data';
 import { ThemeProvider } from '@/ui';
@@ -41,6 +42,28 @@ describeNative('Permissions pane', () => {
         await screen.findByText('Change this on the PC running GAIA.');
         expect(screen.getByRole('switch', { checked: false })).toBe(screen.getByTestId('permissions-default-switch'));
         expect((await client.listAllPermissions()).default_mode).toBe('ask');
+        queryClient.clear();
+    });
+
+    it("a failed list shows our sentence and puts the PC's text on a left-to-right detail line", async () => {
+        const client = { ...createFakeClient(), listAllPermissions: () => Promise.reject(new GaiaApiError(500, 'permissions table is locked')) };
+        const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+        await render(<Permissions />, {
+            wrapper: ({ children }: { children: ReactNode }) => (
+                <QueryClientProvider client={queryClient}>
+                    <GaiaClientProvider client={client}>
+                        <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 800 }, insets: { top: 0, left: 0, right: 0, bottom: 0 } }}>
+                            <ThemeProvider>
+                                <SheetHost>{children}</SheetHost>
+                            </ThemeProvider>
+                        </SafeAreaProvider>
+                    </GaiaClientProvider>
+                </QueryClientProvider>
+            ),
+        });
+        await screen.findByText('GAIA answered with an error (500).');
+        const detail = screen.getByText('permissions table is locked') as unknown as { props: { style: { writingDirection?: string } } };
+        expect(detail.props.style.writingDirection).toBe('ltr');
         queryClient.clear();
     });
 });

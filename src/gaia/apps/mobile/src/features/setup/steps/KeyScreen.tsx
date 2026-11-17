@@ -8,7 +8,7 @@ import { useState } from 'react';
 
 import { GaiaApiError } from '@/api/errors';
 import { useActiveModel, useCloudPrices, useCloudProviders, useConnectCloud, useLemonadeTarget } from '@/data';
-import { describeError, technicalDetail, useLocaleCode, useT, type Translate } from '@/i18n/useT';
+import { describeHttpFailure, technicalDetail, useLocaleCode, useT, type Translate } from '@/i18n/useT';
 import { openLinkFromPress } from '@/platform/openLink';
 import { Button, Card, ChoiceList, Notice, Spinner, Stack, Row, Text, TextField, type ChoiceOption } from '@/ui';
 
@@ -97,7 +97,7 @@ function GetAKey({ provider }: { provider: Provider }) {
 
 function ConnectError({ error, t }: { error: Error; t: Translate }) {
     if (error instanceof GaiaApiError && error.status === 403) return <Notice tone="info" message={t('setup.plan.pcOnly')} />;
-    return <Notice tone="danger" message={describeError(error, t)} />;
+    return <Notice tone="danger" message={describeHttpFailure(error, t).text} detail={describeHttpFailure(error, t).detail} />;
 }
 
 /**
@@ -137,7 +137,7 @@ export const KeyScreen: PlanScreen = ({ ctx, close }) => {
     return (
         <Stack gap="md" testID="key-screen">
             <Text role="title" weight="semibold" accessibilityRole="header">{t('setup.key.title')}</Text>
-            {providers.error ? <Notice tone="danger" message={describeError(providers.error, t)} /> : null}
+            {providers.error ? <Notice tone="danger" message={describeHttpFailure(providers.error, t).text} detail={describeHttpFailure(providers.error, t).detail} /> : null}
             <ChoiceList
                 options={options}
                 value={choice}

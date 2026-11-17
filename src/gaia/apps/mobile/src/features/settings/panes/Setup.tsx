@@ -9,7 +9,7 @@ import { useRouter } from 'expo-router';
 import { useState } from 'react';
 
 import { useActiveModel, useGpuMemory, useSetupPlan, useSetupPreflight } from '@/data';
-import { describeError, useT } from '@/i18n/useT';
+import { describeError, describeHttpFailure, useT } from '@/i18n/useT';
 import { reopenSetup } from '@/features/setup/SetupGate';
 import { Button, Icon, ListRow, Notice, Sheet, Stack, Surface, Text } from '@/ui';
 import { ChevronRight } from '@/ui/icons';
@@ -111,7 +111,7 @@ export default function Setup() {
                         <Button variant="secondary" size="sm" label={t('settings.setup.runAgain')} onPress={() => setAsking(true)} testID="setup-run-again" />
                     </Stack>
                 </Surface>
-                {error ? <Notice tone="danger" message={describeError(error, t)} testID="setup-error" /> : null}
+                {error ? <Notice tone="danger" message={describeHttpFailure(error, t).text} detail={describeHttpFailure(error, t).detail} testID="setup-error" /> : null}
                 {groups.map((g) => (
                     <Stack key={g.title} gap="xs">
                         <Text role="label" weight="medium" tone="secondary" accessibilityRole="header">{g.title}</Text>

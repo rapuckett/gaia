@@ -3,9 +3,8 @@
 
 import { useState } from 'react';
 
-import { GaiaApiError } from '@/api/errors';
 import { useLocalModelStatus, useQueryFailure, useRestartLocalModel } from '@/data';
-import { describeError, useT } from '@/i18n/useT';
+import { describeHttpFailure, useT } from '@/i18n/useT';
 import { ChipButton } from '@/features/schedules/ChipButton';
 import { Button, Notice, Row, Sheet, Spinner, Stack, StatusDot, Text, type StatusTone } from '@/ui';
 import { RotateCw, ScrollText, Settings } from '@/ui/icons';
@@ -53,11 +52,7 @@ export function ModelStatusSheet({ open, onClose, onOpenSettings, initial }: Mod
     const s = query.data;
     const control = s ? restartControl(s, restart.isPending) : null;
     const busy = restart.isPending || !!s?.restarting;
-    const restartError = restart.error
-        ? restart.error instanceof GaiaApiError
-            ? restart.error.detail
-            : describeError(restart.error, t)
-        : null;
+    const restartError = restart.error ? describeHttpFailure(restart.error, t) : null;
 
     const close = () => {
         setConfirming(false);
@@ -78,7 +73,7 @@ export function ModelStatusSheet({ open, onClose, onOpenSettings, initial }: Mod
                         <Text role="label">{t('modelStatus.checking')}</Text>
                     </Row>
                 ) : null}
-                {failure.failed && !s ? <Notice tone="danger" message={describeError(failure.error, t)} /> : null}
+                {failure.failed && !s ? <Notice tone="danger" message={describeHttpFailure(failure.error, t).text} detail={describeHttpFailure(failure.error, t).detail} /> : null}
                 {s ? (
                     <>
                         <Row gap="sm">
@@ -131,7 +126,7 @@ export function ModelStatusSheet({ open, onClose, onOpenSettings, initial }: Mod
                         {s.restart_error ? <Notice tone="danger" message={s.restart_error} /> : null}
                     </>
                 ) : null}
-                {restartError ? <Notice tone="danger" message={restartError} /> : null}
+                {restartError ? <Notice tone="danger" message={restartError.text} detail={restartError.detail} /> : null}
                 {confirming && s ? (
                     <Stack gap="sm">
                         <Notice

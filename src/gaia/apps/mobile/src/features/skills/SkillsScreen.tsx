@@ -7,7 +7,7 @@ import { View } from 'react-native';
 import type { SkillInfo } from '@/api/client.types';
 import { useSkills } from '@/data';
 import { ScreenHeader } from '@/features/nav/ScreenHeader';
-import { describeError, useT } from '@/i18n/useT';
+import { describeHttpFailure, useT } from '@/i18n/useT';
 import {
     Button,
     Disclosure,
@@ -74,7 +74,7 @@ export function SkillsBody({ onTry }: { onTry: (name: string, prompt: string) =>
                 </Disclosure>
                 <Button label={t('settings.skills.link.title')} variant="secondary" full onPress={() => setAdding(true)} testID="skills-add" />
                 {skills.error ? (
-                    <ErrorState title={describeError(skills.error, t)} onRetry={() => void skills.refetch()} />
+                    <ErrorState title={describeHttpFailure(skills.error, t).text} detail={describeHttpFailure(skills.error, t).detail} onRetry={() => void skills.refetch()} />
                 ) : skills.isPending ? (
                     <ListSkeleton rows={6} />
                 ) : (

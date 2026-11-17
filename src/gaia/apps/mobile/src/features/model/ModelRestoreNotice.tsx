@@ -28,7 +28,7 @@ export function ModelRestoreNotice({ onPick = () => openSettings('model'), holdO
     // The PC's own sentence stays off ours: it goes on the detail line.
     const failed = restore?.status === 'failed';
     const sentence = failed ? t('mobileApp.model.restoreFailed') : ok && name ? t('mobileApp.model.restored', { name: keepTogether(name) }) : message;
-    const detail = sentence === message ? undefined : message;
+    const detail = failed ? message : undefined;
     const recheck = restore?.status === 'pending' || (restore?.status === 'failed' && !!restore.retry);
     const { refetch } = active;
 

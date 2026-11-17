@@ -18,7 +18,7 @@ import {
     useSkipSetupModel,
     useStartSetup,
 } from '@/data';
-import { describeError, useT } from '@/i18n/useT';
+import { describeHttpFailure, useT } from '@/i18n/useT';
 import { Button, Card, Ltr, Notice, ProgressLine, Row, Spinner, Stack, Text } from '@/ui';
 
 import { useFlushQueuedModels, useQueuedModels } from '../optionalModels';
@@ -198,7 +198,7 @@ export function DownloadStep({ ctx }: { ctx: SetupStepContext }) {
           )
         : '';
 
-    const errorText = actionError != null ? describeError(actionError, t) : flushError ? describeError(flushError, t) : null;
+    const failure = actionError != null ? describeHttpFailure(actionError, t) : flushError ? describeHttpFailure(flushError, t) : null;
     const stoppedLead: MessageKey = run?.problem ? (run.problem.kind === 'server_too_old' ? 'setup.server.tooOld' : 'setup.server.unreachable') : 'setup.stopped';
 
     return (
@@ -288,7 +288,7 @@ export function DownloadStep({ ctx }: { ctx: SetupStepContext }) {
             ) : null}
             {stoppedBeforeCheck ? <Text role="caption" tone="secondary">{t('setup.download.finishNote')}</Text> : null}
 
-            {errorText ? <Notice tone="danger" message={errorText} /> : null}
+            {failure ? <Notice tone="danger" message={failure.text} detail={failure.detail} /> : null}
             {run ? <SetupLogs run={run} failed={!!view?.runFailed || rows.some((m) => m.state === 'failed')} /> : null}
             {footer ? <SetupFooter>{footer}</SetupFooter> : null}
             {sheet}

@@ -1,7 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { GaiaApiError, GaiaNetworkError } from '@/api/errors';
+import { GaiaApiError, GaiaAuthError, GaiaNetworkError } from '@/api/errors';
 
 import { describeErrorWith, describeHttpFailure, serverText, technicalDetail, translator } from './useT';
 
@@ -25,6 +25,21 @@ describe('server text stays out of the sentence', () => {
         expect(detail).toBe('The connectors service is not running.');
         expect(text).not.toContain('connectors service');
         expect(text).toContain('500');
+    });
+
+    it.each(['en', 'ar'])('a pairing refusal in %s gives the reason-free sentence and the PC text as detail', (code) => {
+        const t = translator(code);
+        const { text, detail } = describeHttpFailure(new GaiaAuthError('token revoked by the PC'), t);
+        expect(detail).toBe('token revoked by the PC');
+        expect(text).toBe(t('mobileApp.error.authNoDetail'));
+        expect(text).not.toContain('revoked');
+    });
+
+    it('a pairing refusal with no detail is the sentence alone', () => {
+        const t = translator('en');
+        const result = describeHttpFailure(new GaiaAuthError(''), t);
+        expect(result.detail).toBeUndefined();
+        expect(result.text).toBe(t('mobileApp.error.authNoDetail'));
     });
 
     it('serverText is the raw text only for errors we did not write', () => {
