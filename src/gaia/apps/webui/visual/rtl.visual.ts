@@ -6124,3 +6124,35 @@ test('the icon-touches-label audit flags real overlaps and ignores clipped text'
     expect(await flagged(row('rtl', `<span style="display:block;width:60px;overflow:hidden;white-space:nowrap">${text}</span>`))).toBe(true);
     expect(await flagged(row('ltr', `<span style="display:block;width:80px;margin-inline-start:5px;text-indent:-5px;overflow:hidden;white-space:nowrap">${text}</span>`))).toBe(false);
 });
+
+test('the setup Checks log reads each line in its own direction, with no glossed separators', async ({ page }, info) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    const hardware = {
+        os: 'Windows 11', detected_platform: 'windows', ram_gb: 96, disk_free_gb: 400, npu_detected: true, gpu_name: 'AMD Radeon 8060S', gpu_vram_gb: 32,
+        lemonade_running: true, lemonade_error: null, tier: 'full', recommended_profile: 'standard', recommended_model: 'Qwen3.6-35B-A3B-GGUF',
+        required_disk_gb: 30, required_memory_gb: 32, compatible: true, blockers: [], warnings: [],
+    };
+    await open(page, '', 'ar', async (p) => {
+        await p.route('**/api/setup/check*', (route) => route.fulfill({ json: { ready: false, stage: 'server', initialized: false, steps: [] } }));
+        await p.route('**/api/onboarding/preflight', (route) => route.fulfill({ json: hardware }));
+        await p.route('**/api/lemonade/detect', (route) => route.fulfill({ json: { found: { url: 'http://localhost:13305', version: '10.2.1', status: 'ok', message: null }, unchecked: [] } }));
+        await p.route('**/api/setup/plan', (route) => route.fulfill({ status: 500, json: { detail: 'Lemonade answered but could not list its models: 500' } }));
+    });
+    // The failed plan opens "Having trouble?" by itself; wait for it so the click doesn't close it.
+    await expect(page.getByRole('alert')).toBeVisible();
+    const trouble = page.getByRole('button', { name: /Having trouble/ });
+    await expect(trouble).toBeVisible();
+    if ((await trouble.getAttribute('aria-expanded')) !== 'true') await trouble.click();
+    await page.getByRole('button', { name: /Checks log/ }).click();
+    const lines = page.locator('.setup-log-pre .follow-log-line');
+    await expect(lines.first()).toBeVisible();
+    await page.screenshot({ path: info.outputPath('checks-log-ar-1280.png') });
+    const seen = await lines.evaluateAll((els) => els.map((el) => ({ text: el.textContent ?? '', dir: getComputedStyle(el).direction })));
+    expect(seen.length, 'the log has lines').toBeGreaterThan(0);
+    for (const line of seen) {
+        expect(line.text, 'a separator is never glossed').not.toContain('(; )');
+        // A line that opens with Arabic must resolve right to left.
+        if (/^[‎‏⁦-⁩]*[؀-ۿ]/.test(line.text)) expect(line.dir, line.text).toBe('rtl');
+    }
+    expect(seen.some((l) => l.dir === 'rtl'), 'an Arabic line reads right to left').toBe(true);
+});
