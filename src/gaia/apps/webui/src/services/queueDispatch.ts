@@ -138,7 +138,7 @@ export async function dispatchNext(sessionId: string, send: QueuedSend, canSend:
                 }
                 log.chat.error(`Could not learn what chat ${sessionId}'s last reply did with the messages added to it`, err);
                 store().updateQueue(sessionId, (q) => messageQueue.failDelivered(
-                    q, getT()('queue.err.unread', { error: errorText(err) }),
+                    q, `${getT()('queue.err.unread')}${messageQueue.ERROR_DETAIL_SEP}${errorText(err)}`,
                 ));
                 return;
             }

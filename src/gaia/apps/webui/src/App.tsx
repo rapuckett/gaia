@@ -47,6 +47,7 @@ import { runWhileVisible } from './utils/visibleInterval';
 import { RETRY_INITIAL_MS, retryUntilOk, type Retrier } from './utils/retry';
 import { shouldShowStartupScreen } from './utils/startupGate';
 import { getT, useT } from './i18n/useT';
+import { isolate } from './i18n/registry';
 import type { SetupCheck, StartCard } from './types';
 
 // Heavy, occasional screens load on first use.
@@ -87,7 +88,7 @@ class UpgradeFailed extends Error {}
 /** The model in use could not be read, so a setup check can't be trusted to say "not set up". */
 class ModelUnread extends Error {
     constructor(reason: string) {
-        super(getT().bare('setup.unknown.modelUnread', { error: reason }));
+        super(`${getT().bare('setup.unknown.modelUnread')}\n${isolate(reason, 'ltr')}`);
     }
 }
 
