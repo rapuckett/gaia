@@ -31,6 +31,13 @@ describeNative('/dev/connectors scenes', () => {
         expect(await screen.findByLabelText('Search connectors')).toBeTruthy();
     });
 
+    it('groups: the Custom agent servers header opens its tile', async () => {
+        await mount('groups');
+        expect(screen.queryByText('filesystem')).toBeNull();
+        await fireEvent.press(await screen.findByTestId('connectors-group-agentServers'));
+        expect(await screen.findByText('filesystem')).toBeTruthy();
+    });
+
     it('personalize shows the offer on the open tile', async () => {
         await mount('personalize');
         expect(await screen.findByText('Personalize GAIA')).toBeTruthy();

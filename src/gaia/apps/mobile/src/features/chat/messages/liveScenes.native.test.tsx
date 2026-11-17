@@ -98,6 +98,15 @@ describeNative('chat, new-chat, composer and permission scenes', () => {
         expect(screen.queryByText(/\b\d{2,}m \d+s/, opts)).toBeNull();
     });
 
+    it('activity-variants shows a failed, a repeated and a thought-first call, one opened', async () => {
+        await open('messages', { state: 'activity-variants' });
+        fireEvent.press(await screen.findByTestId('steps-summary', opts));
+        expect(await screen.findByText('×3', opts)).toBeTruthy();
+        expect(await screen.findByTestId('step-row-2', opts)).toBeTruthy();
+        fireEvent.press(await screen.findByTestId('step-row-1', opts));
+        expect(await screen.findByText('path: forecast.csv', opts)).toBeTruthy();
+    });
+
     it('activity-filter shows the step filter once the seven calls are open', async () => {
         await open('messages', { state: 'activity-filter' });
         fireEvent.press(within(await screen.findByTestId('steps-summary', opts)).getAllByLabelText(/./, opts)[0]!);
@@ -182,6 +191,11 @@ describeNative('chat, new-chat, composer and permission scenes', () => {
             const turn = await screen.findByTestId(`reply-error-${kind}`, opts);
             expect(within(turn).getAllByText(text, opts).length).toBeGreaterThan(0);
         }
+    });
+
+    it('chat env-offline shows the offline notice above the composer', async () => {
+        await open('chat', { state: 'env-offline' });
+        expect(await screen.findByTestId('offline-notice', opts)).toBeTruthy();
     });
 
     it('chat question waits for an answer', async () => {

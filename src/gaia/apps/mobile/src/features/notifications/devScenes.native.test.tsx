@@ -44,6 +44,12 @@ describeNative('/dev/notifications', () => {
         expect(await screen.findByText(title)).toBeTruthy();
     });
 
+    it('goal-store-error lists the unreadable-goal-store notification', async () => {
+        mockState = 'goal-store-error';
+        await mount();
+        expect(await screen.findByText("Approved goals aren't running")).toBeTruthy();
+    });
+
     it('setup-upgrading-failed says the server update stopped, with Try again', async () => {
         mockState = 'setup-upgrading-failed';
         await mount();
