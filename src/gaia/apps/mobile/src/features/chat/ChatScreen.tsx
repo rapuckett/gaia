@@ -17,7 +17,7 @@ import { ModelRestoreNotice } from '@/features/model/ModelRestoreNotice';
 import { Composer, ContextMeter, ContextWarning, ModelChip, PermissionChip, SessionFolderChip, SpendMeter, useAttachments, useComposerQueue, useFollowUpEvents } from '@/features/composer';
 import { QueuedMessages } from '@/features/composer/QueuedMessages';
 import { FileScope } from '@/features/files';
-import { describeError, describeErrorWith, useT } from '@/i18n/useT';
+import { describeErrorWith, describeHttpFailure, useT } from '@/i18n/useT';
 import { isQuestionGone, questionCardData, resolveTypedAnswer } from '@/features/questions/questionLogic';
 import { ErrorState, Notice, Screen, Stack } from '@/ui';
 
@@ -53,7 +53,7 @@ export function ChatScreen({ sessionId, onManageDocuments }: { sessionId: string
     const answer = useAnswerQuestion();
     const followUps = useFollowUpEvents(sessionId, stream.events);
     const stopped = useRef(false);
-    const [actionError, setActionError] = useState<unknown>(null);
+    const [actionError, setActionError] = useState<{ text: string; detail?: string } | null>(null);
     const [panelOpen, setPanelOpen] = useState(false);
     const showEnvironment = () => setPanelOpen(true);
     const busy = stream.status !== 'idle';
@@ -117,7 +117,7 @@ export function ChatScreen({ sessionId, onManageDocuments }: { sessionId: string
         const data = questionCardData(sessionId, asked);
         const resolved = data && resolveTypedAnswer(message, data);
         if (!resolved) {
-            setActionError(t('composer.pickAnOption'));
+            setActionError({ text: t('composer.pickAnOption') });
             return false;
         }
         answer
@@ -125,7 +125,13 @@ export function ChatScreen({ sessionId, onManageDocuments }: { sessionId: string
             .catch((err: unknown) => {
                 // Back in the box, so nothing typed is lost; an expired question says so in its card.
                 queue.setDraft((prev) => (prev.trim() ? `${message}\n\n${prev}` : message));
-                if (!isQuestionGone(err)) setActionError(t.compose((say) => say('composer.answerFailed', { error: describeErrorWith(err, say) })));
+                if (isQuestionGone(err)) return;
+                const failed = describeHttpFailure(err, t);
+                setActionError(
+                    failed.detail
+                        ? { text: t('mobileApp.composer.answerFailedShort'), detail: failed.detail }
+                        : { text: t.compose((say) => say('composer.answerFailed', { error: describeErrorWith(err, say) })) },
+                );
             });
         return true;
     };
@@ -133,7 +139,7 @@ export function ChatScreen({ sessionId, onManageDocuments }: { sessionId: string
     const send = (message: string): boolean | void => {
         setActionError(null);
         if (retiredAgent) {
-            setActionError(t('chat.retiredSend', { agent: retiredAgent }));
+            setActionError({ text: t('chat.retiredSend', { agent: retiredAgent }) });
             return false;
         }
         if (question) return answerQuestion(message, question);
@@ -148,7 +154,7 @@ export function ChatScreen({ sessionId, onManageDocuments }: { sessionId: string
 
     const tryAgain = (replyId: number | null) => {
         setActionError(null);
-        stream.retry(replyId).catch((err: unknown) => setActionError(err));
+        stream.retry(replyId).catch((err: unknown) => setActionError(describeHttpFailure(err, t)));
     };
     const continueReply = () => {
         setActionError(null);
@@ -162,6 +168,7 @@ export function ChatScreen({ sessionId, onManageDocuments }: { sessionId: string
           : saved.length > 0 || tail
             ? t('composer.reply')
             : undefined;
+    const sessionFailure = describeHttpFailure(session.error, t);
     const disabledReason = retiredAgent ? t('chat.retiredReadOnly', { agent: retiredAgent }) : undefined;
 
     return (
@@ -178,7 +185,8 @@ export function ChatScreen({ sessionId, onManageDocuments }: { sessionId: string
                         <Stack paddingX="lg">
                             <Notice
                                 tone="danger"
-                                message={describeError(actionError, t)}
+                                message={actionError.text}
+                                detail={actionError.detail}
                                 action={{ label: t('chat.dismissError'), onPress: () => setActionError(null) }}
                                 testID="action-error"
                             />
@@ -227,7 +235,7 @@ export function ChatScreen({ sessionId, onManageDocuments }: { sessionId: string
             }
         >
             {session.isError ? (
-                <ErrorState title={describeError(session.error, t)} onRetry={() => void session.refetch()} />
+                <ErrorState title={sessionFailure.text} detail={sessionFailure.detail} onRetry={() => void session.refetch()} />
             ) : (
                 <MessageList
                     sessionId={sessionId}

@@ -11,7 +11,7 @@ import { useConnectors } from '@/data';
 import { cardSignInScopes } from '@/features/connectors/connectorAccess';
 import { ProviderConnect } from '@/features/connectors/ProviderConnect';
 import { openSettings } from '@/features/settings/openSettings';
-import { describeError, useT } from '@/i18n/useT';
+import { describeHttpFailure, useT } from '@/i18n/useT';
 import { Button, Icon, Notice, Row, Spinner, Stack, Surface, Text } from '@/ui';
 import { CircleCheck, Link2, Settings } from '@/ui/icons';
 
@@ -43,7 +43,7 @@ export function ConnectAccountCard({ data }: { data: unknown }) {
                             <Text role="label">{prompt}</Text>
                         </View>
                     </Row>
-                    {connectors.error ? <Notice tone="danger" message={describeError(connectors.error, t)} /> : null}
+                    {connectors.error ? <Notice tone="danger" message={describeHttpFailure(connectors.error, t).text} detail={describeHttpFailure(connectors.error, t).detail} /> : null}
                     {connectors.isPending ? <Spinner size="sm" /> : null}
                     {connectors.isPending ? null : data.providers.map((id) => {
                         const row = rowFor(id);

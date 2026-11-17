@@ -13,7 +13,7 @@ import { providerName, providerNotice } from '@webui/utils/providerText';
 import type { ProviderModel } from '@webui/types';
 import { useActiveModel, useDownloadModel, useProviderModels, useProviders, useSelectModel, type ProviderRow } from '@/data';
 import { openSettings } from '@/features/settings/openSettings';
-import { describeError, technicalDetail, useT, type Translate } from '@/i18n/useT';
+import { describeHttpFailure, technicalDetail, useT, type Translate } from '@/i18n/useT';
 import { Button, Divider, Icon, IconButton, ListRow, Ltr, Notice, Row, Sheet, Spinner, Stack, StatusDot, Text } from '@/ui';
 import { Check, Download, Info, KeyRound } from '@/ui/icons';
 
@@ -43,9 +43,7 @@ function CloudGroup({ provider, open, row }: { provider: ProviderRow; open: bool
                     {t('settings.privacy.localOnlyBlocked')}
                 </Text>
             ) : list.isError ? (
-                <Text role="caption" tone="danger">
-                    {describeError(list.error, t)}
-                </Text>
+                <Notice tone="danger" message={describeHttpFailure(list.error, t).text} detail={describeHttpFailure(list.error, t).detail} />
             ) : list.isSuccess && models.length === 0 ? (
                 <Text role="caption" tone="secondary">
                     {t('modelMenu.noModels')}
@@ -96,7 +94,7 @@ export function ModelMenu({ open, onClose, turnRunning, queued, onQueue, switchE
     const providers = useProviders().data?.providers;
     const select = useSelectModel();
     const download = useDownloadModel();
-    const [error, setError] = useState<string | null>(null);
+    const [error, setError] = useState<{ text: string; detail?: string } | null>(null);
     const [askDownload, setAskDownload] = useState<ProviderModel | null>(null);
     // A cloud model picked from a local one waits here on its provider's privacy notice.
     const [askCloud, setAskCloud] = useState<{ model: string; provider: ProviderRow } | null>(null);
@@ -144,7 +142,7 @@ export function ModelMenu({ open, onClose, turnRunning, queued, onQueue, switchE
                     const failed = switchAfterFailed(afterDownload, err, t);
                     onSwitchError(failed.message, failed.detail);
                 }
-                else setError(describeError(err, t));
+                else setError(describeHttpFailure(err, t));
             },
         });
     };
@@ -167,7 +165,7 @@ export function ModelMenu({ open, onClose, turnRunning, queued, onQueue, switchE
         }
         if (m.download_progress?.state === 'error') {
             pickAfterDownload.current = null;
-            onSwitchError(t('modelMenu.downloadFailed', { model: modelLabel(m), message: m.download_progress.message ?? '' }));
+            onSwitchError(t('mobileApp.model.downloadFailedShort', { model: isolate(modelLabel(m), 'ltr') }), m.download_progress.message || undefined);
         } else if (m.download_progress?.state === 'complete' || modelState(m) !== 'not_downloaded') {
             pickAfterDownload.current = null;
             onSwitchError(null);
@@ -190,7 +188,7 @@ export function ModelMenu({ open, onClose, turnRunning, queued, onQueue, switchE
         download.mutate(m.id, {
             onError: (err) => {
                 pickAfterDownload.current = null;
-                setError(describeError(err, t));
+                setError(describeHttpFailure(err, t));
             },
         });
     };
@@ -339,7 +337,7 @@ export function ModelMenu({ open, onClose, turnRunning, queued, onQueue, switchE
                     </Text>
                 ) : null}
                 {switchError ? <Notice tone="danger" message={switchError.message} detail={switchError.detail} onDismiss={() => onSwitchError(null)} /> : null}
-                {error ? <Notice tone="danger" message={error} /> : null}
+                {error ? <Notice tone="danger" message={error.text} detail={error.detail} /> : null}
                 {local.isLoading ? (
                     <Row gap="sm">
                         <Spinner size="sm" />
@@ -348,7 +346,7 @@ export function ModelMenu({ open, onClose, turnRunning, queued, onQueue, switchE
                         </Text>
                     </Row>
                 ) : null}
-                {local.isError ? <Notice tone="danger" message={describeError(local.error, t)} /> : null}
+                {local.isError ? <Notice tone="danger" message={describeHttpFailure(local.error, t).text} detail={describeHttpFailure(local.error, t).detail} /> : null}
                 <View accessibilityRole="list" accessibilityLabel={t('modelMenu.models')}>
                 <Stack gap="sm">
                 {inUse ? cloudGroup(inUse) : null}

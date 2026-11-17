@@ -189,7 +189,8 @@ describe('ChatScreen', () => {
         });
         await mount(client);
 
-        expect(await screen.findByText(t('queue.notSentWhy', { error: 'no connection' }))).toBeTruthy();
+        expect(await screen.findByText(t('queue.notSent'))).toBeTruthy();
+        expect(screen.getByText('no connection')).toBeTruthy();
         expect(client.sent).toEqual([]);
 
         await fireEvent.press(screen.getByTestId(`queued-retry-${failed.id}`));
