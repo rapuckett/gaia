@@ -40,7 +40,8 @@ describe('UserBubble', () => {
             </QueryClientProvider>,
         );
 
-        const showAll = screen.getByLabelText(/^Show all/);
+        const showAll = screen.getByTestId('user-show-all');
+        expect(showAll).toBe(screen.getByLabelText(/^Show all/));
         await fireEvent.press(showAll);
         expect(onCollapse).not.toHaveBeenCalled();
         await fireEvent.press(screen.getByLabelText(t('msg.showLess')));

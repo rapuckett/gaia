@@ -54,6 +54,7 @@ export function UserBubble({ message, onCollapse, context, startOpen }: UserBubb
                                 onPress={toggle}
                                 aria-expanded={expanded}
                                 minSize={48}
+                                testID="user-show-all"
                                 accessibilityLabel={
                                     expanded
                                         ? t('msg.showLess')

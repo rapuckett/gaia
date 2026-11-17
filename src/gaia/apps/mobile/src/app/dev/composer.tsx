@@ -12,7 +12,7 @@ import { COMPOSER_MENU_STATES, ComposerMenusGallery, type ComposerMenuState } fr
 import { Composer, type Attachments, FolderChip, PermissionChip, PrivateChip } from '@/features/composer';
 import { ControlChip } from '@/features/composer/ControlChip';
 import { HeldGallery } from '@/features/new-chat/HeldGallery';
-import { NEW_CHAT_STATES, NewChatGallery, type NewChatState } from '@/features/new-chat/NewChatScenes';
+import { NEW_CHAT_SCENES, NewChatScenes, type NewChatScene } from '@/features/new-chat/NewChatScenes';
 import { useT } from '@/i18n/useT';
 import { uploadRefusalText } from '@webui/utils/uploadErrors';
 import { Divider, Screen, Stack, UIProvider } from '@/ui';
@@ -51,7 +51,7 @@ export default function ComposerGalleryRoute() {
         );
     }
     if (state === 'held') return <HeldGallery />;
-    if ((NEW_CHAT_STATES as readonly string[]).includes(state ?? '')) return <NewChatGallery key={state} state={state as NewChatState} />;
+    if ((NEW_CHAT_SCENES as readonly string[]).includes(state ?? '')) return <NewChatScenes key={state} state={state as NewChatScene} />;
     if (state && (COMPOSER_MENU_STATES as readonly string[]).includes(state)) return <ComposerMenusGallery key={state} state={state as ComposerMenuState} />;
     const folder = { path: '/Users/avery/Projects/gaia', name: 'gaia-notes', gaia_folder: false, choosable: false };
     const chipRow = (running = false, value?: string) => (

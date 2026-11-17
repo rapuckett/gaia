@@ -5,7 +5,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react-nativ
 import { Platform } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-import { NewChatGallery, type NewChatState } from './NewChatScenes';
+import { NewChatScenes, type NewChatScene } from './NewChatScenes';
 
 jest.mock('@/features/nav/ScreenHeader', () => ({ ScreenHeader: () => null }));
 jest.mock('expo-font', () => ({ useFonts: () => [true, null] }));
@@ -17,10 +17,10 @@ jest.mock('expo-router', () => ({
 
 const describeNative = Platform.OS === 'web' ? describe.skip : describe;
 
-const mount = (state: NewChatState) =>
+const mount = (state: NewChatScene) =>
     render(
         <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 800 }, insets: { top: 0, left: 0, right: 0, bottom: 0 } }}>
-            <NewChatGallery state={state} />
+            <NewChatScenes state={state} />
         </SafeAreaProvider>,
     );
 
