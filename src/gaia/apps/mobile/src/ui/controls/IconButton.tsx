@@ -4,7 +4,7 @@
 import { View } from 'react-native';
 import type { LucideIcon } from 'lucide-react-native';
 import { Icon } from './Icon';
-import { Pressable } from './Pressable';
+import { Pressable, PRESSABLE_MIN_SIZE } from './Pressable';
 import { Spinner } from './Spinner';
 import { useTheme } from '../theme/ThemeProvider';
 import type { Tone } from '../theme/tone';
@@ -41,32 +41,33 @@ export function IconButton({
     };
     const v = look[variant];
     const box = size === 'sm' ? 36 : variant === 'raised' ? 38 : 44;
-    const hit = variant === 'raised' ? 44 : box;
     return (
-        <Pressable
-            onPress={busy ? undefined : onPress}
-            disabled={disabled}
-            accessibilityLabel={label}
-            aria-busy={!!busy}
-            testID={testID}
-        >
-            <View style={{ width: hit, height: hit, alignSelf: 'center', alignItems: 'center', justifyContent: 'center' }}>
-            <View
-                style={{
-                    width: box,
-                    height: box,
-                    alignSelf: 'center',
-                    borderRadius: radius.md,
-                    backgroundColor: v.bg,
-                    ...(variant === 'raised' ? { borderWidth: 1, borderColor: colors.border, boxShadow: shadows.sm } : null),
-                    ...(variant === 'outlined' ? { borderWidth: 1, borderColor: colors.border } : null),
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                }}
+        <View style={{ minWidth: PRESSABLE_MIN_SIZE, minHeight: PRESSABLE_MIN_SIZE, alignItems: 'center', justifyContent: 'center' }}>
+            <Pressable
+                onPress={busy ? undefined : onPress}
+                disabled={disabled}
+                accessibilityLabel={label}
+                aria-busy={!!busy}
+                testID={testID}
+                minSize={box}
+                radius={variant === 'raised' ? undefined : radius.md}
+                slop={(PRESSABLE_MIN_SIZE - box) / 2}
             >
-                {busy ? <Spinner size="sm" tone={v.tone} /> : <Icon icon={icon} tone={v.tone} />}
-            </View>
-            </View>
-        </Pressable>
+                <View
+                    style={{
+                        width: box,
+                        height: box,
+                        borderRadius: radius.md,
+                        backgroundColor: v.bg,
+                        ...(variant === 'raised' ? { borderWidth: 1, borderColor: colors.border, boxShadow: shadows.sm } : null),
+                        ...(variant === 'outlined' ? { borderWidth: 1, borderColor: colors.border } : null),
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                    }}
+                >
+                    {busy ? <Spinner size="sm" tone={v.tone} /> : <Icon icon={icon} tone={v.tone} />}
+                </View>
+            </Pressable>
+        </View>
     );
 }
