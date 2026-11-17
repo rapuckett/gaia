@@ -154,6 +154,16 @@ export function localizeQueueError(t: Translate, error: string): string {
     return error;
 }
 
+/** Joins a translated sentence to the raw error beneath it in a stored failure. */
+export const ERROR_DETAIL_SEP = '\u001e';
+
+/** A failed message's saved error as a sentence plus, when it carries one, the raw text to show on its own line. */
+export function splitQueueError(t: Translate, error: string): { message: string; detail?: string } {
+    const i = error.indexOf(ERROR_DETAIL_SEP);
+    if (i === -1) return { message: localizeQueueError(t, error) };
+    return { message: error.slice(0, i), detail: error.slice(i + 1) };
+}
+
 /**
  * Queues read back after a reload. A message whose offer to the reply was in
  * flight may or may not have arrived, so it is asked about like a delivered one;

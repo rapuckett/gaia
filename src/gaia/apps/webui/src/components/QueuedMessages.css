@@ -55,6 +55,14 @@
     font-size: 12px;
 }
 
+.queued-message-detail {
+    display: block;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    text-align: left;
+    word-break: break-all;
+}
+
 .queued-message-steer {
     display: inline-flex;
     align-items: center;

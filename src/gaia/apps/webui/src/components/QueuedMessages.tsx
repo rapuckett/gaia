@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: MIT
 
 import { AlertCircle, Clock, CornerDownRight, RotateCw, X } from 'lucide-react';
-import { localizeQueueError, type QueuedMessage } from '../utils/messageQueue';
+import { splitQueueError, type QueuedMessage } from '../utils/messageQueue';
 import { useT, type Translate } from '../i18n/useT';
-import type { MessageKey } from '../i18n/registry';
+import { isolate, type MessageKey } from '../i18n/registry';
 import './QueuedMessages.css';
 
 const STATE_LABEL: Record<'sending' | 'delivered' | 'queued', MessageKey> = {
@@ -40,7 +40,9 @@ export function QueuedMessages({ items, onRemove, onSteer, onRetry, replying = t
     if (shown.length === 0) return null;
     return (
         <ul className="queued-messages" aria-label={t('queue.listAria')} aria-live="polite">
-            {shown.map((item) => (
+            {shown.map((item) => {
+                const failure = item.error ? splitQueueError(t, item.error) : undefined;
+                return (
                 <li key={item.id} className={`queued-message is-${item.state}`}>
                     {item.state === 'failed'
                         ? <AlertCircle size={12} aria-hidden="true" />
@@ -48,9 +50,11 @@ export function QueuedMessages({ items, onRemove, onSteer, onRetry, replying = t
                             ? <Clock size={12} aria-hidden="true" />
                             : <CornerDownRight size={12} aria-hidden="true" />}
                     <span className="queued-message-text" title={item.text}><bdi>{item.text}</bdi></span>
-                    <span className="queued-message-state" title={item.error ? localizeQueueError(t, item.error) : undefined}>
+                    <span className="queued-message-state" title={failure ? [failure.message, failure.detail && isolate(failure.detail, 'ltr')].filter(Boolean).join('\n') : undefined}>
                         {item.state === 'failed'
-                            ? (item.error ? t('queue.notSentWhy', { error: localizeQueueError(t, item.error) }) : t('queue.notSent'))
+                            ? (failure
+                                ? <>{`${t('queue.notSentWhy')} ${failure.message}`}{failure.detail && <bdi dir="ltr" className="queued-message-detail">{failure.detail}</bdi>}</>
+                                : t('queue.notSent'))
                             : item.state === 'queued'
                                 ? (replying && item.note) || queuedLabel(t, replying, busyRetry)
                                 : t(STATE_LABEL[item.state as keyof typeof STATE_LABEL])}
@@ -87,7 +91,8 @@ export function QueuedMessages({ items, onRemove, onSteer, onRetry, replying = t
                         </button>
                     )}
                 </li>
-            ))}
+                );
+            })}
         </ul>
     );
 }

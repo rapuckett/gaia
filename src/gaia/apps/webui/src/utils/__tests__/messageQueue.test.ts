@@ -155,4 +155,11 @@ describe('restoring queues after a reload', () => {
         expect(q.localizeQueueError(ar, q.INTERRUPTED_ERROR)).toBe(ar('queue.err.interrupted'));
         expect(q.localizeQueueError(ar, 'HTTP 500')).toBe('HTTP 500');
     });
+
+    it('keeps a raw error out of the sentence it belongs to', () => {
+        const ar = translator('ar');
+        const saved = `${ar('queue.err.unread')}${q.ERROR_DETAIL_SEP}HTTP 500`;
+        expect(q.splitQueueError(ar, saved)).toEqual({ message: ar('queue.err.unread'), detail: 'HTTP 500' });
+        expect(q.splitQueueError(ar, 'HTTP 500')).toEqual({ message: 'HTTP 500' });
+    });
 });
