@@ -141,7 +141,7 @@ export default function Model({ provider: requested }: { provider?: string }) {
             {provider ? (
                 <Card padding="md">
                     <Stack gap="md">
-                        {provider.remote ? <Notice tone="info" role="note" message={providerNotice(t, provider)} /> : null}
+                        {provider.remote && provider.privacy_notice.trim() ? <Notice tone="info" role="note" message={providerNotice(t, provider)} /> : null}
                         {blocked ? <Notice tone="danger" message={t('settings.privacy.localOnlyBlocked')} /> : null}
                         <Disclosure title={t('settings.model.howItWorks')} open={howOpen} onToggle={() => setHowOpen((o) => !o)}>
                             <Stack gap="sm">
