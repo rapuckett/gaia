@@ -5,7 +5,7 @@
 // Each takes one language half's `say` and locale, so a composed line words its dates and plurals per half.
 
 import { pluralCategory } from '@/i18n/plural';
-import { isMessageKey, isolateUnit, type MessageKey, type Say } from '@webui/i18n/registry';
+import { isMessageKey, isolateUnit, keepTogether, type MessageKey, type Say } from '@webui/i18n/registry';
 
 const UNITS: [string, number][] = [['week', 604800], ['day', 86400], ['hour', 3600], ['minute', 60]];
 
@@ -20,7 +20,7 @@ export function everyPhrase(seconds: number, say: Say, code: string): string | n
 
 /** An epoch-seconds time as the desktop shows it: weekday, day, month and clock, kept whole in either direction. */
 export function formatWhen(epochSeconds: number, locale: string | undefined): string {
-    return isolateUnit(
+    return keepTogether(
         new Intl.DateTimeFormat(locale, { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).format(
             new Date(epochSeconds * 1000),
         ),
