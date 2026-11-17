@@ -89,7 +89,7 @@ export function MemoryScreen({ onBack, onOpenChat, initialTab = 'about' }: Memor
             <MemoryTabs value={tab} onChange={setTab} />
             {notice ? (
                 <Stack paddingX="lg">
-                    <Notice tone={notice.tone} message={notice.text} action={notice.action} onDismiss={dismiss} testID="memory-notice" />
+                    <Notice tone={notice.tone} message={notice.text} detail={notice.detail} action={notice.action} onDismiss={dismiss} testID="memory-notice" />
                 </Stack>
             ) : null}
         </Stack>
