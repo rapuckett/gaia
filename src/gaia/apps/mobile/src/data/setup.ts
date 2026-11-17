@@ -90,6 +90,7 @@ export async function runSetupCheck(client: GaiaClient, options: SetupCheckOptio
     const sleep = options.sleep ?? wait;
     const pollMs = options.pollMs ?? SETUP_POLL_MS;
     let waited = 0;
+    const startedAt = Date.now();
     try {
         let check: SetupCheck;
         for (;;) {
@@ -98,7 +99,7 @@ export async function runSetupCheck(client: GaiaClient, options: SetupCheckOptio
                 break;
             } catch (err) {
                 const starting = err instanceof GaiaNetworkError;
-                if (!options.waitForStart || !starting || waited >= BACKEND_START_WAIT_MS) throw err;
+                if (!options.waitForStart || !starting || Math.max(waited, Date.now() - startedAt) >= BACKEND_START_WAIT_MS) throw err;
                 await sleep(pollMs);
                 waited += pollMs;
             }

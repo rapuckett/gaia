@@ -462,6 +462,8 @@ export const CONNECTOR_REVOKE_OUTCOME_MS = 3_000;
 export const SESSION_EVENTS_IDLE_MS = 90_000;
 /** An attach replays at once; a slower answer means the backend is stuck or unreachable. */
 export const ATTACH_HEADER_TIMEOUT_MS = 30_000;
+/** The PC's setup check probes its model server without loading anything; a slower answer means it is stuck or unreachable. */
+export const SETUP_CHECK_HEADER_TIMEOUT_MS = 20_000;
 /** How often to re-read the PC's connectors while a reply waits on an account being connected (webui's ConnectorRetryBanner). */
 export const CONNECTOR_POLL_MS = 4_000;
 

@@ -23,6 +23,7 @@ import { ROUTES } from '@/features/nav/routes';
 import { sweepTempFiles } from '@/features/files/shareTemp';
 import { installPinnedPairing, PairingGate } from '@/features/pairing';
 import { SetupGate } from '@/features/setup/SetupGate';
+import { LanguageSwitchHost } from '@/features/language/LanguageSwitchCover';
 import { useDirection, useLocaleCode } from '@/i18n/useT';
 import { applyDirection } from '@/platform/direction';
 import { platformFetch } from '@/platform/fetch';
@@ -115,6 +116,7 @@ export default function RootLayout() {
                             <ModelNeededHost />
                         </RootSetupGate>
                         </PairingGate>
+                        <LanguageSwitchHost />
                     </ScreenBannerProvider>
                     </AppErrorBoundary>
                 </UIProvider>

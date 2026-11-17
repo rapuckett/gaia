@@ -3,13 +3,14 @@
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Redirect, useLocalSearchParams } from 'expo-router';
-import { useRef, useState } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { ComponentRef } from 'react';
 import type { ScrollView } from 'react-native';
 
 import { GaiaClientProvider } from '@/data';
 import { devGalleryEnabled } from '@/features/dev/devGallery';
 import { KeyedScene } from '@/features/dev/KeyedScene';
+import { LanguageSwitchHost, SeedLanguageSwitch } from '@/features/language/LanguageSwitchCover';
 import { SeedSkillsAdd } from '@/features/skills';
 import { SeedConfirmFullAccess } from '@/features/settings/panes/Permissions';
 import { SeedAutomationRemove } from '@/features/settings/panes/Automations';
@@ -31,13 +32,18 @@ function Thrower(): never {
 
 function SettingsView({ found }: { found: SettingsScene }) {
     const [queryClient] = useState(() => new QueryClient({ defaultOptions: { queries: { retry: false } } }));
-    const [client] = useState(() => {
-        // Palette only, so a scene that saved a custom one doesn't leak into the next; the color scheme stays as it was.
-        useAppearance.setState(found.appearance ?? { palette: 'default', custom: DEFAULT_CUSTOM });
-        return settingsSceneClient(found);
-    });
+    const [client] = useState(() => settingsSceneClient(found));
+    // Palette only, so a scene that saved a custom one doesn't leak into the next; the color scheme stays as it was.
+    const wanted = useMemo(() => found.appearance ?? { palette: 'default' as const, custom: DEFAULT_CUSTOM }, [found]);
+    const seeded = useAppearance(
+        (s) => s.palette === wanted.palette && s.custom.accent === wanted.custom.accent && s.custom.base === wanted.custom.base,
+    );
+    useLayoutEffect(() => {
+        useAppearance.setState(wanted);
+    }, [wanted]);
     const scrollRef = useRef<ComponentRef<typeof ScrollView>>(null);
     const Pane = SETTINGS_SECTIONS[found.section].pane;
+    if (!seeded) return null;
     return (
         <QueryClientProvider client={queryClient}>
             <GaiaClientProvider client={client}>
@@ -72,6 +78,9 @@ function SettingsView({ found }: { found: SettingsScene }) {
                                 </SeedAddedModel.Provider>
                             </SettingsTargets>
                         </Screen>
+                        <SeedLanguageSwitch.Provider value={found.languageSwitch ? { target: found.languageSwitchTo ?? 'ar', platform: found.languageSwitch } : null}>
+                            <LanguageSwitchHost />
+                        </SeedLanguageSwitch.Provider>
                     </ScreenBannerProvider>
                 </UIProvider>
             </GaiaClientProvider>
