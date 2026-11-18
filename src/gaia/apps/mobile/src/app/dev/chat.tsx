@@ -7,10 +7,11 @@ import { CHAT_STATES, ChatGallery, type ChatGalleryState } from '@/features/chat
 import { devGalleryEnabled } from '@/features/dev/devGallery';
 import { KeyedScene } from '@/features/dev/KeyedScene';
 
-/** The chat screen with a turn running; `?state=running-empty|running-status`. */
+/** The chat screen with a turn running; `?state=…`, `?queued=<model id>` (a queued model switch), `?model=none` (no model reported). */
 export default function ChatGalleryRoute() {
-    const { state } = useLocalSearchParams<{ state?: string }>();
+    const { state, queued, model } = useLocalSearchParams<{ state?: string; queued?: string; model?: string }>();
     if (!devGalleryEnabled()) return <Redirect href="/" />;
     const picked = CHAT_STATES.find((s) => s === state) ?? 'running-empty';
-    return <KeyedScene sceneKey={picked} scene={ChatGallery} props={{ state: picked as ChatGalleryState }} />;
+    const props = { state: picked as ChatGalleryState, queued: queued || undefined, model: model === 'none' ? ('none' as const) : undefined };
+    return <KeyedScene sceneKey={`${picked}|${queued ?? ''}|${model ?? ''}`} scene={ChatGallery} props={props} />;
 }
