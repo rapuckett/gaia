@@ -327,6 +327,11 @@ export function ModelMenu({ open, onClose, turnRunning, queued, onQueue, switchE
     return (
         <Sheet open={open} onClose={onClose} title={t('modelMenu.label')}>
             <Stack gap="sm">
+                {queued ? (
+                    <Text role="caption" tone="secondary" testID="model-menu-queued">
+                        {t('modelMenu.usedNext', { name: isolate(queued, 'ltr') })}
+                    </Text>
+                ) : null}
                 {turnRunning ? (
                     <Text role="caption" tone="secondary">
                         {active?.model

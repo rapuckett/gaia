@@ -89,10 +89,18 @@ export function ContextMeter({ usage, unavailable, onDetails, initialOpen = fals
         </Row>
     );
 
-    return (
+    const measures = (
         <>
             <ChipMeasure id="meter">{reading(false)}</ChipMeasure>
             <ChipMeasure id="meterWord">{usage ? reading(true) : null}</ChipMeasure>
+        </>
+    );
+    // Last step with no reading: nothing to show or tap, but the measures stay so the row's room doesn't oscillate.
+    if (wordless && !usage) return measures;
+
+    return (
+        <>
+            {measures}
             <Pressable
                 onPress={() => setOpen(true)}
                 accessibilityLabel={aria}
@@ -101,8 +109,7 @@ export function ContextMeter({ usage, unavailable, onDetails, initialOpen = fals
                 aria-haspopup="dialog"
                 testID="context-meter"
             >
-                {/* Last step: with no reading the text is "Context –"; drop all of it rather than leave a lone dash. */}
-                {wordless && !usage ? null : reading(barless)}
+                {reading(barless)}
             </Pressable>
             <Sheet open={open} onClose={() => setOpen(false)} title={t('ctx.meter.window')}>
                 {usage ? <Breakdown usage={usage} colors={partColor} onDetails={onDetails ? () => { setOpen(false); onDetails(); } : undefined} /> : <Text role="body">{unavailable}</Text>}
