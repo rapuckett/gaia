@@ -50,9 +50,11 @@ from ..dependencies import get_db
 from ..local_models import DOWNLOADED, LOADED, NOT_DOWNLOADED
 from ..models import DownloadProgress, WireModel
 from ..security import (
+    allowed_device,
+    audit_approval,
     is_local_pc,
     refuse_on_device_listener,
-    require_local_pc,
+    require_pc_or_allowed_device,
     require_ui_header,
 )
 from .spending import PriceCard
@@ -1334,8 +1336,64 @@ class LocalRestartResponse(WireModel):
 # ── Routes ─────────────────────────────────────────────────────────────────
 
 
-def _raise(e: ProviderError) -> None:
+_AWAY_STORE_DETAIL = (
+    "The credential store on the PC running GAIA could not be used. Unlock or "
+    "fix it on the PC, then try again."
+)
+_AWAY_SERVER_DETAIL = (
+    "GAIA's model server on the PC could not take the change. Its log on the "
+    "PC says why; fix it there, then try again."
+)
+
+
+def _from_pc_internals(e: Optional[BaseException]) -> Optional[str]:
+    """``store`` or ``server`` when *e* came from one, whose text can name PC paths."""
+    import keyring.errors
+
+    from gaia.connectors.credential_wait import CredentialStoreLocked
+    from gaia.connectors.errors import ConnectorsError
+    from gaia.llm.fireworks_known_models import KnownModelsError
+    from gaia.llm.lemonade_embedded import EmbeddedLemonadeError
+
+    seen = set()
+    while e is not None and id(e) not in seen:
+        seen.add(id(e))
+        if isinstance(
+            e, (ConnectorsError, CredentialStoreLocked, keyring.errors.KeyringError)
+        ):
+            return "store"
+        if isinstance(e, (EmbeddedLemonadeError, KnownModelsError)):
+            return "server"
+        e = e.__cause__ or e.__context__
+    return None
+
+
+def _caller_detail(
+    e: BaseException,
+    detail: str,
+    request: Optional[Request],
+    key: Optional[str] = None,
+) -> str:
+    """*detail* as *request*'s caller may see it; never the key, nor PC internals off the PC."""
+    if key and key in detail:
+        detail = detail.replace(key, "<your-key>")
+    if request is None or is_local_pc(request):
+        return detail
+    kind = _from_pc_internals(e)
+    if kind == "store":
+        return _AWAY_STORE_DETAIL
+    if kind == "server":
+        return _AWAY_SERVER_DETAIL
+    return detail
+
+
+def _raise(
+    e: ProviderError,
+    request: Optional[Request] = None,
+    key: Optional[str] = None,
+) -> None:
     detail = surface_wording(str(e), "agent_ui")
+    detail = _caller_detail(e, detail, request, key)
     raise HTTPException(status_code=e.status, detail=detail) from e
 
 
@@ -1605,13 +1663,14 @@ def connect_provider(
             ),
         )
     key = (body.api_key or "").strip()
-    if key and not is_local_pc(request):
+    on_pc = is_local_pc(request)
+    if key and not on_pc and allowed_device(request) is None:
         raise HTTPException(
             status_code=403,
-            detail="Enter provider keys on the PC running GAIA, not over mobile "
-            "access or from a paired device.",
+            detail="Enter provider keys on the PC running GAIA or on a paired "
+            "device the PC allowed, not over mobile access.",
         )
-    if not is_local_pc(request) and any(
+    if not on_pc and any(
         getattr(body, field) is not None for field in _KEY_ROUTING_FIELDS
     ):
         raise HTTPException(
@@ -1629,13 +1688,15 @@ def connect_provider(
 
         # A read from before this key was pasted must not be served after it.
         discard(_key_slot(provider))
+        if not on_pc:
+            audit_approval(request, f"{_NAMES[provider]} API key entered")
     try:
         # A key-less reconnect must keep a custom gateway, not reset it.
         registration = _registration(
             provider, body, _cloud_entry(provider) if provider == AMD else None
         )
     except ProviderError as e:
-        _raise(e)
+        _raise(e, request, key)
     if provider == AMD and _gateway_check_applies():
         from gaia.llm.gateway import GatewayUnreachable
 
@@ -1666,14 +1727,14 @@ def connect_provider(
             if not result.get("models_discovered"):
                 # Lemonade stores a key without checking it; don't leave a dud behind.
                 _lemonade("DELETE", f"cloud/auth/{provider}")
-                _use_known_models(provider, key)
+                _use_known_models(provider, key, on_pc=on_pc)
                 remembered = True
             else:
                 try:
                     remember_key(provider, key)
                     remembered = True
                 except CloudKeyError as e:
-                    remember_error = str(e)
+                    remember_error = _caller_detail(e, str(e), request, key)
         else:
             from gaia.connectors.credential_wait import (
                 CredentialStoreLocked,
@@ -1705,12 +1766,15 @@ def connect_provider(
                     # store, but keep a user-saved key durable when it is the
                     # one being replayed.
                     persist_key = not (env and stored == env[1])
-                    _use_known_models(provider, stored, persist_key=persist_key)
+                    _use_known_models(
+                        provider, stored, persist_key=persist_key, on_pc=on_pc
+                    )
                 del stored
-        del key
         entry = _cloud_entry(provider)
     except ProviderError as e:
-        _raise(e)
+        _raise(e, request, key)
+    finally:
+        del key
     view = _provider_view(provider, entry)
     if not view["models_discovered"]:
         raise HTTPException(
@@ -1723,7 +1787,9 @@ def connect_provider(
     return {**view, "remembered": remembered, "remember_error": remember_error}
 
 
-def _use_known_models(provider: str, key: str, *, persist_key: bool = True) -> None:
+def _use_known_models(
+    provider: str, key: str, *, persist_key: bool = True, on_pc: bool = True
+) -> None:
     """After no models came back: serve known ones, or say what actually failed."""
     from gaia.llm.cloud_keys import CloudKeyError, ensure_authenticated, remember_key
     from gaia.llm.fireworks_known_models import KnownModelsError, use_known_models
@@ -1742,7 +1808,10 @@ def _use_known_models(provider: str, key: str, *, persist_key: bool = True) -> N
         from gaia.llm import lemonade_client
 
         log = lemonade_client.embedded_lemonade_log_path(_base_url())
-        where = str(log) if log else "The model server's log"
+        if not on_pc:
+            where = "The model server's log on the PC"
+        else:
+            where = str(log) if log else "The model server's log"
         raise ProviderError(
             f"{name} accepted that key, but the model server discovered no "
             f"models with it, so the key is not the problem. {where} says why; "
@@ -1841,11 +1910,11 @@ def _connect_on_users_server(provider: str) -> Dict[str, Any]:
 
 @router.delete(
     "/api/providers/{provider}/key",
-    dependencies=[Depends(require_local_pc)],
+    dependencies=[Depends(require_pc_or_allowed_device)],
     response_model=ProviderKeyForgotten,
     response_model_exclude_unset=True,
 )
-def forget_provider_key(provider: str) -> Dict[str, Any]:
+def forget_provider_key(provider: str, request: Request) -> Dict[str, Any]:
     """Clear the key from Lemonade and from the OS credential store."""
     from gaia.connectors.credential_wait import discard
     from gaia.connectors.errors import ConnectorsError
@@ -1865,15 +1934,19 @@ def forget_provider_key(provider: str) -> Dict[str, Any]:
         removed = forget_key(provider)
         discard(_key_slot(provider))
     except ProviderError as e:
-        _raise(e)
+        _raise(e, request)
     except ConnectorsError as e:
-        raise HTTPException(status_code=503, detail=str(e)) from e
+        raise HTTPException(
+            status_code=503, detail=_caller_detail(e, str(e), request)
+        ) from e
+    if not is_local_pc(request):
+        audit_approval(request, f"{_NAMES[provider]} API key removed")
     return {"removed": removed}
 
 
 @router.post(
     "/api/providers/key-store/retry",
-    dependencies=[Depends(require_ui_header), Depends(require_local_pc)],
+    dependencies=[Depends(require_ui_header), Depends(require_pc_or_allowed_device)],
     response_model=ProviderKeyStoreRetry,
     response_model_exclude_unset=True,
 )

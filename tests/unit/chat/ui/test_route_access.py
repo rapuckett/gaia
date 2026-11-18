@@ -55,7 +55,6 @@ PC_ONLY = {
     "DELETE /api/devices/pairing",
     "DELETE /api/devices/routes/{kind}",
     "DELETE /api/devices/{device_id}",
-    "DELETE /api/providers/{provider}/key",
     "GET /api/connectors/_debug",
     "GET /api/connectors/eval-mailbox",
     "GET /api/devices",
@@ -95,7 +94,6 @@ PC_ONLY = {
     "POST /api/messaging/discord/restart",
     "POST /api/messaging/discord/start",
     "POST /api/messaging/discord/stop",
-    "POST /api/providers/key-store/retry",
     "POST /api/setup/npu/memlock-fix",
     "POST /api/setup/report",
     "POST /api/skills/link/add",
@@ -110,6 +108,7 @@ PC_ONLY = {
 PC_OR_DEVICE = {
     "DELETE /api/automations/{ref}",
     "DELETE /api/goals/{goal_id}",
+    "DELETE /api/providers/{provider}/key",
     "DELETE /api/schedules/{name:path}",
     "GET /api/automations",
     "POST /api/automations/{ref}/{action}",
@@ -117,6 +116,7 @@ PC_OR_DEVICE = {
     "POST /api/goals",
     "POST /api/goals/store/reset",
     "POST /api/goals/{goal_id}/tasks",
+    "POST /api/providers/key-store/retry",
     "POST /api/schedules",
     "POST /api/schedules/{name:path}/run",
     "POST /api/setup/cancel",
@@ -159,8 +159,9 @@ WEB = {
     "HEAD /redoc",
 }
 
-# Some check fields on the PC inside the handler: a provider key and its
-# gateway fields in ``POST /api/providers/{provider}/connect``, and
+# Some check fields inside the handler: a provider key (the PC or an allowed
+# device) and its gateway fields (the PC only) in
+# ``POST /api/providers/{provider}/connect``, and
 # ``network_policy`` in ``PUT /api/settings``.
 REMOTE = {
     "DELETE /api/chat/permissions/{session_id}/grants",
@@ -566,14 +567,14 @@ def test_every_route_is_classified(setup):
     assert sent > 500 and guarded > 40, (sent, guarded)
 
 
-def test_provider_key_refused_away_from_the_pc(setup, monkeypatch):
+def test_provider_key_refused_over_mobile_access(setup, monkeypatch):
     """A key is checked field by field inside a route mobile access may call."""
     from gaia.ui.routers import providers
 
     app, clients, _ = setup
     handed = []
     monkeypatch.setattr(providers, "_install", lambda *a, **k: handed.append(a))
-    for caller in ("tunnel", "device"):
+    for caller in ("tunnel", "pending"):
         resp = clients[caller].post(
             "/api/providers/fireworks/connect", json={"api_key": "fw-secret-key"}
         )
