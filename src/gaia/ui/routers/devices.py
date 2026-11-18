@@ -2,7 +2,9 @@
 # SPDX-License-Identifier: MIT
 
 """Paired devices: the PC turns access on, shows a pairing code, and allows,
-lists and unpairs devices; a device redeems the code on the listener.
+lists and unpairs devices; a device redeems the code on the listener. An
+allowed device may also list and unpair devices and close the pairing window;
+opening it and allowing a device stay at the PC.
 
 Every route answers 403 while ``device_pairing`` is off in
 ``~/.gaia/config.json``. Responses are never cached. The invitation appears
@@ -53,11 +55,14 @@ from ..models import (
 )
 from ..security import (
     ROUTE_SCOPE_KEY,
+    allowed_device,
     audit_approval,
+    is_local_pc,
     require_allowed_device,
     require_device,
     require_device_listener,
     require_local_pc,
+    require_pc_or_allowed_device,
 )
 from .sessions import emit_pc_event
 
@@ -92,6 +97,14 @@ router = APIRouter(
 )
 
 _AT_THE_PC = [Depends(require_local_pc)]
+# Opening pairing and allowing a device stay at the PC: they are the trust anchor.
+_PC_OR_DEVICE = [Depends(require_pc_or_allowed_device)]
+
+#: What a device sees in place of a PC-side failure, which can name PC paths.
+DEVICE_ACCESS_ERROR = (
+    "Something on the PC is stopping paired devices. Open Settings › Phones "
+    "and tablets on the PC to see what."
+)
 
 
 def _access(request: Request) -> DeviceAccess:
@@ -104,25 +117,34 @@ def _refused(code: str, message: str) -> HTTPException:
 
 
 @contextmanager
-def _folder_checked() -> Iterator[None]:
+def _folder_checked(request: Request) -> Iterator[None]:
     """The device table refuses to open once someone else can reach it."""
     try:
         yield
     except UnsafeDeviceFolderError as e:
-        raise _refused("unsafe_folder", str(e)) from e
+        detail = str(e) if is_local_pc(request) else DEVICE_ACCESS_ERROR
+        raise _refused("unsafe_folder", detail) from e
 
 
-@router.get("/status", response_model=DeviceAccessStatus, dependencies=_AT_THE_PC)
+def _status_for(request: Request) -> Dict[str, Any]:
+    """The access status; a device gets the error code without its PC-side text."""
+    status = _access(request).status()
+    if status["error_detail"] and not is_local_pc(request):
+        status["error_detail"] = DEVICE_ACCESS_ERROR
+    return status
+
+
+@router.get("/status", response_model=DeviceAccessStatus, dependencies=_PC_OR_DEVICE)
 def device_status(request: Request) -> Dict[str, Any]:
     """Whether GAIA listens for devices, the pairing window, recent failures."""
-    return _access(request).status()
+    return _status_for(request)
 
 
-@router.get("", response_model=PairedDeviceList, dependencies=_AT_THE_PC)
+@router.get("", response_model=PairedDeviceList, dependencies=_PC_OR_DEVICE)
 def list_devices(request: Request) -> Dict[str, Any]:
-    """Every paired device, pending ones included."""
+    """Every paired device, pending ones included; never a token or its hash."""
     access = _access(request)
-    with _folder_checked():
+    with _folder_checked(request):
         return {"devices": [access.describe(d) for d in access.devices()]}
 
 
@@ -182,12 +204,15 @@ def open_pairing(request: Request) -> Dict[str, Any]:
         raise _refused(e.code, e.detail) from e
 
 
-@router.delete("/pairing", response_model=DeviceAccessStatus, dependencies=_AT_THE_PC)
+@router.delete(
+    "/pairing", response_model=DeviceAccessStatus, dependencies=_PC_OR_DEVICE
+)
 def close_pairing(request: Request) -> Dict[str, Any]:
     """Close the pairing window; its code stops working."""
-    access = _access(request)
-    access.pairing.close()
-    return access.status()
+    _access(request).pairing.close()
+    if not is_local_pc(request):
+        audit_approval(request, "pairing closed")
+    return _status_for(request)
 
 
 @router.post(
@@ -280,7 +305,7 @@ def unpair_this_device(
 def allow_device(request: Request, device_id: str) -> Dict[str, Any]:
     """Let a pending device in."""
     access = _access(request)
-    with _folder_checked():
+    with _folder_checked(request):
         device = access.allow(device_id)
     if device is None:
         raise HTTPException(
@@ -292,11 +317,24 @@ def allow_device(request: Request, device_id: str) -> Dict[str, Any]:
     return access.describe(device)
 
 
-@router.delete("/{device_id}", status_code=204, dependencies=_AT_THE_PC)
+@router.delete("/{device_id}", status_code=204, dependencies=_PC_OR_DEVICE)
 def unpair_device(request: Request, device_id: str) -> Response:
-    """Unpair a device: its next request is refused and its streams end."""
-    with _folder_checked():
-        gone = _access(request).revoke(device_id)
+    """Unpair a device: its next request is refused and its streams end.
+
+    An allowed device may unpair itself or any other device.
+    """
+    access = _access(request)
+    caller = allowed_device(request)
+    itself = caller is not None and caller.device_id == device_id
+    with _folder_checked(request):
+        # A device unpairing itself keeps this request; its others end after.
+        gone = access.revoke(device_id, end_requests=not itself)
     if not gone:
         raise HTTPException(status_code=404, detail="No paired device has that id.")
-    return Response(status_code=204, headers={"Cache-Control": "no-store"})
+    if caller is not None:
+        audit_approval(request, f"device {device_id} unpaired")
+    return Response(
+        status_code=204,
+        headers={"Cache-Control": "no-store"},
+        background=BackgroundTask(access.requests.end, device_id) if itself else None,
+    )

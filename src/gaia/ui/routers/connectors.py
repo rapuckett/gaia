@@ -1200,7 +1200,9 @@ async def disconnect_connector(connector_id: str) -> Response:
     return Response(status_code=204)
 
 
-async def _set_connector_enabled(connector_id: str, enabled: bool) -> Dict[str, Any]:
+async def _set_connector_enabled(
+    connector_id: str, enabled: bool, request: Optional[Request] = None
+) -> Dict[str, Any]:
     """Shared implementation for ``POST /{id}/enable`` and ``POST /{id}/disable``.
 
     The toggle is meaningful only for ``mcp_server`` connectors that have
@@ -1242,7 +1244,9 @@ async def _set_connector_enabled(connector_id: str, enabled: bool) -> Dict[str, 
     try:
         await handler.set_enabled(connector_id, enabled)
     except ConnectorsError as e:
-        raise _raise_http_for(e) from e
+        if request is None:
+            raise _raise_http_for(e) from e
+        raise _http_error_for(request, e) from e
 
     event_name = "connector.enabled" if enabled else "connector.disabled"
     await _emitter.emit(event_name, {"connector_id": connector_id})
@@ -1251,13 +1255,16 @@ async def _set_connector_enabled(connector_id: str, enabled: bool) -> Dict[str, 
 
 @router.post(
     "/{connector_id}/enable",
-    dependencies=[Depends(_require_ui_header), Depends(require_local_pc)],
+    dependencies=[Depends(_require_ui_header), Depends(require_pc_or_allowed_device)],
     response_model=ConnectorSummary,
     response_model_exclude_unset=True,
 )
-async def enable_connector(connector_id: str) -> Dict[str, Any]:
+async def enable_connector(request: Request, connector_id: str) -> Dict[str, Any]:
     """Enable a previously-disabled MCP connector. Tools materialize live."""
-    return await _set_connector_enabled(connector_id, True)
+    summary = await _set_connector_enabled(connector_id, True, request)
+    if not is_local_pc(request):
+        audit_approval(request, f"connector {connector_id} enabled")
+    return summary
 
 
 @router.post(
@@ -1437,15 +1444,15 @@ class ActivationSaved(WireModel):
     auto_granted: bool
 
 
-# Widens what an agent may do with an account, like configure and authorize.
+# Widens what an agent may do with an account, so a device's grant is audited.
 @router.put(
     "/{connector_id}/grants/{agent_id:path}",
-    dependencies=[Depends(_require_ui_header), Depends(require_local_pc)],
+    dependencies=[Depends(_require_ui_header), Depends(require_pc_or_allowed_device)],
     response_model=GrantSaved,
     response_model_exclude_unset=True,
 )
 async def put_grant(
-    connector_id: str, agent_id: str, body: GrantRequest
+    request: Request, connector_id: str, agent_id: str, body: GrantRequest
 ) -> Dict[str, Any]:
     """Write the per-agent grant ledger for ``(connector_id, agent_id)``.
 
@@ -1459,7 +1466,9 @@ async def put_grant(
     try:
         grant_agent(connector_id, agent_id, body.scopes)
     except ConnectorsError as e:
-        raise _raise_http_for(e) from e
+        raise _http_error_for(request, e) from e
+    if not is_local_pc(request):
+        audit_approval(request, f"connector {connector_id} granted to {agent_id}")
     await _emitter.emit(
         "connector.grant.changed",
         {"connector_id": connector_id, "agent_id": agent_id, "scopes": body.scopes},
@@ -1494,12 +1503,12 @@ async def delete_grant(connector_id: str, agent_id: str) -> Response:
 
 @router.put(
     "/{connector_id}/activations/{agent_id:path}",
-    dependencies=[Depends(_require_ui_header), Depends(require_local_pc)],
+    dependencies=[Depends(_require_ui_header), Depends(require_pc_or_allowed_device)],
     response_model=ActivationSaved,
     response_model_exclude_unset=True,
 )
 async def put_activation(
-    connector_id: str, agent_id: str, body: ActivationRequest
+    request: Request, connector_id: str, agent_id: str, body: ActivationRequest
 ) -> Dict[str, Any]:
     """Activate ``agent_id`` for ``connector_id``.
 
@@ -1516,7 +1525,13 @@ async def put_activation(
     except ConfigurationError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except ConnectorsError as e:
-        raise _raise_http_for(e) from e
+        raise _http_error_for(request, e) from e
+    if not is_local_pc(request):
+        audit_approval(
+            request,
+            f"connector {connector_id} turned on for {agent_id}"
+            + (" (granted)" if auto_granted else ""),
+        )
 
     if auto_granted:
         # Auto-grant fired — also surface the grant change so subscribed
@@ -1542,9 +1557,11 @@ async def put_activation(
 @router.delete(
     "/{connector_id}/activations/{agent_id:path}",
     status_code=204,
-    dependencies=[Depends(_require_ui_header), Depends(require_local_pc)],
+    dependencies=[Depends(_require_ui_header), Depends(require_pc_or_allowed_device)],
 )
-async def delete_activation(connector_id: str, agent_id: str) -> Response:
+async def delete_activation(
+    request: Request, connector_id: str, agent_id: str
+) -> Response:
     """Deactivate ``agent_id`` for ``connector_id``. Idempotent.
 
     Non-destructive — the grant is preserved so a later re-activate is
@@ -1557,6 +1574,8 @@ async def delete_activation(connector_id: str, agent_id: str) -> Response:
     # inline, bypassing the guard.
     _require_mcp_server(connector_id)
     deactivate_connector_for_agent(connector_id, agent_id)
+    if not is_local_pc(request):
+        audit_approval(request, f"connector {connector_id} turned off for {agent_id}")
     return Response(status_code=204)
 
 

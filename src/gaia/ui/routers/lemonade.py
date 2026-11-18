@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Literal, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from gaia.llm.lemonade_choice import (
@@ -29,7 +29,13 @@ from gaia.llm.lemonade_choice import (
 from gaia.logger import get_logger
 
 from ..models import WireModel
-from ..security import require_local_pc, require_ui_header
+from ..security import (
+    audit_approval,
+    is_local_pc,
+    principal,
+    require_pc_or_allowed_device,
+    require_ui_header,
+)
 
 logger = get_logger(__name__)
 
@@ -131,6 +137,20 @@ def detect() -> Dict[str, Any]:
     }
 
 
+#: What a device sees when switching fails; the PC-side text can name config paths.
+DEVICE_SWITCH_ERROR = (
+    "GAIA couldn't switch servers on the PC. Open Settings › Advanced on the PC "
+    "to see why."
+)
+
+
+def _switch_failed(request: Request, status: int, detail: Any) -> HTTPException:
+    if is_local_pc(request):
+        return HTTPException(status_code=status, detail=detail)
+    logger.error("Lemonade switch from %s failed: %s", principal(request), detail)
+    return HTTPException(status_code=status, detail=DEVICE_SWITCH_ERROR)
+
+
 class TargetRequest(BaseModel):
     """``mode`` "gaia" or "external"; the URL and key only for "external"."""
 
@@ -141,16 +161,25 @@ class TargetRequest(BaseModel):
 
 @router.post(
     "/api/lemonade/target",
-    dependencies=[Depends(require_ui_header), Depends(require_local_pc)],
+    dependencies=[Depends(require_ui_header), Depends(require_pc_or_allowed_device)],
     response_model=LemonadeTargetSwitched,
     response_model_exclude_unset=True,
 )
-def set_target(body: TargetRequest) -> Dict[str, Any]:
-    """Switch servers. Nothing is saved unless the user's server checks out."""
+def set_target(request: Request, body: TargetRequest) -> Dict[str, Any]:
+    """Switch servers. Nothing is saved unless the user's server checks out.
+
+    A paired device may only switch back to GAIA's own server.
+    """
     from gaia.config import GaiaConfigError
     from gaia.daemon.errors import DaemonError
     from gaia.llm import lemonade_choice as choice
 
+    if body.mode != choice.MODE_GAIA and not is_local_pc(request):
+        raise HTTPException(
+            status_code=403,
+            detail="Switch to your own Lemonade Server on the PC running GAIA. "
+            "A paired device can only switch back to GAIA's own server.",
+        )
     try:
         previous_mode = choice.saved_mode()
         over_env = body.mode == choice.MODE_GAIA and choice.configured_source() == "env"
@@ -169,7 +198,7 @@ def set_target(body: TargetRequest) -> Dict[str, Any]:
             status_code=422, detail={"message": str(e), "status": e.status}
         ) from e
     except GaiaConfigError as e:
-        raise HTTPException(status_code=409, detail=str(e)) from e
+        raise _switch_failed(request, 409, str(e)) from e
 
     _drop_cached_agents()
     applied = None
@@ -181,7 +210,7 @@ def set_target(body: TargetRequest) -> Dict[str, Any]:
         else:
             applied = choice.apply_to_daemon()
     except GaiaConfigError as e:
-        raise HTTPException(status_code=409, detail=str(e)) from e
+        raise _switch_failed(request, 409, str(e)) from e
     except DaemonError as e:
         if body.mode != choice.MODE_GAIA:
             raise HTTPException(
@@ -190,11 +219,14 @@ def set_target(body: TargetRequest) -> Dict[str, Any]:
             ) from e
         # The previous mode is back: never report "GAIA's own" unless it runs.
         _drop_cached_agents()
-        raise HTTPException(
-            status_code=502,
-            detail=f"GAIA could not switch to its own Lemonade Server: {e} "
+        raise _switch_failed(
+            request,
+            502,
+            f"GAIA could not switch to its own Lemonade Server: {e} "
             "Nothing was changed.",
         ) from e
+    if not is_local_pc(request):
+        audit_approval(request, "Lemonade Server switched to GAIA's own")
     return {**_target(), "daemon": applied}
 
 

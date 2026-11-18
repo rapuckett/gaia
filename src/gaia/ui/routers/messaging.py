@@ -6,31 +6,49 @@ Every route calls the same functions as ``gaia discord`` (``gaia.messaging.
 discord.cli``), so the app and the terminal can never disagree about what
 "connected" or "paired" means.
 
-**Every route is local-PC only**, reads included. The status carries the
-pairing code, and whoever DMs that code becomes the only person the bot
-answers; a phone on mobile access that could read it, or swap in its own bot
-token, could make itself the approver of commands on this PC.
+An allowed paired device may read the status and start, stop and restart the
+bridge or forget its "Always allow" answers. Connecting a bot token, pairing
+and disconnecting stay on the PC, and a device never sees the pairing code:
+whoever DMs that code becomes the only person the bot answers, so a device
+that could read it, or swap in its own bot token, could make itself the
+approver of commands on this PC. Mobile access reaches none of it.
 """
 
 from __future__ import annotations
 
 from typing import Any, Dict, List, Literal, Optional, Union
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from gaia.logger import get_logger
 from gaia.messaging.discord import state as bridge_state
 
 from ..models import WireModel
-from ..security import require_local_pc, require_ui_header
+from ..security import (
+    audit_approval,
+    is_local_pc,
+    require_local_pc,
+    require_pc_or_allowed_device,
+    require_ui_header,
+)
 
 log = get_logger(__name__)
 
-router = APIRouter(
-    prefix="/api/messaging",
-    tags=["messaging"],
-    dependencies=[Depends(require_local_pc)],
+router = APIRouter(prefix="/api/messaging", tags=["messaging"])
+
+_AT_THE_PC = [Depends(require_ui_header), Depends(require_local_pc)]
+_PC_OR_DEVICE = [Depends(require_ui_header), Depends(require_pc_or_allowed_device)]
+
+#: A device's view of a failure, whose own text can name a log path or the keyring.
+DEVICE_BRIDGE_ERROR = (
+    "The Discord bridge has a problem on the PC. Open Settings › Messaging on "
+    "the PC to see what."
+)
+_FAILED_STATES = (
+    bridge_state.STATE_ERROR,
+    bridge_state.STATE_CREDENTIALS_UNAVAILABLE,
+    bridge_state.STATE_TOKEN_INVALID,
 )
 
 
@@ -108,19 +126,36 @@ def _cli():
     return cli
 
 
-def _status() -> Dict[str, Any]:
-    return _cli().status(detect=False)
+def _status(request: Optional[Request] = None) -> Dict[str, Any]:
+    """The bridge's status; off the PC, without the pairing code or PC-side text."""
+    status = _cli().status(detect=False)
+    if request is None or is_local_pc(request):
+        return status
+    status["pairing_code"] = ""
+    if status["state"] in _FAILED_STATES:
+        status["detail"] = DEVICE_BRIDGE_ERROR
+    return status
 
 
-@router.get("/discord", response_model=DiscordStatus, response_model_exclude_unset=True)
-def discord_status() -> Dict[str, Any]:
+def _audit(request: Request, what: str) -> None:
+    if not is_local_pc(request):
+        audit_approval(request, f"Discord bridge {what}")
+
+
+@router.get(
+    "/discord",
+    dependencies=[Depends(require_pc_or_allowed_device)],
+    response_model=DiscordStatus,
+    response_model_exclude_unset=True,
+)
+def discord_status(request: Request) -> Dict[str, Any]:
     """Connection, pairing and bridge state, plus every link setup opens."""
-    return _status()
+    return _status(request)
 
 
 @router.post(
     "/discord/connect",
-    dependencies=[Depends(require_ui_header)],
+    dependencies=_AT_THE_PC,
     response_model=DiscordConnectResponse,
     response_model_exclude_unset=True,
 )
@@ -141,12 +176,12 @@ def discord_connect(body: DiscordConnectRequest) -> Dict[str, Any]:
 
 @router.post(
     "/discord/start",
-    dependencies=[Depends(require_ui_header)],
+    dependencies=_PC_OR_DEVICE,
     response_model=DiscordStatus,
     response_model_exclude_unset=True,
 )
-def discord_start(body: DiscordStartRequest) -> Dict[str, Any]:
-    """Start the bridge (or take the lease from another PC)."""
+def discord_start(request: Request, body: DiscordStartRequest) -> Dict[str, Any]:
+    """Start the bridge, or take the lease from another PC only when asked to."""
     cli = _cli()
     if body.take_over and not cli.stop():
         raise HTTPException(
@@ -155,32 +190,34 @@ def discord_start(body: DiscordStartRequest) -> Dict[str, Any]:
             + cli.stop_failed_hint(),
         )
     cli.start_detached(model=body.model, take_over=body.take_over, emit=lambda _l: None)
-    return _status()
+    _audit(request, "taken over from another PC" if body.take_over else "started")
+    return _status(request)
 
 
 @router.post(
     "/discord/stop",
-    dependencies=[Depends(require_ui_header)],
+    dependencies=_PC_OR_DEVICE,
     response_model=DiscordStatus,
     response_model_exclude_unset=True,
 )
-def discord_stop() -> Dict[str, Any]:
+def discord_stop(request: Request) -> Dict[str, Any]:
     cli = _cli()
     if not cli.stop(stay_stopped=True):
         raise HTTPException(
             status_code=500,
             detail="The Discord bridge did not stop. " + cli.stop_failed_hint(),
         )
-    return _status()
+    _audit(request, "stopped")
+    return _status(request)
 
 
 @router.post(
     "/discord/restart",
-    dependencies=[Depends(require_ui_header)],
+    dependencies=_PC_OR_DEVICE,
     response_model=DiscordStatus,
     response_model_exclude_unset=True,
 )
-def discord_restart() -> Dict[str, Any]:
+def discord_restart(request: Request) -> Dict[str, Any]:
     cli = _cli()
     if not cli.stop():
         raise HTTPException(
@@ -189,16 +226,17 @@ def discord_restart() -> Dict[str, Any]:
             + cli.stop_failed_hint(),
         )
     cli.start_detached(emit=lambda _line: None)
-    return _status()
+    _audit(request, "restarted")
+    return _status(request)
 
 
 @router.post(
     "/discord/forget-always",
-    dependencies=[Depends(require_ui_header)],
+    dependencies=_PC_OR_DEVICE,
     response_model=DiscordStatus,
     response_model_exclude_unset=True,
 )
-def discord_forget_always() -> Dict[str, Any]:
+def discord_forget_always(request: Request) -> Dict[str, Any]:
     """Forget every "Always allow"; GAIA asks again from the next request."""
     cli = _cli()
     # The running agent holds its own copy of the answers, so it is restarted.
@@ -212,12 +250,13 @@ def discord_forget_always() -> Dict[str, Any]:
     bridge_state.forget_always()
     if was_running:
         cli.start_detached(emit=lambda _line: None)
-    return _status()
+    _audit(request, '"Always allow" answers forgotten')
+    return _status(request)
 
 
 @router.post(
     "/discord/pair",
-    dependencies=[Depends(require_ui_header)],
+    dependencies=_AT_THE_PC,
     response_model=DiscordStatus,
     response_model_exclude_unset=True,
 )
@@ -237,7 +276,7 @@ def discord_pair() -> Dict[str, Any]:
 
 @router.post(
     "/discord/disconnect",
-    dependencies=[Depends(require_ui_header)],
+    dependencies=_AT_THE_PC,
     response_model=DiscordStatus,
     response_model_exclude_unset=True,
 )
