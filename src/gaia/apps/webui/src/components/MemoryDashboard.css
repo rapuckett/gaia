@@ -1373,6 +1373,11 @@
     line-height: 1.5;
     color: var(--text-secondary);
 }
+.mem-profile-consent {
+    grid-column: 1 / -1;
+    max-width: 72ch;
+    margin-top: -12px;
+}
 .mem-profile-checkbox {
     display: flex;
     align-items: center;

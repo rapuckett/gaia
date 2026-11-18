@@ -221,6 +221,144 @@ test("writeDiagnosticsBundle includes the backend's fault log and its rotated co
   }
 });
 
+// ─── redaction ───────────────────────────────────────────────────────
+//
+// Token-shaped literals are built at run time so secret scanners skip them.
+
+const { redact } = require(path.resolve(__dirname, "../../src/gaia/apps/webui/services/redact.cjs"));
+const A = (n) => "A".repeat(n);
+const fakeSecrets = {
+  openai: "sk-" + A(24),
+  github: "ghp_" + A(30),
+  slack: "xoxb-" + "1234567890-" + A(10),
+  slackApp: "xapp-" + "1-" + A(14),
+  fireworks: "fw_" + A(20),
+  device: "gaiad_" + A(26),
+  telegram: "123456789" + ":" + A(35),
+  discord: "M" + A(23) + "." + A(6) + "." + A(27),
+  bearer: "Bearer " + A(20),
+  queryToken: "token=" + A(12),
+  oauthCode: "/cb?code=" + A(12),
+};
+
+test("redact removes each secret shape and keeps a plain line", () => {
+  for (const [name, value] of Object.entries(fakeSecrets)) {
+    const out = redact(`line before ${value} line after`);
+    const bare = value.replace(/^(Bearer |token=|\/cb\?code=)/, "");
+    assert.ok(!out.includes(bare), `${name} survived: ${out}`);
+    assert.ok(out.includes("[redacted]"), `${name} not marked: ${out}`);
+  }
+  const plain = "INFO server started on port 4200 (n_tokens 12)";
+  assert.equal(redact(plain), plain);
+});
+
+test("redact removes a known secret value wherever it appears", () => {
+  const out = redact("value is hunter2-secret here", ["hunter2-secret"]);
+  assert.equal(out, "value is [redacted] here");
+});
+
+// ─── diagnostics bundle redaction ────────────────────────────────────
+
+function withFakeHome(files, fn) {
+  const fakeGaia = fs.mkdtempSync(path.join(os.tmpdir(), "gaia-home-"));
+  for (const [rel, text] of Object.entries(files)) {
+    fs.mkdirSync(path.dirname(path.join(fakeGaia, rel)), { recursive: true });
+    fs.writeFileSync(path.join(fakeGaia, rel), text);
+  }
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "gaia-diag-"));
+  const prev = process.env.GAIA_HOME_OVERRIDE;
+  process.env.GAIA_HOME_OVERRIDE = fakeGaia;
+  return Promise.resolve(fn(tmpDir)).finally(() => {
+    if (prev === undefined) delete process.env.GAIA_HOME_OVERRIDE;
+    else process.env.GAIA_HOME_OVERRIDE = prev;
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+    fs.rmSync(fakeGaia, { recursive: true, force: true });
+  });
+}
+
+const silent = { error: () => {} };
+
+test("without Python the bundle is redacted by shape and carries a note", async () => {
+  const logged = [];
+  await withFakeHome(
+    {
+      "gaia.log": `ok line\nkey ${fakeSecrets.openai}\nbot ${fakeSecrets.telegram}\n`,
+      "logs/backend-faults.log": `${fakeSecrets.github}\n`,
+    },
+    async (tmpDir) => {
+      const written = await writeDiagnosticsBundle(
+        path.join(tmpDir, "b.tgz"),
+        { error: (m) => logged.push(m) },
+        { findGaiaBin: () => null },
+      );
+      const out = path.join(tmpDir, "out");
+      fs.mkdirSync(out);
+      execFileSync("tar", ["-xzf", written, "-C", out]);
+      const all = ["gaia.log", "logs/backend-faults.log", "NOTE.txt"]
+        .map((f) => fs.readFileSync(path.join(out, f), "utf8"))
+        .join("\n");
+      for (const v of [fakeSecrets.openai, fakeSecrets.telegram, fakeSecrets.github]) {
+        assert.ok(!all.includes(v), "a secret survived in the bundle");
+      }
+      assert.ok(all.includes("ok line"));
+      assert.match(fs.readFileSync(path.join(out, "NOTE.txt"), "utf8"), /redacted by shape only/);
+      assert.ok(logged.some((m) => /shape only/.test(m)), "the fallback was not logged");
+    },
+  );
+});
+
+test("the plain-text bundle (tar missing) is redacted and has the note", async () => {
+  await withFakeHome({ "gaia.log": `${fakeSecrets.slack}\n` }, async (tmpDir) => {
+    const written = await writeDiagnosticsBundle(path.join(tmpDir, "b.tgz"), silent, {
+      findGaiaBin: () => null,
+      execFile: () => {
+        throw new Error("tar: not found");
+      },
+    });
+    assert.ok(written.endsWith(".txt"));
+    const text = fs.readFileSync(written, "utf8");
+    assert.ok(!text.includes(fakeSecrets.slack));
+    assert.match(text, /redacted by shape only/);
+  });
+});
+
+test("with Python available the bundle comes from `gaia diagnostics --output`", async () => {
+  await withFakeHome({ "gaia.log": "x\n" }, async (tmpDir) => {
+    const dest = path.join(tmpDir, "b.tgz");
+    const calls = [];
+    const written = await writeDiagnosticsBundle(dest, silent, {
+      findGaiaBin: () => "/fake/gaia",
+      execFile: (cmd, args) => {
+        calls.push([cmd, args]);
+        fs.writeFileSync(dest, "bundle");
+      },
+    });
+    assert.equal(written, dest);
+    assert.deepEqual(calls, [["/fake/gaia", ["diagnostics", "--output", dest]]]);
+  });
+});
+
+test("when `gaia diagnostics` fails the redacted fallback is used and says why", async () => {
+  await withFakeHome({ "gaia.log": `${fakeSecrets.openai}\n` }, async (tmpDir) => {
+    const dest = path.join(tmpDir, "b.tgz");
+    let n = 0;
+    const written = await writeDiagnosticsBundle(dest, silent, {
+      findGaiaBin: () => "/fake/gaia",
+      execFile: (cmd, args, o) => {
+        if (cmd === "/fake/gaia") throw new Error("python crashed");
+        n += 1;
+        return execFileSync(cmd, args, o);
+      },
+    });
+    assert.equal(n, 1);
+    const out = path.join(tmpDir, "out");
+    fs.mkdirSync(out);
+    execFileSync("tar", ["-xzf", written, "-C", out]);
+    assert.match(fs.readFileSync(path.join(out, "NOTE.txt"), "utf8"), /python crashed/);
+    assert.ok(!fs.readFileSync(path.join(out, "gaia.log"), "utf8").includes(fakeSecrets.openai));
+  });
+});
+
 // ─── PortManager class wrapper ───────────────────────────────────────
 
 test("PortManager class wraps the module-level helpers", async () => {
