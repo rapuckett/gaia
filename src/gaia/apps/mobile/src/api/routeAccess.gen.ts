@@ -57,6 +57,7 @@ export const ROUTE_ACCESS: Readonly<Record<string, RouteAccessClass>> = {
     'GET /api/devices': 'pc',
     'GET /api/devices/me/routes': 'device',
     'GET /api/devices/status': 'pc',
+    'GET /api/devices/{device_id}/changes': 'pc_or_device',
     'GET /api/documents': 'remote',
     'GET /api/documents/{doc_id}/file': 'remote',
     'GET /api/documents/{doc_id}/status': 'remote',

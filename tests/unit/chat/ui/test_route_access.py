@@ -112,6 +112,7 @@ PC_OR_DEVICE = {
     "DELETE /api/goals/{goal_id}",
     "DELETE /api/schedules/{name:path}",
     "GET /api/automations",
+    "GET /api/devices/{device_id}/changes",
     "POST /api/automations/{ref}/{action}",
     "POST /api/connectors/{connector_id}/authorize-device",
     "POST /api/goals",
