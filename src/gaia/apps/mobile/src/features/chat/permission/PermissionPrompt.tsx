@@ -60,9 +60,10 @@ type CodeTone = 'primary' | 'secondary' | 'success' | 'danger';
 
 /** Code, a path or a diff: left to right and left-aligned in any UI language; a long line scrolls sideways inside the box. */
 function CodeBox({ lines, testID }: { lines: { text: string; tone?: CodeTone }[]; testID?: string }) {
+    const { colors } = useTheme();
     return (
         <Surface tone="recessed" radius="sm" padding="sm" border>
-            <HScroll dir="ltr" hint testID={testID}>
+            <HScroll dir="ltr" hint hintBackground={colors.bgRecessed} testID={testID}>
                 <View style={{ minWidth: '100%', direction: 'ltr' }} {...dirProp('ltr')}>
                     {lines.map((line, i) => (
                         <Text key={i} role="caption" mono dir="ltr" align="ltr" selectable tone={line.tone}>
