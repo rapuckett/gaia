@@ -583,6 +583,60 @@ def test_provider_key_refused_over_mobile_access(setup, monkeypatch):
     assert handed == []
 
 
+def test_an_allowed_device_may_enter_a_provider_key(setup, monkeypatch):
+    """Through the real listener: the key reaches Lemonade, and only then is audited."""
+    import logging
+
+    from gaia.llm import cloud_keys
+    from gaia.security import audit_logger
+    from gaia.ui.routers import providers
+
+    app, clients, device = setup
+    sent, lines = [], []
+    entry = {"name": "fireworks", "runtime_key_set": True, "models_discovered": True}
+
+    def lemonade(method, path, payload=None):
+        sent.append((method, path, payload))
+        return 200, {"models_discovered": True}
+
+    monkeypatch.setattr(providers, "_install", lambda *a, **k: None)
+    monkeypatch.setattr(providers, "_uses_users_server", lambda: False)
+    monkeypatch.setattr(providers, "_require_loopback", lambda *a: None)
+    monkeypatch.setattr(providers, "_known_models_active", lambda *a: False)
+    monkeypatch.setattr(providers, "_lemonade", lemonade)
+    monkeypatch.setattr(providers, "_cloud_entry", lambda p: entry)
+    monkeypatch.setattr(cloud_keys, "remember_key", lambda *a: None)
+
+    class _Capture(logging.Handler):
+        def emit(self, record):
+            lines.append(record.getMessage())
+
+    handler = _Capture()
+    level = audit_logger.level
+    audit_logger.addHandler(handler)
+    audit_logger.setLevel(logging.INFO)
+    try:
+        resp = clients["device"].post(
+            "/api/providers/fireworks/connect",
+            json={"api_key": "fw-secret-key"},
+            headers={"X-Gaia-UI": "1"},
+        )
+    finally:
+        audit_logger.removeHandler(handler)
+        audit_logger.setLevel(level)
+    assert resp.status_code == 200, resp.text
+    assert "fw-secret-key" not in resp.text
+    assert sent == [
+        ("POST", "cloud/auth", {"provider": "fireworks", "api_key": "fw-secret-key"})
+    ]
+    by = f"by {security.DEVICE_PRINCIPAL_PREFIX}{device.device_id}"
+    assert [line.split(" | ")[1] for line in lines] == [
+        "Fireworks AI API key submitted",
+        "Fireworks AI API key accepted",
+    ]
+    assert all(by in line and "fw-secret-key" not in line for line in lines)
+
+
 def test_provider_key_routing_refused_away_from_the_pc(setup, monkeypatch):
     """Moving the saved key's gateway or header is the PC's call, key or not."""
     from gaia.ui.routers import providers

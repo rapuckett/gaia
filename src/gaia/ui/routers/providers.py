@@ -1689,7 +1689,7 @@ def connect_provider(
         # A read from before this key was pasted must not be served after it.
         discard(_key_slot(provider))
         if not on_pc:
-            audit_approval(request, f"{_NAMES[provider]} API key entered")
+            audit_approval(request, f"{_NAMES[provider]} API key submitted")
     try:
         # A key-less reconnect must keep a custom gateway, not reset it.
         registration = _registration(
@@ -1735,6 +1735,8 @@ def connect_provider(
                     remembered = True
                 except CloudKeyError as e:
                     remember_error = _caller_detail(e, str(e), request, key)
+            if not on_pc:
+                audit_approval(request, f"{_NAMES[provider]} API key accepted")
         else:
             from gaia.connectors.credential_wait import (
                 CredentialStoreLocked,
@@ -1802,6 +1804,11 @@ def _use_known_models(
     runs_lemonade = gaia_runs_lemonade(_base_url())
     ca_problem = ca_store_problem() if runs_lemonade else None
     if ca_problem:
+        if not on_pc:
+            ca_problem = (
+                "The PC's certificate store needs fixing before GAIA can reach "
+                f"{name}. Fix it on the PC, then try again."
+            )
         raise ProviderError(ca_problem, 503)
     check = check_model_list(key) if provider == FIREWORKS else None
     if check is not None and check.state is ModelListState.OK:

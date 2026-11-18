@@ -1445,7 +1445,7 @@ def test_a_key_accepted_without_models_names_the_log_to_read(
 
 
 def test_a_missing_ca_file_is_named_instead_of_the_key(
-    client, lemonade, keys, model_list
+    client, device_client, lemonade, keys, model_list
 ):
     problem = "This PC's certificate store has no /etc/ssl/certs/ca-certificates.crt"
     model_list["ca_problem"] = problem
@@ -1454,6 +1454,11 @@ def test_a_missing_ca_file_is_named_instead_of_the_key(
     assert resp.status_code == 503
     assert resp.json()["detail"] == problem
     assert model_list["keys_checked"] == []
+    # A paired device is told to fix it on the PC, without the PC's paths.
+    resp = device_client.post("/api/providers/fireworks/connect", json={"api_key": KEY})
+    assert resp.status_code == 503
+    assert "certificate store needs fixing" in resp.json()["detail"]
+    assert "/etc/ssl" not in resp.text
 
 
 def test_a_missing_ca_file_on_the_users_own_server_is_not_claimed(
