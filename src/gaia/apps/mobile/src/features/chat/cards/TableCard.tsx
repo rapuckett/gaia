@@ -4,7 +4,7 @@
 import { MAX_ITEMS, isTablePayload, scalarText, type Scalar } from '@webui/utils/renderCards.core';
 
 import { useDirection, useT } from '@/i18n/useT';
-import { contentDir, Divider, HScroll, Ltr, Row, Stack, Surface, Text } from '@/ui';
+import { contentDir, Divider, HScroll, Ltr, Row, Stack, Surface, Text, useTheme } from '@/ui';
 
 import { TruncationNote } from './TruncationNote';
 import { UnsupportedCard } from './UnsupportedCard';
@@ -18,6 +18,7 @@ const isNumberColumn = (rows: Scalar[][], c: number) => {
 export function TableCard({ data }: { data: unknown }) {
     const t = useT();
     const uiDir = useDirection();
+    const { colors } = useTheme();
     if (!isTablePayload(data)) return <UnsupportedCard variant="invalid" render="table" data={data} />;
     const columns = data.columns.slice(0, MAX_ITEMS);
     const rows = data.rows.slice(0, MAX_ITEMS);
@@ -33,7 +34,7 @@ export function TableCard({ data }: { data: unknown }) {
                         {data.title}
                     </Text>
                 ) : null}
-                <HScroll dir={dir} hint testID="card-table-scroll">
+                <HScroll dir={dir} hint hintBackground={colors.bgCard} testID="card-table-scroll">
                     <Row dir={dir} align="stretch">
                         {headers.map((header, c) => {
                             const numeric = header !== null && isNumberColumn(rows, c);
