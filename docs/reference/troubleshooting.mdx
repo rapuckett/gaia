@@ -811,6 +811,11 @@ error. To run the chat model in the cloud instead, see
     - `electron-main.log`: the exit code and the assistant's last output.
     - `logs/backend-faults.log`: the stack of every thread, when the assistant
       died in a hard crash that skipped normal logging.
+
+    The bundle is made by `gaia diagnostics`, so keys and tokens are removed,
+    including the ones GAIA saved for you. If GAIA's Python can't run, the app
+    removes anything shaped like a key or token instead and adds a `NOTE.txt`
+    saying so. Read the files before you share them.
   </Accordion>
 
   <Accordion title="Cannot find module 'electron'" icon="window-restore">
