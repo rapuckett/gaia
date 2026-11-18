@@ -18,7 +18,12 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from ..models import LogReadResponse, LogSourcesResponse
-from ..security import allowed_device, require_pc_or_allowed_device, require_ui_header
+from ..security import (
+    allowed_device,
+    hide_pc_folders,
+    require_pc_or_allowed_device,
+    require_ui_header,
+)
 
 router = APIRouter(tags=["logs"])
 
@@ -33,10 +38,11 @@ def _for_device(read: Dict[str, Any]) -> Dict[str, Any]:
     """*read* with the log's place on the PC reduced to its file name."""
     full = read.get("log_path")
     if full:
-        name = _file_name(full)
-        read["log_path"] = name
+        read["log_path"] = _file_name(full)
         if read.get("detail"):
-            read["detail"] = read["detail"].replace(full, name)
+            read["detail"] = read["detail"].replace(full, read["log_path"])
+    if read.get("detail"):
+        read["detail"] = hide_pc_folders(read["detail"])
     return read
 
 
@@ -56,10 +62,9 @@ def list_logs(request: Request) -> Dict[str, Any]:
     """Each log source and the files it has now."""
     from gaia.log_sources import describe_sources
 
-    sources = describe_sources()
-    if allowed_device(request) is not None:
-        sources = _sources_for_device(sources)
-    return {"sources": sources}
+    if allowed_device(request) is None:
+        return {"sources": describe_sources()}
+    return {"sources": _sources_for_device(describe_sources(symlinks=False))}
 
 
 @router.get(
@@ -78,12 +83,23 @@ async def read_log(
 
     *source* and *file* are names GAIA lists; a path is a **404**.
     """
-    result = await _read(source, file, after, limit)
-    return _for_device(result) if allowed_device(request) is not None else result
+    device = allowed_device(request) is not None
+    try:
+        result = await _read(source, file, after, limit, device=device)
+    except HTTPException as e:
+        if device and e.status_code == 409:
+            e.detail = hide_pc_folders(str(e.detail))
+        raise
+    return _for_device(result) if device else result
 
 
 async def _read(
-    source: str, file: Optional[str], after: Optional[str], limit: int
+    source: str,
+    file: Optional[str],
+    after: Optional[str],
+    limit: int,
+    *,
+    device: bool,
 ) -> Dict[str, Any]:
     from gaia.config import GaiaConfigError
     from gaia.llm import lemonade_choice as choice
@@ -95,7 +111,7 @@ async def _read(
         if source == "model_server":
             result = await read_lemonade_log(after=after, limit=limit)
             return result.to_dict()
-        found = find_file(source, file)
+        found = find_file(source, file, symlinks=not device)
     except UnknownLogError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except (choice.LemonadeChoiceError, GaiaConfigError) as e:

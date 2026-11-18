@@ -817,13 +817,13 @@ def test_a_device_cannot_fetch_a_report_by_path(setup, name):
     assert b"not a report" not in got.content
 
 
-def test_a_device_makes_one_report_at_a_time(setup, monkeypatch):
-    """The report is audited by device, named without its place on the PC, and fetchable."""
+def test_one_report_at_a_time_from_any_caller(setup, monkeypatch):
+    """Audited by device on write and download, and named without its place on the PC."""
     from gaia.home import gaia_home
     from gaia.ui.routers import setup as setup_router
 
     app, clients, device = setup
-    name = "diagnostics-20261118-101010.tgz"
+    name = "diagnostics-20261118-101010-0a1b2c3d.tgz"
     started, release = threading.Event(), threading.Event()
 
     def write_report(record):
@@ -846,8 +846,9 @@ def test_a_device_makes_one_report_at_a_time(setup, monkeypatch):
         worker.start()
         try:
             assert started.wait(10)
-            second = clients["device"].post("/api/setup/report", headers=UI)
-            assert second.status_code == 409, second.text
+            for caller in ("device", "pc"):
+                second = clients[caller].post("/api/setup/report", headers=UI)
+                assert second.status_code == 409, (caller, second.text)
         finally:
             release.set()
             worker.join(10)
@@ -855,18 +856,96 @@ def test_a_device_makes_one_report_at_a_time(setup, monkeypatch):
         resp = first["resp"]
         assert resp.status_code == 200, resp.text
         assert resp.json()["path"] == name and resp.json()["name"] == name
-        by = f"by {security.DEVICE_PRINCIPAL_PREFIX}{device.device_id}"
-        assert [line for line in lines if "troubleshooting report" in line] == [
-            f"APPROVAL | troubleshooting report requested | {by}"
-        ]
-        got = clients["device"].get(f"/api/setup/report/{name}", headers=UI)
+        with _audit_lines() as fetched:
+            got = clients["device"].get(f"/api/setup/report/{name}", headers=UI)
         assert got.status_code == 200 and got.content == b"redacted bundle"
+        by = f"by {security.DEVICE_PRINCIPAL_PREFIX}{device.device_id}"
+        assert [
+            line for line in lines + fetched if "troubleshooting report" in line
+        ] == [
+            f"APPROVAL | troubleshooting report requested | {by}",
+            f"APPROVAL | troubleshooting report {name} downloaded | {by}",
+        ]
         # Done, so the next one may start.
         release.set()
         again = clients["device"].post("/api/setup/report", headers=UI)
         assert again.status_code == 200, again.text
     finally:
         (gaia_home() / name).unlink(missing_ok=True)
+
+
+@pytest.mark.parametrize("into", ["key_value", "saved_secret"])
+def test_a_cursor_inside_a_line_cannot_split_a_secret(
+    setup, tmp_path, monkeypatch, into
+):
+    """A cursor that isn't at a line start reads the tail, redacting whole lines."""
+    from gaia.llm import lemonade_logs
+
+    app, clients, _ = setup
+    saved = "saved-" + "q" * 24
+    pair = "api_key=" + "v" * 24
+    head = "[2026-11-18 10:00:00,000] | INFO | gaia | a.py:1 | "
+    first, second = f"{head}start\n", f"{head}used {pair} and {saved}\n"
+    log = tmp_path / "gaia.log"
+    log.write_text(first + second, encoding="utf-8")
+    monkeypatch.setenv("GAIA_LOG_FILE", str(log))
+    monkeypatch.setattr(lemonade_logs, "known_secrets", lambda: ((saved,), None))
+    if into == "key_value":
+        cursor, hidden = len(first) + second.index("=") + 1, pair.split("=")[1]
+    else:
+        cursor, hidden = len(first) + second.index(saved) + 1, saved
+    resp = clients["device"].get(
+        "/api/logs/gaia", params={"after": str(cursor)}, headers=UI
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["reset"] is True
+    assert hidden[1:] not in resp.text and hidden[4:12] not in resp.text
+
+
+def test_a_device_never_follows_a_symlinked_log_or_report(setup, tmp_path, monkeypatch):
+    from gaia.home import gaia_home
+
+    app, clients, _ = setup
+    outside = tmp_path / "outside.txt"
+    outside.write_text("[2026-11-18] | INFO | x | not a log\n", encoding="utf-8")
+    link = tmp_path / "gaia.log"
+    link.symlink_to(outside)
+    monkeypatch.setenv("GAIA_LOG_FILE", str(link))
+    listed = clients["device"].get("/api/logs", headers=UI).json()
+    assert next(s for s in listed["sources"] if s["id"] == "gaia")["files"] == []
+    for path, params in (
+        ("/api/logs/gaia", {}),
+        ("/api/logs/gaia", {"file": "gaia.log"}),
+    ):
+        resp = clients["device"].get(path, params=params, headers=UI)
+        assert "not a log" not in resp.text
+    name = "diagnostics-20261118-111111.tgz"
+    report = gaia_home() / name
+    report.parent.mkdir(parents=True, exist_ok=True)
+    report.symlink_to(outside)
+    try:
+        assert (
+            clients["device"].get(f"/api/setup/report/{name}", headers=UI).status_code
+            == 404
+        )
+    finally:
+        report.unlink()
+
+
+def test_a_device_never_sees_the_home_folder_in_an_error(setup, monkeypatch):
+    from pathlib import Path
+
+    from gaia.llm import lemonade_choice as choice
+
+    app, clients, _ = setup
+
+    def broken():
+        raise choice.LemonadeChoiceError(f"can't read {Path.home()}/.gaia-x/config")
+
+    monkeypatch.setattr(choice, "describe", broken)
+    resp = clients["device"].get("/api/logs/model_server", headers=UI)
+    assert resp.status_code == 409
+    assert str(Path.home()) not in resp.text and "your home folder" in resp.text
 
 
 @pytest.mark.parametrize(

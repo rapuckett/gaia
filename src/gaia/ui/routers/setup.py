@@ -10,7 +10,7 @@ with the same ``gaia init --check``, so they can never disagree.
 from __future__ import annotations
 
 import threading
-from typing import Any, Dict, List, Literal, Optional, Set, Union
+from typing import Any, Dict, List, Literal, Optional, Union
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import FileResponse
@@ -35,6 +35,7 @@ from ..models import WireModel
 from ..security import (
     allowed_device,
     audit_approval,
+    hide_pc_folders,
     require_local_pc,
     require_pc_or_allowed_device,
     require_pc_or_device,
@@ -591,9 +592,8 @@ def setup_vision_model(body: VisionModelRequest) -> Dict[str, Any]:
 #: The report bundles every GAIA log, redacted: the PC or an allowed device.
 _REPORT_ACCESS = [Depends(require_ui_header), Depends(require_pc_or_allowed_device)]
 
-#: Devices with a report being written; one at a time each.
-_reports_building: Set[str] = set()
-_reports_lock = threading.Lock()
+#: Held while a report is written; one at a time, whoever asks.
+_report_lock = threading.Lock()
 
 
 @router.post(
@@ -605,20 +605,16 @@ _reports_lock = threading.Lock()
 def setup_report(request: Request) -> Dict[str, Any]:
     """Bundle setup's record, every GAIA log and a system snapshot for a bug report.
 
-    A paired device gets the file name as ``path``, never where it is on the PC,
-    and may build one report at a time (**409** while one is being written).
+    One report at a time (**409** while one is being written). A paired device
+    gets the file name as ``path``, never where it is on the PC.
     """
     device = allowed_device(request)
-    device_id = device.device_id if device else None
-    if device_id is not None:
-        with _reports_lock:
-            if device_id in _reports_building:
-                raise HTTPException(
-                    status_code=409,
-                    detail="A troubleshooting report is already being written for "
-                    "this device. Wait for it to finish, then try again.",
-                )
-            _reports_building.add(device_id)
+    if not _report_lock.acquire(blocking=False):
+        raise HTTPException(
+            status_code=409,
+            detail="A troubleshooting report is already being written. Wait for "
+            "it to finish, then try again.",
+        )
     try:
         audit_approval(request, "troubleshooting report requested")
         record = runner.report()
@@ -630,30 +626,28 @@ def setup_report(request: Request) -> Dict[str, Any]:
         try:
             path = write_report(record)
         except SetupError as e:
-            detail = str(e)
-            if device:
-                from gaia.home import gaia_home
-
-                detail = detail.replace(str(gaia_home()), "GAIA's folder")
+            detail = hide_pc_folders(str(e)) if device else str(e)
             raise HTTPException(status_code=500, detail=detail) from e
     finally:
-        if device_id is not None:
-            with _reports_lock:
-                _reports_building.discard(device_id)
+        _report_lock.release()
     shown = path.name if device else str(path)
     return {"name": path.name, "path": shown, "size_bytes": path.stat().st_size}
 
 
 @router.get("/api/setup/report/{name}", dependencies=_REPORT_ACCESS)
-def setup_report_file(name: str) -> FileResponse:
+def setup_report_file(request: Request, name: str) -> FileResponse:
     """A troubleshooting report written by ``POST /api/setup/report``."""
     from gaia.home import gaia_home
 
+    missing = HTTPException(status_code=404, detail=f"No report named {name}.")
     if not REPORT_NAME_RE.fullmatch(name):
-        raise HTTPException(status_code=404, detail=f"No report named {name}.")
+        raise missing
     path = gaia_home() / name
-    if not path.is_file():
-        raise HTTPException(status_code=404, detail=f"No report named {name}.")
+    device = allowed_device(request)
+    if not path.is_file() or (device and path.is_symlink()):
+        raise missing
+    if device:
+        audit_approval(request, f"troubleshooting report {name} downloaded")
     return FileResponse(path, media_type="application/gzip", filename=name)
 
 
