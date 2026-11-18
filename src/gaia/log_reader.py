@@ -83,7 +83,21 @@ _REDACTIONS = (
     (re.compile(r"\bsk-[A-Za-z0-9_-]{16,}\b"), REDACTED),
     (re.compile(r"\bgh[pousr]_[A-Za-z0-9]{20,}\b"), REDACTED),
     (re.compile(r"\bxox[abprs]-[A-Za-z0-9-]{10,}\b"), REDACTED),
+    (re.compile(r"\bxapp-[A-Za-z0-9-]{10,}\b"), REDACTED),
+    (re.compile(r"\bfw_[A-Za-z0-9]{16,}\b"), REDACTED),
+    # A paired device's token (gaia.ui.devices.DEVICE_TOKEN_PREFIX).
+    (re.compile(r"\bgaiad_[A-Za-z0-9_-]{20,}"), REDACTED),
 )
+
+#: Tokens with no fixed prefix to look for first, so every line is checked.
+_UNMARKED_SHAPES = (
+    # Telegram bot token: the bot's id, a colon, 35 characters; in a Bot API URL after /bot.
+    r"(?:(?<=/bot)|(?<![\w-]))\d{6,12}:[A-Za-z0-9_-]{35}(?![\w-])",
+    # Discord bot token: the bot's id in base64 (M, N or O first), a time, an HMAC.
+    r"(?<![\w.-])[MNO][A-Za-z0-9_-]{23,27}\.[A-Za-z0-9_-]{6,7}\.[A-Za-z0-9_-]{27,40}(?![\w.-])",
+)
+_UNMARKED = tuple(re.compile(p) for p in _UNMARKED_SHAPES)
+_UNMARKED_BYTES = tuple(re.compile(p.encode()) for p in _UNMARKED_SHAPES)
 
 #: Environment variables whose values are secrets wherever they turn up.
 _SECRET_ENV_RE = re.compile(r"key|token|secret|pass(word|wd)?|credential", re.I)
@@ -102,6 +116,9 @@ _TRIGGERS = (
     "sk-",
     "gh",
     "xox",
+    "xapp-",
+    "fw_",
+    "gaiad_",
     "token=",
     "?code",
     "&code",
@@ -121,6 +138,8 @@ def redact(text: str, secrets: Iterable[str] = ()) -> str:
     for secret in secrets:
         if secret and _is_secret_value(secret):
             text = text.replace(secret, REDACTED)
+    for pattern in _UNMARKED:
+        text = pattern.sub(REDACTED, text)
     lower = text.lower()
     if not any(word in lower for word in _TRIGGERS):
         return text
@@ -138,6 +157,8 @@ def redact_lines(data: bytes, secrets: Iterable[str] = ()) -> bytes:
     for secret in secrets:
         if secret and _is_secret_value(secret):
             data = data.replace(secret.encode("utf-8"), REDACTED.encode())
+    for pattern in _UNMARKED_BYTES:
+        data = pattern.sub(REDACTED.encode(), data)
     lower = data.lower()  # ASCII only, so offsets match *data*
     starts = set()
     for word in _TRIGGERS:
@@ -181,6 +202,126 @@ def env_secrets() -> List[str]:
         for name, value in os.environ.items()
         if _SECRET_ENV_RE.search(name) and value and _is_secret_value(value.strip())
     ]
+
+
+def stored_secrets() -> Tuple[List[str], List[str]]:
+    """The credentials GAIA keeps for the user, and the ones it could not read.
+
+    Cloud provider keys, the Discord and Slack bot tokens, each connector's OAuth
+    client secret and refresh token, and every MCP server's secret settings.
+    Returns ``(values, unreadable)``; *unreadable* names each kind of credential
+    whose store did not answer, so the caller can say it is removed only by shape.
+    """
+    import importlib.util
+
+    if importlib.util.find_spec("keyring") is None:
+        return [], []  # Nothing can be saved without it.
+    from keyring.backends import fail, null
+
+    from gaia.connectors._keyring import keyring
+    from gaia.connectors.errors import ConnectorsError
+
+    if isinstance(keyring.get_keyring(), (fail.Keyring, null.Keyring)):
+        return [], []
+    values: List[str] = []
+    unreadable: List[str] = []
+    for label, read in _STORED_SECRET_SOURCES:
+        try:
+            values.extend(v for v in read() if isinstance(v, str))
+        except (
+            ConnectorsError,
+            keyring.errors.KeyringError,
+            OSError,
+            ValueError,
+            RuntimeError,
+        ) as e:
+            unreadable.append(f"{label} ({type(e).__name__})")
+    return [v.strip() for v in values if v and _is_secret_value(v.strip())], unreadable
+
+
+def _keyring_slots(*usernames: str) -> List[Optional[str]]:
+    from gaia.connectors._keyring import keyring
+    from gaia.connectors.store import SERVICE_NAME
+
+    return [keyring.get_password(SERVICE_NAME, name) for name in usernames]
+
+
+def _cloud_keys() -> List[Optional[str]]:
+    from gaia.connectors.store import peek_secret
+    from gaia.llm.gateway import GATEWAY_SECRET_NAME
+    from gaia.llm.lemonade_choice import API_KEY_SECRET_NAME as LEMONADE_SLOT
+    from gaia.llm.providers.fireworks import API_KEY_SECRET_NAME as FIREWORKS_SLOT
+
+    return [
+        peek_secret(s) for s in (FIREWORKS_SLOT, GATEWAY_SECRET_NAME, LEMONADE_SLOT)
+    ]
+
+
+def _messaging_tokens() -> List[Optional[str]]:
+    from gaia.messaging.discord import credentials as discord
+    from gaia.messaging.slack import credentials as slack
+
+    return _keyring_slots(
+        discord.BOT_TOKEN_KEY, slack.BOT_TOKEN_KEY, slack.APP_TOKEN_KEY
+    )
+
+
+def _connector_specs() -> list:
+    import gaia.connectors.catalog  # noqa: F401  # registers the built-in specs
+    from gaia.connectors.registry import REGISTRY
+
+    return REGISTRY.all()
+
+
+def _oauth_secrets() -> List[Optional[str]]:
+    from gaia.connectors import store
+
+    out: List[Optional[str]] = []
+    for spec in _connector_specs():
+        if spec.type != "oauth_pkce":
+            continue
+        client = store.peek_provider_credentials(spec.id)
+        if isinstance(client, dict):
+            out.append(client.get("client_secret"))
+        connection = store.peek_connection(spec.id)
+        if isinstance(connection, dict):
+            out.extend(connection.get(f) for f in ("refresh_token", "access_token"))
+    return out
+
+
+def _mcp_server_secrets() -> List[Optional[str]]:
+    from gaia.connectors import mcp_server
+    from gaia.connectors.store import SERVICE_NAME
+
+    out: List[Optional[str]] = []
+    for spec in _connector_specs():
+        if spec.type == "mcp_server":
+            out.extend(mcp_server._saved_secret(spec, k) for k in spec.mcp_env_keys)
+    # Servers the user added by hand keep plain values or their own keyring slots.
+    for entry in mcp_server._read_mcp_servers_json().values():
+        if not isinstance(entry, dict):
+            continue
+        for section in ("env", "headers"):
+            settings = entry.get(section)
+            if not isinstance(settings, dict):
+                continue
+            for name, value in settings.items():
+                ref = value.get("$keyring") if isinstance(value, dict) else None
+                if isinstance(ref, str) and ref.startswith(f"{SERVICE_NAME}:"):
+                    out.extend(_keyring_slots(ref[len(SERVICE_NAME) + 1 :]))
+                elif isinstance(value, str) and (
+                    _SECRET_ENV_RE.search(name) or name.lower() == "authorization"
+                ):
+                    out.extend([value, value.split()[-1] if value.split() else ""])
+    return out
+
+
+_STORED_SECRET_SOURCES = (
+    ("cloud provider keys", _cloud_keys),
+    ("Discord and Slack bot tokens", _messaging_tokens),
+    ("connector sign-ins", _oauth_secrets),
+    ("MCP server settings", _mcp_server_secrets),
+)
 
 
 @dataclass
