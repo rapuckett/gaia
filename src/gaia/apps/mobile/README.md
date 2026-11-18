@@ -70,6 +70,11 @@ PC. The simulator must reach the PC's home-network address, so run both on the s
   never backed up, so JavaScript never holds it. The Kotlin unit tests run with
   `./gradlew :gaia-transport:testDebugUnitTest` from a prebuilt `android/`. A pin that no longer matches shows `PinMismatchScreen`. The PC
   must also **Allow** each new phone before it can reach any chat.
+- **The app's language.** The picker in Settings › General writes the phone's per-app language,
+  so it and the phone's Settings can never disagree: `AppleLanguages` in the app's own domain on
+  iOS, the per-app language on Android 13+ (`modules/gaia-app-language`; Kotlin tests
+  `./gradlew :gaia-app-language:testDebugUnitTest`). Below Android 13 the app keeps the pick
+  itself (`src/state/locale.ts`). Neither path touches the phone's own language.
 - **Route classes.** The PC's route guards define who may call what. `src/api/routeAccess.gen.ts`
   is generated from them (`python -m gaia.ui.export_route_access` from the repo root) and
   classifies each route as `pc`, `device`, `remote` and so on; do not edit it. `routeAccess.ts`

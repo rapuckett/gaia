@@ -10,9 +10,8 @@ import { getLocale, isLocaleCode } from '@webui/i18n/registry';
 import { deviceLanguageCode, deviceLocaleCode } from '@/i18n/useT';
 import { layoutDirection } from '@/platform/direction';
 import { useLanguageSwitch } from '@/state/languageSwitch';
-import { useLocaleStore } from '@/state/locale';
+import { SEEN_DEVICE_LOCALE_KEY, syncLocaleFromPlatform, useLocaleStore } from '@/state/locale';
 
-const SEEN_KEY = 'gaia.deviceLocale';
 const SHOWN_KEY = 'gaia.systemSwitchShown';
 
 interface SystemSwitchState {
@@ -44,16 +43,10 @@ export async function checkSystemLanguage(): Promise<void> {
     const cold = firstCheck;
     firstCheck = false;
     try {
+        // Android 13+ keeps the pick as the per-app language, which system Settings changes in place; below 13 the app keeps it.
+        if (!syncLocaleFromPlatform()) await syncStoredPick();
         const device = deviceLocaleCode();
-        const reported = deviceLanguageCode();
-        const [seen, shown] = await Promise.all([AsyncStorage.getItem(SEEN_KEY), AsyncStorage.getItem(SHOWN_KEY)]);
-        if (seen !== reported) {
-            await AsyncStorage.setItem(SEEN_KEY, reported);
-            // The phone's setting is the newer word: drop an older in-app pick so it can't fight it on the next launch.
-            // A language GAIA doesn't ship can't replace the pick.
-            const pick = useLocaleStore.getState().locale;
-            if (seen !== null && pick !== null && pick !== device && isLocaleCode(reported)) useLocaleStore.getState().setLocale(null);
-        }
+        const shown = await AsyncStorage.getItem(SHOWN_KEY);
         const language = useLocaleStore.getState().locale ?? device;
         if (getLocale(language).meta.dir === layoutDirection()) {
             giveUp = false;
@@ -74,4 +67,14 @@ export async function checkSystemLanguage(): Promise<void> {
     } catch (err) {
         console.error(`Could not check whether the system language switch needs a restart: ${err instanceof Error ? err.message : String(err)}`);
     }
+}
+
+/** Below Android 13: the phone's language is the newer word, so a change to a language GAIA ships drops an older in-app pick that would fight it on the next launch. */
+async function syncStoredPick(): Promise<void> {
+    const reported = deviceLanguageCode();
+    const seen = await AsyncStorage.getItem(SEEN_DEVICE_LOCALE_KEY);
+    if (seen === reported) return;
+    await AsyncStorage.setItem(SEEN_DEVICE_LOCALE_KEY, reported);
+    const pick = useLocaleStore.getState().locale;
+    if (seen !== null && pick !== null && pick !== deviceLocaleCode() && isLocaleCode(reported)) useLocaleStore.getState().setLocale(null);
 }
