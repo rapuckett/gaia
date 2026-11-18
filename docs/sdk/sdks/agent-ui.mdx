@@ -2472,11 +2472,14 @@ The Memory endpoints expose the agent's persistent knowledge system. See the [Me
   <Accordion title="GET /api/memory/stream-discovery">
     SSE stream of the local system-discovery scan (git identity, installed
     apps, recent file types, shell config, …) that seeds first-run memory.
-    PC-only: the scan reads the PC's files and browser history, so a request
-    from mobile access, a paired device or another computer is a `403`. It
-    runs only with `system_discovery_consent` on: otherwise it reads nothing
-    and sends one `error` event (`source: "consent"`) saying how to turn it
-    on, then `done` with a total of 0. `stream-inference` does the same.
+    The PC or a paired device the PC allowed: the scan reads the PC's files
+    and browser history, so mobile access, a pending device or another
+    computer gets a `403`. A device's findings carry no absolute PC paths
+    (`path`, `paths`), matching what the PC's scan view shows. It runs only
+    with `system_discovery_consent` on, for every caller: otherwise it reads
+    nothing and sends one `error` event (`source: "consent"`) saying how to
+    turn it on, then `done` with a total of 0. `stream-inference` does the
+    same.
   </Accordion>
 
   <Accordion title="GET /api/memory/stream-inference">
@@ -2487,22 +2490,21 @@ The Memory endpoints expose the agent's persistent knowledge system. See the [Me
     or isn't downloaded, it runs on the machine's default local chat model
     (`default_model` in `~/.gaia/config.json`), never the chat's cloud model.
     A cloud `default_model`, or a local one that isn't downloaded yet, ends
-    the stream with an `error` event rather than a download. PC-only, like
-    `stream-discovery`.
+    the stream with an `error` event rather than a download. The PC or an
+    allowed paired device, including `include_browser`, and only with
+    consent on, like `stream-discovery`.
   </Accordion>
 
   <Accordion title="POST /api/memory/commit-discovery">
     Store the discovery findings a user approved in the memory dashboard's
     discovery review. Items are validated as knowledge creates, so a disallowed
-    category 422s the whole batch before anything is written. PC-only, like
-    `stream-discovery`.
+    category 422s the whole batch before anything is written. PC-only.
   </Accordion>
 
   <Accordion title="POST /api/memory/commit-inference">
     Store approved inference insights, replacing the prior inferred profile
     (old `source="inferred"` rows are deleted first — a failure here leaves
-    the old profile in place rather than partially wiped). PC-only, like
-    `stream-discovery`.
+    the old profile in place rather than partially wiped). PC-only.
   </Accordion>
 
   <Accordion title="GET /api/memory/settings">
@@ -2514,8 +2516,10 @@ The Memory endpoints expose the agent's persistent knowledge system. See the [Me
   <Accordion title="PUT /api/memory/settings">
     Update the flags above. Turning `system_discovery_consent` on also
     persists it to `~/.gaia/memory_settings.json` and triggers an immediate
-    system-context refresh, so turning it on is PC-only (a `403` elsewhere);
-    turning it off, and the other flags, work from any caller.
+    system-context refresh, so turning it on is for the PC or a paired device
+    the PC allowed (a `403` over mobile access or from a pending device), and
+    writes an audit line naming who turned it on. Turning it off, and the
+    other flags, work from any caller.
   </Accordion>
 
   <Accordion title="POST /api/memory/admin/clear">

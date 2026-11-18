@@ -40,7 +40,12 @@ from gaia.ui.memory_settings import MEMORY_ENABLED_KEY, memory_enabled
 from ..database import ChatDatabase
 from ..dependencies import get_db
 from ..models import WireModel
-from ..security import require_local_pc
+from ..security import (
+    allowed_device,
+    audit_approval,
+    require_local_pc,
+    require_pc_or_allowed_device,
+)
 from ..security import require_ui_header as _require_ui_header
 
 logger = logging.getLogger(__name__)
@@ -1657,8 +1662,15 @@ def _without_discovery_consent():
     )
 
 
-@router.get("/api/memory/stream-discovery", dependencies=[Depends(require_local_pc)])
-def stream_discovery():
+#: Finding keys holding absolute PC paths, which the PC's scan view never shows.
+_PC_PATH_KEYS = ("path", "paths")
+
+
+@router.get(
+    "/api/memory/stream-discovery",
+    dependencies=[Depends(require_pc_or_allowed_device)],
+)
+def stream_discovery(request: Request):
     """Stream system discovery findings as SSE.
 
     Events:
@@ -1670,6 +1682,7 @@ def stream_discovery():
     from fastapi.responses import StreamingResponse
 
     refused = _without_discovery_consent()
+    to_device = allowed_device(request) is not None
 
     def _generate():
         if refused is not None:
@@ -1725,6 +1738,9 @@ def stream_discovery():
                     items = scanner()
                     for item in items:
                         item["_source_name"] = source_key
+                        if to_device:
+                            for key in _PC_PATH_KEYS:
+                                item.pop(key, None)
                         yield _sse(
                             {"type": "finding", "source": source_key, "item": item}
                         )
@@ -1771,7 +1787,10 @@ def stream_discovery():
     )
 
 
-@router.get("/api/memory/stream-inference", dependencies=[Depends(require_local_pc)])
+@router.get(
+    "/api/memory/stream-inference",
+    dependencies=[Depends(require_pc_or_allowed_device)],
+)
 def stream_inference(include_browser: bool = Query(False)):
     """Stream LLM-assisted profile inference as SSE.
 
@@ -2300,10 +2319,11 @@ def update_memory_settings(
     - ``system_discovery_consent`` (bool): allow system scanning. Default false.
       When toggled ON, also persists the consent to ``~/.gaia/memory_settings.json``
       and triggers an immediate system context refresh. Turning it on is
-      PC-only, like the scan; turning it off works from anywhere.
+      for the PC or an allowed paired device, like the scan, and is audited;
+      turning it off works from anywhere.
     """
     if body.system_discovery_consent:
-        require_local_pc(request)
+        require_pc_or_allowed_device(request)
     if body.system_discovery_consent is not None:
         # The file is the source of truth; write it before any DB key so a
         # failed save leaves the whole request unapplied.
@@ -2329,6 +2349,7 @@ def update_memory_settings(
         consented = body.system_discovery_consent
         db.set_setting(_SYSTEM_DISCOVERY_KEY, "true" if consented else "false")
         if consented:
+            audit_approval(request, "system discovery turned on")
             try:
                 refresh_result = _do_system_context_refresh()
                 result = _get_memory_settings_dict(db)
