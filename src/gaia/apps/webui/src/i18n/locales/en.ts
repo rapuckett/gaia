@@ -3941,6 +3941,7 @@ export const enMessages = {
     'mobileApp.error.modelListFailed': 'Couldn’t read the model list from the model server.',
     'mobileApp.error.pricesFailed': 'Prices could not be loaded.',
     'mobileApp.model.downloadFailedShort': 'Downloading {model} failed.',
+    'mobileApp.model.nextMessageUses': '{current}, next message uses {next}',
     'mobileApp.model.restoreFailed': 'Your saved model could not be restored.',
     'mobileApp.model.restored': 'Restored your saved model, {name}.',
     'mobileApp.settings.model.cantRunNoReason': "Can't run here",

@@ -37,6 +37,7 @@ export function ContextMeter({ usage, unavailable, onDetails, initialOpen = fals
     const { colors, radius } = useTheme();
     const [open, setOpen] = useState(initialOpen);
     const barless = useChipCollapsed('meter');
+    const wordless = useChipCollapsed('meterWord');
     if (!usage && !unavailable) return null;
 
     const pct = usage ? Math.min(100, Math.round((usage.used / usage.window) * 100)) : 0;
@@ -91,6 +92,7 @@ export function ContextMeter({ usage, unavailable, onDetails, initialOpen = fals
     return (
         <>
             <ChipMeasure id="meter">{reading(false)}</ChipMeasure>
+            <ChipMeasure id="meterWord">{usage ? reading(true) : null}</ChipMeasure>
             <Pressable
                 onPress={() => setOpen(true)}
                 accessibilityLabel={aria}
@@ -99,7 +101,8 @@ export function ContextMeter({ usage, unavailable, onDetails, initialOpen = fals
                 aria-haspopup="dialog"
                 testID="context-meter"
             >
-                {reading(barless)}
+                {/* Last step: with no reading the text is "Context –"; drop all of it rather than leave a lone dash. */}
+                {wordless && !usage ? null : reading(barless)}
             </Pressable>
             <Sheet open={open} onClose={() => setOpen(false)} title={t('ctx.meter.window')}>
                 {usage ? <Breakdown usage={usage} colors={partColor} onDetails={onDetails ? () => { setOpen(false); onDetails(); } : undefined} /> : <Text role="body">{unavailable}</Text>}

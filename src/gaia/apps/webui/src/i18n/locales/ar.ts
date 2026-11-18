@@ -3940,6 +3940,7 @@ const messages: Messages = {
     'mobileApp.error.modelListFailed': 'تعذّرت قراءة قائمة النماذج من خادم النماذج.',
     'mobileApp.error.pricesFailed': 'تعذّر تحميل الأسعار.',
     'mobileApp.model.downloadFailedShort': 'فشل تنزيل {model}.',
+    'mobileApp.model.nextMessageUses': '{current}، والرسالة التالية تستخدم {next}',
     'mobileApp.model.restoreFailed': 'تعذّرت استعادة النموذج المحفوظ.',
     'mobileApp.model.restored': 'تمت استعادة النموذج المحفوظ، {name}.',
     'mobileApp.settings.model.cantRunNoReason': 'لا يمكن تشغيله هنا',
