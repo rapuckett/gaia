@@ -4,18 +4,17 @@
 import { ScreenHeader } from '@/features/nav/ScreenHeader';
 import { useT } from '@/i18n/useT';
 import { useConnectionStore } from '@/state/connection';
-import { Screen, Stack, Text } from '@/ui';
+import { EmptyState, Screen } from '@/ui';
 
 export function HomeScreen() {
     const t = useT();
     const connection = useConnectionStore((s) => s.connection);
-    return (
-        <Screen header={<ScreenHeader />}>
-            {connection === null ? (
-                <Stack paddingX="gutter">
-                    <Text>{t('mobileApp.notConnected')}</Text>
-                </Stack>
-            ) : null}
-        </Screen>
-    );
+    if (connection === null) {
+        return (
+            <Screen width="flow">
+                <EmptyState title={t('mobileApp.notConnected')} />
+            </Screen>
+        );
+    }
+    return <Screen header={<ScreenHeader />} />;
 }
