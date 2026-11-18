@@ -15,9 +15,12 @@ import {
     useAgents,
     useChangeConnectorAccess,
     useConnectorActivations,
+    useConfigureConnector,
+    useConnectorChecks,
     useConnectorGrants,
     useConnectors,
     useConnectorServerAction,
+    type ConnectorCheck,
 } from '@/data';
 import { ScreenHeader } from '@/features/nav/ScreenHeader';
 import { ChipButton } from '@/features/schedules/ChipButton';
@@ -25,9 +28,11 @@ import { PcOnlyNotice } from '@/features/settings/PcOnlyNotice';
 import { SettingsGroup } from '@/features/skills/SettingsGroup';
 import { failureNoticeProps } from '@/features/chat/header/failureText';
 import { describeHttpFailure, useDirection, useT } from '@/i18n/useT';
+import { openLinkFromPress } from '@/platform/openLink';
 import {
     ActionSheet,
     Button,
+    Disclosure,
     EmptyState,
     ErrorState,
     Icon,
@@ -37,6 +42,7 @@ import {
     Notice,
     Row,
     Screen,
+    Spinner,
     Stack,
     Surface,
     Switch,
@@ -46,7 +52,7 @@ import {
     useTheme,
 } from '@/ui';
 import { lineHeightOf } from '@/ui/text/Text';
-import { ChevronDown, ChevronRight, CircleCheck, Ellipsis, Pause, Play, Trash2 } from '@/ui/icons';
+import { ChevronDown, ChevronRight, CircleCheck, Ellipsis, ExternalLink, Pause, Play, Trash2 } from '@/ui/icons';
 
 import {
     activatableAgents,
@@ -65,29 +71,43 @@ import {
     disconnectNotice,
     GOOGLE_CONNECTOR_ID,
     groupConnectors,
+    isUnavailable,
+    MCP_GUIDE_URL,
     oauthClientStatus,
     SEARCH_ABOVE,
+    setupForm,
     tileStatus,
     unavailableHint,
 } from './connectorList';
+import { ConnectorSetupSheet } from './ConnectorSetupSheet';
 import { DeviceCodeSignIn } from './DeviceCodeSignIn';
 
 type Translator = ReturnType<typeof useT>;
 
-export function ConnectorsScreen({ initialExpanded, initialJustConnected }: { initialExpanded?: string; initialJustConnected?: string }) {
+interface ConnectorsBodyProps {
+    initialExpanded?: string;
+    initialJustConnected?: string;
+    /** The connector whose setup sheet starts open. */
+    initialSheet?: string;
+    initialChecks?: Record<string, ConnectorCheck>;
+}
+
+export function ConnectorsScreen(props: ConnectorsBodyProps) {
     const t = useT();
     return (
         <Screen scroll header={<ScreenHeader title={t('settings.section.connectors')} />}>
-            <ConnectorsBody initialExpanded={initialExpanded} initialJustConnected={initialJustConnected} />
+            <ConnectorsBody {...props} />
         </Screen>
     );
 }
 
 /** The connector list, for the screen and for the Settings pane. */
-export function ConnectorsBody({ initialExpanded, initialJustConnected }: { initialExpanded?: string; initialJustConnected?: string }) {
+export function ConnectorsBody({ initialExpanded, initialJustConnected, initialSheet, initialChecks }: ConnectorsBodyProps) {
     const t = useT();
     const connectors = useConnectors();
     const agentMcps = useAgentMcps();
+    const checks = useConnectorChecks(initialChecks);
+    const [sheetFor, setSheetFor] = useState<string | null>(initialSheet ?? null);
     const [query, setQuery] = useState('');
     const [expanded, setExpanded] = useState<string | null>(initialExpanded ?? null);
     const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
@@ -98,6 +118,8 @@ export function ConnectorsBody({ initialExpanded, initialJustConnected }: { init
 
     const rows = connectors.data?.connectors ?? [];
     const servers = agentMcps.data?.agent_mcps ?? [];
+    const sheetRow = rows.find((c): c is ConnectorRow => !isUnavailable(c) && c.id === sheetFor);
+    const sheetForm = sheetRow ? setupForm(sheetRow) : null;
     const q = query.trim();
     const groups = useMemo(() => groupConnectors(rows, query, t), [rows, query, t]);
 
@@ -154,6 +176,10 @@ export function ConnectorsBody({ initialExpanded, initialJustConnected }: { init
                 onDisconnected={setNotice}
                 justConnected={justConnected === c.id}
                 onPersonalizeStarted={() => setJustConnected(null)}
+                check={checks.checks[c.id]}
+                onCheck={() => void checks.run(c.id)}
+                onClearCheck={() => checks.clear(c.id)}
+                onSetup={() => setSheetFor(c.id)}
             />
         ));
 
@@ -229,7 +255,30 @@ export function ConnectorsBody({ initialExpanded, initialJustConnected }: { init
                             : null}
                     </>
                 )}
+                <Stack align="start">
+                    <Button
+                        size="sm"
+                        variant="secondary"
+                        label={t('mobileApp.connectors.mcpGuide')}
+                        iconEnd={ExternalLink}
+                        onPress={() => openLinkFromPress(MCP_GUIDE_URL)}
+                        testID="connectors-mcp-guide"
+                    />
+                </Stack>
             </Stack>
+            {sheetRow && sheetForm ? (
+                <ConnectorSetupSheet
+                    key={sheetRow.id}
+                    connector={sheetRow}
+                    form={sheetForm}
+                    onClose={() => setSheetFor(null)}
+                    onSaved={() => {
+                        if (sheetForm !== 'mcp') return;
+                        setSheetFor(null);
+                        void checks.run(sheetRow.id);
+                    }}
+                />
+            ) : null}
         </>
     );
 }
@@ -303,8 +352,12 @@ function UnavailableTile({ connector }: { connector: UnavailableConnectorRow }) 
     return <Tile header={<TileHeader name={connector.display_name} trailing={<Pill label={t('settings.connectors.unavailableStatus')} />} />} />;
 }
 
-function StatusText({ connector, t }: { connector: ConnectorRow; t: Translator }) {
+function StatusText({ connector, check, t }: { connector: ConnectorRow; check?: ConnectorCheck; t: Translator }) {
     const status = tileStatus(connector);
+    // A server that won't start is not working, whatever was saved for it.
+    if (status.kind === 'connected' && check?.state === 'failed' && !check.slow) {
+        return <Text role="label" tone="danger">{t('settings.connectors.notWorking')}</Text>;
+    }
     switch (status.kind) {
         case 'connected':
             return (
@@ -344,6 +397,10 @@ function ConnectorTile({
     onDisconnected,
     justConnected,
     onPersonalizeStarted,
+    check,
+    onCheck,
+    onClearCheck,
+    onSetup,
 }: {
     connector: ConnectorRow;
     expanded: boolean;
@@ -351,22 +408,29 @@ function ConnectorTile({
     onDisconnected: (notice: string | null) => void;
     justConnected: boolean;
     onPersonalizeStarted: () => void;
+    check?: ConnectorCheck;
+    onCheck: () => void;
+    onClearCheck: () => void;
+    onSetup: () => void;
 }) {
     const t = useT();
     const [menuOpen, setMenuOpen] = useState(false);
     const [confirmOpen, setConfirmOpen] = useState(false);
+    const [connecting, setConnecting] = useState(false);
     const [message, setMessage] = useState<{ tone: 'info' | 'danger'; text: string; detail?: string } | null>(null);
     const action = useConnectorServerAction(connector.id, (outcome) => onDisconnected(disconnectNotice(outcome, connector, t)));
+    const configure = useConfigureConnector();
     const google = connector.id === GOOGLE_CONNECTOR_ID;
     const server = connector.type === 'mcp_server';
     const paused = connector.enabled === false;
+    const form = setupForm(connector);
 
     // A result shown inside the tile opens it, so a menu pick is never silent.
     function show(next: { tone: 'info' | 'danger'; text: string; detail?: string }) {
         setMessage(next);
         if (!expanded) onToggle();
     }
-    const refuse = (detailKey: 'checkPcOnly' | 'configurePcOnly' | 'connectPcOnly' | 'enablePcOnly') =>
+    const refuse = (detailKey: 'connectPcOnly' | 'enablePcOnly') =>
         show({ tone: 'info', text: `${t('mobileApp.pcOnly.refusal')} ${t(`mobileApp.connectors.${detailKey}`)}` });
     const connectChip = (
         <ChipButton
@@ -378,6 +442,7 @@ function ConnectorTile({
     );
     function run(kind: 'disable' | 'disconnect') {
         setMessage(null);
+        onClearCheck();
         if (kind === 'disconnect') onDisconnected(null);
         action.mutate(kind, {
             onError: (e) => {
@@ -386,6 +451,35 @@ function ConnectorTile({
             },
         });
     }
+    // A server with no keys connects at once, then gets checked as one saved with keys does.
+    async function connectKeyless() {
+        setMessage(null);
+        setConnecting(true);
+        try {
+            await configure(connector.id, {});
+        } catch (e) {
+            const { text, detail } = describeHttpFailure(e, t);
+            show({ tone: 'danger', text, detail });
+            return;
+        } finally {
+            setConnecting(false);
+        }
+        onCheck();
+    }
+    const messageNotice = message ? <Notice tone={message.tone} message={message.text} detail={message.detail} /> : null;
+    const setupButton = (
+        <Stack align="start">
+            <Button
+                size="sm"
+                variant="primary"
+                wrap
+                label={t('connectCard.setUp', { name: connector.display_name })}
+                onPress={onSetup}
+                testID={`connector-start-setup-${connector.id}`}
+            />
+        </Stack>
+    );
+    const clientRow = form === 'oauthClient' ? <OAuthClientRow connector={connector} onChange={onSetup} /> : null;
 
     return (
         <Tile
@@ -410,7 +504,7 @@ function ConnectorTile({
                     trailing={
                         <>
                             {connector.configured ? <Pill label={connector.type === 'oauth_pkce' ? 'OAuth' : 'MCP'} /> : null}
-                            <StatusText connector={connector} t={t} />
+                            <StatusText connector={connector} check={server ? check : undefined} t={t} />
                         </>
                     }
                 />
@@ -444,15 +538,28 @@ function ConnectorTile({
             <Stack gap="sm">
                 <Text role="label" tone="secondary">{connectorDescription(t, connector)}</Text>
                 {!connector.configured ? (
-                    google ? (
-                        <Notice tone="info" message={t('mobileApp.connectors.googlePcOnly')} />
+                    form === 'oauthSetup' ? (
+                        setupButton
+                    ) : google ? (
+                        <>
+                            <Notice tone="info" message={t('mobileApp.connectors.googlePcOnly')} />
+                            {clientRow}
+                        </>
                     ) : server ? (
                         <>
-                            <ChipButton label={t('settings.key.connect')} variant="accent" onPress={() => refuse('configurePcOnly')} />
-                            {message ? <Notice tone={message.tone} message={message.text} detail={message.detail} /> : null}
+                            <Row gap="sm" wrap>
+                                <ChipButton
+                                    label={t.bare('settings.key.connect')}
+                                    accessibilityLabel={t('settings.key.connect')}
+                                    variant="accent"
+                                    disabled={connecting}
+                                    onPress={form === 'mcp' ? onSetup : () => void connectKeyless()}
+                                    testID={`connector-connect-${connector.id}`}
+                                />
+                            </Row>
+                            <CheckStatus connector={connector} check={check} />
+                            {messageNotice}
                         </>
-                    ) : !connector.configurable && connector.oauth_setup_fields.length > 0 ? (
-                        <Notice tone="info" message={t('mobileApp.connectors.setupPcOnly', { name: connector.display_name })} />
                     ) : (
                         <>
                             {connector.supports_device_code ? (
@@ -462,13 +569,30 @@ function ConnectorTile({
                                     {connectChip}
                                 </Row>
                             )}
-                            {message ? <Notice tone={message.tone} message={message.text} detail={message.detail} /> : null}
+                            {clientRow}
+                            {messageNotice}
                         </>
                     )
                 ) : (
                     <>
                         <Row gap="sm" wrap>
-                            {server ? <ChipButton label={t('settings.connectors.check')} onPress={() => refuse('checkPcOnly')} /> : null}
+                            {server && !paused ? (
+                                <ChipButton
+                                    label={t.bare('settings.connectors.check')}
+                                    accessibilityLabel={t('settings.connectors.check')}
+                                    disabled={action.isPending || check?.state === 'checking'}
+                                    onPress={onCheck}
+                                    testID={`connector-check-${connector.id}`}
+                                />
+                            ) : null}
+                            {form === 'mcp' ? (
+                                <ChipButton
+                                    label={t.bare('mobileApp.connectors.editSetup')}
+                                    accessibilityLabel={t('mobileApp.connectors.editSetup')}
+                                    onPress={onSetup}
+                                    testID={`connector-edit-${connector.id}`}
+                                />
+                            ) : null}
                             <ChipButton
                                 label={t('settings.connectors.disconnect')}
                                 variant="danger"
@@ -477,14 +601,9 @@ function ConnectorTile({
                                 onPress={() => setConfirmOpen(true)}
                             />
                         </Row>
-                        {oauthClientStatus(connector, t) ? (
-                            <Stack gap="xs">
-                                <Text role="label" weight="semibold" tone="muted">{t('settings.connectors.client')}</Text>
-                                <Text role="label" tone="secondary">{oauthClientStatus(connector, t)}</Text>
-                                <Text role="label" tone="muted">{t('mobileApp.connectors.clientPcOnly')}</Text>
-                            </Stack>
-                        ) : null}
-                        {message ? <Notice tone={message.tone} message={message.text} detail={message.detail} /> : null}
+                        {server ? <CheckStatus connector={connector} check={check} /> : null}
+                        {clientRow}
+                        {messageNotice}
                         <ConnectorAccess
                             connector={connector}
                             offer={justConnected}
@@ -504,6 +623,72 @@ function ConnectorTile({
             </Stack>
         </Tile>
     );
+}
+
+/** The OAuth client the PC uses for this connector, by its ID only, and the way to change it. */
+function OAuthClientRow({ connector, onChange }: { connector: ConnectorRow; onChange: () => void }) {
+    const t = useT();
+    return (
+        <Stack gap="xs">
+            <Text role="label" weight="semibold" tone="muted">{t('settings.connectors.client')}</Text>
+            <Text role="label" tone="secondary">{oauthClientStatus(connector, t) ?? t('settings.connectors.noClient')}</Text>
+            <Row gap="sm" wrap>
+                <ChipButton
+                    label={t.bare('mobileApp.connectors.changeClient')}
+                    accessibilityLabel={t('mobileApp.connectors.changeClient')}
+                    onPress={onChange}
+                    testID={`connector-client-${connector.id}`}
+                />
+            </Row>
+        </Stack>
+    );
+}
+
+/** The desktop's Check line: starting, started, too slow, or didn't start with the server's own output behind Details. */
+function CheckStatus({ connector, check }: { connector: ConnectorRow; check?: ConnectorCheck }) {
+    const t = useT();
+    const [details, setDetails] = useState(false);
+    if (!check) return null;
+    const name = connector.display_name;
+    switch (check.state) {
+        case 'checking':
+            return (
+                <View accessibilityLiveRegion="polite" testID={`connector-check-status-${connector.id}`}>
+                    <Row gap="sm">
+                        <Spinner size="sm" />
+                        <Text role="label" tone="secondary">{t('settings.connectors.checking', { name })}</Text>
+                    </Row>
+                </View>
+            );
+        case 'ok':
+            return <Notice tone="success" role="status" message={t('settings.connectors.checkOk', { name })} testID={`connector-check-status-${connector.id}`} />;
+        case 'failed':
+            return (
+                <Stack gap="xs" testID={`connector-check-status-${connector.id}`}>
+                    <Notice
+                        tone="danger"
+                        message={
+                            check.slow
+                                ? t('settings.connectors.checkSlow', { name })
+                                : (connector.mcp_env_keys ?? []).length === 0
+                                  ? t('settings.connectors.checkFailed', { name })
+                                  : t('settings.connectors.checkFailedKey', { name })
+                        }
+                    />
+                    {check.detail ? (
+                        <Disclosure title={t('settings.connectors.checkDetails')} open={details} onToggle={() => setDetails((v) => !v)}>
+                            <Text role="caption" tone="muted" dir="ltr" mono>
+                                {check.detail}
+                            </Text>
+                        </Disclosure>
+                    ) : null}
+                </Stack>
+            );
+        case 'error': {
+            const { text, detail } = describeHttpFailure(check.error, t);
+            return <Notice tone="danger" message={text} detail={detail} testID={`connector-check-status-${connector.id}`} />;
+        }
+    }
 }
 
 interface ServerSwitch {

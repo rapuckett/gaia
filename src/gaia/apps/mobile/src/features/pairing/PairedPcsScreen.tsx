@@ -79,7 +79,8 @@ export function PairedPcsScreen({ onAdd }: { onAdd: () => void }) {
                         />
                     );
                 })}
-                <Stack paddingX="lg">
+                <Stack paddingX="lg" gap="md">
+                    <Text role="label" tone="muted">{t('mobileApp.pairing.pcs.connectorSetup')}</Text>
                     <Button label={t('mobileApp.pairing.pcs.add')} icon={Plus} variant="secondary" onPress={onAdd} />
                 </Stack>
             </Stack>

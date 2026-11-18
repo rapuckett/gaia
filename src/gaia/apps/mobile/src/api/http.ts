@@ -38,8 +38,10 @@ import type {
     ConfirmToolResult,
     ContextChoice,
     ConnectorActivations,
+    ConnectorConfigureResponse,
     ConnectorDeviceAuthResponse,
     ConnectorSignInEnd,
+    ConnectorTestResponse,
     AllPermissions,
     ConnectorGrants,
     ConnectorList,
@@ -139,9 +141,11 @@ import {
     connectorActivationPath,
     connectorActivationsPath,
     connectorAuthorizeDevicePath,
+    connectorConfigurePath,
     connectorDisablePath,
     connectorGrantPath,
     connectorGrantsPath,
+    connectorTestPath,
     CONNECTOR_REVOKE_OUTCOME_MS,
     connectorPath,
     chatSpendingPath,
@@ -887,6 +891,14 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
                 options?.signal?.removeEventListener('abort', stop);
                 stop();
             }
+        },
+
+        configureConnector(connectorId, config, options) {
+            return postJson<ConnectorConfigureResponse>(connectorConfigurePath(connectorId), { config }, options?.signal);
+        },
+
+        testConnector(connectorId, options) {
+            return postJson<ConnectorTestResponse>(connectorTestPath(connectorId), undefined, options?.signal);
         },
 
         async disableConnector(connectorId, options) {

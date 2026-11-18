@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import type { ReactNode } from 'react';
 import { Platform, StyleSheet } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -13,6 +13,7 @@ import type { ConnectorRow, DisconnectOutcome } from '@/api/client.types';
 import { GaiaClientProvider } from '@/data';
 import { ThemeProvider } from '@/ui';
 import { SheetHost } from '@/ui/overlays/SheetHost';
+import { sheetStore } from '@/ui/overlays/sheetStore';
 
 import { ConnectorsGallery, type ConnectorScene } from './ConnectorsGallery';
 import { ConnectorsScreen } from './ConnectorsScreen';
@@ -248,6 +249,81 @@ describeNative('ConnectorsScreen after-connect Personalize offer', () => {
         expect(await screen.findByText("Couldn't start personalization.")).toBeTruthy();
         expect(screen.getByText('keyring locked')).toBeTruthy();
         expect(screen.getByText(/^Want GAIA to read/)).toBeTruthy();
+        queryClient.clear();
+    });
+});
+
+describeNative('ConnectorsScreen setup from the phone', () => {
+    afterEach(() => act(() => sheetStore.reset()));
+
+    /** Records what each configure call sent, then lets the fake PC apply it. */
+    function recordConfigure(client: ReturnType<typeof setup>['client']) {
+        const sent: [string, Record<string, string | boolean>][] = [];
+        const apply = client.configureConnector;
+        client.configureConnector = (id, config, options) => {
+            sent.push([id, { ...config }]);
+            return apply(id, config, options);
+        };
+        return sent;
+    }
+
+    it("sends a server's key to the PC, clears it from the sheet, and checks the server", async () => {
+        const slackSetup = {
+            ...slack,
+            id: 'mcp-slack',
+            configured: false,
+            mcp_env_keys: ['SLACK_MCP_XOXB_TOKEN'],
+            config_fields: [{ key: 'SLACK_MCP_XOXB_TOKEN', label: 'Slack bot token', kind: 'secret', required: true, placeholder: 'xoxb-…', help_md: '', prefix: 'xoxb-' }],
+        } as unknown as ConnectorRow;
+        const { client, queryClient, wrap } = setup([slackSetup]);
+        const sent = recordConfigure(client);
+        await render(<ConnectorsScreen />, { wrapper: wrap });
+        await fireEvent.press(await screen.findByTestId('connectors-group-servers'));
+        await fireEvent.press(await screen.findByLabelText('Slack'));
+        await fireEvent.press(await screen.findByTestId('connector-connect-mcp-slack'));
+        await fireEvent.changeText(await screen.findByTestId('connector-setup-SLACK_MCP_XOXB_TOKEN'), 'xoxb-test-token');
+        await fireEvent.press(screen.getByTestId('connector-setup-save'));
+
+        expect(await screen.findByText('Slack started without errors.')).toBeTruthy();
+        expect(sent).toEqual([['mcp-slack', { SLACK_MCP_XOXB_TOKEN: 'xoxb-test-token' }]]);
+        expect(screen.queryByDisplayValue('xoxb-test-token')).toBeNull();
+
+        await fireEvent.press(await screen.findByTestId('connector-edit-mcp-slack'));
+        const field = await screen.findByTestId('connector-setup-SLACK_MCP_XOXB_TOKEN');
+        expect(field.props).toMatchObject({ value: '', placeholder: '••••••••', secureTextEntry: true, autoComplete: 'off', autoCorrect: false });
+        queryClient.clear();
+    });
+
+    it('saves an OAuth client and afterwards shows only its ID, never the secret', async () => {
+        const fields = [
+            { key: 'client_id', label: 'OAuth Client ID', kind: 'text', required: true, placeholder: '', help_md: '' },
+            { key: 'client_secret', label: 'OAuth Client Secret', kind: 'secret', required: true, placeholder: '', help_md: '' },
+        ];
+        const google = {
+            ...microsoft,
+            id: 'google',
+            display_name: 'Google',
+            configured: true,
+            account_id: 'me@example.com',
+            supports_device_code: false,
+            oauth_setup_fields: fields,
+            oauth_client: { source: null, client_id: null, has_secret: false },
+        } as unknown as ConnectorRow;
+        const { client, queryClient, wrap } = setup([google]);
+        const sent = recordConfigure(client);
+        await render(<ConnectorsScreen />, { wrapper: wrap });
+        await fireEvent.press(await screen.findByLabelText('Google'));
+        await fireEvent.press(await screen.findByTestId('connector-client-google'));
+        await fireEvent.changeText(await screen.findByTestId('connector-setup-client_id'), 'test-client-id');
+        await fireEvent.changeText(screen.getByTestId('connector-setup-client_secret'), 'test-client-secret');
+        await fireEvent.press(screen.getByTestId('connector-setup-save'));
+
+        expect(await screen.findByText('Saved')).toBeTruthy();
+        expect(sent).toEqual([['google', { client_id: 'test-client-id', client_secret: 'test-client-secret', save_only: true }]]);
+        expect((await screen.findAllByText(/Saved client: .*test-client-id/)).length).toBeGreaterThan(0);
+        expect(screen.queryByText(/test-client-secret/)).toBeNull();
+        expect(screen.queryByDisplayValue('test-client-secret')).toBeNull();
+        expect(screen.getByTestId('connector-setup-client_secret').props.placeholder).toBe('••••••••');
         queryClient.clear();
     });
 });
