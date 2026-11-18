@@ -3323,9 +3323,15 @@ credential store (the slot the TUI uses). A key is never echoed back or logged.
     has it and it lists models; always `true` for `local`) and `blocked` (Local
     only is on), and for `amd` a `network` with `reachable` (`true`, `false`, or
     `null` when the check doesn't apply to this PC; never the reason or the
-    address), plus `lemonade_error` when Lemonade could not be read. Each call
+    address), plus `lemonade_error` when Lemonade could not be read. Cloud
+    providers also carry `key_source` (`stored`, `environment`, `lemonade` or
+    `null`), `key_state` (`read`, `store_locked`, or `unknown` until GAIA has
+    read the credential store once since it started), `key_hint` (the key's
+    last four characters, as the PC shows them; always `null` over mobile
+    access) and `known_models`; all four are `null` for `local`. Each call
     dials the gateway. It only reads: it registers nothing, hands no key over,
-    and never carries a key, a key hint or a gateway address. Requires `X-Gaia-UI: 1` (**403** without it).
+    never reads the OS credential store (so it can't raise a key-store
+    prompt), and never carries a key or a gateway address. Requires `X-Gaia-UI: 1` (**403** without it).
   </Accordion>
 
   <Accordion title="GET /api/providers/active">
@@ -3350,8 +3356,14 @@ credential store (the slot the TUI uses). A key is never echoed back or logged.
     the key. Body: `{"api_key", "base_url", "auth_header_name",
     "auth_header_prefix"}`; the last three apply to `amd` only. A blank
     `api_key` keeps the current key, and a gateway field left out keeps the
-    one `amd` is registered with. Only the PC may send a key or a gateway
-    field, since they decide where the saved key goes.
+    one `amd` is registered with. The PC and an allowed paired device may
+    send a key. A paired device may send a gateway field only in the same
+    request as a new key, so the saved key never follows a gateway it chose:
+    `base_url` must be `https://`, and its host must not be, or resolve to, a
+    loopback, link-local or private address or a `.local` name. If the change
+    fails, the previous gateway is put back without the device's key. A
+    device's gateway change is recorded in the audit log under its device id,
+    without the address or the key.
 
     While GAIA uses the user's own Lemonade (`lemonade_mode` `external`) it
     sends that server nothing: it succeeds only when the server already has
@@ -3360,7 +3372,11 @@ credential store (the slot the TUI uses). A key is never echoed back or logged.
     **Errors:** **401** when the provider rejects the key or discovers no
     models (a key that discovers nothing is removed from Lemonade again);
     **403** when a key comes from mobile access or another computer, or a
-    gateway field comes from anywhere but the PC; **409** when an
+    gateway field comes from them, from a device the PC hasn't allowed, or
+    from a device without a new key; **422** for a device's gateway that is
+    not `https://`, and for any other refusal or failure of a device's
+    gateway, all with one message that says nothing about whether the host
+    or port answered; **409** when an
     environment key takes precedence, Lemonade is not on this PC, or the
     user's own server has no working provider. A paired device gets the same
     statuses without PC file paths or credential-store details, and its key

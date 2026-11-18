@@ -19,10 +19,12 @@ a key). The calls mirror ``tui/internal/lemonade/cloud.go`` and
 
 from __future__ import annotations
 
+import ipaddress
 import os
+import socket
 import threading
 import time
-from typing import Any, Dict, List, Literal, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Literal, Optional, Tuple, Union
 from urllib.parse import urlparse
 
 import requests
@@ -315,16 +317,51 @@ def _key_slot(provider: str) -> str:
     return f"cloud-key:{provider}"
 
 
+#: What the last stored-key read found, per provider: None when nothing is
+#: stored, else the key's hint ("" when too short to show). Never the key.
+_STORED_KEY_SEEN: Dict[str, Optional[str]] = {}
+
+
+def _hint_of(key: Optional[str]) -> Optional[str]:
+    if not key or len(key) < _MIN_KEY_LENGTH_FOR_HINT:
+        return None
+    return key[-_KEY_HINT_LENGTH:]
+
+
 def _bounded_recall(provider: str) -> Optional[str]:
     """The stored key; raises ``CredentialStoreWaiting`` while the OS is prompting."""
     from gaia.connectors.credential_wait import read_within
     from gaia.llm import cloud_keys
 
-    return read_within(
+    key = read_within(
         _key_slot(provider),
         lambda: cloud_keys.recall_key(provider),
         f"your saved {_NAMES[provider]} key",
     )
+    _STORED_KEY_SEEN[provider] = None if not key else (_hint_of(key) or "")
+    return key
+
+
+class _StoredKeyUnknown(Exception):
+    """No stored-key read has happened yet, so whether one is stored is unknown."""
+
+
+def _seen_stored_key(provider: str) -> Optional[str]:
+    """``_bounded_recall`` from :data:`_STORED_KEY_SEEN`: never reads the store.
+
+    Returns a stand-in that is truthy when a key is stored, so precedence
+    matches the PC's view. Raises ``CredentialStoreLocked`` while the store is
+    held, as a real read would, and :class:`_StoredKeyUnknown` before any read.
+    """
+    from gaia.connectors.credential_wait import CredentialStoreLocked
+    from gaia.connectors.store import keyring_refusal
+
+    refusal = keyring_refusal()
+    if refusal:
+        raise CredentialStoreLocked(refusal)
+    if provider not in _STORED_KEY_SEEN:
+        raise _StoredKeyUnknown(provider)
+    return None if _STORED_KEY_SEEN[provider] is None else "stored"
 
 
 def _env_key(provider: str) -> Optional[Tuple[str, str]]:
@@ -379,15 +416,18 @@ def _known_models_active(provider: str) -> bool:
 
 
 def _key_source(
-    entry: Optional[Dict[str, Any]], provider: str, known_models: bool = False
+    entry: Optional[Dict[str, Any]],
+    provider: str,
+    known_models: bool = False,
+    recall: Optional[Callable[[str], Optional[str]]] = None,
 ) -> Optional[str]:
+    """*recall* replaces ``_bounded_recall`` for whether a key is stored."""
+    recall = recall or _bounded_recall
     # Known-model mode uses the same precedence as normal reconnect: a saved
     # key wins after a restart, and GAIA's environment key is only a fallback.
     env = _env_key(provider)
     if known_models:
-        return (
-            "stored" if _bounded_recall(provider) else ("environment" if env else None)
-        )
+        return "stored" if recall(provider) else ("environment" if env else None)
     if entry and entry.get("env_var_set"):
         return "environment"
     if entry and entry.get("runtime_key_set"):
@@ -396,7 +436,7 @@ def _key_source(
         # this Lemonade session and must not be relabelled as environment-owned.
         handed = bool(env) and _HANDED_ENV_KEYS.get(provider) == env[1]
         return "environment" if handed else "lemonade"
-    if _bounded_recall(provider):
+    if recall(provider):
         return "stored"
     return "environment" if env else None
 
@@ -418,9 +458,19 @@ def _key_hint(
             key = _bounded_recall(provider)
         except CredentialStoreWaiting:
             return None
-    if not key or len(key) < _MIN_KEY_LENGTH_FOR_HINT:
+    return _hint_of(key)
+
+
+def _seen_key_hint(
+    provider: str, key_source: Optional[str], lemond_env: bool = False
+) -> Optional[str]:
+    """:func:`_key_hint` from :data:`_STORED_KEY_SEEN`, without reading the store."""
+    if key_source == "environment":
+        env = None if lemond_env else _env_key(provider)
+        return _hint_of(env[1] if env else None)
+    if key_source not in ("stored", "lemonade"):
         return None
-    return key[-_KEY_HINT_LENGTH:]
+    return _STORED_KEY_SEEN.get(provider) or None
 
 
 def _provider_view(provider: str, entry: Optional[Dict[str, Any]]) -> Dict[str, Any]:
@@ -1470,8 +1520,17 @@ class ProviderSummaryNetwork(BaseModel):
     reachable: Optional[bool]
 
 
+#: ``key_state`` when only a read of the OS credential store could tell.
+KEY_UNKNOWN = "unknown"
+
+
 class ProviderSummary(BaseModel):
-    """A provider as a paired device may see it: no key, key hint or address."""
+    """A provider as a paired device may see it: never the key or the address.
+
+    The ``key_*`` fields come from Lemonade's registration and from the last
+    stored-key read this GAIA made; the route itself never reads the store.
+    They and ``known_models`` are null for ``local``.
+    """
 
     id: str
     name: str
@@ -1483,6 +1542,15 @@ class ProviderSummary(BaseModel):
     blocked: bool
     #: AMD only: whether its gateway answers; no detail, which can name the address.
     network: Optional[ProviderSummaryNetwork] = None
+    #: Where the key comes from, as ``GET /api/providers`` says; null when none
+    #: is known, including while ``key_state`` is not ``read``.
+    key_source: Optional[Literal["stored", "environment", "lemonade"]] = None
+    #: ``unknown`` until GAIA has read the credential store once since it started.
+    key_state: Optional[Literal["read", KEY_LOCKED, KEY_UNKNOWN]] = None
+    #: The key's last characters, as the PC shows; null over mobile access.
+    key_hint: Optional[str] = None
+    #: GAIA's server is serving known models through a list outage (Fireworks).
+    known_models: Optional[bool] = None
 
 
 class ProviderSummaryList(BaseModel):
@@ -1496,8 +1564,14 @@ class ProviderSummaryList(BaseModel):
     response_model=ProviderSummaryList,
     dependencies=[Depends(require_ui_header)],
 )
-def list_provider_summaries() -> Dict[str, Any]:
-    """Every provider and whether it is set up; reads only, so a paired device may."""
+def list_provider_summaries(request: Request) -> Dict[str, Any]:
+    """Every provider and whether it is set up; reads only, so a paired device may.
+
+    Never registers a provider, hands Lemonade a key, or reads the OS
+    credential store, so it can't raise a key-store prompt: whether a key is
+    stored comes from the last read ``GET /api/providers`` or a connect made,
+    and is ``key_state: "unknown"`` before one.
+    """
     entries: Dict[str, Optional[Dict[str, Any]]] = {}
     lemonade_error = None
     try:
@@ -1506,6 +1580,8 @@ def list_provider_summaries() -> Dict[str, Any]:
     except ProviderError as e:
         lemonade_error = str(e)
     blocked = cloud_blocked()
+    # Mobile access can't enter or remove a key, so it gets no hint either.
+    hide_hint = not is_local_pc(request) and allowed_device(request) is None
     summaries = []
     for provider in PROVIDER_IDS:
         entry = entries.get(provider)
@@ -1527,9 +1603,39 @@ def list_provider_summaries() -> Dict[str, Any]:
                     if provider == AMD
                     else None
                 ),
+                **(
+                    _summary_key_fields(provider, entry, hide_hint=hide_hint)
+                    if provider != LOCAL
+                    else {}
+                ),
             }
         )
     return {"providers": summaries, "lemonade_error": lemonade_error}
+
+
+def _summary_key_fields(
+    provider: str, entry: Optional[Dict[str, Any]], *, hide_hint: bool
+) -> Dict[str, Any]:
+    """:func:`_provider_view`'s key fields, from cached and loaded state only."""
+    from gaia.connectors.credential_wait import CredentialStoreLocked
+
+    known_models = _known_models_active(provider)
+    try:
+        key_source = _key_source(entry, provider, known_models, _seen_stored_key)
+        key_state = "read"
+    except CredentialStoreLocked:
+        key_source, key_state = None, KEY_LOCKED
+    except _StoredKeyUnknown:
+        key_source, key_state = None, KEY_UNKNOWN
+    lemond_env = bool(entry and entry.get("env_var_set"))
+    return {
+        "key_source": key_source,
+        "key_state": key_state,
+        "key_hint": (
+            None if hide_hint else _seen_key_hint(provider, key_source, lemond_env)
+        ),
+        "known_models": known_models,
+    }
 
 
 def _needs_key(
@@ -1638,6 +1744,51 @@ class ConnectRequest(BaseModel):
 #: Fields that change where, or with which header, Lemonade sends the saved key.
 _KEY_ROUTING_FIELDS = ("base_url", "auth_header_name", "auth_header_prefix")
 
+#: Every refusal of a device's gateway, so none says whether a host or port answers.
+_DEVICE_GATEWAY_DETAIL = (
+    "GAIA couldn't use that gateway from this device. Use a public https:// "
+    "address that the PC running GAIA can reach and a key it accepts, or set "
+    "the gateway up on the PC."
+)
+
+
+def _refuse_device_gateway() -> None:
+    raise HTTPException(status_code=422, detail=_DEVICE_GATEWAY_DETAIL)
+
+
+def _is_public_address(address: str) -> bool:
+    ip = ipaddress.ip_address(address.split("%", 1)[0])
+    if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped:
+        ip = ip.ipv4_mapped
+    return ip.is_global and not ip.is_multicast
+
+
+def _check_device_gateway_url(base_url: str) -> None:
+    """Refuse a device's gateway unless it is https and every address is public."""
+    url = urlparse(base_url.strip())
+    if url.scheme != "https":
+        raise HTTPException(
+            status_code=422,
+            detail="A gateway set from a device must start with https://.",
+        )
+    try:
+        host = (url.hostname or "").rstrip(".").lower()
+        port = url.port or 443
+    except ValueError:
+        _refuse_device_gateway()
+    if not host or host.endswith((".local", ".localhost")) or host == "localhost":
+        _refuse_device_gateway()
+    try:
+        addresses = {ipaddress.ip_address(host).compressed}
+    except ValueError:
+        try:
+            infos = socket.getaddrinfo(host, port, proto=socket.IPPROTO_TCP)
+        except (OSError, UnicodeError):
+            _refuse_device_gateway()
+        addresses = {info[4][0] for info in infos}
+    if not addresses or not all(_is_public_address(a) for a in addresses):
+        _refuse_device_gateway()
+
 
 @router.post(
     "/api/providers/{provider}/connect",
@@ -1670,15 +1821,19 @@ def connect_provider(
             detail="Enter provider keys on the PC running GAIA or on a paired "
             "device the PC allowed, not over mobile access.",
         )
-    if not on_pc and any(
-        getattr(body, field) is not None for field in _KEY_ROUTING_FIELDS
-    ):
+    routing = any(getattr(body, field) is not None for field in _KEY_ROUTING_FIELDS)
+    # The saved key must never follow a gateway a device chose, so a device
+    # moves it only while replacing the key, and only to a public https host.
+    device_gateway = routing and not on_pc
+    if device_gateway and (not key or allowed_device(request) is None):
         raise HTTPException(
             status_code=403,
             detail="Change the gateway address or key header on the PC running "
-            "GAIA, not over mobile access or from a paired device. Reconnect "
-            "without them to keep the saved ones.",
+            "GAIA, or from a paired device the PC allowed together with a new "
+            "key. Reconnect without them to keep the saved ones.",
         )
+    if device_gateway and body.base_url is not None:
+        _check_device_gateway_url(body.base_url)
     from gaia.connectors.store import retry_keyring
 
     # Connecting needs the key store, so it may ask the OS again.
@@ -1692,9 +1847,10 @@ def connect_provider(
             audit_approval(request, f"{_NAMES[provider]} API key submitted")
     try:
         # A key-less reconnect must keep a custom gateway, not reset it.
-        registration = _registration(
-            provider, body, _cloud_entry(provider) if provider == AMD else None
-        )
+        current = _cloud_entry(provider) if provider == AMD else None
+        # A copy, so a failed device change can put this registration back.
+        current = dict(current) if current else None
+        registration = _registration(provider, body, current)
     except ProviderError as e:
         _raise(e, request, key)
     if provider == AMD and _gateway_check_applies():
@@ -1702,19 +1858,29 @@ def connect_provider(
 
         try:
             check_gateway_reachable(registration["base_url"])
-        except GatewayUnreachable as e:
+        except (GatewayUnreachable, ValueError) as e:
+            if device_gateway:
+                raise HTTPException(
+                    status_code=422, detail=_DEVICE_GATEWAY_DETAIL
+                ) from e
+            if isinstance(e, ValueError):
+                raise HTTPException(status_code=422, detail=str(e)) from e
             raise HTTPException(
                 status_code=503,
                 detail=f"{e}. Connect to it, then try again.",
             ) from e
-        except ValueError as e:
-            raise HTTPException(status_code=422, detail=str(e)) from e
     if _uses_users_server():
         return _connect_on_users_server(provider)
+    moved = device_gateway and provider == AMD
     try:
         _require_loopback(_base_url())
         if key and _known_models_active(provider):
             _leave_known_models()
+        if moved:
+            # Drop the key Lemonade holds first: the new gateway gets only the new key.
+            status, result = _lemonade("DELETE", f"cloud/auth/{provider}")
+            if status >= 400 and status != 404:
+                raise _cloud_error(provider, status, result)
         _install(provider, registration)
         remembered, remember_error = False, None
         if key:
@@ -1735,6 +1901,9 @@ def connect_provider(
                     remembered = True
                 except CloudKeyError as e:
                     remember_error = _caller_detail(e, str(e), request, key)
+                    if moved:
+                        # The old stored key would be replayed to the new gateway.
+                        raise _KeyNotKept(_AWAY_STORE_DETAIL, 503) from e
             if not on_pc:
                 audit_approval(request, f"{_NAMES[provider]} API key accepted")
         else:
@@ -1773,10 +1942,22 @@ def connect_provider(
                     )
                 del stored
         entry = _cloud_entry(provider)
+        if moved and not (entry or {}).get("models_discovered"):
+            raise ProviderError(_DEVICE_GATEWAY_DETAIL, 422)
     except ProviderError as e:
+        if moved:
+            _restore_gateway(provider, current)
+            if not isinstance(e, _KeyNotKept):
+                generic = ProviderError(_DEVICE_GATEWAY_DETAIL, 422)
+                generic.__cause__ = e
+                e = generic
         _raise(e, request, key)
     finally:
         del key
+    if moved:
+        audit_approval(
+            request, f"{_NAMES[provider]} gateway address or key header changed"
+        )
     view = _provider_view(provider, entry)
     if not view["models_discovered"]:
         raise HTTPException(
@@ -1787,6 +1968,30 @@ def connect_provider(
             ),
         )
     return {**view, "remembered": remembered, "remember_error": remember_error}
+
+
+class _KeyNotKept(ProviderError):
+    """A device's new key worked but the credential store did not keep it."""
+
+
+def _restore_gateway(provider: str, previous: Optional[Dict[str, Any]]) -> None:
+    """Put back the gateway a device's failed change replaced, and drop its key."""
+    try:
+        _lemonade("DELETE", f"cloud/auth/{provider}")
+        _install(provider, _registration(provider, ConnectRequest(), previous))
+    except ProviderError as e:
+        logger.error(
+            "Could not restore the %s gateway after a paired device's change "
+            "failed: %s. Reconnect it on the PC before using it.",
+            _NAMES[provider],
+            e,
+        )
+        raise HTTPException(
+            status_code=502,
+            detail=f"GAIA couldn't use that gateway, and couldn't put the "
+            f"previous {_NAMES[provider]} gateway back. Reconnect it on the PC "
+            "running GAIA before using it.",
+        ) from e
 
 
 def _use_known_models(
@@ -1940,6 +2145,7 @@ def forget_provider_key(provider: str, request: Request) -> Dict[str, Any]:
                 raise _cloud_error(provider, status, body)
         removed = forget_key(provider)
         discard(_key_slot(provider))
+        _STORED_KEY_SEEN[provider] = None
     except ProviderError as e:
         _raise(e, request)
     except ConnectorsError as e:

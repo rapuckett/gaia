@@ -171,8 +171,10 @@ def reach(monkeypatch):
 @pytest.fixture(autouse=True)
 def _fresh_restore():
     providers.reset_restore_state()
+    providers._STORED_KEY_SEEN.clear()
     yield
     providers.reset_restore_state()
+    providers._STORED_KEY_SEEN.clear()
 
 
 @pytest.fixture
@@ -1232,6 +1234,10 @@ def test_provider_summaries_read_only_and_carry_no_secret(client, lemonade, keys
                 "configured": True,
                 "blocked": False,
                 "network": None,
+                "key_source": None,
+                "key_state": None,
+                "key_hint": None,
+                "known_models": None,
             },
             {
                 "id": "fireworks",
@@ -1241,6 +1247,10 @@ def test_provider_summaries_read_only_and_carry_no_secret(client, lemonade, keys
                 "configured": False,
                 "blocked": False,
                 "network": None,
+                "key_source": None,
+                "key_state": "unknown",
+                "key_hint": None,
+                "known_models": False,
             },
             {
                 "id": "amd",
@@ -1250,6 +1260,11 @@ def test_provider_summaries_read_only_and_carry_no_secret(client, lemonade, keys
                 "configured": True,
                 "blocked": False,
                 "network": {"reachable": True},
+                # Lemonade holds a key the user entered; the hint needs a store read.
+                "key_source": "lemonade",
+                "key_state": "read",
+                "key_hint": None,
+                "known_models": False,
             },
         ],
         "lemonade_error": None,
@@ -1741,6 +1756,202 @@ def device_client(db):
     return TestClient(
         on_listener, client=("127.0.0.1", 50000), headers={"X-Gaia-UI": "1"}
     )
+
+
+def _device_listener_client(db, allowed=True):
+    from gaia.ui.security import (
+        DEVICE_SCOPE_KEY,
+        LAN_LISTENER,
+        LISTENER_SCOPE_KEY,
+        DevicePrincipal,
+    )
+
+    app = FastAPI()
+    app.include_router(providers.router)
+    app.state.db = db
+
+    async def on_listener(scope, receive, send):
+        scope[LISTENER_SCOPE_KEY] = LAN_LISTENER
+        scope[DEVICE_SCOPE_KEY] = DevicePrincipal("phone-2", allowed)
+        await app(scope, receive, send)
+
+    return TestClient(
+        on_listener, client=("127.0.0.1", 50000), headers={"X-Gaia-UI": "1"}
+    )
+
+
+def test_a_device_sees_the_pcs_key_hint_without_a_store_read_or_lemonade_write(
+    client, device_client, lemonade, keys, monkeypatch
+):
+    lemonade.cloud["fireworks"] = {"name": "fireworks", "models_discovered": True}
+    keys["stored"]["fireworks"] = KEY
+
+    def fireworks(c):
+        body = c.get("/api/providers/list").json()
+        return next(p for p in body["providers"] if p["id"] == "fireworks")
+
+    reads = []
+    real_recall = cloud_keys.recall_key
+    monkeypatch.setattr(
+        cloud_keys, "recall_key", lambda p: reads.append(p) or real_recall(p)
+    )
+    assert fireworks(device_client)["key_state"] == "unknown"
+    assert reads == []
+    pc_view = _fireworks_view(client)  # the PC's own read fills the cache
+    assert reads
+
+    reads.clear()
+    keys["ensure"].clear()
+    lemonade.calls.clear()
+    seen = fireworks(device_client)
+    assert seen["key_source"] == pc_view["key_source"] == "stored"
+    assert seen["key_hint"] == pc_view["key_hint"] == KEY[-4:]
+    assert seen["key_state"] == "read"
+    assert reads == [] and keys["ensure"] == []
+    assert lemonade.paths("POST") == [] and lemonade.paths("DELETE") == []
+    assert KEY not in device_client.get("/api/providers/list").text
+    # Mobile access sees the source but never a hint.
+    away = client.get("/api/providers/list", headers={"X-Forwarded-For": "203.0.113.9"})
+    assert (
+        next(p for p in away.json()["providers"] if p["id"] == "fireworks")["key_hint"]
+        is None
+    )
+
+
+_PUBLIC_IP = "93.184.216.34"
+_GOOD_GATEWAY = "https://gw.example.com/v1"
+
+
+@pytest.fixture
+def resolve(monkeypatch):
+    """DNS for device gateways, faked: every host resolves to *answers*."""
+    state = {"answers": [_PUBLIC_IP], "asked": []}
+
+    def getaddrinfo(host, port, *a, **k):
+        state["asked"].append(host)
+        if state["answers"] is None:
+            raise OSError("Name or service not known")
+        return [(2, 1, 6, "", (ip, port)) for ip in state["answers"]]
+
+    monkeypatch.setattr(providers.socket, "getaddrinfo", getaddrinfo)
+    return state
+
+
+@pytest.fixture
+def audited(monkeypatch):
+    from gaia.ui.security import principal
+
+    seen = []
+    monkeypatch.setattr(
+        providers,
+        "audit_approval",
+        lambda request, what: seen.append((principal(request), what)),
+    )
+    return seen
+
+
+def test_a_device_moves_the_gateway_only_with_a_new_key(
+    device_client, lemonade, keys, resolve, audited
+):
+    lemonade.cloud["amd"] = dict(_CUSTOM_GATEWAY)
+    resp = device_client.post(
+        "/api/providers/amd/connect", json={"base_url": _GOOD_GATEWAY}
+    )
+    assert resp.status_code == 403
+    assert lemonade.calls == [] and audited == []
+
+    resp = device_client.post(
+        "/api/providers/amd/connect",
+        json={"api_key": KEY, "base_url": _GOOD_GATEWAY, "auth_header_name": "X-K"},
+    )
+    assert resp.status_code == 200, resp.text
+    # The key Lemonade held is dropped before the new gateway is registered.
+    writes = [(c["method"], c["path"]) for c in lemonade.calls if c["method"] != "GET"]
+    assert writes[:3] == [
+        ("DELETE", "cloud/auth/amd"),
+        ("POST", "install"),
+        ("POST", "cloud/auth"),
+    ]
+    assert lemonade.cloud["amd"]["base_url"] == _GOOD_GATEWAY
+    assert lemonade.cloud["amd"]["auth_header_name"] == "X-K"
+    assert keys["stored"]["amd"] == KEY
+    assert (
+        "device:phone-1",
+        "AMD LLM Gateway gateway address or key header changed",
+    ) in audited
+    assert all(KEY not in what and "gw.example" not in what for _, what in audited)
+
+
+@pytest.mark.parametrize(
+    "base_url, answers",
+    [
+        ("http://gw.example.com/v1", [_PUBLIC_IP]),
+        ("https://10.1.2.3/v1", [_PUBLIC_IP]),
+        ("https://[fd00::1]/v1", [_PUBLIC_IP]),
+        ("https://printer.local/v1", [_PUBLIC_IP]),
+        ("https://gw.example.com/v1", ["127.0.0.1"]),
+        ("https://gw.example.com/v1", [_PUBLIC_IP, "169.254.169.254"]),
+        ("https://gw.example.com/v1", ["::ffff:192.168.1.5"]),
+        ("https://gw.example.com/v1", None),
+    ],
+)
+def test_a_device_gateway_must_be_public_https(
+    device_client, lemonade, keys, resolve, audited, base_url, answers
+):
+    lemonade.cloud["amd"] = dict(_CUSTOM_GATEWAY)
+    resolve["answers"] = answers
+    resp = device_client.post(
+        "/api/providers/amd/connect", json={"api_key": KEY, "base_url": base_url}
+    )
+    assert resp.status_code == 422
+    if base_url.startswith("https:"):
+        assert resp.json()["detail"] == providers._DEVICE_GATEWAY_DETAIL
+    assert lemonade.paths("POST") == [] and lemonade.paths("DELETE") == []
+    assert lemonade.cloud["amd"] == _CUSTOM_GATEWAY
+    assert not [a for a in audited if "gateway" in a[1]]
+
+
+def test_a_device_gateway_failure_says_nothing_about_the_host_and_is_undone(
+    device_client, lemonade, keys, resolve, reach
+):
+    lemonade.cloud["amd"] = dict(_CUSTOM_GATEWAY)
+    reach["error"] = _offline()
+    closed = device_client.post(
+        "/api/providers/amd/connect", json={"api_key": KEY, "base_url": _GOOD_GATEWAY}
+    )
+    reach["error"] = None
+    lemonade.answers[("POST", "cloud/auth")] = (200, {"models_discovered": False})
+    no_models = device_client.post(
+        "/api/providers/amd/connect", json={"api_key": KEY, "base_url": _GOOD_GATEWAY}
+    )
+    for resp in (closed, no_models):
+        assert resp.status_code == 422, resp.text
+        assert resp.json()["detail"] == providers._DEVICE_GATEWAY_DETAIL
+    # The PC's gateway is back, without the device's key.
+    for field in ("base_url", "auth_header_name", "auth_header_prefix"):
+        assert lemonade.cloud["amd"][field] == _CUSTOM_GATEWAY[field]
+    assert lemonade.paths("DELETE")[-1] == "cloud/auth/amd"
+    assert "amd" not in keys["stored"]
+
+
+@pytest.mark.parametrize("who", ["tunnel", "pending"])
+def test_the_tunnel_and_a_pending_device_cannot_move_the_gateway(
+    client, db, lemonade, keys, resolve, who
+):
+    lemonade.cloud["amd"] = dict(_CUSTOM_GATEWAY)
+    body = {"api_key": KEY, "base_url": _GOOD_GATEWAY}
+    if who == "tunnel":
+        resp = client.post(
+            "/api/providers/amd/connect",
+            json=body,
+            headers={"X-Forwarded-For": "203.0.113.9"},
+        )
+    else:
+        resp = _device_listener_client(db, allowed=False).post(
+            "/api/providers/amd/connect", json=body
+        )
+    assert resp.status_code == 403
+    assert lemonade.calls == [] and resolve["asked"] == []
 
 
 def test_a_paired_device_may_enter_and_remove_a_key(

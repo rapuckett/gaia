@@ -688,9 +688,14 @@ def test_a_paired_device_may_read_provider_summaries(setup, monkeypatch):
             "configured",
             "blocked",
             "network",
+            "key_source",
+            "key_state",
+            "key_hint",
+            "known_models",
         }
         for p in listed.values()
     )
+    assert listed["amd"]["key_source"] == "lemonade"
     # Reachability only: the gateway's error text can name its address.
     assert listed["amd"]["network"] == {"reachable": None}
     assert "gw.example" not in resp.text
