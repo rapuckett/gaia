@@ -138,10 +138,10 @@ function DeviceChanges({ device, now }: { device: PairedDevice; now: number }) {
                 {state.phase === 'ready' && state.changes.length > 0 && (
                     <>
                         <ul className="devices-list devices-change-list">
-                            {state.changes.map((c, i) => {
+                            {state.changes.map((c) => {
                                 const { what, unknownKind } = changeWhat(c);
                                 return (
-                                    <li key={`${c.at}-${c.kind}-${i}`} className="devices-change">
+                                    <li key={c.id} className="devices-change">
                                         <span><MarkedText text={t('settings.devices.changeRow', { what, when: ago(c.at, now) })} /></span>
                                         {unknownKind && <span className="settings-hint devices-change-kind"><bdi dir="ltr">{unknownKind}</bdi></span>}
                                     </li>

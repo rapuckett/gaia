@@ -535,9 +535,9 @@ export const DEVICE_STATES: Record<string, { status: Record<string, unknown>; de
 export const IPAD_CHANGES = {
     total: 3,
     changes: [
-        { kind: 'providerKeySet', params: { provider: 'OpenAI' }, at: AT_ISO(12) },
-        { kind: 'connectorGrant', params: { agent: 'GAIA', connector: 'Google Calendar' }, at: AT_ISO(300) },
-        { kind: 'teleportCat', params: {}, at: AT_ISO(2000) },
+        { id: 'c1', kind: 'providerKeySet', params: { provider: 'OpenAI' }, at: AT_ISO(12) },
+        { id: 'c2', kind: 'connectorGrant', params: { agent: 'GAIA', connector: 'Google Calendar' }, at: AT_ISO(300) },
+        { id: 'c3', kind: 'teleportCat', params: {}, at: AT_ISO(2000) },
     ],
 };
 

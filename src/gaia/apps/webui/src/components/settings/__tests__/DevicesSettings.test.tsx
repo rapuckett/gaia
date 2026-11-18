@@ -140,8 +140,8 @@ describe('DevicesSettings', () => {
         const at = new Date(Date.now() - 5 * 60_000).toISOString();
         replies['GET /devices'] = { body: { devices: [PAIRED] } };
         replies['GET /devices/d1/changes'] = { body: { total: 2, changes: [
-            { kind: 'providerKeySet', params: { provider: 'OpenAI' }, at },
-            { kind: 'teleportCat', params: {}, at },
+            { id: 'c1', kind: 'providerKeySet', params: { provider: 'OpenAI' }, at },
+            { id: 'c2', kind: 'teleportCat', params: {}, at },
         ] } };
         render(<DevicesSettings />);
         fireEvent.click(await screen.findByText('Changes made from this device (2)'));
