@@ -3262,6 +3262,7 @@ const messages: Messages = {
     'settings.key.kept': 'تم الاتصال. سيُحتفظ بالمفتاح للمرة القادمة.',
     'settings.key.connectedDone': 'تم الاتصال.',
     'settings.key.cleared': 'مُسح المفتاح هنا وللجلسات القادمة. يبقى مفتاح البيئة فعّالًا إن كان مضبوطًا.',
+    'settings.key.gatewayInsecureHttp': 'يجب أن يبدأ عنوان بوابة AMD بـ {scheme}. غيّره على الكمبيوتر الذي يشغّل GAIA، ثم اتصل مرة أخرى.',
 
     'download.chip': 'جارٍ التنزيل {done} من {count} · {pct}%',
     'download.chipFailed': 'فشل أحد التنزيلات',

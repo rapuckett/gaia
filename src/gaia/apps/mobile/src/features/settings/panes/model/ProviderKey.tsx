@@ -73,6 +73,10 @@ export function ProviderKey({ provider, connected }: { provider: ProviderRow; co
             setOutcome({ tone: 'locked', detail: err.detail || undefined });
             return;
         }
+        if (err instanceof GaiaApiError && err.status === 422 && err.body?.code === 'gateway_insecure_http') {
+            setOutcome({ tone: 'danger', text: t('settings.key.gatewayInsecureHttp', { scheme: ltr('https://') }), detail: err.detail || undefined });
+            return;
+        }
         if (err instanceof GaiaApiError && err.status === 422) {
             setOutcome({ tone: 'danger', text: t('mobileApp.settings.key.rejected', { name: ltr(name) }), detail: err.detail || undefined });
             return;

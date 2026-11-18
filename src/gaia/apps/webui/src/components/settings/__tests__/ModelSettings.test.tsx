@@ -8,6 +8,7 @@ import { ModelSettings } from '../ModelSettings';
 import { useModelStore } from '../../../stores/modelStore';
 import { useChatStore } from '../../../stores/chatStore';
 import * as api from '../../../services/api';
+import { ApiError } from '../../../services/apiErrors';
 import { mockSetupApis } from '../../../test/setupApiMocks';
 import type { ActiveModel, ProviderInfo, ProviderModel } from '../../../types';
 
@@ -98,6 +99,16 @@ describe('ModelSettings provider keys', () => {
         expect(within(card).getByText('Not connected')).toBeInTheDocument();
         fireEvent.click(within(card).getByRole('button', { name: 'Reconnect' }));
         await waitFor(() => expect(mockedApi.connectProviderWaitingForOs).toHaveBeenCalledWith('fireworks', { api_key: undefined }, expect.any(Function), expect.any(Function)));
+    });
+
+    it('a gateway on plain http says to use https on the PC', async () => {
+        withProviders(fireworks({ models_discovered: false, key_source: 'stored', key_hint: 'a1b2' }));
+        mockedApi.connectProviderWaitingForOs.mockRejectedValue(
+            new ApiError('x', 422, 'The AMD Gateway address must start with https://.', null, [], { message: 'm', code: 'gateway_insecure_http' }),
+        );
+        const card = await openFireworks();
+        fireEvent.click(within(card).getByRole('button', { name: 'Reconnect' }));
+        expect(await within(card).findByText(/must start with .*https:\/\/.*Change it on the PC/)).toBeInTheDocument();
     });
 
     it('replaces a saved key only after asking for a new one', async () => {

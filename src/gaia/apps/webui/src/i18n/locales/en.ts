@@ -3262,6 +3262,7 @@ export const enMessages = {
     'settings.key.kept': 'Connected. The key is kept for next time.',
     'settings.key.connectedDone': 'Connected.',
     'settings.key.cleared': 'Key cleared, here and for future sessions. An environment key, if set, stays active.',
+    'settings.key.gatewayInsecureHttp': 'The AMD Gateway address must start with {scheme}. Change it on the PC running GAIA, then connect again.',
 
     'download.chip': 'Downloading {done} of {count} · {pct}%',
     'download.chipFailed': 'A download failed',
