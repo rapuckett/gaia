@@ -3044,15 +3044,18 @@ PC-only.
     Write a troubleshooting report for a bug report: setup's record (its last
     run, the plan and every stage's full log) saved as `setup-report.json` in
     GAIA's home, bundled with GAIA's logs and a system snapshot by `gaia
-    diagnostics`, with secret environment variables and secrets in the logs redacted. Returns `{"name", "path", "size_bytes"}`.
-    **500** naming the cause when the bundle can't be written. PC-only, as the
-    logs are: **403** from mobile access, a paired device or another computer.
+    diagnostics`, with secret environment variables and secrets in the logs redacted. Returns `{"name", "path", "size_bytes"}`;
+    a paired device gets the file name as `path`. **500** naming the cause when
+    the bundle can't be written. The PC or an allowed paired device, as for the
+    logs: **403** from mobile access, a pending device or another computer. A
+    device writes one report at a time (**409** while its last is being
+    written), and each report is recorded in the audit log naming who asked.
   </Accordion>
 
   <Accordion title="GET /api/setup/report/{name}">
     The report `POST /api/setup/report` wrote, as `application/gzip`. Only a
     `diagnostics-<YYYYMMDD>-<HHMMSS>.tgz` in GAIA's home is served; anything
-    else is **404**. PC-only, like `POST`.
+    else is **404**. The same callers as `POST`.
   </Accordion>
 
   <Accordion title="POST /api/setup/models/skip">
@@ -3271,7 +3274,10 @@ All three routes need the `X-Gaia-UI: 1` header (**403** without it).
 
 GAIA's logs and the model server's, for the log viewer. Every line is redacted
 before it is sent (API keys, bearer tokens and similar). Both routes need the
-`X-Gaia-UI: 1` header and answer the PC only (**403** from mobile access, a paired device or another computer).
+`X-Gaia-UI: 1` header and answer the PC or a paired device it allowed (**403**
+from mobile access, a pending device or another computer). A device picks a log
+by the names `GET /api/logs` lists, never a path, and sees only file names in
+`path` and `log_path`.
 
 <AccordionGroup>
   <Accordion title="GET /api/logs">
@@ -3691,8 +3697,8 @@ Every route is in one class, pinned by `tests/unit/chat/ui/test_route_access.py`
 
 | Class | Who | Routes |
 |---|---|---|
-| PC-only | `pc` | Tunnel start and stop, a provider's gateway address and key header, the model-server target, logs, messaging, GPU memory apply and revert, the default full-access setting, connector browser sign-in (`authorize`) and enable, an agent's connector grant and activations, `POST /v1/connections/{provider}`, skill and agent installs, `POST /api/files/open`, `POST /api/setup/npu/memlock-fix`, the troubleshooting report, the memory profile scan and its commits, re-collecting system context (`reinitialize`, `refresh-system-context`), the eval-only routes, `GET /api/connectors/_debug`, and every other [paired devices](#paired-devices) route |
-| Setup | `pc`, or an allowed device | Setup's changes (see [Setup](#setup)), provider keys (entering one, removing one, retrying the credential store), `POST /api/system/download-model`, `PUT /api/system/model-server/backend`, a device-code sign-in (`POST /api/connectors/{connector_id}/authorize-device`, for a connector with `supports_device_code` only), connector setup and its check (`POST /api/connectors/{connector_id}/configure` without a browser sign-in, `POST /api/connectors/{connector_id}/test`), Automations, and changes to schedules and goals |
+| PC-only | `pc` | Tunnel start and stop, a provider's gateway address and key header, the model-server target, messaging, GPU memory apply and revert, the default full-access setting, connector browser sign-in (`authorize`) and enable, an agent's connector grant and activations, `POST /v1/connections/{provider}`, skill and agent installs, `POST /api/files/open`, `POST /api/setup/npu/memlock-fix`, the memory profile scan and its commits, re-collecting system context (`reinitialize`, `refresh-system-context`), the eval-only routes, `GET /api/connectors/_debug`, and every other [paired devices](#paired-devices) route |
+| Setup | `pc`, or an allowed device | Setup's changes (see [Setup](#setup)), provider keys (entering one, removing one, retrying the credential store), `POST /api/system/download-model`, `PUT /api/system/model-server/backend`, a device-code sign-in (`POST /api/connectors/{connector_id}/authorize-device`, for a connector with `supports_device_code` only), connector setup and its check (`POST /api/connectors/{connector_id}/configure` without a browser sign-in, `POST /api/connectors/{connector_id}/test`), Automations, changes to schedules and goals, the logs, and the troubleshooting report |
 | Not from a device | `pc`, `tunnel` | `GET /api/providers`, which can register a provider |
 | Pairing | a device on the listener, with no token | `POST /api/devices/pair` |
 | Its own routes | an allowed device | `GET /api/devices/me/routes` |

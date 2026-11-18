@@ -4,47 +4,87 @@
 """GAIA's logs and the model server's, for the Agent UI's log viewer.
 
 Every line is redacted before it is sent (:mod:`gaia.log_reader`). Lines can
-still quote a conversation, so the routes need the UI header and answer only
-the PC running GAIA.
+still quote a conversation, so the routes need the UI header and answer the PC
+running GAIA or a paired device it allowed, never mobile access. A device picks
+a log by the names GAIA lists and sees file names, never where they are on the PC.
 """
 
 from __future__ import annotations
 
 import asyncio
-from typing import Any, Dict, Optional
+from pathlib import PurePath
+from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from ..models import LogReadResponse, LogSourcesResponse
-from ..security import require_local_pc, require_ui_header
+from ..security import allowed_device, require_pc_or_allowed_device, require_ui_header
 
 router = APIRouter(tags=["logs"])
+
+_LOG_ACCESS = [Depends(require_ui_header), Depends(require_pc_or_allowed_device)]
+
+
+def _file_name(path: str) -> str:
+    return PurePath(path).name
+
+
+def _for_device(read: Dict[str, Any]) -> Dict[str, Any]:
+    """*read* with the log's place on the PC reduced to its file name."""
+    full = read.get("log_path")
+    if full:
+        name = _file_name(full)
+        read["log_path"] = name
+        if read.get("detail"):
+            read["detail"] = read["detail"].replace(full, name)
+    return read
+
+
+def _sources_for_device(sources: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    for source in sources:
+        for f in source["files"]:
+            f["path"] = _file_name(f["path"])
+    return sources
 
 
 @router.get(
     "/api/logs",
     response_model=LogSourcesResponse,
-    dependencies=[Depends(require_ui_header), Depends(require_local_pc)],
+    dependencies=_LOG_ACCESS,
 )
-def list_logs() -> Dict[str, Any]:
+def list_logs(request: Request) -> Dict[str, Any]:
     """Each log source and the files it has now."""
     from gaia.log_sources import describe_sources
 
-    return {"sources": describe_sources()}
+    sources = describe_sources()
+    if allowed_device(request) is not None:
+        sources = _sources_for_device(sources)
+    return {"sources": sources}
 
 
 @router.get(
     "/api/logs/{source}",
     response_model=LogReadResponse,
-    dependencies=[Depends(require_ui_header), Depends(require_local_pc)],
+    dependencies=_LOG_ACCESS,
 )
 async def read_log(
+    request: Request,
     source: str,
     file: Optional[str] = Query(None, max_length=200),
     after: Optional[str] = Query(None, max_length=32),
     limit: int = Query(1000, ge=1, le=5000),
 ) -> Dict[str, Any]:
-    """A log's last lines, or only those after *after* (a cursor it returned)."""
+    """A log's last lines, or only those after *after* (a cursor it returned).
+
+    *source* and *file* are names GAIA lists; a path is a **404**.
+    """
+    result = await _read(source, file, after, limit)
+    return _for_device(result) if allowed_device(request) is not None else result
+
+
+async def _read(
+    source: str, file: Optional[str], after: Optional[str], limit: int
+) -> Dict[str, Any]:
     from gaia.config import GaiaConfigError
     from gaia.llm import lemonade_choice as choice
     from gaia.llm.lemonade_logs import known_secrets, read_lemonade_log

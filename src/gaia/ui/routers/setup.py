@@ -9,9 +9,10 @@ with the same ``gaia init --check``, so they can never disagree.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Literal, Optional, Union
+import threading
+from typing import Any, Dict, List, Literal, Optional, Set, Union
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
@@ -31,7 +32,14 @@ from .. import setup_plan as plan_api
 from ..database import ChatDatabase
 from ..dependencies import get_db
 from ..models import WireModel
-from ..security import require_local_pc, require_pc_or_device, require_ui_header
+from ..security import (
+    allowed_device,
+    audit_approval,
+    require_local_pc,
+    require_pc_or_allowed_device,
+    require_pc_or_device,
+    require_ui_header,
+)
 from ..setup_plan import (
     CantRunHere,
     ServerNotRunning,
@@ -580,38 +588,71 @@ def setup_vision_model(body: VisionModelRequest) -> Dict[str, Any]:
         raise _plan_error(e, f"{body.model_id} can't read images.") from e
 
 
-#: The report bundles every GAIA log, which only the PC may read.
-_AT_THIS_PC = [Depends(require_ui_header), Depends(require_local_pc)]
+#: The report bundles every GAIA log, redacted: the PC or an allowed device.
+_REPORT_ACCESS = [Depends(require_ui_header), Depends(require_pc_or_allowed_device)]
+
+#: Devices with a report being written; one at a time each.
+_reports_building: Set[str] = set()
+_reports_lock = threading.Lock()
 
 
 @router.post(
     "/api/setup/report",
-    dependencies=_AT_THIS_PC,
+    dependencies=_REPORT_ACCESS,
     response_model=SetupReportResponse,
     response_model_exclude_unset=True,
 )
-def setup_report() -> Dict[str, Any]:
-    """Bundle setup's record, every GAIA log and a system snapshot for a bug report."""
-    record = runner.report()
+def setup_report(request: Request) -> Dict[str, Any]:
+    """Bundle setup's record, every GAIA log and a system snapshot for a bug report.
+
+    A paired device gets the file name as ``path``, never where it is on the PC,
+    and may build one report at a time (**409** while one is being written).
+    """
+    device = allowed_device(request)
+    device_id = device.device_id if device else None
+    if device_id is not None:
+        with _reports_lock:
+            if device_id in _reports_building:
+                raise HTTPException(
+                    status_code=409,
+                    detail="A troubleshooting report is already being written for "
+                    "this device. Wait for it to finish, then try again.",
+                )
+            _reports_building.add(device_id)
     try:
-        record["plan"] = build_plan()
-    except SetupPlanError as e:
-        # The report is for exactly this: say why the plan couldn't be read.
-        record["plan_error"] = str(e)
-    try:
-        path = write_report(record)
-    except SetupError as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
-    return {"name": path.name, "path": str(path), "size_bytes": path.stat().st_size}
+        audit_approval(request, "troubleshooting report requested")
+        record = runner.report()
+        try:
+            record["plan"] = build_plan()
+        except SetupPlanError as e:
+            # The report is for exactly this: say why the plan couldn't be read.
+            record["plan_error"] = str(e)
+        try:
+            path = write_report(record)
+        except SetupError as e:
+            detail = str(e)
+            if device:
+                from gaia.home import gaia_home
+
+                detail = detail.replace(str(gaia_home()), "GAIA's folder")
+            raise HTTPException(status_code=500, detail=detail) from e
+    finally:
+        if device_id is not None:
+            with _reports_lock:
+                _reports_building.discard(device_id)
+    shown = path.name if device else str(path)
+    return {"name": path.name, "path": shown, "size_bytes": path.stat().st_size}
 
 
-@router.get("/api/setup/report/{name}", dependencies=_AT_THIS_PC)
+@router.get("/api/setup/report/{name}", dependencies=_REPORT_ACCESS)
 def setup_report_file(name: str) -> FileResponse:
     """A troubleshooting report written by ``POST /api/setup/report``."""
     from gaia.home import gaia_home
 
+    if not REPORT_NAME_RE.fullmatch(name):
+        raise HTTPException(status_code=404, detail=f"No report named {name}.")
     path = gaia_home() / name
-    if not REPORT_NAME_RE.fullmatch(name) or not path.is_file():
+    if not path.is_file():
         raise HTTPException(status_code=404, detail=f"No report named {name}.")
     return FileResponse(path, media_type="application/gzip", filename=name)
 
