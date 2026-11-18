@@ -16,10 +16,12 @@ export interface HScrollProps {
     testID?: string;
     /** Shows a chevron at the far edge while there is more to scroll to. */
     hint?: boolean;
+    /** Fill of the hint tab: the surface the scroller sits on. Defaults to the secondary background. */
+    hintBackground?: string;
 }
 
 /** Content wider than its box scrolls sideways inside it and never widens the page. */
-export function HScroll({ children, dir, testID, hint = false }: HScrollProps) {
+export function HScroll({ children, dir, testID, hint = false, hintBackground }: HScrollProps) {
     const { colors, radius } = useTheme();
     const uiDir = useDirection();
     const [box, setBox] = useState({ view: 0, content: 0 });
@@ -54,12 +56,11 @@ export function HScroll({ children, dir, testID, hint = false }: HScrollProps) {
                         bottom: 0,
                         justifyContent: 'center',
                         paddingHorizontal: 2,
-                        backgroundColor: colors.bgSecondary,
+                        backgroundColor: hintBackground ?? colors.bgSecondary,
                         borderStartWidth: 1,
                         borderColor: colors.border,
                         borderTopStartRadius: radius.xs,
                         borderBottomStartRadius: radius.xs,
-                        opacity: 0.92,
                     }}
                 >
                     <View style={flip ? { transform: [{ scaleX: -1 }] } : undefined}>

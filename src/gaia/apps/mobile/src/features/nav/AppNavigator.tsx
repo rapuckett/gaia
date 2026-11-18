@@ -7,7 +7,7 @@ import { createContext, useContext } from 'react';
 import { Platform, useWindowDimensions } from 'react-native';
 
 import { devGalleryEnabled } from '@/features/dev/devGallery';
-import { useDirection } from '@/i18n/useT';
+import { useDirection, useT } from '@/i18n/useT';
 import { useConnectionStore } from '@/state/connection';
 import { useLargeText } from '@/ui/theme/a11y';
 
@@ -33,6 +33,7 @@ export function AppNavigator() {
     const route = usePathname();
     const { width } = useWindowDimensions();
     const largeText = useLargeText();
+    const t = useT();
     const dir = useDirection();
     const webRtl = Platform.OS === 'web' && dir === 'rtl';
     const drawer = paired || (route.startsWith('/dev/') && devGalleryEnabled());
@@ -52,7 +53,7 @@ export function AppNavigator() {
                 </AppErrorBoundary>
             )}
             backBehavior="initialRoute"
-            screenOptions={drawerScreenOptions({ width, largeText, webRtl })}
+            screenOptions={{ ...drawerScreenOptions({ width, largeText, webRtl }), overlayAccessibilityLabel: t('mobileApp.nav.closeDrawer') }}
         >
             {ROUTES.map((name) => (
                 <Drawer.Screen key={name} name={name} options={FULL_SCREEN_ROUTES.includes(name) ? fullScreenOptions(webRtl) : undefined} />

@@ -42,7 +42,7 @@ jest.mock('@/ui', () => {
         Stack: Pass,
         Surface: Pass,
         Text: RNText,
-        useTheme: () => ({ space: { xl: 24 } }),
+        useTheme: () => ({ space: { xl: 24 }, colors: {} }),
     };
 });
 jest.mock('@/ui/icons', () => ({ ShieldQuestion: () => null }));
