@@ -709,6 +709,10 @@ def test_memory_profile_scan_is_pc_only(setup, monkeypatch, method, path, body):
 
     monkeypatch.setattr(discovery, "SystemDiscovery", _Discovery)
     monkeypatch.setattr(memory, "_get_store", _Store)
+    # System discovery is on, so only who asks decides.
+    monkeypatch.setattr(
+        "gaia.agents.base.memory._system_context_is_enabled", lambda: True
+    )
     ui = {"X-Gaia-UI": "1"}
     for caller in ("tunnel", "device"):
         resp = clients[caller].request(method, path, json=body, headers=ui)
