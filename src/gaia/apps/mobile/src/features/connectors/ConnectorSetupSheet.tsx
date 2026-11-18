@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: MIT
 
 import { useEffect, useRef, useState, type MutableRefObject } from 'react';
-import { Platform } from 'react-native';
 
 import type { ConnectorRow } from '@/api/client.types';
 import { useConfigureConnector } from '@/data';
@@ -216,8 +215,7 @@ function SetupInput({
                 placeholder={placeholder}
                 disabled={disabled}
                 secret={secret}
-                // Android keyboards learn and suggest typed words unless the field says it is a password.
-                keyboardType={!secret && Platform.OS === 'android' ? 'visible-password' : undefined}
+                literal={!secret}
                 testID={testID}
             />
             {help ? <Markdown text={help} variant="formatting" /> : null}
