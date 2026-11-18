@@ -5,7 +5,9 @@ import { useEffect, useState } from 'react';
 
 import { useActiveModel, useLocalModelStatus, useSelectModel } from '@/data';
 import { pillText } from '@/features/model/modelStatusText';
-import { useT } from '@/i18n/useT';
+import { isolate } from '@webui/i18n/registry';
+
+import { useDirection, useT } from '@/i18n/useT';
 import { Cloud, Cpu, Download, TriangleAlert } from '@/ui/icons';
 
 import { ControlChip } from './ControlChip';
@@ -14,6 +16,7 @@ import { ModelMenu, type SwitchNotice } from './ModelMenu';
 /** The model the next message runs on; tap to switch, download or see what only the PC can change. */
 export function ModelChip({ turnRunning = false, initialOpen = false, initialInfoRow, forceSwitching, initialSwitchError }: { turnRunning?: boolean; initialOpen?: boolean; initialInfoRow?: string; forceSwitching?: string; initialSwitchError?: string }) {
     const t = useT();
+    const rtl = useDirection() === 'rtl';
     const [open, setOpen] = useState(initialOpen);
     // A model picked while a reply runs is used from the next message.
     const [queued, setQueued] = useState<string | null>(null);
@@ -28,6 +31,8 @@ export function ModelChip({ turnRunning = false, initialOpen = false, initialInf
     }, [turnRunning, queued, mutate]);
     const pill = pillText(data, t);
     const label = pill.name ?? t.bare('modelStatus.fallbackName');
+    // Each model id is its own LTR island; the arrow follows the UI direction, and the fallback word follows the UI language.
+    const queuedLabel = queued ? `${pill.name ? isolate(label, 'ltr') : label} ${rtl ? '←' : '→'} ${isolate(queued, 'ltr')}` : label;
     // As the desktop's chip: the provider for a cloud model, "Local" where the PC says a chat runs on it.
     const place = active?.remote ? active.provider_name || null : active?.inference_remote === false ? t.bare('modelStatus.local') : null;
     const notDownloaded = active?.downloaded === false;
@@ -46,14 +51,14 @@ export function ModelChip({ turnRunning = false, initialOpen = false, initialInf
     return (
         <>
             <ControlChip
-                label={queued ? `${label} → ${queued}` : label}
+                label={queuedLabel}
                 place={queued ? null : place}
                 icon={switchError ? TriangleAlert : notDownloaded ? Download : pill.remote ? Cloud : Cpu}
                 warning={warning}
                 accessibilityHint={hint}
                 menu
                 chip="model"
-                value="ltr"
+                value={pill.name && !queued ? 'ltr' : undefined}
                 onPress={() => setOpen(true)}
                 accessibilityLabel={pill.aria}
                 testID="model-chip"

@@ -44,7 +44,7 @@ export function ControlChip({ label, icon, onPress, menu, warning, chip, disable
     const belowFloor = chip === 'model' && modelWidth !== null && modelWidth < MODEL_FLOOR_WIDTH;
     const iconOnly = collapsed || belowFloor;
     // One line, so an ellipsis cuts the place before the name; each stays one island in Arabic.
-    const text = (placed: boolean) => (placed && place ? [isolate(label, 'ltr'), isolateUnit(place)].join(' · ') : label);
+    const text = (placed: boolean) => (placed && place ? [value === 'ltr' ? isolate(label, 'ltr') : label, isolateUnit(place)].join(' · ') : label);
     const content = (compact: boolean, placed = false) => (
         <Row gap="xs">
             <View style={{ flexShrink: 0 }}>
