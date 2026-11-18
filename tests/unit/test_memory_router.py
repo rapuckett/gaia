@@ -1907,6 +1907,60 @@ class TestClearAllMemory:
         assert data["conversations"] == 0
 
 
+@pytest.fixture
+def discovery_on(monkeypatch):
+    """The user has turned System discovery on, so the profile scan may read the PC."""
+    monkeypatch.setattr(
+        "gaia.agents.base.memory._system_context_is_enabled", lambda: True
+    )
+
+
+class TestProfileScanNeedsConsent:
+    """Without System discovery on, the profile scan reads nothing on the PC."""
+
+    @pytest.mark.parametrize(
+        "path", ["/api/memory/stream-discovery", "/api/memory/stream-inference"]
+    )
+    def test_refuses_and_says_how_to_turn_it_on(
+        self, client, tmp_path, monkeypatch, path
+    ):
+        from gaia.agents.base import discovery
+        from gaia.agents.base import memory as memory_module
+
+        monkeypatch.setattr(
+            memory_module, "_memory_settings_path", lambda: tmp_path / "none.json"
+        )
+        touched = []
+
+        class _Discovery:
+            def __init__(self):
+                touched.append("scan")
+
+            def __getattr__(self, name):
+                touched.append(name)
+                return lambda *a, **k: []
+
+        monkeypatch.setattr(discovery, "SystemDiscovery", _Discovery)
+        resp = client.get(path)
+
+        assert resp.status_code == 200
+        events = [
+            json.loads(line[len("data: ") :])
+            for line in resp.text.splitlines()
+            if line.startswith("data: ")
+        ]
+        assert events == [
+            {
+                "type": "error",
+                "source": "consent",
+                "message": memory_router_mod.NO_DISCOVERY_CONSENT,
+            },
+            {"type": "done", "total": 0},
+        ]
+        assert touched == []
+
+
+@pytest.mark.usefixtures("discovery_on")
 class TestStreamDiscoveryPlatformReporting:
     """GET /api/memory/stream-discovery names sources it cannot run (#1956).
 
@@ -2011,6 +2065,7 @@ class TestStreamDiscoveryPlatformReporting:
         assert "linux" in skipped[0]
 
 
+@pytest.mark.usefixtures("discovery_on")
 class TestStreamInferencePlatformReporting:
     """GET /api/memory/stream-inference gates direct scanner calls too (#1956).
 
@@ -2353,6 +2408,7 @@ class TestPrivilegedAdminWriters:
             )
 
 
+@pytest.mark.usefixtures("discovery_on")
 class TestStreamInferenceModel:
     """Profile inference runs on the machine's default local chat model."""
 

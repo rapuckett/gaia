@@ -35,6 +35,7 @@ from gaia.log_reader import (
     read_log_file,
     redact,
     severity_of,
+    stored_secrets,
 )
 from gaia.logger import get_logger
 
@@ -119,35 +120,54 @@ def _stream_lines(entries: List[Dict[str, Any]], secrets: Iterable[str]) -> List
     return out
 
 
-def _known_secrets(api_key: Optional[str]) -> List[str]:
+def _known_secrets(
+    api_key: Optional[str], unreadable: Optional[List[str]] = None
+) -> List[str]:
     from gaia.llm.lemonade_client import _read_embedded_lemonade_state
 
     secrets = [api_key or "", *env_secrets()]
     state = _read_embedded_lemonade_state()
     if state and isinstance(state.get("api_key"), str):
         secrets.append(state["api_key"])
+    stored, failed = stored_secrets()
+    secrets.extend(stored)
+    if failed:
+        log.warning(
+            "Log redaction: saved credentials unreadable: %s", ", ".join(failed)
+        )
+        if unreadable is not None:
+            unreadable.extend(failed)
     return [s.strip() for s in secrets if s and s.strip()]
 
 
 def known_secrets() -> tuple:
-    """GAIA's Lemonade keys and secret env values, and a note if one was unreadable.
+    """Every secret GAIA keeps or was given, and a note if one was unreadable.
 
     A credential store that won't answer, or a config file that won't parse,
     must not hide GAIA's logs: those lines are still redacted by shape, and the
-    note says the saved key wasn't.
+    note says which saved secrets weren't.
     """
     from gaia.config import GaiaConfigError
     from gaia.llm.lemonade_choice import LemonadeChoiceError
     from gaia.llm.lemonade_client import resolve_lemonade_api_key
 
+    unreadable: List[str] = []
+    notes = []
     try:
-        return _known_secrets(resolve_lemonade_api_key(None)), None
+        secrets = _known_secrets(resolve_lemonade_api_key(None), unreadable)
     except (LemonadeChoiceError, GaiaConfigError) as e:
         log.warning("Log viewer: saved Lemonade key unreadable: %s", e)
-        return _known_secrets(None), (
+        secrets = _known_secrets(None, unreadable)
+        notes.append(
             f"The saved Lemonade key could not be read ({e}), so it is "
             "removed only where it looks like a key."
         )
+    if unreadable:
+        notes.append(
+            f"Some saved credentials could not be read ({', '.join(unreadable)}), "
+            "so they are removed only where they look like a key."
+        )
+    return secrets, " ".join(notes) or None
 
 
 async def read_lemonade_log(

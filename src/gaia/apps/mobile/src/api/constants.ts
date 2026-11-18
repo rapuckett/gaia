@@ -150,9 +150,11 @@ export const ENDPOINTS = {
     connectorActivation: '/api/connectors/{connector_id}/activations/{agent_id:path}',
     connectorActivations: '/api/connectors/{connector_id}/activations',
     connectorAuthorizeDevice: '/api/connectors/{connector_id}/authorize-device',
+    connectorConfigure: '/api/connectors/{connector_id}/configure',
     connectorDisable: '/api/connectors/{connector_id}/disable',
     connectorGrant: '/api/connectors/{connector_id}/grants/{agent_id:path}',
     connectorGrants: '/api/connectors/{connector_id}/grants',
+    connectorTest: '/api/connectors/{connector_id}/test',
     connectors: '/api/connectors',
     connectorsAgentMcps: '/api/connectors/agent-mcps',
     systemDownloadModel: '/api/system/download-model',
@@ -199,6 +201,10 @@ export function connectorAuthorizeDevicePath(connectorId: string): string {
     return ENDPOINTS.connectorAuthorizeDevice.replace('{connector_id}', encodeURIComponent(connectorId));
 }
 
+export function connectorConfigurePath(connectorId: string): string {
+    return ENDPOINTS.connectorConfigure.replace('{connector_id}', encodeURIComponent(connectorId));
+}
+
 export function connectorDisablePath(connectorId: string): string {
     return ENDPOINTS.connectorDisable.replace('{connector_id}', encodeURIComponent(connectorId));
 }
@@ -215,6 +221,10 @@ export function connectorGrantPath(connectorId: string, agentId: string): string
 
 export function connectorGrantsPath(connectorId: string): string {
     return ENDPOINTS.connectorGrants.replace('{connector_id}', encodeURIComponent(connectorId));
+}
+
+export function connectorTestPath(connectorId: string): string {
+    return ENDPOINTS.connectorTest.replace('{connector_id}', encodeURIComponent(connectorId));
 }
 
 export function goalPath(goalId: string, action?: 'approve' | 'cancel' | 'reject'): string {

@@ -2473,7 +2473,10 @@ The Memory endpoints expose the agent's persistent knowledge system. See the [Me
     SSE stream of the local system-discovery scan (git identity, installed
     apps, recent file types, shell config, …) that seeds first-run memory.
     PC-only: the scan reads the PC's files and browser history, so a request
-    from mobile access, a paired device or another computer is a `403`.
+    from mobile access, a paired device or another computer is a `403`. It
+    runs only with `system_discovery_consent` on: otherwise it reads nothing
+    and sends one `error` event (`source: "consent"`) saying how to turn it
+    on, then `done` with a total of 0. `stream-inference` does the same.
   </Accordion>
 
   <Accordion title="GET /api/memory/stream-inference">
@@ -2583,15 +2586,25 @@ OAuth and MCP-server connections for the Settings page and per-agent grants
 
   <Accordion title="POST /api/connectors/{connector_id}/configure">
     Store credentials for a connector — for an `mcp_server` connector this
-    also writes `~/.gaia/mcp_servers.json`. PC-only (**403** from mobile access, a paired device or another computer).
+    also writes `~/.gaia/mcp_servers.json`. The PC may call it, and so may a
+    paired device the PC allowed: a device may save an `mcp_server`
+    connector's keys, or an OAuth client with `save_only: true`, but it can't
+    start a browser sign-in or send `grant_agents` (**403**). A device's call is
+    written to the audit log, and its response never carries a secret; a server
+    failure tells it only to look on the PC. Mobile access and other computers
+    get a **403**.
   </Accordion>
 
   <Accordion title="POST /api/connectors/{connector_id}/test">
     Run the connector's health check and return `{"ok": bool, "detail": str}`.
     An OAuth connector refreshes its token. An `mcp_server` connector starts
     the server once and reports whether it started; a server that only checks
-    its key on a tool call still passes with a bad key. PC-only: the check can
-    raise an OS key-store prompt on the PC.
+    its key on a tool call still passes with a bad key. The PC may call it, and
+    so may a paired device the PC allowed; the check can raise an OS key-store
+    prompt on the PC. A failed check's `detail` (server output, PC paths) goes
+    only to the PC: a device, and the `connector.tested` event, get a sentence
+    that says to run the check on the PC, except for `reason` `timeout` or
+    `disabled`. Mobile access and other computers get a **403**.
   </Accordion>
 
   <Accordion title="DELETE /api/connectors/{connector_id}">
@@ -2601,7 +2614,7 @@ OAuth and MCP-server connections for the Settings page and per-agent grants
 
   <Accordion title="POST /api/connectors/{connector_id}/enable">
     Re-enable a previously-disabled `mcp_server` connector. Its tools
-    materialize live. PC-only, like `configure`.
+    materialize live. PC-only (**403** from mobile access, a paired device or another computer).
   </Accordion>
 
   <Accordion title="POST /api/connectors/{connector_id}/disable">
@@ -2611,7 +2624,9 @@ OAuth and MCP-server connections for the Settings page and per-agent grants
 
   <Accordion title="POST /api/connectors/{connector_id}/authorize">
     Start an OAuth PKCE flow. Returns `{flow_id, authorization_url}` — the UI
-    opens the URL and polls for completion. PC-only, like `configure`.
+    opens the URL and polls for completion. PC-only: the browser's callback can
+    only finish on the PC (**403** from mobile access, a paired device or
+    another computer).
   </Accordion>
 
   <Accordion title="POST /api/connectors/{connector_id}/authorize-device">
@@ -3676,13 +3691,13 @@ Every route is in one class, pinned by `tests/unit/chat/ui/test_route_access.py`
 
 | Class | Who | Routes |
 |---|---|---|
-| PC-only | `pc` | Tunnel start and stop, a provider's gateway address and key header, the model-server target, logs, messaging, GPU memory apply and revert, the default full-access setting, connector configure and authorize, an agent's connector grant and activations, `POST /v1/connections/{provider}`, skill and agent installs, `POST /api/files/open`, `POST /api/setup/npu/memlock-fix`, the troubleshooting report, the memory profile scan and its commits, re-collecting system context (`reinitialize`, `refresh-system-context`), the eval-only routes, `GET /api/connectors/_debug`, and every other [paired devices](#paired-devices) route |
-| Setup | `pc`, or an allowed device | Setup's changes (see [Setup](#setup)), provider keys (entering one, removing one, retrying the credential store), `POST /api/system/download-model`, `PUT /api/system/model-server/backend`, and a device-code sign-in (`POST /api/connectors/{connector_id}/authorize-device`, for a connector with `supports_device_code` only) |
+| PC-only | `pc` | Tunnel start and stop, a provider's gateway address and key header, the model-server target, logs, messaging, GPU memory apply and revert, the default full-access setting, connector browser sign-in (`authorize`) and enable, an agent's connector grant and activations, `POST /v1/connections/{provider}`, skill and agent installs, `POST /api/files/open`, `POST /api/setup/npu/memlock-fix`, the troubleshooting report, the memory profile scan and its commits, re-collecting system context (`reinitialize`, `refresh-system-context`), the eval-only routes, `GET /api/connectors/_debug`, and every other [paired devices](#paired-devices) route |
+| Setup | `pc`, or an allowed device | Setup's changes (see [Setup](#setup)), provider keys (entering one, removing one, retrying the credential store), `POST /api/system/download-model`, `PUT /api/system/model-server/backend`, a device-code sign-in (`POST /api/connectors/{connector_id}/authorize-device`, for a connector with `supports_device_code` only), connector setup and its check (`POST /api/connectors/{connector_id}/configure` without a browser sign-in, `POST /api/connectors/{connector_id}/test`), Automations, and changes to schedules and goals |
 | Not from a device | `pc`, `tunnel` | `GET /api/providers`, which can register a provider |
 | Pairing | a device on the listener, with no token | `POST /api/devices/pair` |
 | Its own routes | an allowed device | `GET /api/devices/me/routes` |
 | Unpairing itself | a device, pending or allowed | `DELETE /api/devices/me` |
-| Everything else | `pc`, `tunnel`, an allowed device | Chats, documents, memory, goals, schedules and the rest |
+| Everything else | `pc`, `tunnel`, an allowed device | Chats, documents, memory, reading goals and schedules, and the rest |
 
 A refused request is a **403** that says to do it on the PC.
 
