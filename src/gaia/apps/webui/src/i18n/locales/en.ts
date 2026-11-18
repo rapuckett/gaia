@@ -4159,6 +4159,7 @@ export const enMessages = {
     'mobileApp.setup.redownload.body': '{name} downloaded but didn’t load. GAIA deletes the copy on your PC and downloads it again {size}.',
     'mobileApp.settings.pcOnly': 'Change this on the PC running GAIA.',
     'mobileApp.settings.key.sessionOnly': 'Connected for this session only. The key could not be kept.',
+    'mobileApp.settings.key.rejected': "{name} didn't accept that key.",
     'mobileApp.settings.on': 'On',
     'mobileApp.settings.off': 'Off',
     'mobileApp.settings.model.removeDownloadBody': 'Its downloaded files are deleted from your PC. You can add it again later.',

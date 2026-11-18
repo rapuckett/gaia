@@ -73,6 +73,10 @@ export function ProviderKey({ provider, connected }: { provider: ProviderRow; co
             setOutcome({ tone: 'locked', detail: err.detail || undefined });
             return;
         }
+        if (err instanceof GaiaApiError && err.status === 422) {
+            setOutcome({ tone: 'danger', text: t('mobileApp.settings.key.rejected', { name: ltr(name) }), detail: err.detail || undefined });
+            return;
+        }
         const f = describeHttpFailure(err, t);
         setOutcome({ tone: 'danger', text: f.text, detail: f.detail });
     };
