@@ -104,6 +104,7 @@ export function ContextMeter({ usage, unavailable, onDetails, initialOpen = fals
                     accessibilityHint={usage ? hint : unavailable ?? undefined}
                     aria-expanded={open}
                     aria-haspopup="dialog"
+                    inline
                     testID="context-meter"
                 >
                     {reading(barless)}
