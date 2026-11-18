@@ -767,6 +767,8 @@ export interface GaiaClient {
     detectLemonade(options?: RequestOptions): Promise<{ found: LemonadeFound | null; unchecked?: string[] }>;
     /** Registers the provider; `apiKey` is a key typed on this phone, sent only in the body. Without one the PC keeps the key it holds. The PC answers 403 to a typed key it won't take from a phone. */
     connectProvider(provider: string, options?: RequestOptions & { apiKey?: string }): Promise<ProviderConnected>;
+    /** Clears the provider's saved key from GAIA and the PC's OS credential store. */
+    forgetProviderKey(provider: string, options?: RequestOptions): Promise<{ removed: boolean }>;
     /** After the PC's OS key-store unlock prompt was closed: lets GAIA ask once more, on the PC. */
     retryKeyStore(options?: RequestOptions): Promise<{ retrying: boolean }>;
     /** A cloud provider's list prices, ranked; the first row is the model GAIA uses unless another is picked. */

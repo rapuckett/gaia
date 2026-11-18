@@ -69,6 +69,7 @@ export const ENDPOINTS = {
     modelServer: '/api/system/model-server',
     modelServerBackend: '/api/system/model-server/backend',
     providerConnect: '/api/providers/{provider}/connect',
+    providerKey: '/api/providers/{provider}/key',
     providerModels: '/api/providers/{provider}/models',
     providersActive: '/api/providers/active',
     providersKeyStoreRetry: '/api/providers/key-store/retry',
@@ -295,6 +296,10 @@ export function chatPermissionsPath(sessionId: string): string {
 
 export function providerConnectPath(provider: string): string {
     return ENDPOINTS.providerConnect.replace('{provider}', encodeURIComponent(provider));
+}
+
+export function providerKeyPath(provider: string): string {
+    return ENDPOINTS.providerKey.replace('{provider}', encodeURIComponent(provider));
 }
 
 export function chatPermissionGrantsPath(sessionId: string, key?: string): string {

@@ -154,6 +154,7 @@ describe('endpoints', () => {
         memoryUpcoming: ['GET'],
         messagingDiscord: ['GET'],
         providerConnect: ['POST'],
+        providerKey: ['DELETE'],
         providerModels: ['GET'],
         providersActive: ['GET'],
         providersKeyStoreRetry: ['POST'],

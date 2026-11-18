@@ -172,6 +172,16 @@ export function useSendProviderKey() {
     return { send, isPending };
 }
 
+/** `mutate(provider)`: clears the provider's saved key on the PC, then the list is read again. */
+export function useForgetProviderKey() {
+    const client = useGaiaClient();
+    const refresh = useRefreshProviders();
+    return useMutation<{ removed: boolean }, Error, string>({
+        mutationFn: (provider) => requireClient(client).forgetProviderKey(provider),
+        onSettled: refresh,
+    });
+}
+
 /** After the PC's key-store unlock prompt was closed: GAIA asks once more on the PC, then the list is read again. */
 export function useRetryKeyStore() {
     const client = useGaiaClient();

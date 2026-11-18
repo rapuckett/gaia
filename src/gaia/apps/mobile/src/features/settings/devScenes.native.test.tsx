@@ -63,6 +63,8 @@ describeNative('/dev/settings', () => {
         ['model-key-disconnected', 'Reconnect'],
         ['model-key-failed', /rejected the key ••••: 401/],
         ['model-key-pc-only', 'Change this on the PC running GAIA.'],
+        ['model-key-locked', /credential store on the PC running GAIA could not be used/],
+        ['model-key-remove', 'Remove key'],
         ['model-key-replace', 'Save key'],
         ['model-search-empty', 'No models match.'],
         ['model-hf-checking', /Needs 64 GB/],

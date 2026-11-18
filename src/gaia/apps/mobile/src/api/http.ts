@@ -162,6 +162,7 @@ import {
     chatPerformancePath,
     chatPermissionsPath,
     providerConnectPath,
+    providerKeyPath,
     localCustomModelPath,
     providerModelsPath,
     followupOutcomePath,
@@ -1313,6 +1314,10 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             // A blank body keeps the key the PC already holds.
             const body = options?.apiKey ? { api_key: options.apiKey } : {};
             return postJson<ProviderConnected>(providerConnectPath(provider), body, options?.signal);
+        },
+
+        forgetProviderKey(provider, options) {
+            return deleteJson<{ removed: boolean }>(providerKeyPath(provider), options?.signal);
         },
 
         retryKeyStore(options) {

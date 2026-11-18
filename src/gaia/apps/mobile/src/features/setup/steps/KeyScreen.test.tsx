@@ -62,8 +62,8 @@ describe('KeyScreen', () => {
         expect(client.connects).toEqual([]);
 
         const connect = jest.spyOn(client, 'connectProvider');
-        fireEvent.changeText(field, 'fw-setup-test-key-77');
-        fireEvent.press(screen.getByLabelText('Test and connect'));
+        await fireEvent.changeText(field, 'fw-setup-test-key-77');
+        await fireEvent.press(screen.getByLabelText('Test and connect'));
         await waitFor(() => expect(ctx.startedRun).toHaveBeenCalled());
         expect(connect.mock.calls).toEqual([['fireworks', { apiKey: 'fw-setup-test-key-77' }]]);
         expect(screen.getByTestId('key-field').props.value).toBe('');
@@ -74,8 +74,8 @@ describe('KeyScreen', () => {
         const { client, ctx } = await mount([provider({ configured: false })]);
         jest.spyOn(client, 'connectProvider').mockRejectedValue(new GaiaApiError(403, 'Enter provider keys on the PC running GAIA, not over mobile access or from a paired device.'));
         await screen.findByText('Kimi · Default', { exact: false });
-        fireEvent.changeText(screen.getByTestId('key-field'), 'fw-setup-test-key-77');
-        fireEvent.press(screen.getByLabelText('Test and connect'));
+        await fireEvent.changeText(screen.getByTestId('key-field'), 'fw-setup-test-key-77');
+        await fireEvent.press(screen.getByLabelText('Test and connect'));
         expect(await screen.findByTestId('key-pc-only')).toBeTruthy();
         expect(screen.getByTestId('key-field').props).toMatchObject({ value: '', editable: false });
         expect(screen.queryByText(/fw-setup-test-key-77/)).toBeNull();

@@ -211,6 +211,8 @@ describe('createHttpClient requests', () => {
         ['disableConnector', (c) => c.disableConnector('slack'), 'POST', '/api/connectors/slack/disable', JSON_HEADERS, {}],
         ['connectProvider, keeping the PC\'s key', (c) => c.connectProvider('fireworks'), 'POST', '/api/providers/fireworks/connect', JSON_HEADERS, {}],
         ['connectProvider, with a typed key', (c) => c.connectProvider('fireworks', { apiKey: 'fw-k-1' }), 'POST', '/api/providers/fireworks/connect', JSON_HEADERS, { api_key: 'fw-k-1' }],
+        ['forgetProviderKey', (c) => c.forgetProviderKey('fireworks'), 'DELETE', '/api/providers/fireworks/key', UI_HEADERS, undefined],
+        ['retryKeyStore, with the UI header the PC requires', (c) => c.retryKeyStore(), 'POST', '/api/providers/key-store/retry', UI_HEADERS, undefined],
     ])('%s: %s', async (_name, call, method, path, headers, body) => {
         const { fetch, calls } = createRecordingFetch(() => jsonResponse({ status: 'ok' }));
         await call(createHttpClient({ baseUrl: BASE, fetch }));

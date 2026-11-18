@@ -413,6 +413,8 @@ export interface FakeGaiaClient extends GaiaClient {
     readonly connects: string[];
     /** The providers connectProvider was sent a typed key for, in order (never the key). */
     readonly keyedConnects: string[];
+    /** The providers whose saved key forgetProviderKey cleared, in order. */
+    readonly keyRemovals: string[];
     /** How many times recheckSetupNpu was asked. */
     readonly npuRechecks: number;
     /** How many times retryKeyStore was asked. */
@@ -528,6 +530,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
     const setupChoices: FakeGaiaClient['setupChoices'] = [];
     const connects: string[] = [];
     const keyedConnects: string[] = [];
+    const keyRemovals: string[] = [];
     let npuRechecks = 0;
     let keyStoreRetries = 0;
     let checkAt = 0;
@@ -641,6 +644,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         setupChoices,
         connects,
         keyedConnects,
+        keyRemovals,
         get npuRechecks() {
             return npuRechecks;
         },
@@ -1675,6 +1679,10 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             connects.push(provider);
             if (options?.apiKey) keyedConnects.push(provider);
             return { remembered: true };
+        },
+        async forgetProviderKey(provider) {
+            keyRemovals.push(provider);
+            return { removed: true };
         },
         async retryKeyStore() {
             keyStoreRetries += 1;

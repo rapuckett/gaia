@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import type { ReactNode } from 'react';
 import { Platform } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -12,6 +12,7 @@ import { createFakeClient } from '@/api/fake';
 import { GaiaClientProvider, type ProviderRow } from '@/data';
 import { ThemeProvider } from '@/ui';
 import { SheetHost } from '@/ui/overlays/SheetHost';
+import { sheetStore } from '@/ui/overlays/sheetStore';
 
 import { ProviderKey } from './ProviderKey';
 
@@ -49,6 +50,8 @@ function setup(provider: ProviderRow) {
 }
 
 describeNative('Provider key', () => {
+    afterEach(() => act(() => sheetStore.reset()));
+
     it('a typed key goes to the PC once, then is gone from the field, the screen and every cache', async () => {
         const { client, queryClient, wrap } = setup(none);
         const r = await render(<ProviderKey provider={none} connected={false} />, { wrapper: wrap });
@@ -113,6 +116,35 @@ describeNative('Provider key', () => {
         await fireEvent.press(screen.getByTestId('provider-key-cancel'));
         expect(screen.queryByTestId('provider-key-field')).toBeNull();
         expect(client.connects).toEqual([]);
+        queryClient.clear();
+    });
+
+    it('a locked OS key store (423) shows the PC\'s sentence under ours, and Try again asks the PC once more', async () => {
+        const { client, queryClient, wrap } = setup(none);
+        const locked = 'The credential store on the PC running GAIA could not be used. Unlock or fix it on the PC, then try again.';
+        jest.spyOn(client, 'connectProvider').mockRejectedValue(new GaiaApiError(423, locked));
+        await render(<ProviderKey provider={none} connected={false} />, { wrapper: wrap });
+
+        await fireEvent.press(screen.getByTestId('provider-key-reconnect'));
+        expect(await screen.findByText("The OS key store is locked, so GAIA can't read your saved key.")).toBeTruthy();
+        expect(screen.getByText(locked)).toBeTruthy();
+        await fireEvent.press(screen.getByText('Try again'));
+        await waitFor(() => expect(client.keyStoreRetries).toBe(1));
+        expect(screen.queryByTestId('provider-key-locked')).toBeNull();
+        queryClient.clear();
+    });
+
+    it('Remove key asks first, then clears the saved key on the PC', async () => {
+        const connected: ProviderRow = { ...none, configured: true };
+        const { client, queryClient, wrap } = setup(connected);
+        await render(<ProviderKey provider={connected} connected />, { wrapper: wrap });
+
+        await fireEvent.press(screen.getByTestId('provider-key-remove'));
+        expect(await screen.findByText('Remove this key?')).toBeTruthy();
+        expect(client.keyRemovals).toEqual([]);
+        await fireEvent.press(screen.getByTestId('confirm-ok'));
+        expect(await screen.findByText(/^Key cleared, here and for future sessions/)).toBeTruthy();
+        expect(client.keyRemovals).toEqual(['fireworks']);
         queryClient.clear();
     });
 

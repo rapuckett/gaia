@@ -164,6 +164,9 @@ const refused = () => Promise.reject(new GaiaApiError(403, PC_ONLY_REFUSAL));
 const TYPED_KEY = 'fw-demo-key-0000';
 // The PC's error echoes the key, so the scene shows it masked on the detail line.
 const keyRejected = () => Promise.reject(new GaiaApiError(502, `Fireworks AI rejected the key ${TYPED_KEY}: 401 Unauthorized.`));
+// The PC's answers to a paired phone, as the providers router words them.
+const keyRefusedAway = () => Promise.reject(new GaiaApiError(403, 'Enter provider keys on the PC running GAIA or on a paired device the PC allowed, not over mobile access.'));
+const storeLocked = () => Promise.reject(new GaiaApiError(423, 'The credential store on the PC running GAIA could not be used. Unlock or fix it on the PC, then try again.'));
 const keyScene = (scene: Partial<SettingsScene>): SettingsScene => ({ section: 'model', target: 'cloud-key', provider: 'fireworks', gpuMemory: GPU, ...scene });
 
 const discord = (extra: Partial<DiscordStatus>): DiscordStatus => ({
@@ -263,7 +266,11 @@ export const SETTINGS_SCENES: Record<string, SettingsScene> = {
     // SET-MODEL-15: the PC's error under the sentence, with the key it echoed masked.
     'model-key-failed': keyScene({ keyEntry: { typed: TYPED_KEY, submit: true }, override: { connectProvider: keyRejected } }),
     // SET-MODEL-15: the PC refuses a typed key from a phone (403): "Change this on the PC" in place of the field.
-    'model-key-pc-only': keyScene({ keyEntry: { typed: TYPED_KEY, submit: true }, override: { connectProvider: refused } }),
+    'model-key-pc-only': keyScene({ keyEntry: { typed: TYPED_KEY, submit: true }, override: { connectProvider: keyRefusedAway } }),
+    // SET-MODEL-18: the PC's OS key store is locked (423): the warning, the PC's sentence on the detail line, and Try again.
+    'model-key-locked': keyScene({ keyEntry: { typed: TYPED_KEY, submit: true }, override: { connectProvider: storeLocked } }),
+    // SET-MODEL-14: a connected provider's Remove key asking first (`#tap=provider-key-remove` opens the confirm sheet).
+    'model-key-remove': keyScene({ data: cloud([]) }),
     // SET-MODEL-13: a connected provider with Replace pressed: "Paste your new key", Save key, Cancel.
     'model-key-replace': keyScene({ keyEntry: { replacing: true }, data: cloud([]) }),
     // SET-MODEL-20: a cloud list with nothing in it says "No models match."; typing a miss into `model-search` shows the same on the local list.
