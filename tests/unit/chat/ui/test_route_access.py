@@ -7,8 +7,8 @@ Every route is in exactly one class, and ``test_every_route_is_classified``
 fails for a route nobody has decided about:
 
 * ``pc``: the PC running GAIA only (``require_local_pc``).
-* ``pc_or_device``: first-run setup, device-code sign-in, connector setup and
-  checks, Automations and changes to schedules and goals; the PC or an allowed
+* ``pc_or_device``: first-run setup, connector sign-in, setup and checks,
+  Automations and changes to schedules and goals; the PC or an allowed
   paired device, never mobile access (``require_pc_or_device``, ``require_pc_or_allowed_device``).
 * ``not_on_listener``: a read with side effects on the PC; the PC and mobile
   access, never a paired device (``refuse_on_device_listener``).
@@ -67,7 +67,6 @@ PC_ONLY = {
     "GET /api/setup/report/{name}",
     "POST /api/agents/install",
     "POST /api/connectors/eval-mailbox",
-    "POST /api/connectors/{connector_id}/authorize",
     "POST /api/connectors/{connector_id}/enable",
     "POST /api/devices/listener",
     "POST /api/devices/pairing",
@@ -105,12 +104,15 @@ PC_ONLY = {
 
 PC_OR_DEVICE = {
     "DELETE /api/automations/{ref}",
+    "DELETE /api/connectors/_flows/{flow_id}",
     "DELETE /api/goals/{goal_id}",
     "DELETE /api/providers/{provider}/key",
     "DELETE /api/schedules/{name:path}",
     "GET /api/automations",
     "GET /api/devices/{device_id}/changes",
     "POST /api/automations/{ref}/{action}",
+    "POST /api/connectors/flows/{flow_id}/complete",
+    "POST /api/connectors/{connector_id}/authorize",
     "POST /api/connectors/{connector_id}/authorize-device",
     "POST /api/connectors/{connector_id}/configure",
     "POST /api/connectors/{connector_id}/test",
@@ -166,7 +168,6 @@ WEB = {
 # ``network_policy`` in ``PUT /api/settings``.
 REMOTE = {
     "DELETE /api/chat/permissions/{session_id}/grants",
-    "DELETE /api/connectors/_flows/{flow_id}",
     "DELETE /api/connectors/{connector_id}",
     "DELETE /api/connectors/{connector_id}/grants/{agent_id:path}",
     "DELETE /api/documents/{doc_id}",

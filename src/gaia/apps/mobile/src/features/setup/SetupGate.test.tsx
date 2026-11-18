@@ -3,11 +3,13 @@
 
 import { render, screen } from '@testing-library/react-native';
 import type { ReactNode } from 'react';
-import { Text } from 'react-native';
+import { StyleSheet, Text } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { DEVELOPMENT_SCHEME } from '@/features/dev/devGallery';
+import { translator } from '@/i18n/useT';
 import { ThemeProvider } from '@/ui';
+import { contentWidth } from '@/ui/tokens/space';
 
 import { reopenSetup, SetupGate } from './SetupGate';
 
@@ -83,6 +85,35 @@ describe('a gallery build with no PC answering', () => {
         expect(await shows('/', { gallery: true, scheme: DEVELOPMENT_SCHEME })).toBe(false);
         expect(await shows('/dev/messages', { gallery: true, scheme: 'ai.amd.gaia.mobile' })).toBe(false);
         expect(await shows('/dev/messages', { gallery: false, scheme: DEVELOPMENT_SCHEME })).toBe(false);
+    });
+});
+
+describe('app under a notice', () => {
+    it('renders the app outside the capped notice column, so the navigator keeps the full width', async () => {
+        mockGate = { state: 'serverDown' };
+        const wrapper = ({ children }: { children: ReactNode }) => (
+            <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 1158, height: 800 }, insets: { top: 0, left: 0, right: 0, bottom: 0 } }}>
+                <ThemeProvider>{children}</ThemeProvider>
+            </SafeAreaProvider>
+        );
+        await render(<SetupGate><Text>App</Text></SetupGate>, { wrapper });
+        const capped = (node: ReturnType<typeof screen.getByTestId>) => {
+            const found: unknown[] = [];
+            for (let n: typeof node | null = node; n; n = n.parent) found.push(StyleSheet.flatten(n.props.style)?.maxWidth);
+            return found.includes(contentWidth.reading);
+        };
+        const inside = (node: ReturnType<typeof screen.getByTestId>, testID: string) => {
+            for (let n: typeof node | null = node; n; n = n.parent) if (n.props.testID === testID) return true;
+            return false;
+        };
+        const app = screen.getByTestId('setup-gate-app');
+        expect(StyleSheet.flatten(app.props.style)).toMatchObject({ flex: 1 });
+        expect(capped(app)).toBe(false);
+        expect(inside(app, 'setup-gate-notice')).toBe(false);
+        const retry = screen.getByText(translator('en')('setup.serverDown.setup'));
+        expect(inside(retry, 'setup-gate-notice')).toBe(true);
+        expect(capped(retry)).toBe(true);
+        mockGate = { state: 'ready' };
     });
 });
 
