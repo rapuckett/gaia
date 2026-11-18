@@ -62,7 +62,7 @@ export function AppDrawer({ navigation, state }: DrawerContentComponentProps) {
                     router.push('/pair/pcs');
                     navigation.closeDrawer();
                 }}
-                onClose={() => navigation.closeDrawer()}
+                onClose={permanent ? undefined : () => navigation.closeDrawer()}
             />
         </View>
     );

@@ -8,7 +8,7 @@ import type { ActiveModel, LocalModelStatus, Session, StreamEvent } from '@/api/
 import { GaiaApiError } from '@/api/errors';
 import { createFakeClient } from '@/api/fake';
 import { GaiaClientProvider } from '@/data';
-import { IDLE_TURN, writeTurn } from '@/state/chatStreams';
+import { IDLE_TURN, useChatStreamStore, writeTurn } from '@/state/chatStreams';
 import { useComposerQueueStore } from '@/features/composer/composerQueue';
 import { ScreenBannerProvider, UIProvider } from '@/ui';
 
@@ -141,8 +141,8 @@ export function ChatGallery({ state, queued, model }: { state: ChatGalleryState;
         base.attachToRun = () => ({ [Symbol.asyncIterator]: () => ({ next: () => new Promise<IteratorResult<StreamEvent>>(() => undefined) }) });
         return base;
     });
-    // Seeded before the screen's first render too: a model chip that mounts with no turn running applies `queued` at once.
-    useState(() => seedScene(state));
+    // The screen mounts only once seeded: a model chip that mounts with no turn running applies `queued` at once, and a store write while rendering would update subscribers like the drawer mid-render.
+    const seeded = useChatStreamStore((s) => state === 'env-offline' || s.turns.dev !== undefined);
     useEffect(() => {
         if (state === 'env-offline') return undefined;
         seedScene(state);
@@ -151,6 +151,7 @@ export function ChatGallery({ state, queued, model }: { state: ChatGalleryState;
             useComposerQueueStore.setState({ byChat: {}, drafts: {} });
         };
     }, [state]);
+    if (!seeded) return null;
     return (
         <QueryClientProvider client={queryClient}>
             <GaiaClientProvider client={client}>

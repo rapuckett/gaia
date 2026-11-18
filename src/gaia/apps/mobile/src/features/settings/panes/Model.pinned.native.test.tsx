@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react-native';
+import { fireEvent, render, screen } from '@testing-library/react-native';
 import type { ReactNode } from 'react';
 import { Platform } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -34,7 +34,7 @@ function pathOf(url: string): string {
 describeNative('Settings > Model on a paired phone', () => {
     afterEach(() => useConnectionStore.setState({ connection: null }));
 
-    it('asks the PC for no route it refuses this phone, and says to change it on the PC instead of failing', async () => {
+    it('asks the PC for no route it refuses this phone, and offers the key controls its routes allow', async () => {
         useConnectionStore.setState({ connection: { baseUrl: BASE, pcId: 'pc-1', pinned: true } });
         const { fetch, calls } = createRecordingFetch((call) => {
             const path = pathOf(call.url);
@@ -62,7 +62,10 @@ describeNative('Settings > Model on a paired phone', () => {
         );
         await render(<Model />, { wrapper: wrap });
 
-        expect((await screen.findAllByText('Change this on the PC running GAIA.')).length).toBeGreaterThan(0);
+        expect(await screen.findByTestId('provider-key-replace')).toBeTruthy();
+        // Remove key is a device route now: a real button that asks first, not "Change this on the PC".
+        await fireEvent.press(screen.getByTestId('provider-key-remove'));
+        expect(await screen.findByText('Remove this key?')).toBeTruthy();
         expect(calls.some((c) => pathOf(c.url) === '/api/providers/active')).toBe(true);
         expect(calls.filter((c) => isDeviceRefused(c.method ?? 'GET', pathOf(c.url))).map((c) => `${c.method} ${c.url}`)).toEqual([]);
         expect(screen.queryByText('Do this on the PC running GAIA.')).toBeNull();
