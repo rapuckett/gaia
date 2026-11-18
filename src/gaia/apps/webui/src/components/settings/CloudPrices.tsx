@@ -79,7 +79,8 @@ export function CloudPrices({ provider, limit, picked = null, onPick, pickDisabl
                     );
                 })}
             </ul>
-            <span className="settings-hint"><bdi>{list.source}</bdi>. {t('settings.price.payProvider')}</span>
+            <span className="settings-hint">{t('settings.price.payProvider')}</span>
+            {list.source && <span className="settings-hint"><bdi dir="ltr">{list.source}</bdi></span>}
         </div>
     );
 }
