@@ -1,8 +1,10 @@
 {
-  "CFBundleDisplayName": "GAIA",
-  "NSCameraUsageDescription": "يستخدم GAIA الكاميرا لمسح رمز الاقتران على جهاز الكمبيوتر، ولالتقاط الصور التي ترفقها بمحادثة.",
-  "NSMicrophoneUsageDescription": "يستخدم GAIA الميكروفون لتسجيل الرسائل الصوتية.",
-  "NSPhotoLibraryUsageDescription": "يفتح GAIA مكتبة الصور لديك لتتمكن من إرفاق الصور بمحادثة.",
-  "NSPhotoLibraryAddUsageDescription": "يحفظ GAIA الصور التي تختارها في مكتبة الصور لديك.",
-  "NSLocalNetworkUsageDescription": "يستخدم GAIA شبكتك المحلية للاتصال بـ GAIA على جهاز الكمبيوتر لديك."
+  "ios": {
+    "CFBundleDisplayName": "GAIA",
+    "NSCameraUsageDescription": "يستخدم GAIA الكاميرا لمسح رمز الاقتران على جهاز الكمبيوتر، ولالتقاط الصور التي ترفقها بمحادثة.",
+    "NSMicrophoneUsageDescription": "يستخدم GAIA الميكروفون لتسجيل الرسائل الصوتية.",
+    "NSPhotoLibraryUsageDescription": "يفتح GAIA مكتبة الصور لديك لتتمكن من إرفاق الصور بمحادثة.",
+    "NSPhotoLibraryAddUsageDescription": "يحفظ GAIA الصور التي تختارها في مكتبة الصور لديك.",
+    "NSLocalNetworkUsageDescription": "يستخدم GAIA شبكتك المحلية للاتصال بـ GAIA على جهاز الكمبيوتر لديك."
+  }
 }
