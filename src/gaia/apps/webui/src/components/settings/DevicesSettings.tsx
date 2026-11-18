@@ -13,11 +13,13 @@ import {
     closeDevicePairing,
     openDevicePairing,
     removeDevice,
+    getDeviceChanges,
     resetDevicePairing,
     startAwayRoute,
     startDeviceListener,
     stopAwayRoute,
     stopDeviceListener,
+    type DeviceChange,
     type DevicePairingOffer,
     type PairedDevice,
 } from '../../services/devicesApi';
@@ -27,6 +29,7 @@ import { log } from '../../utils/logger';
 import { pairingLink } from '../../utils/pairingLink';
 import { MarkedText, markLtr } from '../MarkedText';
 import { ConfirmSheet } from '../setup/ConfirmSheet';
+import { SettingsDisclosure } from './SettingsDisclosure';
 import './DevicesSettings.css';
 
 const REASON_KEYS = {
@@ -46,6 +49,118 @@ const PLATFORM_KEYS = {
     ipados: 'settings.devices.platform.ipados',
     android: 'settings.devices.platform.android',
 } as const;
+
+/** Each change kind the server sends: its message, and the params that message fills in. */
+const CHANGE_KINDS = {
+    providerKeySet: ['settings.devices.change.providerKeySet', ['provider']],
+    providerKeyRemoved: ['settings.devices.change.providerKeyRemoved', ['provider']],
+    gatewayChanged: ['settings.devices.change.gatewayChanged', ['provider']],
+    serverTarget: ['settings.devices.change.serverTarget', []],
+    localOnlyOff: ['settings.devices.change.localOnlyOff', []],
+    permissionsDefault: ['settings.devices.change.permissionsDefault', []],
+    skillAdded: ['settings.devices.change.skillAdded', ['name']],
+    skillAddedCode: ['settings.devices.change.skillAddedCode', ['name']],
+    connectorSetup: ['settings.devices.change.connectorSetup', ['connector']],
+    connectorGrant: ['settings.devices.change.connectorGrant', ['agent', 'connector']],
+    discordPaired: ['settings.devices.change.discordPaired', ['account']],
+    memoryWiped: ['settings.devices.change.memoryWiped', []],
+    profileScanOn: ['settings.devices.change.profileScanOn', []],
+} as const satisfies Record<string, readonly [MessageKey, readonly string[]]>;
+
+const CHANGES_PAGE = 20;
+const CHANGES_ALL = 200;
+const warnedKinds = new Set<string>();
+
+/** A change's label: its params are values, each kept left to right; a kind this app lacks reads as a generic change. */
+function changeWhat(c: DeviceChange): { what: MessageRef; unknownKind?: string } {
+    const generic = { what: ref('settings.devices.change.unknown'), unknownKind: c.kind };
+    if (!(c.kind in CHANGE_KINDS)) {
+        if (!warnedKinds.has(c.kind)) {
+            warnedKinds.add(c.kind);
+            log.ui.warn(`A device change of a kind this app has no label for: ${c.kind}`);
+        }
+        return generic;
+    }
+    const [key, names] = CHANGE_KINDS[c.kind as keyof typeof CHANGE_KINDS] as readonly [MessageKey, readonly string[]];
+    const params: Record<string, string> = {};
+    for (const name of names) {
+        const value = c.params[name];
+        if (value === null || value === undefined) {
+            log.ui.error(`A device change of kind ${c.kind} came without ${name}`);
+            return generic;
+        }
+        params[name] = markLtr(String(value));
+    }
+    return { what: ref(key, params) };
+}
+
+type ChangesState =
+    | { phase: 'loading' }
+    | { phase: 'error'; message: string }
+    | { phase: 'ready'; changes: DeviceChange[]; total: number };
+
+/** What one device changed on this PC, read when the section opens. */
+function DeviceChanges({ device, now }: { device: PairedDevice; now: number }) {
+    const t = useT();
+    const [opened, setOpened] = useState(false);
+    const [limit, setLimit] = useState(CHANGES_PAGE);
+    const [state, setState] = useState<ChangesState>({ phase: 'loading' });
+    const [attempt, setAttempt] = useState(0);
+    const count = device.changes_count ?? 0;
+
+    useEffect(() => {
+        if (!opened) return;
+        let live = true;
+        getDeviceChanges(device.id, limit)
+            .then((list) => { if (live) setState({ phase: 'ready', changes: list.changes, total: list.total }); })
+            .catch((err: unknown) => {
+                log.api.error('Reading what a device changed failed', err);
+                if (live) setState({ phase: 'error', message: errorText(err) });
+            });
+        return () => { live = false; };
+    }, [opened, device.id, limit, attempt, count]);
+
+    return (
+        <div className="devices-changes">
+            <SettingsDisclosure title={t('settings.devices.changesTitle', { n: count })} onToggle={(open) => { if (open) setOpened(true); }}>
+                {state.phase === 'loading' && <p className="settings-hint" role="status">{t('settings.loading')}</p>}
+                {state.phase === 'error' && (
+                    <div className="settings-field">
+                        <p className="settings-error" role="alert">{t('settings.devices.changesLoadFailed', { error: state.message })}</p>
+                        <div className="settings-row">
+                            <button type="button" className="btn-secondary" onClick={() => { setState({ phase: 'loading' }); setAttempt((n) => n + 1); }}>
+                                {t('settings.devices.changesRetry')}
+                            </button>
+                        </div>
+                    </div>
+                )}
+                {state.phase === 'ready' && state.changes.length === 0 && <p className="settings-hint">{t('settings.devices.changesNone')}</p>}
+                {state.phase === 'ready' && state.changes.length > 0 && (
+                    <>
+                        <ul className="devices-list devices-change-list">
+                            {state.changes.map((c, i) => {
+                                const { what, unknownKind } = changeWhat(c);
+                                return (
+                                    <li key={`${c.at}-${c.kind}-${i}`} className="devices-change">
+                                        <span><MarkedText text={t('settings.devices.changeRow', { what, when: ago(c.at, now) })} /></span>
+                                        {unknownKind && <bdi dir="ltr" className="settings-hint devices-change-kind">{unknownKind}</bdi>}
+                                    </li>
+                                );
+                            })}
+                        </ul>
+                        {state.total > state.changes.length && limit < CHANGES_ALL && (
+                            <div className="settings-row">
+                                <button type="button" className="btn-secondary" onClick={() => { setState({ phase: 'loading' }); setLimit(CHANGES_ALL); }}>
+                                    {t('settings.devices.changesShowAll')}
+                                </button>
+                            </div>
+                        )}
+                    </>
+                )}
+            </SettingsDisclosure>
+        </div>
+    );
+}
 
 function errorText(err: unknown): string {
     if (err instanceof ApiError) return err.detail || err.message;
@@ -376,6 +491,7 @@ export function DevicesSettings() {
                                         {t('settings.devices.remove')}
                                     </button>
                                 </div>
+                                <DeviceChanges device={d} now={now} />
                             </li>
                         ))}
                     </ul>
@@ -427,6 +543,9 @@ export function DevicesSettings() {
                     onConfirm={() => void act(() => removeDevice(confirm.device.id)).then(() => setConfirm(null))}
                 >
                     {t('settings.devices.removeBody')}
+                    {(confirm.device.changes_count ?? 0) > 0 && (
+                        <> {t.plural('settings.devices.removeHasChanges', confirm.device.changes_count ?? 0)}</>
+                    )}
                 </ConfirmSheet>
             )}
             {confirm?.kind === 'reset' && (

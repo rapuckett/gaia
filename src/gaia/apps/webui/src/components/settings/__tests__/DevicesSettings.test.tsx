@@ -133,4 +133,33 @@ describe('DevicesSettings', () => {
         expect(line.match(/Paired/g)).toHaveLength(1);
         useChatStore.setState({ locale: 'en' });
     });
+
+    const PAIRED = { id: 'd1', name: 'Pixel', platform: 'android', status: 'allowed', created_at: new Date().toISOString(), last_seen_at: null, changes_count: 2 };
+
+    it('reads what a device changed when its section opens, and shows a kind it does not know as a generic change', async () => {
+        const at = new Date(Date.now() - 5 * 60_000).toISOString();
+        replies['GET /devices'] = { body: { devices: [PAIRED] } };
+        replies['GET /devices/d1/changes'] = { body: { total: 2, changes: [
+            { kind: 'providerKeySet', params: { provider: 'OpenAI' }, at },
+            { kind: 'teleportCat', params: {}, at },
+        ] } };
+        render(<DevicesSettings />);
+        fireEvent.click(await screen.findByText('Changes made from this device (2)'));
+        await screen.findByText('teleportCat');
+        const rows = Array.from(document.querySelectorAll('.devices-change'), (li) => li.textContent);
+        expect(rows[0]).toMatch(/^Changed the .*OpenAI.* key · 5m ago$/);
+        expect(rows[1]).toMatch(/^Changed a setting · 5m agoteleportCat$/);
+        expect(screen.getByText('teleportCat')).toBeInTheDocument();
+    });
+
+    it('mentions the changes that stay in the remove confirmation only when the device made some', async () => {
+        replies['GET /devices'] = { body: { devices: [PAIRED, { ...PAIRED, id: 'd2', name: 'Tab', changes_count: 0 }] } };
+        render(<DevicesSettings />);
+        fireEvent.click(await screen.findByRole('button', { name: 'Remove Pixel' }));
+        expect(await screen.findByText(/It made 2 changes that stay after it's removed/)).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+        fireEvent.click(await screen.findByRole('button', { name: 'Remove Tab' }));
+        await screen.findByText(/It can't reach GAIA on this PC anymore/);
+        expect(screen.queryByText(/that stay after it's removed/)).not.toBeInTheDocument();
+    });
 });

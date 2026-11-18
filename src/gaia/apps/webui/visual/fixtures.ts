@@ -504,7 +504,7 @@ const DEVICE_STATUS_BASE = {
     routes: [{ kind: 'tailnet', on: false, origin: null, error_code: null }],
 };
 const AT_ISO = (minutesAgo: number) => new Date(NOW.getTime() - minutesAgo * 60_000).toISOString();
-const IPAD = { id: 'dev-ipad', name: "Someone's iPad Pro with a rather long name", platform: 'ipados', status: 'allowed', created_at: AT_ISO(9000), last_seen_at: AT_ISO(1500), expires_at: null };
+const IPAD = { id: 'dev-ipad', name: "Someone's iPad Pro with a rather long name", platform: 'ipados', status: 'allowed', created_at: AT_ISO(9000), last_seen_at: AT_ISO(1500), expires_at: null, changes_count: 3 };
 const PHONE = { id: 'dev-phone', name: 'هاتف سارة', platform: 'ios', status: 'pending', created_at: AT_ISO(1), last_seen_at: null, expires_at: new Date(NOW.getTime() + 9 * 60_000).toISOString() };
 
 /** Settings > Phones and tablets, one answer per state the pane shows. */
@@ -531,6 +531,22 @@ export const DEVICE_STATES: Record<string, { status: Record<string, unknown>; de
     tailnetMissing: { status: { ...DEVICE_STATUS_BASE, routes: [{ kind: 'tailnet', on: false, origin: null, error_code: 'no_tailscale_address' }] }, devices: [IPAD] },
 };
 
+/** What the iPad changed: a provider name, a connector with an agent, and a kind a newer GAIA added. */
+export const IPAD_CHANGES = {
+    total: 3,
+    changes: [
+        { kind: 'providerKeySet', params: { provider: 'OpenAI' }, at: AT_ISO(12) },
+        { kind: 'connectorGrant', params: { agent: 'GAIA', connector: 'Google Calendar' }, at: AT_ISO(300) },
+        { kind: 'teleportCat', params: {}, at: AT_ISO(2000) },
+    ],
+};
+
+/** A system prompt the iPad raised on this PC, waiting for someone to answer it. */
+export async function withDevicePrompt(page: Page, kind: 'key_store' | 'admin', action: string): Promise<void> {
+    const event = { type: 'device_prompt', device_id: IPAD.id, kind, action, state: 'waiting' };
+    await page.route('**/api/sessions/events', (route) => route.fulfill({ status: 200, contentType: 'text/event-stream', body: `data: ${JSON.stringify(event)}\n\n` }));
+}
+
 /** A pairing code as the PC shows it; never a real invitation. */
 export const DEVICE_OFFER = {
     v: 1, name: 'OFFICE-DESKTOP', pc_id: 'pc-fixture', origins: ['https://192.168.1.10:4243'],
@@ -540,6 +556,7 @@ export const DEVICE_OFFER = {
 export async function withDevices(page: Page, state: { status: Record<string, unknown>; devices: unknown[] }): Promise<void> {
     let status = state.status;
     await page.route('**/api/devices/status', (route) => route.fulfill({ json: status }));
+    await page.route('**/api/devices/*/changes*', (route) => route.fulfill({ json: IPAD_CHANGES }));
     await page.route('**/api/devices', (route) => route.fulfill({ json: { devices: state.devices } }));
     await page.route('**/api/devices/pairing', (route) => {
         const opening = route.request().method() === 'POST';
