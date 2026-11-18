@@ -8,6 +8,7 @@ import { translator } from '@webui/i18n/translator';
 
 import { ICON_ONLY_WIDTH } from './chipRoom';
 import { Composer } from './Composer';
+import { ControlChip } from './ControlChip';
 import { PrivateChip } from './PrivateChip';
 
 let mockLocale: 'ar' | 'en' = 'ar';
@@ -46,6 +47,18 @@ describe('composer control row in Arabic', () => {
         expect(label.props.children).toBe(translator('ar').bare('composer.memoryOn'));
         expect(String(label.props.children)).not.toMatch(/[A-Za-z]/);
         expect(String(find(r, 'private-chip').props.accessibilityLabel)).toMatch(/[A-Za-z]/);
+    });
+
+    it('forces a model chip label left to right only when it is a model id, never the fallback word', async () => {
+        const dirs: Array<unknown> = [];
+        for (const value of ['ltr', undefined] as const) {
+            const r = createRoot();
+            await act(async () =>
+                r.render(<ControlChip label="Gemma" chip="model" icon={'Cpu' as never} value={value} testID="c" />),
+            );
+            dirs.push(r.container.queryAll((n) => n.type === 'Text')[0].props.dir);
+        }
+        expect(dirs).toEqual(['ltr', undefined]);
     });
 
     // react-native-web renders View as a DOM node the style assertions can't read.
