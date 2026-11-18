@@ -7,7 +7,7 @@ Every route is in exactly one class, and ``test_every_route_is_classified``
 fails for a route nobody has decided about:
 
 * ``pc``: the PC running GAIA only (``require_local_pc``).
-* ``pc_or_device``: first-run setup, device-code sign-in, Automations and changes
+* ``pc_or_device``: first-run setup, connector sign-in, Automations and changes
   to schedules and goals; the PC or an allowed paired device, never mobile
   access (``require_pc_or_device``, ``require_pc_or_allowed_device``).
 * ``not_on_listener``: a read with side effects on the PC; the PC and mobile
@@ -68,7 +68,6 @@ PC_ONLY = {
     "GET /api/setup/report/{name}",
     "POST /api/agents/install",
     "POST /api/connectors/eval-mailbox",
-    "POST /api/connectors/{connector_id}/authorize",
     "POST /api/connectors/{connector_id}/configure",
     "POST /api/connectors/{connector_id}/enable",
     "POST /api/connectors/{connector_id}/test",
@@ -113,6 +112,8 @@ PC_OR_DEVICE = {
     "DELETE /api/schedules/{name:path}",
     "GET /api/automations",
     "POST /api/automations/{ref}/{action}",
+    "POST /api/connectors/flows/{flow_id}/complete",
+    "POST /api/connectors/{connector_id}/authorize",
     "POST /api/connectors/{connector_id}/authorize-device",
     "POST /api/goals",
     "POST /api/goals/store/reset",

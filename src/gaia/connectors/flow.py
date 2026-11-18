@@ -48,10 +48,13 @@ from gaia.connectors._refresh_lock import locked_write
 from gaia.connectors.errors import (
     ConnectorsError,
     ConsentDeniedError,
+    FlowOwnerError,
+    FlowStateMismatchError,
     FlowTimeoutError,
     GrantAfterConnectError,
     OAuthProviderError,
     ScopeNotAllowedError,
+    UnknownFlowError,
 )
 from gaia.connectors.events import emit
 from gaia.connectors.pkce import compute_code_challenge, generate_code_verifier
@@ -102,7 +105,8 @@ class _PendingFlow:
     code_verifier: str
     state: str
     redirect_uri: str
-    runner: web.AppRunner
+    # None when a paired device catches the redirect on its own loopback.
+    runner: Optional[web.AppRunner]
     future: "asyncio.Future[Dict[str, Any]]"
     # Per-agent grants to commit atomically with a successful token exchange
     # (#2117). Maps a namespaced agent id → the scopes to grant for this
@@ -110,6 +114,8 @@ class _PendingFlow:
     grant_agents: Dict[str, list[str]] = field(default_factory=dict)
     # Ends a flow nobody awaits (the apps) when the user just closes the tab.
     expiry: Optional[asyncio.TimerHandle] = None
+    # The paired device that started the flow; only it may finish it.
+    owner_device_id: Optional[str] = None
 
 
 # v1 single-flow constraint per the plan: only one flow can be pending at
@@ -249,6 +255,9 @@ async def start_authorization(
     provider_id: str,
     scopes: Iterable[str],
     grant_agents: Optional[Mapping[str, Iterable[str]]] = None,
+    *,
+    redirect_port: Optional[int] = None,
+    owner_device_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Begin the OAuth flow for ``provider_id`` with the requested scopes.
@@ -271,7 +280,18 @@ async def start_authorization(
     ``_exchange_code_for_tokens`` — a grant that cannot be written fails
     the whole flow loudly rather than leaving a connected-but-ungranted
     dead end.
+
+    ``redirect_port`` with ``owner_device_id`` starts a paired device's
+    flow: the redirect goes to ``127.0.0.1:<redirect_port>`` on the device,
+    so no listener is bound here and no browser is opened. The device hands
+    the code back through ``complete_device_authorization``; the verifier
+    never leaves this process.
     """
+    if (redirect_port is None) != (owner_device_id is None):
+        raise ValueError(
+            "start_authorization: redirect_port and owner_device_id go "
+            "together — a device flow needs both, the PC's flow neither."
+        )
     if _pending:
         # User re-clicking Connect signals the previous flow is dead.
         # Common case: Google blocks the auth (wrong account / consent
@@ -307,21 +327,25 @@ async def start_authorization(
     # The apps never await it; each failure also goes out as an event.
     future.add_done_callback(lambda f: f.cancelled() or f.exception())
 
-    app = web.Application()
+    runner: Optional[web.AppRunner] = None
+    if redirect_port is not None:
+        port = redirect_port
+    else:
+        app = web.Application()
 
-    async def callback(request: web.Request) -> web.Response:
-        return await _handle_callback(request, flow_id)
+        async def callback(request: web.Request) -> web.Response:
+            return await _handle_callback(request, flow_id)
 
-    app.router.add_get("/callback", callback)
-    # aiohttp's access log would write the code and state in the query string.
-    runner = web.AppRunner(app, access_log=None)
-    await runner.setup()
-    site = web.TCPSite(runner, "127.0.0.1", 0)
-    await site.start()
+        app.router.add_get("/callback", callback)
+        # aiohttp's access log would write the code and state in the query string.
+        runner = web.AppRunner(app, access_log=None)
+        await runner.setup()
+        site = web.TCPSite(runner, "127.0.0.1", 0)
+        await site.start()
 
-    # Read back the actual port the kernel assigned. aiohttp keeps the
-    # bound sockets on the runner.sites list.
-    port = site._server.sockets[0].getsockname()[1]
+        # Read back the actual port the kernel assigned. aiohttp keeps the
+        # bound sockets on the runner.sites list.
+        port = site._server.sockets[0].getsockname()[1]
     redirect_uri = f"http://127.0.0.1:{port}/callback"
 
     authorization_url = provider.authorization_url(
@@ -345,7 +369,16 @@ async def start_authorization(
             for agent_id, agent_scopes in (grant_agents or {}).items()
         },
         expiry=loop.call_later(_FLOW_TIMEOUT_SECONDS, _start_expiry, flow_id),
+        owner_device_id=owner_device_id,
     )
+
+    if owner_device_id is not None:
+        logger.info(
+            "flow: started for a paired device scopes=%d flow_id=%s",
+            len(scopes_list),
+            flow_id,
+        )
+        return {"flow_id": flow_id, "authorization_url": authorization_url}
 
     # Fire-and-forget the browser launch — A8: do not block the event
     # loop on a slow browser-launch (5s on some Linux setups freezes
@@ -459,11 +492,86 @@ async def _teardown_flow(flow_id: str) -> None:
         return
     if flow.expiry is not None:
         flow.expiry.cancel()
+    if flow.runner is None:
+        return
     try:
         await flow.runner.cleanup()
     except Exception as e:
         # Cleanup is best-effort — log and move on.
         logger.warning("flow: runner.cleanup failed for %s: %s", flow_id, e)
+
+
+async def complete_device_authorization(
+    flow_id: str, *, device_id: str, code: str, state: str
+) -> Dict[str, Any]:
+    """Finish a paired device's flow with the code its loopback caught.
+
+    Only the device that started the flow may finish it. The flow is single
+    use: it is removed before the exchange, so a second call finds nothing,
+    and a ``state`` that does not match ends it. The code is exchanged with
+    this process's PKCE verifier and the flow's own redirect_uri, and saved
+    exactly as the PC's loopback callback saves it.
+
+    Raises ``UnknownFlowError``, ``FlowOwnerError``,
+    ``FlowStateMismatchError``, or whatever the token exchange raises.
+    """
+    flow = _pending.get(flow_id)
+    if flow is None:
+        raise UnknownFlowError(
+            "This sign-in is no longer open: it finished, was cancelled, or "
+            f"ran past {_FLOW_TIMEOUT_SECONDS // 60} minutes. Start the "
+            "connection again."
+        )
+    if flow.owner_device_id is None or not hmac.compare_digest(
+        flow.owner_device_id.encode(), device_id.encode()
+    ):
+        raise FlowOwnerError("Only the device that started this sign-in can finish it.")
+    await _teardown_flow(flow_id)
+    # Bytes, so a non-ASCII state is a mismatch rather than a TypeError.
+    if not hmac.compare_digest(state.encode(), flow.state.encode()):
+        error = FlowStateMismatchError(
+            "The sign-in reply did not match the sign-in GAIA started, so it "
+            "was ended. Start the connection again."
+        )
+        if not flow.future.done():
+            flow.future.set_exception(error)
+        await emit(
+            "connector.oauth.error",
+            {
+                "connector_id": flow.provider_id,
+                "reason": "rejected",
+                "error": "The sign-in reply did not match.",
+            },
+        )
+        raise error
+    try:
+        result = await _exchange_code_for_tokens(flow, code)
+    except Exception as e:
+        logger.warning(
+            "flow: device sign-in to %s failed (%s)",
+            flow.provider_id,
+            type(e).__name__,
+        )
+        if not flow.future.done():
+            flow.future.set_exception(e)
+        await emit(
+            "connector.oauth.error",
+            {
+                "connector_id": flow.provider_id,
+                "reason": "failed",
+                # Devices read this stream; other errors can name PC paths.
+                "error": (
+                    _scrub(str(e), (code, flow.code_verifier))
+                    if isinstance(e, OAuthProviderError)
+                    else "The PC running GAIA could not finish the sign-in."
+                ),
+            },
+        )
+        raise
+    if not flow.future.done():
+        flow.future.set_result(result)
+    logger.info("flow: device sign-in finished flow_id=%s", flow_id)
+    return result
 
 
 async def revoke_provider_token(
