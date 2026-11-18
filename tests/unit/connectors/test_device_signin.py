@@ -41,6 +41,7 @@ TOKEN_URL = "https://oauth2.googleapis.com/token"
 SECRET_REFRESH = "refresh-SECRET-0123456789"
 SECRET_ACCESS = "access-SECRET-0123456789"
 CODE = "4/0AQSTgQ-auth-code-SECRET-0123456789"
+CLIENT_SECRET = "GOCSPX-client-SECRET-0123456789"
 
 
 def _as_caller(app):
@@ -60,6 +61,20 @@ def _as_caller(app):
         await app(scope, receive, send)
 
     return stamped
+
+
+@pytest.fixture
+def google_provider(monkeypatch):
+    """The shared provider, with a client secret, as a real Google client has."""
+    from gaia.connectors.providers import _registry
+    from gaia.connectors.providers import get as get_provider
+
+    monkeypatch.setenv("GAIA_GOOGLE_CLIENT_ID", "test.apps.example")
+    monkeypatch.setenv("GAIA_GOOGLE_CLIENT_SECRET", CLIENT_SECRET)
+    _registry.clear()
+    provider = get_provider("google")
+    assert provider.client_secret == CLIENT_SECRET
+    return provider
 
 
 @pytest.fixture
@@ -190,8 +205,9 @@ def test_the_phone_finishes_with_the_pcs_verifier_and_sees_no_secret(client, cap
     assert sent["code"] == [CODE]
     assert sent["code_verifier"] == [verifier]
     assert sent["redirect_uri"] == ["http://127.0.0.1:51234/callback"]
+    assert sent["client_secret"] == [CLIENT_SECRET]
     assert peek_connection("google")["refresh_token"] == SECRET_REFRESH
-    for secret in (CODE, verifier, SECRET_ACCESS, SECRET_REFRESH):
+    for secret in (CODE, verifier, SECRET_ACCESS, SECRET_REFRESH, CLIENT_SECRET):
         assert secret not in resp.text
         assert secret not in caplog.text
     assert client.audited[-1] == ("device:phone-1", "sign-in finished for google")
@@ -209,3 +225,69 @@ async def test_a_phone_sign_in_expires(google_provider, monkeypatch):
         await flow.complete_device_authorization(
             info["flow_id"], device_id="phone-1", code=CODE, state="x"
         )
+
+
+@pytest.mark.parametrize(
+    "caller, status",
+    [
+        ("other_phone", 403),
+        ("tunnel", 403),
+        ("pending", 403),
+        ("phone", 204),
+        ("pc", 204),
+    ],
+)
+def test_only_the_pc_or_the_owner_may_cancel_a_phone_sign_in(client, caller, status):
+    flow_id, _ = _start_on_phone(client)
+    resp = client.delete(
+        f"/api/connectors/_flows/{flow_id}",
+        headers={
+            **UI,
+            "x-test-caller": caller,
+            **({"X-Forwarded-For": "203.0.113.7"} if caller == "tunnel" else {}),
+        },
+    )
+    assert resp.status_code == status, resp.text
+    assert (flow_id in flow._pending) is (status == 403)
+
+
+async def test_a_sign_in_replaced_by_someone_else_stops_waiting(
+    google_provider, monkeypatch
+):
+    from gaia.connectors import events
+
+    seen = []
+
+    class _Recorder:
+        async def emit(self, event_type, payload):
+            seen.append((event_type, payload))
+
+    events.set_emitter(_Recorder())
+    try:
+        first = await flow.start_authorization(
+            "google", scopes=[], redirect_port=51234, owner_device_id="phone-1"
+        )
+        replaced = flow._pending[first["flow_id"]].future
+        again = await flow.start_authorization(
+            "google", scopes=[], redirect_port=51235, owner_device_id="phone-1"
+        )
+        assert seen == [], "the phone that re-clicked Connect is not told it failed"
+        other = await flow.start_authorization(
+            "google", scopes=[], redirect_port=51236, owner_device_id="phone-2"
+        )
+        await flow.cancel_flow(other["flow_id"])
+    finally:
+        events.reset_emitter()
+
+    assert seen == [
+        (
+            "connector.oauth.error",
+            {
+                "connector_id": "google",
+                "flow_id": again["flow_id"],
+                "reason": "superseded",
+                "error": "A newer sign-in replaced this one.",
+            },
+        )
+    ]
+    assert replaced.done() and replaced.exception() is not None

@@ -10,7 +10,7 @@ export const ROUTE_ACCESS: Readonly<Record<string, RouteAccessClass>> = {
     'DELETE /api/agents/{agent_id}': 'pc',
     'DELETE /api/automations/{ref}': 'pc_or_device',
     'DELETE /api/chat/permissions/{session_id}/grants': 'remote',
-    'DELETE /api/connectors/_flows/{flow_id}': 'remote',
+    'DELETE /api/connectors/_flows/{flow_id}': 'pc_or_device',
     'DELETE /api/connectors/{connector_id}': 'remote',
     'DELETE /api/connectors/{connector_id}/activations/{agent_id:path}': 'pc',
     'DELETE /api/connectors/{connector_id}/grants/{agent_id:path}': 'remote',

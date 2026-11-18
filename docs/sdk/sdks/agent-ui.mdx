@@ -2653,7 +2653,12 @@ OAuth and MCP-server connections for the Settings page and per-agent grants
   </Accordion>
 
   <Accordion title="DELETE /api/connectors/_flows/{flow_id}">
-    Cancel a pending OAuth flow without waiting for the callback.
+    Cancel a pending OAuth flow without waiting for the callback. The PC may
+    cancel any flow; a paired device the PC allowed may cancel only a flow it
+    started. Another device, a pending device and mobile access get a
+    **403**. Starting a new sign-in also ends a pending one. When the PC or
+    another device started the one that ended, `connector.oauth.error` goes
+    out with reason `superseded` and its `flow_id`.
   </Accordion>
 
   <Accordion title="PUT /api/connectors/{connector_id}/grants/{agent_id}">
@@ -3700,7 +3705,7 @@ Every route is in one class, pinned by `tests/unit/chat/ui/test_route_access.py`
 | Class | Who | Routes |
 |---|---|---|
 | PC-only | `pc` | Tunnel start and stop, provider keys, the model-server target, logs, messaging, GPU memory apply and revert, the default full-access setting, connector configure, an agent's connector grant and activations, deleting a provider key, `POST /v1/connections/{provider}`, skill and agent installs, `POST /api/files/open`, `POST /api/setup/npu/memlock-fix`, the troubleshooting report, the memory profile scan and its commits, re-collecting system context (`reinitialize`, `refresh-system-context`), the eval-only routes, `GET /api/connectors/_debug`, and every other [paired devices](#paired-devices) route |
-| Setup | `pc`, or an allowed device | Setup's changes (see [Setup](#setup)), `POST /api/system/download-model`, `PUT /api/system/model-server/backend`, a device-code sign-in (`POST /api/connectors/{connector_id}/authorize-device`, for a connector with `supports_device_code` only), and a browser sign-in the device finishes itself (`POST /api/connectors/{connector_id}/authorize` with `redirect_port`, then `POST /api/connectors/flows/{flow_id}/complete`) |
+| Setup | `pc`, or an allowed device | Setup's changes (see [Setup](#setup)), `POST /api/system/download-model`, `PUT /api/system/model-server/backend`, a device-code sign-in (`POST /api/connectors/{connector_id}/authorize-device`, for a connector with `supports_device_code` only), and a browser sign-in the device finishes itself (`POST /api/connectors/{connector_id}/authorize` with `redirect_port`, then `POST /api/connectors/flows/{flow_id}/complete`), and cancelling a sign-in (`DELETE /api/connectors/_flows/{flow_id}`; a device only its own) |
 | Not from a device | `pc`, `tunnel` | `GET /api/providers`, which can register a provider |
 | Pairing | a device on the listener, with no token | `POST /api/devices/pair` |
 | Its own routes | an allowed device | `GET /api/devices/me/routes` |

@@ -108,6 +108,7 @@ PC_ONLY = {
 
 PC_OR_DEVICE = {
     "DELETE /api/automations/{ref}",
+    "DELETE /api/connectors/_flows/{flow_id}",
     "DELETE /api/goals/{goal_id}",
     "DELETE /api/schedules/{name:path}",
     "GET /api/automations",
@@ -165,7 +166,6 @@ WEB = {
 # ``network_policy`` in ``PUT /api/settings``.
 REMOTE = {
     "DELETE /api/chat/permissions/{session_id}/grants",
-    "DELETE /api/connectors/_flows/{flow_id}",
     "DELETE /api/connectors/{connector_id}",
     "DELETE /api/connectors/{connector_id}/grants/{agent_id:path}",
     "DELETE /api/documents/{doc_id}",

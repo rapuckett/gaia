@@ -1471,10 +1471,27 @@ async def authorize_device(
 
 
 @router.delete(
-    "/_flows/{flow_id}", status_code=204, dependencies=[Depends(_require_ui_header)]
+    "/_flows/{flow_id}",
+    status_code=204,
+    dependencies=[Depends(_require_ui_header), Depends(require_pc_or_allowed_device)],
 )
-async def cancel_flow_endpoint(flow_id: str) -> Response:
-    """Cancel a pending OAuth flow without waiting for the callback."""
+async def cancel_flow_endpoint(request: Request, flow_id: str) -> Response:
+    """Cancel a pending OAuth flow without waiting for the callback.
+
+    The PC may cancel any flow; a paired device only one it started.
+    """
+    device = allowed_device(request)
+    pending = _flow_pending.get(flow_id)
+    if (
+        device is not None
+        and pending is not None
+        and pending.owner_device_id != device.device_id
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail="Only the PC or the device that started this sign-in can "
+            "cancel it.",
+        )
     await connections.cancel_flow(flow_id)
     return Response(status_code=204)
 

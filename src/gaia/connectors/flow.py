@@ -308,7 +308,34 @@ async def start_authorization(
             stale_ids,
         )
         for stale_id in stale_ids:
+            stale = _pending.get(stale_id)
             await _teardown_flow(stale_id)
+            if stale is None:
+                continue
+            # A future is resolved only from its own loop.
+            if (
+                not stale.future.done()
+                and stale.future.get_loop() is asyncio.get_running_loop()
+            ):
+                stale.future.set_exception(
+                    ConnectorsError(
+                        f"Sign-in to {stale.provider_id} was replaced by a newer "
+                        "one, so this sign-in link no longer works."
+                    )
+                )
+            # Only another starter's screen is waiting; the one re-clicking
+            # Connect would read this as its new sign-in failing.
+            if stale.owner_device_id == owner_device_id:
+                continue
+            await emit(
+                "connector.oauth.error",
+                {
+                    "connector_id": stale.provider_id,
+                    "flow_id": stale_id,
+                    "reason": "superseded",
+                    "error": "A newer sign-in replaced this one.",
+                },
+            )
 
     provider = get_provider(provider_id)
     scopes_list = resolve_or_reject_empty_scopes(
