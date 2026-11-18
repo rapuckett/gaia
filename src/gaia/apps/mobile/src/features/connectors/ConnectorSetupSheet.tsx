@@ -5,7 +5,6 @@ import { useEffect, useRef, useState, type MutableRefObject } from 'react';
 
 import type { ConnectorRow } from '@/api/client.types';
 import { useConfigureConnector } from '@/data';
-import { Markdown } from '@/features/chat/markdown/Markdown';
 import { isPcRefusal, PcOnlyNotice } from '@/features/settings/PcOnlyNotice';
 import { describeHttpFailure, useT } from '@/i18n/useT';
 import { openLinkFromPress } from '@/platform/openLink';
@@ -223,7 +222,7 @@ function SetupInput({
                 literal={!secret}
                 testID={testID}
             />
-            {help ? <Markdown text={help} variant="formatting" /> : null}
+            {help ? <Text role="label" tone="secondary">{help}</Text> : null}
         </Stack>
     );
 }
