@@ -1050,7 +1050,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             const clientId = typeof config.client_id === 'string' ? config.client_id : '';
             const next: ConnectorRow =
                 row.type === 'mcp_server'
-                    ? { ...row, configured: true, enabled: true }
+                    ? { ...row, configured: true }
                     : clientId
                       ? { ...row, configurable: true, config_error: null, oauth_client: { source: 'keyring', client_id: clientId, has_secret: !!config.client_secret } }
                       : row;
