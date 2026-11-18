@@ -137,7 +137,10 @@ describe('app config', () => {
         expect(file).toBeDefined();
         const path = resolve(__dirname, '..', file as string);
         expect(existsSync(path)).toBe(true);
-        const arabic = JSON.parse(readFileSync(path, 'utf8')) as Record<string, string>;
+        const locale = JSON.parse(readFileSync(path, 'utf8')) as Record<string, unknown>;
+        // Under `ios` only: Expo writes top-level keys to Android strings too, where they break release lint.
+        expect(Object.keys(locale)).toEqual(['ios']);
+        const arabic = locale.ios as Record<string, string>;
 
         const keys = new Set<string>(['CFBundleDisplayName']);
         for (const key of Object.keys(config.ios?.infoPlist ?? {})) {
