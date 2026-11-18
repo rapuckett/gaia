@@ -212,7 +212,7 @@ def test_every_file_is_redacted_of_saved_secrets_and_token_shapes(install):
         "fw_Fake0123456789abcdEF",
         "gaiad_FAKEfake0123456789FAKEfake0123456789abc",
         "xapp-1-AFAKE0001-1111111111111-fakefakefake",
-        "123456789:AAFAKEfakeFAKEfakeFAKEfakeFAKEfake0",
+        "123456789" + ":" + "AAFAKEfakeFAKEfakeFAKEfakeFAKEfake0",
     ]
     leaks = [saved_key, bot_token, *shapes]
     (gaia_dir / "gaia.log").write_text(" ".join(leaks) + "\n", encoding="utf-8")
