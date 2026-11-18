@@ -395,15 +395,15 @@ export function useSaveModelChoices() {
 /**
  * Connects a provider that already holds a key on the PC, selects the model and starts the cloud
  * setup run, as webui's SetupScreen `connect` does. No key is sent: `wanted` is the picked model id,
- * and `wantedName` the name an error says.
+ * and `wantedName` the name an error says. `keySent` skips the connect when `useSendProviderKey` just did it.
  */
 export function useConnectCloud() {
     const client = useGaiaClient();
     const queryClient = useQueryClient();
-    return useMutation<SetupRunStatus, Error, { provider: string; wanted: string | null; wantedName?: string }>({
-        mutationFn: async ({ provider, wanted, wantedName }) => {
+    return useMutation<SetupRunStatus, Error, { provider: string; wanted: string | null; wantedName?: string; keySent?: boolean }>({
+        mutationFn: async ({ provider, wanted, wantedName, keySent }) => {
             const api = requireClient(client);
-            await api.connectProvider(provider);
+            if (!keySent) await api.connectProvider(provider);
             const { models } = await api.listProviderModels(provider);
             const pick = wanted ? models.find((m) => m.id === wanted) : (models.find((m) => m.rank === 1) ?? models[0]);
             if (!pick) {
