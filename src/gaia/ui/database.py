@@ -15,7 +15,7 @@ import uuid
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from gaia.config import GaiaConfig, gaia_home
 from gaia.utils.process_owner import current_owner, owner_is_gone
@@ -232,7 +232,19 @@ CREATE TABLE IF NOT EXISTS cloud_spend (
     usd           REAL
 );
 
+-- One row per change a paired device made on the PC; params never hold a secret.
+-- removed_at is set once the device is no longer paired.
+CREATE TABLE IF NOT EXISTS device_changes (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    device_id  TEXT NOT NULL,
+    kind       TEXT NOT NULL,
+    params     TEXT NOT NULL DEFAULT '{}',
+    at         REAL NOT NULL,
+    removed_at REAL
+);
+
 -- Indexes
+CREATE INDEX IF NOT EXISTS idx_device_changes_device ON device_changes(device_id, id);
 CREATE INDEX IF NOT EXISTS idx_cloud_spend_month ON cloud_spend(month);
 CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_documents_hash ON documents(file_hash);
@@ -244,8 +256,10 @@ CREATE INDEX IF NOT EXISTS idx_schedule_results_task
 _CHAT_SCHEMA_OBJECTS = frozenset(
     {
         "cloud_spend",
+        "device_changes",
         "documents",
         "idx_cloud_spend_month",
+        "idx_device_changes_device",
         "idx_documents_hash",
         "idx_messages_session",
         "idx_messages_unfolded",
@@ -2068,6 +2082,84 @@ class ChatDatabase:
                 (month,),
             ).fetchall()
         return [dict(r) for r in rows]
+
+    # ── Device changes ────────────────────────────────────────────────
+
+    def add_device_change(
+        self, device_id: str, kind: str, params: Dict[str, Any], at: float, keep: int
+    ) -> None:
+        """Record a change *device_id* made, keeping only its *keep* newest rows."""
+        with self._transaction():
+            self._conn.execute(
+                "INSERT INTO device_changes (device_id, kind, params, at) "
+                "VALUES (?, ?, ?, ?)",
+                (device_id, kind, json.dumps(params, sort_keys=True), at),
+            )
+            self._conn.execute(
+                "DELETE FROM device_changes WHERE device_id = ? AND id NOT IN "
+                "(SELECT id FROM device_changes WHERE device_id = ? "
+                "ORDER BY id DESC LIMIT ?)",
+                (device_id, device_id, keep),
+            )
+
+    def device_changes(
+        self, device_id: str, limit: int
+    ) -> Tuple[List[Dict[str, Any]], int]:
+        """*device_id*'s newest *limit* changes, newest first, and how many it has."""
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT kind, params, at FROM device_changes WHERE device_id = ? "
+                "ORDER BY id DESC LIMIT ?",
+                (device_id, limit),
+            ).fetchall()
+            total = self._conn.execute(
+                "SELECT COUNT(*) FROM device_changes WHERE device_id = ?",
+                (device_id,),
+            ).fetchone()[0]
+        return [
+            {"kind": r["kind"], "params": json.loads(r["params"]), "at": r["at"]}
+            for r in rows
+        ], total
+
+    def device_change_counts(self) -> Dict[str, int]:
+        """How many changes each device with any has on record."""
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT device_id, COUNT(*) AS n FROM device_changes GROUP BY device_id"
+            ).fetchall()
+        return {r["device_id"]: r["n"] for r in rows}
+
+    def prune_device_changes(
+        self, paired: Optional[List[str]], at: float, removed_before: float
+    ) -> None:
+        """Start the clock on devices no longer in *paired*, then drop rows whose
+        device was removed before *removed_before*. *paired* None skips the first."""
+        with self._transaction():
+            if paired is not None:
+                marks = ",".join("?" * len(paired))
+                self._conn.execute(
+                    "UPDATE device_changes SET removed_at = ? WHERE removed_at IS NULL"
+                    + (f" AND device_id NOT IN ({marks})" if paired else ""),
+                    (at, *paired),
+                )
+            self._conn.execute(
+                "DELETE FROM device_changes WHERE removed_at IS NOT NULL "
+                "AND removed_at < ?",
+                (removed_before,),
+            )
+
+    def mark_device_removed(self, device_id: str, at: float) -> int:
+        """Start *device_id*'s retention clock now; how many changes it has."""
+        with self._transaction():
+            self._conn.execute(
+                "UPDATE device_changes SET removed_at = ? "
+                "WHERE device_id = ? AND removed_at IS NULL",
+                (at, device_id),
+            )
+            return self._conn.execute(
+                "SELECT COUNT(*) FROM device_changes WHERE device_id = ?",
+                (device_id,),
+            ).fetchone()[0]
 
     # ── Settings ──────────────────────────────────────────────────────
 

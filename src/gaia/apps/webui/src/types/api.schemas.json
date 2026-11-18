@@ -3658,6 +3658,71 @@
     "title": "DeviceAccessStatus",
     "type": "object"
   },
+  "DeviceChange": {
+    "description": "One change a paired device made on the PC; ``params`` never hold a secret.",
+    "properties": {
+      "at": {
+        "title": "At",
+        "type": "string"
+      },
+      "kind": {
+        "title": "Kind",
+        "type": "string"
+      },
+      "params": {
+        "additionalProperties": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "title": "Params",
+        "type": "object"
+      }
+    },
+    "required": [
+      "kind",
+      "params",
+      "at"
+    ],
+    "title": "DeviceChange",
+    "type": "object"
+  },
+  "DeviceChangeList": {
+    "description": "A device's changes, newest first, and how many it has on record.",
+    "properties": {
+      "changes": {
+        "items": {
+          "$ref": "#/components/schemas/DeviceChange"
+        },
+        "title": "Changes",
+        "type": "array"
+      },
+      "total": {
+        "title": "Total",
+        "type": "integer"
+      }
+    },
+    "required": [
+      "changes",
+      "total"
+    ],
+    "title": "DeviceChangeList",
+    "type": "object"
+  },
   "DeviceOrigin": {
     "description": "One origin a paired device may reach this PC at.",
     "properties": {
@@ -3810,6 +3875,20 @@
       "exp"
     ],
     "title": "DevicePairingOffer",
+    "type": "object"
+  },
+  "DeviceRemoved": {
+    "description": "A device the PC unpaired: how many of its changes stay on the PC.",
+    "properties": {
+      "changes_count": {
+        "title": "Changes Count",
+        "type": "integer"
+      }
+    },
+    "required": [
+      "changes_count"
+    ],
+    "title": "DeviceRemoved",
     "type": "object"
   },
   "DeviceRoutes": {
@@ -9774,6 +9853,11 @@
   "PairedDevice": {
     "description": "A paired device, as the PC lists it. Never carries a token or its hash.",
     "properties": {
+      "changes_count": {
+        "default": 0,
+        "title": "Changes Count",
+        "type": "integer"
+      },
       "created_at": {
         "title": "Created At",
         "type": "string"

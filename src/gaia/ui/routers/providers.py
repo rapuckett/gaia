@@ -47,6 +47,7 @@ from gaia.logger import get_logger
 
 from ..database import ChatDatabase
 from ..dependencies import get_db
+from ..devices.changes import record_device_change
 from ..local_models import DOWNLOADED, LOADED, NOT_DOWNLOADED
 from ..models import DownloadProgress, WireModel
 from ..security import (
@@ -1720,6 +1721,13 @@ def connect_provider(
                 "Paste a valid API key."
             ),
         )
+    if body.api_key and body.api_key.strip():
+        record_device_change(
+            request,
+            "providerKeySet",
+            provider=_NAMES[provider],
+            provider_id=provider,
+        )
     return {**view, "remembered": remembered, "remember_error": remember_error}
 
 
@@ -1845,7 +1853,7 @@ def _connect_on_users_server(provider: str) -> Dict[str, Any]:
     response_model=ProviderKeyForgotten,
     response_model_exclude_unset=True,
 )
-def forget_provider_key(provider: str) -> Dict[str, Any]:
+def forget_provider_key(provider: str, request: Request) -> Dict[str, Any]:
     """Clear the key from Lemonade and from the OS credential store."""
     from gaia.connectors.credential_wait import discard
     from gaia.connectors.errors import ConnectorsError
@@ -1868,6 +1876,9 @@ def forget_provider_key(provider: str) -> Dict[str, Any]:
         _raise(e)
     except ConnectorsError as e:
         raise HTTPException(status_code=503, detail=str(e)) from e
+    record_device_change(
+        request, "providerKeyRemoved", provider=_NAMES[provider], provider_id=provider
+    )
     return {"removed": removed}
 
 

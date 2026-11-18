@@ -97,6 +97,7 @@ from gaia.connectors.store import (
     retry_keyring,
 )
 
+from ..devices.changes import record_device_change
 from ..models import WireModel
 from ..security import (
     audit_approval,
@@ -1065,6 +1066,13 @@ async def configure_connector(
     except ConnectorsError as e:
         raise _raise_http_for(e) from e
 
+    await asyncio.to_thread(
+        record_device_change,
+        request,
+        "connectorSetup",
+        connector=REGISTRY.get(connector_id).display_name,
+        connector_id=connector_id,
+    )
     await _emitter.emit(
         "connector.configured",
         {"connector_id": connector_id, "account_id": result.get("account_id")},

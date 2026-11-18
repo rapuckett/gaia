@@ -93,6 +93,27 @@ DEVICE_PAIRED_ACTIONS = ("review", "deny")
 SECURITY_ALERT_EVENT = "security_alert"
 PAIRING_LOCKOUT_ALERT = "pairing_locked_out"
 
+#: Sent on ``/api/sessions/events`` to the device that asked and to the PC
+#: while an OS prompt only a person at the PC can answer is up: ``kind`` is
+#: ``key_store`` or ``admin``, ``action`` what the device started.
+DEVICE_PROMPT_EVENT = "device_prompt"
+DevicePromptState = Literal["waiting", "approved", "cancelled", "denied", "timeout"]
+DEVICE_PROMPT_STATES = get_args(DevicePromptState)
+#: How long the PC waits on such a prompt before reporting ``timeout``.
+DEVICE_PROMPT_TIMEOUT_SECONDS = 5 * 60
+
+#: The change log of what each device changed on the PC: the newest rows kept
+#: per device, how long they outlive the device, and the list's page sizes.
+DEVICE_CHANGES_KEPT = 200
+REMOVED_DEVICE_CHANGES_DAYS = 90
+DEVICE_CHANGES_PAGE = 20
+#: A change's params name what changed, never a secret: these keys are refused.
+DEVICE_CHANGE_SECRET_PARAMS = frozenset(
+    {"api_key", "client_secret", "key", "password", "secret", "token"}
+)
+#: Longest param value kept; a change's params are labels, not payloads.
+DEVICE_CHANGE_PARAM_MAX = 200
+
 #: Invitation and token sizes. A token starts with the prefix, so a leaked
 #: one is recognizable; only its SHA-256 is stored.
 INVITATION_BYTES = 16
