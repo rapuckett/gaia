@@ -928,7 +928,7 @@ def _audit_into(monkeypatch, module):
         ("device", "/api/connectors/google/configure", "save_only", 200),
         ("device", "/api/connectors/google/configure", "sign_in", 403),
         ("device", "/api/connectors/microsoft/configure", "sign_in", 403),
-        ("device", "/api/connectors/mcp-github/configure", "grant_agents", 403),
+        ("device", "/api/connectors/mcp-github/configure", "grant_agents", 200),
         ("tunnel", "/api/connectors/mcp-github/configure", None, 403),
         ("pending", "/api/connectors/mcp-github/configure", None, 403),
         ("device", "/api/connectors/google/authorize", {}, 403),
@@ -964,6 +964,11 @@ def test_a_paired_device_may_set_up_connectors(
         lambda *a, **kw: started.append(a),
     )
     audited = _audit_into(monkeypatch, connectors)
+    monkeypatch.setattr(
+        connectors,
+        "_resolve_grant_scopes",
+        lambda request, connector_id, agent_ids: {a: [] for a in agent_ids},
+    )
     secret = "ghp_" + "S3CRETvalue" * 3
     configs = {
         None: {"GITHUB_PERSONAL_ACCESS_TOKEN": secret},
@@ -997,7 +1002,10 @@ def test_a_paired_device_may_set_up_connectors(
         assert stored == {"mcp-github:GITHUB_PERSONAL_ACCESS_TOKEN": secret}
         assert secret not in (tmp_path / "mcp_servers.json").read_text()
     connector_id = path.split("/")[3]
-    expected = [(f"device:{device.device_id}", f"connector {connector_id} set up")]
+    what = f"connector {connector_id} set up"
+    if body == "grant_agents":
+        what += " and granted to installed:email"
+    expected = [(f"device:{device.device_id}", what)]
     assert audited == (expected if caller == "device" else [])
 
 
@@ -1482,6 +1490,11 @@ def test_a_device_may_only_switch_back_to_gaias_own_lemonade(setup, monkeypatch)
     path = "/api/lemonade/target"
     external = {"mode": "external", "base_url": "http://10.0.0.5:13305", "api_key": "k"}
     assert clients["device"].post(path, json=external, headers=UI).status_code == 403
+    # Only the exact mode is GAIA's own; anything else is the user's server.
+    assert (
+        clients["device"].post(path, json={"mode": "GAIA"}, headers=UI).status_code
+        == 403
+    )
     _refused_away(clients, "POST", path, {"mode": "gaia"})
     assert switched == [] and audited == []
     resp = clients["device"].post(path, json={"mode": "gaia"}, headers=UI)
@@ -1490,3 +1503,60 @@ def test_a_device_may_only_switch_back_to_gaias_own_lemonade(setup, monkeypatch)
     assert audited == [
         (f"device:{device.device_id}", "Lemonade Server switched to GAIA's own")
     ]
+
+
+def _audit_lines(run):
+    """What *run* writes to the audit log, through the file handler's formatter."""
+    import io
+    import logging
+
+    from gaia.security import OneLineFormatter, audit_logger
+
+    out = io.StringIO()
+    handler = logging.StreamHandler(out)
+    handler.setFormatter(OneLineFormatter("%(levelname)s | %(message)s"))
+    level = audit_logger.level
+    audit_logger.addHandler(handler)
+    audit_logger.setLevel(logging.INFO)
+    try:
+        run()
+    finally:
+        audit_logger.removeHandler(handler)
+        audit_logger.setLevel(level)
+    return out.getvalue().splitlines()
+
+
+def test_an_audit_line_cannot_be_forged():
+    """A newline in what is approved stays inside its one line."""
+    forged = "chat 1 set to manual\nINFO | APPROVAL | goal 9 approved | by pc"
+    lines = _audit_lines(
+        lambda: security.audit_approval(_request_for("pc", None), forged)
+    )
+    assert len(lines) == 1, lines
+    assert "\\n" in lines[0]
+
+
+def test_a_malformed_agent_id_is_refused(setup, monkeypatch):
+    from gaia.ui.routers import connectors
+
+    _, clients, _ = setup
+    written = []
+    monkeypatch.setattr(connectors, "grant_agent", lambda *a: written.append(a))
+    monkeypatch.setattr(
+        connectors, "activate_connector_for_agent", lambda *a, **k: written.append(a)
+    )
+    url = "/api/connectors/mcp-github"
+    # The router never matches "\n" in a path parameter (404); "\r" reaches the route.
+    for bad, status in (("%0D", 422), ("%0A", 404), ("%1B", 422), ("x/../y", 422)):
+        agent = f"builtin:chat{bad}INFO%20|%20APPROVAL%20|%20forged"
+        for method, path, body in (
+            ("PUT", f"{url}/grants/{agent}", {"scopes": []}),
+            ("PUT", f"{url}/activations/{agent}", {"scopes": []}),
+            ("DELETE", f"{url}/activations/{agent}", None),
+        ):
+            for caller in ("pc", "device"):
+                resp = clients[caller].request(method, path, json=body, headers=UI)
+                assert resp.status_code == status, (caller, path, resp.text)
+                if status == 422:
+                    assert resp.json()["detail"]["error"] == "invalid_agent_id"
+    assert written == []

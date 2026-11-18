@@ -20,6 +20,7 @@ import stat
 import tempfile
 import threading
 import time
+import unicodedata
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
@@ -30,6 +31,28 @@ logger = logging.getLogger(__name__)
 
 # Audit logger — separate from main logger for file operation tracking
 audit_logger = logging.getLogger("gaia.security.audit")
+
+_LINE_BREAKING = {"Cc", "Zl", "Zp"}
+
+
+def escape_control(text: str) -> str:
+    """*text* with control and line-break characters written as escapes.
+
+    A value from a request (an id in a URL) can carry ``\n``; escaped, it
+    can't start a forged audit line.
+    """
+    if not any(unicodedata.category(c) in _LINE_BREAKING for c in text):
+        return text
+    return "".join(
+        repr(c)[1:-1] if unicodedata.category(c) in _LINE_BREAKING else c for c in text
+    )
+
+
+class OneLineFormatter(logging.Formatter):
+    """Each record is exactly one line, whatever its message carries."""
+
+    def format(self, record: logging.LogRecord) -> str:
+        return escape_control(super().format(record))
 
 
 def ensure_audit_log_handler(cache_dir: Optional[Path] = None) -> None:
@@ -54,7 +77,7 @@ def ensure_audit_log_handler(cache_dir: Optional[Path] = None) -> None:
         backupCount=3,
         encoding="utf-8",
     )
-    handler.setFormatter(logging.Formatter("%(asctime)s | %(levelname)s | %(message)s"))
+    handler.setFormatter(OneLineFormatter("%(asctime)s | %(levelname)s | %(message)s"))
     audit_logger.addHandler(handler)
     audit_logger.setLevel(logging.INFO)
 

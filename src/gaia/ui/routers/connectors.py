@@ -37,6 +37,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 from pathlib import Path
 from typing import Any, AsyncIterator, Dict, List, Literal, Optional, Union
 
@@ -126,6 +127,26 @@ forwarded_router = APIRouter(prefix="/v1/connections", tags=["connections"])
 # ─────────────────────────────────────────────────────────────────
 # CSRF guard (plan amendment A8)
 # ─────────────────────────────────────────────────────────────────
+
+
+#: ``builtin:<id>``, ``installed:<id>``, ``native:<id>`` or ``custom:<hash>:<id>``.
+_AGENT_ID_RE = re.compile(
+    r"(?:builtin|installed|native|custom:[0-9a-f]{1,64}):[A-Za-z0-9][A-Za-z0-9._-]{0,127}"
+)
+
+
+def _checked_agent_id(agent_id: str) -> str:
+    """422 unless *agent_id* is a namespaced agent id."""
+    if not _AGENT_ID_RE.fullmatch(agent_id):
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "error": "invalid_agent_id",
+                "message": "An agent id is namespaced, like 'builtin:chat' or "
+                "'installed:email'. Run `gaia connectors list` to see them.",
+            },
+        )
+    return agent_id
 
 
 def _require_mcp_server(connector_id: str) -> None:
@@ -1072,12 +1093,6 @@ def _refuse_device_sign_in(
         raise HTTPException(
             status_code=404, detail=f"Unknown connector: {connector_id!r}"
         )
-    if config.get("grant_agents"):
-        raise HTTPException(
-            status_code=403,
-            detail="Choose which agents may use this account on the PC running "
-            "GAIA. A paired device can only save the setup.",
-        )
     if spec.type == "oauth_pkce" and not config.get("save_only"):
         raise HTTPException(
             status_code=403,
@@ -1134,7 +1149,12 @@ async def configure_connector(
         raise _http_error_for(request, e) from e
 
     if not is_local_pc(request):
-        audit_approval(request, f"connector {connector_id} set up")
+        granted = sorted(config.get("grant_agents") or {})
+        audit_approval(
+            request,
+            f"connector {connector_id} set up"
+            + (f" and granted to {', '.join(granted)}" if granted else ""),
+        )
     await _emitter.emit(
         "connector.configured",
         {"connector_id": connector_id, "account_id": result.get("account_id")},
@@ -1463,6 +1483,7 @@ async def put_grant(
     routes down), and the same 400 ``scope_not_allowed`` body the authorize
     route already returns.
     """
+    _checked_agent_id(agent_id)
     try:
         grant_agent(connector_id, agent_id, body.scopes)
     except ConnectorsError as e:
@@ -1482,6 +1503,7 @@ async def put_grant(
     dependencies=[Depends(_require_ui_header)],
 )
 async def delete_grant(connector_id: str, agent_id: str) -> Response:
+    _checked_agent_id(agent_id)
     revoke_agent_grant(connector_id, agent_id)
     await _emitter.emit(
         "connector.grant.changed",
@@ -1517,6 +1539,7 @@ async def put_activation(
     frontend must look up REQUIRED_CONNECTORS scopes for the agent and
     pass them in.
     """
+    _checked_agent_id(agent_id)
     _require_mcp_server(connector_id)
     try:
         auto_granted = activate_connector_for_agent(
@@ -1572,6 +1595,7 @@ async def delete_activation(
     # ``connector.activation.changed`` emit fire on one path for all callers
     # (#1226). Previously this called the bare ledger function and emitted
     # inline, bypassing the guard.
+    _checked_agent_id(agent_id)
     _require_mcp_server(connector_id)
     deactivate_connector_for_agent(connector_id, agent_id)
     if not is_local_pc(request):
