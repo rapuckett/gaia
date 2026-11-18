@@ -101,6 +101,7 @@ from ..models import WireModel
 from ..security import (
     audit_approval,
     is_local_pc,
+    principal,
     require_local_pc,
     require_pc_or_allowed_device,
 )
@@ -486,6 +487,37 @@ def _raise_http_for(exc: ConnectorsError) -> HTTPException:
     if isinstance(exc, ConsentDeniedError):
         return HTTPException(status_code=400, detail=str(exc))
     return HTTPException(status_code=500, detail=str(exc))
+
+
+DEVICE_CONNECTOR_ERROR = (
+    "GAIA couldn't finish this on the PC. "
+    "Open Settings \u203a Connectors on the PC to see why."
+)
+DEVICE_CHECK_FAILED = (
+    "The check didn't pass. Run it again in Settings \u203a Connectors on the PC "
+    "to see why."
+)
+
+
+def _http_error_for(request: Request, exc: ConnectorsError) -> HTTPException:
+    """``_raise_http_for``, keeping a server failure's text (paths) on the PC."""
+    http = _raise_http_for(exc)
+    if http.status_code < 500 or is_local_pc(request):
+        return http
+    logger.error("connectors: request from %s failed: %s", principal(request), exc)
+    detail: Any = DEVICE_CONNECTOR_ERROR
+    if isinstance(http.detail, dict) and "error" in http.detail:
+        detail = {"error": http.detail["error"], "message": DEVICE_CONNECTOR_ERROR}
+    return HTTPException(
+        status_code=http.status_code, detail=detail, headers=http.headers
+    )
+
+
+def _shareable_check(result: Dict[str, Any]) -> Dict[str, Any]:
+    """A health check's result with failure text (server output) left on the PC."""
+    if result.get("ok") or result.get("reason") in ("timeout", "disabled"):
+        return result
+    return {**result, "detail": DEVICE_CHECK_FAILED}
 
 
 # ─────────────────────────────────────────────────────────────────
@@ -1028,10 +1060,35 @@ async def get_connector(connector_id: str) -> Dict[str, Any]:
 # ─────────────────────────────────────────────────────────────────
 
 
-# Stores credentials, so only the PC running GAIA may connect an account.
+def _refuse_device_sign_in(
+    request: Request, connector_id: str, config: Dict[str, Any]
+) -> None:
+    """A paired device may save an OAuth client or an MCP server, never sign in."""
+    if is_local_pc(request):
+        return
+    try:
+        spec = REGISTRY.get(connector_id)
+    except KeyError:
+        raise HTTPException(
+            status_code=404, detail=f"Unknown connector: {connector_id!r}"
+        )
+    if config.get("grant_agents"):
+        raise HTTPException(
+            status_code=403,
+            detail="Choose which agents may use this account on the PC running "
+            "GAIA. A paired device can only save the setup.",
+        )
+    if spec.type == "oauth_pkce" and not config.get("save_only"):
+        raise HTTPException(
+            status_code=403,
+            detail=f"Sign in to {spec.display_name} on the PC running GAIA. A "
+            "paired device can only save its OAuth client.",
+        )
+
+
 @router.post(
     "/{connector_id}/configure",
-    dependencies=[Depends(_require_ui_header), Depends(require_local_pc)],
+    dependencies=[Depends(_require_ui_header), Depends(require_pc_or_allowed_device)],
     response_model=ConnectorConfigureResponse,
     response_model_exclude_unset=True,
 )
@@ -1045,9 +1102,10 @@ async def configure_connector(
     the mailbox is granted to those agents when the flow completes (#2117) — the
     same behaviour as the plain ``authorize`` path.
     """
+    config = dict(body.config)
+    _refuse_device_sign_in(request, connector_id, config)
     # Connecting needs the key store, so it may ask the OS to unlock it again.
     retry_keyring()
-    config = dict(body.config)
     raw_grant_agents = config.get("grant_agents")
     if raw_grant_agents:
         config["grant_agents"] = _resolve_grant_scopes(
@@ -1063,23 +1121,26 @@ async def configure_connector(
             status_code=404, detail=f"Unknown connector: {connector_id!r}"
         )
     except ConnectorsError as e:
-        raise _raise_http_for(e) from e
+        raise _http_error_for(request, e) from e
 
+    if not is_local_pc(request):
+        audit_approval(request, f"connector {connector_id} set up")
     await _emitter.emit(
         "connector.configured",
         {"connector_id": connector_id, "account_id": result.get("account_id")},
     )
+    if "args" in result:
+        result = {**result, "args": args_for_caller(request, list(result["args"]))}
     return result
 
 
-# The health check reads the key store, which can prompt on the PC.
 @router.post(
     "/{connector_id}/test",
-    dependencies=[Depends(_require_ui_header), Depends(require_local_pc)],
+    dependencies=[Depends(_require_ui_header), Depends(require_pc_or_allowed_device)],
     response_model=ConnectorTestResponse,
     response_model_exclude_unset=True,
 )
-async def test_connector(connector_id: str) -> Dict[str, Any]:
+async def test_connector(request: Request, connector_id: str) -> Dict[str, Any]:
     """Run the health check for a connector."""
     retry_keyring()
     try:
@@ -1089,17 +1150,19 @@ async def test_connector(connector_id: str) -> Dict[str, Any]:
             status_code=404, detail=f"Unknown connector: {connector_id!r}"
         )
     except ConnectorsError as e:
-        raise _raise_http_for(e) from e
+        raise _http_error_for(request, e) from e
 
+    shareable = _shareable_check(result)
+    # The event stream reaches paired devices too.
     await _emitter.emit(
         "connector.tested",
         {
             "connector_id": connector_id,
-            "ok": result.get("ok"),
-            "detail": result.get("detail"),
+            "ok": shareable.get("ok"),
+            "detail": shareable.get("detail"),
         },
     )
-    return result
+    return result if is_local_pc(request) else shareable
 
 
 @router.delete(
