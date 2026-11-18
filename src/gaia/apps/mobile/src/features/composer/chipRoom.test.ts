@@ -20,7 +20,7 @@ describe('collapsedChips', () => {
         expect(collapsedChips(all, 540)).toEqual(['meter']);
         expect(collapsedChips(all, 500)).toEqual(['meter', 'folder']);
         expect(collapsedChips(all, 450)).toEqual(['meter', 'folder', 'private']);
-        expect(collapsedChips(all, 100)).toEqual(['meter', 'folder', 'private', 'permission']);
+        expect(collapsedChips(all, 100)).toEqual(['meter', 'folder', 'private', 'permission', 'meterWord']);
     });
 
     // Widths as the new-chat row measures them at 390 px (web): 227 between Attach and Send.
@@ -37,6 +37,15 @@ describe('collapsedChips', () => {
         expect(collapsedChips({ ...NEW_CHAT, place: 177 }, 227)).toEqual(['private', 'permission', 'place']);
         expect(collapsedChips({ ...NEW_CHAT, place: 177 }, 270)).toEqual(['private', 'permission']);
         expect(collapsedChips({ ...NEW_CHAT, place: 177 }, 400)).toEqual([]);
+    });
+
+    it("drops the meter's text last, only when that lets the model's name fit", () => {
+        const row = { ...NEW_CHAT, meter: 80 };
+        expect(collapsedChips(row, 265)).toEqual(['meter', 'private', 'permission']);
+        expect(collapsedChips(row, 250)).toEqual(['meter', 'private', 'permission', 'meterWord']);
+        expect(collapsedChips({ ...row, meterWord: 30 }, 250)).toEqual(['meter', 'private', 'permission', 'meterWord']);
+        expect(collapsedChips({ ...row, meterWord: 30 }, 259)).toEqual(['meter', 'private', 'permission', 'meterWord']);
+        expect(collapsedChips({ ...row, meterWord: 30 }, 262)).toEqual(['meter', 'private', 'permission']);
     });
 
     it('skips chips that are absent and treats an unmeasured row as fitting', () => {
