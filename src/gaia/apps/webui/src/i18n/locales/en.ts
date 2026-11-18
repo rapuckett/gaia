@@ -4304,6 +4304,8 @@ export const enMessages = {
     'mobileApp.yourPc.resources.error': "Can't read your PC's usage. Trying again…",
     'mobileApp.yourPc.retry.localHint': 'Your PC',
     'mobileApp.yourPc.retry.onThisPc': 'These run on your PC, not on {provider}. The model loads first, which can take a minute.',
+    'mobileApp.yourPc.settings.connectors.clientHelp': 'Bring your own OAuth client — saved encrypted in your PC’s keyring and reused for future connections. Environment variables on your PC are only used when no saved client exists.',
+    'mobileApp.yourPc.settings.connectors.firstSetup': 'First-time setup — provide your OAuth client credentials below. They’re stored encrypted in your PC’s keyring and reused for future connections.',
     'mobileApp.yourPc.settings.errors.notInstalledTitle': "Models on your PC aren't set up yet",
     'mobileApp.yourPc.settings.messaging.takeOver': 'Answer from your PC',
     'mobileApp.yourPc.setup.backend.hintNoNpu': "Chat runs on your PC's graphics (GPU).",

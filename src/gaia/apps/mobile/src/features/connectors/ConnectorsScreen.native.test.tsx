@@ -339,6 +339,7 @@ describeNative('ConnectorsScreen setup from the phone', () => {
         await render(<ConnectorsScreen />, { wrapper: wrap });
         await fireEvent.press(await screen.findByLabelText('Google'));
         await fireEvent.press(await screen.findByTestId('connector-client-google'));
+        expect(await screen.findByText(/saved encrypted in your PC’s keyring/)).toBeTruthy();
         await fireEvent.changeText(await screen.findByTestId('connector-setup-client_id'), 'test-client-id');
         await fireEvent.changeText(screen.getByTestId('connector-setup-client_secret'), 'test-client-secret');
         await fireEvent.press(screen.getByTestId('connector-setup-save'));

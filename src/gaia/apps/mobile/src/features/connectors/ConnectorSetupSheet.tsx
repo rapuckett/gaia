@@ -2,16 +2,14 @@
 // SPDX-License-Identifier: MIT
 
 import { useEffect, useRef, useState, type MutableRefObject } from 'react';
-import { Platform, TextInput, View } from 'react-native';
+import { Platform } from 'react-native';
 
 import type { ConnectorRow } from '@/api/client.types';
 import { useConfigureConnector } from '@/data';
 import { Markdown } from '@/features/chat/markdown/Markdown';
 import { describeHttpFailure, useT } from '@/i18n/useT';
 import { openLinkFromPress } from '@/platform/openLink';
-import { Button, Notice, Sheet, Stack, Text, useTheme } from '@/ui';
-import { fontFamily } from '@/ui/theme/fonts';
-import { metrics } from '@/ui/tokens/generated';
+import { Button, Notice, Sheet, Stack, Text, TextField } from '@/ui';
 import { Check, ExternalLink } from '@/ui/icons';
 
 import { canSaveSetup, fieldHelp, fieldLabel, oauthClientStatus, setupFields, setupPayload, setupProblem, type SetupField, type SetupForm } from './connectorList';
@@ -189,10 +187,7 @@ function SetupBody({
     );
 }
 
-/**
- * One setup value. Keys and client IDs are never suggested, corrected, autofilled or offered to a
- * password manager; a secret is masked and has no reveal.
- */
+/** One setup value. A secret is masked with no reveal; nothing typed here is suggested, autofilled or offered to a password manager. */
 function SetupInput({
     label,
     help,
@@ -212,52 +207,20 @@ function SetupInput({
     onChangeText: (text: string) => void;
     testID: string;
 }) {
-    const { colors, radius, type } = useTheme();
-    const [focused, setFocused] = useState(false);
-    const size = Math.max(type.body, metrics.inputFontSize);
     return (
-        <View style={{ gap: 6 }}>
-            <Text role="label" weight="medium" tone="secondary">
-                {label}
-            </Text>
-            <TextInput
+        <Stack gap="xs">
+            <TextField
+                label={label}
                 value={value}
                 onChangeText={onChangeText}
                 placeholder={placeholder}
-                placeholderTextColor={colors.textMuted}
-                editable={!disabled}
-                secureTextEntry={secret}
-                autoComplete="off"
-                autoCorrect={false}
-                autoCapitalize="none"
-                spellCheck={false}
-                textContentType="none"
-                importantForAutofill="no"
-                // Android's own keyboards learn and suggest typed words unless the field says it is a password.
-                keyboardType={!secret && Platform.OS === 'android' ? 'visible-password' : 'default'}
-                accessibilityLabel={label}
-                onFocus={() => setFocused(true)}
-                onBlur={() => setFocused(false)}
-                selectionColor={colors.accentSolid}
+                disabled={disabled}
+                secret={secret}
+                // Android keyboards learn and suggest typed words unless the field says it is a password.
+                keyboardType={!secret && Platform.OS === 'android' ? 'visible-password' : undefined}
                 testID={testID}
-                style={{
-                    minHeight: 48,
-                    paddingHorizontal: 12,
-                    paddingVertical: 12,
-                    borderRadius: radius.md,
-                    borderWidth: 1,
-                    borderColor: focused ? colors.accent : colors.border,
-                    backgroundColor: disabled ? colors.bgTertiary : colors.bgInput,
-                    color: colors.textPrimary,
-                    fontFamily: fontFamily({ weight: 'regular', mono: false, display: false }),
-                    fontSize: size,
-                    // Keys and IDs are Latin text: they read left to right in Arabic too.
-                    textAlign: 'left',
-                    writingDirection: 'ltr',
-                    ...(focused ? { boxShadow: `0 0 0 3px ${colors.accentRing}` } : null),
-                }}
             />
             {help ? <Markdown text={help} variant="formatting" /> : null}
-        </View>
+        </Stack>
     );
 }

@@ -32,6 +32,8 @@ export interface TextFieldProps {
     secureTextEntry?: boolean;
     /** With `secureTextEntry`: an eye button that shows the text. */
     revealable?: boolean;
+    /** A key or password: masked, with no reveal, never suggested, corrected, autofilled or offered to a password manager. */
+    secret?: boolean;
     /** Decoration inside the field's start edge (a search icon). */
     leading?: ReactNode;
     /** Content inside the field's end edge (a clear button). */
@@ -67,6 +69,7 @@ export function TextField({
     onSubmitEditing,
     secureTextEntry,
     revealable,
+    secret,
     leading,
     trailing,
     bare,
@@ -85,7 +88,7 @@ export function TextField({
     const t = useT();
     const uiRtl = useDirection() === 'rtl';
     // Typed text sets its own side, like a bubble; secrets and empty fields follow the UI.
-    const rtl = secureTextEntry ? uiRtl : contentDir(value, uiRtl ? 'rtl' : 'ltr') === 'rtl';
+    const rtl = secureTextEntry || secret ? uiRtl : contentDir(value, uiRtl ? 'rtl' : 'ltr') === 'rtl';
     const valueRtl = url && !value ? uiRtl : false;
     const [focused, setFocused] = useState(false);
     const [revealed, setRevealed] = useState(false);
@@ -137,10 +140,11 @@ export function TextField({
                 keyboardType={url ? 'url' : keyboardType}
                 onSubmitEditing={onSubmitEditing}
                 submitBehavior={multiline ? 'newline' : 'blurAndSubmit'}
-                secureTextEntry={secureTextEntry && !revealed}
+                secureTextEntry={secret || (secureTextEntry && !revealed)}
                 autoFocus={autoFocus}
-                autoCapitalize={url ? 'none' : undefined}
-                autoCorrect={url ? false : undefined}
+                autoCapitalize={url || secret ? 'none' : undefined}
+                autoCorrect={url || secret ? false : undefined}
+                {...(secret ? { textContentType: 'none' as const, autoComplete: 'off' as const, importantForAutofill: 'no' as const, spellCheck: false } : null)}
                 accessibilityLabel={accessibilityLabel ?? label}
                 accessibilityHint={accessibilityHint}
                 onFocus={() => {

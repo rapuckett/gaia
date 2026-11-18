@@ -4303,6 +4303,8 @@ const messages: Messages = {
     'mobileApp.yourPc.resources.error': 'تعذّرت قراءة استخدام الكمبيوتر لديك. جارٍ إعادة المحاولة…',
     'mobileApp.yourPc.retry.localHint': 'الكمبيوتر لديك',
     'mobileApp.yourPc.retry.onThisPc': 'تعمل هذه النماذج على الكمبيوتر لديك، لا على {provider}. يُحمَّل النموذج أولًا، وقد يستغرق ذلك دقيقة.',
+    'mobileApp.yourPc.settings.connectors.clientHelp': 'استخدم عميل OAuth الخاص بك — يُحفظ مشفرًا في سلسلة مفاتيح الكمبيوتر لديك ويُعاد استخدامه للاتصالات القادمة. لا تُستخدم متغيرات البيئة على الكمبيوتر لديك إلا عند عدم وجود عميل محفوظ.',
+    'mobileApp.yourPc.settings.connectors.firstSetup': 'الإعداد الأول — أدخل بيانات عميل OAuth أدناه. تُخزَّن مشفرة في سلسلة مفاتيح الكمبيوتر لديك ويُعاد استخدامها للاتصالات القادمة.',
     'mobileApp.yourPc.settings.errors.notInstalledTitle': 'لم تُعدّ النماذج على الكمبيوتر لديك بعد',
     'mobileApp.yourPc.settings.messaging.takeOver': 'الرد من الكمبيوتر لديك',
     'mobileApp.yourPc.setup.backend.hintNoNpu': 'تعمل الدردشة على رسومات الكمبيوتر لديك (GPU).',
