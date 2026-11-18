@@ -1625,6 +1625,38 @@ def _downloaded_on_this_pc(model_id: str) -> bool:
     )
 
 
+#: Said instead of scanning while the user has not turned System discovery on.
+NO_DISCOVERY_CONSENT = (
+    "System discovery is off, so GAIA read nothing on this PC. Turn it on in "
+    "Memory > Advanced > System discovery, then run the scan again."
+)
+
+
+def _without_discovery_consent():
+    """The events that refuse a profile scan when discovery is off, else None.
+
+    The scan reads the PC's files, apps and browsing, so it runs only once the
+    user has turned System discovery on.
+    """
+    from gaia.agents.base.memory import _system_context_is_enabled
+
+    if _system_context_is_enabled():
+        return None
+    logger.info("[memory router] profile scan refused: system discovery is off")
+    return iter(
+        [
+            _sse(
+                {
+                    "type": "error",
+                    "source": "consent",
+                    "message": NO_DISCOVERY_CONSENT,
+                }
+            ),
+            _sse({"type": "done", "total": 0}),
+        ]
+    )
+
+
 @router.get("/api/memory/stream-discovery", dependencies=[Depends(require_local_pc)])
 def stream_discovery():
     """Stream system discovery findings as SSE.
@@ -1637,7 +1669,12 @@ def stream_discovery():
     """
     from fastapi.responses import StreamingResponse
 
+    refused = _without_discovery_consent()
+
     def _generate():
+        if refused is not None:
+            yield from refused
+            return
         try:
             from gaia.agents.base.discovery import (
                 SystemDiscovery,
@@ -1746,7 +1783,12 @@ def stream_inference(include_browser: bool = Query(False)):
     """
     from fastapi.responses import StreamingResponse
 
+    refused = _without_discovery_consent()
+
     def _generate():
+        if refused is not None:
+            yield from refused
+            return
         try:
             from gaia.agents.base.discovery import SystemDiscovery
             from gaia.llm import create_client

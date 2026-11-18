@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type {
     AgentList,
@@ -117,6 +117,63 @@ export function useConnectorServerAction(connectorId: string, onDisconnected?: (
         },
         onSettled: () => queryClient.invalidateQueries({ queryKey: queryKeys.connectors }),
     });
+}
+
+/**
+ * Sends a connector's setup to the PC (an OAuth client, or an MCP server's keys), then re-reads the list.
+ * Not a react-query mutation: its variables are secrets, and the mutation cache would keep them.
+ */
+export function useConfigureConnector() {
+    const client = useGaiaClient();
+    const queryClient = useQueryClient();
+    return useCallback(
+        async (connectorId: string, config: Record<string, string | boolean>) => {
+            const result = await requireClient(client).configureConnector(connectorId, config);
+            await queryClient.invalidateQueries({ queryKey: queryKeys.connectors });
+            return result;
+        },
+        [client, queryClient],
+    );
+}
+
+export type ConnectorCheck =
+    | { state: 'checking' }
+    | { state: 'ok' }
+    | { state: 'failed'; detail: string; slow: boolean }
+    | { state: 'error'; error: Error };
+
+/**
+ * Each MCP server's latest Check, held above the tiles so a tile that moves to another group keeps it.
+ * A newer check, or a clear, wins over one still running.
+ */
+export function useConnectorChecks(initial: Record<string, ConnectorCheck> = {}) {
+    const client = useGaiaClient();
+    const [checks, setChecks] = useState<Record<string, ConnectorCheck | undefined>>(initial);
+    const runs = useRef<Record<string, number>>({});
+
+    const clear = useCallback((id: string) => {
+        runs.current[id] = (runs.current[id] ?? 0) + 1;
+        setChecks((prev) => ({ ...prev, [id]: undefined }));
+    }, []);
+
+    const run = useCallback(
+        async (id: string) => {
+            const mine = (runs.current[id] ?? 0) + 1;
+            runs.current[id] = mine;
+            setChecks((prev) => ({ ...prev, [id]: { state: 'checking' } }));
+            let next: ConnectorCheck;
+            try {
+                const result = await requireClient(client).testConnector(id);
+                next = result.ok ? { state: 'ok' } : { state: 'failed', detail: result.detail, slow: result.reason === 'timeout' };
+            } catch (error) {
+                next = { state: 'error', error: error instanceof Error ? error : new Error(String(error)) };
+            }
+            if (runs.current[id] === mine) setChecks((prev) => ({ ...prev, [id]: next }));
+        },
+        [client],
+    );
+
+    return { checks, run, clear };
 }
 
 export type DeviceSignIn =

@@ -214,6 +214,8 @@ export function MemoryDashboard() {
     const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
     const [reinitConfirm, setReinitConfirm] = useState(false);
     const [betaConfirm, setBetaConfirm] = useState<null | 'memory' | 'mcp' | 'discovery'>(null);
+    // The scan whose button opened the discovery confirmation; it starts once consent is on.
+    const [pendingScan, setPendingScan] = useState<null | 'discovery' | 'inference'>(null);
 
     // Tab state
     const [activeTab, setActiveTab] = useState<DashboardTab>('about');
@@ -845,7 +847,12 @@ export function MemoryDashboard() {
                     setDiscLogs(prev => [...prev, { text: t.bare('mem.log.found', { content: item.content }), kind: 'finding' }]);
                     setDiscItems(prev => [...prev, { ...item, _checked: true }]);
                 } else if (data.type === 'error') {
-                    setDiscLogs(prev => [...prev, { text: t.bare('mem.log.error', { message: data.message }), kind: 'error' }]);
+                    if (data.source === 'consent') {
+                        setSystemDiscoveryConsent(false);
+                        setDiscLogs(prev => [...prev, { text: t('mem.log.noConsent'), kind: 'error' }]);
+                    } else {
+                        setDiscLogs(prev => [...prev, { text: t.bare('mem.log.error', { message: data.message }), kind: 'error' }]);
+                    }
                 } else if (data.type === 'done') {
                     es.close();
                     discEsRef.current = null;
@@ -873,6 +880,16 @@ export function MemoryDashboard() {
             });
         };
     }, [t]);
+
+    const askThenScan = (scan: 'discovery' | 'inference', run: () => void) => {
+        if (systemDiscoveryConsent) { run(); return; }
+        setPendingScan(scan);
+        setBetaConfirm('discovery');
+    };
+
+    useEffect(() => {
+        if (!betaConfirm) setPendingScan(null);
+    }, [betaConfirm]);
 
     const saveDiscoveryItems = useCallback(async () => {
         const selected = discItems.filter(i => i._checked);
@@ -918,7 +935,12 @@ export function MemoryDashboard() {
                     setInfLogs(prev => [...prev, { text: t.bare('mem.log.insight', { content: item.content }), kind: 'finding' }]);
                     setInfItems(prev => [...prev, { ...item, _checked: true }]);
                 } else if (data.type === 'error') {
-                    setInfLogs(prev => [...prev, { text: t.bare('mem.log.error', { message: data.message }), kind: 'error' }]);
+                    if (data.source === 'consent') {
+                        setSystemDiscoveryConsent(false);
+                        setInfLogs(prev => [...prev, { text: t('mem.log.noConsent'), kind: 'error' }]);
+                    } else {
+                        setInfLogs(prev => [...prev, { text: t.bare('mem.log.error', { message: data.message }), kind: 'error' }]);
+                    }
                 } else if (data.type === 'done') {
                     es.close();
                     infEsRef.current = null;
@@ -1998,133 +2020,6 @@ export function MemoryDashboard() {
                                         <span className="mem-toggle-knob" aria-hidden="true" />
                                     </button>
                                 </div>
-                                {/* Floating beta confirmation modal */}
-                                {betaConfirm && (() => {
-                                    const configs: Record<'memory' | 'mcp' | 'discovery', {
-                                        title: MessageKey; description: MessageKey; bullets: MessageKey[]; buttonLabel: MessageKey;
-                                        onConfirm: () => Promise<void>;
-                                    }> = {
-                                        memory: {
-                                            title: 'mem.beta.memory.title',
-                                            description: 'mem.beta.memory.desc',
-                                            bullets: ['mem.beta.memory.local', 'mem.beta.memory.lost', 'mem.beta.memory.disable'],
-                                            buttonLabel: 'mem.beta.memory.confirm',
-                                            onConfirm: async () => {
-                                                const updated = await memoryApi.updateMemorySettings({ memory_enabled: true });
-                                                setMemoryEnabled(updated.memory_enabled);
-                                                showToast(t('mem.toast.memoryEnabled'), 'info');
-                                            },
-                                        },
-                                        mcp: {
-                                            title: 'mem.beta.mcp.title',
-                                            description: 'mem.beta.mcp.desc',
-                                            bullets: ['mem.beta.mcp.read', 'mem.beta.mcp.restart', 'mem.beta.mcp.debug'],
-                                            buttonLabel: 'mem.beta.mcp.confirm',
-                                            onConfirm: async () => {
-                                                const updated = await memoryApi.updateMemorySettings({ mcp_memory_enabled: true });
-                                                setMcpMemoryEnabled(updated.mcp_memory_enabled);
-                                                showToast(t('mem.toast.mcpEnabled'), 'info');
-                                            },
-                                        },
-                                        discovery: {
-                                            title: 'mem.beta.discovery.title',
-                                            description: 'mem.beta.discovery.desc',
-                                            bullets: ['mem.beta.discovery.collects', 'mem.beta.discovery.scans', 'mem.beta.discovery.local'],
-                                            buttonLabel: 'mem.beta.discovery.confirm',
-                                            onConfirm: async () => {
-                                                const updated = await memoryApi.updateMemorySettings({ system_discovery_consent: true });
-                                                setSystemDiscoveryConsent(updated.system_discovery_consent);
-                                                if (updated.system_context_error) {
-                                                    showToast(t('mem.toast.discoveryScanFailed', { error: updated.system_context_error }), 'error');
-                                                } else {
-                                                    const stored = updated.system_context_refresh?.stored ?? 0;
-                                                    showToast(t('mem.toast.discoveryEnabled', { n: stored }), 'info');
-                                                }
-                                                loadAll();
-                                            },
-                                        },
-                                    };
-                                    const cfg = configs[betaConfirm];
-                                    return (
-                                    <>
-                                        <div
-                                            aria-hidden="true"
-                                            style={{
-                                                position: 'fixed', inset: 0, background: 'var(--bg-modal-overlay)',
-                                                zIndex: 9998, backdropFilter: 'blur(4px)',
-                                            }}
-                                            onClick={() => setBetaConfirm(null)}
-                                        />
-                                        <div
-                                            ref={betaConfirmRef}
-                                            role="dialog"
-                                            aria-modal="true"
-                                            aria-labelledby="mem-beta-confirm-title"
-                                            aria-describedby="mem-beta-confirm-desc"
-                                            tabIndex={-1}
-                                            style={{
-                                                position: 'fixed', top: '50%', left: '50%',
-                                                transform: 'translate(-50%, -50%)', zIndex: 9999,
-                                                background: 'var(--bg-card)', border: '1px solid var(--border)',
-                                                borderRadius: 12, padding: '28px 32px', maxWidth: 420,
-                                                width: '90vw', boxShadow: 'var(--shadow-lg)',
-                                            }}
-                                        >
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-                                                <span className="mem-beta" style={{
-                                                    fontSize: 11, fontWeight: 700, color: 'var(--accent-yellow)',
-                                                    background: 'var(--accent-yellow-dim)', padding: '3px 10px',
-                                                    borderRadius: 4,
-                                                }}>{t('mem.beta')}</span>
-                                                <h2 id="mem-beta-confirm-title" style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)' }}>
-                                                    {t(cfg.title)}
-                                                </h2>
-                                            </div>
-                                            <p id="mem-beta-confirm-desc" style={{ fontSize: 13, lineHeight: 1.6, color: 'var(--text-secondary)', margin: '0 0 8px' }}>
-                                                {t(cfg.description)}
-                                            </p>
-                                            <ul style={{ fontSize: 13, lineHeight: 1.7, color: 'var(--text-secondary)', margin: '0 0 24px', paddingInlineStart: 20 }}>
-                                                {cfg.bullets.map((key) => <li key={key}>{t(key)}</li>)}
-                                            </ul>
-                                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
-                                                <button
-                                                    className="btn-secondary"
-                                                    onClick={() => setBetaConfirm(null)}
-                                                    style={{ padding: '8px 20px', fontSize: 13, borderRadius: 6 }}
-                                                >
-                                                    {t('mem.cancel')}
-                                                </button>
-                                                <button
-                                                    disabled={settingsLoading}
-                                                    onClick={async () => {
-                                                        setSettingsLoading(true);
-                                                        try {
-                                                            await cfg.onConfirm();
-                                                        } catch (err) {
-                                                            log.system.warn('Failed to update setting', err);
-                                                            if (memoryApi.isPcOnlyRefusal(err)) {
-                                                                setPcOnly(true);
-                                                                showToast(t('mem.toast.pcOnly'), 'error');
-                                                            } else showToast(t('mem.toast.settingFailed', { error: errorText(err) }), 'error');
-                                                        } finally {
-                                                            setSettingsLoading(false);
-                                                            setBetaConfirm(null);
-                                                        }
-                                                    }}
-                                                    style={{
-                                                        padding: '8px 24px', fontSize: 13, fontWeight: 600,
-                                                        borderRadius: 6, border: 'none', cursor: 'pointer',
-                                                        background: 'var(--accent-fill)',
-                                                        color: 'var(--accent-fill-text)',
-                                                    }}
-                                                >
-                                                    {t(cfg.buttonLabel)}
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </>
-                                    );
-                                })()}
                                 <div className="mem-setting-row">
                                     <div className="mem-setting-info">
                                         <span className="mem-setting-label">{t('mem.settings.mcp')}</span>
@@ -2318,6 +2213,7 @@ export function MemoryDashboard() {
                     {activeTab === 'profile' && (
                         <div className="mem-profile-grid">
                             <p className="mem-tab-intro">{t('mem.profile.intro')}</p>
+                            {!systemDiscoveryConsent && !pcOnly && <p className="mem-profile-note mem-profile-consent">{t('mem.profile.consentOff')}</p>}
                             {pcOnly && <div className="mem-advanced-error" role="alert">{t('mem.profile.pcOnly')}</div>}
                             {/* Card A: System Discovery */}
                             <div className="mem-profile-card">
@@ -2328,7 +2224,7 @@ export function MemoryDashboard() {
                                 <button
                                     className="btn-primary mem-profile-run-btn"
                                     disabled={pcOnly || discPhase === 'running' || discPhase === 'saving'}
-                                    onClick={runDiscovery}
+                                    onClick={() => askThenScan('discovery', runDiscovery)}
                                 >
                                     {discPhase === 'running' ? (
                                         <><div className="mem-spinner-sm" /> {t('mem.running')}</>
@@ -2426,7 +2322,7 @@ export function MemoryDashboard() {
                                 <button
                                     className="btn-primary mem-profile-run-btn"
                                     disabled={pcOnly || infPhase === 'running' || infPhase === 'saving'}
-                                    onClick={runInference}
+                                    onClick={() => askThenScan('inference', runInference)}
                                 >
                                     {infPhase === 'running' ? (
                                         <><div className="mem-spinner-sm" /> {t('mem.running')}</>
@@ -2722,6 +2618,139 @@ export function MemoryDashboard() {
                     ))}
                 </div>
             )}
+            {/* Floating beta confirmation modal */}
+            {betaConfirm && (() => {
+                const configs: Record<'memory' | 'mcp' | 'discovery', {
+                    title: MessageKey; description: MessageKey; bullets: MessageKey[]; buttonLabel: MessageKey;
+                    onConfirm: () => Promise<void>;
+                }> = {
+                    memory: {
+                        title: 'mem.beta.memory.title',
+                        description: 'mem.beta.memory.desc',
+                        bullets: ['mem.beta.memory.local', 'mem.beta.memory.lost', 'mem.beta.memory.disable'],
+                        buttonLabel: 'mem.beta.memory.confirm',
+                        onConfirm: async () => {
+                            const updated = await memoryApi.updateMemorySettings({ memory_enabled: true });
+                            setMemoryEnabled(updated.memory_enabled);
+                            showToast(t('mem.toast.memoryEnabled'), 'info');
+                        },
+                    },
+                    mcp: {
+                        title: 'mem.beta.mcp.title',
+                        description: 'mem.beta.mcp.desc',
+                        bullets: ['mem.beta.mcp.read', 'mem.beta.mcp.restart', 'mem.beta.mcp.debug'],
+                        buttonLabel: 'mem.beta.mcp.confirm',
+                        onConfirm: async () => {
+                            const updated = await memoryApi.updateMemorySettings({ mcp_memory_enabled: true });
+                            setMcpMemoryEnabled(updated.mcp_memory_enabled);
+                            showToast(t('mem.toast.mcpEnabled'), 'info');
+                        },
+                    },
+                    discovery: {
+                        title: 'mem.beta.discovery.title',
+                        description: 'mem.beta.discovery.desc',
+                        bullets: ['mem.beta.discovery.collects', 'mem.beta.discovery.scans', 'mem.beta.discovery.local'],
+                        buttonLabel: 'mem.beta.discovery.confirm',
+                        onConfirm: async () => {
+                            const updated = await memoryApi.updateMemorySettings({ system_discovery_consent: true });
+                            setSystemDiscoveryConsent(updated.system_discovery_consent);
+                            if (updated.system_context_error) {
+                                showToast(t('mem.toast.discoveryScanFailed', { error: updated.system_context_error }), 'error');
+                            } else {
+                                const stored = updated.system_context_refresh?.stored ?? 0;
+                                showToast(t('mem.toast.discoveryEnabled', { n: stored }), 'info');
+                            }
+                            loadAll();
+                        },
+                    },
+                };
+                const cfg = configs[betaConfirm];
+                return (
+                <>
+                    <div
+                        aria-hidden="true"
+                        style={{
+                            position: 'fixed', inset: 0, background: 'var(--bg-modal-overlay)',
+                            zIndex: 9998, backdropFilter: 'blur(4px)',
+                        }}
+                        onClick={() => setBetaConfirm(null)}
+                    />
+                    <div
+                        ref={betaConfirmRef}
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="mem-beta-confirm-title"
+                        aria-describedby="mem-beta-confirm-desc"
+                        tabIndex={-1}
+                        style={{
+                            position: 'fixed', top: '50%', left: '50%',
+                            transform: 'translate(-50%, -50%)', zIndex: 9999,
+                            background: 'var(--bg-card)', border: '1px solid var(--border)',
+                            borderRadius: 12, padding: '28px 32px', maxWidth: 420,
+                            width: '90vw', boxShadow: 'var(--shadow-lg)',
+                        }}
+                    >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+                            <span className="mem-beta" style={{
+                                fontSize: 11, fontWeight: 700, color: 'var(--accent-yellow)',
+                                background: 'var(--accent-yellow-dim)', padding: '3px 10px',
+                                borderRadius: 4,
+                            }}>{t('mem.beta')}</span>
+                            <h2 id="mem-beta-confirm-title" style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)' }}>
+                                {t(cfg.title)}
+                            </h2>
+                        </div>
+                        <p id="mem-beta-confirm-desc" style={{ fontSize: 13, lineHeight: 1.6, color: 'var(--text-secondary)', margin: '0 0 8px' }}>
+                            {t(cfg.description)}
+                        </p>
+                        <ul style={{ fontSize: 13, lineHeight: 1.7, color: 'var(--text-secondary)', margin: '0 0 24px', paddingInlineStart: 20 }}>
+                            {cfg.bullets.map((key) => <li key={key}>{t(key)}</li>)}
+                        </ul>
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+                            <button
+                                className="btn-secondary"
+                                onClick={() => setBetaConfirm(null)}
+                                style={{ padding: '8px 20px', fontSize: 13, borderRadius: 6 }}
+                            >
+                                {t('mem.cancel')}
+                            </button>
+                            <button
+                                disabled={settingsLoading}
+                                onClick={async () => {
+                                    setSettingsLoading(true);
+                                    let confirmed = false;
+                                    try {
+                                        await cfg.onConfirm();
+                                        confirmed = true;
+                                    } catch (err) {
+                                        log.system.warn('Failed to update setting', err);
+                                        if (memoryApi.isPcOnlyRefusal(err)) {
+                                            setPcOnly(true);
+                                            showToast(t('mem.toast.pcOnly'), 'error');
+                                        } else showToast(t('mem.toast.settingFailed', { error: errorText(err) }), 'error');
+                                    } finally {
+                                        setSettingsLoading(false);
+                                        setBetaConfirm(null);
+                                    }
+                                    if (confirmed && betaConfirm === 'discovery') {
+                                        if (pendingScan === 'discovery') runDiscovery();
+                                        else if (pendingScan === 'inference') runInference();
+                                    }
+                                }}
+                                style={{
+                                    padding: '8px 24px', fontSize: 13, fontWeight: 600,
+                                    borderRadius: 6, border: 'none', cursor: 'pointer',
+                                    background: 'var(--accent-fill)',
+                                    color: 'var(--accent-fill-text)',
+                                }}
+                            >
+                                {t(betaConfirm === 'discovery' && pendingScan ? 'mem.beta.discovery.confirmScan' : cfg.buttonLabel)}
+                            </button>
+                        </div>
+                    </div>
+                </>
+                );
+            })()}
         </div>
     );
 }

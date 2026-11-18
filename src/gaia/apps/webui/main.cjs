@@ -275,6 +275,7 @@ let keepAwake = null;
 
 /** @type {PortManager} */
 const portManager = new PortManager({
+  findGaiaBin: () => backendInstaller.findGaiaBin(),
   logger: { log: console.log.bind(console), error: console.error.bind(console) },
 });
 
