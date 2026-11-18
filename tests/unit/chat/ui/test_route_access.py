@@ -7,9 +7,9 @@ Every route is in exactly one class, and ``test_every_route_is_classified``
 fails for a route nobody has decided about:
 
 * ``pc``: the PC running GAIA only (``require_local_pc``).
-* ``pc_or_device``: first-run setup, device-code sign-in, Automations and changes
-  to schedules and goals; the PC or an allowed paired device, never mobile
-  access (``require_pc_or_device``, ``require_pc_or_allowed_device``).
+* ``pc_or_device``: first-run setup, device-code sign-in, connector setup and
+  checks, Automations and changes to schedules and goals; the PC or an allowed
+  paired device, never mobile access (``require_pc_or_device``, ``require_pc_or_allowed_device``).
 * ``not_on_listener``: a read with side effects on the PC; the PC and mobile
   access, never a paired device (``refuse_on_device_listener``).
 * ``remote``: the PC, mobile access with its token, and allowed devices.
@@ -69,9 +69,7 @@ PC_ONLY = {
     "POST /api/agents/install",
     "POST /api/connectors/eval-mailbox",
     "POST /api/connectors/{connector_id}/authorize",
-    "POST /api/connectors/{connector_id}/configure",
     "POST /api/connectors/{connector_id}/enable",
-    "POST /api/connectors/{connector_id}/test",
     "POST /api/devices/listener",
     "POST /api/devices/pairing",
     "POST /api/devices/pairing/reset",
@@ -114,6 +112,8 @@ PC_OR_DEVICE = {
     "GET /api/automations",
     "POST /api/automations/{ref}/{action}",
     "POST /api/connectors/{connector_id}/authorize-device",
+    "POST /api/connectors/{connector_id}/configure",
+    "POST /api/connectors/{connector_id}/test",
     "POST /api/goals",
     "POST /api/goals/store/reset",
     "POST /api/goals/{goal_id}/tasks",
@@ -854,6 +854,149 @@ def test_mcp_server_secrets_stay_on_the_pc(setup, monkeypatch):
         assert shown[0] == "--api-key" and shown[3] == "--verbose", shown
     pc = clients["pc"].get("/api/mcp/servers", headers={"X-Gaia-UI": "1"})
     assert pc.json()["servers"][0]["args"] == args
+
+
+def _audit_into(monkeypatch, module):
+    audited = []
+    monkeypatch.setattr(
+        module,
+        "audit_approval",
+        lambda request, what: audited.append((security.principal(request), what)),
+    )
+    return audited
+
+
+@pytest.mark.parametrize(
+    "caller, path, body, status",
+    [
+        ("device", "/api/connectors/mcp-github/configure", None, 200),
+        ("pc", "/api/connectors/mcp-github/configure", None, 200),
+        ("device", "/api/connectors/google/configure", "save_only", 200),
+        ("device", "/api/connectors/google/configure", "sign_in", 403),
+        ("device", "/api/connectors/microsoft/configure", "sign_in", 403),
+        ("device", "/api/connectors/mcp-github/configure", "grant_agents", 403),
+        ("tunnel", "/api/connectors/mcp-github/configure", None, 403),
+        ("pending", "/api/connectors/mcp-github/configure", None, 403),
+        ("device", "/api/connectors/google/authorize", {}, 403),
+        ("device", "/api/connectors/mcp-github/enable", {}, 403),
+        ("device", "/api/connectors/mcp-github/grants/installed:email", {}, 403),
+        ("device", "/api/connectors/mcp-github/activations/installed:email", {}, 403),
+    ],
+)
+def test_a_paired_device_may_set_up_connectors(
+    setup, monkeypatch, tmp_path, caller, path, body, status
+):
+    """A phone saves an OAuth client or an MCP server's key, never signs in, sees no secret."""
+    from gaia.connectors import handler as connector_handler
+    from gaia.connectors import mcp_server
+    from gaia.ui.routers import connectors
+
+    _, clients, device = setup
+    monkeypatch.setenv("GAIA_HOME", str(tmp_path))
+    stored = {}
+    monkeypatch.setattr(
+        mcp_server.keyring,
+        "set_password",
+        lambda service, user, value: stored.__setitem__(user, value),
+    )
+    monkeypatch.setattr(
+        connector_handler._HANDLER_REGISTRY["mcp_server"], "_reload", None
+    )
+    saved = []
+    monkeypatch.setattr(
+        "gaia.connectors.store.save_provider_credentials",
+        lambda provider, **kw: saved.append((provider, kw)),
+    )
+    started = []
+    monkeypatch.setattr(
+        "gaia.connectors.oauth_pkce.start_authorization",
+        lambda *a, **kw: started.append(a),
+    )
+    audited = _audit_into(monkeypatch, connectors)
+    secret = "ghp_" + "S3CRETvalue" * 3
+    configs = {
+        None: {"GITHUB_PERSONAL_ACCESS_TOKEN": secret},
+        "save_only": {
+            "client_id": "id.apps",
+            "client_secret": secret,
+            "save_only": True,
+        },
+        "sign_in": {"client_id": "id.apps", "client_secret": secret},
+        "grant_agents": {
+            "GITHUB_PERSONAL_ACCESS_TOKEN": secret,
+            "grant_agents": ["installed:email"],
+        },
+    }
+    method = "PUT" if "/grants/" in path or "/activations/" in path else "POST"
+    payload = {"config": configs[body]} if not isinstance(body, dict) else body
+    resp = clients[caller].request(
+        method, path, json=payload, headers={"X-Gaia-UI": "1"}
+    )
+    assert resp.status_code == status, resp.text
+    assert secret not in resp.text
+    assert not started
+    if status != 200:
+        assert not stored and not saved and not audited
+        return
+    if body == "save_only":
+        assert resp.json() == {"status": "saved", "connector_id": "google"}
+        assert saved == [("google", {"client_id": "id.apps", "client_secret": secret})]
+    else:
+        assert resp.json()["configured"] is True
+        assert stored == {"mcp-github:GITHUB_PERSONAL_ACCESS_TOKEN": secret}
+        assert secret not in (tmp_path / "mcp_servers.json").read_text()
+    connector_id = path.split("/")[3]
+    expected = [(f"device:{device.device_id}", f"connector {connector_id} set up")]
+    assert audited == (expected if caller == "device" else [])
+
+
+@pytest.mark.parametrize("caller", ["pc", "device", "tunnel"])
+def test_a_connector_check_from_a_device_keeps_server_output_on_the_pc(
+    setup, monkeypatch, caller
+):
+    """A failed check's text (paths, server output) and a 500's detail stay on the PC."""
+    from unittest.mock import AsyncMock
+
+    from gaia.ui.routers import connectors
+
+    _, clients, _ = setup
+    detail = "Transport error for 'mcp-github': /Users/someone/.npm/_npx/9f/node failed"
+    monkeypatch.setattr(
+        connectors,
+        "health_check",
+        AsyncMock(return_value={"ok": False, "detail": detail}),
+    )
+    events = []
+    monkeypatch.setattr(
+        connectors._emitter, "emit", AsyncMock(side_effect=lambda *a: events.append(a))
+    )
+    resp = clients[caller].post(
+        "/api/connectors/mcp-github/test", headers={"X-Gaia-UI": "1"}
+    )
+    if caller == "tunnel":
+        assert resp.status_code == 403
+        return
+    assert resp.status_code == 200, resp.text
+    shown = resp.json()["detail"]
+    assert shown == (detail if caller == "pc" else connectors.DEVICE_CHECK_FAILED)
+    # The event stream reaches paired devices, so it never carries the raw text.
+    assert events[-1][1]["detail"] == connectors.DEVICE_CHECK_FAILED
+
+    from gaia.connectors.errors import ConnectorsError
+
+    path = "/Users/someone/.gaia/mcp_servers.json"
+    monkeypatch.setattr(
+        connectors,
+        "health_check",
+        AsyncMock(
+            side_effect=ConnectorsError(f"mcp_servers.json at {path} is unreadable")
+        ),
+    )
+    resp = clients[caller].post(
+        "/api/connectors/mcp-github/test", headers={"X-Gaia-UI": "1"}
+    )
+    assert resp.status_code == 500
+    assert (path in resp.text) == (caller == "pc")
 
 
 def test_spending_changes_from_a_phone_are_audited(setup):
