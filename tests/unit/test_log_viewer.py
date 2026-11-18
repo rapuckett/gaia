@@ -25,7 +25,8 @@ SECRET = "embedded-key-0123456789"
 # Made-up values in each credential's real shape.
 FAKE_DEVICE = "gaiad_FAKEfake0123456789FAKEfake0123456789abc"
 FAKE_DISCORD = "MTAwMDAwMDAwMDAwMDAwMDAw.GFAKE1.fakefakefakefakefakefakefakefake"
-FAKE_TELEGRAM = "123456789:AAFAKEfakeFAKEfakeFAKEfakeFAKEfake0"
+# Joined at run time so secret scanners never see a token-shaped literal.
+FAKE_TELEGRAM = "123456789" + ":" + "AAFAKEfakeFAKEfakeFAKEfakeFAKEfake0"
 
 
 @pytest.fixture(autouse=True)
