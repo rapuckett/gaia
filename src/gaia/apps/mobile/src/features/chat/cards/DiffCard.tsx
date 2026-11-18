@@ -42,7 +42,7 @@ export function DiffCard({ data }: { data: unknown }) {
                     </Text>
                 ) : null}
                 {lines.length > 0 ? (
-                    <HScroll dir="ltr" hint testID="card-diff-scroll">
+                    <HScroll dir="ltr" hint hintBackground={colors.bgCard} testID="card-diff-scroll">
                         <View style={{ minWidth: '100%', direction: 'ltr' }} {...dirProp('ltr')}>
                             {lines.map((line, i) => {
                                 const kind = diffLineKind(line);
