@@ -35,3 +35,13 @@ describeNative('the drawer at AX5', () => {
         expect(screen.getByLabelText('Search chats').props.maxFontSizeMultiplier).toBe(2);
     });
 });
+
+describeNative('the drawer header', () => {
+    it('shows the close button only when there is something to close', async () => {
+        const view = await render(<ChatDrawerContent onSelect={() => {}} onClose={() => {}} routeNames={[]} />, { wrapper: wrap });
+        expect(screen.getByLabelText('Collapse sidebar')).toBeTruthy();
+        view.unmount();
+        await render(<ChatDrawerContent onSelect={() => {}} routeNames={[]} />, { wrapper: wrap });
+        expect(screen.queryByLabelText('Collapse sidebar')).toBeNull();
+    });
+});

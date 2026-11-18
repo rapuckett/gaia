@@ -2,15 +2,19 @@
 // SPDX-License-Identifier: MIT
 
 import { useEffect, useState, type ReactNode } from 'react';
+import { useWindowDimensions, View } from 'react-native';
+import { SafeAreaInsetsContext, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { GaiaApiError, GaiaNetworkError, GaiaPinMismatchError } from '@/api/errors';
 import { useGaiaClient, useSetupGate } from '@/data';
 import { galleryBuild } from '@/features/dev/devGallery';
 import { PinMismatchScreen, usePairAgain } from '@/features/pairing';
 import { hasTailnetRoute } from '@/features/pairing/routes';
-import { describeErrorWith, serverText, technicalDetail, useT } from '@/i18n/useT';
+import { PERMANENT_DRAWER_MIN_WIDTH, PERMANENT_DRAWER_WIDTH } from '@/features/nav/navigation';
+import { describeErrorWith, serverText, technicalDetail, useDirection, useT } from '@/i18n/useT';
 import { useConnectionStore } from '@/state/connection';
-import { Button, Disclosure, Ltr, Notice, Screen, Stack } from '@/ui';
+import { Button, Disclosure, Ltr, Notice, ScreenBannerProvider, Stack, useScreenBanner, useTheme } from '@/ui';
+import { contentWidth } from '@/ui/tokens/space';
 
 import { SetupScreen, type SetupScreenProps } from './SetupScreen';
 import { StartupScreen } from './StartupScreen';
@@ -98,16 +102,51 @@ export function SetupGate({
             />
         );
     return (
-        <Screen width="flow" edges={['top', 'start', 'end']}>
-            <Stack gap="md" paddingX="gutter" paddingY="md">
-                {notice}
-                {gate.state === 'unknown' && !unreachable ? <ErrorDetails error={gate.error} /> : null}
-                {gate.state === 'serverDown' && !gate.modelListUnread ? (
-                    <Button variant="secondary" label={t('setup.serverDown.setup')} onPress={open} />
-                ) : null}
-            </Stack>
-            <Stack flex={1}>{children}</Stack>
-        </Screen>
+        <NoticeAboveApp
+            unreachable={unreachable}
+            notice={
+                <>
+                    {notice}
+                    {gate.state === 'unknown' && !unreachable ? <ErrorDetails error={gate.error} /> : null}
+                    {gate.state === 'serverDown' && !gate.modelListUnread ? (
+                        <Button variant="secondary" label={t('setup.serverDown.setup')} onPress={open} />
+                    ) : null}
+                </>
+            }
+        >
+            {children}
+        </NoticeAboveApp>
+    );
+}
+
+/** The navigator is never inside the capped column; only the notice is, and beside the permanent sidebar it sits over the chat. */
+function NoticeAboveApp({ notice, unreachable, children }: { notice: ReactNode; unreachable: boolean; children: ReactNode }) {
+    const { colors } = useTheme();
+    const insets = useSafeAreaInsets();
+    const { width } = useWindowDimensions();
+    const rtl = useDirection() === 'rtl';
+    const sidebar = width >= PERMANENT_DRAWER_MIN_WIDTH ? PERMANENT_DRAWER_WIDTH : 0;
+    const ambientBanner = useScreenBanner();
+    return (
+        <View style={{ flex: 1, backgroundColor: colors.bgPrimary }}>
+            <View
+                testID="setup-gate-notice"
+                style={{ paddingTop: insets.top, paddingStart: sidebar || (rtl ? insets.right : insets.left), paddingEnd: rtl ? insets.left : insets.right, alignItems: 'center' }}
+            >
+                <View style={{ width: '100%', maxWidth: contentWidth.reading }}>
+                    <Stack gap="md" paddingX="gutter" paddingY="md">
+                        {notice}
+                    </Stack>
+                </View>
+            </View>
+            <View testID="setup-gate-app" style={{ flex: 1 }}>
+                {/* The notice already sits below the status bar, so the app under it takes no top inset. */}
+                <SafeAreaInsetsContext.Provider value={{ ...insets, top: 0 }}>
+                    {/* The notice already says the PC is out of reach; the screens' own connection banner would repeat it. */}
+                    <ScreenBannerProvider banner={unreachable ? null : ambientBanner}>{children}</ScreenBannerProvider>
+                </SafeAreaInsetsContext.Provider>
+            </View>
+        </View>
     );
 }
 
