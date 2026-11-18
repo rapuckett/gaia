@@ -141,16 +141,18 @@ export function ChatGallery({ state, queued, model }: { state: ChatGalleryState;
         base.attachToRun = () => ({ [Symbol.asyncIterator]: () => ({ next: () => new Promise<IteratorResult<StreamEvent>>(() => undefined) }) });
         return base;
     });
-    // Seeded before the screen's first render too: a model chip that mounts with no turn running applies `queued` at once.
-    useState(() => seedScene(state));
+    // The screen mounts only once seeded: a model chip that mounts with no turn running applies `queued` at once, and a store write while rendering would update subscribers like the drawer mid-render.
+    const [seeded, setSeeded] = useState(state === 'env-offline');
     useEffect(() => {
         if (state === 'env-offline') return undefined;
         seedScene(state);
+        setSeeded(true);
         return () => {
             writeTurn('dev', null);
             useComposerQueueStore.setState({ byChat: {}, drafts: {} });
         };
     }, [state]);
+    if (!seeded) return null;
     return (
         <QueryClientProvider client={queryClient}>
             <GaiaClientProvider client={client}>

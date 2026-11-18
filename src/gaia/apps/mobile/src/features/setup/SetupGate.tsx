@@ -2,15 +2,19 @@
 // SPDX-License-Identifier: MIT
 
 import { useEffect, useState, type ReactNode } from 'react';
+import { useWindowDimensions, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { GaiaApiError, GaiaNetworkError, GaiaPinMismatchError } from '@/api/errors';
 import { useGaiaClient, useSetupGate } from '@/data';
 import { galleryBuild } from '@/features/dev/devGallery';
 import { PinMismatchScreen, usePairAgain } from '@/features/pairing';
 import { hasTailnetRoute } from '@/features/pairing/routes';
-import { describeErrorWith, serverText, technicalDetail, useT } from '@/i18n/useT';
+import { PERMANENT_DRAWER_MIN_WIDTH, PERMANENT_DRAWER_WIDTH } from '@/features/nav/navigation';
+import { describeErrorWith, serverText, technicalDetail, useDirection, useT } from '@/i18n/useT';
 import { useConnectionStore } from '@/state/connection';
-import { Button, Disclosure, Ltr, Notice, Screen, Stack } from '@/ui';
+import { Button, Disclosure, Ltr, Notice, Stack, useTheme } from '@/ui';
+import { contentWidth } from '@/ui/tokens/space';
 
 import { SetupScreen, type SetupScreenProps } from './SetupScreen';
 import { StartupScreen } from './StartupScreen';
@@ -43,6 +47,10 @@ export function SetupGate({
     const { gate, recheck, finish, open } = useSetupGate();
     const pairAgain = usePairAgain();
     const connection = useConnectionStore((s) => s.connection);
+    const { colors } = useTheme();
+    const insets = useSafeAreaInsets();
+    const { width } = useWindowDimensions();
+    const rtl = useDirection() === 'rtl';
 
     useEffect(() => {
         reopen = open;
@@ -97,17 +105,26 @@ export function SetupGate({
                 }}
             />
         );
+    // The navigator below is never inside the capped column; only the notice is, and beside the permanent sidebar it sits over the chat.
+    const sidebar = width >= PERMANENT_DRAWER_MIN_WIDTH ? PERMANENT_DRAWER_WIDTH : 0;
     return (
-        <Screen width="flow" edges={['top', 'start', 'end']}>
-            <Stack gap="md" paddingX="gutter" paddingY="md">
-                {notice}
-                {gate.state === 'unknown' && !unreachable ? <ErrorDetails error={gate.error} /> : null}
-                {gate.state === 'serverDown' && !gate.modelListUnread ? (
-                    <Button variant="secondary" label={t('setup.serverDown.setup')} onPress={open} />
-                ) : null}
-            </Stack>
-            <Stack flex={1}>{children}</Stack>
-        </Screen>
+        <View style={{ flex: 1, backgroundColor: colors.bgPrimary }}>
+            <View
+                testID="setup-gate-notice"
+                style={{ paddingTop: insets.top, paddingStart: sidebar, paddingEnd: rtl ? insets.left : insets.right, alignItems: 'center' }}
+            >
+                <View style={{ width: '100%', maxWidth: contentWidth.flow }}>
+                    <Stack gap="md" paddingX="gutter" paddingY="md">
+                        {notice}
+                        {gate.state === 'unknown' && !unreachable ? <ErrorDetails error={gate.error} /> : null}
+                        {gate.state === 'serverDown' && !gate.modelListUnread ? (
+                            <Button variant="secondary" label={t('setup.serverDown.setup')} onPress={open} />
+                        ) : null}
+                    </Stack>
+                </View>
+            </View>
+            <View testID="setup-gate-app" style={{ flex: 1 }}>{children}</View>
+        </View>
     );
 }
 

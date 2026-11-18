@@ -118,7 +118,7 @@ export function Screen({
 
     const content = (
         <>
-            {shownBanner ? <ScreenBannerSlot banner={shownBanner} /> : null}
+            {shownBanner ? <ScreenBannerSlot banner={shownBanner} cap={cap} /> : null}
             {header}
             {body}
             {footer ? (
