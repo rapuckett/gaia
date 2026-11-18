@@ -19,7 +19,7 @@ export function useScreenBanner(): ReactNode {
 }
 
 /** The banner row above a `Screen`'s header: it measures what the banner renders, so an empty banner takes no space. */
-export function ScreenBannerSlot({ banner }: { banner: ReactNode }) {
+export function ScreenBannerSlot({ banner, cap }: { banner: ReactNode; cap?: number }) {
     const { space } = useTheme();
     const reduced = useReducedMotion();
     const [height, setHeight] = useState(0);
@@ -42,8 +42,10 @@ export function ScreenBannerSlot({ banner }: { banner: ReactNode }) {
     // The banner sits absolutely so its natural height is measurable while the wrapper animates.
     return (
         <Animated.View style={[{ overflow: 'hidden' }, style]} pointerEvents={height > 0 ? 'auto' : 'none'}>
-            <View style={{ position: 'absolute', top: 0, start: space.lg, end: space.lg }} onLayout={(e) => setHeight(e.nativeEvent.layout.height)}>
-                {banner}
+            <View style={{ position: 'absolute', top: 0, start: 0, end: 0, alignItems: 'center' }}>
+                <View style={{ width: '100%', maxWidth: cap, paddingHorizontal: space.lg }} onLayout={(e) => setHeight(e.nativeEvent.layout.height)}>
+                    {banner}
+                </View>
             </View>
         </Animated.View>
     );
