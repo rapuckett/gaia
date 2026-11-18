@@ -171,8 +171,10 @@ def reach(monkeypatch):
 @pytest.fixture(autouse=True)
 def _fresh_restore():
     providers.reset_restore_state()
+    providers._STORED_KEY_SEEN.clear()
     yield
     providers.reset_restore_state()
+    providers._STORED_KEY_SEEN.clear()
 
 
 @pytest.fixture
@@ -1232,6 +1234,10 @@ def test_provider_summaries_read_only_and_carry_no_secret(client, lemonade, keys
                 "configured": True,
                 "blocked": False,
                 "network": None,
+                "key_source": None,
+                "key_state": None,
+                "key_hint": None,
+                "known_models": None,
             },
             {
                 "id": "fireworks",
@@ -1241,6 +1247,10 @@ def test_provider_summaries_read_only_and_carry_no_secret(client, lemonade, keys
                 "configured": False,
                 "blocked": False,
                 "network": None,
+                "key_source": None,
+                "key_state": "unknown",
+                "key_hint": None,
+                "known_models": False,
             },
             {
                 "id": "amd",
@@ -1250,6 +1260,11 @@ def test_provider_summaries_read_only_and_carry_no_secret(client, lemonade, keys
                 "configured": True,
                 "blocked": False,
                 "network": {"reachable": True},
+                # Lemonade holds a key the user entered; the hint needs a store read.
+                "key_source": "lemonade",
+                "key_state": "read",
+                "key_hint": None,
+                "known_models": False,
             },
         ],
         "lemonade_error": None,
@@ -1741,6 +1756,78 @@ def device_client(db):
     return TestClient(
         on_listener, client=("127.0.0.1", 50000), headers={"X-Gaia-UI": "1"}
     )
+
+
+def test_a_device_sees_the_pcs_key_hint_without_a_store_read_or_lemonade_write(
+    client, device_client, lemonade, keys, monkeypatch
+):
+    lemonade.cloud["fireworks"] = {"name": "fireworks", "models_discovered": True}
+    keys["stored"]["fireworks"] = KEY
+
+    def fireworks(c):
+        body = c.get("/api/providers/list").json()
+        return next(p for p in body["providers"] if p["id"] == "fireworks")
+
+    reads = []
+    real_recall = cloud_keys.recall_key
+    monkeypatch.setattr(
+        cloud_keys, "recall_key", lambda p: reads.append(p) or real_recall(p)
+    )
+    assert fireworks(device_client)["key_state"] == "unknown"
+    assert reads == []
+    pc_view = _fireworks_view(client)  # the PC's own read fills the cache
+    assert reads
+
+    reads.clear()
+    keys["ensure"].clear()
+    lemonade.calls.clear()
+    seen = fireworks(device_client)
+    assert seen["key_source"] == pc_view["key_source"] == "stored"
+    assert seen["key_hint"] == pc_view["key_hint"] == KEY[-4:]
+    assert seen["key_state"] == "read"
+    assert reads == [] and keys["ensure"] == []
+    assert lemonade.paths("POST") == [] and lemonade.paths("DELETE") == []
+    assert KEY not in device_client.get("/api/providers/list").text
+    # Mobile access sees the source but never a hint.
+    away = client.get("/api/providers/list", headers={"X-Forwarded-For": "203.0.113.9"})
+    assert (
+        next(p for p in away.json()["providers"] if p["id"] == "fireworks")["key_hint"]
+        is None
+    )
+
+
+def test_a_new_key_replaces_the_hint_a_device_sees_at_once(
+    client, device_client, lemonade, keys, monkeypatch
+):
+    old = "fw_OLD_key_value_000000_ABCD"
+    lemonade.cloud["fireworks"] = {"name": "fireworks", "models_discovered": True}
+    keys["stored"]["fireworks"] = old
+    _fireworks_view(client)
+
+    def waiting(provider):
+        raise credential_wait.CredentialStoreWaiting("the OS is asking")
+
+    # Connect's own view can't read the store back, so only the save can say.
+    monkeypatch.setattr(providers, "_bounded_recall", waiting)
+    resp = device_client.post("/api/providers/fireworks/connect", json={"api_key": KEY})
+    assert resp.status_code == 200, resp.text
+    lemonade.cloud["fireworks"].pop("runtime_key_set", None)
+    monkeypatch.setattr(
+        cloud_keys, "recall_key", lambda p: pytest.fail("read the key store")
+    )
+    body = device_client.get("/api/providers/list").json()
+    seen = next(p for p in body["providers"] if p["id"] == "fireworks")
+    assert (seen["key_source"], seen["key_hint"]) == ("stored", KEY[-4:])
+
+
+def test_a_device_still_cannot_move_the_gateway(device_client, lemonade, keys):
+    lemonade.cloud["amd"] = dict(_CUSTOM_GATEWAY)
+    resp = device_client.post(
+        "/api/providers/amd/connect",
+        json={"api_key": KEY, "base_url": "https://gw.example.com/v1"},
+    )
+    assert resp.status_code == 403
+    assert lemonade.calls == [] and keys["remembered"] == []
 
 
 def test_a_paired_device_may_enter_and_remove_a_key(
