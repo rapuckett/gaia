@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import { useState, type ComponentRef, type ReactNode, type Ref } from 'react';
-import { TextInput, View, useWindowDimensions, type KeyboardTypeOptions, type ReturnKeyTypeOptions } from 'react-native';
+import { Platform, TextInput, View, useWindowDimensions, type KeyboardTypeOptions, type ReturnKeyTypeOptions } from 'react-native';
 import { CircleAlert } from 'lucide-react-native';
 import { useDirection, useT } from '@/i18n/useT';
 import { Eye, EyeOff } from '../icons';
@@ -32,6 +32,10 @@ export interface TextFieldProps {
     secureTextEntry?: boolean;
     /** With `secureTextEntry`: an eye button that shows the text. */
     revealable?: boolean;
+    /** A key or password: masked, with no reveal, never suggested, corrected, autofilled or offered to a password manager. */
+    secret?: boolean;
+    /** A value typed exactly: an id, address or path. */
+    literal?: boolean;
     /** Decoration inside the field's start edge (a search icon). */
     leading?: ReactNode;
     /** Content inside the field's end edge (a clear button). */
@@ -67,6 +71,8 @@ export function TextField({
     onSubmitEditing,
     secureTextEntry,
     revealable,
+    secret,
+    literal,
     leading,
     trailing,
     bare,
@@ -84,8 +90,9 @@ export function TextField({
     const { colors, radius, type } = useTheme();
     const t = useT();
     const uiRtl = useDirection() === 'rtl';
-    // Typed text sets its own side, like a bubble; secrets and empty fields follow the UI.
-    const rtl = secureTextEntry ? uiRtl : contentDir(value, uiRtl ? 'rtl' : 'ltr') === 'rtl';
+    // Typed text sets its own side, like a bubble; secrets and empty fields follow the UI, and a literal reads LTR.
+    const rtl = secureTextEntry || secret ? uiRtl : !literal && contentDir(value, uiRtl ? 'rtl' : 'ltr') === 'rtl';
+    const exact = url || literal || secret;
     const valueRtl = url && !value ? uiRtl : false;
     const [focused, setFocused] = useState(false);
     const [revealed, setRevealed] = useState(false);
@@ -134,18 +141,15 @@ export function TextField({
                 multiline={multiline}
                 onContentSizeChange={multiline ? (e) => setContentHeight(Math.ceil(e.nativeEvent.contentSize.height)) : undefined}
                 returnKeyType={returnKeyType}
-                keyboardType={url ? 'url' : keyboardType}
+                keyboardType={url ? 'url' : (keyboardType ?? (literal && Platform.OS === 'android' ? 'visible-password' : undefined))}
                 onSubmitEditing={onSubmitEditing}
                 submitBehavior={multiline ? 'newline' : 'blurAndSubmit'}
-                secureTextEntry={secureTextEntry && !revealed}
+                secureTextEntry={secret || (secureTextEntry && !revealed)}
                 autoFocus={autoFocus}
-                autoCapitalize={url || secureTextEntry ? 'none' : undefined}
-                autoCorrect={url || secureTextEntry ? false : undefined}
-                // A secret never goes to the keyboard's suggestions, spell check or autofill.
-                spellCheck={secureTextEntry ? false : undefined}
-                autoComplete={secureTextEntry ? 'off' : undefined}
-                textContentType={secureTextEntry ? 'none' : undefined}
-                importantForAutofill={secureTextEntry ? 'no' : undefined}
+                autoCapitalize={exact ? 'none' : undefined}
+                autoCorrect={exact ? false : undefined}
+                spellCheck={exact ? false : undefined}
+                {...(secret ? { textContentType: 'none' as const, autoComplete: 'off' as const, importantForAutofill: 'no' as const } : null)}
                 accessibilityLabel={accessibilityLabel ?? label}
                 accessibilityHint={accessibilityHint}
                 onFocus={() => {

@@ -204,8 +204,7 @@ export const KeyScreen: PlanScreen = ({ ctx, close }) => {
                         onChangeText={setKey}
                         placeholder={connected ? t.bare('setup.key.placeholder') : t.bare('setup.key.placeholderNew')}
                         accessibilityHint={connected ? t('setup.key.placeholder') : t('setup.key.placeholderNew')}
-                        secureTextEntry
-                        revealable
+                        secret
                         disabled={keyRefused || busy}
                         testID="key-field"
                     />

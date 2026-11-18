@@ -150,7 +150,7 @@ export function ProviderKey({ provider, connected }: { provider: ProviderRow; co
                         placeholder={t.bare(replacing ? 'settings.key.pasteNew' : 'settings.key.paste')}
                         accessibilityLabel={t('settings.key.fieldAria', { name })}
                         accessibilityHint={t(replacing ? 'settings.key.pasteNew' : 'settings.key.paste')}
-                        secureTextEntry
+                        secret
                         autoFocus={replacing && !seed}
                         disabled={busy}
                         returnKeyType="done"

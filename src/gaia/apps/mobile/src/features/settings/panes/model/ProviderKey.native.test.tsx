@@ -57,7 +57,9 @@ describeNative('Provider key', () => {
         const r = await render(<ProviderKey provider={none} connected={false} />, { wrapper: wrap });
 
         const field = screen.getByTestId('provider-key-field');
+        // A secret field: masked with no reveal, and nothing offered to suggestions, autofill or password managers.
         expect(field.props).toMatchObject({ secureTextEntry: true, autoCorrect: false, spellCheck: false, autoComplete: 'off', textContentType: 'none', importantForAutofill: 'no', autoCapitalize: 'none' });
+        expect(screen.queryByLabelText('Show key')).toBeNull();
         expect(screen.getByTestId('provider-key-connect')).toBeDisabled();
         expect(screen.queryByText(/Gateway URL|Auth header/)).toBeNull();
 

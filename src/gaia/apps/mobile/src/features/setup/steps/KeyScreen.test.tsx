@@ -57,7 +57,9 @@ describe('KeyScreen', () => {
         const { client, ctx } = await mount([provider({ configured: false })]);
         await screen.findByText('Kimi · Default', { exact: false });
         const field = screen.getByTestId('key-field');
-        expect(field.props).toMatchObject({ secureTextEntry: true, autoCorrect: false, spellCheck: false, autoComplete: 'off', textContentType: 'none' });
+        // A secret field: masked with no reveal, and nothing offered to suggestions, autofill or password managers.
+        expect(field.props).toMatchObject({ secureTextEntry: true, autoCorrect: false, spellCheck: false, autoComplete: 'off', textContentType: 'none', importantForAutofill: 'no' });
+        expect(screen.queryByLabelText('Show key')).toBeNull();
         expect(screen.getByLabelText('Test and connect')).toBeDisabled();
         expect(client.connects).toEqual([]);
 
