@@ -63,7 +63,9 @@ import type {
     BrowseResponse,
     CancelStreamResponse,
     ConfirmToolResponse,
+    ConnectorConfigureResponse,
     ConnectorDeviceAuthResponse,
+    ConnectorTestResponse,
     CreateSessionRequest,
     DocumentListResponse,
     DocumentResponse,
@@ -137,7 +139,7 @@ export type {
 } from '@webui/types';
 export type { FileDiff, TurnChanges, UndoResult, UndoSettings } from '@webui/types/changes';
 export type { ActiveSkill, AgentCapabilities, AgentTool, ChatFileChange, GitRepo, OutputItem, OutputKind, ScopeEntry, SessionChanges, SessionEnvironment, SessionGit, SessionOutputs, SkillOrigin, UndoAllResult } from '@webui/types/sessionPanel';
-export type { BrowseResponse, ConnectorDeviceAuthResponse, CreateSessionRequest, DocumentListResponse, DocumentResponse, FileEntry, FileSearchResponse, FileSearchResult, ModelServerInfo, QuickLink, ProviderSummary, ProviderSummaryList, SessionSearchResponse, SessionSearchResult, ToolConfirmRequest, FilePreviewResponse } from '@webui/types/api.gen';
+export type { BrowseResponse, ConnectorConfigureResponse, ConnectorDeviceAuthResponse, ConnectorTestResponse, CreateSessionRequest, DocumentListResponse, DocumentResponse, FileEntry, FileSearchResponse, FileSearchResult, ModelServerInfo, QuickLink, ProviderSummary, ProviderSummaryList, SessionSearchResponse, SessionSearchResult, ToolConfirmRequest, FilePreviewResponse } from '@webui/types/api.gen';
 
 /** A photo or file chosen on this phone: where it is, and what it is called. */
 export interface PickedFile {
@@ -568,6 +570,13 @@ export interface GaiaClient {
     startConnectorDeviceSignIn(connectorId: string, scopes: string[], options?: RequestOptions): Promise<ConnectorDeviceAuthResponse>;
     /** Waits for the PC to report a sign-in for this connector finished or failed; null when the events stream can't be read. */
     watchConnectorSignIn(connectorId: string, options?: RequestOptions): Promise<ConnectorSignInEnd | null>;
+    /**
+     * Saves a connector's setup on the PC: an OAuth client (with `save_only`) or an MCP server's keys.
+     * The PC keeps the values in its keyring; the phone keeps none of them.
+     */
+    configureConnector(connectorId: string, config: Record<string, string | boolean>, options?: RequestOptions): Promise<ConnectorConfigureResponse>;
+    /** Starts an MCP server once on the PC and reports whether it started. */
+    testConnector(connectorId: string, options?: RequestOptions): Promise<ConnectorTestResponse>;
     /** Pauses an MCP server; its credentials and grants stay. Turning it back on is PC-only. */
     disableConnector(connectorId: string, options?: RequestOptions): Promise<void>;
     /**
