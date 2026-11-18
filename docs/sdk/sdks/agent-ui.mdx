@@ -3357,7 +3357,7 @@ credential store (the slot the TUI uses). A key is never echoed back or logged.
     sends that server nothing: it succeeds only when the server already has
     the provider working, and a pasted key is not sent anywhere.
 
-    **Errors:** **401** when the provider rejects the key or discovers no
+    **Errors:** **422** when the provider rejects the key or discovers no
     models (a key that discovers nothing is removed from Lemonade again);
     **403** when a key comes from mobile access or another computer, or a
     gateway field comes from anywhere but the PC; **409** when an
