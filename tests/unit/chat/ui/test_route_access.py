@@ -1086,3 +1086,67 @@ def test_schedules_and_goals_are_read_only_over_mobile_access(setup, monkeypatch
         assert resp.json()["name"] == "daily"
         resp = clients[caller].put("/api/goals/g1/approve", headers=ui)
         assert resp.status_code == 404, (caller, resp.text)
+
+
+def _mcp_setup(setup, monkeypatch, tmp_path):
+    from gaia.connectors import handler as connector_handler
+    from gaia.connectors import mcp_server
+    from gaia.ui.routers import connectors
+
+    _, clients, _ = setup
+    monkeypatch.setenv("GAIA_HOME", str(tmp_path))
+    monkeypatch.setattr(mcp_server.keyring, "set_password", lambda *a: None)
+    monkeypatch.setattr(
+        connector_handler._HANDLER_REGISTRY["mcp_server"], "_reload", None
+    )
+    _audit_into(monkeypatch, connectors)
+    return clients
+
+
+def test_a_device_cannot_re_enable_a_paused_server(setup, monkeypatch, tmp_path):
+    """Saving keys from a phone keeps a paused server paused, even if it sends disabled=false."""
+    import json
+
+    clients = _mcp_setup(setup, monkeypatch, tmp_path)
+    hdr = {"X-Gaia-UI": "1"}
+    url = "/api/connectors/mcp-github"
+    keys = {"GITHUB_PERSONAL_ACCESS_TOKEN": "ghp_" + "x" * 30}
+    assert (
+        clients["pc"]
+        .post(f"{url}/configure", json={"config": keys}, headers=hdr)
+        .status_code
+        == 200
+    )
+    assert clients["device"].post(f"{url}/disable", headers=hdr).status_code == 200
+
+    def paused():
+        return json.loads((tmp_path / "mcp_servers.json").read_text())["mcpServers"][
+            "mcp-github"
+        ]["disabled"]
+
+    assert paused() is True
+    for config in (keys, {**keys, "disabled": False}):
+        resp = clients["device"].post(
+            f"{url}/configure", json={"config": config}, headers=hdr
+        )
+        assert resp.status_code == 200, resp.text
+        assert paused() is True
+
+
+def test_a_device_sign_in_code_without_save_only_is_refused(setup, monkeypatch):
+    """A phone sending {flow_id, code} can't finish an OAuth sign-in."""
+    _, clients, _ = setup
+    resp = clients["device"].post(
+        "/api/connectors/google/configure",
+        json={"config": {"flow_id": "f", "code": "c"}},
+        headers={"X-Gaia-UI": "1"},
+    )
+    assert resp.status_code == 403, resp.text
+
+
+def test_a_pending_device_cannot_run_a_connector_check(setup):
+    _, clients, _ = setup
+    resp = clients["pending"].post(
+        "/api/connectors/mcp-github/test", headers={"X-Gaia-UI": "1"}
+    )
+    assert resp.status_code == 403
