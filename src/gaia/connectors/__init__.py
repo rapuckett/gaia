@@ -70,6 +70,7 @@ _API_NAMES: frozenset[str] = frozenset(
         "activate_agent",
         "cancel_flow",
         "complete_authorization",
+        "complete_device_authorization",
         "deactivate",
         "deactivate_agent",
         "get_access_token",

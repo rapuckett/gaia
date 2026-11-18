@@ -47,6 +47,7 @@ export interface ApiSchemas {
   ChatSpendToday: ChatSpendToday;
   CommandOutputResponse: CommandOutputResponse;
   CommitRequest: CommitRequest;
+  CompleteFlowRequest: CompleteFlowRequest;
   ConfigureRequest: ConfigureRequest;
   ConfirmToolResponse: ConfirmToolResponse;
   ConnectRequest: ConnectRequest;
@@ -648,6 +649,7 @@ export interface AttachDocumentRequest {
 }
 export interface AuthorizeRequest {
   grant_agents?: string[];
+  redirect_port?: number | null;
   scopes?: string[];
 }
 /**
@@ -860,6 +862,13 @@ export interface CommitRequest {
   confirmed?: boolean;
   message: string;
   root: string;
+}
+/**
+ * Body for ``POST /api/connectors/flows/{flow_id}/complete``.
+ */
+export interface CompleteFlowRequest {
+  code: string;
+  state: string;
 }
 export interface ConfigureRequest {
   config?: {

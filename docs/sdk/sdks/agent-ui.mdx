@@ -2624,9 +2624,31 @@ OAuth and MCP-server connections for the Settings page and per-agent grants
 
   <Accordion title="POST /api/connectors/{connector_id}/authorize">
     Start an OAuth PKCE flow. Returns `{flow_id, authorization_url}` — the UI
-    opens the URL and polls for completion. PC-only: the browser's callback can
-    only finish on the PC (**403** from mobile access, a paired device or
-    another computer).
+    opens the URL and polls for completion. On the PC, the redirect lands on a
+    listener GAIA binds on the PC's loopback; the PC must not send
+    `redirect_port` (**422**).
+
+    A paired device the PC allowed signs in on its own browser instead: it
+    sends `redirect_port` (1024–65535), the port of a one-shot listener it
+    holds on its own `127.0.0.1`. The PC binds nothing, sets
+    `redirect_uri=http://127.0.0.1:<redirect_port>/callback`, keeps the PKCE
+    verifier, and ties the flow to that device for 15 minutes. The device then
+    hands the code to `POST /api/connectors/flows/{flow_id}/complete`. A device
+    without `redirect_port`, or with `grant_agents`, gets a **403**, as do
+    mobile access and a pending device. A device's start is written to the
+    audit log.
+  </Accordion>
+
+  <Accordion title="POST /api/connectors/flows/{flow_id}/complete">
+    Finish a paired device's sign-in with `{code, state}`, the values its
+    loopback listener received. Only the device that started the flow may call
+    it; anyone else, the PC included, gets a **403**. The PC checks `state`,
+    exchanges the code with its own verifier and the same `redirect_uri`, and
+    saves the connection as the PC's own sign-in does. Returns the connector's
+    summary (the shape of `GET /api/connectors/{connector_id}`), never a token.
+    A `state` that doesn't match is a **400** and ends the flow; an unknown,
+    finished or expired flow is a **404**, so a second call gets a **404**.
+    The finish is written to the audit log, naming the connector.
   </Accordion>
 
   <Accordion title="POST /api/connectors/{connector_id}/authorize-device">
@@ -2641,7 +2663,12 @@ OAuth and MCP-server connections for the Settings page and per-agent grants
   </Accordion>
 
   <Accordion title="DELETE /api/connectors/_flows/{flow_id}">
-    Cancel a pending OAuth flow without waiting for the callback.
+    Cancel a pending OAuth flow without waiting for the callback. The PC may
+    cancel any flow; a paired device the PC allowed may cancel only a flow it
+    started. Another device, a pending device and mobile access get a
+    **403**. Starting a new sign-in also ends a pending one. When the PC or
+    another device started the one that ended, `connector.oauth.error` goes
+    out with reason `superseded` and its `flow_id`.
   </Accordion>
 
   <Accordion title="PUT /api/connectors/{connector_id}/grants/{agent_id}">
@@ -3698,8 +3725,8 @@ Every route is in one class, pinned by `tests/unit/chat/ui/test_route_access.py`
 
 | Class | Who | Routes |
 |---|---|---|
-| PC-only | `pc` | Tunnel start and stop, a provider's gateway address and key header, the model-server target, logs, messaging, GPU memory apply and revert, the default full-access setting, connector browser sign-in (`authorize`) and enable, an agent's connector grant and activations, `POST /v1/connections/{provider}`, skill and agent installs, `POST /api/files/open`, `POST /api/setup/npu/memlock-fix`, the troubleshooting report, the memory profile scan and its commits, re-collecting system context (`reinitialize`, `refresh-system-context`), the eval-only routes, `GET /api/connectors/_debug`, and every other [paired devices](#paired-devices) route |
-| Setup | `pc`, or an allowed device | Setup's changes (see [Setup](#setup)), provider keys (entering one, removing one, retrying the credential store), `POST /api/system/download-model`, `PUT /api/system/model-server/backend`, a device-code sign-in (`POST /api/connectors/{connector_id}/authorize-device`, for a connector with `supports_device_code` only), connector setup and its check (`POST /api/connectors/{connector_id}/configure` without a browser sign-in, `POST /api/connectors/{connector_id}/test`), Automations, and changes to schedules and goals |
+| PC-only | `pc` | Tunnel start and stop, a provider's gateway address and key header, the model-server target, logs, messaging, GPU memory apply and revert, the default full-access setting, connector enable, an agent's connector grant and activations, `POST /v1/connections/{provider}`, skill and agent installs, `POST /api/files/open`, `POST /api/setup/npu/memlock-fix`, the troubleshooting report, the memory profile scan and its commits, re-collecting system context (`reinitialize`, `refresh-system-context`), the eval-only routes, `GET /api/connectors/_debug`, and every other [paired devices](#paired-devices) route |
+| Setup | `pc`, or an allowed device | Setup's changes (see [Setup](#setup)), provider keys (entering one, removing one, retrying the credential store), `POST /api/system/download-model`, `PUT /api/system/model-server/backend`, a device-code sign-in (`POST /api/connectors/{connector_id}/authorize-device`, for a connector with `supports_device_code` only), connector setup and its check (`POST /api/connectors/{connector_id}/configure` without a browser sign-in, `POST /api/connectors/{connector_id}/test`), a browser sign-in the device finishes itself (`POST /api/connectors/{connector_id}/authorize` with `redirect_port`, then `POST /api/connectors/flows/{flow_id}/complete`), cancelling a sign-in (`DELETE /api/connectors/_flows/{flow_id}`; a device only its own), Automations, and changes to schedules and goals |
 | Not from a device | `pc`, `tunnel` | `GET /api/providers`, which can register a provider |
 | Pairing | a device on the listener, with no token | `POST /api/devices/pair` |
 | Its own routes | an allowed device | `GET /api/devices/me/routes` |
