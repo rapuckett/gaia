@@ -6,6 +6,7 @@ import { useEffect, useRef, useState, type MutableRefObject } from 'react';
 import type { ConnectorRow } from '@/api/client.types';
 import { useConfigureConnector } from '@/data';
 import { Markdown } from '@/features/chat/markdown/Markdown';
+import { isPcRefusal, PcOnlyNotice } from '@/features/settings/PcOnlyNotice';
 import { describeHttpFailure, useT } from '@/i18n/useT';
 import { openLinkFromPress } from '@/platform/openLink';
 import { Button, Notice, Sheet, Stack, Text, TextField } from '@/ui';
@@ -73,6 +74,7 @@ function SetupBody({
     const [saved, setSaved] = useState(false);
     const [problem, setProblem] = useState<string | null>(null);
     const [failure, setFailure] = useState<{ text: string; detail?: string } | null>(null);
+    const [pcOnly, setPcOnly] = useState(false);
 
     useEffect(() => {
         clearRef.current = () => setValues({});
@@ -93,11 +95,13 @@ function SetupBody({
         if (why) return;
         setBusy(true);
         setFailure(null);
+        setPcOnly(false);
         setSaved(false);
         try {
             await configure(connector.id, setupPayload(form, values));
         } catch (error) {
-            setFailure(describeHttpFailure(error, t));
+            if (isPcRefusal(error)) setPcOnly(true);
+            else setFailure(describeHttpFailure(error, t));
             return;
         } finally {
             setBusy(false);
@@ -160,6 +164,7 @@ function SetupBody({
             ))}
             {problem ? <Notice tone="danger" message={problem} /> : null}
             {failure ? <Notice tone="danger" message={failure.text} detail={failure.detail} /> : null}
+            {pcOnly ? <PcOnlyNotice testID="connector-setup-pc-only" /> : null}
             <Button
                 variant="primary"
                 full

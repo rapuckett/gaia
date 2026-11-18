@@ -24,7 +24,7 @@ import {
 } from '@/data';
 import { ScreenHeader } from '@/features/nav/ScreenHeader';
 import { ChipButton } from '@/features/schedules/ChipButton';
-import { PcOnlyNotice } from '@/features/settings/PcOnlyNotice';
+import { isPcRefusal, PcOnlyNotice } from '@/features/settings/PcOnlyNotice';
 import { SettingsGroup } from '@/features/skills/SettingsGroup';
 import { failureNoticeProps } from '@/features/chat/header/failureText';
 import { describeHttpFailure, useDirection, useT } from '@/i18n/useT';
@@ -458,8 +458,8 @@ function ConnectorTile({
         try {
             await configure(connector.id, {});
         } catch (e) {
-            const { text, detail } = describeHttpFailure(e, t);
-            show({ tone: 'danger', text, detail });
+            if (isPcRefusal(e)) show({ tone: 'info', text: t('mobileApp.settings.pcOnly') });
+            else show({ tone: 'danger', ...describeHttpFailure(e, t) });
             return;
         } finally {
             setConnecting(false);
@@ -685,6 +685,7 @@ function CheckStatus({ connector, check }: { connector: ConnectorRow; check?: Co
                 </Stack>
             );
         case 'error': {
+            if (isPcRefusal(check.error)) return <PcOnlyNotice testID={`connector-check-status-${connector.id}`} />;
             const { text, detail } = describeHttpFailure(check.error, t);
             return <Notice tone="danger" message={text} detail={detail} testID={`connector-check-status-${connector.id}`} />;
         }

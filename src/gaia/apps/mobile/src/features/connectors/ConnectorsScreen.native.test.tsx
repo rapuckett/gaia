@@ -303,6 +303,16 @@ describeNative('ConnectorsScreen setup from the phone', () => {
         queryClient.clear();
     });
 
+    it("says to do it on the PC when the PC refuses this phone's setup", async () => {
+        const { client, queryClient, wrap } = setup([slackSetup]);
+        client.configureConnector = () => Promise.reject(new GaiaApiError(403, 'Sign in to Slack on the PC running GAIA.'));
+        await openSlackSheet(wrap);
+        await fireEvent.press(screen.getByTestId('connector-setup-save'));
+        expect(await screen.findByTestId('connector-setup-pc-only')).toBeTruthy();
+        expect(screen.getByText('Change this on the PC running GAIA.')).toBeTruthy();
+        queryClient.clear();
+    });
+
     it("sends a server's key to the PC, clears it from the sheet, and checks the server", async () => {
         const { client, queryClient, wrap } = setup([slackSetup]);
         const sent = recordConfigure(client);
