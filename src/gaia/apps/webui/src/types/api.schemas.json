@@ -1038,6 +1038,19 @@
         "title": "Grant Agents",
         "type": "array"
       },
+      "redirect_port": {
+        "anyOf": [
+          {
+            "maximum": 65535.0,
+            "minimum": 1024.0,
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Redirect Port"
+      },
       "scopes": {
         "items": {
           "type": "string"
@@ -1855,6 +1868,25 @@
       "message"
     ],
     "title": "CommitRequest",
+    "type": "object"
+  },
+  "CompleteFlowRequest": {
+    "description": "Body for ``POST /api/connectors/flows/{flow_id}/complete``.",
+    "properties": {
+      "code": {
+        "title": "Code",
+        "type": "string"
+      },
+      "state": {
+        "title": "State",
+        "type": "string"
+      }
+    },
+    "required": [
+      "code",
+      "state"
+    ],
+    "title": "CompleteFlowRequest",
     "type": "object"
   },
   "ConfigureRequest": {
