@@ -143,7 +143,7 @@ function DeviceChanges({ device, now }: { device: PairedDevice; now: number }) {
                                 return (
                                     <li key={`${c.at}-${c.kind}-${i}`} className="devices-change">
                                         <span><MarkedText text={t('settings.devices.changeRow', { what, when: ago(c.at, now) })} /></span>
-                                        {unknownKind && <bdi dir="ltr" className="settings-hint devices-change-kind">{unknownKind}</bdi>}
+                                        {unknownKind && <span className="settings-hint devices-change-kind"><bdi dir="ltr">{unknownKind}</bdi></span>}
                                     </li>
                                 );
                             })}
@@ -542,9 +542,9 @@ export function DevicesSettings() {
                     onCancel={() => setConfirm(null)}
                     onConfirm={() => void act(() => removeDevice(confirm.device.id)).then(() => setConfirm(null))}
                 >
-                    {t('settings.devices.removeBody')}
+                    <span>{t('settings.devices.removeBody')}</span>
                     {(confirm.device.changes_count ?? 0) > 0 && (
-                        <> {t.plural('settings.devices.removeHasChanges', confirm.device.changes_count ?? 0)}</>
+                        <span>{t.plural('settings.devices.removeHasChanges', confirm.device.changes_count ?? 0)}</span>
                     )}
                 </ConfirmSheet>
             )}
