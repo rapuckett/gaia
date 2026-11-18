@@ -35,6 +35,8 @@ export const useLanguageSwitch = create<LanguageSwitchState>((set, get) => ({
 /** Applies a language pick; when it flips the layout, which only a restart finishes, covers the app until Cancel or a restart. */
 export function pickLanguage(code: string): void {
     const previousPick = useLocaleStore.getState().locale;
+    // Flags first, so the next launch is laid out for the pick however the app is closed.
+    applyDirection(getLocale(code).meta.dir, code, true);
     useLocaleStore.getState().setLocale(code);
     // The web flips its layout live; only native needs a restart.
     if (Platform.OS !== 'web' && getLocale(code).meta.dir !== layoutDirection()) useLanguageSwitch.setState({ target: code, previousPick });
