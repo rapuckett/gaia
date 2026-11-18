@@ -178,6 +178,8 @@ export function Text({
     }
     if (strike || underline) style.textDecorationLine = strike && underline ? 'underline line-through' : strike ? 'line-through' : 'underline';
     if (dir) style.writingDirection = dir;
+    // iOS lays a paragraph with a nested span out left to right unless told the UI direction.
+    else if (Platform.OS !== 'web' && !nested && !dirProp && !forced && hasGloss(children)) style.writingDirection = uiDir;
     // `auto` is a block that follows its own content, as the web's dir="auto" does; explicit ltr/rtl only set the run.
     const startsRight = dirProp === 'auto' ? dir === 'rtl' : rtl;
     // Inside a pinned-direction block native does not swap left and right, so the side is taken literally.
@@ -200,7 +202,8 @@ export function Text({
         lineHeight: Math.round(glossSize * GLOSS_LINE_HEIGHT),
         color: toneColor(colors, 'muted'),
         writingDirection: 'ltr',
-        textAlign: align === 'center' ? 'center' : side(false),
+        // The gloss sits on the same reading edge as the text it translates, though it reads left to right.
+        textAlign: style.textAlign ?? side(pinnedStartsRight),
         marginTop: space.xs,
     };
     const main = (

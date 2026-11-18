@@ -9722,7 +9722,7 @@ def handle_diagnostics_command(args):
       as ``<name>.tail``
     - when GAIA uses the user's own Lemonade, that server's recent log lines
       (redacted), read from its log stream, as ``lemonade/server-log.txt``
-    - ``~/.gaia/electron-install-state.json`` and ``setup-report.json``
+    - ``~/.gaia/electron-install-state.json`` and ``setup-report.json``, redacted
     - the last few model-failure records (``failures/GF-*.json``), each
       written redacted at the moment a model call failed (omitted with
       ``--no-logs``: they hold a Lemonade log tail)
@@ -9797,7 +9797,12 @@ def handle_diagnostics_command(args):
 
     sysinfo_parts += _diag_listeners(sys.platform, gaia_dir)
 
-    sysinfo_blob = "\n\n".join(sysinfo_parts).encode("utf-8")
+    from gaia.llm.lemonade_logs import known_secrets
+    from gaia.log_reader import redact_lines
+
+    # Every file in the bundle is redacted: it is made to be shared.
+    secrets, _ = known_secrets()
+    sysinfo_blob = redact_lines("\n\n".join(sysinfo_parts).encode("utf-8"), secrets)
 
     # Build the tarball
     try:
@@ -9811,21 +9816,16 @@ def handle_diagnostics_command(args):
             # Always include state files (no chat content)
             for entry in state_files:
                 if entry.is_file():
-                    tar.add(
-                        str(entry),
-                        arcname=entry.name,
-                        filter=lambda ti: ti if ti.isfile() or ti.isdir() else None,
-                    )
+                    blob = redact_lines(entry.read_bytes(), secrets)
+                    info = tarfile.TarInfo(name=entry.name)
+                    info.size = len(blob)
+                    info.mtime = int(entry.stat().st_mtime)
+                    tar.addfile(info, io.BytesIO(blob))
 
             # Log files gated by --no-logs, and failure records with them since
             # each holds a log tail. Rotated backups (gaia.log.1, ...) ride
             # along; a log from before the size cap keeps only its tail.
-            # Every log is redacted: the bundle is made to be shared.
             if not args.no_logs:
-                from gaia.llm.lemonade_logs import known_secrets
-                from gaia.log_reader import redact_lines
-
-                secrets, _ = known_secrets()
                 for entry in failure_records:
                     blob = redact_lines(entry.read_bytes(), secrets)
                     info = tarfile.TarInfo(name=f"failures/{entry.name}")

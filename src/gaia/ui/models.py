@@ -1107,6 +1107,7 @@ class DeviceRemoved(BaseModel):
 class DeviceChange(BaseModel):
     """One change a paired device made on the PC; ``params`` never hold a secret."""
 
+    id: str
     kind: str
     params: Dict[str, Union[str, int, float, bool, None]]
     at: str

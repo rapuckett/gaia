@@ -1289,6 +1289,7 @@ export interface FailedRedemption {
  */
 export interface DeviceChange {
   at: string;
+  id: string;
   kind: string;
   params: {
     [k: string]: string | number | boolean | null | undefined;

@@ -1,8 +1,8 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { createContext, useContext } from 'react';
-import { BackHandler, Platform, StyleSheet, View } from 'react-native';
+import { createContext, useContext, useEffect } from 'react';
+import { BackHandler, Keyboard, Platform, StyleSheet, View } from 'react-native';
 
 import { ref, type MessageKey } from '@webui/i18n/registry';
 
@@ -36,6 +36,8 @@ export function LanguageSwitchCover({ target, platform, onCancel }: CoverProps) 
     if (!name) throw new Error(`No language name for "${target}"; add mobileApp.settings.languageSwitch.language.${target} to en.ts and ar.ts.`);
     const android = platform === 'android';
     const language = ref(name);
+    // A keyboard left up would sit over the cover and take Back first.
+    useEffect(() => Keyboard.dismiss(), []);
     return (
         <View style={StyleSheet.absoluteFill} testID="language-switch-cover" accessibilityViewIsModal>
             <Screen

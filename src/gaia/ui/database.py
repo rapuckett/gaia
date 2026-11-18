@@ -2108,7 +2108,7 @@ class ChatDatabase:
         """*device_id*'s newest *limit* changes, newest first, and how many it has."""
         with self._lock:
             rows = self._conn.execute(
-                "SELECT kind, params, at FROM device_changes WHERE device_id = ? "
+                "SELECT id, kind, params, at FROM device_changes WHERE device_id = ? "
                 "ORDER BY id DESC LIMIT ?",
                 (device_id, limit),
             ).fetchall()
@@ -2117,7 +2117,12 @@ class ChatDatabase:
                 (device_id,),
             ).fetchone()[0]
         return [
-            {"kind": r["kind"], "params": json.loads(r["params"]), "at": r["at"]}
+            {
+                "id": str(r["id"]),
+                "kind": r["kind"],
+                "params": json.loads(r["params"]),
+                "at": r["at"],
+            }
             for r in rows
         ], total
 

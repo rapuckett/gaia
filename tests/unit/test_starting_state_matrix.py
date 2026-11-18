@@ -203,6 +203,10 @@ def start(tmp_path, monkeypatch):
             "scan_installed_apps",
             lambda *_a, **_k: [{"content": "Installed app: Example Editor"}],
         )
+        # Whoever runs inference has turned System discovery on.
+        monkeypatch.setattr(
+            "gaia.agents.base.memory._system_context_is_enabled", lambda: True
+        )
         server = FakeLemonade(downloaded=state.on_the_server())
         server.__enter__()
         started.append(server)

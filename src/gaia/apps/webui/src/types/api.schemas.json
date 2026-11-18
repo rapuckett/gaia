@@ -3665,6 +3665,10 @@
         "title": "At",
         "type": "string"
       },
+      "id": {
+        "title": "Id",
+        "type": "string"
+      },
       "kind": {
         "title": "Kind",
         "type": "string"
@@ -3694,6 +3698,7 @@
       }
     },
     "required": [
+      "id",
       "kind",
       "params",
       "at"
