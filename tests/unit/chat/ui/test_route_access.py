@@ -7,11 +7,11 @@ Every route is in exactly one class, and ``test_every_route_is_classified``
 fails for a route nobody has decided about:
 
 * ``pc``: the PC running GAIA only (``require_local_pc``).
-* ``pc_or_device``: first-run setup, device-code sign-in, connector setup,
-  checks, grants and activations, Automations, schedules and goals, the device
-  list, the Discord bridge's controls, memory rebuilds and profile saves, and
-  switching back to GAIA's own Lemonade; the PC or an allowed paired device,
-  never mobile access (``require_pc_or_device``, ``require_pc_or_allowed_device``).
+* ``pc_or_device``: first-run setup, connector sign-in, setup, checks, grants
+  and activations, Automations, schedules and goals, the device list, the
+  Discord bridge's controls, memory rebuilds and profile saves, and switching
+  back to GAIA's own Lemonade; the PC or an allowed paired device, never
+  mobile access (``require_pc_or_device``, ``require_pc_or_allowed_device``).
 * ``not_on_listener``: a read with side effects on the PC; the PC and mobile
   access, never a paired device (``refuse_on_device_listener``).
 * ``remote``: the PC, mobile access with its token, and allowed devices.
@@ -63,7 +63,6 @@ PC_ONLY = {
     "GET /api/setup/report/{name}",
     "POST /api/agents/install",
     "POST /api/connectors/eval-mailbox",
-    "POST /api/connectors/{connector_id}/authorize",
     "POST /api/devices/listener",
     "POST /api/devices/pairing",
     "POST /api/devices/pairing/reset",
@@ -89,6 +88,7 @@ PC_ONLY = {
 
 PC_OR_DEVICE = {
     "DELETE /api/automations/{ref}",
+    "DELETE /api/connectors/_flows/{flow_id}",
     "DELETE /api/connectors/{connector_id}/activations/{agent_id:path}",
     "DELETE /api/devices/pairing",
     "DELETE /api/devices/{device_id}",
@@ -100,6 +100,8 @@ PC_OR_DEVICE = {
     "GET /api/devices/status",
     "GET /api/messaging/discord",
     "POST /api/automations/{ref}/{action}",
+    "POST /api/connectors/flows/{flow_id}/complete",
+    "POST /api/connectors/{connector_id}/authorize",
     "POST /api/connectors/{connector_id}/authorize-device",
     "POST /api/connectors/{connector_id}/configure",
     "POST /api/connectors/{connector_id}/enable",
@@ -167,7 +169,6 @@ WEB = {
 # ``network_policy`` in ``PUT /api/settings``.
 REMOTE = {
     "DELETE /api/chat/permissions/{session_id}/grants",
-    "DELETE /api/connectors/_flows/{flow_id}",
     "DELETE /api/connectors/{connector_id}",
     "DELETE /api/connectors/{connector_id}/grants/{agent_id:path}",
     "DELETE /api/documents/{doc_id}",
