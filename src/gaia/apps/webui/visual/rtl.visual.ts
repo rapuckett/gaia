@@ -5710,7 +5710,7 @@ for (const locale of ['ar', 'en']) {
         test('profile setup, System discovery off', async ({ page }) => {
             await openMemory(page, locale, {}, 'dark');
             await memoryTab(page, /Profile setup/);
-            const note = page.locator('.mem-profile-grid > .mem-profile-note');
+            const note = page.locator('.mem-profile-consent');
             await expect(note).toBeVisible();
             await expect(note).toHaveCSS('text-align', locale === 'ar' ? /^(right|start)$/ : /^(left|start)$/);
             await checkMemory(page, locale, 'profile-consent-off');

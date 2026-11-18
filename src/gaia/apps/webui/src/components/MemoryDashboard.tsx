@@ -2213,7 +2213,7 @@ export function MemoryDashboard() {
                     {activeTab === 'profile' && (
                         <div className="mem-profile-grid">
                             <p className="mem-tab-intro">{t('mem.profile.intro')}</p>
-                            {!systemDiscoveryConsent && !pcOnly && <p className="mem-profile-note">{t('mem.profile.consentOff')}</p>}
+                            {!systemDiscoveryConsent && !pcOnly && <p className="mem-profile-note mem-profile-consent">{t('mem.profile.consentOff')}</p>}
                             {pcOnly && <div className="mem-advanced-error" role="alert">{t('mem.profile.pcOnly')}</div>}
                             {/* Card A: System Discovery */}
                             <div className="mem-profile-card">
