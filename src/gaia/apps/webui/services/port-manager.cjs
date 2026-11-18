@@ -23,6 +23,7 @@ const os = require("os");
 const path = require("path");
 const { execFileSync } = require("child_process");
 const { killProcessTree } = require("./process-tree.cjs");
+const { redact, envSecrets } = require("./redact.cjs");
 
 const BACKEND_KILL_GRACE_MS = 3000;
 const BACKEND_FORCE_WAIT_MS = 1000;
@@ -83,27 +84,74 @@ async function killBackend(procOrPid, logger) {
   });
 }
 
+const DIAG_MAX_LOG_BYTES = 50 * 1024 * 1024;
+const DIAG_GAIA_TIMEOUT_MS = 120000;
+
+/** The last DIAG_MAX_LOG_BYTES of a file, as text. */
+function readTail(abs) {
+  const size = fs.statSync(abs).size;
+  if (size <= DIAG_MAX_LOG_BYTES) return fs.readFileSync(abs, "utf8");
+  const fd = fs.openSync(abs, "r");
+  try {
+    const buf = Buffer.alloc(DIAG_MAX_LOG_BYTES);
+    fs.readSync(fd, buf, 0, DIAG_MAX_LOG_BYTES, size - DIAG_MAX_LOG_BYTES);
+    return buf.toString("utf8");
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
 /**
- * Write a diagnostics bundle (.tar.gz) containing the known log/state
- * files under ~/.gaia. Prefers shell-out to `tar` (standard on every
- * Linux distro and macOS); falls back to a best-effort concatenated
- * text blob if `tar` is missing (very rare — mostly Windows from node,
- * where this code path isn't the primary route anyway).
+ * Write a diagnostics bundle (.tgz) of the known log/state files under
+ * ~/.gaia. The bundle is made to be shared, so every line in it is redacted.
+ *
+ * Preferred: GAIA's own `gaia diagnostics --output <dest>`, which also removes
+ * the credentials saved in the keyring by value. When that can't run (often
+ * why the app crashed), the files are redacted here by shape only, with a
+ * NOTE.txt in the bundle and a logged line saying so. If `tar` is missing the
+ * same redacted text is written as a single .txt blob.
+ *
+ * `opts.findGaiaBin()` returns the gaia executable or null; `opts.execFile` is
+ * a test seam for execFileSync.
  *
  * Returns the absolute path of the written bundle.
  */
-async function writeDiagnosticsBundle(destPath, logger) {
+async function writeDiagnosticsBundle(destPath, logger, opts = {}) {
   const logError = (logger && logger.error) || console.error;
+  const run = opts.execFile || execFileSync;
   if (!destPath) {
     const ts = new Date().toISOString().replace(/[:.]/g, "-");
     destPath = path.join(gaiaHome(), `diagnostics-${ts}.tgz`);
   }
+  fs.mkdirSync(path.dirname(destPath), { recursive: true });
 
-  try {
-    fs.mkdirSync(path.dirname(destPath), { recursive: true });
-  } catch {
-    // ignore — best effort
+  let reason;
+  const gaiaBin = opts.findGaiaBin ? opts.findGaiaBin() : null;
+  if (!gaiaBin) {
+    reason = "GAIA's Python backend was not found";
+  } else {
+    try {
+      run(gaiaBin, ["diagnostics", "--output", destPath], {
+        stdio: ["ignore", "ignore", "pipe"],
+        timeout: DIAG_GAIA_TIMEOUT_MS,
+        windowsHide: true,
+      });
+      if (!fs.existsSync(destPath)) {
+        throw new Error("it wrote no bundle");
+      }
+      return destPath;
+    } catch (err) {
+      const stderr = err && err.stderr ? String(err.stderr).trim().slice(-500) : "";
+      reason = `\`gaia diagnostics\` failed (${err.message}${stderr ? `: ${redact(stderr)}` : ""})`;
+    }
   }
+
+  const note =
+    `${reason}, so saved credentials (cloud keys, bot tokens, OAuth secrets) could not be read.\n` +
+    "Every line was redacted by shape only: anything that looks like a key or token, " +
+    "and the values of secret-named environment variables. " +
+    "Read the files before you share them.\n";
+  logError(`[port-manager] diagnostics: ${note.trim()}`);
 
   const candidates = [
     "electron-install.log",
@@ -114,54 +162,56 @@ async function writeDiagnosticsBundle(destPath, logger) {
     // Fatal-crash stacks from the backend (src/gaia/ui/fault_log.py), and its rotated copy.
     "logs/backend-faults.log",
     "logs/backend-faults.log.1",
-  ];
+  ].filter((rel) => fs.existsSync(path.join(gaiaHome(), rel)));
 
-  const present = candidates.filter((rel) =>
-    fs.existsSync(path.join(gaiaHome(), rel))
-  );
-
-  if (present.length === 0) {
-    // Still write an empty marker so the caller's "here is the file"
-    // message doesn't point at vapor.
-    fs.writeFileSync(destPath, "");
-    return destPath;
-  }
-
+  const secrets = envSecrets();
+  const stage = fs.mkdtempSync(path.join(os.tmpdir(), "gaia-diag-stage-"));
+  const texts = [];
   try {
-    // -C so paths inside the archive are relative (no /home/... leakage).
-    execFileSync("tar", ["-czf", destPath, "-C", gaiaHome(), ...present], {
-      stdio: ["ignore", "ignore", "pipe"],
-      timeout: 10000,
-    });
-    return destPath;
-  } catch (err) {
-    // Fallback: concatenate the text files into a single blob. This is
-    // NOT a tar archive; rename so we don't lie about the format.
-    const fallback = destPath.replace(/\.tgz$/, ".txt");
-    const chunks = [];
-    for (const rel of present) {
-      const abs = path.join(gaiaHome(), rel);
+    fs.writeFileSync(path.join(stage, "NOTE.txt"), note);
+    const staged = ["NOTE.txt"];
+    for (const rel of candidates) {
+      let text;
       try {
-        chunks.push(`==== ${rel} ====\n`);
-        chunks.push(fs.readFileSync(abs, "utf8"));
-        chunks.push("\n");
+        text = redact(readTail(path.join(gaiaHome(), rel)), secrets);
       } catch (readErr) {
-        chunks.push(`(could not read ${rel}: ${readErr.message})\n`);
+        text = `(could not read ${rel}: ${readErr.message})\n`;
       }
+      texts.push([rel, text]);
+      fs.mkdirSync(path.dirname(path.join(stage, rel)), { recursive: true });
+      fs.writeFileSync(path.join(stage, rel), text);
+      staged.push(rel);
     }
-    fs.writeFileSync(fallback, chunks.join(""));
-    logError(
-      `[port-manager] tar unavailable (${err.message}); wrote plain-text bundle to ${fallback}`
-    );
-    return fallback;
+
+    try {
+      // -C so paths inside the archive are relative (no /home/... leakage).
+      run("tar", ["-czf", destPath, "-C", stage, ...staged], {
+        stdio: ["ignore", "ignore", "pipe"],
+        timeout: 10000,
+      });
+      return destPath;
+    } catch (err) {
+      // Not a tar archive; rename so we don't lie about the format.
+      const fallback = destPath.replace(/\.tgz$/, ".txt");
+      const chunks = [`==== NOTE.txt ====\n${note}\n`];
+      for (const [rel, text] of texts) chunks.push(`==== ${rel} ====\n${text}\n`);
+      fs.writeFileSync(fallback, chunks.join(""));
+      logError(
+        `[port-manager] tar unavailable (${err.message}); wrote plain-text bundle to ${fallback}`
+      );
+      return fallback;
+    }
+  } finally {
+    fs.rmSync(stage, { recursive: true, force: true });
   }
 }
 
 class PortManager {
   // Instance wrappers so callers can pattern-match the other services
   // (TrayManager, AgentProcessManager) and inject a logger once.
-  constructor({ logger } = {}) {
+  constructor({ logger, findGaiaBin } = {}) {
     this.logger = logger || null;
+    this.findGaiaBin = findGaiaBin || null;
   }
 
   findFreePort() {
@@ -173,7 +223,9 @@ class PortManager {
   }
 
   writeDiagnosticsBundle(destPath) {
-    return writeDiagnosticsBundle(destPath, this.logger);
+    return writeDiagnosticsBundle(destPath, this.logger, {
+      findGaiaBin: this.findGaiaBin,
+    });
   }
 }
 

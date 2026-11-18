@@ -1445,7 +1445,7 @@ def test_a_key_accepted_without_models_names_the_log_to_read(
 
 
 def test_a_missing_ca_file_is_named_instead_of_the_key(
-    client, lemonade, keys, model_list
+    client, device_client, lemonade, keys, model_list
 ):
     problem = "This PC's certificate store has no /etc/ssl/certs/ca-certificates.crt"
     model_list["ca_problem"] = problem
@@ -1454,6 +1454,11 @@ def test_a_missing_ca_file_is_named_instead_of_the_key(
     assert resp.status_code == 503
     assert resp.json()["detail"] == problem
     assert model_list["keys_checked"] == []
+    # A paired device is told to fix it on the PC, without the PC's paths.
+    resp = device_client.post("/api/providers/fireworks/connect", json={"api_key": KEY})
+    assert resp.status_code == 503
+    assert "certificate store needs fixing" in resp.json()["detail"]
+    assert "/etc/ssl" not in resp.text
 
 
 def test_a_missing_ca_file_on_the_users_own_server_is_not_claimed(
@@ -1707,6 +1712,112 @@ def test_forget_key_store_error_is_503(client, lemonade, keys):
 
 def test_forget_key_local_is_422(client, lemonade, keys):
     assert client.delete("/api/providers/local/key").status_code == 422
+
+
+# ── Keys from a paired device ──────────────────────────────────────────────
+
+PC_PATH = "/Users/someone/Library/Keychains/login.keychain-db"
+
+
+@pytest.fixture
+def device_client(db, tmp_path):
+    """A request from an allowed paired device on the device listener."""
+    from gaia.ui.devices.access import DeviceAccess
+    from gaia.ui.security import (
+        DEVICE_SCOPE_KEY,
+        LAN_LISTENER,
+        LISTENER_SCOPE_KEY,
+        DevicePrincipal,
+    )
+
+    app = FastAPI()
+    app.include_router(providers.router)
+    app.state.db = db
+    app.state.devices = DeviceAccess(app, folder=tmp_path / "devices")
+
+    async def on_listener(scope, receive, send):
+        scope[LISTENER_SCOPE_KEY] = LAN_LISTENER
+        scope[DEVICE_SCOPE_KEY] = DevicePrincipal("phone-1", True)
+        await app(scope, receive, send)
+
+    return TestClient(
+        on_listener, client=("127.0.0.1", 50000), headers={"X-Gaia-UI": "1"}
+    )
+
+
+def test_a_paired_device_may_enter_and_remove_a_key(
+    device_client, lemonade, keys, caplog
+):
+    with caplog.at_level(logging.DEBUG):
+        resp = device_client.post(
+            "/api/providers/fireworks/connect", json={"api_key": KEY}
+        )
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["remembered"] is True
+        assert lemonade.call("POST", "cloud/auth")["json"]["api_key"] == KEY
+        assert keys["stored"]["fireworks"] == KEY
+        assert KEY not in resp.text
+
+        resp = device_client.delete("/api/providers/fireworks/key")
+        assert resp.json() == {"removed": True}
+        assert device_client.post("/api/providers/key-store/retry").status_code == 200
+    assert KEY not in caplog.text
+
+
+def test_a_device_key_change_is_recorded_without_the_key(
+    device_client, client, db, lemonade, keys
+):
+    assert (
+        client.post(
+            "/api/providers/fireworks/connect", json={"api_key": KEY}
+        ).status_code
+        == 200
+    )
+    assert db.device_changes("phone-1", 20) == ([], 0)
+
+    resp = device_client.post("/api/providers/fireworks/connect", json={"api_key": KEY})
+    assert resp.status_code == 200, resp.text
+    assert device_client.delete("/api/providers/fireworks/key").status_code == 200
+
+    changes, total = db.device_changes("phone-1", 20)
+    assert total == 2
+    assert [(c["kind"], c["params"]) for c in changes] == [
+        (
+            "providerKeyRemoved",
+            {"provider": "Fireworks AI", "provider_id": "fireworks"},
+        ),
+        ("providerKeySet", {"provider": "Fireworks AI", "provider_id": "fireworks"}),
+    ]
+    rows = db._conn.execute("SELECT * FROM device_changes").fetchall()
+    assert KEY not in json.dumps([dict(r) for r in rows])
+
+
+def test_a_paired_device_sees_no_key_or_pc_internals_on_failure(
+    client, device_client, lemonade, keys, monkeypatch, caplog
+):
+    def remember_key(provider, key):
+        try:
+            raise ConnectorsError(f"Keyring set_password failed: {PC_PATH} {key}")
+        except ConnectorsError as e:
+            raise CloudKeyError(f"not kept ({e})") from e
+
+    monkeypatch.setattr(cloud_keys, "remember_key", remember_key)
+    keys["forget_error"] = ConnectorsError(f"Keyring delete failed: {PC_PATH}")
+    with caplog.at_level(logging.DEBUG):
+        resp = device_client.post(
+            "/api/providers/fireworks/connect", json={"api_key": KEY}
+        )
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["remember_error"] == providers._AWAY_STORE_DETAIL
+        gone = device_client.delete("/api/providers/fireworks/key")
+        assert gone.status_code == 503
+        assert gone.json()["detail"] == providers._AWAY_STORE_DETAIL
+        # The PC keeps the detail it can act on, but never the key itself.
+        on_pc = client.post("/api/providers/fireworks/connect", json={"api_key": KEY})
+        assert PC_PATH in on_pc.json()["remember_error"]
+    for text in (resp.text, gone.text, on_pc.text, caplog.text):
+        assert KEY not in text
+    assert PC_PATH not in resp.text + gone.text
 
 
 # ── GET /api/providers/{p}/models ──────────────────────────────────────────

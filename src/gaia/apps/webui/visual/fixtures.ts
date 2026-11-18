@@ -723,13 +723,15 @@ export interface MemoryState {
     failed?: boolean;
     /** More memories than the first page holds. */
     more?: boolean;
+    /** System discovery is on; off by default. */
+    consent?: boolean;
 }
 
 /** The Memory dashboard's endpoints: a few memories, goals and tools, or empty, off or failing. */
-export async function withMemory(page: Page, { enabled = true, empty = false, failed = false, more = false }: MemoryState = {}): Promise<void> {
+export async function withMemory(page: Page, { enabled = true, empty = false, failed = false, more = false, consent = false }: MemoryState = {}): Promise<void> {
     const items = empty ? [] : MEMORY_ITEMS;
     const answers: Record<string, unknown> = {
-        'GET /memory/settings': { memory_enabled: enabled, mcp_memory_enabled: false, system_discovery_consent: false },
+        'GET /memory/settings': { memory_enabled: enabled, mcp_memory_enabled: false, system_discovery_consent: consent },
         'GET /memory/stats': {
             knowledge: {
                 total: items.length, total_retrievals: empty ? 0 : 9,

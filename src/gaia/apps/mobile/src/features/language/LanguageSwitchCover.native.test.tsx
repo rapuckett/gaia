@@ -3,7 +3,7 @@
 
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
 import type { ReactNode } from 'react';
-import { BackHandler, Platform, StyleSheet } from 'react-native';
+import { BackHandler, Keyboard, Platform, StyleSheet } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { applyDirection } from '@/platform/direction';
@@ -50,6 +50,15 @@ describeNative('language switch cover', () => {
         expect(screen.queryByTestId('language-switch-cover')).toBeNull();
         await act(async () => pickLanguage('ar'));
         expect(await screen.findByTestId('language-switch-cover')).toBeTruthy();
+    });
+
+    it('puts the keyboard away when it covers the app', async () => {
+        const dismiss = jest.spyOn(Keyboard, 'dismiss');
+        await mountHost();
+        expect(dismiss).not.toHaveBeenCalled();
+        await act(async () => pickLanguage('ar'));
+        await screen.findByTestId('language-switch-cover');
+        expect(dismiss).toHaveBeenCalledTimes(1);
     });
 
     it('words the cover in the target language, whichever way the switch goes', async () => {

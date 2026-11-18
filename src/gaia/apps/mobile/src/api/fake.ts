@@ -16,7 +16,9 @@ import type {
     ChatPerformance,
     ConnectorDeviceAuthResponse,
     ConnectorListEntry,
+    ConnectorRow,
     ConnectorSignInEnd,
+    ConnectorTestResponse,
     DisconnectOutcome,
     ContextUsageResult,
     ConsolidateMemoryResult,
@@ -220,6 +222,8 @@ export interface FakeClientData {
     deviceSignIn?: ConnectorDeviceAuthResponse;
     /** How the PC reports a sign-in ended; unset waits until the watch is dropped. */
     signInEnd?: ConnectorSignInEnd;
+    /** What testConnector answers (`{ ok: true }` when unset); an Error is thrown. */
+    connectorTest?: ConnectorTestResponse | Error;
     /** What a disconnect reports about the provider-side revoke; `{}` when unset. */
     disconnectOutcome?: DisconnectOutcome | null;
     /** What watchSessionEvents streams before it ends; the real stream never ends on its own. */
@@ -1038,6 +1042,25 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
                 else options?.signal?.addEventListener('abort', () => resolve());
             });
             return null;
+        },
+        // As the PC: an OAuth client keeps only its id and whether a secret was given; a server just turns configured.
+        async configureConnector(connectorId, config) {
+            const row = (data.connectors ?? []).find((c) => c.id === connectorId);
+            if (!row || 'error' in row) throw new GaiaApiError(404, `Unknown connector: '${connectorId}'`);
+            const clientId = typeof config.client_id === 'string' ? config.client_id : '';
+            const next: ConnectorRow =
+                row.type === 'mcp_server'
+                    ? { ...row, configured: true }
+                    : clientId
+                      ? { ...row, configurable: true, config_error: null, oauth_client: { source: 'keyring', client_id: clientId, has_secret: !!config.client_secret } }
+                      : row;
+            data.connectors = (data.connectors ?? []).map((c) => (c.id === connectorId ? next : c));
+            return row.type === 'mcp_server' ? { configured: true, connector_id: connectorId } : { status: 'saved', connector_id: connectorId };
+        },
+        async testConnector() {
+            const answer = data.connectorTest ?? { ok: true, detail: '' };
+            if (answer instanceof Error) throw answer;
+            return { ...answer };
         },
         async disableConnector(connectorId) {
             data.connectors = (data.connectors ?? []).map((c) => (c.id === connectorId && !('error' in c) ? { ...c, enabled: false } : c));
