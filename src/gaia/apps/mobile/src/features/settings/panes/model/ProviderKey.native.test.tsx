@@ -176,7 +176,8 @@ describeNative('Provider key', () => {
         await render(<ProviderKey provider={stored} connected />, { wrapper: wrap });
 
         const saved = screen.getByTestId('provider-key-saved');
-        expect(saved).toHaveTextContent(`${'•'.repeat(20)} 4f2a`);
+        // LTR-isolated, so the last four stay at the end in Arabic too.
+        expect(saved).toHaveTextContent(`\u2066${'•'.repeat(20)} 4f2a\u2069`);
         expect(saved.props.accessibilityLabel).toMatch(/^Saved .*Fireworks AI.* API key$/);
         queryClient.clear();
     });
