@@ -1599,9 +1599,13 @@ def _scan_or_reason(source_key: str, scanner) -> Tuple[List[Dict], Optional[str]
     Returns:
         ``(items, message)``. `message` is a user-facing line to stream when the
         source cannot run or failed, and is None when the scan succeeded.
+
+    Raises:
+        _ConsentWithdrawn: System discovery is off now.
     """
     from gaia.agents.base.discovery import covered_by_twin, unsupported_reason
 
+    _require_discovery_consent()
     if covered_by_twin(source_key):
         return [], None
     reason = unsupported_reason(source_key)
@@ -1648,18 +1652,28 @@ def _without_discovery_consent():
     if _system_context_is_enabled():
         return None
     logger.info("[memory router] profile scan refused: system discovery is off")
-    return iter(
-        [
-            _sse(
-                {
-                    "type": "error",
-                    "source": "consent",
-                    "message": NO_DISCOVERY_CONSENT,
-                }
-            ),
-            _sse({"type": "done", "total": 0}),
-        ]
-    )
+    return iter(_consent_refusal())
+
+
+def _consent_refusal(total: int = 0) -> List[str]:
+    """The consent ``error`` event and the closing ``done``."""
+    return [
+        _sse({"type": "error", "source": "consent", "message": NO_DISCOVERY_CONSENT}),
+        _sse({"type": "done", "total": total}),
+    ]
+
+
+class _ConsentWithdrawn(Exception):
+    """System discovery was turned off while a profile scan ran."""
+
+
+def _require_discovery_consent() -> None:
+    """Stop a running scan once the user turns System discovery off."""
+    from gaia.agents.base.memory import _system_context_is_enabled
+
+    if not _system_context_is_enabled():
+        logger.info("[memory router] profile scan stopped: system discovery is off")
+        raise _ConsentWithdrawn()
 
 
 #: Finding keys holding absolute PC paths, which the PC's scan view never shows.
@@ -1694,6 +1708,7 @@ def stream_discovery(request: Request):
                 covered_by_twin,
                 unsupported_reason,
             )
+            from gaia.agents.base.memory import _system_context_is_enabled
 
             discovery = SystemDiscovery()
 
@@ -1719,6 +1734,12 @@ def stream_discovery(request: Request):
             for source_key in _DISCOVERY_SOURCES:
                 if covered_by_twin(source_key):
                     continue
+                if not _system_context_is_enabled():
+                    logger.info(
+                        "[memory router] profile scan stopped: system discovery is off"
+                    )
+                    yield from _consent_refusal(total)
+                    return
                 label = _DISCOVERY_SOURCE_LABELS.get(source_key, source_key)
                 yield _sse({"type": "log", "message": f"Scanning {label}..."})
                 reason = unsupported_reason(source_key)
@@ -1941,6 +1962,7 @@ def stream_inference(include_browser: bool = Query(False)):
                     lines = [f"  {r['content']}" for r in non_sensitive]
                     sections.append("PROJECT MANIFESTS (sample):\n" + "\n".join(lines))
 
+            _require_discovery_consent()
             if not sections:
                 yield _sse(
                     {
@@ -2107,6 +2129,8 @@ def stream_inference(include_browser: bool = Query(False)):
 
             yield _sse({"type": "done", "total": sent})
 
+        except _ConsentWithdrawn:
+            yield from _consent_refusal()
         except Exception as exc:
             cid = _log_server_error("stream-inference failed", exc)
             yield _sse(
@@ -2348,8 +2372,10 @@ def update_memory_settings(
     if body.system_discovery_consent is not None:
         consented = body.system_discovery_consent
         db.set_setting(_SYSTEM_DISCOVERY_KEY, "true" if consented else "false")
+        audit_approval(
+            request, f"system discovery turned {'on' if consented else 'off'}"
+        )
         if consented:
-            audit_approval(request, "system discovery turned on")
             try:
                 refresh_result = _do_system_context_refresh()
                 result = _get_memory_settings_dict(db)

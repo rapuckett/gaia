@@ -548,6 +548,15 @@ def _classify_path(path: Path) -> str:
     return "unclassified"
 
 
+#: The ``user:password@`` part of a ``scheme://`` URL's authority.
+_URL_USERINFO = re.compile(r"^([A-Za-z][A-Za-z0-9+.-]*://)[^/?#]*@")
+
+
+def _without_userinfo(url: str) -> str:
+    """*url* without the user and password a remote can embed (``https://u:token@host``)."""
+    return _URL_USERINFO.sub(r"\1", url)
+
+
 def _classify_remote(remote_url: str) -> str:
     """Classify a git remote URL into a context."""
     url_lower = remote_url.lower()
@@ -586,6 +595,7 @@ def _extract_domain(url: str) -> str:
         if url.lower().startswith(prefix):
             url = url[len(prefix) :]
             break
+    url = re.sub(r"^[^/?#]*@", "", url)
     # Remove www.
     if url.lower().startswith("www."):
         url = url[4:]
@@ -1341,7 +1351,7 @@ class SystemDiscovery:
                     remote_name = section[8:-1]
                     url = parser.get(section, "url", fallback="")
                     if url:
-                        remotes[remote_name] = url
+                        remotes[remote_name] = _without_userinfo(url)
         except (configparser.Error, OSError) as e:
             logger.debug("Failed to parse git config %s: %s", config_path, e)
         return remotes

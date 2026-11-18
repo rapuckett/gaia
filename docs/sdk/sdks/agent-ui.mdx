@@ -2478,8 +2478,10 @@ The Memory endpoints expose the agent's persistent knowledge system. See the [Me
     (`path`, `paths`), matching what the PC's scan view shows. It runs only
     with `system_discovery_consent` on, for every caller: otherwise it reads
     nothing and sends one `error` event (`source: "consent"`) saying how to
-    turn it on, then `done` with a total of 0. `stream-inference` does the
-    same.
+    turn it on, then `done` with a total of 0. Consent is checked again
+    before each source, so turning it off mid-scan ends the stream with the
+    same event. Git remotes are reported without any user or token embedded
+    in the URL. `stream-inference` does the same.
   </Accordion>
 
   <Accordion title="GET /api/memory/stream-inference">
@@ -2517,9 +2519,9 @@ The Memory endpoints expose the agent's persistent knowledge system. See the [Me
     Update the flags above. Turning `system_discovery_consent` on also
     persists it to `~/.gaia/memory_settings.json` and triggers an immediate
     system-context refresh, so turning it on is for the PC or a paired device
-    the PC allowed (a `403` over mobile access or from a pending device), and
-    writes an audit line naming who turned it on. Turning it off, and the
-    other flags, work from any caller.
+    the PC allowed (a `403` over mobile access or from a pending device).
+    Turning it off, and the other flags, work from any caller. Either change
+    to `system_discovery_consent` writes an audit line naming who made it.
   </Accordion>
 
   <Accordion title="POST /api/memory/admin/clear">
