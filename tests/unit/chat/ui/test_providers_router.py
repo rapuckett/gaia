@@ -1468,7 +1468,7 @@ def test_a_missing_ca_file_on_the_users_own_server_is_not_claimed(
     model_list["ca_problem"] = "should not be shown"
     lemonade.answers[("POST", "cloud/auth")] = (200, {"models_discovered": False})
     resp = client.post("/api/providers/fireworks/connect", json={"api_key": KEY})
-    assert resp.status_code == 401
+    assert resp.status_code == 422
     assert "did not accept that key" in resp.json()["detail"]
 
 
@@ -1477,7 +1477,7 @@ def test_connect_drops_a_key_that_discovers_no_models(
 ):
     lemonade.answers[("POST", "cloud/auth")] = (200, {"models_discovered": False})
     resp = client.post("/api/providers/fireworks/connect", json={"api_key": KEY})
-    assert resp.status_code == 401
+    assert resp.status_code == 422
     assert "did not accept that key" in resp.json()["detail"]
     assert "DELETE" in [c["method"] for c in lemonade.calls]
     assert lemonade.call("DELETE", "cloud/auth/fireworks")
@@ -1486,10 +1486,10 @@ def test_connect_drops_a_key_that_discovers_no_models(
 
 
 @pytest.mark.parametrize("status", [401, 403])
-def test_connect_rejected_key_is_401(client, lemonade, keys, status):
+def test_connect_rejected_key_is_422(client, lemonade, keys, status):
     lemonade.answers[("POST", "cloud/auth")] = (status, {"error": {"message": KEY}})
     resp = client.post("/api/providers/fireworks/connect", json={"api_key": KEY})
-    assert resp.status_code == 401
+    assert resp.status_code == 422
     assert "rejected the key" in resp.json()["detail"]
     assert KEY not in resp.text
     assert keys["remembered"] == []
@@ -1665,9 +1665,9 @@ def test_connect_blank_key_replay_failure_is_502(client, lemonade, keys):
     assert resp.status_code == 502
 
 
-def test_connect_registered_without_models_is_401(client, lemonade, keys):
+def test_connect_registered_without_models_is_422(client, lemonade, keys):
     resp = client.post("/api/providers/fireworks/connect", json={})
-    assert resp.status_code == 401
+    assert resp.status_code == 422
     assert "discovered no models" in resp.json()["detail"]
 
 
@@ -2999,7 +2999,7 @@ def test_a_rejected_key_is_never_kept_even_mid_outage(
 ):
     lemonade.answers[("POST", "cloud/auth")] = (200, {"models_discovered": False})
     resp = client.post("/api/providers/fireworks/connect", json={"api_key": KEY})
-    assert resp.status_code == 401
+    assert resp.status_code == 422
     assert keys["remembered"] == []
     assert model_list["restarts"] == []
     assert KEY not in resp.text
