@@ -3,6 +3,7 @@
 
 import { createContext, useContext, useEffect, useRef, useState } from 'react';
 
+import { isolate, isolateUnit } from '@webui/i18n/registry';
 import { providerName } from '@webui/utils/providerText';
 
 import type { ProviderConnected } from '@/api/client.types';
@@ -12,7 +13,7 @@ import { useDeviceRefused } from '@/api/routeAccess';
 import { useForgetProviderKey, useReconnectProvider, useRetryKeyStore, useSendProviderKey, type ProviderRow } from '@/data';
 import { describeHttpFailure, ltr, useT, type Translate } from '@/i18n/useT';
 import { PcOnlyAction } from '@/features/logs/PcOnlyAction';
-import { Badge, Button, Notice, Row, Stack, Text, TextField } from '@/ui';
+import { Badge, Button, Notice, Row, Stack, Surface, Text, TextField } from '@/ui';
 import { KeyRound, Trash2 } from '@/ui/icons';
 
 import { useConfirmSheet } from '../../../setup/sheets/ConfirmSheet';
@@ -27,6 +28,9 @@ function connectedOutcome(r: ProviderConnected, name: string, t: Translate): Out
     return { tone: 'success', text: r.remembered ? t('settings.key.kept') : t('settings.key.connectedDone') };
 }
 
+// The desktop's masked saved key: 20 bullets, then the PC's last-four hint.
+const SAVED_MASK = '•'.repeat(20);
+
 /** Dev scenes: the key field opened by Replace, fixture text typed into it, and Connect pressed on arrival. */
 export const SeedProviderKey = createContext<{ replacing?: boolean; typed?: string; submit?: boolean } | null>(null);
 
@@ -35,6 +39,8 @@ export const SeedProviderKey = createContext<{ replacing?: boolean; typed?: stri
  * Replace or Remove once connected. The key lives only in this field until it is sent, and the field clears
  * on every send. When the PC refuses a typed key from this phone (403), the field gives way to "Change this
  * on the PC"; Remove and the key store's Try again show only where the phone's routes allow them.
+ * Where the key comes from, its hint and the key store's state are the PC's list (`key_*`); the list never reads
+ * the PC's key store, so `unknown` means GAIA there hasn't read it since it started.
  */
 export function ProviderKey({ provider, connected }: { provider: ProviderRow; connected: boolean }) {
     const t = useT();
@@ -129,18 +135,54 @@ export function ProviderKey({ provider, connected }: { provider: ProviderRow; co
     }, []);
 
     const busy = reconnect.isPending || sendKey.isPending || forget.isPending || retry.isPending;
-    const showField = !refused && (!connected || replacing);
+    const source = provider.key_source ?? null;
+    // null: a PC that doesn't send the key fields, which keeps the field and Reconnect as before.
+    const state = provider.key_state ?? null;
+    const hasKey = source !== null;
+    const fromEnv = source === 'environment';
+    const showField = !refused && (replacing || (!connected && !hasKey));
+    const locked = outcome?.tone === 'locked' || (!hasKey && state === 'store_locked');
+    const lockedDetail = outcome?.tone === 'locked' ? outcome.detail : undefined;
 
     return (
         <Stack gap="sm" testID="provider-key">
             <Row gap="sm" justify="between">
                 <Text role="label" weight="medium" tone="secondary" accessibilityRole="header">{t('settings.key.title')}</Text>
-                <Badge
-                    tone={connected ? 'success' : 'danger'}
-                    label={t.bare(connected ? 'settings.key.connected' : 'settings.key.notConnected')}
-                    accessibilityLabel={t(connected ? 'settings.key.connected' : 'settings.key.notConnected')}
-                />
+                {connected || hasKey || state === null ? (
+                    <Badge
+                        tone={connected ? 'success' : 'danger'}
+                        label={t.bare(connected ? 'settings.key.connected' : 'settings.key.notConnected')}
+                        accessibilityLabel={t(connected ? 'settings.key.connected' : 'settings.key.notConnected')}
+                    />
+                ) : null}
             </Row>
+            {!hasKey && state === 'unknown' ? (
+                <Text role="caption" tone="muted" testID="provider-key-waiting">{t('settings.key.waitingOs')}</Text>
+            ) : !hasKey && state === 'read' ? (
+                <Text role="caption" tone="muted" testID="provider-key-none">{t('settings.key.none')}</Text>
+            ) : null}
+
+            {hasKey && !replacing ? (
+                fromEnv ? (
+                    <Surface tone="recessed" radius="md" padding="sm" border testID="provider-key-env">
+                        <Text role="label" tone="secondary">{t('mobileApp.settings.key.fromEnvironment')}</Text>
+                    </Surface>
+                ) : provider.key_hint ? (
+                    <Surface tone="recessed" radius="md" padding="sm" border>
+                        <Text
+                            role="label"
+                            tone="secondary"
+                            mono
+                            dir="ltr"
+                            numberOfLines={1}
+                            accessibilityLabel={t('settings.key.savedAria', { name: isolateUnit(name) })}
+                            testID="provider-key-saved"
+                        >
+                            {isolate(`${SAVED_MASK} ${provider.key_hint}`, 'ltr')}
+                        </Text>
+                    </Surface>
+                ) : null
+            ) : null}
 
             {showField ? (
                 <>
@@ -182,7 +224,7 @@ export function ProviderKey({ provider, connected }: { provider: ProviderRow; co
                 </>
             ) : null}
 
-            {!connected && !replacing ? (
+            {!connected && !replacing && (hasKey || state !== 'read') ? (
                 <Button
                     variant="secondary"
                     full
@@ -194,7 +236,7 @@ export function ProviderKey({ provider, connected }: { provider: ProviderRow; co
                 />
             ) : null}
 
-            {connected && !replacing ? (
+            {(connected || hasKey) && !replacing && !fromEnv ? (
                 <>
                     {refused ? (
                         <PcOnlyAction label={t('settings.key.replace')} icon={KeyRound} detail={t('mobileApp.settings.pcOnly')} testID="provider-key-replace" />
@@ -228,17 +270,24 @@ export function ProviderKey({ provider, connected }: { provider: ProviderRow; co
                     )}
                 </>
             ) : null}
+            {hasKey && !connected && !replacing ? (
+                <Text role="caption" tone="muted" testID="provider-key-not-connected">{t('settings.key.notConnectedHint', { name: isolateUnit(name) })}</Text>
+            ) : null}
             {refused ? <PcOnlyNotice testID="provider-key-pc-only" /> : null}
-            {outcome?.tone === 'locked' ? (
+            {locked ? (
                 <Notice
                     tone="warning"
                     message={t('settings.key.storeLocked')}
-                    detail={outcome.detail}
+                    detail={lockedDetail}
                     action={retryRefused || busy ? undefined : { label: t('settings.key.unlockAgain'), onPress: onRetryStore }}
                     testID="provider-key-locked"
                 />
-            ) : outcome ? (
+            ) : null}
+            {outcome && outcome.tone !== 'locked' ? (
                 <Notice tone={outcome.tone} message={outcome.text} detail={outcome.detail} testID="provider-key-outcome" />
+            ) : null}
+            {provider.known_models ? (
+                <Notice tone="info" role="note" message={t('settings.key.knownList', { name: isolateUnit(name) })} testID="provider-key-known-list" />
             ) : null}
             {sheet}
         </Stack>
