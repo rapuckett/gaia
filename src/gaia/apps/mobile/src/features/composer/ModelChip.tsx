@@ -6,17 +6,17 @@ import { useEffect, useState } from 'react';
 import { useActiveModel, useLocalModelStatus, useSelectModel } from '@/data';
 import { pillText } from '@/features/model/modelStatusText';
 import { useT } from '@/i18n/useT';
-import { Cloud, Cpu, Download, TriangleAlert } from '@/ui/icons';
+import { ArrowRight, Cloud, Cpu, Download, TriangleAlert } from '@/ui/icons';
 
 import { ControlChip } from './ControlChip';
 import { ModelMenu, type SwitchNotice } from './ModelMenu';
 
 /** The model the next message runs on; tap to switch, download or see what only the PC can change. */
-export function ModelChip({ turnRunning = false, initialOpen = false, initialInfoRow, forceSwitching, initialSwitchError }: { turnRunning?: boolean; initialOpen?: boolean; initialInfoRow?: string; forceSwitching?: string; initialSwitchError?: string }) {
+export function ModelChip({ turnRunning = false, initialOpen = false, initialInfoRow, forceSwitching, initialSwitchError, initialQueued }: { turnRunning?: boolean; initialOpen?: boolean; initialInfoRow?: string; forceSwitching?: string; initialSwitchError?: string; initialQueued?: string }) {
     const t = useT();
     const [open, setOpen] = useState(initialOpen);
     // A model picked while a reply runs is used from the next message.
-    const [queued, setQueued] = useState<string | null>(null);
+    const [queued, setQueued] = useState<string | null>(initialQueued ?? null);
     const { data } = useLocalModelStatus(open);
     const [switchError, setSwitchError] = useState<SwitchNotice | null>(initialSwitchError ? { message: initialSwitchError } : null);
     const active = useActiveModel().data;
@@ -46,16 +46,16 @@ export function ModelChip({ turnRunning = false, initialOpen = false, initialInf
     return (
         <>
             <ControlChip
-                label={queued ? `${label} → ${queued}` : label}
+                label={queued ?? label}
                 place={queued ? null : place}
-                icon={switchError ? TriangleAlert : notDownloaded ? Download : pill.remote ? Cloud : Cpu}
+                icon={switchError ? TriangleAlert : queued ? ArrowRight : notDownloaded ? Download : pill.remote ? Cloud : Cpu}
                 warning={warning}
                 accessibilityHint={hint}
                 menu
                 chip="model"
-                value="ltr"
+                value={queued || pill.name ? 'ltr' : undefined}
                 onPress={() => setOpen(true)}
-                accessibilityLabel={pill.aria}
+                accessibilityLabel={queued ? t('mobileApp.model.nextMessageUses', { current: label, next: queued }) : pill.aria}
                 testID="model-chip"
             />
             <ModelMenu

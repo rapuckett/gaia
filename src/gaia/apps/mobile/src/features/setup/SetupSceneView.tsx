@@ -80,7 +80,7 @@ export function SetupSceneView({ found }: { found: SetupScene }) {
                             <SetupScreen onReady={noop} onClose={found.shell.again ? noop : undefined} initialViewing={found.shell.viewing} />
                         ) : (
                             <SetupFooterProvider>
-                                <Screen scroll footer={<SetupFooterBar />}>
+                                <Screen width="flow" scroll footer={<SetupFooterBar />}>
                                     <Stack gap="lg" padding="lg">
                                         {found.chip ? <DownloadChip onPress={noop} /> : null}
                                         <SceneStep stage={found.stage} />

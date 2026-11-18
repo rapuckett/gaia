@@ -7,7 +7,7 @@ import { Platform, StyleSheet, Text } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { Screen, ThemeProvider } from '@/ui';
-import { space } from '../tokens/space';
+import { contentWidth, space } from '../tokens/space';
 
 const describeNative = Platform.OS === 'web' ? describe.skip : describe;
 
@@ -35,5 +35,28 @@ describeNative('Screen footer', () => {
         const style = StyleSheet.flatten(screen.getByTestId('screen-footer').props.style);
         expect(style.borderTopWidth).toBe(1);
         expect(style.paddingVertical).toBe(space.md);
+    });
+});
+
+describeNative('Screen content width', () => {
+    const column = () => StyleSheet.flatten(screen.getByTestId('screen-content').props.style);
+    const footerColumn = () => StyleSheet.flatten(screen.getByTestId('screen-footer').props.children.props.style);
+
+    it('caps a reading screen at 680 and centers it by default', async () => {
+        await render(<Screen footer={<Text>Actions</Text>}><Text>Body</Text></Screen>, { wrapper: wrap });
+        expect(column()).toMatchObject({ maxWidth: contentWidth.reading, width: '100%', alignSelf: 'center' });
+        expect(footerColumn()).toMatchObject({ maxWidth: 680, alignSelf: 'center' });
+        expect(screen.getByTestId('screen-content').props.dataSet).toEqual({ contentWidth: '680' });
+    });
+
+    it('caps a flow screen at 560, scrolling or not', async () => {
+        await render(<Screen width="flow" scroll><Text>Body</Text></Screen>, { wrapper: wrap });
+        expect(column().maxWidth).toBe(560);
+    });
+
+    it('leaves a full screen uncapped', async () => {
+        await render(<Screen width="full"><Text>Body</Text></Screen>, { wrapper: wrap });
+        expect(column().maxWidth).toBeUndefined();
+        expect(screen.getByTestId('screen-content').props.dataSet).toEqual({ contentWidth: 'full' });
     });
 });

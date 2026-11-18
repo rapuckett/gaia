@@ -11,6 +11,7 @@ import { IconButton, Row, Spacer, Stack, Text } from '@/ui';
 import { useLargeText } from '@/ui/theme/a11y';
 import { Menu } from '@/ui/icons';
 
+import { useDrawerPresent } from './AppNavigator';
 import { PERMANENT_DRAWER_MIN_WIDTH } from './navigation';
 
 export function useIsPermanentDrawer(): boolean {
@@ -26,8 +27,9 @@ export function ScreenHeader({ title, titleNode, end }: { title?: string; titleN
     const t = useT();
     const navigation = useNavigation<DrawerNavigationProp<Record<string, object | undefined>>>();
     const permanent = useIsPermanentDrawer();
+    const drawerPresent = useDrawerPresent();
     const largeText = useLargeText();
-    const menu = permanent ? null : <IconButton icon={Menu} variant="raised" label={t('sidebar.open')} onPress={() => navigation.openDrawer()} />;
+    const menu = permanent || !drawerPresent ? null : <IconButton icon={Menu} variant="raised" label={t('sidebar.open')} onPress={() => navigation.openDrawer()} />;
     const titleText = title ? <Text role="title" weight="semibold" numberOfLines={1} largeLines={2}>{title}</Text> : null;
     if (largeText && (titleNode || titleText)) {
         return (

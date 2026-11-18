@@ -40,7 +40,7 @@ import { useTurnAnnouncer, useTurnEnd } from './useTurnAnnouncer';
 
 const NO_MESSAGES: never[] = [];
 
-export function ChatScreen({ sessionId, onManageDocuments }: { sessionId: string; onManageDocuments?: () => void }) {
+export function ChatScreen({ sessionId, onManageDocuments, initialQueuedModel }: { sessionId: string; onManageDocuments?: () => void; initialQueuedModel?: string }) {
     const t = useT();
     const session = useSession(sessionId);
     const messages = useMessages(sessionId);
@@ -231,7 +231,7 @@ export function ChatScreen({ sessionId, onManageDocuments }: { sessionId: string
                                 <SpendMeter sessionId={sessionId} busy={busy} />
                                 <ContextMeter usage={context.usage} unavailable={context.unavailable} onDetails={() => setPanelOpen(true)} />
                                 <SessionFolderChip sessionId={sessionId} live={busy} onOpen={showEnvironment} />
-                                <ModelChip turnRunning={busy} />
+                                <ModelChip turnRunning={busy} initialQueued={initialQueuedModel} />
                             </>
                         }
                     />

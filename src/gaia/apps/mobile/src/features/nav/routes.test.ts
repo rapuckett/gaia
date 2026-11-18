@@ -19,7 +19,7 @@ describe('dev routes', () => {
     });
 
     it('sends back from any drawer destination to home, and home leaves the app', () => {
-        const layout = fs.readFileSync(path.join(__dirname, '..', '..', 'app', '_layout.tsx'), 'utf8');
+        const layout = fs.readFileSync(path.join(__dirname, 'AppNavigator.tsx'), 'utf8');
         expect(layout).toContain('backBehavior="initialRoute"');
         expect(ROUTES[0]).toBe(INITIAL_ROUTE);
         expect(INITIAL_ROUTE).toBe('index');

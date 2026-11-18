@@ -3,9 +3,8 @@
 
 import { focusManager, QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { usePathname } from 'expo-router';
-import { Drawer } from 'expo-router/drawer';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { AppState, Platform, useWindowDimensions } from 'react-native';
+import { AppState, Platform } from 'react-native';
 
 import { createHttpClient } from '@/api/http';
 import { shouldRetryQuery } from '@/data/queryRetry';
@@ -16,10 +15,9 @@ import { AppBanner } from '@/features/banners/AppBanner';
 import { ModelNeededHost } from '@/features/model';
 import { AppPolls } from '@/features/notifications/AppPolls';
 import { NotificationFeed } from '@/features/notifications';
-import { AppDrawer } from '@/features/nav/AppDrawer';
+import { AppNavigator } from '@/features/nav/AppNavigator';
 import { RoutingEffects } from '@/features/nav/RoutingEffects';
-import { INITIAL_ROUTE, PERMANENT_DRAWER_MIN_WIDTH } from '@/features/nav/navigation';
-import { ROUTES } from '@/features/nav/routes';
+import { INITIAL_ROUTE } from '@/features/nav/navigation';
 import { sweepTempFiles } from '@/features/files/shareTemp';
 import { installPinnedPairing, PairingGate } from '@/features/pairing';
 import { SetupGate } from '@/features/setup/SetupGate';
@@ -31,7 +29,6 @@ import { platformFetch } from '@/platform/fetch';
 import { useConnectionStore } from '@/state/connection';
 import { useLocaleStore } from '@/state/locale';
 import { ScreenBannerProvider, UIProvider } from '@/ui';
-import { useLargeText } from '@/ui/theme/a11y';
 
 // Before the first render, so the pairing screens and the saved PC use the pinned transport.
 installPinnedPairing();
@@ -57,8 +54,6 @@ export default function RootLayout() {
     const [queryClient] = useState(() => new QueryClient({ defaultOptions: { queries: { retry: shouldRetryQuery } } }));
     const dir = useDirection();
     const lang = useLocaleCode();
-    const { width } = useWindowDimensions();
-    const largeText = useLargeText();
     const connection = useConnectionStore((s) => s.connection);
     const client = useMemo(
         () => (connection ? createHttpClient({ ...connection, fetch: platformFetch }) : null),
@@ -103,27 +98,7 @@ export default function RootLayout() {
                             <NotificationFeed />
                             <AppPolls />
                             <ChatAlertFeed />
-                            <Drawer
-                                drawerContent={(props) => (
-                                    <AppErrorBoundary variant="compact">
-                                        <AppDrawer {...props} />
-                                    </AppErrorBoundary>
-                                )}
-                                backBehavior="initialRoute"
-                                screenOptions={{
-                                    headerShown: false,
-                                    freezeOnBlur: true,
-                                    // At large text sizes one word of a label is wider than the default drawer.
-                                    drawerStyle: largeText && width < PERMANENT_DRAWER_MIN_WIDTH ? { width: '100%' } : undefined,
-                                    drawerType: width >= PERMANENT_DRAWER_MIN_WIDTH ? 'permanent' : 'front',
-                                    // react-navigation reads I18nManager, which stays LTR on web, so the closed drawer would sit inside the page.
-                                    drawerPosition: Platform.OS === 'web' && dir === 'rtl' ? 'right' : undefined,
-                                }}
-                            >
-                                {ROUTES.map((name) => (
-                                    <Drawer.Screen key={name} name={name} />
-                                ))}
-                            </Drawer>
+                            <AppNavigator />
                             <ModelNeededHost />
                         </RootSetupGate>
                         </PairingGate>

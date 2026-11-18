@@ -8,7 +8,7 @@ import { Screen, Spinner, Stack, Text } from '@/ui';
 export function StartupScreen({ upgrading = false }: { upgrading?: boolean }) {
     const t = useT();
     return (
-        <Screen>
+        <Screen width="flow">
             <Stack flex={1} gap="lg" align="center" justify="center" padding="xl">
                 <Spinner />
                 <Text role="body" tone="secondary" align="center">

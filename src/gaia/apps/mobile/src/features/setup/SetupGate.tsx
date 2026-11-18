@@ -98,7 +98,7 @@ export function SetupGate({
             />
         );
     return (
-        <Screen edges={['top', 'start', 'end']}>
+        <Screen width="flow" edges={['top', 'start', 'end']}>
             <Stack gap="md" paddingX="gutter" paddingY="md">
                 {notice}
                 {gate.state === 'unknown' && !unreachable ? <ErrorDetails error={gate.error} /> : null}

@@ -349,6 +349,7 @@ function Page({
 }) {
     return (
         <Screen
+            width="flow"
             banner={null}
             keyboard="avoid"
             scroll
@@ -361,7 +362,7 @@ function Page({
                 ) : undefined
             }
         >
-            <Stack flex={1} gap="lg" padding="xl" justify="center" width="100%" maxWidth={560} self="center" testID="pairing-page">
+            <Stack flex={1} gap="lg" padding="xl" justify="center" width="100%" testID="pairing-page">
                 {icon ? (
                     <Stack align="center">
                         <Icon icon={icon} size="lg" tone="accent" />

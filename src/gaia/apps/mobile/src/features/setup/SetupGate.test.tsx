@@ -85,3 +85,12 @@ describe('a gallery build with no PC answering', () => {
         expect(await shows('/dev/messages', { gallery: false, scheme: DEVELOPMENT_SCHEME })).toBe(false);
     });
 });
+
+describe('first-run setup', () => {
+    it.each(['checking', 'upgrading', 'needed', 'addingLocal'])('replaces the app, and so its sidebar and menu, while the gate is %s', async (state) => {
+        mockGate = { state };
+        await render(<SetupGate><Text>App</Text></SetupGate>, { wrapper: ThemeProvider });
+        expect(screen.queryByText('App')).toBeNull();
+        mockGate = { state: 'ready' };
+    });
+});
