@@ -1086,6 +1086,14 @@ def _refuse_device_sign_in(
         )
 
 
+def _keep_saved_pause(connector_id: str, config: Dict[str, Any]) -> None:
+    """A device can't enable a paused server: its saved ``disabled`` value wins."""
+    config.pop("disabled", None)
+    if REGISTRY.get(connector_id).type == "mcp_server":
+        saved = _read_mcp_servers_json().get(connector_id) or {}
+        config["disabled"] = saved.get("disabled", False)
+
+
 @router.post(
     "/{connector_id}/configure",
     dependencies=[Depends(_require_ui_header), Depends(require_pc_or_allowed_device)],
@@ -1115,6 +1123,8 @@ async def configure_connector(
             connector_id, list(config.get("scopes") or []), config["grant_agents"]
         )
     try:
+        if not is_local_pc(request):
+            _keep_saved_pause(connector_id, config)
         result = await configure(connector_id, config)
     except KeyError:
         raise HTTPException(
