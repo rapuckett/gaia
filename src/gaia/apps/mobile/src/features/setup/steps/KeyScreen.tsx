@@ -4,10 +4,10 @@
 import { ltrIn } from '@webui/components/setup/format';
 import { FIREWORKS_KEYS_URL, GATEWAY_GUIDE_URL } from '@webui/components/setup/keyLinks';
 import type { CloudPriceList } from '@webui/types';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { GaiaApiError } from '@/api/errors';
-import { useActiveModel, useCloudPrices, useCloudProviders, useConnectCloud, useLemonadeTarget } from '@/data';
+import { useActiveModel, useCloudPrices, useCloudProviders, useConnectCloud, useLemonadeTarget, useSendProviderKey } from '@/data';
 import { describeHttpFailure, technicalDetail, useLocaleCode, useT, type Translate } from '@/i18n/useT';
 import { openLinkFromPress } from '@/platform/openLink';
 import { Button, Card, ChoiceList, Notice, Spinner, Stack, Row, Text, TextField, type ChoiceOption } from '@/ui';
@@ -95,20 +95,28 @@ function GetAKey({ provider }: { provider: Provider }) {
     );
 }
 
-function ConnectError({ error, t }: { error: Error; t: Translate }) {
-    if (error instanceof GaiaApiError && error.status === 403) return <Notice tone="info" message={t('setup.plan.pcOnly')} />;
+function refusedByPc(error: unknown): boolean {
+    return error instanceof GaiaApiError && error.status === 403;
+}
+
+function ConnectError({ error, t }: { error: unknown; t: Translate }) {
+    if (refusedByPc(error)) return <Notice tone="info" message={t('setup.plan.pcOnly')} testID="key-pc-only" />;
     return <Notice tone="danger" message={describeHttpFailure(error, t).text} detail={describeHttpFailure(error, t).detail} />;
 }
 
 /**
- * Connect a cloud provider. The key is typed on the PC only: its field is shown here read-only. A provider
- * the PC already holds a key for connects from the phone, and setup goes on to the run.
+ * Connect a cloud provider with a key typed here, or with the one the PC already holds, and setup goes on
+ * to the run. The key lives only in its field until sent, and the field clears on every send. When the PC
+ * refuses a typed key from this phone (403), the field turns read-only with "Change this on the PC".
  */
 export const KeyScreen: PlanScreen = ({ ctx, close }) => {
     const t = useT();
     const providers = useCloudProviders();
     const usersServer = useLemonadeTarget().data?.source === 'config';
     const connect = useConnectCloud();
+    const sendKey = useSendProviderKey();
+    const [key, setKey] = useState('');
+    const [keyError, setKeyError] = useState<unknown>(null);
     const [chosen, setChosen] = useState<Provider | null>(null);
     const [picked, setPicked] = useState<string | null>(null);
 
@@ -122,7 +130,9 @@ export const KeyScreen: PlanScreen = ({ ctx, close }) => {
     const gatewayShown = !gatewayDown || choice === 'amd';
     const unavailable = (id: Provider) => blocked(id) || (id === 'amd' && gatewayDown);
     const connected = !!info?.configured;
-    const canConnect = (connected || usersServer) && !unavailable(choice);
+    const keyRefused = refusedByPc(keyError) || refusedByPc(connect.error);
+    const busy = connect.isPending || sendKey.isPending;
+    const canConnect = (connected || usersServer || !!key.trim()) && !unavailable(choice);
     const inUse = active?.provider === choice ? active.model : null;
     const shownPick = picked ?? inUse;
 
@@ -132,7 +142,30 @@ export const KeyScreen: PlanScreen = ({ ctx, close }) => {
         description: blocked(p.id) ? t('settings.privacy.localOnlyBlocked') : unavailable(p.id) ? t('setup.key.gatewayOff') : t(p.note),
     }));
 
-    const go = () => connect.mutate({ provider: choice, wanted: shownPick, wantedName: shownPick ? shortModelName(shownPick) : undefined }, { onSuccess: () => ctx.startedRun() });
+    const mounted = useRef(true);
+    useEffect(() => {
+        mounted.current = true;
+        return () => {
+            mounted.current = false;
+        };
+    }, []);
+
+    const go = () => {
+        const typed = usersServer ? '' : key.trim();
+        setKey('');
+        setKeyError(null);
+        connect.reset();
+        const run = (keySent: boolean) =>
+            connect.mutate(
+                { provider: choice, wanted: shownPick, wantedName: shownPick ? shortModelName(shownPick) : undefined, keySent },
+                { onSuccess: () => ctx.startedRun() },
+            );
+        if (!typed) return run(false);
+        sendKey.send(choice, typed, { onWaiting: () => undefined, stopped: () => !mounted.current }).then(
+            () => mounted.current && run(true),
+            (err: unknown) => mounted.current && setKeyError(err),
+        );
+    };
 
     return (
         <Stack gap="md" testID="key-screen">
@@ -143,9 +176,11 @@ export const KeyScreen: PlanScreen = ({ ctx, close }) => {
                 value={choice}
                 accessibilityLabel={t('setup.key.provider')}
                 onChange={(v) => {
-                    if (connect.isPending || unavailable(v as Provider)) return;
+                    if (busy || unavailable(v as Provider)) return;
                     setChosen(v as Provider);
                     setPicked(null);
+                    setKey('');
+                    setKeyError(null);
                     connect.reset();
                 }}
             />
@@ -158,33 +193,33 @@ export const KeyScreen: PlanScreen = ({ ctx, close }) => {
                 <>
                     {usersServer ? null : <GetAKey provider={choice} />}
                     <Text role="caption" tone="muted">{t('setup.models.cloudNote')}</Text>
-                    <Prices provider={choice} picked={shownPick} onPick={setPicked} disabled={connect.isPending} inUse={inUse} />
+                    <Prices provider={choice} picked={shownPick} onPick={setPicked} disabled={busy} inUse={inUse} />
                 </>
             )}
             {usersServer ? null : (
                 <Stack gap="xs">
                     <TextField
                         label={t('setup.key.labelFor', { provider: PROVIDERS.find((p) => p.id === choice)?.title ?? '' })}
-                        value=""
-                        onChangeText={() => undefined}
+                        value={key}
+                        onChangeText={setKey}
                         placeholder={connected ? t.bare('setup.key.placeholder') : t.bare('setup.key.placeholderNew')}
-                        accessibilityLabel={connected ? t('setup.key.placeholder') : t('setup.key.placeholderNew')}
-                        secureTextEntry
-                        disabled
+                        accessibilityHint={connected ? t('setup.key.placeholder') : t('setup.key.placeholderNew')}
+                        secret
+                        disabled={keyRefused || busy}
+                        testID="key-field"
                     />
-                    {connected ? null : <Text role="caption" tone="muted">{t('setup.plan.pcOnly')}</Text>}
                 </Stack>
             )}
             <Text role="caption" tone="secondary">{usersServer ? t('setup.key.usersServer') : t('setup.key.where')}</Text>
-            {connect.isPending ? <Text role="caption" tone="secondary">{t('setup.key.testing')}</Text> : null}
-            {connect.error ? <ConnectError error={connect.error} t={t} /> : null}
+            {busy ? <Text role="caption" tone="secondary">{t('setup.key.testing')}</Text> : null}
+            {keyError ? <ConnectError error={keyError} t={t} /> : connect.error ? <ConnectError error={connect.error} t={t} /> : null}
             <SetupFooter>
-                <Button variant="secondary" label={t('setup.back')} disabled={connect.isPending} onPress={close} />
+                <Button variant="secondary" label={t('setup.back')} disabled={busy} onPress={close} />
                 <Button
                     variant="primary"
                     label={t('setup.key.connect')}
-                    busy={connect.isPending}
-                    disabled={ctx.locked || connect.isPending || !canConnect}
+                    busy={busy}
+                    disabled={ctx.locked || busy || !canConnect}
                     onPress={go}
                 />
             </SetupFooter>
