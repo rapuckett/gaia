@@ -7,6 +7,7 @@ import type { ConnectorRow } from '@/api/client.types';
 import { useConfigureConnector } from '@/data';
 import { isPcRefusal, PcOnlyNotice } from '@/features/settings/PcOnlyNotice';
 import { describeHttpFailure, useT } from '@/i18n/useT';
+import { isolate } from '@webui/i18n/registry';
 import { openLinkFromPress } from '@/platform/openLink';
 import { Button, Notice, Sheet, Stack, Text, TextField } from '@/ui';
 import { Check, ExternalLink } from '@/ui/icons';
@@ -120,8 +121,10 @@ function SetupBody({
           : t('settings.connectors.saveClient');
 
     function placeholder(field: SetupField): string {
-        if (form === 'mcp') return connector.configured ? SAVED_SECRET : field.placeholder || t.bare('settings.connectors.enterValue');
-        return field.kind === 'secret' && client?.source === 'keyring' && client.has_secret ? SAVED_SECRET : field.placeholder;
+        // A catalog hint is a literal ("xoxb-…"); isolated, it keeps its order in an RTL field.
+        const hint = field.placeholder ? isolate(field.placeholder, 'ltr') : '';
+        if (form === 'mcp') return connector.configured ? SAVED_SECRET : hint || t.bare('settings.connectors.enterValue');
+        return field.kind === 'secret' && client?.source === 'keyring' && client.has_secret ? SAVED_SECRET : hint;
     }
 
     return (

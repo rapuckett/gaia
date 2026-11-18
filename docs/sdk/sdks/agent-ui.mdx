@@ -3371,23 +3371,27 @@ credential store (the slot the TUI uses). A key is never echoed back or logged.
 
     **Errors:** **401** when the provider rejects the key or discovers no
     models (a key that discovers nothing is removed from Lemonade again);
-    **403** when a key or a gateway field comes from mobile access, a paired device or another computer; **409** when an
+    **403** when a key comes from mobile access or another computer, or a
+    gateway field comes from anywhere but the PC; **409** when an
     environment key takes precedence, Lemonade is not on this PC, or the
-    user's own server has no working provider.
+    user's own server has no working provider. A paired device gets the same
+    statuses without PC file paths or credential-store details, and its key
+    changes are recorded in the audit log under its device id.
   </Accordion>
 
   <Accordion title="DELETE /api/providers/{provider}/key">
     Clear the key from Lemonade and from the OS credential store. Returns
     `{"removed": bool}`. On the user's own Lemonade only GAIA's stored copy is
-    removed; the server keeps its key. PC-only (**403** from mobile access, a paired device or another computer).
+    removed; the server keeps its key. The PC or an allowed paired device
+    (**403** from mobile access or another computer).
   </Accordion>
 
   <Accordion title="POST /api/providers/key-store/retry">
     Let the next key read ask the OS to unlock the credential store again. After
     a dismissed or refused unlock prompt GAIA stops reading the store for five
     minutes, and providers report `key_state: "store_locked"`; the Try again
-    button calls this. Returns `{"retrying": true}`. PC-only: the prompt it
-    allows shows on the PC.
+    button calls this. Returns `{"retrying": true}`. The PC or an allowed
+    paired device; the unlock prompt it allows shows on the PC.
   </Accordion>
 
   <Accordion title="GET /api/providers/{provider}/models">
@@ -3699,8 +3703,8 @@ Every route is in one class, pinned by `tests/unit/chat/ui/test_route_access.py`
 
 | Class | Who | Routes |
 |---|---|---|
-| PC-only | `pc` | Tunnel start and stop, provider keys, the model-server target, logs, messaging, GPU memory apply and revert, the default full-access setting, connector browser sign-in (`authorize`) and enable, an agent's connector grant and activations, deleting a provider key, `POST /v1/connections/{provider}`, skill and agent installs, `POST /api/files/open`, `POST /api/setup/npu/memlock-fix`, the troubleshooting report, the memory profile scan and its commits, re-collecting system context (`reinitialize`, `refresh-system-context`), the eval-only routes, `GET /api/connectors/_debug`, and every other [paired devices](#paired-devices) route |
-| Setup | `pc`, or an allowed device | Setup's changes (see [Setup](#setup)), `POST /api/system/download-model`, `PUT /api/system/model-server/backend`, a device-code sign-in (`POST /api/connectors/{connector_id}/authorize-device`, for a connector with `supports_device_code` only), connector setup and its check (`POST /api/connectors/{connector_id}/configure` without a browser sign-in, `POST /api/connectors/{connector_id}/test`), Automations, and changes to schedules and goals |
+| PC-only | `pc` | Tunnel start and stop, a provider's gateway address and key header, the model-server target, logs, messaging, GPU memory apply and revert, the default full-access setting, connector browser sign-in (`authorize`) and enable, an agent's connector grant and activations, `POST /v1/connections/{provider}`, skill and agent installs, `POST /api/files/open`, `POST /api/setup/npu/memlock-fix`, the troubleshooting report, the memory profile scan and its commits, re-collecting system context (`reinitialize`, `refresh-system-context`), the eval-only routes, `GET /api/connectors/_debug`, and every other [paired devices](#paired-devices) route |
+| Setup | `pc`, or an allowed device | Setup's changes (see [Setup](#setup)), provider keys (entering one, removing one, retrying the credential store), `POST /api/system/download-model`, `PUT /api/system/model-server/backend`, a device-code sign-in (`POST /api/connectors/{connector_id}/authorize-device`, for a connector with `supports_device_code` only), connector setup and its check (`POST /api/connectors/{connector_id}/configure` without a browser sign-in, `POST /api/connectors/{connector_id}/test`), Automations, and changes to schedules and goals |
 | Not from a device | `pc`, `tunnel` | `GET /api/providers`, which can register a provider |
 | Pairing | a device on the listener, with no token | `POST /api/devices/pair` |
 | Its own routes | an allowed device | `GET /api/devices/me/routes` |
