@@ -4086,6 +4086,7 @@ const messages: Messages = {
     'mobileApp.connectors.disconnectConfirm': 'فصل {name}؟ سيُحذف تسجيل الدخول أو الرمز المحفوظ من الكمبيوتر.',
     'mobileApp.connectors.connectPcOnly': 'يُكمل الكمبيوتر تسجيل الدخول هذا ويحتفظ بالحساب. اربطه من الكمبيوتر.',
     'mobileApp.connectors.codeExpired': 'انتهت صلاحية الرمز قبل اكتمال تسجيل الدخول. سجّل الدخول برمز مرة أخرى للحصول على رمز جديد.',
+    'mobileApp.connectors.reconnectNeeded': 'يحتاج هذا الموصل إلى تسجيل الدخول مرة أخرى. أعد ربطه من قائمة الموصلات.',
     'mobileApp.connectors.codeHint': 'سجّل الدخول من هذا الهاتف أو من أي جهاز آخر. يكمل الكمبيوتر لديك تسجيل الدخول ويحتفظ بالحساب.',
     'mobileApp.connectors.codeNotHttps': 'أرسل الكمبيوتر لديك صفحة تسجيل دخول لا تستخدم https، لذا لن يفتحها هذا الهاتف. سجّل الدخول من الكمبيوتر.',
     'mobileApp.connectors.codeOpen': 'فتح صفحة تسجيل الدخول',

@@ -53,8 +53,14 @@ export function serverText(error: unknown): string | undefined {
     return error instanceof Error ? error.message || undefined : undefined;
 }
 
+const CONNECTOR_RECONNECT_CODES: ReadonlySet<string> = new Set(['not_connected', 'reauth_required', 'connection_revoked']);
+
 /** A PC's HTTP error, pairing-auth error or failed turn as our reason-free sentence plus its raw text for `detail`; any other error reads as `describeError`. */
 export function describeHttpFailure(error: unknown, t: Translate): { text: string; detail?: string } {
+    // A 409 carrying one of these codes is a connector asking to sign in again, not a failed request.
+    if (error instanceof GaiaApiError && error.status === 409 && CONNECTOR_RECONNECT_CODES.has(String(error.body?.error))) {
+        return { text: t('mobileApp.connectors.reconnectNeeded') };
+    }
     if (error instanceof GaiaApiError && error.messageKey === 'mobileApp.error.http' && error.detail) {
         return { text: t('mobileApp.error.httpNoDetail', { status: error.status }), detail: error.detail };
     }

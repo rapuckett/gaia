@@ -4087,6 +4087,7 @@ export const enMessages = {
     'mobileApp.connectors.disconnectConfirm': "Disconnect {name}? Its saved sign-in or token is deleted from your PC.",
     'mobileApp.connectors.connectPcOnly': "Your PC finishes this sign-in and keeps the account. Connect this on your PC.",
     'mobileApp.connectors.codeExpired': "The code expired before sign-in finished. Sign in with a code again to get a new one.",
+    'mobileApp.connectors.reconnectNeeded': "This connector needs to sign in again. Reconnect it from the Connectors list.",
     'mobileApp.connectors.codeHint': "Sign in on this phone or any other device. Your PC finishes the sign-in and keeps the account.",
     'mobileApp.connectors.codeNotHttps': "Your PC sent a sign-in page that isn't https, so this phone won't open it. Sign in on your PC.",
     'mobileApp.connectors.codeOpen': 'Open sign-in page',
