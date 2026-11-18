@@ -23,7 +23,7 @@ import { FIXTURES } from './messages/__fixtures__/messages';
  * `env-offline` (SP-17): the chat's internet is off and the session panel is closed, so the offline notice shows above the composer.
  * `queue-stop` (CMP-15): the same queue; `#tap=composer-stop` ends the turn and the queued texts return to the box.
  * `?queued=<model id>`: the chip shows a model switch waiting for the turn to end ("name → id").
- * `?model=none`: the PC reports no model, so the chip shows its fallback name. Otherwise it shows Gemma-4-E4B-it-GGUF on this PC.
+ * `?model=none`: the PC reports no model, so the chip shows its fallback name. Otherwise it shows Gemma 4 E4B, running on the PC.
  */
 export const CHAT_STATES = ['running-empty', 'running-status', 'question', 'question-answered', 'question-answer-failed', 'approval', 'queue', 'queue-stop', 'env-offline'] as const;
 export type ChatGalleryState = (typeof CHAT_STATES)[number];
@@ -44,8 +44,8 @@ const SESSION = {
 const ACTIVE_MODEL: ActiveModel = {
     provider: 'local',
     model: SESSION.model,
-    display_name: SESSION.model,
-    label: SESSION.model,
+    display_name: 'Gemma 4 E4B',
+    label: 'Gemma 4 E4B',
     remote: false,
     is_default: true,
     downloaded: true,
@@ -54,10 +54,10 @@ const ACTIVE_MODEL: ActiveModel = {
 const LOCAL_MODEL: LocalModelStatus = {
     state: 'loaded',
     active_model: SESSION.model,
-    active_display_name: SESSION.model,
+    active_display_name: 'Gemma 4 E4B',
     active_remote: false,
     model: SESSION.model,
-    display_name: SESSION.model,
+    display_name: 'Gemma 4 E4B',
     placement: null,
     ctx_size: 65536,
     memory: null,
