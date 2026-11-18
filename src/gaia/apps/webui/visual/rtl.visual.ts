@@ -5706,8 +5706,22 @@ for (const locale of ['ar', 'en']) {
             await checkMemory(page, locale, 'goals-damaged');
         });
 
+        // Both scans ask for System discovery when it is off; the intro says so first.
+        test('profile setup, System discovery off', async ({ page }) => {
+            await openMemory(page, locale, {}, 'dark');
+            await memoryTab(page, /Profile setup/);
+            const note = page.locator('.mem-profile-grid > .mem-profile-note');
+            await expect(note).toBeVisible();
+            await expect(note).toHaveCSS('text-align', locale === 'ar' ? /^(right|start)$/ : /^(left|start)$/);
+            await checkMemory(page, locale, 'profile-consent-off');
+            await page.locator('.mem-profile-run-btn').first().click();
+            await expect(page.getByRole('dialog')).toBeVisible();
+            await expect(page.getByRole('dialog').locator('button').last()).toContainText(locale === 'ar' ? 'تشغيل وبدء الفحص' : 'Turn on and start scan');
+            await checkMemory(page, locale, 'profile-consent-dialog');
+        });
+
         test('profile setup, before and after a discovery run', async ({ page }) => {
-            await openMemory(page, locale);
+            await openMemory(page, locale, { consent: true });
             await memoryTab(page, /Profile setup/);
             await expect(page.locator('.mem-profile-card')).toHaveCount(2);
             await checkMemory(page, locale, 'profile');

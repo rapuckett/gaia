@@ -3798,6 +3798,7 @@ export const enMessages = {
     'mem.beta.discovery.scans': 'Scans files, git repos, browser history, and SSH config',
     'mem.beta.discovery.local': 'All data stays local on this machine',
     'mem.beta.discovery.confirm': 'Enable discovery',
+    'mem.beta.discovery.confirmScan': 'Turn on and start scan',
     'mem.footer.database': 'Database',
     'mem.footer.avgConfidence': 'Avg confidence: {n}',
     'mem.footer.entities': '{n} entities',
@@ -3842,6 +3843,7 @@ export const enMessages = {
     // Memory dashboard: Profile setup
     'mem.profile.intro': 'Help GAIA get to know you faster. Both scans run on this PC and send nothing anywhere. You see what they found and pick what to keep before anything is saved to memory.',
     'mem.profile.pcOnly': 'The scans read the files on the PC running GAIA, so only that PC can run them. Open GAIA on that PC to scan and save; this window is on mobile access or another computer.',
+    'mem.profile.consentOff': 'Both scans need System discovery, which is off. Starting one asks you to turn it on.',
     'mem.disc.title': 'Scan this PC',
     'mem.disc.desc': 'Reads installed apps and how often you use them, recent file types, your home and project folders, Git repositories and identity, shell and SSH settings, and browser bookmarks and the last 30 days of history.',
     'mem.disc.run': 'Start scan',
@@ -3866,6 +3868,7 @@ export const enMessages = {
     'mem.log.discoveryDone': 'Done. {n} items discovered.',
     'mem.log.inferenceDone': 'Done. {n} insights generated.',
     'mem.log.parseFailed': 'Failed to parse event data.',
+    'mem.log.noConsent': 'System discovery is off, so GAIA read nothing on this PC.',
     'mem.log.discoveryConnection': 'Connection error. Is the GAIA server running?',
     'mem.log.inferenceConnection': 'Connection error. Is Lemonade Server running?',
 
@@ -4129,6 +4132,7 @@ export const enMessages = {
     'mobileApp.mem.disc.title': 'Scan your PC',
     'mobileApp.mem.inf.desc': 'Reads installed apps and how often you use them, recent file types, games and media, the kinds of personal files you keep, and your Git projects, then asks a model on your PC to write 5 to 10 short facts about you.',
     'mobileApp.mem.inf.note': 'Uses a model on your PC, never a cloud one, even when your chats use one.',
+    'mobileApp.mem.log.noConsent': 'System discovery is off, so GAIA read nothing on your PC.',
     'mobileApp.mem.profile.intro': 'Help GAIA get to know you faster. Both scans run on your PC and send nothing anywhere. You see what they found and pick what to keep before anything is saved to memory.',
     'mobileApp.resources.settingsHint': 'CPU, memory, GPU, NPU and network use on your PC, updated every second.',
     'mobileApp.settings.advanced.notInstalledHint': 'Set it up to run models on your PC. Cloud providers still work.',
