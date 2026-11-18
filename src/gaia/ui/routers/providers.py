@@ -19,9 +19,7 @@ a key). The calls mirror ``tui/internal/lemonade/cloud.go`` and
 
 from __future__ import annotations
 
-import ipaddress
 import os
-import socket
 import threading
 import time
 from typing import Any, Callable, Dict, List, Literal, Optional, Tuple, Union
@@ -338,8 +336,13 @@ def _bounded_recall(provider: str) -> Optional[str]:
         lambda: cloud_keys.recall_key(provider),
         f"your saved {_NAMES[provider]} key",
     )
-    _STORED_KEY_SEEN[provider] = None if not key else (_hint_of(key) or "")
+    _note_stored_key(provider, key)
     return key
+
+
+def _note_stored_key(provider: str, key: Optional[str]) -> None:
+    """Record what the store now holds for *provider*; call after every read or save."""
+    _STORED_KEY_SEEN[provider] = None if not key else (_hint_of(key) or "")
 
 
 class _StoredKeyUnknown(Exception):
@@ -1744,51 +1747,6 @@ class ConnectRequest(BaseModel):
 #: Fields that change where, or with which header, Lemonade sends the saved key.
 _KEY_ROUTING_FIELDS = ("base_url", "auth_header_name", "auth_header_prefix")
 
-#: Every refusal of a device's gateway, so none says whether a host or port answers.
-_DEVICE_GATEWAY_DETAIL = (
-    "GAIA couldn't use that gateway from this device. Use a public https:// "
-    "address that the PC running GAIA can reach and a key it accepts, or set "
-    "the gateway up on the PC."
-)
-
-
-def _refuse_device_gateway() -> None:
-    raise HTTPException(status_code=422, detail=_DEVICE_GATEWAY_DETAIL)
-
-
-def _is_public_address(address: str) -> bool:
-    ip = ipaddress.ip_address(address.split("%", 1)[0])
-    if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped:
-        ip = ip.ipv4_mapped
-    return ip.is_global and not ip.is_multicast
-
-
-def _check_device_gateway_url(base_url: str) -> None:
-    """Refuse a device's gateway unless it is https and every address is public."""
-    url = urlparse(base_url.strip())
-    if url.scheme != "https":
-        raise HTTPException(
-            status_code=422,
-            detail="A gateway set from a device must start with https://.",
-        )
-    try:
-        host = (url.hostname or "").rstrip(".").lower()
-        port = url.port or 443
-    except ValueError:
-        _refuse_device_gateway()
-    if not host or host.endswith((".local", ".localhost")) or host == "localhost":
-        _refuse_device_gateway()
-    try:
-        addresses = {ipaddress.ip_address(host).compressed}
-    except ValueError:
-        try:
-            infos = socket.getaddrinfo(host, port, proto=socket.IPPROTO_TCP)
-        except (OSError, UnicodeError):
-            _refuse_device_gateway()
-        addresses = {info[4][0] for info in infos}
-    if not addresses or not all(_is_public_address(a) for a in addresses):
-        _refuse_device_gateway()
-
 
 @router.post(
     "/api/providers/{provider}/connect",
@@ -1821,19 +1779,15 @@ def connect_provider(
             detail="Enter provider keys on the PC running GAIA or on a paired "
             "device the PC allowed, not over mobile access.",
         )
-    routing = any(getattr(body, field) is not None for field in _KEY_ROUTING_FIELDS)
-    # The saved key must never follow a gateway a device chose, so a device
-    # moves it only while replacing the key, and only to a public https host.
-    device_gateway = routing and not on_pc
-    if device_gateway and (not key or allowed_device(request) is None):
+    if not on_pc and any(
+        getattr(body, field) is not None for field in _KEY_ROUTING_FIELDS
+    ):
         raise HTTPException(
             status_code=403,
             detail="Change the gateway address or key header on the PC running "
-            "GAIA, or from a paired device the PC allowed together with a new "
-            "key. Reconnect without them to keep the saved ones.",
+            "GAIA, not over mobile access or from a paired device. Reconnect "
+            "without them to keep the saved ones.",
         )
-    if device_gateway and body.base_url is not None:
-        _check_device_gateway_url(body.base_url)
     from gaia.connectors.store import retry_keyring
 
     # Connecting needs the key store, so it may ask the OS again.
@@ -1847,10 +1801,9 @@ def connect_provider(
             audit_approval(request, f"{_NAMES[provider]} API key submitted")
     try:
         # A key-less reconnect must keep a custom gateway, not reset it.
-        current = _cloud_entry(provider) if provider == AMD else None
-        # A copy, so a failed device change can put this registration back.
-        current = dict(current) if current else None
-        registration = _registration(provider, body, current)
+        registration = _registration(
+            provider, body, _cloud_entry(provider) if provider == AMD else None
+        )
     except ProviderError as e:
         _raise(e, request, key)
     if provider == AMD and _gateway_check_applies():
@@ -1858,29 +1811,19 @@ def connect_provider(
 
         try:
             check_gateway_reachable(registration["base_url"])
-        except (GatewayUnreachable, ValueError) as e:
-            if device_gateway:
-                raise HTTPException(
-                    status_code=422, detail=_DEVICE_GATEWAY_DETAIL
-                ) from e
-            if isinstance(e, ValueError):
-                raise HTTPException(status_code=422, detail=str(e)) from e
+        except GatewayUnreachable as e:
             raise HTTPException(
                 status_code=503,
                 detail=f"{e}. Connect to it, then try again.",
             ) from e
+        except ValueError as e:
+            raise HTTPException(status_code=422, detail=str(e)) from e
     if _uses_users_server():
         return _connect_on_users_server(provider)
-    moved = device_gateway and provider == AMD
     try:
         _require_loopback(_base_url())
         if key and _known_models_active(provider):
             _leave_known_models()
-        if moved:
-            # Drop the key Lemonade holds first: the new gateway gets only the new key.
-            status, result = _lemonade("DELETE", f"cloud/auth/{provider}")
-            if status >= 400 and status != 404:
-                raise _cloud_error(provider, status, result)
         _install(provider, registration)
         remembered, remember_error = False, None
         if key:
@@ -1898,12 +1841,10 @@ def connect_provider(
             else:
                 try:
                     remember_key(provider, key)
+                    _note_stored_key(provider, key)
                     remembered = True
                 except CloudKeyError as e:
                     remember_error = _caller_detail(e, str(e), request, key)
-                    if moved:
-                        # The old stored key would be replayed to the new gateway.
-                        raise _KeyNotKept(_AWAY_STORE_DETAIL, 503) from e
             if not on_pc:
                 audit_approval(request, f"{_NAMES[provider]} API key accepted")
         else:
@@ -1942,22 +1883,10 @@ def connect_provider(
                     )
                 del stored
         entry = _cloud_entry(provider)
-        if moved and not (entry or {}).get("models_discovered"):
-            raise ProviderError(_DEVICE_GATEWAY_DETAIL, 422)
     except ProviderError as e:
-        if moved:
-            _restore_gateway(provider, current)
-            if not isinstance(e, _KeyNotKept):
-                generic = ProviderError(_DEVICE_GATEWAY_DETAIL, 422)
-                generic.__cause__ = e
-                e = generic
         _raise(e, request, key)
     finally:
         del key
-    if moved:
-        audit_approval(
-            request, f"{_NAMES[provider]} gateway address or key header changed"
-        )
     view = _provider_view(provider, entry)
     if not view["models_discovered"]:
         raise HTTPException(
@@ -1968,30 +1897,6 @@ def connect_provider(
             ),
         )
     return {**view, "remembered": remembered, "remember_error": remember_error}
-
-
-class _KeyNotKept(ProviderError):
-    """A device's new key worked but the credential store did not keep it."""
-
-
-def _restore_gateway(provider: str, previous: Optional[Dict[str, Any]]) -> None:
-    """Put back the gateway a device's failed change replaced, and drop its key."""
-    try:
-        _lemonade("DELETE", f"cloud/auth/{provider}")
-        _install(provider, _registration(provider, ConnectRequest(), previous))
-    except ProviderError as e:
-        logger.error(
-            "Could not restore the %s gateway after a paired device's change "
-            "failed: %s. Reconnect it on the PC before using it.",
-            _NAMES[provider],
-            e,
-        )
-        raise HTTPException(
-            status_code=502,
-            detail=f"GAIA couldn't use that gateway, and couldn't put the "
-            f"previous {_NAMES[provider]} gateway back. Reconnect it on the PC "
-            "running GAIA before using it.",
-        ) from e
 
 
 def _use_known_models(
@@ -2045,6 +1950,7 @@ def _use_known_models(
             remember_key(provider, key)
         except CloudKeyError as e:
             raise ProviderError(f"{outage} GAIA could not keep it: {e}", 503) from e
+        _note_stored_key(provider, key)
     kept = (
         "GAIA kept it."
         if persist_key
@@ -2145,7 +2051,7 @@ def forget_provider_key(provider: str, request: Request) -> Dict[str, Any]:
                 raise _cloud_error(provider, status, body)
         removed = forget_key(provider)
         discard(_key_slot(provider))
-        _STORED_KEY_SEEN[provider] = None
+        _note_stored_key(provider, None)
     except ProviderError as e:
         _raise(e, request)
     except ConnectorsError as e:
