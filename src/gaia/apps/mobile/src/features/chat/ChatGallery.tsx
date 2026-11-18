@@ -88,6 +88,21 @@ const QUEUED = [
 
 const STATUS: StreamEvent = { type: 'status', phase: 'reading', message: 'Reading your request' };
 
+function seedScene(state: ChatGalleryState) {
+    if (state === 'env-offline') return;
+    if (state === 'approval') writeTurn('dev', { ...IDLE_TURN, pendingConfirmation: CONFIRMATION as typeof IDLE_TURN.pendingConfirmation });
+    else {
+        writeTurn('dev', {
+            ...IDLE_TURN,
+            status: 'streaming',
+            events: state === 'running-status' ? [STATUS] : [],
+            pendingQuestion: state.startsWith('question') ? (QUESTION as typeof IDLE_TURN.pendingQuestion) : null,
+        });
+    }
+    if (state === 'queue' || state === 'queue-stop') useComposerQueueStore.setState({ byChat: { dev: QUEUED }, drafts: {} });
+    if (state === 'question-answered' || state === 'question-answer-failed') useComposerQueueStore.setState({ byChat: {}, drafts: { dev: 'Downloads' } });
+}
+
 export function ChatGallery({ state, queued, model }: { state: ChatGalleryState; queued?: string; model?: 'none' }) {
     const [queryClient] = useState(() => new QueryClient({ defaultOptions: { queries: { retry: false } } }));
     const [client] = useState(() => {
@@ -126,19 +141,11 @@ export function ChatGallery({ state, queued, model }: { state: ChatGalleryState;
         base.attachToRun = () => ({ [Symbol.asyncIterator]: () => ({ next: () => new Promise<IteratorResult<StreamEvent>>(() => undefined) }) });
         return base;
     });
+    // Seeded before the screen's first render too: a model chip that mounts with no turn running applies `queued` at once.
+    useState(() => seedScene(state));
     useEffect(() => {
         if (state === 'env-offline') return undefined;
-        if (state === 'approval') writeTurn('dev', { ...IDLE_TURN, pendingConfirmation: CONFIRMATION as typeof IDLE_TURN.pendingConfirmation });
-        else {
-            writeTurn('dev', {
-                ...IDLE_TURN,
-                status: 'streaming',
-                events: state === 'running-status' ? [STATUS] : [],
-                pendingQuestion: state.startsWith('question') ? (QUESTION as typeof IDLE_TURN.pendingQuestion) : null,
-            });
-        }
-        if (state === 'queue' || state === 'queue-stop') useComposerQueueStore.setState({ byChat: { dev: QUEUED }, drafts: {} });
-        if (state === 'question-answered' || state === 'question-answer-failed') useComposerQueueStore.setState({ byChat: {}, drafts: { dev: 'Downloads' } });
+        seedScene(state);
         return () => {
             writeTurn('dev', null);
             useComposerQueueStore.setState({ byChat: {}, drafts: {} });
