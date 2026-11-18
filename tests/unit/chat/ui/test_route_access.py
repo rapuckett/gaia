@@ -55,7 +55,6 @@ PC_ONLY = {
     "DELETE /api/devices/pairing",
     "DELETE /api/devices/routes/{kind}",
     "DELETE /api/devices/{device_id}",
-    "DELETE /api/providers/{provider}/key",
     "GET /api/connectors/_debug",
     "GET /api/connectors/eval-mailbox",
     "GET /api/devices",
@@ -93,7 +92,6 @@ PC_ONLY = {
     "POST /api/messaging/discord/restart",
     "POST /api/messaging/discord/start",
     "POST /api/messaging/discord/stop",
-    "POST /api/providers/key-store/retry",
     "POST /api/setup/npu/memlock-fix",
     "POST /api/setup/report",
     "POST /api/skills/link/add",
@@ -108,6 +106,7 @@ PC_ONLY = {
 PC_OR_DEVICE = {
     "DELETE /api/automations/{ref}",
     "DELETE /api/goals/{goal_id}",
+    "DELETE /api/providers/{provider}/key",
     "DELETE /api/schedules/{name:path}",
     "GET /api/automations",
     "POST /api/automations/{ref}/{action}",
@@ -117,6 +116,7 @@ PC_OR_DEVICE = {
     "POST /api/goals",
     "POST /api/goals/store/reset",
     "POST /api/goals/{goal_id}/tasks",
+    "POST /api/providers/key-store/retry",
     "POST /api/schedules",
     "POST /api/schedules/{name:path}/run",
     "POST /api/setup/cancel",
@@ -159,8 +159,9 @@ WEB = {
     "HEAD /redoc",
 }
 
-# Some check fields on the PC inside the handler: a provider key and its
-# gateway fields in ``POST /api/providers/{provider}/connect``, and
+# Some check fields inside the handler: a provider key (the PC or an allowed
+# device) and its gateway fields (the PC only) in
+# ``POST /api/providers/{provider}/connect``, and
 # ``network_policy`` in ``PUT /api/settings``.
 REMOTE = {
     "DELETE /api/chat/permissions/{session_id}/grants",
@@ -566,20 +567,74 @@ def test_every_route_is_classified(setup):
     assert sent > 500 and guarded > 40, (sent, guarded)
 
 
-def test_provider_key_refused_away_from_the_pc(setup, monkeypatch):
+def test_provider_key_refused_over_mobile_access(setup, monkeypatch):
     """A key is checked field by field inside a route mobile access may call."""
     from gaia.ui.routers import providers
 
     app, clients, _ = setup
     handed = []
     monkeypatch.setattr(providers, "_install", lambda *a, **k: handed.append(a))
-    for caller in ("tunnel", "device"):
+    for caller in ("tunnel", "pending"):
         resp = clients[caller].post(
             "/api/providers/fireworks/connect", json={"api_key": "fw-secret-key"}
         )
         assert resp.status_code == 403, caller
         assert "fw-secret-key" not in resp.text
     assert handed == []
+
+
+def test_an_allowed_device_may_enter_a_provider_key(setup, monkeypatch):
+    """Through the real listener: the key reaches Lemonade, and only then is audited."""
+    import logging
+
+    from gaia.llm import cloud_keys
+    from gaia.security import audit_logger
+    from gaia.ui.routers import providers
+
+    app, clients, device = setup
+    sent, lines = [], []
+    entry = {"name": "fireworks", "runtime_key_set": True, "models_discovered": True}
+
+    def lemonade(method, path, payload=None):
+        sent.append((method, path, payload))
+        return 200, {"models_discovered": True}
+
+    monkeypatch.setattr(providers, "_install", lambda *a, **k: None)
+    monkeypatch.setattr(providers, "_uses_users_server", lambda: False)
+    monkeypatch.setattr(providers, "_require_loopback", lambda *a: None)
+    monkeypatch.setattr(providers, "_known_models_active", lambda *a: False)
+    monkeypatch.setattr(providers, "_lemonade", lemonade)
+    monkeypatch.setattr(providers, "_cloud_entry", lambda p: entry)
+    monkeypatch.setattr(cloud_keys, "remember_key", lambda *a: None)
+
+    class _Capture(logging.Handler):
+        def emit(self, record):
+            lines.append(record.getMessage())
+
+    handler = _Capture()
+    level = audit_logger.level
+    audit_logger.addHandler(handler)
+    audit_logger.setLevel(logging.INFO)
+    try:
+        resp = clients["device"].post(
+            "/api/providers/fireworks/connect",
+            json={"api_key": "fw-secret-key"},
+            headers={"X-Gaia-UI": "1"},
+        )
+    finally:
+        audit_logger.removeHandler(handler)
+        audit_logger.setLevel(level)
+    assert resp.status_code == 200, resp.text
+    assert "fw-secret-key" not in resp.text
+    assert sent == [
+        ("POST", "cloud/auth", {"provider": "fireworks", "api_key": "fw-secret-key"})
+    ]
+    by = f"by {security.DEVICE_PRINCIPAL_PREFIX}{device.device_id}"
+    assert [line.split(" | ")[1] for line in lines] == [
+        "Fireworks AI API key submitted",
+        "Fireworks AI API key accepted",
+    ]
+    assert all(by in line and "fw-secret-key" not in line for line in lines)
 
 
 def test_provider_key_routing_refused_away_from_the_pc(setup, monkeypatch):

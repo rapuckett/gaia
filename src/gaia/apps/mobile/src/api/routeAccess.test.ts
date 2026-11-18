@@ -7,14 +7,16 @@ describe('isDeviceRefused', () => {
     it('matches plain paths and the method in any case', () => {
         expect(isDeviceRefused('GET', '/api/providers')).toBe(true);
         expect(isDeviceRefused('get', '/api/providers')).toBe(true);
-        expect(isDeviceRefused('POST', '/api/providers/key-store/retry')).toBe(true);
+        expect(isDeviceRefused('POST', '/api/messaging/discord/start')).toBe(true);
+        expect(isDeviceRefused('POST', '/api/providers/key-store/retry')).toBe(false);
         expect(isDeviceRefused('GET', '/api/settings')).toBe(false);
         expect(isDeviceRefused('POST', '/api/providers')).toBe(false);
     });
 
     it('matches {param} segments, one segment each', () => {
-        expect(isDeviceRefused('DELETE', '/api/providers/fireworks/key')).toBe(true);
-        expect(isDeviceRefused('DELETE', '/api/providers/a/b/key')).toBe(false);
+        expect(isDeviceRefused('DELETE', '/api/devices/abc123')).toBe(true);
+        expect(isDeviceRefused('DELETE', '/api/devices/a/b')).toBe(false);
+        expect(isDeviceRefused('DELETE', '/api/providers/fireworks/key')).toBe(false);
         expect(isDeviceRefused('POST', '/api/providers/fireworks/connect')).toBe(false);
     });
 
