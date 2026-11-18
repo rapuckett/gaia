@@ -3,6 +3,7 @@
 
 import { View } from 'react-native';
 import type { LucideIcon } from 'lucide-react-native';
+import { glossParts } from '@webui/i18n/registry';
 import { Row } from '../layout/layout';
 import { Text } from '../text/Text';
 import { useLargeText } from '../theme/a11y';
@@ -30,32 +31,35 @@ export function SmallButton({ label, accessibilityLabel, icon, variant = 'defaul
     const accent = variant === 'accent' || variant === 'plain' || variant === 'primary';
     const tone: Tone = variant === 'default' || variant === 'plain' ? 'primary' : variant === 'primary' ? 'onAccent' : 'accent';
     return (
-        <Pressable
-            onPress={onPress}
-            disabled={disabled}
-            accessibilityLabel={accessibilityLabel ?? label}
-            minSize={44}
-            shape={{ radius: accent ? radius.md : radius.sm, hug: true }}
-            testID={testID}
-        >
-            <View
-                style={{
-                    alignSelf: 'flex-start',
-                    paddingHorizontal: accent ? space.lg : space.md,
-                    paddingVertical: accent ? space.sm + 2 : space.xs + 2,
-                    borderRadius: accent ? radius.md : radius.sm,
-                    borderWidth: accent ? 0 : 1,
-                    borderColor: variant === 'danger' ? colors.accent : colors.border,
-                    backgroundColor: variant === 'accent' ? colors.accentDim : variant === 'primary' ? colors.accentFill : colors.bgTertiary,
-                }}
+        // Never wider than its row: a long label wraps inside the button instead of running off the screen.
+        <View style={{ maxWidth: '100%' }}>
+            <Pressable
+                onPress={onPress}
+                disabled={disabled}
+                accessibilityLabel={accessibilityLabel ?? label}
+                minSize={44}
+                shape={{ radius: accent ? radius.md : radius.sm, hug: true }}
+                testID={testID}
             >
-                <Row gap="xs" justify="center">
-                    {icon ? <Icon icon={icon} size="sm" tone={tone} /> : null}
-                    <Text role={accent ? 'ui' : 'caption'} weight={accent ? 'semibold' : 'medium'} tone={tone} numberOfLines={largeText ? undefined : 1} compact glossInline>
-                        {label}
-                    </Text>
-                </Row>
-            </View>
-        </Pressable>
+                <View
+                    style={{
+                        alignSelf: 'flex-start',
+                        paddingHorizontal: accent ? space.lg : space.md,
+                        paddingVertical: accent ? space.sm + 2 : space.xs + 2,
+                        borderRadius: accent ? radius.md : radius.sm,
+                        borderWidth: accent ? 0 : 1,
+                        borderColor: variant === 'danger' ? colors.accent : colors.border,
+                        backgroundColor: variant === 'accent' ? colors.accentDim : variant === 'primary' ? colors.accentFill : colors.bgTertiary,
+                    }}
+                >
+                    <Row gap="xs" justify="center">
+                        {icon ? <Icon icon={icon} size="sm" tone={tone} /> : null}
+                        <Text role={accent ? 'ui' : 'caption'} weight={accent ? 'semibold' : 'medium'} tone={tone} numberOfLines={largeText ? undefined : glossParts(label) ? 2 : 1} compact glossInline>
+                            {label}
+                        </Text>
+                    </Row>
+                </View>
+            </Pressable>
+        </View>
     );
 }

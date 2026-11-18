@@ -1,8 +1,8 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { Children, createContext, useContext, type ReactNode } from 'react';
-import { Platform, Text as RNText, View, type AccessibilityRole, type TextStyle } from 'react-native';
+import { Children, createContext, useContext, useState, type ReactNode } from 'react';
+import { Platform, Text as RNText, View, type AccessibilityRole, type TextLayoutEvent, type TextStyle } from 'react-native';
 import { glossParts, stripIsolates } from '@webui/i18n/registry';
 import { useDirection } from '@/i18n/useT';
 import { metrics } from '../tokens/generated';
@@ -89,11 +89,22 @@ function glossEnglish(part: string): string {
     return stripIsolates(part).trim().replace(/^\(/, '').replace(/\)$/, '');
 }
 
-/** Splits each string child at its English glosses and sets them small and muted, as the web's `.i18n-gloss` does; with `blocks`, long glosses are moved into it instead. */
-function withGlosses(children: ReactNode, size: number, color: string, blocks: string[] | null, limit = LONG_GLOSS_LENGTH): ReactNode {
+/** Whether an inline gloss was laid out across lines: it was wider than a line, so a bracket may stand alone. */
+export function glossCut(lines: readonly string[], glosses: readonly string[]): boolean {
+    const flat = (s: string) => stripIsolates(s).replace(/\s+/g, ' ').trim();
+    const flatLines = lines.map(flat);
+    return glosses.some((g) => !flatLines.some((line) => line.includes(flat(g))));
+}
+
+// Web: an inline block, as the desktop's `.i18n-gloss`, moves to the next line whole and wraps inside itself only when wider than a line.
+const WEB_GLOSS = { writingDirection: 'ltr', display: 'inline-block', maxWidth: '100%' } as unknown as TextStyle;
+
+/** Splits each string child at its English glosses and sets them small and muted, as the web's `.i18n-gloss` does; with `blocks`, long glosses are moved into it instead. Inline glosses are listed in `inline`. */
+function withGlosses(children: ReactNode, size: number, color: string, blocks: string[] | null, limit = LONG_GLOSS_LENGTH, inline: string[] = [], wrapWords = false): ReactNode {
     const gloss = Math.max(size * 0.8, GLOSS_MIN_SIZE);
     // Native keeps the paragraph's direction (a nested writingDirection would apply to the whole line); the gloss's own isolates keep its English run LTR.
-    const style = { fontSize: gloss, lineHeight: Math.round(gloss * GLOSS_LINE_HEIGHT), fontWeight: '400' as const, color, ...(Platform.OS === 'web' ? { writingDirection: 'ltr' as const } : null) };
+    const style = { fontSize: gloss, lineHeight: Math.round(gloss * GLOSS_LINE_HEIGHT), fontWeight: '400' as const, color, ...(Platform.OS === 'web' ? WEB_GLOSS : null) };
+    const keepWhole = Platform.OS !== 'web' && !wrapWords;
     let changed = false;
     const mapped = Children.map(children, (child, i) => {
         if (typeof child !== 'string') return child;
@@ -110,14 +121,24 @@ function withGlosses(children: ReactNode, size: number, color: string, blocks: s
                 blocks.push(english);
                 return null;
             }
+            inline.push(part.text);
             return (
                 <RNText key={`${i}.${j}`} style={style}>
-                    {part.text.replace(/ /g, NBSP)}
+                    {keepWhole ? part.text.replace(/ /g, NBSP) : part.text}
                 </RNText>
             );
         });
     });
     return changed ? mapped : children;
+}
+
+/** The string children joined, ignoring elements. */
+function stringsOf(children: ReactNode): string {
+    let text = '';
+    Children.forEach(children, (child) => {
+        if (typeof child === 'string') text += child;
+    });
+    return text;
 }
 
 /** The plain text of string children (a string or an array of strings), else null. */
@@ -164,7 +185,12 @@ export function Text({
     const largeText = useLargeText();
     const capped = !compact && largeText && numberOfLines !== undefined && numberOfLines <= 3 ? largeLines : numberOfLines;
     // A cap sized for English would cut the gloss off a translated line, at the wrong end in RTL.
-    const lines = capped !== undefined && !compact && hasGloss(children) ? capped * 2 : capped;
+    const glossy = hasGloss(children);
+    const lines = capped !== undefined && !compact && glossy ? capped * 2 : capped;
+    // Native: a no-break gloss wider than a line is broken anywhere; once seen cut, it moves to a block or wraps between words.
+    const glossText = Platform.OS !== 'web' && !nested && glossy ? stringsOf(children) : null;
+    const [cutFor, setCutFor] = useState<string | null>(null);
+    const cut = glossText !== null && cutFor === glossText;
 
     // A nested Text is a span: it inherits everything it isn't given.
     const baseSize = type[role ?? 'body'];
@@ -189,7 +215,9 @@ export function Text({
     if (strike || underline) style.textDecorationLine = strike && underline ? 'underline line-through' : strike ? 'line-through' : 'underline';
     if (dir) style.writingDirection = dir;
     // iOS lays a paragraph with a nested span out left to right unless told the UI direction.
-    else if (Platform.OS !== 'web' && !nested && !dirProp && !forced && hasGloss(children)) style.writingDirection = uiDir;
+    else if (Platform.OS !== 'web' && !nested && !dirProp && !forced && glossy) style.writingDirection = uiDir;
+    // A gloss roughly doubles a line, so beside an icon in a row it must wrap in the space left (native text doesn't shrink by default; web's does).
+    if (!nested && glossy) style.flexShrink = 1;
     // `auto` is a block that follows its own content, as the web's dir="auto" does; explicit ltr/rtl only set the run.
     const startsRight = dirProp === 'auto' || isolatePinned ? dir === 'rtl' : rtl;
     // Inside a pinned-direction block native does not swap left and right, so the side is taken literally.
@@ -204,7 +232,14 @@ export function Text({
     const blocks: string[] | null = !nested && !glossInline && !compact && numberOfLines === undefined ? [] : null;
     // Larger type wraps sooner, so headings move a shorter gloss to its own line.
     const glossLimit = Math.round((LONG_GLOSS_LENGTH * type.body) / baseSize);
-    const body = withGlosses(children, baseSize, toneColor(colors, 'muted'), blocks, glossLimit);
+    const inline: string[] = [];
+    const body = withGlosses(children, baseSize, toneColor(colors, 'muted'), blocks, cut ? 0 : glossLimit, inline, cut);
+    const onTextLayout =
+        glossText !== null && !cut && inline.length > 0
+            ? (e: TextLayoutEvent) => {
+                  if (glossCut(e.nativeEvent.lines.map((l) => l.text), inline)) setCutFor(glossText);
+              }
+            : undefined;
     const glossSize = Math.max(baseSize * 0.8, GLOSS_MIN_SIZE);
     const blockStyle: TextStyle = {
         fontFamily: fontFamily({ weight: 'regular', mono: false, display: false }),
@@ -224,6 +259,7 @@ export function Text({
                 style={style}
                 {...webDir}
                 numberOfLines={lines}
+                onTextLayout={onTextLayout}
                 maxFontSizeMultiplier={maxScale ?? maxScaleFor(role, compact)}
                 ellipsizeMode={ellipsize ?? 'tail'}
                 selectable={selectable}
