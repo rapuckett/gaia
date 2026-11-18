@@ -3,10 +3,10 @@
 
 import { useEffect, useState } from 'react';
 
-import { useActiveModel, useLocalModelStatus, useSelectModel } from '@/data';
-import { pillText } from '@/features/model/modelStatusText';
 import { isolate } from '@webui/i18n/registry';
 
+import { useActiveModel, useLocalModelStatus, useSelectModel } from '@/data';
+import { pillText } from '@/features/model/modelStatusText';
 import { useDirection, useT } from '@/i18n/useT';
 import { Cloud, Cpu, Download, TriangleAlert } from '@/ui/icons';
 
