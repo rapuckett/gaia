@@ -80,7 +80,8 @@ export function Screen({
     const column = (node: ReactNode) => (
         <View
             testID="screen-content"
-            style={[{ flexGrow: 1, width: '100%', alignSelf: 'center' }, cap ? { maxWidth: cap } : undefined]}
+            // Without scrolling, the column shrinks to the screen so a list inside it scrolls instead of spilling under the footer.
+            style={[{ flexGrow: 1, flexShrink: scroll ? 0 : 1, width: '100%', alignSelf: 'center' }, cap ? { maxWidth: cap } : undefined]}
             // @ts-expect-error dataSet is a react-native-web prop, absent from the native View types
             dataSet={{ contentWidth: cap ? String(cap) : 'full' }}
         >

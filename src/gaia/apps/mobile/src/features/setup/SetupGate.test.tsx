@@ -100,7 +100,7 @@ describe('app under a notice', () => {
         const capped = (node: ReturnType<typeof screen.getByTestId>) => {
             const found: unknown[] = [];
             for (let n: typeof node | null = node; n; n = n.parent) found.push(StyleSheet.flatten(n.props.style)?.maxWidth);
-            return found.includes(contentWidth.flow);
+            return found.includes(contentWidth.reading);
         };
         const inside = (node: ReturnType<typeof screen.getByTestId>, testID: string) => {
             for (let n: typeof node | null = node; n; n = n.parent) if (n.props.testID === testID) return true;

@@ -249,7 +249,7 @@ export function ChatDrawerContent({ activeId, onSelect, onClose, onNewChat, onPc
             edges={['top', 'bottom', 'start']}
             banner={null}
             footerBleed
-            header={<Header onClose={close} onPcs={onPcs} />}
+            header={<Header onClose={onClose ? close : undefined} onPcs={onPcs} />}
             footer={largeText ? undefined : footerRows}
         >
             <Stack paddingX="lg" paddingY="sm">

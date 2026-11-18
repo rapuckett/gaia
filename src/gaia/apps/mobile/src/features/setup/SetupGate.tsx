@@ -3,7 +3,7 @@
 
 import { useEffect, useState, type ReactNode } from 'react';
 import { useWindowDimensions, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaInsetsContext, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { GaiaApiError, GaiaNetworkError, GaiaPinMismatchError } from '@/api/errors';
 import { useGaiaClient, useSetupGate } from '@/data';
@@ -13,7 +13,7 @@ import { hasTailnetRoute } from '@/features/pairing/routes';
 import { PERMANENT_DRAWER_MIN_WIDTH, PERMANENT_DRAWER_WIDTH } from '@/features/nav/navigation';
 import { describeErrorWith, serverText, technicalDetail, useDirection, useT } from '@/i18n/useT';
 import { useConnectionStore } from '@/state/connection';
-import { Button, Disclosure, Ltr, Notice, Stack, useTheme } from '@/ui';
+import { Button, Disclosure, Ltr, Notice, ScreenBannerProvider, Stack, useScreenBanner, useTheme } from '@/ui';
 import { contentWidth } from '@/ui/tokens/space';
 
 import { SetupScreen, type SetupScreenProps } from './SetupScreen';
@@ -103,6 +103,7 @@ export function SetupGate({
         );
     return (
         <NoticeAboveApp
+            unreachable={unreachable}
             notice={
                 <>
                     {notice}
@@ -119,25 +120,32 @@ export function SetupGate({
 }
 
 /** The navigator is never inside the capped column; only the notice is, and beside the permanent sidebar it sits over the chat. */
-function NoticeAboveApp({ notice, children }: { notice: ReactNode; children: ReactNode }) {
+function NoticeAboveApp({ notice, unreachable, children }: { notice: ReactNode; unreachable: boolean; children: ReactNode }) {
     const { colors } = useTheme();
     const insets = useSafeAreaInsets();
     const { width } = useWindowDimensions();
     const rtl = useDirection() === 'rtl';
     const sidebar = width >= PERMANENT_DRAWER_MIN_WIDTH ? PERMANENT_DRAWER_WIDTH : 0;
+    const ambientBanner = useScreenBanner();
     return (
         <View style={{ flex: 1, backgroundColor: colors.bgPrimary }}>
             <View
                 testID="setup-gate-notice"
-                style={{ paddingTop: insets.top, paddingStart: sidebar, paddingEnd: rtl ? insets.left : insets.right, alignItems: 'center' }}
+                style={{ paddingTop: insets.top, paddingStart: sidebar || (rtl ? insets.right : insets.left), paddingEnd: rtl ? insets.left : insets.right, alignItems: 'center' }}
             >
-                <View style={{ width: '100%', maxWidth: contentWidth.flow }}>
+                <View style={{ width: '100%', maxWidth: contentWidth.reading }}>
                     <Stack gap="md" paddingX="gutter" paddingY="md">
                         {notice}
                     </Stack>
                 </View>
             </View>
-            <View testID="setup-gate-app" style={{ flex: 1 }}>{children}</View>
+            <View testID="setup-gate-app" style={{ flex: 1 }}>
+                {/* The notice already sits below the status bar, so the app under it takes no top inset. */}
+                <SafeAreaInsetsContext.Provider value={{ ...insets, top: 0 }}>
+                    {/* The notice already says the PC is out of reach; the screens' own connection banner would repeat it. */}
+                    <ScreenBannerProvider banner={unreachable ? null : ambientBanner}>{children}</ScreenBannerProvider>
+                </SafeAreaInsetsContext.Provider>
+            </View>
         </View>
     );
 }
