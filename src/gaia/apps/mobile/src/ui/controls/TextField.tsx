@@ -139,8 +139,13 @@ export function TextField({
                 submitBehavior={multiline ? 'newline' : 'blurAndSubmit'}
                 secureTextEntry={secureTextEntry && !revealed}
                 autoFocus={autoFocus}
-                autoCapitalize={url ? 'none' : undefined}
-                autoCorrect={url ? false : undefined}
+                autoCapitalize={url || secureTextEntry ? 'none' : undefined}
+                autoCorrect={url || secureTextEntry ? false : undefined}
+                // A secret never goes to the keyboard's suggestions, spell check or autofill.
+                spellCheck={secureTextEntry ? false : undefined}
+                autoComplete={secureTextEntry ? 'off' : undefined}
+                textContentType={secureTextEntry ? 'none' : undefined}
+                importantForAutofill={secureTextEntry ? 'no' : undefined}
                 accessibilityLabel={accessibilityLabel ?? label}
                 accessibilityHint={accessibilityHint}
                 onFocus={() => {

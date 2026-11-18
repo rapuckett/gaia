@@ -2,10 +2,11 @@
 // SPDX-License-Identifier: MIT
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useState } from 'react';
 
 import type { CloudPriceList, ContextChoice, ProviderConnected, ProviderId, ProviderSummary, ProviderSummaryList } from '@/api/client.types';
 import { CONNECT_RETRY_MS } from '@/api/constants';
-import { GaiaApiError } from '@/api/errors';
+import { GaiaApiError, GaiaError } from '@/api/errors';
 
 import { useGaiaClient } from './GaiaClientProvider';
 import { modelMenuKeys } from './modelMenu';
@@ -107,6 +108,68 @@ export function useReconnectProvider() {
         },
         onSettled: refresh,
     });
+}
+
+const MASK = '••••';
+
+/** `text` with every copy of `secret` (as typed, and trimmed) masked. */
+export function withoutSecret(text: string, secret: string): string {
+    let out = text;
+    for (const s of new Set([secret, secret.trim()])) if (s) out = out.split(s).join(MASK);
+    return out;
+}
+
+function masksParams(params: GaiaError['params'], secret: string): GaiaError['params'] {
+    return Object.fromEntries(Object.entries(params).map(([k, v]) => [k, typeof v === 'string' ? withoutSecret(v, secret) : v]));
+}
+
+/** The same failure with no copy of `secret` in its message, detail, params or body. */
+export function secretFreeError(err: unknown, secret: string): unknown {
+    const s = secret.trim();
+    if (!s || !(err instanceof Error)) return err;
+    const seen = err instanceof GaiaApiError ? `${err.message}\n${err.detail}\n${JSON.stringify(err.body)}` : err.message;
+    if (!seen.includes(s)) return err;
+    if (err instanceof GaiaApiError) {
+        return new GaiaApiError(err.status, withoutSecret(err.detail, secret), err.messageKey, masksParams(err.params, secret));
+    }
+    if (err instanceof GaiaError) return new GaiaError(err.messageKey, masksParams(err.params, secret));
+    return new Error(withoutSecret(err.message, secret));
+}
+
+/**
+ * Sends a key typed on this phone to the PC, waiting out the PC's OS key-store prompt (409) as Reconnect does.
+ * Not a mutation, so the key is never a mutation variable or cache entry; nothing it returns or throws carries it.
+ */
+export function useSendProviderKey() {
+    const client = useGaiaClient();
+    const refresh = useRefreshProviders();
+    const [isPending, setPending] = useState(false);
+    const send = async (
+        provider: string,
+        apiKey: string,
+        { onWaiting, stopped }: { onWaiting: (detail: string) => void; stopped: () => boolean },
+    ): Promise<ProviderConnected> => {
+        const api = requireClient(client);
+        setPending(true);
+        try {
+            for (;;) {
+                try {
+                    const r = await api.connectProvider(provider, { apiKey });
+                    return r.remember_error ? { ...r, remember_error: withoutSecret(r.remember_error, apiKey) } : r;
+                } catch (err) {
+                    if (!(err instanceof GaiaApiError) || err.status !== 409 || stopped()) throw err;
+                    onWaiting(withoutSecret(err.detail, apiKey));
+                    await new Promise((resolve) => setTimeout(resolve, CONNECT_RETRY_MS));
+                }
+            }
+        } catch (err) {
+            throw secretFreeError(err, apiKey);
+        } finally {
+            setPending(false);
+            refresh();
+        }
+    };
+    return { send, isPending };
 }
 
 /** After the PC's key-store unlock prompt was closed: GAIA asks once more on the PC, then the list is read again. */

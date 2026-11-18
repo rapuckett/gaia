@@ -7,6 +7,7 @@ import type { ReactNode } from 'react';
 import { Platform } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { GaiaApiError } from '@/api/errors';
 import { createFakeClient } from '@/api/fake';
 import { GaiaClientProvider, type ProviderRow } from '@/data';
 import { ThemeProvider } from '@/ui';
@@ -18,6 +19,17 @@ import { ProviderKey } from './ProviderKey';
 const describeNative = Platform.OS === 'web' ? describe.skip : describe;
 
 const DUMMY_KEY = 'sk-test-dummy';
+const TYPED_KEY = 'fw-typed-test-key-4242';
+const none: ProviderRow = { id: 'fireworks', name: 'Fireworks AI', remote: true, privacy_notice: '', configured: false, blocked: false };
+
+/** Everything the app could still hold the key in: the screen, the query cache and the mutation cache. */
+function heldAnywhere(r: { toJSON: () => unknown }, queryClient: QueryClient): string {
+    return JSON.stringify([
+        r.toJSON(),
+        queryClient.getQueryCache().getAll().map((q) => q.state),
+        queryClient.getMutationCache().getAll().map((m) => m.state),
+    ]);
+}
 
 function setup(provider: ProviderRow) {
     const client = createFakeClient({ providers: { providers: [provider], lemonade_error: null } });
@@ -37,17 +49,70 @@ function setup(provider: ProviderRow) {
 }
 
 describeNative('Provider key', () => {
-    it('never offers a key field the PC refuses from a phone: no input, no gateway fields, the PC-only notice', async () => {
-        const none: ProviderRow = { id: 'amd', name: 'AMD LLM Gateway', remote: true, privacy_notice: '', configured: false, blocked: false };
-        const { queryClient, wrap } = setup(none);
+    it('a typed key goes to the PC once, then is gone from the field, the screen and every cache', async () => {
+        const { client, queryClient, wrap } = setup(none);
         const r = await render(<ProviderKey provider={none} connected={false} />, { wrapper: wrap });
 
-        expect(screen.getByTestId('provider-key-pc-only')).toHaveTextContent('Change this on the PC running GAIA.');
-        expect(JSON.stringify(r.container.toJSON())).not.toContain('"type":"TextInput"');
+        const field = screen.getByTestId('provider-key-field');
+        expect(field.props).toMatchObject({ secureTextEntry: true, autoCorrect: false, spellCheck: false, autoComplete: 'off', textContentType: 'none', importantForAutofill: 'no', autoCapitalize: 'none' });
+        expect(screen.getByTestId('provider-key-connect')).toBeDisabled();
         expect(screen.queryByText(/Gateway URL|Auth header/)).toBeNull();
-        await fireEvent.press(screen.getByTestId('provider-key-paste'));
-        expect(await screen.findByTestId('provider-key-paste-refusal')).toBeTruthy();
-        expect(JSON.stringify(r.container.toJSON())).not.toContain('"type":"TextInput"');
+
+        await fireEvent.changeText(field, TYPED_KEY);
+        expect(screen.getByTestId('provider-key-connect')).toBeEnabled();
+        await fireEvent.press(screen.getByTestId('provider-key-connect'));
+        await screen.findByText('Connected. The key is kept for next time.');
+
+        expect(client.keyedConnects).toEqual(['fireworks']);
+        expect(screen.getByTestId('provider-key-field').props.value).toBe('');
+        expect(heldAnywhere(r.container, queryClient)).not.toContain(TYPED_KEY);
+        queryClient.clear();
+    });
+
+    it('a key the PC refuses from a phone (403) clears and gives way to "Change this on the PC"', async () => {
+        const { client, queryClient, wrap } = setup(none);
+        jest.spyOn(client, 'connectProvider').mockRejectedValue(new GaiaApiError(403, 'Enter provider keys on the PC running GAIA, not over mobile access or from a paired device.'));
+        const r = await render(<ProviderKey provider={none} connected={false} />, { wrapper: wrap });
+
+        await fireEvent.changeText(screen.getByTestId('provider-key-field'), TYPED_KEY);
+        await fireEvent.press(screen.getByTestId('provider-key-connect'));
+
+        expect(await screen.findByTestId('provider-key-pc-only')).toHaveTextContent('Change this on the PC running GAIA.');
+        expect(screen.queryByTestId('provider-key-field')).toBeNull();
+        expect(heldAnywhere(r.container, queryClient)).not.toContain(TYPED_KEY);
+        queryClient.clear();
+    });
+
+    it('a PC error that echoes the key shows it masked on the detail line, and the field clears', async () => {
+        const { client, queryClient, wrap } = setup(none);
+        jest.spyOn(client, 'connectProvider').mockRejectedValue(new GaiaApiError(502, `Fireworks AI rejected the key ${TYPED_KEY}: 401 Unauthorized.`));
+        const r = await render(<ProviderKey provider={none} connected={false} />, { wrapper: wrap });
+
+        await fireEvent.changeText(screen.getByTestId('provider-key-field'), `  ${TYPED_KEY} `);
+        await fireEvent.press(screen.getByTestId('provider-key-connect'));
+
+        expect(await screen.findByText(/rejected the key ••••: 401 Unauthorized/)).toBeTruthy();
+        expect(screen.getByTestId('provider-key-field').props.value).toBe('');
+        expect(client.connectProvider).toHaveBeenCalledWith('fireworks', { apiKey: TYPED_KEY });
+        expect(heldAnywhere(r.container, queryClient)).not.toContain(TYPED_KEY);
+        queryClient.clear();
+    });
+
+    it('Replace opens the same field as "Paste your new key" with Save key, and Cancel closes it', async () => {
+        const connected: ProviderRow = { ...none, configured: true };
+        const { client, queryClient, wrap } = setup(connected);
+        await render(<ProviderKey provider={connected} connected />, { wrapper: wrap });
+
+        expect(screen.queryByTestId('provider-key-field')).toBeNull();
+        await fireEvent.press(screen.getByTestId('provider-key-replace'));
+        const field = screen.getByTestId('provider-key-field');
+        expect(field.props).toMatchObject({ placeholder: 'Paste your new key', secureTextEntry: true });
+        expect(screen.getByTestId('provider-key-connect')).toHaveTextContent('Save key');
+
+        await fireEvent.changeText(field, TYPED_KEY);
+        await fireEvent.press(screen.getByTestId('provider-key-cancel'));
+        expect(screen.queryByTestId('provider-key-field')).toBeNull();
+        expect(client.connects).toEqual([]);
         queryClient.clear();
     });
 
@@ -56,15 +121,13 @@ describeNative('Provider key', () => {
         const { client, queryClient, wrap } = setup(saved);
         const r = await render(<ProviderKey provider={saved} connected={false} />, { wrapper: wrap });
 
-        expect(screen.getByTestId('provider-key-pc-only')).toBeTruthy();
         expect(screen.queryByText(/^(Replace|Remove key)$/)).toBeNull();
 
         await fireEvent.press(screen.getByText('Reconnect'));
         await screen.findByText('Connected. The key is kept for next time.');
         expect(client.connects).toEqual(['fireworks']);
-        const shown = JSON.stringify(r.container.toJSON());
-        expect(shown).not.toContain('"type":"TextInput"');
-        expect(shown).not.toContain(DUMMY_KEY);
+        expect(client.keyedConnects).toEqual([]);
+        expect(JSON.stringify(r.container.toJSON())).not.toContain(DUMMY_KEY);
         queryClient.clear();
     });
 });

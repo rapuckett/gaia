@@ -209,6 +209,8 @@ describe('createHttpClient requests', () => {
         ['loadModel', (c) => c.loadModel('m', false), 'POST', '/api/system/load-model', JSON_HEADERS, { model_name: 'm', force: false }],
         ['listConnectors', (c) => c.listConnectors(), 'GET', '/api/connectors', UI_HEADERS, undefined],
         ['disableConnector', (c) => c.disableConnector('slack'), 'POST', '/api/connectors/slack/disable', JSON_HEADERS, {}],
+        ['connectProvider, keeping the PC\'s key', (c) => c.connectProvider('fireworks'), 'POST', '/api/providers/fireworks/connect', JSON_HEADERS, {}],
+        ['connectProvider, with a typed key', (c) => c.connectProvider('fireworks', { apiKey: 'fw-k-1' }), 'POST', '/api/providers/fireworks/connect', JSON_HEADERS, { api_key: 'fw-k-1' }],
     ])('%s: %s', async (_name, call, method, path, headers, body) => {
         const { fetch, calls } = createRecordingFetch(() => jsonResponse({ status: 'ok' }));
         await call(createHttpClient({ baseUrl: BASE, fetch }));

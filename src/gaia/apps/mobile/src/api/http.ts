@@ -1310,8 +1310,9 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
         },
 
         connectProvider(provider, options) {
-            // No key travels from the phone: a blank body keeps the key the PC already holds.
-            return postJson<ProviderConnected>(providerConnectPath(provider), {}, options?.signal);
+            // A blank body keeps the key the PC already holds.
+            const body = options?.apiKey ? { api_key: options.apiKey } : {};
+            return postJson<ProviderConnected>(providerConnectPath(provider), body, options?.signal);
         },
 
         retryKeyStore(options) {

@@ -4153,6 +4153,7 @@ const messages: Messages = {
     'mobileApp.setup.pc.step': 'الكمبيوتر لديك',
     'mobileApp.setup.redownload.body': 'نُزّل {name} لكنه لم يُحمَّل. يحذف GAIA النسخة الموجودة على الكمبيوتر لديك وينزّله من جديد {size}.',
     'mobileApp.settings.pcOnly': 'غيّر هذا من الكمبيوتر الذي يشغّل GAIA.',
+    'mobileApp.settings.key.sessionOnly': 'متصل لهذه الجلسة فقط. تعذّر الاحتفاظ بالمفتاح.',
     'mobileApp.settings.on': 'مفعّل',
     'mobileApp.settings.off': 'متوقف',
     'mobileApp.settings.model.removeDownloadBody': 'تُحذف الملفات التي نزّلتها من الكمبيوتر الذي يشغّل GAIA. يمكنك إضافته مرة أخرى لاحقًا.',

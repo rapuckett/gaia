@@ -411,6 +411,8 @@ export interface FakeGaiaClient extends GaiaClient {
     readonly setupChoices: { kind: 'chat' | 'vision' | 'skip'; modelId: string | null; flag?: boolean }[];
     /** The providers connectProvider was asked for, in order. */
     readonly connects: string[];
+    /** The providers connectProvider was sent a typed key for, in order (never the key). */
+    readonly keyedConnects: string[];
     /** How many times recheckSetupNpu was asked. */
     readonly npuRechecks: number;
     /** How many times retryKeyStore was asked. */
@@ -525,6 +527,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
     const targetSets: LemonadeTargetBody[] = [];
     const setupChoices: FakeGaiaClient['setupChoices'] = [];
     const connects: string[] = [];
+    const keyedConnects: string[] = [];
     let npuRechecks = 0;
     let keyStoreRetries = 0;
     let checkAt = 0;
@@ -637,6 +640,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         targetSets,
         setupChoices,
         connects,
+        keyedConnects,
         get npuRechecks() {
             return npuRechecks;
         },
@@ -1667,8 +1671,9 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             if (data.lemonadeDetect instanceof Error) throw data.lemonadeDetect;
             return data.lemonadeDetect;
         },
-        async connectProvider(provider) {
+        async connectProvider(provider, options) {
             connects.push(provider);
+            if (options?.apiKey) keyedConnects.push(provider);
             return { remembered: true };
         },
         async retryKeyStore() {

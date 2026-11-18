@@ -9,6 +9,7 @@ import { StyleSheet } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import type { ProviderSummary } from '@/api/client.types';
+import { GaiaApiError } from '@/api/errors';
 import type { FakeClientData } from '@/api/fake';
 import { createFakeClient } from '@/api/fake';
 import { GaiaClientProvider } from '@/data';
@@ -52,11 +53,33 @@ async function mount(providers: ProviderSummary[], extra: FakeClientData = {}) {
 }
 
 describe('KeyScreen', () => {
-    it('without a key on the PC, shows the key field read-only and cannot connect', async () => {
-        const { client } = await mount([provider({ configured: false })]);
-        await screen.findByText('Change this on the PC running GAIA');
+    it('without a key on the PC, waits for a typed key, sends it once in the body, clears it and starts the run', async () => {
+        const { client, ctx } = await mount([provider({ configured: false })]);
+        await screen.findByText('Kimi · Default', { exact: false });
+        const field = screen.getByTestId('key-field');
+        expect(field.props).toMatchObject({ secureTextEntry: true, autoCorrect: false, spellCheck: false, autoComplete: 'off', textContentType: 'none' });
         expect(screen.getByLabelText('Test and connect')).toBeDisabled();
         expect(client.connects).toEqual([]);
+
+        const connect = jest.spyOn(client, 'connectProvider');
+        fireEvent.changeText(field, 'fw-setup-test-key-77');
+        fireEvent.press(screen.getByLabelText('Test and connect'));
+        await waitFor(() => expect(ctx.startedRun).toHaveBeenCalled());
+        expect(connect.mock.calls).toEqual([['fireworks', { apiKey: 'fw-setup-test-key-77' }]]);
+        expect(screen.getByTestId('key-field').props.value).toBe('');
+        expect(client.setupStarts).toMatchObject([{ skipChatModel: true }]);
+    });
+
+    it('a typed key the PC refuses from a phone (403) clears, locks the field and says to change it on the PC', async () => {
+        const { client, ctx } = await mount([provider({ configured: false })]);
+        jest.spyOn(client, 'connectProvider').mockRejectedValue(new GaiaApiError(403, 'Enter provider keys on the PC running GAIA, not over mobile access or from a paired device.'));
+        await screen.findByText('Kimi · Default', { exact: false });
+        fireEvent.changeText(screen.getByTestId('key-field'), 'fw-setup-test-key-77');
+        fireEvent.press(screen.getByLabelText('Test and connect'));
+        expect(await screen.findByTestId('key-pc-only')).toBeTruthy();
+        expect(screen.getByTestId('key-field').props).toMatchObject({ value: '', editable: false });
+        expect(screen.queryByText(/fw-setup-test-key-77/)).toBeNull();
+        expect(ctx.startedRun).not.toHaveBeenCalled();
     });
 
     it('with a key on the PC, connects it, selects the model and starts the cloud run, sending no key', async () => {
