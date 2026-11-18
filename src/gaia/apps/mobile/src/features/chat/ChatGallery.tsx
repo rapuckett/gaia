@@ -4,7 +4,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 
-import type { Session, StreamEvent } from '@/api/client.types';
+import type { ActiveModel, LocalModelStatus, Session, StreamEvent } from '@/api/client.types';
 import { GaiaApiError } from '@/api/errors';
 import { createFakeClient } from '@/api/fake';
 import { GaiaClientProvider } from '@/data';
@@ -22,6 +22,8 @@ import { FIXTURES } from './messages/__fixtures__/messages';
  * `queue` (CMP-12, CMP-13): a queued text with Add to this reply, a failed one with Send again.
  * `env-offline` (SP-17): the chat's internet is off and the session panel is closed, so the offline notice shows above the composer.
  * `queue-stop` (CMP-15): the same queue; `#tap=composer-stop` ends the turn and the queued texts return to the box.
+ * `?queued=<model id>`: the chip shows a model switch waiting for the turn to end ("name → id").
+ * `?model=none`: the PC reports no model, so the chip shows its fallback name. Otherwise it shows Gemma 4 E4B, running on the PC.
  */
 export const CHAT_STATES = ['running-empty', 'running-status', 'question', 'question-answered', 'question-answer-failed', 'approval', 'queue', 'queue-stop', 'env-offline'] as const;
 export type ChatGalleryState = (typeof CHAT_STATES)[number];
@@ -38,6 +40,35 @@ const SESSION = {
     agent_type: 'gaia',
     inference_remote: false,
 } as Session;
+
+const ACTIVE_MODEL: ActiveModel = {
+    provider: 'local',
+    model: SESSION.model,
+    display_name: 'Gemma 4 E4B',
+    label: 'Gemma 4 E4B',
+    remote: false,
+    is_default: true,
+    downloaded: true,
+    inference_remote: false,
+};
+const LOCAL_MODEL: LocalModelStatus = {
+    state: 'loaded',
+    active_model: SESSION.model,
+    active_display_name: 'Gemma 4 E4B',
+    active_remote: false,
+    model: SESSION.model,
+    display_name: 'Gemma 4 E4B',
+    placement: null,
+    ctx_size: 65536,
+    memory: null,
+    memory_error: null,
+    error: null,
+    base_url: null,
+    owner: 'gaia',
+    busy: false,
+    restarting: false,
+    restart_error: null,
+};
 
 const QUESTION = {
     type: 'needs_input',
@@ -57,11 +88,13 @@ const QUEUED = [
 
 const STATUS: StreamEvent = { type: 'status', phase: 'reading', message: 'Reading your request' };
 
-export function ChatGallery({ state }: { state: ChatGalleryState }) {
+export function ChatGallery({ state, queued, model }: { state: ChatGalleryState; queued?: string; model?: 'none' }) {
     const [queryClient] = useState(() => new QueryClient({ defaultOptions: { queries: { retry: false } } }));
     const [client] = useState(() => {
         const base = createFakeClient({
             sessions: [SESSION],
+            activeModel: model === 'none' ? undefined : ACTIVE_MODEL,
+            localModel: model === 'none' ? undefined : LOCAL_MODEL,
             messages: { dev: [FIXTURES.short.messages[0]!] },
             environments: state === 'env-offline' ? { dev: { session_id: 'dev', folders: [], removed: [], internet: false, enforced: true, internet_enforced: true } } : undefined,
         });
@@ -116,7 +149,7 @@ export function ChatGallery({ state }: { state: ChatGalleryState }) {
             <GaiaClientProvider client={client}>
                 <UIProvider>
                     <ScreenBannerProvider banner={null}>
-                        <ChatScreen sessionId="dev" />
+                        <ChatScreen sessionId="dev" initialQueuedModel={queued} />
                     </ScreenBannerProvider>
                 </UIProvider>
             </GaiaClientProvider>
