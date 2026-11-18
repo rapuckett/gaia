@@ -47,10 +47,6 @@ export function SetupGate({
     const { gate, recheck, finish, open } = useSetupGate();
     const pairAgain = usePairAgain();
     const connection = useConnectionStore((s) => s.connection);
-    const { colors } = useTheme();
-    const insets = useSafeAreaInsets();
-    const { width } = useWindowDimensions();
-    const rtl = useDirection() === 'rtl';
 
     useEffect(() => {
         reopen = open;
@@ -105,7 +101,29 @@ export function SetupGate({
                 }}
             />
         );
-    // The navigator below is never inside the capped column; only the notice is, and beside the permanent sidebar it sits over the chat.
+    return (
+        <NoticeAboveApp
+            notice={
+                <>
+                    {notice}
+                    {gate.state === 'unknown' && !unreachable ? <ErrorDetails error={gate.error} /> : null}
+                    {gate.state === 'serverDown' && !gate.modelListUnread ? (
+                        <Button variant="secondary" label={t('setup.serverDown.setup')} onPress={open} />
+                    ) : null}
+                </>
+            }
+        >
+            {children}
+        </NoticeAboveApp>
+    );
+}
+
+/** The navigator is never inside the capped column; only the notice is, and beside the permanent sidebar it sits over the chat. */
+function NoticeAboveApp({ notice, children }: { notice: ReactNode; children: ReactNode }) {
+    const { colors } = useTheme();
+    const insets = useSafeAreaInsets();
+    const { width } = useWindowDimensions();
+    const rtl = useDirection() === 'rtl';
     const sidebar = width >= PERMANENT_DRAWER_MIN_WIDTH ? PERMANENT_DRAWER_WIDTH : 0;
     return (
         <View style={{ flex: 1, backgroundColor: colors.bgPrimary }}>
@@ -116,10 +134,6 @@ export function SetupGate({
                 <View style={{ width: '100%', maxWidth: contentWidth.flow }}>
                     <Stack gap="md" paddingX="gutter" paddingY="md">
                         {notice}
-                        {gate.state === 'unknown' && !unreachable ? <ErrorDetails error={gate.error} /> : null}
-                        {gate.state === 'serverDown' && !gate.modelListUnread ? (
-                            <Button variant="secondary" label={t('setup.serverDown.setup')} onPress={open} />
-                        ) : null}
                     </Stack>
                 </View>
             </View>

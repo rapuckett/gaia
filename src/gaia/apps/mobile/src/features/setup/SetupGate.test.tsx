@@ -7,6 +7,7 @@ import { StyleSheet, Text } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { DEVELOPMENT_SCHEME } from '@/features/dev/devGallery';
+import { translator } from '@/i18n/useT';
 import { ThemeProvider } from '@/ui';
 import { contentWidth } from '@/ui/tokens/space';
 
@@ -96,12 +97,22 @@ describe('app under a notice', () => {
             </SafeAreaProvider>
         );
         await render(<SetupGate><Text>App</Text></SetupGate>, { wrapper });
+        const capped = (node: ReturnType<typeof screen.getByTestId>) => {
+            const found: unknown[] = [];
+            for (let n: typeof node | null = node; n; n = n.parent) found.push(StyleSheet.flatten(n.props.style)?.maxWidth);
+            return found.includes(contentWidth.flow);
+        };
+        const inside = (node: ReturnType<typeof screen.getByTestId>, testID: string) => {
+            for (let n: typeof node | null = node; n; n = n.parent) if (n.props.testID === testID) return true;
+            return false;
+        };
         const app = screen.getByTestId('setup-gate-app');
         expect(StyleSheet.flatten(app.props.style)).toMatchObject({ flex: 1 });
-        const notice = screen.getByTestId('setup-gate-notice');
-        expect(notice.findAll((n) => StyleSheet.flatten(n.props.style)?.maxWidth === contentWidth.flow).length).toBeGreaterThan(0);
-        expect(notice.findAll((n) => n.props.testID === 'setup-gate-app')).toEqual([]);
-        expect(app.findAll((n) => StyleSheet.flatten(n.props.style)?.maxWidth === contentWidth.flow)).toEqual([]);
+        expect(capped(app)).toBe(false);
+        expect(inside(app, 'setup-gate-notice')).toBe(false);
+        const retry = screen.getByText(translator('en')('setup.serverDown.setup'));
+        expect(inside(retry, 'setup-gate-notice')).toBe(true);
+        expect(capped(retry)).toBe(true);
         mockGate = { state: 'ready' };
     });
 });

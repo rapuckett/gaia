@@ -8,7 +8,7 @@ import type { ActiveModel, LocalModelStatus, Session, StreamEvent } from '@/api/
 import { GaiaApiError } from '@/api/errors';
 import { createFakeClient } from '@/api/fake';
 import { GaiaClientProvider } from '@/data';
-import { IDLE_TURN, writeTurn } from '@/state/chatStreams';
+import { IDLE_TURN, useChatStreamStore, writeTurn } from '@/state/chatStreams';
 import { useComposerQueueStore } from '@/features/composer/composerQueue';
 import { ScreenBannerProvider, UIProvider } from '@/ui';
 
@@ -142,11 +142,10 @@ export function ChatGallery({ state, queued, model }: { state: ChatGalleryState;
         return base;
     });
     // The screen mounts only once seeded: a model chip that mounts with no turn running applies `queued` at once, and a store write while rendering would update subscribers like the drawer mid-render.
-    const [seeded, setSeeded] = useState(state === 'env-offline');
+    const seeded = useChatStreamStore((s) => state === 'env-offline' || s.turns.dev !== undefined);
     useEffect(() => {
         if (state === 'env-offline') return undefined;
         seedScene(state);
-        setSeeded(true);
         return () => {
             writeTurn('dev', null);
             useComposerQueueStore.setState({ byChat: {}, drafts: {} });
