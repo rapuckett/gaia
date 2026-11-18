@@ -1469,12 +1469,19 @@ Deleting a chat deletes its copies.
 
 ### Files
 
-Away from the PC (mobile access, or a paired device), browse, search, preview and
-image reads name a chat with `session_id` and see only the folders and files
-that chat may touch, as its session panel lists them. GAIA's secret-file policy
-still applies inside them: keys, certificates, `.env` files and credential
-folders such as `~/.ssh` are refused (**403**), and so is anything outside the
-chat or a read that names no chat. The PC reads its home folder as before.
+A paired device the PC allowed browses, searches, previews and reads images
+across the home folder, as the PC's folder picker does, with no `session_id`.
+It never sees credentials: keys, certificates, `.env` files, credential folders
+such as `~/.ssh`, keychains, browser profiles and GAIA's own settings folder are
+left out of listings and searches and refused (**403**, code
+`credentials_withheld`), judged after symlinks and `..` are resolved. A path
+outside the home folder is refused with code `outside_home`, without naming it.
+
+Over mobile access, and from a device still waiting for the PC's OK, these reads
+name a chat with `session_id` and see only the folders and files that chat may
+touch, as its session panel lists them. The secret-file policy applies inside
+them, and anything outside the chat or a read that names no chat is refused
+(**403**). The PC reads its home folder as before.
 
 <AccordionGroup>
   <Accordion title="POST /api/files/open">
@@ -1569,7 +1576,8 @@ chat or a read that names no chat. The PC reads its home folder as before.
 
   <Accordion title="GET /api/files/browse">
     Browse filesystem contents. Returns entries under a directory with size,
-    mtime, and type metadata. Away from the PC, `path` must be one of the
+    mtime, and type metadata. An allowed paired device browses like the PC.
+    Over mobile access or from a waiting device, `path` must be one of the
     chat's folders or inside one, and with no `path` the listing opens the
     chat's first folder; `quick_links` lists the chat's folders and
     `parent_path` never leaves them.
@@ -1582,8 +1590,8 @@ chat or a read that names no chat. The PC reads its home folder as before.
     stops at `max_results` matches, after 20,000 directory entries, or after
     about 10 seconds. `truncated: true` in the response means a bound cut the walk
     short and more matches may exist. `folder` searches that one folder only.
-    Away from the PC, the walk covers the chat's folders alone and never
-    returns a file holding secrets.
+    Away from the PC it never returns a file holding secrets, and over mobile
+    access or from a waiting device the walk covers the chat's folders alone.
   </Accordion>
 
   <Accordion title="GET /api/files/preview">
@@ -1697,7 +1705,9 @@ agent at once, so they take effect on its next step.
     (not a folder, a filesystem root, the home folder or a protected folder).
     It knows no chat, so a folder inside one removed from a chat passes here
     and is refused when added. The desktop app asks this as soon as a folder is
-    picked in the system dialog.
+    picked in the system dialog. For an allowed paired device a folder outside
+    the home folder, or one holding credentials, is refused too, without its
+    path.
   </Accordion>
 
   <Accordion title="POST /api/sessions/{session_id}/environment/folders/remove">
