@@ -18,7 +18,11 @@ from gaia.ui.devices import DEVICE_CHANGES_KEPT
 from gaia.ui.devices.access import DeviceAccess
 from gaia.ui.devices.changes import record_device_change
 from gaia.ui.devices.listener import DeviceGate
-from gaia.ui.routers.sessions import emit_device_prompt, session_events
+from gaia.ui.routers.sessions import (
+    _system_emitter,
+    emit_device_prompt,
+    session_events,
+)
 from gaia.ui.security import (
     DEVICE_SCOPE_KEY,
     LAN_LISTENER,
@@ -94,9 +98,11 @@ def _as(app, caller, device_id=None):
         "client": PC,
         "app": app,
     }
-    if caller == "device":
+    if caller in ("device", "pending"):
         scope[LISTENER_SCOPE_KEY] = LAN_LISTENER
-        scope[DEVICE_SCOPE_KEY] = DevicePrincipal(device_id, True)
+        scope[DEVICE_SCOPE_KEY] = DevicePrincipal(device_id, caller == "device")
+    elif caller == "tunnel":
+        scope["headers"] = [(b"x-forwarded-for", b"203.0.113.7")]
     return Request(scope)
 
 
@@ -147,10 +153,22 @@ def test_cap_and_retention_after_removal(paired):
     assert clients["pc"].get(f"/api/devices/{phone}/changes").json()["total"] == 0
 
 
+def test_retention_clock_starts_when_the_device_is_unpaired(paired):
+    """Not when the list is next read: nobody reads it for 91 days here."""
+    app, clock, clients, phone, tablet = paired
+    record_device_change(_as(app, "device", phone), "memoryWiped")
+    record_device_change(_as(app, "device", tablet), "memoryWiped")
+    app.state.devices.revoke(phone)
+    clock.now += 91 * DAY
+    assert clients["pc"].get(f"/api/devices/{phone}/changes").json()["total"] == 0
+    # The tablet idled past 90 days, so its clock only starts now.
+    assert clients["pc"].get(f"/api/devices/{tablet}/changes").json()["total"] == 1
+
+
 def test_a_secret_never_lands_in_a_change_row(paired):
     app, _, _, phone, _ = paired
     key = "fw_live_secret_value"
-    for name in ("key", "api_key", "token"):
+    for name in ("key", "apiKey", "TOKEN", "client_secret", "passwordHint", "bearer"):
         with pytest.raises(ValueError, match="never a key"):
             record_device_change(
                 _as(app, "device", phone), "providerKeySet", **{name: key}
@@ -184,3 +202,25 @@ def test_device_prompt_reaches_only_its_own_device(paired):
     assert asyncio.run(first_event(_as(app, "pc")))["device_id"] == tablet
     with pytest.raises(ValueError):
         asyncio.run(emit_device_prompt(phone, "admin", "x", "maybe"))
+    for nobody in ("", None):
+        with pytest.raises(ValueError):
+            asyncio.run(emit_device_prompt(nobody, "admin", "x", "waiting"))
+
+
+@pytest.mark.parametrize("caller", ["tunnel", "pending"])
+def test_device_prompt_never_reaches_the_tunnel_or_a_pending_device(paired, caller):
+    app, _, _, phone, _ = paired
+    pending = "d0pending"
+
+    async def next_event(request):
+        stream = (await session_events(request)).body_iterator
+        assert (await stream.__anext__()).startswith(":")
+        await emit_device_prompt(pending, "admin", "gpuMemoryApply", "waiting")
+        await emit_device_prompt(phone, "admin", "gpuMemoryApply", "waiting")
+        await _system_emitter.emit({"type": "set_active_session", "session_id": "s"})
+        line = await asyncio.wait_for(stream.__anext__(), 2)
+        await stream.aclose()
+        return json.loads(line.removeprefix("data: "))
+
+    seen = asyncio.run(next_event(_as(app, caller, pending)))
+    assert seen["type"] == "set_active_session"

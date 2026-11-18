@@ -107,9 +107,10 @@ DEVICE_PROMPT_TIMEOUT_SECONDS = 5 * 60
 DEVICE_CHANGES_KEPT = 200
 REMOVED_DEVICE_CHANGES_DAYS = 90
 DEVICE_CHANGES_PAGE = 20
-#: A change's params name what changed, never a secret: these keys are refused.
+#: A change's params name what changed, never a secret: a param name holding
+#: any of these words is refused, whatever its case.
 DEVICE_CHANGE_SECRET_PARAMS = frozenset(
-    {"api_key", "client_secret", "key", "password", "secret", "token"}
+    {"bearer", "key", "password", "secret", "token"}
 )
 #: Longest param value kept; a change's params are labels, not payloads.
 DEVICE_CHANGE_PARAM_MAX = 200

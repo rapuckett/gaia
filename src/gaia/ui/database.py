@@ -2148,14 +2148,23 @@ class ChatDatabase:
                 (removed_before,),
             )
 
-    def mark_device_removed(self, device_id: str, at: float) -> int:
-        """Start *device_id*'s retention clock now; how many changes it has."""
+    def mark_devices_removed(self, device_ids: Optional[List[str]], at: float) -> None:
+        """Start the retention clock for *device_ids*; None means every device."""
+        where = "removed_at IS NULL"
+        args: List[Any] = [at]
+        if device_ids is not None:
+            if not device_ids:
+                return
+            where += f" AND device_id IN ({','.join('?' * len(device_ids))})"
+            args += device_ids
         with self._transaction():
             self._conn.execute(
-                "UPDATE device_changes SET removed_at = ? "
-                "WHERE device_id = ? AND removed_at IS NULL",
-                (at, device_id),
+                f"UPDATE device_changes SET removed_at = ? WHERE {where}", args
             )
+
+    def device_change_count(self, device_id: str) -> int:
+        """How many changes *device_id* has on record."""
+        with self._lock:
             return self._conn.execute(
                 "SELECT COUNT(*) FROM device_changes WHERE device_id = ?",
                 (device_id,),

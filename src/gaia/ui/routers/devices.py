@@ -41,7 +41,7 @@ from ..devices.access import (
     PairingUnavailable,
     iso,
 )
-from ..devices.changes import mark_device_removed, prune_device_changes
+from ..devices.changes import prune_device_changes
 from ..devices.listener import ListenerError
 from ..devices.pairing import PairingRefused
 from ..devices.storage import DeviceCertificateError, UnsafeDeviceFolderError
@@ -218,10 +218,7 @@ async def reset_pairing(request: Request) -> Dict[str, Any]:
     except DeviceCertificateError as e:
         raise _refused("certificate", str(e)) from e
     except ListenerError as e:
-        # The devices were unpaired before the listener failed to come back.
-        prune_device_changes(request, [])
         raise _refused(e.code, e.detail) from e
-    prune_device_changes(request, [])
     return access.status()
 
 
@@ -286,7 +283,6 @@ def unpair_this_device(
     """A device unpairs itself with its own token, pending or allowed."""
     access = _access(request)
     access.revoke(device_id, end_requests=False)
-    mark_device_removed(request, device_id)
     # Its other streams end once this answer is sent.
     return Response(
         status_code=204,
@@ -321,7 +317,7 @@ def unpair_device(request: Request, device_id: str) -> Dict[str, Any]:
         gone = _access(request).revoke(device_id)
     if not gone:
         raise HTTPException(status_code=404, detail="No paired device has that id.")
-    return {"changes_count": mark_device_removed(request, device_id)}
+    return {"changes_count": request.app.state.db.device_change_count(device_id)}
 
 
 @router.get(

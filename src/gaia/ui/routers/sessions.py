@@ -255,8 +255,11 @@ async def emit_device_prompt(
     *kind* is ``key_store`` or ``admin``; *action* names what the device started.
 
     Raises:
-        ValueError: *state* isn't one of ``DEVICE_PROMPT_STATES``.
+        ValueError: *device_id* is empty, or *state* isn't one of
+            ``DEVICE_PROMPT_STATES``.
     """
+    if not isinstance(device_id, str) or not device_id:
+        raise ValueError("device_prompt needs the id of the device that asked")
     if state not in DEVICE_PROMPT_STATES:
         raise ValueError(
             f"device_prompt state {state!r} is not one of {DEVICE_PROMPT_STATES}"
@@ -420,7 +423,8 @@ async def session_events(request: Request):
                     if event.get(_PC_ONLY) and not at_the_pc:
                         continue
                     if _FOR_DEVICE in event:
-                        if not at_the_pc and event[_FOR_DEVICE] != device_id:
+                        target = event[_FOR_DEVICE]
+                        if not at_the_pc and (not target or target != device_id):
                             continue
                         event = {k: v for k, v in event.items() if k != _FOR_DEVICE}
                     yield f"data: {json.dumps(event)}\n\n"
