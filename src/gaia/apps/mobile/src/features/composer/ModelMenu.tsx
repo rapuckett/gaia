@@ -332,7 +332,8 @@ export function ModelMenu({ open, onClose, turnRunning, queued, onQueue, switchE
                         {t('modelMenu.usedNext', { name: isolate(queued, 'ltr') })}
                     </Text>
                 ) : null}
-                {turnRunning ? (
+                {/* With a model queued, the queued line above says it; this would repeat half of it. */}
+                {turnRunning && !queued ? (
                     <Text role="caption" tone="secondary">
                         {active?.model
                             ? t('modelMenu.keepsModel', {
