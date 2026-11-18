@@ -199,7 +199,7 @@ def _cloud_error(
     """
     name = _NAMES[provider]
     if status in (401, 403):
-        return ProviderError(f"{name} rejected the key. Check it and try again.", 401)
+        return ProviderError(f"{name} rejected the key. Check it and try again.", 422)
     detail = body.get("error")
     detail = detail if isinstance(detail, dict) else {}
     message = detail.get("message")
@@ -1890,7 +1890,7 @@ def connect_provider(
     view = _provider_view(provider, entry)
     if not view["models_discovered"]:
         raise HTTPException(
-            status_code=401,
+            status_code=422,
             detail=(
                 f"{_NAMES[provider]} is registered but discovered no models. "
                 "Paste a valid API key."
@@ -1939,7 +1939,7 @@ def _use_known_models(
         raise ProviderError(
             f"{name} did not accept that key (no models were discovered). "
             "Check the key and try again.",
-            401,
+            422,
         )
     outage = (
         f"{name} could not list its models ({check.detail}). It did not reject "
