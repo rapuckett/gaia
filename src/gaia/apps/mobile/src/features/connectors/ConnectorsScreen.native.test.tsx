@@ -4,7 +4,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import type { ReactNode } from 'react';
-import { Platform, StyleSheet } from 'react-native';
+import { BackHandler, Platform, StyleSheet } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { GaiaApiError } from '@/api/errors';
@@ -267,21 +267,46 @@ describeNative('ConnectorsScreen setup from the phone', () => {
         return sent;
     }
 
-    it("sends a server's key to the PC, clears it from the sheet, and checks the server", async () => {
-        const slackSetup = {
-            ...slack,
-            id: 'mcp-slack',
-            configured: false,
-            mcp_env_keys: ['SLACK_MCP_XOXB_TOKEN'],
-            config_fields: [{ key: 'SLACK_MCP_XOXB_TOKEN', label: 'Slack bot token', kind: 'secret', required: true, placeholder: 'xoxb-…', help_md: '', prefix: 'xoxb-' }],
-        } as unknown as ConnectorRow;
-        const { client, queryClient, wrap } = setup([slackSetup]);
-        const sent = recordConfigure(client);
+    const slackSetup = {
+        ...slack,
+        id: 'mcp-slack',
+        configured: false,
+        mcp_env_keys: ['SLACK_MCP_XOXB_TOKEN'],
+        config_fields: [{ key: 'SLACK_MCP_XOXB_TOKEN', label: 'Slack bot token', kind: 'secret', required: true, placeholder: 'xoxb-…', help_md: '', prefix: 'xoxb-' }],
+    } as unknown as ConnectorRow;
+
+    async function openSlackSheet(wrap: ReturnType<typeof setup>['wrap']) {
         await render(<ConnectorsScreen />, { wrapper: wrap });
         await fireEvent.press(await screen.findByTestId('connectors-group-servers'));
         await fireEvent.press(await screen.findByLabelText('Slack'));
         await fireEvent.press(await screen.findByTestId('connector-connect-mcp-slack'));
         await fireEvent.changeText(await screen.findByTestId('connector-setup-SLACK_MCP_XOXB_TOKEN'), 'xoxb-test-token');
+    }
+
+    it('Android back closes the sheet and drops the typed key without sending it', async () => {
+        let backHandlers: (() => boolean)[] = [];
+        jest.spyOn(BackHandler, 'addEventListener').mockImplementation((_event, handler) => {
+            backHandlers.push(handler as () => boolean);
+            return { remove: () => (backHandlers = backHandlers.filter((h) => h !== handler)) };
+        });
+        const { client, queryClient, wrap } = setup([slackSetup]);
+        const sent = recordConfigure(client);
+        await openSlackSheet(wrap);
+        let handled = false;
+        await act(async () => {
+            handled = [...backHandlers].reverse().some((handler) => handler());
+        });
+        expect(handled).toBe(true);
+        await waitFor(() => expect(screen.queryByDisplayValue('xoxb-test-token')).toBeNull());
+        expect(sent).toEqual([]);
+        jest.restoreAllMocks();
+        queryClient.clear();
+    });
+
+    it("sends a server's key to the PC, clears it from the sheet, and checks the server", async () => {
+        const { client, queryClient, wrap } = setup([slackSetup]);
+        const sent = recordConfigure(client);
+        await openSlackSheet(wrap);
         await fireEvent.press(screen.getByTestId('connector-setup-save'));
 
         expect(await screen.findByText('Slack started without errors.')).toBeTruthy();
