@@ -1472,9 +1472,11 @@ Deleting a chat deletes its copies.
 A paired device the PC allowed browses, searches, previews and reads images
 across the home folder, as the PC's folder picker does, with no `session_id`.
 It never sees credentials: keys, certificates, `.env` files, credential folders
-such as `~/.ssh`, keychains, browser profiles and GAIA's own settings folder are
-left out of listings and searches and refused (**403**, code
-`credentials_withheld`), judged after symlinks and `..` are resolved. A path
+such as `~/.ssh`, keychains, browser profiles, shell history, Git's stored
+credentials, chat and editor app data (Signal, Slack, Discord, VS Code, Cursor)
+and GAIA's own settings folder are left out of listings and searches and
+refused (**403**, code `credentials_withheld`), judged after symlinks, `..` and
+hard links are resolved, and without regard to letter case on macOS and Windows. A path
 outside the home folder is refused with code `outside_home`, without naming it.
 
 Over mobile access, and from a device still waiting for the PC's OK, these reads

@@ -17,6 +17,7 @@ PC. The PC's own reads are unchanged.
 from __future__ import annotations
 
 import hashlib
+import os
 from pathlib import Path
 
 import pytest
@@ -507,3 +508,50 @@ def test_device_folder_check_keeps_to_home_and_the_tunnel_does_not_change(
     assert str(home) not in check(device, home / ".ssh")
     assert check(tunnel, outside) is None
     assert check(TestClient(app, client=PC), outside) is None
+
+
+@pytest.fixture
+def folded(private, home, monkeypatch):
+    """A case-insensitive disk, as on macOS and Windows; ``.aws`` is a credential folder."""
+    aws = home / ".aws"
+    aws.mkdir()
+    (aws / "credentials").write_text("aws_secret_access_key = aws-secret\n")
+    (aws / "config").write_text("[default]\nregion = aws-secret\n")
+    monkeypatch.setattr(
+        gaia_security,
+        "SECRET_DIRECTORIES",
+        {*gaia_security.SECRET_DIRECTORIES, str(aws)},
+    )
+    # realpath keeps the caller's casing either way, so this runs on any disk.
+    monkeypatch.setattr(gaia_security, "CASE_INSENSITIVE_PATHS", True)
+    return home
+
+
+@pytest.mark.parametrize(
+    "target",
+    [
+        ".SSH/config",
+        "LIBRARY/Keychains/login.keychain-db",
+        "Library/KEYCHAINS/login.keychain-db",
+        ".GAIA/config.json",
+        ".Aws/credentials",
+        ".Aws/config",
+    ],
+)
+def test_allowed_device_refused_whatever_the_casing(device, folded, target):
+    resp = device.get("/api/files/preview", params={"path": str(folded / target)})
+    assert resp.status_code == 403
+    assert resp.json()["detail"]["code"] == "credentials_withheld"
+    for leak in ("PRIVATE KEY", "keychain-secret", "gaia-secret", "aws-secret"):
+        assert leak not in resp.text
+
+
+def test_allowed_device_refused_a_hard_link_to_a_credential(device, home):
+    link = home / "project" / "notes-copy.md"
+    os.link(home / ".ssh" / "config", link)
+    resp = device.get("/api/files/preview", params={"path": str(link)})
+    assert resp.status_code == 403
+    assert resp.json()["detail"]["code"] == "credentials_withheld"
+    assert "IdentityFile" not in resp.text
+    listing = device.get("/api/files/browse", params={"path": str(home / "project")})
+    assert "notes-copy.md" not in {e["name"] for e in listing.json()["entries"]}

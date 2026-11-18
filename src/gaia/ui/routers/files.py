@@ -217,13 +217,33 @@ def _picker_scope(request: Request, session_id: Optional[str]) -> _ReadScope:
 
 
 def _device_private_folders() -> List[Path]:
-    """Folders a home-wide device never sees that the credential list misses."""
+    """Places a home-wide device never sees that the credential list misses."""
     home = Path.home()
     library = home / "Library"
     support = library / "Application Support"
     local = home / "AppData" / "Local"
     roaming = home / "AppData" / "Roaming"
+    config = home / ".config"
     return [
+        # Shell history: commands typed with tokens and passwords in them.
+        home / ".zsh_history",
+        home / ".bash_history",
+        home / ".local" / "share" / "fish" / "fish_history",
+        home / ".local" / "share" / "powershell" / "PSReadLine",
+        roaming / "Microsoft" / "Windows" / "PowerShell" / "PSReadLine",
+        # Git's stored credentials.
+        home / ".git-credentials",
+        config / "git" / "credentials",
+        # Chat and editor data kept unencrypted: messages, sessions, tokens.
+        *(
+            base / name
+            for base in (support, roaming, config)
+            for name in ("Signal", "Slack", "discord", "Cursor")
+        ),
+        *(
+            base / "Code" / "User" / "globalStorage"
+            for base in (support, roaming, config)
+        ),
         # Keychains and saved passwords.
         library / "Keychains",
         home / ".local" / "share" / "keyrings",
@@ -238,10 +258,10 @@ def _device_private_folders() -> List[Path]:
         support / "Microsoft Edge",
         support / "BraveSoftware",
         support / "Firefox",
-        home / ".config" / "google-chrome",
-        home / ".config" / "chromium",
-        home / ".config" / "microsoft-edge",
-        home / ".config" / "BraveSoftware",
+        config / "google-chrome",
+        config / "chromium",
+        config / "microsoft-edge",
+        config / "BraveSoftware",
         home / ".mozilla",
         local / "Google" / "Chrome" / "User Data",
         local / "Microsoft" / "Edge" / "User Data",
