@@ -7,8 +7,9 @@ HTTP surface over :mod:`gaia.hub.catalog` (remote catalog + local merge) and
 :mod:`gaia.hub.installer` (download/verify/install lifecycle).
 
 Like the rest of the local-first UI backend, the mutating endpoints answer only
-the PC running GAIA (a paired device the PC allowed may install the flagship) and need the ``X-Gaia-UI`` header (a lightweight CSRF guard —
-custom headers force a CORS preflight that drive-by POSTs cannot satisfy).
+the PC running GAIA (a paired device the PC allowed may install the flagship)
+and need the ``X-Gaia-UI`` header (a lightweight CSRF guard — custom headers
+force a CORS preflight that drive-by POSTs cannot satisfy).
 """
 
 from __future__ import annotations
@@ -180,7 +181,7 @@ def _record_failure(agent_id: str, version: Optional[str], exc: Exception) -> No
 
 
 DEVICE_INSTALL_ERROR = (
-    "GAIA couldn't start the install on the PC. Open GAIA on the PC to see why."
+    "GAIA couldn't install the agent on the PC. Open GAIA on the PC to see why."
 )
 
 
@@ -290,13 +291,18 @@ def _prepare_install(body: InstallRequest) -> dict:
 
 
 @router.get("/api/agents/{agent_id}/install-status")
-async def install_status(agent_id: str):
-    """Poll the progress of an in-flight or completed install."""
+async def install_status(request: Request, agent_id: str):
+    """Poll the progress of an in-flight or completed install.
+
+    A failure's ``error`` can name PC paths, so only the PC sees it.
+    """
     state = installer_mod.get_install_status(agent_id)
     if state is None:
         raise HTTPException(
             status_code=404, detail=f"No install status for '{agent_id}'."
         )
+    if state.get("error") and not is_local_pc(request):
+        state = {**state, "error": DEVICE_INSTALL_ERROR}
     return state
 
 

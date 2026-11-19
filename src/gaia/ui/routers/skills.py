@@ -13,6 +13,7 @@ the running agent is asked instead.
 from __future__ import annotations
 
 import logging
+import re
 from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional
 
@@ -222,13 +223,20 @@ DEVICE_SKILL_ERROR = (
 )
 
 
+#: An absolute path left in a message (a temp unpack folder, a drive path); a
+#: URL's path and ``~/`` don't match.
+_ABSOLUTE_PATH = re.compile(r"(?<![\w:/.~\-])/[^\s/]|\b[A-Za-z]:[\\/]")
+
+
 def _off_pc(request: Request, text: str) -> str:
-    """*text* as a caller away from the PC sees it: no home folder path."""
+    """*text* as a caller away from the PC sees it: home folders as ``~``, and
+    the generic message when another absolute path remains."""
     if is_local_pc(request):
         return text
     from gaia.home import gaia_home
 
-    return text.replace(str(gaia_home()), "~/.gaia").replace(str(Path.home()), "~")
+    shown = text.replace(str(gaia_home()), "~/.gaia").replace(str(Path.home()), "~")
+    return DEVICE_SKILL_ERROR if _ABSOLUTE_PATH.search(shown) else shown
 
 
 # Installs code that runs with the agent: the PC, or a device the PC allowed.

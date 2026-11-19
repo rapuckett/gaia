@@ -3703,7 +3703,8 @@ model with no known price reads as unknown, never $0. Cloud models from
     device the PC allowed, with the same signing, audit and code checks;
     each skill a device adds is written to the audit log and listed in
     Settings › Phones and tablets, marked when it runs code. A device sees
-    paths under the home folder as `~`. **403** from mobile access, a device
+    paths under the home folder as `~`, and a generic message for an error
+    that names any other folder on the PC. **403** from mobile access, a device
     the PC hasn't allowed or another computer.
   </Accordion>
 
@@ -3734,7 +3735,8 @@ these to install the GAIA agent when it is missing.
   </Accordion>
 
   <Accordion title="GET /api/agents/{agent_id}/install-status">
-    Progress of an in-flight or completed install.
+    Progress of an in-flight or completed install. A failure's `error` is
+    shown in full on the PC only; everyone else gets a generic message.
   </Accordion>
 
   <Accordion title="DELETE /api/agents/{agent_id}">

@@ -1412,3 +1412,50 @@ def test_a_device_cannot_change_a_setting_pc_settings_hides(setup, fields):
     )
     assert resp.status_code == 403
     assert clients["pc"].get("/api/settings").json() == before
+
+
+def test_install_failure_detail_stays_on_the_pc(setup):
+    """A background failure names PC paths; only the PC reads it."""
+    from pathlib import Path
+
+    from gaia.hub import installer
+    from gaia.ui.routers.hub import DEVICE_INSTALL_ERROR
+
+    app, clients, _ = setup
+    raw = f"Couldn't replace {Path.home() / '.gaia' / 'agents' / 'gaia'}: busy"
+    installer._set_progress(
+        "gaia", status="failed", phase="failed", percent=0, error=raw
+    )
+    try:
+        for caller in ("tunnel", "device"):
+            state = clients[caller].get("/api/agents/gaia/install-status").json()
+            assert state["status"] == "failed", caller
+            assert state["error"] == DEVICE_INSTALL_ERROR, caller
+        assert (
+            clients["pc"].get("/api/agents/gaia/install-status").json()["error"] == raw
+        )
+    finally:
+        installer.clear_progress("gaia")
+
+
+def test_a_device_gets_no_temp_path_from_a_skill_link(setup, monkeypatch):
+    from gaia.skills import link
+    from gaia.ui.routers.skills import DEVICE_SKILL_ERROR
+
+    app, clients, _ = setup
+    temp = "/var/folders/ab/T/gaia-skill-link-x1/repo"
+
+    def add_from_link(url, names, **kwargs):
+        if names == ["broken"]:
+            raise link.SkillLinkError(f"Can't unpack {temp}/skill.zip")
+        return link.LinkAddResult(failed={"notes": f"No SKILL.md in {temp}/notes."})
+
+    monkeypatch.setattr(link, "add_from_link", add_from_link)
+    for names in (["broken"], ["notes"]):
+        body = {"url": "o/r", "names": names, "pin": "commit:abc"}
+        resp = clients["device"].post("/api/skills/link/add", json=body)
+        assert temp not in resp.text and DEVICE_SKILL_ERROR in resp.text, names
+    pc = clients["pc"].post(
+        "/api/skills/link/add", json={"url": "o/r", "names": ["broken"], "pin": "x"}
+    )
+    assert temp in pc.text
