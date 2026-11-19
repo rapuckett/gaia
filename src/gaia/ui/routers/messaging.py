@@ -24,6 +24,7 @@ from pydantic import BaseModel
 from gaia.logger import get_logger
 from gaia.messaging.discord import state as bridge_state
 
+from ..devices.changes import record_device_change
 from ..models import WireModel
 from ..security import (
     audit_approval,
@@ -137,9 +138,11 @@ def _status(request: Optional[Request] = None) -> Dict[str, Any]:
     return status
 
 
-def _audit(request: Request, what: str) -> None:
+def _audit(request: Request, what: str, action: str) -> None:
+    """Audit a device's control of the bridge and list it among its changes."""
     if not is_local_pc(request):
         audit_approval(request, f"Discord bridge {what}")
+        record_device_change(request, "discordControl", action=action)
 
 
 @router.get(
@@ -190,7 +193,10 @@ def discord_start(request: Request, body: DiscordStartRequest) -> Dict[str, Any]
             + cli.stop_failed_hint(),
         )
     cli.start_detached(model=body.model, take_over=body.take_over, emit=lambda _l: None)
-    _audit(request, "taken over from another PC" if body.take_over else "started")
+    if body.take_over:
+        _audit(request, "taken over from another PC", "takeOver")
+    else:
+        _audit(request, "started", "start")
     return _status(request)
 
 
@@ -207,7 +213,7 @@ def discord_stop(request: Request) -> Dict[str, Any]:
             status_code=500,
             detail="The Discord bridge did not stop. " + cli.stop_failed_hint(),
         )
-    _audit(request, "stopped")
+    _audit(request, "stopped", "stop")
     return _status(request)
 
 
@@ -226,7 +232,7 @@ def discord_restart(request: Request) -> Dict[str, Any]:
             + cli.stop_failed_hint(),
         )
     cli.start_detached(emit=lambda _line: None)
-    _audit(request, "restarted")
+    _audit(request, "restarted", "restart")
     return _status(request)
 
 
@@ -250,7 +256,7 @@ def discord_forget_always(request: Request) -> Dict[str, Any]:
     bridge_state.forget_always()
     if was_running:
         cli.start_detached(emit=lambda _line: None)
-    _audit(request, '"Always allow" answers forgotten')
+    _audit(request, '"Always allow" answers forgotten', "forgetAlways")
     return _status(request)
 
 

@@ -39,6 +39,7 @@ from gaia.ui.memory_settings import MEMORY_ENABLED_KEY, memory_enabled
 
 from ..database import ChatDatabase
 from ..dependencies import get_db
+from ..devices.changes import record_device_change
 from ..models import WireModel
 from ..security import (
     audit_approval,
@@ -1438,13 +1439,13 @@ def reinitialize_memory(request: Request) -> Dict:
             cleared,
             system_context,
         )
-        if not is_local_pc(request):
-            audit_approval(request, "memory wiped and rebuilt")
-        return {"cleared": cleared, "system_context": system_context}
-
     except Exception as exc:
         logger.error("[memory router] reinitialize failed: %s", exc)
         raise HTTPException(500, _failed_for(request, "Reinitialize", exc)) from exc
+    if not is_local_pc(request):
+        audit_approval(request, "memory wiped and rebuilt")
+        record_device_change(request, "memoryWiped")
+    return {"cleared": cleared, "system_context": system_context}
 
 
 # ---------------------------------------------------------------------------
@@ -2194,6 +2195,7 @@ def commit_discovery(request: Request, body: DiscoveryCommit) -> Dict:
     logger.info("[memory router] commit-discovery: stored %d items", stored)
     if not is_local_pc(request):
         audit_approval(request, f"{stored} discovery findings saved to memory")
+        record_device_change(request, "memoryCommit", source="discovery", count=stored)
     return {"stored": stored}
 
 
@@ -2240,6 +2242,7 @@ def commit_inference(request: Request, body: InferenceCommit) -> Dict:
     logger.info("[memory router] commit-inference: stored %d insights", stored)
     if not is_local_pc(request):
         audit_approval(request, f"profile replaced with {stored} inferred insights")
+        record_device_change(request, "memoryCommit", source="inference", count=stored)
     return {"stored": stored}
 
 

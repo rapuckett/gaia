@@ -98,6 +98,7 @@ PC_OR_DEVICE = {
     "GET /api/automations",
     "GET /api/devices",
     "GET /api/devices/status",
+    "GET /api/devices/{device_id}/changes",
     "GET /api/messaging/discord",
     "POST /api/automations/{ref}/{action}",
     "POST /api/connectors/flows/{flow_id}/complete",
@@ -691,9 +692,14 @@ def test_a_paired_device_may_read_provider_summaries(setup, monkeypatch):
             "configured",
             "blocked",
             "network",
+            "key_source",
+            "key_state",
+            "key_hint",
+            "known_models",
         }
         for p in listed.values()
     )
+    assert listed["amd"]["key_source"] == "lemonade"
     # Reachability only: the gateway's error text can name its address.
     assert listed["amd"]["network"] == {"reachable": None}
     assert "gw.example" not in resp.text
@@ -1264,9 +1270,10 @@ def test_a_device_reads_and_prunes_the_device_list(setup, monkeypatch):
     assert audited == []
 
     assert clients["device"].delete("/api/devices/pairing").status_code == 200
-    assert clients["device"].delete(f"/api/devices/{other_id}").status_code == 204
+    assert clients["device"].delete(f"/api/devices/{other_id}").status_code == 200
     self_id, _, self_client = _device_client(app, allow=True)
-    assert self_client.delete(f"/api/devices/{self_id}").status_code == 204
+    gone = self_client.delete(f"/api/devices/{self_id}")
+    assert gone.status_code == 200 and gone.json() == {"changes_count": 1}
     assert self_client.get("/api/devices").status_code == 401
     assert audited == [
         (f"device:{device.device_id}", "pairing closed"),
@@ -1396,6 +1403,16 @@ def test_a_device_grants_and_turns_on_connectors(setup, monkeypatch, tmp_path):
         assert resp.status_code in (200, 204), (path, resp.text)
         assert secret not in resp.text
     by = f"device:{device.device_id}"
+    kinds = [
+        (c["kind"], c["params"].get("agent_id"))
+        for c in setup[0].state.db.device_changes(device.device_id, 10)[0]
+    ]
+    assert kinds[:4] == [
+        ("connectorEnable", None),
+        ("connectorActivation", "installed:email"),
+        ("connectorActivation", "installed:email"),
+        ("connectorGrant", "installed:email"),
+    ], kinds
     assert audited == [
         (by, "connector mcp-github granted to installed:email"),
         (by, "connector mcp-github turned on for installed:email (granted)"),

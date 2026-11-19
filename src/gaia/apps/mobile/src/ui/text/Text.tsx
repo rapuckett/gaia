@@ -11,7 +11,7 @@ import { COMPACT_MAX_FONT_SCALE, TITLE_MAX_FONT_SCALE, useLargeText } from '../t
 import { useTheme } from '../theme/ThemeProvider';
 import { toneColor, type Tone } from '../theme/tone';
 import { ForcedDirection } from './ForcedDirection';
-import { contentDir, physicalAlign } from './direction';
+import { contentDir, isolateMisleads, physicalAlign } from './direction';
 import type { TypeRole } from '../tokens/type';
 
 export interface TextProps {
@@ -120,6 +120,13 @@ function withGlosses(children: ReactNode, size: number, color: string, blocks: s
     return changed ? mapped : children;
 }
 
+/** The plain text of string children (a string or an array of strings), else null. */
+function plainText(children: ReactNode): string | null {
+    if (typeof children === 'string') return children;
+    if (Array.isArray(children) && children.every((c) => typeof c === 'string')) return children.join('');
+    return null;
+}
+
 export function Text({
     children,
     role,
@@ -148,9 +155,12 @@ export function Text({
     const { colors, type, space } = useTheme();
     const uiDir = useDirection();
     const rtl = uiDir === 'rtl';
-    const dir = dirProp === 'auto' ? (typeof children === 'string' ? contentDir(children, uiDir) : uiDir) : dirProp;
     const nested = useContext(InsideText);
     const forced = useContext(ForcedDirection);
+    const plain = plainText(children);
+    // An isolated value (a size) must not set the line's direction, but the browser's dir="auto" lets it.
+    const isolatePinned = !nested && !dirProp && !forced && plain !== null && isolateMisleads(plain, uiDir);
+    const dir = dirProp === 'auto' ? (typeof children === 'string' ? contentDir(children, uiDir) : uiDir) : isolatePinned ? contentDir(plain, uiDir) : dirProp;
     const largeText = useLargeText();
     const capped = !compact && largeText && numberOfLines !== undefined && numberOfLines <= 3 ? largeLines : numberOfLines;
     // A cap sized for English would cut the gloss off a translated line, at the wrong end in RTL.
@@ -181,7 +191,7 @@ export function Text({
     // iOS lays a paragraph with a nested span out left to right unless told the UI direction.
     else if (Platform.OS !== 'web' && !nested && !dirProp && !forced && hasGloss(children)) style.writingDirection = uiDir;
     // `auto` is a block that follows its own content, as the web's dir="auto" does; explicit ltr/rtl only set the run.
-    const startsRight = dirProp === 'auto' ? dir === 'rtl' : rtl;
+    const startsRight = dirProp === 'auto' || isolatePinned ? dir === 'rtl' : rtl;
     // Inside a pinned-direction block native does not swap left and right, so the side is taken literally.
     const side = (right: boolean): 'left' | 'right' => (forced ? (right ? 'right' : 'left') : physicalAlign(right));
     const pinnedStartsRight = forced ? (dirProp === 'auto' ? dir === 'rtl' : forced === 'rtl') : startsRight;
@@ -206,10 +216,13 @@ export function Text({
         textAlign: style.textAlign ?? side(pinnedStartsRight),
         marginTop: space.xs,
     };
+    // react-native-web turns `dir` into the DOM attribute (else dir="auto"); RN's types don't know it.
+    const webDir = Platform.OS === 'web' && isolatePinned ? { dir } : null;
     const main = (
         <InsideText.Provider value>
             <RNText
                 style={style}
+                {...webDir}
                 numberOfLines={lines}
                 maxFontSizeMultiplier={maxScale ?? maxScaleFor(role, compact)}
                 ellipsizeMode={ellipsize ?? 'tail'}

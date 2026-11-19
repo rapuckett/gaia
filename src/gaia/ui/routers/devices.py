@@ -17,13 +17,23 @@ from __future__ import annotations
 from contextlib import contextmanager
 from typing import Any, Dict, Iterator
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    HTTPException,
+    Query,
+    Request,
+    Response,
+)
 from starlette.background import BackgroundTask
 
 from gaia.config import GaiaConfig, GaiaConfigError
 from gaia.logger import get_logger
 
 from ..devices import (
+    DEVICE_CHANGES_KEPT,
+    DEVICE_CHANGES_PAGE,
     DEVICE_PAIRED_ACTIONS,
     DEVICE_PAIRED_EVENT,
     HOME_ROUTE,
@@ -41,14 +51,17 @@ from ..devices.access import (
     PairingUnavailable,
     iso,
 )
+from ..devices.changes import prune_device_changes, record_device_change
 from ..devices.listener import ListenerError
 from ..devices.pairing import PairingRefused
 from ..devices.storage import DeviceCertificateError, UnsafeDeviceFolderError
 from ..models import (
     DeviceAccessStatus,
+    DeviceChangeList,
     DevicePairingOffer,
     DevicePairRequest,
     DevicePairResponse,
+    DeviceRemoved,
     DeviceRoutes,
     PairedDevice,
     PairedDeviceList,
@@ -145,7 +158,15 @@ def list_devices(request: Request) -> Dict[str, Any]:
     """Every paired device, pending ones included; never a token or its hash."""
     access = _access(request)
     with _folder_checked(request):
-        return {"devices": [access.describe(d) for d in access.devices()]}
+        devices = access.devices()
+    prune_device_changes(request, [d.id for d in devices])
+    counts = request.app.state.db.device_change_counts()
+    return {
+        "devices": [
+            {**access.describe(d), "changes_count": counts.get(d.id, 0)}
+            for d in devices
+        ]
+    }
 
 
 @router.post("/listener", response_model=DeviceAccessStatus, dependencies=_AT_THE_PC)
@@ -212,6 +233,7 @@ def close_pairing(request: Request) -> Dict[str, Any]:
     _access(request).pairing.close()
     if not is_local_pc(request):
         audit_approval(request, "pairing closed")
+        record_device_change(request, "pairingClosed")
     return _status_for(request)
 
 
@@ -317,11 +339,14 @@ def allow_device(request: Request, device_id: str) -> Dict[str, Any]:
     return access.describe(device)
 
 
-@router.delete("/{device_id}", status_code=204, dependencies=_PC_OR_DEVICE)
-def unpair_device(request: Request, device_id: str) -> Response:
+@router.delete("/{device_id}", response_model=DeviceRemoved, dependencies=_PC_OR_DEVICE)
+def unpair_device(
+    request: Request, device_id: str, background: BackgroundTasks
+) -> Dict[str, Any]:
     """Unpair a device: its next request is refused and its streams end.
 
-    An allowed device may unpair itself or any other device.
+    An allowed device may unpair itself or any other device. Its changes stay
+    on the PC; ``changes_count`` says how many.
     """
     access = _access(request)
     caller = allowed_device(request)
@@ -333,8 +358,37 @@ def unpair_device(request: Request, device_id: str) -> Response:
         raise HTTPException(status_code=404, detail="No paired device has that id.")
     if caller is not None:
         audit_approval(request, f"device {device_id} unpaired")
-    return Response(
-        status_code=204,
-        headers={"Cache-Control": "no-store"},
-        background=BackgroundTask(access.requests.end, device_id) if itself else None,
-    )
+        record_device_change(request, "deviceRemoved", device_id=device_id)
+    if itself:
+        background.add_task(access.requests.end, device_id)
+    return {"changes_count": request.app.state.db.device_change_count(device_id)}
+
+
+@router.get(
+    "/{device_id}/changes",
+    response_model=DeviceChangeList,
+    dependencies=[Depends(require_pc_or_allowed_device)],
+)
+def device_changes(
+    request: Request,
+    device_id: str,
+    limit: int = Query(DEVICE_CHANGES_PAGE, ge=1, le=DEVICE_CHANGES_KEPT),
+) -> Dict[str, Any]:
+    """What a device changed on this PC, newest first: the PC may read any
+    device's, a device only its own."""
+    caller = allowed_device(request)
+    if caller is not None and caller.device_id != device_id:
+        raise HTTPException(
+            status_code=403,
+            detail="A paired device can see only its own changes. See every "
+            "device's on the PC, in Settings > Phones and tablets.",
+        )
+    access = _access(request)
+    with _folder_checked(request):
+        paired = [d.id for d in access.devices()]
+    prune_device_changes(request, paired)
+    changes, total = request.app.state.db.device_changes(device_id, limit)
+    return {
+        "changes": [{**c, "at": iso(c["at"])} for c in changes],
+        "total": total,
+    }

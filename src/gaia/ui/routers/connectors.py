@@ -11,11 +11,11 @@ are reachable from the CLI (``gaia connectors ...``) and SDK
 (``import gaia.connectors; ...``) without going through this layer.
 
 Exception → HTTP mapping:
-- ``AuthRequiredError(NOT_CONNECTED)``             → 401
+- ``AuthRequiredError(NOT_CONNECTED)``             → 409
 - ``AuthRequiredError(AGENT_NOT_GRANTED)``         → 403
 - ``AuthRequiredError(CONNECTION_MISSING_SCOPES)`` → 403 + missing_scopes
-- ``AuthRequiredError(REAUTH_REQUIRED)``           → 401
-- ``ConnectionRevokedError``                       → 401
+- ``AuthRequiredError(REAUTH_REQUIRED)``           → 409
+- ``ConnectionRevokedError``                       → 409
 - ``ConnectionBusyError``                          → 503 + Retry-After
 - ``ScopeMismatchError``                           → 403
 - ``ConfigurationError``                           → 503 ``not_configured``
@@ -103,6 +103,7 @@ from gaia.connectors.store import (
     retry_keyring,
 )
 
+from ..devices.changes import record_device_change
 from ..models import WireModel
 from ..security import (
     allowed_device,
@@ -139,6 +140,20 @@ forwarded_router = APIRouter(prefix="/v1/connections", tags=["connections"])
 _AGENT_ID_RE = re.compile(
     r"(?:builtin|installed|native|custom:[0-9a-f]{1,64}):[A-Za-z0-9][A-Za-z0-9._-]{0,127}"
 )
+
+
+async def _record_change(
+    request: Request, kind: str, connector_id: str, **params: Any
+) -> None:
+    """A device's change to *connector_id*, for the PC's list of what it changed."""
+    await asyncio.to_thread(
+        record_device_change,
+        request,
+        kind,
+        connector=REGISTRY.get(connector_id).display_name,
+        connector_id=connector_id,
+        **params,
+    )
 
 
 def _checked_agent_id(agent_id: str) -> str:
@@ -491,7 +506,7 @@ def _raise_http_for(exc: ConnectorsError) -> HTTPException:
             AuthRequiredError.Reason.REAUTH_REQUIRED,
         ):
             return HTTPException(
-                status_code=401,
+                status_code=409,
                 detail={
                     "error": exc.reason.value,
                     "connector_id": exc.provider,
@@ -509,7 +524,7 @@ def _raise_http_for(exc: ConnectorsError) -> HTTPException:
         )
     if isinstance(exc, ConnectionRevokedError):
         return HTTPException(
-            status_code=401,
+            status_code=409,
             detail={"error": "connection_revoked", "connector_id": exc.provider},
         )
     if isinstance(exc, ScopeMismatchError):
@@ -1177,6 +1192,13 @@ async def configure_connector(
             f"connector {connector_id} set up"
             + (f" and granted to {', '.join(granted)}" if granted else ""),
         )
+        await asyncio.to_thread(
+            record_device_change,
+            request,
+            "connectorSetup",
+            connector=REGISTRY.get(connector_id).display_name,
+            connector_id=connector_id,
+        )
     await _emitter.emit(
         "connector.configured",
         {"connector_id": connector_id, "account_id": result.get("account_id")},
@@ -1306,6 +1328,7 @@ async def enable_connector(request: Request, connector_id: str) -> Dict[str, Any
     summary = await _set_connector_enabled(connector_id, True, request)
     if not is_local_pc(request):
         audit_approval(request, f"connector {connector_id} enabled")
+        await _record_change(request, "connectorEnable", connector_id)
     return summary
 
 
@@ -1614,6 +1637,9 @@ async def put_grant(
         raise _http_error_for(request, e) from e
     if not is_local_pc(request):
         audit_approval(request, f"connector {connector_id} granted to {agent_id}")
+        await _record_change(
+            request, "connectorGrant", connector_id, agent_id=agent_id, granted=True
+        )
     await _emitter.emit(
         "connector.grant.changed",
         {"connector_id": connector_id, "agent_id": agent_id, "scopes": body.scopes},
@@ -1626,9 +1652,14 @@ async def put_grant(
     status_code=204,
     dependencies=[Depends(_require_ui_header)],
 )
-async def delete_grant(connector_id: str, agent_id: str) -> Response:
+async def delete_grant(request: Request, connector_id: str, agent_id: str) -> Response:
     _checked_agent_id(agent_id)
     revoke_agent_grant(connector_id, agent_id)
+    if not is_local_pc(request):
+        audit_approval(request, f"connector {connector_id} grant to {agent_id} revoked")
+        await _record_change(
+            request, "connectorGrant", connector_id, agent_id=agent_id, granted=False
+        )
     await _emitter.emit(
         "connector.grant.changed",
         {"connector_id": connector_id, "agent_id": agent_id, "scopes": []},
@@ -1679,6 +1710,14 @@ async def put_activation(
             f"connector {connector_id} turned on for {agent_id}"
             + (" (granted)" if auto_granted else ""),
         )
+        await _record_change(
+            request,
+            "connectorActivation",
+            connector_id,
+            agent_id=agent_id,
+            active=True,
+            granted=auto_granted,
+        )
 
     if auto_granted:
         # Auto-grant fired — also surface the grant change so subscribed
@@ -1724,6 +1763,13 @@ async def delete_activation(
     deactivate_connector_for_agent(connector_id, agent_id)
     if not is_local_pc(request):
         audit_approval(request, f"connector {connector_id} turned off for {agent_id}")
+        await _record_change(
+            request,
+            "connectorActivation",
+            connector_id,
+            agent_id=agent_id,
+            active=False,
+        )
     return Response(status_code=204)
 
 

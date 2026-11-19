@@ -28,6 +28,7 @@ from gaia.llm.lemonade_choice import (
 )
 from gaia.logger import get_logger
 
+from ..devices.changes import record_device_change
 from ..models import WireModel
 from ..security import (
     audit_approval,
@@ -227,6 +228,7 @@ def set_target(request: Request, body: TargetRequest) -> Dict[str, Any]:
         ) from e
     if not is_local_pc(request):
         audit_approval(request, "Lemonade Server switched to GAIA's own")
+        record_device_change(request, "serverTarget", mode=MODE_GAIA)
     return {**_target(), "daemon": applied}
 
 

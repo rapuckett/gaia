@@ -147,6 +147,12 @@ SENSITIVE_FILE_NAMES: Set[str] = {
     "keystore.jks",
     ".npmrc",
     ".pypirc",
+    ".git-credentials",
+    ".vault-token",
+    # Cargo, RubyGems and Terraform registry tokens.
+    "credentials",
+    "credentials.toml",
+    "credentials.tfrc.json",
 }
 
 # Sensitive file extensions
@@ -159,6 +165,7 @@ SENSITIVE_EXTENSIONS: Set[str] = {
     ".pfx",
     ".jks",
     ".keystore",
+    ".ovpn",
 }
 
 # Files whose contents run automatically — on the next login, the next shell, or
@@ -237,11 +244,27 @@ def _secret_directories() -> Set[str]:
         # The GitHub CLI's OAuth tokens (hosts.yml).
         home / ".config" / "gh",
         home / "AppData" / "Roaming" / "GitHub CLI",
+        # Git's credential store, 1Password's CLI, hub, Tailscale and WireGuard.
+        home / ".config" / "git" / "credentials",
+        home / ".config" / "op",
+        home / ".config" / "hub",
+        home / ".config" / "tailscale",
+        home / ".config" / "wireguard",
         # The paired-device listener's private key and the device table.
         devices_dir(),
         devices_dir(default_gaia_home()),
     ]
     return {os.path.normpath(str(c)) for c in candidates}
+
+
+#: Whether path comparisons ignore case: the default volumes on macOS and
+#: Windows do, and there ``realpath`` keeps whatever casing the caller typed.
+CASE_INSENSITIVE_PATHS: bool = platform.system() in ("Darwin", "Windows")
+
+
+def fold_path_case(path_str: str) -> str:
+    """*path_str* casefolded where the filesystem ignores case, else as is."""
+    return path_str.casefold() if CASE_INSENSITIVE_PATHS else path_str
 
 
 def _path_is_within(candidate: Path, parent: Path) -> bool:
@@ -254,11 +277,12 @@ def _path_is_within(candidate: Path, parent: Path) -> bool:
     Returns:
         True when candidate == parent or candidate is inside it.
     """
-    is_windows = platform.system() == "Windows"
-    norm_candidate = os.path.normpath(_normalize_macos_symlinks(str(candidate)))
-    norm_parent = os.path.normpath(_normalize_macos_symlinks(str(parent)))
-    if is_windows:
-        norm_candidate, norm_parent = norm_candidate.lower(), norm_parent.lower()
+    norm_candidate = fold_path_case(
+        os.path.normpath(_normalize_macos_symlinks(str(candidate)))
+    )
+    norm_parent = fold_path_case(
+        os.path.normpath(_normalize_macos_symlinks(str(parent)))
+    )
     # A drive root or "/" already ends in a separator.
     prefix = norm_parent if norm_parent.endswith(os.sep) else norm_parent + os.sep
     return norm_candidate == norm_parent or norm_candidate.startswith(prefix)
@@ -331,6 +355,9 @@ def _is_gaia_user_content(norm_path: str, state_dir: str) -> bool:
     Returns:
         True if the first path segment below *state_dir* is user content.
     """
+    norm_path, state_dir = fold_path_case(norm_path), fold_path_case(state_dir)
+    if not norm_path.startswith(state_dir):
+        return False
     relative = norm_path[len(state_dir) :].lstrip("\\/")
     if not relative:
         return False
@@ -1858,17 +1885,13 @@ class PathValidator:
             file_name = real_path.name.lower()
             file_ext = real_path.suffix.lower()
 
-            # Check blocked directories (case-insensitive on Windows)
-            is_windows = platform.system() == "Windows"
+            # Check blocked directories (case-insensitive where the disk is)
             for blocked_dir in BLOCKED_DIRECTORIES:
                 normalized_blocked = os.path.normpath(
                     _normalize_macos_symlinks(blocked_dir)
                 )
-                # Case-insensitive comparison on Windows, case-sensitive elsewhere
-                cmp_norm = norm_path.lower() if is_windows else norm_path
-                cmp_blocked = (
-                    normalized_blocked.lower() if is_windows else normalized_blocked
-                )
+                cmp_norm = fold_path_case(norm_path)
+                cmp_blocked = fold_path_case(normalized_blocked)
                 if cmp_norm.startswith(cmp_blocked + os.sep) or cmp_norm == cmp_blocked:
                     if normalized_blocked in GAIA_STATE_DIRECTORIES and (
                         _is_gaia_user_content(norm_path, normalized_blocked)

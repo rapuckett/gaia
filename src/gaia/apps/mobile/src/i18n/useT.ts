@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import { getLocales } from 'expo-localization';
+import { createContext, useContext } from 'react';
 
 import { DEFAULT_LOCALE, getLocale, isLocaleCode, isolate, setVariantPrefix, type Say } from '@webui/i18n/registry';
 import { dateLocale, translator, type Translate } from '@webui/i18n/translator';
@@ -84,6 +85,11 @@ export function useT(): Translate {
     return translator(useLocaleCode());
 }
 
+/** For a subtree written in another language than the UI (the language-switch cover). */
+export const DirectionOverride = createContext<'ltr' | 'rtl' | null>(null);
+
 export function useDirection(): 'ltr' | 'rtl' {
-    return getLocale(useLocaleCode()).meta.dir;
+    const override = useContext(DirectionOverride);
+    const own = getLocale(useLocaleCode()).meta.dir;
+    return override ?? own;
 }
