@@ -20,7 +20,9 @@ a key). The calls mirror ``tui/internal/lemonade/cloud.go`` and
 from __future__ import annotations
 
 import asyncio
+import ipaddress
 import os
+import socket
 import threading
 import time
 from typing import Any, Callable, Dict, List, Literal, NoReturn, Optional, Tuple, Union
@@ -1993,6 +1995,179 @@ class ConnectRequest(BaseModel):
 #: Fields that change where, or with which header, Lemonade sends the saved key.
 _KEY_ROUTING_FIELDS = ("base_url", "auth_header_name", "auth_header_prefix")
 
+#: Every failed move of the gateway from a device, so none says whether a host
+#: resolves, a port is open or something answered there.
+DEVICE_GATEWAY_DETAIL = (
+    "GAIA couldn't use that gateway, so it kept the previous one, without its "
+    "saved key. Use a public https:// address that the PC running GAIA can reach "
+    "and a key that gateway accepts, or set the gateway up on the PC."
+)
+_DEVICE_GATEWAY_PUBLIC = (
+    "A gateway set from a paired device must be a public https:// address."
+)
+
+#: Held while a device moves the gateway, so no replay in this process lands in between.
+_gateway_move_lock = threading.Lock()
+
+
+def _is_public_address(address: str) -> bool:
+    ip = ipaddress.ip_address(address.split("%", 1)[0])
+    if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped:
+        ip = ip.ipv4_mapped
+    return ip.is_global and not ip.is_multicast
+
+
+def _device_gateway_host(base_url: str) -> Tuple[str, int]:
+    """The host and port of a device's gateway, checked from its text alone."""
+    url = urlparse(base_url.strip())
+    if url.scheme != "https":
+        raise HTTPException(status_code=422, detail=_DEVICE_GATEWAY_PUBLIC)
+    try:
+        host = (url.hostname or "").rstrip(".").lower()
+        port = url.port or 443
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=_DEVICE_GATEWAY_PUBLIC) from e
+    if not host or host == "localhost" or host.endswith((".local", ".localhost")):
+        raise HTTPException(status_code=422, detail=_DEVICE_GATEWAY_PUBLIC)
+    try:
+        literal = ipaddress.ip_address(host)
+    except ValueError:
+        return host, port
+    if not _is_public_address(literal.compressed):
+        raise HTTPException(status_code=422, detail=_DEVICE_GATEWAY_PUBLIC)
+    return host, port
+
+
+def _require_public_addresses(host: str, port: int) -> None:
+    """Raise unless every address *host* resolves to is public."""
+    infos = socket.getaddrinfo(host, port, proto=socket.IPPROTO_TCP)
+    addresses = {info[4][0] for info in infos}
+    if not addresses or not all(_is_public_address(a) for a in addresses):
+        raise ValueError(f"{host} resolves to an address that is not public")
+
+
+def _put_back_gateway(previous: Optional[Dict[str, Any]], installed: bool) -> None:
+    """Drop the device's key and, once its gateway was *installed*, register the
+    one it replaced (none: remove it)."""
+    try:
+        status, result = _lemonade("DELETE", f"cloud/auth/{AMD}")
+        if status >= 400 and status != 404:
+            raise _cloud_error(AMD, status, result, echo_body=False)
+        if installed and previous is None:
+            _uninstall(AMD)
+        elif installed:
+            _install(AMD, _registration(AMD, ConnectRequest(), previous))
+    except ProviderError as e:
+        logger.error(
+            "Could not put back the %s gateway after a paired device's change "
+            "failed: %s. It holds no key; reconnect it on the PC.",
+            _NAMES[AMD],
+            e,
+        )
+        raise HTTPException(
+            status_code=502,
+            detail=f"GAIA couldn't use that gateway, and couldn't put the previous "
+            f"{_NAMES[AMD]} gateway back. It holds no key. Reconnect it on the PC "
+            "running GAIA.",
+        ) from e
+
+
+def _connect_device_gateway(
+    body: "ConnectRequest", key: str, request: Request
+) -> Dict[str, Any]:
+    """A device moves the AMD gateway, always with a new key.
+
+    The saved key is removed before anything dials the new address, so no
+    replay or restore can send it there; after that every failure reads
+    :data:`DEVICE_GATEWAY_DETAIL`.
+    """
+    from gaia.connectors.credential_wait import discard
+    from gaia.connectors.errors import ConnectorsError
+    from gaia.connectors.store import retry_keyring
+    from gaia.llm.cloud_keys import CloudKeyError, forget_key, remember_key
+    from gaia.llm.gateway import GatewayUnreachable
+
+    from ..devices.prompts import limit_device_rate
+
+    target = _device_gateway_host(body.base_url) if body.base_url is not None else None
+    # Each try dials a host the device chose; the limit keeps it from sweeping a network.
+    limit_device_rate(request, "gatewayMove")
+    if _uses_users_server():
+        raise HTTPException(
+            status_code=409,
+            detail=f"GAIA uses your own Lemonade Server, so it doesn't change its "
+            f"{_NAMES[AMD]} gateway. Change it on that server.",
+        )
+    retry_keyring()
+    discard(_key_slot(AMD))
+    audit_approval(request, f"{_NAMES[AMD]} gateway change submitted")
+    try:
+        _require_loopback(_base_url())
+        current = _cloud_entry(AMD)
+        if current and current.get("env_var_set"):
+            raise ProviderError(
+                f"The model server on the PC has its own {_NAMES[AMD]} key in its "
+                "environment, which would go to the new address. Change the "
+                "gateway on the PC running GAIA.",
+                409,
+            )
+        previous = dict(current) if current else None
+        registration = _registration(AMD, body, previous)
+        try:
+            forget_key(AMD)
+        except ConnectorsError as e:
+            raise ProviderError(str(e), 503) from e
+        _note_stored_key(AMD, None)
+    except ProviderError as e:
+        _raise(e, request, key)
+    installed = False
+    with _gateway_move_lock:
+        try:
+            status, result = _lemonade("DELETE", f"cloud/auth/{AMD}")
+            if status >= 400 and status != 404:
+                raise _cloud_error(AMD, status, result, echo_body=False)
+            if target is not None:
+                _require_public_addresses(*target)
+            if _gateway_check_applies():
+                check_gateway_reachable(registration["base_url"])
+            _install(AMD, registration)
+            installed = True
+            status, result = _lemonade(
+                "POST", "cloud/auth", {"provider": AMD, "api_key": key}
+            )
+            if status >= 400:
+                raise _cloud_error(AMD, status, result, echo_body=False)
+            if not result.get("models_discovered"):
+                raise ProviderError("the gateway discovered no models", 422)
+        except (ProviderError, GatewayUnreachable, OSError, ValueError) as e:
+            logger.warning(
+                "A paired device's %s gateway was refused: %s", _NAMES[AMD], e
+            )
+            _put_back_gateway(previous, installed)
+            raise HTTPException(status_code=422, detail=DEVICE_GATEWAY_DETAIL) from e
+    remembered, remember_error = False, None
+    try:
+        remember_key(AMD, key)
+        _note_stored_key(AMD, key)
+        remembered = True
+    except CloudKeyError as e:
+        remember_error = _caller_detail(e, str(e), request, key)
+    finally:
+        del key
+    audit_approval(request, f"{_NAMES[AMD]} gateway address or key header changed")
+    record_device_change(
+        request, "gatewayChanged", provider=_NAMES[AMD], provider_id=AMD
+    )
+    try:
+        entry = _cloud_entry(AMD)
+    except ProviderError as e:
+        _raise(e, request)
+    return {
+        **_provider_view(AMD, entry),
+        "remembered": remembered,
+        "remember_error": remember_error,
+    }
+
 
 @router.post(
     "/api/providers/{provider}/connect",
@@ -2028,12 +2203,15 @@ def connect_provider(
     if not on_pc and any(
         getattr(body, field) is not None for field in _KEY_ROUTING_FIELDS
     ):
-        raise HTTPException(
-            status_code=403,
-            detail="Change the gateway address or key header on the PC running "
-            "GAIA, not over mobile access or from a paired device. Reconnect "
-            "without them to keep the saved ones.",
-        )
+        # The saved key must never follow an address a device chose.
+        if provider != AMD or not key or allowed_device(request) is None:
+            raise HTTPException(
+                status_code=403,
+                detail="Change the gateway address or key header on the PC running "
+                "GAIA, or from a paired device the PC allowed together with a new "
+                "key. Reconnect without them to keep the saved ones.",
+            )
+        return _connect_device_gateway(body, key, request)
     from gaia.connectors.store import retry_keyring
 
     # Connecting needs the key store, so it may ask the OS again.

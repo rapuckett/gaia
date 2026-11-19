@@ -103,8 +103,11 @@ def conflict_message() -> str:
 # ----------------------------------------------------------------------
 
 
-def connect(token: str) -> Dict[str, Any]:
+def connect(token: str, *, started_by: str = "") -> Dict[str, Any]:
     """Validate and store a bot token. Returns what the apps show next.
+
+    *started_by* is the paired device connecting, or empty for the PC; it is
+    recorded when the token starts a new pairing.
 
     Raises:
         ValueError: the token is empty or belongs to the connector's bot.
@@ -130,6 +133,8 @@ def connect(token: str) -> Dict[str, Any]:
     if config.bot_id != identity["bot_id"]:
         # A different bot means a different DM channel; pair again.
         config.owner_id = config.owner_name = config.dm_channel_id = ""
+    if not config.paired:
+        config.pairing_device_id = started_by
     config.bot_id = identity["bot_id"]
     config.bot_name = identity["bot_name"]
     config.application_id = identity["application_id"]
@@ -531,13 +536,47 @@ def ensure_started(*, emit: Callable[[str], None] = lambda _: None) -> Optional[
     return start_detached(emit=emit)
 
 
-def reset_pairing() -> None:
-    """Forget the paired user; the next start shows a new code."""
+def reset_pairing(*, started_by: str = "") -> None:
+    """Forget the paired user; the next start shows a new code.
+
+    *started_by* is the paired device asking, or empty for the PC.
+    """
     config = state.load_config()
     config.owner_id = config.owner_name = config.dm_channel_id = ""
+    config.pairing_device_id = started_by
     state.save_config(config)
     # Consent was given by the old pairing's account.
     state.forget_always()
+
+
+class PairingKept(RuntimeError):
+    """A removed device's Discord pairing stayed: the bridge would not stop."""
+
+
+def reset_pairing_started_by(device_ids: Optional[List[str]]) -> bool:
+    """Reset the pairing when one of *device_ids* (None: any device) started it.
+
+    The running bridge holds the owner in memory, so it is stopped first and
+    started again after. True when a pairing was reset.
+
+    Raises:
+        PairingKept: the bridge did not stop, so the pairing was kept.
+    """
+    config = state.load_config()
+    by = config.pairing_device_id
+    if not by or (device_ids is not None and by not in device_ids):
+        return False
+    was_running = state.is_running()
+    if not stop():
+        raise PairingKept(
+            "The Discord pairing that device set up was kept, because the "
+            "Discord bridge did not stop. " + stop_failed_hint()
+        )
+    reset_pairing()
+    log.warning("Discord pairing reset: device %s that set it up was removed", by)
+    if was_running:
+        start_detached(emit=lambda _line: None)
+    return True
 
 
 def stop_failed_hint() -> str:

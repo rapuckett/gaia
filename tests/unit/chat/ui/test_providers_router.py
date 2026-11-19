@@ -2154,14 +2154,41 @@ def test_a_new_key_replaces_the_hint_a_device_sees_at_once(
     assert (seen["key_source"], seen["key_hint"]) == ("stored", KEY[-4:])
 
 
-def test_a_device_still_cannot_move_the_gateway(device_client, lemonade, keys):
+def test_a_device_gateway_never_gets_the_saved_key(
+    device_client, lemonade, keys, monkeypatch
+):
+    import json
+    import socket
+
     lemonade.cloud["amd"] = dict(_CUSTOM_GATEWAY)
+    keys["stored"]["amd"] = "pc-saved-gateway-key"
+    monkeypatch.setattr(providers, "check_gateway_reachable", lambda url: None)
+    monkeypatch.setattr(
+        providers.socket,
+        "getaddrinfo",
+        lambda host, port, proto=0: [
+            (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.215.14", port))
+        ],
+    )
+    without_key = device_client.post(
+        "/api/providers/amd/connect", json={"base_url": "https://gw.example.com/v1"}
+    )
+    assert without_key.status_code == 403 and lemonade.calls == []
+
     resp = device_client.post(
         "/api/providers/amd/connect",
         json={"api_key": KEY, "base_url": "https://gw.example.com/v1"},
     )
-    assert resp.status_code == 403
-    assert lemonade.calls == [] and keys["remembered"] == []
+    assert resp.status_code == 200, resp.text
+    assert "pc-saved-gateway-key" not in json.dumps(lemonade.calls, default=str)
+    assert lemonade.call("POST", "install")["json"]["base_url"] == (
+        "https://gw.example.com/v1"
+    )
+    assert lemonade.call("POST", "cloud/auth")["json"] == {
+        "provider": "amd",
+        "api_key": KEY,
+    }
+    assert keys["stored"]["amd"] == KEY and KEY not in resp.text
 
 
 def test_a_paired_device_may_enter_and_remove_a_key(
