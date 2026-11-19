@@ -42,6 +42,7 @@ from ..dependencies import get_db
 from ..devices.changes import record_device_change
 from ..models import WireModel
 from ..security import (
+    allowed_device,
     audit_approval,
     is_local_pc,
     require_local_pc,
@@ -1613,9 +1614,13 @@ def _scan_or_reason(source_key: str, scanner) -> Tuple[List[Dict], Optional[str]
     Returns:
         ``(items, message)``. `message` is a user-facing line to stream when the
         source cannot run or failed, and is None when the scan succeeded.
+
+    Raises:
+        _ConsentWithdrawn: System discovery is off now.
     """
     from gaia.agents.base.discovery import covered_by_twin, unsupported_reason
 
+    _require_discovery_consent()
     if covered_by_twin(source_key):
         return [], None
     reason = unsupported_reason(source_key)
@@ -1662,22 +1667,39 @@ def _without_discovery_consent():
     if _system_context_is_enabled():
         return None
     logger.info("[memory router] profile scan refused: system discovery is off")
-    return iter(
-        [
-            _sse(
-                {
-                    "type": "error",
-                    "source": "consent",
-                    "message": NO_DISCOVERY_CONSENT,
-                }
-            ),
-            _sse({"type": "done", "total": 0}),
-        ]
-    )
+    return iter(_consent_refusal())
 
 
-@router.get("/api/memory/stream-discovery", dependencies=[Depends(require_local_pc)])
-def stream_discovery():
+def _consent_refusal(total: int = 0) -> List[str]:
+    """The consent ``error`` event and the closing ``done``."""
+    return [
+        _sse({"type": "error", "source": "consent", "message": NO_DISCOVERY_CONSENT}),
+        _sse({"type": "done", "total": total}),
+    ]
+
+
+class _ConsentWithdrawn(Exception):
+    """System discovery was turned off while a profile scan ran."""
+
+
+def _require_discovery_consent() -> None:
+    """Stop a running scan once the user turns System discovery off."""
+    from gaia.agents.base.memory import _system_context_is_enabled
+
+    if not _system_context_is_enabled():
+        logger.info("[memory router] profile scan stopped: system discovery is off")
+        raise _ConsentWithdrawn()
+
+
+#: Finding keys holding absolute PC paths, which the PC's scan view never shows.
+_PC_PATH_KEYS = ("path", "paths")
+
+
+@router.get(
+    "/api/memory/stream-discovery",
+    dependencies=[Depends(require_pc_or_allowed_device)],
+)
+def stream_discovery(request: Request):
     """Stream system discovery findings as SSE.
 
     Events:
@@ -1689,6 +1711,7 @@ def stream_discovery():
     from fastapi.responses import StreamingResponse
 
     refused = _without_discovery_consent()
+    to_device = allowed_device(request) is not None
 
     def _generate():
         if refused is not None:
@@ -1700,6 +1723,7 @@ def stream_discovery():
                 covered_by_twin,
                 unsupported_reason,
             )
+            from gaia.agents.base.memory import _system_context_is_enabled
 
             discovery = SystemDiscovery()
 
@@ -1725,6 +1749,12 @@ def stream_discovery():
             for source_key in _DISCOVERY_SOURCES:
                 if covered_by_twin(source_key):
                     continue
+                if not _system_context_is_enabled():
+                    logger.info(
+                        "[memory router] profile scan stopped: system discovery is off"
+                    )
+                    yield from _consent_refusal(total)
+                    return
                 label = _DISCOVERY_SOURCE_LABELS.get(source_key, source_key)
                 yield _sse({"type": "log", "message": f"Scanning {label}..."})
                 reason = unsupported_reason(source_key)
@@ -1744,6 +1774,9 @@ def stream_discovery():
                     items = scanner()
                     for item in items:
                         item["_source_name"] = source_key
+                        if to_device:
+                            for key in _PC_PATH_KEYS:
+                                item.pop(key, None)
                         yield _sse(
                             {"type": "finding", "source": source_key, "item": item}
                         )
@@ -1790,7 +1823,10 @@ def stream_discovery():
     )
 
 
-@router.get("/api/memory/stream-inference", dependencies=[Depends(require_local_pc)])
+@router.get(
+    "/api/memory/stream-inference",
+    dependencies=[Depends(require_pc_or_allowed_device)],
+)
 def stream_inference(include_browser: bool = Query(False)):
     """Stream LLM-assisted profile inference as SSE.
 
@@ -1941,6 +1977,7 @@ def stream_inference(include_browser: bool = Query(False)):
                     lines = [f"  {r['content']}" for r in non_sensitive]
                     sections.append("PROJECT MANIFESTS (sample):\n" + "\n".join(lines))
 
+            _require_discovery_consent()
             if not sections:
                 yield _sse(
                     {
@@ -2107,6 +2144,8 @@ def stream_inference(include_browser: bool = Query(False)):
 
             yield _sse({"type": "done", "total": sent})
 
+        except _ConsentWithdrawn:
+            yield from _consent_refusal()
         except Exception as exc:
             cid = _log_server_error("stream-inference failed", exc)
             yield _sse(
@@ -2325,10 +2364,11 @@ def update_memory_settings(
     - ``system_discovery_consent`` (bool): allow system scanning. Default false.
       When toggled ON, also persists the consent to ``~/.gaia/memory_settings.json``
       and triggers an immediate system context refresh. Turning it on is
-      PC-only, like the scan; turning it off works from anywhere.
+      for the PC or an allowed paired device, like the scan, and is audited;
+      turning it off works from anywhere.
     """
     if body.system_discovery_consent:
-        require_local_pc(request)
+        require_pc_or_allowed_device(request)
     if body.system_discovery_consent is not None:
         # The file is the source of truth; write it before any DB key so a
         # failed save leaves the whole request unapplied.
@@ -2353,6 +2393,12 @@ def update_memory_settings(
     if body.system_discovery_consent is not None:
         consented = body.system_discovery_consent
         db.set_setting(_SYSTEM_DISCOVERY_KEY, "true" if consented else "false")
+        audit_approval(
+            request, f"system discovery turned {'on' if consented else 'off'}"
+        )
+        record_device_change(
+            request, "profileScanOn" if consented else "profileScanOff"
+        )
         if consented:
             try:
                 refresh_result = _do_system_context_refresh()

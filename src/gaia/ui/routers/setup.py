@@ -44,7 +44,6 @@ from ..security import (
     audit_approval,
     hide_pc_folders,
     is_local_pc,
-    require_local_pc,
     require_pc_or_allowed_device,
     require_pc_or_device,
     require_ui_header,
