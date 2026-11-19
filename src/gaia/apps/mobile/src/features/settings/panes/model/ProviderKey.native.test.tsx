@@ -110,6 +110,35 @@ describeNative('Provider key', () => {
         queryClient.clear();
     });
 
+    it('a key the provider rejects (422) says so by name, not pairing, with the PC\'s reason masked under it', async () => {
+        const { client, queryClient, wrap } = setup(none);
+        jest.spyOn(client, 'connectProvider').mockRejectedValue(new GaiaApiError(422, `Fireworks AI rejected the key ${TYPED_KEY}. Check it and try again.`));
+        const r = await render(<ProviderKey provider={none} connected={false} />, { wrapper: wrap });
+
+        await fireEvent.changeText(screen.getByTestId('provider-key-field'), TYPED_KEY);
+        await fireEvent.press(screen.getByTestId('provider-key-connect'));
+
+        expect(await screen.findByText(/didn't accept that key/)).toBeTruthy();
+        expect(screen.queryByText(/pair/i)).toBeNull();
+        expect(screen.getByText(/rejected the key ••••\./)).toBeTruthy();
+        expect(heldAnywhere(r.container, queryClient)).not.toContain(TYPED_KEY);
+        queryClient.clear();
+    });
+
+    it('a gateway on plain http (422 with its code) sends the user to https on the PC', async () => {
+        const { client, queryClient, wrap } = setup(none);
+        const body = { message: 'The AMD Gateway address must start with https://.', code: 'gateway_insecure_http' };
+        jest.spyOn(client, 'connectProvider').mockRejectedValue(new GaiaApiError(422, body.message, undefined, undefined, body));
+        await render(<ProviderKey provider={none} connected={false} />, { wrapper: wrap });
+
+        await fireEvent.changeText(screen.getByTestId('provider-key-field'), TYPED_KEY);
+        await fireEvent.press(screen.getByTestId('provider-key-connect'));
+
+        expect(await screen.findByText(/must start with .*https:\/\/.*Change it on the PC/)).toBeTruthy();
+        expect(screen.queryByText(/didn't accept that key/)).toBeNull();
+        queryClient.clear();
+    });
+
     it('Replace opens the same field as "Paste your new key" with Save key, and Cancel closes it', async () => {
         const connected: ProviderRow = { ...none, configured: true };
         const { client, queryClient, wrap } = setup(connected);
@@ -196,13 +225,44 @@ describeNative('Provider key', () => {
     });
 
     it('a key from the PC\'s environment can\'t be removed or replaced from here', async () => {
-        const env: ProviderRow = { ...stored, key_source: 'environment', key_hint: '9c1e' };
+        const env: ProviderRow = { ...stored, key_source: 'environment', key_hint: '9c1e', env_var: 'FIREWORKS_API_KEY', key_from_gaia_env: false };
         const { queryClient, wrap } = setup(env);
         await render(<ProviderKey provider={env} connected />, { wrapper: wrap });
 
-        expect(screen.getByTestId('provider-key-env')).toHaveTextContent('From your environment on your PC');
+        expect(screen.getByTestId('provider-key-env')).toHaveTextContent('From your environment on your PC: \u2066FIREWORKS_API_KEY\u2069');
         expect(screen.queryByTestId('provider-key-remove')).toBeNull();
         expect(screen.queryByTestId('provider-key-replace')).toBeNull();
+        queryClient.clear();
+    });
+
+    it('an environment key GAIA set can be replaced but not removed', async () => {
+        const env: ProviderRow = { ...stored, key_source: 'environment', env_var: 'FIREWORKS_API_KEY', key_from_gaia_env: true };
+        const { queryClient, wrap } = setup(env);
+        await render(<ProviderKey provider={env} connected />, { wrapper: wrap });
+
+        expect(screen.getByTestId('provider-key-replace')).toBeTruthy();
+        expect(screen.queryByTestId('provider-key-remove')).toBeNull();
+        queryClient.clear();
+    });
+
+    it('the PC\'s provider error goes on its own detail line, and nothing shows without one', async () => {
+        const bad: ProviderRow = { ...stored, configured: false, error: 'HTTP 401: invalid api key' };
+        const { queryClient, wrap } = setup(bad);
+        await render(<ProviderKey provider={bad} connected={false} />, { wrapper: wrap });
+
+        const note = screen.getByTestId('provider-key-error');
+        expect(note).toHaveTextContent(/Your PC got an error from .*Fireworks AI.*\./);
+        expect(screen.getByText('HTTP 401: invalid api key')).toBeTruthy();
+        expect(screen.queryByTestId('provider-key-not-connected')).toBeNull();
+        queryClient.clear();
+    });
+
+    it('renders no error line when the PC reports none', async () => {
+        const ok: ProviderRow = { ...stored, error: null };
+        const { queryClient, wrap } = setup(ok);
+        await render(<ProviderKey provider={ok} connected />, { wrapper: wrap });
+
+        expect(screen.queryByTestId('provider-key-error')).toBeNull();
         queryClient.clear();
     });
 

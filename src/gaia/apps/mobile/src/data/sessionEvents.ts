@@ -5,7 +5,10 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { AppState } from 'react-native';
 
+import type { StreamEvent } from '@webui/types';
+
 import type { GaiaClient } from '@/api/client.types';
+import { applyDevicePromptEvent } from '@/features/devices/devicePrompts';
 
 import { useGaiaClient } from './GaiaClientProvider';
 import { queryKeys } from './queries';
@@ -20,7 +23,7 @@ export interface SessionEventDeps {
     client: GaiaClient;
     signal: AbortSignal;
     /** Called for each event; `sessionId` is set when another client asked this one to open that chat. */
-    onEvent: (sessionId: string | null) => void;
+    onEvent: (sessionId: string | null, event: StreamEvent) => void;
     onError: (err: unknown) => void;
     sleep?: (ms: number, signal: AbortSignal) => Promise<void>;
     now?: () => number;
@@ -45,7 +48,7 @@ export async function followSessionEvents(deps: SessionEventDeps): Promise<void>
         try {
             for await (const event of client.watchSessionEvents({ signal })) {
                 const id = (event as { session_id?: unknown }).session_id;
-                onEvent((event.type as string) === 'set_active_session' && typeof id === 'string' && id ? id : null);
+                onEvent((event.type as string) === 'set_active_session' && typeof id === 'string' && id ? id : null, event);
             }
         } catch (err) {
             if (signal.aborted) return;
@@ -76,7 +79,8 @@ export function useSessionSync(onOpenChat: (sessionId: string) => void): void {
             void followSessionEvents({
                 client,
                 signal: controller.signal,
-                onEvent: (id) => {
+                onEvent: (id, event) => {
+                    applyDevicePromptEvent(event);
                     refresh();
                     if (id) onOpenChat(id);
                 },

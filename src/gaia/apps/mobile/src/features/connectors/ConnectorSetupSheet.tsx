@@ -12,7 +12,8 @@ import { openLinkFromPress } from '@/platform/openLink';
 import { Button, Notice, Sheet, Stack, Text, TextField } from '@/ui';
 import { Check, ExternalLink } from '@/ui/icons';
 
-import { canSaveSetup, fieldHelp, fieldLabel, oauthClientStatus, setupFields, setupPayload, setupProblem, type SetupField, type SetupForm } from './connectorList';
+import { canSaveSetup, fieldHelp, fieldLabel, setupFields, setupPayload, setupProblem, type SetupField, type SetupForm } from './connectorList';
+import { OAuthClientLine } from './OAuthClientLine';
 
 const SAVED_MS = 2200;
 /** Stands in for a secret the PC already holds; the secret itself never comes back. */
@@ -132,7 +133,7 @@ function SetupBody({
             {form === 'oauthSetup' ? <Text role="ui" tone="secondary">{t('settings.connectors.firstSetup')}</Text> : null}
             {form === 'oauthClient' ? (
                 <Stack gap="xs">
-                    <Text role="label" weight="semibold" testID="oauth-client-status">{oauthClientStatus(connector, t) ?? t('settings.connectors.noClient')}</Text>
+                    <OAuthClientLine connector={connector} emphasis testID="oauth-client-status" />
                     <Text role="label" tone="secondary">{t('settings.connectors.clientHelp')}</Text>
                 </Stack>
             ) : null}

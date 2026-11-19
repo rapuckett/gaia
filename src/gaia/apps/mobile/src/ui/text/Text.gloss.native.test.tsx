@@ -1,7 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { render, screen } from '@testing-library/react-native';
+import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import type { ReactNode } from 'react';
 import { Platform, StyleSheet } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -9,7 +9,7 @@ import { isolate } from '@webui/i18n/registry';
 
 import { useLocaleStore } from '@/state/locale';
 import { Button, Text, ThemeProvider } from '@/ui';
-import { isLongGloss } from './Text';
+import { glossCut, isLongGloss } from './Text';
 
 const describeNative = Platform.OS === 'web' ? describe.skip : describe;
 
@@ -35,6 +35,14 @@ describe('isLongGloss', () => {
         expect(isLongGloss('Close GAIA to finish switching to Arabic')).toBe(false);
         expect(isLongGloss('Close GAIA to finish switching to Arabic', 29)).toBe(true);
         expect(isLongGloss(SHORT)).toBe(false);
+    });
+});
+
+describe('glossCut', () => {
+    it('is cut when no line holds the whole bracket', () => {
+        const gloss = isolate('(This file type can\'t be added)', 'ltr');
+        expect(glossCut(['لا يمكن إضافة هذا النوع', gloss.replace(/ /g, '\u00A0')], [gloss])).toBe(false);
+        expect(glossCut(['لا يمكن (This\u00A0file\u00A0type\u00A0can\'t\u00A0be\u00A0added', ')'], [gloss])).toBe(true);
     });
 });
 
@@ -109,6 +117,39 @@ describeNative('Text with a long English gloss', () => {
             </Text>,
             { wrapper: wrap },
         );
+        expect(screen.queryByTestId('t-gloss')).toBeNull();
+    });
+
+    it('shrinks beside an icon in a row', async () => {
+        await render(<Text testID="t">{glossed('إضافة مهارات', SHORT)}</Text>, { wrapper: wrap });
+        expect(StyleSheet.flatten(screen.getByTestId('t').props.style).flexShrink).toBe(1);
+    });
+
+    it('never leaves a bracket alone: a gloss cut across lines moves to its own block', async () => {
+        await render(<Text testID="t">{glossed('لا يمكن إضافة هذا النوع من الملفات', "This file type can't be added")}</Text>, { wrapper: wrap });
+        expect(screen.queryByTestId('t-gloss')).toBeNull();
+        await act(() => fireEvent(screen.getByTestId('t'), 'textLayout', { nativeEvent: { lines: [{ text: "لا يمكن إضافة (This\u00A0file\u00A0type\u00A0can't\u00A0be\u00A0added" }, { text: ')' }] } }));
+        expect(screen.getByTestId('t-gloss').props.children).toBe("This file type can't be added");
+        expect(screen.getByTestId('t')).not.toHaveTextContent('(');
+    });
+
+    it('stays inline when the gloss fits a line whole', async () => {
+        await render(<Text testID="t">{glossed('إضافة مهارات', SHORT)}</Text>, { wrapper: wrap });
+        await act(() => fireEvent(screen.getByTestId('t'), 'textLayout', { nativeEvent: { lines: [{ text: 'إضافة مهارات ' }, { text: '(Add\u00A0skills)' }] } }));
+        expect(screen.queryByTestId('t-gloss')).toBeNull();
+    });
+
+    it('wraps a cut gloss between words where it cannot take a block', async () => {
+        await render(
+            <Text testID="t" numberOfLines={3}>
+                {glossed('لا يمكن إضافة هذا النوع من الملفات', "This file type can't be added")}
+            </Text>,
+            { wrapper: wrap },
+        );
+        const span = () => screen.getByTestId('t').children.find((c) => typeof c !== 'string') as unknown as { props: { children: string } };
+        expect(span().props.children).not.toContain(' ');
+        await act(() => fireEvent(screen.getByTestId('t'), 'textLayout', { nativeEvent: { lines: [{ text: "(This\u00A0file\u00A0type\u00A0can't\u00A0be\u00A0added" }, { text: ')' }] } }));
+        expect(span().props.children).toContain("This file type can't be added");
         expect(screen.queryByTestId('t-gloss')).toBeNull();
     });
 });

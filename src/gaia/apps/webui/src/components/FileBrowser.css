@@ -244,11 +244,6 @@
     white-space: nowrap;
 }
 
-.fb-search-scope code {
-    color: var(--text-secondary);
-    font-family: var(--font-mono);
-}
-
 .fb-back-btn {
     background: none;
     border: none;

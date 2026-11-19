@@ -31,11 +31,19 @@ from gaia.logger import get_logger
 from .. import setup_plan as plan_api
 from ..database import ChatDatabase
 from ..dependencies import get_db
+from ..devices.changes import record_device_change
+from ..devices.prompts import (
+    NPU_MEMLOCK_ELEVATION,
+    AdminPrompt,
+    limit_device_rate,
+    one_at_a_time,
+)
 from ..models import WireModel
 from ..security import (
     allowed_device,
     audit_approval,
     hide_pc_folders,
+    is_local_pc,
     require_local_pc,
     require_pc_or_allowed_device,
     require_pc_or_device,
@@ -502,32 +510,61 @@ def setup_npu_recheck() -> Dict[str, Any]:
     return setup_plan()
 
 
-# Starts a root step on this PC, so only someone at this PC may ask for it.
+_MEMLOCK_STATUS = {
+    "cancelled": 409,
+    "timeout": 409,
+    "not_authorized": 409,
+    "not_linux": 422,
+    "no_pkexec": 422,
+}
+#: How each refusal reads to a device waiting on the PC's prompt.
+_MEMLOCK_PROMPT_STATE = {
+    "cancelled": "denied",
+    "not_authorized": "denied",
+    "timeout": "timeout",
+}
+
+
+# Starts a root step on this PC; an allowed device's request waits on the PC's
+# administrator prompt, which only someone at the PC can answer.
 @router.post(
     "/api/setup/npu/memlock-fix",
-    dependencies=[Depends(require_ui_header), Depends(require_local_pc)],
+    dependencies=[Depends(require_ui_header), Depends(require_pc_or_allowed_device)],
     response_model=SetupPlanResponse,
     response_model_exclude_unset=True,
 )
-def setup_npu_memlock_fix() -> Dict[str, Any]:
+def setup_npu_memlock_fix(request: Request) -> Dict[str, Any]:
     """Raise the locked-memory limit FastFlowLM needs, behind the desktop's own
     administrator prompt; returns the plan. It applies after a restart."""
     from gaia.llm import npu_linux
 
+    prompt = None
+    if not is_local_pc(request):
+        limit_device_rate(request, "npuMemlockFix")
+        prompt = AdminPrompt(request, "npuMemlockFix")
     try:
-        npu_linux.apply_memlock_fix()
+        with one_at_a_time(NPU_MEMLOCK_ELEVATION):
+            if prompt is None:
+                npu_linux.apply_memlock_fix()
+            else:
+                npu_linux.apply_memlock_fix(prompt.before_prompt)
     except npu_linux.MemlockFixError as e:
         logger.warning("NPU memlock fix not applied (%s): %s", e.code, e)
-        status = {
-            "cancelled": 409,
-            "timeout": 409,
-            "not_authorized": 409,
-            "not_linux": 422,
-            "no_pkexec": 422,
-        }.get(e.code, 500)
+        if prompt is not None:
+            prompt.finish(_MEMLOCK_PROMPT_STATE.get(e.code, "failed"))
         raise HTTPException(
-            status_code=status, detail={"code": e.code, "message": str(e)}
+            status_code=_MEMLOCK_STATUS.get(e.code, 500),
+            detail={"code": e.code, "message": str(e)},
         ) from e
+    except Exception:
+        if prompt is not None:
+            prompt.finish("failed")
+        raise
+    # Not shown: the fix was already in place, so nothing changed.
+    if prompt is not None and prompt.shown:
+        prompt.finish("approved")
+        audit_approval(request, "NPU locked-memory limit raised")
+        record_device_change(request, "npuMemlockFixed", action="npuMemlockFix")
     return setup_plan()
 
 

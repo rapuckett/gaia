@@ -76,8 +76,6 @@ PC_ONLY = {
     "POST /api/devices/{device_id}/allow",
     "POST /api/eval/scripted-user",
     "POST /api/files/open",
-    "POST /api/gpu-memory/apply",
-    "POST /api/gpu-memory/revert",
     "POST /api/lemonade/target",
     "POST /api/memory/admin/clear",
     "POST /api/memory/admin/seed",
@@ -92,7 +90,6 @@ PC_ONLY = {
     "POST /api/messaging/discord/restart",
     "POST /api/messaging/discord/start",
     "POST /api/messaging/discord/stop",
-    "POST /api/setup/npu/memlock-fix",
     "POST /api/skills/link/add",
     "POST /api/tunnel/start",
     "POST /api/tunnel/stop",
@@ -122,6 +119,8 @@ PC_OR_DEVICE = {
     "POST /api/goals",
     "POST /api/goals/store/reset",
     "POST /api/goals/{goal_id}/tasks",
+    "POST /api/gpu-memory/apply",
+    "POST /api/gpu-memory/revert",
     "POST /api/providers/key-store/retry",
     "POST /api/schedules",
     "POST /api/schedules/{name:path}/run",
@@ -130,6 +129,7 @@ PC_OR_DEVICE = {
     "POST /api/setup/models/download",
     "POST /api/setup/models/remove",
     "POST /api/setup/models/skip",
+    "POST /api/setup/npu/memlock-fix",
     "POST /api/setup/npu/recheck",
     "POST /api/setup/report",
     "POST /api/setup/run",
@@ -1244,7 +1244,8 @@ def test_a_connector_check_from_a_device_keeps_server_output_on_the_pc(
 
     from gaia.ui.routers import connectors
 
-    _, clients, _ = setup
+    app, clients, _ = setup
+    app.state.device_action_times = {}
     detail = "Transport error for 'mcp-github': /Users/someone/.npm/_npx/9f/node failed"
     monkeypatch.setattr(
         connectors,
@@ -1277,6 +1278,7 @@ def test_a_connector_check_from_a_device_keeps_server_output_on_the_pc(
             side_effect=ConnectorsError(f"mcp_servers.json at {path} is unreadable")
         ),
     )
+    app.state.device_action_times = {}  # a device may test once per 10 s
     resp = clients[caller].post(
         "/api/connectors/mcp-github/test", headers={"X-Gaia-UI": "1"}
     )
