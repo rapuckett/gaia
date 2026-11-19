@@ -116,7 +116,7 @@ describe('SpendingLimit', () => {
 
     it('sets and removes a monthly limit', async () => {
         render(<SpendingLimit />);
-        fireEvent.change(await screen.findByLabelText('Monthly limit ($)'), { target: { value: '10' } });
+        fireEvent.change(await screen.findByLabelText('Monthly limit in US dollars'), { target: { value: '10' } });
         fireEvent.click(screen.getByRole('button', { name: 'Save' }));
         await waitFor(() => expect(mockedApi.setSpendingLimit).toHaveBeenCalledWith(10));
         expect(await screen.findByText(/of your \$10\.00 limit/)).toBeInTheDocument();
@@ -126,7 +126,7 @@ describe('SpendingLimit', () => {
 
     it('refuses a limit of $0', async () => {
         render(<SpendingLimit />);
-        fireEvent.change(await screen.findByLabelText('Monthly limit ($)'), { target: { value: '0' } });
+        fireEvent.change(await screen.findByLabelText('Monthly limit in US dollars'), { target: { value: '0' } });
         expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
     });
 
