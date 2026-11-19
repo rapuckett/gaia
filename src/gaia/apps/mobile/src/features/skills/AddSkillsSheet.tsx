@@ -1,7 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { isMessageKey, isolate } from '@webui/i18n/registry';
+import { isolate } from '@webui/i18n/registry';
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { Share, View } from 'react-native';
@@ -117,11 +117,10 @@ export function AddSkillsSheet({ open, onClose, seed }: { open: boolean; onClose
     const submit = async (from: LinkPreview, names: string[], withCode: boolean) => {
         const shipsCode = withCode && from.skills.some((s) => names.includes(s.name) && s.has_code);
         if (shipsCode) {
-            const audit: string = 'mobileApp.mem.beta.discovery.audit';
             const sure = await ask({
                 title: t('mobileApp.skills.link.codeConfirm.title'),
                 body: [t('mobileApp.skills.link.codeConfirm.body')],
-                note: isMessageKey(audit) ? t(audit) : undefined,
+                note: t('mobileApp.skills.link.codeConfirm.audit'),
                 confirmLabel: t('mobileApp.skills.link.codeConfirm.yes'),
                 cancelLabel: t('settings.skills.link.cancel'),
             });

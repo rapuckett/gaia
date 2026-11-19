@@ -4109,6 +4109,7 @@ export const enMessages = {
     'mobileApp.mem.reconcileFailedShort': "Couldn't reconcile memory.",
     'mobileApp.mem.systemFailedShort': "Couldn't refresh system context.",
     'mobileApp.offline.errorShort': "Couldn't turn it on.",
+    'mobileApp.skills.link.codeConfirm.audit': 'Your PC lists this under Changes made from this phone.',
     'mobileApp.skills.link.codeConfirm.body': 'Some of these skills ship scripts. GAIA can run them on your PC with your permissions. Only add them if you trust who made them.',
     'mobileApp.skills.link.codeConfirm.title': 'Add skills that run code?',
     'mobileApp.skills.link.codeConfirm.yes': 'Add with code',

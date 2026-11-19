@@ -4108,6 +4108,7 @@ const messages: Messages = {
     'mobileApp.mem.reconcileFailedShort': 'تعذّرت مطابقة الذاكرة.',
     'mobileApp.mem.systemFailedShort': 'تعذّر تحديث معلومات النظام.',
     'mobileApp.offline.errorShort': 'تعذّر تفعيله.',
+    'mobileApp.skills.link.codeConfirm.audit': 'يُدرج الكمبيوتر لديك هذا ضمن «التغييرات من هذا الهاتف».',
     'mobileApp.skills.link.codeConfirm.body': 'تتضمّن بعض هذه المهارات سكربتات يمكن لـGAIA تشغيلها على الكمبيوتر لديك بصلاحياتك. لا تُضِفها إلا إذا كنت تثق بمن أنشأها.',
     'mobileApp.skills.link.codeConfirm.title': 'إضافة مهارات تشغّل تعليمات برمجية؟',
     'mobileApp.skills.link.codeConfirm.yes': 'إضافة مع التعليمات البرمجية',
