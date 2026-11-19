@@ -8,9 +8,10 @@ The TUI reads the same functions through ``/daemon/v1/gpu-memory``.
 
 from __future__ import annotations
 
+import subprocess
 from typing import Any, Callable, Dict, List, Literal, Optional, Union
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from gaia.llm import gpu_memory
@@ -22,14 +23,31 @@ from gaia.llm.gpu_memory import (
     PENDING_RESTART,
     PENDING_TOOK_EFFECT,
 )
+from gaia.logger import get_logger
 
+from ..devices.changes import record_device_change
+from ..devices.prompts import AdminPrompt
 from ..models import WireModel
-from ..security import require_local_pc, require_ui_header
+from ..security import (
+    audit_approval,
+    is_local_pc,
+    require_pc_or_allowed_device,
+    require_ui_header,
+)
+
+logger = get_logger(__name__)
 
 router = APIRouter(tags=["gpu-memory"])
 
-# Starts a root step on this PC, so only someone at this PC may ask for it.
-_AT_THIS_PC = [Depends(require_ui_header), Depends(require_local_pc)]
+# Starts a root step on this PC; an allowed device's request waits on the PC's
+# administrator prompt, which only someone at the PC can answer.
+_PC_OR_DEVICE = [Depends(require_ui_header), Depends(require_pc_or_allowed_device)]
+
+#: What a device hears instead of a failure whose text names PC paths or output.
+DEVICE_GPU_MEMORY_ERROR = (
+    "GAIA couldn't change GPU memory on the PC. Open GPU memory in Settings on "
+    "the PC to see why."
+)
 
 
 _SETTING_GB = "GPU memory to set, in decimal GB (10**9 bytes)."
@@ -127,6 +145,38 @@ def _answer(call: Callable[[], Dict[str, Any]]) -> Dict[str, Any]:
         raise HTTPException(status_code=e.status, detail=str(e)) from e
 
 
+def _device_detail(e: gpu_memory.GpuMemoryError) -> str:
+    text = str(e)
+    if e.status >= 500 or "/" in text:
+        return DEVICE_GPU_MEMORY_ERROR
+    return text
+
+
+def _from_device(
+    request: Request,
+    action: str,
+    what: str,
+    call: Callable[[Callable[[], None]], Dict[str, Any]],
+) -> Dict[str, Any]:
+    """*call* for an allowed device, which hears how the PC's prompt went."""
+    prompt = AdminPrompt(request, action)
+    try:
+        result = call(prompt.before_prompt)
+    except gpu_memory.PermissionNotGiven as e:
+        prompt.finish("denied")
+        raise HTTPException(status_code=e.status, detail=_device_detail(e)) from e
+    except gpu_memory.GpuMemoryError as e:
+        timed_out = isinstance(e.__cause__, subprocess.TimeoutExpired)
+        # Answered but the step failed: the device's error says so, not the event.
+        prompt.finish("timeout" if timed_out else "approved")
+        logger.warning("GPU memory %s from a device failed: %s", what, e)
+        raise HTTPException(status_code=e.status, detail=_device_detail(e)) from e
+    prompt.finish("approved")
+    audit_approval(request, f"GPU memory {what}")
+    record_device_change(request, "gpuMemoryChanged", action=action)
+    return result
+
+
 # Reads this PC's memory through Lemonade, so a cross-site GET must not reach it.
 @router.get(
     "/api/gpu-memory",
@@ -141,24 +191,38 @@ def get_gpu_memory(setting_gb: Optional[float] = None) -> Dict[str, Any]:
 
 @router.post(
     "/api/gpu-memory/apply",
-    dependencies=_AT_THIS_PC,
+    dependencies=_PC_OR_DEVICE,
     response_model=GpuMemoryStatusResponse,
     response_model_exclude_unset=True,
 )
-def apply_gpu_memory(body: GpuMemoryApplyRequest) -> Dict[str, Any]:
+def apply_gpu_memory(body: GpuMemoryApplyRequest, request: Request) -> Dict[str, Any]:
     """Set the GPU's share after admin permission; takes effect after a restart."""
-    return _answer(lambda: gpu_memory.apply(body.setting_gb, body.confirm))
+    if is_local_pc(request):
+        return _answer(lambda: gpu_memory.apply(body.setting_gb, body.confirm))
+    return _from_device(
+        request,
+        "gpuMemoryApply",
+        f"set to {body.setting_gb} GB",
+        lambda before: gpu_memory.apply(body.setting_gb, body.confirm, before),
+    )
 
 
 @router.post(
     "/api/gpu-memory/revert",
-    dependencies=_AT_THIS_PC,
+    dependencies=_PC_OR_DEVICE,
     response_model=GpuMemoryStatusResponse,
     response_model_exclude_unset=True,
 )
-def revert_gpu_memory(body: GpuMemoryRevertRequest) -> Dict[str, Any]:
+def revert_gpu_memory(body: GpuMemoryRevertRequest, request: Request) -> Dict[str, Any]:
     """Put back the setting GAIA replaced; takes effect after a restart."""
-    return _answer(lambda: gpu_memory.revert(body.confirm))
+    if is_local_pc(request):
+        return _answer(lambda: gpu_memory.revert(body.confirm))
+    return _from_device(
+        request,
+        "gpuMemoryRevert",
+        "change undone",
+        lambda before: gpu_memory.revert(body.confirm, before),
+    )
 
 
 @router.post(

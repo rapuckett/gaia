@@ -103,6 +103,7 @@ from gaia.connectors.store import (
 )
 
 from ..devices.changes import record_device_change
+from ..devices.prompts import DevicePromptTimeout, limit_device_rate, watch_key_store
 from ..models import WireModel
 from ..security import (
     allowed_device,
@@ -1174,6 +1175,27 @@ async def configure_connector(
     return result
 
 
+async def _device_health_check(request: Request, connector_id: str) -> Dict[str, Any]:
+    from gaia.connectors._loop import _get_persistent_loop
+
+    # The checks read the key store synchronously; a prompt must not stall this loop.
+    running = asyncio.run_coroutine_threadsafe(
+        health_check(connector_id), _get_persistent_loop()
+    )
+    try:
+        return await watch_key_store(
+            request, "connectorTest", asyncio.wrap_future(running)
+        )
+    except DevicePromptTimeout as e:
+        raise HTTPException(
+            status_code=504,
+            detail=(
+                "Nobody answered the key store prompt on the PC within 5 minutes. "
+                "Try again, and approve it on the PC."
+            ),
+        ) from e
+
+
 @router.post(
     "/{connector_id}/test",
     dependencies=[Depends(_require_ui_header), Depends(require_pc_or_allowed_device)],
@@ -1181,10 +1203,20 @@ async def configure_connector(
     response_model_exclude_unset=True,
 )
 async def test_connector(request: Request, connector_id: str) -> Dict[str, Any]:
-    """Run the health check for a connector."""
+    """Run the health check for a connector.
+
+    From a paired device it runs off this loop, so the device hears
+    ``device_prompt`` while the PC's key store prompt is up.
+    """
+    on_pc = is_local_pc(request)
+    if not on_pc:
+        limit_device_rate(request, "connectorTest")
     retry_keyring()
     try:
-        result = await health_check(connector_id)
+        if on_pc:
+            result = await health_check(connector_id)
+        else:
+            result = await _device_health_check(request, connector_id)
     except KeyError:
         raise HTTPException(
             status_code=404, detail=f"Unknown connector: {connector_id!r}"
