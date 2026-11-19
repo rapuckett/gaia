@@ -375,7 +375,9 @@ def test_a_restarted_server_gets_the_cloud_key_back_before_the_turn(
     chat.chat([{"role": "user", "content": "second"}])
 
     new = f"http://localhost:{NEW_PORT}/api/v1"
+    # Read again once the key is in hand, outside the lock.
     assert gateway.calls == [
+        ("GET", f"{new}/system-info", f"Bearer {NEW_KEY}"),
         ("GET", f"{new}/system-info", f"Bearer {NEW_KEY}"),
         ("POST", f"{new}/cloud/auth", f"Bearer {NEW_KEY}"),
     ]
@@ -399,6 +401,7 @@ def test_a_server_the_daemon_restarts_mid_chat_gets_the_cloud_key_back(
     chat.chat([{"role": "user", "content": "after the crash"}])
 
     assert [call[:2] for call in gateway.calls] == [
+        ("GET", f"http://localhost:{NEW_PORT}/api/v1/system-info"),
         ("GET", f"http://localhost:{NEW_PORT}/api/v1/system-info"),
         ("POST", f"http://localhost:{NEW_PORT}/api/v1/cloud/auth"),
     ]

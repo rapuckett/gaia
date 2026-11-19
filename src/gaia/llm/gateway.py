@@ -503,6 +503,15 @@ def _take_file_lock(deadline: float) -> int:
 
 GATEWAY_KEY_LOCK = _GatewayKeyLock()
 
+#: ``ensure_authenticated``'s first pass, before it has read the stored key.
+_KEY_NOT_READ = object()
+#: Its answer when the replay needs the stored key, read outside the lock.
+_KEY_NEEDED = object()
+
+
+class _KeyNotRead(Exception):
+    """The first pass reached the stored key, which it doesn't read."""
+
 
 @dataclass(frozen=True)
 class GatewayKey:
@@ -1436,6 +1445,11 @@ class GatewayManager:
         block on the credential store can bound the read. It returns a
         :class:`GatewayKey`, which goes only to the gateway it was saved with.
 
+        The stored key is read outside :data:`GATEWAY_KEY_LOCK`, and only once
+        a replay needs it, so an OS prompt for it holds up no other process;
+        the replay then checks again under the lock, against the address
+        Lemonade reports by then.
+
         Raises:
             GatewayError: GAIA uses the user's own server and its gateway
                 provider isn't working; GAIA hands that server no token.
@@ -1443,11 +1457,16 @@ class GatewayManager:
                 address than the one Lemonade has registered.
         """
         with GATEWAY_KEY_LOCK:
-            return self._ensure_authenticated(recall)
+            usable = self._ensure_authenticated(_KEY_NOT_READ)
+        if usable is not _KEY_NEEDED:
+            return usable
+        record = (recall or recall_stored_key)()
+        with GATEWAY_KEY_LOCK:
+            return self._ensure_authenticated(record)
 
-    def _ensure_authenticated(
-        self, recall: Optional[Callable[[], Optional[GatewayKey]]]
-    ) -> bool:
+    def _ensure_authenticated(self, record: Any) -> Any:
+        """Whether the gateway is usable, or :data:`_KEY_NEEDED` when *record*
+        is :data:`_KEY_NOT_READ` and a replay needs the stored key."""
         from gaia.llm.lemonade_choice import is_users_server
 
         if cloud_blocked():
@@ -1474,15 +1493,21 @@ class GatewayManager:
             return False
 
         def recall_bound() -> Optional[GatewayKey]:
-            # Handing the key over is where a legacy one moves to the v2 slot.
-            record = (recall or recall_stored_key)()
+            if record is _KEY_NOT_READ:
+                raise _KeyNotRead
             if not record:
                 return None
+            # Handing the key over is where a legacy one moves to the v2 slot.
             return migrate_legacy_key(
                 record, status.base_url or GatewayState.load().base_url
             )
 
-        found = lemonade_token_with_source(recall_bound, status.base_url)
+        try:
+            found = lemonade_token_with_source(
+                recall_bound, status.base_url, warn=record is not _KEY_NOT_READ
+            )
+        except _KeyNotRead:
+            return _KEY_NEEDED
         if not found:
             return False
         token = found[0]

@@ -1873,6 +1873,68 @@ class TestGatewayKeyLock:
         with lock:
             pass
 
+    @staticmethod
+    def _lemonade(gateway, sent):
+        """Lemonade at *gateway*["url"], keyed once anything is in *sent*."""
+
+        def request(method, url, **kwargs):
+            if url.endswith("/system-info"):
+                entry = {
+                    "name": GATEWAY_PROVIDER,
+                    "base_url": gateway["url"],
+                    "env_var_set": False,
+                    "runtime_key_set": bool(sent),
+                    "models_discovered": 3 if sent else 0,
+                }
+                return _response(body={"cloud": {"providers": [entry]}})
+            sent.append(kwargs["json"]["api_key"])
+            return _response(body={"models_discovered": 3})
+
+        return request
+
+    def test_a_slow_key_read_does_not_hold_the_lock(
+        self, manager, tmp_path, monkeypatch
+    ):
+        """A keychain prompt pending on the replay's read holds up no other replay."""
+        monkeypatch.setenv("GAIA_HOME", str(tmp_path))
+        monkeypatch.setattr(gateway_module, "GATEWAY_KEY_LOCK_TIMEOUT", 0.2)
+        took, sent = [], []
+
+        def slow_read():
+            def replay():
+                try:
+                    with gateway_module.GATEWAY_KEY_LOCK:
+                        took.append(True)
+                except gateway_module.GatewayBusy:
+                    took.append(False)
+
+            other = threading.Thread(target=replay)
+            other.start()
+            other.join(timeout=5)
+            return GatewayKey("tok-read-slowly", "https://gw/v1")
+
+        lemonade = self._lemonade({"url": "https://gw/v1"}, sent)
+        with patch("gaia.llm.gateway.requests.request", side_effect=lemonade):
+            assert manager.ensure_authenticated(recall=slow_read) is True
+        assert took == [True]
+        assert sent == ["tok-read-slowly"]
+
+    def test_a_gateway_moved_during_the_read_gets_no_key(
+        self, manager, tmp_path, monkeypatch
+    ):
+        monkeypatch.setenv("GAIA_HOME", str(tmp_path))
+        at, sent = {"url": "https://gw/v1"}, []
+
+        def read_while_it_moves():
+            at["url"] = "https://elsewhere/v1"
+            return GatewayKey("tok-for-gw", "https://gw/v1")
+
+        lemonade = self._lemonade(at, sent)
+        with patch("gaia.llm.gateway.requests.request", side_effect=lemonade):
+            with pytest.raises(gateway_module.GatewayKeyMismatch):
+                manager.ensure_authenticated(recall=read_while_it_moves)
+        assert sent == []
+
 
 # --------------------------------------------------------------------------
 # The v2 slot: a key an older GAIA can't read, and so can't hand anywhere
