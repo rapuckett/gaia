@@ -75,10 +75,12 @@ export function GpuChange({ status, target }: { status: GpuMemoryStatus; target:
         if (sure) send('revert');
     };
 
+    // One change at a time on the PC: while either prompt is up or showing its outcome, neither button shows.
+    const changing = apply.hideAction || revert.hideAction;
     const retry = outcome?.kind === 'denied' || status.pending?.state === 'not_applied';
     return (
         <Stack gap="sm" testID="gpu-change">
-            {canApply && !apply.hideAction ? (
+            {canApply && !changing ? (
                 <Button
                     variant="primary"
                     full
@@ -89,7 +91,7 @@ export function GpuChange({ status, target }: { status: GpuMemoryStatus; target:
                     testID="gpu-apply"
                 />
             ) : null}
-            {canRevert && !revert.hideAction ? (
+            {canRevert && !changing ? (
                 <Button
                     variant="secondary"
                     full

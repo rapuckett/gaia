@@ -60,6 +60,7 @@ describeNative('GpuChange', () => {
         await act(async () => applyDevicePromptEvent(event('waiting')));
         expect(screen.getByText('Approve on your PC')).toBeTruthy();
         expect(screen.queryByTestId('gpu-apply')).toBeNull();
+        expect(screen.queryByTestId('gpu-undo')).toBeNull();
 
         await act(async () => {
             applyDevicePromptEvent(event('approved'));
