@@ -1916,7 +1916,7 @@ def _back_to_known_models(provider: str, failure: ProviderError) -> NoReturn:
         f"{name} couldn't be set up, and GAIA couldn't restore the models it was "
         f"using. {failure} Connect {name} again in Settings › Model.",
         502,
-    )
+    ) from failure
 
 
 def _refuse_replacement(
