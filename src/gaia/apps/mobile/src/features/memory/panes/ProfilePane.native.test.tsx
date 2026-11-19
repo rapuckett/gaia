@@ -10,7 +10,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { createFakeClient, type FakeClientData } from '@/api/fake';
 import { GaiaClientProvider } from '@/data';
 import { useConnectionStore } from '@/state/connection';
-import { ThemeProvider } from '@/ui';
+import { SheetScope, ThemeProvider } from '@/ui';
 
 import { ProfilePane } from './ProfilePane';
 
@@ -30,7 +30,9 @@ async function mount(data: FakeClientData) {
         <QueryClientProvider client={queryClient}>
             <GaiaClientProvider client={client}>
                 <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 800 }, insets: { top: 0, left: 0, right: 0, bottom: 0 } }}>
-                    <ThemeProvider>{children}</ThemeProvider>
+                    <ThemeProvider>
+                        <SheetScope>{children}</SheetScope>
+                    </ThemeProvider>
                 </SafeAreaProvider>
             </GaiaClientProvider>
         </QueryClientProvider>
@@ -89,14 +91,42 @@ describeNative('ProfilePane', () => {
         }
     });
 
-    it('says discovery is off in our own words, with the PC\'s text on the detail line', async () => {
-        const server = 'System discovery is off, so GAIA read nothing on this PC. Turn it on in Memory > Advanced > System discovery, then run the scan again.';
-        await mount({ profileStreams: { discovery: { events: [{ type: 'error', source: 'consent', message: server }, { type: 'done', total: 0 }] } } });
+    const settings = (consent: boolean) => ({ memory_enabled: true, mcp_memory_enabled: false, system_discovery_consent: consent });
+    const refusal = { profileStreams: { discovery: { events: [{ type: 'error' as const, source: 'consent', message: 'NO_DISCOVERY_CONSENT' }, { type: 'done' as const, total: 0 }] } } };
+
+    it('shows one muted line, and no notice, at rest with consent off', async () => {
+        await mount({ memorySettings: settings(false) });
+        expect(await screen.findByTestId('profile-consent-off')).toBeTruthy();
+        expect(screen.queryByTestId('profile-discovery-consent-off')).toBeNull();
+        expect(screen.getByTestId('profile-discovery-run').props.accessibilityState?.disabled).toBeFalsy();
+    });
+
+    it('asks first with consent off: Cancel changes nothing, Confirm turns it on and then scans', async () => {
+        const data = { memorySettings: settings(false), profileStreams: { discovery: { events: [{ type: 'done' as const, total: 0 }] } } };
+        const client = await mount(data);
+        await screen.findByTestId('profile-consent-off');
         fireEvent.press(screen.getByTestId('profile-discovery-run'));
-        const notice = await screen.findByTestId('profile-discovery-consent-off');
-        expect(notice).toBeTruthy();
-        expect(screen.getByText(server)).toBeTruthy();
+        fireEvent.press(await screen.findByTestId('confirm-cancel'));
+        await waitFor(() => expect(screen.queryByTestId('confirm-ok')).toBeNull());
+        expect(data.memorySettings.system_discovery_consent).toBe(false);
+        expect(client.profileStreamOpens).toEqual([]);
+
+        fireEvent.press(screen.getByTestId('profile-discovery-run'));
+        expect(await screen.findByText('Your PC lists this under Changes made from this phone.')).toBeTruthy();
+        fireEvent.press(screen.getByTestId('confirm-ok'));
+        await waitFor(() => expect(client.profileStreamOpens).toHaveLength(1));
+        expect(data.memorySettings.system_discovery_consent).toBe(true);
+    });
+
+    it('answers a refusal that races the toggle with our words alone, and asks again next time', async () => {
+        const client = await mount({ memorySettings: settings(true), ...refusal });
+        fireEvent.press(await screen.findByTestId('profile-discovery-run'));
+        await screen.findByTestId('profile-discovery-consent-off');
         expect(screen.getByText(/System discovery is off, so GAIA read nothing on your PC/)).toBeTruthy();
-        expect(screen.queryByTestId('profile-discovery-empty')).toBeNull();
+        expect(screen.queryByText('NO_DISCOVERY_CONSENT')).toBeNull();
+        expect(await screen.findByTestId('profile-consent-off')).toBeTruthy();
+        fireEvent.press(screen.getByTestId('profile-discovery-run'));
+        expect(await screen.findByTestId('confirm-ok')).toBeTruthy();
+        expect(client.profileStreamOpens).toHaveLength(1);
     });
 });

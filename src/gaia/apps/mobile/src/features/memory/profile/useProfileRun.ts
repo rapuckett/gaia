@@ -1,16 +1,19 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
+import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { isolate } from '@webui/i18n/registry';
 import type { Translate } from '@webui/i18n/translator';
 
-import type { DiscoveryFinding, InferenceInsight, ProfileStreamEvent } from '@/api/client.types';
+import type { DiscoveryFinding, InferenceInsight, MemorySettings, ProfileStreamEvent } from '@/api/client.types';
 import { GaiaApiError } from '@/api/errors';
-import { useCommitProfile, useGaiaClient } from '@/data';
-import { describeErrorWith, technicalDetail, useT } from '@/i18n/useT';
+import { memoryKeys, useCommitProfile, useGaiaClient, useMemorySettings, useUpdateMemorySettings } from '@/data';
+import { describeErrorWith, describeFailureWith, technicalDetail, useT } from '@/i18n/useT';
 
+import { useConfirmSheet } from '../../setup/sheets/ConfirmSheet';
+import { discoveryScanRequest } from '../discoveryConfirm';
 import type { MemoryNotice } from '../useMemoryNotice';
 
 export type ProfileKind = 'discovery' | 'inference';
@@ -42,12 +45,16 @@ export function useProfileRun(kind: ProfileKind, notify: (notice: MemoryNotice) 
     const t = useT();
     const client = useGaiaClient();
     const commit = useCommitProfile();
+    const settings = useMemorySettings();
+    const updateSettings = useUpdateMemorySettings();
+    const queryClient = useQueryClient();
+    const { ask, sheet } = useConfirmSheet();
     const [phase, setPhase] = useState<ProfilePhase>('idle');
     const [logs, setLogs] = useState<LogLine[]>([]);
     const [items, setItems] = useState<ReviewItem[]>([]);
     const [detail, setDetail] = useState<string | null>(null);
     const [savedCount, setSavedCount] = useState<number | null>(null);
-    const [consentOff, setConsentOff] = useState<string | null>(null);
+    const [consentOff, setConsentOff] = useState(false);
     const controller = useRef<AbortController | null>(null);
     const found = useRef(0);
 
@@ -68,7 +75,7 @@ export function useProfileRun(kind: ProfileKind, notify: (notice: MemoryNotice) 
             setItems([]);
             setDetail(null);
             setSavedCount(null);
-            setConsentOff(null);
+            setConsentOff(false);
             found.current = 0;
             let refused = false;
             const connection = kind === 'discovery' ? 'mem.log.discoveryConnection' : 'mem.log.inferenceConnection';
@@ -84,7 +91,8 @@ export function useProfileRun(kind: ProfileKind, notify: (notice: MemoryNotice) 
                     setItems((prev) => [...prev, { content: item.content, confidence: item.confidence, tag, checked: true, raw: item }]);
                 } else if (event.type === 'error' && event.source === 'consent') {
                     refused = true;
-                    setConsentOff(event.message);
+                    setConsentOff(true);
+                    queryClient.setQueryData<MemorySettings>(memoryKeys.settings, (old) => (old ? { ...old, system_discovery_consent: false } : old));
                 } else if (event.type === 'error') addLog({ text: t.bare('mem.log.error', { message: isolate(event.message, 'ltr') }), kind: 'error' });
                 else if (event.type === 'done' && !refused) addLog({ text: t(done, { n: event.total ?? 0 }), kind: 'log' });
             };
@@ -107,7 +115,27 @@ export function useProfileRun(kind: ProfileKind, notify: (notice: MemoryNotice) 
                 setPhase(found.current > 0 ? 'review' : 'idle');
             }
         },
-        [client, kind, pcOnly, t],
+        [client, kind, pcOnly, queryClient, t],
+    );
+
+    const consent = settings.data?.system_discovery_consent;
+
+    /** A press on Start: with consent off, ask first, turn it on, then run the scan. */
+    const begin = useCallback(
+        async (includeBrowser = false) => {
+            if (consent === false) {
+                if (!(await ask(discoveryScanRequest(t)))) return;
+                try {
+                    await updateSettings.mutateAsync({ system_discovery_consent: true });
+                } catch (err) {
+                    if (err instanceof GaiaApiError && err.status === 403) pcOnly();
+                    else notify({ tone: 'danger', text: t.compose((say) => say('mem.toast.settingFailed', { error: describeFailureWith(err, say) })) });
+                    return;
+                }
+            }
+            await start(includeBrowser);
+        },
+        [ask, consent, notify, pcOnly, start, t, updateSettings],
     );
 
     const stop = useCallback(() => {
@@ -140,5 +168,5 @@ export function useProfileRun(kind: ProfileKind, notify: (notice: MemoryNotice) 
         }
     }, [commit, items, kind, notify, pcOnly, t]);
 
-    return { phase, logs, items, detail, consentOff, savedCount, start, stop, setChecked, save };
+    return { phase, logs, items, detail, consentOff, savedCount, start, begin, sheet, stop, setChecked, save };
 }
