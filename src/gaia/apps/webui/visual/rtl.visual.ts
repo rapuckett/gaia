@@ -1974,7 +1974,7 @@ for (const locale of ['ar', 'en']) {
         await page.getByRole('button', { name: /Browse files/ }).click();
         const refusal = page.locator('.fb-error');
         await expect(refusal).toContainText('q1-plan.pdf');
-        if (locale === 'ar') await expect(refusal).not.toContainText('Away from the PC');
+        if (locale === 'ar') await expect(refusal).toContainText('بعيدًا عن الكمبيوتر');
         await shot(page, `files-${locale}-refused`);
     });
 
