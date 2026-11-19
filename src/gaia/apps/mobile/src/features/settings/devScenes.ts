@@ -5,7 +5,8 @@ import { createFakeClient, type FakeClientData } from '@/api/fake';
 import type { SystemStatus } from '@webui/types';
 import { tEn } from '@webui/i18n/translator';
 
-import type { Automation, AutomationList, ContextChoice, Session, SkillInfo, DiscordStatus, GaiaClient, CustomModelReport, GpuMemoryStatus, LemonadeTarget, MCPServerStatus, ModelServerInfo, ProviderModel, ProviderSummary, Settings, SpendingReport } from '@/api/client.types';
+import type { SkillsAddSeed } from '@/features/skills';
+import type { Automation, AutomationList, LinkAddResult, LinkPreview, LinkSkill, ContextChoice, Session, SkillInfo, DiscordStatus, GaiaClient, CustomModelReport, GpuMemoryStatus, LemonadeTarget, MCPServerStatus, ModelServerInfo, ProviderModel, ProviderSummary, Settings, SpendingReport } from '@/api/client.types';
 import { PC_ONLY_REFUSAL } from '@/api/constants';
 import { GaiaApiError, GaiaNetworkError } from '@/api/errors';
 import type { DevicePromptKind, DevicePromptNote, DevicePromptState } from '@/features/devices/devicePrompts';
@@ -52,7 +53,7 @@ export interface SettingsScene {
     /** Opens Automations already asking to remove the automation with this id. */
     confirmRemove?: string;
     /** Opens Skills with the Add skills sheet already up. */
-    skillsAdd?: boolean;
+    skillsAdd?: boolean | SkillsAddSeed;
     /** Covers the screen as an English to Arabic pick would, with this platform's buttons, whatever the device is. */
     languageSwitch?: 'android' | 'ios';
     /** The language the cover is for; Arabic when unset. */
@@ -254,6 +255,34 @@ const RUNNING = {
 const running = (patch: Partial<SystemStatus>): SettingsScene => ({ section: 'advanced', gpuMemory: GPU, status: { ...RUNNING, ...patch } as SystemStatus });
 
 const chat = (id: string): Session => ({ id, title: `Chat ${id}`, created_at: '2026-11-13T00:00:00Z', updated_at: '2026-11-13T00:00:00Z' }) as Session;
+const LINK_URL = 'https://github.com/acme/skills';
+const linkSkill = (name: string, extra: Partial<LinkSkill>): LinkSkill => ({
+    name, description: `${name} helps with a task.`, path: name, has_code: false, permissions: [], permissions_unreadable: false,
+    verdict: 'ALLOW', findings: [], installed: false, update: false, error: null, ...extra,
+}) as unknown as LinkSkill;
+const LINK_PREVIEW: LinkPreview = {
+    link: LINK_URL, source: 'acme/skills', pin: 'f3a9c2', warning: 'Only add skills from people you trust.',
+    skills: [
+        linkSkill('release-notes', {}),
+        linkSkill('docs-lookup', { has_code: true, verdict: 'REVIEW', findings: ['Runs scripts/fetch.py'] }),
+        linkSkill('changelog', { installed: true, update: true }),
+        linkSkill('shell-helper', { installed: true }),
+        linkSkill('crypto-miner', { error: 'The audit blocked it.', verdict: 'BLOCK' }),
+        linkSkill('broken', { error: 'SKILL.md could not be read.', verdict: 'ERROR' }),
+    ],
+};
+const LINK_ADDED: LinkAddResult = {
+    added: [
+        { name: 'release-notes', updated: false, verdict: 'ALLOW', has_code: false, findings: [] },
+        { name: 'docs-lookup', updated: false, verdict: 'REVIEW', has_code: true, findings: [] },
+        { name: 'changelog', updated: true, verdict: 'ALLOW', has_code: false, findings: [] },
+    ],
+    failed: { 'shell-helper': 'A skill with this name is already installed from somewhere else.' },
+};
+const linkScene = (skillsAdd: SkillsAddSeed): SettingsScene => ({
+    section: 'skills', gpuMemory: GPU, skillsAdd,
+    data: { skills: { skills: [skill('summarize')], invalid: {} }, linkPreview: () => LINK_PREVIEW, linkAdd: () => LINK_ADDED },
+});
 const skill = (name: string): SkillInfo => ({ name, description: 'Summarize a document.', version: '1.0', tier: null, tools: [], path: `skills/${name}`, source: 'agent-bundled' }) as SkillInfo;
 
 const PERM_CHATS: FakeClientData = {
@@ -501,6 +530,14 @@ export const SETTINGS_SCENES: Record<string, SettingsScene> = {
             },
         },
     },
+    // Add skills from a link: a mix of new, update, review, code, blocked, elsewhere and unreadable skills; code unticked.
+    'skills-link-mix': linkScene({ read: LINK_URL }),
+    // The same link with Include skills with code ticked: the code skills can be picked.
+    'skills-link-code': linkScene({ read: LINK_URL, allowCode: true }),
+    // What was added, updated and not added.
+    // Add pressed with a code skill picked: the stacked "Add skills that run code?" confirm.
+    'skills-link-confirm': linkScene({ read: LINK_URL, allowCode: true, confirm: true }),
+    'skills-link-result': linkScene({ read: LINK_URL, allowCode: true, add: true }),
     'skills-add': { section: 'skills', gpuMemory: GPU, skillsAdd: true, data: { skills: { skills: [skill('summarize')], invalid: {} } } },
     // SET-GEN-04 to 07: a saved custom accent and tint, so Custom is selected and the Colors disclosure opens with Accent, Background tint and Reset.
     'general-custom-colors': { section: 'general', gpuMemory: GPU, appearance: { palette: 'custom', custom: { accent: '#C2410C', base: '#44403C' } } },

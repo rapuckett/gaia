@@ -65,7 +65,7 @@ function SettingsView({ found }: { found: SettingsScene }) {
                                                 <SeedCustomReport.Provider value={found.customReport ?? null}>
                                                     <SeedAutomationRemove.Provider value={found.confirmRemove ?? null}>
                                                         <SeedConfirmFullAccess.Provider value={!!found.confirmFullAccess}>
-                                                        <SeedSkillsAdd.Provider value={!!found.skillsAdd}>
+                                                        <SeedSkillsAdd.Provider value={found.skillsAdd ?? false}>
                                                             {found.crash ? (
                                                                 <SectionErrorBoundary area={`settings.${found.section}`} onReload={() => void queryClient.resetQueries()}>
                                                                     <Thrower />

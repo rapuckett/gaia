@@ -126,6 +126,7 @@ export const ENDPOINTS = {
     setupVisionModel: '/api/setup/vision-model',
     skills: '/api/skills',
     skillsFeatured: '/api/skills/featured',
+    skillsLinkAdd: '/api/skills/link/add',
     skillsLinkPreview: '/api/skills/link/preview',
     speech: '/api/speech',
     speechModel: '/api/speech/model',
