@@ -30,7 +30,7 @@ import type { ProviderId, ProviderInfo, ProviderModel } from '../../types';
 const DOWNLOAD_POLL_MS = 2000;
 
 function maskedKey(p: ProviderInfo, t: Translate): string {
-    if (p.key_source === 'environment') return t('settings.key.setIn', { name: p.env_var ?? '' });
+    if (p.key_source === 'environment') return t('settings.key.setIn', { name: isolate(p.env_var ?? '', 'ltr') });
     return `••••••••••••••••••••${p.key_hint ? ` ${p.key_hint}` : ''}`;
 }
 
