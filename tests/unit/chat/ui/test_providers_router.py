@@ -2451,6 +2451,21 @@ def test_a_pc_gateway_connect_waits_for_another_processs_move(
     assert lemonade.calls == []
 
 
+def test_a_keyless_pc_move_drops_lemonades_key_before_the_address_changes(
+    client, lemonade, bound_gateway
+):
+    del bound_gateway[gateway.GATEWAY_KEY_SLOT]
+    client.post("/api/providers/amd/connect", json={"base_url": NEW_URL})
+    sent = [(c["method"], c["path"]) for c in lemonade.calls]
+    assert sent.index(("DELETE", "cloud/auth/amd")) < sent.index(("POST", "install"))
+    installed = [c for c in lemonade.calls if c["path"] == "install"]
+    assert installed[0]["json"]["base_url"] == NEW_URL
+    assert installed[0]["gateway"] == OLD_URL
+    assert not any(
+        c["path"] == "cloud/auth" and c["method"] == "POST" for c in lemonade.calls
+    )
+
+
 def test_a_key_saved_before_bindings_is_bound_to_the_current_gateway(
     client, lemonade, bound_gateway
 ):

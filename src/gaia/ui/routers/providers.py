@@ -2285,7 +2285,8 @@ def _prepare_gateway_move(
 
     A legacy saved key is bound to the address it serves first. Without a new
     key, a move the saved key isn't bound to is refused before anything
-    changes, rather than replaying that key to the new address.
+    changes, rather than replaying that key to the new address. With a key or
+    without, Lemonade's copy of the old one goes before the address changes.
     """
     from gaia.llm.gateway import GatewayKeyMismatch, same_gateway_url
 
@@ -2295,12 +2296,8 @@ def _prepare_gateway_move(
         return False
     saved = _bound_saved_key(old_url)
     try:
-        if not new_key:
-            if saved and not same_gateway_url(saved.base_url, new_url):
-                raise ProviderError(
-                    str(GatewayKeyMismatch(saved.base_url, new_url)), 409
-                )
-            return False
+        if not new_key and saved and not same_gateway_url(saved.base_url, new_url):
+            raise ProviderError(str(GatewayKeyMismatch(saved.base_url, new_url)), 409)
     finally:
         saved = None
     if not _holds_key(before) or before.get("env_var_set"):
