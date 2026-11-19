@@ -783,13 +783,11 @@ class TestRememberedToken:
         assert gw.recall_token() is None
 
     def test_ensure_authenticated_restores_after_a_lemonade_restart(
-        self, manager, monkeypatch
+        self, manager, vault
     ):
         """Lemonade forgets its token on restart; without this the user
         re-enters it every time."""
-        vault = {GATEWAY_SECRET_NAME: "remembered-tok"}
-        monkeypatch.setattr("gaia.connectors.store.peek_secret", vault.get)
-        monkeypatch.setattr("gaia.connectors.store.save_secret", vault.__setitem__)
+        vault[GATEWAY_SECRET_NAME] = "remembered-tok"
         sent = {}
 
         def fake_request(method, url, **kwargs):
@@ -809,11 +807,13 @@ class TestRememberedToken:
             assert manager.ensure_authenticated() is True
 
         assert sent["key"] == "remembered-tok"
-        # A key saved before bindings is bound to the gateway it served.
-        assert json.loads(vault[GATEWAY_SECRET_NAME]) == {
+        # A key saved before bindings moves to the v2 slot, bound to the
+        # gateway it served, and the slot an older GAIA reads is emptied.
+        assert json.loads(vault[gateway_module.GATEWAY_KEY_SLOT]) == {
             "key": "remembered-tok",
             "base_url": "https://gw/v1",
         }
+        assert GATEWAY_SECRET_NAME not in vault
 
     def test_a_no_op_keyring_fails_loudly_instead_of_pretending(self, monkeypatch):
         """keyring's null backend accepts a write and stores nothing.
@@ -1872,3 +1872,93 @@ class TestGatewayKeyLock:
         assert isinstance(errors[0], gateway_module.GatewayBusy)
         with lock:
             pass
+
+
+# --------------------------------------------------------------------------
+# The v2 slot: a key an older GAIA can't read, and so can't hand anywhere
+# --------------------------------------------------------------------------
+
+
+class TestKeySlots:
+    def test_a_saved_key_goes_to_v2_and_empties_the_legacy_slot(self, vault):
+        vault[GATEWAY_SECRET_NAME] = "old-bare-key"
+        gateway_module.remember_token("new-key", "https://gw.example.com/v1")
+        assert GATEWAY_SECRET_NAME not in vault
+        assert json.loads(vault[gateway_module.GATEWAY_KEY_SLOT]) == {
+            "key": "new-key",
+            "base_url": "https://gw.example.com/v1",
+        }
+        assert gateway_module.read_stored_key() == GatewayKey(
+            "new-key", "https://gw.example.com/v1"
+        )
+
+    def test_reading_never_writes_and_v2_wins(self, vault, monkeypatch):
+        vault[GATEWAY_SECRET_NAME] = "old-bare-key"
+        monkeypatch.setattr(
+            "gaia.connectors.store.save_secret",
+            lambda *a: pytest.fail("a read wrote the credential store"),
+        )
+        record = gateway_module.read_stored_key()
+        assert record.legacy and record.base_url is None
+        assert gateway_module.use_stored_key(record, "https://gw/v1") == "old-bare-key"
+        assert vault == {GATEWAY_SECRET_NAME: "old-bare-key"}
+        vault[gateway_module.GATEWAY_KEY_SLOT] = json.dumps(
+            {"key": "bound", "base_url": "https://gw/v1"}
+        )
+        assert gateway_module.read_stored_key() == GatewayKey("bound", "https://gw/v1")
+
+    @pytest.mark.parametrize(
+        "legacy, bound_to",
+        [
+            ("bare-key", "https://current.example/v1"),
+            (
+                json.dumps({"key": "bare-key", "base_url": "https://own.example/v1"}),
+                "https://own.example/v1",
+            ),
+        ],
+    )
+    def test_migration_moves_a_legacy_key_bound_to_its_gateway(
+        self, vault, legacy, bound_to
+    ):
+        vault[GATEWAY_SECRET_NAME] = legacy
+        record = gateway_module.read_stored_key()
+        moved = gateway_module.migrate_legacy_key(record, "https://current.example/v1")
+        assert moved == GatewayKey("bare-key", bound_to)
+        assert vault == {
+            gateway_module.GATEWAY_KEY_SLOT: json.dumps(
+                {"key": "bare-key", "base_url": bound_to}
+            )
+        }
+
+    def test_a_store_that_refuses_the_move_fails_loudly(self, vault, monkeypatch):
+        from gaia.connectors.errors import ConnectorsError
+
+        vault[GATEWAY_SECRET_NAME] = "bare-key"
+
+        def locked(name, value):
+            raise ConnectorsError("Keyring set_password failed: locked")
+
+        monkeypatch.setattr("gaia.connectors.store.save_secret", locked)
+        record = gateway_module.read_stored_key()
+        with pytest.raises(GatewayError, match="couldn't move the saved gateway key"):
+            gateway_module.migrate_legacy_key(record, "https://gw/v1")
+        assert vault == {GATEWAY_SECRET_NAME: "bare-key"}
+
+    def test_forgetting_empties_both_slots(self, vault):
+        vault[GATEWAY_SECRET_NAME] = "bare-key"
+        vault[gateway_module.GATEWAY_KEY_SLOT] = json.dumps(
+            {"key": "k", "base_url": "https://gw/v1"}
+        )
+        assert gateway_module.forget_token() is True
+        assert vault == {}
+
+    def test_an_unreadable_store_is_logged_as_a_warning(self, monkeypatch, caplog):
+        import logging
+
+        def broken(name):
+            raise RuntimeError("keychain is locked")
+
+        monkeypatch.setattr("gaia.connectors.store.peek_secret", broken)
+        with caplog.at_level(logging.WARNING, logger="gaia.llm.gateway"):
+            assert gateway_module.recall_stored_key() is None
+        assert "keychain is locked" in caplog.text

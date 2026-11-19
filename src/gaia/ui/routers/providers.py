@@ -2208,7 +2208,8 @@ def _gateway_url(entry: Optional[Dict[str, Any]]) -> str:
 
 
 def _bound_saved_key(current_url: str) -> Optional["GatewayKey"]:
-    """The stored gateway key, a legacy one bound to *current_url* first.
+    """The stored gateway key, a legacy one moved to the v2 slot and bound to
+    *current_url* first.
 
     Called before the gateway moves, so a key saved before bindings existed is
     bound to the address it served, never to the new one.
@@ -2217,11 +2218,11 @@ def _bound_saved_key(current_url: str) -> Optional["GatewayKey"]:
         CredentialStoreLocked,
         CredentialStoreWaiting,
     )
-    from gaia.llm.gateway import GatewayError, bind_legacy_key
+    from gaia.llm.gateway import GatewayError, migrate_legacy_key
 
     try:
         record = _bounded_gateway_key()
-        return bind_legacy_key(record, current_url) if record else None
+        return migrate_legacy_key(record, current_url) if record else None
     except CredentialStoreLocked as e:
         raise ProviderError(str(e), 423) from e
     except CredentialStoreWaiting as e:

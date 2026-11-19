@@ -2246,7 +2246,8 @@ def bound_gateway(lemonade, monkeypatch, tmp_path):
 
 
 def _stored(vault):
-    return json.loads(vault[gateway.GATEWAY_SECRET_NAME])
+    assert gateway.GATEWAY_SECRET_NAME not in vault
+    return json.loads(vault[gateway.GATEWAY_KEY_SLOT])
 
 
 def _keys_went_only_home(lemonade):
@@ -2345,9 +2346,14 @@ def test_a_replay_after_a_failed_move_never_hands_the_old_key_to_the_new_url(
     assert _stored(bound_gateway) == {"key": OLD_KEY, "base_url": OLD_URL}
 
 
+@pytest.mark.parametrize("legacy", [False, True])
 def test_a_failed_move_puts_the_old_gateway_back_with_its_key(
-    device_client, lemonade, bound_gateway
+    device_client, lemonade, bound_gateway, legacy
 ):
+    if legacy:
+        # Saved before bindings: moved to the v2 slot bound to OLD_URL first.
+        del bound_gateway[gateway.GATEWAY_KEY_SLOT]
+        bound_gateway[gateway.GATEWAY_SECRET_NAME] = OLD_KEY
     resp = _move(device_client)
     assert resp.status_code == 422, resp.text
     assert resp.json() == {"detail": providers.DEVICE_GATEWAY_DETAIL}
@@ -2432,6 +2438,7 @@ def test_a_pc_gateway_connect_waits_for_another_processs_move(
 def test_a_key_saved_before_bindings_is_bound_to_the_current_gateway(
     client, lemonade, bound_gateway
 ):
+    del bound_gateway[gateway.GATEWAY_KEY_SLOT]
     bound_gateway[gateway.GATEWAY_SECRET_NAME] = OLD_KEY
     lemonade.cloud["amd"].update(runtime_key_set=False, models_discovered=False)
     listed = {p["id"]: p for p in client.get("/api/providers").json()["providers"]}

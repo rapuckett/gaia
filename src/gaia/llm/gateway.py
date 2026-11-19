@@ -420,9 +420,13 @@ def describe_unavailable(model_id: str, entry: Dict[str, Any]) -> str:
     )
 
 
-# Slot name in the OS credential store. Namespaced by provider so a second
+# Slot names in the OS credential store. Namespaced by provider so a second
 # gateway would not collide.
+#: The legacy slot: a bare key, which a GAIA older than bound keys reads and
+#: hands to any gateway. GAIA only reads it, to move its key to the v2 slot.
 GATEWAY_SECRET_NAME = f"gateway:{GATEWAY_PROVIDER}"
+#: The key bound to its gateway's address, as a JSON record no older GAIA reads.
+GATEWAY_KEY_SLOT = f"{GATEWAY_SECRET_NAME}:v2"
 
 #: How long a replay or a move of the gateway waits for another one to finish.
 GATEWAY_KEY_LOCK_TIMEOUT = 60.0
@@ -505,12 +509,14 @@ class GatewayKey:
     """The stored gateway key and the gateway address it was saved with.
 
     ``base_url`` is None only for a key saved before keys were bound to an
-    address; :func:`use_stored_key` binds it on first use. The key itself is
-    left out of ``repr`` so a log line can never carry it.
+    address. ``legacy`` is True while the key still sits in the legacy slot,
+    which :func:`migrate_legacy_key` empties. The key itself is left out of
+    ``repr`` so a log line can never carry it.
     """
 
     key: str = field(repr=False)
     base_url: Optional[str] = None
+    legacy: bool = False
 
 
 class GatewayKeyMismatch(GatewayError):
@@ -554,16 +560,22 @@ def _encode_key(key: str, base_url: str) -> str:
     return json.dumps({"key": key, "base_url": base_url.strip().rstrip("/")})
 
 
-def _decode_key(raw: Optional[str]) -> Optional[GatewayKey]:
-    """A stored slot value as a :class:`GatewayKey`; a bare string is a legacy key."""
+def _decode_key(raw: Optional[str], *, legacy: bool = False) -> Optional[GatewayKey]:
+    """A stored slot value as a :class:`GatewayKey`.
+
+    A bare string is a key from before bindings, and only the legacy slot holds
+    one; a record there was written by a build that kept records in it.
+    """
     if not raw or not raw.strip():
         return None
     try:
         record = json.loads(raw)
     except ValueError:
-        return GatewayKey(raw.strip())
+        record = None
     if not isinstance(record, dict):
-        return GatewayKey(raw.strip())
+        if legacy:
+            return GatewayKey(raw.strip(), legacy=True)
+        record = {}
     key, base_url = record.get("key"), record.get("base_url")
     if not isinstance(key, str) or not key.strip() or not isinstance(base_url, str):
         raise GatewayError(
@@ -571,16 +583,16 @@ def _decode_key(raw: Optional[str]) -> Optional[GatewayKey]:
             "reads. Enter the key again in Settings › Model or with "
             "`gaia gateway auth`."
         )
-    return GatewayKey(key.strip(), base_url)
+    return GatewayKey(key.strip(), base_url, legacy=legacy)
 
 
 def stored_secret_value(raw: Optional[str]) -> Optional[str]:
-    """The key inside a stored slot value, for redaction; never logged.
+    """The key inside either slot's value, for redaction; never logged.
 
     A record GAIA can't read is returned whole, so it is still redacted.
     """
     try:
-        record = _decode_key(raw)
+        record = _decode_key(raw, legacy=True)
     except GatewayError:
         return raw
     return record.key if record else None
@@ -597,12 +609,14 @@ def remember_token(token: str, base_url: str) -> None:
     quietly become a readable file.
 
     *base_url* is the gateway the token was accepted at. It is stored in the
-    same record, so the token is only ever handed to that gateway
-    (:func:`use_stored_key`).
+    same record, in the v2 slot, so the token is only ever handed to that
+    gateway (:func:`use_stored_key`); the legacy slot is emptied after, so an
+    older GAIA finds no key to hand anywhere.
 
     Still never written to ``gateway.json`` or any other GAIA file.
     """
-    from gaia.connectors.store import peek_secret, save_secret
+    from gaia.connectors.errors import ConnectorsError
+    from gaia.connectors.store import delete_secret, peek_secret, save_secret
 
     token = (token or "").strip()
     if not token:
@@ -613,13 +627,22 @@ def remember_token(token: str, base_url: str) -> None:
             f"belongs to, and {base_url!r} is not one."
         )
     record = _encode_key(token, base_url)
-    save_secret(GATEWAY_SECRET_NAME, record)
+    save_secret(GATEWAY_KEY_SLOT, record)
     # Read it back. keyring's null backend — which a headless Linux box or
     # PYTHON_KEYRING_BACKEND=null selects — accepts a write and stores nothing,
     # so the save "succeeds" and the user is told the token was remembered
     # right before being asked for it again. Fail loudly instead.
-    if peek_secret(GATEWAY_SECRET_NAME) != record:
+    if peek_secret(GATEWAY_KEY_SLOT) != record:
         raise GatewayError(_no_credential_store_message())
+    try:
+        delete_secret(GATEWAY_SECRET_NAME)
+    except ConnectorsError as e:
+        raise GatewayError(
+            f"GAIA saved the gateway key, but couldn't remove the copy older GAIA "
+            f"versions read from the OS credential store: {e}. Remove "
+            f"'secret:{GATEWAY_SECRET_NAME}' from it, or run `gaia gateway auth` "
+            f"again once the store is unlocked."
+        ) from e
 
 
 def _no_credential_store_message(platform: Optional[str] = None) -> str:
@@ -698,7 +721,10 @@ def read_stored_key() -> Optional[GatewayKey]:
     try:
         from gaia.connectors.store import peek_secret
 
-        raw = peek_secret(GATEWAY_SECRET_NAME)
+        raw = peek_secret(GATEWAY_KEY_SLOT)
+        legacy = not raw
+        if legacy:
+            raw = peek_secret(GATEWAY_SECRET_NAME)
     except Exception as e:  # noqa: BLE001 - keyring backends raise anything
         raise GatewayError(
             f"Could not read the gateway token from the OS credential store: {e}. "
@@ -706,7 +732,7 @@ def read_stored_key() -> Optional[GatewayKey]:
             f"GAIA_GATEWAY_TOKEN in GAIA's environment. "
             f"See https://amd-gaia.ai/docs/guides/llm-gateway."
         ) from e
-    return _decode_key(raw)
+    return _decode_key(raw, legacy=legacy)
 
 
 def recall_stored_key() -> Optional[GatewayKey]:
@@ -714,7 +740,7 @@ def recall_stored_key() -> Optional[GatewayKey]:
     try:
         return read_stored_key()
     except GatewayError as e:
-        log.debug(str(e))
+        log.warning(str(e))
         return None
 
 
@@ -735,21 +761,36 @@ def recall_token() -> Optional[str]:
     try:
         return read_stored_token()
     except GatewayError as e:
-        log.debug(str(e))
+        log.warning(str(e))
         return None
 
 
-def bind_legacy_key(record: GatewayKey, current_url: str) -> GatewayKey:
-    """Bind a key saved before keys carried their gateway to *current_url*.
+def migrate_legacy_key(record: GatewayKey, current_url: str) -> GatewayKey:
+    """Move a key still in the legacy slot into the v2 slot, and empty the legacy one.
 
-    *current_url* is the gateway the key serves now. A move calls this before
-    it changes anything, so a legacy key is never bound to the new address.
+    A key saved before bindings is bound to *current_url*, the gateway it
+    serves now. An explicit step, taken where GAIA hands the key to Lemonade or
+    before the gateway moves, never on a read: a move calls it before changing
+    anything, so a legacy key is never bound to the new address.
+
+    Raises:
+        GatewayError: the OS credential store wouldn't take the move.
     """
-    if record.base_url is not None:
+    from gaia.connectors.errors import ConnectorsError
+
+    if not record.legacy:
         return record
-    remember_token(record.key, current_url)
-    log.info(f"Bound the saved gateway key to {_host_of(current_url)}.")
-    return GatewayKey(record.key, current_url.strip().rstrip("/"))
+    bound_url = (record.base_url or current_url).strip().rstrip("/")
+    try:
+        remember_token(record.key, bound_url)
+    except ConnectorsError as e:
+        raise GatewayError(
+            f"GAIA couldn't move the saved gateway key to its new place in the OS "
+            f"credential store: {e}. Unlock the store and try again, or enter the "
+            f"key again in Settings › Model or with `gaia gateway auth`."
+        ) from e
+    log.info(f"Moved the saved gateway key, bound to {_host_of(bound_url)}.")
+    return GatewayKey(record.key, bound_url)
 
 
 def use_stored_key(
@@ -757,22 +798,24 @@ def use_stored_key(
 ) -> str:
     """The stored key, for sending to *target_url* only if it was saved with it.
 
-    A legacy key is bound to *current_url* first (default *target_url*: the
-    gateway Lemonade serves it to now). Raises :class:`GatewayKeyMismatch`.
+    A key saved before bindings counts as bound to *current_url* (default
+    *target_url*: the gateway Lemonade serves it to now); nothing is written.
+    Raises :class:`GatewayKeyMismatch`.
     """
     if not isinstance(record, GatewayKey):
         raise TypeError("a stored gateway key must be read with read_stored_key")
-    bound = bind_legacy_key(record, current_url or target_url)
-    if not same_gateway_url(bound.base_url, target_url):
-        raise GatewayKeyMismatch(bound.base_url, target_url)
-    return bound.key
+    bound_url = record.base_url or current_url or target_url
+    if not same_gateway_url(bound_url, target_url):
+        raise GatewayKeyMismatch(bound_url, target_url)
+    return record.key
 
 
 def forget_token() -> bool:
-    """Remove the remembered token. True when one was actually stored."""
+    """Remove the remembered token from both slots. True when one was stored."""
     from gaia.connectors.store import delete_secret
 
     had = recall_token() is not None
+    delete_secret(GATEWAY_KEY_SLOT)
     delete_secret(GATEWAY_SECRET_NAME)
     return had
 
@@ -1429,7 +1472,17 @@ class GatewayManager:
                 f"auth`, or unset {GATEWAY_ENV_VAR} if it is stale."
             )
             return False
-        found = lemonade_token_with_source(recall, status.base_url)
+
+        def recall_bound() -> Optional[GatewayKey]:
+            # Handing the key over is where a legacy one moves to the v2 slot.
+            record = (recall or recall_stored_key)()
+            if not record:
+                return None
+            return migrate_legacy_key(
+                record, status.base_url or GatewayState.load().base_url
+            )
+
+        found = lemonade_token_with_source(recall_bound, status.base_url)
         if not found:
             return False
         token = found[0]

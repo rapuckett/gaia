@@ -157,6 +157,10 @@ def forget_key(provider: str) -> bool:
     from gaia.connectors.store import delete_secret
 
     slot = _check(provider)
+    if provider == GATEWAY_PROVIDER:
+        from gaia.llm.gateway import forget_token
+
+        return forget_token()
     had = recall_key(provider) is not None
     delete_secret(slot)
     return had
