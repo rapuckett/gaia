@@ -1172,3 +1172,79 @@ class TestDaemonRoutes:
             headers=auth,
         )
         assert r.status_code == 200 and box.conf.exists()
+
+
+class TestOneChangeAtATime:
+    @pytest.fixture
+    def held(self, box):
+        import os
+
+        from gaia.config import gaia_home
+        from gaia.daemon.lock import try_lock
+
+        path = gaia_home() / "gpu_memory.lock"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        fd = os.open(path, os.O_RDWR | os.O_CREAT)
+        assert try_lock(fd)
+        yield path
+        os.close(fd)
+
+    def test_apply_and_revert_refuse_while_held(self, held, box):
+        with pytest.raises(gm.Busy, match="already waiting for approval"):
+            gm.apply(96, True)
+        with pytest.raises(gm.Busy):
+            gm.revert(True)
+        assert box.calls == []
+
+    def test_another_process_holding_it_blocks_apply(self, box):
+        import os
+        import subprocess as sp
+        import sys
+
+        from gaia.config import gaia_home
+
+        code = (
+            "import os, sys\n"
+            "from gaia.daemon.lock import try_lock\n"
+            "fd = os.open(sys.argv[1], os.O_RDWR | os.O_CREAT)\n"
+            "assert try_lock(fd)\n"
+            "print('held', flush=True)\n"
+            "sys.stdin.readline()\n"
+        )
+        path = gaia_home() / "gpu_memory.lock"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        child = sp.Popen(
+            [sys.executable, "-c", code, str(path)],
+            stdin=sp.PIPE,
+            stdout=sp.PIPE,
+            text=True,
+        )
+        try:
+            assert child.stdout.readline().strip() == "held"
+            with pytest.raises(gm.Busy):
+                gm.apply(96, True)
+        finally:
+            child.communicate("\n", timeout=10)
+        assert gm.apply(96, True)["pending"]["state"] == "restart_required"
+        assert os.name  # lock released once the other process exits
+
+    def test_unconfirmed_is_still_400_not_busy(self, held):
+        with pytest.raises(gm.NotConfirmed):
+            gm.apply(96, False)
+
+    def test_both_routes_answer_409_with_the_same_detail(self, held, ui):
+        from gaia.daemon.gpu_memory_routes import build_gpu_memory_router
+
+        app = FastAPI()
+        app.include_router(build_gpu_memory_router("t"))
+        daemon = TestClient(app)
+        auth = {"Authorization": "Bearer t"}
+        body = {"setting_gb": 96, "confirm": True}
+        a = ui.post("/api/gpu-memory/apply", json=body, headers=UI)
+        b = daemon.post("/daemon/v1/gpu-memory/apply", json=body, headers=auth)
+        assert a.status_code == b.status_code == 409
+        assert a.json()["detail"] == b.json()["detail"] == gm.BUSY_MESSAGE
+        r = daemon.post(
+            "/daemon/v1/gpu-memory/revert", json={"confirm": True}, headers=auth
+        )
+        assert r.status_code == 409 and r.json()["detail"] == gm.BUSY_MESSAGE
