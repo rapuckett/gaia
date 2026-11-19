@@ -2142,12 +2142,17 @@ def _public_addresses(host: str, port: int) -> List[str]:
     return addresses
 
 
+#: How many of a gateway's addresses a device's check dials, each up to ``REACH_TIMEOUT``.
+_GATEWAY_DIAL_LIMIT = 3
+
+
 def _dial_checked_addresses(host: str, port: int, addresses: List[str]) -> None:
     """A TLS handshake as *host* with one of *addresses*, already checked public.
 
     Dials the addresses themselves, so a second lookup of *host* (DNS
     rebinding) can't point the check at another one; SNI and the certificate
-    check still use *host*. Raises ``OSError`` when none completes.
+    check still use *host*. Tries the first :data:`_GATEWAY_DIAL_LIMIT`, and
+    raises ``OSError`` when none completes.
     """
     import ssl
 
@@ -2155,7 +2160,7 @@ def _dial_checked_addresses(host: str, port: int, addresses: List[str]) -> None:
 
     context = ssl.create_default_context()
     failure: Optional[OSError] = None
-    for address in addresses:
+    for address in addresses[:_GATEWAY_DIAL_LIMIT]:
         try:
             with socket.create_connection(
                 (address, port), timeout=REACH_TIMEOUT
@@ -2360,6 +2365,23 @@ def _connect_device_gateway(
     retry_keyring()
     _discard_key_reads(AMD)
     audit_approval(request, f"{_NAMES[AMD]} gateway change submitted")
+    # Dialing takes seconds per address, so it runs before the lock is taken.
+    unchanged_url = None
+    try:
+        if target is not None:
+            addresses = _public_addresses(*target)
+            if _gateway_check_applies():
+                _dial_checked_addresses(*target, addresses)
+        elif _gateway_check_applies():
+            try:
+                current = _cloud_entry(AMD)
+            except ProviderError as e:
+                _raise(e, request, key)
+            unchanged_url = _registration(AMD, body, current)["base_url"]
+            check_gateway_reachable(unchanged_url)
+    except (GatewayUnreachable, OSError, ValueError) as e:
+        logger.warning("A paired device's %s gateway was refused: %s", _NAMES[AMD], e)
+        raise HTTPException(status_code=422, detail=DEVICE_GATEWAY_DETAIL) from e
     with _gateway_move_lock:
         try:
             _require_loopback(_base_url())
@@ -2373,6 +2395,14 @@ def _connect_device_gateway(
                 )
             previous = dict(current) if current else None
             registration = _registration(AMD, body, previous)
+            if unchanged_url is not None and not same_gateway_url(
+                registration["base_url"], unchanged_url
+            ):
+                raise ProviderError(
+                    f"The {_NAMES[AMD]} gateway's address changed on the PC while "
+                    "GAIA checked it. Try again.",
+                    409,
+                )
             old_url = _gateway_url(previous)
             saved = _bound_saved_key(old_url)
             if _holds_key(previous) and not (
@@ -2386,18 +2416,6 @@ def _connect_device_gateway(
                 )
         except ProviderError as e:
             _raise(e, request, key)
-        try:
-            if target is not None:
-                addresses = _public_addresses(*target)
-                if _gateway_check_applies():
-                    _dial_checked_addresses(*target, addresses)
-            elif _gateway_check_applies():
-                check_gateway_reachable(registration["base_url"])
-        except (GatewayUnreachable, OSError, ValueError) as e:
-            logger.warning(
-                "A paired device's %s gateway was refused: %s", _NAMES[AMD], e
-            )
-            raise HTTPException(status_code=422, detail=DEVICE_GATEWAY_DETAIL) from e
         try:
             # Lemonade's copy of the old key goes before the address changes.
             status, result = _lemonade("DELETE", f"cloud/auth/{AMD}")
@@ -2459,16 +2477,16 @@ def connect_provider(
 ) -> Dict[str, Any]:
     """Register the provider and hand Lemonade the key; keep a key that works.
 
-    The gateway's connect holds the machine-wide gateway key lock throughout,
-    so no other process replays a key while its address or key changes.
+    The gateway's connect holds the machine-wide gateway key lock while it
+    changes Lemonade, so no other process replays a key while its address or
+    key changes. A device's check of a new gateway's network runs before it.
     """
     if provider != AMD:
         return _connect_provider(provider, body, request)
     from gaia.llm.gateway import GatewayBusy
 
     try:
-        with _gateway_move_lock:
-            return _connect_provider(provider, body, request)
+        return _connect_provider(provider, body, request)
     except GatewayBusy as e:
         raise HTTPException(status_code=409, detail=str(e)) from e
 
@@ -2478,7 +2496,6 @@ def _connect_provider(
 ) -> Dict[str, Any]:
     # A new key gets its own settle window.
     _key_settle_started.pop(provider, None)
-    from gaia.llm.cloud_keys import CloudKeyError, ensure_authenticated, remember_key
 
     _known(provider)
     if provider == LOCAL:
@@ -2510,7 +2527,18 @@ def _connect_provider(
                 "key. Reconnect without them to keep the saved ones.",
             )
         return _connect_device_gateway(body, key, request)
+    if provider != AMD:
+        return _connect_here(provider, body, request, key, on_pc)
+    with _gateway_move_lock:
+        return _connect_here(provider, body, request, key, on_pc)
+
+
+def _connect_here(
+    provider: str, body: ConnectRequest, request: Request, key: str, on_pc: bool
+) -> Dict[str, Any]:
+    """:func:`_connect_provider` for a connect that isn't a device's gateway move."""
     from gaia.connectors.store import retry_keyring
+    from gaia.llm.cloud_keys import CloudKeyError, ensure_authenticated, remember_key
 
     # Connecting needs the key store, so it may ask the OS again.
     retry_keyring()

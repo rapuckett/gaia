@@ -3539,9 +3539,11 @@ credential store (the slot the TUI uses). A key is never echoed back or logged.
     back; when that restore fails too, a **502** asks for a working address and
     key. A move is refused (**409**) when GAIA holds no saved key for the
     current gateway to put back. A device's host is looked up once, every
-    address must be public, and GAIA's check dials those addresses with TLS
-    for the name given, so a second lookup can't point it elsewhere. One try
-    per device every 10 s (**429**).
+    address must be public, and GAIA's check dials the first three of those
+    addresses with TLS for the name given, so a second lookup can't point it
+    elsewhere. The check runs before the move takes the gateway key lock, so a
+    slow host doesn't hold up other replays. One try per device every 10 s
+    (**429**).
 
     Any change of the `amd` address, with a key or without, first drops the key
     Lemonade holds for the old address. Only one replay or move of the gateway

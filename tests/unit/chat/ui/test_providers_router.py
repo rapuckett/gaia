@@ -2517,6 +2517,48 @@ def test_device_gateway_moves_wait_for_each_other(
     assert lemonade.cloud["amd"]["base_url"] == NEW_URL
 
 
+def test_a_device_gateway_is_dialed_before_the_lock_is_taken(
+    device_client, lemonade, bound_gateway, monkeypatch
+):
+    """A slow dial of the new gateway never holds up another process's replay."""
+    monkeypatch.setattr(gateway, "GATEWAY_KEY_LOCK_TIMEOUT", 0.2)
+    monkeypatch.setattr(providers, "_gateway_check_applies", lambda: True)
+    lemonade.answers[("POST", "cloud/auth")] = None
+    took = []
+
+    def slow_dial(host, port, addresses):
+        def replay():
+            try:
+                with providers._gateway_move_lock:
+                    took.append(True)
+            except gateway.GatewayBusy:
+                took.append(False)
+
+        other = threading.Thread(target=replay)
+        other.start()
+        other.join(timeout=5)
+
+    monkeypatch.setattr(providers, "_dial_checked_addresses", slow_dial)
+    resp = _move(device_client)
+    assert took == [True]
+    assert resp.status_code == 200, resp.text
+    assert lemonade.cloud["amd"]["base_url"] == NEW_URL
+
+
+def test_a_gateway_check_dials_at_most_three_addresses(monkeypatch):
+    dialed = []
+
+    def refuse(address, timeout):
+        dialed.append(address[0])
+        raise OSError("connection refused")
+
+    monkeypatch.setattr(providers.socket, "create_connection", refuse)
+    addresses = [f"93.184.215.{n}" for n in range(1, 16)]
+    with pytest.raises(OSError, match="did not complete a TLS handshake"):
+        providers._dial_checked_addresses("gw.example.com", 443, addresses)
+    assert dialed == addresses[:3]
+
+
 def test_a_pc_gateway_connect_waits_for_another_processs_move(
     client, lemonade, bound_gateway, monkeypatch
 ):
