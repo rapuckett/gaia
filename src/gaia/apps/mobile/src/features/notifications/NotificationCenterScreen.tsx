@@ -221,7 +221,10 @@ function PolicyDetails({ n }: { n: GaiaNotification }) {
         <Stack gap="xs">
             {n.tool ? line(t('activity.policy.tool'), n.tool) : null}
             {n.reason ? (
-                <Text role="caption" tone="muted">{t('notifications.reason')}: {n.reason}</Text>
+                <Stack>
+                    <Text role="caption" tone="muted">{t('notifications.reason')}:</Text>
+                    <Text role="caption" tone="muted" dir="ltr">{n.reason}</Text>
+                </Stack>
             ) : null}
             {n.ruleIds && n.ruleIds.length > 0 ? line(t('activity.policy.rules'), n.ruleIds.join(', ')) : null}
             {n.policyVersion ? line(t('activity.policy.policy'), n.policyVersion) : null}
