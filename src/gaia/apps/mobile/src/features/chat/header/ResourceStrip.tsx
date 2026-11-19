@@ -22,7 +22,8 @@ export function ResourceStrip({ onClose }: { onClose: () => void }) {
                         {tiles.length > 0 ? (
                             tiles.map((tile) => (
                                 <Stack key={tile.key} gap="xs">
-                                    <Row gap="sm" justify="between">
+                                    {/* A value too wide to share the line moves under its label instead of squeezing it to a letter a line. */}
+                                    <Row gap="sm" justify="between" wrap>
                                         <View style={{ flexShrink: 1 }}>
                                             <Text role="label" weight="medium">
                                                 {tile.label}
