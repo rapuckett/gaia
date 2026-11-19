@@ -1119,7 +1119,7 @@ def test_connect_fireworks_sends_the_tui_request_shapes(client, lemonade, keys):
         "provider": "fireworks",
         "api_key": KEY,
     }
-    assert lemonade.paths() == ["install", "cloud/auth", "system-info"]
+    assert lemonade.paths() == ["system-info", "install", "cloud/auth", "system-info"]
     assert all(c["allow_redirects"] is False for c in lemonade.calls)
     body = resp.json()
     assert body["remembered"] is True and body["remember_error"] is None
@@ -1516,17 +1516,15 @@ def test_connect_drops_a_key_that_discovers_no_models(
 
 def _registered(client, provider="fireworks"):
     view = next(
-        p for p in client.get("/api/providers").json()["providers"] if p["id"] == provider
+        p
+        for p in client.get("/api/providers").json()["providers"]
+        if p["id"] == provider
     )
     return view["registered"]
 
 
 def _mutations(lemonade):
-    return [
-        (c["method"], c["path"])
-        for c in lemonade.calls
-        if c["method"] != "GET"
-    ]
+    return [(c["method"], c["path"]) for c in lemonade.calls if c["method"] != "GET"]
 
 
 UNINSTALL = {"backend": "cloud", "provider": "fireworks"}
