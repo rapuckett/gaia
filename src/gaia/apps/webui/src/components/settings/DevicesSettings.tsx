@@ -56,7 +56,8 @@ const CHANGE_KINDS = {
     providerKeyRemoved: ['settings.devices.change.providerKeyRemoved', ['provider']],
     gatewayChanged: ['settings.devices.change.gatewayChanged', ['provider']],
     localOnlyOff: ['settings.devices.change.localOnlyOff', []],
-    permissionsDefault: ['settings.devices.change.permissionsDefault', []],
+    localOnlyOn: ['settings.devices.change.localOnlyOn', []],
+    agentInstalled: ['settings.devices.change.agentInstalled', []],
     skillAdded: ['settings.devices.change.skillAdded', ['name']],
     skillAddedCode: ['settings.devices.change.skillAddedCode', ['name']],
     connectorSetup: ['settings.devices.change.connectorSetup', ['connector']],
@@ -132,6 +133,11 @@ function changeWhat(c: DeviceChange): { what: MessageRef; unknownKind?: string }
             const base = p.source === 'discovery' ? 'settings.devices.change.memoryCommitDiscovery' : 'settings.devices.change.memoryCommitInference';
             return { what: ref(pluralKey(base, count), { count: markLtr(String(count)) }) };
         }
+        case 'permissionsDefault':
+            if (p.mode === 'ask') return { what: ref('settings.devices.change.permissionsDefaultAsk') };
+            if (p.mode === 'full_access') return { what: ref('settings.devices.change.permissionsDefaultFull') };
+            if (present(p.mode) && firstSight(`permissionsDefault:${String(p.mode)}`)) log.ui.warn(`A permission change with a mode this app has no label for: ${String(p.mode)}`);
+            return { what: ref('settings.devices.change.permissionsDefault') };
         case 'serverTarget':
             return { what: ref(p.mode === 'gaia' ? 'settings.devices.change.serverTargetGaia' : 'settings.devices.change.serverTarget') };
         case 'deviceRemoved':
