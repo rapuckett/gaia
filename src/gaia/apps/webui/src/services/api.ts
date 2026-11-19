@@ -15,8 +15,8 @@ import { ApiError, getFriendlyError as friendlyError, isBareInternalError, parse
 export { ApiError, parseErrorDetail, parseErrorFields, parseErrorStatus, StreamDroppedError, StreamStalledError, StreamTimeoutError } from './apiErrors';
 
 /** `getFriendlyError` in the interface language chosen now, unless `t` is given. */
-export function getFriendlyError(status: number, detail: string, t: Translate = getT()): string {
-    return friendlyError(status, detail, t);
+export function getFriendlyError(status: number, detail: string, t: Translate = getT(), body: Record<string, unknown> | null = null): string {
+    return friendlyError(status, detail, t, body);
 }
 
 /**
@@ -78,7 +78,7 @@ export async function apiFetch<T>(
         const errorText = await res.text().catch(() => '');
         log.api.error(`${method} ${url} - HTTP ${res.status}`, { errorText });
         const detail = parseErrorDetail(errorText);
-        throw new ApiError(getFriendlyError(res.status, detail), res.status, detail, parseErrorStatus(errorText), parseErrorFields(errorText), parseErrorBody(errorText));
+        throw new ApiError(getFriendlyError(res.status, detail, getT(), parseErrorBody(errorText)), res.status, detail, parseErrorStatus(errorText), parseErrorFields(errorText), parseErrorBody(errorText));
     }
 
     // Some endpoints (DELETE, fire-and-forget POSTs) intentionally return no
@@ -881,7 +881,7 @@ export async function uploadDocumentByPath(filepath: string, sessionId?: string 
 
 function uploadError(status: number, errorText: string): ApiError {
     const detail = parseErrorDetail(errorText);
-    return new ApiError(getFriendlyError(status, detail), status, detail, parseErrorStatus(errorText), [], parseErrorBody(errorText));
+    return new ApiError(getFriendlyError(status, detail, getT(), parseErrorBody(errorText)), status, detail, parseErrorStatus(errorText), [], parseErrorBody(errorText));
 }
 
 /**
@@ -1061,7 +1061,7 @@ export function uploadMedia(file: File, onProgress: (percent: number) => void, s
             }
             log.api.error(`POST ${url} - HTTP ${request.status}`, { errorText: request.responseText });
             const detail = parseErrorDetail(request.responseText);
-            reject(new ApiError(getFriendlyError(request.status, detail), request.status, detail, parseErrorStatus(request.responseText), [], parseErrorBody(request.responseText)));
+            reject(new ApiError(getFriendlyError(request.status, detail, getT(), parseErrorBody(request.responseText)), request.status, detail, parseErrorStatus(request.responseText), [], parseErrorBody(request.responseText)));
         };
         request.send(file);
     });
