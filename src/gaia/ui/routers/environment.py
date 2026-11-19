@@ -5,6 +5,8 @@
 from __future__ import annotations
 
 import asyncio
+import os
+from pathlib import Path
 from typing import List, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -20,7 +22,9 @@ from .. import session_outputs
 from ..database import ChatDatabase
 from ..dependencies import get_db
 from ..models import WireModel
-from ..security import audit_approval
+from ..security import allowed_device, audit_approval
+from ..utils import is_within_document_roots
+from .files import OUTSIDE_HOME_REFUSAL, device_withholds
 
 logger = get_logger(__name__)
 
@@ -135,6 +139,19 @@ def _session(db: ChatDatabase, session_id: str) -> dict:
     return session
 
 
+def _device_pick_refusal(path: str) -> Optional[str]:
+    """Why a paired device can't pick *path*, or None; never names a PC path."""
+    resolved = Path(os.path.expanduser(path)).resolve()
+    if not is_within_document_roots(resolved):
+        return OUTSIDE_HOME_REFUSAL
+    if device_withholds(resolved):
+        return (
+            "GAIA doesn't give a paired device this folder: it holds "
+            "credentials or keys."
+        )
+    return None
+
+
 @router.get(
     "/api/sessions/{session_id}/environment",
     response_model=SessionEnvironment,
@@ -172,8 +189,16 @@ async def add_folder(
     response_model=FolderCheckResponse,
     response_model_exclude_unset=True,
 )
-async def check_folder(body: FolderRequest) -> dict:
-    """Why a chat can't be given a folder, or None: the add step's own rule."""
+async def check_folder(body: FolderRequest, http_request: Request) -> dict:
+    """Why a chat can't be given a folder, or None: the add step's own rule.
+
+    An allowed paired device picks from the PC picker's home-wide scope, so a
+    folder that scope refuses is refused here too, without naming its path.
+    """
+    if allowed_device(http_request) is not None:
+        refusal = await asyncio.to_thread(_device_pick_refusal, body.path)
+        if refusal:
+            return {"refusal": refusal}
     try:
         await asyncio.to_thread(env.check_folder, body.path)
     except env.EnvironmentChangeError as e:

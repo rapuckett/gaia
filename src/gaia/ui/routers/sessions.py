@@ -43,6 +43,7 @@ from ..database import (
     resolved_default_model,
 )
 from ..dependencies import get_db
+from ..devices import DEVICE_PROMPT_EVENT, DEVICE_PROMPT_STATES
 from ..email_sidecar.profiles import profile_for
 from ..models import (
     AttachDocumentRequest,
@@ -56,7 +57,7 @@ from ..models import (
     WireModel,
 )
 from ..run_manager import run_manager
-from ..security import flagship_only, is_local_pc
+from ..security import allowed_device, flagship_only, is_local_pc
 from ..utils import UPLOAD_LINK_RE, message_to_response, session_to_response
 from .memory import _get_store as get_memory_store
 
@@ -242,6 +243,39 @@ async def emit_pc_event(event: dict) -> None:
     await _system_emitter.emit({**event, _PC_ONLY: True})
 
 
+#: Marks an event only the PC and the one device it names may receive.
+_FOR_DEVICE = "for_device"
+
+
+async def emit_device_prompt(
+    device_id: str, kind: str, action: str, state: str
+) -> None:
+    """Tell *device_id* and the PC where an OS prompt it caused on the PC stands.
+
+    *kind* is ``key_store`` or ``admin``; *action* names what the device started.
+
+    Raises:
+        ValueError: *device_id* is empty, or *state* isn't one of
+            ``DEVICE_PROMPT_STATES``.
+    """
+    if not isinstance(device_id, str) or not device_id:
+        raise ValueError("device_prompt needs the id of the device that asked")
+    if state not in DEVICE_PROMPT_STATES:
+        raise ValueError(
+            f"device_prompt state {state!r} is not one of {DEVICE_PROMPT_STATES}"
+        )
+    await _system_emitter.emit(
+        {
+            "type": DEVICE_PROMPT_EVENT,
+            "device_id": device_id,
+            "kind": kind,
+            "action": action,
+            "state": state,
+            _FOR_DEVICE: device_id,
+        }
+    )
+
+
 # ── Session CRUD ─────────────────────────────────────────────────────────────
 
 
@@ -370,11 +404,14 @@ async def session_events(request: Request):
 
     Frontend subscribes on mount; events are emitted by activate_session().
     Event shape: {"type": "set_active_session", "session_id": "<id>"}. The
-    PC also gets the events :func:`emit_pc_event` sends.
+    PC also gets the events :func:`emit_pc_event` sends, and the PC and the
+    device it names the ones :func:`emit_device_prompt` sends.
     """
     from fastapi.responses import StreamingResponse
 
     at_the_pc = is_local_pc(request)
+    device = allowed_device(request)
+    device_id = device.device_id if device else None
 
     async def generate():
         q = await _system_emitter.subscribe()
@@ -385,6 +422,11 @@ async def session_events(request: Request):
                     event = await asyncio.wait_for(q.get(), timeout=30.0)
                     if event.get(_PC_ONLY) and not at_the_pc:
                         continue
+                    if _FOR_DEVICE in event:
+                        target = event[_FOR_DEVICE]
+                        if not at_the_pc and (not target or target != device_id):
+                            continue
+                        event = {k: v for k, v in event.items() if k != _FOR_DEVICE}
                     yield f"data: {json.dumps(event)}\n\n"
                 except asyncio.TimeoutError:
                     yield ": keepalive\n\n"  # prevent proxy timeout

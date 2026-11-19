@@ -11,11 +11,11 @@ are reachable from the CLI (``gaia connectors ...``) and SDK
 (``import gaia.connectors; ...``) without going through this layer.
 
 Exception → HTTP mapping:
-- ``AuthRequiredError(NOT_CONNECTED)``             → 401
+- ``AuthRequiredError(NOT_CONNECTED)``             → 409
 - ``AuthRequiredError(AGENT_NOT_GRANTED)``         → 403
 - ``AuthRequiredError(CONNECTION_MISSING_SCOPES)`` → 403 + missing_scopes
-- ``AuthRequiredError(REAUTH_REQUIRED)``           → 401
-- ``ConnectionRevokedError``                       → 401
+- ``AuthRequiredError(REAUTH_REQUIRED)``           → 409
+- ``ConnectionRevokedError``                       → 409
 - ``ConnectionBusyError``                          → 503 + Retry-After
 - ``ScopeMismatchError``                           → 403
 - ``ConfigurationError``                           → 503 ``not_configured``
@@ -40,7 +40,9 @@ import os
 from pathlib import Path
 from typing import Any, AsyncIterator, Dict, List, Literal, Optional, Union
 
+import httpx
 import keyring
+import keyring.errors
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
@@ -63,6 +65,8 @@ from gaia.connectors.errors import (
     ConnectorsError,
     ConsentDeniedError,
     FlowInProgressError,
+    FlowOwnerError,
+    FlowStateMismatchError,
     FlowTimeoutError,
     InvalidConfigValueError,
     NoDeclaredScopesError,
@@ -70,6 +74,7 @@ from gaia.connectors.errors import (
     ScopeNotAllowedError,
     UnknownAgentError,
     UnknownConnectorError,
+    UnknownFlowError,
 )
 from gaia.connectors.events import set_emitter
 from gaia.connectors.flow import _pending as _flow_pending
@@ -97,8 +102,10 @@ from gaia.connectors.store import (
     retry_keyring,
 )
 
+from ..devices.changes import record_device_change
 from ..models import WireModel
 from ..security import (
+    allowed_device,
     audit_approval,
     is_local_pc,
     principal,
@@ -166,6 +173,16 @@ class AuthorizeRequest(BaseModel):
     # REQUIRED_CONNECTORS declaration (single source of truth) before handing
     # the map to the flow.
     grant_agents: List[str] = Field(default_factory=list)
+    # A paired device's own loopback port: the redirect lands on the device,
+    # which hands the code back through ``POST /flows/{flow_id}/complete``.
+    redirect_port: Optional[int] = Field(default=None, ge=1024, le=65535)
+
+
+class CompleteFlowRequest(BaseModel):
+    """Body for ``POST /api/connectors/flows/{flow_id}/complete``."""
+
+    code: str
+    state: str
 
 
 class GrantRequest(BaseModel):
@@ -454,7 +471,7 @@ def _raise_http_for(exc: ConnectorsError) -> HTTPException:
             AuthRequiredError.Reason.REAUTH_REQUIRED,
         ):
             return HTTPException(
-                status_code=401,
+                status_code=409,
                 detail={
                     "error": exc.reason.value,
                     "connector_id": exc.provider,
@@ -472,7 +489,7 @@ def _raise_http_for(exc: ConnectorsError) -> HTTPException:
         )
     if isinstance(exc, ConnectionRevokedError):
         return HTTPException(
-            status_code=401,
+            status_code=409,
             detail={"error": "connection_revoked", "connector_id": exc.provider},
         )
     if isinstance(exc, ScopeMismatchError):
@@ -485,6 +502,12 @@ def _raise_http_for(exc: ConnectorsError) -> HTTPException:
     if isinstance(exc, FlowTimeoutError):
         return HTTPException(status_code=408, detail=str(exc))
     if isinstance(exc, ConsentDeniedError):
+        return HTTPException(status_code=400, detail=str(exc))
+    if isinstance(exc, UnknownFlowError):
+        return HTTPException(status_code=404, detail=str(exc))
+    if isinstance(exc, FlowOwnerError):
+        return HTTPException(status_code=403, detail=str(exc))
+    if isinstance(exc, FlowStateMismatchError):
         return HTTPException(status_code=400, detail=str(exc))
     return HTTPException(status_code=500, detail=str(exc))
 
@@ -1135,6 +1158,13 @@ async def configure_connector(
 
     if not is_local_pc(request):
         audit_approval(request, f"connector {connector_id} set up")
+        await asyncio.to_thread(
+            record_device_change,
+            request,
+            "connectorSetup",
+            connector=REGISTRY.get(connector_id).display_name,
+            connector_id=connector_id,
+        )
     await _emitter.emit(
         "connector.configured",
         {"connector_id": connector_id, "account_id": result.get("account_id")},
@@ -1271,9 +1301,36 @@ async def disable_connector(connector_id: str) -> Dict[str, Any]:
     return await _set_connector_enabled(connector_id, False)
 
 
+def _device_redirect_port(
+    request: Request, connector_id: str, body: AuthorizeRequest
+) -> Optional[int]:
+    """The device's loopback port for a device flow; None for the PC's own flow."""
+    if is_local_pc(request):
+        if body.redirect_port is not None:
+            raise HTTPException(
+                status_code=422,
+                detail="redirect_port is for a paired device's sign-in. On the PC, "
+                "leave it out: GAIA catches the sign-in on this PC itself.",
+            )
+        return None
+    if body.redirect_port is None:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Connect {connector_id} on the PC running GAIA, or update the "
+            "GAIA app on this device: its sign-in has to finish on the device.",
+        )
+    if body.grant_agents:
+        raise HTTPException(
+            status_code=403,
+            detail="Choose which agents may use this account on the PC running "
+            "GAIA. A paired device can only start the sign-in.",
+        )
+    return body.redirect_port
+
+
 @router.post(
     "/{connector_id}/authorize",
-    dependencies=[Depends(_require_ui_header), Depends(require_local_pc)],
+    dependencies=[Depends(_require_ui_header), Depends(require_pc_or_allowed_device)],
     response_model=ConnectorAuthorizeResponse,
     response_model_exclude_unset=True,
 )
@@ -1287,17 +1344,75 @@ async def authorize(
     OAuth exchange succeeds — connecting a mailbox grants it to the email agent
     in the same flow (#2117). Scope resolution happens up front so an unknown
     or non-declaring agent fails the request before any browser step.
+
+    A paired device the PC allowed must send ``redirect_port``, the port of a
+    listener it holds on its own loopback; it may not grant agents. The PC
+    then binds nothing, and the device finishes with
+    ``POST /flows/{flow_id}/complete``. The PC must not send it.
     """
+    redirect_port = _device_redirect_port(request, connector_id, body)
+    device = allowed_device(request) if redirect_port is not None else None
     retry_keyring()
     grant_map = _resolve_grant_scopes(request, connector_id, body.grant_agents)
+    device_flow = (
+        {"redirect_port": redirect_port, "owner_device_id": device.device_id}
+        if device is not None
+        else {}
+    )
     try:
-        return await connections.start_authorization(
+        started = await connections.start_authorization(
             connector_id,
             scopes=_signin_scopes(connector_id, body.scopes, grant_map),
             grant_agents=grant_map or None,
+            **device_flow,
         )
     except ConnectorsError as e:
-        raise _raise_http_for(e) from e
+        raise _http_error_for(request, e) from e
+    if device is not None:
+        audit_approval(request, f"sign-in started for {connector_id}")
+    return started
+
+
+@router.post(
+    "/flows/{flow_id}/complete",
+    dependencies=[Depends(_require_ui_header), Depends(require_pc_or_allowed_device)],
+    response_model=ConnectorSummary,
+    response_model_exclude_unset=True,
+)
+async def complete_flow(
+    request: Request, flow_id: str, body: CompleteFlowRequest
+) -> Dict[str, Any]:
+    """Finish a paired device's sign-in with the code its loopback caught.
+
+    Only the device that started the flow may call this (403 for anyone
+    else, the PC included). An unknown, finished or expired flow is a 404; a
+    ``state`` that does not match is a 400 and ends the flow. The code is
+    exchanged on the PC with the PC's verifier, and the result is the
+    connector's summary: no token, code or secret.
+    """
+    device = allowed_device(request)
+    if device is None:
+        raise HTTPException(
+            status_code=403,
+            detail="Only the device that started this sign-in can finish it.",
+        )
+    retry_keyring()
+    try:
+        state = await connections.complete_device_authorization(
+            flow_id, device_id=device.device_id, code=body.code, state=body.state
+        )
+    except ConnectorsError as e:
+        raise _http_error_for(request, e) from e
+    except (httpx.HTTPError, keyring.errors.KeyringError) as e:
+        # Type only: the request this failed on carried the code.
+        logger.error(
+            "connectors: device sign-in flow_id=%s failed: %s",
+            flow_id,
+            type(e).__name__,
+        )
+        raise HTTPException(status_code=502, detail=DEVICE_CONNECTOR_ERROR) from e
+    audit_approval(request, f"sign-in finished for {state['provider']}")
+    return _connector_summary(state["provider"])
 
 
 # Keeps background device-poll tasks referenced so they aren't garbage
@@ -1412,10 +1527,27 @@ async def authorize_device(
 
 
 @router.delete(
-    "/_flows/{flow_id}", status_code=204, dependencies=[Depends(_require_ui_header)]
+    "/_flows/{flow_id}",
+    status_code=204,
+    dependencies=[Depends(_require_ui_header), Depends(require_pc_or_allowed_device)],
 )
-async def cancel_flow_endpoint(flow_id: str) -> Response:
-    """Cancel a pending OAuth flow without waiting for the callback."""
+async def cancel_flow_endpoint(request: Request, flow_id: str) -> Response:
+    """Cancel a pending OAuth flow without waiting for the callback.
+
+    The PC may cancel any flow; a paired device only one it started.
+    """
+    device = allowed_device(request)
+    pending = _flow_pending.get(flow_id)
+    if (
+        device is not None
+        and pending is not None
+        and pending.owner_device_id != device.device_id
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail="Only the PC or the device that started this sign-in can "
+            "cancel it.",
+        )
     await connections.cancel_flow(flow_id)
     return Response(status_code=204)
 

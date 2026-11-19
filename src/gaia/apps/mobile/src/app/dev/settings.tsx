@@ -18,6 +18,7 @@ import { SeedJustPaired } from '@/features/settings/panes/Messaging';
 import { SeedCheckPending, SeedCustomReport } from '@/features/settings/panes/model/AddCustomModel';
 import { SeedAddedModel, SeedModelSearch } from '@/features/settings/panes/model/ModelList';
 import { SeedOpenDetails } from '@/features/settings/panes/model/ModelRow';
+import { SeedProviderKey } from '@/features/settings/panes/model/ProviderKey';
 import { SectionErrorBoundary } from '@/features/settings/SectionErrorBoundary';
 import { BackToSection } from '@/features/settings/SettingsSectionScreen';
 import { SETTINGS_SECTIONS } from '@/features/settings/sections';
@@ -51,6 +52,7 @@ function SettingsView({ found }: { found: SettingsScene }) {
                     <ScreenBannerProvider banner={null}>
                         <Screen scroll scrollRef={scrollRef} header={found.from ? <BackToSection from={found.from} /> : undefined}>
                             <SettingsTargets section={found.section} target={found.target} scrollRef={scrollRef}>
+                                <SeedProviderKey.Provider value={found.keyEntry ?? null}>
                                 <SeedAddedModel.Provider value={found.addedModel ?? null}>
                                     <SeedModelSearch.Provider value={found.search ?? ''}>
                                         <SeedOpenDetails.Provider value={found.openDetails ?? null}>
@@ -76,6 +78,7 @@ function SettingsView({ found }: { found: SettingsScene }) {
                                         </SeedOpenDetails.Provider>
                                     </SeedModelSearch.Provider>
                                 </SeedAddedModel.Provider>
+                                </SeedProviderKey.Provider>
                             </SettingsTargets>
                         </Screen>
                         <SeedLanguageSwitch.Provider value={found.languageSwitch ? { target: found.languageSwitchTo ?? 'ar', platform: found.languageSwitch, system: found.languageSwitchSystem } : null}>

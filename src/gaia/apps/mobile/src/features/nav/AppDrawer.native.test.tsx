@@ -12,7 +12,8 @@ import { AppDrawer } from './AppDrawer';
 
 jest.mock('expo-router/drawer', () => ({ useDrawerStatus: () => 'closed' }));
 jest.mock('expo-router', () => ({ usePathname: () => '/', useRouter: () => ({ push: jest.fn(), replace: jest.fn() }) }));
-jest.mock('@/features/chats/ChatDrawerContent', () => ({ ChatDrawerContent: () => null }));
+const mockContent = jest.fn((_props: { onClose?: () => void }) => null);
+jest.mock('@/features/chats/ChatDrawerContent', () => ({ ChatDrawerContent: (props: { onClose?: () => void }) => mockContent(props) }));
 
 function mount(width: number, navigation: { closeDrawer: jest.Mock }) {
     Dimensions.set({ window: { width, height: 800, scale: 2, fontScale: 1 } });
@@ -50,5 +51,12 @@ describe('AppDrawer rotation', () => {
         await permanent.unmount();
         const overlay = await mount(768, { closeDrawer: jest.fn() });
         expect(StyleSheet.flatten(overlay.getByTestId('app-sidebar').props.style).borderEndWidth).toBeUndefined();
+    });
+
+    it('gives the overlay a close button and the permanent sidebar none', async () => {
+        await mount(768, { closeDrawer: jest.fn() });
+        expect(mockContent.mock.lastCall?.[0].onClose).toEqual(expect.any(Function));
+        await mount(1024, { closeDrawer: jest.fn() });
+        expect(mockContent.mock.lastCall?.[0].onClose).toBeUndefined();
     });
 });

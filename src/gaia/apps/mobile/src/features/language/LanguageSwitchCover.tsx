@@ -1,12 +1,12 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { createContext, useContext } from 'react';
-import { BackHandler, Platform, StyleSheet, View } from 'react-native';
+import { createContext, useContext, useEffect } from 'react';
+import { BackHandler, Keyboard, Platform, StyleSheet, View } from 'react-native';
 
-import { ref, type MessageKey } from '@webui/i18n/registry';
+import { getLocale, ref, type MessageKey } from '@webui/i18n/registry';
 
-import { translator } from '@/i18n/useT';
+import { DirectionOverride, translator } from '@/i18n/useT';
 import { useLanguageSwitch } from '@/state/languageSwitch';
 import { useSystemSwitch } from '@/state/systemLanguage';
 import { Button, Screen, Stack, Text, useBackStep } from '@/ui';
@@ -34,14 +34,20 @@ export function LanguageSwitchCover({ target, platform, onCancel }: CoverProps) 
     const t = translator(target);
     const name = LANGUAGE_NAME[target];
     if (!name) throw new Error(`No language name for "${target}"; add mobileApp.settings.languageSwitch.language.${target} to en.ts and ar.ts.`);
+    const dir = getLocale(target).meta.dir;
     const android = platform === 'android';
     const language = ref(name);
+    // A keyboard left up would sit over the cover and take Back first.
+    useEffect(() => Keyboard.dismiss(), []);
     return (
         <View style={StyleSheet.absoluteFill} testID="language-switch-cover" accessibilityViewIsModal>
             <Screen
                 width="flow"
                 banner={null}
                 footer={
+                    <DirectionOverride.Provider value={dir}>
+                    {/* Android ignores writingDirection; a layout direction is what its text follows. */}
+                    <View style={{ direction: dir }}>
                     <Stack gap="sm">
                         {android ? (
                             <Button
@@ -56,9 +62,12 @@ export function LanguageSwitchCover({ target, platform, onCancel }: CoverProps) 
                             <Button full label={t('mobileApp.settings.languageSwitch.cancel')} onPress={onCancel} testID="language-switch-cancel" />
                         ) : null}
                     </Stack>
+                    </View>
+                    </DirectionOverride.Provider>
                 }
             >
-                <View style={{ flex: 1, justifyContent: 'center' }}>
+                <DirectionOverride.Provider value={dir}>
+                <View style={{ flex: 1, justifyContent: 'center', direction: dir }}>
                     <Stack gap="md" paddingX="gutter" testID="language-switch-content">
                         <Text role="title" weight="semibold" align="center" accessibilityRole="header">
                             {t(android ? 'mobileApp.settings.languageSwitch.androidTitle' : 'mobileApp.settings.languageSwitch.iosTitle', { language })}
@@ -68,6 +77,7 @@ export function LanguageSwitchCover({ target, platform, onCancel }: CoverProps) 
                         </Text>
                     </Stack>
                 </View>
+                </DirectionOverride.Provider>
             </Screen>
         </View>
     );

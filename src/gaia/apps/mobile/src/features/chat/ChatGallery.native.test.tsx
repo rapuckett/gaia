@@ -41,4 +41,24 @@ async function mount(state: ChatGalleryState) {
         await waitFor(() => expect(screen.getByTestId('composer-input').props.value).toBe('Downloads'));
         expect(useChatStreamStore.getState().resolved.dev?.q1).toBeUndefined();
     });
+
+    it('seeding does not update a store subscriber (the sidebar) while the scene renders', async () => {
+        const spy = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+        function Subscriber() {
+            useChatStreamStore((s) => s.turns);
+            return null;
+        }
+        try {
+            await render(
+                <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 800 }, insets: { top: 0, left: 0, right: 0, bottom: 0 } }}>
+                    <Subscriber />
+                    <ChatGallery state="question-answered" />
+                </SafeAreaProvider>,
+            );
+            await screen.findByTestId('composer-input');
+            expect(spy.mock.calls.map((c) => String(c[0])).filter((m) => m.includes('Cannot update a component'))).toEqual([]);
+        } finally {
+            spy.mockRestore();
+        }
+    });
 });

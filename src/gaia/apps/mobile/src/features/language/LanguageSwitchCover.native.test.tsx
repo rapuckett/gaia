@@ -3,7 +3,7 @@
 
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
 import type { ReactNode } from 'react';
-import { BackHandler, Platform, StyleSheet } from 'react-native';
+import { BackHandler, Keyboard, Platform, StyleSheet } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { applyDirection } from '@/platform/direction';
@@ -12,7 +12,7 @@ import { useLocaleStore } from '@/state/locale';
 import { UIProvider } from '@/ui';
 import { contentWidth } from '@/ui/tokens/space';
 
-import { LanguageSwitchHost } from './LanguageSwitchCover';
+import { LanguageSwitchCover, LanguageSwitchHost } from './LanguageSwitchCover';
 
 jest.mock('expo-font', () => ({ useFonts: () => [true, null] }));
 jest.mock('@/platform/direction', () => ({ applyDirection: jest.fn(), layoutDirection: jest.fn(() => 'ltr') }));
@@ -52,6 +52,15 @@ describeNative('language switch cover', () => {
         expect(await screen.findByTestId('language-switch-cover')).toBeTruthy();
     });
 
+    it('puts the keyboard away when it covers the app', async () => {
+        const dismiss = jest.spyOn(Keyboard, 'dismiss');
+        await mountHost();
+        expect(dismiss).not.toHaveBeenCalled();
+        await act(async () => pickLanguage('ar'));
+        await screen.findByTestId('language-switch-cover');
+        expect(dismiss).toHaveBeenCalledTimes(1);
+    });
+
     it('words the cover in the target language, whichever way the switch goes', async () => {
         await mountHost();
         await act(async () => pickLanguage('ar'));
@@ -89,6 +98,20 @@ describeNative('language switch cover', () => {
         await act(async () => pickLanguage('ar'));
         const cover = await screen.findByTestId('language-switch-cover');
         expect(within(cover).getByTestId('screen-content').props.dataSet).toEqual({ contentWidth: String(contentWidth.flow) });
+    });
+
+    it.each([
+        ['en', 'ar', 'rtl'],
+        ['ar', 'en', undefined],
+    ])('with the UI in %s and the cover in %s, the Close label is pinned %s', async (ui, target, dir) => {
+        jest.replaceProperty(Platform, 'OS', 'android');
+        useLocaleStore.setState({ locale: ui });
+        await render(<LanguageSwitchCover target={target} platform="android" />, { wrapper: wrap });
+        const close = await screen.findByTestId('language-switch-close');
+        const span = within(close).getByText(/Close/, { includeHiddenElements: true });
+        const label = span.parent?.props.style && target === 'ar' ? span.parent : span;
+        // Only a line with an English gloss is pinned; plain English follows the paragraph, never the UI's rtl.
+        expect(StyleSheet.flatten(label.props.style).writingDirection).toBe(dir);
     });
 
     describe('on Android', () => {

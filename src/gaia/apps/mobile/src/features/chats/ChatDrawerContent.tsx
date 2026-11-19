@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import { useRouter } from 'expo-router';
-import { Image, ScrollView, type ImageSourcePropType } from 'react-native';
+import { Image, ScrollView, View, type ImageSourcePropType } from 'react-native';
 import { useCallback, useMemo, useState } from 'react';
 
 import { APP_NAME } from '@webui/utils/constants';
@@ -68,7 +68,8 @@ export interface ChatDrawerContentProps {
     activeId?: string | null;
     /** Opens the chat; the drawer closes itself after the pick. */
     onSelect: (sessionId: string) => void;
-    onClose: () => void;
+    /** Shows the close button when given; a permanent sidebar has nothing to close. */
+    onClose?: () => void;
     /** Shows a New chat button in the header when given. */
     onNewChat?: () => void;
     /** Route names the navigator declares; the section entries for the others stay hidden. */
@@ -106,7 +107,7 @@ export function ChatDrawerContent({ activeId, onSelect, onClose, onNewChat, onPc
     }, [onSelect]);
     const close = useCallback(() => {
         setText('');
-        onClose();
+        onClose?.();
     }, [onClose]);
     const newChat = useCallback(() => {
         setText('');
@@ -156,21 +157,27 @@ export function ChatDrawerContent({ activeId, onSelect, onClose, onNewChat, onPc
 
     const navRows = (
         <>
-            {onNewChat ? <ListRow title={t('sidebar.newChat')} titleMaxScale={TITLE_MAX_FONT_SCALE} leading={<Icon icon={SquarePen} size="sm" tone="secondary" />} onPress={newChat} /> : null}
+            {onNewChat ? (
+                <View style={{ flexShrink: 0 }}>
+                    <ListRow title={t('sidebar.newChat')} titleMaxScale={TITLE_MAX_FONT_SCALE} leading={<Icon icon={SquarePen} size="sm" tone="secondary" />} onPress={newChat} />
+                </View>
+            ) : null}
             {entries.filter((e) => !e.footer).map((e) => (
                 <NavRow key={e.key} entry={e} active={activeRoute === e.route} onOpen={open} />
             ))}
         </>
     );
     const footerRows = (
-        <Stack>
+        <View style={{ flexShrink: 0 }}>
             <DownloadChipRow onPress={() => { close(); openSettings('model'); }} />
             {entries.filter((e) => e.footer).map((e) => (
                 <NavRow key={e.key} entry={e} active={activeRoute === e.route} onOpen={open} />
             ))}
-            <NotificationsEntry active={activeRoute === 'notifications'} onOpen={() => open('notifications')} />
+            <View style={{ flexShrink: 0 }}>
+                <NotificationsEntry active={activeRoute === 'notifications'} onOpen={() => open('notifications')} />
+            </View>
             <ModelStatusPill />
-        </Stack>
+        </View>
     );
     const notices = (
         <>
@@ -212,15 +219,15 @@ export function ChatDrawerContent({ activeId, onSelect, onClose, onNewChat, onPc
                 />
             </Stack>
         ) : null;
-    // At large text sizes the pinned rows alone outgrow the drawer, so everything but the search scrolls with the chats.
+    // The rows above the chats scroll with them, so a short sidebar never squeezes rows into each other; at large text sizes the pinned footer scrolls too.
     const list =
         state === 'list' ? (
             <SectionList<ChatRow, ChatSection>
                 sections={sections}
                 keyExtractor={(row) => row.id}
                 accessibilityLabel={t('sidebar.recent')}
-                ListHeaderComponent={largeText ? <>{navRows}{notices}</> : undefined}
-                ListFooterComponent={largeText ? <>{automated}{footerRows}</> : undefined}
+                ListHeaderComponent={<>{navRows}{notices}</>}
+                ListFooterComponent={<>{automated}{largeText ? footerRows : null}</>}
                 renderSectionHeader={({ section }) => <SectionHeader title={t(section.titleKey)} />}
                 renderItem={({ item }) =>
                     q ? (
@@ -240,28 +247,21 @@ export function ChatDrawerContent({ activeId, onSelect, onClose, onNewChat, onPc
     return (
         <Screen
             edges={['top', 'bottom', 'start']}
+            banner={null}
             footerBleed
-            header={<Header onClose={close} onPcs={onPcs} />}
+            header={<Header onClose={onClose ? close : undefined} onPcs={onPcs} />}
             footer={largeText ? undefined : footerRows}
         >
             <Stack paddingX="lg" paddingY="sm">
                 <SearchField value={text} onChangeText={setText} placeholder={t.bare('sidebar.search')} accessibilityLabel={t('sidebar.search')} />
             </Stack>
-            {largeText ? (
-                (list ?? (
-                    <ScrollView keyboardShouldPersistTaps="handled">
-                        {navRows}
-                        {notices}
-                        {automated}
-                        {footerRows}
-                    </ScrollView>
-                ))
-            ) : (
-                <>
+            {list ?? (
+                <ScrollView keyboardShouldPersistTaps="handled">
                     {navRows}
                     {notices}
-                    {list}
-                </>
+                    {automated}
+                    {largeText ? footerRows : null}
+                </ScrollView>
             )}
             <ChatRowSheets
                 target={target}
@@ -270,7 +270,6 @@ export function ChatDrawerContent({ activeId, onSelect, onClose, onNewChat, onPc
                 onSetPinned={(id, pinned) => setPinned.mutate({ id, pinned }, outcome(pinned ? 'pin' : 'unpin'))}
                 onDelete={(id) => remove.mutate(id, outcome('delete'))}
             />
-            {largeText ? null : automated}
         </Screen>
     );
 }
@@ -291,7 +290,7 @@ function DownloadChipRow({ onPress }: { onPress: () => void }) {
     );
 }
 
-function Header({ onClose, onPcs }: { onClose: () => void; onPcs?: () => void }) {
+function Header({ onClose, onPcs }: { onClose?: () => void; onPcs?: () => void }) {
     const t = useT();
     const largeText = useLargeText();
     const brand = (
@@ -305,7 +304,7 @@ function Header({ onClose, onPcs }: { onClose: () => void; onPcs?: () => void })
     const buttons = (
         <>
             {onPcs ? <IconButton icon={Monitor} label={t('mobileApp.pairing.pcs.title')} onPress={onPcs} testID="pcs-drawer-button" /> : null}
-            <IconButton icon={X} label={t('sidebar.collapse')} onPress={onClose} />
+            {onClose ? <IconButton icon={X} label={t('sidebar.collapse')} onPress={onClose} /> : null}
         </>
     );
     // At large text sizes the name gets its own line, so three buttons beside it don't break it mid-word.
@@ -333,13 +332,15 @@ function Header({ onClose, onPcs }: { onClose: () => void; onPcs?: () => void })
 function NavRow({ entry, active, onOpen }: { entry: NavEntry; active: boolean; onOpen: (route: string) => void }) {
     const t = useT();
     return (
-        <ListRow
-            title={t(entry.labelKey)}
-            titleMaxScale={TITLE_MAX_FONT_SCALE}
-            selected={active}
-            leading={<Icon icon={entry.icon} size="sm" tone="secondary" />}
-            onPress={() => onOpen(entry.route)}
-        />
+        <View style={{ flexShrink: 0 }}>
+            <ListRow
+                title={t(entry.labelKey)}
+                titleMaxScale={TITLE_MAX_FONT_SCALE}
+                selected={active}
+                leading={<Icon icon={entry.icon} size="sm" tone="secondary" />}
+                onPress={() => onOpen(entry.route)}
+            />
+        </View>
     );
 }
 
