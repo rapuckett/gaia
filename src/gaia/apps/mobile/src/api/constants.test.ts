@@ -209,6 +209,7 @@ describe('endpoints', () => {
         setupVisionModel: ['POST'],
         skills: ['GET'],
         skillsFeatured: ['GET'],
+        skillsLinkAdd: ['POST'],
         skillsLinkPreview: ['POST'],
         speech: ['POST'],
         speechModel: ['GET'],

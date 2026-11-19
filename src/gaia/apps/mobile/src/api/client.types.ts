@@ -104,6 +104,7 @@ export type {
     LemonadeFound,
     LemonadeTarget,
     LemonadeTargetBody,
+    LinkAddResult,
     LinkPreview,
     LinkSkill,
     LocalModelStatus,
@@ -636,7 +637,7 @@ export interface GaiaClient {
     listAgentMcps(options?: RequestOptions): Promise<AgentMcpList>;
     /** The agents this PC can run; a PC without the `gaia` agent can't start chats. */
     listAgents(options?: RequestOptions): Promise<AgentList>;
-    /** Starts installing an agent on the PC (202); follow it with `getAgentInstallStatus`. PC-only: a phone gets the refusal. */
+    /** Starts installing an agent on the PC (202); follow it with `getAgentInstallStatus`. A phone the PC allowed may install the GAIA agent only; any other phone gets a 403. */
     installAgent(id: string, options?: RequestOptions): Promise<{ id: string; status: string }>;
     getAgentInstallStatus(id: string, options?: RequestOptions): Promise<AgentInstallStatus>;
     /** The chats with a turn in flight, those queued, and those paused on the user. */
@@ -730,8 +731,10 @@ export interface GaiaClient {
     listSkills(options?: RequestOptions): Promise<SkillList>;
     /** Skill libraries GAIA suggests adding from a link. */
     listFeaturedSkillLibraries(options?: RequestOptions): Promise<FeaturedLibraries>;
-    /** Reads and audits the skills behind a link; writes nothing. Adding them is PC-only. */
+    /** Reads and audits the skills behind a link; writes nothing. */
     previewSkillLink(url: string, options?: RequestOptions): Promise<LinkPreview>;
+    /** Adds the chosen skills from a previewed link (`pin` is the preview's). Skills that ship code need `allowCode`, sent only when true. A phone the PC didn't allow gets a 403. */
+    addSkillsFromLink(request: { url: string; names: string[]; pin: string; allowCode: boolean }, options?: RequestOptions): Promise<LinkAddResult>;
     /** Creates a schedule; `interval` is the plain-words "when to run", parsed by the PC. 409 when the name is taken. */
     createSchedule(request: CreateScheduleRequest, options?: RequestOptions): Promise<Schedule>;
     /** Reads a plain-words "when to run" without saving it, for the form's live preview. */

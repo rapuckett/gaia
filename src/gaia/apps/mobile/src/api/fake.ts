@@ -95,6 +95,7 @@ import type {
     SpeechModel,
     SpeechSettings,
     FeaturedLibraries,
+    LinkAddResult,
     LinkPreview,
     SpendingReport,
     ChatSpending,
@@ -220,6 +221,7 @@ export interface FakeClientData {
     skills?: SkillList;
     featuredLibraries?: FeaturedLibraries;
     linkPreview?: (url: string) => LinkPreview;
+    linkAdd?: (request: { url: string; names: string[]; pin: string; allowCode: boolean }) => LinkAddResult;
     resources?: ResourceUsage;
     start?: StartScreen;
     /** What a sign-in with a code starts with; a connector without `supports_device_code` is refused, as the PC does. */
@@ -1203,6 +1205,10 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         async previewSkillLink(url) {
             if (!data.linkPreview) throw new GaiaApiError(400, 'This fake client was given no link preview.');
             return data.linkPreview(url);
+        },
+        async addSkillsFromLink(request) {
+            if (!data.linkAdd) throw new GaiaApiError(400, 'This fake client was given no link add.');
+            return data.linkAdd(request);
         },
         async getMemoryActivity(days) {
             memoryActivityReads.push(days);

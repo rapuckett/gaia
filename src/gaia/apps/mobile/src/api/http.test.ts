@@ -71,6 +71,23 @@ describe('createHttpClient requests', () => {
         await expect(createHttpClient({ baseUrl: BASE, fetch }).getFilePreview('/x', 's1')).rejects.toMatchObject({ status: 403 });
     });
 
+    it('addSkillsFromLink: sends the preview pin and names, and allow_code only when ticked', async () => {
+        const { fetch, calls } = createRecordingFetch(() => jsonResponse({ added: [], failed: {} }));
+        const client = createHttpClient({ baseUrl: BASE, token: null, fetch });
+        const request = { url: 'https://github.com/acme/skills', names: ['a', 'b'], pin: 'abc123' };
+        await client.addSkillsFromLink({ ...request, allowCode: false });
+        await client.addSkillsFromLink({ ...request, allowCode: true });
+        expect(calls[0]).toMatchObject({ url: `${BASE}/api/skills/link/add`, method: 'POST', headers: UI_HEADERS, body: request });
+        expect(calls[0]!.body).not.toHaveProperty('allow_code');
+        expect(calls[1]!.body).toEqual({ ...request, allow_code: true });
+    });
+
+    it('installAgent: POST /api/agents/install with just the agent id', async () => {
+        const { fetch, calls } = createRecordingFetch(() => jsonResponse({ id: 'gaia', status: 'queued' }));
+        await createHttpClient({ baseUrl: BASE, token: null, fetch }).installAgent('gaia');
+        expect(calls[0]).toMatchObject({ url: `${BASE}/api/agents/install`, method: 'POST', body: { id: 'gaia' } });
+    });
+
     it('health: GET /api/health with the UI headers and no body', async () => {
         const { fetch, calls } = createRecordingFetch(() => jsonResponse({ status: 'ok', service: 'gaia-agent-ui' }));
         const result = await createHttpClient({ baseUrl: BASE, token: null, fetch }).health();

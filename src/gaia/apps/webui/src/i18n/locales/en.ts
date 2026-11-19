@@ -7,6 +7,7 @@ import type { Locale } from '../types';
 // `.other` pair, picked by `t.plural`.
 export const enMessages = {
     // Sidebar
+    'mobileApp.agentNotice.failed': "The GAIA agent couldn't be installed.",
     'mobileApp.approveOnPc.admin': 'Your PC is asking for administrator permission. Approve it there to continue.',
     'mobileApp.approveOnPc.cancel': 'Stop waiting',
     'mobileApp.approveOnPc.cancelled': 'Stopped waiting. If the prompt is still open on your PC, close it there.',
@@ -4108,6 +4109,9 @@ export const enMessages = {
     'mobileApp.mem.reconcileFailedShort': "Couldn't reconcile memory.",
     'mobileApp.mem.systemFailedShort': "Couldn't refresh system context.",
     'mobileApp.offline.errorShort': "Couldn't turn it on.",
+    'mobileApp.skills.link.codeConfirm.body': 'Some of these skills ship scripts. GAIA can run them on your PC with your permissions. Only add them if you trust who made them.',
+    'mobileApp.skills.link.codeConfirm.title': 'Add skills that run code?',
+    'mobileApp.skills.link.codeConfirm.yes': 'Add with code',
     'mobileApp.skills.listErrorShort': "Couldn't list this chat's skills.",
     'mobileApp.tools.listErrorShort': "Couldn't list this agent's tools.",
     'mobileApp.chat.stoppedErrorShort': 'Stopped. GAIA reported an error while stopping.',
@@ -4376,7 +4380,7 @@ export const enMessages = {
     'mobileApp.changes.git.committedAs.other': 'Committed {n} files as {hash}.',
     'mobileApp.changes.git.opened': 'Opened {url}',
     'mobileApp.yourPc.activity.visionNeeded': 'Reading images needs the vision model, which isn\'t on your PC yet.',
-    'mobileApp.yourPc.agentNotice.noBuild': "No GAIA agent build for your PC yet, so chat isn't available here.",
+    'mobileApp.yourPc.agentNotice.noBuild': "No GAIA agent build for your PC yet, so chat isn't available.",
     'mobileApp.yourPc.answer.place.thisPc': 'on your PC',
     'mobileApp.yourPc.chat.browseFiles': 'Browse files on your PC',
     'mobileApp.yourPc.env.fullAccessWarn': 'Full access lets GAIA change files and run commands on your PC without asking.',
@@ -4400,6 +4404,7 @@ export const enMessages = {
     'mobileApp.yourPc.settings.errors.notInstalledTitle': "Models on your PC aren't set up yet",
     'mobileApp.yourPc.settings.key.setIn': 'From your environment on your PC: {name}',
     'mobileApp.yourPc.settings.messaging.takeOver': 'Answer from your PC',
+    'mobileApp.yourPc.settings.skills.link.codeHint': 'Their scripts can run on your PC with your permissions.',
     'mobileApp.yourPc.setup.backend.hintNoNpu': "Chat runs on your PC's graphics (GPU).",
     'mobileApp.yourPc.setup.backend.hintNpuUnusable': "Chat runs on your PC's graphics (GPU). Your PC's Ryzen AI NPU can't run GAIA's models.",
     'mobileApp.yourPc.setup.blocked': "Your PC can't run GAIA's models as it is. Details say why; a cloud model still works.",

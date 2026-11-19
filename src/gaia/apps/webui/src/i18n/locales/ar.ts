@@ -7,6 +7,7 @@ import type { Locale, Messages } from '../types';
 // (dual, 3-10, 11+) can't be expressed with a one/other pair.
 const messages: Messages = {
     // Sidebar
+    'mobileApp.agentNotice.failed': 'تعذّر تثبيت وكيل GAIA.',
     'mobileApp.approveOnPc.admin': 'يطلب الكمبيوتر لديك إذن المسؤول. وافق عليه هناك للمتابعة.',
     'mobileApp.approveOnPc.cancel': 'إيقاف الانتظار',
     'mobileApp.approveOnPc.cancelled': 'توقّف الانتظار. إذا كانت النافذة لا تزال مفتوحة على الكمبيوتر لديك، فأغلقها هناك.',
@@ -4107,6 +4108,9 @@ const messages: Messages = {
     'mobileApp.mem.reconcileFailedShort': 'تعذّرت مطابقة الذاكرة.',
     'mobileApp.mem.systemFailedShort': 'تعذّر تحديث معلومات النظام.',
     'mobileApp.offline.errorShort': 'تعذّر تفعيله.',
+    'mobileApp.skills.link.codeConfirm.body': 'تتضمّن بعض هذه المهارات سكربتات يمكن لـGAIA تشغيلها على الكمبيوتر لديك بصلاحياتك. لا تُضِفها إلا إذا كنت تثق بمن أنشأها.',
+    'mobileApp.skills.link.codeConfirm.title': 'إضافة مهارات تشغّل تعليمات برمجية؟',
+    'mobileApp.skills.link.codeConfirm.yes': 'إضافة مع التعليمات البرمجية',
     'mobileApp.skills.listErrorShort': 'تعذّر سرد مهارات هذه المحادثة.',
     'mobileApp.tools.listErrorShort': 'تعذّر سرد أدوات هذا الوكيل.',
     'mobileApp.chat.stoppedErrorShort': 'تم الإيقاف. أبلغ GAIA عن خطأ أثناء الإيقاف.',
@@ -4375,7 +4379,7 @@ const messages: Messages = {
     'mobileApp.changes.git.committedAs.other': 'أُودع {n} ملفات برمز {hash}.',
     'mobileApp.changes.git.opened': 'فُتح {url}',
     'mobileApp.yourPc.activity.visionNeeded': 'تحتاج قراءة الصور إلى نموذج الرؤية، وهو غير موجود على الكمبيوتر لديك بعد.',
-    'mobileApp.yourPc.agentNotice.noBuild': 'لا يتوفر إصدار من وكيل GAIA للكمبيوتر لديك بعد، لذا لا تتوفر المحادثة هنا.',
+    'mobileApp.yourPc.agentNotice.noBuild': 'لا يتوفر إصدار من وكيل GAIA للكمبيوتر لديك بعد، لذا لا تتوفر المحادثة.',
     'mobileApp.yourPc.answer.place.thisPc': 'على الكمبيوتر لديك',
     'mobileApp.yourPc.chat.browseFiles': 'تصفح الملفات على الكمبيوتر لديك',
     'mobileApp.yourPc.env.fullAccessWarn': 'يتيح الوصول الكامل لـ GAIA تغيير الملفات وتشغيل الأوامر على الكمبيوتر لديك دون استئذان.',
@@ -4399,6 +4403,7 @@ const messages: Messages = {
     'mobileApp.yourPc.settings.errors.notInstalledTitle': 'لم تُعدّ النماذج على الكمبيوتر لديك بعد',
     'mobileApp.yourPc.settings.key.setIn': 'من متغيرات البيئة على الكمبيوتر لديك: {name}',
     'mobileApp.yourPc.settings.messaging.takeOver': 'الرد من الكمبيوتر لديك',
+    'mobileApp.yourPc.settings.skills.link.codeHint': 'يمكن لسكربتاتها أن تعمل على الكمبيوتر لديك بصلاحياتك.',
     'mobileApp.yourPc.setup.backend.hintNoNpu': 'تعمل الدردشة على رسومات الكمبيوتر لديك (GPU).',
     'mobileApp.yourPc.setup.backend.hintNpuUnusable': 'تعمل الدردشة على رسومات الكمبيوتر لديك (GPU). لا تستطيع وحدة Ryzen AI NPU في الكمبيوتر لديك تشغيل نماذج GAIA.',
     'mobileApp.yourPc.setup.blocked': 'لا يستطيع الكمبيوتر لديك تشغيل نماذج GAIA كما هو. توضح التفاصيل السبب؛ ويظل النموذج السحابي يعمل.',

@@ -10,12 +10,18 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { FLAGSHIP_AGENT_ID } from '@webui/utils/newTask';
 
 import type { AgentInstallStatus } from '@/api/client.types';
+import { GaiaApiError } from '@/api/errors';
+import { useDeviceRefused } from '@/api/routeAccess';
 import { createFakeClient, type FakeClientData } from '@/api/fake';
 import { GaiaClientProvider } from '@/data';
 import { translator } from '@/i18n/useT';
 import { ThemeProvider } from '@/ui';
 
 import { FlagshipAgentBanner } from './FlagshipAgentBanner';
+
+jest.mock('@/api/routeAccess', () => ({ ...jest.requireActual('@/api/routeAccess'), useDeviceRefused: jest.fn(() => false) }));
+const refused = useDeviceRefused as jest.Mock;
+beforeEach(() => refused.mockReturnValue(false));
 
 const t = translator('en');
 
@@ -50,7 +56,7 @@ describe('FlagshipAgentBanner', () => {
     it('shows the PC reason when the install fails, and offers Try again', async () => {
         await mount({ installStatuses: [status({ status: 'failed', error: 'disk full' })] });
         fireEvent.press(await screen.findByText(t('agentNotice.install')));
-        expect(await screen.findByText(t('mobileApp.error.agentInstallFailed'))).toBeTruthy();
+        expect(await screen.findByText(t('mobileApp.agentNotice.failed'))).toBeTruthy();
         const detail = screen.getByText('disk full');
         expect(StyleSheet.flatten(detail.props.style)).toMatchObject({ writingDirection: 'ltr' });
         expect(screen.getByText(t('agentNotice.retry'))).toBeTruthy();
@@ -65,5 +71,21 @@ describe('FlagshipAgentBanner', () => {
     it('renders nothing while the agent is installed', async () => {
         await mount({ agents: undefined });
         await waitFor(() => expect(screen.queryByTestId('flagship-notice')).toBeNull());
+    });
+
+    it('offers no install, only the PC-only notice, when the PC refuses it for this phone', async () => {
+        refused.mockReturnValue(true);
+        await mount({});
+        expect(await screen.findByText(`${t('agentNotice.missing')} ${t('mobileApp.settings.pcOnly')}`)).toBeTruthy();
+        expect(screen.queryByText(t('agentNotice.install'))).toBeNull();
+    });
+
+    it('turns to the PC-only notice when the install itself is refused (403)', async () => {
+        const client = await mount({});
+        client.installAgent = async () => {
+            throw new GaiaApiError(403, 'Do this on the PC.');
+        };
+        fireEvent.press(await screen.findByText(t('agentNotice.install')));
+        expect(await screen.findByText(`${t('agentNotice.missing')} ${t('mobileApp.settings.pcOnly')}`)).toBeTruthy();
     });
 });
