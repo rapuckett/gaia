@@ -185,7 +185,7 @@ def test_device_prompt_reaches_only_its_own_device(paired):
     async def first_event(request):
         stream = (await session_events(request)).body_iterator
         assert (await stream.__anext__()).startswith(":")
-        await emit_device_prompt(tablet, "key_store", "providerKeyStore", "waiting")
+        await emit_device_prompt(tablet, "keyStore", "keyStoreRetry", "waiting")
         await emit_device_prompt(phone, "admin", "gpuMemoryApply", "waiting")
         line = await asyncio.wait_for(stream.__anext__(), 2)
         await stream.aclose()

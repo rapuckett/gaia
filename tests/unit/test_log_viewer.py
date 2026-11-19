@@ -302,6 +302,16 @@ class TestReadLogFile:
         r = reader.read_log_file(path, after=cursor)
         assert r.reset and len(r.lines) == 1
 
+    def test_a_cursor_inside_a_line_reads_the_tail_instead(self, tmp_path):
+        path = tmp_path / "lemond.log"
+        path.write_text(f"2026-11-04 10:00:00.000 [Info] (main) key {SECRET}\n")
+        r = reader.read_log_file(
+            path,
+            after=len("2026-11-04 10:00:00.000 [Info] (main) key ") + 1,
+            secrets=[SECRET],
+        )
+        assert r.reset and SECRET[1:] not in r.lines[0].text
+
     def test_redacts_known_secrets(self, tmp_path):
         path = tmp_path / "lemond.log"
         path.write_text(f"2026-11-04 10:00:00.000 [Info] (main) key {SECRET}\n")

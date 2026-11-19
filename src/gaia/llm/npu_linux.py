@@ -35,7 +35,7 @@ import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from gaia.env import child_env
 from gaia.logger import get_logger
@@ -585,12 +585,13 @@ def memlock_fix_script() -> str:
     return "\n".join(lines) + "\n"
 
 
-def apply_memlock_fix() -> None:
+def apply_memlock_fix(before_prompt: Optional[Callable[[], None]] = None) -> None:
     """Lift the locked-memory limit for user sessions, asking for the password.
 
     Runs one ``pkexec`` step, so the desktop shows its own administrator
-    prompt. The limit applies to sessions that start after it, so the PC
-    needs a restart before FastFlowLM sees it.
+    prompt, calling *before_prompt* just before it. The limit applies to
+    sessions that start after it, so the PC needs a restart before
+    FastFlowLM sees it.
 
     Raises:
         MemlockFixError: Not Linux, no ``pkexec``, the prompt was dismissed,
@@ -610,6 +611,8 @@ def apply_memlock_fix() -> None:
             "set memlock to unlimited for your account (see "
             "https://amd-gaia.ai/docs/guides/npu#linux), then restart the PC.",
         )
+    if before_prompt is not None:
+        before_prompt()
     try:
         result = subprocess.run(
             [pkexec, "/bin/sh", "-c", memlock_fix_script()],

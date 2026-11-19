@@ -8,6 +8,7 @@ import { ModelSettings } from '../ModelSettings';
 import { useModelStore } from '../../../stores/modelStore';
 import { useChatStore } from '../../../stores/chatStore';
 import * as api from '../../../services/api';
+import { ApiError } from '../../../services/apiErrors';
 import { mockSetupApis } from '../../../test/setupApiMocks';
 import type { ActiveModel, ProviderInfo, ProviderModel } from '../../../types';
 
@@ -100,6 +101,16 @@ describe('ModelSettings provider keys', () => {
         await waitFor(() => expect(mockedApi.connectProviderWaitingForOs).toHaveBeenCalledWith('fireworks', { api_key: undefined }, expect.any(Function), expect.any(Function)));
     });
 
+    it('a gateway on plain http says to use https on the PC', async () => {
+        withProviders(fireworks({ models_discovered: false, key_source: 'stored', key_hint: 'a1b2' }));
+        mockedApi.connectProviderWaitingForOs.mockRejectedValue(
+            new ApiError('x', 422, 'The AMD Gateway address must start with https://.', null, [], { message: 'm', code: 'gateway_insecure_http' }),
+        );
+        const card = await openFireworks();
+        fireEvent.click(within(card).getByRole('button', { name: 'Reconnect' }));
+        expect(await within(card).findByText(/must start with .*https:\/\/.*Change it on the PC/)).toBeInTheDocument();
+    });
+
     it('replaces a saved key only after asking for a new one', async () => {
         withProviders(fireworks({ models_discovered: true, key_source: 'stored', key_hint: 'a1b2' }));
         mockedApi.connectProviderWaitingForOs.mockResolvedValue({ ...fireworks(), remembered: true, remember_error: null });
@@ -128,7 +139,7 @@ describe('ModelSettings provider keys', () => {
     it('an environment key can be neither replaced nor removed here', async () => {
         withProviders(fireworks({ models_discovered: true, key_source: 'environment' }));
         const card = await openFireworks();
-        expect(within(card).getByLabelText('Saved Fireworks AI API key')).toHaveValue('From your environment (FIREWORKS_API_KEY)');
+        expect(within(card).getByLabelText('Saved Fireworks AI API key')).toHaveValue('From your environment: \u2066FIREWORKS_API_KEY\u2069');
         expect(within(card).queryByRole('button', { name: 'Replace' })).not.toBeInTheDocument();
         expect(within(card).queryByRole('button', { name: 'Remove key' })).not.toBeInTheDocument();
     });
@@ -145,7 +156,7 @@ describe('ModelSettings provider keys', () => {
         withProviders(fireworks({ key_source: 'environment', models_discovered: false }));
         mockedApi.connectProviderWaitingForOs.mockResolvedValue({ ...fireworks({ key_source: 'environment', models_discovered: true }), remembered: false, remember_error: null });
         const card = await openFireworks();
-        expect(within(card).getByLabelText('Saved Fireworks AI API key')).toHaveValue('From your environment (FIREWORKS_API_KEY)');
+        expect(within(card).getByLabelText('Saved Fireworks AI API key')).toHaveValue('From your environment: \u2066FIREWORKS_API_KEY\u2069');
         expect(within(card).getByText('Not connected')).toBeInTheDocument();
         expect(within(card).getByText('Fireworks AI has your key but is not connected yet, so no models are listed.')).toBeInTheDocument();
         fireEvent.click(within(card).getByRole('button', { name: 'Reconnect' }));

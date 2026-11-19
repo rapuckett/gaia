@@ -8,6 +8,7 @@ export * from './capabilities';
 export * from './chatStream';
 export * from './connectors';
 export * from './context';
+export * from './deviceChanges';
 export * from './documents';
 export * from './environment';
 export * from './fileStatus';

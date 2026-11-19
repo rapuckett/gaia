@@ -1,7 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { ApiError } from '../services/apiErrors';
+import { ApiError, fileRefusalRef } from '../services/apiErrors';
 import { ref, type Param } from '../i18n/registry';
 import type { Translate } from '../i18n/translator';
 
@@ -20,6 +20,10 @@ export function requestErrorParam(err: unknown): Param {
         // remedy is correct. The Agent UI has its own Local only switch, so do
         // not reflect that CLI-only instruction back into this surface.
         if (/\blocal only is on\b/i.test(err.detail)) return ref('settings.privacy.localOnlyBlocked');
+        if (err.httpStatus === 403) {
+            const refusal = fileRefusalRef(err.body);
+            if (refusal) return refusal;
+        }
         return err.detail || err.message;
     }
     return err instanceof Error ? err.message : String(err);

@@ -30,6 +30,13 @@ const mount = (state: ConnectorScene) =>
 describeNative('/dev/connectors scenes', () => {
     afterEach(() => useConnectionStore.setState({ connection: null }));
 
+    it("googleReady shows Google's Connect without touching the app's connection", async () => {
+        await mount('googleReady');
+        expect(await screen.findByTestId('connector-connect-google')).toBeTruthy();
+        // A connection set from a scene sends the web gallery to the home screen.
+        expect(useConnectionStore.getState().connection).toBeNull();
+    });
+
     it('many shows the search field', async () => {
         await mount('many');
         expect(await screen.findByLabelText('Search connectors')).toBeTruthy();
@@ -60,11 +67,11 @@ describeNative('/dev/connectors scenes', () => {
         expect(screen.getByText('The keyring is locked.')).toBeTruthy();
     });
 
-    it('personalizeMcp shows the PC-only line and the connector name, no button', async () => {
+    it('personalizeMcp shows the Personalize button and the connector name, no PC-only line', async () => {
         await mount('personalizeMcp');
-        expect(await screen.findByTestId('personalize-pc-only-linear')).toBeTruthy();
+        expect(await screen.findByTestId('personalize-linear')).toBeTruthy();
         expect(screen.getAllByText(/Linear/).length).toBeGreaterThan(0);
-        expect(screen.queryByTestId('personalize-linear')).toBeNull();
+        expect(screen.queryByTestId('personalize-pc-only-linear')).toBeNull();
     });
 
     it.each([
