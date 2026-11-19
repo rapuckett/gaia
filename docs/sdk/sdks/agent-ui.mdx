@@ -3404,7 +3404,12 @@ credential store (the slot the TUI uses). A key is never echoed back or logged.
     `null`), `key_state` (`read`, `store_locked`, or `unknown` until GAIA has
     read the credential store once since it started), `key_hint` (the key's
     last four characters, as the PC shows them; always `null` over mobile
-    access) and `known_models`; all four are `null` for `local`. Each call
+    access) and `known_models`, plus `error` (the error line the PC's last
+    provider list showed, with PC paths and key-store text removed for a device;
+    `null` when there is none and always over mobile access), `env_var` (the
+    environment variable's name, never its value, when `key_source` is
+    `environment`) and `key_from_gaia_env` (`true` when that key is GAIA's own
+    environment rather than Lemonade's); all seven are `null` for `local`. Each call
     dials the gateway. It only reads: it registers nothing, hands no key over,
     never reads the OS credential store (so it can't raise a key-store
     prompt), and never carries a key or a gateway address. Requires `X-Gaia-UI: 1` (**403** without it).

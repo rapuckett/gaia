@@ -3162,7 +3162,10 @@ export interface ProviderModelsResponse {
 export interface ProviderSummary {
   blocked: boolean;
   configured: boolean;
+  env_var?: string | null;
+  error?: string | null;
   id: string;
+  key_from_gaia_env?: boolean | null;
   key_hint?: string | null;
   key_source?: ("stored" | "environment" | "lemonade") | null;
   key_state?: ("read" | "store_locked" | "unknown") | null;

@@ -109,12 +109,12 @@ SEARCH_SETUP_ALLOWANCE_SEC = 1.0
 REMOTE_PREVIEW_MAX_LINES = 50
 
 _AWAY_FROM_PC = (
-    "A paired device can open files only from the folders its chat was given."
+    "Away from the PC, GAIA opens files only from the folders the chat was given."
 )
 
 OUTSIDE_HOME_REFUSAL = (
-    "A paired device can browse only your home folder on the PC, as the PC's "
-    "own folder picker does."
+    "Away from the PC, GAIA browses only your home folder on the PC, as the "
+    "PC's own folder picker does."
 )
 
 router = APIRouter(tags=["files"])
@@ -162,8 +162,7 @@ def _refuse_remote_secret(resolved: Path) -> None:
     if secret_read_refusal(resolved):
         raise _device_refusal(
             "credentials_withheld",
-            "GAIA doesn't show this to a paired device: it holds "
-            "credentials or keys.",
+            "GAIA doesn't show this away from the PC: it holds credentials or keys.",
         )
 
 
@@ -311,8 +310,7 @@ def _refuse_picker_read(resolved: Path, scope: _ReadScope) -> None:
     if device_withholds(resolved):
         raise _device_refusal(
             "credentials_withheld",
-            "GAIA doesn't show this to a paired device: it holds "
-            "credentials or keys.",
+            "GAIA doesn't show this away from the PC: it holds credentials or keys.",
         )
 
 

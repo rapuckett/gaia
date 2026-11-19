@@ -694,6 +694,9 @@ def test_a_paired_device_may_read_provider_summaries(setup, monkeypatch):
             "key_state",
             "key_hint",
             "known_models",
+            "error",
+            "env_var",
+            "key_from_gaia_env",
         }
         for p in listed.values()
     )
