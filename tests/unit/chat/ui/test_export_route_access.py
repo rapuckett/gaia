@@ -51,3 +51,26 @@ def test_classes_match_the_route_access_table(access):
     }
     assert set(access) == api_routes
     assert all(access[key] == EXPECTED[key] for key in access)
+
+
+def test_doc_table_is_current():
+    stale = export_route_access.update_doc(
+        export_route_access.DOC_PATH.read_text(encoding="utf-8"),
+        export_route_access.build_access(),
+    )
+    assert stale == export_route_access.DOC_PATH.read_text(
+        encoding="utf-8"
+    ), f"Regenerate from the repo root: {export_route_access.REGENERATE_HINT}"
+
+
+def test_doc_update_heals_duplicated_sections(access):
+    section = export_route_access.render_doc_section(access)
+    doubled = f"intro\n\n{section}\n\nstale row\n\n{section}\n\noutro\n"
+
+    healed = export_route_access.update_doc(doubled, access)
+
+    assert healed == f"intro\n\n{section}\n\noutro\n"
+    assert healed.count(export_route_access.DOC_BEGIN) == 1
+    assert healed.count("| PC-only |") == 1
+    assert "| Setup | `pc`, or an allowed device | " in healed
+    assert "`POST /api/setup/npu/memlock-fix`" in healed.split("| Setup |")[1]
