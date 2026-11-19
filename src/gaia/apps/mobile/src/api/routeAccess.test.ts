@@ -29,7 +29,8 @@ describe('isDeviceRefused', () => {
     });
 
     it('ignores the query string', () => {
-        expect(isDeviceRefused('GET', '/api/memory/stream-discovery?include_browser=true')).toBe(true);
+        expect(isDeviceRefused('GET', '/api/connectors/eval-mailbox?limit=5')).toBe(true);
+        expect(isDeviceRefused('GET', '/api/memory/stream-discovery?include_browser=true')).toBe(false);
         expect(isDeviceRefused('GET', '/api/memory/activity?days=30')).toBe(false);
     });
 
