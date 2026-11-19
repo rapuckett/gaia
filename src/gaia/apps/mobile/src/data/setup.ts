@@ -237,6 +237,22 @@ export function useGpuMemoryPending() {
     });
 }
 
+/**
+ * Writes the GPU memory limit (a size) or puts the old one back (null) through the PC's administrator prompt. The request stays
+ * open while the PC waits for that prompt, up to 15 minutes, so a screen follows the PC's `device_prompt` events meanwhile.
+ */
+export function useChangeGpuMemory() {
+    const client = useGaiaClient();
+    const queryClient = useQueryClient();
+    return useMutation<GpuMemoryStatus, Error, number | null>({
+        mutationFn: (settingGb) => {
+            const api = requireClient(client);
+            return settingGb == null ? api.revertGpuMemory() : api.applyGpuMemory(settingGb);
+        },
+        onSettled: () => queryClient.invalidateQueries({ queryKey: ['gpuMemory'] }),
+    });
+}
+
 /** Which model server GAIA uses; `offer` stays true until someone on the PC chooses, so it is re-read while waiting. */
 export function useLemonadeTarget() {
     const client = useGaiaClient();
@@ -351,6 +367,19 @@ export function useRecheckNpu() {
     const queryClient = useQueryClient();
     return useMutation<SetupPlan, Error, void>({
         mutationFn: () => requireClient(client).recheckSetupNpu(),
+        onSuccess: (plan) => {
+            queryClient.setQueryData(queryKeys.setupPlan, plan);
+            void queryClient.invalidateQueries({ queryKey: ['setupPreflight'] });
+        },
+    });
+}
+
+/** Raises the NPU's locked-memory limit through the PC's administrator prompt (up to 15 minutes); the plan it answers replaces the one shown. */
+export function useFixNpuMemlock() {
+    const client = useGaiaClient();
+    const queryClient = useQueryClient();
+    return useMutation<SetupPlan, Error, void>({
+        mutationFn: () => requireClient(client).fixSetupNpuMemlock(),
         onSuccess: (plan) => {
             queryClient.setQueryData(queryKeys.setupPlan, plan);
             void queryClient.invalidateQueries({ queryKey: ['setupPreflight'] });

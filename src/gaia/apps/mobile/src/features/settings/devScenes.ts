@@ -8,6 +8,7 @@ import { tEn } from '@webui/i18n/translator';
 import type { Automation, AutomationList, ContextChoice, Session, SkillInfo, DiscordStatus, GaiaClient, CustomModelReport, GpuMemoryStatus, LemonadeTarget, MCPServerStatus, ModelServerInfo, ProviderModel, ProviderSummary, Settings, SpendingReport } from '@/api/client.types';
 import { PC_ONLY_REFUSAL } from '@/api/constants';
 import { GaiaApiError, GaiaNetworkError } from '@/api/errors';
+import type { DevicePromptKind, DevicePromptNote, DevicePromptState } from '@/features/devices/devicePrompts';
 import { COMMON, GPU, RUN } from '@/features/setup/devScenes';
 
 import type { SectionId } from './sections';
@@ -24,6 +25,8 @@ export interface SettingsScene {
     data?: FakeClientData;
     /** Opens the Model pane on the success notice for this just-added model, with the Hugging Face section open. */
     addedModel?: string;
+    /** Puts a device prompt in this state before the pane shows, as the PC's events or a refused request would. */
+    prompt?: { kind: DevicePromptKind; action: string; state: DevicePromptState; note?: DevicePromptNote };
     /** Opens the cloud key field (with Replace already pressed when `replacing`), with `typed` in it and Connect pressed when `submit`. */
     keyEntry?: { replacing?: boolean; typed?: string; submit?: boolean };
     /** Opens the models search field with this text typed in. */
@@ -300,6 +303,12 @@ export const SETTINGS_SCENES: Record<string, SettingsScene> = {
     'model-key-unknown': keyFields({ configured: false, key_state: 'unknown' }),
     // SET-MODEL-18: the PC's list says its key store is locked, before anything is sent: the warning and Try again.
     'model-key-store-locked': keyFields({ configured: false, key_state: 'store_locked' }),
+    // SET-MODEL-18: Try again pressed and the PC's unlock prompt is up: "Approve on your PC" with Stop waiting, in place of the button.
+    'model-key-locked-waiting': { ...keyFields({ configured: false, key_state: 'store_locked' }), prompt: { kind: 'keyStore', action: 'keyStoreRetry', state: 'waiting' } },
+    // SET-MODEL-18: Try again pressed within 10 s of the last try: the wait in seconds, and Try again stays.
+    'model-key-locked-too-soon': { ...keyFields({ configured: false, key_state: 'store_locked' }), prompt: { kind: 'keyStore', action: 'keyStoreRetry', state: 'tooSoon', note: { seconds: 7 } } },
+    // SET-MODEL-18: the PC is already waiting on another request: no Try again on the notice, the button stays.
+    'model-key-locked-busy': { ...keyFields({ configured: false, key_state: 'store_locked' }), prompt: { kind: 'keyStore', action: 'keyStoreRetry', state: 'busy' } },
     // SET-MODEL-11: a saved key with no hint, as over mobile access: no saved-key row at all.
     'model-key-no-hint': keyFields({ configured: true, key_source: 'stored', key_hint: null }),
     // SET-MODEL-19: Fireworks can't list its models, so the PC serves the ones it knows.

@@ -17,6 +17,7 @@ export interface ApproveOnPcNoticeProps {
  * What stands in for an action's button while its prompt is up on the PC, and the way out when
  * it isn't answered. Shows nothing when there is no prompt or it was approved: the card then
  * shows the action's own success state. Callers hide their button on `useDevicePrompt(...).hideAction`; Try again is then the only retry.
+ * A refused request (the PC busy with another, or asked again within 10 s) leaves the button and has no Try again.
  */
 export function ApproveOnPcNotice({ kind, action, onRetry }: ApproveOnPcNoticeProps) {
     const t = useT();
@@ -47,6 +48,14 @@ export function ApproveOnPcNotice({ kind, action, onRetry }: ApproveOnPcNoticePr
             return <Notice tone="warning" message={t('mobileApp.approveOnPc.denied')} action={retry} onDismiss={prompt.dismiss} testID="approve-on-pc" />;
         case 'timeout':
             return <Notice tone="warning" message={t('mobileApp.approveOnPc.timedOut')} action={retry} onDismiss={prompt.dismiss} testID="approve-on-pc" />;
+        case 'failed':
+            return <Notice tone="danger" message={t('mobileApp.approveOnPc.failed')} detail={prompt.note.detail} action={retry} onDismiss={prompt.dismiss} testID="approve-on-pc" />;
+        case 'busy':
+            return <Notice tone="warning" message={t('mobileApp.approveOnPc.busy')} onDismiss={prompt.dismiss} testID="approve-on-pc" />;
+        case 'tooSoon':
+            return prompt.note.seconds === undefined ? null : (
+                <Notice tone="warning" message={t('mobileApp.approveOnPc.tooSoon', { seconds: String(prompt.note.seconds) })} onDismiss={prompt.dismiss} testID="approve-on-pc" />
+            );
         default:
             return null;
     }

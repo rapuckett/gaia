@@ -261,6 +261,10 @@ export interface FakeClientData {
     chatSpending?: ChatSpending;
     /** What getCloudPrices answers, by provider. */
     cloudPrices?: Record<string, CloudPriceList>;
+    /** What applyGpuMemory and revertGpuMemory answer (else `gpuMemory`); an Error is thrown. */
+    gpuMemoryChange?: GpuMemoryStatus | Error;
+    /** What fixSetupNpuMemlock answers (else `npuRecheck`); an Error is thrown. */
+    npuMemlockFix?: SetupPlan | Error;
     /** What recheckSetupNpu answers; an Error is thrown. */
     npuRecheck?: SetupPlan | Error;
     /** What getPreflight answers; an Error is thrown. */
@@ -441,6 +445,10 @@ export interface FakeGaiaClient extends GaiaClient {
     readonly keyedConnects: string[];
     /** The providers whose saved key forgetProviderKey cleared, in order. */
     readonly keyRemovals: string[];
+    /** The GPU memory changes asked for, in order: an apply with its size, or a revert. */
+    readonly gpuMemoryChanges: ({ action: 'apply'; settingGb: number } | { action: 'revert' })[];
+    /** How many times fixSetupNpuMemlock was asked. */
+    readonly npuMemlockFixes: number;
     /** How many times recheckSetupNpu was asked. */
     readonly npuRechecks: number;
     /** How many times retryKeyStore was asked. */
@@ -561,8 +569,16 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
     const browserFlows = new Map<string, string>();
     const keyedConnects: string[] = [];
     const keyRemovals: string[] = [];
+    const gpuMemoryChanges: ({ action: 'apply'; settingGb: number } | { action: 'revert' })[] = [];
+    let npuMemlockFixes = 0;
     let npuRechecks = 0;
     let keyStoreRetries = 0;
+    const gpuChangeAnswer = (): GpuMemoryStatus => {
+        const answer = data.gpuMemoryChange ?? data.gpuMemory;
+        if (answer instanceof Error) throw answer;
+        if (!answer) throw new GaiaApiError(503, 'This fake client was given no GPU memory status.');
+        return answer;
+    };
     let checkAt = 0;
     let statusAt = 0;
     const nextOf = <T,>(list: (T | Error)[], at: number): T => {
@@ -678,6 +694,10 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         flowCancels,
         keyedConnects,
         keyRemovals,
+        gpuMemoryChanges,
+        get npuMemlockFixes() {
+            return npuMemlockFixes;
+        },
         get npuRechecks() {
             return npuRechecks;
         },
@@ -1700,6 +1720,14 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             if (data.gpuMemory instanceof Error) throw data.gpuMemory;
             return data.gpuMemory;
         },
+        async applyGpuMemory(settingGb) {
+            gpuMemoryChanges.push({ action: 'apply', settingGb });
+            return gpuChangeAnswer();
+        },
+        async revertGpuMemory() {
+            gpuMemoryChanges.push({ action: 'revert' });
+            return gpuChangeAnswer();
+        },
         async recordGpuMemoryPending() {
             if (!data.gpuMemory || data.gpuMemory instanceof Error) throw new GaiaApiError(503, 'This fake client was given no GPU memory status.');
             return data.gpuMemory;
@@ -1784,6 +1812,13 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         async retryKeyStore() {
             keyStoreRetries += 1;
             return { retrying: true };
+        },
+        async fixSetupNpuMemlock() {
+            npuMemlockFixes += 1;
+            const answer = data.npuMemlockFix ?? data.npuRecheck;
+            if (answer instanceof Error) throw answer;
+            if (!answer) throw new GaiaApiError(503, 'This fake client was given no NPU fix plan.');
+            return answer;
         },
         async recheckSetupNpu() {
             npuRechecks += 1;

@@ -314,7 +314,10 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
         if (!res.ok) {
             const errorText = await res.text().catch(() => '');
             const detail = parseErrorDetail(errorText);
-            throw res.status === 401 ? new GaiaAuthError(detail) : new GaiaApiError(res.status, detail, undefined, undefined, parseErrorBody(errorText));
+            const retryAfter = Number(res.headers?.get('retry-after'));
+            throw res.status === 401
+                ? new GaiaAuthError(detail)
+                : new GaiaApiError(res.status, detail, undefined, undefined, parseErrorBody(errorText), Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : null);
         }
         return res;
     }
@@ -1275,6 +1278,14 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             return getJson<GpuMemoryStatus>(`${ENDPOINTS.gpuMemory}${query}`, options?.signal);
         },
 
+        applyGpuMemory(settingGb, options) {
+            return postJson<GpuMemoryStatus>(ENDPOINTS.gpuMemoryApply, { setting_gb: settingGb, confirm: true }, options?.signal);
+        },
+
+        revertGpuMemory(options) {
+            return postJson<GpuMemoryStatus>(ENDPOINTS.gpuMemoryRevert, { confirm: true }, options?.signal);
+        },
+
         recordGpuMemoryPending(settingGb, options) {
             return postJson<GpuMemoryStatus>(ENDPOINTS.gpuMemoryPending, { setting_gb: settingGb }, options?.signal);
         },
@@ -1359,6 +1370,10 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         retryKeyStore(options) {
             return postJson<{ retrying: boolean }>(ENDPOINTS.providersKeyStoreRetry, undefined, options?.signal);
+        },
+
+        fixSetupNpuMemlock(options) {
+            return postJson<SetupPlan>(ENDPOINTS.setupNpuMemlockFix, undefined, options?.signal);
         },
 
         recheckSetupNpu(options) {
