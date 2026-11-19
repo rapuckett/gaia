@@ -160,10 +160,11 @@ describeNative('Provider key', () => {
     });
 
     it('a locked OS key store (423) shows the PC\'s sentence under ours, and Try again asks the PC once more', async () => {
-        const { client, queryClient, wrap } = setup(none);
+        const savedKey: ProviderRow = { ...none, key_source: 'stored', key_state: 'read', key_hint: '4f2a' };
+        const { client, queryClient, wrap } = setup(savedKey);
         const locked = 'The credential store on the PC running GAIA could not be used. Unlock or fix it on the PC, then try again.';
         jest.spyOn(client, 'connectProvider').mockRejectedValue(new GaiaApiError(423, locked));
-        await render(<ProviderKey provider={none} connected={false} />, { wrapper: wrap });
+        await render(<ProviderKey provider={savedKey} connected={false} />, { wrapper: wrap });
 
         await fireEvent.press(screen.getByTestId('provider-key-reconnect'));
         expect(await screen.findByText("The OS key store is locked, so GAIA can't read your saved key.")).toBeTruthy();
@@ -185,6 +186,7 @@ describeNative('Provider key', () => {
             jest.spyOn(client, 'retryKeyStore').mockReturnValue(new Promise((resolve) => (finish = resolve)));
             await render(<ProviderKey provider={lockedRow} connected={false} />, { wrapper: wrap });
 
+            expect(screen.queryByTestId('provider-key-reconnect')).toBeNull();
             await fireEvent.press(screen.getByText('Try again'));
             await act(async () => applyDevicePromptEvent(event('waiting')));
             expect(screen.getByText('Approve on your PC')).toBeTruthy();
@@ -229,7 +231,7 @@ describeNative('Provider key', () => {
     });
 
     it('Reconnect works without any key leaving the phone', async () => {
-        const saved: ProviderRow = { id: 'fireworks', name: 'Fireworks AI', remote: true, privacy_notice: '', configured: false, blocked: false };
+        const saved: ProviderRow = { id: 'fireworks', name: 'Fireworks AI', remote: true, privacy_notice: '', configured: false, blocked: false, key_source: 'stored', key_hint: '4f2a' };
         const { client, queryClient, wrap } = setup(saved);
         const r = await render(<ProviderKey provider={saved} connected={false} />, { wrapper: wrap });
 
@@ -253,13 +255,14 @@ describeNative('Provider key', () => {
         queryClient.clear();
     });
 
-    it('shows no saved-key row when the PC sends no hint, as over mobile access', async () => {
+    it('shows the 20 bullets alone when the PC sends no hint, as over the tunnel', async () => {
         const noHint: ProviderRow = { ...stored, key_hint: null };
         const { queryClient, wrap } = setup(noHint);
         await render(<ProviderKey provider={noHint} connected />, { wrapper: wrap });
 
-        expect(screen.queryByTestId('provider-key-saved')).toBeNull();
-        expect(screen.queryByText(/•/)).toBeNull();
+        const saved = screen.getByTestId('provider-key-saved');
+        expect(saved).toHaveTextContent(`\u2066${'•'.repeat(20)}\u2069`);
+        expect(saved.props.accessibilityLabel).toMatch(/^Saved .*Fireworks AI.* API key$/);
         expect(screen.getByTestId('provider-key-remove')).toBeTruthy();
         queryClient.clear();
     });
@@ -313,7 +316,7 @@ describeNative('Provider key', () => {
 
         expect(screen.getByTestId('provider-key-waiting')).toHaveTextContent('Waiting for the OS to allow reading the saved key.');
         expect(screen.queryByText('No key yet.')).toBeNull();
-        expect(screen.getByTestId('provider-key-reconnect')).toBeTruthy();
+        expect(screen.queryByTestId('provider-key-reconnect')).toBeNull();
         queryClient.clear();
     });
 

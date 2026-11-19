@@ -283,7 +283,7 @@ export const SETTINGS_SCENES: Record<string, SettingsScene> = {
     'gpu-read-error': { section: 'model', target: 'gpu-memory', gpuMemory: READ_ERROR },
     'gpu-read-error-setup': { section: 'setup', gpuMemory: READ_ERROR },
     // SET-MODEL-12: a cloud provider with no connected key shows Reconnect.
-    'model-key-disconnected': { section: 'model', target: 'cloud-key', provider: 'fireworks', gpuMemory: GPU },
+    'model-key-disconnected': keyFields({ configured: false, key_source: 'stored', key_hint: '4f2a' }),
     // SET-MODEL-15: the key field, Connect disabled until text is typed (`#tap=provider-key-connect` after typing connects on the fake PC).
     'model-key-entry': keyScene({}),
     // SET-MODEL-15: a typed key sent and the PC still answering: the field cleared, Connect busy.
@@ -320,7 +320,7 @@ export const SETTINGS_SCENES: Record<string, SettingsScene> = {
     'model-key-locked-too-soon': { ...keyFields({ configured: false, key_state: 'store_locked' }), prompt: { kind: 'keyStore', action: 'keyStoreRetry', state: 'tooSoon', note: { seconds: 7 } } },
     // SET-MODEL-18: the PC is already waiting on another request: no Try again on the notice, the button stays.
     'model-key-locked-busy': { ...keyFields({ configured: false, key_state: 'store_locked' }), prompt: { kind: 'keyStore', action: 'keyStoreRetry', state: 'busy' } },
-    // SET-MODEL-11: a saved key with no hint, as over mobile access: no saved-key row at all.
+    // SET-MODEL-11: a saved key with no hint, as over the tunnel: the 20 bullets alone in the saved-key row.
     'model-key-no-hint': keyFields({ configured: true, key_source: 'stored', key_hint: null }),
     // SET-MODEL-19: Fireworks can't list its models, so the PC serves the ones it knows.
     'model-models-stale': keyFields({ configured: true, key_source: 'stored', key_hint: '4f2a', known_models: true }),

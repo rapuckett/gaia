@@ -197,7 +197,7 @@ export function ProviderKey({ provider, connected }: { provider: ProviderRow; co
                                 : t('mobileApp.settings.key.fromEnvironment')}
                         </Text>
                     </Surface>
-                ) : provider.key_hint ? (
+                ) : (
                     <Surface tone="recessed" radius="md" padding="sm" border>
                         <Text
                             role="label"
@@ -208,10 +208,10 @@ export function ProviderKey({ provider, connected }: { provider: ProviderRow; co
                             accessibilityLabel={t('settings.key.savedAria', { name: isolateUnit(name) })}
                             testID="provider-key-saved"
                         >
-                            {isolate(`${SAVED_MASK} ${provider.key_hint}`, 'ltr')}
+                            {isolate(provider.key_hint ? `${SAVED_MASK} ${provider.key_hint}` : SAVED_MASK, 'ltr')}
                         </Text>
                     </Surface>
-                ) : null
+                )
             ) : null}
 
             {showField ? (
@@ -254,7 +254,7 @@ export function ProviderKey({ provider, connected }: { provider: ProviderRow; co
                 </>
             ) : null}
 
-            {!connected && !replacing && (hasKey || state !== 'read') ? (
+            {!connected && !replacing && hasKey ? (
                 <Button
                     variant="secondary"
                     full
