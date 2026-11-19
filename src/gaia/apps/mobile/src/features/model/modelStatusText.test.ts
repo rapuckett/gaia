@@ -70,7 +70,7 @@ describe('restartControl', () => {
 describe('needLine', () => {
     it('brackets the Arabic "Free:" with its own value, with no separator between them and the sizes read left to right', () => {
         const [own, gloss] = bracketParts(needLine(translator('ar'), 'Gemma 4 E4B', 6, 120));
-        expect(own).toBe('\u2066Gemma 4 E4B\u2069 · \u20666.0 GB\u2069 · \u2067المتاح: \u2066120.0 GB\u2069\u2069');
-        expect(gloss).toBe('\u2066(Free: \u2066120.0 GB\u2069)\u2069');
+        expect(own).toBe('\u2066Gemma 4 E4B\u2069 · \u20666.0\u00A0GB\u2069 · \u2067المتاح: \u2066120.0\u00A0GB\u2069\u2069');
+        expect(gloss).toBe('\u2066(Free: \u2066120.0\u00A0GB\u2069)\u2069');
     });
 });

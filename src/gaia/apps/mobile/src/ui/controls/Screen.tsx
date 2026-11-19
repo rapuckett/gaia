@@ -77,10 +77,11 @@ export function Screen({
     const bottom = has('bottom') && !(avoid && keyboardUp) ? insets.bottom : 0;
 
     const cap = width === 'full' ? undefined : contentWidth[width];
+    // Without a scroll view the column must fit the screen, so a list inside it scrolls instead of running under the footer.
     const column = (node: ReactNode) => (
         <View
             testID="screen-content"
-            style={[{ flexGrow: 1, width: '100%', alignSelf: 'center' }, cap ? { maxWidth: cap } : undefined]}
+            style={[{ flexGrow: 1, flexShrink: scroll ? 0 : 1, width: '100%', alignSelf: 'center' }, cap ? { maxWidth: cap } : undefined]}
             // @ts-expect-error dataSet is a react-native-web prop, absent from the native View types
             dataSet={{ contentWidth: cap ? String(cap) : 'full' }}
         >

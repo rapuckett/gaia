@@ -58,7 +58,13 @@ function Prices({ provider, picked, onPick, disabled, inUse }: {
         );
     }
     if (list.models.length === 0) {
-        return <Text role="caption" tone="secondary">{`${t('settings.price.unknownSentence')} ${list.note ?? ''}`}</Text>;
+        // The note is the server's own text, so it keeps its own direction on a line of its own.
+        return (
+            <Stack gap="xs">
+                <Text role="caption" tone="secondary">{t('settings.price.unknownSentence')}</Text>
+                {list.note ? <Text role="caption" tone="secondary" dir="auto">{list.note}</Text> : null}
+            </Stack>
+        );
     }
     const rows = shownRows(list, inUse);
     const chosen = picked ?? rows[0]?.model;

@@ -98,12 +98,14 @@ export function glossCut(lines: readonly string[], glosses: readonly string[]): 
 
 // Web: an inline block, as the desktop's `.i18n-gloss`, moves to the next line whole and wraps inside itself only when wider than a line.
 const WEB_GLOSS = { writingDirection: 'ltr', display: 'inline-block', maxWidth: '100%' } as unknown as TextStyle;
+// A line cap only clips inline text: an inline block counts as one line however tall it is.
+const WEB_GLOSS_CLAMPED: TextStyle = { writingDirection: 'ltr' };
 
 /** Splits each string child at its English glosses and sets them small and muted, as the web's `.i18n-gloss` does; with `blocks`, long glosses are moved into it instead. Inline glosses are listed in `inline`. */
-function withGlosses(children: ReactNode, size: number, color: string, blocks: string[] | null, limit = LONG_GLOSS_LENGTH, inline: string[] = [], wrapWords = false): ReactNode {
+function withGlosses(children: ReactNode, size: number, color: string, blocks: string[] | null, limit = LONG_GLOSS_LENGTH, inline: string[] = [], wrapWords = false, clamped = false): ReactNode {
     const gloss = Math.max(size * 0.8, GLOSS_MIN_SIZE);
     // Native keeps the paragraph's direction (a nested writingDirection would apply to the whole line); the gloss's own isolates keep its English run LTR.
-    const style = { fontSize: gloss, lineHeight: Math.round(gloss * GLOSS_LINE_HEIGHT), fontWeight: '400' as const, color, ...(Platform.OS === 'web' ? WEB_GLOSS : null) };
+    const style = { fontSize: gloss, lineHeight: Math.round(gloss * GLOSS_LINE_HEIGHT), fontWeight: '400' as const, color, ...(Platform.OS === 'web' ? (clamped ? WEB_GLOSS_CLAMPED : WEB_GLOSS) : null) };
     const keepWhole = Platform.OS !== 'web' && !wrapWords;
     let changed = false;
     const mapped = Children.map(children, (child, i) => {
@@ -233,7 +235,7 @@ export function Text({
     // Larger type wraps sooner, so headings move a shorter gloss to its own line.
     const glossLimit = Math.round((LONG_GLOSS_LENGTH * type.body) / baseSize);
     const inline: string[] = [];
-    const body = withGlosses(children, baseSize, toneColor(colors, 'muted'), blocks, cut ? 0 : glossLimit, inline, cut);
+    const body = withGlosses(children, baseSize, toneColor(colors, 'muted'), blocks, cut ? 0 : glossLimit, inline, cut, lines !== undefined);
     const onTextLayout =
         glossText !== null && !cut && inline.length > 0
             ? (e: TextLayoutEvent) => {
