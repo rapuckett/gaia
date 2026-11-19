@@ -148,6 +148,9 @@ export function ProviderKey({ provider, connected }: { provider: ProviderRow; co
     const state = provider.key_state ?? null;
     const hasKey = source !== null;
     const fromEnv = source === 'environment';
+    // Like the desktop: a GAIA-set environment key can be replaced, any other can't be changed from here.
+    const canChange = !fromEnv || provider.key_from_gaia_env === true;
+    const providerError = provider.error || null;
     const showField = !refused && (replacing || (!connected && !hasKey));
     const locked = outcome?.tone === 'locked' || (!hasKey && state === 'store_locked');
     const lockedDetail = outcome?.tone === 'locked' ? outcome.detail : undefined;
@@ -173,7 +176,11 @@ export function ProviderKey({ provider, connected }: { provider: ProviderRow; co
             {hasKey && !replacing ? (
                 fromEnv ? (
                     <Surface tone="recessed" radius="md" padding="sm" border testID="provider-key-env">
-                        <Text role="label" tone="secondary">{t('mobileApp.settings.key.fromEnvironment')}</Text>
+                        <Text role="label" tone="secondary">
+                            {provider.env_var
+                                ? t('mobileApp.yourPc.settings.key.setIn', { name: isolate(provider.env_var, 'ltr') })
+                                : t('mobileApp.settings.key.fromEnvironment')}
+                        </Text>
                     </Surface>
                 ) : provider.key_hint ? (
                     <Surface tone="recessed" radius="md" padding="sm" border>
@@ -244,7 +251,7 @@ export function ProviderKey({ provider, connected }: { provider: ProviderRow; co
                 />
             ) : null}
 
-            {(connected || hasKey) && !replacing && !fromEnv ? (
+            {(connected || hasKey) && !replacing && canChange ? (
                 <>
                     {refused ? (
                         <PcOnlyAction label={t('settings.key.replace')} icon={KeyRound} detail={t('mobileApp.settings.pcOnly')} testID="provider-key-replace" />
@@ -262,7 +269,7 @@ export function ProviderKey({ provider, connected }: { provider: ProviderRow; co
                             testID="provider-key-replace"
                         />
                     )}
-                    {removeRefused ? (
+                    {fromEnv ? null : removeRefused ? (
                         <PcOnlyAction label={t('settings.key.remove')} icon={Trash2} detail={t('mobileApp.settings.pcOnly')} testID="provider-key-remove" />
                     ) : (
                         <Button
@@ -278,8 +285,16 @@ export function ProviderKey({ provider, connected }: { provider: ProviderRow; co
                     )}
                 </>
             ) : null}
-            {hasKey && !connected && !replacing ? (
+            {hasKey && !connected && !replacing && !providerError ? (
                 <Text role="caption" tone="muted" testID="provider-key-not-connected">{t('settings.key.notConnectedHint', { name: isolateUnit(name) })}</Text>
+            ) : null}
+            {providerError ? (
+                <Notice
+                    tone="danger"
+                    message={t('mobileApp.settings.key.providerError', { name: isolateUnit(name) })}
+                    detail={providerError}
+                    testID="provider-key-error"
+                />
             ) : null}
             {refused ? <PcOnlyNotice testID="provider-key-pc-only" /> : null}
             {locked ? (

@@ -73,13 +73,15 @@ import {
     groupConnectors,
     isUnavailable,
     MCP_GUIDE_URL,
-    oauthClientStatus,
     SEARCH_ABOVE,
     setupForm,
     tileStatus,
     unavailableHint,
 } from './connectorList';
+import { BrowserSignInBlock } from './BrowserSignInBlock';
+import { useBrowserSignInAvailable } from './browserSignIn';
 import { ConnectorSetupSheet } from './ConnectorSetupSheet';
+import { OAuthClientLine } from './OAuthClientLine';
 import { DeviceCodeSignIn } from './DeviceCodeSignIn';
 
 type Translator = ReturnType<typeof useT>;
@@ -361,12 +363,21 @@ function StatusText({ connector, check, t }: { connector: ConnectorRow; check?: 
     switch (status.kind) {
         case 'connected':
             return (
-                <Row gap="xs">
-                    <Icon icon={CircleCheck} size="sm" tone="success" />
-                    <Text role="label" tone="success" numberOfLines={1}>
-                        {status.accountId ? <Ltr>{status.accountId}</Ltr> : t('settings.connectors.connected')}
-                    </Text>
-                </Row>
+                // Shrinks inside the header, so a long address is cut instead of running into the gutter.
+                <View style={{ flexShrink: 1, minWidth: 0, maxWidth: '100%' }}>
+                    <Row gap="xs">
+                        <Icon icon={CircleCheck} size="sm" tone="success" />
+                        <View style={{ flexShrink: 1, minWidth: 0 }}>
+                            {status.accountId ? (
+                                <Text role="label" tone="success" numberOfLines={1} largeLines={1} ellipsize="middle" accessibilityLabel={status.accountId}>
+                                    <Ltr>{status.accountId}</Ltr>
+                                </Text>
+                            ) : (
+                                <Text role="label" tone="success" numberOfLines={1}>{t('settings.connectors.connected')}</Text>
+                            )}
+                        </View>
+                    </Row>
+                </View>
             );
         case 'paused':
             return <Pill label={t('settings.connectors.paused')} />;
@@ -421,6 +432,7 @@ function ConnectorTile({
     const action = useConnectorServerAction(connector.id, (outcome) => onDisconnected(disconnectNotice(outcome, connector, t)));
     const configure = useConfigureConnector();
     const google = connector.id === GOOGLE_CONNECTOR_ID;
+    const browserSignIn = useBrowserSignInAvailable();
     const server = connector.type === 'mcp_server';
     const paused = connector.enabled === false;
     const form = setupForm(connector);
@@ -542,7 +554,7 @@ function ConnectorTile({
                         setupButton
                     ) : google ? (
                         <>
-                            <Notice tone="info" message={t('mobileApp.connectors.googlePcOnly')} />
+                            {browserSignIn ? <BrowserSignInBlock connector={connector} /> : <Notice tone="info" message={t('mobileApp.connectors.googlePcOnly')} />}
                             {clientRow}
                         </>
                     ) : server ? (
@@ -594,7 +606,8 @@ function ConnectorTile({
                                 />
                             ) : null}
                             <ChipButton
-                                label={t('settings.connectors.disconnect')}
+                                label={t.bare('settings.connectors.disconnect')}
+                                accessibilityLabel={t('settings.connectors.disconnect')}
                                 variant="danger"
                                 testID={`connector-disconnect-${connector.id}`}
                                 disabled={action.isPending}
@@ -631,7 +644,7 @@ function OAuthClientRow({ connector, onChange }: { connector: ConnectorRow; onCh
     return (
         <Stack gap="xs">
             <Text role="label" weight="semibold" tone="muted">{t('settings.connectors.client')}</Text>
-            <Text role="label" tone="secondary">{oauthClientStatus(connector, t) ?? t('settings.connectors.noClient')}</Text>
+            <OAuthClientLine connector={connector} />
             <Row gap="sm" wrap>
                 <ChipButton
                     label={t.bare('mobileApp.connectors.changeClient')}
@@ -677,7 +690,7 @@ function CheckStatus({ connector, check }: { connector: ConnectorRow; check?: Co
                     />
                     {check.detail ? (
                         <Disclosure title={t('settings.connectors.checkDetails')} open={details} onToggle={() => setDetails((v) => !v)}>
-                            <Text role="caption" tone="muted" dir="ltr" mono>
+                            <Text role="caption" tone="muted" dir="ltr" align="ltr" mono>
                                 {check.detail}
                             </Text>
                         </Disclosure>

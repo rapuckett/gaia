@@ -28,6 +28,13 @@ const EXPECTED: Record<string, string> = {
     'route-tailnet-long-name': t('mobileApp.pairing.route.tailnet'),
     'two-pcs-same-host': t('mobileApp.pairing.pcs.use'),
     'unreachable-away': t('mobileApp.pairing.unreachable.away'),
+    'changes-loading': t('mobileApp.devices.changesTitle'),
+    'changes-empty': t('settings.devices.changesNone'),
+    'changes-few': t('settings.devices.change.localOnlyOff'),
+    'changes-many': t('settings.devices.changesShowAll'),
+    'changes-all': t('settings.devices.changesShowAll'),
+    'changes-error': 'The PC could not read its audit log.',
+    'changes-unknown-kind': 'cameraEnabled',
 };
 
 describeNative('pairing dev scenes', () => {
@@ -38,6 +45,6 @@ describeNative('pairing dev scenes', () => {
                 <PairingSceneView scene={PAIRING_SCENES[name]} />
             </SafeAreaProvider>,
         );
-        expect(await screen.findByText(EXPECTED[name])).toBeTruthy();
+        expect((await screen.findAllByText(EXPECTED[name], { includeHiddenElements: true })).length).toBeGreaterThan(0);
     });
 });

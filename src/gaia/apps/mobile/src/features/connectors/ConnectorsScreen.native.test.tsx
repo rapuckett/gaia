@@ -359,7 +359,9 @@ describeNative('ConnectorsScreen setup from the phone', () => {
 
         expect(await screen.findByText('Saved')).toBeTruthy();
         expect(sent).toEqual([['google', { client_id: 'test-client-id', client_secret: 'test-client-secret', save_only: true }]]);
-        expect((await screen.findAllByText(/Saved client: .*test-client-id/)).length).toBeGreaterThan(0);
+        // The id is its own literal line under the label; the row reads both.
+        expect((await screen.findAllByLabelText('Saved client: test-client-id')).length).toBeGreaterThan(0);
+        expect(screen.getAllByText(/test-client-id/).length).toBeGreaterThan(0);
         expect(screen.queryByText(/test-client-secret/)).toBeNull();
         expect(screen.queryByDisplayValue('test-client-secret')).toBeNull();
         expect(screen.getByTestId('connector-setup-client_secret').props.placeholder).toBe('••••••••');

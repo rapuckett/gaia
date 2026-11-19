@@ -139,7 +139,7 @@ describe('ModelSettings provider keys', () => {
     it('an environment key can be neither replaced nor removed here', async () => {
         withProviders(fireworks({ models_discovered: true, key_source: 'environment' }));
         const card = await openFireworks();
-        expect(within(card).getByLabelText('Saved Fireworks AI API key')).toHaveValue('From your environment (FIREWORKS_API_KEY)');
+        expect(within(card).getByLabelText('Saved Fireworks AI API key')).toHaveValue('From your environment: \u2066FIREWORKS_API_KEY\u2069');
         expect(within(card).queryByRole('button', { name: 'Replace' })).not.toBeInTheDocument();
         expect(within(card).queryByRole('button', { name: 'Remove key' })).not.toBeInTheDocument();
     });
@@ -156,7 +156,7 @@ describe('ModelSettings provider keys', () => {
         withProviders(fireworks({ key_source: 'environment', models_discovered: false }));
         mockedApi.connectProviderWaitingForOs.mockResolvedValue({ ...fireworks({ key_source: 'environment', models_discovered: true }), remembered: false, remember_error: null });
         const card = await openFireworks();
-        expect(within(card).getByLabelText('Saved Fireworks AI API key')).toHaveValue('From your environment (FIREWORKS_API_KEY)');
+        expect(within(card).getByLabelText('Saved Fireworks AI API key')).toHaveValue('From your environment: \u2066FIREWORKS_API_KEY\u2069');
         expect(within(card).getByText('Not connected')).toBeInTheDocument();
         expect(within(card).getByText('Fireworks AI has your key but is not connected yet, so no models are listed.')).toBeInTheDocument();
         fireEvent.click(within(card).getByRole('button', { name: 'Reconnect' }));

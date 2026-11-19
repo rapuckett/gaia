@@ -54,8 +54,8 @@ function formatDate(iso: string | null, t: Translate): string {
 
 function formatSearchScope(locations: string[], t: Translate): string {
     if (locations.length === 0) return '';
-    const [first, ...rest] = locations;
-    return rest.length > 0 ? t('fileBrowser.scopeMore', { first, n: rest.length }) : first;
+    const [path, ...rest] = locations;
+    return rest.length > 0 ? t('fileBrowser.searchingInScopeMore', { path, n: rest.length }) : t('fileBrowser.searchingInScope', { path });
 }
 
 // Quick link icon mapping
@@ -626,7 +626,7 @@ export function FileBrowser({ onStartChat }: FileBrowserProps) {
                                         className="fb-search-scope"
                                         title={searchedLocations.join('\n')}
                                     >
-                                        {t('fileBrowser.searchingIn')} <code>{searchScope}</code>
+                                        {searchScope}
                                     </span>
                                 )}
                                 {searchTruncated && (
