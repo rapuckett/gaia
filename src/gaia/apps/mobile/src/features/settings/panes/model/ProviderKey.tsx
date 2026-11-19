@@ -12,6 +12,8 @@ import { GaiaApiError } from '@/api/errors';
 import { useDeviceRefused } from '@/api/routeAccess';
 import { useForgetProviderKey, useReconnectProvider, useRetryKeyStore, useSendProviderKey, type ProviderRow } from '@/data';
 import { describeHttpFailure, ltr, useT, type Translate } from '@/i18n/useT';
+import { ApproveOnPcNotice } from '@/features/devices/ApproveOnPcNotice';
+import { useDevicePrompt } from '@/features/devices/devicePrompts';
 import { PcOnlyAction } from '@/features/logs/PcOnlyAction';
 import { Badge, Button, Notice, Row, Stack, Surface, Text, TextField } from '@/ui';
 import { KeyRound, Trash2 } from '@/ui/icons';
@@ -50,6 +52,7 @@ export function ProviderKey({ provider, connected }: { provider: ProviderRow; co
     const sendKey = useSendProviderKey();
     const forget = useForgetProviderKey();
     const retry = useRetryKeyStore();
+    const storePrompt = useDevicePrompt({ kind: 'keyStore', action: 'keyStoreRetry' });
     const removeRefused = useDeviceRefused('DELETE', ENDPOINTS.providerKey);
     const retryRefused = useDeviceRefused('POST', ENDPOINTS.providersKeyStoreRetry);
     const { ask, sheet } = useConfirmSheet();
@@ -101,7 +104,19 @@ export function ProviderKey({ provider, connected }: { provider: ProviderRow; co
         );
     };
 
-    const onRetryStore = () => retry.mutate(undefined, { onSuccess: () => !movedOn() && setOutcome(null), onError: failed });
+    // The request stays open while the PC's unlock prompt waits; the notice follows the PC's events meanwhile.
+    const onRetryStore = () => {
+        storePrompt.begin();
+        retry.mutate(undefined, {
+            onSuccess: () => {
+                storePrompt.settle();
+                if (!movedOn()) setOutcome(null);
+            },
+            onError: (err) => {
+                if (!storePrompt.report(err)) failed(err);
+            },
+        });
+    };
 
     const onRemove = async () => {
         const sure = await ask({
@@ -182,7 +197,7 @@ export function ProviderKey({ provider, connected }: { provider: ProviderRow; co
                                 : t('mobileApp.settings.key.fromEnvironment')}
                         </Text>
                     </Surface>
-                ) : provider.key_hint ? (
+                ) : (
                     <Surface tone="recessed" radius="md" padding="sm" border>
                         <Text
                             role="label"
@@ -193,10 +208,10 @@ export function ProviderKey({ provider, connected }: { provider: ProviderRow; co
                             accessibilityLabel={t('settings.key.savedAria', { name: isolateUnit(name) })}
                             testID="provider-key-saved"
                         >
-                            {isolate(`${SAVED_MASK} ${provider.key_hint}`, 'ltr')}
+                            {isolate(provider.key_hint ? `${SAVED_MASK} ${provider.key_hint}` : SAVED_MASK, 'ltr')}
                         </Text>
                     </Surface>
-                ) : null
+                )
             ) : null}
 
             {showField ? (
@@ -239,7 +254,7 @@ export function ProviderKey({ provider, connected }: { provider: ProviderRow; co
                 </>
             ) : null}
 
-            {!connected && !replacing && (hasKey || state !== 'read') ? (
+            {!connected && !replacing && hasKey ? (
                 <Button
                     variant="secondary"
                     full
@@ -302,10 +317,11 @@ export function ProviderKey({ provider, connected }: { provider: ProviderRow; co
                     tone="warning"
                     message={t('settings.key.storeLocked')}
                     detail={lockedDetail}
-                    action={retryRefused || busy ? undefined : { label: t('settings.key.unlockAgain'), onPress: onRetryStore }}
+                    action={retryRefused || busy || storePrompt.hideAction ? undefined : { label: t('settings.key.unlockAgain'), onPress: onRetryStore }}
                     testID="provider-key-locked"
                 />
             ) : null}
+            {!retryRefused ? <ApproveOnPcNotice kind="keyStore" action="keyStoreRetry" onRetry={onRetryStore} /> : null}
             {outcome && outcome.tone !== 'locked' ? (
                 <Notice tone={outcome.tone} message={outcome.text} detail={outcome.detail} testID="provider-key-outcome" />
             ) : null}
