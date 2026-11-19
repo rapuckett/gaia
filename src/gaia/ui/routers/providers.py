@@ -1792,7 +1792,7 @@ def _undo_registration(
         )
         raise ProviderError(
             f"{failure} GAIA also could not remove the registration it just "
-            f"made: {e} Open Settings > Model and disconnect {_NAMES[provider]} "
+            f"made: {e} Open Settings › Model and disconnect {_NAMES[provider]} "
             "to clear it.",
             502,
         ) from e
