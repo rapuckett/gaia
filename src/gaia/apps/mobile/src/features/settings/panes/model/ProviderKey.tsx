@@ -100,7 +100,7 @@ export function ProviderKey({ provider, connected }: { provider: ProviderRow; co
             title: t('settings.key.removeAsk'),
             body: [t('settings.key.removeBody', { name: ltr(name) })],
             confirmLabel: t('settings.key.remove'),
-            cancelLabel: t('settings.key.cancel'),
+            cancelLabel: t('settings.models.keep'),
             danger: true,
         });
         if (!sure || movedOn()) return;

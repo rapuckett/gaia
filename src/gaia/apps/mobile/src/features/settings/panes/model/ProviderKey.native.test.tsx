@@ -150,6 +150,8 @@ describeNative('Provider key', () => {
 
         await fireEvent.press(screen.getByTestId('provider-key-remove'));
         expect(await screen.findByText('Remove this key?')).toBeTruthy();
+        expect(screen.getByTestId('confirm-ok')).toHaveTextContent('Remove key');
+        expect(screen.getByTestId('confirm-cancel')).toHaveTextContent('Keep');
         expect(client.keyRemovals).toEqual([]);
         await fireEvent.press(screen.getByTestId('confirm-ok'));
         expect(await screen.findByText(/^Key cleared, here and for future sessions/)).toBeTruthy();
