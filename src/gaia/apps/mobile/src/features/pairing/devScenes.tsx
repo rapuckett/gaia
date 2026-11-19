@@ -44,6 +44,20 @@ const CHANGES: DeviceChange[] = [
     { id: 'c3', kind: 'skillAddedCode', params: { name: 'git-helper' }, at: ago(60 * 30) },
     { id: 'c4', kind: 'connectorGrant', params: { agent: 'GAIA', connector: 'Gmail' }, at: ago(60 * 24 * 3) },
 ];
+const WAVE1: DeviceChange[] = [
+    { id: 'w1', kind: 'connectorGrant', params: { agent: 'GAIA', connector: 'Gmail', granted: false }, at: ago(3) },
+    { id: 'w2', kind: 'connectorActivation', params: { agent: 'GAIA', connector: 'Google Calendar', active: true }, at: ago(8) },
+    { id: 'w3', kind: 'connectorEnable', params: { connector: 'GitHub' }, at: ago(14) },
+    { id: 'w4', kind: 'connectorDisable', params: { connector: 'GitHub' }, at: ago(20) },
+    { id: 'w5', kind: 'discordControl', params: { action: 'takeOver' }, at: ago(30) },
+    { id: 'w6', kind: 'memoryCommit', params: { source: 'discovery', count: 12 }, at: ago(45) },
+    { id: 'w7', kind: 'memoryCommit', params: { source: 'inference', count: 1 }, at: ago(50) },
+    { id: 'w8', kind: 'serverTarget', params: { mode: 'gaia' }, at: ago(70) },
+    { id: 'w9', kind: 'deviceRemoved', params: { device: 'Pixel 9 Pro' }, at: ago(90) },
+    { id: 'w10', kind: 'pairingClosed', params: {}, at: ago(120) },
+    { id: 'w11', kind: 'profileScanOn', params: {}, at: ago(150) },
+    { id: 'w12', kind: 'profileScanOff', params: {}, at: ago(180) },
+];
 const MANY: DeviceChange[] = Array.from({ length: 35 }, (_, i) => ({ ...CHANGES[i % CHANGES.length]!, id: `m${i}`, at: ago(10 + i * 90) }));
 
 export const PAIRING_SCENES: Record<string, PairingScene> = {
@@ -57,6 +71,7 @@ export const PAIRING_SCENES: Record<string, PairingScene> = {
     'changes-few': { name: 'Studio PC', chosen: HOME, changes: CHANGES },
     'changes-many': { name: 'Studio PC', chosen: HOME, changes: MANY },
     'changes-all': { name: 'Studio PC', chosen: HOME, changes: MANY, changesAll: true },
+    'changes-wave1': { name: 'Studio PC', chosen: HOME, changes: WAVE1 },
     'changes-error': { name: 'Studio PC', chosen: HOME, changes: new GaiaApiError(500, 'The PC could not read its audit log.') },
     'changes-unknown-kind': {
         name: 'Studio PC',
