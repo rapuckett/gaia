@@ -3557,6 +3557,91 @@ def test_a_failed_known_models_restore_is_a_loud_502(
         assert key not in resp.text and key not in caplog.text
 
 
+@pytest.mark.parametrize(
+    "fails,sequence",
+    [
+        ("install", [("POST", "install", FIREWORKS_INSTALL)]),
+        (
+            "auth-unreachable",
+            [("POST", "install", FIREWORKS_INSTALL), _auth(KEY)],
+        ),
+    ],
+)
+def test_a_failed_setup_in_known_models_mode_brings_it_back(
+    client, lemonade, keys, model_list, serving_known, fails, sequence
+):
+    if fails == "install":
+        lemonade.answers[("POST", "install")] = (
+            500,
+            {"error": {"message": "disk full"}},
+        )
+        said = "Lemonade could not configure Fireworks AI: disk full."
+    else:
+        lemonade.answers[("POST", "cloud/auth")] = requests.ConnectionError("gone")
+        said = "The local model server is not reachable"
+    resp = client.post("/api/providers/fireworks/connect", json={"api_key": KEY})
+    assert resp.status_code in (502, 503)
+    assert said in resp.json()["detail"]
+    assert "couldn't restore" not in resp.json()["detail"]
+    assert _sequence(lemonade) == [
+        ("GET", "system-info", None),
+        *sequence,
+        ("DELETE", "cloud/auth/fireworks", None),
+        ("GET", "system-info", None),
+    ]
+    assert serving_known["restarts"] == ["stop", "start"]
+    assert serving_known["active"] is True
+    assert serving_known["handed"] == [OLD_KEY]
+    assert lemonade.cloud["fireworks"]["env_var_set"] is True
+    assert keys["stored"]["fireworks"] == OLD_KEY and keys["remembered"] == []
+    assert KEY not in resp.text and OLD_KEY not in resp.text
+
+
+def test_a_failed_restore_after_a_failed_setup_is_a_loud_502(
+    client, lemonade, keys, model_list, serving_known, monkeypatch, caplog
+):
+    from gaia.llm import fireworks_known_models as known
+    from gaia.llm.lemonade_embedded import EmbeddedLemonadeError
+
+    def boom(_):
+        raise EmbeddedLemonadeError("could not start the model server")
+
+    monkeypatch.setattr(known, "use_known_models", boom)
+    lemonade.answers[("POST", "install")] = (500, {"error": {"message": "disk full"}})
+    with caplog.at_level(logging.DEBUG):
+        resp = client.post("/api/providers/fireworks/connect", json={"api_key": KEY})
+    assert resp.status_code == 502
+    assert resp.json()["detail"] == (
+        "Fireworks AI couldn't be set up, and GAIA couldn't restore the models it "
+        "was using. Lemonade could not configure Fireworks AI: disk full. Connect "
+        "Fireworks AI again in Settings › Model."
+    )
+    assert serving_known["restarts"] == ["stop"]
+    assert "restore the known fireworks models" in caplog.text
+    assert keys["stored"]["fireworks"] == OLD_KEY
+    for key in (KEY, OLD_KEY):
+        assert key not in resp.text and key not in caplog.text
+
+
+def test_a_failed_install_outside_known_models_restarts_nothing(
+    client, lemonade, keys, model_list, serving_known
+):
+    serving_known["active"] = False
+    lemonade.answers[("POST", "install")] = (500, {"error": {"message": "disk full"}})
+    resp = client.post("/api/providers/fireworks/connect", json={"api_key": KEY})
+    assert resp.status_code == 502
+    assert resp.json()["detail"] == (
+        "Lemonade could not configure Fireworks AI: disk full."
+    )
+    assert _sequence(lemonade) == [
+        ("GET", "system-info", None),
+        ("POST", "install", FIREWORKS_INSTALL),
+    ]
+    assert serving_known["restarts"] == []
+    assert serving_known["handed"] == []
+    assert keys["stored"]["fireworks"] == OLD_KEY
+
+
 def test_a_rejected_first_connect_outside_known_models_still_unregisters(
     client, lemonade, keys, model_list, serving_known
 ):
