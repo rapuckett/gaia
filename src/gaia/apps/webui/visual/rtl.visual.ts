@@ -2990,7 +2990,7 @@ for (const locale of ['ar', 'en']) {
         await open(page, '', locale, (p) => withDevices(p, DEVICE_STATES.failed), 'dark');
         await openDevices(page);
         await page.locator('.devices-changes summary').click();
-        await expect(page.locator('.devices-change')).toHaveCount(3);
+        await expect(page.locator('.devices-change')).toHaveCount(6);
         await page.locator('.devices-changes').scrollIntoViewIfNeeded();
         await shot(page, `device-changes-${locale}-open`);
         expect(await audit(page)).toEqual([]);
