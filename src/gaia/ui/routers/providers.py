@@ -22,7 +22,7 @@ from __future__ import annotations
 import os
 import threading
 import time
-from typing import Any, Dict, List, Literal, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Literal, Optional, Tuple, Union
 from urllib.parse import urlparse
 
 import requests
@@ -331,16 +331,56 @@ def _key_slot(provider: str) -> str:
     return f"cloud-key:{provider}"
 
 
+#: What the last stored-key read found, per provider: None when nothing is
+#: stored, else the key's hint ("" when too short to show). Never the key.
+_STORED_KEY_SEEN: Dict[str, Optional[str]] = {}
+
+
+def _hint_of(key: Optional[str]) -> Optional[str]:
+    if not key or len(key) < _MIN_KEY_LENGTH_FOR_HINT:
+        return None
+    return key[-_KEY_HINT_LENGTH:]
+
+
 def _bounded_recall(provider: str) -> Optional[str]:
     """The stored key; raises ``CredentialStoreWaiting`` while the OS is prompting."""
     from gaia.connectors.credential_wait import read_within
     from gaia.llm import cloud_keys
 
-    return read_within(
+    key = read_within(
         _key_slot(provider),
         lambda: cloud_keys.recall_key(provider),
         f"your saved {_NAMES[provider]} key",
     )
+    _note_stored_key(provider, key)
+    return key
+
+
+def _note_stored_key(provider: str, key: Optional[str]) -> None:
+    """Record what the store now holds for *provider*; call after every read or save."""
+    _STORED_KEY_SEEN[provider] = None if not key else (_hint_of(key) or "")
+
+
+class _StoredKeyUnknown(Exception):
+    """No stored-key read has happened yet, so whether one is stored is unknown."""
+
+
+def _seen_stored_key(provider: str) -> Optional[str]:
+    """``_bounded_recall`` from :data:`_STORED_KEY_SEEN`: never reads the store.
+
+    Returns a stand-in that is truthy when a key is stored, so precedence
+    matches the PC's view. Raises ``CredentialStoreLocked`` while the store is
+    held, as a real read would, and :class:`_StoredKeyUnknown` before any read.
+    """
+    from gaia.connectors.credential_wait import CredentialStoreLocked
+    from gaia.connectors.store import keyring_refusal
+
+    refusal = keyring_refusal()
+    if refusal:
+        raise CredentialStoreLocked(refusal)
+    if provider not in _STORED_KEY_SEEN:
+        raise _StoredKeyUnknown(provider)
+    return None if _STORED_KEY_SEEN[provider] is None else "stored"
 
 
 def _env_key(provider: str) -> Optional[Tuple[str, str]]:
@@ -395,15 +435,18 @@ def _known_models_active(provider: str) -> bool:
 
 
 def _key_source(
-    entry: Optional[Dict[str, Any]], provider: str, known_models: bool = False
+    entry: Optional[Dict[str, Any]],
+    provider: str,
+    known_models: bool = False,
+    recall: Optional[Callable[[str], Optional[str]]] = None,
 ) -> Optional[str]:
+    """*recall* replaces ``_bounded_recall`` for whether a key is stored."""
+    recall = recall or _bounded_recall
     # Known-model mode uses the same precedence as normal reconnect: a saved
     # key wins after a restart, and GAIA's environment key is only a fallback.
     env = _env_key(provider)
     if known_models:
-        return (
-            "stored" if _bounded_recall(provider) else ("environment" if env else None)
-        )
+        return "stored" if recall(provider) else ("environment" if env else None)
     if entry and entry.get("env_var_set"):
         return "environment"
     if entry and entry.get("runtime_key_set"):
@@ -412,7 +455,7 @@ def _key_source(
         # this Lemonade session and must not be relabelled as environment-owned.
         handed = bool(env) and _HANDED_ENV_KEYS.get(provider) == env[1]
         return "environment" if handed else "lemonade"
-    if _bounded_recall(provider):
+    if recall(provider):
         return "stored"
     return "environment" if env else None
 
@@ -434,9 +477,19 @@ def _key_hint(
             key = _bounded_recall(provider)
         except CredentialStoreWaiting:
             return None
-    if not key or len(key) < _MIN_KEY_LENGTH_FOR_HINT:
+    return _hint_of(key)
+
+
+def _seen_key_hint(
+    provider: str, key_source: Optional[str], lemond_env: bool = False
+) -> Optional[str]:
+    """:func:`_key_hint` from :data:`_STORED_KEY_SEEN`, without reading the store."""
+    if key_source == "environment":
+        env = None if lemond_env else _env_key(provider)
+        return _hint_of(env[1] if env else None)
+    if key_source not in ("stored", "lemonade"):
         return None
-    return key[-_KEY_HINT_LENGTH:]
+    return _STORED_KEY_SEEN.get(provider) or None
 
 
 def _provider_view(provider: str, entry: Optional[Dict[str, Any]]) -> Dict[str, Any]:
@@ -1490,8 +1543,17 @@ class ProviderSummaryNetwork(BaseModel):
     reachable: Optional[bool]
 
 
+#: ``key_state`` when only a read of the OS credential store could tell.
+KEY_UNKNOWN = "unknown"
+
+
 class ProviderSummary(BaseModel):
-    """A provider as a paired device may see it: no key, key hint or address."""
+    """A provider as a paired device may see it: never the key or the address.
+
+    The ``key_*`` fields come from Lemonade's registration and from the last
+    stored-key read this GAIA made; the route itself never reads the store.
+    They and ``known_models`` are null for ``local``.
+    """
 
     id: str
     name: str
@@ -1503,6 +1565,15 @@ class ProviderSummary(BaseModel):
     blocked: bool
     #: AMD only: whether its gateway answers; no detail, which can name the address.
     network: Optional[ProviderSummaryNetwork] = None
+    #: Where the key comes from, as ``GET /api/providers`` says; null when none
+    #: is known, including while ``key_state`` is not ``read``.
+    key_source: Optional[Literal["stored", "environment", "lemonade"]] = None
+    #: ``unknown`` until GAIA has read the credential store once since it started.
+    key_state: Optional[Literal["read", KEY_LOCKED, KEY_UNKNOWN]] = None
+    #: The key's last characters, as the PC shows; null over mobile access.
+    key_hint: Optional[str] = None
+    #: GAIA's server is serving known models through a list outage (Fireworks).
+    known_models: Optional[bool] = None
 
 
 class ProviderSummaryList(BaseModel):
@@ -1516,8 +1587,14 @@ class ProviderSummaryList(BaseModel):
     response_model=ProviderSummaryList,
     dependencies=[Depends(require_ui_header)],
 )
-def list_provider_summaries() -> Dict[str, Any]:
-    """Every provider and whether it is set up; reads only, so a paired device may."""
+def list_provider_summaries(request: Request) -> Dict[str, Any]:
+    """Every provider and whether it is set up; reads only, so a paired device may.
+
+    Never registers a provider, hands Lemonade a key, or reads the OS
+    credential store, so it can't raise a key-store prompt: whether a key is
+    stored comes from the last read ``GET /api/providers`` or a connect made,
+    and is ``key_state: "unknown"`` before one.
+    """
     entries: Dict[str, Optional[Dict[str, Any]]] = {}
     lemonade_error = None
     try:
@@ -1526,6 +1603,8 @@ def list_provider_summaries() -> Dict[str, Any]:
     except ProviderError as e:
         lemonade_error = str(e)
     blocked = cloud_blocked()
+    # Mobile access can't enter or remove a key, so it gets no hint either.
+    hide_hint = not is_local_pc(request) and allowed_device(request) is None
     summaries = []
     for provider in PROVIDER_IDS:
         entry = entries.get(provider)
@@ -1547,9 +1626,39 @@ def list_provider_summaries() -> Dict[str, Any]:
                     if provider == AMD
                     else None
                 ),
+                **(
+                    _summary_key_fields(provider, entry, hide_hint=hide_hint)
+                    if provider != LOCAL
+                    else {}
+                ),
             }
         )
     return {"providers": summaries, "lemonade_error": lemonade_error}
+
+
+def _summary_key_fields(
+    provider: str, entry: Optional[Dict[str, Any]], *, hide_hint: bool
+) -> Dict[str, Any]:
+    """:func:`_provider_view`'s key fields, from cached and loaded state only."""
+    from gaia.connectors.credential_wait import CredentialStoreLocked
+
+    known_models = _known_models_active(provider)
+    try:
+        key_source = _key_source(entry, provider, known_models, _seen_stored_key)
+        key_state = "read"
+    except CredentialStoreLocked:
+        key_source, key_state = None, KEY_LOCKED
+    except _StoredKeyUnknown:
+        key_source, key_state = None, KEY_UNKNOWN
+    lemond_env = bool(entry and entry.get("env_var_set"))
+    return {
+        "key_source": key_source,
+        "key_state": key_state,
+        "key_hint": (
+            None if hide_hint else _seen_key_hint(provider, key_source, lemond_env)
+        ),
+        "known_models": known_models,
+    }
 
 
 def _needs_key(
@@ -1752,6 +1861,7 @@ def connect_provider(
             else:
                 try:
                     remember_key(provider, key)
+                    _note_stored_key(provider, key)
                     remembered = True
                 except CloudKeyError as e:
                     remember_error = _caller_detail(e, str(e), request, key)
@@ -1860,6 +1970,7 @@ def _use_known_models(
             remember_key(provider, key)
         except CloudKeyError as e:
             raise ProviderError(f"{outage} GAIA could not keep it: {e}", 503) from e
+        _note_stored_key(provider, key)
     kept = (
         "GAIA kept it."
         if persist_key
@@ -1960,6 +2071,7 @@ def forget_provider_key(provider: str, request: Request) -> Dict[str, Any]:
                 raise _cloud_error(provider, status, body)
         removed = forget_key(provider)
         discard(_key_slot(provider))
+        _note_stored_key(provider, None)
     except ProviderError as e:
         _raise(e, request)
     except ConnectorsError as e:

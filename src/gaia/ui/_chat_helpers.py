@@ -49,6 +49,7 @@ from gaia.security import (
     BLOCKED_DIRECTORIES,
     AllowedPathsEnvError,
     env_allowed_paths,
+    fold_path_case,
     narrow_allowed_paths,
 )
 from gaia.stream_timeout import (
@@ -2068,13 +2069,14 @@ def _unsafe_directory_grant_reason(directory: Path) -> str:
     """
     if directory == Path(directory.anchor):
         return "it is a filesystem root"
-    if directory == Path.home().resolve():
+    folded = Path(fold_path_case(str(directory)))
+    if folded == Path(fold_path_case(str(Path.home().resolve()))):
         return "it is your home directory"
     for blocked in BLOCKED_DIRECTORIES:
-        blocked_path = Path(blocked).resolve()
-        if directory == blocked_path or blocked_path.is_relative_to(directory):
+        blocked_path = Path(fold_path_case(str(Path(blocked).resolve())))
+        if folded == blocked_path or blocked_path.is_relative_to(folded):
             return f"it contains the protected directory '{blocked}'"
-        if directory.is_relative_to(blocked_path):
+        if folded.is_relative_to(blocked_path):
             return f"it is inside the protected directory '{blocked}'"
     return ""
 

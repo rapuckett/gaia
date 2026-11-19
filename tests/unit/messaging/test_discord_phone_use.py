@@ -348,7 +348,8 @@ def test_a_sign_in_file_under_home_is_never_sent(tmp_path, monkeypatch, where):
     turn = _turn(ad, clock)
     ad._on_agent_event({"type": "final", "answer": f"[[send: {secret}]]"}, turn)
     assert _files(ad) == []
-    assert any("hidden or app-settings folder" in t for t in _texts(ad)), _texts(ad)
+    refusals = ("hidden or app-settings folder", "looks like a key or password file")
+    assert any(r in t for t in _texts(ad) for r in refusals), _texts(ad)
 
 
 def test_an_ordinary_file_under_home_is_still_sent(tmp_path, monkeypatch):
