@@ -146,6 +146,12 @@ def render(access: Dict[str, str]) -> str:
 
 def render_doc_section(access: Dict[str, str]) -> str:
     """The marked route-class table, markers included."""
+    unknown = set(access.values()) - {key for key, *_ in DOC_CLASSES}
+    if unknown:
+        raise ValueError(
+            f"route class(es) {sorted(unknown)} have no row in DOC_CLASSES in "
+            f"{__file__}; add one so the doc table lists them."
+        )
     lines = [DOC_BEGIN, "", "| Class | Who | Routes |", "|---|---|---|"]
     for key, label, who, text in DOC_CLASSES:
         routes = sorted(k for k, cls in access.items() if cls == key)
