@@ -30,10 +30,11 @@ describe('file browser model', () => {
         expect(folderName('C:\\Users\\me\\')).toBe('me');
     });
 
-    it('says where a search looked in one Arabic line with one gloss, the path and the count kept left to right', () => {
+    it('says where a search looked in one Arabic sentence with one gloss, the path isolated', () => {
         const [own, gloss] = bracketParts(searchScopeText(['/Users/me', '/Volumes/Data'], translator('ar')));
-        expect(own).toBe('\u2067البحث في: \u2068\u2066/Users/me\u2069\u2069 (\u2066+1\u2069 أخرى)\u2069');
-        expect(gloss).toBe('\u2066(Searching in: \u2068\u2066/Users/me\u2069\u2069 (+1 more))\u2069');
+        expect(own).toBe('\u2067البحث في: \u2068/Users/me\u2069 و1 أخرى\u2069');
+        expect(gloss).toBe('\u2066(Searching in: \u2068/Users/me\u2069 and 1 more)\u2069');
+        expect(searchScopeText(['/Users/me'], translator('en'))).toBe('Searching in: /Users/me');
         expect(searchScopeText([], translator('ar'))).toBe('');
     });
 });

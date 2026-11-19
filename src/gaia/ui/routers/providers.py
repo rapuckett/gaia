@@ -19,6 +19,7 @@ a key). The calls mirror ``tui/internal/lemonade/cloud.go`` and
 
 from __future__ import annotations
 
+import asyncio
 import os
 import threading
 import time
@@ -94,12 +95,20 @@ _NON_CHAT_LABELS = {
 _TIMEOUT = 60
 
 
+GATEWAY_INSECURE_HTTP = "gateway_insecure_http"
+_INSECURE_GATEWAY_DETAIL = (
+    "The AMD Gateway address must start with https://. "
+    "Change it on the PC running GAIA, then connect again."
+)
+
+
 class ProviderError(Exception):
     """A provider call failed, with the remedy."""
 
-    def __init__(self, message: str, status: int = 502):
+    def __init__(self, message: str, status: int = 502, code: Optional[str] = None):
         super().__init__(message)
         self.status = status
+        self.code = code
 
 
 class _ModelListFailed(ProviderError):
@@ -232,6 +241,14 @@ def _cloud_error(
             "the key blank to keep using it.",
             409,
         )
+    # Matched here and never echoed: a refusal of a plaintext-HTTP gateway.
+    if (
+        status == 400
+        and isinstance(message, str)
+        and "uses http://" in message
+        and "allow_insecure_http" in message
+    ):
+        return ProviderError(_INSECURE_GATEWAY_DETAIL, 422, GATEWAY_INSECURE_HTTP)
     message = (message if echo_body else None) or f"HTTP {status}"
     return ProviderError(f"Lemonade could not configure {name}: {message}.", 502)
 
@@ -319,6 +336,18 @@ def _key_slot(provider: str) -> str:
 #: What the last stored-key read found, per provider: None when nothing is
 #: stored, else the key's hint ("" when too short to show). Never the key.
 _STORED_KEY_SEEN: Dict[str, Optional[str]] = {}
+
+
+#: The error line the last ``GET /api/providers`` showed per provider, with the
+#: exception behind it (None when it had none), so the summary can mask it.
+_LAST_ERRORS: Dict[str, Tuple[Optional[BaseException], str]] = {}
+
+
+def _note_error(provider: str, e: Optional[BaseException], text: Optional[str]) -> None:
+    if text:
+        _LAST_ERRORS[provider] = (e, text)
+    else:
+        _LAST_ERRORS.pop(provider, None)
 
 
 def _hint_of(key: Optional[str]) -> Optional[str]:
@@ -1446,6 +1475,10 @@ def _raise(
     request: Optional[Request] = None,
     key: Optional[str] = None,
 ) -> None:
+    if e.code:
+        raise HTTPException(
+            status_code=e.status, detail={"message": str(e), "code": e.code}
+        ) from e
     detail = surface_wording(str(e), "agent_ui")
     detail = _caller_detail(e, detail, request, key)
     raise HTTPException(status_code=e.status, detail=detail) from e
@@ -1481,6 +1514,7 @@ def list_providers(db: ChatDatabase = Depends(get_db)) -> Dict[str, Any]:
         for provider in (FIREWORKS, AMD):
             entry = _cloud_entry(provider)
             view = _provider_view(provider, entry)
+            failure: Optional[BaseException] = None
             # Hand a kept or environment key to a Lemonade that lacks it.
             if _needs_key(provider, entry, view["key_source"]):
                 try:
@@ -1503,6 +1537,8 @@ def list_providers(db: ChatDatabase = Depends(get_db)) -> Dict[str, Any]:
                     )
                 except (ProviderError, CloudKeyError, requests.RequestException) as e:
                     view["error"] = str(e)
+                    failure = e
+            _note_error(provider, failure, view.get("error"))
             providers.append(view)
     except ProviderError as e:
         lemonade_error = str(e)
@@ -1555,6 +1591,14 @@ class ProviderSummary(BaseModel):
     key_hint: Optional[str] = None
     #: GAIA's server is serving known models through a list outage (Fireworks).
     known_models: Optional[bool] = None
+    #: The error line the PC's last provider list showed, as this caller may see
+    #: it; null when none, and over mobile access.
+    error: Optional[str] = None
+    #: The environment variable's name (never its value) when ``key_source`` is
+    #: ``environment``; else null.
+    env_var: Optional[str] = None
+    #: The environment key is GAIA's own rather than Lemonade's, as on the PC.
+    key_from_gaia_env: Optional[bool] = None
 
 
 class ProviderSummaryList(BaseModel):
@@ -1608,7 +1652,9 @@ def list_provider_summaries(request: Request) -> Dict[str, Any]:
                     else None
                 ),
                 **(
-                    _summary_key_fields(provider, entry, hide_hint=hide_hint)
+                    _summary_key_fields(
+                        provider, entry, hide_hint=hide_hint, request=request
+                    )
                     if provider != LOCAL
                     else {}
                 ),
@@ -1618,10 +1664,15 @@ def list_provider_summaries(request: Request) -> Dict[str, Any]:
 
 
 def _summary_key_fields(
-    provider: str, entry: Optional[Dict[str, Any]], *, hide_hint: bool
+    provider: str,
+    entry: Optional[Dict[str, Any]],
+    *,
+    hide_hint: bool,
+    request: Optional[Request] = None,
 ) -> Dict[str, Any]:
     """:func:`_provider_view`'s key fields, from cached and loaded state only."""
     from gaia.connectors.credential_wait import CredentialStoreLocked
+    from gaia.llm.cloud_keys import env_var_for
 
     known_models = _known_models_active(provider)
     try:
@@ -1632,6 +1683,15 @@ def _summary_key_fields(
     except _StoredKeyUnknown:
         key_source, key_state = None, KEY_UNKNOWN
     lemond_env = bool(entry and entry.get("env_var_set"))
+    env = _env_key(provider)
+    from_gaia_env = bool(env) and key_source == "environment" and not lemond_env
+    env_var = None
+    if key_source == "environment":
+        env_var = env[0] if from_gaia_env else env_var_for(provider)
+    error = None
+    if not hide_hint and provider in _LAST_ERRORS:
+        cause, text = _LAST_ERRORS[provider]
+        error = _caller_detail(cause, text, request) if cause else text
     return {
         "key_source": key_source,
         "key_state": key_state,
@@ -1639,6 +1699,9 @@ def _summary_key_fields(
             None if hide_hint else _seen_key_hint(provider, key_source, lemond_env)
         ),
         "known_models": known_models,
+        "error": error,
+        "env_var": env_var,
+        "key_from_gaia_env": from_gaia_env,
     }
 
 
@@ -2082,12 +2145,53 @@ def forget_provider_key(provider: str, request: Request) -> Dict[str, Any]:
     response_model=ProviderKeyStoreRetry,
     response_model_exclude_unset=True,
 )
-def retry_key_store() -> Dict[str, Any]:
-    """Let the next read ask the OS to unlock the key store again (Try again)."""
+async def retry_key_store(request: Request) -> Dict[str, Any]:
+    """Let the next read ask the OS to unlock the key store again (Try again).
+
+    From a paired device the keys are read now, so the device hears
+    ``device_prompt`` while the PC's prompt is up and how it was answered.
+    """
+    from gaia.connectors.credential_wait import CredentialStoreWaiting
     from gaia.connectors.store import retry_keyring
 
+    from ..devices.prompts import (
+        DevicePromptTimeout,
+        limit_device_rate,
+        watch_key_store,
+    )
+
+    if is_local_pc(request):
+        retry_keyring()
+        return {"retrying": True}
+    limit_device_rate(request, "keyStoreRetry")
     retry_keyring()
+    try:
+        await watch_key_store(
+            request, "keyStoreRetry", lambda: asyncio.to_thread(_read_stored_keys)
+        )
+    except DevicePromptTimeout:
+        logger.warning("Nobody answered the PC's key store prompt for a device")
+    except CredentialStoreWaiting as e:
+        # Closed or still locked: the device heard ``denied``; GET shows the state.
+        logger.info("Key store stayed locked after a device's retry: %s", e)
     return {"retrying": True}
+
+
+def _read_stored_keys() -> None:
+    """Read each cloud provider's stored key, waiting out the OS's prompt."""
+    from gaia.connectors.credential_wait import read_within
+    from gaia.llm import cloud_keys
+
+    from ..devices import DEVICE_PROMPT_TIMEOUT_SECONDS
+
+    for provider in (FIREWORKS, AMD):
+        key = read_within(
+            _key_slot(provider),
+            lambda p=provider: cloud_keys.recall_key(p),
+            f"your saved {_NAMES[provider]} key",
+            timeout=DEVICE_PROMPT_TIMEOUT_SECONDS + 5,
+        )
+        _note_stored_key(provider, key)
 
 
 @router.get(

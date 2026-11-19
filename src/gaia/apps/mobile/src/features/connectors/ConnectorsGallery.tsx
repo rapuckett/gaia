@@ -12,6 +12,9 @@ import { GaiaClientProvider } from '@/data';
 import { useConnectionStore } from '@/state/connection';
 import { ScreenBannerProvider, UIProvider } from '@/ui';
 
+import type { LoopbackOutcome, OAuthLoopbackNative } from '../../../modules/gaia-oauth-loopback';
+
+import { BrowserSignInDepsContext, type BrowserSignInDeps } from './browserSignIn';
 import { ConnectorsScreen } from './ConnectorsScreen';
 
 /**
@@ -23,9 +26,12 @@ import { ConnectorsScreen } from './ConnectorsScreen';
  * `#tap=connector-disconnect-microsoft,connector-disconnect-confirm`: `disconnected` answers that the provider has no revoke API, `revoked`
  * that the provider did not confirm the revoke (reason on the notice). CON-09: `oauthSetup` opens Google's first-time setup sheet. CON-10: `oauthClient`
  * opens a connected account's OAuth client sheet. CON-12: `mcpConfigure` opens Slack's key sheet. CON-13: `checkRunning`, `checkOk`, `checkSlow` and
- * `checkFailed` show a Linear server's Check line (`#tap=connector-check-linear` runs it again). CON-18: every scene ends with the Extend with MCP link. CON-16: `personalize` opens a just-connected Gmail tile with the after-connect Personalize GAIA offer, `personalizeTile` the plain per-tile offer, and `personalizeFailed` a just-connected server whose offer fails (`#tap=personalize-linear`: the sentence plus the PC's reason), `personalizeMcp` a just-connected server on a paired phone (the PC-only line in place of the button).
+ * `checkFailed` show a Linear server's Check line (`#tap=connector-check-linear` runs it again). CON-07: on a paired phone, `googleReady` shows Google's
+ * Connect, and with `#tap=connector-connect-google`: `googleBrowser` waits on the browser, `googleFinishing` waits on the PC, `googleDone` ends
+ * connected, `googleDenied` (declined at Google), `googleTimeout`, `googleExpired` (PC answers 404), `googleStateMismatch` (400), `googleRefused`
+ * (403 at the start), `googleFailed` (the PC's generic 500) and `googleSuperseded` (a sign-in started on the PC replaced it) each end on their notice. CON-18: every scene ends with the Extend with MCP link. CON-16: `personalize` opens a just-connected Gmail tile with the after-connect Personalize GAIA offer, `personalizeTile` the plain per-tile offer, and `personalizeFailed` a just-connected server whose offer fails (`#tap=personalize-linear`: the sentence plus the PC's reason), `personalizeMcp` a just-connected server on a paired phone (the same Personalize button as on the PC).
  */
-export const CONNECTOR_SCENES = ['serverOn', 'serverOff', 'grants', 'loading', 'error', 'none', 'groups', 'menu', 'code', 'codeFailed', 'many', 'disconnected', 'revoked', 'personalize', 'personalizeTile', 'personalizeFailed', 'personalizeMcp', 'oauthSetup', 'oauthClient', 'mcpConfigure', 'checkRunning', 'checkOk', 'checkSlow', 'checkFailed'] as const;
+export const CONNECTOR_SCENES = ['serverOn', 'serverOff', 'grants', 'loading', 'error', 'none', 'groups', 'menu', 'code', 'codeFailed', 'many', 'disconnected', 'revoked', 'personalize', 'personalizeTile', 'personalizeFailed', 'personalizeMcp', 'oauthSetup', 'oauthClient', 'mcpConfigure', 'checkRunning', 'checkOk', 'checkSlow', 'checkFailed', 'googleReady', 'googleBrowser', 'googleFinishing', 'googleDone', 'googleDenied', 'googleTimeout', 'googleExpired', 'googleStateMismatch', 'googleRefused', 'googleFailed', 'googleSuperseded'] as const;
 export type ConnectorScene = (typeof CONNECTOR_SCENES)[number];
 
 const server = (over: Partial<ConnectorRow> = {}) =>
@@ -59,6 +65,10 @@ const GOOGLE_CLIENT = server({
     id: 'google', display_name: 'Google', type: 'oauth_pkce', account_id: 'avery@example.com', oauth_setup_fields: CLIENT_FIELDS,
     oauth_client: { source: 'keyring', client_id: 'example-client.apps.googleusercontent.com', has_secret: true }, docs_url: 'https://amd-gaia.ai/docs/connectors/google',
 } as Partial<ConnectorRow>);
+const GOOGLE_READY = server({
+    id: 'google', display_name: 'Google', type: 'oauth_pkce', configured: false, configurable: true, oauth_setup_fields: CLIENT_FIELDS,
+    oauth_client: { source: 'keyring', client_id: 'example-client.apps.googleusercontent.com', has_secret: true }, docs_url: 'https://amd-gaia.ai/docs/connectors/google',
+} as Partial<ConnectorRow>);
 const SLACK_SETUP = server({
     id: 'mcp-slack', display_name: 'Slack', configured: false, mcp_env_keys: ['SLACK_MCP_XOXB_TOKEN'], setup_url: 'https://api.slack.com/apps', product_url: 'https://slack.com',
     config_fields: [{ key: 'SLACK_MCP_XOXB_TOKEN', label: 'Slack bot token', kind: 'secret', required: true, placeholder: 'xoxb-…', help_md: '', prefix: 'xoxb-' }],
@@ -70,6 +80,39 @@ const CHECKS: Partial<Record<ConnectorScene, ConnectorCheck>> = {
     checkSlow: { state: 'failed', slow: true, detail: 'Timed out after 30 s waiting for the server to start.' },
     checkFailed: { state: 'failed', slow: false, detail: 'Error: 401 Unauthorized (the key was rejected)' },
 };
+
+/** What the phone's loopback listener hands back in each Google scene; null waits on the browser. */
+const GOOGLE_REDIRECTS: Partial<Record<ConnectorScene, LoopbackOutcome | null>> = {
+    googleReady: null,
+    googleBrowser: null,
+    googleFinishing: { outcome: 'code', code: 'gallery-code', state: '' },
+    googleDone: { outcome: 'code', code: 'gallery-code', state: '' },
+    googleDenied: { outcome: 'error', error: 'access_denied' },
+    googleTimeout: { outcome: 'timeout' },
+    googleExpired: { outcome: 'code', code: 'gallery-code', state: '' },
+    googleStateMismatch: { outcome: 'code', code: 'gallery-code', state: '' },
+    googleRefused: null,
+    googleFailed: { outcome: 'code', code: 'gallery-code', state: '' },
+    googleSuperseded: null,
+};
+
+/** A listener that answers at once, as if the browser came straight back; the browser itself never closes. */
+function galleryDeps(redirect: LoopbackOutcome | null): BrowserSignInDeps {
+    const loopback: OAuthLoopbackNative = {
+        start: async () => ({ port: 49152 }),
+        waitForRedirect: (state) =>
+            redirect ? Promise.resolve(redirect.outcome === 'code' ? { ...redirect, state } : redirect) : new Promise<never>(() => undefined),
+        cancel: () => undefined,
+    };
+    // Paired through the deps, not the app's connection: setting that sends the web gallery to the home screen.
+    return {
+        loopback,
+        returnUrl: () => 'ai.amd.gaia.mobile.dev://oauth-done',
+        openAuthSession: () => new Promise<never>(() => undefined),
+        dismissAuthSession: () => undefined,
+        paired: true,
+    };
+}
 
 /** What each list-state scene gives the fake PC, and the calls it answers itself. */
 const LIST_SCENES: Partial<Record<ConnectorScene, { data: FakeClientData; expanded?: string; override?: Partial<GaiaClient> }>> = {
@@ -108,6 +151,29 @@ const LIST_SCENES: Partial<Record<ConnectorScene, { data: FakeClientData; expand
     checkOk: { data: { connectors: [LINEAR_KEYED] }, expanded: 'linear' },
     checkSlow: { data: { connectors: [LINEAR_KEYED], connectorTest: { ok: false, reason: 'timeout', detail: 'Timed out after 30 s waiting for the server to start.' } }, expanded: 'linear' },
     checkFailed: { data: { connectors: [LINEAR_KEYED], connectorTest: { ok: false, detail: 'Error: 401 Unauthorized (the key was rejected)' } }, expanded: 'linear' },
+    googleReady: { data: { connectors: [GOOGLE_READY] }, expanded: 'google' },
+    googleBrowser: { data: { connectors: [GOOGLE_READY] }, expanded: 'google' },
+    googleFinishing: { data: { connectors: [GOOGLE_READY] }, expanded: 'google', override: { completeConnectorBrowserSignIn: () => new Promise<never>(() => undefined) } },
+    googleDone: { data: { connectors: [GOOGLE_READY] }, expanded: 'google' },
+    googleDenied: { data: { connectors: [GOOGLE_READY] }, expanded: 'google' },
+    googleTimeout: { data: { connectors: [GOOGLE_READY] }, expanded: 'google' },
+    googleExpired: {
+        data: { connectors: [GOOGLE_READY], browserCompleteError: new GaiaApiError(404, "No sign-in is waiting with flow_id 'flow-1'. It finished, expired, or a newer sign-in replaced it.") },
+        expanded: 'google',
+    },
+    googleStateMismatch: {
+        data: { connectors: [GOOGLE_READY], browserCompleteError: new GaiaApiError(400, "The sign-in's state did not match, so the sign-in was ended. Connect again.") },
+        expanded: 'google',
+    },
+    googleRefused: { data: { connectors: [GOOGLE_READY], browserSignInError: new GaiaApiError(403, 'Allow this device on the PC running GAIA first.') }, expanded: 'google' },
+    googleFailed: {
+        data: {
+            connectors: [GOOGLE_READY],
+            browserCompleteError: new GaiaApiError(500, "GAIA couldn't finish this on the PC. Open Settings › Connectors on the PC to see why."),
+        },
+        expanded: 'google',
+    },
+    googleSuperseded: { data: { connectors: [GOOGLE_READY], browserSuperseded: true }, expanded: 'google' },
 };
 const SHEET_SCENES: Partial<Record<ConnectorScene, string>> = { oauthSetup: 'google', oauthClient: 'google', mcpConfigure: 'mcp-slack' };
 
@@ -131,19 +197,22 @@ export function ConnectorsGallery({ state }: { state: ConnectorScene }) {
                   activations: { linear: { gaia: true } },
               }),
     );
+    const [deps] = useState(() => (state in GOOGLE_REDIRECTS ? galleryDeps(GOOGLE_REDIRECTS[state] ?? null) : null));
     return (
         <QueryClientProvider client={queryClient}>
             <GaiaClientProvider client={client}>
-                <UIProvider>
-                    <ScreenBannerProvider banner={null}>
-                        <ConnectorsScreen
-                            initialExpanded={listScene ? listScene.expanded : 'linear'}
-                            initialJustConnected={state === 'personalize' ? 'gmail' : state === 'personalizeFailed' || state === 'personalizeMcp' ? 'linear' : undefined}
-                            initialSheet={SHEET_SCENES[state]}
-                            initialChecks={CHECKS[state] ? { linear: CHECKS[state] } : undefined}
-                        />
-                    </ScreenBannerProvider>
-                </UIProvider>
+                <BrowserSignInDepsContext.Provider value={deps}>
+                    <UIProvider>
+                        <ScreenBannerProvider banner={null}>
+                            <ConnectorsScreen
+                                initialExpanded={listScene ? listScene.expanded : 'linear'}
+                                initialJustConnected={state === 'personalize' ? 'gmail' : state === 'personalizeFailed' || state === 'personalizeMcp' ? 'linear' : undefined}
+                                initialSheet={SHEET_SCENES[state]}
+                                initialChecks={CHECKS[state] ? { linear: CHECKS[state] } : undefined}
+                            />
+                        </ScreenBannerProvider>
+                    </UIProvider>
+                </BrowserSignInDepsContext.Provider>
             </GaiaClientProvider>
         </QueryClientProvider>
     );

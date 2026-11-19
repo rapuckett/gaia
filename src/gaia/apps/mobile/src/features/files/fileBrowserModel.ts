@@ -1,7 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { isolate, stripIsolates, type MessageKey } from '@webui/i18n/registry';
+import { stripIsolates, type MessageKey } from '@webui/i18n/registry';
 import type { Translate } from '@webui/i18n/translator';
 
 import type { FileEntry } from '@/api/client.types';
@@ -49,14 +49,11 @@ export function emptyKey(searching: boolean, hiddenCount: number): MessageKey {
     return hiddenCount > 0 ? 'fileBrowser.onlyHidden' : 'fileBrowser.empty';
 }
 
-/** "Searching in: <path> (+n more)" as one line, bracketed once, the path read left to right. */
+/** "Searching in: <path> and n more" as one sentence, so t() isolates the path. */
 export function searchScopeText(scope: readonly string[], t: Translate): string {
     const [path] = scope;
     if (path === undefined) return '';
-    return t.compose((say) => {
-        const first = isolate(path, 'ltr');
-        return `${say('fileBrowser.searchingIn')} ${scope.length > 1 ? say('fileBrowser.scopeMore', { first, n: scope.length - 1 }) : first}`;
-    });
+    return scope.length > 1 ? t('fileBrowser.searchingInScopeMore', { path, n: scope.length - 1 }) : t('fileBrowser.searchingInScope', { path });
 }
 
 /** Add to library and Ask GAIA need a selection and wait while files are being added. */

@@ -7,9 +7,12 @@ Every route is in exactly one class, and ``test_every_route_is_classified``
 fails for a route nobody has decided about:
 
 * ``pc``: the PC running GAIA only (``require_local_pc``).
-* ``pc_or_device``: first-run setup, connector sign-in, setup and checks,
-  Automations and changes to schedules and goals; the PC or an allowed
-  paired device, never mobile access (``require_pc_or_device``, ``require_pc_or_allowed_device``).
+* ``pc_or_device``: first-run setup, connector sign-in, setup, checks, grants
+  and activations, Automations, schedules and goals, the device list, the
+  Discord bridge's controls, memory rebuilds and profile saves, switching
+  back to GAIA's own Lemonade, the logs and the troubleshooting report; the
+  PC or an allowed paired device, never mobile access (``require_pc_or_device``,
+  ``require_pc_or_allowed_device``).
 * ``not_on_listener``: a read with side effects on the PC; the PC and mobile
   access, never a paired device (``refuse_on_device_listener``).
 * ``remote``: the PC, mobile access with its token, and allowed devices.
@@ -21,8 +24,11 @@ fails for a route nobody has decided about:
 
 from __future__ import annotations
 
+import contextlib
 import json
+import logging
 import re
+import threading
 import uuid
 
 import pytest
@@ -51,22 +57,12 @@ PC = ("127.0.0.1", 50000)
 
 PC_ONLY = {
     "DELETE /api/agents/{agent_id}",
-    "DELETE /api/connectors/{connector_id}/activations/{agent_id:path}",
     "DELETE /api/devices/listener",
-    "DELETE /api/devices/pairing",
     "DELETE /api/devices/routes/{kind}",
-    "DELETE /api/devices/{device_id}",
     "GET /api/connectors/_debug",
     "GET /api/connectors/eval-mailbox",
-    "GET /api/devices",
-    "GET /api/devices/status",
-    "GET /api/logs",
-    "GET /api/logs/{source}",
-    "GET /api/messaging/discord",
-    "GET /api/setup/report/{name}",
     "POST /api/agents/install",
     "POST /api/connectors/eval-mailbox",
-    "POST /api/connectors/{connector_id}/enable",
     "POST /api/devices/listener",
     "POST /api/devices/pairing",
     "POST /api/devices/pairing/reset",
@@ -74,52 +70,58 @@ PC_ONLY = {
     "POST /api/devices/{device_id}/allow",
     "POST /api/eval/scripted-user",
     "POST /api/files/open",
-    "POST /api/gpu-memory/apply",
-    "POST /api/gpu-memory/revert",
-    "POST /api/lemonade/target",
     "POST /api/memory/admin/clear",
     "POST /api/memory/admin/seed",
-    "POST /api/memory/commit-discovery",
-    "POST /api/memory/commit-inference",
-    "POST /api/memory/refresh-system-context",
-    "POST /api/memory/reinitialize",
     "POST /api/messaging/discord/connect",
     "POST /api/messaging/discord/disconnect",
-    "POST /api/messaging/discord/forget-always",
     "POST /api/messaging/discord/pair",
-    "POST /api/messaging/discord/restart",
-    "POST /api/messaging/discord/start",
-    "POST /api/messaging/discord/stop",
-    "POST /api/setup/npu/memlock-fix",
-    "POST /api/setup/report",
     "POST /api/skills/link/add",
     "POST /api/tunnel/start",
     "POST /api/tunnel/stop",
     "POST /v1/connections/{provider}",
     "PUT /api/chat/permissions",
-    "PUT /api/connectors/{connector_id}/activations/{agent_id:path}",
-    "PUT /api/connectors/{connector_id}/grants/{agent_id:path}",
 }
 
 PC_OR_DEVICE = {
     "DELETE /api/automations/{ref}",
     "DELETE /api/connectors/_flows/{flow_id}",
+    "DELETE /api/connectors/{connector_id}/activations/{agent_id:path}",
+    "DELETE /api/devices/pairing",
+    "DELETE /api/devices/{device_id}",
     "DELETE /api/goals/{goal_id}",
     "DELETE /api/providers/{provider}/key",
     "DELETE /api/schedules/{name:path}",
     "GET /api/automations",
+    "GET /api/devices",
+    "GET /api/devices/status",
     "GET /api/devices/{device_id}/changes",
+    "GET /api/logs",
+    "GET /api/logs/{source}",
     "GET /api/memory/stream-discovery",
     "GET /api/memory/stream-inference",
+    "GET /api/messaging/discord",
+    "GET /api/setup/report/{name}",
     "POST /api/automations/{ref}/{action}",
     "POST /api/connectors/flows/{flow_id}/complete",
     "POST /api/connectors/{connector_id}/authorize",
     "POST /api/connectors/{connector_id}/authorize-device",
     "POST /api/connectors/{connector_id}/configure",
+    "POST /api/connectors/{connector_id}/enable",
     "POST /api/connectors/{connector_id}/test",
     "POST /api/goals",
     "POST /api/goals/store/reset",
     "POST /api/goals/{goal_id}/tasks",
+    "POST /api/gpu-memory/apply",
+    "POST /api/gpu-memory/revert",
+    "POST /api/lemonade/target",
+    "POST /api/memory/commit-discovery",
+    "POST /api/memory/commit-inference",
+    "POST /api/memory/refresh-system-context",
+    "POST /api/memory/reinitialize",
+    "POST /api/messaging/discord/forget-always",
+    "POST /api/messaging/discord/restart",
+    "POST /api/messaging/discord/start",
+    "POST /api/messaging/discord/stop",
     "POST /api/providers/key-store/retry",
     "POST /api/schedules",
     "POST /api/schedules/{name:path}/run",
@@ -128,10 +130,14 @@ PC_OR_DEVICE = {
     "POST /api/setup/models/download",
     "POST /api/setup/models/remove",
     "POST /api/setup/models/skip",
+    "POST /api/setup/npu/memlock-fix",
     "POST /api/setup/npu/recheck",
+    "POST /api/setup/report",
     "POST /api/setup/run",
     "POST /api/setup/vision-model",
     "POST /api/system/download-model",
+    "PUT /api/connectors/{connector_id}/activations/{agent_id:path}",
+    "PUT /api/connectors/{connector_id}/grants/{agent_id:path}",
     "PUT /api/goals/{goal_id}/approve",
     "PUT /api/goals/{goal_id}/cancel",
     "PUT /api/goals/{goal_id}/reject",
@@ -695,6 +701,9 @@ def test_a_paired_device_may_read_provider_summaries(setup, monkeypatch):
             "key_state",
             "key_hint",
             "known_models",
+            "error",
+            "env_var",
+            "key_from_gaia_env",
         }
         for p in listed.values()
     )
@@ -718,26 +727,238 @@ def test_refused_network_policy_saves_nothing(setup):
     assert clients["pc"].get("/api/settings").json()["agent_mode"] == before
 
 
-def test_troubleshooting_report_is_pc_only(setup):
-    """The report bundles every log, so it is no side door around them."""
+UI = {"X-Gaia-UI": "1"}
+
+
+@contextlib.contextmanager
+def _captured_audit():
+    from gaia.security import audit_logger
+
+    lines = []
+
+    class _Capture(logging.Handler):
+        def emit(self, record):
+            lines.append(record.getMessage())
+
+    handler, level = _Capture(), audit_logger.level
+    audit_logger.addHandler(handler)
+    audit_logger.setLevel(logging.INFO)
+    try:
+        yield lines
+    finally:
+        audit_logger.removeHandler(handler)
+        audit_logger.setLevel(level)
+
+
+@pytest.mark.parametrize("caller", ["tunnel", "pending"])
+@pytest.mark.parametrize(
+    "method,path",
+    [
+        ("GET", "/api/logs"),
+        ("GET", "/api/logs/gaia"),
+        ("POST", "/api/setup/report"),
+        ("GET", "/api/setup/report/diagnostics-20261112-101010.tgz"),
+    ],
+)
+def test_logs_and_report_refuse_mobile_access_and_pending_devices(
+    setup, caller, method, path
+):
+    app, clients, _ = setup
+    assert clients[caller].request(method, path, headers=UI).status_code == 403
+
+
+def test_an_allowed_device_reads_a_log_redacted_by_file_name(
+    setup, tmp_path, monkeypatch
+):
+    from gaia.llm import lemonade_logs
+
+    app, clients, _ = setup
+    saved = "saved-" + "q" * 24
+    shaped = "sk-" + "x" * 20
+    log = tmp_path / "gaia.log"
+    log.write_text(
+        f"[2026-11-18 10:00:00,000] | INFO | gaia | a.py:1 | used {saved} and {shaped}\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("GAIA_LOG_FILE", str(log))
+    monkeypatch.setattr(lemonade_logs, "known_secrets", lambda: ((saved,), None))
+
+    listed = clients["device"].get("/api/logs", headers=UI)
+    assert listed.status_code == 200, listed.text
+    gaia = next(s for s in listed.json()["sources"] if s["id"] == "gaia")
+    assert gaia["files"][0]["path"] == "gaia.log"
+    read = clients["device"].get("/api/logs/gaia", headers=UI)
+    assert read.status_code == 200, read.text
+    body = read.json()
+    assert body["log_path"] == "gaia.log"
+    assert saved not in read.text and shaped not in read.text
+    assert "[redacted]" in body["lines"][0]["text"]
+    assert str(tmp_path) not in listed.text + read.text
+    # The PC's own view still shows where the file is.
+    assert clients["pc"].get("/api/logs/gaia", headers=UI).json()["log_path"] == str(
+        log
+    )
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/api/logs/..%2Fconfig.json",
+        "/api/logs/%2Fetc%2Fpasswd",
+        "/api/logs/gaia?file=..%2F..%2Fconfig.json",
+        "/api/logs/gaia?file=%2Fetc%2Fpasswd",
+        "/api/logs/agent?file=..%2Fgaia.log",
+    ],
+)
+def test_a_device_cannot_read_a_log_by_path(setup, path):
+    app, clients, _ = setup
+    assert clients["device"].get(path, headers=UI).status_code == 404
+
+
+@pytest.mark.parametrize(
+    "name", ["..%2Fconfig.json", "gaia.log", "%2Fetc%2Fpasswd", "diagnostics-1.tgz"]
+)
+def test_a_device_cannot_fetch_a_report_by_path(setup, name):
     from gaia.home import gaia_home
 
     app, clients, _ = setup
-    name = "diagnostics-20261112-101010.tgz"
+    home = gaia_home()
+    home.mkdir(parents=True, exist_ok=True)
+    (home / "gaia.log").write_text("not a report", encoding="utf-8")
+    got = clients["device"].get(f"/api/setup/report/{name}", headers=UI)
+    assert got.status_code == 404
+    assert b"not a report" not in got.content
+
+
+def test_one_report_at_a_time_from_any_caller(setup, monkeypatch):
+    """Audited by device on write and download, and named without its place on the PC."""
+    from gaia.home import gaia_home
+    from gaia.ui.routers import setup as setup_router
+
+    app, clients, device = setup
+    name = "diagnostics-20261118-101010-0a1b2c3d.tgz"
+    started, release = threading.Event(), threading.Event()
+
+    def write_report(record):
+        started.set()
+        assert release.wait(10)
+        out = gaia_home() / name
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_bytes(b"redacted bundle")
+        return out
+
+    monkeypatch.setattr(setup_router, "write_report", write_report)
+    monkeypatch.setattr(setup_router, "build_plan", lambda: {})
+    first = {}
+
+    def make():
+        first["resp"] = clients["device"].post("/api/setup/report", headers=UI)
+
+    with _captured_audit() as lines:
+        worker = threading.Thread(target=make)
+        worker.start()
+        try:
+            assert started.wait(10)
+            for caller in ("device", "pc"):
+                second = clients[caller].post("/api/setup/report", headers=UI)
+                assert second.status_code == 409, (caller, second.text)
+        finally:
+            release.set()
+            worker.join(10)
+    try:
+        resp = first["resp"]
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["path"] == name and resp.json()["name"] == name
+        with _captured_audit() as fetched:
+            got = clients["device"].get(f"/api/setup/report/{name}", headers=UI)
+        assert got.status_code == 200 and got.content == b"redacted bundle"
+        by = f"by {security.DEVICE_PRINCIPAL_PREFIX}{device.device_id}"
+        assert [
+            line for line in lines + fetched if "troubleshooting report" in line
+        ] == [
+            f"APPROVAL | troubleshooting report requested | {by}",
+            f"APPROVAL | troubleshooting report {name} downloaded | {by}",
+        ]
+        # Done, so the next one may start.
+        release.set()
+        again = clients["device"].post("/api/setup/report", headers=UI)
+        assert again.status_code == 200, again.text
+    finally:
+        (gaia_home() / name).unlink(missing_ok=True)
+
+
+@pytest.mark.parametrize("into", ["key_value", "saved_secret"])
+def test_a_cursor_inside_a_line_cannot_split_a_secret(
+    setup, tmp_path, monkeypatch, into
+):
+    """A cursor that isn't at a line start reads the tail, redacting whole lines."""
+    from gaia.llm import lemonade_logs
+
+    app, clients, _ = setup
+    saved = "saved-" + "q" * 24
+    pair = "api_key=" + "v" * 24
+    head = "[2026-11-18 10:00:00,000] | INFO | gaia | a.py:1 | "
+    first, second = f"{head}start\n", f"{head}used {pair} and {saved}\n"
+    log = tmp_path / "gaia.log"
+    log.write_text(first + second, encoding="utf-8")
+    monkeypatch.setenv("GAIA_LOG_FILE", str(log))
+    monkeypatch.setattr(lemonade_logs, "known_secrets", lambda: ((saved,), None))
+    if into == "key_value":
+        cursor, hidden = len(first) + second.index("=") + 1, pair.split("=")[1]
+    else:
+        cursor, hidden = len(first) + second.index(saved) + 1, saved
+    resp = clients["device"].get(
+        "/api/logs/gaia", params={"after": str(cursor)}, headers=UI
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["reset"] is True
+    assert hidden[1:] not in resp.text and hidden[4:12] not in resp.text
+
+
+def test_a_device_never_follows_a_symlinked_log_or_report(setup, tmp_path, monkeypatch):
+    from gaia.home import gaia_home
+
+    app, clients, _ = setup
+    outside = tmp_path / "outside.txt"
+    outside.write_text("[2026-11-18] | INFO | x | not a log\n", encoding="utf-8")
+    link = tmp_path / "gaia.log"
+    link.symlink_to(outside)
+    monkeypatch.setenv("GAIA_LOG_FILE", str(link))
+    listed = clients["device"].get("/api/logs", headers=UI).json()
+    assert next(s for s in listed["sources"] if s["id"] == "gaia")["files"] == []
+    for path, params in (
+        ("/api/logs/gaia", {}),
+        ("/api/logs/gaia", {"file": "gaia.log"}),
+    ):
+        resp = clients["device"].get(path, params=params, headers=UI)
+        assert "not a log" not in resp.text
+    name = "diagnostics-20261118-111111.tgz"
     report = gaia_home() / name
     report.parent.mkdir(parents=True, exist_ok=True)
-    report.write_bytes(b"logs that quote a conversation")
+    report.symlink_to(outside)
     try:
-        for caller in ("tunnel", "device"):
-            got = clients[caller].get(f"/api/setup/report/{name}")
-            assert got.status_code == 403
-            assert b"conversation" not in got.content
-            assert clients[caller].post("/api/setup/report").status_code == 403
-        pc = clients["pc"].get(f"/api/setup/report/{name}")
-        assert pc.status_code == 200
-        assert pc.content == b"logs that quote a conversation"
+        assert (
+            clients["device"].get(f"/api/setup/report/{name}", headers=UI).status_code
+            == 404
+        )
     finally:
         report.unlink()
+
+
+def test_a_device_never_sees_the_home_folder_in_an_error(setup, monkeypatch):
+    from pathlib import Path
+
+    from gaia.llm import lemonade_choice as choice
+
+    app, clients, _ = setup
+
+    def broken():
+        raise choice.LemonadeChoiceError(f"can't read {Path.home()}/.gaia-x/config")
+
+    monkeypatch.setattr(choice, "describe", broken)
+    resp = clients["device"].get("/api/logs/model_server", headers=UI)
+    assert resp.status_code == 409
+    assert str(Path.home()) not in resp.text and "your home folder" in resp.text
 
 
 @pytest.mark.parametrize(
@@ -747,8 +968,8 @@ def test_troubleshooting_report_is_pc_only(setup):
         ("/api/memory/commit-inference", {"insights": [{"content": "x"}]}),
     ],
 )
-def test_saving_a_profile_scan_is_pc_only(setup, monkeypatch, path, body):
-    """Saving what a scan found stays on the PC."""
+def test_mobile_access_cannot_save_a_profile_scan(setup, monkeypatch, path, body):
+    """Saving what a scan found needs the PC or an allowed device, never the tunnel."""
     from gaia.ui.routers import memory
 
     app, clients, _ = setup
@@ -764,7 +985,7 @@ def test_saving_a_profile_scan_is_pc_only(setup, monkeypatch, path, body):
 
     monkeypatch.setattr(memory, "_get_store", _Store)
     ui = {"X-Gaia-UI": "1"}
-    for caller in ("tunnel", "device"):
+    for caller in ("tunnel", "pending"):
         resp = clients[caller].post(path, json=body, headers=ui)
         assert resp.status_code == 403, (caller, resp.text)
     assert touched == []
@@ -872,8 +1093,8 @@ def test_profile_scan_and_consent_refused_to_tunnel_and_pending(
     assert touched == [] and saved == [] and audited == []
 
 
-def test_system_context_collection_is_pc_only(setup, monkeypatch):
-    """Re-collecting system context stays on the PC; mobile access can't consent."""
+def test_mobile_access_cannot_collect_system_context(setup, monkeypatch):
+    """Mobile access and an unallowed device can't re-collect system context."""
     from gaia.ui.routers import memory
 
     app, clients, _ = setup
@@ -887,7 +1108,7 @@ def test_system_context_collection_is_pc_only(setup, monkeypatch):
         "gaia.agents.base.memory._save_memory_settings", lambda settings: None
     )
     ui = {"X-Gaia-UI": "1"}
-    for caller in ("tunnel", "device"):
+    for caller in ("tunnel", "pending"):
         for path in (
             "/api/memory/refresh-system-context",
             "/api/memory/reinitialize",
@@ -899,7 +1120,10 @@ def test_system_context_collection_is_pc_only(setup, monkeypatch):
             json={"system_discovery_consent": False},
             headers=ui,
         )
-        assert off.status_code == 200, (caller, off.text)
+        assert off.status_code == (200 if caller == "tunnel" else 403), (
+            caller,
+            off.text,
+        )
     assert ran == []
 
 
@@ -1161,13 +1385,10 @@ def _audit_into(monkeypatch, module):
         ("device", "/api/connectors/google/configure", "save_only", 200),
         ("device", "/api/connectors/google/configure", "sign_in", 403),
         ("device", "/api/connectors/microsoft/configure", "sign_in", 403),
-        ("device", "/api/connectors/mcp-github/configure", "grant_agents", 403),
+        ("device", "/api/connectors/mcp-github/configure", "grant_agents", 200),
         ("tunnel", "/api/connectors/mcp-github/configure", None, 403),
         ("pending", "/api/connectors/mcp-github/configure", None, 403),
         ("device", "/api/connectors/google/authorize", {}, 403),
-        ("device", "/api/connectors/mcp-github/enable", {}, 403),
-        ("device", "/api/connectors/mcp-github/grants/installed:email", {}, 403),
-        ("device", "/api/connectors/mcp-github/activations/installed:email", {}, 403),
     ],
 )
 def test_a_paired_device_may_set_up_connectors(
@@ -1200,6 +1421,11 @@ def test_a_paired_device_may_set_up_connectors(
         lambda *a, **kw: started.append(a),
     )
     audited = _audit_into(monkeypatch, connectors)
+    monkeypatch.setattr(
+        connectors,
+        "_resolve_grant_scopes",
+        lambda request, connector_id, agent_ids: {a: [] for a in agent_ids},
+    )
     secret = "ghp_" + "S3CRETvalue" * 3
     configs = {
         None: {"GITHUB_PERSONAL_ACCESS_TOKEN": secret},
@@ -1214,7 +1440,7 @@ def test_a_paired_device_may_set_up_connectors(
             "grant_agents": ["installed:email"],
         },
     }
-    method = "PUT" if "/grants/" in path or "/activations/" in path else "POST"
+    method = "POST"
     payload = {"config": configs[body]} if not isinstance(body, dict) else body
     resp = clients[caller].request(
         method, path, json=payload, headers={"X-Gaia-UI": "1"}
@@ -1233,7 +1459,10 @@ def test_a_paired_device_may_set_up_connectors(
         assert stored == {"mcp-github:GITHUB_PERSONAL_ACCESS_TOKEN": secret}
         assert secret not in (tmp_path / "mcp_servers.json").read_text()
     connector_id = path.split("/")[3]
-    expected = [(f"device:{device.device_id}", f"connector {connector_id} set up")]
+    what = f"connector {connector_id} set up"
+    if body == "grant_agents":
+        what += " and granted to installed:email"
+    expected = [(f"device:{device.device_id}", what)]
     assert audited == (expected if caller == "device" else [])
 
 
@@ -1246,7 +1475,8 @@ def test_a_connector_check_from_a_device_keeps_server_output_on_the_pc(
 
     from gaia.ui.routers import connectors
 
-    _, clients, _ = setup
+    app, clients, _ = setup
+    app.state.device_action_times = {}
     detail = "Transport error for 'mcp-github': /Users/someone/.npm/_npx/9f/node failed"
     monkeypatch.setattr(
         connectors,
@@ -1279,6 +1509,7 @@ def test_a_connector_check_from_a_device_keeps_server_output_on_the_pc(
             side_effect=ConnectorsError(f"mcp_servers.json at {path} is unreadable")
         ),
     )
+    app.state.device_action_times = {}  # a device may test once per 10 s
     resp = clients[caller].post(
         "/api/connectors/mcp-github/test", headers={"X-Gaia-UI": "1"}
     )
@@ -1437,3 +1668,365 @@ def test_a_pending_device_cannot_run_a_connector_check(setup):
         "/api/connectors/mcp-github/test", headers={"X-Gaia-UI": "1"}
     )
     assert resp.status_code == 403
+
+
+# ── Wave 1 of full parity: what an allowed device may now do ────────────────
+
+UI = {"X-Gaia-UI": "1"}
+
+
+def _device_client(app, *, allow):
+    """A fresh paired device and its own client, for tests that unpair one."""
+    access = app.state.devices
+    invite, _ = access.pairing.open()
+    paired = access.redeem(invite, "Spare", "android", "192.168.1.22")
+    if allow:
+        access.allow(paired["device_id"])
+    listener = ListenerScopeMiddleware(DeviceGate(app, access, allow_loopback=True))
+    client = TestClient(
+        listener, client=PC, headers={"Authorization": f"Bearer {paired['token']}"}
+    )
+    return paired["device_id"], paired["token"], client
+
+
+def _refused_away(clients, method, path, body=None):
+    for caller in ("tunnel", "pending"):
+        resp = clients[caller].request(method, path, json=body, headers=UI)
+        assert resp.status_code in (401, 403), (caller, path, resp.status_code)
+
+
+def test_a_device_reads_and_prunes_the_device_list(setup, monkeypatch):
+    """A phone lists devices without any token, removes itself or another, and
+    closes pairing; opening pairing and allowing a device stay on the PC."""
+    from gaia.ui.routers import devices
+
+    app, clients, device = setup
+    GaiaConfig.save_key("device_pairing", True)
+    audited = _audit_into(monkeypatch, devices)
+    own_token = clients["device"].headers["Authorization"].split()[-1]
+    other_id, other_token, _ = _device_client(app, allow=False)
+
+    listed = clients["device"].get("/api/devices", headers=UI)
+    assert listed.status_code == 200, listed.text
+    assert {d["id"] for d in listed.json()["devices"]} >= {device.device_id, other_id}
+    for token in (own_token, other_token):
+        assert token not in listed.text
+    assert clients["device"].get("/api/devices/status").status_code == 200
+    for method, path in (("GET", "/api/devices"), ("GET", "/api/devices/status")):
+        _refused_away(clients, method, path)
+
+    assert clients["device"].post("/api/devices/pairing").status_code == 403
+    assert clients["device"].post(f"/api/devices/{other_id}/allow").status_code == 403
+    _refused_away(clients, "DELETE", "/api/devices/pairing")
+    _refused_away(clients, "DELETE", f"/api/devices/{other_id}")
+    assert audited == []
+
+    assert clients["device"].delete("/api/devices/pairing").status_code == 200
+    assert clients["device"].delete(f"/api/devices/{other_id}").status_code == 200
+    self_id, _, self_client = _device_client(app, allow=True)
+    gone = self_client.delete(f"/api/devices/{self_id}")
+    assert gone.status_code == 200 and gone.json() == {"changes_count": 1}
+    assert self_client.get("/api/devices").status_code == 401
+    assert audited == [
+        (f"device:{device.device_id}", "pairing closed"),
+        (f"device:{device.device_id}", f"device {other_id} unpaired"),
+        (f"device:{self_id}", f"device {self_id} unpaired"),
+    ]
+
+
+class _Bridge:
+    """``gaia.messaging.discord.cli`` as the routes use it."""
+
+    def __init__(self, state="pairing", detail="DM the code to the bot."):
+        self.state, self.detail, self.started = state, detail, []
+
+    def status(self, detect=True):
+        return {
+            "connected": True,
+            "paired": False,
+            "running": True,
+            "state": self.state,
+            "detail": self.detail,
+            "bot_name": "GAIA",
+            "owner_name": "",
+            "autostart": True,
+            "always_allowed": [],
+            "model": "",
+            "portal_url": "https://discord.com/developers/applications",
+            "bot_page_url": "",
+            "invite_url": "",
+            "bot_profile_url": "",
+            "pairing_code": "PAIR-4242",
+            "pairing_expires_at": 1.0,
+            "discord_installed": False,
+            "should_offer_setup": False,
+        }
+
+    def stop(self, stay_stopped=False):
+        return True
+
+    def start_detached(self, model=None, take_over=False, emit=None):
+        self.started.append(take_over)
+
+    def stop_failed_hint(self):
+        return ""
+
+
+def test_a_device_runs_the_discord_bridge_but_never_sees_its_code(setup, monkeypatch):
+    from gaia.messaging.discord import state as bridge_state
+    from gaia.ui.routers import messaging
+
+    _, clients, device = setup
+    bridge = _Bridge()
+    monkeypatch.setattr(messaging, "_cli", lambda: bridge)
+    monkeypatch.setattr(bridge_state, "is_running", lambda: False)
+    monkeypatch.setattr(bridge_state, "forget_always", lambda: None)
+    audited = _audit_into(monkeypatch, messaging)
+
+    assert clients["pc"].get("/api/messaging/discord").json()["pairing_code"]
+    shown = clients["device"].get("/api/messaging/discord")
+    assert shown.status_code == 200 and "PAIR-4242" not in shown.text
+    for action in ("start", "stop", "restart", "forget-always"):
+        path = f"/api/messaging/discord/{action}"
+        _refused_away(clients, "POST", path, {})
+        resp = clients["device"].post(path, json={}, headers=UI)
+        assert resp.status_code == 200, (action, resp.text)
+        assert "PAIR-4242" not in resp.text
+    # Taking the lease from another PC needs the explicit flag, from a device too.
+    assert bridge.started == [False, False]
+    clients["device"].post(
+        "/api/messaging/discord/start", json={"take_over": True}, headers=UI
+    )
+    assert bridge.started[-1] is True
+    for action in ("connect", "pair", "disconnect"):
+        resp = clients["device"].post(
+            f"/api/messaging/discord/{action}", json={"token": "t"}, headers=UI
+        )
+        assert resp.status_code == 403, action
+    by = f"device:{device.device_id}"
+    assert audited == [
+        (by, "Discord bridge started"),
+        (by, "Discord bridge stopped"),
+        (by, "Discord bridge restarted"),
+        (by, 'Discord bridge "Always allow" answers forgotten'),
+        (by, "Discord bridge taken over from another PC"),
+    ]
+
+    bridge.state, bridge.detail = "error", "Its log is at /Users/someone/.gaia/d.log"
+    assert "/Users/someone" not in clients["device"].get("/api/messaging/discord").text
+    assert "/Users/someone" in clients["pc"].get("/api/messaging/discord").text
+
+
+def test_a_device_grants_and_turns_on_connectors(setup, monkeypatch, tmp_path):
+    from unittest.mock import AsyncMock
+
+    from gaia.ui.routers import connectors
+
+    clients = _mcp_setup(setup, monkeypatch, tmp_path)
+    _, _, device = setup
+    audited = _audit_into(monkeypatch, connectors)
+    monkeypatch.setattr(connectors._emitter, "emit", AsyncMock())
+    monkeypatch.setattr(connectors, "grant_agent", lambda *a: None)
+    monkeypatch.setattr(
+        connectors, "activate_connector_for_agent", lambda *a, **k: True
+    )
+    monkeypatch.setattr(connectors, "deactivate_connector_for_agent", lambda *a: None)
+    secret = "ghp_" + "S3CRETvalue" * 3
+    url = "/api/connectors/mcp-github"
+    configured = clients["pc"].post(
+        f"{url}/configure",
+        json={"config": {"GITHUB_PERSONAL_ACCESS_TOKEN": secret}},
+        headers=UI,
+    )
+    assert configured.status_code == 200, configured.text
+    assert clients["pc"].post(f"{url}/disable", headers=UI).status_code == 200
+
+    calls = (
+        ("PUT", f"{url}/grants/installed:email", {"scopes": ["repo"]}),
+        ("PUT", f"{url}/activations/installed:email", {"scopes": ["repo"]}),
+        ("DELETE", f"{url}/activations/installed:email", None),
+        ("POST", f"{url}/enable", None),
+    )
+    for method, path, body in calls:
+        _refused_away(clients, method, path, body)
+    assert audited == []
+    for method, path, body in calls:
+        resp = clients["device"].request(method, path, json=body, headers=UI)
+        assert resp.status_code in (200, 204), (path, resp.text)
+        assert secret not in resp.text
+    by = f"device:{device.device_id}"
+    kinds = [
+        (c["kind"], c["params"].get("agent_id"))
+        for c in setup[0].state.db.device_changes(device.device_id, 10)[0]
+    ]
+    assert kinds[:4] == [
+        ("connectorEnable", None),
+        ("connectorActivation", "installed:email"),
+        ("connectorActivation", "installed:email"),
+        ("connectorGrant", "installed:email"),
+    ], kinds
+    assert audited == [
+        (by, "connector mcp-github granted to installed:email"),
+        (by, "connector mcp-github turned on for installed:email (granted)"),
+        (by, "connector mcp-github turned off for installed:email"),
+        (by, "connector mcp-github enabled"),
+    ]
+
+
+def test_a_device_rebuilds_memory_and_saves_the_profile(setup, monkeypatch):
+    from gaia.ui.routers import memory
+
+    _, clients, device = setup
+    audited = _audit_into(monkeypatch, memory)
+
+    class _Store:
+        def store(self, **kwargs):
+            pass
+
+        def replace_by_source(self, *args, **kwargs):
+            return [1, 2]
+
+        def clear_all(self):
+            return {"knowledge": 0, "tool_history": 0, "conversations": 0}
+
+    monkeypatch.setattr(memory, "_get_store", _Store)
+    monkeypatch.setattr(
+        memory, "_do_system_context_refresh", lambda: {"stored": 3, "skipped": False}
+    )
+    calls = (
+        ("/api/memory/commit-discovery", {"items": [{"content": "Uses Rust"}]}),
+        ("/api/memory/commit-inference", {"insights": [{"content": "A developer"}]}),
+        ("/api/memory/refresh-system-context", None),
+        ("/api/memory/reinitialize", None),
+    )
+    for path, body in calls:
+        _refused_away(clients, "POST", path, body)
+    assert audited == []
+    for path, body in calls:
+        resp = clients["device"].post(path, json=body, headers=UI)
+        assert resp.status_code == 200, (path, resp.text)
+    by = f"device:{device.device_id}"
+    assert audited == [
+        (by, "1 discovery findings saved to memory"),
+        (by, "profile replaced with 2 inferred insights"),
+        (by, "system context refreshed"),
+        (by, "memory wiped and rebuilt"),
+    ]
+
+    def broken():
+        raise RuntimeError("cannot read /Users/someone/.gaia/memory.db")
+
+    monkeypatch.setattr(memory, "_do_system_context_refresh", broken)
+    path = "/api/memory/refresh-system-context"
+    away = clients["device"].post(path, headers=UI)
+    assert away.status_code == 500 and "/Users/someone" not in away.text
+    assert "/Users/someone" in clients["pc"].post(path, headers=UI).text
+
+
+def test_a_device_may_only_switch_back_to_gaias_own_lemonade(setup, monkeypatch):
+    from gaia.llm import lemonade_choice
+    from gaia.ui.routers import lemonade
+
+    _, clients, device = setup
+    audited = _audit_into(monkeypatch, lemonade)
+    switched = []
+    monkeypatch.setattr(lemonade_choice, "saved_mode", lambda: "external")
+    monkeypatch.setattr(lemonade_choice, "configured_source", lambda: "config")
+    monkeypatch.setattr(lemonade_choice, "set_mode", switched.append)
+    monkeypatch.setattr(
+        lemonade_choice,
+        "use_external",
+        lambda *a: pytest.fail("a device chose an external server"),
+    )
+    monkeypatch.setattr(lemonade_choice, "apply_gaia_switch", lambda previous: None)
+    monkeypatch.setattr(lemonade, "_drop_cached_agents", lambda: None)
+    monkeypatch.setattr(
+        lemonade,
+        "_target",
+        lambda: {
+            "mode": "gaia",
+            "saved_mode": "gaia",
+            "source": "config",
+            "base_url": None,
+            "saved_base_url": None,
+            "api_key_stored": False,
+            "env_url_ignored": None,
+            "env_override": None,
+            "gaia_installed": True,
+            "offer": False,
+            "what_gaia_does": lemonade.WHAT_GAIA_DOES,
+        },
+    )
+    path = "/api/lemonade/target"
+    external = {"mode": "external", "base_url": "http://10.0.0.5:13305", "api_key": "k"}
+    assert clients["device"].post(path, json=external, headers=UI).status_code == 403
+    # Only the exact mode is GAIA's own; anything else is the user's server.
+    assert (
+        clients["device"].post(path, json={"mode": "GAIA"}, headers=UI).status_code
+        == 403
+    )
+    _refused_away(clients, "POST", path, {"mode": "gaia"})
+    assert switched == [] and audited == []
+    resp = clients["device"].post(path, json={"mode": "gaia"}, headers=UI)
+    assert resp.status_code == 200, resp.text
+    assert switched == ["gaia"]
+    assert audited == [
+        (f"device:{device.device_id}", "Lemonade Server switched to GAIA's own")
+    ]
+
+
+def _audit_lines(run):
+    """What *run* writes to the audit log, through the file handler's formatter."""
+    import io
+    import logging
+
+    from gaia.security import OneLineFormatter, audit_logger
+
+    out = io.StringIO()
+    handler = logging.StreamHandler(out)
+    handler.setFormatter(OneLineFormatter("%(levelname)s | %(message)s"))
+    level = audit_logger.level
+    audit_logger.addHandler(handler)
+    audit_logger.setLevel(logging.INFO)
+    try:
+        run()
+    finally:
+        audit_logger.removeHandler(handler)
+        audit_logger.setLevel(level)
+    return out.getvalue().splitlines()
+
+
+def test_an_audit_line_cannot_be_forged():
+    """A newline in what is approved stays inside its one line."""
+    forged = "chat 1 set to manual\nINFO | APPROVAL | goal 9 approved | by pc"
+    lines = _audit_lines(
+        lambda: security.audit_approval(_request_for("pc", None), forged)
+    )
+    assert len(lines) == 1, lines
+    assert "\\n" in lines[0]
+
+
+def test_a_malformed_agent_id_is_refused(setup, monkeypatch):
+    from gaia.ui.routers import connectors
+
+    _, clients, _ = setup
+    written = []
+    monkeypatch.setattr(connectors, "grant_agent", lambda *a: written.append(a))
+    monkeypatch.setattr(
+        connectors, "activate_connector_for_agent", lambda *a, **k: written.append(a)
+    )
+    url = "/api/connectors/mcp-github"
+    # The router never matches "\n" in a path parameter (404); "\r" reaches the route.
+    for bad, status in (("%0D", 422), ("%0A", 404), ("%1B", 422), ("x/../y", 422)):
+        agent = f"builtin:chat{bad}INFO%20|%20APPROVAL%20|%20forged"
+        for method, path, body in (
+            ("PUT", f"{url}/grants/{agent}", {"scopes": []}),
+            ("PUT", f"{url}/activations/{agent}", {"scopes": []}),
+            ("DELETE", f"{url}/activations/{agent}", None),
+        ):
+            for caller in ("pc", "device"):
+                resp = clients[caller].request(method, path, json=body, headers=UI)
+                assert resp.status_code == status, (caller, path, resp.text)
+                if status == 422:
+                    assert resp.json()["detail"]["error"] == "invalid_agent_id"
+    assert written == []

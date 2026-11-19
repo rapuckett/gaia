@@ -12,7 +12,7 @@
 
 import { expect, test, type Locator, type Page } from '@playwright/test';
 
-import { ANSWER_SESSION, AUTOMATIONS, DEVICE_STATES, DISCORD_STATES, MESSAGES, MODEL_LIST, NOW, RESOURCES, SESSIONS, SYSTEM_STATUS, TOOL_STATUS, holdOnToolStatus, mockApi, shownText, useLocale, useTheme, withAutomations, withConnectors, withCrashedBackend, withDesktopBridges, withDevices, withDiscord, withMemory, withModelPage, withSettingsPanes, withoutFlagship, type MemoryState } from './fixtures';
+import { ANSWER_SESSION, AUTOMATIONS, DEVICE_STATES, DISCORD_STATES, MESSAGES, MODEL_LIST, NOW, RESOURCES, SESSIONS, SYSTEM_STATUS, TOOL_STATUS, holdOnToolStatus, mockApi, shownText, useLocale, useTheme, withAutomations, withConnectors, withCrashedBackend, withDesktopBridges, withDevicePrompt, withDevices, withDiscord, withMemory, withModelPage, withSettingsPanes, withoutFlagship, type MemoryState } from './fixtures';
 import { NARROW_SCENES, SETUP_SCENES, scene, withSetup } from './setup-scenes';
 
 test.use({ viewport: { width: 1400, height: 900 } });
@@ -1962,6 +1962,22 @@ async function withOldFile(page: Page): Promise<void> {
 }
 
 for (const locale of ['ar', 'en']) {
+    test(`a file the server refuses away from the PC is worded in the interface language (${locale})`, async ({ page }) => {
+        await open(page, '', locale, async (p) => {
+            await withOldFile(p);
+            await p.route('**/api/files/browse**', (route) => route.fulfill({
+                status: 403,
+                json: { detail: { code: 'not_in_chat_folders', message: 'Away from the PC, GAIA opens files only from the folders the chat was given. q1-plan.pdf isn\'t in this chat\'s folders.', name: 'q1-plan.pdf' } },
+            }));
+        }, 'dark');
+        await page.locator('.sb').getByRole('button', { name: /Documents/ }).click();
+        await page.getByRole('button', { name: /Browse files/ }).click();
+        const refusal = page.locator('.fb-error');
+        await expect(refusal).toContainText('q1-plan.pdf');
+        if (locale === 'ar') await expect(refusal).toContainText('بعيدًا عن الكمبيوتر');
+        await shot(page, `files-${locale}-refused`);
+    });
+
     test(`dates read in the interface language, not the PC's (${locale})`, async ({ page }) => {
         const month = locale === 'ar' ? ARABIC_MONTH : /Mar/;
         await open(page, '', locale, withOldFile);
@@ -2985,6 +3001,32 @@ for (const locale of ['ar', 'en']) {
             if (locale === 'ar') expect(await untranslated(page, '.settings-scroll', 'bdi')).toEqual([]);
         });
     }
+
+    test(`device changes: list open (${locale})`, async ({ page }) => {
+        await open(page, '', locale, (p) => withDevices(p, DEVICE_STATES.failed), 'dark');
+        await openDevices(page);
+        await page.locator('.devices-changes summary').click();
+        await expect(page.locator('.devices-change')).toHaveCount(6);
+        await page.locator('.devices-changes').scrollIntoViewIfNeeded();
+        await shot(page, `device-changes-${locale}-open`);
+        expect(await audit(page)).toEqual([]);
+    });
+
+    test(`device changes: remove confirm (${locale})`, async ({ page }) => {
+        await open(page, '', locale, (p) => withDevices(p, DEVICE_STATES.failed), 'dark');
+        await openDevices(page);
+        await page.locator('.devices-row[data-device-id="dev-ipad"] > .devices-row-actions .btn-secondary').click();
+        await expect(page.getByRole('alertdialog')).toBeVisible();
+        await shot(page, `device-changes-${locale}-remove`);
+        expect(await audit(page)).toEqual([]);
+    });
+
+    test(`device changes: prompt banner (${locale})`, async ({ page }) => {
+        await open(page, '', locale, async (p) => { await withDevices(p, DEVICE_STATES.failed); await withDevicePrompt(p, 'admin', 'gpuMemoryApply'); }, 'dark');
+        await expect(page.getByTestId('device-prompt-banner')).toBeVisible();
+        await shot(page, `device-changes-${locale}-banner`);
+        expect(await audit(page)).toEqual([]);
+    });
 
     test(`settings devices: pairing code shown (${locale})`, async ({ page }) => {
         await open(page, '', locale, (p) => withDevices(p, DEVICE_STATES.empty));

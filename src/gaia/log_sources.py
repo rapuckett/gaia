@@ -76,8 +76,11 @@ def gaia_log_path() -> Path:
     return Path(override) if override else gaia_home() / "gaia.log"
 
 
-def log_files(source: str) -> List[LogFile]:
+def log_files(source: str, *, symlinks: bool = True) -> List[LogFile]:
     """The files of *source* that exist, the one to show first at the front.
+
+    With *symlinks* False, a log that is a symlink is left out: it could point
+    anywhere on the PC.
 
     Raises:
         UnknownLogError: *source* is not one of :data:`SOURCES`.
@@ -119,10 +122,14 @@ def log_files(source: str) -> List[LogFile]:
             for p in sorted((gaia_home() / "logs").glob("*.log"))
             if p.name != "gaia-agent.log"
         ]
-    return [f for f in files if f.path.is_file()]
+    return [
+        f for f in files if f.path.is_file() and (symlinks or not f.path.is_symlink())
+    ]
 
 
-def find_file(source: str, name: Optional[str]) -> Optional[LogFile]:
+def find_file(
+    source: str, name: Optional[str], *, symlinks: bool = True
+) -> Optional[LogFile]:
     """*source*'s file called *name*, or its first when *name* is None.
 
     None when the source has no files yet.
@@ -131,7 +138,7 @@ def find_file(source: str, name: Optional[str]) -> Optional[LogFile]:
         UnknownLogError: Unknown source, or a *name* that isn't one of its files
             (never a path: the viewer can only read what GAIA lists).
     """
-    files = log_files(source)
+    files = log_files(source, symlinks=symlinks)
     if name is None:
         return files[0] if files else None
     for f in files:
@@ -140,9 +147,12 @@ def find_file(source: str, name: Optional[str]) -> Optional[LogFile]:
     raise UnknownLogError(f"The {source} logs have no file named {name!r}.")
 
 
-def describe_sources() -> List[Dict[str, object]]:
+def describe_sources(*, symlinks: bool = True) -> List[Dict[str, object]]:
     """Each source with its files, for the viewer's tabs."""
     return [
-        {"id": source, "files": [f.to_dict() for f in log_files(source)]}
+        {
+            "id": source,
+            "files": [f.to_dict() for f in log_files(source, symlinks=symlinks)],
+        }
         for source in SOURCES
     ]

@@ -3,6 +3,7 @@
 
 import { useState } from 'react';
 
+import { ChangesFromThisPhone } from '@/features/devices/ChangesFromThisPhone';
 import { ScreenHeader } from '@/features/nav/ScreenHeader';
 import { describeHttpFailure, useT } from '@/i18n/useT';
 import { ActionSheet, Badge, Button, EmptyState, ErrorState, Icon, IconButton, ListRow, ListSkeleton, Notice, Row, Screen, Sheet, Stack, Text } from '@/ui';
@@ -14,7 +15,7 @@ import { isCurrentPc, useForgetPc, usePairedPcs, useUsePc } from './pairedPcs';
 import type { PairedPc } from './service';
 
 /** The PCs this phone is paired with: switch to one, forget one after a confirmation, or pair another. */
-export function PairedPcsScreen({ onAdd }: { onAdd: () => void }) {
+export function PairedPcsScreen({ onAdd, changesInitial }: { onAdd: () => void; changesInitial?: 'open' | 'all' }) {
     const t = useT();
     const pcs = usePairedPcs();
     const connection = useActiveConnection();
@@ -26,6 +27,7 @@ export function PairedPcsScreen({ onAdd }: { onAdd: () => void }) {
     const close = () => setTarget(null);
     const pc = target?.pc;
     const failure = use.error ?? forget.error;
+    const currentPc = pcs.data?.find((item) => isCurrentPc(item, connection));
 
     return (
         <Screen scroll header={<ScreenHeader title={t('mobileApp.pairing.pcs.title')} />}>
@@ -79,6 +81,7 @@ export function PairedPcsScreen({ onAdd }: { onAdd: () => void }) {
                         />
                     );
                 })}
+                {currentPc?.deviceId ? <ChangesFromThisPhone deviceId={currentPc.deviceId} pcName={currentPc.name} initial={changesInitial} /> : null}
                 <Stack paddingX="lg" gap="md">
                     <Text role="label" tone="muted">{t('mobileApp.pairing.pcs.connectorSetup')}</Text>
                     <Button label={t('mobileApp.pairing.pcs.add')} icon={Plus} variant="secondary" onPress={onAdd} />

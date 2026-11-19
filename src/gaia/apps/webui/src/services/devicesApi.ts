@@ -4,9 +4,9 @@
 /** Settings > Phones and tablets: paired devices (`/api/devices`), PC-only. */
 
 import { apiFetch } from './api';
-import type { AwayRouteStatus, DeviceAccessStatus, DevicePairingOffer, PairedDevice, PairedDeviceList } from '../types/api.gen';
+import type { AwayRouteStatus, DeviceAccessStatus, DeviceChange, DeviceChangeList, DevicePairingOffer, PairedDevice, PairedDeviceList } from '../types/api.gen';
 
-export type { DeviceAccessStatus, DevicePairingOffer, PairedDevice };
+export type { DeviceAccessStatus, DeviceChange, DeviceChangeList, DevicePairingOffer, PairedDevice };
 
 export const getDeviceStatus = (): Promise<DeviceAccessStatus> => apiFetch('GET', '/devices/status');
 
@@ -33,3 +33,6 @@ export const allowDevice = (id: string): Promise<PairedDevice> =>
     apiFetch('POST', `/devices/${encodeURIComponent(id)}/allow`);
 
 export const removeDevice = (id: string): Promise<void> => apiFetch('DELETE', `/devices/${encodeURIComponent(id)}`);
+
+export const getDeviceChanges = (id: string, limit: number): Promise<DeviceChangeList> =>
+    apiFetch('GET', `/devices/${encodeURIComponent(id)}/changes?limit=${limit}`);

@@ -133,4 +133,65 @@ describe('DevicesSettings', () => {
         expect(line.match(/Paired/g)).toHaveLength(1);
         useChatStore.setState({ locale: 'en' });
     });
+
+    const PAIRED = { id: 'd1', name: 'Pixel', platform: 'android', status: 'allowed', created_at: new Date().toISOString(), last_seen_at: null, changes_count: 2 };
+
+    it('reads what a device changed when its section opens, and shows a kind it does not know as a generic change', async () => {
+        const at = new Date(Date.now() - 5 * 60_000).toISOString();
+        replies['GET /devices'] = { body: { devices: [PAIRED] } };
+        replies['GET /devices/d1/changes'] = { body: { total: 2, changes: [
+            { id: 'c1', kind: 'providerKeySet', params: { provider: 'OpenAI' }, at },
+            { id: 'c2', kind: 'teleportCat', params: {}, at },
+        ] } };
+        render(<DevicesSettings />);
+        fireEvent.click(await screen.findByText('Changes made from this device (2)'));
+        await screen.findByText('teleportCat');
+        const rows = Array.from(document.querySelectorAll('.devices-change'), (li) => li.textContent);
+        expect(rows[0]).toMatch(/^Changed the .*OpenAI.* key · 5m ago$/);
+        expect(rows[1]).toMatch(/^Changed a setting · 5m agoteleportCat$/);
+        expect(screen.getByText('teleportCat')).toBeInTheDocument();
+    });
+
+    it.each([
+        ['connectorGrant', { agent: 'GAIA', connector: 'Gmail', granted: false }, /^Stopped .*GAIA.* from using .*Gmail.* · 5m ago$/],
+        ['connectorGrant', { agent_id: 'gaia', connector: 'Gmail', granted: true }, /^Let .*gaia.* use .*Gmail.* · 5m ago$/],
+        ['connectorActivation', { agent: 'GAIA', connector: 'Gmail', active: false }, /^Turned off .*Gmail.* for .*GAIA.* · 5m ago$/],
+        ['discordControl', { action: 'stop' }, /^Stopped the Discord bot · 5m ago$/],
+        ['memoryCommit', { source: 'discovery', count: 1 }, /^Saved 1 item from scanning this PC to memory · 5m ago$/],
+        ['memoryCommit', { source: 'discovery', count: 3 }, /^Saved .*3.* items from scanning this PC to memory · 5m ago$/],
+        ['serverTarget', { mode: 'gaia' }, /^Switched GAIA back to its own model server · 5m ago$/],
+        ['deviceRemoved', { device: 'Tab', device_id: 'x' }, /^Removed the paired device .*Tab.* · 5m ago$/],
+        ['deviceRemoved', { device_id: 'x' }, /^Removed a paired device · 5m ago$/],
+    ])('names the %s change from its params (%j)', async (kind, params, expected) => {
+        const at = new Date(Date.now() - 5 * 60_000).toISOString();
+        replies['GET /devices'] = { body: { devices: [PAIRED] } };
+        replies['GET /devices/d1/changes'] = { body: { total: 1, changes: [{ id: 'c1', kind, params, at }] } };
+        render(<DevicesSettings />);
+        fireEvent.click(await screen.findByText('Changes made from this device (2)'));
+        await waitFor(() => expect(document.querySelector('.devices-change')).not.toBeNull());
+        const text = document.querySelector('.devices-change')!.textContent!;
+        expect(text).toMatch(expected);
+        expect(text).not.toContain('undefined');
+    });
+
+    it('shows an unknown Discord action as a generic change', async () => {
+        const at = new Date(Date.now() - 5 * 60_000).toISOString();
+        replies['GET /devices'] = { body: { devices: [PAIRED] } };
+        replies['GET /devices/d1/changes'] = { body: { total: 1, changes: [{ id: 'c1', kind: 'discordControl', params: { action: 'explode' }, at }] } };
+        render(<DevicesSettings />);
+        fireEvent.click(await screen.findByText('Changes made from this device (2)'));
+        await screen.findByText('discordControl');
+        expect(document.querySelector('.devices-change')!.textContent).toMatch(/^Changed a setting · 5m ago/);
+    });
+
+    it('mentions the changes that stay in the remove confirmation only when the device made some', async () => {
+        replies['GET /devices'] = { body: { devices: [PAIRED, { ...PAIRED, id: 'd2', name: 'Tab', changes_count: 0 }] } };
+        render(<DevicesSettings />);
+        fireEvent.click(await screen.findByRole('button', { name: 'Remove Pixel' }));
+        expect(await screen.findByText(/It made 2 changes that stay after it's removed/)).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+        fireEvent.click(await screen.findByRole('button', { name: 'Remove Tab' }));
+        await screen.findByText(/It can't reach GAIA on this PC anymore/);
+        expect(screen.queryByText(/that stay after it's removed/)).not.toBeInTheDocument();
+    });
 });

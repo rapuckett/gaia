@@ -44,6 +44,7 @@ from ..models import WireModel
 from ..security import (
     allowed_device,
     audit_approval,
+    is_local_pc,
     require_local_pc,
     require_pc_or_allowed_device,
 )
@@ -1392,13 +1393,21 @@ def clear_all_memory() -> Dict:
         raise HTTPException(500, f"Clear failed: {type(exc).__name__}")
 
 
+def _failed_for(request: Request, what: str, exc: Exception) -> str:
+    """*what* failed: the PC sees why, a device only a log id (paths stay on the PC)."""
+    if is_local_pc(request):
+        return f"{what} failed: {type(exc).__name__}: {exc}"
+    cid = _log_server_error(f"{what} failed", exc)
+    return f"{what} failed on the PC; see its server logs (id={cid})."
+
+
 @router.post(
     "/api/memory/reinitialize",
-    dependencies=[Depends(_require_ui_header), Depends(require_local_pc)],
+    dependencies=[Depends(_require_ui_header), Depends(require_pc_or_allowed_device)],
     response_model=MemoryReinitializeResponse,
     response_model_exclude_unset=True,
 )
-def reinitialize_memory() -> Dict:
+def reinitialize_memory(request: Request) -> Dict:
     """Wipe all memory and re-run initialization from scratch.
 
     Sequence:
@@ -1431,11 +1440,13 @@ def reinitialize_memory() -> Dict:
             cleared,
             system_context,
         )
-        return {"cleared": cleared, "system_context": system_context}
-
     except Exception as exc:
         logger.error("[memory router] reinitialize failed: %s", exc)
-        raise HTTPException(500, f"Reinitialize failed: {type(exc).__name__}: {exc}")
+        raise HTTPException(500, _failed_for(request, "Reinitialize", exc)) from exc
+    if not is_local_pc(request):
+        audit_approval(request, "memory wiped and rebuilt")
+        record_device_change(request, "memoryWiped")
+    return {"cleared": cleared, "system_context": system_context}
 
 
 # ---------------------------------------------------------------------------
@@ -1488,11 +1499,11 @@ def _do_system_context_refresh() -> Dict:
 
 @router.post(
     "/api/memory/refresh-system-context",
-    dependencies=[Depends(_require_ui_header), Depends(require_local_pc)],
+    dependencies=[Depends(_require_ui_header), Depends(require_pc_or_allowed_device)],
     response_model=MemorySystemContextRefresh,
     response_model_exclude_unset=True,
 )
-def refresh_system_context() -> Dict:
+def refresh_system_context(request: Request) -> Dict:
     """Re-collect OS, hardware, installed apps, and version facts.
 
     Deletes stale category='system' entries and stores fresh ones.
@@ -1501,12 +1512,15 @@ def refresh_system_context() -> Dict:
     Returns ``{stored: int, skipped: bool}``.
     """
     try:
-        return _do_system_context_refresh()
+        refreshed = _do_system_context_refresh()
     except Exception as exc:
         logger.error("[memory router] refresh-system-context failed: %s", exc)
         raise HTTPException(
-            500, f"System context refresh failed: {type(exc).__name__}: {exc}"
-        )
+            500, _failed_for(request, "System context refresh", exc)
+        ) from exc
+    if not is_local_pc(request):
+        audit_approval(request, "system context refreshed")
+    return refreshed
 
 
 # ---------------------------------------------------------------------------
@@ -2178,11 +2192,11 @@ class InferenceCommit(BaseModel):
 
 @router.post(
     "/api/memory/commit-discovery",
-    dependencies=[Depends(require_local_pc)],
+    dependencies=[Depends(require_pc_or_allowed_device)],
     response_model=MemoryCommitResponse,
     response_model_exclude_unset=True,
 )
-def commit_discovery(body: DiscoveryCommit) -> Dict:
+def commit_discovery(request: Request, body: DiscoveryCommit) -> Dict:
     """Store approved discovery findings. Returns ``{stored: int}``.
 
     Items are validated as ``KnowledgeCreate`` at the request boundary, so a
@@ -2218,16 +2232,19 @@ def commit_discovery(body: DiscoveryCommit) -> Dict:
             f"— see server logs (id={cid}).",
         ) from exc
     logger.info("[memory router] commit-discovery: stored %d items", stored)
+    if not is_local_pc(request):
+        audit_approval(request, f"{stored} discovery findings saved to memory")
+        record_device_change(request, "memoryCommit", source="discovery", count=stored)
     return {"stored": stored}
 
 
 @router.post(
     "/api/memory/commit-inference",
-    dependencies=[Depends(require_local_pc)],
+    dependencies=[Depends(require_pc_or_allowed_device)],
     response_model=MemoryCommitResponse,
     response_model_exclude_unset=True,
 )
-def commit_inference(body: InferenceCommit) -> Dict:
+def commit_inference(request: Request, body: InferenceCommit) -> Dict:
     """Store approved inference insights, replacing old inferred entries.
 
     The old inferred profile is replaced in one transaction, so a failed save
@@ -2262,6 +2279,9 @@ def commit_inference(body: InferenceCommit) -> Dict:
         ) from exc
     stored = len(ids)
     logger.info("[memory router] commit-inference: stored %d insights", stored)
+    if not is_local_pc(request):
+        audit_approval(request, f"profile replaced with {stored} inferred insights")
+        record_device_change(request, "memoryCommit", source="inference", count=stored)
     return {"stored": stored}
 
 
