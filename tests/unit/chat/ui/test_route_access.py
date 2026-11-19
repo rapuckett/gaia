@@ -109,6 +109,7 @@ PC_OR_DEVICE = {
     "DELETE /api/providers/{provider}/key",
     "DELETE /api/schedules/{name:path}",
     "GET /api/automations",
+    "GET /api/devices/{device_id}/changes",
     "POST /api/automations/{ref}/{action}",
     "POST /api/connectors/flows/{flow_id}/complete",
     "POST /api/connectors/{connector_id}/authorize",
