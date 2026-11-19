@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react-native';
+import { render, screen, waitFor } from '@testing-library/react-native';
 import type { ReactNode } from 'react';
 import { Platform } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -16,6 +16,12 @@ import { SheetHost } from '@/ui/overlays/SheetHost';
 
 import Privacy from './Privacy';
 
+let mockRefused = false;
+jest.mock('@/api/routeAccess', () => ({
+    ...jest.requireActual('@/api/routeAccess'),
+    useDeviceRefused: () => mockRefused,
+}));
+
 // The web project's renderer can't mount react-native-web's DOM or the sheet host.
 const describeNative = Platform.OS === 'web' ? describe.skip : describe;
 
@@ -26,9 +32,13 @@ function pathOf(url: string): string {
 }
 
 describeNative('Settings > Privacy on a paired phone', () => {
-    afterEach(() => useConnectionStore.setState({ connection: null }));
+    afterEach(() => {
+        mockRefused = false;
+        useConnectionStore.setState({ connection: null });
+    });
 
-    it('shows Local only read-only with the PC-only note, and sends no settings change', async () => {
+    it('shows Local only read-only with the PC-only note when the route is refused, and sends no settings change', async () => {
+        mockRefused = true;
         useConnectionStore.setState({ connection: { baseUrl: BASE, pcId: 'pc-1', pinned: true } });
         const { fetch, calls } = createRecordingFetch((call) => {
             if (pathOf(call.url) === '/api/settings') return jsonResponse({ network_policy: 'cloud_allowed', policy_notices: [] });
@@ -51,6 +61,29 @@ describeNative('Settings > Privacy on a paired phone', () => {
         expect(await screen.findByTestId('privacy-pc-only')).toBeTruthy();
         expect(screen.queryByTestId('privacy-local-only')).toBeNull();
         expect(calls.filter((c) => c.method === 'PUT' && pathOf(c.url) === '/api/settings')).toEqual([]);
+        queryClient.clear();
+    });
+
+    it('leaves the Local only switch enabled on a paired phone the PC allows', async () => {
+        useConnectionStore.setState({ connection: { baseUrl: BASE, pcId: 'pc-1', pinned: true } });
+        const { fetch } = createRecordingFetch((call) =>
+            pathOf(call.url) === '/api/settings' ? jsonResponse({ network_policy: 'cloud_allowed', policy_notices: [] }) : jsonResponse({ detail: 'Not Found' }, 404),
+        );
+        const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+        const wrap = ({ children }: { children: ReactNode }) => (
+            <QueryClientProvider client={queryClient}>
+                <GaiaClientProvider client={createHttpClient({ baseUrl: BASE, fetch })}>
+                    <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 800 }, insets: { top: 0, left: 0, right: 0, bottom: 0 } }}>
+                        <ThemeProvider>
+                            <SheetHost>{children}</SheetHost>
+                        </ThemeProvider>
+                    </SafeAreaProvider>
+                </GaiaClientProvider>
+            </QueryClientProvider>
+        );
+        await render(<Privacy />, { wrapper: wrap });
+        await waitFor(() => expect(screen.getByTestId('privacy-local-only')).toBeEnabled());
+        expect(screen.queryByTestId('privacy-pc-only')).toBeNull();
         queryClient.clear();
     });
 });
