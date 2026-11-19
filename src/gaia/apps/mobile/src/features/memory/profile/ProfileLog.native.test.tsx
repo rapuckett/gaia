@@ -12,11 +12,6 @@ import type { LogLine } from './useProfileRun';
 
 const describeNative = Platform.OS === 'web' ? describe.skip : describe;
 
-const LINES = [
-    { kind: 'progress', text: 'Scanning installed applications...' },
-    { kind: 'finding', text: 'Bookmarks cooking blogs and Calgary transit pages' },
-] as unknown as LogLine[];
-
 const wrap = ({ children }: { children: React.ReactNode }) => (
     <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 800 }, insets: { top: 0, left: 0, right: 0, bottom: 0 } }}>
         <ThemeProvider>{children}</ThemeProvider>
@@ -24,15 +19,14 @@ const wrap = ({ children }: { children: React.ReactNode }) => (
 );
 
 describeNative('Scan log', () => {
-    it('grows to its content once the scan is done, so no line spills past the border', async () => {
-        await render(<Log lines={LINES} running={false} />, { wrapper: wrap });
-        expect(StyleSheet.flatten(screen.getByTestId('profile-log').props.style).maxHeight).toBeUndefined();
-    });
-
-    it('clips to its cap while scanning', async () => {
-        await render(<Log lines={LINES} running />, { wrapper: wrap });
-        const style = StyleSheet.flatten(screen.getByTestId('profile-log').props.style);
-        expect(style.overflow).toBe('hidden');
-        expect(style.maxHeight).toBeGreaterThan(0);
+    it('keeps every line in a scroll box that clips at its border', async () => {
+        const many = Array.from({ length: 50 }, (_, i) => ({ kind: 'log', text: `Line ${i + 1}` })) as LogLine[];
+        await render(<Log lines={many} />, { wrapper: wrap });
+        expect(screen.getByText('Line 1')).toBeTruthy();
+        expect(screen.getByText('Line 50')).toBeTruthy();
+        const box = screen.getByTestId('profile-log');
+        expect(box.type).toBe('RCTScrollView');
+        expect(StyleSheet.flatten(box.props.style).maxHeight).toBeLessThanOrEqual(200);
+        expect(StyleSheet.flatten(box.parent?.props.style).overflow).toBe('hidden');
     });
 });

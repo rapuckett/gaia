@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
 import type { ReactNode } from 'react';
 import { Platform } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -140,7 +140,7 @@ describeNative('ProfilePane', () => {
         return events;
     }
 
-    it('lists every finding of a scan shaped as a paired phone gets it, and puts the review in sight', async () => {
+    it('lists every finding of a scan shaped as a paired phone gets it, with the whole log in its box', async () => {
         const events = deviceScan();
         const count = (type: string) => events.filter((e) => e.type === type).length;
         expect({ log: count('log'), finding: count('finding'), done: count('done') }).toEqual({ log: 28, finding: 21, done: 1 });
@@ -149,11 +149,10 @@ describeNative('ProfilePane', () => {
         await screen.findByTestId('profile-discovery-review');
         expect(screen.getAllByRole('checkbox')).toHaveLength(21);
         expect(screen.getByTestId('profile-discovery-save')).toBeTruthy();
-        expect(screen.getByText('Done. 21 items discovered.')).toBeTruthy();
-        expect(screen.queryByText(/Scanning Git identity/)).toBeNull();
-        fireEvent.press(screen.getByTestId('profile-log-toggle'));
-        expect(await screen.findByText(/Scanning Git identity/)).toBeTruthy();
-        expect(screen.getByText('Show less')).toBeTruthy();
+        const log = within(screen.getByTestId('profile-log'));
+        expect(log.getByText(/Scanning Git identity/)).toBeTruthy();
+        expect(log.getAllByText(/^Found: /)).toHaveLength(21);
+        expect(log.getByText('Done. 21 items discovered.')).toBeTruthy();
     });
 
     it.each([

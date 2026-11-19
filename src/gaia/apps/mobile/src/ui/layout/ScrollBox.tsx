@@ -1,7 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { useState, type ReactNode } from 'react';
+import { useRef, useState, type ComponentRef, type ReactNode } from 'react';
 import { ScrollView, View } from 'react-native';
 import { Icon } from '../controls/Icon';
 import { ChevronDown } from '../icons';
@@ -9,6 +9,8 @@ import { useTheme } from '../theme/ThemeProvider';
 
 /** Height of the strip under a hinted box that holds the chevron, outside the scrolling viewport. */
 const HINT_STRIP = 24;
+/** How near the bottom, in points, still counts as at the end for `stickToEnd`. */
+const END_SLOP = 16;
 
 export interface ScrollBoxProps {
     /** Height in points at which the content starts to scroll. */
@@ -17,13 +19,20 @@ export interface ScrollBoxProps {
     testID?: string;
     /** Shows a chevron at the bottom edge while there is more below, so a cut line reads as "scroll", not as clipped. */
     hint?: boolean;
+    /** Follows new content to the end, except while the person has scrolled up; back at the bottom, it follows again. */
+    stickToEnd?: boolean;
 }
 
 /** A bounded region that scrolls vertically (a tool step's output); never sideways, so long lines wrap unless the child is an `HScroll`. */
-export function ScrollBox({ maxHeight, children, testID, hint = false }: ScrollBoxProps) {
+export function ScrollBox({ maxHeight, children, testID, hint = false, stickToEnd = false }: ScrollBoxProps) {
     const { colors, radius, space } = useTheme();
     const [box, setBox] = useState({ view: 0, content: 0 });
     const [offset, setOffset] = useState(0);
+    const scroller = useRef<ComponentRef<typeof ScrollView>>(null);
+    const atEnd = useRef(true);
+    const follow = () => {
+        if (stickToEnd && atEnd.current) scroller.current?.scrollToEnd({ animated: false });
+    };
     // Past maxHeight (less the 1 pt border each side) the box reserves a hint strip, so the chevron never covers text.
     const overflows = hint && box.content > maxHeight - 2;
     const more = overflows && box.content > box.view + 1 && offset < box.content - box.view - 1;
@@ -38,13 +47,24 @@ export function ScrollBox({ maxHeight, children, testID, hint = false }: ScrollB
             }}
         >
             <ScrollView
+                ref={scroller}
                 nestedScrollEnabled
                 showsVerticalScrollIndicator
                 style={{ maxHeight: maxHeight - 2 - (overflows ? HINT_STRIP : 0) }}
                 contentContainerStyle={{ padding: space.md }}
-                onLayout={hint ? (e) => setBox((b) => ({ ...b, view: e.nativeEvent.layout.height })) : undefined}
-                onContentSizeChange={hint ? (_w, h) => setBox((b) => ({ ...b, content: h })) : undefined}
-                onScroll={hint ? (e) => setOffset(e.nativeEvent.contentOffset.y) : undefined}
+                onLayout={(e) => {
+                    if (hint) setBox((b) => ({ ...b, view: e.nativeEvent.layout.height }));
+                    follow();
+                }}
+                onContentSizeChange={(_w, h) => {
+                    if (hint) setBox((b) => ({ ...b, content: h }));
+                    follow();
+                }}
+                onScroll={(e) => {
+                    const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
+                    if (hint) setOffset(contentOffset.y);
+                    if (stickToEnd) atEnd.current = contentOffset.y + layoutMeasurement.height >= contentSize.height - END_SLOP;
+                }}
                 scrollEventThrottle={64}
                 testID={testID}
             >
