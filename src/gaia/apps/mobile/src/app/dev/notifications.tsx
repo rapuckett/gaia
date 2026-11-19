@@ -63,7 +63,9 @@ function Body({ scene }: { scene: NotificationScene }) {
     if (scene.view === 'gate') {
         return (
             <ScreenBannerProvider banner={null}>
-                <SetupGate>{placeholder}</SetupGate>
+                <SetupGate>
+                    <Screen>{placeholder}</Screen>
+                </SetupGate>
             </ScreenBannerProvider>
         );
     }
