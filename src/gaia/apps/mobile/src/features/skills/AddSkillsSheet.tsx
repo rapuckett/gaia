@@ -1,7 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { isolate } from '@webui/i18n/registry';
+import { isMessageKey, isolate } from '@webui/i18n/registry';
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { Share, View } from 'react-native';
@@ -12,7 +12,6 @@ import { useDeviceRefused } from '@/api/routeAccess';
 import { GaiaApiError } from '@/api/errors';
 import { useGaiaClient } from '@/data';
 import { queryKeys } from '@/data/queries';
-import { isMessageKey } from '@webui/i18n/registry';
 import { describeHttpFailure, technicalDetail, useT, type Translate } from '@/i18n/useT';
 import { Badge, Button, Disclosure, Divider, Ltr, Notice, Row, Sheet, Stack, Switch, TextField, Text } from '@/ui';
 
@@ -52,13 +51,13 @@ export function AddSkillsSheet({ open, onClose, seed }: { open: boolean; onClose
     const [denied, setDenied] = useState(false);
     const refused = routeRefused || denied;
     const [picked, setPicked] = useState<Set<string>>(new Set());
-    const [allowCode, setAllowCode] = useState(false);
+    const [allowCode, setAllowCode] = useState(!!seed?.allowCode);
     const { ask, sheet: confirmSheet } = useConfirmSheet();
     const [adding, setAdding] = useState(false);
     const [failedOpen, setFailedOpen] = useState(false);
     const queryClient = useQueryClient();
     const [result, setResult] = useState<LinkAddResult | null>(null);
-    const [url, setUrl] = useState('');
+    const [url, setUrl] = useState(seed?.read ?? '');
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<{ text: string; detail?: string } | null>(null);
     const [preview, setPreview] = useState<LinkPreview | null>(null);
@@ -77,7 +76,7 @@ export function AddSkillsSheet({ open, onClose, seed }: { open: boolean; onClose
         return () => controller.abort();
     }, [open, client, t]);
 
-    const read = async (link: string): Promise<LinkPreview | null> => {
+    const read = async (link: string, withCode = false): Promise<LinkPreview | null> => {
         const trimmed = link.trim();
         if (!trimmed || !client) return null;
         setBusy(true);
@@ -87,7 +86,7 @@ export function AddSkillsSheet({ open, onClose, seed }: { open: boolean; onClose
         try {
             const p = await client.previewSkillLink(trimmed);
             setPreview(p);
-            setPicked(new Set(p.skills.filter((s) => addable(s, false)).map((s) => s.name)));
+            setPicked(new Set(p.skills.filter((s) => addable(s, withCode)).map((s) => s.name)));
             return p;
         } catch (err) {
             setError(describeHttpFailure(err, t));
@@ -118,7 +117,7 @@ export function AddSkillsSheet({ open, onClose, seed }: { open: boolean; onClose
     const submit = async (from: LinkPreview, names: string[], withCode: boolean) => {
         const shipsCode = withCode && from.skills.some((s) => names.includes(s.name) && s.has_code);
         if (shipsCode) {
-            const audit = 'mobileApp.mem.beta.discovery.audit';
+            const audit: string = 'mobileApp.mem.beta.discovery.audit';
             const sure = await ask({
                 title: t('mobileApp.skills.link.codeConfirm.title'),
                 body: [t('mobileApp.skills.link.codeConfirm.body')],
@@ -135,9 +134,7 @@ export function AddSkillsSheet({ open, onClose, seed }: { open: boolean; onClose
     useEffect(() => {
         if (!open || !client || !seed?.read || seeded.current) return;
         seeded.current = true;
-        setUrl(seed.read);
-        if (seed.allowCode) setAllowCode(true);
-        void read(seed.read).then((p) => {
+        void read(seed.read, !!seed.allowCode).then((p) => {
             if (p && (seed.add || seed.confirm)) {
                 const names = p.skills.filter((s) => addable(s, !!seed.allowCode)).map((s) => s.name);
                 void (seed.confirm ? submit : add)(p, names, !!seed.allowCode);
@@ -176,7 +173,6 @@ export function AddSkillsSheet({ open, onClose, seed }: { open: boolean; onClose
     const failed = Object.entries(result?.failed ?? {});
 
     return (
-        <>
         <Sheet
             open={open}
             onClose={close}
@@ -313,10 +309,9 @@ export function AddSkillsSheet({ open, onClose, seed }: { open: boolean; onClose
                         ) : null}
                     </Stack>
                 ) : null}
+                {confirmSheet}
             </Stack>
         </Sheet>
-        {confirmSheet}
-        </>
     );
 }
 

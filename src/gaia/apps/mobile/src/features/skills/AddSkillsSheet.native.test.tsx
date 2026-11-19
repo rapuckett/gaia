@@ -28,7 +28,7 @@ const describeNative = Platform.OS === 'web' ? describe.skip : describe;
 const FRAME = { frame: { x: 0, y: 0, width: 390, height: 800 }, insets: { top: 0, left: 0, right: 0, bottom: 0 } };
 function wrapper(client: ReturnType<typeof createFakeClient>) {
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    return ({ children }: { children: ReactNode }) => (
+    const Wrapper = ({ children }: { children: ReactNode }) => (
         <QueryClientProvider client={queryClient}>
             <GaiaClientProvider client={client}>
                 <SafeAreaProvider initialMetrics={FRAME}>
@@ -39,6 +39,7 @@ function wrapper(client: ReturnType<typeof createFakeClient>) {
             </GaiaClientProvider>
         </QueryClientProvider>
     );
+    return Wrapper;
 }
 async function readLink(link: string) {
     fireEvent.changeText(await screen.findByLabelText('Link to a skill or skills library'), link);
@@ -84,7 +85,7 @@ describeNative('AddSkillsSheet', () => {
 
         expect(screen.getByTestId('skills-link-pick-docs-lookup').props.accessibilityState?.disabled).toBe(true);
         fireEvent.press(screen.getByText('Add 1'));
-        await screen.findByText('Added notes.');
+        await screen.findByText(/^Added .*notes.*\.$/);
         expect(adds).toEqual([{ url: PREVIEW.link, names: ['notes'], pin: 'abc', allowCode: false }]);
         expect(screen.queryByText('Add skills that run code?')).toBeNull();
         expect(screen.getByText('1 not added')).toBeTruthy();
@@ -104,12 +105,13 @@ describeNative('AddSkillsSheet', () => {
         await screen.findByText('docs-lookup');
 
         fireEvent.press(screen.getByTestId('skills-link-allow-code'));
-        fireEvent.press(await screen.findByTestId('skills-link-pick-docs-lookup'));
+        await waitFor(() => expect(screen.getByTestId('skills-link-pick-docs-lookup').props.accessibilityState?.disabled).toBe(false));
+        fireEvent.press(screen.getByTestId('skills-link-pick-docs-lookup'));
         fireEvent.press(await screen.findByText('Add 1'));
         await screen.findByText('Add skills that run code?');
         expect(adds).toEqual([]);
         fireEvent.press(screen.getByText('Add with code'));
-        await screen.findByText('Added docs-lookup.');
+        await screen.findByText(/^Added .*docs-lookup.*\.$/);
         expect(adds).toEqual([{ url: PREVIEW.link, names: ['docs-lookup'], pin: 'abc', allowCode: true }]);
     });
 
@@ -120,7 +122,8 @@ describeNative('AddSkillsSheet', () => {
         await readLink(PREVIEW.link);
         await screen.findByText('docs-lookup');
         fireEvent.press(screen.getByTestId('skills-link-allow-code'));
-        fireEvent.press(await screen.findByTestId('skills-link-pick-docs-lookup'));
+        await waitFor(() => expect(screen.getByTestId('skills-link-pick-docs-lookup').props.accessibilityState?.disabled).toBe(false));
+        fireEvent.press(screen.getByTestId('skills-link-pick-docs-lookup'));
         fireEvent.press(await screen.findByText('Add 1'));
         await screen.findByText('Add skills that run code?');
         fireEvent.press(screen.getByTestId('confirm-cancel'));

@@ -23,6 +23,7 @@ import type {
     LemonadeFound,
     LemonadeTarget,
     LemonadeTargetBody,
+    LinkAddResult,
     LinkPreview,
     LocalModelStatus,
     MCPServerStatus,
