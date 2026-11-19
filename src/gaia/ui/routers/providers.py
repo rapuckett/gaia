@@ -350,6 +350,19 @@ def _key_slot(provider: str) -> str:
     return f"cloud-key:{provider}"
 
 
+#: The gateway's bound-key read; never ``_key_slot(AMD)``, whose readers get a ``str``.
+_GATEWAY_RECORD_SLOT = f"{_key_slot(AMD)}:v2"
+
+
+def _discard_key_reads(provider: str) -> None:
+    """Forget every in-flight read of *provider*'s stored key."""
+    from gaia.connectors.credential_wait import discard
+
+    discard(_key_slot(provider))
+    if provider == AMD:
+        discard(_GATEWAY_RECORD_SLOT)
+
+
 #: What the last stored-key read found, per provider: None when nothing is
 #: stored, else the key's hint ("" when too short to show). Never the key.
 _STORED_KEY_SEEN: Dict[str, Optional[str]] = {}
@@ -436,12 +449,18 @@ def _bounded_gateway_key() -> Optional["GatewayKey"]:
     """The stored gateway key with its bound address; raises like ``_bounded_recall``."""
     from gaia.connectors.credential_wait import read_within
     from gaia.llm import cloud_keys
+    from gaia.llm.gateway import GatewayError, GatewayKey
 
     record = read_within(
-        _key_slot(AMD),
+        _GATEWAY_RECORD_SLOT,
         cloud_keys.recall_gateway_key,
         f"your saved {_NAMES[AMD]} key",
     )
+    if record is not None and not isinstance(record, GatewayKey):
+        raise GatewayError(
+            f"Reading the saved {_NAMES[AMD]} key returned a "
+            f"{type(record).__name__}, not the key with its address."
+        )
     _note_stored_key(AMD, record.key if record else None)
     return record
 
@@ -2219,21 +2238,27 @@ def _restore_gateway(
     """:func:`_put_back_gateway`, raising the 502 *failed* when it couldn't.
 
     *saved* left out reads the stored key now, bound to *previous*'s address if
-    it predates bindings.
+    it predates bindings. A read that fails still puts the old address back,
+    and the 502 says why when the old key was needed.
     """
     from gaia.connectors.credential_wait import (
         CredentialStoreLocked,
         CredentialStoreWaiting,
     )
+    from gaia.llm.gateway import GatewayError
 
+    unread = None
     try:
         if saved is _READ_SAVED_KEY:
-            saved = _bounded_gateway_key()
+            try:
+                saved = _bounded_gateway_key()
+            except (CredentialStoreLocked, CredentialStoreWaiting, GatewayError) as e:
+                unread, saved = e, None
         reason = _put_back_gateway(previous, saved)
-    except (CredentialStoreLocked, CredentialStoreWaiting) as e:
-        reason = str(e)
     finally:
         saved = None
+    if reason is not None and unread is not None:
+        reason = f"reading the saved key failed ({unread}); {reason}"
     if reason is None:
         return
     logger.error(
@@ -2317,7 +2342,6 @@ def _connect_device_gateway(
     sends it to the new one, and a failed move puts that gateway back with it.
     Every failure reads :data:`DEVICE_GATEWAY_DETAIL`.
     """
-    from gaia.connectors.credential_wait import discard
     from gaia.connectors.store import retry_keyring
     from gaia.llm.cloud_keys import CloudKeyError, remember_key
     from gaia.llm.gateway import GatewayUnreachable, same_gateway_url
@@ -2334,7 +2358,7 @@ def _connect_device_gateway(
             f"{_NAMES[AMD]} gateway. Change it on that server.",
         )
     retry_keyring()
-    discard(_key_slot(AMD))
+    _discard_key_reads(AMD)
     audit_approval(request, f"{_NAMES[AMD]} gateway change submitted")
     with _gateway_move_lock:
         try:
@@ -2491,10 +2515,8 @@ def _connect_provider(
     # Connecting needs the key store, so it may ask the OS again.
     retry_keyring()
     if key:
-        from gaia.connectors.credential_wait import discard
-
         # A read from before this key was pasted must not be served after it.
-        discard(_key_slot(provider))
+        _discard_key_reads(provider)
         if not on_pc:
             audit_approval(request, f"{_NAMES[provider]} API key submitted")
     try:
@@ -2788,7 +2810,6 @@ def _connect_on_users_server(provider: str) -> Dict[str, Any]:
 )
 def forget_provider_key(provider: str, request: Request) -> Dict[str, Any]:
     """Clear the key from Lemonade and from the OS credential store."""
-    from gaia.connectors.credential_wait import discard
     from gaia.connectors.errors import ConnectorsError
     from gaia.llm.cloud_keys import forget_key
 
@@ -2809,7 +2830,7 @@ def forget_provider_key(provider: str, request: Request) -> Dict[str, Any]:
             if leftover:
                 _uninstall(provider)
         removed = forget_key(provider) or leftover
-        discard(_key_slot(provider))
+        _discard_key_reads(provider)
         _note_stored_key(provider, None)
     except ProviderError as e:
         _raise(e, request)

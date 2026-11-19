@@ -2418,6 +2418,86 @@ def test_a_failed_restore_is_a_502_that_names_no_key(
     assert _stored(bound_gateway) == {"key": OLD_KEY, "base_url": OLD_URL}
 
 
+def test_the_gateway_key_read_never_gets_the_bare_key_reads_answer(monkeypatch):
+    """The key hint's read and the gateway's bound read run at once; each gets its own."""
+    bare_key = "bare-gateway-key-0123456789"
+    in_flight = threading.Event()
+
+    def slow_bare_key(provider):
+        in_flight.set()
+        time.sleep(0.3)
+        return bare_key
+
+    monkeypatch.setattr(cloud_keys, "recall_key", slow_bare_key)
+    monkeypatch.setattr(
+        cloud_keys, "recall_gateway_key", lambda: gateway.GatewayKey(OLD_KEY, OLD_URL)
+    )
+    got = {}
+    hint = threading.Thread(
+        target=lambda: got.update(bare=providers._bounded_recall(providers.AMD))
+    )
+    hint.start()
+    assert in_flight.wait(5)
+    got["record"] = providers._bounded_gateway_key()
+    hint.join(5)
+    assert got == {"bare": bare_key, "record": gateway.GatewayKey(OLD_KEY, OLD_URL)}
+
+    stuck = threading.Event()
+    monkeypatch.setattr(credential_wait, "WAIT_SECONDS", 0.05)
+    monkeypatch.setattr(cloud_keys, "recall_key", lambda p: stuck.wait(5))
+    monkeypatch.setattr(cloud_keys, "recall_gateway_key", lambda: stuck.wait(5))
+    with pytest.raises(credential_wait.CredentialStoreWaiting):
+        providers._bounded_recall(providers.AMD)
+    with pytest.raises(credential_wait.CredentialStoreWaiting):
+        providers._bounded_gateway_key()
+    assert credential_wait.in_flight_count() == 2
+    providers._discard_key_reads(providers.AMD)
+    assert credential_wait.in_flight_count() == 0
+    stuck.set()
+
+
+def test_a_restore_whose_key_read_breaks_still_puts_the_address_back(
+    client, lemonade, bound_gateway, monkeypatch, caplog
+):
+    """An unexpected answer from the key read is a loud 502 with the reason,
+    never a 500 that leaves the gateway half moved."""
+    real_read = cloud_keys.recall_gateway_key
+    rejected = []
+
+    def recall_gateway_key():
+        return "a-bare-key-not-a-record" if rejected else real_read()
+
+    def reject_the_new_key(body):
+        rejected.append(body["api_key"] == NEW_KEY)
+        return 401, {"error": {"message": "unauthorized"}}
+
+    def drop_key(body):
+        # A fresh entry, so the snapshot taken before the move keeps its key.
+        lemonade.cloud["amd"] = {
+            **lemonade.cloud["amd"],
+            "runtime_key_set": False,
+            "models_discovered": False,
+        }
+        return 200, {}
+
+    monkeypatch.setattr(cloud_keys, "recall_gateway_key", recall_gateway_key)
+    lemonade.answers[("POST", "cloud/auth")] = reject_the_new_key
+    lemonade.answers[("DELETE", "cloud/auth/amd")] = drop_key
+    with caplog.at_level(logging.ERROR):
+        resp = client.post(
+            "/api/providers/amd/connect",
+            json={"api_key": NEW_KEY, "base_url": NEW_URL},
+        )
+    assert rejected == [True]
+    assert resp.status_code == 502, resp.text
+    assert "couldn't restore the old one" in resp.json()["detail"]
+    assert lemonade.cloud["amd"]["base_url"] == OLD_URL
+    assert "reading the saved key failed" in caplog.text
+    assert "returned a str" in caplog.text
+    for key in (OLD_KEY, NEW_KEY):
+        assert key not in resp.text and key not in caplog.text
+
+
 def test_device_gateway_moves_wait_for_each_other(
     device_client, lemonade, bound_gateway, monkeypatch
 ):
