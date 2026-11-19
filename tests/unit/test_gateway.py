@@ -65,6 +65,19 @@ def isolated_state(tmp_path, monkeypatch):
     return tmp_path / "gateway.json"
 
 
+@pytest.fixture(autouse=True)
+def vault(monkeypatch):
+    """GAIA's credential store over a dict, so no test here reads the OS keychain."""
+    secrets = {}
+    monkeypatch.setattr("gaia.connectors.store.verify_keyring_backend", lambda: None)
+    monkeypatch.setattr("gaia.connectors.store.save_secret", secrets.__setitem__)
+    monkeypatch.setattr("gaia.connectors.store.peek_secret", secrets.get)
+    monkeypatch.setattr(
+        "gaia.connectors.store.delete_secret", lambda n: secrets.pop(n, None)
+    )
+    return secrets
+
+
 # --------------------------------------------------------------------------
 # install — the call must be one Lemonade will accept
 # --------------------------------------------------------------------------

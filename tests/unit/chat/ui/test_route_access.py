@@ -484,6 +484,19 @@ def _request_path(key):
     return method, re.sub(r"\{[^}]+\}", "x", path)
 
 
+@pytest.fixture(autouse=True)
+def vault(monkeypatch):
+    """GAIA's credential store over a dict, so no test here reads the OS keychain."""
+    from gaia.connectors import store
+
+    secrets = {}
+    monkeypatch.setattr(store, "verify_keyring_backend", lambda: None)
+    monkeypatch.setattr(store, "save_secret", secrets.__setitem__)
+    monkeypatch.setattr(store, "peek_secret", secrets.get)
+    monkeypatch.setattr(store, "delete_secret", lambda n: secrets.pop(n, None))
+    return secrets
+
+
 @pytest.fixture(scope="module")
 def setup(tmp_path_factory):
     app = create_app(db_path=":memory:")
@@ -2687,6 +2700,29 @@ def test_a_device_probe_failure_never_says_why(setup, monkeypatch):
     assert all(_LEMONADE_KEY not in m for m in on_pc | on_device)
     # A second try inside the limit is refused before anything is dialed.
     assert clients["device"].post(path, json=body, headers=UI).status_code == 429
+
+
+def test_a_device_probe_failure_without_a_status_reads_the_same(setup, monkeypatch):
+    from gaia.llm import lemonade_choice
+    from gaia.ui.routers import lemonade
+
+    app, clients, _ = setup
+    _lemonade_target_stubs(monkeypatch)
+    app.state.device_action_times = {}
+
+    def unsaved(url, key):
+        raise lemonade_choice.LemonadeChoiceError("10.0.0.9 refused on 8443", None)
+
+    monkeypatch.setattr(lemonade_choice, "use_external", unsaved)
+    resp = clients["device"].post(
+        "/api/lemonade/target",
+        json={"mode": "external", "base_url": "https://10.0.0.9:8443", "confirm": True},
+        headers=UI,
+    )
+    assert resp.status_code == 422
+    assert resp.json() == {
+        "detail": {"message": lemonade.DEVICE_PROBE_ERROR, "status": None}
+    }
 
 
 def _audit_lines(run):

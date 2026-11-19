@@ -198,9 +198,8 @@ def _use_external_from_device(request: Request, body: TargetRequest) -> None:
             e.status or "not saved",
             e,
         )
-        detail = DEVICE_PROBE_ERROR if e.status else DEVICE_SWITCH_ERROR
         raise HTTPException(
-            status_code=422, detail={"message": detail, "status": None}
+            status_code=422, detail={"message": DEVICE_PROBE_ERROR, "status": None}
         ) from e
 
 
