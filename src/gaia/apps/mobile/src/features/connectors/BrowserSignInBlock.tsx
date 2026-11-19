@@ -47,6 +47,37 @@ export function browserSignInNotice(failed: Failed, name: string, t: ReturnType<
     }
 }
 
+/** The wait while the browser is open on this phone or the PC finishes the sign-in. */
+export function BrowserSignInWaiting({ state, name, onCancel }: { state: 'browser' | 'finishing'; name: string; onCancel(): void }) {
+    const t = useT();
+    return (
+        <Surface tone="secondary" border radius="md" padding="md" testID="browser-sign-in-block">
+            <Stack gap="sm">
+                <View accessibilityLiveRegion="polite">
+                    <Row gap="sm">
+                        <Spinner size="sm" />
+                        <Text role="label" tone="secondary">
+                            {state === 'browser' ? t('mobileApp.connectors.browserWaiting', { name }) : t('mobileApp.connectors.browserFinishing')}
+                        </Text>
+                    </Row>
+                </View>
+                <Text role="caption" tone="muted">{t('mobileApp.connectors.browserHint')}</Text>
+                {state === 'browser' ? (
+                    <Row gap="sm" wrap>
+                        <Button
+                            size="sm"
+                            label={t.bare('settings.key.cancel')}
+                            accessibilityLabel={t('settings.key.cancel')}
+                            onPress={onCancel}
+                            testID="browser-sign-in-cancel"
+                        />
+                    </Row>
+                ) : null}
+            </Stack>
+        </Surface>
+    );
+}
+
 /** Connect for a connector whose sign-in runs in a browser (Google): the browser opens on this phone, and the PC finishes the sign-in and keeps the account. */
 export function BrowserSignInBlock({ connector }: { connector: ConnectorRow }) {
     const t = useT();
@@ -54,34 +85,7 @@ export function BrowserSignInBlock({ connector }: { connector: ConnectorRow }) {
     const name = connector.display_name;
 
     if (signIn.state === 'done') return null;
-    if (signIn.state === 'browser' || signIn.state === 'finishing') {
-        return (
-            <Surface tone="secondary" border radius="md" padding="md" testID="browser-sign-in-block">
-                <Stack gap="sm">
-                    <View accessibilityLiveRegion="polite">
-                        <Row gap="sm">
-                            <Spinner size="sm" />
-                            <Text role="label" tone="secondary">
-                                {signIn.state === 'browser' ? t('mobileApp.connectors.browserWaiting', { name }) : t('mobileApp.connectors.browserFinishing')}
-                            </Text>
-                        </Row>
-                    </View>
-                    <Text role="caption" tone="muted">{t('mobileApp.connectors.browserHint')}</Text>
-                    {signIn.state === 'browser' ? (
-                        <Row gap="sm" wrap>
-                            <Button
-                                size="sm"
-                                label={t.bare('settings.key.cancel')}
-                                accessibilityLabel={t('settings.key.cancel')}
-                                onPress={cancel}
-                                testID="browser-sign-in-cancel"
-                            />
-                        </Row>
-                    ) : null}
-                </Stack>
-            </Surface>
-        );
-    }
+    if (signIn.state === 'browser' || signIn.state === 'finishing') return <BrowserSignInWaiting state={signIn.state} name={name} onCancel={cancel} />;
     return (
         <Stack gap="sm">
             <Row gap="sm" wrap>

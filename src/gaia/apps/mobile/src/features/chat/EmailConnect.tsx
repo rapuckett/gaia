@@ -16,7 +16,7 @@ const MAILBOXES: readonly EmailProvider[] = ['google', 'microsoft', 'microsoft_w
 
 /**
  * The desktop's email connect block on a reply that reports a mailbox sign-in error: Microsoft
- * accounts sign in with a code from here, and Google is connected on the PC.
+ * accounts sign in with a code from here, and Google in this phone's browser (on a paired phone; else on the PC).
  */
 export function EmailConnect({ content }: { content: string }) {
     const t = useT();
