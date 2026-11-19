@@ -19,10 +19,11 @@ a key). The calls mirror ``tui/internal/lemonade/cloud.go`` and
 
 from __future__ import annotations
 
+import asyncio
 import os
 import threading
 import time
-from typing import Any, Callable, Dict, List, Literal, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Literal, NoReturn, Optional, Tuple, Union
 from urllib.parse import urlparse
 
 import requests
@@ -94,12 +95,20 @@ _NON_CHAT_LABELS = {
 _TIMEOUT = 60
 
 
+GATEWAY_INSECURE_HTTP = "gateway_insecure_http"
+_INSECURE_GATEWAY_DETAIL = (
+    "The AMD Gateway address must start with https://. "
+    "Change it on the PC running GAIA, then connect again."
+)
+
+
 class ProviderError(Exception):
     """A provider call failed, with the remedy."""
 
-    def __init__(self, message: str, status: int = 502):
+    def __init__(self, message: str, status: int = 502, code: Optional[str] = None):
         super().__init__(message)
         self.status = status
+        self.code = code
 
 
 class _ModelListFailed(ProviderError):
@@ -212,7 +221,7 @@ def _cloud_error(
         if not install and isinstance(message, str) and "is not installed" in message:
             return ProviderError(
                 f"Lemonade has no cloud provider registered for {name}, so it "
-                "cannot accept a key yet. Open Settings > Model and connect it "
+                "cannot accept a key yet. Open Settings › Model and connect it "
                 "again, then try again.",
                 409,
             )
@@ -232,6 +241,14 @@ def _cloud_error(
             "the key blank to keep using it.",
             409,
         )
+    # Matched here and never echoed: a refusal of a plaintext-HTTP gateway.
+    if (
+        status == 400
+        and isinstance(message, str)
+        and "uses http://" in message
+        and "allow_insecure_http" in message
+    ):
+        return ProviderError(_INSECURE_GATEWAY_DETAIL, 422, GATEWAY_INSECURE_HTTP)
     message = (message if echo_body else None) or f"HTTP {status}"
     return ProviderError(f"Lemonade could not configure {name}: {message}.", 502)
 
@@ -1458,6 +1475,10 @@ def _raise(
     request: Optional[Request] = None,
     key: Optional[str] = None,
 ) -> None:
+    if e.code:
+        raise HTTPException(
+            status_code=e.status, detail={"message": str(e), "code": e.code}
+        ) from e
     detail = surface_wording(str(e), "agent_ui")
     detail = _caller_detail(e, detail, request, key)
     raise HTTPException(status_code=e.status, detail=detail) from e
@@ -1743,6 +1764,188 @@ def _install(provider: str, registration: Dict[str, Any]) -> None:
         raise _cloud_error(provider, status, result, install=True)
 
 
+def _uninstall(provider: str) -> None:
+    """Remove *provider*'s cloud registration from Lemonade."""
+    status, result = _lemonade(
+        "POST", "uninstall", {"backend": "cloud", "provider": provider}
+    )
+    if status >= 400:
+        raise _cloud_error(provider, status, result, echo_body=False)
+
+
+def _undo_registration(
+    provider: str, before: Optional[Dict[str, Any]], failure: str
+) -> None:
+    """Remove the registration this request made; one that was already there stays.
+
+    Raises *failure* plus the cleanup's own error when the removal fails.
+    """
+    if before is not None:
+        return
+    try:
+        _uninstall(provider)
+    except ProviderError as e:
+        logger.error(
+            "Could not remove the %s registration after a failed connect: %s",
+            provider,
+            e,
+        )
+        raise ProviderError(
+            f"{failure} GAIA also could not remove the registration it just "
+            f"made: {e} Open Settings › Model and disconnect {_NAMES[provider]} "
+            "to clear it.",
+            502,
+        ) from e
+
+
+def _holds_key(entry: Optional[Dict[str, Any]]) -> bool:
+    return bool(entry and (entry.get("env_var_set") or entry.get("runtime_key_set")))
+
+
+def _restore_key(
+    provider: str, before: Optional[Dict[str, Any]], known_models: bool = False
+) -> None:
+    """Give Lemonade back the key it held before a failed replace, and read it back.
+
+    An environment key needs nothing back: dropping the new key lets Lemonade
+    read the environment again. *known_models* restarts known-models mode with
+    the kept key, since the replace had to leave it.
+    """
+    from gaia.connectors.credential_wait import (
+        CredentialStoreLocked,
+        CredentialStoreWaiting,
+    )
+
+    reason = None
+    old = None
+    try:
+        if known_models:
+            reason = _restore_known_models(provider)
+        elif before.get("env_var_set"):
+            status, _ = _lemonade("DELETE", f"cloud/auth/{provider}")
+            if status >= 400 and status != 404:
+                reason = f"clearing the new key answered HTTP {status}"
+        else:
+            old = _usable_key(provider)
+            if not old:
+                reason = "GAIA holds no copy of the old key"
+            else:
+                status, _ = _lemonade(
+                    "POST", "cloud/auth", {"provider": provider, "api_key": old}
+                )
+                if status >= 400:
+                    reason = f"handing back the old key answered HTTP {status}"
+        if (
+            reason is None
+            and not known_models
+            and not _holds_key(_cloud_entry(provider))
+        ):
+            reason = "Lemonade reports no key afterwards"
+    except (ProviderError, CredentialStoreLocked, CredentialStoreWaiting) as e:
+        reason = str(e)
+    finally:
+        del old
+    if reason is None:
+        return
+    logger.error(
+        "Could not restore the previous %s key after a failed replace: %s",
+        provider,
+        reason,
+    )
+    # Raised outside the handler, so a paired device sees this text, not the cause's.
+    raise ProviderError(
+        f"{_NAMES[provider]} didn't accept the new key, and GAIA couldn't restore "
+        "the old one. Enter a working key in Settings › Model.",
+        502,
+    )
+
+
+def _restore_known_models(provider: str) -> Optional[str]:
+    """Serve known models on the kept key again; returns why not, if it could not."""
+    from gaia.connectors.credential_wait import (
+        CredentialStoreLocked,
+        CredentialStoreWaiting,
+    )
+    from gaia.llm.cloud_keys import CloudKeyError, ensure_authenticated
+    from gaia.llm.fireworks_known_models import KnownModelsError, use_known_models
+    from gaia.llm.lemonade_embedded import EmbeddedLemonade, EmbeddedLemonadeError
+
+    old = None
+    try:
+        status, _ = _lemonade("DELETE", f"cloud/auth/{provider}")
+        if status >= 400 and status != 404:
+            return f"clearing the new key answered HTTP {status}"
+        old = _usable_key(provider)
+        if not old:
+            return "GAIA holds no copy of the old key"
+        # The start reads the kept key itself; a POST would drop the entries.
+        use_known_models(EmbeddedLemonade())
+        ensure_authenticated(provider, recall=lambda: old)
+    except (
+        CloudKeyError,
+        EmbeddedLemonadeError,
+        KnownModelsError,
+        requests.RequestException,
+    ) as e:
+        return f"restarting with the known models failed: {e}"
+    except (ProviderError, CredentialStoreLocked, CredentialStoreWaiting) as e:
+        return str(e)
+    finally:
+        del old
+    entry = _cloud_entry(provider)
+    if not _holds_key(entry):
+        return "Lemonade reports no key afterwards"
+    # A list that answers again drops the known models; the old key then works.
+    if not (_known_models_active(provider) or entry.get("models_discovered")):
+        return "the known models did not come back"
+    return None
+
+
+def _back_to_known_models(provider: str, failure: ProviderError) -> NoReturn:
+    """Setup failed after leaving known-models mode: restart it, then raise *failure*."""
+    reason = _restore_known_models(provider)
+    if reason is None:
+        raise failure
+    logger.error(
+        "Could not restore the known %s models after a failed setup: %s",
+        provider,
+        reason,
+    )
+    name = _NAMES[provider]
+    raise ProviderError(
+        f"{name} couldn't be set up, and GAIA couldn't restore the models it was "
+        f"using. {failure} Connect {name} again in Settings › Model.",
+        502,
+    ) from failure
+
+
+def _refuse_replacement(
+    provider: str,
+    key: str,
+    before: Optional[Dict[str, Any]],
+    on_pc: bool,
+    known_models: bool = False,
+) -> NoReturn:
+    """A new key found no models: say why, with the old key put back first."""
+    from gaia.llm.lemonade_launcher import gaia_runs_lemonade
+
+    name = _NAMES[provider]
+    try:
+        detail = _list_outage_detail(
+            provider, key, on_pc, gaia_runs_lemonade(_base_url())
+        )
+        failure = ProviderError(
+            f"{name} could not list its models ({detail}), so GAIA couldn't "
+            f"check the new key and kept the one you had. Connect again once "
+            f"{name} recovers.",
+            503,
+        )
+    except ProviderError as e:
+        failure = e
+    _restore_key(provider, before, known_models)
+    raise failure
+
+
 # Can restore and persist the last model, so a cross-site GET must not reach it.
 @router.get(
     "/api/providers/active",
@@ -1865,21 +2068,48 @@ def connect_provider(
         return _connect_on_users_server(provider)
     try:
         _require_loopback(_base_url())
-        if key and _known_models_active(provider):
+        # Read before leaving: the restart drops the key and the registration.
+        known_before = bool(key) and _known_models_active(provider)
+        if known_before:
             _leave_known_models()
-        _install(provider, registration)
+        try:
+            before = _cloud_entry(provider)
+            _install(provider, registration)
+        except ProviderError as e:
+            if known_before:
+                _back_to_known_models(provider, e)
+            raise
         remembered, remember_error = False, None
         if key:
+            replacing = known_before or _holds_key(before)
             _HANDED_ENV_KEYS.pop(provider, None)
-            status, result = _lemonade(
-                "POST", "cloud/auth", {"provider": provider, "api_key": key}
-            )
+            try:
+                status, result = _lemonade(
+                    "POST", "cloud/auth", {"provider": provider, "api_key": key}
+                )
+            except ProviderError as e:
+                if known_before:
+                    _back_to_known_models(provider, e)
+                raise
             if status >= 400:
-                raise _cloud_error(provider, status, result, echo_body=False)
+                rejected = _cloud_error(provider, status, result, echo_body=False)
+                # A 409 means Lemonade kept its key; known models were still left.
+                if known_before or (replacing and rejected.status != 409):
+                    _restore_key(provider, before, known_before)
+                elif rejected.status == 422:
+                    _undo_registration(provider, before, str(rejected))
+                raise rejected
+            if not result.get("models_discovered") and replacing:
+                _refuse_replacement(provider, key, before, on_pc, known_before)
             if not result.get("models_discovered"):
                 # Lemonade stores a key without checking it; don't leave a dud behind.
                 _lemonade("DELETE", f"cloud/auth/{provider}")
-                _use_known_models(provider, key, on_pc=on_pc)
+                try:
+                    _use_known_models(provider, key, on_pc=on_pc)
+                except ProviderError as e:
+                    if e.status == 422:
+                        _undo_registration(provider, before, str(e))
+                    raise
                 remembered = True
             else:
                 try:
@@ -1938,13 +2168,15 @@ def connect_provider(
         del key
     view = _provider_view(provider, entry)
     if not view["models_discovered"]:
-        raise HTTPException(
-            status_code=422,
-            detail=(
-                f"{_NAMES[provider]} is registered but discovered no models. "
-                "Paste a valid API key."
-            ),
+        detail = (
+            f"{_NAMES[provider]} is registered but discovered no models. "
+            "Paste a valid API key."
         )
+        try:
+            _undo_registration(provider, before, detail)
+        except ProviderError as e:
+            _raise(e, request)
+        raise HTTPException(status_code=422, detail=detail)
     return {**view, "remembered": remembered, "remember_error": remember_error}
 
 
@@ -1956,43 +2188,13 @@ def _use_known_models(
     from gaia.llm.fireworks_known_models import KnownModelsError, use_known_models
     from gaia.llm.lemonade_embedded import EmbeddedLemonade, EmbeddedLemonadeError
     from gaia.llm.lemonade_launcher import gaia_runs_lemonade
-    from gaia.llm.lemonade_tls import ca_store_problem
-    from gaia.llm.providers.fireworks import ModelListState, check_model_list
 
     name = _NAMES[provider]
     runs_lemonade = gaia_runs_lemonade(_base_url())
-    ca_problem = ca_store_problem() if runs_lemonade else None
-    if ca_problem:
-        if not on_pc:
-            ca_problem = (
-                "The PC's certificate store needs fixing before GAIA can reach "
-                f"{name}. Fix it on the PC, then try again."
-            )
-        raise ProviderError(ca_problem, 503)
-    check = check_model_list(key) if provider == FIREWORKS else None
-    if check is not None and check.state is ModelListState.OK:
-        from gaia.llm import lemonade_client
-
-        log = lemonade_client.embedded_lemonade_log_path(_base_url())
-        if not on_pc:
-            where = "The model server's log on the PC"
-        else:
-            where = str(log) if log else "The model server's log"
-        raise ProviderError(
-            f"{name} accepted that key, but the model server discovered no "
-            f"models with it, so the key is not the problem. {where} says why; "
-            "paste the key again once that is fixed.",
-            502,
-        )
-    if check is None or check.state is not ModelListState.FAILING:
-        raise ProviderError(
-            f"{name} did not accept that key (no models were discovered). "
-            "Check the key and try again.",
-            422,
-        )
     outage = (
-        f"{name} could not list its models ({check.detail}). It did not reject "
-        "your key, so there is no need to replace it."
+        f"{name} could not list its models "
+        f"({_list_outage_detail(provider, key, on_pc, runs_lemonade)}). It did not "
+        "reject your key, so there is no need to replace it."
     )
     if persist_key:
         try:
@@ -2025,6 +2227,49 @@ def _use_known_models(
             f"switch to the models it already knows: {e}",
             503,
         ) from e
+
+
+def _list_outage_detail(
+    provider: str, key: str, on_pc: bool, runs_lemonade: bool
+) -> str:
+    """Why *key* found no models: raises unless the model list itself is failing.
+
+    Returns the list's failure, the one case where the key is not to blame.
+    """
+    from gaia.llm.lemonade_tls import ca_store_problem
+    from gaia.llm.providers.fireworks import ModelListState, check_model_list
+
+    name = _NAMES[provider]
+    ca_problem = ca_store_problem() if runs_lemonade else None
+    if ca_problem:
+        if not on_pc:
+            ca_problem = (
+                "The PC's certificate store needs fixing before GAIA can reach "
+                f"{name}. Fix it on the PC, then try again."
+            )
+        raise ProviderError(ca_problem, 503)
+    check = check_model_list(key) if provider == FIREWORKS else None
+    if check is not None and check.state is ModelListState.OK:
+        from gaia.llm import lemonade_client
+
+        log = lemonade_client.embedded_lemonade_log_path(_base_url())
+        if not on_pc:
+            where = "The model server's log on the PC"
+        else:
+            where = str(log) if log else "The model server's log"
+        raise ProviderError(
+            f"{name} accepted that key, but the model server discovered no "
+            f"models with it, so the key is not the problem. {where} says why; "
+            "paste the key again once that is fixed.",
+            502,
+        )
+    if check is None or check.state is not ModelListState.FAILING:
+        raise ProviderError(
+            f"{name} did not accept that key (no models were discovered). "
+            "Check the key and try again.",
+            422,
+        )
+    return check.detail
 
 
 def _leave_known_models() -> None:
@@ -2092,13 +2337,18 @@ def forget_provider_key(provider: str, request: Request) -> Dict[str, Any]:
         raise HTTPException(status_code=422, detail="Local models have no key.")
     try:
         # The user's own server keeps its keys; only GAIA's copy is removed.
+        leftover = False
         if not _uses_users_server():
             if _known_models_active(provider):
                 _leave_known_models()
+            entry = _cloud_entry(provider)
+            leftover = entry is not None and not _holds_key(entry)
             status, body = _lemonade("DELETE", f"cloud/auth/{provider}")
             if status >= 400 and status != 404:
                 raise _cloud_error(provider, status, body)
-        removed = forget_key(provider)
+            if leftover:
+                _uninstall(provider)
+        removed = forget_key(provider) or leftover
         discard(_key_slot(provider))
         _note_stored_key(provider, None)
     except ProviderError as e:
@@ -2124,12 +2374,53 @@ def forget_provider_key(provider: str, request: Request) -> Dict[str, Any]:
     response_model=ProviderKeyStoreRetry,
     response_model_exclude_unset=True,
 )
-def retry_key_store() -> Dict[str, Any]:
-    """Let the next read ask the OS to unlock the key store again (Try again)."""
+async def retry_key_store(request: Request) -> Dict[str, Any]:
+    """Let the next read ask the OS to unlock the key store again (Try again).
+
+    From a paired device the keys are read now, so the device hears
+    ``device_prompt`` while the PC's prompt is up and how it was answered.
+    """
+    from gaia.connectors.credential_wait import CredentialStoreWaiting
     from gaia.connectors.store import retry_keyring
 
+    from ..devices.prompts import (
+        DevicePromptTimeout,
+        limit_device_rate,
+        watch_key_store,
+    )
+
+    if is_local_pc(request):
+        retry_keyring()
+        return {"retrying": True}
+    limit_device_rate(request, "keyStoreRetry")
     retry_keyring()
+    try:
+        await watch_key_store(
+            request, "keyStoreRetry", lambda: asyncio.to_thread(_read_stored_keys)
+        )
+    except DevicePromptTimeout:
+        logger.warning("Nobody answered the PC's key store prompt for a device")
+    except CredentialStoreWaiting as e:
+        # Closed or still locked: the device heard ``denied``; GET shows the state.
+        logger.info("Key store stayed locked after a device's retry: %s", e)
     return {"retrying": True}
+
+
+def _read_stored_keys() -> None:
+    """Read each cloud provider's stored key, waiting out the OS's prompt."""
+    from gaia.connectors.credential_wait import read_within
+    from gaia.llm import cloud_keys
+
+    from ..devices import DEVICE_PROMPT_TIMEOUT_SECONDS
+
+    for provider in (FIREWORKS, AMD):
+        key = read_within(
+            _key_slot(provider),
+            lambda p=provider: cloud_keys.recall_key(p),
+            f"your saved {_NAMES[provider]} key",
+            timeout=DEVICE_PROMPT_TIMEOUT_SECONDS + 5,
+        )
+        _note_stored_key(provider, key)
 
 
 @router.get(

@@ -36,6 +36,7 @@ from .. import security, warmup
 from ..agent_loop import resolve_agent_mode
 from ..database import ChatDatabase
 from ..dependencies import get_db
+from ..devices.changes import record_device_change
 from ..models import (
     DownloadProgress,
     InitTaskInfo,
@@ -1230,6 +1231,21 @@ def _load_newly_selected_model(db: ChatDatabase) -> None:
         warmup.request_warm_up("model setting", fresh=True, model=model)
 
 
+#: Settings a paired device may change: the ones PC Settings shows.
+DEVICE_SETTINGS = frozenset({"custom_model", "dynamic_tools", "network_policy"})
+
+
+def _refuse_device_only_fields(request: SettingsUpdateRequest) -> None:
+    """403 for a field PC Settings doesn't show, so a device can't reach it either."""
+    hidden = sorted(request.model_fields_set - DEVICE_SETTINGS)
+    if hidden:
+        raise HTTPException(
+            status_code=403,
+            detail=f"A paired device can't change {', '.join(hidden)}. Change it "
+            "on the PC.",
+        )
+
+
 @router.put("/api/settings", response_model=SettingsResponse)
 async def update_settings(
     request: SettingsUpdateRequest,
@@ -1258,9 +1274,12 @@ async def update_settings(
         "network_policy" in request.model_fields_set
         and request.network_policy is not None
     )
+    on_pc = security.is_local_pc(http_request)
     # Before any field is saved, so a refused request changes nothing.
     if policy_requested:
-        security.require_local_pc(http_request)
+        security.require_pc_or_allowed_device(http_request)
+    if security.allowed_device(http_request) is not None:
+        _refuse_device_only_fields(request)
 
     if request.custom_model is not None:
         value = request.custom_model.strip() if request.custom_model else None
@@ -1360,8 +1379,17 @@ async def update_settings(
 
         try:
             result = local_only.apply_policy(request.network_policy)
-        except (ValueError, OSError) as e:
+        except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e)) from e
+        except OSError as e:
+            detail = str(e)
+            if not on_pc:
+                logger.error("Network policy for a device not saved: %s", e)
+                detail = (
+                    "GAIA couldn't change Local only on the PC. Open Settings "
+                    "\u203a Privacy on the PC to see why."
+                )
+            raise HTTPException(status_code=400, detail=detail) from e
         policy_warnings = result["warnings"]
         policy_notices = result["notices"]
         if result["policy"] is local_only.NetworkPolicy.LOCAL_AI_ONLY:
@@ -1376,6 +1404,14 @@ async def update_settings(
                 db.set_setting("custom_model", None)
                 _load_newly_selected_model(db)
         logger.info("Network policy set: %s", result["policy"].value)
+        if not on_pc:
+            local = result["policy"] is local_only.NetworkPolicy.LOCAL_AI_ONLY
+            security.audit_approval(
+                http_request, f"Local only turned {'on' if local else 'off'}"
+            )
+            record_device_change(
+                http_request, "localOnlyOn" if local else "localOnlyOff"
+            )
 
     from .providers import custom_model_override
 

@@ -4,6 +4,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { formatSize } from '@webui/components/setup/format';
+import { isolate } from '@webui/i18n/registry';
 
 import type { ModelNeed } from '@/api/client.types';
 import { DOWNLOAD_MISS_LIMIT, DOWNLOAD_NO_ROW_LIMIT, DOWNLOAD_POLL_MS } from '@/api/constants';
@@ -177,7 +178,7 @@ export function NeedPrompt({ need, initial }: { need: ModelNeed; initial?: NeedP
                 <Text role="body">{needLine(t, model.name, model.size_gb, freeGb)}</Text>
                 {model.source ? (
                     <Text role="label" tone="secondary">
-                        {`${t('setup.contents.from')} ${model.source}`}
+                        {`${t('setup.contents.from')} ${isolate(model.source, 'ltr')}`}
                     </Text>
                 ) : null}
                 <Text role="label" tone="secondary">

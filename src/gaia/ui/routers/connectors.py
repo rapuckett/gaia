@@ -37,6 +37,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 from pathlib import Path
 from typing import Any, AsyncIterator, Dict, List, Literal, Optional, Union
 
@@ -103,6 +104,7 @@ from gaia.connectors.store import (
 )
 
 from ..devices.changes import record_device_change
+from ..devices.prompts import DevicePromptTimeout, limit_device_rate, watch_key_store
 from ..models import WireModel
 from ..security import (
     allowed_device,
@@ -133,6 +135,40 @@ forwarded_router = APIRouter(prefix="/v1/connections", tags=["connections"])
 # ─────────────────────────────────────────────────────────────────
 # CSRF guard (plan amendment A8)
 # ─────────────────────────────────────────────────────────────────
+
+
+#: ``builtin:<id>``, ``installed:<id>``, ``native:<id>`` or ``custom:<hash>:<id>``.
+_AGENT_ID_RE = re.compile(
+    r"(?:builtin|installed|native|custom:[0-9a-f]{1,64}):[A-Za-z0-9][A-Za-z0-9._-]{0,127}"
+)
+
+
+async def _record_change(
+    request: Request, kind: str, connector_id: str, **params: Any
+) -> None:
+    """A device's change to *connector_id*, for the PC's list of what it changed."""
+    await asyncio.to_thread(
+        record_device_change,
+        request,
+        kind,
+        connector=REGISTRY.get(connector_id).display_name,
+        connector_id=connector_id,
+        **params,
+    )
+
+
+def _checked_agent_id(agent_id: str) -> str:
+    """422 unless *agent_id* is a namespaced agent id."""
+    if not _AGENT_ID_RE.fullmatch(agent_id):
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "error": "invalid_agent_id",
+                "message": "An agent id is namespaced, like 'builtin:chat' or "
+                "'installed:email'.",
+            },
+        )
+    return agent_id
 
 
 def _require_mcp_server(connector_id: str) -> None:
@@ -1095,12 +1131,6 @@ def _refuse_device_sign_in(
         raise HTTPException(
             status_code=404, detail=f"Unknown connector: {connector_id!r}"
         )
-    if config.get("grant_agents"):
-        raise HTTPException(
-            status_code=403,
-            detail="Choose which agents may use this account on the PC running "
-            "GAIA. A paired device can only save the setup.",
-        )
     if spec.type == "oauth_pkce" and not config.get("save_only"):
         raise HTTPException(
             status_code=403,
@@ -1157,7 +1187,12 @@ async def configure_connector(
         raise _http_error_for(request, e) from e
 
     if not is_local_pc(request):
-        audit_approval(request, f"connector {connector_id} set up")
+        granted = sorted(config.get("grant_agents") or {})
+        audit_approval(
+            request,
+            f"connector {connector_id} set up"
+            + (f" and granted to {', '.join(granted)}" if granted else ""),
+        )
         await asyncio.to_thread(
             record_device_change,
             request,
@@ -1174,6 +1209,29 @@ async def configure_connector(
     return result
 
 
+async def _device_health_check(request: Request, connector_id: str) -> Dict[str, Any]:
+    from gaia.connectors._loop import _get_persistent_loop
+
+    # The checks read the key store synchronously; a prompt must not stall this loop.
+    def start():
+        return asyncio.wrap_future(
+            asyncio.run_coroutine_threadsafe(
+                health_check(connector_id), _get_persistent_loop()
+            )
+        )
+
+    try:
+        return await watch_key_store(request, "connectorTest", start)
+    except DevicePromptTimeout as e:
+        raise HTTPException(
+            status_code=504,
+            detail=(
+                "Nobody answered the key store prompt on the PC within 5 minutes. "
+                "Try again, and approve it on the PC."
+            ),
+        ) from e
+
+
 @router.post(
     "/{connector_id}/test",
     dependencies=[Depends(_require_ui_header), Depends(require_pc_or_allowed_device)],
@@ -1181,10 +1239,20 @@ async def configure_connector(
     response_model_exclude_unset=True,
 )
 async def test_connector(request: Request, connector_id: str) -> Dict[str, Any]:
-    """Run the health check for a connector."""
+    """Run the health check for a connector.
+
+    From a paired device it runs off this loop, so the device hears
+    ``device_prompt`` while the PC's key store prompt is up.
+    """
+    on_pc = is_local_pc(request)
+    if not on_pc:
+        limit_device_rate(request, "connectorTest")
     retry_keyring()
     try:
-        result = await health_check(connector_id)
+        if on_pc:
+            result = await health_check(connector_id)
+        else:
+            result = await _device_health_check(request, connector_id)
     except KeyError:
         raise HTTPException(
             status_code=404, detail=f"Unknown connector: {connector_id!r}"
@@ -1230,7 +1298,9 @@ async def disconnect_connector(connector_id: str) -> Response:
     return Response(status_code=204)
 
 
-async def _set_connector_enabled(connector_id: str, enabled: bool) -> Dict[str, Any]:
+async def _set_connector_enabled(
+    connector_id: str, enabled: bool, request: Optional[Request] = None
+) -> Dict[str, Any]:
     """Shared implementation for ``POST /{id}/enable`` and ``POST /{id}/disable``.
 
     The toggle is meaningful only for ``mcp_server`` connectors that have
@@ -1272,7 +1342,9 @@ async def _set_connector_enabled(connector_id: str, enabled: bool) -> Dict[str, 
     try:
         await handler.set_enabled(connector_id, enabled)
     except ConnectorsError as e:
-        raise _raise_http_for(e) from e
+        if request is None:
+            raise _raise_http_for(e) from e
+        raise _http_error_for(request, e) from e
 
     event_name = "connector.enabled" if enabled else "connector.disabled"
     await _emitter.emit(event_name, {"connector_id": connector_id})
@@ -1281,13 +1353,17 @@ async def _set_connector_enabled(connector_id: str, enabled: bool) -> Dict[str, 
 
 @router.post(
     "/{connector_id}/enable",
-    dependencies=[Depends(_require_ui_header), Depends(require_local_pc)],
+    dependencies=[Depends(_require_ui_header), Depends(require_pc_or_allowed_device)],
     response_model=ConnectorSummary,
     response_model_exclude_unset=True,
 )
-async def enable_connector(connector_id: str) -> Dict[str, Any]:
+async def enable_connector(request: Request, connector_id: str) -> Dict[str, Any]:
     """Enable a previously-disabled MCP connector. Tools materialize live."""
-    return await _set_connector_enabled(connector_id, True)
+    summary = await _set_connector_enabled(connector_id, True, request)
+    if not is_local_pc(request):
+        audit_approval(request, f"connector {connector_id} enabled")
+        await _record_change(request, "connectorEnable", connector_id)
+    return summary
 
 
 @router.post(
@@ -1569,15 +1645,15 @@ class ActivationSaved(WireModel):
     auto_granted: bool
 
 
-# Widens what an agent may do with an account, like configure and authorize.
+# Widens what an agent may do with an account, so a device's grant is audited.
 @router.put(
     "/{connector_id}/grants/{agent_id:path}",
-    dependencies=[Depends(_require_ui_header), Depends(require_local_pc)],
+    dependencies=[Depends(_require_ui_header), Depends(require_pc_or_allowed_device)],
     response_model=GrantSaved,
     response_model_exclude_unset=True,
 )
 async def put_grant(
-    connector_id: str, agent_id: str, body: GrantRequest
+    request: Request, connector_id: str, agent_id: str, body: GrantRequest
 ) -> Dict[str, Any]:
     """Write the per-agent grant ledger for ``(connector_id, agent_id)``.
 
@@ -1588,10 +1664,16 @@ async def put_grant(
     routes down), and the same 400 ``scope_not_allowed`` body the authorize
     route already returns.
     """
+    _checked_agent_id(agent_id)
     try:
         grant_agent(connector_id, agent_id, body.scopes)
     except ConnectorsError as e:
-        raise _raise_http_for(e) from e
+        raise _http_error_for(request, e) from e
+    if not is_local_pc(request):
+        audit_approval(request, f"connector {connector_id} granted to {agent_id}")
+        await _record_change(
+            request, "connectorGrant", connector_id, agent_id=agent_id, granted=True
+        )
     await _emitter.emit(
         "connector.grant.changed",
         {"connector_id": connector_id, "agent_id": agent_id, "scopes": body.scopes},
@@ -1604,8 +1686,14 @@ async def put_grant(
     status_code=204,
     dependencies=[Depends(_require_ui_header)],
 )
-async def delete_grant(connector_id: str, agent_id: str) -> Response:
+async def delete_grant(request: Request, connector_id: str, agent_id: str) -> Response:
+    _checked_agent_id(agent_id)
     revoke_agent_grant(connector_id, agent_id)
+    if not is_local_pc(request):
+        audit_approval(request, f"connector {connector_id} grant to {agent_id} revoked")
+        await _record_change(
+            request, "connectorGrant", connector_id, agent_id=agent_id, granted=False
+        )
     await _emitter.emit(
         "connector.grant.changed",
         {"connector_id": connector_id, "agent_id": agent_id, "scopes": []},
@@ -1626,12 +1714,12 @@ async def delete_grant(connector_id: str, agent_id: str) -> Response:
 
 @router.put(
     "/{connector_id}/activations/{agent_id:path}",
-    dependencies=[Depends(_require_ui_header), Depends(require_local_pc)],
+    dependencies=[Depends(_require_ui_header), Depends(require_pc_or_allowed_device)],
     response_model=ActivationSaved,
     response_model_exclude_unset=True,
 )
 async def put_activation(
-    connector_id: str, agent_id: str, body: ActivationRequest
+    request: Request, connector_id: str, agent_id: str, body: ActivationRequest
 ) -> Dict[str, Any]:
     """Activate ``agent_id`` for ``connector_id``.
 
@@ -1640,6 +1728,7 @@ async def put_activation(
     frontend must look up REQUIRED_CONNECTORS scopes for the agent and
     pass them in.
     """
+    _checked_agent_id(agent_id)
     _require_mcp_server(connector_id)
     try:
         auto_granted = activate_connector_for_agent(
@@ -1648,7 +1737,21 @@ async def put_activation(
     except ConfigurationError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except ConnectorsError as e:
-        raise _raise_http_for(e) from e
+        raise _http_error_for(request, e) from e
+    if not is_local_pc(request):
+        audit_approval(
+            request,
+            f"connector {connector_id} turned on for {agent_id}"
+            + (" (granted)" if auto_granted else ""),
+        )
+        await _record_change(
+            request,
+            "connectorActivation",
+            connector_id,
+            agent_id=agent_id,
+            active=True,
+            granted=auto_granted,
+        )
 
     if auto_granted:
         # Auto-grant fired — also surface the grant change so subscribed
@@ -1674,9 +1777,11 @@ async def put_activation(
 @router.delete(
     "/{connector_id}/activations/{agent_id:path}",
     status_code=204,
-    dependencies=[Depends(_require_ui_header), Depends(require_local_pc)],
+    dependencies=[Depends(_require_ui_header), Depends(require_pc_or_allowed_device)],
 )
-async def delete_activation(connector_id: str, agent_id: str) -> Response:
+async def delete_activation(
+    request: Request, connector_id: str, agent_id: str
+) -> Response:
     """Deactivate ``agent_id`` for ``connector_id``. Idempotent.
 
     Non-destructive — the grant is preserved so a later re-activate is
@@ -1687,8 +1792,18 @@ async def delete_activation(connector_id: str, agent_id: str) -> Response:
     # ``connector.activation.changed`` emit fire on one path for all callers
     # (#1226). Previously this called the bare ledger function and emitted
     # inline, bypassing the guard.
+    _checked_agent_id(agent_id)
     _require_mcp_server(connector_id)
     deactivate_connector_for_agent(connector_id, agent_id)
+    if not is_local_pc(request):
+        audit_approval(request, f"connector {connector_id} turned off for {agent_id}")
+        await _record_change(
+            request,
+            "connectorActivation",
+            connector_id,
+            agent_id=agent_id,
+            active=False,
+        )
     return Response(status_code=204)
 
 

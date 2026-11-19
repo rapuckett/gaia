@@ -93,6 +93,8 @@ export function restartControl(s: LocalModelStatus, restarting: boolean): Restar
 
 /** The model a job needs, its size and the PC's free space on one line; "Free:" is bracketed with its own value, never apart from it. */
 export function needLine(t: Translate, name: string, sizeGb: number | null | undefined, freeGb: number | null | undefined): string {
-    const free = freeGb != null ? t.compose((say) => `${say('modelNeeded.free')} ${isolate(formatSize(freeGb), 'ltr')}`) : null;
-    return [isolate(name, 'ltr'), sizeGb != null ? isolate(formatSize(sizeGb), 'ltr') : null, free].filter(Boolean).join(' · ');
+    // A size never wraps between its number and unit.
+    const size = (gb: number) => isolate(formatSize(gb).replace(/ /g, '\u00A0'), 'ltr');
+    const free = freeGb != null ? t.compose((say) => `${say('modelNeeded.free')} ${size(freeGb)}`) : null;
+    return [isolate(name, 'ltr'), sizeGb != null ? size(sizeGb) : null, free].filter(Boolean).join(' · ');
 }

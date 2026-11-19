@@ -167,7 +167,7 @@ function Body({ state }: { state: LiveScene }) {
         return (
             <Stack flex={1}>
                 <MessageListView messages={FIXTURES.many.messages} loading={false} />
-                <JumpButton visible onPress={noop} />
+                <JumpButton visible onPress={noop} areaHeight={600} />
             </Stack>
         );
     }

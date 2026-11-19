@@ -101,6 +101,7 @@ describe('endpoints', () => {
     });
     const methods: Record<keyof typeof ENDPOINTS, string[]> = {
         agentInstallStatus: ['GET'],
+        deviceChanges: ['GET'],
         agents: ['GET'],
         agentsInstall: ['POST'],
         automation: ['DELETE'],
@@ -234,9 +235,12 @@ describe('endpoints', () => {
         connector: ['DELETE'],
         connectorActivation: ['DELETE', 'PUT'],
         connectorActivations: ['GET'],
+        connectorAuthorize: ['POST'],
         connectorAuthorizeDevice: ['POST'],
         connectorConfigure: ['POST'],
         connectorDisable: ['POST'],
+        connectorFlow: ['DELETE'],
+        connectorFlowComplete: ['POST'],
         connectorGrant: ['DELETE', 'PUT'],
         connectorGrants: ['GET'],
         connectorTest: ['POST'],

@@ -75,6 +75,13 @@ PC. The simulator must reach the PC's home-network address, so run both on the s
   iOS, the per-app language on Android 13+ (`modules/gaia-app-language`; Kotlin tests
   `./gradlew :gaia-app-language:testDebugUnitTest`). Below Android 13 the app keeps the pick
   itself (`src/state/locale.ts`). Neither path touches the phone's own language.
+- **Google sign-in from the phone.** Google's sign-in returns to a loopback address, so a paired
+  phone catches it itself: `modules/gaia-oauth-loopback` (Swift `NWListener`, Kotlin
+  `ServerSocket`) listens on the phone's `127.0.0.1` for one `GET /callback`, the browser runs in
+  `ASWebAuthenticationSession` or a Custom Tab (`expo-web-browser`), and the PC, which keeps the
+  PKCE verifier and the account, exchanges the code (`src/features/connectors/browserSignIn.ts`).
+  Without a paired PC, Google stays a connect on the PC. Kotlin tests
+  `./gradlew :gaia-oauth-loopback:testDebugUnitTest`.
 - **Route classes.** The PC's route guards define who may call what. `src/api/routeAccess.gen.ts`
   is generated from them (`python -m gaia.ui.export_route_access` from the repo root) and
   classifies each route as `pc`, `device`, `remote` and so on; do not edit it. `routeAccess.ts`

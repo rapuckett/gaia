@@ -22,6 +22,7 @@ import subprocess
 import sys
 import threading
 import time
+import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
@@ -428,7 +429,8 @@ NO_CLOUD_MODEL = (
 
 #: Setup's own record, in GAIA's home, which ``gaia diagnostics`` bundles.
 SETUP_REPORT = "setup-report.json"
-REPORT_NAME_RE = re.compile(r"diagnostics-\d{8}-\d{6}\.tgz")
+#: A random suffix keeps two reports in the same second apart; older ones lack it.
+REPORT_NAME_RE = re.compile(r"diagnostics-\d{8}-\d{6}(?:-[0-9a-f]{8})?\.tgz")
 _REPORT_TIMEOUT_S = 120
 #: How long a report waits for a failed run's problem report to finish saving.
 _RECORD_WAIT_S = 30
@@ -450,7 +452,8 @@ def write_report(record: Dict[str, Any]) -> Path:
         )
     except OSError as e:
         raise SetupError(f"Couldn't save setup's record in {home}: {e}") from e
-    out = home / f"diagnostics-{time.strftime('%Y%m%d-%H%M%S')}.tgz"
+    stamp = time.strftime("%Y%m%d-%H%M%S")
+    out = home / f"diagnostics-{stamp}-{uuid.uuid4().hex[:8]}.tgz"
     try:
         proc = subprocess.run(
             _gaia_argv("diagnostics", "--output", str(out)),

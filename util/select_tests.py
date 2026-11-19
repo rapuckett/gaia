@@ -18,7 +18,9 @@ For a change that passes the allowlist, two sources say which tests it reaches:
 
 **The coverage map** (``build-map``), from a full run with per-test coverage
 contexts on main. It lists, for each source file, the test files that executed
-it. This is what makes the selection tight: most of ``src/gaia`` imports most of
+it, except lines that more than ``FULL_FRACTION`` of the suite runs in the
+setup or teardown phase (an autouse fixture's work), which say nothing about
+what a test uses. This is what makes the selection tight: most of ``src/gaia`` imports most of
 the rest inside function bodies, so static reading alone would run nearly
 everything for nearly any change.
 
@@ -33,6 +35,8 @@ everything for nearly any change.
 - Tests and tooling that list a directory (``rglob``, ``os.walk``) are affected
   by any file under a directory whose name they spell out.
 - A ``conftest.py`` below the suite root reaches every file beneath it.
+- A change to a module the root ``conftest.py`` imports always adds
+  ``CONFTEST_SMOKE_TEST``, since the map drops that conftest's suite-wide setup.
 - A package ``__init__`` reaches everything under it when it changes, but the
   walk never continues *through* one: ``gaia/__init__`` imports the agent base
   eagerly, and following that would make every test depend on everything.
@@ -85,6 +89,9 @@ from typing import Dict, Iterable, List, Optional, Set, Tuple
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_TEST_ROOT = "tests/unit"
+# Always selected when a change touches a module the root conftest imports: the
+# map drops that conftest's suite-wide setup lines, and this test runs them.
+CONFTEST_SMOKE_TEST = "tests/unit/test_unit_daemon_isolation.py"
 MAP_VERSION = 1
 # The nightly run rebuilds the map; older than this means it stopped.
 MAX_MAP_AGE = timedelta(days=3)
@@ -173,6 +180,8 @@ class Graph:
     spawn_deps: Dict[str, Set[str]] = field(default_factory=_edges)
     imported_modules: Dict[str, Set[str]] = field(default_factory=_edges)
     sources: Dict[str, str] = field(default_factory=dict)
+    # Files the top-level conftests import, at module level or in any fixture.
+    conftest_imports: Set[str] = field(default_factory=set)
 
 
 @dataclass
@@ -619,10 +628,13 @@ def build_graph(repo: Path = REPO_ROOT, files: Optional[List[str]] = None) -> Gr
                 graph.deps[path].add(conftest)
             continue
         fixtures, autouse = _fixture_imports(graph.sources.get(conftest, ""), conftest)
-        if not fixtures:
-            continue
         package = _module_name(conftest, "")
         package = package.rpartition(".")[0] if package else None
+        for node in ast.walk(ast.parse(graph.sources.get(conftest, ""))):
+            if isinstance(node, (ast.Import, ast.ImportFrom)):
+                graph.conftest_imports |= import_files(node, package)
+        if not fixtures:
+            continue
         patched: Set[str] = set()
         for name in autouse:
             for node in fixtures.get(name, ()):
@@ -720,25 +732,47 @@ def load_map(path: Path) -> Tuple[Dict[str, Set[str]], bool]:
     return files, stale
 
 
+_SETUP_PHASES = ("setup", "teardown")
+
+
+def _split_context(context: str) -> Tuple[str, str]:
+    """A pytest-cov context ``<nodeid>|<phase>`` as (test file, phase)."""
+    nodeid, _, phase = context.partition("|")
+    return nodeid.split("::", 1)[0].replace("\\", "/"), phase
+
+
 def build_map(coverage_file: Path, repo: Path = REPO_ROOT) -> dict:
     from coverage import CoverageData
 
     data = CoverageData(basename=str(coverage_file))
     data.read()
-    tests: Dict[str, int] = {}
-    files: Dict[str, Set[int]] = {}
+    lines: Dict[str, List[Set[str]]] = {}
+    suite: Set[str] = set()
     for measured in data.measured_files():
         try:
             rel = Path(measured).resolve().relative_to(repo.resolve()).as_posix()
         except ValueError:
             continue
-        hit: Set[int] = set()
-        for contexts in (data.contexts_by_lineno(measured) or {}).values():
+        lines[rel] = list((data.contexts_by_lineno(measured) or {}).values())
+        for contexts in lines[rel]:
             for context in contexts:
-                test = context.split("::", 1)[0]
+                test, _ = _split_context(context)
+                if test.endswith(".py"):
+                    suite.add(test)
+    tests: Dict[str, int] = {}
+    files: Dict[str, Set[int]] = {}
+    for rel, per_line in lines.items():
+        hit: Set[int] = set()
+        for contexts in per_line:
+            split = [_split_context(c) for c in contexts]
+            fixture_files = {t for t, phase in split if phase in _SETUP_PHASES}
+            shared = len(fixture_files) > FULL_FRACTION * len(suite)
+            for test, phase in split:
                 if not test.endswith(".py"):
                     continue
-                hit.add(tests.setdefault(test.replace("\\", "/"), len(tests)))
+                if shared and phase in _SETUP_PHASES:
+                    continue
+                hit.add(tests.setdefault(test, len(tests)))
         if hit:
             files[rel] = hit
     names = sorted(tests, key=tests.get)
@@ -967,6 +1001,14 @@ def select(
         if len(tests) > FULL_FRACTION * len(all_tests):
             reason = f"{len(tests)} of {len(all_tests)} test files affected"
             tests = all_tests
+    if reason is None and graph.conftest_imports.intersection(changed):
+        if CONFTEST_SMOKE_TEST not in all_tests:
+            raise SystemExit(
+                f"select_tests: {CONFTEST_SMOKE_TEST} is missing from {test_root}, "
+                "but a change touches a module the root conftest imports. Restore "
+                "it, or point CONFTEST_SMOKE_TEST at another fast test."
+            )
+        tests = sorted(set(tests) | {CONFTEST_SMOKE_TEST})
     if platform_only:
         tests = [p for p in tests if is_platform_sensitive(graph, p)]
     detail = reason or f"{len(changed)} changed file(s)"

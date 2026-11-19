@@ -181,12 +181,10 @@ export function disconnectNotice(outcome: DisconnectOutcome | null, connector: C
     return t('settings.connectors.noRevokeApi');
 }
 
-/** The saved OAuth client's status line, as the desktop's OAuth client editor words it. */
-export function oauthClientStatus(connector: ConnectorRow, t: Translate): string | null {
+/** The saved OAuth client as a label and its id (null when none is set), so the id is shown as a literal value of its own. */
+export function oauthClientStatus(connector: ConnectorRow, t: Translate): { label: string; id: string | null } {
     const client = connector.oauth_client;
-    if (!client) return null;
-    const id = isolate(client.client_id ?? '', 'ltr');
-    if (client.source === 'keyring') return t('settings.connectors.savedClient', { id });
-    if (client.source === 'env') return t('settings.connectors.envClient', { id });
-    return t('settings.connectors.noClient');
+    if (client?.source === 'keyring' && client.client_id) return { label: t('mobileApp.connectors.savedClientLabel'), id: client.client_id };
+    if (client?.source === 'env' && client.client_id) return { label: t('mobileApp.connectors.envClientLabel'), id: client.client_id };
+    return { label: t('settings.connectors.noClient'), id: null };
 }

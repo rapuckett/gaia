@@ -70,7 +70,7 @@ function withOrigins<T extends Omit<SavedPc, 'origins'> & { origins?: RouteOrigi
 }
 
 function pairedOf(pc: SavedPc): PairedPc {
-    return { id: pc.id, name: pc.name, connection: connectionOf(pc), pairedAt: pc.pairedAt };
+    return { id: pc.id, name: pc.name, connection: connectionOf(pc), pairedAt: pc.pairedAt, deviceId: pc.deviceId };
 }
 
 function devicePlatform(): 'ios' | 'ipados' | 'android' {

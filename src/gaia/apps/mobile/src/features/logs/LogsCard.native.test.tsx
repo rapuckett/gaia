@@ -24,11 +24,11 @@ const wrap = ({ children }: { children: ReactNode }) => (
 describeNative('LogsCard', () => {
     afterEach(() => useConnectionStore.setState({ connection: null }));
 
-    it('on a paired phone replaces View logs with the PC-only notice, and keeps the button unpaired', async () => {
+    it('shows View logs on a paired phone, now that the PC lets one read its logs, and unpaired', async () => {
         useConnectionStore.setState({ connection: { baseUrl: 'https://pc.local:4443', pcId: 'pc-1', pinned: true } });
         const pinned = await render(<LogsCard />, { wrapper: wrap });
-        expect(screen.getByTestId('advanced-logs-pc-only')).toBeTruthy();
-        expect(screen.queryByTestId('advanced-view-logs')).toBeNull();
+        expect(screen.getByTestId('advanced-view-logs')).toBeTruthy();
+        expect(screen.queryByTestId('advanced-logs-pc-only')).toBeNull();
         pinned.unmount();
 
         useConnectionStore.setState({ connection: null });

@@ -11,6 +11,7 @@ import { hiddenAutomatedCount } from '@webui/utils/sessionGrouping';
 import { useDeleteSession, useMarkRead, useRenameSession, useSessions, useSessionSearch, useSetPinned, useSetupStatus } from '@/data';
 import { ModelStatusPill } from '@/features/model';
 import { openSettings } from '@/features/settings/openSettings';
+import { useGateUnreachable } from '@/features/setup/gateUnreachable';
 import { DownloadChip } from '@/features/setup/DownloadChip';
 import { useDownloadQueue } from '@/features/settings/panes/model/downloadQueue';
 import { chipView } from '@/features/setup/steps/downloadState';
@@ -18,9 +19,9 @@ import { NotificationsEntry } from '@/features/notifications';
 import { GaiaApiError } from '@/api/errors';
 import { describeErrorWith, describeHttpFailure, ltr, useT } from '@/i18n/useT';
 import {
+    Button,
     Chip,
     EmptyState,
-    ErrorState,
     Icon,
     IconButton,
     ListRow,
@@ -37,7 +38,7 @@ import {
     Text,
 } from '@/ui';
 import { TITLE_MAX_FONT_SCALE, useLargeText } from '@/ui/theme/a11y';
-import { Ellipsis, EyeOff, Monitor, SquarePen, X } from '@/ui/icons';
+import { CircleAlert, Ellipsis, EyeOff, Monitor, SquarePen, X } from '@/ui/icons';
 
 import { ChatRowSheets, type RowSheet } from './ChatRowSheets';
 import { declaredNavEntries, type NavEntry } from './navEntries';
@@ -154,6 +155,7 @@ export function ChatDrawerContent({ activeId, onSelect, onClose, onNewChat, onPc
     useMarkReadWhenSeen(activeId, sessions.data?.sessions.find((s) => s.id === activeId)?.unread, markSeen);
     const alert = failure ?? error;
     const largeText = useLargeText();
+    const gateUnreachable = useGateUnreachable();
 
     const navRows = (
         <>
@@ -187,7 +189,7 @@ export function ChatDrawerContent({ activeId, onSelect, onClose, onNewChat, onPc
                 </Stack>
             ) : null}
             {state === 'loading' ? <ListSkeleton rows={8} /> : null}
-            {state === 'error' ? <ErrorState title={describeHttpFailure(sessions.error, t).text} detail={describeHttpFailure(sessions.error, t).detail} onRetry={() => void sessions.refetch()} /> : null}
+            {state === 'error' ? <ListError error={sessions.error} unavailable={gateUnreachable} onRetry={() => void sessions.refetch()} /> : null}
             {state === 'empty' && q === '' ? <EmptyState title={t('sidebar.empty')} /> : null}
             {q !== '' && searchFailed ? (
                 <Notice
@@ -271,6 +273,24 @@ export function ChatDrawerContent({ activeId, onSelect, onClose, onNewChat, onPc
                 onDelete={(id) => remove.mutate(id, outcome('delete'))}
             />
         </Screen>
+    );
+}
+
+/** The chat list's failure, list-sized: it scrolls with the rows and is never clipped. While the main pane already says the PC is unreachable, one muted line with no retry. */
+function ListError({ error, unavailable, onRetry }: { error: unknown; unavailable: boolean; onRetry: () => void }) {
+    const t = useT();
+    const failure = unavailable ? { text: t('mobileApp.chats.listUnavailable'), detail: undefined } : describeHttpFailure(error, t);
+    return (
+        <Stack paddingX="lg" paddingY="sm" gap="sm" align="start">
+            <Row gap="sm" align="start">
+                {unavailable ? null : <Icon icon={CircleAlert} size="sm" tone="danger" />}
+                <Stack flex={1} gap="xs">
+                    <Text role="label" tone="muted" accessibilityRole={unavailable ? undefined : 'alert'}>{failure.text}</Text>
+                    {failure.detail ? <Text role="caption" tone="muted" dir="ltr">{failure.detail}</Text> : null}
+                </Stack>
+            </Row>
+            {unavailable ? null : <Button size="sm" label={t('msg.tryAgain')} onPress={onRetry} />}
+        </Stack>
     );
 }
 

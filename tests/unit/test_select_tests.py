@@ -89,6 +89,7 @@ FILES = {
             return home
         """),
     "tests/unit/__init__.py": "",
+    st.CONFTEST_SMOKE_TEST: "",
     "tests/unit/sub/conftest.py": "from gaia.tools.sinks import go\n",
     "tests/unit/sub/test_in_sub.py": "def test_x():\n    pass\n",
     "tests/unit/test_base.py": "from gaia.core.base import VALUE\n",
@@ -279,6 +280,24 @@ def test_a_fixture_requested_through_another_fixture_is_followed(graph):
     assert "tests/unit/test_chain.py" in _selected(graph, "src/gaia/tools/reader.py")
 
 
+def test_a_change_to_a_conftest_import_adds_the_smoke_test(graph, tmp_path):
+    # reader is imported only inside a non-autouse fixture body, so no static
+    # or map link reaches the smoke test; the guard adds it.
+    narrow = {"src/gaia/tools/reader.py": {ANCHOR}}
+    assert st.CONFTEST_SMOKE_TEST in _selected(
+        graph, "src/gaia/tools/reader.py", coverage=narrow
+    )
+    assert st.CONFTEST_SMOKE_TEST not in _selected(
+        graph, "src/gaia/tools/sinks.py", coverage={"src/gaia/tools/sinks.py": {ANCHOR}}
+    )
+    (tmp_path / st.CONFTEST_SMOKE_TEST).unlink()
+    gone = st.build_graph(
+        repo=tmp_path, files=sorted(set(FILES) - {st.CONFTEST_SMOKE_TEST})
+    )
+    with pytest.raises(SystemExit, match="CONFTEST_SMOKE_TEST"):
+        st.select(gone, ["src/gaia/tools/reader.py"], narrow)
+
+
 def test_a_module_an_autouse_fixture_imports_reaches_every_test(graph):
     sel = st.select(graph, ["src/gaia/core/home.py"], FULL_MAP)
     assert "tests/unit/test_unrelated.py" in sel.tests
@@ -412,6 +431,30 @@ def test_a_mapped_test_that_reaches_nothing_stays_out(graph):
     }
     hit = _selected(graph, "src/gaia/tools/sinks.py", coverage=coverage)
     assert "tests/unit/test_daemon_start.py" not in hit
+
+
+def test_build_map_ignores_suite_wide_fixture_setup(tmp_path):
+    from coverage import CoverageData
+
+    repo = tmp_path / "repo"
+    (repo / "src").mkdir(parents=True)
+    mod = repo / "src" / "mod.py"
+    mod.write_text("\n" * 5, encoding="utf-8")
+    suite = [f"tests/unit/test_{n}.py" for n in "abcde"]
+
+    cov = CoverageData(basename=str(tmp_path / ".coverage"))
+    for test in suite:
+        cov.set_context(f"{test}::test_x|setup")
+        cov.add_lines({str(mod): [1]})  # autouse fixture: runs for every test
+    cov.set_context(f"{suite[0]}::test_x|run")
+    cov.add_lines({str(mod): [2]})
+    cov.set_context(f"{suite[1]}::test_x|setup")
+    cov.add_lines({str(mod): [3]})  # a fixture only some tests request
+    cov.write()
+
+    built = st.build_map(tmp_path / ".coverage", repo=repo)
+    reached = {built["tests"][i] for i in built["files"]["src/mod.py"]}
+    assert reached == {suite[0], suite[1]}
 
 
 @pytest.mark.parametrize("days, stale", [(0, False), (3, False), (4, True)])

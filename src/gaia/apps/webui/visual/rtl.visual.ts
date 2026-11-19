@@ -1962,6 +1962,22 @@ async function withOldFile(page: Page): Promise<void> {
 }
 
 for (const locale of ['ar', 'en']) {
+    test(`a file the server refuses away from the PC is worded in the interface language (${locale})`, async ({ page }) => {
+        await open(page, '', locale, async (p) => {
+            await withOldFile(p);
+            await p.route('**/api/files/browse**', (route) => route.fulfill({
+                status: 403,
+                json: { detail: { code: 'not_in_chat_folders', message: 'Away from the PC, GAIA opens files only from the folders the chat was given. q1-plan.pdf isn\'t in this chat\'s folders.', name: 'q1-plan.pdf' } },
+            }));
+        }, 'dark');
+        await page.locator('.sb').getByRole('button', { name: /Documents/ }).click();
+        await page.getByRole('button', { name: /Browse files/ }).click();
+        const refusal = page.locator('.fb-error');
+        await expect(refusal).toContainText('q1-plan.pdf');
+        if (locale === 'ar') await expect(refusal).toContainText('بعيدًا عن الكمبيوتر');
+        await shot(page, `files-${locale}-refused`);
+    });
+
     test(`dates read in the interface language, not the PC's (${locale})`, async ({ page }) => {
         const month = locale === 'ar' ? ARABIC_MONTH : /Mar/;
         await open(page, '', locale, withOldFile);
@@ -2990,7 +3006,7 @@ for (const locale of ['ar', 'en']) {
         await open(page, '', locale, (p) => withDevices(p, DEVICE_STATES.failed), 'dark');
         await openDevices(page);
         await page.locator('.devices-changes summary').click();
-        await expect(page.locator('.devices-change')).toHaveCount(3);
+        await expect(page.locator('.devices-change')).toHaveCount(6);
         await page.locator('.devices-changes').scrollIntoViewIfNeeded();
         await shot(page, `device-changes-${locale}-open`);
         expect(await audit(page)).toEqual([]);
@@ -3882,12 +3898,12 @@ async function expectVisibleTryAgain(page: Page, locale: string): Promise<void> 
     const retry = page.getByRole('button', { name: /Try again/ });
     await expect(retry).toHaveCount(1);
     await expect(retry).toHaveText(locale === 'ar' ? /حاول مجددًا/ : /Try again/);
-    const opacity = await retry.evaluate((el) => {
+    // The reply fades in as it mounts, so the first frame reads 0; it must settle at 1 without a hover.
+    await expect.poll(() => retry.evaluate((el) => {
         let o = 1;
         for (let at: Element | null = el; at; at = at.parentElement) o *= Number(getComputedStyle(at).opacity);
         return o;
-    });
-    expect(opacity).toBeGreaterThan(0.99);
+    }), { timeout: 5000 }).toBeGreaterThan(0.99);
 }
 
 const FAILED_WITH_REPORT =
@@ -4387,9 +4403,16 @@ test('a browser never shows the install screen, even when the URL asks', async (
     await expect(page.locator('.sb')).toBeVisible();
 });
 
+/** The width Windows 11 gives minimize, maximize and close; a browser reports no controls. */
+const WINDOW_CONTROLS_W = 138;
+
 /** The Windows desktop frame: the window controls are drawn over the app's top-right corner. */
 async function withWindowsControls(page: Page): Promise<void> {
-    await page.addInitScript(() => {
+    await page.addInitScript((w) => {
+        // Set on every document the page loads, so a navigation after goto can't drop it.
+        const width = () => document.documentElement.style.setProperty('--titlebar-controls-w', `${w}px`);
+        if (document.documentElement) width();
+        document.addEventListener('readystatechange', width);
         const calls: unknown[] = [];
         Object.assign(window, {
             __colors: calls,
@@ -4401,7 +4424,7 @@ async function withWindowsControls(page: Page): Promise<void> {
                 },
             },
         });
-    });
+    }, WINDOW_CONTROLS_W);
 }
 
 for (const [locale, settings, beneath] of [['ar', /الإعدادات/, '--bg-sidebar'], ['en', /^Settings$/, '--bg-primary']] as const) {
@@ -4503,16 +4526,12 @@ const refusedColors = (page: Page): Promise<string[]> =>
             .filter((c) => !/^#[\da-f]{6}$/i.test(c)),
     );
 
-/** The width Windows 11 gives minimize, maximize and close; a browser reports no controls. */
-const WINDOW_CONTROLS_W = 138;
-
 for (const locale of ['ar', 'en']) {
     test(`the top notice keeps its action clear of the window controls (${locale})`, async ({ page }) => {
         await open(page, '', locale, async (p) => {
             await withWindowsControls(p);
             await withoutFlagship(p);
         });
-        await page.evaluate((w) => document.documentElement.style.setProperty('--titlebar-controls-w', `${w}px`), WINDOW_CONTROLS_W);
         const notice = page.locator('.app-notice').first();
         await expect(notice.getByRole('button')).toBeVisible();
         const controls = { left: 1400 - WINDOW_CONTROLS_W, bottom: 48 };
@@ -4542,7 +4561,6 @@ for (const locale of ['ar', 'en']) {
                 return route.fulfill({ status: 500, json: { detail: 'The permission service did not answer' } });
             });
         });
-        await page.evaluate((w) => document.documentElement.style.setProperty('--titlebar-controls-w', `${w}px`), WINDOW_CONTROLS_W);
         await page.locator('textarea').first().fill('hello');
         await page.keyboard.press('Enter');
         const error = page.locator('.toast-dismissible');

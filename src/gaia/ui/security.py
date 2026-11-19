@@ -371,15 +371,36 @@ def refuse_on_device_listener(request: Request) -> None:
         )
 
 
+def hide_pc_folders(text: str) -> str:
+    """*text* with GAIA's folder and the user's home folder named, not spelled out.
+
+    For error text sent to a paired device, which has no use for the PC's paths.
+    """
+    from pathlib import Path
+
+    from gaia.home import gaia_home
+
+    for folder, said in (
+        (gaia_home(), "GAIA's folder"),
+        (Path.home(), "your home folder"),
+    ):
+        text = text.replace(str(folder), said)
+    return text
+
+
 def audit_approval(request: Request, what: str) -> None:
     """Record a decision that lets GAIA act, and who made it, in the audit log.
 
     A paired device is named by its id; its token never reaches a log.
     """
-    from gaia.security import audit_logger, ensure_audit_log_handler
+    from gaia.security import audit_logger, ensure_audit_log_handler, escape_control
 
     ensure_audit_log_handler()
-    audit_logger.info("APPROVAL | %s | by %s", what, principal(request))
+    audit_logger.info(
+        "APPROVAL | %s | by %s",
+        escape_control(what),
+        escape_control(principal(request)),
+    )
 
 
 def flagship_only(
