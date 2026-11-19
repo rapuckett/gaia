@@ -7,6 +7,7 @@ import type { MessageKey } from '@webui/i18n/registry';
 
 import type { MemorySettings } from '@/api/client.types';
 import { ENDPOINTS } from '@/api/constants';
+import { GaiaApiError } from '@/api/errors';
 import { useDeviceRefused } from '@/api/routeAccess';
 import { useClearAllMemory, useReinitializeMemory, useUpdateMemorySettings } from '@/data';
 import { describeFailureWith, useT } from '@/i18n/useT';
@@ -56,8 +57,10 @@ export function MemoryAdmin({ settings, notify }: { settings: MemorySettings; no
     const reinit = useReinitializeMemory();
     const [beta, setBeta] = useState<Beta | null>(null);
     const [danger, setDanger] = useState<Danger | null>(null);
-    // Turning discovery consent on runs the same PC scan as a refresh; turning it off works anywhere.
-    const scanRefused = useDeviceRefused('POST', ENDPOINTS.memoryRefreshSystemContext);
+    // Turning consent on is a PUT of the settings; the PC lets an allowed device do it and answers 403 to the rest.
+    const scanRefused = useDeviceRefused('PUT', ENDPOINTS.memorySettings);
+    const [notAllowed, setNotAllowed] = useState(false);
+    const scanRefusedHere = scanRefused || notAllowed;
     const reinitRefused = useDeviceRefused('POST', ENDPOINTS.memoryReinitialize);
     const busy = update.isPending || clear.isPending || reinit.isPending;
 
@@ -73,7 +76,10 @@ export function MemoryAdmin({ settings, notify }: { settings: MemorySettings; no
             else if (updated.system_context_error) notify({ tone: 'danger', text: t('mem.toast.discoveryScanFailed', { error: updated.system_context_error }) });
             else notify({ tone: 'info', text: t('mem.toast.discoveryEnabled', { n: updated.system_context_refresh?.stored ?? 0 }) });
         } catch (error) {
-            fail('mem.toast.settingFailed', error);
+            if (kind === 'discovery' && error instanceof GaiaApiError && error.status === 403) {
+                setNotAllowed(true);
+                notify({ tone: 'info', text: t('mobileApp.settings.pcOnly') });
+            } else fail('mem.toast.settingFailed', error);
         } finally {
             setBeta(null);
         }
@@ -132,10 +138,10 @@ export function MemoryAdmin({ settings, notify }: { settings: MemorySettings; no
                         description={t('mem.settings.discoveryDesc')}
                         value={settings.system_discovery_consent}
                         onValueChange={() => toggle('discovery', settings.system_discovery_consent)}
-                        disabled={busy || (scanRefused && !settings.system_discovery_consent)}
+                        disabled={busy || (scanRefusedHere && !settings.system_discovery_consent)}
                         testID="memory-switch-discovery"
                     />
-                    {scanRefused && !settings.system_discovery_consent ? (
+                    {scanRefusedHere && !settings.system_discovery_consent ? (
                         <Text role="caption" tone="muted" testID="memory-discovery-pc-only">{t('mobileApp.mem.admin.pcOnly')}</Text>
                     ) : null}
                 </Stack>
