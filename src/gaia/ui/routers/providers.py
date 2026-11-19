@@ -23,7 +23,7 @@ import asyncio
 import os
 import threading
 import time
-from typing import Any, Callable, Dict, List, Literal, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Literal, NoReturn, Optional, Tuple, Union
 from urllib.parse import urlparse
 
 import requests
@@ -1798,6 +1798,82 @@ def _undo_registration(
         ) from e
 
 
+def _holds_key(entry: Optional[Dict[str, Any]]) -> bool:
+    return bool(entry and (entry.get("env_var_set") or entry.get("runtime_key_set")))
+
+
+def _restore_key(provider: str, before: Dict[str, Any]) -> None:
+    """Give Lemonade back the key it held before a failed replace, and read it back.
+
+    An environment key needs nothing back: dropping the new key lets Lemonade
+    read the environment again.
+    """
+    from gaia.connectors.credential_wait import (
+        CredentialStoreLocked,
+        CredentialStoreWaiting,
+    )
+
+    reason = None
+    old = None
+    try:
+        if before.get("env_var_set"):
+            status, _ = _lemonade("DELETE", f"cloud/auth/{provider}")
+            if status >= 400 and status != 404:
+                reason = f"clearing the new key answered HTTP {status}"
+        else:
+            old = _usable_key(provider)
+            if not old:
+                reason = "GAIA holds no copy of the old key"
+            else:
+                status, _ = _lemonade(
+                    "POST", "cloud/auth", {"provider": provider, "api_key": old}
+                )
+                if status >= 400:
+                    reason = f"handing back the old key answered HTTP {status}"
+        if reason is None and not _holds_key(_cloud_entry(provider)):
+            reason = "Lemonade reports no key afterwards"
+    except (ProviderError, CredentialStoreLocked, CredentialStoreWaiting) as e:
+        reason = str(e)
+    finally:
+        del old
+    if reason is None:
+        return
+    logger.error(
+        "Could not restore the previous %s key after a failed replace: %s",
+        provider,
+        reason,
+    )
+    # Raised outside the handler, so a paired device sees this text, not the cause's.
+    raise ProviderError(
+        f"{_NAMES[provider]} didn't accept the new key, and GAIA couldn't restore "
+        "the old one. Enter a working key in Settings › Model.",
+        502,
+    )
+
+
+def _refuse_replacement(
+    provider: str, key: str, before: Dict[str, Any], on_pc: bool
+) -> NoReturn:
+    """A new key found no models: say why, with the old key put back first."""
+    from gaia.llm.lemonade_launcher import gaia_runs_lemonade
+
+    name = _NAMES[provider]
+    try:
+        detail = _list_outage_detail(
+            provider, key, on_pc, gaia_runs_lemonade(_base_url())
+        )
+        failure = ProviderError(
+            f"{name} could not list its models ({detail}), so GAIA couldn't "
+            f"check the new key and kept the one you had. Connect again once "
+            f"{name} recovers.",
+            503,
+        )
+    except ProviderError as e:
+        failure = e
+    _restore_key(provider, before)
+    raise failure
+
+
 # Can restore and persist the last model, so a cross-site GET must not reach it.
 @router.get(
     "/api/providers/active",
@@ -1926,15 +2002,21 @@ def connect_provider(
         _install(provider, registration)
         remembered, remember_error = False, None
         if key:
+            replacing = _holds_key(before)
             _HANDED_ENV_KEYS.pop(provider, None)
             status, result = _lemonade(
                 "POST", "cloud/auth", {"provider": provider, "api_key": key}
             )
             if status >= 400:
                 rejected = _cloud_error(provider, status, result, echo_body=False)
-                if rejected.status == 422:
+                # A 409 means Lemonade kept the key it had.
+                if replacing and rejected.status != 409:
+                    _restore_key(provider, before)
+                elif rejected.status == 422:
                     _undo_registration(provider, before, str(rejected))
                 raise rejected
+            if not result.get("models_discovered") and replacing:
+                _refuse_replacement(provider, key, before, on_pc)
             if not result.get("models_discovered"):
                 # Lemonade stores a key without checking it; don't leave a dud behind.
                 _lemonade("DELETE", f"cloud/auth/{provider}")
@@ -2022,43 +2104,13 @@ def _use_known_models(
     from gaia.llm.fireworks_known_models import KnownModelsError, use_known_models
     from gaia.llm.lemonade_embedded import EmbeddedLemonade, EmbeddedLemonadeError
     from gaia.llm.lemonade_launcher import gaia_runs_lemonade
-    from gaia.llm.lemonade_tls import ca_store_problem
-    from gaia.llm.providers.fireworks import ModelListState, check_model_list
 
     name = _NAMES[provider]
     runs_lemonade = gaia_runs_lemonade(_base_url())
-    ca_problem = ca_store_problem() if runs_lemonade else None
-    if ca_problem:
-        if not on_pc:
-            ca_problem = (
-                "The PC's certificate store needs fixing before GAIA can reach "
-                f"{name}. Fix it on the PC, then try again."
-            )
-        raise ProviderError(ca_problem, 503)
-    check = check_model_list(key) if provider == FIREWORKS else None
-    if check is not None and check.state is ModelListState.OK:
-        from gaia.llm import lemonade_client
-
-        log = lemonade_client.embedded_lemonade_log_path(_base_url())
-        if not on_pc:
-            where = "The model server's log on the PC"
-        else:
-            where = str(log) if log else "The model server's log"
-        raise ProviderError(
-            f"{name} accepted that key, but the model server discovered no "
-            f"models with it, so the key is not the problem. {where} says why; "
-            "paste the key again once that is fixed.",
-            502,
-        )
-    if check is None or check.state is not ModelListState.FAILING:
-        raise ProviderError(
-            f"{name} did not accept that key (no models were discovered). "
-            "Check the key and try again.",
-            422,
-        )
     outage = (
-        f"{name} could not list its models ({check.detail}). It did not reject "
-        "your key, so there is no need to replace it."
+        f"{name} could not list its models "
+        f"({_list_outage_detail(provider, key, on_pc, runs_lemonade)}). It did not "
+        "reject your key, so there is no need to replace it."
     )
     if persist_key:
         try:
@@ -2091,6 +2143,49 @@ def _use_known_models(
             f"switch to the models it already knows: {e}",
             503,
         ) from e
+
+
+def _list_outage_detail(
+    provider: str, key: str, on_pc: bool, runs_lemonade: bool
+) -> str:
+    """Why *key* found no models: raises unless the model list itself is failing.
+
+    Returns the list's failure, the one case where the key is not to blame.
+    """
+    from gaia.llm.lemonade_tls import ca_store_problem
+    from gaia.llm.providers.fireworks import ModelListState, check_model_list
+
+    name = _NAMES[provider]
+    ca_problem = ca_store_problem() if runs_lemonade else None
+    if ca_problem:
+        if not on_pc:
+            ca_problem = (
+                "The PC's certificate store needs fixing before GAIA can reach "
+                f"{name}. Fix it on the PC, then try again."
+            )
+        raise ProviderError(ca_problem, 503)
+    check = check_model_list(key) if provider == FIREWORKS else None
+    if check is not None and check.state is ModelListState.OK:
+        from gaia.llm import lemonade_client
+
+        log = lemonade_client.embedded_lemonade_log_path(_base_url())
+        if not on_pc:
+            where = "The model server's log on the PC"
+        else:
+            where = str(log) if log else "The model server's log"
+        raise ProviderError(
+            f"{name} accepted that key, but the model server discovered no "
+            f"models with it, so the key is not the problem. {where} says why; "
+            "paste the key again once that is fixed.",
+            502,
+        )
+    if check is None or check.state is not ModelListState.FAILING:
+        raise ProviderError(
+            f"{name} did not accept that key (no models were discovered). "
+            "Check the key and try again.",
+            422,
+        )
+    return check.detail
 
 
 def _leave_known_models() -> None:
@@ -2163,9 +2258,7 @@ def forget_provider_key(provider: str, request: Request) -> Dict[str, Any]:
             if _known_models_active(provider):
                 _leave_known_models()
             entry = _cloud_entry(provider)
-            leftover = entry is not None and not (
-                entry.get("env_var_set") or entry.get("runtime_key_set")
-            )
+            leftover = entry is not None and not _holds_key(entry)
             status, body = _lemonade("DELETE", f"cloud/auth/{provider}")
             if status >= 400 and status != 404:
                 raise _cloud_error(provider, status, body)
