@@ -3,12 +3,12 @@
 
 import { render, screen } from '@testing-library/react-native';
 import type { ReactNode } from 'react';
-import { StyleSheet, Text } from 'react-native';
+import { Platform, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { DEVELOPMENT_SCHEME } from '@/features/dev/devGallery';
 import { translator } from '@/i18n/useT';
-import { ThemeProvider } from '@/ui';
+import { ThemeProvider, useScreenBanner } from '@/ui';
 import { contentWidth } from '@/ui/tokens/space';
 
 import { reopenSetup, SetupGate } from './SetupGate';
@@ -34,6 +34,17 @@ jest.mock('expo-constants', () => ({
     },
 }));
 
+/** Stands in for a `Screen`: the gate's notice reaches the app through the banner context. */
+const Pane = () => {
+    const banner = useScreenBanner();
+    return (
+        <View testID="pane">
+            <Text>App</Text>
+            <View testID="pane-banner">{banner}</View>
+        </View>
+    );
+};
+
 describe('reopenSetup', () => {
     it('opens setup in re-run mode while the gate is mounted, and says so when it is not', async () => {
         expect(() => reopenSetup()).toThrow(/not mounted/);
@@ -54,7 +65,7 @@ describe('failed upgrade notice', () => {
                 <ThemeProvider>{children}</ThemeProvider>
             </SafeAreaProvider>
         );
-        await render(<SetupGate><Text>App</Text></SetupGate>, { wrapper });
+        await render(<SetupGate><Pane /></SetupGate>, { wrapper });
         expect(screen.getByText('The download was interrupted.')).toBeTruthy();
         expect(screen.queryByText(/Details:/)).toBeNull();
         mockGate = { state: 'ready' };
@@ -63,7 +74,13 @@ describe('failed upgrade notice', () => {
 
 describe('a gallery build with no PC answering', () => {
     const saved = process.env.EXPO_PUBLIC_DEV_GALLERY;
+    const savedDev = __DEV__;
+    // Jest runs with __DEV__ on, which opens the gallery on its own; these cases are about a built app.
+    beforeEach(() => {
+        (globalThis as unknown as { __DEV__: boolean }).__DEV__ = false;
+    });
     afterEach(() => {
+        (globalThis as unknown as { __DEV__: boolean }).__DEV__ = savedDev;
         mockGate = { state: 'ready' };
         if (saved === undefined) delete process.env.EXPO_PUBLIC_DEV_GALLERY;
         else process.env.EXPO_PUBLIC_DEV_GALLERY = saved;
@@ -83,36 +100,36 @@ describe('a gallery build with no PC answering', () => {
     it('opens only the /dev/* scenes, and only in a development-env build', async () => {
         expect(await shows('/dev/messages', { gallery: true, scheme: DEVELOPMENT_SCHEME })).toBe(true);
         expect(await shows('/', { gallery: true, scheme: DEVELOPMENT_SCHEME })).toBe(false);
-        expect(await shows('/dev/messages', { gallery: true, scheme: 'ai.amd.gaia.mobile' })).toBe(false);
         expect(await shows('/dev/messages', { gallery: false, scheme: DEVELOPMENT_SCHEME })).toBe(false);
+    });
+
+    it('opens a production web export made with the flag, but never a production native build', async () => {
+        expect(await shows('/dev/messages', { gallery: true, scheme: 'ai.amd.gaia.mobile' })).toBe(Platform.OS === 'web');
+        expect(await shows('/', { gallery: true, scheme: 'ai.amd.gaia.mobile' })).toBe(false);
     });
 });
 
 describe('app under a notice', () => {
-    it('renders the app outside the capped notice column, so the navigator keeps the full width', async () => {
+    it('shows the notice through the banner context, never in a wrapper above or around the navigator', async () => {
         mockGate = { state: 'serverDown' };
         const wrapper = ({ children }: { children: ReactNode }) => (
             <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 1158, height: 800 }, insets: { top: 0, left: 0, right: 0, bottom: 0 } }}>
                 <ThemeProvider>{children}</ThemeProvider>
             </SafeAreaProvider>
         );
-        await render(<SetupGate><Text>App</Text></SetupGate>, { wrapper });
+        await render(<SetupGate><Pane /></SetupGate>, { wrapper });
         const capped = (node: ReturnType<typeof screen.getByTestId>) => {
-            const found: unknown[] = [];
-            for (let n: typeof node | null = node; n; n = n.parent) found.push(StyleSheet.flatten(n.props.style)?.maxWidth);
-            return found.includes(contentWidth.reading);
+            for (let n: typeof node | null = node; n; n = n.parent) if (StyleSheet.flatten(n.props.style)?.maxWidth === contentWidth.reading) return true;
+            return false;
         };
         const inside = (node: ReturnType<typeof screen.getByTestId>, testID: string) => {
             for (let n: typeof node | null = node; n; n = n.parent) if (n.props.testID === testID) return true;
             return false;
         };
-        const app = screen.getByTestId('setup-gate-app');
-        expect(StyleSheet.flatten(app.props.style)).toMatchObject({ flex: 1 });
-        expect(capped(app)).toBe(false);
-        expect(inside(app, 'setup-gate-notice')).toBe(false);
+        expect(capped(screen.getByTestId('pane'))).toBe(false);
         const retry = screen.getByText(translator('en')('setup.serverDown.setup'));
-        expect(inside(retry, 'setup-gate-notice')).toBe(true);
-        expect(capped(retry)).toBe(true);
+        expect(inside(retry, 'pane-banner')).toBe(true);
+        expect(screen.queryByTestId('setup-gate-notice')).toBeNull();
         mockGate = { state: 'ready' };
     });
 });
