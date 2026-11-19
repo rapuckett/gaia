@@ -28,11 +28,26 @@ const LOG_MAX_HEIGHT = 220;
 export const ProfileDevContext = createContext<{ kind: ProfileKind; save?: boolean } | null>(null);
 
 export function Log({ lines, running }: { lines: LogLine[]; running: boolean }) {
-    const body = (running ? lines.slice(-LIVE_LINES) : lines).map((line, i) => (
+    const t = useT();
+    const [all, setAll] = useState(false);
+    // A real scan logs ~50 lines; folded, its errors and closing line keep the review list in sight.
+    const shown = running ? lines.slice(-LIVE_LINES) : all ? lines : lines.filter((line, i) => line.kind === 'error' || i === lines.length - 1);
+    const foldable = !running && (all || shown.length < lines.length);
+    const body = shown.map((line, i) => (
         <Text key={i} role="caption" tone={line.kind === 'error' ? 'danger' : line.kind === 'finding' ? 'primary' : 'muted'} dir={line.server ? 'ltr' : undefined}>
             {line.server ? isolate(line.text, 'ltr') : line.text}
         </Text>
     ));
+    const toggle = foldable ? (
+        <Button
+            label={t.bare(all ? 'prompt.showLess' : 'prompt.showAllLines', { n: lines.length })}
+            accessibilityLabel={t(all ? 'prompt.showLess' : 'prompt.showAllLines', { n: lines.length })}
+            variant="ghost"
+            size="sm"
+            onPress={() => setAll((open) => !open)}
+            testID="profile-log-toggle"
+        />
+    ) : null;
     return running ? (
         <View style={{ maxHeight: LOG_MAX_HEIGHT, overflow: 'hidden' }} testID="profile-log">
             <Surface tone="recessed" radius="md" padding="md" border>
@@ -41,7 +56,10 @@ export function Log({ lines, running }: { lines: LogLine[]; running: boolean }) 
         </View>
     ) : (
         <Surface tone="recessed" radius="md" padding="md" border testID="profile-log">
-            <Stack gap="xs">{body}</Stack>
+            <Stack gap="xs">
+                {body}
+                {toggle ? <Row>{toggle}</Row> : null}
+            </Stack>
         </Surface>
     );
 }
