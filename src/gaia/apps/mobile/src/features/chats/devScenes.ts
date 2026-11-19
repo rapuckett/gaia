@@ -6,7 +6,7 @@ import type { SetupRunStatus } from '@webui/types';
 
 import { createFakeClient, type FakeClientData } from '@/api/fake';
 import type { GaiaClient, Message, Session } from '@/api/client.types';
-import { GaiaApiError } from '@/api/errors';
+import { GaiaApiError, GaiaNetworkError } from '@/api/errors';
 
 import type { ChatListError } from './ChatDrawerContent';
 import type { RowSheet } from './ChatRowSheets';
@@ -20,6 +20,8 @@ export interface DrawerScene {
     activeId?: string;
     error?: ChatListError;
     unreadNotifications?: number;
+    /** The setup gate is already saying the PC is unreachable in the main pane. */
+    gateUnreachable?: boolean;
     /** The saved "show background runs" choice the drawer opens with. */
     automatedShown?: boolean;
     dev?: { query?: string; sheet?: { rowId: string; mode: RowSheet['mode'] } };
@@ -102,6 +104,8 @@ export const DRAWER_SCENES = {
     'search-none': scene({ dev: { query: 'zzzz' } }),
     'search-failed': scene({ data: { searchError: 'Search is unavailable' }, dev: { query: 'revenue' } }),
     empty: scene({ data: { sessions: [] } }),
+    'list-error': scene({ data: { sessionsError: new GaiaApiError(500, 'database is locked') } }),
+    'list-unavailable': scene({ data: { sessionsError: new GaiaNetworkError('http://pc.local:4200', 'timed out') }, gateUnreachable: true }),
     'error-delete': scene({ error: { kind: 'delete', error: new GaiaApiError(409, 'Chat is running') } }),
     'error-rename': scene({ error: { kind: 'rename', error: new GaiaApiError(500, 'database is locked') } }),
     'error-pin': scene({ error: { kind: 'pin', error: new Error('') } }),

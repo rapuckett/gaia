@@ -244,6 +244,8 @@ export interface FakeClientData {
     sessionEvents?: unknown[];
     /** Most chats a search returns before it says `truncated`. */
     searchLimit?: number;
+    /** Makes the chat list fail with this error. */
+    sessionsError?: Error;
     /** Makes every search fail with this message. */
     searchError?: string;
     /** Each check answers the next entry (the last one repeats); an Error entry is thrown. */
@@ -765,6 +767,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             };
         },
         async listSessions(): Promise<SessionList> {
+            if (data.sessionsError) throw data.sessionsError;
             return { sessions: [...sessions], total: sessions.length };
         },
         async getSession(sessionId) {

@@ -12,6 +12,7 @@ import { describeErrorWith, serverText, technicalDetail, useT } from '@/i18n/use
 import { useConnectionStore } from '@/state/connection';
 import { Button, Disclosure, Ltr, Notice, ScreenBannerProvider, Stack, useScreenBanner } from '@/ui';
 
+import { GateUnreachableProvider } from './gateUnreachable';
 import { SetupScreen, type SetupScreenProps } from './SetupScreen';
 import { StartupScreen } from './StartupScreen';
 
@@ -52,7 +53,12 @@ export function SetupGate({
         };
     }, [open]);
 
-    const passThrough = <ScreenBannerProvider banner={ambientBanner}>{children}</ScreenBannerProvider>;
+    // Same provider stack as the notice path below, so the navigator never remounts when the gate changes state.
+    const passThrough = (
+        <GateUnreachableProvider value={false}>
+            <ScreenBannerProvider banner={ambientBanner}>{children}</ScreenBannerProvider>
+        </GateUnreachableProvider>
+    );
     if (!client || (route?.startsWith('/dev/') && devGalleryEnabled())) return passThrough;
     if (gate.state === 'checking') return <StartupScreen />;
     if (gate.state === 'upgrading') return <StartupScreen upgrading />;
@@ -101,6 +107,7 @@ export function SetupGate({
         );
     // The notice rides the ambient banner slot, so each main-pane screen shows it above its own header and the sidebar (banner={null}) never does.
     return (
+        <GateUnreachableProvider value={unreachable}>
         <ScreenBannerProvider
             banner={
                 <Stack gap="md">
@@ -116,6 +123,7 @@ export function SetupGate({
         >
             {children}
         </ScreenBannerProvider>
+        </GateUnreachableProvider>
     );
 }
 
