@@ -164,8 +164,9 @@ describe('policy alert: toast → View receipt → scroll to the entry', () => {
             return el!;
         });
         expect(within(entry).getByText('rcpt/1 a')).toBeInTheDocument();
-        expect(within(entry).getByText('Reason:')).toBeInTheDocument();
-        expect(within(entry).getByText('run_shell_command is not allowed here.')).toBeInTheDocument();
+        const reason = entry.querySelector('.notification-policy-reason')!;
+        expect(within(reason as HTMLElement).getByText('Reason:')).toBeInTheDocument();
+        expect(reason.querySelector('bdi[dir="ltr"]')!.textContent).toBe('run_shell_command is not allowed here.');
         expect(within(entry).getByText('no-shell')).toBeInTheDocument();
         expect(within(entry).getByText('v7')).toBeInTheDocument();
         // A block is a record, not a prompt: no approve/deny on it.
