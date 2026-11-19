@@ -110,6 +110,35 @@ describeNative('Provider key', () => {
         queryClient.clear();
     });
 
+    it('a key the provider rejects (422) says so by name, not pairing, with the PC\'s reason masked under it', async () => {
+        const { client, queryClient, wrap } = setup(none);
+        jest.spyOn(client, 'connectProvider').mockRejectedValue(new GaiaApiError(422, `Fireworks AI rejected the key ${TYPED_KEY}. Check it and try again.`));
+        const r = await render(<ProviderKey provider={none} connected={false} />, { wrapper: wrap });
+
+        await fireEvent.changeText(screen.getByTestId('provider-key-field'), TYPED_KEY);
+        await fireEvent.press(screen.getByTestId('provider-key-connect'));
+
+        expect(await screen.findByText(/didn't accept that key/)).toBeTruthy();
+        expect(screen.queryByText(/pair/i)).toBeNull();
+        expect(screen.getByText(/rejected the key ••••\./)).toBeTruthy();
+        expect(heldAnywhere(r.container, queryClient)).not.toContain(TYPED_KEY);
+        queryClient.clear();
+    });
+
+    it('a gateway on plain http (422 with its code) sends the user to https on the PC', async () => {
+        const { client, queryClient, wrap } = setup(none);
+        const body = { message: 'The AMD Gateway address must start with https://.', code: 'gateway_insecure_http' };
+        jest.spyOn(client, 'connectProvider').mockRejectedValue(new GaiaApiError(422, body.message, undefined, undefined, body));
+        await render(<ProviderKey provider={none} connected={false} />, { wrapper: wrap });
+
+        await fireEvent.changeText(screen.getByTestId('provider-key-field'), TYPED_KEY);
+        await fireEvent.press(screen.getByTestId('provider-key-connect'));
+
+        expect(await screen.findByText(/must start with .*https:\/\/.*Change it on the PC/)).toBeTruthy();
+        expect(screen.queryByText(/didn't accept that key/)).toBeNull();
+        queryClient.clear();
+    });
+
     it('Replace opens the same field as "Paste your new key" with Save key, and Cancel closes it', async () => {
         const connected: ProviderRow = { ...none, configured: true };
         const { client, queryClient, wrap } = setup(connected);

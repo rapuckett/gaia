@@ -24,13 +24,13 @@ describe('DevicePromptBanner', () => {
 
     it('shows one banner per device, newest on top, and an action it has no label for reads without one', () => {
         render(<DevicePromptBanner />);
-        prompt('d1', 'key_store', 'providerKeyStore', 'waiting');
+        prompt('d1', 'keyStore', 'providerKeyStore', 'waiting');
         prompt('d2', 'admin', 'somethingNew', 'waiting');
         const banners = screen.getAllByTestId('device-prompt-banner');
         expect(banners).toHaveLength(2);
         expect(banners[0]).toHaveTextContent('Kitchen iPad asked for administrator permission. Approve');
         expect(banners[1]).toHaveTextContent('asked to unlock the key store');
-        prompt('d1', 'key_store', 'providerKeyStore', 'timeout');
+        prompt('d1', 'keyStore', 'providerKeyStore', 'timeout');
         expect(screen.getAllByTestId('device-prompt-banner')).toHaveLength(1);
     });
 });
