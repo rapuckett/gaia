@@ -221,7 +221,7 @@ def _cloud_error(
         if not install and isinstance(message, str) and "is not installed" in message:
             return ProviderError(
                 f"Lemonade has no cloud provider registered for {name}, so it "
-                "cannot accept a key yet. Open Settings > Model and connect it "
+                "cannot accept a key yet. Open Settings › Model and connect it "
                 "again, then try again.",
                 409,
             )
@@ -1802,11 +1802,14 @@ def _holds_key(entry: Optional[Dict[str, Any]]) -> bool:
     return bool(entry and (entry.get("env_var_set") or entry.get("runtime_key_set")))
 
 
-def _restore_key(provider: str, before: Dict[str, Any]) -> None:
+def _restore_key(
+    provider: str, before: Optional[Dict[str, Any]], known_models: bool = False
+) -> None:
     """Give Lemonade back the key it held before a failed replace, and read it back.
 
     An environment key needs nothing back: dropping the new key lets Lemonade
-    read the environment again.
+    read the environment again. *known_models* restarts known-models mode with
+    the kept key, since the replace had to leave it.
     """
     from gaia.connectors.credential_wait import (
         CredentialStoreLocked,
@@ -1816,7 +1819,9 @@ def _restore_key(provider: str, before: Dict[str, Any]) -> None:
     reason = None
     old = None
     try:
-        if before.get("env_var_set"):
+        if known_models:
+            reason = _restore_known_models(provider)
+        elif before.get("env_var_set"):
             status, _ = _lemonade("DELETE", f"cloud/auth/{provider}")
             if status >= 400 and status != 404:
                 reason = f"clearing the new key answered HTTP {status}"
@@ -1830,7 +1835,11 @@ def _restore_key(provider: str, before: Dict[str, Any]) -> None:
                 )
                 if status >= 400:
                     reason = f"handing back the old key answered HTTP {status}"
-        if reason is None and not _holds_key(_cloud_entry(provider)):
+        if (
+            reason is None
+            and not known_models
+            and not _holds_key(_cloud_entry(provider))
+        ):
             reason = "Lemonade reports no key afterwards"
     except (ProviderError, CredentialStoreLocked, CredentialStoreWaiting) as e:
         reason = str(e)
@@ -1851,8 +1860,47 @@ def _restore_key(provider: str, before: Dict[str, Any]) -> None:
     )
 
 
+def _restore_known_models(provider: str) -> Optional[str]:
+    """Serve known models on the kept key again; returns why not, if it could not."""
+    from gaia.llm.cloud_keys import CloudKeyError, ensure_authenticated
+    from gaia.llm.fireworks_known_models import KnownModelsError, use_known_models
+    from gaia.llm.lemonade_embedded import EmbeddedLemonade, EmbeddedLemonadeError
+
+    old = None
+    try:
+        status, _ = _lemonade("DELETE", f"cloud/auth/{provider}")
+        if status >= 400 and status != 404:
+            return f"clearing the new key answered HTTP {status}"
+        old = _usable_key(provider)
+        if not old:
+            return "GAIA holds no copy of the old key"
+        # The start reads the kept key itself; a POST would drop the entries.
+        use_known_models(EmbeddedLemonade())
+        ensure_authenticated(provider, recall=lambda: old)
+    except (
+        CloudKeyError,
+        EmbeddedLemonadeError,
+        KnownModelsError,
+        requests.RequestException,
+    ) as e:
+        return f"restarting with the known models failed: {e}"
+    finally:
+        del old
+    entry = _cloud_entry(provider)
+    if not _holds_key(entry):
+        return "Lemonade reports no key afterwards"
+    # A list that answers again drops the known models; the old key then works.
+    if not (_known_models_active(provider) or entry.get("models_discovered")):
+        return "the known models did not come back"
+    return None
+
+
 def _refuse_replacement(
-    provider: str, key: str, before: Dict[str, Any], on_pc: bool
+    provider: str,
+    key: str,
+    before: Optional[Dict[str, Any]],
+    on_pc: bool,
+    known_models: bool = False,
 ) -> NoReturn:
     """A new key found no models: say why, with the old key put back first."""
     from gaia.llm.lemonade_launcher import gaia_runs_lemonade
@@ -1870,7 +1918,7 @@ def _refuse_replacement(
         )
     except ProviderError as e:
         failure = e
-    _restore_key(provider, before)
+    _restore_key(provider, before, known_models)
     raise failure
 
 
@@ -1996,27 +2044,29 @@ def connect_provider(
         return _connect_on_users_server(provider)
     try:
         _require_loopback(_base_url())
-        if key and _known_models_active(provider):
+        # Read before leaving: the restart drops the key and the registration.
+        known_before = bool(key) and _known_models_active(provider)
+        if known_before:
             _leave_known_models()
         before = _cloud_entry(provider)
         _install(provider, registration)
         remembered, remember_error = False, None
         if key:
-            replacing = _holds_key(before)
+            replacing = known_before or _holds_key(before)
             _HANDED_ENV_KEYS.pop(provider, None)
             status, result = _lemonade(
                 "POST", "cloud/auth", {"provider": provider, "api_key": key}
             )
             if status >= 400:
                 rejected = _cloud_error(provider, status, result, echo_body=False)
-                # A 409 means Lemonade kept the key it had.
-                if replacing and rejected.status != 409:
-                    _restore_key(provider, before)
+                # A 409 means Lemonade kept its key; known models were still left.
+                if known_before or (replacing and rejected.status != 409):
+                    _restore_key(provider, before, known_before)
                 elif rejected.status == 422:
                     _undo_registration(provider, before, str(rejected))
                 raise rejected
             if not result.get("models_discovered") and replacing:
-                _refuse_replacement(provider, key, before, on_pc)
+                _refuse_replacement(provider, key, before, on_pc, known_before)
             if not result.get("models_discovered"):
                 # Lemonade stores a key without checking it; don't leave a dud behind.
                 _lemonade("DELETE", f"cloud/auth/{provider}")
