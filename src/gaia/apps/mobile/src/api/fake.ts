@@ -146,6 +146,9 @@ const EMPTY_PERFORMANCE: ChatPerformance = {
     now: { model: null, provider: 'unknown', loaded: null, device: null, backend: null, ctx_size: null, weights_gb: null, kv_cache_gb: null, free_gb: null, error: null },
 };
 
+/** As long as the PC's own (secrets.token_urlsafe(32)), so the phone's length check passes. */
+export const FAKE_SIGN_IN_STATE = 'fake-state-0123456789abcdefghijklmnopqrstuv';
+
 export interface FakeClientData {
     sessions?: Session[];
     schedules?: Schedule[];
@@ -223,6 +226,14 @@ export interface FakeClientData {
     deviceSignIn?: ConnectorDeviceAuthResponse;
     /** How the PC reports a sign-in ended; unset waits until the watch is dropped. */
     signInEnd?: ConnectorSignInEnd;
+    /** Makes startConnectorBrowserSignIn fail with this, as a PC that refuses the phone does. */
+    browserSignInError?: GaiaApiError;
+    /** Makes completeConnectorBrowserSignIn fail with this, as a PC that rejects the state or the code does. */
+    browserCompleteError?: GaiaApiError;
+    /** What the browser sign-in link's state is; FAKE_SIGN_IN_STATE when unset. */
+    browserSignInState?: string;
+    /** Makes the PC report the phone's browser sign-in replaced by a newer one, as its events stream does. */
+    browserSuperseded?: boolean;
     /** What testConnector answers (`{ ok: true }` when unset); an Error is thrown. */
     connectorTest?: ConnectorTestResponse | Error;
     /** What a disconnect reports about the provider-side revoke; `{}` when unset. */
@@ -418,6 +429,12 @@ export interface FakeGaiaClient extends GaiaClient {
     readonly setupChoices: { kind: 'chat' | 'vision' | 'skip'; modelId: string | null; flag?: boolean }[];
     /** The providers connectProvider was asked for, in order. */
     readonly connects: string[];
+    /** Each browser sign-in started from the phone, with the loopback port it named. */
+    readonly browserSignIns: { connectorId: string; redirectPort: number; scopes: string[] }[];
+    /** Each browser sign-in handed back to the PC to finish. */
+    readonly browserCompletions: { flowId: string; code: string; state: string }[];
+    /** Each pending sign-in dropped. */
+    readonly flowCancels: string[];
     /** The providers connectProvider was sent a typed key for, in order (never the key). */
     readonly keyedConnects: string[];
     /** The providers whose saved key forgetProviderKey cleared, in order. */
@@ -536,6 +553,10 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
     const targetSets: LemonadeTargetBody[] = [];
     const setupChoices: FakeGaiaClient['setupChoices'] = [];
     const connects: string[] = [];
+    const browserSignIns: FakeGaiaClient['browserSignIns'] = [];
+    const browserCompletions: FakeGaiaClient['browserCompletions'] = [];
+    const flowCancels: string[] = [];
+    const browserFlows = new Map<string, string>();
     const keyedConnects: string[] = [];
     const keyRemovals: string[] = [];
     let npuRechecks = 0;
@@ -650,6 +671,9 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         targetSets,
         setupChoices,
         connects,
+        browserSignIns,
+        browserCompletions,
+        flowCancels,
         keyedConnects,
         keyRemovals,
         get npuRechecks() {
@@ -1047,12 +1071,44 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             return { ...data.deviceSignIn };
         },
         async watchConnectorSignIn(_connectorId, options) {
+            if (options?.flowId && data.browserSuperseded) return { outcome: 'failed', reason: 'superseded', error: 'A newer sign-in replaced this one.' };
             if (data.signInEnd) return { ...data.signInEnd };
             await new Promise<void>((resolve) => {
                 if (options?.signal?.aborted) resolve();
                 else options?.signal?.addEventListener('abort', () => resolve());
             });
             return null;
+        },
+        // As the PC: the link sends the browser to the phone's port, and only that flow's state finishes it.
+        async startConnectorBrowserSignIn(connectorId, redirectPort, scopes) {
+            browserSignIns.push({ connectorId, redirectPort, scopes: [...scopes] });
+            if (data.browserSignInError) throw data.browserSignInError;
+            const row = (data.connectors ?? []).find((c) => c.id === connectorId);
+            if (!row || 'error' in row) throw new GaiaApiError(404, `Unknown connector: '${connectorId}'`);
+            const flowId = `flow-${browserSignIns.length}`;
+            const state = data.browserSignInState ?? FAKE_SIGN_IN_STATE;
+            browserFlows.set(flowId, connectorId);
+            const redirect = encodeURIComponent(`http://127.0.0.1:${redirectPort}/callback`);
+            return {
+                flow_id: flowId,
+                authorization_url: `https://accounts.google.com/o/oauth2/v2/auth?client_id=example.apps.googleusercontent.com&redirect_uri=${redirect}&response_type=code&state=${state}&code_challenge=example&code_challenge_method=S256`,
+            };
+        },
+        async completeConnectorBrowserSignIn(flowId, code, state) {
+            browserCompletions.push({ flowId, code, state });
+            if (data.browserCompleteError) throw data.browserCompleteError;
+            const connectorId = browserFlows.get(flowId);
+            if (!connectorId) throw new GaiaApiError(404, `No sign-in is waiting with flow_id '${flowId}'.`);
+            if (state !== (data.browserSignInState ?? FAKE_SIGN_IN_STATE)) throw new GaiaApiError(400, 'The sign-in state did not match.');
+            browserFlows.delete(flowId);
+            data.connectors = (data.connectors ?? []).map((c) =>
+                c.id === connectorId && !('error' in c) ? { ...c, configured: true, account_id: 'avery@example.com' } : c,
+            );
+            return { ...(data.connectors.find((c) => c.id === connectorId) as ConnectorRow) };
+        },
+        async cancelConnectorFlow(flowId) {
+            flowCancels.push(flowId);
+            browserFlows.delete(flowId);
         },
         // As the PC: an OAuth client keeps only its id and whether a secret was given; a server just turns configured.
         async configureConnector(connectorId, config) {

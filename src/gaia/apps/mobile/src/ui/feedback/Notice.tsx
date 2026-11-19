@@ -91,7 +91,7 @@ export function Notice({ tone, title, message, detail, action, onDismiss, dismis
                             </Text>
                         ) : null}
                         {detail ? (
-                            <Text role="caption" tone="muted" dir="ltr" align="ltr">
+                            <Text role="caption" tone="muted" dir="ltr">
                                 {detail}
                             </Text>
                         ) : null}
