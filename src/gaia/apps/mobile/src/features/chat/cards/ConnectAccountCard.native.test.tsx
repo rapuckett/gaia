@@ -10,6 +10,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { createFakeClient, type FakeClientData } from '@/api/fake';
 import type { ConnectorRow } from '@/api/client.types';
 import { GaiaClientProvider } from '@/data';
+import { BrowserSignInDepsContext, type BrowserSignInDeps } from '@/features/connectors/browserSignIn';
 import { ThemeProvider } from '@/ui';
 
 import { EmailConnect } from '../EmailConnect';
@@ -41,15 +42,17 @@ const microsoft = row({ id: 'microsoft', display_name: 'Microsoft Personal', sup
 const google = row({ id: 'google', display_name: 'Google' });
 const code = { user_code: 'ABCD-EFGH', verification_uri: 'https://microsoft.com/devicelogin', expires_in: 900, interval: 60, message: '' };
 
-function setup(data: FakeClientData) {
+function setup(data: FakeClientData, deps?: BrowserSignInDeps) {
     const client = createFakeClient(data);
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const wrapper = ({ children }: { children: ReactNode }) => (
         <QueryClientProvider client={queryClient}>
             <GaiaClientProvider client={client}>
-                <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 800 }, insets: { top: 0, left: 0, right: 0, bottom: 0 } }}>
-                    <ThemeProvider>{children}</ThemeProvider>
-                </SafeAreaProvider>
+                <BrowserSignInDepsContext.Provider value={deps ?? null}>
+                    <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 800 }, insets: { top: 0, left: 0, right: 0, bottom: 0 } }}>
+                        <ThemeProvider>{children}</ThemeProvider>
+                    </SafeAreaProvider>
+                </BrowserSignInDepsContext.Provider>
             </GaiaClientProvider>
         </QueryClientProvider>
     );
@@ -87,6 +90,54 @@ describeNative('ConnectAccountCard', () => {
 
         await fireEvent.press(screen.getByText('Connect Microsoft'));
         expect(await screen.findByText('Sign-in was cancelled. Press Connect to try again.')).toBeTruthy();
+    });
+});
+
+const loopbackDeps = (loopback: BrowserSignInDeps['loopback']): BrowserSignInDeps => ({
+    loopback,
+    returnUrl: () => 'ai.amd.gaia.mobile.dev://oauth-done',
+    openAuthSession: jest.fn(() => new Promise<{ type: string }>(() => undefined)),
+    dismissAuthSession: jest.fn(),
+    paired: true,
+});
+
+describeNative('Google in the chat on a paired phone', () => {
+    const listener = { start: jest.fn(async () => ({ port: 50123 })), waitForRedirect: jest.fn(() => new Promise<never>(() => undefined)), cancel: jest.fn() };
+
+    const state = 'pc-state-0123456789abcdefghijklmnopqrstuvwx';
+
+    it('signs in with the phone browser from the card', async () => {
+        const { client, wrapper } = setup({ connectors: [google], browserSignInState: state }, loopbackDeps(listener));
+        await render(<ConnectAccountCard data={{ kind: 'connect_account', providers: ['google'] }} />, { wrapper });
+        await fireEvent.press(await screen.findByText('Connect Google'));
+        expect(await screen.findByTestId('browser-sign-in-block')).toBeTruthy();
+        expect(client.browserSignIns).toHaveLength(1);
+        expect(screen.queryByText(/Connect your account on your PC/)).toBeNull();
+    });
+
+    it('signs in with the phone browser from the email block', async () => {
+        const { client, wrapper } = setup({ connectors: [google], browserSignInState: state }, loopbackDeps(listener));
+        await render(<EmailConnect content="NOT_CONNECTED: google is not currently connected." />, { wrapper });
+        await fireEvent.press(await screen.findByText('Connect Google'));
+        expect(await screen.findByTestId('browser-sign-in-block')).toBeTruthy();
+        expect(client.browserSignIns).toHaveLength(1);
+    });
+
+    it("says why the browser sign-in failed instead of the card's generic line", async () => {
+        const lost = { ...listener, waitForRedirect: jest.fn(async () => ({ outcome: 'lost' as const })) };
+        const { wrapper } = setup({ connectors: [google], browserSignInState: state }, loopbackDeps(lost));
+        await render(<ConnectAccountCard data={{ kind: 'connect_account', providers: ['google'] }} />, { wrapper });
+        await fireEvent.press(await screen.findByText('Connect Google'));
+        expect(await screen.findByText(/stopped listening for the sign-in/)).toBeTruthy();
+        expect(screen.queryByText('Sign-in did not finish.')).toBeNull();
+    });
+
+    it('keeps the PC note where the build has no listener', async () => {
+        const { client, wrapper } = setup({ connectors: [google] }, loopbackDeps(null));
+        await render(<ConnectAccountCard data={{ kind: 'connect_account', providers: ['google'] }} />, { wrapper });
+        await fireEvent.press(await screen.findByText('Connect Google'));
+        expect(await screen.findByText(/Connect your account on your PC/)).toBeTruthy();
+        expect(client.browserSignIns).toHaveLength(0);
     });
 });
 
