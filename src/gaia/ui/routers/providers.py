@@ -1764,6 +1764,40 @@ def _install(provider: str, registration: Dict[str, Any]) -> None:
         raise _cloud_error(provider, status, result, install=True)
 
 
+def _uninstall(provider: str) -> None:
+    """Remove *provider*'s cloud registration from Lemonade."""
+    status, result = _lemonade(
+        "POST", "uninstall", {"backend": "cloud", "provider": provider}
+    )
+    if status >= 400:
+        raise _cloud_error(provider, status, result, echo_body=False)
+
+
+def _undo_registration(
+    provider: str, before: Optional[Dict[str, Any]], failure: str
+) -> None:
+    """Remove the registration this request made; one that was already there stays.
+
+    Raises *failure* plus the cleanup's own error when the removal fails.
+    """
+    if before is not None:
+        return
+    try:
+        _uninstall(provider)
+    except ProviderError as e:
+        logger.error(
+            "Could not remove the %s registration after a failed connect: %s",
+            provider,
+            e,
+        )
+        raise ProviderError(
+            f"{failure} GAIA also could not remove the registration it just "
+            f"made: {e} Open Settings > Model and disconnect {_NAMES[provider]} "
+            "to clear it.",
+            502,
+        ) from e
+
+
 # Can restore and persist the last model, so a cross-site GET must not reach it.
 @router.get(
     "/api/providers/active",
@@ -1888,6 +1922,7 @@ def connect_provider(
         _require_loopback(_base_url())
         if key and _known_models_active(provider):
             _leave_known_models()
+        before = _cloud_entry(provider)
         _install(provider, registration)
         remembered, remember_error = False, None
         if key:
@@ -1896,11 +1931,19 @@ def connect_provider(
                 "POST", "cloud/auth", {"provider": provider, "api_key": key}
             )
             if status >= 400:
-                raise _cloud_error(provider, status, result, echo_body=False)
+                rejected = _cloud_error(provider, status, result, echo_body=False)
+                if rejected.status == 422:
+                    _undo_registration(provider, before, str(rejected))
+                raise rejected
             if not result.get("models_discovered"):
                 # Lemonade stores a key without checking it; don't leave a dud behind.
                 _lemonade("DELETE", f"cloud/auth/{provider}")
-                _use_known_models(provider, key, on_pc=on_pc)
+                try:
+                    _use_known_models(provider, key, on_pc=on_pc)
+                except ProviderError as e:
+                    if e.status == 422:
+                        _undo_registration(provider, before, str(e))
+                    raise
                 remembered = True
             else:
                 try:
@@ -1959,13 +2002,15 @@ def connect_provider(
         del key
     view = _provider_view(provider, entry)
     if not view["models_discovered"]:
-        raise HTTPException(
-            status_code=422,
-            detail=(
-                f"{_NAMES[provider]} is registered but discovered no models. "
-                "Paste a valid API key."
-            ),
+        detail = (
+            f"{_NAMES[provider]} is registered but discovered no models. "
+            "Paste a valid API key."
         )
+        try:
+            _undo_registration(provider, before, detail)
+        except ProviderError as e:
+            _raise(e, request)
+        raise HTTPException(status_code=422, detail=detail)
     return {**view, "remembered": remembered, "remember_error": remember_error}
 
 
@@ -2113,13 +2158,20 @@ def forget_provider_key(provider: str, request: Request) -> Dict[str, Any]:
         raise HTTPException(status_code=422, detail="Local models have no key.")
     try:
         # The user's own server keeps its keys; only GAIA's copy is removed.
+        leftover = False
         if not _uses_users_server():
             if _known_models_active(provider):
                 _leave_known_models()
+            entry = _cloud_entry(provider)
+            leftover = entry is not None and not (
+                entry.get("env_var_set") or entry.get("runtime_key_set")
+            )
             status, body = _lemonade("DELETE", f"cloud/auth/{provider}")
             if status >= 400 and status != 404:
                 raise _cloud_error(provider, status, body)
-        removed = forget_key(provider)
+            if leftover:
+                _uninstall(provider)
+        removed = forget_key(provider) or leftover
         discard(_key_slot(provider))
         _note_stored_key(provider, None)
     except ProviderError as e:
