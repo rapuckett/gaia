@@ -605,6 +605,12 @@ def unlink_devices(device_ids: Optional[Collection[str]]) -> Optional[str]:
                 "The Discord bot that device connected stayed connected, because "
                 "the Discord bridge did not stop. " + stop_failed_hint()
             ) from e
+        except Exception as e:  # noqa: BLE001 - keyring backends raise anything
+            raise PairingKept(
+                "The Discord bot that device connected stayed connected, because "
+                f"GAIA couldn't remove its token from the OS keyring: {e}. Unlock "
+                "the keyring, then open Settings › Messaging again."
+            ) from e
         log.warning(
             "Discord disconnected: device %s that connected its bot is no longer "
             "paired",

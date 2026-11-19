@@ -259,6 +259,22 @@ def test_a_stuck_bridge_keeps_the_token_and_says_so(monkeypatch, cleared):
     assert state.load_config().token_device_id == "phone" and cleared == []
 
 
+def test_a_keyring_that_wont_forget_the_token_keeps_the_link(monkeypatch):
+    import keyring.errors
+
+    from gaia.messaging.discord import cli, credentials
+
+    _linked(token_device_id="phone")
+
+    def locked():
+        raise keyring.errors.KeyringLocked("locked")
+
+    monkeypatch.setattr(credentials, "clear", locked)
+    with pytest.raises(cli.PairingKept, match="couldn't remove its token"):
+        cli.unlink_devices(["phone"])
+    assert state.load_config().token_device_id == "phone"
+
+
 def test_a_start_disconnects_a_token_whose_device_is_gone(monkeypatch, cleared):
     """No device table means no device is paired, so the link is stale."""
     from gaia.messaging.discord import cli
