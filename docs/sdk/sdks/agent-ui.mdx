@@ -812,7 +812,7 @@ Every other path serves the Agent UI page, except paths under `/api`: an unknown
   </Accordion>
 
   <Accordion title="PUT /api/settings">
-    Update user settings. Set `custom_model` to a model ID to override the default, or to an empty string to clear the override and go back to the model picked under Model (`POST /api/providers/select`); omitting it or sending `null` leaves it unchanged. With no pick on record, clearing reverts to the default model, except for a cloud model whose user has not downloaded the local default, which stays in use. The model left running is also saved as `last_model` in `~/.gaia/config.json`, so the flagship's start-up warm-up and the next launch use the same model. A change that leaves a different local model running starts a fresh warm-up, as picking one does. A cloud model is refused with `409` while Local only is on, including one from a provider GAIA knows only from the model server's list; when that list can't be read to tell, the save is refused with `503`. `network_policy` changes only on the PC: a request that carries it from mobile access or a paired device is a `403` and saves none of its fields.
+    Update user settings. Set `custom_model` to a model ID to override the default, or to an empty string to clear the override and go back to the model picked under Model (`POST /api/providers/select`); omitting it or sending `null` leaves it unchanged. With no pick on record, clearing reverts to the default model, except for a cloud model whose user has not downloaded the local default, which stays in use. The model left running is also saved as `last_model` in `~/.gaia/config.json`, so the flagship's start-up warm-up and the next launch use the same model. A change that leaves a different local model running starts a fresh warm-up, as picking one does. A cloud model is refused with `409` while Local only is on, including one from a provider GAIA knows only from the model server's list; when that list can't be read to tell, the save is refused with `503`. `network_policy` changes on the PC or on a paired device the PC allowed: a request that carries it from mobile access or a device the PC hasn't allowed is a `403` and saves none of its fields. A paired device may change only what PC Settings shows (`custom_model`, `dynamic_tools` and `network_policy`); a request from one that carries `context_size` or `agent_mode` is a `403` and saves nothing. A device's Local only change is written to the audit log and listed in Settings › Phones and tablets.
 
     **Request:**
     ```json
@@ -2091,8 +2091,11 @@ removed.
 
     **Request:** `{"mode": "full_access"}` or `{"mode": "ask"}` — any other
     value is a **422**. **Response:** `{"default_mode"}`. A config file that
-    can't be written is a **500** naming the cause. A request from
-    mobile access, a paired device or another computer is a **403** before anything is written.
+    can't be written is a **500** naming the cause (on the PC only). The PC
+    or a paired device the PC allowed; a device's change is written to the
+    audit log and listed in Settings › Phones and tablets. A request from
+    mobile access, a device the PC hasn't allowed or another computer is a
+    **403** before anything is written.
   </Accordion>
 
   <Accordion title="GET /api/chat/permissions/{session_id}">
@@ -3696,8 +3699,12 @@ model with no known price reads as unknown, never $0. Cloud models from
     reviewed. Skills that ship code are refused unless `allow_code` is true.
     Returns `{"added": [...], "failed": {name: reason}}`. **422** when `pin`
     is missing, **400** when it is malformed or the link cannot be read,
-    **409** when the link changed since the preview. PC-only (**403** from
-    mobile access, a paired device or another computer).
+    **409** when the link changed since the preview. The PC or a paired
+    device the PC allowed, with the same signing, audit and code checks;
+    each skill a device adds is written to the audit log and listed in
+    Settings › Phones and tablets, marked when it runs code. A device sees
+    paths under the home folder as `~`. **403** from mobile access, a device
+    the PC hasn't allowed or another computer.
   </Accordion>
 
   <Accordion title="DELETE /api/skills/{name}">
@@ -3718,7 +3725,12 @@ these to install the GAIA agent when it is missing.
 
   <Accordion title="POST /api/agents/install">
     Start an install in the background (body names the agent id). Poll
-    `install-status` for progress. PC-only (**403** from mobile access, a paired device or another computer).
+    `install-status` for progress. The PC, or a paired device the PC allowed
+    installing the GAIA agent (`gaia`) at its latest version: from a device,
+    another id, `version` or `trust_native` is a **403**, and a started
+    install is written to the audit log and listed in Settings › Phones and
+    tablets. **403** from mobile access, a device the PC hasn't allowed or
+    another computer.
   </Accordion>
 
   <Accordion title="GET /api/agents/{agent_id}/install-status">
@@ -3726,8 +3738,7 @@ these to install the GAIA agent when it is missing.
   </Accordion>
 
   <Accordion title="DELETE /api/agents/{agent_id}">
-    Uninstall a hub-installed agent. Refuses a builtin (400). PC-only, like
-    `install`.
+    Uninstall a hub-installed agent. Refuses a builtin (400). PC-only.
   </Accordion>
 </AccordionGroup>
 

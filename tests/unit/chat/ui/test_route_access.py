@@ -65,7 +65,6 @@ PC_ONLY = {
     "GET /api/memory/stream-inference",
     "GET /api/messaging/discord",
     "GET /api/setup/report/{name}",
-    "POST /api/agents/install",
     "POST /api/connectors/eval-mailbox",
     "POST /api/connectors/{connector_id}/enable",
     "POST /api/devices/listener",
@@ -93,11 +92,9 @@ PC_ONLY = {
     "POST /api/messaging/discord/stop",
     "POST /api/setup/npu/memlock-fix",
     "POST /api/setup/report",
-    "POST /api/skills/link/add",
     "POST /api/tunnel/start",
     "POST /api/tunnel/stop",
     "POST /v1/connections/{provider}",
-    "PUT /api/chat/permissions",
     "PUT /api/connectors/{connector_id}/activations/{agent_id:path}",
     "PUT /api/connectors/{connector_id}/grants/{agent_id:path}",
 }
@@ -110,6 +107,7 @@ PC_OR_DEVICE = {
     "DELETE /api/schedules/{name:path}",
     "GET /api/automations",
     "GET /api/devices/{device_id}/changes",
+    "POST /api/agents/install",
     "POST /api/automations/{ref}/{action}",
     "POST /api/connectors/flows/{flow_id}/complete",
     "POST /api/connectors/{connector_id}/authorize",
@@ -130,7 +128,9 @@ PC_OR_DEVICE = {
     "POST /api/setup/npu/recheck",
     "POST /api/setup/run",
     "POST /api/setup/vision-model",
+    "POST /api/skills/link/add",
     "POST /api/system/download-model",
+    "PUT /api/chat/permissions",
     "PUT /api/goals/{goal_id}/approve",
     "PUT /api/goals/{goal_id}/cancel",
     "PUT /api/goals/{goal_id}/reject",
@@ -164,8 +164,9 @@ WEB = {
 
 # Some check fields inside the handler: a provider key (the PC or an allowed
 # device) and its gateway fields (the PC only) in
-# ``POST /api/providers/{provider}/connect``, and
-# ``network_policy`` in ``PUT /api/settings``.
+# ``POST /api/providers/{provider}/connect``, and in ``PUT /api/settings``
+# ``network_policy`` (the PC or an allowed device) and the fields a device
+# may not change.
 REMOTE = {
     "DELETE /api/chat/permissions/{session_id}/grants",
     "DELETE /api/connectors/{connector_id}",
@@ -707,11 +708,11 @@ def test_a_paired_device_may_read_provider_summaries(setup, monkeypatch):
 
 
 def test_refused_network_policy_saves_nothing(setup):
-    """A settings change that includes the policy is all or nothing away from the PC."""
+    """A settings change that includes the policy is all or nothing when refused."""
     app, clients, _ = setup
     before = clients["pc"].get("/api/settings").json()["agent_mode"]
     other = "manual" if before != "manual" else "goal_driven"
-    for caller in ("tunnel", "device"):
+    for caller in ("tunnel", "pending"):
         resp = clients[caller].put(
             "/api/settings",
             json={"agent_mode": other, "network_policy": "local_ai_only"},
@@ -1219,3 +1220,195 @@ def test_a_pending_device_cannot_run_a_connector_check(setup):
         "/api/connectors/mcp-github/test", headers={"X-Gaia-UI": "1"}
     )
     assert resp.status_code == 403
+
+
+class _Audit:
+    """The audit log's APPROVAL lines while the block runs."""
+
+    def __enter__(self):
+        import logging
+
+        from gaia.security import audit_logger
+
+        lines = self.lines = []
+
+        class _Capture(logging.Handler):
+            def emit(self, record):
+                lines.append(record.getMessage())
+
+        self._handler, self._level = _Capture(), audit_logger.level
+        audit_logger.addHandler(self._handler)
+        audit_logger.setLevel(logging.INFO)
+        return self
+
+    def __exit__(self, *exc):
+        from gaia.security import audit_logger
+
+        audit_logger.removeHandler(self._handler)
+        audit_logger.setLevel(self._level)
+
+
+def _newest_changes(app, device, count):
+    changes, _ = app.state.db.device_changes(device.device_id, count)
+    return [(c["kind"], c["params"]) for c in reversed(changes)]
+
+
+def test_an_allowed_device_adds_skills_from_a_link(setup, monkeypatch):
+    """The same add as the PC's; which skills run code is recorded, paths stay home."""
+    from gaia.home import gaia_home
+    from gaia.skills import link
+
+    app, clients, device = setup
+    calls = []
+
+    def add_from_link(url, names, **kwargs):
+        calls.append(kwargs)
+        skills = gaia_home() / "skills"
+        return link.LinkAddResult(
+            added=[
+                {
+                    "name": n,
+                    "updated": False,
+                    "path": str(skills / n),
+                    "verdict": "PASS",
+                    "has_code": n == "coder",
+                    "code_trusted": n == "coder",
+                    "findings": [],
+                }
+                for n in names
+            ],
+            failed={"other": f"Already at {skills / 'other'}."},
+        )
+
+    monkeypatch.setattr(link, "add_from_link", add_from_link)
+    body = {"url": "o/r", "names": ["notes", "coder"], "pin": "commit:abc"}
+    for caller in ("tunnel", "pending"):
+        resp = clients[caller].post(
+            "/api/skills/link/add", json={**body, "allow_code": True}
+        )
+        assert resp.status_code == 403, caller
+    assert calls == []
+
+    with _Audit() as audit:
+        resp = clients["device"].post(
+            "/api/skills/link/add", json={**body, "allow_code": True}
+        )
+    assert resp.status_code == 200, resp.text
+    assert calls[0]["allow_code"] is True and calls[0]["pin"] == "commit:abc"
+    assert str(gaia_home()) not in resp.text
+    assert resp.json()["added"][0]["path"] == "~/.gaia/skills/notes"
+    assert _newest_changes(app, device, 2) == [
+        ("skillAdded", {"name": "notes"}),
+        ("skillAddedCode", {"name": "coder"}),
+    ]
+    by = f"by {security.DEVICE_PRINCIPAL_PREFIX}{device.device_id}"
+    assert len(audit.lines) == 2 and all(by in line for line in audit.lines)
+    assert "with code" in audit.lines[1] and "with code" not in audit.lines[0]
+
+
+def test_an_allowed_device_installs_the_flagship_only(setup, monkeypatch):
+    from gaia.ui.routers import hub
+
+    app, clients, device = setup
+    started = []
+    monkeypatch.setattr(
+        hub,
+        "_start_install",
+        lambda request, body: started.append(body)
+        or {"id": body.id, "status": "queued"},
+    )
+    ui = {"X-Gaia-UI": "1"}
+    for caller in ("tunnel", "pending"):
+        resp = clients[caller].post("/api/agents/install", json={"id": "gaia"})
+        assert resp.status_code == 403, caller
+    for refused in (
+        {"id": "email"},
+        {"id": "gaia", "trust_native": True},
+        {"id": "gaia", "version": "0.1.0"},
+    ):
+        resp = clients["device"].post("/api/agents/install", json=refused, headers=ui)
+        assert resp.status_code == 403, refused
+    assert started == []
+
+    with _Audit() as audit:
+        resp = clients["device"].post(
+            "/api/agents/install", json={"id": "gaia"}, headers=ui
+        )
+    assert resp.status_code == 202, resp.text
+    assert len(started) == 1
+    assert _newest_changes(app, device, 1) == [("agentInstalled", {})]
+    assert len(audit.lines) == 1 and device.device_id in audit.lines[0]
+
+
+def test_an_allowed_device_sets_the_default_permission_mode(setup):
+    from gaia.ui import permissions
+
+    app, clients, device = setup
+    for caller in ("tunnel", "pending"):
+        resp = clients[caller].put(
+            "/api/chat/permissions", json={"mode": "full_access"}
+        )
+        assert resp.status_code == 403, caller
+    assert permissions.default_mode() == permissions.MODE_ASK
+
+    try:
+        with _Audit() as audit:
+            resp = clients["device"].put(
+                "/api/chat/permissions", json={"mode": "full_access"}
+            )
+        assert resp.status_code == 200, resp.text
+        assert permissions.default_mode() == permissions.MODE_FULL_ACCESS
+    finally:
+        GaiaConfig.save_key("full_access", False)
+    assert _newest_changes(app, device, 1) == [
+        ("permissionsDefault", {"mode": "full_access"})
+    ]
+    assert len(audit.lines) == 1 and device.device_id in audit.lines[0]
+
+
+def test_an_allowed_device_turns_local_only_off_and_on(setup, monkeypatch):
+    from gaia.llm import local_only
+
+    app, clients, device = setup
+    applied = []
+
+    def apply_policy(value):
+        applied.append(value)
+        return {
+            "policy": local_only.NetworkPolicy(value),
+            "warnings": [],
+            "notices": [],
+        }
+
+    monkeypatch.setattr(local_only, "apply_policy", apply_policy)
+    for caller in ("tunnel", "pending"):
+        resp = clients[caller].put(
+            "/api/settings", json={"network_policy": "cloud_allowed"}
+        )
+        assert resp.status_code == 403, caller
+    assert applied == []
+
+    with _Audit() as audit:
+        for value in ("cloud_allowed", "local_ai_only"):
+            resp = clients["device"].put(
+                "/api/settings", json={"network_policy": value}
+            )
+            assert resp.status_code == 200, resp.text
+    assert applied == ["cloud_allowed", "local_ai_only"]
+    assert _newest_changes(app, device, 2) == [
+        ("localOnlyOff", {}),
+        ("localOnlyOn", {}),
+    ]
+    assert len(audit.lines) == 2 and all(device.device_id in a for a in audit.lines)
+
+
+@pytest.mark.parametrize("fields", [{"agent_mode": "manual"}, {"context_size": 65536}])
+def test_a_device_cannot_change_a_setting_pc_settings_hides(setup, fields):
+    """Only what PC Settings shows; the refusal saves nothing it came with."""
+    app, clients, _ = setup
+    before = clients["pc"].get("/api/settings").json()
+    resp = clients["device"].put(
+        "/api/settings", json={**fields, "dynamic_tools": not before["dynamic_tools"]}
+    )
+    assert resp.status_code == 403
+    assert clients["pc"].get("/api/settings").json() == before

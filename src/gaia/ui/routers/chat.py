@@ -38,10 +38,17 @@ from .._chat_helpers import (
 )
 from ..database import ChatDatabase
 from ..dependencies import get_db
+from ..devices.changes import record_device_change
 from ..models import ChatRequest, ChatResponse, WireModel
 from ..restart_recovery import CANCELLED_TURN_NOTICE
 from ..run_manager import run_manager
-from ..security import audit_approval, flagship_only, require_local_pc
+from ..security import (
+    audit_approval,
+    flagship_only,
+    is_local_pc,
+    require_local_pc,
+    require_pc_or_allowed_device,
+)
 from ..sse_handler import (
     _RAG_RESULT_JSON_SUB_RE,
     _THOUGHT_JSON_SUB_RE,
@@ -576,16 +583,16 @@ async def list_permissions():
 
 @router.put(
     "/api/chat/permissions",
-    dependencies=[Depends(require_local_pc)],
+    dependencies=[Depends(require_pc_or_allowed_device)],
     response_model=DefaultPermissionModeResponse,
     response_model_exclude_unset=True,
 )
-async def set_default_permission_mode(body: PermissionModeRequest):
+async def set_default_permission_mode(request: Request, body: PermissionModeRequest):
     """Set the mode new chats start in: ``full_access`` in ``~/.gaia/config.json``.
 
-    The same key the TUI's ``/full-access always`` writes. Chats already open
-    keep the mode they have. A paired phone can't change it: it would apply
-    to every future chat on the PC, the TUI's included.
+    The same key the TUI's ``/full-access always`` writes, so it applies to
+    every future chat on the PC, the TUI's included. Chats already open keep
+    the mode they have. A device's change is audited and listed on the PC.
     """
     if body.mode not in session_permissions.MODES:
         raise HTTPException(
@@ -600,10 +607,17 @@ async def set_default_permission_mode(body: PermissionModeRequest):
             body.mode == session_permissions.MODE_FULL_ACCESS,
         )
     except (GaiaConfigError, OSError) as exc:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Couldn't save the default permission mode: {exc}",
-        ) from exc
+        detail = f"Couldn't save the default permission mode: {exc}"
+        if not is_local_pc(request):
+            logger.error("Default permission mode for a device not saved: %s", exc)
+            detail = (
+                "Couldn't save the default permission mode on the PC. Open GAIA "
+                "on the PC to see why."
+            )
+        raise HTTPException(status_code=500, detail=detail) from exc
+    if not is_local_pc(request):
+        audit_approval(request, f"Default permission mode for new chats: {body.mode}")
+        record_device_change(request, "permissionsDefault", mode=body.mode)
     return {"default_mode": session_permissions.default_mode()}
 
 

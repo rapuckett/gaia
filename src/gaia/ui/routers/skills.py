@@ -13,16 +13,18 @@ the running agent is asked instead.
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from gaia.skills.format import SECURITY_TIERS
 from gaia.skills.listing import SKILL_SOURCES
 
+from ..devices.changes import record_device_change
 from ..models import WireModel
-from ..security import require_local_pc
+from ..security import audit_approval, is_local_pc, require_pc_or_allowed_device
 
 logger = logging.getLogger(__name__)
 
@@ -214,14 +216,29 @@ def preview_skill_link(body: SkillLinkRequest) -> Dict[str, Any]:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
-# Installs code that runs with the agent, so only the PC running GAIA may.
+DEVICE_SKILL_ERROR = (
+    "GAIA couldn't add the skill on the PC. Open Settings \u203a Skills on the PC "
+    "to see why."
+)
+
+
+def _off_pc(request: Request, text: str) -> str:
+    """*text* as a caller away from the PC sees it: no home folder path."""
+    if is_local_pc(request):
+        return text
+    from gaia.home import gaia_home
+
+    return text.replace(str(gaia_home()), "~/.gaia").replace(str(Path.home()), "~")
+
+
+# Installs code that runs with the agent: the PC, or a device the PC allowed.
 @router.post(
     "/api/skills/link/add",
-    dependencies=[Depends(require_local_pc)],
+    dependencies=[Depends(require_pc_or_allowed_device)],
     response_model=SkillLinkAddResponse,
     response_model_exclude_unset=True,
 )
-def add_skill_link(body: SkillLinkAddRequest) -> Dict[str, Any]:
+def add_skill_link(request: Request, body: SkillLinkAddRequest) -> Dict[str, Any]:
     """Add the chosen skills behind a pasted link to ``~/.gaia/skills``.
 
     409 when the link no longer serves the version the preview pinned.
@@ -230,7 +247,7 @@ def add_skill_link(body: SkillLinkAddRequest) -> Dict[str, Any]:
     from gaia.skills.link import SkillLinkChangedError, SkillLinkError, add_from_link
 
     try:
-        return add_from_link(
+        result = add_from_link(
             body.url,
             body.names,
             allow_code=body.allow_code,
@@ -238,11 +255,33 @@ def add_skill_link(body: SkillLinkAddRequest) -> Dict[str, Any]:
             pin=body.pin,
         ).to_dict()
     except SkillLinkChangedError as e:
-        raise HTTPException(status_code=409, detail=str(e)) from e
+        raise HTTPException(status_code=409, detail=_off_pc(request, str(e))) from e
     except SkillLinkError as e:
-        raise HTTPException(status_code=400, detail=_link_error(e)) from e
+        raise HTTPException(
+            status_code=400, detail=_off_pc(request, _link_error(e))
+        ) from e
     except SkillError as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        if is_local_pc(request):
+            raise HTTPException(status_code=500, detail=str(e)) from e
+        logger.error("Adding skills from a link for a device failed: %s", e)
+        raise HTTPException(status_code=500, detail=DEVICE_SKILL_ERROR) from e
+    if is_local_pc(request):
+        return result
+    for added in result["added"]:
+        code = added["has_code"]
+        audit_approval(
+            request,
+            f"Skill {added['name']!r} added from a link"
+            + (" with code (allow_code)" if code else ""),
+        )
+        record_device_change(
+            request, "skillAddedCode" if code else "skillAdded", name=added["name"]
+        )
+        added["path"] = _off_pc(request, added["path"])
+    result["failed"] = {
+        name: _off_pc(request, reason) for name, reason in result["failed"].items()
+    }
+    return result
 
 
 def _link_error(e: Exception) -> str:
