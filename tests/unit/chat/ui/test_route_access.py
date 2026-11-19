@@ -30,6 +30,7 @@ import logging
 import re
 import threading
 import uuid
+from types import SimpleNamespace
 
 import pytest
 from fastapi.routing import APIRoute
@@ -1968,6 +1969,12 @@ def test_a_device_reads_and_prunes_the_device_list(setup, monkeypatch):
     gone = self_client.delete(f"/api/devices/{self_id}")
     assert gone.status_code == 200 and gone.json() == {"changes_count": 1}
     assert self_client.get("/api/devices").status_code == 401
+    removed = app.state.db.device_changes(device.device_id, 5)[0]
+    assert [
+        (c["kind"], c["params"].get("device"))
+        for c in removed
+        if c["kind"] == "deviceRemoved"
+    ] == [("deviceRemoved", "Spare")]
     assert audited == [
         (f"device:{device.device_id}", "pairing closed"),
         (f"device:{device.device_id}", f"device {other_id} unpaired"),
@@ -2072,6 +2079,12 @@ def test_a_device_grants_and_turns_on_connectors(setup, monkeypatch, tmp_path):
         connectors, "activate_connector_for_agent", lambda *a, **k: True
     )
     monkeypatch.setattr(connectors, "deactivate_connector_for_agent", lambda *a: None)
+    registry = SimpleNamespace(
+        list=lambda: [
+            SimpleNamespace(namespaced_agent_id="installed:email", name="Email Triage")
+        ]
+    )
+    monkeypatch.setattr(setup[0].state, "agent_registry", registry, raising=False)
     secret = "ghp_" + "S3CRETvalue" * 3
     url = "/api/connectors/mcp-github"
     configured = clients["pc"].post(
@@ -2091,26 +2104,31 @@ def test_a_device_grants_and_turns_on_connectors(setup, monkeypatch, tmp_path):
     for method, path, body in calls:
         _refused_away(clients, method, path, body)
     assert audited == []
+    calls += (("POST", f"{url}/disable", None),)
     for method, path, body in calls:
         resp = clients["device"].request(method, path, json=body, headers=UI)
         assert resp.status_code in (200, 204), (path, resp.text)
         assert secret not in resp.text
     by = f"device:{device.device_id}"
+    changes = setup[0].state.db.device_changes(device.device_id, 10)[0]
     kinds = [
-        (c["kind"], c["params"].get("agent_id"))
-        for c in setup[0].state.db.device_changes(device.device_id, 10)[0]
+        (c["kind"], c["params"].get("agent_id"), c["params"].get("agent"))
+        for c in changes
     ]
-    assert kinds[:4] == [
-        ("connectorEnable", None),
-        ("connectorActivation", "installed:email"),
-        ("connectorActivation", "installed:email"),
-        ("connectorGrant", "installed:email"),
+    assert kinds[:5] == [
+        ("connectorDisable", None, None),
+        ("connectorEnable", None, None),
+        ("connectorActivation", "installed:email", "Email Triage"),
+        ("connectorActivation", "installed:email", "Email Triage"),
+        ("connectorGrant", "installed:email", "Email Triage"),
     ], kinds
+    assert all(c["params"]["connector"] for c in changes[:5])
     assert audited == [
         (by, "connector mcp-github granted to installed:email"),
         (by, "connector mcp-github turned on for installed:email (granted)"),
         (by, "connector mcp-github turned off for installed:email"),
         (by, "connector mcp-github enabled"),
+        (by, "connector mcp-github disabled"),
     ]
 
 
