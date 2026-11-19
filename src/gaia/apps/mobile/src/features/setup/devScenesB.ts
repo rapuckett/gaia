@@ -131,6 +131,13 @@ export const SETUP_SCENES_B: Record<string, SetupScene> = {
             providers: withProviders({ fireworks: { configured: true, key_source: 'environment', key_hint: '9c1e', env_var: 'FIREWORKS_API_KEY' } }),
         },
     },
+    'key/env-unnamed': {
+        stage: 'plan', screen: 'key',
+        data: {
+            lemonadeTarget: { ...COMMON.lemonadeTarget!, source: 'gaia' },
+            providers: withProviders({ fireworks: { configured: true, key_source: 'environment', key_hint: '9c1e', env_var: null } }),
+        },
+    },
     'plan/blocked': { stage: 'plan', data: blockedPc() },
     'ready/gpu-now': { stage: 'ready', data: { ...READY, gpuMemory: GPU_TOOK_EFFECT } },
     'ready/gpu-restart': { stage: 'ready', data: { ...READY, gpuMemory: GPU_RESTART } },

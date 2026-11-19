@@ -52,6 +52,7 @@ const SHOWS: Record<string, RegExp> = {
     'gpu/restart': /Restart your PC to use/,
     'gpu/took-effect': /GPU memory is now/,
     'key/env': /Found a .*Fireworks AI.* key in your PC's environment/,
+    'key/env-unnamed': /Found a .*Fireworks AI.* key in your PC's environment\. Test and connect/,
     'key/gateway': /How to get an AMD LLM Gateway key/,
     'key/gateway-down': /Check the AMD gateway again/,
     'plan/blocked': /can't run GAIA's models/,
