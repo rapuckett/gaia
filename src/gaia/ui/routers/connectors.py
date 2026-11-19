@@ -164,7 +164,7 @@ def _checked_agent_id(agent_id: str) -> str:
             detail={
                 "error": "invalid_agent_id",
                 "message": "An agent id is namespaced, like 'builtin:chat' or "
-                "'installed:email'. Run `gaia connectors list` to see them.",
+                "'installed:email'.",
             },
         )
     return agent_id
