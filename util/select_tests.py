@@ -201,6 +201,7 @@ OS_MODULE_PREFIXES = PLATFORM_MODULE_PREFIXES + (
     "gaia.ports",
     "gaia.env",
     "gaia.device",
+    "gaia.ui.devices.listener",
     "gaia.login_path",
     "gaia.log_rotation",
     "gaia.program_lookup",

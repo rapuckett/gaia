@@ -53,11 +53,12 @@ def test_a_connection_short_of_scopes_is_a_403_that_lists_them():
     "reason",
     [AuthRequiredError.Reason.NOT_CONNECTED, AuthRequiredError.Reason.REAUTH_REQUIRED],
 )
-def test_no_usable_connection_is_a_401(reason):
+def test_no_usable_connection_is_a_409(reason):
+    # 401 is kept for GAIA's own auth, so a paired phone never reads it as unpaired.
     http = _raise_http_for(
         AuthRequiredError(reason, provider="microsoft", agent_id=FLAGSHIP)
     )
-    assert http.status_code == 401
+    assert http.status_code == 409
     assert http.detail == {
         "error": reason.value,
         "connector_id": "microsoft",

@@ -1264,6 +1264,7 @@ def test_every_module_that_branches_on_macos_runs_the_macos_lane():
             encoding="utf-8", errors="ignore"
         )
         for path in (REPO / "src/gaia").rglob("*.py")
+        if "node_modules" not in path.parts
     }
     missing = _unlisted_darwin_modules(sources)
     assert not missing, (
