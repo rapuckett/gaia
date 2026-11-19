@@ -21,6 +21,7 @@ import pytest
 from gaia.llm.lemonade_client import LemonadeClientError, LemonadeStatus
 from gaia.llm.lemonade_manager import DEFAULT_CONTEXT_SIZE, LemonadeManager
 from gaia.version import LEMONADE_VERSION
+from tests.unit.log_capture import printed_lines
 
 # A co-loaded non-LLM model. Its tiny ctx_size must never be mistaken for the
 # server's, and its presence must never be mistaken for "a chat model is up".
@@ -843,12 +844,9 @@ def test_first_discovery_of_ceiling_skips_restart_advice(mock_cls, capsys, caplo
     # The reload path already announced the cap once — the fall-through
     # must not print a second, separate ceiling message. Log records reach
     # the captured stderr too; they are diagnostics, not announcements.
-    printed = [
-        line
-        for line in output.splitlines()
-        if not any(message in line for message in caplog.messages)
+    announcements = [
+        line for line in printed_lines(output, caplog) if "trained context" in line
     ]
-    announcements = [line for line in printed if "trained context" in line]
     assert (
         len(announcements) == 1
     ), f"Expected exactly one ceiling announcement, got:\n{output}"
