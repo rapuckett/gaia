@@ -43,10 +43,8 @@ export function CloudPrices({ provider }: { provider: string }) {
                     <Text role="caption" tone="secondary">{priceText(m.price, t)}</Text>
                 </Stack>
             ))}
-            <Text role="caption" tone="muted">
-                {list.source ? `${list.source}. ` : ''}
-                {t('settings.price.payProvider')}
-            </Text>
+            <Text role="caption" tone="muted">{t('settings.price.payProvider')}</Text>
+            {list.source ? <Text role="caption" tone="muted" dir="ltr">{list.source}</Text> : null}
         </Stack>
     );
 }

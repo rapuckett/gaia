@@ -71,9 +71,8 @@ function Prices({ provider, picked, onPick, disabled, inUse }: {
         <Stack gap="sm" testID="key-prices">
             <Text role="label" weight="semibold">{t('settings.price.pickLegend')}</Text>
             <ChoiceList options={options} value={chosen} onChange={disabled ? () => undefined : onPick} accessibilityLabel={t('settings.model.prices')} />
-            <Text role="caption" tone="secondary">
-                {`${ltrIn(locale, list.source ?? '')}. ${t('settings.price.payProvider')}`}
-            </Text>
+            <Text role="caption" tone="secondary">{t('settings.price.payProvider')}</Text>
+            {list.source ? <Text role="caption" tone="muted" dir="ltr">{list.source}</Text> : null}
         </Stack>
     );
 }
