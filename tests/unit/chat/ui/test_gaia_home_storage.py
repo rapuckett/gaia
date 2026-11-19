@@ -164,7 +164,7 @@ def test_unsafe_gaia_home_is_an_actionable_startup_error_not_a_traceback(
     )
     # If the guard ever stops firing, fail instead of binding a real port.
     monkeypatch.setattr(
-        "uvicorn.run",
+        "gaia.ui.shutdown.serve",
         lambda *a, **k: pytest.fail("create_app() should have refused GAIA_HOME"),
     )
 
