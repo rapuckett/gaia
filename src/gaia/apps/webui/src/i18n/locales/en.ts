@@ -4209,6 +4209,7 @@ export const enMessages = {
     'mobileApp.ctx.costLocal': '$0 · on your PC',
     'mobileApp.ctx.costLocalTitle': 'Runs on your PC',
     'mobileApp.gpu.body': 'Your PC shares {total} between the processor (CPU) and graphics (GPU). The GPU has {gpu} now. AI models run on the GPU, so more here means bigger models.',
+    'mobileApp.mem.beta.discovery.audit': 'Your PC lists this under Changes made from this phone.',
     'mobileApp.mem.beta.discovery.local': 'All data stays local on your PC',
     'mobileApp.mem.beta.memory.local': 'Conversations and facts are stored locally on your PC',
     'mobileApp.mem.disc.title': 'Scan your PC',

@@ -58,12 +58,12 @@ export function ProfileCard({ kind, notify }: { kind: ProfileKind; notify: Memor
     const dev = useContext(ProfileDevContext);
     const auto = useRef(dev?.kind === kind);
     const autoSaved = useRef(false);
-    const { start, save } = run;
+    const { begin, save } = run;
     useEffect(() => {
         if (!auto.current) return;
         auto.current = false;
-        void start(false);
-    }, [start]);
+        void begin(false);
+    }, [begin]);
     useEffect(() => {
         if (dev?.kind !== kind || !dev.save || phase !== 'review' || items.length === 0 || autoSaved.current) return;
         autoSaved.current = true;
@@ -103,7 +103,7 @@ export function ProfileCard({ kind, notify }: { kind: ProfileKind; notify: Memor
                             variant="primary"
                             busy={phase === 'running'}
                             disabled={busy}
-                            onPress={() => void run.start(includeBrowser)}
+                            onPress={() => void run.begin(includeBrowser)}
                             testID={`profile-${kind}-run`}
                         />
                         {phase === 'running' ? (
@@ -112,7 +112,7 @@ export function ProfileCard({ kind, notify }: { kind: ProfileKind; notify: Memor
                     </Row>
                 )}
 
-                {consentOff ? <Notice tone="info" message={t('mobileApp.mem.log.noConsent')} detail={consentOff} testID={`profile-${kind}-consent-off`} /> : null}
+                {consentOff ? <Notice tone="info" message={t('mobileApp.mem.log.noConsent')} testID={`profile-${kind}-consent-off`} /> : null}
                 {logs.length > 0 ? <Log lines={logs} running={phase === 'running'} /> : null}
                 {detail ? (
                     <Disclosure title={t('prompt.technicalDetails')} open={detailOpen} onToggle={() => setDetailOpen((open) => !open)}>
@@ -175,6 +175,7 @@ export function ProfileCard({ kind, notify }: { kind: ProfileKind; notify: Memor
                         <Text tone="muted">{t(copy.empty)}</Text>
                     </Row>
                 ) : null}
+                {run.sheet}
             </Stack>
         </Card>
     );

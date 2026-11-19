@@ -13,6 +13,8 @@ export interface ConfirmRequest {
     body: string[];
     confirmLabel: string;
     cancelLabel: string;
+    /** A muted caption under the body. */
+    note?: string;
     /** Danger styling for a choice that deletes something. */
     danger?: boolean;
 }

@@ -4208,6 +4208,7 @@ const messages: Messages = {
     'mobileApp.ctx.costLocal': '$0 · على الكمبيوتر لديك',
     'mobileApp.ctx.costLocalTitle': 'يعمل على الكمبيوتر لديك',
     'mobileApp.gpu.body': 'يتشارك الكمبيوتر لديك {total} بين المعالج (CPU) والرسومات (GPU). لدى الـGPU الآن {gpu}. تعمل نماذج الذكاء الاصطناعي على الـGPU، لذا فالمزيد هنا يعني نماذج أكبر.',
+    'mobileApp.mem.beta.discovery.audit': 'يُدرج الكمبيوتر لديك هذا ضمن «التغييرات من هذا الهاتف».',
     'mobileApp.mem.beta.discovery.local': 'تبقى كل البيانات محليًا على الكمبيوتر لديك',
     'mobileApp.mem.beta.memory.local': 'تُحفظ المحادثات والمعلومات محليًا على الكمبيوتر لديك',
     'mobileApp.mem.disc.title': 'افحص الكمبيوتر لديك',
