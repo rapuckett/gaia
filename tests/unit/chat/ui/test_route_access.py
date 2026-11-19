@@ -1745,7 +1745,8 @@ def test_an_allowed_device_adds_skills_from_a_link(setup, monkeypatch):
     assert resp.status_code == 200, resp.text
     assert calls[0]["allow_code"] is True and calls[0]["pin"] == "commit:abc"
     assert str(gaia_home()) not in resp.text
-    assert resp.json()["added"][0]["path"] == "~/.gaia/skills/notes"
+    # The test's GAIA folder sits outside its home folder, so it is named, not tilde'd.
+    assert resp.json()["added"][0]["path"] == "GAIA's folder/skills/notes"
     assert _newest_changes(app, device, 2) == [
         ("skillAdded", {"name": "notes"}),
         ("skillAddedCode", {"name": "coder"}),

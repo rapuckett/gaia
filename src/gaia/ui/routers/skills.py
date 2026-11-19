@@ -235,7 +235,12 @@ def _off_pc(request: Request, text: str) -> str:
         return text
     from gaia.home import gaia_home
 
-    shown = text.replace(str(gaia_home()), "~/.gaia").replace(str(Path.home()), "~")
+    folder = gaia_home()
+    try:
+        folder_shown = "~/" + folder.relative_to(Path.home()).as_posix()
+    except ValueError:
+        folder_shown = "GAIA's folder"
+    shown = text.replace(str(folder), folder_shown).replace(str(Path.home()), "~")
     return DEVICE_SKILL_ERROR if _ABSOLUTE_PATH.search(shown) else shown
 
 
