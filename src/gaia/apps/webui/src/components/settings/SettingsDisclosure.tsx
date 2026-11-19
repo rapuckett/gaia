@@ -17,18 +17,20 @@ interface Props {
     forceOpen?: boolean;
     /** Lets Settings > Setup send the user straight to this section. */
     targetId?: string;
+    /** Called when the section opens or closes. */
+    onToggle?: (open: boolean) => void;
     children: ReactNode;
 }
 
 /** A collapsible section; its contents stay mounted, so their state survives closing it. */
-export function SettingsDisclosure({ title, titleId, count, hint, defaultOpen = false, forceOpen = false, targetId, children }: Props) {
+export function SettingsDisclosure({ title, titleId, count, hint, defaultOpen = false, forceOpen = false, targetId, onToggle, children }: Props) {
     const [open, setOpen] = useState(defaultOpen);
     return (
         <details
             className="settings-disclosure"
             data-settings-target={targetId}
             open={open || forceOpen}
-            onToggle={(e) => { if (!forceOpen) setOpen(e.currentTarget.open); }}
+            onToggle={(e) => { if (!forceOpen) setOpen(e.currentTarget.open); onToggle?.(e.currentTarget.open); }}
         >
             <summary onClick={(e) => { if (forceOpen) e.preventDefault(); }}>
                 <ChevronDown size={15} className="settings-disclosure-chevron" aria-hidden="true" />

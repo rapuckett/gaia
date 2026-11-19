@@ -5,7 +5,7 @@ import { createFakeClient, type FakeClientData } from '@/api/fake';
 import type { SystemStatus } from '@webui/types';
 import { tEn } from '@webui/i18n/translator';
 
-import type { Automation, AutomationList, ContextChoice, Session, SkillInfo, DiscordStatus, GaiaClient, CustomModelReport, GpuMemoryStatus, LemonadeTarget, MCPServerStatus, ModelServerInfo, ProviderModel, Settings, SpendingReport } from '@/api/client.types';
+import type { Automation, AutomationList, ContextChoice, Session, SkillInfo, DiscordStatus, GaiaClient, CustomModelReport, GpuMemoryStatus, LemonadeTarget, MCPServerStatus, ModelServerInfo, ProviderModel, ProviderSummary, Settings, SpendingReport } from '@/api/client.types';
 import { PC_ONLY_REFUSAL } from '@/api/constants';
 import { GaiaApiError, GaiaNetworkError } from '@/api/errors';
 import { COMMON, GPU, RUN } from '@/features/setup/devScenes';
@@ -168,6 +168,17 @@ const keyRejected = () => Promise.reject(new GaiaApiError(502, `Fireworks AI rej
 const keyRefusedAway = () => Promise.reject(new GaiaApiError(403, 'Enter provider keys on the PC running GAIA or on a paired device the PC allowed, not over mobile access.'));
 const storeLocked = () => Promise.reject(new GaiaApiError(423, 'The credential store on the PC running GAIA could not be used. Unlock or fix it on the PC, then try again.'));
 const keyScene = (scene: Partial<SettingsScene>): SettingsScene => ({ section: 'model', target: 'cloud-key', provider: 'fireworks', gpuMemory: GPU, ...scene });
+// Fireworks as the PC's list reports its key; the hint is fixture data, never a real key's.
+const keyFields = (fireworks: Partial<ProviderSummary>): SettingsScene => {
+    const list = providers(!!fireworks.configured);
+    const fields = { key_source: null, key_state: 'read', key_hint: null, known_models: false, ...fireworks } as const;
+    return keyScene({
+        data: {
+            providers: { ...list, providers: list.providers.map((p) => (p.id === 'fireworks' ? { ...p, ...fields } : p)) },
+            providerModels: { fireworks: { provider: 'fireworks', models: [] } },
+        },
+    });
+};
 
 const discord = (extra: Partial<DiscordStatus>): DiscordStatus => ({
     connected: true, paired: false, running: true, state: 'stopped', detail: '', bot_name: 'GAIA Helper', owner_name: '', autostart: false,
@@ -273,6 +284,22 @@ export const SETTINGS_SCENES: Record<string, SettingsScene> = {
     'model-key-remove': keyScene({ data: cloud([]) }),
     // SET-MODEL-13: a connected provider with Replace pressed: "Paste your new key", Save key, Cancel.
     'model-key-replace': keyScene({ keyEntry: { replacing: true }, data: cloud([]) }),
+    // SET-MODEL-11: a saved key on the PC: 20 bullets and its last four, with Replace and Remove.
+    'model-key-stored': keyFields({ configured: true, key_source: 'stored', key_hint: '4f2a' }),
+    // SET-MODEL-10: a saved key that isn't connected: "has your key but is not connected yet" and Reconnect.
+    'model-key-saved-disconnected': keyFields({ configured: false, key_source: 'stored', key_hint: '4f2a' }),
+    // SET-MODEL-10: a key from the PC's environment: no Replace or Remove.
+    'model-key-env': keyFields({ configured: true, key_source: 'environment', key_hint: '9c1e' }),
+    // SET-MODEL-10: a key Lemonade already holds, shown masked like a saved one.
+    'model-key-lemonade': keyFields({ configured: true, key_source: 'lemonade', key_hint: '7b3d' }),
+    // SET-MODEL-10: GAIA on the PC hasn't read its key store since it started: "Waiting for the OS…".
+    'model-key-unknown': keyFields({ configured: false, key_state: 'unknown' }),
+    // SET-MODEL-18: the PC's list says its key store is locked, before anything is sent: the warning and Try again.
+    'model-key-store-locked': keyFields({ configured: false, key_state: 'store_locked' }),
+    // SET-MODEL-11: a saved key with no hint, as over mobile access: no saved-key row at all.
+    'model-key-no-hint': keyFields({ configured: true, key_source: 'stored', key_hint: null }),
+    // SET-MODEL-19: Fireworks can't list its models, so the PC serves the ones it knows.
+    'model-models-stale': keyFields({ configured: true, key_source: 'stored', key_hint: '4f2a', known_models: true }),
     // SET-MODEL-20: a cloud list with nothing in it says "No models match."; typing a miss into `model-search` shows the same on the local list.
     'model-search-empty': { section: 'model', target: 'models-on-pc', provider: 'fireworks', gpuMemory: GPU, data: cloud([]) },
     'model-local-empty': { section: 'model', target: 'models-on-pc', gpuMemory: GPU, data: local([]) },

@@ -46,6 +46,8 @@ export function LanguageSwitchCover({ target, platform, onCancel }: CoverProps) 
                 banner={null}
                 footer={
                     <DirectionOverride.Provider value={dir}>
+                    {/* Android ignores writingDirection; a layout direction is what its text follows. */}
+                    <View style={{ direction: dir }}>
                     <Stack gap="sm">
                         {android ? (
                             <Button
@@ -60,11 +62,12 @@ export function LanguageSwitchCover({ target, platform, onCancel }: CoverProps) 
                             <Button full label={t('mobileApp.settings.languageSwitch.cancel')} onPress={onCancel} testID="language-switch-cancel" />
                         ) : null}
                     </Stack>
+                    </View>
                     </DirectionOverride.Provider>
                 }
             >
                 <DirectionOverride.Provider value={dir}>
-                <View style={{ flex: 1, justifyContent: 'center' }}>
+                <View style={{ flex: 1, justifyContent: 'center', direction: dir }}>
                     <Stack gap="md" paddingX="gutter" testID="language-switch-content">
                         <Text role="title" weight="semibold" align="center" accessibilityRole="header">
                             {t(android ? 'mobileApp.settings.languageSwitch.androidTitle' : 'mobileApp.settings.languageSwitch.iosTitle', { language })}

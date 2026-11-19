@@ -9,7 +9,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { GaiaApiError } from '@/api/errors';
 import { createFakeClient } from '@/api/fake';
-import { GaiaClientProvider, type ProviderRow } from '@/data';
+import { GaiaClientProvider, useProviders, type ProviderRow } from '@/data';
 import { ThemeProvider } from '@/ui';
 import { SheetHost } from '@/ui/overlays/SheetHost';
 import { sheetStore } from '@/ui/overlays/sheetStore';
@@ -22,6 +22,13 @@ const describeNative = Platform.OS === 'web' ? describe.skip : describe;
 const DUMMY_KEY = 'sk-test-dummy';
 const TYPED_KEY = 'fw-typed-test-key-4242';
 const none: ProviderRow = { id: 'fireworks', name: 'Fireworks AI', remote: true, privacy_notice: '', configured: false, blocked: false };
+const stored: ProviderRow = { ...none, configured: true, key_source: 'stored', key_state: 'read', key_hint: '4f2a', known_models: false };
+
+/** The card as the Model pane mounts it: the row comes from the PC's provider list. */
+function FromList() {
+    const row = useProviders().data?.providers.find((p) => p.id === 'fireworks');
+    return row ? <ProviderKey provider={row} connected={row.configured} /> : null;
+}
 
 /** Everything the app could still hold the key in: the screen, the query cache and the mutation cache. */
 function heldAnywhere(r: { toJSON: () => unknown }, queryClient: QueryClient): string {
@@ -143,6 +150,8 @@ describeNative('Provider key', () => {
 
         await fireEvent.press(screen.getByTestId('provider-key-remove'));
         expect(await screen.findByText('Remove this key?')).toBeTruthy();
+        expect(screen.getByTestId('confirm-ok')).toHaveTextContent('Remove key');
+        expect(screen.getByTestId('confirm-cancel')).toHaveTextContent('Keep');
         expect(client.keyRemovals).toEqual([]);
         await fireEvent.press(screen.getByTestId('confirm-ok'));
         expect(await screen.findByText(/^Key cleared, here and for future sessions/)).toBeTruthy();
@@ -162,6 +171,80 @@ describeNative('Provider key', () => {
         expect(client.connects).toEqual(['fireworks']);
         expect(client.keyedConnects).toEqual([]);
         expect(JSON.stringify(r.container.toJSON())).not.toContain(DUMMY_KEY);
+        queryClient.clear();
+    });
+    it('shows a saved key as 20 bullets and the PC\'s last four, labeled as the saved key', async () => {
+        const { queryClient, wrap } = setup(stored);
+        await render(<ProviderKey provider={stored} connected />, { wrapper: wrap });
+
+        const saved = screen.getByTestId('provider-key-saved');
+        // LTR-isolated, so the last four stay at the end in Arabic too.
+        expect(saved).toHaveTextContent(`\u2066${'•'.repeat(20)} 4f2a\u2069`);
+        expect(saved.props.accessibilityLabel).toMatch(/^Saved .*Fireworks AI.* API key$/);
+        queryClient.clear();
+    });
+
+    it('shows no saved-key row when the PC sends no hint, as over mobile access', async () => {
+        const noHint: ProviderRow = { ...stored, key_hint: null };
+        const { queryClient, wrap } = setup(noHint);
+        await render(<ProviderKey provider={noHint} connected />, { wrapper: wrap });
+
+        expect(screen.queryByTestId('provider-key-saved')).toBeNull();
+        expect(screen.queryByText(/•/)).toBeNull();
+        expect(screen.getByTestId('provider-key-remove')).toBeTruthy();
+        queryClient.clear();
+    });
+
+    it('a key from the PC\'s environment can\'t be removed or replaced from here', async () => {
+        const env: ProviderRow = { ...stored, key_source: 'environment', key_hint: '9c1e' };
+        const { queryClient, wrap } = setup(env);
+        await render(<ProviderKey provider={env} connected />, { wrapper: wrap });
+
+        expect(screen.getByTestId('provider-key-env')).toHaveTextContent('From your environment on your PC');
+        expect(screen.queryByTestId('provider-key-remove')).toBeNull();
+        expect(screen.queryByTestId('provider-key-replace')).toBeNull();
+        queryClient.clear();
+    });
+
+    it('before GAIA on the PC has read its key store, it says it is waiting for the OS', async () => {
+        const unknown: ProviderRow = { ...none, key_source: null, key_state: 'unknown', key_hint: null, known_models: false };
+        const { queryClient, wrap } = setup(unknown);
+        await render(<ProviderKey provider={unknown} connected={false} />, { wrapper: wrap });
+
+        expect(screen.getByTestId('provider-key-waiting')).toHaveTextContent('Waiting for the OS to allow reading the saved key.');
+        expect(screen.queryByText('No key yet.')).toBeNull();
+        expect(screen.getByTestId('provider-key-reconnect')).toBeTruthy();
+        queryClient.clear();
+    });
+
+    it('says the model list may be out of date only while the PC serves the models it knows', async () => {
+        const stale: ProviderRow = { ...stored, known_models: true };
+        const { queryClient, wrap } = setup(stale);
+        const r = await render(<ProviderKey provider={stored} connected />, { wrapper: wrap });
+        expect(screen.queryByTestId('provider-key-known-list')).toBeNull();
+
+        await r.rerender(<ProviderKey provider={stale} connected />);
+        expect(screen.getByTestId('provider-key-known-list')).toHaveTextContent(/can't list its models right now, so GAIA is showing models it already knows/);
+        queryClient.clear();
+    });
+
+    it('after a new key is saved, the card reads the PC\'s list again and shows the new hint', async () => {
+        const { client, queryClient, wrap } = setup(stored);
+        let hint = '4f2a';
+        jest.spyOn(client, 'listProviderSummaries').mockImplementation(async () => ({ providers: [{ ...stored, key_hint: hint }], lemonade_error: null }));
+        jest.spyOn(client, 'connectProvider').mockImplementation(async () => {
+            hint = '4242';
+            return { remembered: true };
+        });
+        const r = await render(<FromList />, { wrapper: wrap });
+
+        expect(await screen.findByTestId('provider-key-saved')).toHaveTextContent(/4f2a/);
+        await fireEvent.press(screen.getByTestId('provider-key-replace'));
+        await fireEvent.changeText(screen.getByTestId('provider-key-field'), TYPED_KEY);
+        await fireEvent.press(screen.getByTestId('provider-key-connect'));
+
+        await waitFor(() => expect(screen.getByTestId('provider-key-saved')).toHaveTextContent(/4242/));
+        expect(heldAnywhere(r.container, queryClient)).not.toContain(TYPED_KEY);
         queryClient.clear();
     });
 });

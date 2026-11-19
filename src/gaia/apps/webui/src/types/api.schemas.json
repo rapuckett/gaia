@@ -11417,9 +11417,42 @@
         "title": "Configured",
         "type": "boolean"
       },
+      "env_var": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Env Var"
+      },
+      "error": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Error"
+      },
       "id": {
         "title": "Id",
         "type": "string"
+      },
+      "key_from_gaia_env": {
+        "anyOf": [
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Key From Gaia Env"
       },
       "key_hint": {
         "anyOf": [
