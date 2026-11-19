@@ -28,6 +28,7 @@ import socket
 import sys
 import tempfile
 import threading
+import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -423,9 +424,80 @@ def describe_unavailable(model_id: str, entry: Dict[str, Any]) -> str:
 # gateway would not collide.
 GATEWAY_SECRET_NAME = f"gateway:{GATEWAY_PROVIDER}"
 
-#: Held while GAIA hands Lemonade the stored key or moves the gateway, so no
-#: replay in this process lands in the middle of a move.
-GATEWAY_KEY_LOCK = threading.RLock()
+#: How long a replay or a move of the gateway waits for another one to finish.
+GATEWAY_KEY_LOCK_TIMEOUT = 60.0
+#: The lock file under ``gaia_home()`` every GAIA process takes.
+GATEWAY_KEY_LOCK_NAME = "gateway_key.lock"
+
+
+class GatewayBusy(GatewayError):
+    """Another replay or move of the gateway held the lock past the timeout."""
+
+
+def _busy_message() -> str:
+    return (
+        f"Another GAIA window or process has been changing the AMD LLM Gateway "
+        f"for over {GATEWAY_KEY_LOCK_TIMEOUT:.0f} s, so GAIA didn't hand Lemonade "
+        f"a key meanwhile. Try again in a minute; if it keeps happening, quit "
+        f"GAIA's other windows and `gaia` commands, or restart the PC."
+    )
+
+
+class _GatewayKeyLock:
+    """Held while GAIA hands Lemonade a gateway key or moves the gateway.
+
+    Machine-wide: a file lock under ``gaia_home()`` that the Agent UI, the
+    daemon, the CLI and agent processes all take, so no replay lands between a
+    move dropping Lemonade's key and registering the new address. Re-entrant
+    within one thread. Blocks up to :data:`GATEWAY_KEY_LOCK_TIMEOUT`, then
+    raises :class:`GatewayBusy`.
+    """
+
+    def __init__(self) -> None:
+        self._local = threading.RLock()
+        self._depth = 0
+        self._fd: Optional[int] = None
+
+    def __enter__(self) -> "_GatewayKeyLock":
+        deadline = time.monotonic() + GATEWAY_KEY_LOCK_TIMEOUT
+        if not self._local.acquire(timeout=GATEWAY_KEY_LOCK_TIMEOUT):
+            raise GatewayBusy(_busy_message())
+        try:
+            if self._depth == 0:
+                self._fd = _take_file_lock(deadline)
+            self._depth += 1
+        except BaseException:
+            self._local.release()
+            raise
+        return self
+
+    def __exit__(self, *exc: Any) -> None:
+        try:
+            self._depth -= 1
+            if self._depth == 0 and self._fd is not None:
+                fd, self._fd = self._fd, None
+                # Closing the descriptor releases the lock.
+                os.close(fd)
+        finally:
+            self._local.release()
+
+
+def _take_file_lock(deadline: float) -> int:
+    from gaia.config import gaia_home
+    from gaia.daemon.lock import try_lock
+
+    path = gaia_home() / GATEWAY_KEY_LOCK_NAME
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd = os.open(path, os.O_RDWR | os.O_CREAT, 0o600)
+    while not try_lock(fd):
+        if time.monotonic() >= deadline:
+            os.close(fd)
+            raise GatewayBusy(_busy_message())
+        time.sleep(0.05)
+    return fd
+
+
+GATEWAY_KEY_LOCK = _GatewayKeyLock()
 
 
 @dataclass(frozen=True)
@@ -1131,7 +1203,28 @@ class GatewayManager:
         for an ``http://`` endpoint — it refuses by default rather than send a
         credential in the clear. Needed only for an on-prem gateway without
         TLS; AMD's is https and does not.
+
+        A new address first drops Lemonade's key for the old one, which it
+        would otherwise send to the new address.
         """
+        with GATEWAY_KEY_LOCK:
+            return self._install(
+                base_url,
+                api_key=api_key,
+                auth_header_name=auth_header_name,
+                auth_header_prefix=auth_header_prefix,
+                allow_insecure_http=allow_insecure_http,
+            )
+
+    def _install(
+        self,
+        base_url: str,
+        *,
+        api_key: Optional[str],
+        auth_header_name: Optional[str],
+        auth_header_prefix: Optional[str],
+        allow_insecure_http: bool,
+    ) -> Dict[str, Any]:
         payload: Dict[str, Any] = {
             "backend": "cloud",
             "provider": GATEWAY_PROVIDER,
@@ -1158,6 +1251,17 @@ class GatewayManager:
             payload["api_key"] = api_key
 
         self._refuse_an_unsupported_server()
+        current = self.status()
+        if (
+            current.installed
+            and current.runtime_key_set
+            and not same_gateway_url(current.base_url, payload["base_url"])
+        ):
+            self.clear_token()
+            self.log.info(
+                f"Dropped Lemonade's key for {_host_of(current.base_url or '')} "
+                f"before moving the gateway to {_host_of(payload['base_url'])}."
+            )
         result = self._request(
             "POST", "install", payload=payload, timeout=_DISCOVERY_TIMEOUT, redact=True
         )
@@ -1235,6 +1339,10 @@ class GatewayManager:
         is not it: callers use ``remember_token`` for the OS credential store,
         or ``LEMONADE_AMD_API_KEY`` in Lemonade's own environment.
         """
+        with GATEWAY_KEY_LOCK:
+            return self._set_token(api_key)
+
+    def _set_token(self, api_key: str) -> Dict[str, Any]:
         if cloud_blocked():
             raise GatewayBlockedError(local_only_key_message("AMD LLM Gateway"))
         if not api_key or not api_key.strip():

@@ -11,11 +11,14 @@ whether Lemonade would accept the request. The matching contract test lives in
 
 import json
 import os
+import sys
+import threading
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
 
+from gaia.llm import gateway as gateway_module
 from gaia.llm.gateway import (
     DEFAULT_AUTH_HEADER_NAME,
     DEFAULT_GATEWAY_BASE_URL,
@@ -195,6 +198,34 @@ class TestInstall:
             manager.set_token("tok")
 
         assert "allow_insecure_http" not in request.call_args.kwargs["json"]
+
+    @pytest.mark.parametrize("moved", [True, False])
+    def test_a_new_address_drops_lemonades_key_for_the_old_one_first(
+        self, manager, moved
+    ):
+        registered = {
+            "cloud": {
+                "providers": [
+                    {
+                        "name": GATEWAY_PROVIDER,
+                        "base_url": "https://old.example.com/v1",
+                        "runtime_key_set": True,
+                    }
+                ]
+            }
+        }
+        with patch("gaia.llm.gateway.requests.request") as request:
+            request.return_value = _response(body=registered)
+            manager.install(
+                "https://new.example.com/v1" if moved else "https://old.example.com/v1/"
+            )
+        sent = [
+            (c.args[0], c.args[1].rsplit("/api/v1/", 1)[1])
+            for c in request.mock_calls
+            if c.args
+        ]
+        dropped = [("DELETE", f"cloud/auth/{GATEWAY_PROVIDER}")] if moved else []
+        assert sent == [("GET", "system-info"), *dropped, ("POST", "install")]
 
     def test_remembers_the_base_url(self, manager):
         with patch("gaia.llm.gateway.requests.request") as request:
@@ -980,7 +1011,8 @@ class TestAnUnsupportedServerIsRefusedBeforeRegistering:
         with patch("gaia.llm.gateway.requests.request") as request:
             request.return_value = _response(body={"models_discovered": 2})
             manager.install("https://gw.example.com/v1")
-        request.assert_called_once()
+        assert request.call_args.args[0] == "POST"
+        assert request.call_args.args[1].endswith("/install")
 
     def test_an_unreachable_server_registers_nothing(self, manager):
         manager.client.health_check.side_effect = LemonadeClientError("refused")
@@ -1748,3 +1780,95 @@ def test_gateway_token_prompt_without_a_terminal_exits_1_and_names_the_alternati
     assert "needs a terminal" in captured.err
     assert "--token-stdin" in captured.err
     assert "GAIA_GATEWAY_TOKEN" in captured.err
+
+
+# --------------------------------------------------------------------------
+# One replay or move at a time, across every GAIA process
+# --------------------------------------------------------------------------
+
+
+class TestGatewayKeyLock:
+    @pytest.fixture
+    def held_elsewhere(self, tmp_path, monkeypatch):
+        """Another process holding the machine-wide lock, until the test ends."""
+        import subprocess as sp
+
+        monkeypatch.setenv("GAIA_HOME", str(tmp_path))
+        code = (
+            "import os, sys\n"
+            "from gaia.daemon.lock import try_lock\n"
+            "fd = os.open(sys.argv[1], os.O_RDWR | os.O_CREAT)\n"
+            "assert try_lock(fd)\n"
+            "print('held', flush=True)\n"
+            "sys.stdin.readline()\n"
+        )
+        path = tmp_path / gateway_module.GATEWAY_KEY_LOCK_NAME
+        child = sp.Popen(
+            [sys.executable, "-c", code, str(path)],
+            stdin=sp.PIPE,
+            stdout=sp.PIPE,
+            text=True,
+            env={**os.environ, "PYTHONPATH": os.pathsep.join(sys.path)},
+        )
+        assert child.stdout.readline().strip() == "held"
+        try:
+            yield child
+        finally:
+            if child.poll() is None:
+                child.communicate("\n", timeout=10)
+
+    def test_a_replay_waits_out_another_process_then_fails_loudly(
+        self, manager, held_elsewhere, monkeypatch
+    ):
+        monkeypatch.setattr(gateway_module, "GATEWAY_KEY_LOCK_TIMEOUT", 0.3)
+        with patch("gaia.llm.gateway.requests.request") as request:
+            with pytest.raises(gateway_module.GatewayBusy, match="Try again"):
+                manager.ensure_authenticated(
+                    recall=lambda: pytest.fail("read the key under another's move")
+                )
+            with pytest.raises(gateway_module.GatewayBusy):
+                manager.set_token("tok")
+            with pytest.raises(gateway_module.GatewayBusy):
+                manager.install("https://gw.example.com/v1")
+        request.assert_not_called()
+
+    def test_a_replay_goes_ahead_once_the_other_process_lets_go(
+        self, manager, held_elsewhere
+    ):
+        done = []
+        with patch("gaia.llm.gateway.requests.request") as request:
+            request.return_value = _response(body={})
+            waiter = threading.Thread(
+                target=lambda: done.append(manager.set_token("tok"))
+            )
+            waiter.start()
+            waiter.join(timeout=0.5)
+            assert waiter.is_alive() and request.call_count == 0
+            held_elsewhere.communicate("\n", timeout=10)
+            waiter.join(timeout=10)
+        assert done and request.call_args.args[0] == "POST"
+
+    def test_one_thread_may_take_it_again_but_another_waits(
+        self, tmp_path, monkeypatch
+    ):
+        monkeypatch.setenv("GAIA_HOME", str(tmp_path))
+        lock = gateway_module.GATEWAY_KEY_LOCK
+        errors = []
+        with lock:
+            with lock:
+                pass
+            monkeypatch.setattr(gateway_module, "GATEWAY_KEY_LOCK_TIMEOUT", 0.2)
+
+            def try_it():
+                try:
+                    with lock:
+                        errors.append(None)
+                except gateway_module.GatewayBusy as e:
+                    errors.append(e)
+
+            other = threading.Thread(target=try_it)
+            other.start()
+            other.join(timeout=5)
+        assert isinstance(errors[0], gateway_module.GatewayBusy)
+        with lock:
+            pass

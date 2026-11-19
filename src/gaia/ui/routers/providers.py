@@ -2059,7 +2059,8 @@ GATEWAY_RESTORE_FAILED_DETAIL = (
     "old one. Enter a working address and key in Settings › Model."
 )
 
-#: Held while a device moves the gateway; GAIA's own replays take it too.
+#: Held while the gateway moves or takes a key; every GAIA process's replays
+#: take it too.
 _gateway_move_lock = GATEWAY_KEY_LOCK
 #: ``_restore_gateway``'s default: read the stored key when restoring.
 _READ_SAVED_KEY = object()
@@ -2386,7 +2387,25 @@ def _connect_device_gateway(
 def connect_provider(
     provider: str, body: ConnectRequest, request: Request
 ) -> Dict[str, Any]:
-    """Register the provider and hand Lemonade the key; keep a key that works."""
+    """Register the provider and hand Lemonade the key; keep a key that works.
+
+    The gateway's connect holds the machine-wide gateway key lock throughout,
+    so no other process replays a key while its address or key changes.
+    """
+    if provider != AMD:
+        return _connect_provider(provider, body, request)
+    from gaia.llm.gateway import GatewayBusy
+
+    try:
+        with _gateway_move_lock:
+            return _connect_provider(provider, body, request)
+    except GatewayBusy as e:
+        raise HTTPException(status_code=409, detail=str(e)) from e
+
+
+def _connect_provider(
+    provider: str, body: ConnectRequest, request: Request
+) -> Dict[str, Any]:
     # A new key gets its own settle window.
     _key_settle_started.pop(provider, None)
     from gaia.llm.cloud_keys import CloudKeyError, ensure_authenticated, remember_key

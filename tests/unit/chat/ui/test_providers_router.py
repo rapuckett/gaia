@@ -2415,6 +2415,20 @@ def test_device_gateway_moves_wait_for_each_other(
     assert lemonade.cloud["amd"]["base_url"] == NEW_URL
 
 
+def test_a_pc_gateway_connect_waits_for_another_processs_move(
+    client, lemonade, bound_gateway, monkeypatch
+):
+    monkeypatch.setattr(gateway, "GATEWAY_KEY_LOCK_TIMEOUT", 0.3)
+    with providers._gateway_move_lock:
+        results = []
+        other = threading.Thread(target=lambda: results.append(_move(client)))
+        other.start()
+        other.join(timeout=10)
+    assert results[0].status_code == 409
+    assert results[0].json()["detail"] == gateway._busy_message()
+    assert lemonade.calls == []
+
+
 def test_a_key_saved_before_bindings_is_bound_to_the_current_gateway(
     client, lemonade, bound_gateway
 ):

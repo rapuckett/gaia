@@ -196,11 +196,11 @@ def ensure_authenticated(
             return True
         raise CloudKeyError(users_server_provider_message(base_url, provider))
     if provider == GATEWAY_PROVIDER:
-        from gaia.llm.gateway import GatewayKeyMismatch, GatewayManager
+        from gaia.llm.gateway import GatewayBusy, GatewayKeyMismatch, GatewayManager
 
         try:
             return GatewayManager(client).ensure_authenticated(recall=recall)
-        except GatewayKeyMismatch as e:
+        except (GatewayBusy, GatewayKeyMismatch) as e:
             raise CloudKeyError(str(e)) from e
 
     entry = _provider_entry(base_url, provider)
