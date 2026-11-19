@@ -25,6 +25,7 @@ fails for a route nobody has decided about:
 from __future__ import annotations
 
 import contextlib
+import json
 import logging
 import re
 import threading
@@ -60,8 +61,6 @@ PC_ONLY = {
     "DELETE /api/devices/routes/{kind}",
     "GET /api/connectors/_debug",
     "GET /api/connectors/eval-mailbox",
-    "GET /api/memory/stream-discovery",
-    "GET /api/memory/stream-inference",
     "POST /api/agents/install",
     "POST /api/connectors/eval-mailbox",
     "POST /api/devices/listener",
@@ -98,6 +97,8 @@ PC_OR_DEVICE = {
     "GET /api/devices/{device_id}/changes",
     "GET /api/logs",
     "GET /api/logs/{source}",
+    "GET /api/memory/stream-discovery",
+    "GET /api/memory/stream-inference",
     "GET /api/messaging/discord",
     "GET /api/setup/report/{name}",
     "POST /api/automations/{ref}/{action}",
@@ -961,24 +962,18 @@ def test_a_device_never_sees_the_home_folder_in_an_error(setup, monkeypatch):
 
 
 @pytest.mark.parametrize(
-    "method,path,body",
+    "path,body",
     [
-        ("GET", "/api/memory/stream-discovery", None),
-        ("GET", "/api/memory/stream-inference?include_browser=true", None),
+        ("/api/memory/commit-discovery", {"items": [{"content": "x"}]}),
+        ("/api/memory/commit-inference", {"insights": [{"content": "x"}]}),
     ],
 )
-def test_memory_profile_scan_is_pc_only(setup, monkeypatch, method, path, body):
-    """The scan reads the PC's files and browsing; only the PC may run it."""
-    from gaia.agents.base import discovery
+def test_mobile_access_cannot_save_a_profile_scan(setup, monkeypatch, path, body):
+    """Saving what a scan found needs the PC or an allowed device, never the tunnel."""
     from gaia.ui.routers import memory
 
     app, clients, _ = setup
     touched = []
-
-    class _Discovery:
-        def __init__(self):
-            touched.append("scan")
-            raise RuntimeError("scanned")
 
     class _Store:
         def store(self, **kwargs):
@@ -988,23 +983,118 @@ def test_memory_profile_scan_is_pc_only(setup, monkeypatch, method, path, body):
             touched.append("store")
             return []
 
-    monkeypatch.setattr(discovery, "SystemDiscovery", _Discovery)
     monkeypatch.setattr(memory, "_get_store", _Store)
-    # System discovery is on, so only who asks decides.
+    ui = {"X-Gaia-UI": "1"}
+    for caller in ("tunnel", "pending"):
+        resp = clients[caller].post(path, json=body, headers=ui)
+        assert resp.status_code == 403, (caller, resp.text)
+    assert touched == []
+    assert clients["pc"].post(path, json=body, headers=ui).status_code == 200
+    assert touched
+
+
+_SCANS = ("/api/memory/stream-discovery", "/api/memory/stream-inference")
+
+
+def _events(resp):
+    return [
+        json.loads(line[len("data: ") :])
+        for line in resp.text.splitlines()
+        if line.startswith("data: ")
+    ]
+
+
+def _stub_discovery(monkeypatch, touched):
+    from gaia.agents.base import discovery
+
+    class _Discovery:
+        def __init__(self):
+            touched.append("scan")
+
+        def scan_git_identity(self):
+            return [
+                {
+                    "content": "Project 'gaia' in Projects/",
+                    "path": "/Users/someone/Projects/gaia",
+                    "paths": ["/Users/someone/Projects/gaia"],
+                }
+            ]
+
+        def __getattr__(self, name):
+            return lambda *a, **k: []
+
+    monkeypatch.setattr(discovery, "SystemDiscovery", _Discovery)
+    monkeypatch.setattr(discovery, "covered_by_twin", lambda key: False)
+    monkeypatch.setattr(discovery, "unsupported_reason", lambda key: None)
+
+
+@pytest.mark.parametrize("path", _SCANS)
+def test_a_device_without_consent_gets_only_the_refusal(setup, monkeypatch, path):
+    """System discovery off: a phone's scan reads nothing on the PC."""
+    from gaia.ui.routers import memory
+
+    _, clients, _ = setup
+    touched = []
+    _stub_discovery(monkeypatch, touched)
+    monkeypatch.setattr(
+        "gaia.agents.base.memory._system_context_is_enabled", lambda: False
+    )
+    resp = clients["device"].get(path, headers={"X-Gaia-UI": "1"})
+    assert resp.status_code == 200, resp.text
+    assert _events(resp) == [
+        {"type": "error", "source": "consent", "message": memory.NO_DISCOVERY_CONSENT},
+        {"type": "done", "total": 0},
+    ]
+    assert touched == []
+
+
+def test_a_device_with_consent_gets_the_scan_without_pc_paths(setup, monkeypatch):
+    """A phone sees the findings the PC's scan view shows, never absolute paths."""
+    _, clients, _ = setup
+    touched = []
+    _stub_discovery(monkeypatch, touched)
     monkeypatch.setattr(
         "gaia.agents.base.memory._system_context_is_enabled", lambda: True
     )
     ui = {"X-Gaia-UI": "1"}
-    for caller in ("tunnel", "device"):
-        resp = clients[caller].request(method, path, json=body, headers=ui)
-        assert resp.status_code == 403, (caller, resp.text)
-    assert touched == []
-    assert clients["pc"].request(method, path, json=body, headers=ui).status_code == 200
-    assert touched
+    device = clients["device"].get(_SCANS[0], headers=ui)
+    assert device.status_code == 200, device.text
+    found = [e["item"] for e in _events(device) if e["type"] == "finding"]
+    assert [f["content"] for f in found] == ["Project 'gaia' in Projects/"]
+    assert "/Users/someone" not in device.text
+    assert _events(device)[-1] == {"type": "done", "total": 1}
+    pc = clients["pc"].get(_SCANS[0], headers=ui)
+    assert "/Users/someone/Projects/gaia" in pc.text
 
 
-def test_system_discovery_consent_is_given_on_the_pc_only(setup, monkeypatch):
-    """Consenting to system discovery happens on the PC; turning it off anywhere."""
+@pytest.mark.parametrize("caller", ["tunnel", "pending"])
+def test_profile_scan_and_consent_refused_to_tunnel_and_pending(
+    setup, monkeypatch, caller
+):
+    """Mobile access and a device the PC hasn't allowed can't scan or consent."""
+    from gaia.ui.routers import memory
+
+    _, clients, _ = setup
+    touched = []
+    _stub_discovery(monkeypatch, touched)
+    monkeypatch.setattr(
+        "gaia.agents.base.memory._system_context_is_enabled", lambda: True
+    )
+    saved = []
+    monkeypatch.setattr("gaia.agents.base.memory._save_memory_settings", saved.append)
+    audited = _audit_into(monkeypatch, memory)
+    ui = {"X-Gaia-UI": "1"}
+    for path in (*_SCANS, _SCANS[1] + "?include_browser=true"):
+        assert clients[caller].get(path, headers=ui).status_code == 403, path
+    on = clients[caller].put(
+        "/api/memory/settings", json={"system_discovery_consent": True}, headers=ui
+    )
+    assert on.status_code == 403, on.text
+    assert touched == [] and saved == [] and audited == []
+
+
+def test_mobile_access_cannot_collect_system_context(setup, monkeypatch):
+    """Mobile access and an unallowed device can't re-collect system context."""
     from gaia.ui.routers import memory
 
     app, clients, _ = setup
@@ -1018,22 +1108,163 @@ def test_system_discovery_consent_is_given_on_the_pc_only(setup, monkeypatch):
         "gaia.agents.base.memory._save_memory_settings", lambda settings: None
     )
     ui = {"X-Gaia-UI": "1"}
-    on = {"system_discovery_consent": True}
-    for caller in ("tunnel", "device"):
-        resp = clients[caller].put("/api/memory/settings", json=on, headers=ui)
-        assert resp.status_code == 403, (caller, resp.text)
+    for caller in ("tunnel", "pending"):
+        for path in (
+            "/api/memory/refresh-system-context",
+            "/api/memory/reinitialize",
+        ):
+            resp = clients[caller].post(path, headers=ui)
+            assert resp.status_code == 403, (caller, path, resp.text)
         off = clients[caller].put(
             "/api/memory/settings",
             json={"system_discovery_consent": False},
             headers=ui,
         )
-        assert off.status_code == 200, (caller, off.text)
+        assert off.status_code == (200 if caller == "tunnel" else 403), (
+            caller,
+            off.text,
+        )
     assert ran == []
-    assert (
-        clients["pc"].put("/api/memory/settings", json=on, headers=ui).status_code
-        == 200
+
+
+def test_consent_turned_off_mid_scan_stops_it(setup, monkeypatch):
+    """Turning System discovery off during a scan ends it with the consent error."""
+    from gaia.ui.routers import memory
+
+    _, clients, _ = setup
+    touched = []
+    _stub_discovery(monkeypatch, touched)
+    consent = {"on": True}
+    monkeypatch.setattr(
+        "gaia.agents.base.memory._system_context_is_enabled", lambda: consent["on"]
     )
-    assert ran == ["refresh"]
+    monkeypatch.setattr(memory, "_DISCOVERY_SOURCES", ("git_identity", "ssh_config"))
+    from gaia.agents.base import discovery
+
+    real = discovery.SystemDiscovery
+
+    class _Withdrawn(real):
+        def scan_git_identity(self):
+            consent["on"] = False
+            return super().scan_git_identity()
+
+        def scan_ssh_config(self):
+            touched.append("ssh_config")
+            return []
+
+    monkeypatch.setattr(discovery, "SystemDiscovery", _Withdrawn)
+    resp = clients["device"].get(_SCANS[0], headers={"X-Gaia-UI": "1"})
+    events = _events(resp)
+    assert events[-2:] == [
+        {"type": "error", "source": "consent", "message": memory.NO_DISCOVERY_CONSENT},
+        {"type": "done", "total": 1},
+    ]
+    assert "ssh_config" not in touched
+
+
+def test_consent_turned_off_mid_inference_stops_it(setup, monkeypatch):
+    """Inference stops reading, and never calls the model, once consent goes off."""
+    from gaia.agents.base import discovery
+    from gaia.ui.routers import memory
+
+    _, clients, _ = setup
+    consent = {"on": True}
+    monkeypatch.setattr(
+        "gaia.agents.base.memory._system_context_is_enabled", lambda: consent["on"]
+    )
+    read = []
+
+    class _Withdrawn:
+        def scan_installed_apps(self):
+            consent["on"] = False
+            read.append("installed_apps")
+            return [{"content": "Installed app: Blender"}]
+
+        def __getattr__(self, name):
+            return lambda *a, **k: read.append(name) or []
+
+    monkeypatch.setattr(discovery, "SystemDiscovery", _Withdrawn)
+    monkeypatch.setattr(discovery, "covered_by_twin", lambda key: False)
+    monkeypatch.setattr(discovery, "unsupported_reason", lambda key: None)
+    called = []
+    monkeypatch.setattr("gaia.llm.create_client", lambda **k: called.append(k))
+    resp = clients["device"].get(_SCANS[1], headers={"X-Gaia-UI": "1"})
+    assert _events(resp)[-2:] == [
+        {"type": "error", "source": "consent", "message": memory.NO_DISCOVERY_CONSENT},
+        {"type": "done", "total": 0},
+    ]
+    assert read == ["installed_apps"] and called == []
+
+
+def test_a_device_with_consent_gets_the_inference_stream(setup, monkeypatch):
+    """A phone runs profile inference on the PC's local model, browser included."""
+    from unittest.mock import MagicMock
+
+    from gaia.ui.routers import memory
+
+    _, clients, _ = setup
+    touched = []
+    _stub_discovery(monkeypatch, touched)
+    monkeypatch.setattr(
+        "gaia.agents.base.memory._system_context_is_enabled", lambda: True
+    )
+    model = "Gemma-4-E4B-it-GGUF"
+    monkeypatch.setattr(
+        "gaia.llm.lemonade_client.resolve_default_chat_model", lambda: model
+    )
+    monkeypatch.setattr("gaia.llm.lemonade_client.resolve_chat_model", lambda: model)
+    monkeypatch.setattr("gaia.llm.hybrid.start_model", lambda m, *a, **k: m)
+    monkeypatch.setattr("gaia.ui._chat_helpers._runs_on_this_pc", lambda m: True)
+    monkeypatch.setattr(memory, "_downloaded_on_this_pc", lambda m: True)
+    llm = MagicMock()
+    llm.chat.return_value = (
+        '[{"content": "Works on GAIA", "confidence": "high", "domain": "work"}]'
+    )
+    monkeypatch.setattr("gaia.llm.create_client", lambda model: llm)
+    resp = clients["device"].get(
+        _SCANS[1] + "?include_browser=true", headers={"X-Gaia-UI": "1"}
+    )
+    assert resp.status_code == 200, resp.text
+    events = _events(resp)
+    insights = [e["item"]["content"] for e in events if e["type"] == "insight"]
+    assert insights == ["Works on GAIA"]
+    assert events[-1] == {"type": "done", "total": 1}
+    assert "Reading browser history..." in resp.text
+
+
+@pytest.mark.parametrize("on", [True, False])
+def test_a_device_changing_discovery_consent_is_audited(setup, monkeypatch, on):
+    """A phone may turn System discovery on or off; the audit log names the phone."""
+    from gaia.ui.routers import memory
+
+    _, clients, device = setup
+    ran = []
+    monkeypatch.setattr(
+        memory,
+        "_do_system_context_refresh",
+        lambda: ran.append("refresh") or {"stored": 0, "skipped": False},
+    )
+    saved = []
+    monkeypatch.setattr("gaia.agents.base.memory._save_memory_settings", saved.append)
+    audited = _audit_into(monkeypatch, memory)
+    GaiaConfig.save_key("device_pairing", True)
+    changes = f"/api/devices/{device.device_id}/changes"
+    before = clients["pc"].get(changes).json()["changes"]
+    resp = clients["device"].put(
+        "/api/memory/settings",
+        json={"system_discovery_consent": on},
+        headers={"X-Gaia-UI": "1"},
+    )
+    assert resp.status_code == 200, resp.text
+    after = clients["pc"].get(changes).json()["changes"]
+    added = [c["kind"] for c in after if c not in before]
+    assert added == ["profileScanOn" if on else "profileScanOff"]
+    assert saved == [{"system_context_enabled": on}]
+    assert ran == (["refresh"] if on else [])
+    word = "on" if on else "off"
+    assert audited == [
+        (f"device:{device.device_id}", f"system discovery turned {word}")
+    ]
 
 
 _DEVICE_FLOW = {

@@ -33,6 +33,7 @@ from gaia.agents.base.discovery import (
     _classify_path,
     _classify_project,
     _classify_remote,
+    _extract_domain,
     unsupported_reason,
 )
 
@@ -170,6 +171,51 @@ class TestClassifyRemote:
 
     def test_malformed_url_is_unclassified(self):
         assert _classify_remote("not-a-url") == "unclassified"
+
+
+class TestRemoteCredentials:
+    """A token embedded in a URL never reaches a finding."""
+
+    @pytest.mark.parametrize(
+        "remote",
+        [
+            "https://alice:{token}@github.com/alice/repo.git",
+            "https://{token}@github.com/alice/repo.git",
+            "https://alice:p@ss{token}@github.com/alice/repo.git",
+        ],
+    )
+    def test_git_remote_credentials_are_stripped(self, tmp_path, remote):
+        token = "ghp_" + "x" * 36
+        git_dir = tmp_path / "Projects" / "repo" / ".git"
+        git_dir.mkdir(parents=True)
+        url = remote.format(token=token)
+        (git_dir / "config").write_text(
+            f'[remote "origin"]\n\turl = {url}\n', encoding="utf-8"
+        )
+        (git_dir / "HEAD").write_text("ref: refs/heads/main\n", encoding="utf-8")
+
+        found = SystemDiscovery().scan_git_repos(paths=[tmp_path / "Projects"])
+
+        assert len(found) == 1
+        text = json.dumps(found)
+        assert token not in text and "alice:" not in text
+        assert "remote: https://github.com/alice/repo.git" in found[0]["content"]
+
+    def test_ssh_remote_is_unchanged(self, tmp_path):
+        git_dir = tmp_path / "repo" / ".git"
+        git_dir.mkdir(parents=True)
+        (git_dir / "config").write_text(
+            '[remote "origin"]\n\turl = git@github.com:alice/repo.git\n',
+            encoding="utf-8",
+        )
+        found = SystemDiscovery().scan_git_repos(paths=[tmp_path])
+        assert "remote: git@github.com:alice/repo.git" in found[0]["content"]
+
+    def test_browsed_url_credentials_leave_only_the_domain(self):
+        token = "ghp_" + "x" * 36
+        assert _extract_domain(f"https://alice:{token}@www.example.com/x") == (
+            "example.com"
+        )
 
 
 # ---------------------------------------------------------------------------
