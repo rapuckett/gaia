@@ -14,6 +14,7 @@ import { SettingsDialog } from './components/settings/SettingsDialog';
 import { buildPersonalizePrompt, PERSONALIZE_EVENT, type PersonalizeRequest } from './utils/connectorPersonalize';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ConnectionBanner } from './components/ConnectionBanner';
+import { DevicePromptBanner } from './components/DevicePromptBanner';
 import { UpdateIndicator } from './components/UpdateIndicator';
 import { DownloadChip } from './components/setup/DownloadChip';
 import { NotificationCenter } from './components/NotificationCenter';
@@ -886,6 +887,7 @@ function App() {
             </ErrorBoundary>
 
             <div className="main-content">
+                <DevicePromptBanner />
                 {/* The setup check can wait a minute on a hung model server; the chat shows meanwhile, so the warning must too. */}
                 {(setup.state === 'ready' || setup.state === 'checking' || (setup.state === 'serverDown' && serverHung)) && <ConnectionBanner onRetry={checkSystemStatus} backendSlow={backendSlow} backendError={backendError} />}
                 {setup.state === 'serverDown' && !serverHung && (
