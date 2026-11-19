@@ -252,7 +252,7 @@ async def emit_device_prompt(
 ) -> None:
     """Tell *device_id* and the PC where an OS prompt it caused on the PC stands.
 
-    *kind* is ``key_store`` or ``admin``; *action* names what the device started.
+    *kind* is ``keyStore`` or ``admin``; *action* names what the device started.
 
     Raises:
         ValueError: *device_id* is empty, or *state* isn't one of
