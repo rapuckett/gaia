@@ -1317,6 +1317,8 @@ def uvicorn_options(host: str, port: int, *, debug: bool = False) -> dict:
         "access_log": debug,
         "proxy_headers": False,
         "forwarded_allow_ips": "",
+        # Streams end on shutdown; this bounds whatever else holds a connection.
+        "timeout_graceful_shutdown": 2,
     }
 
 
@@ -1332,7 +1334,7 @@ def main():
     use_os_trust_store()
     expose_shipped_gaia()
 
-    import uvicorn
+    from .shutdown import serve
 
     parser = argparse.ArgumentParser(description="GAIA Agent UI Server")
     parser.add_argument("--host", default="localhost", help="Host (default: localhost)")
@@ -1358,7 +1360,7 @@ def main():
         raise SystemExit(64) from exc
     if not lemonade_is_remote():
         start_model_server_owner()
-    uvicorn.run(server_app, **uvicorn_options(args.host, args.port, debug=args.debug))
+    serve(server_app, **uvicorn_options(args.host, args.port, debug=args.debug))
 
 
 if __name__ == "__main__":

@@ -1003,7 +1003,7 @@ def _launch_agent_ui(port=4200, base_url=None, log=None, debug=False, webui_dist
         print(f"   Open your browser to http://127.0.0.1:{port}")
         print("   Press Ctrl+C to stop")
         print()
-        import uvicorn
+        from gaia.ui.shutdown import serve
 
         # create_app() refuses an unsafe GAIA_HOME, so nothing is written there first.
         app = create_app(webui_dist=webui_dist)
@@ -1011,7 +1011,7 @@ def _launch_agent_ui(port=4200, base_url=None, log=None, debug=False, webui_dist
         if not base_url and not lemonade_is_remote():
             # First run is set up in the app; the daemon owns the model server.
             start_model_server_owner()
-        uvicorn.run(app, **uvicorn_options("127.0.0.1", port, debug=debug))
+        serve(app, **uvicorn_options("127.0.0.1", port, debug=debug))
         log.warning(
             "Agent UI server stopped: uvicorn returned after a shutdown signal "
             "(Ctrl+C or Ctrl+Break reached this process)"

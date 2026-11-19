@@ -626,6 +626,7 @@ class DeviceListener:
             # False would mute the main server's access log, which is global;
             # this listener's protocols log no access lines instead.
             "access_log": True,
+            "timeout_graceful_shutdown": LISTENER_SHUTDOWN_SECONDS,
         }
         config = uvicorn.Config(
             ListenerScopeMiddleware(
@@ -640,7 +641,6 @@ class DeviceListener:
             log_config=None,
             limit_concurrency=LISTENER_MAX_CONCURRENCY,
             timeout_keep_alive=LISTENER_KEEP_ALIVE_SECONDS,
-            timeout_graceful_shutdown=LISTENER_SHUTDOWN_SECONDS,
             **options,
         )
         self._server = _ListenerServer.make(config, sock, context, admit)

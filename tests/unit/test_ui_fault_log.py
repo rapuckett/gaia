@@ -82,7 +82,8 @@ def test_an_unsafe_gaia_home_is_refused_before_the_fault_log_is_opened(
         lambda *a, **k: pytest.fail("opened the fault log under an unsafe GAIA_HOME"),
     )
     monkeypatch.setattr(
-        "uvicorn.run", lambda *a, **k: pytest.fail("started under an unsafe GAIA_HOME")
+        "gaia.ui.shutdown.serve",
+        lambda *a, **k: pytest.fail("started under an unsafe GAIA_HOME"),
     )
 
     with pytest.raises(SystemExit) as exc_info:
@@ -101,7 +102,7 @@ def test_a_safe_gaia_home_opens_the_fault_log_before_serving(tmp_path, monkeypat
         "gaia.ui.fault_log.enable_fault_log",
         lambda *a, **k: calls.append("fault_log") or tmp_path / "faults.log",
     )
-    monkeypatch.setattr("uvicorn.run", lambda *a, **k: calls.append("serve"))
+    monkeypatch.setattr("gaia.ui.shutdown.serve", lambda *a, **k: calls.append("serve"))
 
     cli._launch_agent_ui(port=4200, base_url="http://127.0.0.1:59999")
 

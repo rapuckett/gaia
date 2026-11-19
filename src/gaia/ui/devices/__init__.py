@@ -150,7 +150,7 @@ LISTENER_UPLOAD_PATHS = frozenset(
 LISTENER_MAX_CONCURRENCY = 32
 LISTENER_KEEP_ALIVE_SECONDS = 15
 LISTENER_HANDSHAKE_SECONDS = 10
-LISTENER_SHUTDOWN_SECONDS = 5
+LISTENER_SHUTDOWN_SECONDS = 2
 #: How often the running listener expires idle and pending devices.
 HOUSEKEEPING_SECONDS = 60
 #: How often a listener left on, resumed before the PC has a home network,
