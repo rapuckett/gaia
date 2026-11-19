@@ -9,6 +9,7 @@ with the same ``gaia init --check``, so they can never disagree.
 
 from __future__ import annotations
 
+import threading
 from typing import Any, Dict, List, Literal, Optional, Union
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -39,7 +40,9 @@ from ..devices.prompts import (
 )
 from ..models import WireModel
 from ..security import (
+    allowed_device,
     audit_approval,
+    hide_pc_folders,
     is_local_pc,
     require_local_pc,
     require_pc_or_allowed_device,
@@ -623,39 +626,65 @@ def setup_vision_model(body: VisionModelRequest) -> Dict[str, Any]:
         raise _plan_error(e, f"{body.model_id} can't read images.") from e
 
 
-#: The report bundles every GAIA log, which only the PC may read.
-_AT_THIS_PC = [Depends(require_ui_header), Depends(require_local_pc)]
+#: The report bundles every GAIA log, redacted: the PC or an allowed device.
+_REPORT_ACCESS = [Depends(require_ui_header), Depends(require_pc_or_allowed_device)]
+
+#: Held while a report is written; one at a time, whoever asks.
+_report_lock = threading.Lock()
 
 
 @router.post(
     "/api/setup/report",
-    dependencies=_AT_THIS_PC,
+    dependencies=_REPORT_ACCESS,
     response_model=SetupReportResponse,
     response_model_exclude_unset=True,
 )
-def setup_report() -> Dict[str, Any]:
-    """Bundle setup's record, every GAIA log and a system snapshot for a bug report."""
-    record = runner.report()
+def setup_report(request: Request) -> Dict[str, Any]:
+    """Bundle setup's record, every GAIA log and a system snapshot for a bug report.
+
+    One report at a time (**409** while one is being written). A paired device
+    gets the file name as ``path``, never where it is on the PC.
+    """
+    device = allowed_device(request)
+    if not _report_lock.acquire(blocking=False):
+        raise HTTPException(
+            status_code=409,
+            detail="A troubleshooting report is already being written. Wait for "
+            "it to finish, then try again.",
+        )
     try:
-        record["plan"] = build_plan()
-    except SetupPlanError as e:
-        # The report is for exactly this: say why the plan couldn't be read.
-        record["plan_error"] = str(e)
-    try:
-        path = write_report(record)
-    except SetupError as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
-    return {"name": path.name, "path": str(path), "size_bytes": path.stat().st_size}
+        audit_approval(request, "troubleshooting report requested")
+        record = runner.report()
+        try:
+            record["plan"] = build_plan()
+        except SetupPlanError as e:
+            # The report is for exactly this: say why the plan couldn't be read.
+            record["plan_error"] = str(e)
+        try:
+            path = write_report(record)
+        except SetupError as e:
+            detail = hide_pc_folders(str(e)) if device else str(e)
+            raise HTTPException(status_code=500, detail=detail) from e
+    finally:
+        _report_lock.release()
+    shown = path.name if device else str(path)
+    return {"name": path.name, "path": shown, "size_bytes": path.stat().st_size}
 
 
-@router.get("/api/setup/report/{name}", dependencies=_AT_THIS_PC)
-def setup_report_file(name: str) -> FileResponse:
+@router.get("/api/setup/report/{name}", dependencies=_REPORT_ACCESS)
+def setup_report_file(request: Request, name: str) -> FileResponse:
     """A troubleshooting report written by ``POST /api/setup/report``."""
     from gaia.home import gaia_home
 
+    missing = HTTPException(status_code=404, detail=f"No report named {name}.")
+    if not REPORT_NAME_RE.fullmatch(name):
+        raise missing
     path = gaia_home() / name
-    if not REPORT_NAME_RE.fullmatch(name) or not path.is_file():
-        raise HTTPException(status_code=404, detail=f"No report named {name}.")
+    device = allowed_device(request)
+    if not path.is_file() or (device and path.is_symlink()):
+        raise missing
+    if device:
+        audit_approval(request, f"troubleshooting report {name} downloaded")
     return FileResponse(path, media_type="application/gzip", filename=name)
 
 

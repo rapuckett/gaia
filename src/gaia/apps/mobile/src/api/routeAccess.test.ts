@@ -29,7 +29,7 @@ describe('isDeviceRefused', () => {
     });
 
     it('ignores the query string', () => {
-        expect(isDeviceRefused('GET', '/api/logs?lines=200')).toBe(true);
+        expect(isDeviceRefused('GET', '/api/memory/stream-discovery?include_browser=true')).toBe(true);
         expect(isDeviceRefused('GET', '/api/memory/activity?days=30')).toBe(false);
     });
 

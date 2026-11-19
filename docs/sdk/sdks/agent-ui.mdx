@@ -3145,15 +3145,20 @@ shows on the PC. The troubleshooting report is PC-only.
     Write a troubleshooting report for a bug report: setup's record (its last
     run, the plan and every stage's full log) saved as `setup-report.json` in
     GAIA's home, bundled with GAIA's logs and a system snapshot by `gaia
-    diagnostics`, with secret environment variables and secrets in the logs redacted. Returns `{"name", "path", "size_bytes"}`.
-    **500** naming the cause when the bundle can't be written. PC-only, as the
-    logs are: **403** from mobile access, a paired device or another computer.
+    diagnostics`, with secret environment variables and secrets in the logs redacted. Returns `{"name", "path", "size_bytes"}`;
+    a paired device gets the file name as `path`. **500** naming the cause when
+    the bundle can't be written. The PC or an allowed paired device, as for the
+    logs: **403** from mobile access, a pending device or another computer.
+    One report is written at a time, whoever asks (**409** while one is being
+    written), and each request is recorded in the audit log naming who asked.
   </Accordion>
 
   <Accordion title="GET /api/setup/report/{name}">
     The report `POST /api/setup/report` wrote, as `application/gzip`. Only a
-    `diagnostics-<YYYYMMDD>-<HHMMSS>.tgz` in GAIA's home is served; anything
-    else is **404**. PC-only, like `POST`.
+    `diagnostics-<YYYYMMDD>-<HHMMSS>-<8 hex>.tgz` in GAIA's home is served
+    (reports from before the suffix too); anything else is **404**, and so is a
+    symlinked report asked for by a device. The same callers as `POST`; a
+    device's download is recorded in the audit log.
   </Accordion>
 
   <Accordion title="POST /api/setup/models/skip">
@@ -3388,7 +3393,12 @@ All three routes need the `X-Gaia-UI: 1` header (**403** without it).
 
 GAIA's logs and the model server's, for the log viewer. Every line is redacted
 before it is sent (API keys, bearer tokens and similar). Both routes need the
-`X-Gaia-UI: 1` header and answer the PC only (**403** from mobile access, a paired device or another computer).
+`X-Gaia-UI: 1` header and answer the PC or a paired device it allowed (**403**
+from mobile access, a pending device or another computer). A device picks a log
+by the names `GET /api/logs` lists, never a path, and sees only file names in
+`path` and `log_path`. A symlinked log is not listed for a device, and error
+text a device gets names GAIA's folder and the home folder instead of their
+paths.
 
 <AccordionGroup>
   <Accordion title="GET /api/logs">
@@ -3403,7 +3413,9 @@ before it is sent (API keys, bearer tokens and similar). Both routes need the
   <Accordion title="GET /api/logs/{source}">
     A log's last lines. Query: `file` (a name `GET /api/logs` listed; the
     source's first file when omitted), `after` (the `cursor` a previous read
-    returned, for only the lines written since), `limit` (1-5000, default 1000).
+    returned, for only the lines written since; a cursor that isn't at the start
+    of a line reads the log's last lines instead, with `reset`), `limit`
+    (1-5000, default 1000).
     Returns `lines` (`text`, `severity` of `debug`/`info`/`warning`/`error` or
     `null`, `tag`), `cursor`, `reset` (the log started over: replace, don't
     append), `dropped`, `log_path`, and `available`; when `false`, `reason` is
@@ -3826,6 +3838,8 @@ Every route is in one class, pinned by `tests/unit/chat/ui/test_route_access.py`
 
 | Class | Who | Routes |
 |---|---|---|
+| PC-only | `pc` | Tunnel start and stop, a provider's gateway address and key header, the model-server target, messaging, GPU memory apply and revert, the default full-access setting, connector enable, an agent's connector grant and activations, `POST /v1/connections/{provider}`, skill and agent installs, `POST /api/files/open`, `POST /api/setup/npu/memlock-fix`, the memory profile scan and its commits, re-collecting system context (`reinitialize`, `refresh-system-context`), the eval-only routes, `GET /api/connectors/_debug`, and every other [paired devices](#paired-devices) route |
+| Setup | `pc`, or an allowed device | Setup's changes (see [Setup](#setup)), provider keys (entering one, removing one, retrying the credential store), `POST /api/system/download-model`, `PUT /api/system/model-server/backend`, a device-code sign-in (`POST /api/connectors/{connector_id}/authorize-device`, for a connector with `supports_device_code` only), connector setup and its check (`POST /api/connectors/{connector_id}/configure` without a browser sign-in, `POST /api/connectors/{connector_id}/test`), a browser sign-in the device finishes itself (`POST /api/connectors/{connector_id}/authorize` with `redirect_port`, then `POST /api/connectors/flows/{flow_id}/complete`), cancelling a sign-in (`DELETE /api/connectors/_flows/{flow_id}`; a device only its own), `GET /api/devices/{device_id}/changes` (a device reads its own only), Automations, changes to schedules and goals, the logs, and the troubleshooting report |
 | PC-only | `pc` | Tunnel start and stop, a provider's gateway address and key header, logs, Discord connect, pairing and disconnect, GPU memory apply and revert, the default full-access setting, `POST /v1/connections/{provider}`, skill and agent installs, `POST /api/files/open`, `POST /api/setup/npu/memlock-fix`, the troubleshooting report, the memory profile scan (`stream-discovery`, `stream-inference`) and consenting to system discovery, the eval-only routes, `GET /api/connectors/_debug`, and the [paired devices](#paired-devices) routes not listed below (the listener, away routes, opening and resetting pairing, allowing a device) |
 | Setup | `pc`, or an allowed device | Setup's changes (see [Setup](#setup)), provider keys (entering one, removing one, retrying the credential store), `POST /api/system/download-model`, `PUT /api/system/model-server/backend`, a device-code sign-in (`POST /api/connectors/{connector_id}/authorize-device`, for a connector with `supports_device_code` only), connector setup and its check (`POST /api/connectors/{connector_id}/configure` without a browser sign-in, `POST /api/connectors/{connector_id}/test`), a browser sign-in the device finishes itself (`POST /api/connectors/{connector_id}/authorize` with `redirect_port`, then `POST /api/connectors/flows/{flow_id}/complete`), cancelling a sign-in (`DELETE /api/connectors/_flows/{flow_id}`; a device only its own), `GET /api/devices/{device_id}/changes` (a device reads its own only), connector enable, an agent's connector grant and activations, Automations, changes to schedules and goals, the device list and status, unpairing any device and closing pairing, the Discord bridge's status (without its pairing code) and its start, stop, restart and forget-always, the memory profile's commits, `reinitialize` and `refresh-system-context`, and `POST /api/lemonade/target` (a device may only switch to mode `gaia`; `external` is a **403**) |
 | Not from a device | `pc`, `tunnel` | `GET /api/providers`, which can register a provider |

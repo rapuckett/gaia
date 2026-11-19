@@ -9,9 +9,10 @@ fails for a route nobody has decided about:
 * ``pc``: the PC running GAIA only (``require_local_pc``).
 * ``pc_or_device``: first-run setup, connector sign-in, setup, checks, grants
   and activations, Automations, schedules and goals, the device list, the
-  Discord bridge's controls, memory rebuilds and profile saves, and switching
-  back to GAIA's own Lemonade; the PC or an allowed paired device, never
-  mobile access (``require_pc_or_device``, ``require_pc_or_allowed_device``).
+  Discord bridge's controls, memory rebuilds and profile saves, switching
+  back to GAIA's own Lemonade, the logs and the troubleshooting report; the
+  PC or an allowed paired device, never mobile access (``require_pc_or_device``,
+  ``require_pc_or_allowed_device``).
 * ``not_on_listener``: a read with side effects on the PC; the PC and mobile
   access, never a paired device (``refuse_on_device_listener``).
 * ``remote``: the PC, mobile access with its token, and allowed devices.
@@ -23,7 +24,10 @@ fails for a route nobody has decided about:
 
 from __future__ import annotations
 
+import contextlib
+import logging
 import re
+import threading
 import uuid
 
 import pytest
@@ -56,11 +60,8 @@ PC_ONLY = {
     "DELETE /api/devices/routes/{kind}",
     "GET /api/connectors/_debug",
     "GET /api/connectors/eval-mailbox",
-    "GET /api/logs",
-    "GET /api/logs/{source}",
     "GET /api/memory/stream-discovery",
     "GET /api/memory/stream-inference",
-    "GET /api/setup/report/{name}",
     "POST /api/agents/install",
     "POST /api/connectors/eval-mailbox",
     "POST /api/devices/listener",
@@ -75,7 +76,6 @@ PC_ONLY = {
     "POST /api/messaging/discord/connect",
     "POST /api/messaging/discord/disconnect",
     "POST /api/messaging/discord/pair",
-    "POST /api/setup/report",
     "POST /api/skills/link/add",
     "POST /api/tunnel/start",
     "POST /api/tunnel/stop",
@@ -96,7 +96,10 @@ PC_OR_DEVICE = {
     "GET /api/devices",
     "GET /api/devices/status",
     "GET /api/devices/{device_id}/changes",
+    "GET /api/logs",
+    "GET /api/logs/{source}",
     "GET /api/messaging/discord",
+    "GET /api/setup/report/{name}",
     "POST /api/automations/{ref}/{action}",
     "POST /api/connectors/flows/{flow_id}/complete",
     "POST /api/connectors/{connector_id}/authorize",
@@ -128,6 +131,7 @@ PC_OR_DEVICE = {
     "POST /api/setup/models/skip",
     "POST /api/setup/npu/memlock-fix",
     "POST /api/setup/npu/recheck",
+    "POST /api/setup/report",
     "POST /api/setup/run",
     "POST /api/setup/vision-model",
     "POST /api/system/download-model",
@@ -722,26 +726,238 @@ def test_refused_network_policy_saves_nothing(setup):
     assert clients["pc"].get("/api/settings").json()["agent_mode"] == before
 
 
-def test_troubleshooting_report_is_pc_only(setup):
-    """The report bundles every log, so it is no side door around them."""
+UI = {"X-Gaia-UI": "1"}
+
+
+@contextlib.contextmanager
+def _captured_audit():
+    from gaia.security import audit_logger
+
+    lines = []
+
+    class _Capture(logging.Handler):
+        def emit(self, record):
+            lines.append(record.getMessage())
+
+    handler, level = _Capture(), audit_logger.level
+    audit_logger.addHandler(handler)
+    audit_logger.setLevel(logging.INFO)
+    try:
+        yield lines
+    finally:
+        audit_logger.removeHandler(handler)
+        audit_logger.setLevel(level)
+
+
+@pytest.mark.parametrize("caller", ["tunnel", "pending"])
+@pytest.mark.parametrize(
+    "method,path",
+    [
+        ("GET", "/api/logs"),
+        ("GET", "/api/logs/gaia"),
+        ("POST", "/api/setup/report"),
+        ("GET", "/api/setup/report/diagnostics-20261112-101010.tgz"),
+    ],
+)
+def test_logs_and_report_refuse_mobile_access_and_pending_devices(
+    setup, caller, method, path
+):
+    app, clients, _ = setup
+    assert clients[caller].request(method, path, headers=UI).status_code == 403
+
+
+def test_an_allowed_device_reads_a_log_redacted_by_file_name(
+    setup, tmp_path, monkeypatch
+):
+    from gaia.llm import lemonade_logs
+
+    app, clients, _ = setup
+    saved = "saved-" + "q" * 24
+    shaped = "sk-" + "x" * 20
+    log = tmp_path / "gaia.log"
+    log.write_text(
+        f"[2026-11-18 10:00:00,000] | INFO | gaia | a.py:1 | used {saved} and {shaped}\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("GAIA_LOG_FILE", str(log))
+    monkeypatch.setattr(lemonade_logs, "known_secrets", lambda: ((saved,), None))
+
+    listed = clients["device"].get("/api/logs", headers=UI)
+    assert listed.status_code == 200, listed.text
+    gaia = next(s for s in listed.json()["sources"] if s["id"] == "gaia")
+    assert gaia["files"][0]["path"] == "gaia.log"
+    read = clients["device"].get("/api/logs/gaia", headers=UI)
+    assert read.status_code == 200, read.text
+    body = read.json()
+    assert body["log_path"] == "gaia.log"
+    assert saved not in read.text and shaped not in read.text
+    assert "[redacted]" in body["lines"][0]["text"]
+    assert str(tmp_path) not in listed.text + read.text
+    # The PC's own view still shows where the file is.
+    assert clients["pc"].get("/api/logs/gaia", headers=UI).json()["log_path"] == str(
+        log
+    )
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/api/logs/..%2Fconfig.json",
+        "/api/logs/%2Fetc%2Fpasswd",
+        "/api/logs/gaia?file=..%2F..%2Fconfig.json",
+        "/api/logs/gaia?file=%2Fetc%2Fpasswd",
+        "/api/logs/agent?file=..%2Fgaia.log",
+    ],
+)
+def test_a_device_cannot_read_a_log_by_path(setup, path):
+    app, clients, _ = setup
+    assert clients["device"].get(path, headers=UI).status_code == 404
+
+
+@pytest.mark.parametrize(
+    "name", ["..%2Fconfig.json", "gaia.log", "%2Fetc%2Fpasswd", "diagnostics-1.tgz"]
+)
+def test_a_device_cannot_fetch_a_report_by_path(setup, name):
     from gaia.home import gaia_home
 
     app, clients, _ = setup
-    name = "diagnostics-20261112-101010.tgz"
+    home = gaia_home()
+    home.mkdir(parents=True, exist_ok=True)
+    (home / "gaia.log").write_text("not a report", encoding="utf-8")
+    got = clients["device"].get(f"/api/setup/report/{name}", headers=UI)
+    assert got.status_code == 404
+    assert b"not a report" not in got.content
+
+
+def test_one_report_at_a_time_from_any_caller(setup, monkeypatch):
+    """Audited by device on write and download, and named without its place on the PC."""
+    from gaia.home import gaia_home
+    from gaia.ui.routers import setup as setup_router
+
+    app, clients, device = setup
+    name = "diagnostics-20261118-101010-0a1b2c3d.tgz"
+    started, release = threading.Event(), threading.Event()
+
+    def write_report(record):
+        started.set()
+        assert release.wait(10)
+        out = gaia_home() / name
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_bytes(b"redacted bundle")
+        return out
+
+    monkeypatch.setattr(setup_router, "write_report", write_report)
+    monkeypatch.setattr(setup_router, "build_plan", lambda: {})
+    first = {}
+
+    def make():
+        first["resp"] = clients["device"].post("/api/setup/report", headers=UI)
+
+    with _captured_audit() as lines:
+        worker = threading.Thread(target=make)
+        worker.start()
+        try:
+            assert started.wait(10)
+            for caller in ("device", "pc"):
+                second = clients[caller].post("/api/setup/report", headers=UI)
+                assert second.status_code == 409, (caller, second.text)
+        finally:
+            release.set()
+            worker.join(10)
+    try:
+        resp = first["resp"]
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["path"] == name and resp.json()["name"] == name
+        with _captured_audit() as fetched:
+            got = clients["device"].get(f"/api/setup/report/{name}", headers=UI)
+        assert got.status_code == 200 and got.content == b"redacted bundle"
+        by = f"by {security.DEVICE_PRINCIPAL_PREFIX}{device.device_id}"
+        assert [
+            line for line in lines + fetched if "troubleshooting report" in line
+        ] == [
+            f"APPROVAL | troubleshooting report requested | {by}",
+            f"APPROVAL | troubleshooting report {name} downloaded | {by}",
+        ]
+        # Done, so the next one may start.
+        release.set()
+        again = clients["device"].post("/api/setup/report", headers=UI)
+        assert again.status_code == 200, again.text
+    finally:
+        (gaia_home() / name).unlink(missing_ok=True)
+
+
+@pytest.mark.parametrize("into", ["key_value", "saved_secret"])
+def test_a_cursor_inside_a_line_cannot_split_a_secret(
+    setup, tmp_path, monkeypatch, into
+):
+    """A cursor that isn't at a line start reads the tail, redacting whole lines."""
+    from gaia.llm import lemonade_logs
+
+    app, clients, _ = setup
+    saved = "saved-" + "q" * 24
+    pair = "api_key=" + "v" * 24
+    head = "[2026-11-18 10:00:00,000] | INFO | gaia | a.py:1 | "
+    first, second = f"{head}start\n", f"{head}used {pair} and {saved}\n"
+    log = tmp_path / "gaia.log"
+    log.write_text(first + second, encoding="utf-8")
+    monkeypatch.setenv("GAIA_LOG_FILE", str(log))
+    monkeypatch.setattr(lemonade_logs, "known_secrets", lambda: ((saved,), None))
+    if into == "key_value":
+        cursor, hidden = len(first) + second.index("=") + 1, pair.split("=")[1]
+    else:
+        cursor, hidden = len(first) + second.index(saved) + 1, saved
+    resp = clients["device"].get(
+        "/api/logs/gaia", params={"after": str(cursor)}, headers=UI
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["reset"] is True
+    assert hidden[1:] not in resp.text and hidden[4:12] not in resp.text
+
+
+def test_a_device_never_follows_a_symlinked_log_or_report(setup, tmp_path, monkeypatch):
+    from gaia.home import gaia_home
+
+    app, clients, _ = setup
+    outside = tmp_path / "outside.txt"
+    outside.write_text("[2026-11-18] | INFO | x | not a log\n", encoding="utf-8")
+    link = tmp_path / "gaia.log"
+    link.symlink_to(outside)
+    monkeypatch.setenv("GAIA_LOG_FILE", str(link))
+    listed = clients["device"].get("/api/logs", headers=UI).json()
+    assert next(s for s in listed["sources"] if s["id"] == "gaia")["files"] == []
+    for path, params in (
+        ("/api/logs/gaia", {}),
+        ("/api/logs/gaia", {"file": "gaia.log"}),
+    ):
+        resp = clients["device"].get(path, params=params, headers=UI)
+        assert "not a log" not in resp.text
+    name = "diagnostics-20261118-111111.tgz"
     report = gaia_home() / name
     report.parent.mkdir(parents=True, exist_ok=True)
-    report.write_bytes(b"logs that quote a conversation")
+    report.symlink_to(outside)
     try:
-        for caller in ("tunnel", "device"):
-            got = clients[caller].get(f"/api/setup/report/{name}")
-            assert got.status_code == 403
-            assert b"conversation" not in got.content
-            assert clients[caller].post("/api/setup/report").status_code == 403
-        pc = clients["pc"].get(f"/api/setup/report/{name}")
-        assert pc.status_code == 200
-        assert pc.content == b"logs that quote a conversation"
+        assert (
+            clients["device"].get(f"/api/setup/report/{name}", headers=UI).status_code
+            == 404
+        )
     finally:
         report.unlink()
+
+
+def test_a_device_never_sees_the_home_folder_in_an_error(setup, monkeypatch):
+    from pathlib import Path
+
+    from gaia.llm import lemonade_choice as choice
+
+    app, clients, _ = setup
+
+    def broken():
+        raise choice.LemonadeChoiceError(f"can't read {Path.home()}/.gaia-x/config")
+
+    monkeypatch.setattr(choice, "describe", broken)
+    resp = clients["device"].get("/api/logs/model_server", headers=UI)
+    assert resp.status_code == 409
+    assert str(Path.home()) not in resp.text and "your home folder" in resp.text
 
 
 @pytest.mark.parametrize(

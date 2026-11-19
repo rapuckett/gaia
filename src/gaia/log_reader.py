@@ -267,7 +267,8 @@ def _messaging_tokens() -> List[Optional[str]]:
 
 
 def _connector_specs() -> list:
-    import gaia.connectors.catalog  # noqa: F401  # registers the built-in specs
+    # Registers the built-in specs.
+    import gaia.connectors.catalog  # noqa: F401  # pylint: disable=unused-import
     from gaia.connectors.registry import REGISTRY
 
     return REGISTRY.all()
@@ -412,6 +413,12 @@ def keep_last(items: list, limit: int) -> Tuple[list, int]:
     return items[-limit:], len(items) - limit
 
 
+def _at_line_start(handle, offset: int) -> bool:
+    """Whether byte *offset* of *handle* begins a line (the byte before it is ``\\n``)."""
+    handle.seek(offset - 1)
+    return handle.read(1) == b"\n"
+
+
 def read_log_file(
     path: Path,
     *,
@@ -431,6 +438,9 @@ def read_log_file(
             start = after if after is not None else max(0, size - MAX_READ_BYTES)
             if after is not None and after > size:
                 # Shorter than where we stopped: the file was replaced.
+                start, result.reset = max(0, size - MAX_READ_BYTES), True
+            elif after and not _at_line_start(handle, after):
+                # Mid-line would split a secret past redaction: read the tail instead.
                 start, result.reset = max(0, size - MAX_READ_BYTES), True
             if size - start > MAX_READ_BYTES:
                 start, result.reset = size - MAX_READ_BYTES, after is not None
