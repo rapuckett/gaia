@@ -5,25 +5,37 @@ import { useState } from 'react';
 
 import { formatSize, ltrIn } from '@webui/components/setup/format';
 
-import { useGpuMemory } from '@/data';
+import { useActiveModel, useGpuMemory } from '@/data';
 import { useLocaleCode, useT } from '@/i18n/useT';
-import { Disclosure, Notice, Stack, Text } from '@/ui';
+import { ChoiceList, Disclosure, Notice, Stack, Text } from '@/ui';
 
+import { defaultTarget } from '../../../setup/steps/gpu';
 import { SettingsAnchor } from '../../targets';
+import { GpuChange } from './GpuChange';
 import { errorText } from './modelText';
 
-/** GPU memory on a PC that shares it: today's split, read only. Changing it needs someone at the PC, so a phone only reads it. */
+const KEEP = 'keep';
+
+/** GPU memory on a PC that shares it: today's split, and where GAIA can write it, the sizes to apply or undo from here (the PC asks for administrator permission). */
 export function GpuMemory() {
     const t = useT();
     const locale = useLocaleCode();
     const read = useGpuMemory();
     const [picked, setPicked] = useState<boolean | null>(null);
+    const [chosen, setChosen] = useState<number | null | undefined>(undefined);
+    const chatInCloud = !!useActiveModel().data?.remote;
     const status = read.data;
     const failed = read.error;
 
     if (!status?.applies && !failed) return null;
     const open = picked ?? (!!status?.pending || !!failed);
     const gb = (n: number) => ltrIn(locale, formatSize(n));
+    const presets = status?.presets ?? [];
+    const target = chosen !== undefined ? chosen : status ? defaultTarget(status, chatInCloud) : null;
+    const options = [
+        ...(status?.gpu_gb != null ? [{ value: KEEP, label: t('gpu.presets.keep', { gb: gb(status.gpu_gb) }) }] : []),
+        ...presets.map((p) => ({ value: String(p.setting_gb), label: t('gpu.presets.gpu', { gb: gb(p.gpu_gb) }) })),
+    ];
 
     return (
         <SettingsAnchor name="gpu-memory" onTarget={() => setPicked(true)}>
@@ -38,7 +50,21 @@ export function GpuMemory() {
                                     {`${t('gpu.split.gpu', { gb: gb(status.gpu_gb) })} · ${t('gpu.split.cpu', { gb: gb(status.cpu_gb) })}`}
                                 </Text>
                             ) : null}
-                            <Notice tone="info" message={t('mobileApp.settings.pcOnly')} testID="gpu-memory-pc-only" />
+                            {status.method === 'apply' || status.revert?.available ? (
+                                <>
+                                    {status.method === 'apply' && presets.length > 0 && status.pending?.state !== 'restart_required' ? (
+                                        <ChoiceList
+                                            accessibilityLabel={t('gpu.presets.label')}
+                                            options={options}
+                                            value={target == null ? KEEP : String(target)}
+                                            onChange={(v) => setChosen(v === KEEP ? null : Number(v))}
+                                        />
+                                    ) : null}
+                                    <GpuChange status={status} target={target} />
+                                </>
+                            ) : (
+                                <Notice tone="info" message={t('mobileApp.settings.pcOnly')} testID="gpu-memory-pc-only" />
+                            )}
                         </>
                     ) : null}
                 </Stack>

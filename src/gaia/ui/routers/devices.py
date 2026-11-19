@@ -352,13 +352,20 @@ def unpair_device(
     caller = allowed_device(request)
     itself = caller is not None and caller.device_id == device_id
     with _folder_checked(request):
+        removed = access.describe_id(device_id)
         # A device unpairing itself keeps this request; its others end after.
         gone = access.revoke(device_id, end_requests=not itself)
     if not gone:
         raise HTTPException(status_code=404, detail="No paired device has that id.")
     if caller is not None:
         audit_approval(request, f"device {device_id} unpaired")
-        record_device_change(request, "deviceRemoved", device_id=device_id)
+        name = removed["name"] if removed else None
+        record_device_change(
+            request,
+            "deviceRemoved",
+            device_id=device_id,
+            **({"device": name} if name else {}),
+        )
     if itself:
         background.add_task(access.requests.end, device_id)
     return {"changes_count": request.app.state.db.device_change_count(device_id)}

@@ -1,11 +1,15 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
+import { useState } from 'react';
+
 import { ltrIn } from '@webui/components/setup/format';
 import type { SetupNpuProblem, SetupPlan } from '@webui/types';
 
 import { GaiaApiError } from '@/api/errors';
-import { useRecheckNpu } from '@/data';
+import { useFixNpuMemlock, useRecheckNpu } from '@/data';
+import { ApproveOnPcNotice } from '@/features/devices/ApproveOnPcNotice';
+import { useDevicePrompt } from '@/features/devices/devicePrompts';
 import { useLocaleCode, useT, type Translate } from '@/i18n/useT';
 import { Button, Notice, Stack, Text } from '@/ui';
 
@@ -18,6 +22,14 @@ const NPU_PROBLEM_KEYS: Record<SetupNpuProblem['code'], readonly [Key, Key]> = {
     access: ['setup.npu.problem.access', 'setup.npu.fix.access'],
     memlock: ['setup.npu.problem.memlock', 'setup.npu.fix.memlock'],
     runtime: ['setup.npu.problem.runtime', 'setup.npu.fix.runtime'],
+};
+
+/** Why the administrator step didn't happen, by the PC's `code`. */
+const MEMLOCK_FIX_ERRORS: Record<string, Key> = {
+    cancelled: 'setup.npu.fixError.cancelled',
+    timeout: 'setup.npu.fixError.timeout',
+    not_authorized: 'setup.npu.fixError.notAuthorized',
+    no_pkexec: 'setup.npu.fixError.noPkexec',
 };
 
 function Problem({ problem }: { problem: SetupNpuProblem }) {
@@ -44,7 +56,7 @@ function Problem({ problem }: { problem: SetupNpuProblem }) {
 
 /**
  * The NPU is there but can't run a model yet: what is missing, and a way to check again.
- * The locked-memory fix starts an administrator prompt on the PC, so here it is only shown.
+ * The locked-memory fix starts an administrator prompt on the PC: the request stays open while someone answers there, and the notice stands in for its button.
  * Check again refreshes the cached plan, so a parent reading it updates; `onReady` is also told the fresh plan.
  */
 export function NpuNotReady({ problems, disabled = false, onReady }: {
@@ -54,9 +66,28 @@ export function NpuNotReady({ problems, disabled = false, onReady }: {
 }) {
     const t = useT();
     const recheck = useRecheckNpu();
+    const fix = useFixNpuMemlock();
+    const fixPrompt = useDevicePrompt({ kind: 'admin', action: 'npuMemlockFix' });
+    const [fixFailure, setFixFailure] = useState<unknown>(null);
     const canFix = problems.some((p) => p.code === 'memlock' && p.params.fix === 'apply');
     const failure = recheck.error;
     const refused = failure instanceof GaiaApiError && failure.status === 403;
+    const fixRefused = fixFailure instanceof GaiaApiError && fixFailure.status === 403;
+    const fixCode = fixFailure instanceof GaiaApiError ? fixFailure.body?.code : undefined;
+    const fixKey: Key = typeof fixCode === 'string' && fixCode in MEMLOCK_FIX_ERRORS ? MEMLOCK_FIX_ERRORS[fixCode]! : 'setup.npu.fixError.failed';
+    const onFix = () => {
+        fixPrompt.begin();
+        setFixFailure(null);
+        fix.mutate(undefined, {
+            onSuccess: (plan) => {
+                fixPrompt.settle();
+                onReady?.(plan);
+            },
+            onError: (err) => {
+                if (!fixPrompt.report(err)) setFixFailure(err);
+            },
+        });
+    };
 
     return (
         <Stack gap="md" testID="npu-not-ready">
@@ -66,17 +97,25 @@ export function NpuNotReady({ problems, disabled = false, onReady }: {
             {failure ? (
                 <Notice tone={refused ? 'info' : 'danger'} message={refused ? t('setup.plan.pcOnly') : t('setup.npu.recheckFailed')} />
             ) : null}
-            {canFix ? (
-                <Stack gap="xs">
-                    <Button variant="secondary" label={t('setup.npu.fixMemlock')} disabled onPress={() => undefined} />
-                    <Text role="caption" tone="muted">{t('setup.plan.pcOnly')}</Text>
-                </Stack>
+            {canFix && !fixPrompt.hideAction ? (
+                <Button
+                    variant="secondary"
+                    label={t('setup.npu.fixMemlock')}
+                    busy={fix.isPending && fixPrompt.state === 'idle'}
+                    disabled={disabled || fix.isPending || recheck.isPending}
+                    onPress={onFix}
+                    testID="npu-fix-memlock"
+                />
+            ) : null}
+            {canFix ? <ApproveOnPcNotice kind="admin" action="npuMemlockFix" onRetry={onFix} /> : null}
+            {fixFailure ? (
+                <Notice tone={fixRefused ? 'info' : 'danger'} message={fixRefused ? t('setup.plan.pcOnly') : t(fixKey)} testID="npu-fix-error" />
             ) : null}
             <Button
                 variant="secondary"
                 label={t('setup.npu.recheck')}
                 busy={recheck.isPending}
-                disabled={disabled || recheck.isPending}
+                disabled={disabled || recheck.isPending || fix.isPending}
                 onPress={() => recheck.mutate(undefined, { onSuccess: (plan) => onReady?.(plan) })}
             />
         </Stack>

@@ -1652,7 +1652,7 @@ def _downloaded_on_this_pc(model_id: str) -> bool:
 #: Said instead of scanning while the user has not turned System discovery on.
 NO_DISCOVERY_CONSENT = (
     "System discovery is off, so GAIA read nothing on this PC. Turn it on in "
-    "Memory > Advanced > System discovery, then run the scan again."
+    "Memory › Advanced › System discovery, then run the scan again."
 )
 
 

@@ -23,6 +23,8 @@ export class GaiaApiError extends GaiaError {
     readonly detail: string;
     /** The error's `detail` when GAIA sent an object, such as a 409 asking to be confirmed. */
     readonly body: Record<string, unknown> | null;
+    /** A 429's `Retry-After`, in seconds. */
+    readonly retryAfterSeconds: number | null;
 
     constructor(
         status: number,
@@ -30,11 +32,13 @@ export class GaiaApiError extends GaiaError {
         messageKey: MessageKey = 'mobileApp.error.http',
         params?: Params,
         body: Record<string, unknown> | null = null,
+        retryAfterSeconds: number | null = null,
     ) {
         super(messageKey, params ?? { status, detail });
         this.status = status;
         this.detail = detail;
         this.body = body;
+        this.retryAfterSeconds = retryAfterSeconds;
     }
 }
 

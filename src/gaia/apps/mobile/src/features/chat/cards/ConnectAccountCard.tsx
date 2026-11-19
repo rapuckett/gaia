@@ -18,8 +18,8 @@ import { CircleCheck, Link2, Settings } from '@/ui/icons';
 import { UnsupportedCard } from './UnsupportedCard';
 
 /**
- * The desktop's Connect card. An account that signs in with a code starts here and the PC keeps
- * it; any other is connected on the PC. Once one is connected, the chat's banner offers "Ask again".
+ * The desktop's Connect card. An account that signs in with a code, or Google through this phone's browser,
+ * starts here and the PC keeps it; any other is connected on the PC. Once one is connected, the chat's banner offers "Ask again".
  */
 export function ConnectAccountCard({ data }: { data: unknown }) {
     const t = useT();

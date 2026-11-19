@@ -12,6 +12,7 @@ import requests
 
 from gaia.llm import lemonade_client as lc
 from gaia.llm import retry
+from tests.unit.log_capture import printed_lines
 
 MODEL = "Gemma-4-E4B-it-GGUF"
 BIG = "Qwen3-30B-A3B-Instruct-2507-GGUF"
@@ -356,7 +357,7 @@ def test_stop_ends_the_busy_server_wait():
     assert clock.now <= 1.5
 
 
-def test_busy_wait_is_announced_not_printed(capsys):
+def test_busy_wait_is_announced_not_printed(capsys, caplog):
     """A library reports through the retry notice, not stdout/stderr."""
     clock = FakeClock()
     client = lc.LemonadeClient(base_url="http://127.0.0.1:1/api/v1", verbose=False)
@@ -374,7 +375,7 @@ def test_busy_wait_is_announced_not_printed(capsys):
         with retry.model_retry_notices(notices.append):
             assert client._wait_while_busy(MODEL).running
     assert notices and "busy" in notices[0].reason
-    assert capsys.readouterr().err == ""
+    assert printed_lines(capsys.readouterr().err, caplog) == []
 
 
 def test_a_slow_load_is_not_labelled_a_busy_server():
