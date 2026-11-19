@@ -3522,7 +3522,7 @@ const messages: Messages = {
     'schedules.history': 'سجل التشغيل',
     'schedules.historyLoading': 'جارٍ التحميل…',
     'schedules.historyEmpty': 'لم تُشغَّل بعد',
-    'schedules.noOutput': '(بلا مخرجات)',
+    'schedules.noOutput': 'لا مخرجات',
     'schedules.time.never': 'لا يوجد',
     'schedules.time.inSeconds': 'بعد {n} ث',
     'schedules.time.inMinutes': 'بعد {n} د',
