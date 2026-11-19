@@ -9,6 +9,7 @@ const REFUSAL_KEYS = {
     document_not_in_chat: 'mobileApp.files.refused.documentNotInChat',
     no_chat_folders: 'mobileApp.files.refused.noChatFolders',
     not_in_chat_folders: 'mobileApp.files.refused.notInChatFolders',
+    outside_home: 'mobileApp.files.refused.outsideHome',
     session_required: 'mobileApp.files.refused.sessionRequired',
 } as const;
 

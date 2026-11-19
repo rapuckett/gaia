@@ -49,6 +49,7 @@ from gaia.connectors.events import emit_change
 from gaia.connectors.flow import (
     cancel_flow,
     complete_authorization,
+    complete_device_authorization,
     poll_device_flow,
     start_authorization,
     start_device_flow,
@@ -944,6 +945,7 @@ __all__ = [
     "activate_agent",
     "cancel_flow",
     "complete_authorization",
+    "complete_device_authorization",
     "connected_mailbox_providers",
     "deactivate",
     "deactivate_agent",

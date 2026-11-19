@@ -36,6 +36,7 @@ from . import (
     PC_NAME_MAX,
     PENDING_DEVICE_SECONDS,
 )
+from .changes import retire_devices
 from .home import NoHomeNetwork, home_network
 from .listener import DeviceListener, ListenerError, OpenRequests
 from .pairing import PairingWindow, sanitize_device_name
@@ -391,6 +392,7 @@ class DeviceAccess:
                 continue
             try:
                 expired = await asyncio.to_thread(store.expire)
+                await asyncio.to_thread(self._retire, expired)
             except sqlite3.Error as e:
                 logger.error("Expiring idle devices failed (%s); trying again later", e)
                 continue
@@ -536,6 +538,10 @@ class DeviceAccess:
             logger.info("Device %s allowed", device_id)
         return device
 
+    def _retire(self, device_ids: Optional[List[str]]) -> None:
+        """Start the retention clock on unpaired devices' changes (None: all)."""
+        retire_devices(self._app.state.db, device_ids, self._clock())
+
     def revoke(self, device_id: str, *, end_requests: bool = True) -> bool:
         """Unpair a device; its open requests end too unless *end_requests* is
         False, for a device unpairing itself, whose own request must finish."""
@@ -543,6 +549,7 @@ class DeviceAccess:
         gone = bool(store and store.revoke(device_id))
         if gone:
             logger.info("Device %s unpaired", device_id)
+            self._retire([device_id])
             if end_requests:
                 self.requests.end(device_id)
         return gone
@@ -569,6 +576,7 @@ class DeviceAccess:
             if not os.path.lexists(self.folder):
                 return
             reset_folder(self.folder)
+            self._retire(None)
             store = self._open_store()
             if pc_id:
                 store.adopt_pc_id(pc_id)

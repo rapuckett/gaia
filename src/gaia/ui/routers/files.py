@@ -17,6 +17,7 @@ import logging
 import platform
 import shutil
 import threading
+from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Literal, Optional
 
@@ -26,7 +27,12 @@ from starlette.requests import ClientDisconnect
 
 from gaia.audio.media import MEDIA_EXTENSIONS, prune_older_than
 from gaia.env import child_env
-from gaia.security import AllowedPathsEnvError, secret_read_refusal
+from gaia.home import default_gaia_home, gaia_home
+from gaia.security import (
+    GAIA_STATE_USER_CONTENT_SUBDIRS,
+    AllowedPathsEnvError,
+    secret_read_refusal,
+)
 from gaia.upload_names import place_copy, reserve_copy_path, upload_copy_stem
 from gaia.utils.text_decoding import file_encoding
 from gaia.utils.user_folders import documents_dir
@@ -46,7 +52,7 @@ from ..models import (
     QuickLink,
     WireModel,
 )
-from ..security import is_local_pc, require_local_pc
+from ..security import allowed_device, is_local_pc, require_local_pc
 from ..turn_summary import is_openable
 from ..utils import (
     ALLOWED_EXTENSIONS,
@@ -103,7 +109,12 @@ SEARCH_SETUP_ALLOWANCE_SEC = 1.0
 REMOTE_PREVIEW_MAX_LINES = 50
 
 _AWAY_FROM_PC = (
-    "A paired device can open files only from the folders its chat was given."
+    "Away from the PC, GAIA opens files only from the folders the chat was given."
+)
+
+OUTSIDE_HOME_REFUSAL = (
+    "Away from the PC, GAIA browses only your home folder on the PC, as the "
+    "PC's own folder picker does."
 )
 
 router = APIRouter(tags=["files"])
@@ -151,8 +162,7 @@ def _refuse_remote_secret(resolved: Path) -> None:
     if secret_read_refusal(resolved):
         raise _device_refusal(
             "credentials_withheld",
-            "GAIA doesn't show this to a paired device: it holds "
-            "credentials or keys.",
+            "GAIA doesn't show this away from the PC: it holds credentials or keys.",
         )
 
 
@@ -177,6 +187,130 @@ def _refuse_remote_read(resolved: Path, roots) -> None:
             "chat's folders: add its folder to the chat on your PC, or open it "
             "on your PC.",
             name=name,
+        )
+
+
+@dataclass(frozen=True)
+class _ReadScope:
+    """What one caller of the picker routes may read.
+
+    ``roots`` is ``None`` for the PC picker's home-wide scope, else one chat's
+    folders. ``away`` is every caller but the PC: secrets withheld, previews
+    capped.
+    """
+
+    roots: Optional[List[str]]
+    away: bool
+
+    @property
+    def device_wide(self) -> bool:
+        return self.away and self.roots is None
+
+
+def _picker_scope(request: Request, session_id: Optional[str]) -> _ReadScope:
+    """An allowed paired device browses home-wide like the PC; others as before."""
+    if allowed_device(request) is not None:
+        return _ReadScope(roots=None, away=True)
+    roots = _remote_read_roots(request, session_id)
+    return _ReadScope(roots=roots, away=roots is not None)
+
+
+def _device_private_folders() -> List[Path]:
+    """Places a home-wide device never sees that the credential list misses."""
+    home = Path.home()
+    library = home / "Library"
+    support = library / "Application Support"
+    local = home / "AppData" / "Local"
+    roaming = home / "AppData" / "Roaming"
+    config = home / ".config"
+    return [
+        # Shell history: commands typed with tokens and passwords in them.
+        home / ".zsh_history",
+        home / ".bash_history",
+        home / ".local" / "share" / "fish" / "fish_history",
+        home / ".local" / "share" / "powershell" / "PSReadLine",
+        roaming / "Microsoft" / "Windows" / "PowerShell" / "PSReadLine",
+        # Git's stored credentials.
+        home / ".git-credentials",
+        config / "git" / "credentials",
+        # Chat and editor data kept unencrypted: messages, sessions, tokens.
+        *(
+            base / name
+            for base in (support, roaming, config)
+            for name in ("Signal", "Slack", "discord", "Cursor")
+        ),
+        *(
+            base / "Code" / "User" / "globalStorage"
+            for base in (support, roaming, config)
+        ),
+        # Keychains and saved passwords.
+        library / "Keychains",
+        home / ".local" / "share" / "keyrings",
+        home / ".password-store",
+        local / "Microsoft" / "Credentials",
+        roaming / "Microsoft" / "Credentials",
+        roaming / "Microsoft" / "Protect",
+        # Browser profiles: cookies, sessions and saved logins.
+        library / "Cookies",
+        library / "Safari",
+        support / "Google" / "Chrome",
+        support / "Microsoft Edge",
+        support / "BraveSoftware",
+        support / "Firefox",
+        config / "google-chrome",
+        config / "chromium",
+        config / "microsoft-edge",
+        config / "BraveSoftware",
+        home / ".mozilla",
+        local / "Google" / "Chrome" / "User Data",
+        local / "Microsoft" / "Edge" / "User Data",
+        local / "BraveSoftware",
+        roaming / "Mozilla",
+    ]
+
+
+def _device_private(path: Path) -> bool:
+    """Whether a home-wide device is kept out of *path*, judged on its realpath."""
+    real = str(path)
+    if any(session_environment.within(real, str(f)) for f in _device_private_folders()):
+        return True
+    for state in {default_gaia_home(), gaia_home()}:
+        if session_environment.within(real, str(state)) and not any(
+            session_environment.within(real, str(state / sub))
+            for sub in GAIA_STATE_USER_CONTENT_SUBDIRS
+        ):
+            return True
+    return False
+
+
+def device_withholds(path: Path) -> bool:
+    """Whether a home-wide paired device is kept out of *path*."""
+    return bool(secret_read_refusal(path)) or _device_private(path)
+
+
+def _withheld_entry(item: Path, scope: _ReadScope) -> bool:
+    """Whether a listing or search away from the PC leaves *item* out."""
+    if scope.device_wide:
+        return device_withholds(item)
+    return scope.away and bool(secret_read_refusal(item))
+
+
+def _refuse_picker_read(resolved: Path, scope: _ReadScope) -> None:
+    """403 unless *scope* may read the already-resolved *resolved*.
+
+    Runs before anything touches the file. A device gets a plain refusal
+    with no PC path in it; the PC and the tunnel keep their old checks.
+    """
+    if not scope.device_wide:
+        ensure_within_home(resolved)
+        _refuse_remote_read(resolved, scope.roots)
+        return
+    if not is_within_document_roots(resolved):
+        raise _device_refusal("outside_home", OUTSIDE_HOME_REFUSAL)
+    if device_withholds(resolved):
+        raise _device_refusal(
+            "credentials_withheld",
+            "GAIA doesn't show this away from the PC: it holds credentials or keys.",
         )
 
 
@@ -394,10 +528,12 @@ async def browse_files(
     Args:
         path: Directory to browse. Defaults to user home directory.
               On Windows, pass "/" to list drive letters.
-        session_id: The chat whose folders a caller away from the PC browses;
-              required for them. With no path they start in its first folder.
+        session_id: The chat whose folders mobile access or a pending device
+              browses; required for them, and they start in its first folder.
+              An allowed paired device browses home-wide, like the PC.
     """
-    roots = _remote_read_roots(request, session_id)
+    scope = _picker_scope(request, session_id)
+    roots = scope.roots
     if roots is not None and not path:
         path = next((root for root in roots if Path(root).is_dir()), None)
         if path is None:
@@ -441,8 +577,7 @@ async def browse_files(
     # Security: restrict browsing to user's home directory FIRST, before
     # ANY filesystem operations (is_symlink/is_dir can throw PermissionError
     # on protected OS paths).
-    ensure_within_home(resolved)
-    _refuse_remote_read(resolved, roots)
+    _refuse_picker_read(resolved, scope)
 
     # Check symlink after home restriction
     try:
@@ -488,7 +623,7 @@ async def browse_files(
             # Skip symlinks for security
             if item.is_symlink():
                 continue
-            if roots is not None and secret_read_refusal(item):
+            if _withheld_entry(item, scope):
                 continue
 
             try:
@@ -731,8 +866,9 @@ async def search_files(
         file_types: Comma-separated extensions to filter (e.g., 'csv,xlsx').
         max_results: Maximum results to return (1-100, default 20).
         folder: Search this folder only.
-        session_id: The chat a caller away from the PC searches; only its
-            folders are walked, and files holding secrets never come back.
+        session_id: The chat mobile access or a pending device searches; only
+            its folders are walked. An allowed paired device searches like the
+            PC. Away from the PC, files holding secrets never come back.
     """
     import time as _time
 
@@ -743,12 +879,12 @@ async def search_files(
     if "\x00" in query or (folder and "\x00" in folder):
         raise HTTPException(status_code=400, detail="Invalid search query")
 
-    roots = _remote_read_roots(request, session_id)
+    scope = _picker_scope(request, session_id)
+    roots = scope.roots
     only: Optional[Path] = None
     if folder:
         only = Path(folder).resolve(strict=False)
-        ensure_within_home(only)
-        _refuse_remote_read(only, roots)
+        _refuse_picker_read(only, scope)
 
     query_lower = query.strip().lower()
     max_results = min(max(max_results, 1), 100)
@@ -820,7 +956,7 @@ async def search_files(
                         if item.is_symlink():
                             continue
                         if item.is_file() and _matches(item):
-                            if roots is not None and secret_read_refusal(item):
+                            if _withheld_entry(item, scope):
                                 continue
                             resolved_str = str(item.resolve())
                             if resolved_str in seen_paths:
@@ -842,6 +978,8 @@ async def search_files(
                                 }
                             )
                         elif item.is_dir() and depth < max_depth:
+                            if scope.device_wide and _device_private(item):
+                                continue
                             _scan(item, max_depth, depth + 1, skip)
                     except (PermissionError, OSError):
                         continue
@@ -964,9 +1102,10 @@ async def preview_file(
         path: Absolute path to the file.
         lines: Number of lines to preview (default 50, max 200; at most
             ``REMOTE_PREVIEW_MAX_LINES`` away from the PC).
-        session_id: The chat whose folders a caller away from the PC reads.
+        session_id: The chat whose folders mobile access or a pending device
+            reads; an allowed paired device reads home-wide.
     """
-    roots = _remote_read_roots(request, session_id)
+    scope = _picker_scope(request, session_id)
     if not path:
         raise HTTPException(status_code=400, detail="File path is required")
 
@@ -981,8 +1120,7 @@ async def preview_file(
     # Security: restrict previews to user's home directory FIRST, before
     # ANY filesystem operations (is_symlink/exists/is_file can all throw
     # PermissionError on protected OS paths like C:\Windows\System32\...).
-    ensure_within_home(resolved)
-    _refuse_remote_read(resolved, roots)
+    _refuse_picker_read(resolved, scope)
 
     # Check symlink before other filesystem operations
     try:
@@ -997,7 +1135,7 @@ async def preview_file(
     if not resolved.is_file():
         raise HTTPException(status_code=400, detail="Path is not a file")
 
-    lines = min(max(lines, 1), 200 if roots is None else REMOTE_PREVIEW_MAX_LINES)
+    lines = min(max(lines, 1), REMOTE_PREVIEW_MAX_LINES if scope.away else 200)
     stat = resolved.stat()
     ext = resolved.suffix.lower()
 
@@ -1085,13 +1223,15 @@ async def serve_local_image(
     (e.g., Stable Diffusion output, screenshots).
 
     Security: only files within the user's home directory are accessible,
-    and away from the PC only those in the named chat's folders.
+    and over mobile access or from a pending device only those in the named
+    chat's folders.
 
     Args:
         path: Absolute path to the image file.
-        session_id: The chat whose folders a caller away from the PC reads.
+        session_id: The chat whose folders mobile access or a pending device
+            reads; an allowed paired device reads home-wide.
     """
-    roots = _remote_read_roots(request, session_id)
+    scope = _picker_scope(request, session_id)
     if not path:
         raise HTTPException(status_code=400, detail="File path is required")
     if "\x00" in path:
@@ -1101,8 +1241,7 @@ async def serve_local_image(
     resolved = raw_path.resolve(strict=False)
 
     # Security: restrict to user's home directory
-    ensure_within_home(resolved)
-    _refuse_remote_read(resolved, roots)
+    _refuse_picker_read(resolved, scope)
 
     try:
         if raw_path.is_symlink():

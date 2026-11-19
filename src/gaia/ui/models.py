@@ -3,7 +3,7 @@
 
 """Pydantic models for GAIA Agent UI API."""
 
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional, Union
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -1088,12 +1088,36 @@ class PairedDevice(BaseModel):
     last_seen_at: Optional[str] = None
     # Set while pending: when it stops working unless allowed.
     expires_at: Optional[str] = None
+    # How many changes it made on this PC that are still on record.
+    changes_count: int = 0
 
 
 class PairedDeviceList(BaseModel):
     """Every paired device."""
 
     devices: List[PairedDevice]
+
+
+class DeviceRemoved(BaseModel):
+    """A device the PC unpaired: how many of its changes stay on the PC."""
+
+    changes_count: int
+
+
+class DeviceChange(BaseModel):
+    """One change a paired device made on the PC; ``params`` never hold a secret."""
+
+    id: str
+    kind: str
+    params: Dict[str, Union[str, int, float, bool, None]]
+    at: str
+
+
+class DeviceChangeList(BaseModel):
+    """A device's changes, newest first, and how many it has on record."""
+
+    changes: List[DeviceChange]
+    total: int
 
 
 class FailedRedemption(BaseModel):

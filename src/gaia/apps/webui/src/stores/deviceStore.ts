@@ -10,12 +10,23 @@ import { log } from '../utils/logger';
 import { getT } from '../i18n/useT';
 import { useNotificationStore } from './notificationStore';
 
+/** An OS prompt a device caused on this PC that someone at the PC has yet to answer. */
+export interface DevicePrompt {
+    deviceId: string;
+    kind: 'key_store' | 'admin';
+    action: string;
+}
+
+const promptKey = (p: DevicePrompt) => `${p.deviceId}\u0000${p.kind}\u0000${p.action}`;
+
 interface DeviceState {
     /** null until the first read; false when pairing is off or this isn't the PC, which hides every trace of it. */
     available: boolean | null;
     status: DeviceAccessStatus | null;
     devices: PairedDevice[];
     loadError: string | null;
+    /** Prompts still waiting, newest first. */
+    prompts: DevicePrompt[];
     refresh: () => Promise<void>;
     setStatus: (status: DeviceAccessStatus) => void;
 }
@@ -25,6 +36,7 @@ export const useDeviceStore = create<DeviceState>((set) => ({
     status: null,
     devices: [],
     loadError: null,
+    prompts: [],
     refresh: async () => {
         try {
             const [status, devices] = await Promise.all([getDeviceStatus(), listDevices()]);
@@ -45,13 +57,22 @@ export const useDeviceStore = create<DeviceState>((set) => ({
 /** What `/api/sessions/events` sends the PC about devices. */
 export type DeviceEvent =
     | { type: 'device_paired'; device: PairedDevice | null; actions?: string[] }
-    | { type: 'security_alert'; kind: string; address: string; at: string };
+    | { type: 'security_alert'; kind: string; address: string; at: string }
+    | { type: 'device_prompt'; device_id: string; kind: 'key_store' | 'admin'; action: string; state: 'waiting' | 'approved' | 'cancelled' | 'denied' | 'timeout' };
 
 /** A device event from the PC's event stream: a Security notice, and fresh state. False for any other event. */
 export function handleDeviceEvent(data: { type?: string }): boolean {
-    if (data.type !== 'device_paired' && data.type !== 'security_alert') return false;
+    if (data.type !== 'device_paired' && data.type !== 'security_alert' && data.type !== 'device_prompt') return false;
     const event = data as DeviceEvent;
     const store = useDeviceStore.getState();
+    if (event.type === 'device_prompt') {
+        const prompt: DevicePrompt = { deviceId: event.device_id, kind: event.kind, action: event.action };
+        const rest = store.prompts.filter((p) => promptKey(p) !== promptKey(prompt));
+        useDeviceStore.setState({ prompts: event.state === 'waiting' ? [prompt, ...rest] : rest });
+        // A device the list hasn't read yet (it paired a moment ago) still needs a name on the banner.
+        if (event.state === 'waiting' && !store.devices.some((d) => d.id === event.device_id)) void store.refresh();
+        return true;
+    }
     const notify = useNotificationStore.getState().addNotification;
     const t = getT();
     const base = { type: 'security_alert' as const, agentId: 'devices', agentName: 'GAIA', timestamp: Date.now(), read: false, dismissed: false, priority: 'high' as const };
