@@ -1962,6 +1962,22 @@ async function withOldFile(page: Page): Promise<void> {
 }
 
 for (const locale of ['ar', 'en']) {
+    test(`a file the server refuses away from the PC is worded in the interface language (${locale})`, async ({ page }) => {
+        await open(page, '', locale, async (p) => {
+            await withOldFile(p);
+            await p.route('**/api/files/browse**', (route) => route.fulfill({
+                status: 403,
+                json: { detail: { code: 'not_in_chat_folders', message: 'Away from the PC, GAIA opens files only from the folders the chat was given. q1-plan.pdf isn\'t in this chat\'s folders.', name: 'q1-plan.pdf' } },
+            }));
+        }, 'dark');
+        await page.locator('.sb').getByRole('button', { name: /Documents/ }).click();
+        await page.getByRole('button', { name: /Browse files/ }).click();
+        const refusal = page.locator('.fb-error');
+        await expect(refusal).toContainText('q1-plan.pdf');
+        if (locale === 'ar') await expect(refusal).not.toContainText('Away from the PC');
+        await shot(page, `files-${locale}-refused`);
+    });
+
     test(`dates read in the interface language, not the PC's (${locale})`, async ({ page }) => {
         const month = locale === 'ar' ? ARABIC_MONTH : /Mar/;
         await open(page, '', locale, withOldFile);
