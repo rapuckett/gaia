@@ -2032,9 +2032,11 @@ removed.
     or a paired device the PC allowed, whose change is written to the audit log
     and its list of changes; **403** from mobile access, a pending device or
     another computer. Opening pairing and allowing a device stay PC-only.
-    Unpairing the device that started the Discord pairing resets that pairing
-    (as do `DELETE /api/devices/me` and a pairing reset); **500** when the
-    Discord bridge does not stop, with the device already unpaired.
+    Unpairing the device that connected the Discord bot token disconnects the
+    bridge (its token, approver and "Always allow" answers are forgotten), and
+    unpairing the one that started the pairing resets that pairing; so do
+    `DELETE /api/devices/me`, a pairing reset and a device expiring. **500**
+    when the Discord bridge does not stop, with the device already unpaired.
   </Accordion>
 
   <Accordion title="GET /api/devices/{device_id}/changes">
@@ -2787,8 +2789,12 @@ Settings → Messaging: connect, pair and run the Discord bridge
 `gaia discord`. Every route answers the PC or a paired device the PC allowed,
 and a device's change is written to the audit log and its list of changes.
 Whoever DMs the pairing code becomes the bot's only approver, so a device sees
-the code only for a pairing it started itself, and unpairing that device resets
-the pairing. A device never sees the bot token or a failure's PC-side text.
+the code only for a pairing it started itself. The device that connected the
+bot token holds that token, so unpairing it disconnects the bridge; unpairing
+the device that started the pairing resets the pairing. An expired or no longer
+allowed device counts as unpaired at the next status read or bridge start. A
+pair press never clears the token's device. A device never sees the bot token
+or a failure's PC-side text.
 Mobile access, a pending device or another computer gets a 403. Mutating routes
 also require the `X-Gaia-UI: 1` header.
 
@@ -2807,8 +2813,9 @@ also require the `X-Gaia-UI: 1` header.
     OS keyring, and starts the bridge in pairing mode. 400 when Discord refuses
     the token or it belongs to the Discord connector's bot; 502 when Discord
     can't be reached. From a device a running bridge is stopped first (500 when
-    it does not stop) and started again if the token is refused; the token is
-    never returned or logged.
+    it does not stop) and started again after any failure, the failure's
+    `detail` saying so when it did not start; the token is never returned or
+    logged.
   </Accordion>
 
   <Accordion title="POST /api/messaging/discord/start">
@@ -3468,7 +3475,9 @@ credential store (the slot the TUI uses). A key is never echoed back or logged.
     Every provider with its state — `registered`, `key_source` (`environment`,
     `lemonade`, `stored`, or `null`), `models_discovered` — and the active
     model. A stored key is handed back to a Lemonade that lost it.
-    `lemonade_error` is set when Lemonade could not be reached. Requires
+    `lemonade_error` is set when Lemonade could not be reached. The `amd`
+    entry's `network` is checked for the PC only; over mobile access it is
+    `{"reachable": null, "detail": null}`. Requires
     `X-Gaia-UI: 1` (**403** without it). Because it can register a provider
     and hand Lemonade a key, a paired device is refused (**403**).
   </Accordion>
@@ -3479,7 +3488,10 @@ credential store (the slot the TUI uses). A key is never echoed back or logged.
     has it and it lists models; always `true` for `local`) and `blocked` (Local
     only is on), and for `amd` a `network` with `reachable` (`true`, `false`, or
     `null` when the check doesn't apply to this PC; never the reason or the
-    address), plus `lemonade_error` when Lemonade could not be read. Cloud
+    address). Only the PC gets `true` or `false`: for a device or mobile access
+    it is always `null` and nothing is dialed, so a gateway host rebound to a
+    home-network address can't be used to probe the PC's network. Plus
+    `lemonade_error` when Lemonade could not be read. Cloud
     providers also carry `key_source` (`stored`, `environment`, `lemonade` or
     `null`), `key_state` (`read`, `store_locked`, or `unknown` until GAIA has
     read the credential store once since it started), `key_hint` (the key's
@@ -3490,7 +3502,7 @@ credential store (the slot the TUI uses). A key is never echoed back or logged.
     environment variable's name, never its value, when `key_source` is
     `environment`) and `key_from_gaia_env` (`true` when that key is GAIA's own
     environment rather than Lemonade's); all seven are `null` for `local`. Each call
-    dials the gateway. It only reads: it registers nothing, hands no key over,
+    from the PC dials the gateway. It only reads: it registers nothing, hands no key over,
     never reads the OS credential store (so it can't raise a key-store
     prompt), and never carries a key or a gateway address. Requires `X-Gaia-UI: 1` (**403** without it).
   </Accordion>
@@ -3526,7 +3538,19 @@ credential store (the slot the TUI uses). A key is never echoed back or logged.
     move is one **422** message, with the previous gateway and its key put
     back; when that restore fails too, a **502** asks for a working address and
     key. A move is refused (**409**) when GAIA holds no saved key for the
-    current gateway to put back. One try per device every 10 s (**429**).
+    current gateway to put back. A device's host is looked up once, every
+    address must be public, and GAIA's check dials those addresses with TLS
+    for the name given, so a second lookup can't point it elsewhere. One try
+    per device every 10 s (**429**).
+
+    Any change of the `amd` address, with a key or without, first drops the key
+    Lemonade holds for the old address. Only one replay or move of the gateway
+    key runs at a time across every GAIA process (the Agent UI, the daemon, the
+    CLI and agents); a connect that waits over 60 s for another one gets a
+    **409** saying so. The saved key lives in the credential store's
+    `gateway:amd:v2` slot, which older GAIA versions don't read; a key in the
+    old `gateway:amd` slot moves there, bound to the gateway it serves, the
+    next time GAIA hands it to Lemonade or before the gateway moves.
 
     While GAIA uses the user's own Lemonade (`lemonade_mode` `external`) it
     sends that server nothing: it succeeds only when the server already has
