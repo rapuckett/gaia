@@ -291,7 +291,9 @@ def test_a_change_to_a_conftest_import_adds_the_smoke_test(graph, tmp_path):
         graph, "src/gaia/tools/sinks.py", coverage={"src/gaia/tools/sinks.py": {ANCHOR}}
     )
     (tmp_path / st.CONFTEST_SMOKE_TEST).unlink()
-    gone = st.build_graph(repo=tmp_path, files=sorted(set(FILES) - {st.CONFTEST_SMOKE_TEST}))
+    gone = st.build_graph(
+        repo=tmp_path, files=sorted(set(FILES) - {st.CONFTEST_SMOKE_TEST})
+    )
     with pytest.raises(SystemExit, match="CONFTEST_SMOKE_TEST"):
         st.select(gone, ["src/gaia/tools/reader.py"], narrow)
 
