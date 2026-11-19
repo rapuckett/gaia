@@ -7,6 +7,14 @@ import type { Locale, Messages } from '../types';
 // (dual, 3-10, 11+) can't be expressed with a one/other pair.
 const messages: Messages = {
     // Sidebar
+    'mobileApp.approveOnPc.admin': 'يطلب الكمبيوتر لديك إذن المسؤول. وافق عليه هناك للمتابعة.',
+    'mobileApp.approveOnPc.cancel': 'إيقاف الانتظار',
+    'mobileApp.approveOnPc.cancelled': 'توقّف الانتظار. إذا كانت النافذة لا تزال مفتوحة على الكمبيوتر لديك، فأغلقها هناك.',
+    'mobileApp.approveOnPc.denied': 'لم تتم الموافقة على الكمبيوتر لديك.',
+    'mobileApp.approveOnPc.keyStore': 'يطلب الكمبيوتر لديك فتح مخزن المفاتيح. وافق عليه هناك للمتابعة.',
+    'mobileApp.approveOnPc.retry': 'حاول مرة أخرى',
+    'mobileApp.approveOnPc.timedOut': 'لم يُجب أحد على الكمبيوتر لديك خلال 5 دقائق.',
+    'mobileApp.approveOnPc.title': 'وافق على الكمبيوتر لديك',
     'sidebar.label': 'المحادثات',
     'sidebar.expand': 'توسيع الشريط الجانبي',
     'sidebar.collapse': 'طي الشريط الجانبي',

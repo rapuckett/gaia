@@ -44,6 +44,7 @@ import type {
     ConnectorTestResponse,
     AllPermissions,
     ConnectorGrants,
+    DeviceChangeList,
     ConnectorList,
     DisconnectOutcome,
     ContextUsageResult,
@@ -145,6 +146,7 @@ import {
     connectorDisablePath,
     connectorGrantPath,
     connectorGrantsPath,
+    deviceChangesPath,
     connectorTestPath,
     CONNECTOR_REVOKE_OUTCOME_MS,
     connectorPath,
@@ -851,6 +853,10 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         listConnectors(options) {
             return getJson<ConnectorList>(ENDPOINTS.connectors, options?.signal);
+        },
+
+        listDeviceChanges(deviceId, limit, options) {
+            return getJson<DeviceChangeList>(deviceChangesPath(deviceId, limit), options?.signal);
         },
 
         listConnectorGrants(connectorId, options) {

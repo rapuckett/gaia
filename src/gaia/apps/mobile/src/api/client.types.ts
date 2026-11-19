@@ -190,6 +190,33 @@ export interface AllPermissions {
 }
 
 /** Namespaced agent ids to the scopes granted to them. */
+/** One thing this phone changed on its PC, as `GET /api/devices/{id}/changes` lists it; `kind` is a fixed id the phone words itself. */
+export interface DeviceChange {
+    /** Stable per change; the list key. */
+    id: string;
+    /** A camelCase id the phone words itself; a newer PC may send one this app doesn't know. */
+    kind: string;
+    /** The values the kind's sentence fills in: `provider`, `name`, `connector`, `agent`, `account`. */
+    params: Record<string, string | number | boolean | null | undefined>;
+    /** ISO 8601 time the PC recorded it. */
+    at: string;
+}
+
+export interface DeviceChangeList {
+    changes: DeviceChange[];
+    /** Everything the PC kept for this phone, which may be more than `changes`. */
+    total: number;
+}
+
+/** A `device_prompt` event on the sessions stream: where an OS prompt this phone raised on the PC stands. */
+export interface DevicePromptEvent {
+    type: 'device_prompt';
+    device_id: string;
+    kind: 'keyStore' | 'admin';
+    action: string;
+    state: 'waiting' | 'approved' | 'cancelled' | 'denied' | 'timeout';
+}
+
 export interface ConnectorGrants {
     grants: Record<string, string[]>;
 }
@@ -557,6 +584,8 @@ export interface GaiaClient {
     watchSessionEvents(options?: RequestOptions): AsyncIterable<StreamEvent>;
     listConnectors(options?: RequestOptions): Promise<ConnectorList>;
     listConnectorGrants(connectorId: string, options?: RequestOptions): Promise<ConnectorGrants>;
+    /** The newest `limit` changes the PC recorded as made from this device, newest first; a device may read only its own id. */
+    listDeviceChanges(deviceId: string, limit: number, options?: RequestOptions): Promise<DeviceChangeList>;
     listConnectorActivations(connectorId: string, options?: RequestOptions): Promise<ConnectorActivations>;
     /** Sets the scopes an agent holds on a connector; the PC answers 400 for a scope past what the connector allows. */
     grantConnectorAgent(connectorId: string, agentId: string, scopes: string[], options?: RequestOptions): Promise<void>;

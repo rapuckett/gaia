@@ -7,6 +7,14 @@ import type { Locale } from '../types';
 // `.other` pair, picked by `t.plural`.
 export const enMessages = {
     // Sidebar
+    'mobileApp.approveOnPc.admin': 'Your PC is asking for administrator permission. Approve it there to continue.',
+    'mobileApp.approveOnPc.cancel': 'Stop waiting',
+    'mobileApp.approveOnPc.cancelled': 'Stopped waiting. If the prompt is still open on your PC, close it there.',
+    'mobileApp.approveOnPc.denied': 'It wasn\'t approved on your PC.',
+    'mobileApp.approveOnPc.keyStore': 'Your PC is asking to unlock its key store. Approve it there to continue.',
+    'mobileApp.approveOnPc.retry': 'Try again',
+    'mobileApp.approveOnPc.timedOut': 'No one answered on your PC within 5 minutes.',
+    'mobileApp.approveOnPc.title': 'Approve on your PC',
     'sidebar.label': 'Chats',
     'sidebar.expand': 'Expand sidebar',
     'sidebar.collapse': 'Collapse sidebar',

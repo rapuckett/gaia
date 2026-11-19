@@ -6,6 +6,7 @@ import { useT } from '@/i18n/useT';
 import { Button } from '../controls/Button';
 import { Icon } from '../controls/Icon';
 import { IconButton } from '../controls/IconButton';
+import { Spinner } from '../controls/Spinner';
 import { Check, CircleAlert, Info, TriangleAlert, X } from '../icons';
 import { Row } from '../layout/layout';
 import { FirstLine } from '../text/FirstLine';
@@ -31,6 +32,8 @@ export interface NoticeProps {
     role?: 'note' | 'status';
     /** `card` is the desktop's `.model-warning`: a toned title and wider padding; both variants share the tinted box with a 25% border. */
     variant?: 'tint' | 'card';
+    /** Shows a spinner in place of the tone icon while the thing the notice describes is still going. */
+    busy?: boolean;
     testID?: string;
 }
 
@@ -44,7 +47,7 @@ function withAlpha(hex: string, alpha: number): string {
 }
 
 // The icon carries the tone with the color, so it never rests on color alone.
-export function Notice({ tone, title, message, detail, action, onDismiss, dismissLabel, role, variant = 'tint', testID }: NoticeProps) {
+export function Notice({ tone, title, message, detail, action, onDismiss, dismissLabel, role, variant = 'tint', busy, testID }: NoticeProps) {
     const t = useT();
     const { colors, radius, space } = useTheme();
     const largeText = useLargeText();
@@ -73,7 +76,7 @@ export function Notice({ tone, title, message, detail, action, onDismiss, dismis
         >
             <Row gap="md" align="start">
                 <FirstLine role={title ? 'ui' : 'label'}>
-                    <Icon icon={ICONS[tone]} size="md" tone={ICON_TONE[tone]} />
+                    {busy ? <Spinner size="sm" tone={ICON_TONE[tone]} /> : <Icon icon={ICONS[tone]} size="md" tone={ICON_TONE[tone]} />}
                 </FirstLine>
                 <View style={{ flex: 1, minWidth: 0, gap: space.xs }}>
                     <View {...(hasControls ? semantics : {})} style={{ gap: space.xs }}>
