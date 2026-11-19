@@ -106,6 +106,9 @@ class BridgeConfig:
     #: one still waiting for a code); empty when it was the PC. Unpairing that
     #: device resets the pairing.
     pairing_device_id: str = ""
+    #: The paired device that connected the bot token; empty when it was the
+    #: PC. That device holds the token, so unpairing it disconnects the bridge.
+    token_device_id: str = ""
 
     @property
     def connected(self) -> bool:

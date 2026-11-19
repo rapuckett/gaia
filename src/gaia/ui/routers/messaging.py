@@ -10,10 +10,11 @@ An allowed paired device may read the status, start, stop and restart the
 bridge, forget its "Always allow" answers, connect a bot token, pair and
 disconnect. Whoever DMs the pairing code becomes the only person the bot
 answers, the approver of commands on this PC, so a device sees the code only
-for a pairing it started, and unpairing that device resets the pairing
-(``reset_pairing_started_by``). Every device write is audited and listed among
-its changes; the token is never returned or logged. Mobile access and pending
-devices reach none of it.
+for a pairing it started. Unpairing the device that connected the token
+disconnects the bridge, and unpairing the one that started the pairing resets
+it, as does either device expiring (``unlink_devices``). Every device write is
+audited and listed among its changes; the token is never returned or logged.
+Mobile access and pending devices reach none of it.
 """
 
 from __future__ import annotations
@@ -134,9 +135,27 @@ def _device_id(request: Request) -> str:
     return device.device_id if device else ""
 
 
+def _drop_stale_device_links(request: Request) -> None:
+    """Undo the Discord setup of a device that expired or is no longer allowed."""
+    from gaia.messaging.discord import cli
+
+    access = getattr(request.app.state, "devices", None)
+    live = None
+    if access is not None:
+        live = [d.id for d in access.devices() if d.allowed]
+    try:
+        cli.unlink_stale_devices(live)
+    except (cli.PairingKept, bridge_state.BridgeStateError) as e:
+        log.error("A device that is no longer paired kept its Discord setup: %s", e)
+        detail = str(e) if is_local_pc(request) else DEVICE_BRIDGE_ERROR
+        raise HTTPException(status_code=500, detail=detail) from e
+
+
 def _status(request: Optional[Request] = None) -> Dict[str, Any]:
     """The bridge's status; off the PC, without PC-side text, and with the
     pairing code only for the device that started that pairing."""
+    if request is not None:
+        _drop_stale_device_links(request)
     status = _cli().status(detect=False)
     if request is None or is_local_pc(request):
         return status
@@ -171,6 +190,27 @@ def _without_token(text: str, token: str) -> str:
     return text.replace(token, "<token>") if token else text
 
 
+#: Said when a failed connect from a device couldn't bring back the bridge it stopped.
+BRIDGE_NOT_RESTARTED = (
+    "The Discord bridge was stopped for the change and did not start again; "
+    "start it in Settings › Messaging."
+)
+
+
+def _restart(cli: Any) -> bool:
+    """Start the bridge again after a failed change; False, logged, if it didn't."""
+    try:
+        code = cli.start_detached(emit=lambda _line: None)
+    except Exception as e:  # noqa: BLE001 - reported to the caller as not restarted
+        log.error(
+            "The Discord bridge did not start again after a failed connect: %s", e
+        )
+        return False
+    if code:
+        log.error("The Discord bridge did not start again after a failed connect")
+    return not code
+
+
 @router.post(
     "/discord/connect",
     dependencies=_PC_OR_DEVICE,
@@ -196,16 +236,16 @@ def discord_connect(request: Request, body: DiscordConnectRequest) -> Dict[str, 
             result = cli.connect(body.token)
         else:
             result = cli.connect(body.token, started_by=_device_id(request))
-    except (ValueError, DiscordTokenError, RuntimeError) as e:
-        if was_running:
-            cli.start_detached(emit=lambda _line: None)
+    except Exception as e:  # noqa: BLE001 - a stopped bridge comes back or is named
         detail = _without_token(str(e), body.token)
-        if isinstance(e, (ValueError, DiscordTokenError)):
-            raise HTTPException(status_code=400, detail=detail) from e
-        if not on_pc:
-            log.error("Discord connect from a device failed: %s", detail)
-            detail = DEVICE_BRIDGE_ERROR
-        raise HTTPException(status_code=502, detail=detail) from e
+        refused = isinstance(e, (ValueError, DiscordTokenError))
+        if not refused:
+            log.error("Discord connect failed: %s", detail)
+            if not on_pc:
+                detail = DEVICE_BRIDGE_ERROR
+        if was_running and not _restart(cli):
+            detail += " " + BRIDGE_NOT_RESTARTED
+        raise HTTPException(status_code=400 if refused else 502, detail=detail) from e
     cli.start_detached(model=body.model, emit=lambda _line: None)
     _audit(request, "bot token connected", "connect")
     return {"connect": result, "status": _status(request)}

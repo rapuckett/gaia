@@ -23,6 +23,8 @@ from typing import Callable, List, Optional, Tuple
 
 from gaia.config import GaiaConfig, GaiaConfigError, devices_dir
 from gaia.logger import get_logger
+from gaia.messaging.discord.cli import PairingKept
+from gaia.messaging.discord.state import BridgeStateError
 
 from . import (
     DEVICE_IDLE_DAYS,
@@ -399,6 +401,12 @@ class DeviceAccess:
             for device_id in expired:
                 logger.info("Device %s expired and was unpaired", device_id)
                 self.requests.end(device_id)
+            if expired:
+                try:
+                    await asyncio.to_thread(_reset_discord_pairing, expired)
+                except (PairingKept, BridgeStateError) as e:
+                    # The next status read or bridge start tries again.
+                    logger.error("An expired device's Discord setup was kept: %s", e)
 
     # ── What the PC sees ──────────────────────────────────────────────────
 
@@ -612,7 +620,7 @@ class DeviceAccess:
 
 
 def _reset_discord_pairing(device_ids: Optional[List[str]]) -> None:
-    """Reset the Discord pairing an unpaired device set up (None: any device)."""
-    from gaia.messaging.discord.cli import reset_pairing_started_by
+    """Undo the Discord bot or pairing an unpaired device set up (None: any device)."""
+    from gaia.messaging.discord.cli import unlink_devices
 
-    reset_pairing_started_by(device_ids)
+    unlink_devices(device_ids)

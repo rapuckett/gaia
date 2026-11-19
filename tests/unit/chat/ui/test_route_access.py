@@ -2383,6 +2383,30 @@ def test_a_device_never_gets_the_token_back_in_a_failure(setup, monkeypatch, cap
     assert _DISCORD_TOKEN not in caplog.text
 
 
+def test_a_failed_device_connect_brings_the_bridge_back_or_says_so(setup, monkeypatch):
+    from gaia.messaging.discord import state as bridge_state
+    from gaia.ui.routers import messaging
+
+    _, clients, _ = setup
+    bridge = _bridge_for(monkeypatch)
+    monkeypatch.setattr(bridge_state, "is_running", lambda: True)
+
+    def broken(token, started_by=""):
+        raise OSError(f"disk full writing {token}")
+
+    monkeypatch.setattr(bridge, "connect", broken)
+    path, body = "/api/messaging/discord/connect", {"token": _DISCORD_TOKEN}
+    resp = clients["device"].post(path, json=body, headers=UI)
+    assert resp.status_code == 502 and bridge.started == [False]
+    assert resp.json()["detail"] == messaging.DEVICE_BRIDGE_ERROR
+
+    monkeypatch.setattr(bridge, "start_detached", lambda **_: 1)
+    resp = clients["device"].post(path, json=body, headers=UI)
+    assert resp.status_code == 502
+    assert resp.json()["detail"].endswith(messaging.BRIDGE_NOT_RESTARTED)
+    assert _DISCORD_TOKEN not in resp.text
+
+
 def test_pc_pairing_is_unchanged_and_never_marked(setup, monkeypatch):
     from gaia.messaging.discord import state as bridge_state
 
@@ -2452,6 +2476,49 @@ def test_an_approver_kept_by_a_stuck_bridge_is_reported(setup, monkeypatch):
     assert "not reset" in resp.json()["detail"]
     assert not app.state.devices.still_paired(spare_id)
     assert bridge_state.load_config().owner_id == "42"
+
+
+def test_unpairing_the_device_that_connected_the_bot_disconnects_it(setup, monkeypatch):
+    """Its owner holds the token, so a pair press elsewhere doesn't keep it."""
+    from gaia.messaging.discord import credentials
+    from gaia.messaging.discord import state as bridge_state
+
+    app, clients, _ = setup
+    GaiaConfig.save_key("device_pairing", True)
+    _bridge_for(monkeypatch)
+    cleared = []
+    monkeypatch.setattr(credentials, "clear", lambda: cleared.append(True))
+    token_id, _, _ = _device_client(app, allow=True)
+    _paired_by("")
+    config = bridge_state.load_config()
+    config.token_device_id = token_id
+    bridge_state.save_config(config)
+    assert clients["device"].post("/api/messaging/discord/pair", headers=UI).is_success
+    assert bridge_state.load_config().token_device_id == token_id
+
+    assert clients["device"].delete(f"/api/devices/{token_id}").status_code == 200
+    config = bridge_state.load_config()
+    assert not config.connected and config.owner_id == "" and cleared == [True]
+
+
+def test_an_expired_devices_approver_is_reset_on_the_next_status_read(
+    setup, monkeypatch
+):
+    from gaia.messaging.discord import state as bridge_state
+
+    app, clients, _ = setup
+    _bridge_for(monkeypatch)
+    expired_id, _, _ = _device_client(app, allow=True)
+    _paired_by(expired_id)
+    store = app.state.devices._store
+    with store._conn:
+        store._conn.execute(
+            "UPDATE paired_devices SET created_at = 1, last_seen_at = 1 WHERE id = ?",
+            (expired_id,),
+        )
+    assert clients["pc"].get("/api/messaging/discord").is_success
+    config = bridge_state.load_config()
+    assert (config.owner_id, config.pairing_device_id) == ("", "")
 
 
 def test_a_device_grants_and_turns_on_connectors(setup, monkeypatch, tmp_path):

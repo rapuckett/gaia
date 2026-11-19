@@ -139,8 +139,8 @@ def _discord_kept(request: Request, e: Exception, end_device: str = "") -> JSONR
     return JSONResponse(
         status_code=500,
         content={
-            "detail": "The device was unpaired, but the Discord pairing it set up "
-            f"was not reset. {reason} Then pair Discord again."
+            "detail": "The device was unpaired, but the Discord bot or pairing it set "
+            f"up was not reset. {reason} Then set up Discord again."
         },
         headers={"Cache-Control": "no-store"},
         background=(
