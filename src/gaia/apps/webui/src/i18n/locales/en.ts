@@ -3518,7 +3518,7 @@ export const enMessages = {
     'schedules.history': 'Execution history',
     'schedules.historyLoading': 'Loading...',
     'schedules.historyEmpty': 'No executions yet',
-    'schedules.noOutput': '(no output)',
+    'schedules.noOutput': 'No output',
     'schedules.time.never': 'never',
     'schedules.time.inSeconds': 'in {n}s',
     'schedules.time.inMinutes': 'in {n}m',
