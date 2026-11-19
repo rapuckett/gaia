@@ -10,6 +10,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GaiaApiError } from '@/api/errors';
 import { createFakeClient } from '@/api/fake';
 import { GaiaClientProvider, useProviders, type ProviderRow } from '@/data';
+import { ALREADY_WAITING_DETAIL, applyDevicePromptEvent, useDevicePromptStore } from '@/features/devices/devicePrompts';
 import { ThemeProvider } from '@/ui';
 import { SheetHost } from '@/ui/overlays/SheetHost';
 import { sheetStore } from '@/ui/overlays/sheetStore';
@@ -57,6 +58,7 @@ function setup(provider: ProviderRow) {
 }
 
 describeNative('Provider key', () => {
+    beforeEach(() => useDevicePromptStore.setState({ states: {}, notes: {} }));
     afterEach(() => act(() => sheetStore.reset()));
 
     it('a typed key goes to the PC once, then is gone from the field, the screen and every cache', async () => {
@@ -170,6 +172,44 @@ describeNative('Provider key', () => {
         await waitFor(() => expect(client.keyStoreRetries).toBe(1));
         expect(screen.queryByTestId('provider-key-locked')).toBeNull();
         queryClient.clear();
+    });
+
+    describe('the locked key store\'s Try again follows the PC\'s prompt', () => {
+        const lockedRow: ProviderRow = { ...none, key_state: 'store_locked' };
+        const LOCKED = "The OS key store is locked, so GAIA can't read your saved key.";
+        const event = (state: string) => ({ type: 'device_prompt', device_id: 'd1', kind: 'keyStore', action: 'keyStoreRetry', state });
+
+        it('while the PC asks, the notice replaces Try again; the request stays open and its result clears the lock', async () => {
+            const { client, queryClient, wrap } = setup(lockedRow);
+            let finish: (v: { retrying: boolean }) => void = () => undefined;
+            jest.spyOn(client, 'retryKeyStore').mockReturnValue(new Promise((resolve) => (finish = resolve)));
+            await render(<ProviderKey provider={lockedRow} connected={false} />, { wrapper: wrap });
+
+            await fireEvent.press(screen.getByText('Try again'));
+            await act(async () => applyDevicePromptEvent(event('waiting')));
+            expect(screen.getByText('Approve on your PC')).toBeTruthy();
+            expect(screen.queryByText('Try again')).toBeNull();
+            expect(screen.getByText(LOCKED)).toBeTruthy();
+            await act(async () => finish({ retrying: true }));
+            queryClient.clear();
+        });
+
+        it('a 429 shows the wait and keeps Try again; the PC\'s busy 409 shows its notice and keeps Try again too', async () => {
+            const { client, queryClient, wrap } = setup(lockedRow);
+            const retry = jest.spyOn(client, 'retryKeyStore').mockRejectedValueOnce(new GaiaApiError(429, 'This was just tried. Wait 6 s, then try again.', undefined, undefined, null, 6));
+            await render(<ProviderKey provider={lockedRow} connected={false} />, { wrapper: wrap });
+
+            await fireEvent.press(screen.getByText('Try again'));
+            expect(await screen.findByText(/This was just tried\. Wait .*6.* s, then try again\./)).toBeTruthy();
+            expect(screen.getByText('Try again')).toBeTruthy();
+
+            retry.mockRejectedValueOnce(new GaiaApiError(409, ALREADY_WAITING_DETAIL));
+            await fireEvent.press(screen.getByText('Try again'));
+            expect(await screen.findByText('Your PC is already waiting for an answer to another request. Answer that one first.')).toBeTruthy();
+            expect(screen.queryByText(/This was just tried/)).toBeNull();
+            expect(screen.getAllByText('Try again')).toHaveLength(1);
+            queryClient.clear();
+        });
     });
 
     it('Remove key asks first, then clears the saved key on the PC', async () => {

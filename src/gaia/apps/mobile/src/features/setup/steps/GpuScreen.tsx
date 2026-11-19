@@ -13,6 +13,7 @@ import { describeHttpFailure, useLocaleCode, useT } from '@/i18n/useT';
 import { Button, ChoiceList, Ltr, Notice, Row, Spinner, Stack, Surface, Text } from '@/ui';
 import { Check, Copy } from '@/ui/icons';
 
+import { GpuChange } from '../../settings/panes/model/GpuChange';
 import { SetupFooter } from '../SetupFooter';
 import type { PlanScreen } from './planScreens';
 import { defaultTarget, maxSetting, modelNames, unlockNames } from './gpu';
@@ -225,7 +226,11 @@ export const GpuScreen: PlanScreen = ({ ctx, close }) => {
             {!restartPending && presets.length > 0 && canGuide ? (
                 <Button variant="secondary" label={t('gpu.showMe')} testID="gpu-show-me" disabled={target == null} onPress={() => setGuided(true)} />
             ) : null}
-            {status.method === 'apply' || status.revert?.available || pending ? <Notice tone="info" message={t('setup.plan.pcOnly')} /> : null}
+            {status.method === 'apply' || status.revert?.available ? (
+                <GpuChange status={status} target={target} />
+            ) : pending ? (
+                <Notice tone="info" message={t('setup.plan.pcOnly')} />
+            ) : null}
         </Stack>
     );
 

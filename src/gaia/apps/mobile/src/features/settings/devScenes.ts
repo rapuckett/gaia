@@ -63,6 +63,8 @@ export interface SettingsScene {
     appearance?: { palette: 'default' | 'custom'; custom: { accent: string; base: string } };
 }
 
+const APPLY: GpuMemoryStatus = { ...GPU, os: 'linux', method: 'apply', method_reason: '', setting: { name: 'amdgpu.gttsize', current_gb: 16, min_gb: 4, max_gb: 96 } };
+
 const PENDING: GpuMemoryStatus = {
     ...GPU,
     pending: { setting_gb: 32, previous_setting_gb: 16, source: 'guided', recorded_at: '2026-11-15T09:30:00Z', state: 'restart_required' },
@@ -268,6 +270,15 @@ export const SETTINGS_SCENES: Record<string, SettingsScene> = {
     'advanced-not-installed': { section: 'advanced', gpuMemory: GPU, status: NOT_INSTALLED },
     'gpu-adjustable': { section: 'model', target: 'gpu-memory', gpuMemory: GPU },
     'gpu-adjustable-setup': { section: 'setup', gpuMemory: GPU },
+    // Linux, where GAIA writes the size itself: the sizes, Apply (asks first), and Undo once GAIA has changed it.
+    'gpu-apply': { section: 'model', target: 'gpu-memory', gpuMemory: APPLY },
+    'gpu-apply-undo': { section: 'model', target: 'gpu-memory', gpuMemory: { ...APPLY, revert: { available: true, previous_setting_gb: 16 } } },
+    // Apply confirmed and the PC's administrator prompt up: "Approve on your PC" in place of Apply.
+    'gpu-apply-waiting': { section: 'model', target: 'gpu-memory', gpuMemory: APPLY, prompt: { kind: 'admin', action: 'gpuMemoryApply', state: 'waiting' } },
+    'gpu-apply-failed': {
+        section: 'model', target: 'gpu-memory', gpuMemory: APPLY,
+        prompt: { kind: 'admin', action: 'gpuMemoryApply', state: 'failed', note: { detail: 'GAIA could not change the GPU memory setting. Check the PC for details.' } },
+    },
     'gpu-pending': { section: 'model', target: 'gpu-memory', gpuMemory: PENDING },
     'gpu-read-error': { section: 'model', target: 'gpu-memory', gpuMemory: READ_ERROR },
     'gpu-read-error-setup': { section: 'setup', gpuMemory: READ_ERROR },

@@ -6,11 +6,17 @@ import { useState } from 'react';
 import { Button, Screen, ScreenBannerProvider, Stack, Surface, Text, UIProvider } from '@/ui';
 
 import { ApproveOnPcNotice } from './ApproveOnPcNotice';
-import { useDevicePrompt, useDevicePromptStore, type DevicePromptKind, type DevicePromptState } from './devicePrompts';
+import { seedDevicePrompt, useDevicePrompt, type DevicePromptKind, type DevicePromptNote, type DevicePromptState } from './devicePrompts';
 
 const ACTION = 'sample';
 
-export const APPROVE_STATES: readonly DevicePromptState[] = ['idle', 'waiting', 'approved', 'cancelled', 'denied', 'timeout'];
+export const APPROVE_STATES: readonly DevicePromptState[] = ['idle', 'waiting', 'approved', 'cancelled', 'denied', 'timeout', 'failed', 'busy', 'tooSoon'];
+
+/** What the PC's reason or wait would be for a state that carries one. */
+const NOTES: Partial<Record<DevicePromptState, DevicePromptNote>> = {
+    failed: { detail: 'GAIA could not write the setting. Check the PC for details.' },
+    tooSoon: { seconds: 7 },
+};
 
 function SampleCard({ kind }: { kind: DevicePromptKind }) {
     const prompt = useDevicePrompt({ kind, action: ACTION });
@@ -28,10 +34,10 @@ function SampleCard({ kind }: { kind: DevicePromptKind }) {
     );
 }
 
-/** The notice inside a sample card, in one state (`?state=waiting|cancelled|denied|timeout&kind=keyStore|admin`). */
+/** The notice inside a sample card, in one state (`?state=waiting|cancelled|denied|timeout|failed|busy|tooSoon&kind=keyStore|admin`). */
 export function ApproveOnPcGallery({ state, kind }: { state: DevicePromptState; kind: DevicePromptKind }) {
     useState(() => {
-        useDevicePromptStore.setState({ states: { [`${kind}\u0000${ACTION}`]: state } });
+        seedDevicePrompt(kind, ACTION, state, NOTES[state]);
     });
     return (
         <UIProvider>

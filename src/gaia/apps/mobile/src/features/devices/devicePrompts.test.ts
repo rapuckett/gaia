@@ -3,7 +3,9 @@
 
 import { act, renderHook } from '@testing-library/react-native';
 
-import { applyDevicePromptEvent, deviceHaptics, useDevicePrompt, useDevicePromptStore } from './devicePrompts';
+import { GaiaApiError, GaiaNetworkError } from '@/api/errors';
+
+import { ALREADY_WAITING_DETAIL, applyDevicePromptEvent, deviceHaptics, useDevicePrompt, useDevicePromptStore } from './devicePrompts';
 
 const denied = jest.spyOn(deviceHaptics, 'denied').mockImplementation(() => undefined);
 
@@ -11,7 +13,7 @@ const event = (state: string, kind = 'keyStore', action = 'providerKeyRetry') =>
 
 describe('useDevicePrompt', () => {
     beforeEach(() => {
-        useDevicePromptStore.setState({ states: {} });
+        useDevicePromptStore.setState({ states: {}, notes: {} });
         denied.mockClear();
     });
 
@@ -71,5 +73,66 @@ describe('useDevicePrompt', () => {
         expect(result.current.waiting).toBe(true);
         expect(warn).toHaveBeenCalledTimes(1);
         warn.mockRestore();
+    });
+
+    it('takes the failed state the PC now sends, and keeps the action hidden for it', async () => {
+        const { result } = await renderHook(() => useDevicePrompt({ kind: 'admin', action: 'gpuMemoryApply' }));
+        await act(async () => applyDevicePromptEvent(event('failed', 'admin', 'gpuMemoryApply')));
+        expect(result.current.state).toBe('failed');
+        expect(result.current.hideAction).toBe(true);
+    });
+
+    describe('report', () => {
+        const hook = () => renderHook(() => useDevicePrompt({ kind: 'admin', action: 'gpuMemoryApply' }));
+
+        it('a 409 with the PC\'s busy sentence is busy and leaves the button; any other 409 is left to the caller', async () => {
+            const { result } = await hook();
+            let consumed = true;
+            await act(async () => {
+                consumed = result.current.report(new GaiaApiError(409, 'GPU memory is managed by hand on this PC.'));
+            });
+            expect(consumed).toBe(false);
+            await act(async () => {
+                consumed = result.current.report(new GaiaApiError(409, ALREADY_WAITING_DETAIL));
+            });
+            expect(consumed).toBe(true);
+            expect(result.current.state).toBe('busy');
+            expect(result.current.hideAction).toBe(false);
+        });
+
+        it('a 429 keeps the seconds to wait, from Retry-After, else from the sentence', async () => {
+            const { result } = await hook();
+            await act(async () => void result.current.report(new GaiaApiError(429, 'This was just tried. Wait 9 s, then try again.', undefined, undefined, null, 8)));
+            expect(result.current.state).toBe('tooSoon');
+            expect(result.current.note.seconds).toBe(8);
+            await act(async () => void result.current.report(new GaiaApiError(429, 'This was just tried. Wait 9 s, then try again.')));
+            expect(result.current.note.seconds).toBe(9);
+        });
+
+        it('while the PC\'s prompt is up, an HTTP error becomes the failed reason, a 504 the timeout, and a dropped connection nothing', async () => {
+            const { result } = await hook();
+            await act(async () => applyDevicePromptEvent(event('waiting', 'admin', 'gpuMemoryApply')));
+            await act(async () => void result.current.report(new GaiaNetworkError('http://pc', 'lost')));
+            expect(result.current.state).toBe('waiting');
+            await act(async () => void result.current.report(new GaiaApiError(500, 'The change could not be written.')));
+            expect(result.current.state).toBe('failed');
+            expect(result.current.note.detail).toBe('The change could not be written.');
+            await act(async () => result.current.dismiss());
+            await act(async () => applyDevicePromptEvent(event('waiting', 'admin', 'gpuMemoryApply')));
+            await act(async () => void result.current.report(new GaiaApiError(504, 'timed out')));
+            expect(result.current.state).toBe('timeout');
+        });
+
+        it('with no prompt up, an error is the caller\'s to show; settle ends a waiting the PC never closed', async () => {
+            const { result } = await hook();
+            let consumed = true;
+            await act(async () => {
+                consumed = result.current.report(new GaiaApiError(500, 'x'));
+            });
+            expect(consumed).toBe(false);
+            await act(async () => applyDevicePromptEvent(event('waiting', 'admin', 'gpuMemoryApply')));
+            await act(async () => result.current.settle());
+            expect(result.current.state).toBe('idle');
+        });
     });
 });
