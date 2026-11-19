@@ -5,6 +5,8 @@ import { RadioGroup } from '../RadioGroup';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown, Cloud, Cpu, Loader2, Trash2 } from 'lucide-react';
 import * as api from '../../services/api';
+import { ApiError } from '../../services/apiErrors';
+import { isolate } from '../../i18n/registry';
 import { useModelStore, displayModelName, distinctModelLabels, sameModelId, syncModelAfterSettingChange } from '../../stores/modelStore';
 import { useChatStore } from '../../stores/chatStore';
 import { useT, type Translate } from '../../i18n/useT';
@@ -165,7 +167,11 @@ export function ModelSettings() {
             await loadProviders();
         } catch (err) {
             if (mounted.current && chosenRef.current === chosen) {
-                setNotice({ ok: false, text: err instanceof Error ? err.message : String(err) });
+                const insecure = err instanceof ApiError && err.body?.code === 'gateway_insecure_http';
+                setNotice({
+                    ok: false,
+                    text: insecure ? t('settings.key.gatewayInsecureHttp', { scheme: isolate('https://', 'ltr') }) : err instanceof Error ? err.message : String(err),
+                });
             }
         } finally {
             if (mounted.current) setBusy(null);

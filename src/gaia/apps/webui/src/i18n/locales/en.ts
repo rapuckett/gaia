@@ -3313,6 +3313,7 @@ export const enMessages = {
     'settings.key.kept': 'Connected. The key is kept for next time.',
     'settings.key.connectedDone': 'Connected.',
     'settings.key.cleared': 'Key cleared, here and for future sessions. An environment key, if set, stays active.',
+    'settings.key.gatewayInsecureHttp': 'The AMD Gateway address must start with {scheme}. Change it on the PC running GAIA, then connect again.',
 
     'download.chip': 'Downloading {done} of {count} · {pct}%',
     'download.chipFailed': 'A download failed',
@@ -4139,6 +4140,7 @@ export const enMessages = {
     'mobileApp.connectors.disconnectConfirm': "Disconnect {name}? Its saved sign-in or token is deleted from your PC.",
     'mobileApp.connectors.connectPcOnly': "Your PC finishes this sign-in and keeps the account. Connect this on your PC.",
     'mobileApp.connectors.codeExpired': "The code expired before sign-in finished. Sign in with a code again to get a new one.",
+    'mobileApp.connectors.reconnectNeeded': "This connector needs to sign in again. Reconnect it from the Connectors list.",
     'mobileApp.connectors.codeHint': "Sign in on this phone or any other device. Your PC finishes the sign-in and keeps the account.",
     'mobileApp.connectors.codeNotHttps': "Your PC sent a sign-in page that isn't https, so this phone won't open it. Sign in on your PC.",
     'mobileApp.connectors.codeOpen': 'Open sign-in page',
@@ -4212,6 +4214,7 @@ export const enMessages = {
     'mobileApp.settings.pcOnly': 'Change this on the PC running GAIA.',
     'mobileApp.settings.key.fromEnvironment': 'From your environment on your PC',
     'mobileApp.settings.key.sessionOnly': 'Connected for this session only. The key could not be kept.',
+    'mobileApp.settings.key.rejected': "{name} didn't accept that key.",
     'mobileApp.settings.on': 'On',
     'mobileApp.settings.off': 'Off',
     'mobileApp.settings.model.removeDownloadBody': 'Its downloaded files are deleted from your PC. You can add it again later.',

@@ -3313,6 +3313,7 @@ const messages: Messages = {
     'settings.key.kept': 'تم الاتصال. سيُحتفظ بالمفتاح للمرة القادمة.',
     'settings.key.connectedDone': 'تم الاتصال.',
     'settings.key.cleared': 'مُسح المفتاح هنا وللجلسات القادمة. يبقى مفتاح البيئة فعّالًا إن كان مضبوطًا.',
+    'settings.key.gatewayInsecureHttp': 'يجب أن يبدأ عنوان بوابة AMD بـ {scheme}. غيّره على الكمبيوتر الذي يشغّل GAIA، ثم اتصل مرة أخرى.',
 
     'download.chip': 'جارٍ التنزيل {done} من {count} · {pct}%',
     'download.chipFailed': 'فشل أحد التنزيلات',
@@ -4138,6 +4139,7 @@ const messages: Messages = {
     'mobileApp.connectors.disconnectConfirm': 'فصل {name}؟ سيُحذف تسجيل الدخول أو الرمز المحفوظ من الكمبيوتر.',
     'mobileApp.connectors.connectPcOnly': 'يُكمل الكمبيوتر تسجيل الدخول هذا ويحتفظ بالحساب. اربطه من الكمبيوتر.',
     'mobileApp.connectors.codeExpired': 'انتهت صلاحية الرمز قبل اكتمال تسجيل الدخول. سجّل الدخول برمز مرة أخرى للحصول على رمز جديد.',
+    'mobileApp.connectors.reconnectNeeded': 'يحتاج هذا الموصل إلى تسجيل الدخول مرة أخرى. أعد ربطه من قائمة الموصلات.',
     'mobileApp.connectors.codeHint': 'سجّل الدخول من هذا الهاتف أو من أي جهاز آخر. يكمل الكمبيوتر لديك تسجيل الدخول ويحتفظ بالحساب.',
     'mobileApp.connectors.codeNotHttps': 'أرسل الكمبيوتر لديك صفحة تسجيل دخول لا تستخدم https، لذا لن يفتحها هذا الهاتف. سجّل الدخول من الكمبيوتر.',
     'mobileApp.connectors.codeOpen': 'فتح صفحة تسجيل الدخول',
@@ -4211,6 +4213,7 @@ const messages: Messages = {
     'mobileApp.settings.pcOnly': 'غيّر هذا من الكمبيوتر الذي يشغّل GAIA.',
     'mobileApp.settings.key.fromEnvironment': 'من متغيرات البيئة على الكمبيوتر لديك',
     'mobileApp.settings.key.sessionOnly': 'متصل لهذه الجلسة فقط. تعذّر الاحتفاظ بالمفتاح.',
+    'mobileApp.settings.key.rejected': 'لم يقبل {name} هذا المفتاح.',
     'mobileApp.settings.on': 'مفعّل',
     'mobileApp.settings.off': 'متوقف',
     'mobileApp.settings.model.removeDownloadBody': 'تُحذف الملفات التي نزّلتها من الكمبيوتر الذي يشغّل GAIA. يمكنك إضافته مرة أخرى لاحقًا.',
