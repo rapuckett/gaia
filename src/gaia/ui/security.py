@@ -393,10 +393,14 @@ def audit_approval(request: Request, what: str) -> None:
 
     A paired device is named by its id; its token never reaches a log.
     """
-    from gaia.security import audit_logger, ensure_audit_log_handler
+    from gaia.security import audit_logger, ensure_audit_log_handler, escape_control
 
     ensure_audit_log_handler()
-    audit_logger.info("APPROVAL | %s | by %s", what, principal(request))
+    audit_logger.info(
+        "APPROVAL | %s | by %s",
+        escape_control(what),
+        escape_control(principal(request)),
+    )
 
 
 def flagship_only(

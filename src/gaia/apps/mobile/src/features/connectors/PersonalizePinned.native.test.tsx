@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react-native';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { Platform } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
@@ -52,11 +52,12 @@ describeNative('Personalize offer on a paired phone', () => {
     beforeEach(() => useConnectionStore.setState({ connection: { baseUrl: 'https://pc.local:4443', pcId: 'pc-1', pinned: true } }));
     afterEach(() => useConnectionStore.setState({ connection: null }));
 
-    it('an MCP connector shows the PC-only line and never activates', async () => {
+    it('an MCP connector shows the button and activates the flagship agent from the phone', async () => {
         const activate = await mount(row({}));
-        expect(await screen.findByTestId('personalize-pc-only-linear')).toBeTruthy();
-        expect(screen.queryByTestId('personalize-linear')).toBeNull();
-        expect(activate).not.toHaveBeenCalled();
+        await fireEvent.press(await screen.findByTestId('personalize-linear'));
+        await waitFor(() => expect(activate).toHaveBeenCalledTimes(1));
+        expect(activate.mock.calls[0]).toEqual(expect.arrayContaining(['linear', 'gaia']));
+        expect(screen.queryByTestId('personalize-pc-only-linear')).toBeNull();
     });
 
     it('an OAuth connector keeps the button', async () => {

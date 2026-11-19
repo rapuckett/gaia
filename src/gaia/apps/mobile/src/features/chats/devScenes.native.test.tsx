@@ -67,6 +67,20 @@ describeNative('drawer gallery route', () => {
         expect(await screen.findByText('A download failed')).toBeTruthy();
     });
 
+    it('shows a failed chat list as a list-sized error with a retry', async () => {
+        mockState = 'list-error';
+        await render(<DrawerGalleryRoute />);
+        expect(await screen.findByText('Try again')).toBeTruthy();
+        expect(screen.getByRole('alert')).toBeTruthy();
+    });
+
+    it('says one muted line, with no retry, while the setup gate already shows the PC unreachable', async () => {
+        mockState = 'list-unavailable';
+        await render(<DrawerGalleryRoute />);
+        expect(await screen.findByText('Chats show up once your PC is reachable.')).toBeTruthy();
+        expect(screen.queryByText('Try again')).toBeNull();
+    });
+
     it('names the scenes when the state is unknown', async () => {
         mockState = 'nope';
         await render(<DrawerGalleryRoute />);
