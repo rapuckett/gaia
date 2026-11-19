@@ -106,6 +106,7 @@ const ROOM_PERMISSION = {
     type: 'permission_request',
     confirm_id: 'p2',
     tool: 'run_shell_command',
+    tool_label: 'running a shell command',
     args: { command: 'git status --short' },
     timeout_seconds: 600,
 } as StreamEvent;
