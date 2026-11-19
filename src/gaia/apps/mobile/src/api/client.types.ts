@@ -216,7 +216,7 @@ export interface DevicePromptEvent {
     device_id: string;
     kind: 'keyStore' | 'admin';
     action: string;
-    state: 'waiting' | 'approved' | 'cancelled' | 'denied' | 'timeout';
+    state: 'waiting' | 'approved' | 'cancelled' | 'denied' | 'timeout' | 'failed';
 }
 
 export interface ConnectorGrants {
@@ -790,6 +790,10 @@ export interface GaiaClient {
     getModelNeed(job: ModelNeedJob, options?: RequestOptions): Promise<ModelNeed>;
     /** How this PC's memory is split, the presets and what each unlocks; `settingGb` also reads the manual steps for that size. Read only: changing it is done on the PC. */
     getGpuMemory(settingGb?: number, options?: RequestOptions): Promise<GpuMemoryStatus>;
+    /** Writes the GPU memory limit through the PC's administrator prompt (`confirm` is the person's yes); the PC waits on that prompt for up to 15 minutes. Takes effect after a restart. */
+    applyGpuMemory(settingGb: number, options?: RequestOptions): Promise<GpuMemoryStatus>;
+    /** Puts back the setting GAIA replaced, through the same administrator prompt. */
+    revertGpuMemory(options?: RequestOptions): Promise<GpuMemoryStatus>;
     /** "I've done this": records the size someone set by hand on the PC, so it reports a restart pending. Changes no setting. */
     recordGpuMemoryPending(settingGb: number, options?: RequestOptions): Promise<GpuMemoryStatus>;
     /** "Keep {gb}": stops reporting a pending GPU memory change. Changes no setting. */
@@ -839,6 +843,8 @@ export interface GaiaClient {
     allowSpendingThisMonth(options?: RequestOptions): Promise<SpendingReport>;
     /** Reads the NPU's setup afresh after a fix on the PC; answers the plan. */
     recheckSetupNpu(options?: RequestOptions): Promise<SetupPlan>;
+    /** Raises the NPU's locked-memory limit through the PC's administrator prompt (up to 15 minutes); answers the plan. Takes effect after a restart. */
+    fixSetupNpuMemlock(options?: RequestOptions): Promise<SetupPlan>;
     /** What setup will use and download, before it starts; `catalog` marks partial downloads. */
     getSetupPlan(options?: RequestOptions): Promise<SetupPlan>;
     /** Saves setup's chat model; a 409 `no_fit` asks to be sent again with `acknowledgeNoFit`. Returns the new plan. */

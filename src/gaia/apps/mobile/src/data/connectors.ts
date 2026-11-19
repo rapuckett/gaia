@@ -16,6 +16,8 @@ import type {
     GaiaClient,
 } from '@/api/client.types';
 
+import { beginDevicePrompt, reportDevicePromptError, settleDevicePrompt } from '@/features/devices/devicePrompts';
+
 import { useGaiaClient } from './GaiaClientProvider';
 import { queryKeys, requireClient } from './queries';
 
@@ -136,11 +138,16 @@ export function useConfigureConnector() {
     );
 }
 
+/** The `device_prompt` action a connector's Check raises on the PC. */
+export const CHECK_PROMPT_ACTION = 'connectorTest';
+
 export type ConnectorCheck =
     | { state: 'checking' }
     | { state: 'ok' }
     | { state: 'failed'; detail: string; slow: boolean }
-    | { state: 'error'; error: Error };
+    | { state: 'error'; error: Error }
+    /** The PC's key-store prompt for this check is what the screen shows: `ApproveOnPcNotice` follows how it ends. */
+    | { state: 'prompt' };
 
 /**
  * Each MCP server's latest Check, held above the tiles so a tile that moves to another group keeps it.
@@ -161,12 +168,17 @@ export function useConnectorChecks(initial: Record<string, ConnectorCheck> = {})
             const mine = (runs.current[id] ?? 0) + 1;
             runs.current[id] = mine;
             setChecks((prev) => ({ ...prev, [id]: { state: 'checking' } }));
+            beginDevicePrompt('keyStore', CHECK_PROMPT_ACTION);
             let next: ConnectorCheck;
             try {
+                // Held open while the PC's key-store prompt waits (the PC answers 504 after 5 minutes), so no header timeout.
                 const result = await requireClient(client).testConnector(id);
+                settleDevicePrompt('keyStore', CHECK_PROMPT_ACTION);
                 next = result.ok ? { state: 'ok' } : { state: 'failed', detail: result.detail, slow: result.reason === 'timeout' };
             } catch (error) {
-                next = { state: 'error', error: error instanceof Error ? error : new Error(String(error)) };
+                next = reportDevicePromptError('keyStore', CHECK_PROMPT_ACTION, error)
+                    ? { state: 'prompt' }
+                    : { state: 'error', error: error instanceof Error ? error : new Error(String(error)) };
             }
             if (runs.current[id] === mine) setChecks((prev) => ({ ...prev, [id]: next }));
         },
