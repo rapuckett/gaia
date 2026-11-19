@@ -19,6 +19,7 @@ a key). The calls mirror ``tui/internal/lemonade/cloud.go`` and
 
 from __future__ import annotations
 
+import asyncio
 import os
 import threading
 import time
@@ -2124,12 +2125,53 @@ def forget_provider_key(provider: str, request: Request) -> Dict[str, Any]:
     response_model=ProviderKeyStoreRetry,
     response_model_exclude_unset=True,
 )
-def retry_key_store() -> Dict[str, Any]:
-    """Let the next read ask the OS to unlock the key store again (Try again)."""
+async def retry_key_store(request: Request) -> Dict[str, Any]:
+    """Let the next read ask the OS to unlock the key store again (Try again).
+
+    From a paired device the keys are read now, so the device hears
+    ``device_prompt`` while the PC's prompt is up and how it was answered.
+    """
+    from gaia.connectors.credential_wait import CredentialStoreWaiting
     from gaia.connectors.store import retry_keyring
 
+    from ..devices.prompts import (
+        DevicePromptTimeout,
+        limit_device_rate,
+        watch_key_store,
+    )
+
+    if is_local_pc(request):
+        retry_keyring()
+        return {"retrying": True}
+    limit_device_rate(request, "keyStoreRetry")
     retry_keyring()
+    try:
+        await watch_key_store(
+            request, "keyStoreRetry", lambda: asyncio.to_thread(_read_stored_keys)
+        )
+    except DevicePromptTimeout:
+        logger.warning("Nobody answered the PC's key store prompt for a device")
+    except CredentialStoreWaiting as e:
+        # Closed or still locked: the device heard ``denied``; GET shows the state.
+        logger.info("Key store stayed locked after a device's retry: %s", e)
     return {"retrying": True}
+
+
+def _read_stored_keys() -> None:
+    """Read each cloud provider's stored key, waiting out the OS's prompt."""
+    from gaia.connectors.credential_wait import read_within
+    from gaia.llm import cloud_keys
+
+    from ..devices import DEVICE_PROMPT_TIMEOUT_SECONDS
+
+    for provider in (FIREWORKS, AMD):
+        key = read_within(
+            _key_slot(provider),
+            lambda p=provider: cloud_keys.recall_key(p),
+            f"your saved {_NAMES[provider]} key",
+            timeout=DEVICE_PROMPT_TIMEOUT_SECONDS + 5,
+        )
+        _note_stored_key(provider, key)
 
 
 @router.get(
