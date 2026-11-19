@@ -78,6 +78,8 @@ class FakeLemonade:
         answer = self.answers.get((method, path))
         if isinstance(answer, Exception):
             raise answer
+        if callable(answer):
+            answer = answer(json)
         if answer is not None:
             return _Resp(*answer)
         if (method, path) == ("GET", "system-info"):
@@ -95,6 +97,9 @@ class FakeLemonade:
             entry = self.cloud.setdefault(json["provider"], {"name": json["provider"]})
             entry.update(runtime_key_set=True, models_discovered=True)
             return _Resp(200, {"models_discovered": True})
+        if (method, path) == ("POST", "uninstall"):
+            self.cloud.pop(json["provider"], None)
+            return _Resp(200, {"status": "ok"})
         if method == "DELETE" and path.startswith("cloud/auth/"):
             return _Resp(200, {})
         raise AssertionError(f"unexpected Lemonade call {method} {path}")
@@ -1116,7 +1121,7 @@ def test_connect_fireworks_sends_the_tui_request_shapes(client, lemonade, keys):
         "provider": "fireworks",
         "api_key": KEY,
     }
-    assert lemonade.paths() == ["install", "cloud/auth", "system-info"]
+    assert lemonade.paths() == ["system-info", "install", "cloud/auth", "system-info"]
     assert all(c["allow_redirects"] is False for c in lemonade.calls)
     body = resp.json()
     assert body["remembered"] is True and body["remember_error"] is None
@@ -1509,6 +1514,249 @@ def test_connect_drops_a_key_that_discovers_no_models(
     assert lemonade.call("DELETE", "cloud/auth/fireworks")
     assert keys["remembered"] == []
     assert KEY not in resp.text
+
+
+def _registered(client, provider="fireworks"):
+    view = next(
+        p
+        for p in client.get("/api/providers").json()["providers"]
+        if p["id"] == provider
+    )
+    return view["registered"]
+
+
+def _mutations(lemonade):
+    return [(c["method"], c["path"]) for c in lemonade.calls if c["method"] != "GET"]
+
+
+UNINSTALL = {"backend": "cloud", "provider": "fireworks"}
+
+
+def test_a_rejected_connect_leaves_nothing_registered(
+    client, lemonade, keys, model_list
+):
+    assert _registered(client) is False
+    lemonade.calls.clear()
+    lemonade.answers[("POST", "cloud/auth")] = (200, {"models_discovered": False})
+    resp = client.post("/api/providers/fireworks/connect", json={"api_key": KEY})
+    assert resp.status_code == 422
+    assert "did not accept that key" in resp.json()["detail"]
+    assert KEY not in resp.text
+    assert _mutations(lemonade) == [
+        ("POST", "install"),
+        ("POST", "cloud/auth"),
+        ("DELETE", "cloud/auth/fireworks"),
+        ("POST", "uninstall"),
+    ]
+    assert lemonade.call("POST", "uninstall")["json"] == UNINSTALL
+    assert _registered(client) is False
+
+
+def test_a_401_connect_leaves_nothing_registered(client, lemonade, keys):
+    lemonade.answers[("POST", "cloud/auth")] = (401, {"error": {"message": KEY}})
+    resp = client.post("/api/providers/fireworks/connect", json={"api_key": KEY})
+    assert resp.status_code == 422
+    assert "rejected the key" in resp.json()["detail"]
+    assert _mutations(lemonade) == [
+        ("POST", "install"),
+        ("POST", "cloud/auth"),
+        ("POST", "uninstall"),
+    ]
+    assert lemonade.call("POST", "uninstall")["json"] == UNINSTALL
+    assert _registered(client) is False
+
+
+OLD_KEY = "fw_OLD_working_key_fixed_456"
+FIREWORKS_INSTALL = {
+    "backend": "cloud",
+    "provider": "fireworks",
+    "wire_format": "openai",
+    "base_url": "https://api.fireworks.ai/inference/v1",
+    "auth_header_name": "Authorization",
+    "auth_header_prefix": "Bearer ",
+}
+
+
+def _holding(lemonade, *, env=False):
+    """Fireworks registered and working on OLD_KEY, or on Lemonade's environment key.
+
+    Lemonade stores any key it is handed; only OLD_KEY discovers models.
+    """
+    lemonade.held = {} if env else {"fireworks": OLD_KEY}
+    entry = {"name": "fireworks", "models_discovered": True}
+    entry["env_var_set" if env else "runtime_key_set"] = True
+    lemonade.cloud["fireworks"] = entry
+
+    def auth(body):
+        lemonade.held["fireworks"] = body["api_key"]
+        works = body["api_key"] == OLD_KEY
+        entry.update(runtime_key_set=True, models_discovered=works)
+        return 200, {"models_discovered": works}
+
+    def clear(_):
+        lemonade.held.pop("fireworks", None)
+        entry.update(runtime_key_set=False, models_discovered=env)
+        return 200, {}
+
+    lemonade.answers[("POST", "cloud/auth")] = auth
+    lemonade.answers[("DELETE", "cloud/auth/fireworks")] = clear
+
+
+def _sequence(lemonade):
+    return [(c["method"], c["path"], c["json"]) for c in lemonade.calls]
+
+
+def _auth(key):
+    return ("POST", "cloud/auth", {"provider": "fireworks", "api_key": key})
+
+
+def test_a_rejected_replace_puts_the_stored_key_back(
+    client, lemonade, keys, model_list
+):
+    _holding(lemonade)
+    keys["stored"]["fireworks"] = OLD_KEY
+    resp = client.post("/api/providers/fireworks/connect", json={"api_key": KEY})
+    assert resp.status_code == 422
+    assert "did not accept that key" in resp.json()["detail"]
+    assert _sequence(lemonade) == [
+        ("GET", "system-info", None),
+        ("POST", "install", FIREWORKS_INSTALL),
+        _auth(KEY),
+        _auth(OLD_KEY),
+        ("GET", "system-info", None),
+    ]
+    assert lemonade.held["fireworks"] == OLD_KEY
+    assert lemonade.cloud["fireworks"]["models_discovered"] is True
+    assert keys["stored"]["fireworks"] == OLD_KEY and keys["remembered"] == []
+    assert KEY not in resp.text and OLD_KEY not in resp.text
+    assert _registered(client) is True
+
+
+def test_a_401_replace_puts_the_stored_key_back(client, lemonade, keys):
+    _holding(lemonade)
+    keys["stored"]["fireworks"] = OLD_KEY
+    auth = lemonade.answers[("POST", "cloud/auth")]
+    lemonade.answers[("POST", "cloud/auth")] = lambda body: (
+        (401, {}) if body["api_key"] == KEY else auth(body)
+    )
+    resp = client.post("/api/providers/fireworks/connect", json={"api_key": KEY})
+    assert resp.status_code == 422
+    assert "rejected the key" in resp.json()["detail"]
+    assert _sequence(lemonade)[2:] == [
+        _auth(KEY),
+        _auth(OLD_KEY),
+        ("GET", "system-info", None),
+    ]
+    assert lemonade.held["fireworks"] == OLD_KEY
+
+
+def test_a_rejected_replace_of_an_environment_key_drops_only_the_new_key(
+    client, lemonade, keys, model_list
+):
+    _holding(lemonade, env=True)
+    resp = client.post("/api/providers/fireworks/connect", json={"api_key": KEY})
+    assert resp.status_code == 422
+    assert _sequence(lemonade) == [
+        ("GET", "system-info", None),
+        ("POST", "install", FIREWORKS_INSTALL),
+        _auth(KEY),
+        ("DELETE", "cloud/auth/fireworks", None),
+        ("GET", "system-info", None),
+    ]
+    assert lemonade.held == {}
+    assert lemonade.cloud["fireworks"]["env_var_set"] is True
+    assert keys["remembered"] == []
+
+
+@pytest.mark.parametrize("stored", [True, False], ids=["refused", "no-copy"])
+def test_a_failed_restore_is_a_loud_502(
+    client, lemonade, keys, model_list, caplog, stored
+):
+    _holding(lemonade)
+    if stored:
+        keys["stored"]["fireworks"] = OLD_KEY
+        auth = lemonade.answers[("POST", "cloud/auth")]
+        lemonade.answers[("POST", "cloud/auth")] = lambda body: (
+            (500, {"error": {"message": body["api_key"]}})
+            if body["api_key"] == OLD_KEY
+            else auth(body)
+        )
+    with caplog.at_level(logging.ERROR):
+        resp = client.post("/api/providers/fireworks/connect", json={"api_key": KEY})
+    assert resp.status_code == 502
+    assert resp.json()["detail"] == (
+        "Fireworks AI didn't accept the new key, and GAIA couldn't restore the "
+        "old one. Enter a working key in Settings › Model."
+    )
+    assert "fireworks" in caplog.text
+    for key in (KEY, OLD_KEY):
+        assert key not in resp.text and key not in caplog.text
+
+
+@pytest.mark.parametrize(
+    "state,status,said",
+    [("FAILING", 503, "kept the one you had"), ("OK", 502, "accepted that key")],
+)
+def test_an_outage_during_replace_keeps_the_old_key(
+    client, lemonade, keys, model_list, state, status, said
+):
+    from gaia.llm.providers.fireworks import ModelListCheck, ModelListState
+
+    _holding(lemonade)
+    keys["stored"]["fireworks"] = OLD_KEY
+    model_list["check"] = ModelListCheck(ModelListState[state], "HTTP 500")
+    resp = client.post("/api/providers/fireworks/connect", json={"api_key": KEY})
+    assert resp.status_code == status
+    assert said in resp.json()["detail"]
+    assert "DELETE" not in [c["method"] for c in lemonade.calls]
+    assert lemonade.held["fireworks"] == OLD_KEY
+    assert keys["stored"]["fireworks"] == OLD_KEY and keys["remembered"] == []
+    assert model_list["restarts"] == []
+    assert KEY not in resp.text and OLD_KEY not in resp.text
+
+
+def test_a_failed_cleanup_is_reported_with_the_rejection(
+    client, lemonade, keys, model_list, caplog
+):
+    lemonade.answers[("POST", "cloud/auth")] = (200, {"models_discovered": False})
+    lemonade.answers[("POST", "uninstall")] = (500, {"error": {"message": KEY}})
+    with caplog.at_level(logging.ERROR):
+        resp = client.post("/api/providers/fireworks/connect", json={"api_key": KEY})
+    assert resp.status_code == 502
+    detail = resp.json()["detail"]
+    assert "did not accept that key" in detail
+    assert "could not remove the registration" in detail
+    assert "disconnect Fireworks" in detail
+    assert KEY not in resp.text and KEY not in caplog.text
+    assert "fireworks" in caplog.text
+
+
+def test_forget_clears_a_key_less_leftover(client, lemonade, keys):
+    lemonade.cloud["fireworks"] = {"name": "fireworks", "models_discovered": False}
+    resp = client.delete("/api/providers/fireworks/key")
+    assert resp.status_code == 200
+    assert resp.json() == {"removed": True}
+    assert _mutations(lemonade) == [
+        ("DELETE", "cloud/auth/fireworks"),
+        ("POST", "uninstall"),
+    ]
+    assert lemonade.call("POST", "uninstall")["json"] == UNINSTALL
+    assert _registered(client) is False
+
+
+def test_forget_keeps_the_registration_of_a_provider_that_held_a_key(
+    client, lemonade, keys
+):
+    lemonade.cloud["fireworks"] = {"name": "fireworks", "runtime_key_set": True}
+    client.delete("/api/providers/fireworks/key")
+    assert "uninstall" not in lemonade.paths("POST")
+
+
+def test_forget_reports_a_failed_leftover_cleanup(client, lemonade, keys):
+    lemonade.cloud["fireworks"] = {"name": "fireworks"}
+    lemonade.answers[("POST", "uninstall")] = (500, {})
+    resp = client.delete("/api/providers/fireworks/key")
+    assert resp.status_code == 502
 
 
 @pytest.mark.parametrize("status", [401, 403])
