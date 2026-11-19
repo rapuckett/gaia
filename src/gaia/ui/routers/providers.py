@@ -320,6 +320,18 @@ def _key_slot(provider: str) -> str:
 _STORED_KEY_SEEN: Dict[str, Optional[str]] = {}
 
 
+#: The error line the last ``GET /api/providers`` showed per provider, with the
+#: exception behind it (None when it had none), so the summary can mask it.
+_LAST_ERRORS: Dict[str, Tuple[Optional[BaseException], str]] = {}
+
+
+def _note_error(provider: str, e: Optional[BaseException], text: Optional[str]) -> None:
+    if text:
+        _LAST_ERRORS[provider] = (e, text)
+    else:
+        _LAST_ERRORS.pop(provider, None)
+
+
 def _hint_of(key: Optional[str]) -> Optional[str]:
     if not key or len(key) < _MIN_KEY_LENGTH_FOR_HINT:
         return None
@@ -1480,6 +1492,7 @@ def list_providers(db: ChatDatabase = Depends(get_db)) -> Dict[str, Any]:
         for provider in (FIREWORKS, AMD):
             entry = _cloud_entry(provider)
             view = _provider_view(provider, entry)
+            failure: Optional[BaseException] = None
             # Hand a kept or environment key to a Lemonade that lacks it.
             if _needs_key(provider, entry, view["key_source"]):
                 try:
@@ -1502,6 +1515,8 @@ def list_providers(db: ChatDatabase = Depends(get_db)) -> Dict[str, Any]:
                     )
                 except (ProviderError, CloudKeyError, requests.RequestException) as e:
                     view["error"] = str(e)
+                    failure = e
+            _note_error(provider, failure, view.get("error"))
             providers.append(view)
     except ProviderError as e:
         lemonade_error = str(e)
@@ -1554,6 +1569,14 @@ class ProviderSummary(BaseModel):
     key_hint: Optional[str] = None
     #: GAIA's server is serving known models through a list outage (Fireworks).
     known_models: Optional[bool] = None
+    #: The error line the PC's last provider list showed, as this caller may see
+    #: it; null when none, and over mobile access.
+    error: Optional[str] = None
+    #: The environment variable's name (never its value) when ``key_source`` is
+    #: ``environment``; else null.
+    env_var: Optional[str] = None
+    #: The environment key is GAIA's own rather than Lemonade's, as on the PC.
+    key_from_gaia_env: Optional[bool] = None
 
 
 class ProviderSummaryList(BaseModel):
@@ -1607,7 +1630,9 @@ def list_provider_summaries(request: Request) -> Dict[str, Any]:
                     else None
                 ),
                 **(
-                    _summary_key_fields(provider, entry, hide_hint=hide_hint)
+                    _summary_key_fields(
+                        provider, entry, hide_hint=hide_hint, request=request
+                    )
                     if provider != LOCAL
                     else {}
                 ),
@@ -1617,10 +1642,15 @@ def list_provider_summaries(request: Request) -> Dict[str, Any]:
 
 
 def _summary_key_fields(
-    provider: str, entry: Optional[Dict[str, Any]], *, hide_hint: bool
+    provider: str,
+    entry: Optional[Dict[str, Any]],
+    *,
+    hide_hint: bool,
+    request: Optional[Request] = None,
 ) -> Dict[str, Any]:
     """:func:`_provider_view`'s key fields, from cached and loaded state only."""
     from gaia.connectors.credential_wait import CredentialStoreLocked
+    from gaia.llm.cloud_keys import env_var_for
 
     known_models = _known_models_active(provider)
     try:
@@ -1631,6 +1661,15 @@ def _summary_key_fields(
     except _StoredKeyUnknown:
         key_source, key_state = None, KEY_UNKNOWN
     lemond_env = bool(entry and entry.get("env_var_set"))
+    env = _env_key(provider)
+    from_gaia_env = bool(env) and key_source == "environment" and not lemond_env
+    env_var = None
+    if key_source == "environment":
+        env_var = env[0] if from_gaia_env else env_var_for(provider)
+    error = None
+    if not hide_hint and provider in _LAST_ERRORS:
+        cause, text = _LAST_ERRORS[provider]
+        error = _caller_detail(cause, text, request) if cause else text
     return {
         "key_source": key_source,
         "key_state": key_state,
@@ -1638,6 +1677,9 @@ def _summary_key_fields(
             None if hide_hint else _seen_key_hint(provider, key_source, lemond_env)
         ),
         "known_models": known_models,
+        "error": error,
+        "env_var": env_var,
+        "key_from_gaia_env": from_gaia_env,
     }
 
 

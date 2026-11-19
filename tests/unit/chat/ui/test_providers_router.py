@@ -172,9 +172,11 @@ def reach(monkeypatch):
 def _fresh_restore():
     providers.reset_restore_state()
     providers._STORED_KEY_SEEN.clear()
+    providers._LAST_ERRORS.clear()
     yield
     providers.reset_restore_state()
     providers._STORED_KEY_SEEN.clear()
+    providers._LAST_ERRORS.clear()
 
 
 @pytest.fixture
@@ -495,7 +497,7 @@ def test_an_env_key_is_not_registered_on_a_remote_lemonade(
     monkeypatch.setattr(providers, "_base_url", lambda: "http://10.0.0.5:13305/api/v1")
     monkeypatch.setattr(providers, "_cloud_entry", lambda p: lemonade.cloud.get(p))
     fw = client.get("/api/providers").json()["providers"][1]
-    assert lemonade.calls == []
+    assert lemonade.paths("POST") == [] and lemonade.paths("DELETE") == []
     assert replay == []
     assert "not on this PC" in fw["error"]
 
@@ -1202,7 +1204,7 @@ def test_only_the_pc_may_move_where_the_saved_key_goes(
     resp = client.post("/api/providers/amd/connect", json=fields, headers=away)
     assert resp.status_code == 403
     assert "on the PC running GAIA" in resp.json()["detail"]
-    assert lemonade.calls == []
+    assert lemonade.paths("POST") == [] and lemonade.paths("DELETE") == []
     assert lemonade.cloud["amd"] == _CUSTOM_GATEWAY
     assert keys["ensure"] == []
 
@@ -1238,6 +1240,9 @@ def test_provider_summaries_read_only_and_carry_no_secret(client, lemonade, keys
                 "key_state": None,
                 "key_hint": None,
                 "known_models": None,
+                "error": None,
+                "env_var": None,
+                "key_from_gaia_env": None,
             },
             {
                 "id": "fireworks",
@@ -1251,6 +1256,9 @@ def test_provider_summaries_read_only_and_carry_no_secret(client, lemonade, keys
                 "key_state": "unknown",
                 "key_hint": None,
                 "known_models": False,
+                "error": None,
+                "env_var": None,
+                "key_from_gaia_env": False,
             },
             {
                 "id": "amd",
@@ -1265,6 +1273,9 @@ def test_provider_summaries_read_only_and_carry_no_secret(client, lemonade, keys
                 "key_state": "read",
                 "key_hint": None,
                 "known_models": False,
+                "error": None,
+                "env_var": None,
+                "key_from_gaia_env": False,
             },
         ],
         "lemonade_error": None,
@@ -1616,7 +1627,7 @@ def test_connect_refuses_a_key_over_the_tunnel(client, lemonade, keys):
         headers={"X-Forwarded-For": "203.0.113.9"},
     )
     assert resp.status_code == 403
-    assert lemonade.calls == []
+    assert lemonade.paths("POST") == [] and lemonade.paths("DELETE") == []
     assert KEY not in resp.text
 
 
@@ -1641,7 +1652,7 @@ def test_connect_refuses_a_remote_lemonade(client, lemonade, keys, monkeypatch):
     resp = client.post("/api/providers/fireworks/connect", json={"api_key": KEY})
     assert resp.status_code == 409
     assert "not on this PC" in resp.json()["detail"]
-    assert lemonade.calls == []
+    assert lemonade.paths("POST") == [] and lemonade.paths("DELETE") == []
 
 
 @pytest.mark.parametrize("host", ["localhost", "127.0.0.1", "[::1]"])
@@ -1689,7 +1700,7 @@ def test_connect_registered_without_models_is_422(client, lemonade, keys):
 def test_connect_local_and_unknown(client, lemonade, keys):
     assert client.post("/api/providers/local/connect", json={}).status_code == 422
     assert client.post("/api/providers/openai/connect", json={}).status_code == 404
-    assert lemonade.calls == []
+    assert lemonade.paths("POST") == [] and lemonade.paths("DELETE") == []
 
 
 # ── DELETE /api/providers/{p}/key ──────────────────────────────────────────
@@ -1794,6 +1805,62 @@ def test_a_device_sees_the_pcs_key_hint_without_a_store_read_or_lemonade_write(
         next(p for p in away.json()["providers"] if p["id"] == "fireworks")["key_hint"]
         is None
     )
+
+
+def _summary(c, provider="fireworks", **kw):
+    body = c.get("/api/providers/list", **kw).json()
+    return next(p for p in body["providers"] if p["id"] == provider)
+
+
+def test_the_summary_error_is_masked_for_a_device_and_null_over_the_tunnel(
+    client, device_client, lemonade, keys, monkeypatch
+):
+    lemonade.cloud["fireworks"] = {"name": "fireworks", "models_discovered": True}
+    keys["stored"]["fireworks"] = KEY
+
+    def not_kept(*a, **k):
+        try:
+            raise ConnectorsError(f"Keyring failed: {PC_PATH}")
+        except ConnectorsError as e:
+            raise CloudKeyError(f"not kept ({e})") from e
+
+    monkeypatch.setattr(cloud_keys, "ensure_authenticated", not_kept)
+    pc_error = _fireworks_view(client)["error"]
+    assert PC_PATH in pc_error
+
+    lemonade.calls.clear()
+    monkeypatch.setattr(
+        cloud_keys, "ensure_authenticated", lambda *a, **k: pytest.fail("replayed")
+    )
+    monkeypatch.setattr(
+        cloud_keys, "recall_key", lambda p: pytest.fail("read the key store")
+    )
+    assert _summary(client)["error"] == pc_error
+    seen = _summary(device_client)["error"]
+    assert seen and PC_PATH not in seen and KEY not in seen
+    tunnel = _summary(client, headers={"X-Forwarded-For": "203.0.113.9"})
+    assert tunnel["error"] is None
+    assert lemonade.paths("POST") == [] and lemonade.paths("DELETE") == []
+
+
+def test_the_summary_names_the_env_var_never_its_value(
+    client, device_client, lemonade, keys, monkeypatch
+):
+    monkeypatch.setenv("FIREWORKS_API_KEY", ENV_KEY)
+    lemonade.cloud["fireworks"] = {"name": "fireworks", "models_discovered": True}
+    pc_view = _fireworks_view(client)
+    assert pc_view["key_source"] == "environment"
+    monkeypatch.setattr(
+        cloud_keys, "recall_key", lambda p: pytest.fail("read the key store")
+    )
+    lemonade.calls.clear()
+    for c in (client, device_client):
+        seen = _summary(c)
+        assert seen["env_var"] == pc_view["env_var"] == "FIREWORKS_API_KEY"
+        assert seen["key_from_gaia_env"] is pc_view["key_from_gaia_env"] is True
+    assert ENV_KEY not in device_client.get("/api/providers/list").text
+    assert lemonade.paths("POST") == [] and lemonade.paths("DELETE") == []
+    assert _summary(device_client, "amd")["env_var"] is None
 
 
 def test_a_new_key_replaces_the_hint_a_device_sees_at_once(
@@ -3008,7 +3075,7 @@ def test_selecting_a_cloud_model_is_refused_under_local_only(
     # The app names its own setting, never a command to run.
     assert "Settings > Privacy" in resp.json()["detail"]
     assert "gaia config" not in resp.json()["detail"]
-    assert lemonade.calls == []
+    assert lemonade.paths("POST") == [] and lemonade.paths("DELETE") == []
     assert db.get_setting("custom_model") is None
 
 
