@@ -47,6 +47,7 @@ export interface ApiSchemas {
   ChatSpendToday: ChatSpendToday;
   CommandOutputResponse: CommandOutputResponse;
   CommitRequest: CommitRequest;
+  CompleteFlowRequest: CompleteFlowRequest;
   ConfigureRequest: ConfigureRequest;
   ConfirmToolResponse: ConfirmToolResponse;
   ConnectRequest: ConnectRequest;
@@ -78,10 +79,13 @@ export interface ApiSchemas {
   CustomModelVariant: CustomModelVariant;
   DefaultPermissionModeResponse: DefaultPermissionModeResponse;
   DeviceAccessStatus: DeviceAccessStatus;
+  DeviceChange: DeviceChange;
+  DeviceChangeList: DeviceChangeList;
   DeviceOrigin: DeviceOrigin;
   DevicePairRequest: DevicePairRequest;
   DevicePairResponse: DevicePairResponse;
   DevicePairingOffer: DevicePairingOffer;
+  DeviceRemoved: DeviceRemoved;
   DeviceRoutes: DeviceRoutes;
   DeviceUsage: DeviceUsage;
   DiscordConnectRequest: DiscordConnectRequest;
@@ -648,6 +652,7 @@ export interface AttachDocumentRequest {
 }
 export interface AuthorizeRequest {
   grant_agents?: string[];
+  redirect_port?: number | null;
   scopes?: string[];
 }
 /**
@@ -860,6 +865,13 @@ export interface CommitRequest {
   confirmed?: boolean;
   message: string;
   root: string;
+}
+/**
+ * Body for ``POST /api/connectors/flows/{flow_id}/complete``.
+ */
+export interface CompleteFlowRequest {
+  code: string;
+  state: string;
 }
 export interface ConfigureRequest {
   config?: {
@@ -1282,6 +1294,24 @@ export interface FailedRedemption {
   reason: "expired" | "used" | "wrong" | "closed" | "rate_limited";
 }
 /**
+ * One change a paired device made on the PC; ``params`` never hold a secret.
+ */
+export interface DeviceChange {
+  at: string;
+  id: string;
+  kind: string;
+  params: {
+    [k: string]: string | number | boolean | null | undefined;
+  };
+}
+/**
+ * A device's changes, newest first, and how many it has on record.
+ */
+export interface DeviceChangeList {
+  changes: DeviceChange[];
+  total: number;
+}
+/**
  * One origin a paired device may reach this PC at.
  */
 export interface DeviceOrigin {
@@ -1342,6 +1372,12 @@ export interface DevicePairingOffer {
    * Format version
    */
   v: number;
+}
+/**
+ * A device the PC unpaired: how many of its changes stay on the PC.
+ */
+export interface DeviceRemoved {
+  changes_count: number;
 }
 /**
  * Every origin a paired device may reach this PC at now.
@@ -2807,6 +2843,7 @@ export interface OutputItem {
  * A paired device, as the PC lists it. Never carries a token or its hash.
  */
 export interface PairedDevice {
+  changes_count?: number;
   created_at: string;
   expires_at?: string | null;
   id: string;
@@ -3116,12 +3153,20 @@ export interface ProviderModelsResponse {
   [k: string]: unknown | undefined;
 }
 /**
- * A provider as a paired device may see it: no key, key hint or address.
+ * A provider as a paired device may see it: never the key or the address.
+ *
+ * The ``key_*`` fields come from Lemonade's registration and from the last
+ * stored-key read this GAIA made; the route itself never reads the store.
+ * They and ``known_models`` are null for ``local``.
  */
 export interface ProviderSummary {
   blocked: boolean;
   configured: boolean;
   id: string;
+  key_hint?: string | null;
+  key_source?: ("stored" | "environment" | "lemonade") | null;
+  key_state?: ("read" | "store_locked" | "unknown") | null;
+  known_models?: boolean | null;
   name: string;
   network?: ProviderSummaryNetwork | null;
   privacy_notice: string;

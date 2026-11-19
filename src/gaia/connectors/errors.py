@@ -336,6 +336,18 @@ class FlowInProgressError(ConnectorsError):
     """Another OAuth flow is already pending; only one at a time is supported."""
 
 
+class UnknownFlowError(ConnectorsError):
+    """No pending sign-in has this flow id: never started, finished, burned or expired."""
+
+
+class FlowOwnerError(ConnectorsError):
+    """A sign-in started by one paired device may be finished only by that device."""
+
+
+class FlowStateMismatchError(ConnectorsError):
+    """The redirect's ``state`` did not match the sign-in's; the sign-in is ended."""
+
+
 class OAuthProviderError(ConnectorsError):
     """A provider's OAuth endpoint rejected a request, with a structured reason.
 

@@ -7,8 +7,8 @@ Every route is in exactly one class, and ``test_every_route_is_classified``
 fails for a route nobody has decided about:
 
 * ``pc``: the PC running GAIA only (``require_local_pc``).
-* ``pc_or_device``: first-run setup, device-code sign-in, connector setup and
-  checks, Automations, changes to schedules and goals, the logs and the
+* ``pc_or_device``: first-run setup, connector sign-in, setup and checks,
+  Automations, changes to schedules and goals, the logs and the
   troubleshooting report; the PC or an allowed
   paired device, never mobile access (``require_pc_or_device``, ``require_pc_or_allowed_device``).
 * ``not_on_listener``: a read with side effects on the PC; the PC and mobile
@@ -68,7 +68,6 @@ PC_ONLY = {
     "GET /api/messaging/discord",
     "POST /api/agents/install",
     "POST /api/connectors/eval-mailbox",
-    "POST /api/connectors/{connector_id}/authorize",
     "POST /api/connectors/{connector_id}/enable",
     "POST /api/devices/listener",
     "POST /api/devices/pairing",
@@ -105,14 +104,18 @@ PC_ONLY = {
 
 PC_OR_DEVICE = {
     "DELETE /api/automations/{ref}",
+    "DELETE /api/connectors/_flows/{flow_id}",
     "DELETE /api/goals/{goal_id}",
     "DELETE /api/providers/{provider}/key",
     "DELETE /api/schedules/{name:path}",
     "GET /api/automations",
+    "GET /api/devices/{device_id}/changes",
     "GET /api/logs",
     "GET /api/logs/{source}",
     "GET /api/setup/report/{name}",
     "POST /api/automations/{ref}/{action}",
+    "POST /api/connectors/flows/{flow_id}/complete",
+    "POST /api/connectors/{connector_id}/authorize",
     "POST /api/connectors/{connector_id}/authorize-device",
     "POST /api/connectors/{connector_id}/configure",
     "POST /api/connectors/{connector_id}/test",
@@ -169,7 +172,6 @@ WEB = {
 # ``network_policy`` in ``PUT /api/settings``.
 REMOTE = {
     "DELETE /api/chat/permissions/{session_id}/grants",
-    "DELETE /api/connectors/_flows/{flow_id}",
     "DELETE /api/connectors/{connector_id}",
     "DELETE /api/connectors/{connector_id}/grants/{agent_id:path}",
     "DELETE /api/documents/{doc_id}",
@@ -692,9 +694,14 @@ def test_a_paired_device_may_read_provider_summaries(setup, monkeypatch):
             "configured",
             "blocked",
             "network",
+            "key_source",
+            "key_state",
+            "key_hint",
+            "known_models",
         }
         for p in listed.values()
     )
+    assert listed["amd"]["key_source"] == "lemonade"
     # Reachability only: the gateway's error text can name its address.
     assert listed["amd"]["network"] == {"reachable": None}
     assert "gw.example" not in resp.text
