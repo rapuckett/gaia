@@ -289,7 +289,11 @@ export const SETTINGS_SCENES: Record<string, SettingsScene> = {
     // SET-MODEL-10: a saved key that isn't connected: "has your key but is not connected yet" and Reconnect.
     'model-key-saved-disconnected': keyFields({ configured: false, key_source: 'stored', key_hint: '4f2a' }),
     // SET-MODEL-10: a key from the PC's environment: no Replace or Remove.
-    'model-key-env': keyFields({ configured: true, key_source: 'environment', key_hint: '9c1e' }),
+    'model-key-env': keyFields({ configured: true, key_source: 'environment', key_hint: '9c1e', env_var: 'FIREWORKS_API_KEY', key_from_gaia_env: false }),
+    // SET-MODEL-10: an environment key GAIA's own env file set: Replace shows, Remove doesn't.
+    'model-key-env-gaia': keyFields({ configured: true, key_source: 'environment', key_hint: '9c1e', env_var: 'FIREWORKS_API_KEY', key_from_gaia_env: true }),
+    // SET-MODEL-10: the PC's provider error line, our sentence with the PC's words on a detail line under it.
+    'model-key-error': keyFields({ configured: false, key_source: 'stored', key_hint: '4f2a', error: 'HTTP 401: invalid api key' }),
     // SET-MODEL-10: a key Lemonade already holds, shown masked like a saved one.
     'model-key-lemonade': keyFields({ configured: true, key_source: 'lemonade', key_hint: '7b3d' }),
     // SET-MODEL-10: GAIA on the PC hasn't read its key store since it started: "Waiting for the OS…".
