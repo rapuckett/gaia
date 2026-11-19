@@ -215,10 +215,13 @@ class TestPutGrantRouteTranslation:
     def _put(connector_id, agent_id, scopes):
         import asyncio
 
+        from starlette.requests import Request
+
         from gaia.ui.routers.connectors import GrantRequest, put_grant
 
+        on_pc = Request({"type": "http", "headers": [], "client": ("127.0.0.1", 50000)})
         return asyncio.run(
-            put_grant(connector_id, agent_id, GrantRequest(scopes=scopes))
+            put_grant(on_pc, connector_id, agent_id, GrantRequest(scopes=scopes))
         )
 
     @pytest.mark.allow_network
