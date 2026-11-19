@@ -16,10 +16,9 @@ export type DevicePromptKind = 'keyStore' | 'admin';
  */
 export type DevicePromptState = 'idle' | 'waiting' | 'approved' | 'denied' | 'timeout' | 'cancelled' | 'failed' | 'busy' | 'tooSoon';
 
-/** What goes with a state: the failure's reason as the PC sent it, or the seconds a too-soon request must wait. */
+/** What goes with a state: the failure's reason as the PC sent it. */
 export interface DevicePromptNote {
     detail?: string;
-    seconds?: number;
 }
 
 interface DevicePromptsState {
@@ -90,7 +89,7 @@ export interface DevicePrompt {
     waiting: boolean;
     /** True while the notice stands in for the action's button: waiting or any outcome not yet dismissed. A refused request (`busy`, `tooSoon`) leaves the button. */
     hideAction: boolean;
-    /** The failure's reason, or the seconds to wait. */
+    /** The failure's reason. */
     note: DevicePromptNote;
     /** Call as the action is pressed: forgets the last outcome. */
     begin: () => void;
@@ -132,8 +131,18 @@ export function reportDevicePromptError(kind: DevicePromptKind, action: string, 
         return true;
     }
     if (err instanceof GaiaApiError && err.status === 429) {
-        const seconds = waitSeconds(err);
-        set(kind, action, 'tooSoon', seconds === null ? undefined : { seconds });
+        const seconds = waitSeconds(err) ?? TOO_SOON_DEFAULT_SECONDS;
+        const key = keyOf(kind, action);
+        set(kind, action, 'tooSoon');
+        clearTimeout(tooSoonTimers.get(key));
+        // The notice stays for the PC's wait, then clears itself, unless something newer has replaced it.
+        tooSoonTimers.set(
+            key,
+            setTimeout(() => {
+                tooSoonTimers.delete(key);
+                if (useDevicePromptStore.getState().states[key] === 'tooSoon') set(kind, action, 'idle');
+            }, seconds * 1000),
+        );
         return true;
     }
     const now = useDevicePromptStore.getState().states[keyOf(kind, action)];
@@ -150,6 +159,9 @@ export function reportDevicePromptError(kind: DevicePromptKind, action: string, 
 }
 
 const NO_NOTE: DevicePromptNote = {};
+
+const TOO_SOON_DEFAULT_SECONDS = 10;
+const tooSoonTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
 /** Where the prompt this action raised on the PC stands, from the PC's `device_prompt` events. */
 export function useDevicePrompt({ kind, action }: { kind: DevicePromptKind; action: string }): DevicePrompt {

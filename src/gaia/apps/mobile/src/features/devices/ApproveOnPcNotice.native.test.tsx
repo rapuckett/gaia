@@ -44,10 +44,10 @@ describeNative('ApproveOnPcNotice', () => {
         expect(screen.queryByTestId('approve-on-pc')).toBeNull();
     });
 
-    it('tooSoon: shows the seconds to wait, with no Try again', async () => {
-        seedDevicePrompt('admin', 'gpuMemoryApply', 'tooSoon', { seconds: 7 });
+    it('tooSoon: asks to wait a few seconds, with or without a known wait, and no Try again', async () => {
+        seedDevicePrompt('admin', 'gpuMemoryApply', 'tooSoon');
         await mount();
-        expect(screen.getByText(/This was just tried\. Wait .*7.* s, then try again\./)).toBeTruthy();
+        expect(screen.getByText('You asked for this a moment ago. Wait a few seconds, then try again.')).toBeTruthy();
         expect(screen.queryByText('Try again')).toBeNull();
     });
 

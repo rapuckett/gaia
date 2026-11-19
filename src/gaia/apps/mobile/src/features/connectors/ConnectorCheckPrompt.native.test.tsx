@@ -75,18 +75,18 @@ describeNative('Connector Check on the PC\'s key-store prompt', () => {
         queryClient.clear();
     });
 
-    it('a 429 shows the wait and a busy 409 says the PC waits on another request; Check stays for both', async () => {
+    it('a 429 asks to wait a few seconds and a busy 409 says the PC waits on another request; Check stays for both', async () => {
         const { client, queryClient } = await mount();
         const test = jest.spyOn(client, 'testConnector').mockRejectedValueOnce(new GaiaApiError(429, 'This was just tried. Wait 5 s, then try again.', undefined, undefined, null, 5));
 
         await fireEvent.press(screen.getByTestId('connector-check-slack'));
-        expect(await screen.findByText(/This was just tried\. Wait .*5.* s, then try again\./)).toBeTruthy();
+        expect(await screen.findByText('You asked for this a moment ago. Wait a few seconds, then try again.')).toBeTruthy();
         expect(screen.getByTestId('connector-check-slack')).toBeTruthy();
 
         test.mockRejectedValueOnce(new GaiaApiError(409, ALREADY_WAITING_DETAIL));
         await fireEvent.press(screen.getByTestId('connector-check-slack'));
         expect(await screen.findByText('Your PC is already waiting for an answer to another request. Answer that one first.')).toBeTruthy();
-        expect(screen.queryByText(/This was just tried/)).toBeNull();
+        expect(screen.queryByText(/You asked for this a moment ago/)).toBeNull();
         expect(screen.getByTestId('connector-check-slack')).toBeTruthy();
         queryClient.clear();
     });

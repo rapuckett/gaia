@@ -53,9 +53,7 @@ export function ApproveOnPcNotice({ kind, action, onRetry }: ApproveOnPcNoticePr
         case 'busy':
             return <Notice tone="warning" message={t('mobileApp.approveOnPc.busy')} onDismiss={prompt.dismiss} testID="approve-on-pc" />;
         case 'tooSoon':
-            return prompt.note.seconds === undefined ? null : (
-                <Notice tone="warning" message={t('mobileApp.approveOnPc.tooSoon', { seconds: String(prompt.note.seconds) })} onDismiss={prompt.dismiss} testID="approve-on-pc" />
-            );
+            return <Notice tone="warning" message={t('mobileApp.approveOnPc.tooSoon')} onDismiss={prompt.dismiss} testID="approve-on-pc" />;
         default:
             return null;
     }

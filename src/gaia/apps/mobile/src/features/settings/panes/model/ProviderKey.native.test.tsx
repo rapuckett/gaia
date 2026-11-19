@@ -202,13 +202,13 @@ describeNative('Provider key', () => {
             await render(<ProviderKey provider={lockedRow} connected={false} />, { wrapper: wrap });
 
             await fireEvent.press(screen.getByText('Try again'));
-            expect(await screen.findByText(/This was just tried\. Wait .*6.* s, then try again\./)).toBeTruthy();
+            expect(await screen.findByText('You asked for this a moment ago. Wait a few seconds, then try again.')).toBeTruthy();
             expect(screen.getByText('Try again')).toBeTruthy();
 
             retry.mockRejectedValueOnce(new GaiaApiError(409, ALREADY_WAITING_DETAIL));
             await fireEvent.press(screen.getByText('Try again'));
             expect(await screen.findByText('Your PC is already waiting for an answer to another request. Answer that one first.')).toBeTruthy();
-            expect(screen.queryByText(/This was just tried/)).toBeNull();
+            expect(screen.queryByText(/You asked for this a moment ago/)).toBeNull();
             expect(screen.getAllByText('Try again')).toHaveLength(1);
             queryClient.clear();
         });

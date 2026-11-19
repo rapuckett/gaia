@@ -15,7 +15,6 @@ export const APPROVE_STATES: readonly DevicePromptState[] = ['idle', 'waiting', 
 /** What the PC's reason or wait would be for a state that carries one. */
 const NOTES: Partial<Record<DevicePromptState, DevicePromptNote>> = {
     failed: { detail: 'GAIA could not write the setting. Check the PC for details.' },
-    tooSoon: { seconds: 7 },
 };
 
 function SampleCard({ kind }: { kind: DevicePromptKind }) {

@@ -100,13 +100,25 @@ describe('useDevicePrompt', () => {
             expect(result.current.hideAction).toBe(false);
         });
 
-        it('a 429 keeps the seconds to wait, from Retry-After, else from the sentence', async () => {
-            const { result } = await hook();
-            await act(async () => void result.current.report(new GaiaApiError(429, 'This was just tried. Wait 9 s, then try again.', undefined, undefined, null, 8)));
-            expect(result.current.state).toBe('tooSoon');
-            expect(result.current.note.seconds).toBe(8);
-            await act(async () => void result.current.report(new GaiaApiError(429, 'This was just tried. Wait 9 s, then try again.')));
-            expect(result.current.note.seconds).toBe(9);
+        it('a 429 is tooSoon, leaves the button, and clears itself after Retry-After (10 s when absent)', async () => {
+            jest.useFakeTimers();
+            try {
+                const { result } = await hook();
+                await act(async () => void result.current.report(new GaiaApiError(429, 'This was just tried. Wait 8 s, then try again.', undefined, undefined, null, 8)));
+                expect(result.current.state).toBe('tooSoon');
+                expect(result.current.hideAction).toBe(false);
+                await act(async () => void jest.advanceTimersByTime(7999));
+                expect(result.current.state).toBe('tooSoon');
+                await act(async () => void jest.advanceTimersByTime(1));
+                expect(result.current.state).toBe('idle');
+                await act(async () => void result.current.report(new GaiaApiError(429, 'wait')));
+                await act(async () => void jest.advanceTimersByTime(9999));
+                expect(result.current.state).toBe('tooSoon');
+                await act(async () => void jest.advanceTimersByTime(1));
+                expect(result.current.state).toBe('idle');
+            } finally {
+                jest.useRealTimers();
+            }
         });
 
         it('while the PC\'s prompt is up, an HTTP error becomes the failed reason, a 504 the timeout, and a dropped connection nothing', async () => {

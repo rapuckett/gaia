@@ -316,8 +316,8 @@ export const SETTINGS_SCENES: Record<string, SettingsScene> = {
     'model-key-store-locked': keyFields({ configured: false, key_state: 'store_locked' }),
     // SET-MODEL-18: Try again pressed and the PC's unlock prompt is up: "Approve on your PC" with Stop waiting, in place of the button.
     'model-key-locked-waiting': { ...keyFields({ configured: false, key_state: 'store_locked' }), prompt: { kind: 'keyStore', action: 'keyStoreRetry', state: 'waiting' } },
-    // SET-MODEL-18: Try again pressed within 10 s of the last try: the wait in seconds, and Try again stays.
-    'model-key-locked-too-soon': { ...keyFields({ configured: false, key_state: 'store_locked' }), prompt: { kind: 'keyStore', action: 'keyStoreRetry', state: 'tooSoon', note: { seconds: 7 } } },
+    // SET-MODEL-18: Try again pressed within 10 s of the last try: "Wait a few seconds", and Try again stays.
+    'model-key-locked-too-soon': { ...keyFields({ configured: false, key_state: 'store_locked' }), prompt: { kind: 'keyStore', action: 'keyStoreRetry', state: 'tooSoon' } },
     // SET-MODEL-18: the PC is already waiting on another request: no Try again on the notice, the button stays.
     'model-key-locked-busy': { ...keyFields({ configured: false, key_state: 'store_locked' }), prompt: { kind: 'keyStore', action: 'keyStoreRetry', state: 'busy' } },
     // SET-MODEL-11: a saved key with no hint, as over the tunnel: the 20 bullets alone in the saved-key row.
