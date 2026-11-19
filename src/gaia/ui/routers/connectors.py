@@ -102,6 +102,7 @@ from gaia.connectors.store import (
     retry_keyring,
 )
 
+from ..devices.changes import record_device_change
 from ..models import WireModel
 from ..security import (
     allowed_device,
@@ -1157,6 +1158,13 @@ async def configure_connector(
 
     if not is_local_pc(request):
         audit_approval(request, f"connector {connector_id} set up")
+        await asyncio.to_thread(
+            record_device_change,
+            request,
+            "connectorSetup",
+            connector=REGISTRY.get(connector_id).display_name,
+            connector_id=connector_id,
+        )
     await _emitter.emit(
         "connector.configured",
         {"connector_id": connector_id, "account_id": result.get("account_id")},

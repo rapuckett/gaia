@@ -47,6 +47,7 @@ from gaia.logger import get_logger
 
 from ..database import ChatDatabase
 from ..dependencies import get_db
+from ..devices.changes import record_device_change
 from ..local_models import DOWNLOADED, LOADED, NOT_DOWNLOADED
 from ..models import DownloadProgress, WireModel
 from ..security import (
@@ -1847,6 +1848,12 @@ def connect_provider(
                     remember_error = _caller_detail(e, str(e), request, key)
             if not on_pc:
                 audit_approval(request, f"{_NAMES[provider]} API key accepted")
+                record_device_change(
+                    request,
+                    "providerKeySet",
+                    provider=_NAMES[provider],
+                    provider_id=provider,
+                )
         else:
             from gaia.connectors.credential_wait import (
                 CredentialStoreLocked,
@@ -2060,6 +2067,12 @@ def forget_provider_key(provider: str, request: Request) -> Dict[str, Any]:
         ) from e
     if not is_local_pc(request):
         audit_approval(request, f"{_NAMES[provider]} API key removed")
+        record_device_change(
+            request,
+            "providerKeyRemoved",
+            provider=_NAMES[provider],
+            provider_id=provider,
+        )
     return {"removed": removed}
 
 

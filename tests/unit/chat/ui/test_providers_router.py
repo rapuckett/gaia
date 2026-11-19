@@ -1735,8 +1735,9 @@ PC_PATH = "/Users/someone/Library/Keychains/login.keychain-db"
 
 
 @pytest.fixture
-def device_client(db):
+def device_client(db, tmp_path):
     """A request from an allowed paired device on the device listener."""
+    from gaia.ui.devices.access import DeviceAccess
     from gaia.ui.security import (
         DEVICE_SCOPE_KEY,
         LAN_LISTENER,
@@ -1747,6 +1748,7 @@ def device_client(db):
     app = FastAPI()
     app.include_router(providers.router)
     app.state.db = db
+    app.state.devices = DeviceAccess(app, folder=tmp_path / "devices")
 
     async def on_listener(scope, receive, send):
         scope[LISTENER_SCOPE_KEY] = LAN_LISTENER
@@ -1847,6 +1849,34 @@ def test_a_paired_device_may_enter_and_remove_a_key(
         assert resp.json() == {"removed": True}
         assert device_client.post("/api/providers/key-store/retry").status_code == 200
     assert KEY not in caplog.text
+
+
+def test_a_device_key_change_is_recorded_without_the_key(
+    device_client, client, db, lemonade, keys
+):
+    assert (
+        client.post(
+            "/api/providers/fireworks/connect", json={"api_key": KEY}
+        ).status_code
+        == 200
+    )
+    assert db.device_changes("phone-1", 20) == ([], 0)
+
+    resp = device_client.post("/api/providers/fireworks/connect", json={"api_key": KEY})
+    assert resp.status_code == 200, resp.text
+    assert device_client.delete("/api/providers/fireworks/key").status_code == 200
+
+    changes, total = db.device_changes("phone-1", 20)
+    assert total == 2
+    assert [(c["kind"], c["params"]) for c in changes] == [
+        (
+            "providerKeyRemoved",
+            {"provider": "Fireworks AI", "provider_id": "fireworks"},
+        ),
+        ("providerKeySet", {"provider": "Fireworks AI", "provider_id": "fireworks"}),
+    ]
+    rows = db._conn.execute("SELECT * FROM device_changes").fetchall()
+    assert KEY not in json.dumps([dict(r) for r in rows])
 
 
 def test_a_paired_device_sees_no_key_or_pc_internals_on_failure(
