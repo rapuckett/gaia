@@ -183,7 +183,11 @@ export function ModelChecklist({ plan, selection, onToggle, onDefaultChat, disab
                                 name={<Text role="ui" weight="medium" dir="ltr">{e.name}</Text>}
                                 chips={<><Badge label={t('setup.models.purpose.chat')} />{isNpu(e) ? <Badge label={t('setup.models.npu')} /> : null}</>}
                             >
-                                <Text role="caption" tone="secondary">{`${t('setup.models.status.onPc')} · ${t('setup.models.useAsDefault')}`}</Text>
+                                <Row gap="sm" wrap>
+                                    <Text role="caption" tone="secondary">{t('setup.models.status.onPc')}</Text>
+                                    <Text role="caption" tone="secondary">·</Text>
+                                    <Text role="caption" tone="secondary">{t('setup.models.useAsDefault')}</Text>
+                                </Row>
                             </MarkedRow>
                         ))}
                     </Stack>
