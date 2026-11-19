@@ -54,7 +54,9 @@ export function ConnectionBanner() {
     const t = useT();
     const status = useSystemStatus();
     const { data, refetch } = status;
-    const { error } = useQueryFailure(status);
+    const held = useQueryFailure(status).error;
+    // A PC that answered once keeps its last status in the cache; its latest failure must still show.
+    const error = status.error ?? held;
     const { slow, slowPending, lost } = useStatusHealth();
     const connection = useActiveConnection();
     const goalStoreError = useGoalStoreError().data;

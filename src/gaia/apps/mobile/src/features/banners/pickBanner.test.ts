@@ -91,6 +91,16 @@ describe('backend errors read as one sentence', () => {
         expect(id(OK)).toBeNull();
     });
 
+    it('says a PC that answered mid-download has gone away rather than show its last download, and keeps it for an HTTP error', () => {
+        const download = { state: 'downloading', model_name: 'M', percent: 50, file: 'a.gguf', file_index: 1, total_files: 2, downloaded_bytes: 5e9, total_bytes: 1e10, message: null } as const;
+        const last = withStatus({ download_progress: download });
+        expect(id(last, new GaiaNetworkError('http://pc', new Error('refused')))).toBe('unreachable');
+        expect(pickBanner(last, new Error('aborted'), t, null, { lost: true })?.id).toBe('unreachable');
+        expect(id(OK, new GaiaNetworkError('http://pc', new Error('refused')))).toBe('unreachable');
+        expect(id(last, new GaiaApiError(503, 'busy'))).toBe('download');
+        expect(id(OK, new GaiaApiError(503, 'busy'))).toBe('backendError');
+    });
+
     it('follows the status streak: nothing for the first two slow answers, slow at three, unreachable when lost', () => {
         const h = createStatusHealth();
         const timeout = new Error('aborted');

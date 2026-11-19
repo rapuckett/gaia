@@ -186,7 +186,8 @@ export function useSystemStatus() {
         queryKey: queryKeys.systemStatus,
         enabled: client !== null,
         queryFn: ({ signal }) => fetchStatus(requireClient(client), signal, tracker),
-        refetchInterval: (q) => statusPollMs(q.state.data, q.state.status === 'error' || q.state.errorUpdateCount > 0),
+        // `errorUpdateCount` never resets, so it can't say the latest read failed once one has succeeded.
+        refetchInterval: (q) => statusPollMs(q.state.data, q.state.status === 'error' || failedWithoutData(q)),
     });
 }
 
