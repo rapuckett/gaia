@@ -12,6 +12,7 @@ import type {
     ChatPerformance,
     CloudPriceList,
     ConnectorListEntry,
+    ConnectorRow,
     ContextChoice,
     ContextUsageResult,
     CustomModelRemoved,
@@ -63,6 +64,7 @@ import type {
     BrowseResponse,
     CancelStreamResponse,
     ConfirmToolResponse,
+    ConnectorAuthorizeResponse,
     ConnectorConfigureResponse,
     ConnectorDeviceAuthResponse,
     ConnectorTestResponse,
@@ -139,7 +141,7 @@ export type {
 } from '@webui/types';
 export type { FileDiff, TurnChanges, UndoResult, UndoSettings } from '@webui/types/changes';
 export type { ActiveSkill, AgentCapabilities, AgentTool, ChatFileChange, GitRepo, OutputItem, OutputKind, ScopeEntry, SessionChanges, SessionEnvironment, SessionGit, SessionOutputs, SkillOrigin, UndoAllResult } from '@webui/types/sessionPanel';
-export type { BrowseResponse, ConnectorConfigureResponse, ConnectorDeviceAuthResponse, ConnectorTestResponse, CreateSessionRequest, DocumentListResponse, DocumentResponse, FileEntry, FileSearchResponse, FileSearchResult, ModelServerInfo, QuickLink, ProviderSummary, ProviderSummaryList, SessionSearchResponse, SessionSearchResult, ToolConfirmRequest, FilePreviewResponse } from '@webui/types/api.gen';
+export type { BrowseResponse, ConnectorAuthorizeResponse, ConnectorConfigureResponse, ConnectorDeviceAuthResponse, ConnectorTestResponse, CreateSessionRequest, DocumentListResponse, DocumentResponse, FileEntry, FileSearchResponse, FileSearchResult, ModelServerInfo, QuickLink, ProviderSummary, ProviderSummaryList, SessionSearchResponse, SessionSearchResult, ToolConfirmRequest, FilePreviewResponse } from '@webui/types/api.gen';
 
 /** A photo or file chosen on this phone: where it is, and what it is called. */
 export interface PickedFile {
@@ -173,8 +175,8 @@ export interface DisconnectOutcome {
     revoke_error?: string | null;
 }
 
-/** How a sign-in the PC is finishing ended, from its `connector.oauth.*` events; `error` is the PC's own message. */
-export type ConnectorSignInEnd = { outcome: 'completed' } | { outcome: 'cancelled' | 'failed'; error?: string };
+/** How a sign-in the PC is finishing ended, from its `connector.oauth.*` events; `error` is the PC's own message, `reason` its code (such as `superseded`). */
+export type ConnectorSignInEnd = { outcome: 'completed' } | { outcome: 'cancelled' | 'failed'; error?: string; reason?: string };
 
 export interface ConnectorList {
     connectors: ConnectorListEntry[];
@@ -568,8 +570,24 @@ export interface GaiaClient {
     deactivateConnectorAgent(connectorId: string, agentId: string, options?: RequestOptions): Promise<void>;
     /** Starts a sign-in with a code on the PC; only for a connector with `supports_device_code`. The PC polls the provider and keeps the account. */
     startConnectorDeviceSignIn(connectorId: string, scopes: string[], options?: RequestOptions): Promise<ConnectorDeviceAuthResponse>;
-    /** Waits for the PC to report a sign-in for this connector finished or failed; null when the events stream can't be read. */
-    watchConnectorSignIn(connectorId: string, options?: RequestOptions): Promise<ConnectorSignInEnd | null>;
+    /**
+     * Waits for the PC to report a sign-in for this connector finished or failed; null when the events stream can't be read.
+     * With `flowId`, a failure counts only when the PC names that flow (one replaced by a newer sign-in), so another flow's end is ignored.
+     */
+    watchConnectorSignIn(connectorId: string, options?: RequestOptions & { flowId?: string }): Promise<ConnectorSignInEnd | null>;
+    /**
+     * Starts a browser sign-in whose redirect comes back to this phone's loopback listener on `redirectPort`; the PC
+     * keeps the PKCE verifier and starts no listener of its own. Only an allowed paired device may ask.
+     */
+    startConnectorBrowserSignIn(connectorId: string, redirectPort: number, scopes: string[], options?: RequestOptions): Promise<ConnectorAuthorizeResponse>;
+    /**
+     * Hands the redirect's code and state to the PC, which checks the state, exchanges the code and answers with the
+     * connector as the list shows it (never a token). Only the device that started the flow may: 403 for anyone else,
+     * 404 for a flow that expired or was replaced by another sign-in, 400 (ending the flow) for a state that doesn't match.
+     */
+    completeConnectorBrowserSignIn(flowId: string, code: string, state: string, options?: RequestOptions): Promise<ConnectorRow>;
+    /** Drops a sign-in the PC is still waiting on. */
+    cancelConnectorFlow(flowId: string, options?: RequestOptions): Promise<void>;
     /**
      * Saves a connector's setup on the PC: an OAuth client (with `save_only`) or an MCP server's keys.
      * The PC keeps the values in its keyring; the phone keeps none of them.

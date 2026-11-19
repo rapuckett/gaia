@@ -38,6 +38,7 @@ import type {
     ConfirmToolResult,
     ContextChoice,
     ConnectorActivations,
+    ConnectorAuthorizeResponse,
     ConnectorConfigureResponse,
     ConnectorDeviceAuthResponse,
     ConnectorSignInEnd,
@@ -45,6 +46,7 @@ import type {
     AllPermissions,
     ConnectorGrants,
     ConnectorList,
+    ConnectorRow,
     DisconnectOutcome,
     ContextUsageResult,
     CustomModelRemoved,
@@ -141,6 +143,9 @@ import {
     connectorActivationPath,
     connectorActivationsPath,
     connectorAuthorizeDevicePath,
+    connectorAuthorizePath,
+    connectorFlowCompletePath,
+    connectorFlowPath,
     connectorConfigurePath,
     connectorDisablePath,
     connectorGrantPath,
@@ -343,14 +348,16 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
     }
 
     /** The first sign-in outcome the PC reports for this connector, or null when the stream ends first. */
-    async function readSignInEnd(events: AsyncGenerator<StreamEvent>, connectorId: string): Promise<ConnectorSignInEnd | null> {
+    async function readSignInEnd(events: AsyncGenerator<StreamEvent>, connectorId: string, flowId?: string): Promise<ConnectorSignInEnd | null> {
         for await (const event of events) {
             const { type, payload } = event as unknown as { type: string; payload?: Record<string, unknown> };
             if (payload?.connector_id !== connectorId) continue;
             if (type === 'connector.oauth.completed') return { outcome: 'completed' };
             if (type === 'connector.oauth.error') {
+                if (flowId !== undefined && payload.flow_id !== flowId) continue;
                 const error = typeof payload.error === 'string' ? payload.error : undefined;
-                return { outcome: payload.reason === 'cancelled' ? 'cancelled' : 'failed', error };
+                const reason = typeof payload.reason === 'string' ? payload.reason : undefined;
+                return { outcome: payload.reason === 'cancelled' ? 'cancelled' : 'failed', error, ...(reason ? { reason } : {}) };
             }
         }
         return null;
@@ -887,11 +894,23 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
             options?.signal?.addEventListener('abort', stop);
             try {
                 const events = await openConnectorEvents(listen.signal);
-                return events ? await readSignInEnd(events, connectorId).catch(() => null) : null;
+                return events ? await readSignInEnd(events, connectorId, options?.flowId).catch(() => null) : null;
             } finally {
                 options?.signal?.removeEventListener('abort', stop);
                 stop();
             }
+        },
+
+        startConnectorBrowserSignIn(connectorId, redirectPort, scopes, options) {
+            return postJson<ConnectorAuthorizeResponse>(connectorAuthorizePath(connectorId), { scopes, redirect_port: redirectPort }, options?.signal);
+        },
+
+        completeConnectorBrowserSignIn(flowId, code, state, options) {
+            return postJson<ConnectorRow>(connectorFlowCompletePath(flowId), { code, state }, options?.signal);
+        },
+
+        async cancelConnectorFlow(flowId, options) {
+            await request('DELETE', connectorFlowPath(flowId), undefined, options?.signal);
         },
 
         configureConnector(connectorId, config, options) {

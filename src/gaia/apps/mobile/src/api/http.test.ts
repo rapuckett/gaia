@@ -209,6 +209,16 @@ describe('createHttpClient requests', () => {
         ['loadModel', (c) => c.loadModel('m', false), 'POST', '/api/system/load-model', JSON_HEADERS, { model_name: 'm', force: false }],
         ['listConnectors', (c) => c.listConnectors(), 'GET', '/api/connectors', UI_HEADERS, undefined],
         ['disableConnector', (c) => c.disableConnector('slack'), 'POST', '/api/connectors/slack/disable', JSON_HEADERS, {}],
+        [
+            'startConnectorBrowserSignIn',
+            (c) => c.startConnectorBrowserSignIn('google', 50123, ['gmail.readonly']),
+            'POST',
+            '/api/connectors/google/authorize',
+            JSON_HEADERS,
+            { scopes: ['gmail.readonly'], redirect_port: 50123 },
+        ],
+        ['completeConnectorBrowserSignIn', (c) => c.completeConnectorBrowserSignIn('f1', 'c', 's'), 'POST', '/api/connectors/flows/f1/complete', JSON_HEADERS, { code: 'c', state: 's' }],
+        ['cancelConnectorFlow', (c) => c.cancelConnectorFlow('f1'), 'DELETE', '/api/connectors/_flows/f1', UI_HEADERS, undefined],
         ['connectProvider, keeping the PC\'s key', (c) => c.connectProvider('fireworks'), 'POST', '/api/providers/fireworks/connect', JSON_HEADERS, {}],
         ['connectProvider, with a typed key', (c) => c.connectProvider('fireworks', { apiKey: 'fw-k-1' }), 'POST', '/api/providers/fireworks/connect', JSON_HEADERS, { api_key: 'fw-k-1' }],
         ['forgetProviderKey', (c) => c.forgetProviderKey('fireworks'), 'DELETE', '/api/providers/fireworks/key', UI_HEADERS, undefined],
@@ -233,6 +243,14 @@ describe('createHttpClient requests', () => {
             ['DELETE', `${BASE}/api/connectors/google`],
         ]);
         expect(outcome).toEqual(event.payload);
+    });
+
+    it('watchConnectorSignIn with a flow: skips another flow\'s failure and reports this one replaced', async () => {
+        const other = { type: 'connector.oauth.error', payload: { connector_id: 'google', flow_id: 'f0', reason: 'superseded', error: 'Old.' } };
+        const mine = { type: 'connector.oauth.error', payload: { connector_id: 'google', flow_id: 'f1', reason: 'superseded', error: 'A newer sign-in replaced this one.' } };
+        const { fetch } = createRecordingFetch(() => streamResponse([`data: ${JSON.stringify(other)}\n\n`, `data: ${JSON.stringify(mine)}\n\n`]));
+        const end = await createHttpClient({ baseUrl: BASE, fetch }).watchConnectorSignIn('google', { flowId: 'f1' });
+        expect(end).toEqual({ outcome: 'failed', reason: 'superseded', error: 'A newer sign-in replaced this one.' });
     });
 
     it('attachToRun: GET /api/chat/attach for the chat; no turn running ends with no events', async () => {

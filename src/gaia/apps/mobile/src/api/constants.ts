@@ -149,9 +149,12 @@ export const ENDPOINTS = {
     connector: '/api/connectors/{connector_id}',
     connectorActivation: '/api/connectors/{connector_id}/activations/{agent_id:path}',
     connectorActivations: '/api/connectors/{connector_id}/activations',
+    connectorAuthorize: '/api/connectors/{connector_id}/authorize',
     connectorAuthorizeDevice: '/api/connectors/{connector_id}/authorize-device',
     connectorConfigure: '/api/connectors/{connector_id}/configure',
     connectorDisable: '/api/connectors/{connector_id}/disable',
+    connectorFlow: '/api/connectors/_flows/{flow_id}',
+    connectorFlowComplete: '/api/connectors/flows/{flow_id}/complete',
     connectorGrant: '/api/connectors/{connector_id}/grants/{agent_id:path}',
     connectorGrants: '/api/connectors/{connector_id}/grants',
     connectorTest: '/api/connectors/{connector_id}/test',
@@ -195,6 +198,18 @@ export function connectorActivationPath(connectorId: string, agentId: string): s
 
 export function connectorActivationsPath(connectorId: string): string {
     return ENDPOINTS.connectorActivations.replace('{connector_id}', encodeURIComponent(connectorId));
+}
+
+export function connectorAuthorizePath(connectorId: string): string {
+    return ENDPOINTS.connectorAuthorize.replace('{connector_id}', encodeURIComponent(connectorId));
+}
+
+export function connectorFlowPath(flowId: string): string {
+    return ENDPOINTS.connectorFlow.replace('{flow_id}', encodeURIComponent(flowId));
+}
+
+export function connectorFlowCompletePath(flowId: string): string {
+    return ENDPOINTS.connectorFlowComplete.replace('{flow_id}', encodeURIComponent(flowId));
 }
 
 export function connectorAuthorizeDevicePath(connectorId: string): string {
@@ -481,6 +496,10 @@ export const ATTACH_HEADER_TIMEOUT_MS = 30_000;
 export const SETUP_CHECK_HEADER_TIMEOUT_MS = 20_000;
 /** How often to re-read the PC's connectors while a reply waits on an account being connected (webui's ConnectorRetryBanner). */
 export const CONNECTOR_POLL_MS = 4_000;
+/** How long a browser sign-in from the phone may take: the PC's own sign-in window (flow.py's _FLOW_TIMEOUT_SECONDS). */
+export const BROWSER_SIGN_IN_TIMEOUT_MS = 15 * 60_000;
+/** How long, once the browser closes, the phone still waits for its loopback listener to hand over the redirect. */
+export const BROWSER_RETURN_GRACE_MS = 3_000;
 
 /** How many past runs a schedule's history shows; the web UI asks for the same 20. */
 export const SCHEDULE_RESULTS_LIMIT = 20;
