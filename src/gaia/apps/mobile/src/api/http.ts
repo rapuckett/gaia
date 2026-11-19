@@ -77,6 +77,7 @@ import type {
     IndexFolderResponse,
     LemonadeFound,
     LemonadeTarget,
+    LinkAddResult,
     LinkPreview,
     LocalModelStatus,
     KnowledgeSaveResult,
@@ -968,6 +969,14 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         previewSkillLink(url, options) {
             return postJson<LinkPreview>(ENDPOINTS.skillsLinkPreview, { url }, options?.signal);
+        },
+
+        addSkillsFromLink({ url, names, pin, allowCode }, options) {
+            return postJson<LinkAddResult>(
+                ENDPOINTS.skillsLinkAdd,
+                { url, names, pin, ...(allowCode ? { allow_code: true } : {}) },
+                options?.signal,
+            );
         },
 
         getActiveRuns(options) {
