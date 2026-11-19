@@ -3443,15 +3443,136 @@ def test_a_new_key_during_known_models_restarts_without_the_old_one(
     assert keys["stored"]["fireworks"] == KEY
 
 
-def test_a_rejected_key_is_never_kept_even_mid_outage(
-    client, lemonade, keys, model_list, known_models_on
+@pytest.fixture
+def serving_known(monkeypatch, lemonade, keys, model_list):
+    """Fireworks served from known models on the stored OLD_KEY, mid list outage.
+
+    Leaving the mode restarts Lemonade with no key and no registration; entering
+    it starts Lemonade on the stored key, as ``start_env`` does.
+    """
+    from gaia.llm import fireworks_known_models as known
+
+    state = {"active": True, "restarts": [], "handed": []}
+    keys["stored"]["fireworks"] = OLD_KEY
+    model_list["check"] = _list_failing()
+
+    def serve():
+        lemonade.cloud["fireworks"] = {
+            "name": "fireworks",
+            "env_var_set": bool(keys["stored"].get("fireworks")),
+            "models_discovered": True,
+        }
+
+    def stop(_):
+        state["restarts"].append("stop")
+        state["active"] = False
+        lemonade.cloud.pop("fireworks", None)
+
+    def start(_):
+        state["restarts"].append("start")
+        state["active"] = True
+        serve()
+
+    def ensure_authenticated(provider, client=None, recall=None):
+        state["handed"].append(recall())
+        return True
+
+    serve()
+    monkeypatch.setattr(
+        providers,
+        "_known_models_active",
+        lambda p: p == "fireworks" and state["active"],
+    )
+    monkeypatch.setattr(known, "stop_using_known_models", stop)
+    monkeypatch.setattr(known, "use_known_models", start)
+    monkeypatch.setattr(cloud_keys, "ensure_authenticated", ensure_authenticated)
+    return state
+
+
+@pytest.mark.parametrize(
+    "auth,check,status,said",
+    [
+        ((401, {}), "FAILING", 422, "rejected the key"),
+        ((200, {"models_discovered": False}), "REJECTED", 422, "did not accept"),
+        ((200, {"models_discovered": False}), "FAILING", 503, "kept the one you had"),
+    ],
+    ids=["401", "no-models", "outage"],
+)
+def test_a_rejected_replace_in_known_models_mode_brings_it_back(
+    client, lemonade, keys, model_list, serving_known, auth, check, status, said
 ):
-    lemonade.answers[("POST", "cloud/auth")] = (200, {"models_discovered": False})
+    from gaia.llm.providers.fireworks import ModelListCheck, ModelListState
+
+    model_list["check"] = ModelListCheck(ModelListState[check], "HTTP 500")
+    lemonade.answers[("POST", "cloud/auth")] = auth
+    resp = client.post("/api/providers/fireworks/connect", json={"api_key": KEY})
+    assert resp.status_code == status
+    assert said in resp.json()["detail"]
+    assert _sequence(lemonade) == [
+        ("GET", "system-info", None),
+        ("POST", "install", FIREWORKS_INSTALL),
+        _auth(KEY),
+        ("DELETE", "cloud/auth/fireworks", None),
+        ("GET", "system-info", None),
+    ]
+    assert serving_known["restarts"] == ["stop", "start"]
+    assert serving_known["active"] is True
+    assert serving_known["handed"] == [OLD_KEY]
+    assert lemonade.cloud["fireworks"]["env_var_set"] is True
+    assert keys["stored"]["fireworks"] == OLD_KEY and keys["remembered"] == []
+    assert KEY not in resp.text and OLD_KEY not in resp.text
+    assert _registered(client) is True
+
+
+@pytest.mark.parametrize("fails", ["restart", "keyless"])
+def test_a_failed_known_models_restore_is_a_loud_502(
+    client, lemonade, keys, model_list, serving_known, monkeypatch, caplog, fails
+):
+    from gaia.llm import fireworks_known_models as known
+    from gaia.llm.lemonade_embedded import EmbeddedLemonadeError
+
+    if fails == "restart":
+
+        def boom(_):
+            raise EmbeddedLemonadeError("could not start the model server")
+
+        monkeypatch.setattr(known, "use_known_models", boom)
+    else:
+
+        def keyless(_):
+            lemonade.cloud["fireworks"] = {"name": "fireworks"}
+
+        monkeypatch.setattr(known, "use_known_models", keyless)
+    lemonade.answers[("POST", "cloud/auth")] = (401, {"error": {"message": KEY}})
+    with caplog.at_level(logging.ERROR):
+        resp = client.post("/api/providers/fireworks/connect", json={"api_key": KEY})
+    assert resp.status_code == 502
+    assert resp.json()["detail"] == (
+        "Fireworks AI didn't accept the new key, and GAIA couldn't restore the "
+        "old one. Enter a working key in Settings › Model."
+    )
+    assert "fireworks" in caplog.text
+    assert "POST" not in [c["method"] for c in lemonade.calls[3:]]
+    for key in (KEY, OLD_KEY):
+        assert key not in resp.text and key not in caplog.text
+
+
+def test_a_rejected_first_connect_outside_known_models_still_unregisters(
+    client, lemonade, keys, model_list, serving_known
+):
+    serving_known["active"] = False
+    lemonade.cloud.clear()
+    keys["stored"].clear()
+    lemonade.answers[("POST", "cloud/auth")] = (401, {})
     resp = client.post("/api/providers/fireworks/connect", json={"api_key": KEY})
     assert resp.status_code == 422
-    assert keys["remembered"] == []
-    assert model_list["restarts"] == []
-    assert KEY not in resp.text
+    assert _mutations(lemonade) == [
+        ("POST", "install"),
+        ("POST", "cloud/auth"),
+        ("POST", "uninstall"),
+    ]
+    assert serving_known["restarts"] == []
+    assert _registered(client) is False
 
 
 def test_only_fireworks_falls_back_to_known_models(client, lemonade, keys, model_list):
