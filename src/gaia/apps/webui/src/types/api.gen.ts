@@ -3125,12 +3125,20 @@ export interface ProviderModelsResponse {
   [k: string]: unknown | undefined;
 }
 /**
- * A provider as a paired device may see it: no key, key hint or address.
+ * A provider as a paired device may see it: never the key or the address.
+ *
+ * The ``key_*`` fields come from Lemonade's registration and from the last
+ * stored-key read this GAIA made; the route itself never reads the store.
+ * They and ``known_models`` are null for ``local``.
  */
 export interface ProviderSummary {
   blocked: boolean;
   configured: boolean;
   id: string;
+  key_hint?: string | null;
+  key_source?: ("stored" | "environment" | "lemonade") | null;
+  key_state?: ("read" | "store_locked" | "unknown") | null;
+  known_models?: boolean | null;
   name: string;
   network?: ProviderSummaryNetwork | null;
   privacy_notice: string;

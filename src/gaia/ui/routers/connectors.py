@@ -11,11 +11,11 @@ are reachable from the CLI (``gaia connectors ...``) and SDK
 (``import gaia.connectors; ...``) without going through this layer.
 
 Exception → HTTP mapping:
-- ``AuthRequiredError(NOT_CONNECTED)``             → 401
+- ``AuthRequiredError(NOT_CONNECTED)``             → 409
 - ``AuthRequiredError(AGENT_NOT_GRANTED)``         → 403
 - ``AuthRequiredError(CONNECTION_MISSING_SCOPES)`` → 403 + missing_scopes
-- ``AuthRequiredError(REAUTH_REQUIRED)``           → 401
-- ``ConnectionRevokedError``                       → 401
+- ``AuthRequiredError(REAUTH_REQUIRED)``           → 409
+- ``ConnectionRevokedError``                       → 409
 - ``ConnectionBusyError``                          → 503 + Retry-After
 - ``ScopeMismatchError``                           → 403
 - ``ConfigurationError``                           → 503 ``not_configured``
@@ -470,7 +470,7 @@ def _raise_http_for(exc: ConnectorsError) -> HTTPException:
             AuthRequiredError.Reason.REAUTH_REQUIRED,
         ):
             return HTTPException(
-                status_code=401,
+                status_code=409,
                 detail={
                     "error": exc.reason.value,
                     "connector_id": exc.provider,
@@ -488,7 +488,7 @@ def _raise_http_for(exc: ConnectorsError) -> HTTPException:
         )
     if isinstance(exc, ConnectionRevokedError):
         return HTTPException(
-            status_code=401,
+            status_code=409,
             detail={"error": "connection_revoked", "connector_id": exc.provider},
         )
     if isinstance(exc, ScopeMismatchError):

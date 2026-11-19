@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any, Dict, Iterator, List, Optional
 
 from gaia.logger import get_logger
-from gaia.security import AllowedPathsEnvError, env_allowed_paths
+from gaia.security import AllowedPathsEnvError, env_allowed_paths, fold_path_case
 
 from .database import ChatDatabase
 from .email_sidecar.profiles import profile_for
@@ -35,7 +35,9 @@ class RelayedSwitchError(RuntimeError):
 
 
 def _norm(path: str) -> str:
-    return os.path.normcase(os.path.realpath(os.path.expanduser(path)))
+    real = os.path.normcase(os.path.realpath(os.path.expanduser(path)))
+    # realpath keeps the caller's casing on a case-insensitive disk.
+    return fold_path_case(real)
 
 
 def within(child: str, parent: str) -> bool:

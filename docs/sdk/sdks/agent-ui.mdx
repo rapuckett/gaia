@@ -1469,12 +1469,21 @@ Deleting a chat deletes its copies.
 
 ### Files
 
-Away from the PC (mobile access, or a paired device), browse, search, preview and
-image reads name a chat with `session_id` and see only the folders and files
-that chat may touch, as its session panel lists them. GAIA's secret-file policy
-still applies inside them: keys, certificates, `.env` files and credential
-folders such as `~/.ssh` are refused (**403**), and so is anything outside the
-chat or a read that names no chat. The PC reads its home folder as before.
+A paired device the PC allowed browses, searches, previews and reads images
+across the home folder, as the PC's folder picker does, with no `session_id`.
+It never sees credentials: keys, certificates, `.env` files, credential folders
+such as `~/.ssh`, keychains, browser profiles, shell history, Git's stored
+credentials, chat and editor app data (Signal, Slack, Discord, VS Code, Cursor)
+and GAIA's own settings folder are left out of listings and searches and
+refused (**403**, code `credentials_withheld`), judged after symlinks, `..` and
+hard links are resolved, and without regard to letter case on macOS and Windows. A path
+outside the home folder is refused with code `outside_home`, without naming it.
+
+Over mobile access, and from a device still waiting for the PC's OK, these reads
+name a chat with `session_id` and see only the folders and files that chat may
+touch, as its session panel lists them. The secret-file policy applies inside
+them, and anything outside the chat or a read that names no chat is refused
+(**403**). The PC reads its home folder as before.
 
 <AccordionGroup>
   <Accordion title="POST /api/files/open">
@@ -1569,7 +1578,8 @@ chat or a read that names no chat. The PC reads its home folder as before.
 
   <Accordion title="GET /api/files/browse">
     Browse filesystem contents. Returns entries under a directory with size,
-    mtime, and type metadata. Away from the PC, `path` must be one of the
+    mtime, and type metadata. An allowed paired device browses like the PC.
+    Over mobile access or from a waiting device, `path` must be one of the
     chat's folders or inside one, and with no `path` the listing opens the
     chat's first folder; `quick_links` lists the chat's folders and
     `parent_path` never leaves them.
@@ -1582,8 +1592,8 @@ chat or a read that names no chat. The PC reads its home folder as before.
     stops at `max_results` matches, after 20,000 directory entries, or after
     about 10 seconds. `truncated: true` in the response means a bound cut the walk
     short and more matches may exist. `folder` searches that one folder only.
-    Away from the PC, the walk covers the chat's folders alone and never
-    returns a file holding secrets.
+    Away from the PC it never returns a file holding secrets, and over mobile
+    access or from a waiting device the walk covers the chat's folders alone.
   </Accordion>
 
   <Accordion title="GET /api/files/preview">
@@ -1697,7 +1707,9 @@ agent at once, so they take effect on its next step.
     (not a folder, a filesystem root, the home folder or a protected folder).
     It knows no chat, so a folder inside one removed from a chat passes here
     and is refused when added. The desktop app asks this as soon as a folder is
-    picked in the system dialog.
+    picked in the system dialog. For an allowed paired device a folder outside
+    the home folder, or one holding credentials, is refused too, without its
+    path.
   </Accordion>
 
   <Accordion title="POST /api/sessions/{session_id}/environment/folders/remove">
@@ -3350,9 +3362,15 @@ credential store (the slot the TUI uses). A key is never echoed back or logged.
     has it and it lists models; always `true` for `local`) and `blocked` (Local
     only is on), and for `amd` a `network` with `reachable` (`true`, `false`, or
     `null` when the check doesn't apply to this PC; never the reason or the
-    address), plus `lemonade_error` when Lemonade could not be read. Each call
+    address), plus `lemonade_error` when Lemonade could not be read. Cloud
+    providers also carry `key_source` (`stored`, `environment`, `lemonade` or
+    `null`), `key_state` (`read`, `store_locked`, or `unknown` until GAIA has
+    read the credential store once since it started), `key_hint` (the key's
+    last four characters, as the PC shows them; always `null` over mobile
+    access) and `known_models`; all four are `null` for `local`. Each call
     dials the gateway. It only reads: it registers nothing, hands no key over,
-    and never carries a key, a key hint or a gateway address. Requires `X-Gaia-UI: 1` (**403** without it).
+    never reads the OS credential store (so it can't raise a key-store
+    prompt), and never carries a key or a gateway address. Requires `X-Gaia-UI: 1` (**403** without it).
   </Accordion>
 
   <Accordion title="GET /api/providers/active">
@@ -3377,17 +3395,18 @@ credential store (the slot the TUI uses). A key is never echoed back or logged.
     the key. Body: `{"api_key", "base_url", "auth_header_name",
     "auth_header_prefix"}`; the last three apply to `amd` only. A blank
     `api_key` keeps the current key, and a gateway field left out keeps the
-    one `amd` is registered with. Only the PC may send a key or a gateway
-    field, since they decide where the saved key goes.
+    one `amd` is registered with. The PC and an allowed paired device may
+    send a key; only the PC may send a gateway field, since it decides where
+    the saved key goes.
 
     While GAIA uses the user's own Lemonade (`lemonade_mode` `external`) it
     sends that server nothing: it succeeds only when the server already has
     the provider working, and a pasted key is not sent anywhere.
 
-    **Errors:** **401** when the provider rejects the key or discovers no
+    **Errors:** **422** when the provider rejects the key or discovers no
     models (a key that discovers nothing is removed from Lemonade again);
     **403** when a key comes from mobile access or another computer, or a
-    gateway field comes from anywhere but the PC; **409** when an
+    gateway field comes from anywhere but the PC, a paired device included; **409** when an
     environment key takes precedence, Lemonade is not on this PC, or the
     user's own server has no working provider. A paired device gets the same
     statuses without PC file paths or credential-store details, and its key
