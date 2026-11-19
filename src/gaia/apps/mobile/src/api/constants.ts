@@ -160,6 +160,7 @@ export const ENDPOINTS = {
     systemDownloadModel: '/api/system/download-model',
     systemLoadModel: '/api/system/load-model',
     connectorsEvents: '/api/connectors/events',
+    deviceChanges: '/api/devices/{device_id}/changes',
     systemResources: '/api/system/resources',
     systemStatus: '/api/system/status',
     systemWarmUp: '/api/system/warm-up',
@@ -221,6 +222,10 @@ export function connectorGrantPath(connectorId: string, agentId: string): string
 
 export function connectorGrantsPath(connectorId: string): string {
     return ENDPOINTS.connectorGrants.replace('{connector_id}', encodeURIComponent(connectorId));
+}
+
+export function deviceChangesPath(deviceId: string, limit: number): string {
+    return `${ENDPOINTS.deviceChanges.replace('{device_id}', encodeURIComponent(deviceId))}?limit=${limit}`;
 }
 
 export function connectorTestPath(connectorId: string): string {

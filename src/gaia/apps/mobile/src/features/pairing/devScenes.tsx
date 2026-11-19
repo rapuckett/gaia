@@ -4,7 +4,8 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useState } from 'react';
 
-import { GaiaNetworkError } from '@/api/errors';
+import { GaiaApiError, GaiaNetworkError } from '@/api/errors';
+import type { DeviceChange } from '@/api/client.types';
 import { createFakeClient } from '@/api/fake';
 import { GaiaClientProvider } from '@/data';
 import { ConnectionBanner } from '@/features/banners/ConnectionBanner';
@@ -30,7 +31,20 @@ export interface PairingScene {
     banner?: boolean;
     /** A second paired PC with the same name, on the same host at another port. */
     twin?: boolean;
+    /** What the PC answers for "Changes made from this phone"; the list starts open. */
+    changes?: DeviceChange[] | Error | 'loading';
+    /** Also open the sheet with the full list. */
+    changesAll?: boolean;
 }
+
+const ago = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString();
+const CHANGES: DeviceChange[] = [
+    { id: 'c1', kind: 'providerKeySet', params: { provider: 'Anthropic' }, at: ago(4) },
+    { id: 'c2', kind: 'localOnlyOff', params: {}, at: ago(95) },
+    { id: 'c3', kind: 'skillAddedCode', params: { name: 'git-helper' }, at: ago(60 * 30) },
+    { id: 'c4', kind: 'connectorGrant', params: { agent: 'GAIA', connector: 'Gmail' }, at: ago(60 * 24 * 3) },
+];
+const MANY: DeviceChange[] = Array.from({ length: 35 }, (_, i) => ({ ...CHANGES[i % CHANGES.length]!, id: `m${i}`, at: ago(10 + i * 90) }));
 
 export const PAIRING_SCENES: Record<string, PairingScene> = {
     'route-home': { name: 'Studio PC', chosen: HOME },
@@ -38,6 +52,17 @@ export const PAIRING_SCENES: Record<string, PairingScene> = {
     'route-tailnet-long-name': { name: LONG_NAME, chosen: TAILNET },
     'two-pcs-same-host': { name: 'air', chosen: HOME, twin: true },
     'unreachable-away': { name: 'Studio PC', chosen: TAILNET, banner: true },
+    'changes-loading': { name: 'Studio PC', chosen: HOME, changes: 'loading' },
+    'changes-empty': { name: 'Studio PC', chosen: HOME, changes: [] },
+    'changes-few': { name: 'Studio PC', chosen: HOME, changes: CHANGES },
+    'changes-many': { name: 'Studio PC', chosen: HOME, changes: MANY },
+    'changes-all': { name: 'Studio PC', chosen: HOME, changes: MANY, changesAll: true },
+    'changes-error': { name: 'Studio PC', chosen: HOME, changes: new GaiaApiError(500, 'The PC could not read its audit log.') },
+    'changes-unknown-kind': {
+        name: 'Studio PC',
+        chosen: HOME,
+        changes: [{ id: 'u1', kind: 'cameraEnabled', params: {}, at: ago(12) }, ...CHANGES.slice(0, 2)],
+    },
 };
 
 function connectionOf(scene: PairingScene): ConnectionConfig {
@@ -57,6 +82,7 @@ export function PairingSceneView({ scene }: { scene: PairingScene }) {
     const [client] = useState(() => {
         const pc: PairedPc = {
             id: 'scene-pc',
+            deviceId: 'scene-device',
             name: scene.name,
             connection: connectionOf(scene),
             pairedAt: scene.twin ? '2026-11-10T09:15:00' : undefined,
@@ -69,7 +95,7 @@ export function PairingSceneView({ scene }: { scene: PairingScene }) {
             pairedAt: '2026-11-10T18:40:00',
         };
         setPairingService({ list: async () => (scene.twin ? [pc, twin] : [pc]) } as never);
-        const fake = createFakeClient();
+        const fake = createFakeClient({ deviceChanges: scene.changes });
         return scene.banner
             ? {
                   ...fake,
@@ -94,7 +120,7 @@ export function PairingSceneView({ scene }: { scene: PairingScene }) {
                             </ScreenBannerProvider>
                         ) : (
                             <ScreenBannerProvider banner={null}>
-                                <PairedPcsScreen onAdd={() => undefined} />
+                                <PairedPcsScreen onAdd={() => undefined} changesInitial={scene.changesAll ? 'all' : scene.changes ? 'open' : undefined} />
                             </ScreenBannerProvider>
                         )}
                     </ConnectionOverride.Provider>

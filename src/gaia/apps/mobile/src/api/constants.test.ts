@@ -101,6 +101,7 @@ describe('endpoints', () => {
     });
     const methods: Record<keyof typeof ENDPOINTS, string[]> = {
         agentInstallStatus: ['GET'],
+        deviceChanges: ['GET'],
         agents: ['GET'],
         agentsInstall: ['POST'],
         automation: ['DELETE'],

@@ -15,6 +15,7 @@ import type {
     MCPServerStatus,
     ChatPerformance,
     ConnectorDeviceAuthResponse,
+    DeviceChange,
     ConnectorListEntry,
     ConnectorRow,
     ConnectorSignInEnd,
@@ -226,6 +227,8 @@ export interface FakeClientData {
     connectorTest?: ConnectorTestResponse | Error;
     /** What a disconnect reports about the provider-side revoke; `{}` when unset. */
     disconnectOutcome?: DisconnectOutcome | null;
+    /** What listDeviceChanges answers, newest first; an Error is thrown, and `'loading'` never answers. */
+    deviceChanges?: DeviceChange[] | Error | 'loading';
     /** What watchSessionEvents streams before it ends; the real stream never ends on its own. */
     sessionEvents?: unknown[];
     /** Most chats a search returns before it says `truncated`. */
@@ -1078,6 +1081,18 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
                 c.id === connectorId && !('error' in c) ? { ...c, configured: false, enabled: true, account_id: null } : c,
             );
             return data.disconnectOutcome ?? {};
+        },
+        async listDeviceChanges(_deviceId, limit, options) {
+            const rows = data.deviceChanges ?? [];
+            if (rows === 'loading') {
+                await new Promise<void>((resolve) => {
+                    if (options?.signal?.aborted) resolve();
+                    else options?.signal?.addEventListener('abort', () => resolve());
+                });
+                return { changes: [], total: 0 };
+            }
+            if (rows instanceof Error) throw rows;
+            return { changes: rows.slice(0, limit), total: rows.length };
         },
         async listConnectorGrants(connectorId) {
             return { grants: { ...grants[connectorId] } };
