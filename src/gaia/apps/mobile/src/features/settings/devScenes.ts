@@ -8,6 +8,7 @@ import { tEn } from '@webui/i18n/translator';
 import type { Automation, AutomationList, ContextChoice, Session, SkillInfo, DiscordStatus, GaiaClient, CustomModelReport, GpuMemoryStatus, LemonadeTarget, MCPServerStatus, ModelServerInfo, ProviderModel, ProviderSummary, Settings, SpendingReport } from '@/api/client.types';
 import { PC_ONLY_REFUSAL } from '@/api/constants';
 import { GaiaApiError, GaiaNetworkError } from '@/api/errors';
+import type { DevicePromptKind, DevicePromptNote, DevicePromptState } from '@/features/devices/devicePrompts';
 import { COMMON, GPU, RUN } from '@/features/setup/devScenes';
 
 import type { SectionId } from './sections';
@@ -24,6 +25,8 @@ export interface SettingsScene {
     data?: FakeClientData;
     /** Opens the Model pane on the success notice for this just-added model, with the Hugging Face section open. */
     addedModel?: string;
+    /** Puts a device prompt in this state before the pane shows, as the PC's events or a refused request would. */
+    prompt?: { kind: DevicePromptKind; action: string; state: DevicePromptState; note?: DevicePromptNote };
     /** Opens the cloud key field (with Replace already pressed when `replacing`), with `typed` in it and Connect pressed when `submit`. */
     keyEntry?: { replacing?: boolean; typed?: string; submit?: boolean };
     /** Opens the models search field with this text typed in. */
@@ -59,6 +62,8 @@ export interface SettingsScene {
     /** The device's saved palette; scenes without one open on the default palette. */
     appearance?: { palette: 'default' | 'custom'; custom: { accent: string; base: string } };
 }
+
+const APPLY: GpuMemoryStatus = { ...GPU, os: 'linux', method: 'apply', method_reason: '', setting: { name: 'amdgpu.gttsize', current_gb: 16, min_gb: 4, max_gb: 96 } };
 
 const PENDING: GpuMemoryStatus = {
     ...GPU,
@@ -265,11 +270,20 @@ export const SETTINGS_SCENES: Record<string, SettingsScene> = {
     'advanced-not-installed': { section: 'advanced', gpuMemory: GPU, status: NOT_INSTALLED },
     'gpu-adjustable': { section: 'model', target: 'gpu-memory', gpuMemory: GPU },
     'gpu-adjustable-setup': { section: 'setup', gpuMemory: GPU },
+    // Linux, where GAIA writes the size itself: the sizes, Apply (asks first), and Undo once GAIA has changed it.
+    'gpu-apply': { section: 'model', target: 'gpu-memory', gpuMemory: APPLY },
+    'gpu-apply-undo': { section: 'model', target: 'gpu-memory', gpuMemory: { ...APPLY, revert: { available: true, previous_setting_gb: 16 } } },
+    // Apply confirmed and the PC's administrator prompt up: "Approve on your PC" in place of Apply.
+    'gpu-apply-waiting': { section: 'model', target: 'gpu-memory', gpuMemory: APPLY, prompt: { kind: 'admin', action: 'gpuMemoryApply', state: 'waiting' } },
+    'gpu-apply-failed': {
+        section: 'model', target: 'gpu-memory', gpuMemory: APPLY,
+        prompt: { kind: 'admin', action: 'gpuMemoryApply', state: 'failed', note: { detail: 'GAIA could not change the GPU memory setting. Check the PC for details.' } },
+    },
     'gpu-pending': { section: 'model', target: 'gpu-memory', gpuMemory: PENDING },
     'gpu-read-error': { section: 'model', target: 'gpu-memory', gpuMemory: READ_ERROR },
     'gpu-read-error-setup': { section: 'setup', gpuMemory: READ_ERROR },
     // SET-MODEL-12: a cloud provider with no connected key shows Reconnect.
-    'model-key-disconnected': { section: 'model', target: 'cloud-key', provider: 'fireworks', gpuMemory: GPU },
+    'model-key-disconnected': keyFields({ configured: false, key_source: 'stored', key_hint: '4f2a' }),
     // SET-MODEL-15: the key field, Connect disabled until text is typed (`#tap=provider-key-connect` after typing connects on the fake PC).
     'model-key-entry': keyScene({}),
     // SET-MODEL-15: a typed key sent and the PC still answering: the field cleared, Connect busy.
@@ -300,7 +314,13 @@ export const SETTINGS_SCENES: Record<string, SettingsScene> = {
     'model-key-unknown': keyFields({ configured: false, key_state: 'unknown' }),
     // SET-MODEL-18: the PC's list says its key store is locked, before anything is sent: the warning and Try again.
     'model-key-store-locked': keyFields({ configured: false, key_state: 'store_locked' }),
-    // SET-MODEL-11: a saved key with no hint, as over mobile access: no saved-key row at all.
+    // SET-MODEL-18: Try again pressed and the PC's unlock prompt is up: "Approve on your PC" with Stop waiting, in place of the button.
+    'model-key-locked-waiting': { ...keyFields({ configured: false, key_state: 'store_locked' }), prompt: { kind: 'keyStore', action: 'keyStoreRetry', state: 'waiting' } },
+    // SET-MODEL-18: Try again pressed within 10 s of the last try: "Wait a few seconds", and Try again stays.
+    'model-key-locked-too-soon': { ...keyFields({ configured: false, key_state: 'store_locked' }), prompt: { kind: 'keyStore', action: 'keyStoreRetry', state: 'tooSoon' } },
+    // SET-MODEL-18: the PC is already waiting on another request: no Try again on the notice, the button stays.
+    'model-key-locked-busy': { ...keyFields({ configured: false, key_state: 'store_locked' }), prompt: { kind: 'keyStore', action: 'keyStoreRetry', state: 'busy' } },
+    // SET-MODEL-11: a saved key with no hint, as over the tunnel: the 20 bullets alone in the saved-key row.
     'model-key-no-hint': keyFields({ configured: true, key_source: 'stored', key_hint: null }),
     // SET-MODEL-19: Fireworks can't list its models, so the PC serves the ones it knows.
     'model-models-stale': keyFields({ configured: true, key_source: 'stored', key_hint: '4f2a', known_models: true }),
