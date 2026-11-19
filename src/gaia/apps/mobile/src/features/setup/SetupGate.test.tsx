@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import { render, screen } from '@testing-library/react-native';
-import type { ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { Platform, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
@@ -130,6 +130,29 @@ describe('app under a notice', () => {
         const retry = screen.getByText(translator('en')('setup.serverDown.setup'));
         expect(inside(retry, 'pane-banner')).toBe(true);
         expect(screen.queryByTestId('setup-gate-notice')).toBeNull();
+        mockGate = { state: 'ready' };
+    });
+
+    it('keeps the app mounted while the gate goes from a notice to ready', async () => {
+        let mounts = 0;
+        const Counted = () => {
+            useEffect(() => {
+                mounts += 1;
+            }, []);
+            return <Pane />;
+        };
+        const wrapper = ({ children }: { children: ReactNode }) => (
+            <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 1158, height: 800 }, insets: { top: 0, left: 0, right: 0, bottom: 0 } }}>
+                <ThemeProvider>{children}</ThemeProvider>
+            </SafeAreaProvider>
+        );
+        mockGate = { state: 'serverDown' };
+        const view = await render(<SetupGate><Counted /></SetupGate>, { wrapper });
+        mockGate = { state: 'ready' };
+        await view.rerender(<SetupGate><Counted /></SetupGate>);
+        mockGate = { state: 'serverDown' };
+        await view.rerender(<SetupGate><Counted /></SetupGate>);
+        expect(mounts).toBe(1);
         mockGate = { state: 'ready' };
     });
 });
