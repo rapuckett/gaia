@@ -1862,6 +1862,10 @@ def _restore_key(
 
 def _restore_known_models(provider: str) -> Optional[str]:
     """Serve known models on the kept key again; returns why not, if it could not."""
+    from gaia.connectors.credential_wait import (
+        CredentialStoreLocked,
+        CredentialStoreWaiting,
+    )
     from gaia.llm.cloud_keys import CloudKeyError, ensure_authenticated
     from gaia.llm.fireworks_known_models import KnownModelsError, use_known_models
     from gaia.llm.lemonade_embedded import EmbeddedLemonade, EmbeddedLemonadeError
@@ -1884,6 +1888,8 @@ def _restore_known_models(provider: str) -> Optional[str]:
         requests.RequestException,
     ) as e:
         return f"restarting with the known models failed: {e}"
+    except (ProviderError, CredentialStoreLocked, CredentialStoreWaiting) as e:
+        return str(e)
     finally:
         del old
     entry = _cloud_entry(provider)
@@ -1893,6 +1899,24 @@ def _restore_known_models(provider: str) -> Optional[str]:
     if not (_known_models_active(provider) or entry.get("models_discovered")):
         return "the known models did not come back"
     return None
+
+
+def _back_to_known_models(provider: str, failure: ProviderError) -> NoReturn:
+    """Setup failed after leaving known-models mode: restart it, then raise *failure*."""
+    reason = _restore_known_models(provider)
+    if reason is None:
+        raise failure
+    logger.error(
+        "Could not restore the known %s models after a failed setup: %s",
+        provider,
+        reason,
+    )
+    name = _NAMES[provider]
+    raise ProviderError(
+        f"{name} couldn't be set up, and GAIA couldn't restore the models it was "
+        f"using. {failure} Connect {name} again in Settings › Model.",
+        502,
+    )
 
 
 def _refuse_replacement(
@@ -2048,15 +2072,25 @@ def connect_provider(
         known_before = bool(key) and _known_models_active(provider)
         if known_before:
             _leave_known_models()
-        before = _cloud_entry(provider)
-        _install(provider, registration)
+        try:
+            before = _cloud_entry(provider)
+            _install(provider, registration)
+        except ProviderError as e:
+            if known_before:
+                _back_to_known_models(provider, e)
+            raise
         remembered, remember_error = False, None
         if key:
             replacing = known_before or _holds_key(before)
             _HANDED_ENV_KEYS.pop(provider, None)
-            status, result = _lemonade(
-                "POST", "cloud/auth", {"provider": provider, "api_key": key}
-            )
+            try:
+                status, result = _lemonade(
+                    "POST", "cloud/auth", {"provider": provider, "api_key": key}
+                )
+            except ProviderError as e:
+                if known_before:
+                    _back_to_known_models(provider, e)
+                raise
             if status >= 400:
                 rejected = _cloud_error(provider, status, result, echo_body=False)
                 # A 409 means Lemonade kept its key; known models were still left.
