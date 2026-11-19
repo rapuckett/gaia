@@ -40,6 +40,7 @@ from starlette.requests import Request
 from starlette.routing import Mount
 
 from gaia.config import GaiaConfig
+from gaia.llm.gateway import GatewayKey
 from gaia.ui import security
 from gaia.ui.devices.access import DeviceAccess
 from gaia.ui.devices.listener import DeviceGate
@@ -616,7 +617,7 @@ def test_an_allowed_device_may_enter_a_provider_key(setup, monkeypatch):
     monkeypatch.setattr(providers, "_known_models_active", lambda *a: False)
     monkeypatch.setattr(providers, "_lemonade", lemonade)
     monkeypatch.setattr(providers, "_cloud_entry", lambda p: entry)
-    monkeypatch.setattr(cloud_keys, "remember_key", lambda *a: None)
+    monkeypatch.setattr(cloud_keys, "remember_key", lambda *a, **k: None)
 
     class _Capture(logging.Handler):
         def emit(self, record):
@@ -668,6 +669,7 @@ def test_provider_key_routing_refused_away_from_the_pc(setup, monkeypatch):
 
 
 _GATEWAY_KEY = "amd-gateway-key-0123456789abcdef"
+_SAVED_GATEWAY_KEY = "saved-pc-gateway-key-fedcba9876543210"
 _PREVIOUS_GATEWAY = {
     "name": "amd",
     "base_url": "https://llm-api.amd.com/v1",
@@ -686,12 +688,22 @@ def _gateway_stubs(monkeypatch, *, addresses=("93.184.215.14",), discovered=True
     from gaia.ui.routers import providers
 
     calls = []
+    entry = dict(_PREVIOUS_GATEWAY)
 
     def lemonade(method, path, payload=None):
         calls.append((method, path, payload))
         if path == "cloud/auth" and method == "POST":
+            entry["runtime_key_set"] = True
+            if payload["api_key"] == _SAVED_GATEWAY_KEY:
+                return 200, {"models_discovered": True}
             return 200, {"models_discovered": discovered}
+        if method == "DELETE":
+            entry["runtime_key_set"] = False
         return 200, {}
+
+    def install(provider, registration):
+        calls.append(("install", provider, registration))
+        entry.update(registration)
 
     def resolve(host, port, proto=0):
         calls.append(("resolve", host, port))
@@ -706,10 +718,8 @@ def _gateway_stubs(monkeypatch, *, addresses=("93.184.215.14",), discovered=True
     monkeypatch.setattr(providers, "_base_url", lambda: "http://127.0.0.1:13305/api/v1")
     monkeypatch.setattr(providers, "_gateway_check_applies", lambda: False)
     monkeypatch.setattr(providers, "_lemonade", lemonade)
-    monkeypatch.setattr(providers, "_cloud_entry", lambda p: dict(_PREVIOUS_GATEWAY))
-    monkeypatch.setattr(
-        providers, "_install", lambda p, reg: calls.append(("install", p, reg))
-    )
+    monkeypatch.setattr(providers, "_cloud_entry", lambda p: dict(entry))
+    monkeypatch.setattr(providers, "_install", install)
     monkeypatch.setattr(
         providers, "_uninstall", lambda p: calls.append(("uninstall", p))
     )
@@ -718,7 +728,14 @@ def _gateway_stubs(monkeypatch, *, addresses=("93.184.215.14",), discovered=True
         cloud_keys, "forget_key", lambda p: calls.append(("forget", p)) or True
     )
     monkeypatch.setattr(
-        cloud_keys, "remember_key", lambda p, k: calls.append(("remember", p, k))
+        cloud_keys,
+        "remember_key",
+        lambda p, k, base_url=None: calls.append(("remember", p, k, base_url)),
+    )
+    monkeypatch.setattr(
+        cloud_keys,
+        "recall_gateway_key",
+        lambda: GatewayKey(_SAVED_GATEWAY_KEY, _PREVIOUS_GATEWAY["base_url"]),
     )
     return calls
 
@@ -747,8 +764,8 @@ def test_gateway_fields_from_a_device_need_a_new_key(setup, monkeypatch):
 
 
 def test_a_device_moves_the_gateway_with_a_new_key(setup, monkeypatch):
-    """The saved key is gone before the new address is dialed, and only the
-    device's key is handed to it."""
+    """Lemonade drops the old key before the address changes, only the
+    device's key is handed to the new one, and it is saved bound to it."""
     app, clients, device = setup
     app.state.device_action_times = {}
     calls = _gateway_stubs(monkeypatch)
@@ -764,9 +781,8 @@ def test_a_device_moves_the_gateway_with_a_new_key(setup, monkeypatch):
     assert resp.status_code == 200, resp.text
     assert _GATEWAY_KEY not in resp.text
     assert calls == [
-        ("forget", "amd"),
-        ("DELETE", "cloud/auth/amd", None),
         ("resolve", "gw.example.com", 443),
+        ("DELETE", "cloud/auth/amd", None),
         (
             "install",
             "amd",
@@ -777,7 +793,7 @@ def test_a_device_moves_the_gateway_with_a_new_key(setup, monkeypatch):
             },
         ),
         ("POST", "cloud/auth", {"provider": "amd", "api_key": _GATEWAY_KEY}),
-        ("remember", "amd", _GATEWAY_KEY),
+        ("remember", "amd", _GATEWAY_KEY, "https://gw.example.com/v1"),
     ]
     by = f"by {security.DEVICE_PRINCIPAL_PREFIX}{device.device_id}"
     assert [line.split(" | ")[1] for line in audit.lines] == [
@@ -797,7 +813,7 @@ def test_a_device_moves_the_gateway_with_a_new_key(setup, monkeypatch):
 def test_a_failed_device_gateway_says_nothing_about_the_host(
     setup, monkeypatch, failure
 ):
-    """Same text for every failure; the previous gateway is back without a key."""
+    """Same text for every failure; the previous gateway is back with its key."""
     import socket
 
     from gaia.llm.gateway import GatewayUnreachable
@@ -826,12 +842,17 @@ def test_a_failed_device_gateway_says_nothing_about_the_host(
     )
     assert resp.status_code == 422, resp.text
     assert resp.json() == {"detail": providers.DEVICE_GATEWAY_DETAIL}
-    assert calls[0] == ("forget", "amd")
-    assert not any(c[0] == "remember" for c in calls)
+    assert not any(c[0] in ("remember", "forget") for c in calls)
     installs = [c for c in calls if c[0] == "install"]
-    if installs:
-        assert installs[-1][2]["base_url"] == _PREVIOUS_GATEWAY["base_url"]
-    assert calls.count(("DELETE", "cloud/auth/amd", None)) >= 1
+    if failure != "no_models":
+        assert installs == [] and not any(c[0] == "POST" for c in calls)
+        return
+    assert installs[-1][2]["base_url"] == _PREVIOUS_GATEWAY["base_url"]
+    assert calls[-1] == (
+        "POST",
+        "cloud/auth",
+        {"provider": "amd", "api_key": _SAVED_GATEWAY_KEY},
+    )
 
 
 @pytest.mark.parametrize(

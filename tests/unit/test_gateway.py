@@ -21,7 +21,9 @@ from gaia.llm.gateway import (
     DEFAULT_GATEWAY_BASE_URL,
     GATEWAY_ENV_VAR,
     GATEWAY_PROVIDER,
+    GATEWAY_SECRET_NAME,
     GatewayError,
+    GatewayKey,
     GatewayManager,
     GatewayModel,
     GatewayState,
@@ -710,7 +712,7 @@ class TestRememberedToken:
         )
         from gaia.llm import gateway as gw
 
-        gw.remember_token("tok-abc")
+        gw.remember_token("tok-abc", "https://gw/v1")
         assert gw.recall_token() == "tok-abc"
         assert gw.forget_token() is True
         assert gw.recall_token() is None
@@ -741,9 +743,9 @@ class TestRememberedToken:
     ):
         """Lemonade forgets its token on restart; without this the user
         re-enters it every time."""
-        monkeypatch.setattr(
-            "gaia.connectors.store.peek_secret", lambda n: "remembered-tok"
-        )
+        vault = {GATEWAY_SECRET_NAME: "remembered-tok"}
+        monkeypatch.setattr("gaia.connectors.store.peek_secret", vault.get)
+        monkeypatch.setattr("gaia.connectors.store.save_secret", vault.__setitem__)
         sent = {}
 
         def fake_request(method, url, **kwargs):
@@ -763,6 +765,11 @@ class TestRememberedToken:
             assert manager.ensure_authenticated() is True
 
         assert sent["key"] == "remembered-tok"
+        # A key saved before bindings is bound to the gateway it served.
+        assert json.loads(vault[GATEWAY_SECRET_NAME]) == {
+            "key": "remembered-tok",
+            "base_url": "https://gw/v1",
+        }
 
     def test_a_no_op_keyring_fails_loudly_instead_of_pretending(self, monkeypatch):
         """keyring's null backend accepts a write and stores nothing.
@@ -776,7 +783,7 @@ class TestRememberedToken:
         from gaia.llm.gateway import GatewayError, remember_token
 
         with pytest.raises(GatewayError) as excinfo:
-            remember_token("tok")
+            remember_token("tok", "https://gw/v1")
         message = str(excinfo.value)
         # The remedy is platform-specific now; what must always be offered is
         # the environment variable and the opt-out.
@@ -822,7 +829,10 @@ class TestEnsureAuthenticatedReportsRealUsability:
     def test_a_stored_token_the_gateway_rejects_is_not_success(
         self, manager, isolated_state
     ):
-        with patch("gaia.llm.gateway.recall_token", return_value="revoked"):
+        with patch(
+            "gaia.llm.gateway.recall_stored_key",
+            return_value=GatewayKey("revoked", "https://x/v1"),
+        ):
             with patch("gaia.llm.gateway.requests.request") as request:
                 request.side_effect = [
                     # system-info: registered, no key held yet
@@ -1100,7 +1110,7 @@ def test_gateway_install_restores_a_remembered_token_before_reporting_none(
             }
 
         def ensure_authenticated(self, recall=None):
-            calls.append(recall())
+            calls.append(recall().key)
             return True
 
         def status(self):
@@ -1111,6 +1121,13 @@ def test_gateway_install_restores_a_remembered_token_before_reporting_none(
     )
     monkeypatch.setattr(gateway_module, "GatewayManager", FakeManager)
     monkeypatch.setattr(gateway_module, "recall_token", lambda: "remembered-token")
+    monkeypatch.setattr(
+        gateway_module,
+        "recall_stored_key",
+        lambda: gateway_module.GatewayKey(
+            "remembered-token", "https://gateway.example/v1"
+        ),
+    )
 
     args = SimpleNamespace(
         gateway_action="install",
@@ -1196,7 +1213,7 @@ def test_gateway_install_reports_when_the_remembered_token_is_rejected(
             }
 
         def ensure_authenticated(self, recall=None):
-            calls.append(recall())
+            calls.append(recall().key)
             return False
 
     monkeypatch.setattr(
@@ -1204,6 +1221,13 @@ def test_gateway_install_reports_when_the_remembered_token_is_rejected(
     )
     monkeypatch.setattr(gateway_module, "GatewayManager", FakeManager)
     monkeypatch.setattr(gateway_module, "recall_token", lambda: "remembered-token")
+    monkeypatch.setattr(
+        gateway_module,
+        "recall_stored_key",
+        lambda: gateway_module.GatewayKey(
+            "remembered-token", "https://gateway.example/v1"
+        ),
+    )
 
     args = SimpleNamespace(
         gateway_action="install",
@@ -1235,6 +1259,15 @@ def _run_gateway_install(monkeypatch, *, saved_url, install_url, manager_cls, to
     monkeypatch.setattr(gateway_module, "GatewayManager", manager_cls)
     store = {"token": token} if token else {}
     monkeypatch.setattr(gateway_module, "recall_token", lambda: store.get("token"))
+    monkeypatch.setattr(
+        gateway_module,
+        "recall_stored_key",
+        lambda: (
+            gateway_module.GatewayKey(store["token"], saved_url)
+            if store.get("token")
+            else None
+        ),
+    )
     monkeypatch.setattr(
         gateway_module, "forget_token", lambda: store.pop("token", None) is not None
     )
@@ -1345,7 +1378,7 @@ def test_gateway_install_restores_despite_trailing_slash_or_case(
 
     class Manager(_NoRestoreManager):
         def ensure_authenticated(self, recall=None):
-            sent.append(recall())
+            sent.append(recall().key)
             return True
 
         def status(self):
@@ -1456,7 +1489,12 @@ def test_lemonade_gets_the_stored_token_when_gaia_s_env_has_none(manager):
     with patch(
         "gaia.llm.gateway.requests.request", side_effect=_lemonade_without_a_key(sent)
     ):
-        assert manager.ensure_authenticated(recall=lambda: "stored-token") is True
+        assert (
+            manager.ensure_authenticated(
+                recall=lambda: GatewayKey("stored-token", AMD_GATEWAY)
+            )
+            is True
+        )
     assert sent[0]["api_key"] == "stored-token"
 
 
@@ -1481,7 +1519,12 @@ def test_a_non_amd_gateway_never_receives_gaia_s_env_token(
         "gaia.llm.gateway.requests.request",
         side_effect=_lemonade_without_a_key(sent, gateway_url=registered),
     ):
-        assert manager.ensure_authenticated(recall=lambda: "stored-token") is True
+        assert (
+            manager.ensure_authenticated(
+                recall=lambda: GatewayKey("stored-token", registered)
+            )
+            is True
+        )
 
     assert [body["api_key"] for body in sent] == ["stored-token"]
     assert "did not give it to Lemonade" in caplog.text
@@ -1514,7 +1557,12 @@ def test_the_env_token_follows_the_gateway_lemonade_reports(manager, monkeypatch
             sent, gateway_url="https://gateway.example/v1"
         ),
     ):
-        assert manager.ensure_authenticated(recall=lambda: "stored-token") is True
+        assert (
+            manager.ensure_authenticated(
+                recall=lambda: GatewayKey("stored-token", "https://gateway.example/v1")
+            )
+            is True
+        )
 
     assert [body["api_key"] for body in sent] == ["stored-token"]
 
@@ -1552,6 +1600,11 @@ def test_gateway_install_names_the_env_variable_it_restored_from(monkeypatch, ca
     )
     monkeypatch.setattr(gateway_module, "GatewayManager", Manager)
     monkeypatch.setattr(gateway_module, "recall_token", lambda: "stored-token")
+    monkeypatch.setattr(
+        gateway_module,
+        "recall_stored_key",
+        lambda: gateway_module.GatewayKey("stored-token", AMD_GATEWAY),
+    )
     cli.handle_gateway_command(
         SimpleNamespace(
             gateway_action="install",
@@ -1592,13 +1645,20 @@ def _run_auth(monkeypatch, *, token, no_remember=False, stored=None):
 
     store = {"token": stored} if stored else {}
 
-    def remember(value):
+    def remember(value, base_url):
+        assert base_url == AMD_GATEWAY
         store["token"] = value
+
+    def read_stored_key():
+        token = store.get("token")
+        return gateway_module.GatewayKey(token, AMD_GATEWAY) if token else None
 
     monkeypatch.setattr(gateway_module, "GatewayManager", _AuthManager)
     monkeypatch.setattr(gateway_module, "remember_token", remember)
+    monkeypatch.setattr(gateway_module, "configured_gateway_url", lambda m: AMD_GATEWAY)
     monkeypatch.setattr(gateway_module, "recall_token", lambda: store.get("token"))
     monkeypatch.setattr(gateway_module, "read_stored_token", lambda: store.get("token"))
+    monkeypatch.setattr(gateway_module, "read_stored_key", read_stored_key)
     monkeypatch.setattr(
         gateway_module, "forget_token", lambda: store.pop("token", None) is not None
     )

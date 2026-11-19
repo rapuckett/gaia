@@ -27,6 +27,7 @@ import os
 import socket
 import sys
 import tempfile
+import threading
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -422,9 +423,99 @@ def describe_unavailable(model_id: str, entry: Dict[str, Any]) -> str:
 # gateway would not collide.
 GATEWAY_SECRET_NAME = f"gateway:{GATEWAY_PROVIDER}"
 
+#: Held while GAIA hands Lemonade the stored key or moves the gateway, so no
+#: replay in this process lands in the middle of a move.
+GATEWAY_KEY_LOCK = threading.RLock()
 
-def remember_token(token: str) -> None:
-    """Keep the token in the OS credential store so it survives a restart.
+
+@dataclass(frozen=True)
+class GatewayKey:
+    """The stored gateway key and the gateway address it was saved with.
+
+    ``base_url`` is None only for a key saved before keys were bound to an
+    address; :func:`use_stored_key` binds it on first use. The key itself is
+    left out of ``repr`` so a log line can never carry it.
+    """
+
+    key: str = field(repr=False)
+    base_url: Optional[str] = None
+
+
+class GatewayKeyMismatch(GatewayError):
+    """The stored key belongs to another gateway address, so it was not sent."""
+
+    def __init__(self, bound_url: str, target_url: str):
+        self.bound_url = bound_url
+        self.target_url = target_url
+        super().__init__(
+            f"The saved AMD Gateway key belongs to {_host_of(bound_url)}; enter a "
+            f"new key for {_host_of(target_url)}."
+        )
+
+
+def _host_of(url: str) -> str:
+    return urlparse(url).hostname or url
+
+
+def same_gateway_url(a: Optional[str], b: Optional[str]) -> bool:
+    """Whether two gateway base URLs name the same endpoint."""
+    if not a or not b:
+        return False
+    left, right = urlparse(a.strip()), urlparse(b.strip())
+    try:
+        ports = (left.port, right.port)
+    except ValueError:
+        return False
+
+    def default_port(url, port):
+        return port or (80 if url.scheme.lower() == "http" else 443)
+
+    return (
+        left.scheme.lower() == right.scheme.lower()
+        and (left.hostname or "") == (right.hostname or "")
+        and default_port(left, ports[0]) == default_port(right, ports[1])
+        and left.path.rstrip("/") == right.path.rstrip("/")
+    )
+
+
+def _encode_key(key: str, base_url: str) -> str:
+    return json.dumps({"key": key, "base_url": base_url.strip().rstrip("/")})
+
+
+def _decode_key(raw: Optional[str]) -> Optional[GatewayKey]:
+    """A stored slot value as a :class:`GatewayKey`; a bare string is a legacy key."""
+    if not raw or not raw.strip():
+        return None
+    try:
+        record = json.loads(raw)
+    except ValueError:
+        return GatewayKey(raw.strip())
+    if not isinstance(record, dict):
+        return GatewayKey(raw.strip())
+    key, base_url = record.get("key"), record.get("base_url")
+    if not isinstance(key, str) or not key.strip() or not isinstance(base_url, str):
+        raise GatewayError(
+            "The gateway key in the OS credential store is not in a form GAIA "
+            "reads. Enter the key again in Settings › Model or with "
+            "`gaia gateway auth`."
+        )
+    return GatewayKey(key.strip(), base_url)
+
+
+def stored_secret_value(raw: Optional[str]) -> Optional[str]:
+    """The key inside a stored slot value, for redaction; never logged.
+
+    A record GAIA can't read is returned whole, so it is still redacted.
+    """
+    try:
+        record = _decode_key(raw)
+    except GatewayError:
+        return raw
+    return record.key if record else None
+
+
+def remember_token(token: str, base_url: str) -> None:
+    """Keep the token, bound to *base_url*, in the OS credential store.
 
     Lemonade holds a token in memory only, which means re-entering it every
     time Lemonade restarts — several times a day for anyone running an agent
@@ -433,16 +524,29 @@ def remember_token(token: str) -> None:
     Linux). ``verify_keyring_backend`` refuses plaintext backends, so it cannot
     quietly become a readable file.
 
+    *base_url* is the gateway the token was accepted at. It is stored in the
+    same record, so the token is only ever handed to that gateway
+    (:func:`use_stored_key`).
+
     Still never written to ``gateway.json`` or any other GAIA file.
     """
     from gaia.connectors.store import peek_secret, save_secret
 
-    save_secret(GATEWAY_SECRET_NAME, token)
+    token = (token or "").strip()
+    if not token:
+        raise GatewayError("No token given, so there is nothing to keep.")
+    if not base_url or not urlparse(base_url).hostname:
+        raise GatewayError(
+            f"GAIA can't keep the gateway token without the gateway address it "
+            f"belongs to, and {base_url!r} is not one."
+        )
+    record = _encode_key(token, base_url)
+    save_secret(GATEWAY_SECRET_NAME, record)
     # Read it back. keyring's null backend — which a headless Linux box or
     # PYTHON_KEYRING_BACKEND=null selects — accepts a write and stores nothing,
     # so the save "succeeds" and the user is told the token was remembered
     # right before being asked for it again. Fail loudly instead.
-    if peek_secret(GATEWAY_SECRET_NAME) != token:
+    if peek_secret(GATEWAY_SECRET_NAME) != record:
         raise GatewayError(_no_credential_store_message())
 
 
@@ -513,8 +617,8 @@ def _no_credential_store_message(platform: Optional[str] = None) -> str:
     )
 
 
-def read_stored_token() -> Optional[str]:
-    """The remembered token, or None when none is stored.
+def read_stored_key() -> Optional[GatewayKey]:
+    """The remembered token and its gateway, or None when none is stored.
 
     Raises ``GatewayError`` when the OS credential store can't be read, so a
     caller that has no prompt to fall back on can say why.
@@ -522,7 +626,7 @@ def read_stored_token() -> Optional[str]:
     try:
         from gaia.connectors.store import peek_secret
 
-        return peek_secret(GATEWAY_SECRET_NAME)
+        raw = peek_secret(GATEWAY_SECRET_NAME)
     except Exception as e:  # noqa: BLE001 - keyring backends raise anything
         raise GatewayError(
             f"Could not read the gateway token from the OS credential store: {e}. "
@@ -530,6 +634,23 @@ def read_stored_token() -> Optional[str]:
             f"GAIA_GATEWAY_TOKEN in GAIA's environment. "
             f"See https://amd-gaia.ai/docs/guides/llm-gateway."
         ) from e
+    return _decode_key(raw)
+
+
+def recall_stored_key() -> Optional[GatewayKey]:
+    """:func:`read_stored_key`, with an unreadable store logged and read as none."""
+    try:
+        return read_stored_key()
+    except GatewayError as e:
+        log.debug(str(e))
+        return None
+
+
+def read_stored_token() -> Optional[str]:
+    """The remembered token, or None when none is stored. Raises like
+    :func:`read_stored_key`. Never hand it on: :func:`use_stored_key` does."""
+    record = read_stored_key()
+    return record.key if record else None
 
 
 def recall_token() -> Optional[str]:
@@ -544,6 +665,35 @@ def recall_token() -> Optional[str]:
     except GatewayError as e:
         log.debug(str(e))
         return None
+
+
+def bind_legacy_key(record: GatewayKey, current_url: str) -> GatewayKey:
+    """Bind a key saved before keys carried their gateway to *current_url*.
+
+    *current_url* is the gateway the key serves now. A move calls this before
+    it changes anything, so a legacy key is never bound to the new address.
+    """
+    if record.base_url is not None:
+        return record
+    remember_token(record.key, current_url)
+    log.info(f"Bound the saved gateway key to {_host_of(current_url)}.")
+    return GatewayKey(record.key, current_url.strip().rstrip("/"))
+
+
+def use_stored_key(
+    record: GatewayKey, target_url: str, current_url: Optional[str] = None
+) -> str:
+    """The stored key, for sending to *target_url* only if it was saved with it.
+
+    A legacy key is bound to *current_url* first (default *target_url*: the
+    gateway Lemonade serves it to now). Raises :class:`GatewayKeyMismatch`.
+    """
+    if not isinstance(record, GatewayKey):
+        raise TypeError("a stored gateway key must be read with read_stored_key")
+    bound = bind_legacy_key(record, current_url or target_url)
+    if not same_gateway_url(bound.base_url, target_url):
+        raise GatewayKeyMismatch(bound.base_url, target_url)
+    return bound.key
 
 
 def forget_token() -> bool:
@@ -638,9 +788,12 @@ def resolve_gateway_token_with_source() -> tuple[str, str]:
     from_env = _env_gateway_token()
     if from_env:
         return from_env
-    token = read_stored_token()
-    if token and token.strip():
-        return token.strip(), STORED_TOKEN_SOURCE
+    record = read_stored_key()
+    if record:
+        # The Claude route derives its address from the registered gateway.
+        return use_stored_key(record, GatewayState.load().base_url), (
+            STORED_TOKEN_SOURCE
+        )
     raise GatewayError(
         f"No AMD LLM gateway key found, and Claude gateway models need one "
         f"saved where GAIA itself can read it. {TUI_GATEWAY_KEY_HINT} Or set "
@@ -650,7 +803,7 @@ def resolve_gateway_token_with_source() -> tuple[str, str]:
 
 
 def lemonade_token_with_source(
-    recall: Optional[Callable[[], Optional[str]]] = None,
+    recall: Optional[Callable[[], Optional[GatewayKey]]] = None,
     lemonade_url: Optional[str] = None,
     *,
     warn: bool = True,
@@ -660,9 +813,10 @@ def lemonade_token_with_source(
     GAIA's environment token is the one for AMD's gateway, so, as on the Claude
     route, it goes to Lemonade only while the registered gateway is AMD's (and
     *lemonade_url*, the gateway Lemonade reports, when given). Any other
-    gateway gets only the stored token, which ``gaia gateway install`` drops
-    when the gateway URL changes. *recall* replaces :func:`recall_token`;
-    *warn* False skips the warning about an environment token left unused.
+    gateway gets only the stored token, and only when it was saved with that
+    gateway (:func:`use_stored_key`, raising :class:`GatewayKeyMismatch`).
+    *recall* replaces :func:`recall_stored_key`; *warn* False skips the warning
+    about an environment token left unused.
     """
     from_env = _env_gateway_token()
     if from_env:
@@ -678,8 +832,11 @@ def lemonade_token_with_source(
                 f"so GAIA did not give it to Lemonade. Run `gaia gateway auth` "
                 f"with a token for that gateway."
             )
-    token = (recall or recall_token)()
-    return (token, STORED_TOKEN_SOURCE) if token else None
+    record = (recall or recall_stored_key)()
+    if not record:
+        return None
+    target = lemonade_url or GatewayState.load().base_url
+    return use_stored_key(record, target), STORED_TOKEN_SOURCE
 
 
 def lemonade_key_conflict(source: str, status: GatewayStatus) -> Optional[str]:
@@ -754,6 +911,15 @@ def explain_rejected_token(
             f"is current and GAIA's has gone stale. {TUI_GATEWAY_KEY_HINT}"
         )
     return f"{used} {generic}"
+
+
+def configured_gateway_url(manager: Optional["GatewayManager"] = None) -> str:
+    """The gateway a key entered now is for: the one Lemonade has registered,
+    else the one GAIA last registered (``gateway.json``)."""
+    status = (manager or GatewayManager()).status()
+    if status.installed and status.base_url:
+        return status.base_url
+    return GatewayState.load().base_url
 
 
 class GatewayManager:
@@ -1098,7 +1264,7 @@ class GatewayManager:
         return self._request("DELETE", f"cloud/auth/{GATEWAY_PROVIDER}")
 
     def ensure_authenticated(
-        self, recall: Optional[Callable[[], Optional[str]]] = None
+        self, recall: Optional[Callable[[], Optional[GatewayKey]]] = None
     ) -> bool:
         """Give Lemonade GAIA's gateway token if it has none.
 
@@ -1115,13 +1281,22 @@ class GatewayManager:
         authenticated and discovers nothing. Reporting that as success sends the
         caller looking for a missing model instead of an expired key.
 
-        *recall* replaces :func:`recall_token`, so a caller that must not block
-        on the credential store can bound the read.
+        *recall* replaces :func:`recall_stored_key`, so a caller that must not
+        block on the credential store can bound the read. It returns a
+        :class:`GatewayKey`, which goes only to the gateway it was saved with.
 
         Raises:
             GatewayError: GAIA uses the user's own server and its gateway
                 provider isn't working; GAIA hands that server no token.
+            GatewayKeyMismatch: The stored key belongs to another gateway
+                address than the one Lemonade has registered.
         """
+        with GATEWAY_KEY_LOCK:
+            return self._ensure_authenticated(recall)
+
+    def _ensure_authenticated(
+        self, recall: Optional[Callable[[], Optional[GatewayKey]]]
+    ) -> bool:
         from gaia.llm.lemonade_choice import is_users_server
 
         if cloud_blocked():

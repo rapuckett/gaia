@@ -248,12 +248,14 @@ def _keyring_slots(*usernames: str) -> List[Optional[str]]:
 
 def _cloud_keys() -> List[Optional[str]]:
     from gaia.connectors.store import peek_secret
-    from gaia.llm.gateway import GATEWAY_SECRET_NAME
+    from gaia.llm.gateway import GATEWAY_SECRET_NAME, stored_secret_value
     from gaia.llm.lemonade_choice import API_KEY_SECRET_NAME as LEMONADE_SLOT
     from gaia.llm.providers.fireworks import API_KEY_SECRET_NAME as FIREWORKS_SLOT
 
     return [
-        peek_secret(s) for s in (FIREWORKS_SLOT, GATEWAY_SECRET_NAME, LEMONADE_SLOT)
+        peek_secret(FIREWORKS_SLOT),
+        stored_secret_value(peek_secret(GATEWAY_SECRET_NAME)),
+        peek_secret(LEMONADE_SLOT),
     ]
 
 

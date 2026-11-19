@@ -3519,10 +3519,14 @@ credential store (the slot the TUI uses). A key is never echoed back or logged.
     `api_key` keeps the current key, and a gateway field left out keeps the
     one `amd` is registered with. The PC and an allowed paired device may
     send a key. A device may send a gateway field for `amd` only together with
-    a new key, to a public `https://` address: GAIA removes the saved key
-    before it dials the new address, so the saved key never goes there, and
-    every failure after that is one **422** message, with the previous gateway
-    put back without a key. One try per device every 10 s (**429**).
+    a new key, to a public `https://` address. The saved key is bound to the
+    address it was saved with and is never sent to another one: a replay that
+    finds the gateway at a different address fails with "The saved AMD Gateway
+    key belongs to {old host}; enter a new key for {new host}." Every failed
+    move is one **422** message, with the previous gateway and its key put
+    back; when that restore fails too, a **502** asks for a working address and
+    key. A move is refused (**409**) when GAIA holds no saved key for the
+    current gateway to put back. One try per device every 10 s (**429**).
 
     While GAIA uses the user's own Lemonade (`lemonade_mode` `external`) it
     sends that server nothing: it succeeds only when the server already has

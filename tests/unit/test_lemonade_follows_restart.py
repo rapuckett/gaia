@@ -27,6 +27,13 @@ NEW_PORT, NEW_KEY = 41002, "key-after-restart"
 MODEL = "Gemma-4-E4B-it-GGUF"
 
 
+def _bound_key(token):
+    """*token* stored bound to the gateway GAIA has registered."""
+    from gaia.llm import gateway
+
+    return gateway.GatewayKey(token, gateway.GatewayState.load().base_url)
+
+
 class _Response:
     status_code = 200
 
@@ -327,6 +334,10 @@ class _Gateway:
         self.calls = []
         self.holds_key = False
         monkeypatch.setattr("gaia.llm.gateway.recall_token", lambda: "kept-key")
+        monkeypatch.setattr(
+            "gaia.llm.gateway.recall_stored_key",
+            lambda: _bound_key("kept-key"),
+        )
         monkeypatch.setattr("gaia.llm.gateway.requests.request", self.request)
 
     def request(self, method, url, json=None, headers=None, timeout=None, **_):
@@ -438,6 +449,10 @@ class _CloudLemonade:
     def __init__(self, monkeypatch):
         self.calls = []
         monkeypatch.setattr("gaia.llm.gateway.recall_token", lambda: "kept-amd-key")
+        monkeypatch.setattr(
+            "gaia.llm.gateway.recall_stored_key",
+            lambda: _bound_key("kept-amd-key"),
+        )
         monkeypatch.setattr(
             "gaia.llm.cloud_keys.recall_key", lambda provider: f"kept-{provider}-key"
         )
