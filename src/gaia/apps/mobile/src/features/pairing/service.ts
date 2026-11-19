@@ -12,6 +12,8 @@ export interface PairedPc {
     connection: ConnectionConfig;
     /** When this phone was last allowed by the PC, ISO 8601; absent for a PC paired before it was kept. */
     pairedAt?: string;
+    /** The id this PC knows this phone by; absent only in a build with no pairing (dev scenes). */
+    deviceId?: string;
 }
 
 /**

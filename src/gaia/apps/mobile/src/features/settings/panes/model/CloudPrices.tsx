@@ -27,10 +27,12 @@ export function CloudPrices({ provider }: { provider: string }) {
         );
     }
     if (list.models.length === 0) {
+        // The note is the server's own text, so it keeps its own direction on a line of its own.
         return (
-            <Text role="caption" tone="muted">
-                {[t('settings.price.unknownSentence'), list.note].filter(Boolean).join(' ')}
-            </Text>
+            <Stack gap="xs">
+                <Text role="caption" tone="muted">{t('settings.price.unknownSentence')}</Text>
+                {list.note ? <Text role="caption" tone="muted" dir="auto">{list.note}</Text> : null}
+            </Stack>
         );
     }
     return (

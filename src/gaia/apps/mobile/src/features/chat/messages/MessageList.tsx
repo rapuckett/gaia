@@ -1,14 +1,16 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { useCallback, useEffect, useMemo, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+
+import { View } from 'react-native';
 
 import { latencyByMessage } from '@webui/utils/answerStats.core';
 
 import type { Message } from '@/api/client.types';
 import { useChatStream, useMessages } from '@/data';
 import { describeHttpFailure, useT } from '@/i18n/useT';
-import { ErrorState, List, ListSkeleton, Stack } from '@/ui';
+import { ErrorState, List, ListSkeleton } from '@/ui';
 
 import { useAnswerComparison } from '../compare/useAnswerComparison';
 import { AssistantBubble } from './AssistantBubble';
@@ -44,6 +46,7 @@ function contextOf(shown: readonly Message[], index: number): MessageContext {
 export function MessageListView({ messages, loading = false, error, onRetry, live, sessionId, fixShownBelowId = null }: MessageListViewProps) {
     const t = useT();
     const { listRef, following, showJump, onScroll, jumpToBottom } = useFollowScroll<Message>();
+    const [areaHeight, setAreaHeight] = useState(0);
     const latency = useMemo(() => latencyByMessage(messages), [messages]);
     const shown = useMemo(() => messages.filter((m) => m.role !== 'system').reverse(), [messages]);
     const newestReply = shown.find((m) => m.role === 'assistant')?.id;
@@ -71,7 +74,7 @@ export function MessageListView({ messages, loading = false, error, onRetry, liv
     }
 
     return (
-        <Stack flex={1}>
+        <View style={{ flex: 1, minHeight: 0 }} onLayout={(e) => setAreaHeight(e.nativeEvent.layout.height)}>
             <List<Message>
                 listRef={listRef}
                 inverted
@@ -100,8 +103,8 @@ export function MessageListView({ messages, loading = false, error, onRetry, liv
                     listRef.current?.scrollToOffset({ offset: averageItemLength * index, animated: true })
                 }
             />
-            <JumpButton visible={showJump} onPress={jumpToBottom} />
-        </Stack>
+            <JumpButton visible={showJump} onPress={jumpToBottom} areaHeight={areaHeight} />
+        </View>
     );
 }
 

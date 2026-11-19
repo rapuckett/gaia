@@ -30,6 +30,13 @@ const mount = (state: ConnectorScene) =>
 describeNative('/dev/connectors scenes', () => {
     afterEach(() => useConnectionStore.setState({ connection: null }));
 
+    it("googleReady shows Google's Connect without touching the app's connection", async () => {
+        await mount('googleReady');
+        expect(await screen.findByTestId('connector-connect-google')).toBeTruthy();
+        // A connection set from a scene sends the web gallery to the home screen.
+        expect(useConnectionStore.getState().connection).toBeNull();
+    });
+
     it('many shows the search field', async () => {
         await mount('many');
         expect(await screen.findByLabelText('Search connectors')).toBeTruthy();
