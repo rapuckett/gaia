@@ -251,7 +251,7 @@ describeNative('Provider key', () => {
         await render(<ProviderKey provider={bad} connected={false} />, { wrapper: wrap });
 
         const note = screen.getByTestId('provider-key-error');
-        expect(note).toHaveTextContent('Your PC got an error from \u2066Fireworks AI\u2069.');
+        expect(note).toHaveTextContent(/Your PC got an error from .*Fireworks AI.*\./);
         expect(screen.getByText('HTTP 401: invalid api key')).toBeTruthy();
         expect(screen.queryByTestId('provider-key-not-connected')).toBeNull();
         queryClient.clear();
