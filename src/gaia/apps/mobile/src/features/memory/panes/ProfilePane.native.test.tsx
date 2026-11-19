@@ -14,6 +14,12 @@ import { ThemeProvider } from '@/ui';
 
 import { ProfilePane } from './ProfilePane';
 
+let mockRefused = false;
+jest.mock('@/api/routeAccess', () => ({
+    ...jest.requireActual('@/api/routeAccess'),
+    useDeviceRefused: () => mockRefused,
+}));
+
 // The web project's renderer can't mount react-native-web's DOM.
 const describeNative = Platform.OS === 'web' ? describe.skip : describe;
 
@@ -61,17 +67,36 @@ describeNative('ProfilePane', () => {
         await waitFor(() => expect(screen.queryByTestId('profile-inference-stop')).toBeNull());
     });
 
-    it('says the scan runs on the PC and offers no Run on a paired phone', async () => {
+    it('offers Run on a paired phone the PC allows to scan, and says PC only when the route is refused', async () => {
         useConnectionStore.setState({ connection: { baseUrl: 'https://pc.local:4443', pcId: 'pc-1', pinned: true } });
+        try {
+            await mount({});
+            expect(screen.getByTestId('profile-discovery-run')).toBeTruthy();
+            expect(screen.getByTestId('profile-inference-run')).toBeTruthy();
+            expect(screen.queryByTestId('profile-discovery-pc-only')).toBeNull();
+        } finally {
+            useConnectionStore.setState({ connection: null });
+        }
+        mockRefused = true;
         try {
             const client = await mount({});
             expect(screen.getByTestId('profile-discovery-pc-only')).toBeTruthy();
             expect(screen.getByTestId('profile-inference-pc-only')).toBeTruthy();
             expect(screen.queryByTestId('profile-discovery-run')).toBeNull();
-            expect(screen.queryByTestId('profile-inference-run')).toBeNull();
             expect(client.profileStreamOpens).toEqual([]);
         } finally {
-            useConnectionStore.setState({ connection: null });
+            mockRefused = false;
         }
+    });
+
+    it('says discovery is off in our own words, with the PC\'s text on the detail line', async () => {
+        const server = 'System discovery is off, so GAIA read nothing on this PC. Turn it on in Memory > Advanced > System discovery, then run the scan again.';
+        await mount({ profileStreams: { discovery: { events: [{ type: 'error', source: 'consent', message: server }, { type: 'done', total: 0 }] } } });
+        fireEvent.press(screen.getByTestId('profile-discovery-run'));
+        const notice = await screen.findByTestId('profile-discovery-consent-off');
+        expect(notice).toBeTruthy();
+        expect(screen.getByText(server)).toBeTruthy();
+        expect(screen.getByText(/System discovery is off, so GAIA read nothing on your PC/)).toBeTruthy();
+        expect(screen.queryByTestId('profile-discovery-empty')).toBeNull();
     });
 });
