@@ -79,10 +79,13 @@ export interface ApiSchemas {
   CustomModelVariant: CustomModelVariant;
   DefaultPermissionModeResponse: DefaultPermissionModeResponse;
   DeviceAccessStatus: DeviceAccessStatus;
+  DeviceChange: DeviceChange;
+  DeviceChangeList: DeviceChangeList;
   DeviceOrigin: DeviceOrigin;
   DevicePairRequest: DevicePairRequest;
   DevicePairResponse: DevicePairResponse;
   DevicePairingOffer: DevicePairingOffer;
+  DeviceRemoved: DeviceRemoved;
   DeviceRoutes: DeviceRoutes;
   DeviceUsage: DeviceUsage;
   DiscordConnectRequest: DiscordConnectRequest;
@@ -1291,6 +1294,24 @@ export interface FailedRedemption {
   reason: "expired" | "used" | "wrong" | "closed" | "rate_limited";
 }
 /**
+ * One change a paired device made on the PC; ``params`` never hold a secret.
+ */
+export interface DeviceChange {
+  at: string;
+  id: string;
+  kind: string;
+  params: {
+    [k: string]: string | number | boolean | null | undefined;
+  };
+}
+/**
+ * A device's changes, newest first, and how many it has on record.
+ */
+export interface DeviceChangeList {
+  changes: DeviceChange[];
+  total: number;
+}
+/**
  * One origin a paired device may reach this PC at.
  */
 export interface DeviceOrigin {
@@ -1351,6 +1372,12 @@ export interface DevicePairingOffer {
    * Format version
    */
   v: number;
+}
+/**
+ * A device the PC unpaired: how many of its changes stay on the PC.
+ */
+export interface DeviceRemoved {
+  changes_count: number;
 }
 /**
  * Every origin a paired device may reach this PC at now.
@@ -2816,6 +2843,7 @@ export interface OutputItem {
  * A paired device, as the PC lists it. Never carries a token or its hash.
  */
 export interface PairedDevice {
+  changes_count?: number;
   created_at: string;
   expires_at?: string | null;
   id: string;

@@ -47,6 +47,7 @@ from gaia.logger import get_logger
 
 from ..database import ChatDatabase
 from ..dependencies import get_db
+from ..devices.changes import record_device_change
 from ..local_models import DOWNLOADED, LOADED, NOT_DOWNLOADED
 from ..models import DownloadProgress, WireModel
 from ..security import (
@@ -199,7 +200,7 @@ def _cloud_error(
     """
     name = _NAMES[provider]
     if status in (401, 403):
-        return ProviderError(f"{name} rejected the key. Check it and try again.", 401)
+        return ProviderError(f"{name} rejected the key. Check it and try again.", 422)
     detail = body.get("error")
     detail = detail if isinstance(detail, dict) else {}
     message = detail.get("message")
@@ -1847,6 +1848,12 @@ def connect_provider(
                     remember_error = _caller_detail(e, str(e), request, key)
             if not on_pc:
                 audit_approval(request, f"{_NAMES[provider]} API key accepted")
+                record_device_change(
+                    request,
+                    "providerKeySet",
+                    provider=_NAMES[provider],
+                    provider_id=provider,
+                )
         else:
             from gaia.connectors.credential_wait import (
                 CredentialStoreLocked,
@@ -1890,7 +1897,7 @@ def connect_provider(
     view = _provider_view(provider, entry)
     if not view["models_discovered"]:
         raise HTTPException(
-            status_code=401,
+            status_code=422,
             detail=(
                 f"{_NAMES[provider]} is registered but discovered no models. "
                 "Paste a valid API key."
@@ -1939,7 +1946,7 @@ def _use_known_models(
         raise ProviderError(
             f"{name} did not accept that key (no models were discovered). "
             "Check the key and try again.",
-            401,
+            422,
         )
     outage = (
         f"{name} could not list its models ({check.detail}). It did not reject "
@@ -2060,6 +2067,12 @@ def forget_provider_key(provider: str, request: Request) -> Dict[str, Any]:
         ) from e
     if not is_local_pc(request):
         audit_approval(request, f"{_NAMES[provider]} API key removed")
+        record_device_change(
+            request,
+            "providerKeyRemoved",
+            provider=_NAMES[provider],
+            provider_id=provider,
+        )
     return {"removed": removed}
 
 

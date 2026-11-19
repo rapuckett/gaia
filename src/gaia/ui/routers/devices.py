@@ -15,13 +15,15 @@ from __future__ import annotations
 from contextlib import contextmanager
 from typing import Any, Dict, Iterator
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from starlette.background import BackgroundTask
 
 from gaia.config import GaiaConfig, GaiaConfigError
 from gaia.logger import get_logger
 
 from ..devices import (
+    DEVICE_CHANGES_KEPT,
+    DEVICE_CHANGES_PAGE,
     DEVICE_PAIRED_ACTIONS,
     DEVICE_PAIRED_EVENT,
     HOME_ROUTE,
@@ -39,25 +41,30 @@ from ..devices.access import (
     PairingUnavailable,
     iso,
 )
+from ..devices.changes import prune_device_changes
 from ..devices.listener import ListenerError
 from ..devices.pairing import PairingRefused
 from ..devices.storage import DeviceCertificateError, UnsafeDeviceFolderError
 from ..models import (
     DeviceAccessStatus,
+    DeviceChangeList,
     DevicePairingOffer,
     DevicePairRequest,
     DevicePairResponse,
+    DeviceRemoved,
     DeviceRoutes,
     PairedDevice,
     PairedDeviceList,
 )
 from ..security import (
     ROUTE_SCOPE_KEY,
+    allowed_device,
     audit_approval,
     require_allowed_device,
     require_device,
     require_device_listener,
     require_local_pc,
+    require_pc_or_allowed_device,
 )
 from .sessions import emit_pc_event
 
@@ -123,7 +130,15 @@ def list_devices(request: Request) -> Dict[str, Any]:
     """Every paired device, pending ones included."""
     access = _access(request)
     with _folder_checked():
-        return {"devices": [access.describe(d) for d in access.devices()]}
+        devices = access.devices()
+    prune_device_changes(request, [d.id for d in devices])
+    counts = request.app.state.db.device_change_counts()
+    return {
+        "devices": [
+            {**access.describe(d), "changes_count": counts.get(d.id, 0)}
+            for d in devices
+        ]
+    }
 
 
 @router.post("/listener", response_model=DeviceAccessStatus, dependencies=_AT_THE_PC)
@@ -292,11 +307,44 @@ def allow_device(request: Request, device_id: str) -> Dict[str, Any]:
     return access.describe(device)
 
 
-@router.delete("/{device_id}", status_code=204, dependencies=_AT_THE_PC)
-def unpair_device(request: Request, device_id: str) -> Response:
-    """Unpair a device: its next request is refused and its streams end."""
+@router.delete("/{device_id}", response_model=DeviceRemoved, dependencies=_AT_THE_PC)
+def unpair_device(request: Request, device_id: str) -> Dict[str, Any]:
+    """Unpair a device: its next request is refused and its streams end.
+
+    Its changes stay on the PC; ``changes_count`` says how many.
+    """
     with _folder_checked():
         gone = _access(request).revoke(device_id)
     if not gone:
         raise HTTPException(status_code=404, detail="No paired device has that id.")
-    return Response(status_code=204, headers={"Cache-Control": "no-store"})
+    return {"changes_count": request.app.state.db.device_change_count(device_id)}
+
+
+@router.get(
+    "/{device_id}/changes",
+    response_model=DeviceChangeList,
+    dependencies=[Depends(require_pc_or_allowed_device)],
+)
+def device_changes(
+    request: Request,
+    device_id: str,
+    limit: int = Query(DEVICE_CHANGES_PAGE, ge=1, le=DEVICE_CHANGES_KEPT),
+) -> Dict[str, Any]:
+    """What a device changed on this PC, newest first: the PC may read any
+    device's, a device only its own."""
+    caller = allowed_device(request)
+    if caller is not None and caller.device_id != device_id:
+        raise HTTPException(
+            status_code=403,
+            detail="A paired device can see only its own changes. See every "
+            "device's on the PC, in Settings > Phones and tablets.",
+        )
+    access = _access(request)
+    with _folder_checked():
+        paired = [d.id for d in access.devices()]
+    prune_device_changes(request, paired)
+    changes, total = request.app.state.db.device_changes(device_id, limit)
+    return {
+        "changes": [{**c, "at": iso(c["at"])} for c in changes],
+        "total": total,
+    }

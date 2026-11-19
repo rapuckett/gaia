@@ -492,9 +492,24 @@ class PairedDevice(BaseModel):
     created_at: str
     last_seen_at: Optional[str] = None
     expires_at: Optional[str] = None  # while pending
+    changes_count: int = 0            # its changes on record (GET /api/devices)
 
 class PairedDeviceList(BaseModel):
     devices: List[PairedDevice]
+
+class DeviceRemoved(BaseModel):
+    """DELETE /api/devices/{device_id}"""
+    changes_count: int  # its changes, which stay on the PC
+
+class DeviceChange(BaseModel):
+    id: str             # stable for the row
+    kind: str           # camelCase id, e.g. providerKeySet, connectorSetup
+    params: Dict[str, Union[str, int, float, bool, None]]  # labels, never a secret
+    at: str
+
+class DeviceChangeList(BaseModel):
+    changes: List[DeviceChange]  # newest first
+    total: int                   # every change on record for the device
 
 class FailedRedemption(BaseModel):
     at: str
@@ -1469,12 +1484,21 @@ Deleting a chat deletes its copies.
 
 ### Files
 
-Away from the PC (mobile access, or a paired device), browse, search, preview and
-image reads name a chat with `session_id` and see only the folders and files
-that chat may touch, as its session panel lists them. GAIA's secret-file policy
-still applies inside them: keys, certificates, `.env` files and credential
-folders such as `~/.ssh` are refused (**403**), and so is anything outside the
-chat or a read that names no chat. The PC reads its home folder as before.
+A paired device the PC allowed browses, searches, previews and reads images
+across the home folder, as the PC's folder picker does, with no `session_id`.
+It never sees credentials: keys, certificates, `.env` files, credential folders
+such as `~/.ssh`, keychains, browser profiles, shell history, Git's stored
+credentials, chat and editor app data (Signal, Slack, Discord, VS Code, Cursor)
+and GAIA's own settings folder are left out of listings and searches and
+refused (**403**, code `credentials_withheld`), judged after symlinks, `..` and
+hard links are resolved, and without regard to letter case on macOS and Windows. A path
+outside the home folder is refused with code `outside_home`, without naming it.
+
+Over mobile access, and from a device still waiting for the PC's OK, these reads
+name a chat with `session_id` and see only the folders and files that chat may
+touch, as its session panel lists them. The secret-file policy applies inside
+them, and anything outside the chat or a read that names no chat is refused
+(**403**). The PC reads its home folder as before.
 
 <AccordionGroup>
   <Accordion title="POST /api/files/open">
@@ -1569,7 +1593,8 @@ chat or a read that names no chat. The PC reads its home folder as before.
 
   <Accordion title="GET /api/files/browse">
     Browse filesystem contents. Returns entries under a directory with size,
-    mtime, and type metadata. Away from the PC, `path` must be one of the
+    mtime, and type metadata. An allowed paired device browses like the PC.
+    Over mobile access or from a waiting device, `path` must be one of the
     chat's folders or inside one, and with no `path` the listing opens the
     chat's first folder; `quick_links` lists the chat's folders and
     `parent_path` never leaves them.
@@ -1582,8 +1607,8 @@ chat or a read that names no chat. The PC reads its home folder as before.
     stops at `max_results` matches, after 20,000 directory entries, or after
     about 10 seconds. `truncated: true` in the response means a bound cut the walk
     short and more matches may exist. `folder` searches that one folder only.
-    Away from the PC, the walk covers the chat's folders alone and never
-    returns a file holding secrets.
+    Away from the PC it never returns a file holding secrets, and over mobile
+    access or from a waiting device the walk covers the chat's folders alone.
   </Accordion>
 
   <Accordion title="GET /api/files/preview">
@@ -1697,7 +1722,9 @@ agent at once, so they take effect on its next step.
     (not a folder, a filesystem root, the home folder or a protected folder).
     It knows no chat, so a folder inside one removed from a chat passes here
     and is refused when added. The desktop app asks this as soon as a folder is
-    picked in the system dialog.
+    picked in the system dialog. For an allowed paired device a folder outside
+    the home folder, or one holding credentials, is refused too, without its
+    path.
   </Accordion>
 
   <Accordion title="POST /api/sessions/{session_id}/environment/folders/remove">
@@ -1882,6 +1909,20 @@ else's:
   when an address fails to pair 5 times in a minute and is locked out for 5
   minutes.
 
+One more reaches the PC and the one device it names, and no other caller:
+
+- `{"type": "device_prompt", "device_id", "kind", "action", "state"}` while an
+  OS prompt a device caused on the PC is up, such as unlocking the key store
+  (`kind` `key_store`) or an administrator prompt (`admin`). `action` names what
+  the device started; `state` is `waiting`, `approved`, `cancelled`, `denied` or
+  `timeout` (no answer within 5 minutes).
+
+GAIA records each change an allowed device makes on the PC (a provider key set
+or removed, a connector set up, and the like) with its `kind`, a few labels in
+`params` (a provider or connector name, never a key or token) and the time. A
+device's newest 200 are kept while it is paired, and 90 days after it is
+removed.
+
 <AccordionGroup>
   <Accordion title="GET /api/devices/status">
     `DeviceAccessStatus`: whether GAIA is listening and on which port, why it
@@ -1981,8 +2022,16 @@ else's:
   </Accordion>
 
   <Accordion title="DELETE /api/devices/{device_id}">
-    Unpair a device: **204**. Its next request is a **401** and its open
-    streams end. **404** for an unknown id. PC-only.
+    Unpair a device: `DeviceRemoved`, with how many of its changes stay on the
+    PC. Its next request is a **401** and its open streams end. **404** for an
+    unknown id. PC-only.
+  </Accordion>
+
+  <Accordion title="GET /api/devices/{device_id}/changes">
+    `DeviceChangeList`: what the device changed on this PC, newest first;
+    `limit` is 20 by default, 200 at most. The PC may read any device's,
+    removed ones included; an allowed device only its own (**403** for another
+    id). Never over mobile access.
   </Accordion>
 </AccordionGroup>
 
@@ -3391,7 +3440,7 @@ credential store (the slot the TUI uses). A key is never echoed back or logged.
     sends that server nothing: it succeeds only when the server already has
     the provider working, and a pasted key is not sent anywhere.
 
-    **Errors:** **401** when the provider rejects the key or discovers no
+    **Errors:** **422** when the provider rejects the key or discovers no
     models (a key that discovers nothing is removed from Lemonade again);
     **403** when a key comes from mobile access or another computer, or a
     gateway field comes from anywhere but the PC, a paired device included; **409** when an
@@ -3726,7 +3775,7 @@ Every route is in one class, pinned by `tests/unit/chat/ui/test_route_access.py`
 | Class | Who | Routes |
 |---|---|---|
 | PC-only | `pc` | Tunnel start and stop, a provider's gateway address and key header, the model-server target, logs, messaging, GPU memory apply and revert, the default full-access setting, connector enable, an agent's connector grant and activations, `POST /v1/connections/{provider}`, skill and agent installs, `POST /api/files/open`, `POST /api/setup/npu/memlock-fix`, the troubleshooting report, the memory profile scan and its commits, re-collecting system context (`reinitialize`, `refresh-system-context`), the eval-only routes, `GET /api/connectors/_debug`, and every other [paired devices](#paired-devices) route |
-| Setup | `pc`, or an allowed device | Setup's changes (see [Setup](#setup)), provider keys (entering one, removing one, retrying the credential store), `POST /api/system/download-model`, `PUT /api/system/model-server/backend`, a device-code sign-in (`POST /api/connectors/{connector_id}/authorize-device`, for a connector with `supports_device_code` only), connector setup and its check (`POST /api/connectors/{connector_id}/configure` without a browser sign-in, `POST /api/connectors/{connector_id}/test`), a browser sign-in the device finishes itself (`POST /api/connectors/{connector_id}/authorize` with `redirect_port`, then `POST /api/connectors/flows/{flow_id}/complete`), cancelling a sign-in (`DELETE /api/connectors/_flows/{flow_id}`; a device only its own), Automations, and changes to schedules and goals |
+| Setup | `pc`, or an allowed device | Setup's changes (see [Setup](#setup)), provider keys (entering one, removing one, retrying the credential store), `POST /api/system/download-model`, `PUT /api/system/model-server/backend`, a device-code sign-in (`POST /api/connectors/{connector_id}/authorize-device`, for a connector with `supports_device_code` only), connector setup and its check (`POST /api/connectors/{connector_id}/configure` without a browser sign-in, `POST /api/connectors/{connector_id}/test`), a browser sign-in the device finishes itself (`POST /api/connectors/{connector_id}/authorize` with `redirect_port`, then `POST /api/connectors/flows/{flow_id}/complete`), cancelling a sign-in (`DELETE /api/connectors/_flows/{flow_id}`; a device only its own), `GET /api/devices/{device_id}/changes` (a device reads its own only), Automations, and changes to schedules and goals |
 | Not from a device | `pc`, `tunnel` | `GET /api/providers`, which can register a provider |
 | Pairing | a device on the listener, with no token | `POST /api/devices/pair` |
 | Its own routes | an allowed device | `GET /api/devices/me/routes` |
