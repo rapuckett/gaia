@@ -1587,6 +1587,23 @@ def test_cloud_error_other_404_keeps_lemonades_detail():
     assert "no cloud provider registered" not in str(err)
 
 
+def test_connect_names_a_plaintext_http_gateway_without_echoing_lemonade(
+    client, lemonade, keys
+):
+    raw = (
+        "Cloud provider 'amd' uses http://. Set allow_insecure_http=true to "
+        f"explicitly opt in before storing or using an API key over plaintext HTTP. {KEY}"
+    )
+    lemonade.answers[("POST", "cloud/auth")] = (400, {"error": {"message": raw}})
+    resp = client.post("/api/providers/amd/connect", json={"api_key": KEY})
+    assert resp.status_code == 422, resp.text
+    detail = resp.json()["detail"]
+    assert detail["code"] == "gateway_insecure_http"
+    assert "https://" in detail["message"]
+    assert KEY not in resp.text
+    assert "allow_insecure_http" not in resp.text
+
+
 def test_connect_never_echoes_lemonade_errors_about_the_key(
     client, lemonade, keys, caplog
 ):
