@@ -11,6 +11,7 @@ export interface ConfirmSheetProps {
     open: boolean;
     title: string;
     body?: string[];
+    note?: string;
     confirmLabel: string;
     cancelLabel: string;
     onConfirm: () => void;
@@ -20,7 +21,7 @@ export interface ConfirmSheetProps {
 }
 
 /** Asks before something costly: one full-width button per line, so a long bracketed label wraps instead of widening the sheet. The action sits on top and Cancel nearest the thumb; the scrim, back and swipe all cancel. */
-export function ConfirmSheet({ open, title, body = [], confirmLabel, cancelLabel, onConfirm, onCancel, danger, busy }: ConfirmSheetProps) {
+export function ConfirmSheet({ open, title, body = [], note, confirmLabel, cancelLabel, onConfirm, onCancel, danger, busy }: ConfirmSheetProps) {
     return (
         <Sheet
             open={open}
@@ -40,6 +41,7 @@ export function ConfirmSheet({ open, title, body = [], confirmLabel, cancelLabel
                         {line}
                     </Text>
                 ))}
+                {note ? <Text role="caption" tone="muted">{note}</Text> : null}
             </Stack>
         </Sheet>
     );
@@ -93,6 +95,7 @@ export function useConfirmSheet(): { ask: (request: ConfirmRequest) => Promise<b
             open={open}
             title={shown.title}
             body={shown.body}
+            note={shown.note}
             confirmLabel={shown.confirmLabel}
             cancelLabel={shown.cancelLabel}
             danger={shown.danger}

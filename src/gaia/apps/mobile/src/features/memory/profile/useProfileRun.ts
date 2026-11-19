@@ -47,6 +47,7 @@ export function useProfileRun(kind: ProfileKind, notify: (notice: MemoryNotice) 
     const [items, setItems] = useState<ReviewItem[]>([]);
     const [detail, setDetail] = useState<string | null>(null);
     const [savedCount, setSavedCount] = useState<number | null>(null);
+    const [consentOff, setConsentOff] = useState<string | null>(null);
     const controller = useRef<AbortController | null>(null);
     const found = useRef(0);
 
@@ -67,7 +68,9 @@ export function useProfileRun(kind: ProfileKind, notify: (notice: MemoryNotice) 
             setItems([]);
             setDetail(null);
             setSavedCount(null);
+            setConsentOff(null);
             found.current = 0;
+            let refused = false;
             const connection = kind === 'discovery' ? 'mem.log.discoveryConnection' : 'mem.log.inferenceConnection';
             const done = kind === 'discovery' ? 'mem.log.discoveryDone' : 'mem.log.inferenceDone';
             const onEvent = (event: ProfileStreamEvent) => {
@@ -79,8 +82,11 @@ export function useProfileRun(kind: ProfileKind, notify: (notice: MemoryNotice) 
                     addLog({ text: findingLine(t, event.type, item.content), kind: 'finding' });
                     const tag = event.type === 'insight' ? event.item.domain : (event.item._source_name ?? event.item.category);
                     setItems((prev) => [...prev, { content: item.content, confidence: item.confidence, tag, checked: true, raw: item }]);
+                } else if (event.type === 'error' && event.source === 'consent') {
+                    refused = true;
+                    setConsentOff(event.message);
                 } else if (event.type === 'error') addLog({ text: t.bare('mem.log.error', { message: isolate(event.message, 'ltr') }), kind: 'error' });
-                else if (event.type === 'done') addLog({ text: t(done, { n: event.total ?? 0 }), kind: 'log' });
+                else if (event.type === 'done' && !refused) addLog({ text: t(done, { n: event.total ?? 0 }), kind: 'log' });
             };
             try {
                 const stream = kind === 'discovery' ? client.streamMemoryDiscovery({ signal: ctrl.signal }) : client.streamMemoryInference(includeBrowser, { signal: ctrl.signal });
@@ -88,7 +94,7 @@ export function useProfileRun(kind: ProfileKind, notify: (notice: MemoryNotice) 
                     if (ctrl.signal.aborted) return;
                     onEvent(event);
                 }
-                if (!ctrl.signal.aborted) setPhase('review');
+                if (!ctrl.signal.aborted) setPhase(refused ? 'idle' : 'review');
             } catch (err) {
                 if (ctrl.signal.aborted) return;
                 if (err instanceof GaiaApiError && err.status === 403) {
@@ -134,5 +140,5 @@ export function useProfileRun(kind: ProfileKind, notify: (notice: MemoryNotice) 
         }
     }, [commit, items, kind, notify, pcOnly, t]);
 
-    return { phase, logs, items, detail, savedCount, start, stop, setChecked, save };
+    return { phase, logs, items, detail, consentOff, savedCount, start, stop, setChecked, save };
 }

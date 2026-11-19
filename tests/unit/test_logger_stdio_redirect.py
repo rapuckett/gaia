@@ -102,3 +102,18 @@ def test_no_log_output_reaches_stdout_after_redirect(clean_root, monkeypatch, tm
 
     assert fake_stdout.getvalue() == ""
     assert "json-rpc-must-stay-clean" in fake_stderr.getvalue()
+
+
+def test_console_handler_follows_stderr_after_a_swap(clean_root, monkeypatch, tmp_path):
+    """A capture that replaced and closed stderr must not strand the handler."""
+    first = io.StringIO()
+    monkeypatch.setattr(sys, "stderr", first)
+    GaiaLogger(log_file=tmp_path / "t.log")
+    first.close()
+
+    second = io.StringIO()
+    monkeypatch.setattr(sys, "stderr", second)
+    logging.getLogger("gaia.test.swap").warning("after-the-swap")
+
+    assert "after-the-swap" in second.getvalue()
+    assert "Logging error" not in second.getvalue()

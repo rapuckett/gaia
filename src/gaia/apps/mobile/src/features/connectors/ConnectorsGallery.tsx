@@ -97,7 +97,7 @@ const GOOGLE_REDIRECTS: Partial<Record<ConnectorScene, LoopbackOutcome | null>> 
 };
 
 /** A listener that answers at once, as if the browser came straight back; the browser itself never closes. */
-function galleryDeps(redirect: LoopbackOutcome | null): BrowserSignInDeps {
+export function galleryDeps(redirect: LoopbackOutcome | null): BrowserSignInDeps {
     const loopback: OAuthLoopbackNative = {
         start: async () => ({ port: 49152 }),
         waitForRedirect: (state) =>

@@ -26,7 +26,7 @@ import {
 } from '@/ui';
 
 import { ChipButton } from '../schedules/ChipButton';
-import { AddSkillsSheet } from './AddSkillsSheet';
+import { AddSkillsSheet, type SkillsAddSeed } from './AddSkillsSheet';
 import { SettingsGroup } from './SettingsGroup';
 
 import { filterSkills, GROUPS, isGrouped, SEARCH_ABOVE, SKILLS_HOW_PARAMS, skippedName, skipReason } from './skillList';
@@ -44,7 +44,7 @@ export function SkillsScreen({ onTry }: { onTry: (name: string, prompt: string) 
 }
 
 /** Dev scenes only: opens the Add skills sheet on arrival. */
-export const SeedSkillsAdd = createContext(false);
+export const SeedSkillsAdd = createContext<boolean | SkillsAddSeed>(false);
 
 /** The skills list and its add sheet, for the screen and for the Settings pane. */
 export function SkillsBody({ onTry }: { onTry: (name: string, prompt: string) => void }) {
@@ -52,7 +52,8 @@ export function SkillsBody({ onTry }: { onTry: (name: string, prompt: string) =>
     const skills = useSkills();
     const [query, setQuery] = useState('');
     const [howOpen, setHowOpen] = useState(false);
-    const [adding, setAdding] = useState(useContext(SeedSkillsAdd));
+    const seed = useContext(SeedSkillsAdd);
+    const [adding, setAdding] = useState(!!seed);
     const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
 
     const all = skills.data?.skills ?? [];
@@ -134,7 +135,7 @@ export function SkillsBody({ onTry }: { onTry: (name: string, prompt: string) =>
                     </>
                 )}
             </Stack>
-            <AddSkillsSheet open={adding} onClose={() => setAdding(false)} />
+            <AddSkillsSheet open={adding} onClose={() => setAdding(false)} seed={typeof seed === 'object' ? seed : undefined} />
         </>
     );
 }

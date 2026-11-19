@@ -16,6 +16,8 @@ const KEYS = {
     gatewayChanged: `${P}gatewayChanged`,
     localOnlyOff: `${P}localOnlyOff`,
     permissionsDefault: `${P}permissionsDefault`,
+    localOnlyOn: `${P}localOnlyOn`,
+    agentInstalled: `${P}agentInstalled`,
     skillAdded: `${P}skillAdded`,
     skillAddedCode: `${P}skillAddedCode`,
     connectorSetup: `${P}connectorSetup`,
@@ -24,6 +26,7 @@ const KEYS = {
     profileScanOn: `${P}profileScanOn`,
     profileScanOff: `${P}profileScanOff`,
     pairingClosed: `${P}pairingClosed`,
+    npuMemlockFixed: `${P}npuMemlockFixed`,
 } as const satisfies Record<string, MessageKey>;
 
 const DISCORD_ACTIONS = {
@@ -32,6 +35,11 @@ const DISCORD_ACTIONS = {
     stop: `${P}discord.stop`,
     restart: `${P}discord.restart`,
     forgetAlways: `${P}discord.forgetAlways`,
+} as const satisfies Record<string, MessageKey>;
+
+const GPU_MEMORY_ACTIONS = {
+    gpuMemoryApply: `${P}gpuMemoryApply`,
+    gpuMemoryRevert: `${P}gpuMemoryRevert`,
 } as const satisfies Record<string, MessageKey>;
 
 const warned = new Set<string>();
@@ -78,6 +86,14 @@ export function changeText(change: DeviceChange, t: Translate): { title: string;
             }
             return { title: t(key) };
         }
+        case 'gpuMemoryChanged': {
+            const key = typeof p.action === 'string' && Object.prototype.hasOwnProperty.call(GPU_MEMORY_ACTIONS, p.action) ? GPU_MEMORY_ACTIONS[p.action as keyof typeof GPU_MEMORY_ACTIONS] : undefined;
+            if (!key) {
+                warnOnce(`gpuMemoryChanged:${String(p.action)}`, `a GPU memory change with an action this app has no label for: ${String(p.action)}`);
+                return generic;
+            }
+            return { title: t(key) };
+        }
         case 'memoryCommit': {
             const count = p.count;
             if (typeof count !== 'number' || !Number.isFinite(count)) return missing('count');
@@ -88,6 +104,11 @@ export function changeText(change: DeviceChange, t: Translate): { title: string;
             const base = (p.source === 'discovery' ? `${P}memoryCommitDiscovery` : `${P}memoryCommitInference`) as PluralKey;
             return { title: t(pluralKey(base, count), { count: keepTogether(String(count)) }) };
         }
+        case 'permissionsDefault':
+            if (p.mode === 'ask') return { title: t(`${P}permissionsDefaultAsk`) };
+            if (p.mode === 'full_access') return { title: t(`${P}permissionsDefaultFull`) };
+            if (present(p.mode)) warnOnce(`permissionsDefault:${String(p.mode)}`, `a permission change with a mode this app has no label for: ${String(p.mode)}`);
+            return { title: t(KEYS.permissionsDefault) };
         case 'serverTarget':
             return { title: t(p.mode === 'gaia' ? `${P}serverTargetGaia` : `${P}serverTarget`) };
         case 'deviceRemoved':

@@ -4,24 +4,51 @@
 import { create } from 'zustand';
 
 import type { DevicePromptEvent } from '@/api/client.types';
+import { GaiaApiError, GaiaNetworkError } from '@/api/errors';
 
 /** What the phone asked of the PC that needs a person there: the key store's unlock, or an administrator prompt. */
 export type DevicePromptKind = 'keyStore' | 'admin';
 
-/** `cancelled` is the phone giving up on waiting, or the PC cancelling the prompt; the rest are the PC's own answers. */
-export type DevicePromptState = 'idle' | 'waiting' | 'approved' | 'denied' | 'timeout' | 'cancelled';
+/**
+ * `cancelled` is the phone giving up on waiting, or the PC cancelling the prompt; `failed` is the step failing after
+ * approval. `busy` (the PC already waits on another request) and `tooSoon` (asked again within 10 s) come from the
+ * request's own refusal, never from an event.
+ */
+export type DevicePromptState = 'idle' | 'waiting' | 'approved' | 'denied' | 'timeout' | 'cancelled' | 'failed' | 'busy' | 'tooSoon';
+
+/** What goes with a state: the failure's reason as the PC sent it. */
+export interface DevicePromptNote {
+    detail?: string;
+}
 
 interface DevicePromptsState {
     /** The latest state by kind and action. It lives here, not in a screen, so leaving a screen never cancels anything. */
     states: Readonly<Record<string, DevicePromptState>>;
+    notes?: Readonly<Record<string, DevicePromptNote>>;
 }
 
-export const useDevicePromptStore = create<DevicePromptsState>(() => ({ states: {} }));
+export const useDevicePromptStore = create<DevicePromptsState>(() => ({ states: {}, notes: {} }));
+
+/** The 409 detail while the PC already waits on this action: `ALREADY_WAITING` in gaia/ui/devices/prompts.py. Other 409s are ordinary errors. */
+export const ALREADY_WAITING_DETAIL = 'GAIA is already waiting on the PC for this. Answer the prompt on the PC, then try again.';
 
 const keyOf = (kind: DevicePromptEvent['kind'], action: string) => `${kind}\u0000${action}`;
 
-function set(kind: DevicePromptEvent['kind'], action: string, state: DevicePromptState): void {
-    useDevicePromptStore.setState((s) => ({ states: { ...s.states, [keyOf(kind, action)]: state } }));
+function set(kind: DevicePromptEvent['kind'], action: string, state: DevicePromptState, note?: DevicePromptNote): void {
+    const key = keyOf(kind, action);
+    useDevicePromptStore.setState((s) => {
+        const notes = { ...s.notes };
+        if (note) notes[key] = note;
+        else delete notes[key];
+        return { states: { ...s.states, [key]: state }, notes };
+    });
+}
+
+/** Seconds from a 429's `Retry-After`, else the number in "Wait N s", else null. */
+function waitSeconds(err: GaiaApiError): number | null {
+    if (err.retryAfterSeconds !== null) return err.retryAfterSeconds;
+    const m = /\bWait (\d+) s\b/.exec(err.detail);
+    return m ? Number(m[1]) : null;
 }
 
 /** What the phone does in the hand; a seam so tests can watch it, since jest can't load expo-haptics lazily. */
@@ -41,7 +68,7 @@ function isDevicePrompt(event: unknown): event is DevicePromptEvent {
         e.type === 'device_prompt' &&
         (e.kind === 'keyStore' || e.kind === 'admin') &&
         typeof e.action === 'string' &&
-        (e.state === 'waiting' || e.state === 'approved' || e.state === 'cancelled' || e.state === 'denied' || e.state === 'timeout')
+        (e.state === 'waiting' || e.state === 'approved' || e.state === 'cancelled' || e.state === 'denied' || e.state === 'timeout' || e.state === 'failed')
     );
 }
 
@@ -60,8 +87,20 @@ export interface DevicePrompt {
     state: DevicePromptState;
     /** True while the phone is waiting for the PC: the action's own button stays hidden. */
     waiting: boolean;
-    /** True while the notice stands in for the action's button: waiting or any outcome not yet dismissed. */
+    /** True while the notice stands in for the action's button: waiting or any outcome not yet dismissed. A refused request (`busy`, `tooSoon`) leaves the button. */
     hideAction: boolean;
+    /** The failure's reason. */
+    note: DevicePromptNote;
+    /** Call as the action is pressed: forgets the last outcome. */
+    begin: () => void;
+    /** Call when the action's request succeeds: a prompt still shown as waiting (its event was missed) is over. */
+    settle: () => void;
+    /**
+     * Gives the notice the action's HTTP failure: a 409 `busy`, a 429 `tooSoon`, and while the PC's prompt is up or
+     * has just failed, the failure itself (its detail line; a 504 is the timeout). True when the notice now shows it,
+     * so the caller shows no error of its own; false for any other failure.
+     */
+    report: (err: unknown) => boolean;
     /** Stops waiting on the phone; the PC's prompt may still be up. */
     stopWaiting: () => void;
     /** Clears a stopped-waiting note. */
@@ -70,13 +109,72 @@ export interface DevicePrompt {
     restart: () => void;
 }
 
+/** Puts an action's prompt in a state, as the PC's event or a refused request would; for dev scenes. */
+export function seedDevicePrompt(kind: DevicePromptKind, action: string, state: DevicePromptState, note?: DevicePromptNote): void {
+    set(kind, action, state, note);
+}
+
+/** Forgets the last outcome as the action is pressed; a prompt still waiting on the PC stays. */
+export function beginDevicePrompt(kind: DevicePromptKind, action: string): void {
+    if (useDevicePromptStore.getState().states[keyOf(kind, action)] !== 'waiting') set(kind, action, 'idle');
+}
+
+/** The action's request succeeded: a prompt still shown as waiting (its event was missed) is over. */
+export function settleDevicePrompt(kind: DevicePromptKind, action: string): void {
+    if (useDevicePromptStore.getState().states[keyOf(kind, action)] === 'waiting') set(kind, action, 'idle');
+}
+
+/** See `DevicePrompt.report`. */
+export function reportDevicePromptError(kind: DevicePromptKind, action: string, err: unknown): boolean {
+    if (err instanceof GaiaApiError && err.status === 409 && err.detail === ALREADY_WAITING_DETAIL) {
+        set(kind, action, 'busy');
+        return true;
+    }
+    if (err instanceof GaiaApiError && err.status === 429) {
+        const seconds = waitSeconds(err) ?? TOO_SOON_DEFAULT_SECONDS;
+        const key = keyOf(kind, action);
+        set(kind, action, 'tooSoon');
+        clearTimeout(tooSoonTimers.get(key));
+        // The notice stays for the PC's wait, then clears itself, unless something newer has replaced it.
+        tooSoonTimers.set(
+            key,
+            setTimeout(() => {
+                tooSoonTimers.delete(key);
+                if (useDevicePromptStore.getState().states[key] === 'tooSoon') set(kind, action, 'idle');
+            }, seconds * 1000),
+        );
+        return true;
+    }
+    const now = useDevicePromptStore.getState().states[keyOf(kind, action)];
+    if (now === 'timeout' || now === 'denied' || now === 'cancelled') return true;
+    if (now !== 'waiting' && now !== 'failed') return false;
+    // The connection to the PC dropped while its prompt is up: the PC's events still say how it ends.
+    if (err instanceof GaiaNetworkError) return true;
+    if (err instanceof GaiaApiError && err.status === 504) {
+        set(kind, action, 'timeout');
+        return true;
+    }
+    set(kind, action, 'failed', err instanceof GaiaApiError && err.detail ? { detail: err.detail } : undefined);
+    return true;
+}
+
+const NO_NOTE: DevicePromptNote = {};
+
+const TOO_SOON_DEFAULT_SECONDS = 10;
+const tooSoonTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
 /** Where the prompt this action raised on the PC stands, from the PC's `device_prompt` events. */
 export function useDevicePrompt({ kind, action }: { kind: DevicePromptKind; action: string }): DevicePrompt {
     const state = useDevicePromptStore((s) => s.states[keyOf(kind, action)]) ?? 'idle';
+    const note = useDevicePromptStore((s) => s.notes?.[keyOf(kind, action)]) ?? NO_NOTE;
     return {
         state,
         waiting: state === 'waiting',
-        hideAction: state !== 'idle' && state !== 'approved',
+        hideAction: state !== 'idle' && state !== 'approved' && state !== 'busy' && state !== 'tooSoon',
+        note,
+        begin: () => beginDevicePrompt(kind, action),
+        settle: () => settleDevicePrompt(kind, action),
+        report: (err) => reportDevicePromptError(kind, action, err),
         stopWaiting: () => set(kind, action, 'cancelled'),
         dismiss: () => set(kind, action, 'idle'),
         restart: () => set(kind, action, 'waiting'),

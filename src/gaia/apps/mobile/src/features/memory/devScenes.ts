@@ -5,7 +5,7 @@ import { createFakeClient, type ProfileScript } from '@/api/fake';
 import type { GaiaClient, Goal, MemoryActivityDay, MemoryConversation, MemoryKnowledgeEntry, MemoryKnowledgeItem, MemoryStats, MemoryToolStat, MemoryTurn, MemoryUpcomingItem, ProfileStreamEvent } from '@/api/client.types';
 import { GaiaApiError, GaiaNetworkError } from '@/api/errors';
 
-export type MemoryScene = 'on' | 'off' | 'loading' | 'failed' | 'actionFails' | 'statsEmpty' | 'statsManyTools' | 'aboutEmpty' | 'aboutFailed' | 'aboutMany' | 'aboutShowMore' | 'goalsEmpty' | 'goalsFailed' | 'goalsStoreError' | 'goalsStoreDamaged' | 'knowledgeRich' | 'knowledgeEmpty' | 'knowledgeFailed' | 'knowledgeMany' | 'profileIdle' | 'profileScanning' | 'profileReview' | 'profileSaved' | 'profileInferring' | 'profileInferenceReview' | 'profileFailed' | 'profileOff' | 'discoveryOff';
+export type MemoryScene = 'on' | 'off' | 'loading' | 'failed' | 'actionFails' | 'statsEmpty' | 'statsManyTools' | 'aboutEmpty' | 'aboutFailed' | 'aboutMany' | 'aboutShowMore' | 'goalsEmpty' | 'goalsFailed' | 'goalsStoreError' | 'goalsStoreDamaged' | 'knowledgeRich' | 'knowledgeEmpty' | 'knowledgeFailed' | 'knowledgeMany' | 'profileIdle' | 'profileScanning' | 'profileReview' | 'profileSaved' | 'profileInferring' | 'profileInferenceReview' | 'profileFailed' | 'profileOff' | 'discoveryOff' | 'profilePaired' | 'profileConsentOff';
 
 export const SAMPLE_MEMORY_STATS: MemoryStats = {
     knowledge: {
@@ -194,6 +194,8 @@ const INSIGHTS_DONE: ProfileScript = {
 const PROFILE_SCRIPTS: Partial<Record<MemoryScene, { discovery?: ProfileScript; inference?: ProfileScript }>> = {
     profileScanning: { discovery: { events: DISCOVERY_SO_FAR, hang: true } },
     profileReview: { discovery: DISCOVERY_DONE },
+    profilePaired: { discovery: DISCOVERY_DONE },
+    profileConsentOff: { discovery: { events: [{ type: 'error', source: 'consent', message: 'System discovery is off, so GAIA read nothing on this PC. Turn it on in Memory > Advanced > System discovery, then run the scan again.' }, { type: 'done', total: 0 }] } },
     profileSaved: { discovery: DISCOVERY_DONE },
     profileInferring: { inference: { events: INSIGHTS_DONE.events.slice(0, 2), hang: true } },
     profileInferenceReview: { inference: INSIGHTS_DONE },
@@ -202,11 +204,14 @@ const PROFILE_SCRIPTS: Partial<Record<MemoryScene, { discovery?: ProfileScript; 
 
 /** The Profile setup state a scene starts in: which card runs on its own, and whether the result is saved. */
 export function profileSceneStart(scene: MemoryScene): { kind: 'discovery' | 'inference'; save?: boolean } | null {
-    if (scene === 'profileScanning' || scene === 'profileReview' || scene === 'profileFailed') return { kind: 'discovery' };
+    if (scene === 'profileScanning' || scene === 'profileReview' || scene === 'profileFailed' || scene === 'profilePaired' || scene === 'profileConsentOff') return { kind: 'discovery' };
     if (scene === 'profileSaved') return { kind: 'discovery', save: true };
     if (scene === 'profileInferring' || scene === 'profileInferenceReview') return { kind: 'inference' };
     return null;
 }
+
+/** Scenes shown as a paired phone, whose requests reach the device listener. */
+export const sceneIsPaired = (scene: MemoryScene): boolean => scene === 'profilePaired' || scene === 'profileConsentOff';
 
 /** The stats scenes read what only the Advanced tab shows, so they open there unless the URL names a tab. */
 export const sceneDefaultTab = (scene: MemoryScene): 'advanced' | undefined =>

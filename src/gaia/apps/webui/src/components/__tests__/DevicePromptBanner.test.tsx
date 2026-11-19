@@ -17,7 +17,7 @@ describe('DevicePromptBanner', () => {
     it('names the device while its prompt waits, and clears when the prompt ends', () => {
         render(<DevicePromptBanner />);
         prompt('d1', 'admin', 'gpuMemoryApply', 'waiting');
-        expect(screen.getByRole('status')).toHaveTextContent(/Rich iPhone.*administrator permission to give the GPU more memory/);
+        expect(screen.getByRole('status')).toHaveTextContent(/Rich iPhone.*administrator permission to change the GPU memory/);
         prompt('d1', 'admin', 'gpuMemoryApply', 'denied');
         expect(screen.queryByRole('status')).not.toBeInTheDocument();
     });

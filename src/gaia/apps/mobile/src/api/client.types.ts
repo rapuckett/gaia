@@ -23,6 +23,7 @@ import type {
     LemonadeFound,
     LemonadeTarget,
     LemonadeTargetBody,
+    LinkAddResult,
     LinkPreview,
     LocalModelStatus,
     MCPServerStatus,
@@ -104,6 +105,7 @@ export type {
     LemonadeFound,
     LemonadeTarget,
     LemonadeTargetBody,
+    LinkAddResult,
     LinkPreview,
     LinkSkill,
     LocalModelStatus,
@@ -216,7 +218,7 @@ export interface DevicePromptEvent {
     device_id: string;
     kind: 'keyStore' | 'admin';
     action: string;
-    state: 'waiting' | 'approved' | 'cancelled' | 'denied' | 'timeout';
+    state: 'waiting' | 'approved' | 'cancelled' | 'denied' | 'timeout' | 'failed';
 }
 
 export interface ConnectorGrants {
@@ -636,7 +638,7 @@ export interface GaiaClient {
     listAgentMcps(options?: RequestOptions): Promise<AgentMcpList>;
     /** The agents this PC can run; a PC without the `gaia` agent can't start chats. */
     listAgents(options?: RequestOptions): Promise<AgentList>;
-    /** Starts installing an agent on the PC (202); follow it with `getAgentInstallStatus`. PC-only: a phone gets the refusal. */
+    /** Starts installing an agent on the PC (202); follow it with `getAgentInstallStatus`. A phone the PC allowed may install the GAIA agent only; any other phone gets a 403. */
     installAgent(id: string, options?: RequestOptions): Promise<{ id: string; status: string }>;
     getAgentInstallStatus(id: string, options?: RequestOptions): Promise<AgentInstallStatus>;
     /** The chats with a turn in flight, those queued, and those paused on the user. */
@@ -730,8 +732,10 @@ export interface GaiaClient {
     listSkills(options?: RequestOptions): Promise<SkillList>;
     /** Skill libraries GAIA suggests adding from a link. */
     listFeaturedSkillLibraries(options?: RequestOptions): Promise<FeaturedLibraries>;
-    /** Reads and audits the skills behind a link; writes nothing. Adding them is PC-only. */
+    /** Reads and audits the skills behind a link; writes nothing. */
     previewSkillLink(url: string, options?: RequestOptions): Promise<LinkPreview>;
+    /** Adds the chosen skills from a previewed link (`pin` is the preview's). Skills that ship code need `allowCode`, sent only when true. A phone the PC didn't allow gets a 403. */
+    addSkillsFromLink(request: { url: string; names: string[]; pin: string; allowCode: boolean }, options?: RequestOptions): Promise<LinkAddResult>;
     /** Creates a schedule; `interval` is the plain-words "when to run", parsed by the PC. 409 when the name is taken. */
     createSchedule(request: CreateScheduleRequest, options?: RequestOptions): Promise<Schedule>;
     /** Reads a plain-words "when to run" without saving it, for the form's live preview. */
@@ -790,6 +794,10 @@ export interface GaiaClient {
     getModelNeed(job: ModelNeedJob, options?: RequestOptions): Promise<ModelNeed>;
     /** How this PC's memory is split, the presets and what each unlocks; `settingGb` also reads the manual steps for that size. Read only: changing it is done on the PC. */
     getGpuMemory(settingGb?: number, options?: RequestOptions): Promise<GpuMemoryStatus>;
+    /** Writes the GPU memory limit through the PC's administrator prompt (`confirm` is the person's yes); the PC waits on that prompt for up to 15 minutes. Takes effect after a restart. */
+    applyGpuMemory(settingGb: number, options?: RequestOptions): Promise<GpuMemoryStatus>;
+    /** Puts back the setting GAIA replaced, through the same administrator prompt. */
+    revertGpuMemory(options?: RequestOptions): Promise<GpuMemoryStatus>;
     /** "I've done this": records the size someone set by hand on the PC, so it reports a restart pending. Changes no setting. */
     recordGpuMemoryPending(settingGb: number, options?: RequestOptions): Promise<GpuMemoryStatus>;
     /** "Keep {gb}": stops reporting a pending GPU memory change. Changes no setting. */
@@ -839,6 +847,8 @@ export interface GaiaClient {
     allowSpendingThisMonth(options?: RequestOptions): Promise<SpendingReport>;
     /** Reads the NPU's setup afresh after a fix on the PC; answers the plan. */
     recheckSetupNpu(options?: RequestOptions): Promise<SetupPlan>;
+    /** Raises the NPU's locked-memory limit through the PC's administrator prompt (up to 15 minutes); answers the plan. Takes effect after a restart. */
+    fixSetupNpuMemlock(options?: RequestOptions): Promise<SetupPlan>;
     /** What setup will use and download, before it starts; `catalog` marks partial downloads. */
     getSetupPlan(options?: RequestOptions): Promise<SetupPlan>;
     /** Saves setup's chat model; a 409 `no_fit` asks to be sent again with `acknowledgeNoFit`. Returns the new plan. */

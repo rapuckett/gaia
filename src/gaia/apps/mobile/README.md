@@ -136,6 +136,8 @@ APP_ENV=development npm run export:web    # expo export --platform web
   page. It is available in development builds and in a native build or web export built with
   `EXPO_PUBLIC_DEV_GALLERY=1`. Declare each new dev page in `src/features/nav/routes.ts`;
   `routes.test.ts` fails for one that is missing.
+  On a native dev client the `/dev/*` gallery sits behind the pairing gate unless Metro runs with
+  `EXPO_PUBLIC_GAIA_URL` set, as in the dev command at the top of this file.
 - **A gallery APK** checks the scenes on a device with no Metro and no PC:
 
   ```bash

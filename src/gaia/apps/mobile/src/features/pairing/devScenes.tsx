@@ -58,6 +58,12 @@ const WAVE1: DeviceChange[] = [
     { id: 'w11', kind: 'profileScanOn', params: {}, at: ago(150) },
     { id: 'w12', kind: 'profileScanOff', params: {}, at: ago(180) },
 ];
+const WAVE6: DeviceChange[] = [
+    { id: 'x1', kind: 'permissionsDefault', params: { mode: 'ask' }, at: ago(3) },
+    { id: 'x2', kind: 'permissionsDefault', params: { mode: 'full_access' }, at: ago(9) },
+    { id: 'x3', kind: 'localOnlyOn', params: {}, at: ago(20) },
+    { id: 'x4', kind: 'agentInstalled', params: {}, at: ago(40) },
+];
 const MANY: DeviceChange[] = Array.from({ length: 35 }, (_, i) => ({ ...CHANGES[i % CHANGES.length]!, id: `m${i}`, at: ago(10 + i * 90) }));
 
 export const PAIRING_SCENES: Record<string, PairingScene> = {
@@ -72,6 +78,7 @@ export const PAIRING_SCENES: Record<string, PairingScene> = {
     'changes-many': { name: 'Studio PC', chosen: HOME, changes: MANY },
     'changes-all': { name: 'Studio PC', chosen: HOME, changes: MANY, changesAll: true },
     'changes-wave1': { name: 'Studio PC', chosen: HOME, changes: WAVE1 },
+    'changes-wave6': { name: 'Studio PC', chosen: HOME, changes: WAVE6 },
     'changes-error': { name: 'Studio PC', chosen: HOME, changes: new GaiaApiError(500, 'The PC could not read its audit log.') },
     'changes-unknown-kind': {
         name: 'Studio PC',

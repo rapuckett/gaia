@@ -35,9 +35,10 @@ import shutil
 import subprocess
 import sys
 import time
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple
 
 from gaia.logger import get_logger
 
@@ -169,12 +170,39 @@ class NotPossible(GpuMemoryError):
     status = 409
 
 
+class Busy(GpuMemoryError):
+    status = 409
+
+
 class OutOfRange(GpuMemoryError):
     status = 422
 
 
 class Unavailable(GpuMemoryError):
     status = 503
+
+
+BUSY_MESSAGE = (
+    "Another GPU memory change is already waiting for approval. "
+    "Finish or cancel it, then try again."
+)
+
+
+@contextmanager
+def _one_change_at_a_time() -> Iterator[None]:
+    """Hold the machine-wide GPU memory lock; :class:`Busy` while another process has it."""
+    from gaia.config import gaia_home
+    from gaia.daemon.lock import try_lock
+
+    path = gaia_home() / "gpu_memory.lock"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd = os.open(path, os.O_RDWR | os.O_CREAT, 0o600)
+    try:
+        if not try_lock(fd):
+            raise Busy(BUSY_MESSAGE)
+        yield
+    finally:
+        os.close(fd)
 
 
 @dataclass(frozen=True)
@@ -931,12 +959,20 @@ def apply(
 
     Asks for administrator permission, calling *before_prompt* first;
     keeps the previous setting for :func:`revert`. Never restarts the PC.
+    Raises :class:`Busy` while another process is changing GPU memory.
     """
     if confirm is not True:
         raise NotConfirmed(
             "Changing GPU memory needs your confirmation: it asks for "
             "administrator permission and takes effect after a restart."
         )
+    with _one_change_at_a_time():
+        return _apply_locked(setting_gb, before_prompt)
+
+
+def _apply_locked(
+    setting_gb: float, before_prompt: Optional[Callable[[], None]]
+) -> Dict[str, Any]:
     info, url = _read_system_info()
     current = describe(info, url)
     _require_applies(current)
@@ -995,13 +1031,19 @@ def revert(
 ) -> Dict[str, Any]:
     """Put back the setting GAIA replaced, effective after a restart.
 
-    Calls *before_prompt* just before the administrator prompt.
+    Calls *before_prompt* just before the administrator prompt. Raises
+    :class:`Busy` while another process is changing GPU memory.
     """
     if confirm is not True:
         raise NotConfirmed(
             "Undoing the GPU memory change needs your confirmation: it asks "
             "for administrator permission and takes effect after a restart."
         )
+    with _one_change_at_a_time():
+        return _revert_locked(before_prompt)
+
+
+def _revert_locked(before_prompt: Optional[Callable[[], None]]) -> Dict[str, Any]:
     state = _load_state()
     linux = (state or {}).get("linux")
     if not linux or state.get("source") != "apply":

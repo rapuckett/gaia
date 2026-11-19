@@ -9,6 +9,7 @@ import type { ScrollView } from 'react-native';
 
 import { GaiaClientProvider } from '@/data';
 import { devGalleryEnabled } from '@/features/dev/devGallery';
+import { seedDevicePrompt } from '@/features/devices/devicePrompts';
 import { KeyedScene } from '@/features/dev/KeyedScene';
 import { LanguageSwitchHost, SeedLanguageSwitch } from '@/features/language/LanguageSwitchCover';
 import { SeedSkillsAdd } from '@/features/skills';
@@ -34,6 +35,9 @@ function Thrower(): never {
 function SettingsView({ found }: { found: SettingsScene }) {
     const [queryClient] = useState(() => new QueryClient({ defaultOptions: { queries: { retry: false } } }));
     const [client] = useState(() => settingsSceneClient(found));
+    useState(() => {
+        if (found.prompt) seedDevicePrompt(found.prompt.kind, found.prompt.action, found.prompt.state, found.prompt.note);
+    });
     // Palette only, so a scene that saved a custom one doesn't leak into the next; the color scheme stays as it was.
     const wanted = useMemo(() => found.appearance ?? { palette: 'default' as const, custom: DEFAULT_CUSTOM }, [found]);
     const seeded = useAppearance(
@@ -61,7 +65,7 @@ function SettingsView({ found }: { found: SettingsScene }) {
                                                 <SeedCustomReport.Provider value={found.customReport ?? null}>
                                                     <SeedAutomationRemove.Provider value={found.confirmRemove ?? null}>
                                                         <SeedConfirmFullAccess.Provider value={!!found.confirmFullAccess}>
-                                                        <SeedSkillsAdd.Provider value={!!found.skillsAdd}>
+                                                        <SeedSkillsAdd.Provider value={found.skillsAdd ?? false}>
                                                             {found.crash ? (
                                                                 <SectionErrorBoundary area={`settings.${found.section}`} onReload={() => void queryClient.resetQueries()}>
                                                                     <Thrower />

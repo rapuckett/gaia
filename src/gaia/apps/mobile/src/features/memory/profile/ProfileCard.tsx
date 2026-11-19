@@ -6,7 +6,8 @@ import { View } from 'react-native';
 
 import { isolate } from '@webui/i18n/registry';
 
-import { usePinned } from '@/api/routeAccess';
+import { ENDPOINTS } from '@/api/constants';
+import { useDeviceRefused } from '@/api/routeAccess';
 import { useT } from '@/i18n/useT';
 import { Button, Card, ChoiceList, Disclosure, Icon, Ltr, Notice, Row, Stack, Surface, Switch, Text } from '@/ui';
 import { CircleCheck, Cpu, Sparkles, Square } from '@/ui/icons';
@@ -49,11 +50,11 @@ export function ProfileCard({ kind, notify }: { kind: ProfileKind; notify: Memor
     const t = useT();
     const copy = COPY[kind];
     const run = useProfileRun(kind, notify);
-    // The scan reads the PC's files and browser, so the PC refuses it from a paired phone.
-    const pinned = usePinned();
+    // Only a device the PC doesn't allow to scan is refused; an allowed phone runs it.
+    const pinned = useDeviceRefused('GET', kind === 'discovery' ? ENDPOINTS.memoryStreamDiscovery : ENDPOINTS.memoryStreamInference);
     const [includeBrowser, setIncludeBrowser] = useState(false);
     const [detailOpen, setDetailOpen] = useState(false);
-    const { phase, logs, items, detail, savedCount } = run;
+    const { phase, logs, items, detail, consentOff, savedCount } = run;
     const dev = useContext(ProfileDevContext);
     const auto = useRef(dev?.kind === kind);
     const autoSaved = useRef(false);
@@ -111,6 +112,7 @@ export function ProfileCard({ kind, notify }: { kind: ProfileKind; notify: Memor
                     </Row>
                 )}
 
+                {consentOff ? <Notice tone="info" message={t('mobileApp.mem.log.noConsent')} detail={consentOff} testID={`profile-${kind}-consent-off`} /> : null}
                 {logs.length > 0 ? <Log lines={logs} running={phase === 'running'} /> : null}
                 {detail ? (
                     <Disclosure title={t('prompt.technicalDetails')} open={detailOpen} onToggle={() => setDetailOpen((open) => !open)}>

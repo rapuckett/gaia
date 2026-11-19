@@ -7,7 +7,7 @@ import { devGalleryEnabled } from '@/features/dev/devGallery';
 import { APPROVE_STATES, ApproveOnPcGallery } from '@/features/devices/ApproveOnPcGallery';
 import type { DevicePromptState } from '@/features/devices/devicePrompts';
 
-/** The "Approve on your PC" notice in a sample card: `?state=idle|waiting|approved|cancelled|denied|timeout&kind=keyStore|admin`. */
+/** The "Approve on your PC" notice in a sample card: `?state=idle|waiting|approved|cancelled|denied|timeout|failed|busy|tooSoon&kind=keyStore|admin`. */
 export default function ApproveOnPcGalleryRoute() {
     const { state = 'waiting', kind = 'keyStore' } = useLocalSearchParams<{ state?: string; kind?: string }>();
     if (!devGalleryEnabled()) return <Redirect href="/" />;
