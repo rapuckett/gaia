@@ -797,7 +797,7 @@ def test_print_ceiling_message_has_no_server_remediation_text():
 
 
 @patch("gaia.llm.lemonade_manager.LemonadeClient")
-def test_first_discovery_of_ceiling_skips_restart_advice(mock_cls, capsys):
+def test_first_discovery_of_ceiling_skips_restart_advice(mock_cls, capsys, caplog):
     """A reload that *just discovered* the ceiling (not one already known
     before the attempt) must not fall through to "Restart Lemonade Server"
     — that advice cannot raise a GGUF's trained context either, and the
@@ -841,9 +841,16 @@ def test_first_discovery_of_ceiling_skips_restart_advice(mock_cls, capsys):
     assert "To fix this issue" not in output
     assert LemonadeManager.get_context_size() == 40960
     # The reload path already announced the cap once — the fall-through
-    # must not print a second, separate ceiling message.
+    # must not print a second, separate ceiling message. Log records reach
+    # the captured stderr too; they are diagnostics, not announcements.
+    printed = [
+        line
+        for line in output.splitlines()
+        if not any(message in line for message in caplog.messages)
+    ]
+    announcements = [line for line in printed if "trained context" in line]
     assert (
-        output.count("trained context") == 1
+        len(announcements) == 1
     ), f"Expected exactly one ceiling announcement, got:\n{output}"
 
 
