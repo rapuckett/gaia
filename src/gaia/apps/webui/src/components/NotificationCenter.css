@@ -295,6 +295,10 @@
   line-height: 1.45;
 }
 
+.notification-policy-reason-label {
+  display: block;
+}
+
 .notification-policy-details {
   display: flex;
   flex-direction: column;
