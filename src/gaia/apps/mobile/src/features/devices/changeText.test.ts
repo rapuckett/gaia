@@ -29,6 +29,9 @@ describe('changeText', () => {
         ['deviceRemoved', { device: 'Pixel 9' }, 'Removed the paired device Pixel 9'],
         ['deviceRemoved', {}, 'Removed a paired device'],
         ['pairingClosed', {}, 'Closed pairing to new devices'],
+        ['gpuMemoryChanged', { action: 'gpuMemoryApply' }, 'Changed the GPU memory'],
+        ['gpuMemoryChanged', { action: 'gpuMemoryRevert' }, 'Undid the GPU memory change'],
+        ['npuMemlockFixed', { action: 'npuMemlockFix' }, 'Raised the NPU locked-memory limit'],
         ['profileScanOn', {}, 'Turned on System discovery'],
         ['profileScanOff', {}, 'Turned off System discovery'],
     ])('%s %j reads "%s"', (kind, params, expected) => {

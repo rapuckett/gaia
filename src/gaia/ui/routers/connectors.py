@@ -144,10 +144,24 @@ _AGENT_ID_RE = re.compile(
 )
 
 
+def _agent_display_name(request: Request, agent_id: str) -> Dict[str, str]:
+    """``{"agent": name}`` for a registered agent id, else ``{}`` (never a guess)."""
+    registry = getattr(request.app.state, "agent_registry", None)
+    if registry is None:
+        return {}
+    for reg in registry.list():
+        if reg.namespaced_agent_id == agent_id and reg.name:
+            return {"agent": reg.name}
+    return {}
+
+
 async def _record_change(
     request: Request, kind: str, connector_id: str, **params: Any
 ) -> None:
     """A device's change to *connector_id*, for the PC's list of what it changed."""
+    agent_id = params.get("agent_id")
+    if agent_id:
+        params = {**_agent_display_name(request, agent_id), **params}
     await asyncio.to_thread(
         record_device_change,
         request,
@@ -1377,9 +1391,13 @@ async def enable_connector(request: Request, connector_id: str) -> Dict[str, Any
     response_model=ConnectorSummary,
     response_model_exclude_unset=True,
 )
-async def disable_connector(connector_id: str) -> Dict[str, Any]:
+async def disable_connector(request: Request, connector_id: str) -> Dict[str, Any]:
     """Disable a configured MCP connector without clearing its credentials."""
-    return await _set_connector_enabled(connector_id, False)
+    summary = await _set_connector_enabled(connector_id, False, request)
+    if allowed_device(request) is not None:
+        audit_approval(request, f"connector {connector_id} disabled")
+        await _record_change(request, "connectorDisable", connector_id)
+    return summary
 
 
 def _device_redirect_port(

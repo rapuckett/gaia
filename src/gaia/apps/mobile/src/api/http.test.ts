@@ -66,9 +66,33 @@ describe('createHttpClient requests', () => {
         await expect(html.getGeneratedAudio('/api/media/audio/a.wav')).rejects.toMatchObject({ messageKey: 'mobileApp.error.notAudio' });
     });
 
+    it('a 429 carries the PC\'s Retry-After seconds', async () => {
+        const res = { ...jsonResponse({ detail: 'This was just tried. Wait 7 s, then try again.' }, 429), headers: { get: (n: string) => (n.toLowerCase() === 'retry-after' ? '7' : null) } };
+        const { fetch } = createRecordingFetch(() => res);
+        await expect(createHttpClient({ baseUrl: BASE, fetch }).retryKeyStore()).rejects.toMatchObject({ status: 429, retryAfterSeconds: 7 });
+    });
+
     it('a refused file read rejects with the PC status', async () => {
         const { fetch } = createRecordingFetch(() => jsonResponse({ detail: 'Access denied' }, 403));
         await expect(createHttpClient({ baseUrl: BASE, fetch }).getFilePreview('/x', 's1')).rejects.toMatchObject({ status: 403 });
+    });
+
+    it('addSkillsFromLink: sends the preview pin and names, and allow_code only when ticked', async () => {
+        const { fetch, calls } = createRecordingFetch(() => jsonResponse({ added: [], failed: {} }));
+        const client = createHttpClient({ baseUrl: BASE, token: null, fetch });
+        const request = { url: 'https://github.com/acme/skills', names: ['a', 'b'], pin: 'abc123' };
+        await client.addSkillsFromLink({ ...request, allowCode: false });
+        await client.addSkillsFromLink({ ...request, allowCode: true });
+        expect(calls[0]).toMatchObject({ url: `${BASE}/api/skills/link/add`, method: 'POST', headers: UI_HEADERS });
+        expect(JSON.parse(calls[0]!.body as string)).toEqual(request);
+        expect(JSON.parse(calls[1]!.body as string)).toEqual({ ...request, allow_code: true });
+    });
+
+    it('installAgent: POST /api/agents/install with just the agent id', async () => {
+        const { fetch, calls } = createRecordingFetch(() => jsonResponse({ id: 'gaia', status: 'queued' }));
+        await createHttpClient({ baseUrl: BASE, token: null, fetch }).installAgent('gaia');
+        expect(calls[0]).toMatchObject({ url: `${BASE}/api/agents/install`, method: 'POST' });
+        expect(JSON.parse(calls[0]!.body as string)).toEqual({ id: 'gaia' });
     });
 
     it('health: GET /api/health with the UI headers and no body', async () => {
@@ -223,6 +247,9 @@ describe('createHttpClient requests', () => {
         ['connectProvider, with a typed key', (c) => c.connectProvider('fireworks', { apiKey: 'fw-k-1' }), 'POST', '/api/providers/fireworks/connect', JSON_HEADERS, { api_key: 'fw-k-1' }],
         ['forgetProviderKey', (c) => c.forgetProviderKey('fireworks'), 'DELETE', '/api/providers/fireworks/key', UI_HEADERS, undefined],
         ['retryKeyStore, with the UI header the PC requires', (c) => c.retryKeyStore(), 'POST', '/api/providers/key-store/retry', UI_HEADERS, undefined],
+        ['applyGpuMemory, confirmed', (c) => c.applyGpuMemory(96), 'POST', '/api/gpu-memory/apply', JSON_HEADERS, { setting_gb: 96, confirm: true }],
+        ['revertGpuMemory, confirmed', (c) => c.revertGpuMemory(), 'POST', '/api/gpu-memory/revert', JSON_HEADERS, { confirm: true }],
+        ['fixSetupNpuMemlock, with no body', (c) => c.fixSetupNpuMemlock(), 'POST', '/api/setup/npu/memlock-fix', UI_HEADERS, undefined],
     ])('%s: %s', async (_name, call, method, path, headers, body) => {
         const { fetch, calls } = createRecordingFetch(() => jsonResponse({ status: 'ok' }));
         await call(createHttpClient({ baseUrl: BASE, fetch }));

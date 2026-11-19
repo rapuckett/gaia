@@ -265,7 +265,8 @@ export function NotificationCenter({ onClose, onOpenChat }: NotificationCenterPr
                       )}
                       {n.reason && (
                         <span className="notification-policy-reason">
-                          {t('notifications.reason')}: {n.reason}
+                          <span className="notification-policy-reason-label">{t('notifications.reason')}:</span>
+                          <bdi dir="ltr">{n.reason}</bdi>
                         </span>
                       )}
                       {n.ruleIds && n.ruleIds.length > 0 && (

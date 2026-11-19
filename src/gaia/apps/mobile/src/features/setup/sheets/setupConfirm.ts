@@ -11,6 +11,8 @@ import type { SetupConfirm } from '@webui/types';
 export interface ConfirmRequest {
     title: string;
     body: string[];
+    /** A muted line under the body. */
+    note?: string;
     confirmLabel: string;
     cancelLabel: string;
     /** Danger styling for a choice that deletes something. */

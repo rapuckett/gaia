@@ -41,6 +41,7 @@ NOT_ANSWERING = (
     "be loading a model."
 )
 from gaia.version import LEMONADE_VERSION
+from tests.unit.log_capture import printed_lines
 
 
 class _Http:
@@ -369,15 +370,17 @@ class TestANewSessionWaitsToo:
         for post in startup.daemon_posts:
             _assert_ensure_shape(post)
 
-    def test_a_session_whose_server_never_returns_fails_loudly(self, startup, capsys):
+    def test_a_session_whose_server_never_returns_fails_loudly(
+        self, startup, capsys, caplog
+    ):
         startup.daemon_answers = [startup.not_answering]
 
         assert not LemonadeManager.ensure_ready(quiet=False, preload=False)
 
-        err = capsys.readouterr().err
-        assert "was not back within" in err
-        assert CLI_RESTART_HINT in err
-        assert APP_RESTART_HINT not in err
+        printed = "\n".join(printed_lines(capsys.readouterr().err, caplog))
+        assert "was not back within" in printed
+        assert CLI_RESTART_HINT in printed
+        assert APP_RESTART_HINT not in printed
         assert startup.now == pytest.approx(lc.GAIA_LEMONADE_RECONNECT_SECONDS)
 
     def test_a_failed_start_is_still_reported_at_once(self, startup, capsys):

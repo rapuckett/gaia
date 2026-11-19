@@ -2,3 +2,4 @@
 // SPDX-License-Identifier: MIT
 
 export { SeedSkillsAdd, SkillsBody, SkillsScreen } from './SkillsScreen';
+export type { SkillsAddSeed } from './AddSkillsSheet';

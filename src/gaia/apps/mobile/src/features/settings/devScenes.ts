@@ -5,9 +5,11 @@ import { createFakeClient, type FakeClientData } from '@/api/fake';
 import type { SystemStatus } from '@webui/types';
 import { tEn } from '@webui/i18n/translator';
 
-import type { Automation, AutomationList, ContextChoice, Session, SkillInfo, DiscordStatus, GaiaClient, CustomModelReport, GpuMemoryStatus, LemonadeTarget, MCPServerStatus, ModelServerInfo, ProviderModel, ProviderSummary, Settings, SpendingReport } from '@/api/client.types';
+import type { SkillsAddSeed } from '@/features/skills';
+import type { Automation, AutomationList, LinkAddResult, LinkPreview, LinkSkill, ContextChoice, Session, SkillInfo, DiscordStatus, GaiaClient, CustomModelReport, GpuMemoryStatus, LemonadeTarget, MCPServerStatus, ModelServerInfo, ProviderModel, ProviderSummary, Settings, SpendingReport } from '@/api/client.types';
 import { PC_ONLY_REFUSAL } from '@/api/constants';
 import { GaiaApiError, GaiaNetworkError } from '@/api/errors';
+import type { DevicePromptKind, DevicePromptNote, DevicePromptState } from '@/features/devices/devicePrompts';
 import { COMMON, GPU, RUN } from '@/features/setup/devScenes';
 
 import type { SectionId } from './sections';
@@ -24,6 +26,8 @@ export interface SettingsScene {
     data?: FakeClientData;
     /** Opens the Model pane on the success notice for this just-added model, with the Hugging Face section open. */
     addedModel?: string;
+    /** Puts a device prompt in this state before the pane shows, as the PC's events or a refused request would. */
+    prompt?: { kind: DevicePromptKind; action: string; state: DevicePromptState; note?: DevicePromptNote };
     /** Opens the cloud key field (with Replace already pressed when `replacing`), with `typed` in it and Connect pressed when `submit`. */
     keyEntry?: { replacing?: boolean; typed?: string; submit?: boolean };
     /** Opens the models search field with this text typed in. */
@@ -49,7 +53,7 @@ export interface SettingsScene {
     /** Opens Automations already asking to remove the automation with this id. */
     confirmRemove?: string;
     /** Opens Skills with the Add skills sheet already up. */
-    skillsAdd?: boolean;
+    skillsAdd?: boolean | SkillsAddSeed;
     /** Covers the screen as an English to Arabic pick would, with this platform's buttons, whatever the device is. */
     languageSwitch?: 'android' | 'ios';
     /** The language the cover is for; Arabic when unset. */
@@ -59,6 +63,8 @@ export interface SettingsScene {
     /** The device's saved palette; scenes without one open on the default palette. */
     appearance?: { palette: 'default' | 'custom'; custom: { accent: string; base: string } };
 }
+
+const APPLY: GpuMemoryStatus = { ...GPU, os: 'linux', method: 'apply', method_reason: '', setting: { name: 'amdgpu.gttsize', current_gb: 16, min_gb: 4, max_gb: 96 } };
 
 const PENDING: GpuMemoryStatus = {
     ...GPU,
@@ -249,6 +255,34 @@ const RUNNING = {
 const running = (patch: Partial<SystemStatus>): SettingsScene => ({ section: 'advanced', gpuMemory: GPU, status: { ...RUNNING, ...patch } as SystemStatus });
 
 const chat = (id: string): Session => ({ id, title: `Chat ${id}`, created_at: '2026-11-13T00:00:00Z', updated_at: '2026-11-13T00:00:00Z' }) as Session;
+const LINK_URL = 'https://github.com/acme/skills';
+const linkSkill = (name: string, extra: Partial<LinkSkill>): LinkSkill => ({
+    name, description: `${name} helps with a task.`, path: name, has_code: false, permissions: [], permissions_unreadable: false,
+    verdict: 'ALLOW', findings: [], installed: false, update: false, error: null, ...extra,
+}) as unknown as LinkSkill;
+const LINK_PREVIEW: LinkPreview = {
+    link: LINK_URL, source: 'acme/skills', pin: 'f3a9c2', warning: 'Only add skills from people you trust.',
+    skills: [
+        linkSkill('release-notes', {}),
+        linkSkill('docs-lookup', { has_code: true, verdict: 'REVIEW', findings: ['Runs scripts/fetch.py'] }),
+        linkSkill('changelog', { installed: true, update: true }),
+        linkSkill('shell-helper', { installed: true }),
+        linkSkill('crypto-miner', { error: 'The audit blocked it.', verdict: 'BLOCK' }),
+        linkSkill('broken', { error: 'SKILL.md could not be read.', verdict: 'ERROR' }),
+    ],
+};
+const LINK_ADDED: LinkAddResult = {
+    added: [
+        { name: 'release-notes', updated: false, verdict: 'ALLOW', has_code: false, findings: [] },
+        { name: 'docs-lookup', updated: false, verdict: 'REVIEW', has_code: true, findings: [] },
+        { name: 'changelog', updated: true, verdict: 'ALLOW', has_code: false, findings: [] },
+    ],
+    failed: { 'shell-helper': 'A skill with this name is already installed from somewhere else.' },
+};
+const linkScene = (skillsAdd: SkillsAddSeed): SettingsScene => ({
+    section: 'skills', gpuMemory: GPU, skillsAdd,
+    data: { skills: { skills: [skill('summarize')], invalid: {} }, linkPreview: () => LINK_PREVIEW, linkAdd: () => LINK_ADDED },
+});
 const skill = (name: string): SkillInfo => ({ name, description: 'Summarize a document.', version: '1.0', tier: null, tools: [], path: `skills/${name}`, source: 'agent-bundled' }) as SkillInfo;
 
 const PERM_CHATS: FakeClientData = {
@@ -265,11 +299,20 @@ export const SETTINGS_SCENES: Record<string, SettingsScene> = {
     'advanced-not-installed': { section: 'advanced', gpuMemory: GPU, status: NOT_INSTALLED },
     'gpu-adjustable': { section: 'model', target: 'gpu-memory', gpuMemory: GPU },
     'gpu-adjustable-setup': { section: 'setup', gpuMemory: GPU },
+    // Linux, where GAIA writes the size itself: the sizes, Apply (asks first), and Undo once GAIA has changed it.
+    'gpu-apply': { section: 'model', target: 'gpu-memory', gpuMemory: APPLY },
+    'gpu-apply-undo': { section: 'model', target: 'gpu-memory', gpuMemory: { ...APPLY, revert: { available: true, previous_setting_gb: 16 } } },
+    // Apply confirmed and the PC's administrator prompt up: "Approve on your PC" in place of Apply.
+    'gpu-apply-waiting': { section: 'model', target: 'gpu-memory', gpuMemory: APPLY, prompt: { kind: 'admin', action: 'gpuMemoryApply', state: 'waiting' } },
+    'gpu-apply-failed': {
+        section: 'model', target: 'gpu-memory', gpuMemory: APPLY,
+        prompt: { kind: 'admin', action: 'gpuMemoryApply', state: 'failed', note: { detail: 'GAIA could not change the GPU memory setting. Check the PC for details.' } },
+    },
     'gpu-pending': { section: 'model', target: 'gpu-memory', gpuMemory: PENDING },
     'gpu-read-error': { section: 'model', target: 'gpu-memory', gpuMemory: READ_ERROR },
     'gpu-read-error-setup': { section: 'setup', gpuMemory: READ_ERROR },
     // SET-MODEL-12: a cloud provider with no connected key shows Reconnect.
-    'model-key-disconnected': { section: 'model', target: 'cloud-key', provider: 'fireworks', gpuMemory: GPU },
+    'model-key-disconnected': keyFields({ configured: false, key_source: 'stored', key_hint: '4f2a' }),
     // SET-MODEL-15: the key field, Connect disabled until text is typed (`#tap=provider-key-connect` after typing connects on the fake PC).
     'model-key-entry': keyScene({}),
     // SET-MODEL-15: a typed key sent and the PC still answering: the field cleared, Connect busy.
@@ -300,7 +343,13 @@ export const SETTINGS_SCENES: Record<string, SettingsScene> = {
     'model-key-unknown': keyFields({ configured: false, key_state: 'unknown' }),
     // SET-MODEL-18: the PC's list says its key store is locked, before anything is sent: the warning and Try again.
     'model-key-store-locked': keyFields({ configured: false, key_state: 'store_locked' }),
-    // SET-MODEL-11: a saved key with no hint, as over mobile access: no saved-key row at all.
+    // SET-MODEL-18: Try again pressed and the PC's unlock prompt is up: "Approve on your PC" with Stop waiting, in place of the button.
+    'model-key-locked-waiting': { ...keyFields({ configured: false, key_state: 'store_locked' }), prompt: { kind: 'keyStore', action: 'keyStoreRetry', state: 'waiting' } },
+    // SET-MODEL-18: Try again pressed within 10 s of the last try: "Wait a few seconds", and Try again stays.
+    'model-key-locked-too-soon': { ...keyFields({ configured: false, key_state: 'store_locked' }), prompt: { kind: 'keyStore', action: 'keyStoreRetry', state: 'tooSoon' } },
+    // SET-MODEL-18: the PC is already waiting on another request: no Try again on the notice, the button stays.
+    'model-key-locked-busy': { ...keyFields({ configured: false, key_state: 'store_locked' }), prompt: { kind: 'keyStore', action: 'keyStoreRetry', state: 'busy' } },
+    // SET-MODEL-11: a saved key with no hint, as over the tunnel: the 20 bullets alone in the saved-key row.
     'model-key-no-hint': keyFields({ configured: true, key_source: 'stored', key_hint: null }),
     // SET-MODEL-19: Fireworks can't list its models, so the PC serves the ones it knows.
     'model-models-stale': keyFields({ configured: true, key_source: 'stored', key_hint: '4f2a', known_models: true }),
@@ -481,6 +530,14 @@ export const SETTINGS_SCENES: Record<string, SettingsScene> = {
             },
         },
     },
+    // Add skills from a link: a mix of new, update, review, code, blocked, elsewhere and unreadable skills; code unticked.
+    'skills-link-mix': linkScene({ read: LINK_URL }),
+    // The same link with Include skills with code ticked: the code skills can be picked.
+    'skills-link-code': linkScene({ read: LINK_URL, allowCode: true }),
+    // What was added, updated and not added.
+    // Add pressed with a code skill picked: the stacked "Add skills that run code?" confirm.
+    'skills-link-confirm': linkScene({ read: LINK_URL, allowCode: true, confirm: true }),
+    'skills-link-result': linkScene({ read: LINK_URL, allowCode: true, add: true }),
     'skills-add': { section: 'skills', gpuMemory: GPU, skillsAdd: true, data: { skills: { skills: [skill('summarize')], invalid: {} } } },
     // SET-GEN-04 to 07: a saved custom accent and tint, so Custom is selected and the Colors disclosure opens with Accent, Background tint and Reset.
     'general-custom-colors': { section: 'general', gpuMemory: GPU, appearance: { palette: 'custom', custom: { accent: '#C2410C', base: '#44403C' } } },

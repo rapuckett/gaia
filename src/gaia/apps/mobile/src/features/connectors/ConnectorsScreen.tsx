@@ -11,6 +11,7 @@ import type { AgentMcpServer, ConnectorRow, UnavailableConnectorRow } from '@/ap
 import { ENDPOINTS } from '@/api/constants';
 import { useDeviceRefused } from '@/api/routeAccess';
 import {
+    CHECK_PROMPT_ACTION,
     useAgentMcps,
     useAgents,
     useChangeConnectorAccess,
@@ -22,6 +23,8 @@ import {
     useConnectorServerAction,
     type ConnectorCheck,
 } from '@/data';
+import { ApproveOnPcNotice } from '@/features/devices/ApproveOnPcNotice';
+import { useDevicePrompt } from '@/features/devices/devicePrompts';
 import { ScreenHeader } from '@/features/nav/ScreenHeader';
 import { ChipButton } from '@/features/schedules/ChipButton';
 import { isPcRefusal, PcOnlyNotice } from '@/features/settings/PcOnlyNotice';
@@ -436,6 +439,9 @@ function ConnectorTile({
     const server = connector.type === 'mcp_server';
     const paused = connector.enabled === false;
     const form = setupForm(connector);
+    const checkPrompt = useDevicePrompt({ kind: 'keyStore', action: CHECK_PROMPT_ACTION });
+    // The prompt's state is shared by every Check; only the tile whose check raised it hides its button.
+    const checkOnPc = checkPrompt.hideAction && (check?.state === 'checking' || check?.state === 'prompt');
 
     // A result shown inside the tile opens it, so a menu pick is never silent.
     function show(next: { tone: 'info' | 'danger'; text: string; detail?: string }) {
@@ -569,7 +575,7 @@ function ConnectorTile({
                                     testID={`connector-connect-${connector.id}`}
                                 />
                             </Row>
-                            <CheckStatus connector={connector} check={check} />
+                            <CheckStatus connector={connector} check={check} onCheck={onCheck} />
                             {messageNotice}
                         </>
                     ) : (
@@ -588,7 +594,7 @@ function ConnectorTile({
                 ) : (
                     <>
                         <Row gap="sm" wrap>
-                            {server && !paused ? (
+                            {server && !paused && !checkOnPc ? (
                                 <ChipButton
                                     label={t.bare('settings.connectors.check')}
                                     accessibilityLabel={t('settings.connectors.check')}
@@ -614,7 +620,7 @@ function ConnectorTile({
                                 onPress={() => setConfirmOpen(true)}
                             />
                         </Row>
-                        {server ? <CheckStatus connector={connector} check={check} /> : null}
+                        {server ? <CheckStatus connector={connector} check={check} onCheck={onCheck} /> : null}
                         {clientRow}
                         {messageNotice}
                         <ConnectorAccess
@@ -658,13 +664,18 @@ function OAuthClientRow({ connector, onChange }: { connector: ConnectorRow; onCh
 }
 
 /** The desktop's Check line: starting, started, too slow, or didn't start with the server's own output behind Details. */
-function CheckStatus({ connector, check }: { connector: ConnectorRow; check?: ConnectorCheck }) {
+function CheckStatus({ connector, check, onCheck }: { connector: ConnectorRow; check?: ConnectorCheck; onCheck: () => void }) {
     const t = useT();
+    const prompt = useDevicePrompt({ kind: 'keyStore', action: CHECK_PROMPT_ACTION });
     const [details, setDetails] = useState(false);
     if (!check) return null;
     const name = connector.display_name;
     switch (check.state) {
+        case 'prompt':
+            return <ApproveOnPcNotice kind="keyStore" action={CHECK_PROMPT_ACTION} onRetry={onCheck} />;
         case 'checking':
+            // The PC's prompt stands in for the spinner once it is up.
+            if (prompt.state !== 'idle' && prompt.state !== 'approved') return <ApproveOnPcNotice kind="keyStore" action={CHECK_PROMPT_ACTION} onRetry={onCheck} />;
             return (
                 <View accessibilityLiveRegion="polite" testID={`connector-check-status-${connector.id}`}>
                     <Row gap="sm">

@@ -7,8 +7,9 @@ import { useEffect, useRef, useState } from 'react';
 import type { Translate } from '@webui/i18n/translator';
 
 import type { Settings } from '@/api/client.types';
+import { ENDPOINTS } from '@/api/constants';
 import { GaiaApiError } from '@/api/errors';
-import { usePinned } from '@/api/routeAccess';
+import { useDeviceRefused } from '@/api/routeAccess';
 import { useActiveModel, useSessions, useSetNetworkPolicy, useSettings, useSystemStatus } from '@/data';
 import { describeHttpFailure, useT } from '@/i18n/useT';
 import { Card, Disclosure, IconButton, Ltr, Notice, Row, Stack, Switch, Text } from '@/ui';
@@ -43,7 +44,8 @@ function LocalOnly() {
     const set = useSetNetworkPolicy();
     const [result, setResult] = useState<{ tone: 'success' | 'warning'; text: string; details: string[] } | null>(null);
     const [detailsOpen, setDetailsOpen] = useState(false);
-    const pinned = usePinned();
+    // Local only is a PUT of the settings; the PC lets an allowed device make it and answers 403 to the rest.
+    const pinned = useDeviceRefused('PUT', ENDPOINTS.settings);
     const error = set.error ?? settings.error;
     const refused = error instanceof GaiaApiError && error.status === 403;
     const on = set.isPending ? set.variables === 'local_ai_only' : settings.data?.network_policy === 'local_ai_only';

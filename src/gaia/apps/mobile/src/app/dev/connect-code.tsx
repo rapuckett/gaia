@@ -11,6 +11,8 @@ import { GaiaClientProvider } from '@/data';
 import { ConnectAccountCard } from '@/features/chat/cards/ConnectAccountCard';
 import { EmailConnect } from '@/features/chat/EmailConnect';
 import { GrantNote } from '@/features/chat/GrantNote';
+import { BrowserSignInDepsContext } from '@/features/connectors/browserSignIn';
+import { galleryDeps } from '@/features/connectors/ConnectorsGallery';
 import { DeviceCodeBlock } from '@/features/connectors/DeviceCodeSignIn';
 import { devGalleryEnabled } from '@/features/dev/devGallery';
 import { Screen, Stack, Text, UIProvider } from '@/ui';
@@ -76,6 +78,13 @@ export default function ConnectCodeGalleryRoute() {
                     <Scene title={'Connect card: sign-in cancelled'}>
                         <Faked data={{ connectors: MAILBOXES, deviceSignIn: CODE, signInEnd: { outcome: 'cancelled' } }}>
                             <ConnectAccountCard data={{ kind: 'connect_account', providers: ['microsoft'] }} />
+                        </Faked>
+                    </Scene>
+                    <Scene title={'Connect card: Google on a paired phone signs in with the phone browser'}>
+                        <Faked data={{ connectors: MAILBOXES, browserSignInState: 'gallery-state-0123456789abcdefghijklmnopqrstuv' }}>
+                            <BrowserSignInDepsContext.Provider value={galleryDeps(null)}>
+                                <ConnectAccountCard data={{ kind: 'connect_account', providers: ['google'] }} />
+                            </BrowserSignInDepsContext.Provider>
                         </Faked>
                     </Scene>
                     <Scene title={'Email connect on a reply'}>
