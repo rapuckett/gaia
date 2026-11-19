@@ -56,7 +56,7 @@ export function fieldHelp(t: Translate, connectorId: string, field: SetupField):
 }
 
 /** The desktop's Agent UI guide section on MCP: adding tools to GAIA, and letting other tools use it. */
-export const MCP_GUIDE_URL = 'https://amd-gaia.ai/docs/guides/agent-ui#extend-with-mcp';
+export const MCP_GUIDE_URL = 'https://amd-gaia.ai/docs/guides/agent-ui/extend#mcp-servers';
 
 /** `oauthSetup`: the OAuth client a connector needs before anyone can connect it. `oauthClient`: changing that client. `mcp`: a server's keys. */
 export type SetupForm = 'oauthSetup' | 'oauthClient' | 'mcp';
