@@ -13,6 +13,7 @@ import { DRAWER_SCENES, drawerSceneClient, sceneNotifications, type DrawerSceneN
 import { NAV_ENTRIES } from '@/features/chats/navEntries';
 import { SHOW_AUTOMATED_KEY } from '@/features/chats/showAutomated';
 import { devGalleryEnabled } from '@/features/dev/devGallery';
+import { GateUnreachableProvider } from '@/features/setup/gateUnreachable';
 import { KeyedScene } from '@/features/dev/KeyedScene';
 import { addNotification, clearNotifications } from '@/state/notifications';
 import { Screen, ScreenBannerProvider, Stack, Text, UIProvider } from '@/ui';
@@ -58,6 +59,7 @@ function DrawerView({ state }: { state: string }) {
         <QueryClientProvider client={queryClient}>
             <GaiaClientProvider client={client}>
                 <UIProvider>
+                    <GateUnreachableProvider value={found.gateUnreachable ?? false}>
                     <ScreenBannerProvider banner={null}>
                         <View style={{ height }}>
                             <ChatDrawerContent
@@ -74,6 +76,7 @@ function DrawerView({ state }: { state: string }) {
                             />
                         </View>
                     </ScreenBannerProvider>
+                    </GateUnreachableProvider>
                 </UIProvider>
             </GaiaClientProvider>
         </QueryClientProvider>

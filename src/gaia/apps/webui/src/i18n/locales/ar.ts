@@ -34,6 +34,7 @@ const messages: Messages = {
     'sidebar.matchCount.other': 'المحادثات المطابقة: {n}',
     'sidebar.empty': 'لا توجد محادثات بعد.',
     'sidebar.searchFailed': 'تعذّر البحث داخل المحادثات: {error}',
+    'mobileApp.chats.listUnavailable': 'تظهر المحادثات عندما يصبح الوصول إلى الكمبيوتر لديك ممكنًا.',
     'mobileApp.chats.markReadFailed': 'تعذّر تعليم المحادثة كمقروءة.',
     'mobileApp.chats.searchFailedLabel': 'تعذّر البحث داخل المحادثات',
     'sidebar.markReadFailed': 'تعذّر تعليم المحادثة كمقروءة: {error}',
