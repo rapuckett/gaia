@@ -2570,7 +2570,9 @@ The Memory endpoints expose the agent's persistent knowledge system. See the [Me
     system-context refresh, so turning it on is for the PC or a paired device
     the PC allowed (a `403` over mobile access or from a pending device).
     Turning it off, and the other flags, work from any caller. Either change
-    to `system_discovery_consent` writes an audit line naming who made it.
+    to `system_discovery_consent` writes an audit line naming who made it,
+    and a paired device's change shows in its changes list (`profileScanOn`,
+    `profileScanOff`).
   </Accordion>
 
   <Accordion title="POST /api/memory/admin/clear">

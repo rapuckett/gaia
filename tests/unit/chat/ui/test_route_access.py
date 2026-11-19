@@ -1023,12 +1023,18 @@ def test_a_device_changing_discovery_consent_is_audited(setup, monkeypatch, on):
     saved = []
     monkeypatch.setattr("gaia.agents.base.memory._save_memory_settings", saved.append)
     audited = _audit_into(monkeypatch, memory)
+    GaiaConfig.save_key("device_pairing", True)
+    changes = f"/api/devices/{device.device_id}/changes"
+    before = clients["pc"].get(changes).json()["changes"]
     resp = clients["device"].put(
         "/api/memory/settings",
         json={"system_discovery_consent": on},
         headers={"X-Gaia-UI": "1"},
     )
     assert resp.status_code == 200, resp.text
+    after = clients["pc"].get(changes).json()["changes"]
+    added = [c["kind"] for c in after if c not in before]
+    assert added == ["profileScanOn" if on else "profileScanOff"]
     assert saved == [{"system_context_enabled": on}]
     assert ran == (["refresh"] if on else [])
     word = "on" if on else "off"

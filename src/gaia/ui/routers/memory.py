@@ -39,6 +39,7 @@ from gaia.ui.memory_settings import MEMORY_ENABLED_KEY, memory_enabled
 
 from ..database import ChatDatabase
 from ..dependencies import get_db
+from ..devices.changes import record_device_change
 from ..models import WireModel
 from ..security import (
     allowed_device,
@@ -2374,6 +2375,9 @@ def update_memory_settings(
         db.set_setting(_SYSTEM_DISCOVERY_KEY, "true" if consented else "false")
         audit_approval(
             request, f"system discovery turned {'on' if consented else 'off'}"
+        )
+        record_device_change(
+            request, "profileScanOn" if consented else "profileScanOff"
         )
         if consented:
             try:
