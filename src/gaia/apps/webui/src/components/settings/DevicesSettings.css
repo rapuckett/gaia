@@ -113,3 +113,30 @@
     from { opacity: 0; transform: translateY(-4px); }
     to { opacity: 1; transform: none; }
 }
+
+.devices-row {
+    flex-wrap: wrap;
+}
+
+.devices-changes {
+    flex: 1 1 100%;
+    min-width: 0;
+}
+
+.devices-change-list {
+    gap: 8px;
+}
+
+.devices-change {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    font-size: 13px;
+    color: var(--text-primary);
+    overflow-wrap: anywhere;
+}
+
+.devices-change-kind {
+    font-family: var(--font-mono);
+    font-size: 12px;
+}
