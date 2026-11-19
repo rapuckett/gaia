@@ -161,7 +161,8 @@ function ScheduleRow({ schedule, working, onWorking, onSettled }: ScheduleRowPro
         // The store sets its error when an action fails and clears it when one works, so this is that action's outcome.
         void op.finally(() => {
             onWorking(false);
-            onSettled(useScheduleStore.getState().actionError);
+            const error = useScheduleStore.getState().actionError;
+            onSettled(error === null || typeof error === 'string' ? error : t(error.ref, error.params));
         });
     };
 

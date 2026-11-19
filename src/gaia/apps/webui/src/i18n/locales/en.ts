@@ -4776,6 +4776,18 @@ export const enMessages = {
     'browserPane.block.tooMany': 'At most {max} picked elements',
     'browserPane.block.uploading': 'A picked element is still uploading',
     'browserPane.block.streaming': 'Picked elements send once GAIA finishes this reply',
+    // Phone app: session-panel and gallery text the desktop no longer shows
+    'env.offBlocked': 'Off: web search and pages are blocked',
+    'out.empty': 'Nothing yet. Files, documents, images and memories this chat makes appear here.',
+    'rail.noSites': 'None from GAIA\'s web tools',
+    'rail.pending': 'Working on this answer. Its sources, files and where its data went appear here when it finishes.',
+    'rail.thisPc': 'This PC',
+    'settings.shortcut.newChat': 'New chat',
+    'settings.shortcut.search': 'Search chats',
+    'settings.shortcut.send': 'Send',
+    'settings.shortcut.stop': 'Stop the answer',
+    'skills.empty': 'No skill is in use yet. GAIA picks one up when a request needs it.',
+    'skills.notRunning': 'This chat\'s agent isn\'t running yet. Skills it uses show here after your next message.',
 } as const;
 
 export const en: Locale = {

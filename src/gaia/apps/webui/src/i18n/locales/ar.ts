@@ -4775,6 +4775,18 @@ const messages: Messages = {
     'browserPane.block.tooMany': 'الحد الأقصى للعناصر المحددة: {max}',
     'browserPane.block.uploading': 'لا يزال أحد العناصر المحددة قيد الرفع',
     'browserPane.block.streaming': 'تُرسل العناصر المحددة بعد أن ينهي GAIA هذا الرد',
+    // Phone app: session-panel and gallery text the desktop no longer shows
+    'env.offBlocked': 'متوقف: البحث على الويب والصفحات محظورة',
+    'out.empty': 'لا شيء بعد. تظهر هنا الملفات والمستندات والصور والذكريات التي تنشئها هذه المحادثة.',
+    'rail.noSites': 'لا شيء من أدوات الويب في GAIA',
+    'rail.pending': 'جارٍ العمل على هذه الإجابة. ستظهر هنا مصادرها وملفاتها ووجهة بياناتها عند انتهائها.',
+    'rail.thisPc': 'هذا الجهاز',
+    'settings.shortcut.newChat': 'محادثة جديدة',
+    'settings.shortcut.search': 'البحث في المحادثات',
+    'settings.shortcut.send': 'إرسال',
+    'settings.shortcut.stop': 'إيقاف الإجابة',
+    'skills.empty': 'لا توجد مهارة قيد الاستخدام بعد. يستعين GAIA بإحداها عندما يحتاجها طلب.',
+    'skills.notRunning': 'وكيل هذه المحادثة لا يعمل بعد. تظهر المهارات التي يستخدمها هنا بعد رسالتك التالية.',
 };
 
 export const ar: Locale = {
