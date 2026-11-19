@@ -48,6 +48,10 @@ dependencies:
       util/select_tests.py names it in FULL_RUN_FILES for the unit-test
       selection. This workflow runs only its lane-scope command, which reads
       build_tui.yml's own paths filter, never test_unit.yml.
+    tests/unit/test_unit_daemon_isolation.py: >-
+      util/select_tests.py names it as the smoke test the unit lane runs when a
+      conftest import changes. This workflow runs only lane-scope, which never
+      selects unit tests.
 
   build-installers.yml:
     src/gaia/apps/webui/**: >-
