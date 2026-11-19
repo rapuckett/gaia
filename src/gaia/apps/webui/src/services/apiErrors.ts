@@ -1,7 +1,7 @@
 // Copyright(C) 2025-2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { isolate } from '../i18n/registry';
+import { isolate, ref, type MessageRef } from '../i18n/registry';
 import type { Translate } from '../i18n/translator';
 
 /** The API's error types and error-body parsing, free of fetch and the DOM so any client can share them. */
@@ -95,9 +95,30 @@ function hasUsefulServerDetail(detail: string): boolean {
     return text !== '' && !isBareInternalError(text) && !/^[<{[]/.test(text);
 }
 
-export function getFriendlyError(status: number, detail: string, t: Translate): string {
+const FILE_REFUSAL_KEYS = {
+    session_required: 'files.refused.sessionRequired',
+    not_in_chat_folders: 'files.refused.notInChatFolders',
+    outside_home: 'files.refused.outsideHome',
+    credentials_withheld: 'files.refused.credentialsWithheld',
+} as const;
+
+/** The server's file refusal (403 `code`) as a message reference; null for a code this UI doesn't word. */
+export function fileRefusalRef(body: Record<string, unknown> | null): MessageRef | null {
+    const code = body?.code;
+    if (typeof code !== 'string' || !(code in FILE_REFUSAL_KEYS)) return null;
+    const name = body?.name;
+    return ref(FILE_REFUSAL_KEYS[code as keyof typeof FILE_REFUSAL_KEYS], typeof name === 'string' ? { name: isolate(name, 'ltr') } : {});
+}
+
+/** The same refusal in the interface language. */
+export function fileRefusalText(body: Record<string, unknown> | null, t: Translate): string | null {
+    const r = fileRefusalRef(body);
+    return r ? t(r.ref, r.params) : null;
+}
+
+export function getFriendlyError(status: number, detail: string, t: Translate, body: Record<string, unknown> | null = null): string {
     switch (status) {
-        case 403: return detail || t('apiError.accessDenied');
+        case 403: return fileRefusalText(body, t) ?? (detail || t('apiError.accessDenied'));
         // The backend's detail first: a canned "moved or deleted" hid a malformed path (#728).
         case 404: return detail || t('apiError.notFound');
         case 413: return detail || t('apiError.tooLarge');

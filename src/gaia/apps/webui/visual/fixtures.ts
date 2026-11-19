@@ -504,7 +504,7 @@ const DEVICE_STATUS_BASE = {
     routes: [{ kind: 'tailnet', on: false, origin: null, error_code: null }],
 };
 const AT_ISO = (minutesAgo: number) => new Date(NOW.getTime() - minutesAgo * 60_000).toISOString();
-const IPAD = { id: 'dev-ipad', name: "Someone's iPad Pro with a rather long name", platform: 'ipados', status: 'allowed', created_at: AT_ISO(9000), last_seen_at: AT_ISO(1500), expires_at: null, changes_count: 3 };
+const IPAD = { id: 'dev-ipad', name: "Someone's iPad Pro with a rather long name", platform: 'ipados', status: 'allowed', created_at: AT_ISO(9000), last_seen_at: AT_ISO(1500), expires_at: null, changes_count: 6 };
 const PHONE = { id: 'dev-phone', name: 'هاتف سارة', platform: 'ios', status: 'pending', created_at: AT_ISO(1), last_seen_at: null, expires_at: new Date(NOW.getTime() + 9 * 60_000).toISOString() };
 
 /** Settings > Phones and tablets, one answer per state the pane shows. */
@@ -533,10 +533,13 @@ export const DEVICE_STATES: Record<string, { status: Record<string, unknown>; de
 
 /** What the iPad changed: a provider name, a connector with an agent, and a kind a newer GAIA added. */
 export const IPAD_CHANGES = {
-    total: 3,
+    total: 6,
     changes: [
         { id: 'c1', kind: 'providerKeySet', params: { provider: 'OpenAI' }, at: AT_ISO(12) },
         { id: 'c2', kind: 'connectorGrant', params: { agent: 'GAIA', connector: 'Google Calendar' }, at: AT_ISO(300) },
+        { id: 'c4', kind: 'connectorGrant', params: { agent: 'GAIA', connector: 'Google Calendar', granted: false }, at: AT_ISO(600) },
+        { id: 'c5', kind: 'memoryCommit', params: { source: 'discovery', count: 3 }, at: AT_ISO(900) },
+        { id: 'c6', kind: 'discordControl', params: { action: 'stop' }, at: AT_ISO(1200) },
         { id: 'c3', kind: 'teleportCat', params: {}, at: AT_ISO(2000) },
     ],
 };

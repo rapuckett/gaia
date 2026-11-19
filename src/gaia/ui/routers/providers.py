@@ -95,12 +95,20 @@ _NON_CHAT_LABELS = {
 _TIMEOUT = 60
 
 
+GATEWAY_INSECURE_HTTP = "gateway_insecure_http"
+_INSECURE_GATEWAY_DETAIL = (
+    "The AMD Gateway address must start with https://. "
+    "Change it on the PC running GAIA, then connect again."
+)
+
+
 class ProviderError(Exception):
     """A provider call failed, with the remedy."""
 
-    def __init__(self, message: str, status: int = 502):
+    def __init__(self, message: str, status: int = 502, code: Optional[str] = None):
         super().__init__(message)
         self.status = status
+        self.code = code
 
 
 class _ModelListFailed(ProviderError):
@@ -233,6 +241,14 @@ def _cloud_error(
             "the key blank to keep using it.",
             409,
         )
+    # Matched here and never echoed: a refusal of a plaintext-HTTP gateway.
+    if (
+        status == 400
+        and isinstance(message, str)
+        and "uses http://" in message
+        and "allow_insecure_http" in message
+    ):
+        return ProviderError(_INSECURE_GATEWAY_DETAIL, 422, GATEWAY_INSECURE_HTTP)
     message = (message if echo_body else None) or f"HTTP {status}"
     return ProviderError(f"Lemonade could not configure {name}: {message}.", 502)
 
@@ -1459,6 +1475,10 @@ def _raise(
     request: Optional[Request] = None,
     key: Optional[str] = None,
 ) -> None:
+    if e.code:
+        raise HTTPException(
+            status_code=e.status, detail={"message": str(e), "code": e.code}
+        ) from e
     detail = surface_wording(str(e), "agent_ui")
     detail = _caller_detail(e, detail, request, key)
     raise HTTPException(status_code=e.status, detail=detail) from e
