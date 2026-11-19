@@ -34,6 +34,7 @@ const EXPECTED: Record<string, string> = {
     'changes-many': t('settings.devices.changesShowAll'),
     'changes-all': t('settings.devices.changesShowAll'),
     'changes-wave1': t('settings.devices.change.pairingClosed'),
+    'changes-wave6': t('settings.devices.change.permissionsDefaultAsk'),
     'changes-error': 'The PC could not read its audit log.',
     'changes-unknown-kind': 'cameraEnabled',
 };

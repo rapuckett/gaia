@@ -34,8 +34,21 @@ describe('changeText', () => {
         ['npuMemlockFixed', { action: 'npuMemlockFix' }, 'Raised the NPU locked-memory limit'],
         ['profileScanOn', {}, 'Turned on System discovery'],
         ['profileScanOff', {}, 'Turned off System discovery'],
+        ['permissionsDefault', { mode: 'ask' }, 'New chats now ask before acting'],
+        ['permissionsDefault', { mode: 'full_access' }, 'New chats now start with full access'],
+        ['permissionsDefault', {}, 'Changed the permission new chats start with'],
+        ['localOnlyOn', {}, 'Turned on Local only'],
+        ['agentInstalled', {}, 'Installed the GAIA agent'],
     ])('%s %j reads "%s"', (kind, params, expected) => {
         expect(text(kind, params)).toBe(expected);
+    });
+
+    it('reads an unknown permission mode as the generic row and warns once', () => {
+        const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+        expect(text('permissionsDefault', { mode: 'yolo' })).toBe('Changed the permission new chats start with');
+        expect(text('permissionsDefault', { mode: 'yolo' })).toBe('Changed the permission new chats start with');
+        expect(warn).toHaveBeenCalledTimes(1);
+        warn.mockRestore();
     });
 
     it('reads a variant it cannot word as a generic change', () => {
