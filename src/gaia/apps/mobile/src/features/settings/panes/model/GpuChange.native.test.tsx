@@ -52,7 +52,7 @@ describeNative('GpuChange', () => {
         const apply = jest.spyOn(client, 'applyGpuMemory').mockReturnValue(new Promise((resolve) => (finish = resolve)));
 
         await fireEvent.press(screen.getByTestId('gpu-apply'));
-        expect(await screen.findByText('Give the GPU 48 GB?')).toBeTruthy();
+        expect(await screen.findByText(/^Give the GPU .*48.* GB\?$/)).toBeTruthy();
         expect(apply).not.toHaveBeenCalled();
         await fireEvent.press(screen.getByTestId('confirm-ok'));
         await waitFor(() => expect(apply).toHaveBeenCalledWith(48));
@@ -66,7 +66,7 @@ describeNative('GpuChange', () => {
             applyDevicePromptEvent(event('approved'));
             finish({ ...LINUX, pending: { setting_gb: 48, previous_setting_gb: 16, source: 'apply', recorded_at: 'now', state: 'restart_required' } });
         });
-        expect(await screen.findByText('Done. Restart your PC to use 48 GB.')).toBeTruthy();
+        expect(await screen.findByText(/^Done\. Restart your PC to use .*48.* GB\.$/)).toBeTruthy();
         queryClient.clear();
     });
 

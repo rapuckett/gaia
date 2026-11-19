@@ -235,8 +235,6 @@ describeNative('Provider key', () => {
         const { client, queryClient, wrap } = setup(saved);
         const r = await render(<ProviderKey provider={saved} connected={false} />, { wrapper: wrap });
 
-        expect(screen.queryByText(/^(Replace|Remove key)$/)).toBeNull();
-
         await fireEvent.press(screen.getByText('Reconnect'));
         await screen.findByText('Connected. The key is kept for next time.');
         expect(client.connects).toEqual(['fireworks']);

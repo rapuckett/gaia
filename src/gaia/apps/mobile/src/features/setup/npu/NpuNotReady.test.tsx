@@ -51,7 +51,7 @@ describe('NpuNotReady', () => {
         const fix = jest.spyOn(client, 'fixSetupNpuMemlock').mockReturnValue(new Promise((resolve) => (finish = resolve)));
         const onReady = await mount(client, [memlock]);
         fireEvent.press(screen.getByTestId('npu-fix-memlock'));
-        expect(fix).toHaveBeenCalledTimes(1);
+        await waitFor(() => expect(fix).toHaveBeenCalledTimes(1));
         await act(async () => applyDevicePromptEvent(event('waiting')));
         expect(screen.getByText('Approve on your PC')).toBeTruthy();
         expect(screen.queryByTestId('npu-fix-memlock')).toBeNull();
