@@ -58,7 +58,7 @@ export const useDeviceStore = create<DeviceState>((set) => ({
 export type DeviceEvent =
     | { type: 'device_paired'; device: PairedDevice | null; actions?: string[] }
     | { type: 'security_alert'; kind: string; address: string; at: string }
-    | { type: 'device_prompt'; device_id: string; kind: 'keyStore' | 'admin'; action: string; state: 'waiting' | 'approved' | 'cancelled' | 'denied' | 'timeout' };
+    | { type: 'device_prompt'; device_id: string; kind: 'keyStore' | 'admin'; action: string; state: 'waiting' | 'approved' | 'cancelled' | 'denied' | 'timeout' | 'failed' };
 
 /** A device event from the PC's event stream: a Security notice, and fresh state. False for any other event. */
 export function handleDeviceEvent(data: { type?: string }): boolean {

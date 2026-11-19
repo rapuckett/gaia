@@ -1179,13 +1179,15 @@ async def _device_health_check(request: Request, connector_id: str) -> Dict[str,
     from gaia.connectors._loop import _get_persistent_loop
 
     # The checks read the key store synchronously; a prompt must not stall this loop.
-    running = asyncio.run_coroutine_threadsafe(
-        health_check(connector_id), _get_persistent_loop()
-    )
-    try:
-        return await watch_key_store(
-            request, "connectorTest", asyncio.wrap_future(running)
+    def start():
+        return asyncio.wrap_future(
+            asyncio.run_coroutine_threadsafe(
+                health_check(connector_id), _get_persistent_loop()
+            )
         )
+
+    try:
+        return await watch_key_store(request, "connectorTest", start)
     except DevicePromptTimeout as e:
         raise HTTPException(
             status_code=504,

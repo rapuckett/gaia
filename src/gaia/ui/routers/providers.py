@@ -2147,7 +2147,7 @@ async def retry_key_store(request: Request) -> Dict[str, Any]:
     retry_keyring()
     try:
         await watch_key_store(
-            request, "keyStoreRetry", asyncio.to_thread(_read_stored_keys)
+            request, "keyStoreRetry", lambda: asyncio.to_thread(_read_stored_keys)
         )
     except DevicePromptTimeout:
         logger.warning("Nobody answered the PC's key store prompt for a device")

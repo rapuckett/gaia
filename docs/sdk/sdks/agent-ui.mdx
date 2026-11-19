@@ -1913,9 +1913,11 @@ One more reaches the PC and the one device it names, and no other caller:
 
 - `{"type": "device_prompt", "device_id", "kind", "action", "state"}` while an
   OS prompt a device caused on the PC is up, such as unlocking the key store
-  (`kind` `key_store`) or an administrator prompt (`admin`). `action` names what
-  the device started; `state` is `waiting`, `approved`, `cancelled`, `denied` or
-  `timeout` (no answer within 5 minutes).
+  (`kind` `keyStore`) or an administrator prompt (`admin`). `action` names what
+  the device started; `state` is `waiting`, `approved`, `cancelled`, `denied`,
+  `timeout` (no answer within 5 minutes for the key store, up to 15 minutes for
+  an administrator prompt) or `failed` (the step ran and failed for another
+  reason).
 
 GAIA records each change an allowed device makes on the PC (a provider key set
 or removed, a connector set up, and the like) with its `kind`, a few labels in
@@ -2655,9 +2657,10 @@ OAuth and MCP-server connections for the Settings page and per-agent grants
     that says to run the check on the PC, except for `reason` `timeout` or
     `disabled`. When a device's check waits on that prompt, the device hears
     the `device_prompt` event (kind `keyStore`, action `connectorTest`) on
-    `/api/sessions/events`: `waiting`, then `approved`, `denied` or `timeout`;
-    after five minutes unanswered the request answers **504**. A device may
-    run a check once every 10 seconds (**429** with `Retry-After`). Mobile
+    `/api/sessions/events`: `waiting`, then `approved`, `denied`, `failed` or
+    `timeout`; after five minutes unanswered the request answers **504**. A
+    device may run a check once every 10 seconds (**429** with `Retry-After`),
+    and one at a time (**409** while its earlier check still runs). Mobile
     access and other computers get a **403**.
   </Accordion>
 
@@ -3014,8 +3017,8 @@ plan and make one set of choices.
 The routes that change setup (`npu/recheck`, `chat-model`, `vision-model`,
 `models/skip`, `models/download`, `models/remove`, `run` and `cancel`) answer the
 PC or a paired device the PC allowed, and refuse mobile access and other
-computers (**403**). `npu/memlock-fix` and the troubleshooting report are
-PC-only.
+computers (**403**). So does `npu/memlock-fix`, whose administrator prompt
+shows on the PC. The troubleshooting report is PC-only.
 
 <AccordionGroup>
   Error `detail` strings are fixed messages that say what failed and what to
@@ -3101,10 +3104,13 @@ PC-only.
     until then. The PC or an allowed paired device: a device hears the
     `device_prompt` event (kind `admin`, action `npuMemlockFix`) on
     `/api/sessions/events`, `waiting` while the prompt is up on the PC, then
-    `approved`, `denied` or `timeout`, and the change is audited and listed in
-    the device's changes (`npuMemlockFixed`). **403** from mobile access, a
-    pending device or another computer; **409** with `detail` `{"code",
-    "message"}` when the prompt was closed (`cancelled`), not answered
+    `approved`, `denied`, `timeout` or `failed`, and the change is audited and
+    listed in the device's changes (`npuMemlockFixed`). Waits up to 15
+    minutes for the prompt's answer. One fix runs at a time, from the PC or a
+    device: another request while one waits gets **409** ("already waiting on
+    the PC"). A device may start it once every 10 seconds (**429** with
+    `Retry-After`). **403** from mobile access, a pending device or another
+    computer; **409** with `detail` `{"code", "message"}` when the prompt was closed (`cancelled`), not answered
     (`timeout`) or couldn't be shown (`not_authorized`); **422** on a PC that
     isn't Linux (`not_linux`) or has no polkit (`no_pkexec`); **500**
     (`failed`) otherwise. The [NPU guide](/guides/npu) has the steps to do it
@@ -3283,10 +3289,14 @@ for a target and `guided_value` as the value to enter, not a preset's
     the PC. The response's `needs_restart` and `pending` say so. The PC or an
     allowed paired device: a device hears the `device_prompt` event (kind
     `admin`, action `gpuMemoryApply`) on `/api/sessions/events`, `waiting`
-    while the prompt is up on the PC, then `approved`, `denied` or `timeout`;
-    the change is audited and listed in the device's changes
+    while the prompt is up on the PC, then `approved`, `denied`, `timeout` or
+    `failed`; the change is audited and listed in the device's changes
     (`gpuMemoryChanged`), and an error that would name a PC path or command
-    output reaches the device as a fixed sentence. **400** without `confirm`;
+    output reaches the device as a fixed sentence. Waits up to 15 minutes for
+    the prompt's answer. One GPU memory change (apply or revert) runs at a
+    time, from the PC or a device: another request while one waits gets
+    **409** ("already waiting on the PC"). A device may start it once every 10
+    seconds (**429** with `Retry-After`). **400** without `confirm`;
     **403** from mobile access, a pending device or another computer, or when
     permission isn't given; **409** when the method
     is `guided` or the value is already set; **422** when it would leave the
@@ -3296,8 +3306,9 @@ for a target and `guided_value` as the value to enter, not a preset's
   <Accordion title="POST /api/gpu-memory/revert">
     Body: `{"confirm": true}`. Puts back the setting GAIA replaced, after a
     restart. **409** when GAIA has no record of a change, or the record holds
-    anything but GPU memory settings. Same callers, **400**/**403** and
-    device events as apply, with action `gpuMemoryRevert`.
+    anything but GPU memory settings. Same callers, **400**/**403**, wait,
+    one-at-a-time **409**, **429** and device events as apply, with action
+    `gpuMemoryRevert`.
   </Accordion>
 
   <Accordion title="POST /api/gpu-memory/pending">
@@ -3489,8 +3500,9 @@ credential store (the slot the TUI uses). A key is never echoed back or logged.
     the stored keys are read before it answers, so the device hears the
     `device_prompt` event (kind `keyStore`, action `keyStoreRetry`) on
     `/api/sessions/events` while the prompt is up: `waiting`, then `approved`,
-    `denied` or, after five minutes, `timeout`. A device may retry once every
-    10 seconds (**429** with `Retry-After`).
+    `denied`, `failed` or, after five minutes, `timeout`. A device may retry
+    once every 10 seconds (**429** with `Retry-After`), and one at a time
+    (**409** while its earlier read still runs).
   </Accordion>
 
   <Accordion title="GET /api/providers/{provider}/models">

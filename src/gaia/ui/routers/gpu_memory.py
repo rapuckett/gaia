@@ -26,7 +26,12 @@ from gaia.llm.gpu_memory import (
 from gaia.logger import get_logger
 
 from ..devices.changes import record_device_change
-from ..devices.prompts import AdminPrompt
+from ..devices.prompts import (
+    GPU_MEMORY_ELEVATION,
+    AdminPrompt,
+    limit_device_rate,
+    one_at_a_time,
+)
 from ..models import WireModel
 from ..security import (
     audit_approval,
@@ -159,18 +164,22 @@ def _from_device(
     call: Callable[[Callable[[], None]], Dict[str, Any]],
 ) -> Dict[str, Any]:
     """*call* for an allowed device, which hears how the PC's prompt went."""
+    limit_device_rate(request, action)
     prompt = AdminPrompt(request, action)
     try:
-        result = call(prompt.before_prompt)
+        with one_at_a_time(GPU_MEMORY_ELEVATION):
+            result = call(prompt.before_prompt)
     except gpu_memory.PermissionNotGiven as e:
         prompt.finish("denied")
         raise HTTPException(status_code=e.status, detail=_device_detail(e)) from e
     except gpu_memory.GpuMemoryError as e:
         timed_out = isinstance(e.__cause__, subprocess.TimeoutExpired)
-        # Answered but the step failed: the device's error says so, not the event.
-        prompt.finish("timeout" if timed_out else "approved")
+        prompt.finish("timeout" if timed_out else "failed")
         logger.warning("GPU memory %s from a device failed: %s", what, e)
         raise HTTPException(status_code=e.status, detail=_device_detail(e)) from e
+    except Exception:
+        prompt.finish("failed")
+        raise
     prompt.finish("approved")
     audit_approval(request, f"GPU memory {what}")
     record_device_change(request, "gpuMemoryChanged", action=action)
@@ -198,7 +207,8 @@ def get_gpu_memory(setting_gb: Optional[float] = None) -> Dict[str, Any]:
 def apply_gpu_memory(body: GpuMemoryApplyRequest, request: Request) -> Dict[str, Any]:
     """Set the GPU's share after admin permission; takes effect after a restart."""
     if is_local_pc(request):
-        return _answer(lambda: gpu_memory.apply(body.setting_gb, body.confirm))
+        with one_at_a_time(GPU_MEMORY_ELEVATION):
+            return _answer(lambda: gpu_memory.apply(body.setting_gb, body.confirm))
     return _from_device(
         request,
         "gpuMemoryApply",
@@ -216,7 +226,8 @@ def apply_gpu_memory(body: GpuMemoryApplyRequest, request: Request) -> Dict[str,
 def revert_gpu_memory(body: GpuMemoryRevertRequest, request: Request) -> Dict[str, Any]:
     """Put back the setting GAIA replaced; takes effect after a restart."""
     if is_local_pc(request):
-        return _answer(lambda: gpu_memory.revert(body.confirm))
+        with one_at_a_time(GPU_MEMORY_ELEVATION):
+            return _answer(lambda: gpu_memory.revert(body.confirm))
     return _from_device(
         request,
         "gpuMemoryRevert",

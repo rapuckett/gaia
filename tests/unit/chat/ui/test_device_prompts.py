@@ -130,29 +130,53 @@ def test_a_phone_may_start_a_key_store_action_once_per_10_seconds(paired, monkey
         assert clients["pc"].post(url, headers=UI).status_code == 200
 
 
-def test_a_phones_gpu_apply_waits_on_the_admin_prompt_and_is_recorded(
-    paired, monkeypatch
+_GPU_STATUS = {
+    "applies": True,
+    "show_in_setup": True,
+    "hidden_reason": None,
+    "os": "linux",
+    "method": "apply",
+    "method_reason": "",
+    "needs_restart": True,
+}
+#: (url, body, action, change kind) for each administrator step.
+ADMIN_STEPS = [
+    (url, body, action, kind)
+    for (url, body), (action, kind) in zip(
+        ADMIN_ROUTES,
+        [
+            ("gpuMemoryApply", "gpuMemoryChanged"),
+            ("gpuMemoryRevert", "gpuMemoryChanged"),
+            ("npuMemlockFix", "npuMemlockFixed"),
+        ],
+    )
+]
+
+
+def _stub_admin_steps(monkeypatch, step):
+    """Make every elevated step run ``step(before_prompt)``; nothing real runs."""
+    from gaia.llm import gpu_memory, npu_linux
+    from gaia.ui.routers import setup as setup_router
+    from tests.unit.test_npu_linux import _full_plan
+
+    def gpu(*args):
+        step(args[-1])
+        return _GPU_STATUS
+
+    monkeypatch.setattr(gpu_memory, "apply", gpu)
+    monkeypatch.setattr(gpu_memory, "revert", gpu)
+    monkeypatch.setattr(npu_linux, "apply_memlock_fix", lambda before: step(before))
+    monkeypatch.setattr(setup_router, "build_plan", _full_plan)
+
+
+@pytest.mark.parametrize("url,body,action,kind", ADMIN_STEPS)
+def test_a_phones_admin_step_waits_on_the_pc_and_is_recorded(
+    paired, monkeypatch, url, body, action, kind
 ):
-    from gaia.llm import gpu_memory
     from gaia.security import audit_logger
 
-    app, clients, phone, events = paired
-    asked = []
-
-    def fake_apply(setting_gb, confirm, before_prompt=None):
-        asked.append((setting_gb, confirm))
-        before_prompt()
-        return {
-            "applies": True,
-            "show_in_setup": True,
-            "hidden_reason": None,
-            "os": "linux",
-            "method": "apply",
-            "method_reason": "",
-            "needs_restart": True,
-        }
-
-    monkeypatch.setattr(gpu_memory, "apply", fake_apply)
+    _, clients, phone, events = paired
+    _stub_admin_steps(monkeypatch, lambda before: before())
     lines = []
 
     class _Capture(logging.Handler):
@@ -163,27 +187,114 @@ def test_a_phones_gpu_apply_waits_on_the_admin_prompt_and_is_recorded(
     audit_logger.addHandler(handler)
     audit_logger.setLevel(logging.INFO)
     try:
-        resp = clients["phone"].post(
-            "/api/gpu-memory/apply",
-            json={"setting_gb": 96, "confirm": True},
-            headers=UI,
-        )
+        resp = clients["phone"].post(url, json=body, headers=UI)
     finally:
         audit_logger.removeHandler(handler)
         audit_logger.setLevel(level)
 
     assert resp.status_code == 200, resp.text
-    assert resp.json()["needs_restart"] is True
-    assert asked == [(96, True)]
     assert _prompts(events) == [
-        (phone, "admin", "gpuMemoryApply", "waiting"),
-        (phone, "admin", "gpuMemoryApply", "approved"),
+        (phone, "admin", action, "waiting"),
+        (phone, "admin", action, "approved"),
     ]
     assert [line for line in lines if f"{DEVICE_PRINCIPAL_PREFIX}{phone}" in line]
     changes = clients["pc"].get(f"/api/devices/{phone}/changes").json()["changes"]
-    assert [(c["kind"], c["params"]) for c in changes] == [
-        ("gpuMemoryChanged", {"action": "gpuMemoryApply"})
+    assert [(c["kind"], c["params"]) for c in changes] == [(kind, {"action": action})]
+    again = clients["phone"].post(url, json=body, headers=UI)
+    assert again.status_code == 429
+
+
+def _gpu_error(cls, cause=None):
+    def fail(before):
+        before()
+        raise cls("/etc/modprobe.d/ttm.conf: no") from cause
+
+    return fail
+
+
+def _memlock_error(code):
+    def fail(before):
+        from gaia.llm import npu_linux
+
+        before()
+        raise npu_linux.MemlockFixError(code, "no")
+
+    return fail
+
+
+@pytest.mark.parametrize(
+    "step_url,fail,status,state",
+    [
+        (0, "denied", 403, "denied"),
+        (0, "timeout", 500, "timeout"),
+        (1, "failed", 500, "failed"),
+        (2, "cancelled", 409, "denied"),
+        (2, "timeout", 409, "timeout"),
+        (2, "failed", 500, "failed"),
+    ],
+)
+def test_a_phone_hears_how_an_admin_step_ended_and_nothing_is_recorded(
+    paired, monkeypatch, step_url, fail, status, state
+):
+    import subprocess
+
+    from gaia.llm import gpu_memory
+
+    _, clients, phone, events = paired
+    url, body, action, _ = ADMIN_STEPS[step_url]
+    if step_url == 2:
+        step = _memlock_error(fail)
+    elif fail == "denied":
+        step = _gpu_error(gpu_memory.PermissionNotGiven)
+    elif fail == "timeout":
+        step = _gpu_error(
+            gpu_memory.GpuMemoryError, subprocess.TimeoutExpired("pkexec", 900)
+        )
+    else:
+        step = _gpu_error(gpu_memory.GpuMemoryError)
+    _stub_admin_steps(monkeypatch, step)
+
+    resp = clients["phone"].post(url, json=body, headers=UI)
+    assert resp.status_code == status, resp.text
+    assert "/etc/" not in resp.text
+    assert _prompts(events) == [
+        (phone, "admin", action, "waiting"),
+        (phone, "admin", action, state),
     ]
+    assert clients["pc"].get(f"/api/devices/{phone}/changes").json()["total"] == 0
+
+
+@pytest.mark.parametrize("url,body,action,kind", ADMIN_STEPS)
+def test_one_admin_step_of_a_kind_waits_at_a_time(
+    paired, monkeypatch, url, body, action, kind
+):
+    _, clients, _, events = paired
+    ran = []
+    _stub_admin_steps(monkeypatch, ran.append)
+    lock = (
+        prompts.NPU_MEMLOCK_ELEVATION if "npu" in url else prompts.GPU_MEMORY_ELEVATION
+    )
+    with lock:
+        for caller in ("pc", "phone"):
+            resp = clients[caller].post(url, json=body, headers=UI)
+            assert resp.status_code == 409, resp.text
+            assert "already waiting on the PC" in resp.json()["detail"]
+    assert ran == [] and _prompts(events) == []
+
+
+def test_a_phone_runs_one_key_store_read_at_a_time(paired, monkeypatch):
+    from gaia.ui.routers import providers
+
+    app, clients, phone, _ = paired
+    monkeypatch.setattr(providers, "_read_stored_keys", lambda: None)
+    app.state.device_reads_running = {(phone, "keyStoreRetry")}
+    resp = clients["phone"].post("/api/providers/key-store/retry", headers=UI)
+    assert resp.status_code == 409
+    app.state.device_reads_running.clear()
+    app.state.device_action_times = {}
+    resp = clients["phone"].post("/api/providers/key-store/retry", headers=UI)
+    assert resp.status_code == 200
+    assert app.state.device_reads_running == set()
 
 
 @pytest.mark.parametrize("caller", ["tunnel", "pending"])

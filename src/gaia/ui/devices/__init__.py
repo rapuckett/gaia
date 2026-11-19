@@ -95,16 +95,19 @@ PAIRING_LOCKOUT_ALERT = "pairing_locked_out"
 
 #: Sent on ``/api/sessions/events`` to the device that asked and to the PC
 #: while an OS prompt only a person at the PC can answer is up: ``kind`` is
-#: ``keyStore`` or ``admin``, ``action`` what the device started.
+#: ``keyStore`` or ``admin``, ``action`` what the device started. ``failed``:
+#: the step ran and failed for another reason than the prompt's answer.
 DEVICE_PROMPT_EVENT = "device_prompt"
-DevicePromptState = Literal["waiting", "approved", "cancelled", "denied", "timeout"]
+DevicePromptState = Literal[
+    "waiting", "approved", "cancelled", "denied", "timeout", "failed"
+]
 DEVICE_PROMPT_STATES = get_args(DevicePromptState)
 DEVICE_PROMPT_KEY_STORE = "keyStore"
 DEVICE_PROMPT_ADMIN = "admin"
 #: How long the PC waits on such a prompt before reporting ``timeout``.
 DEVICE_PROMPT_TIMEOUT_SECONDS = 5 * 60
-#: A device may start a key-store action at most this often.
-DEVICE_KEY_STORE_ACTION_SECONDS = 10.0
+#: A device may start an action that prompts on the PC at most this often.
+DEVICE_PROMPT_ACTION_SECONDS = 10.0
 
 #: The change log of what each device changed on the PC: the newest rows kept
 #: per device, how long they outlive the device, and the list's page sizes.

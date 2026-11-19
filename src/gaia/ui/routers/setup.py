@@ -31,7 +31,12 @@ from .. import setup_plan as plan_api
 from ..database import ChatDatabase
 from ..dependencies import get_db
 from ..devices.changes import record_device_change
-from ..devices.prompts import AdminPrompt
+from ..devices.prompts import (
+    NPU_MEMLOCK_ELEVATION,
+    AdminPrompt,
+    limit_device_rate,
+    one_at_a_time,
+)
 from ..models import WireModel
 from ..security import (
     audit_approval,
@@ -530,20 +535,28 @@ def setup_npu_memlock_fix(request: Request) -> Dict[str, Any]:
     administrator prompt; returns the plan. It applies after a restart."""
     from gaia.llm import npu_linux
 
-    prompt = None if is_local_pc(request) else AdminPrompt(request, "npuMemlockFix")
+    prompt = None
+    if not is_local_pc(request):
+        limit_device_rate(request, "npuMemlockFix")
+        prompt = AdminPrompt(request, "npuMemlockFix")
     try:
-        if prompt is None:
-            npu_linux.apply_memlock_fix()
-        else:
-            npu_linux.apply_memlock_fix(prompt.before_prompt)
+        with one_at_a_time(NPU_MEMLOCK_ELEVATION):
+            if prompt is None:
+                npu_linux.apply_memlock_fix()
+            else:
+                npu_linux.apply_memlock_fix(prompt.before_prompt)
     except npu_linux.MemlockFixError as e:
         logger.warning("NPU memlock fix not applied (%s): %s", e.code, e)
         if prompt is not None:
-            prompt.finish(_MEMLOCK_PROMPT_STATE.get(e.code, "approved"))
+            prompt.finish(_MEMLOCK_PROMPT_STATE.get(e.code, "failed"))
         raise HTTPException(
             status_code=_MEMLOCK_STATUS.get(e.code, 500),
             detail={"code": e.code, "message": str(e)},
         ) from e
+    except Exception:
+        if prompt is not None:
+            prompt.finish("failed")
+        raise
     # Not shown: the fix was already in place, so nothing changed.
     if prompt is not None and prompt.shown:
         prompt.finish("approved")
