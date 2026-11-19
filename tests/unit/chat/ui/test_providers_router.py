@@ -1291,7 +1291,8 @@ def test_provider_summaries_read_only_and_carry_no_secret(client, lemonade, keys
                 "privacy_notice": providers._PRIVACY["amd"],
                 "configured": True,
                 "blocked": False,
-                "network": {"reachable": True},
+                # Only the PC learns whether the gateway answers.
+                "network": {"reachable": None},
                 # Lemonade holds a key the user entered; the hint needs a store read.
                 "key_source": "lemonade",
                 "key_state": "read",
@@ -1314,13 +1315,28 @@ def test_provider_summaries_say_an_unreachable_gateway_without_its_address(
 ):
     lemonade.cloud["amd"] = dict(_CUSTOM_GATEWAY)
     reach["error"] = _offline()
-    resp = client.get("/api/providers/list", headers={"X-Forwarded-For": "203.0.113.9"})
+    resp = client.get("/api/providers/list")
     assert resp.status_code == 200, resp.text
     by_id = {p["id"]: p for p in resp.json()["providers"]}
     assert by_id["amd"]["network"] == {"reachable": False}
     assert by_id["local"]["network"] is None
     assert by_id["fireworks"]["network"] is None
     assert "llm-api.amd.com" not in resp.text and "gw.example" not in resp.text
+
+
+@pytest.mark.parametrize("route", ["/api/providers/list", "/api/providers"])
+def test_only_the_pc_learns_whether_the_gateway_answers(
+    client, lemonade, keys, reach, route
+):
+    """A host rebound to a LAN address would turn the answer into a port scan."""
+    lemonade.cloud["amd"] = dict(_CUSTOM_GATEWAY)
+    reach["error"] = _offline()
+    resp = client.get(route, headers={"X-Forwarded-For": "203.0.113.9"})
+    assert resp.status_code == 200, resp.text
+    amd = {p["id"]: p for p in resp.json()["providers"]}["amd"]
+    assert amd["network"]["reachable"] is None
+    assert amd["network"].get("detail") is None
+    assert reach["asked"] == []
 
 
 def test_connect_reports_a_key_the_store_did_not_keep(client, lemonade, keys):

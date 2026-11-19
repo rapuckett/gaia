@@ -639,6 +639,10 @@ def _gateway_network(base_url: Optional[str]) -> Dict[str, Any]:
     return {"reachable": True, "detail": None}
 
 
+#: The network field off the PC: a dial's answer would map the PC's network.
+_UNCHECKED_NETWORK = {"reachable": None, "detail": None}
+
+
 def _with_network(view: Dict[str, Any]) -> Dict[str, Any]:
     """Say whether the AMD gateway can be reached, before anyone picks it."""
     view["network"] = _gateway_network(view.get("base_url"))
@@ -1545,7 +1549,9 @@ def _known(provider: str) -> None:
     response_model=ProviderListResponse,
     response_model_exclude_unset=True,
 )
-def list_providers(db: ChatDatabase = Depends(get_db)) -> Dict[str, Any]:
+def list_providers(
+    request: Request, db: ChatDatabase = Depends(get_db)
+) -> Dict[str, Any]:
     """Every provider with its connection state, and the active model."""
     from gaia.connectors.credential_wait import (
         CredentialStoreLocked,
@@ -1589,7 +1595,15 @@ def list_providers(db: ChatDatabase = Depends(get_db)) -> Dict[str, Any]:
         providers += [
             _provider_view(p, None) for p in (FIREWORKS, AMD) if p not in listed
         ]
-    providers = [_with_network(v) if v["id"] == AMD else v for v in providers]
+    on_pc = is_local_pc(request)
+    providers = [
+        (
+            (_with_network(v) if on_pc else {**v, "network": _UNCHECKED_NETWORK})
+            if v["id"] == AMD
+            else v
+        )
+        for v in providers
+    ]
     return {
         "providers": providers,
         "active": _active_view(db),
@@ -1671,8 +1685,9 @@ def list_provider_summaries(request: Request) -> Dict[str, Any]:
     except ProviderError as e:
         lemonade_error = str(e)
     blocked = cloud_blocked()
+    on_pc = is_local_pc(request)
     # Mobile access can't enter or remove a key, so it gets no hint either.
-    hide_hint = not is_local_pc(request) and allowed_device(request) is None
+    hide_hint = not on_pc and allowed_device(request) is None
     summaries = []
     for provider in PROVIDER_IDS:
         entry = entries.get(provider)
@@ -1687,9 +1702,14 @@ def list_provider_summaries(request: Request) -> Dict[str, Any]:
                 "blocked": provider != LOCAL and blocked,
                 "network": (
                     {
-                        "reachable": _gateway_network(
-                            entry.get("base_url") if entry else None
-                        )["reachable"]
+                        # A device-chosen host could be rebound to probe the LAN.
+                        "reachable": (
+                            _gateway_network(entry.get("base_url") if entry else None)[
+                                "reachable"
+                            ]
+                            if on_pc
+                            else None
+                        )
                     }
                     if provider == AMD
                     else None
@@ -2094,12 +2114,38 @@ def _device_gateway_host(base_url: str) -> Tuple[str, int]:
     return host, port
 
 
-def _require_public_addresses(host: str, port: int) -> None:
-    """Raise unless every address *host* resolves to is public."""
+def _public_addresses(host: str, port: int) -> List[str]:
+    """*host*'s addresses from one lookup; raises unless every one is public."""
     infos = socket.getaddrinfo(host, port, proto=socket.IPPROTO_TCP)
-    addresses = {info[4][0] for info in infos}
+    addresses = list(dict.fromkeys(info[4][0] for info in infos))
     if not addresses or not all(_is_public_address(a) for a in addresses):
         raise ValueError(f"{host} resolves to an address that is not public")
+    return addresses
+
+
+def _dial_checked_addresses(host: str, port: int, addresses: List[str]) -> None:
+    """A TLS handshake as *host* with one of *addresses*, already checked public.
+
+    Dials the addresses themselves, so a second lookup of *host* (DNS
+    rebinding) can't point the check at another one; SNI and the certificate
+    check still use *host*. Raises ``OSError`` when none completes.
+    """
+    import ssl
+
+    from gaia.llm.gateway import REACH_TIMEOUT
+
+    context = ssl.create_default_context()
+    failure: Optional[OSError] = None
+    for address in addresses:
+        try:
+            with socket.create_connection(
+                (address, port), timeout=REACH_TIMEOUT
+            ) as raw:
+                with context.wrap_socket(raw, server_hostname=host):
+                    return
+        except OSError as e:
+            failure = e
+    raise OSError(f"{host}:{port} did not complete a TLS handshake: {failure}")
 
 
 def _put_back_gateway(
@@ -2321,8 +2367,10 @@ def _connect_device_gateway(
             _raise(e, request, key)
         try:
             if target is not None:
-                _require_public_addresses(*target)
-            if _gateway_check_applies():
+                addresses = _public_addresses(*target)
+                if _gateway_check_applies():
+                    _dial_checked_addresses(*target, addresses)
+            elif _gateway_check_applies():
                 check_gateway_reachable(registration["base_url"])
         except (GatewayUnreachable, OSError, ValueError) as e:
             logger.warning(

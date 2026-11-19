@@ -829,7 +829,6 @@ def test_a_failed_device_gateway_says_nothing_about_the_host(
     """Same text for every failure; the previous gateway is back with its key."""
     import socket
 
-    from gaia.llm.gateway import GatewayUnreachable
     from gaia.ui.routers import providers
 
     app, clients, _ = setup
@@ -843,11 +842,11 @@ def test_a_failed_device_gateway_says_nothing_about_the_host(
     )
     if failure == "unreachable":
 
-        def unreachable(url):
-            raise GatewayUnreachable("gw.example.com", "connection refused")
+        def unreachable(host, port, addresses):
+            raise OSError("connection refused")
 
         monkeypatch.setattr(providers, "_gateway_check_applies", lambda: True)
-        monkeypatch.setattr(providers, "check_gateway_reachable", unreachable)
+        monkeypatch.setattr(providers, "_dial_checked_addresses", unreachable)
     resp = clients["device"].post(
         "/api/providers/amd/connect",
         json={"api_key": _GATEWAY_KEY, "base_url": "https://gw.example.com:8443/v1"},
@@ -866,6 +865,55 @@ def test_a_failed_device_gateway_says_nothing_about_the_host(
         "cloud/auth",
         {"provider": "amd", "api_key": _SAVED_GATEWAY_KEY},
     )
+
+
+def test_a_device_gateway_is_dialed_at_the_address_that_was_checked(setup, monkeypatch):
+    """One lookup: a second answer (DNS rebinding) can't move the dial, and
+    TLS still checks the certificate against the name the device gave."""
+    import socket
+    import ssl
+
+    from gaia.ui.routers import providers
+
+    app, clients, _ = setup
+    app.state.device_action_times = {}
+    calls = _gateway_stubs(monkeypatch)
+    monkeypatch.setattr(providers, "_gateway_check_applies", lambda: True)
+    monkeypatch.setattr(
+        providers,
+        "check_gateway_reachable",
+        lambda *a: pytest.fail("dialed by name, which resolves again"),
+    )
+    dialed, handshakes = [], []
+
+    class _Raw:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+    class _Context:
+        def wrap_socket(self, raw, server_hostname):
+            handshakes.append(server_hostname)
+            return _Raw()
+
+    monkeypatch.setattr(
+        socket,
+        "create_connection",
+        lambda address, timeout: dialed.append(address) or _Raw(),
+    )
+    monkeypatch.setattr(ssl, "create_default_context", lambda: _Context())
+    resp = clients["device"].post(
+        "/api/providers/amd/connect",
+        json={"api_key": _GATEWAY_KEY, "base_url": "https://gw.example.com:8443/v1"},
+        headers=UI,
+    )
+    assert resp.status_code == 200, resp.text
+    assert [c for c in calls if c[0] == "resolve"] == [
+        ("resolve", "gw.example.com", 8443)
+    ]
+    assert dialed == [("93.184.215.14", 8443)] and handshakes == ["gw.example.com"]
 
 
 @pytest.mark.parametrize(
