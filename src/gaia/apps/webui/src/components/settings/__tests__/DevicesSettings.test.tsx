@@ -160,6 +160,8 @@ describe('DevicesSettings', () => {
         ['memoryCommit', { source: 'discovery', count: 1 }, /^Saved 1 item from scanning this PC to memory · 5m ago$/],
         ['memoryCommit', { source: 'discovery', count: 3 }, /^Saved .*3.* items from scanning this PC to memory · 5m ago$/],
         ['serverTarget', { mode: 'gaia' }, /^Switched GAIA back to its own model server · 5m ago$/],
+        ['permissionsDefault', { mode: 'full_access' }, /^New chats now start with full access · 5m ago$/],
+        ['permissionsDefault', { mode: 'plan' }, /^Changed the permission new chats start with · 5m ago$/],
         ['deviceRemoved', { device: 'Tab', device_id: 'x' }, /^Removed the paired device .*Tab.* · 5m ago$/],
         ['deviceRemoved', { device_id: 'x' }, /^Removed a paired device · 5m ago$/],
     ])('names the %s change from its params (%j)', async (kind, params, expected) => {
