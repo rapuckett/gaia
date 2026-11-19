@@ -589,8 +589,7 @@ def _decode_key(raw: Optional[str], *, legacy: bool = False) -> Optional[Gateway
     if not isinstance(key, str) or not key.strip() or not isinstance(base_url, str):
         raise GatewayError(
             "The gateway key in the OS credential store is not in a form GAIA "
-            "reads. Enter the key again in Settings › Model or with "
-            "`gaia gateway auth`."
+            f"reads. {TUI_GATEWAY_KEY_HINT}"
         )
     return GatewayKey(key.strip(), base_url, legacy=legacy)
 
@@ -649,8 +648,8 @@ def remember_token(token: str, base_url: str) -> None:
         raise GatewayError(
             f"GAIA saved the gateway key, but couldn't remove the copy older GAIA "
             f"versions read from the OS credential store: {e}. Remove "
-            f"'secret:{GATEWAY_SECRET_NAME}' from it, or run `gaia gateway auth` "
-            f"again once the store is unlocked."
+            f"'secret:{GATEWAY_SECRET_NAME}' from it, or unlock the store and "
+            f"save the key again. {TUI_GATEWAY_KEY_HINT}"
         ) from e
 
 
@@ -795,8 +794,8 @@ def migrate_legacy_key(record: GatewayKey, current_url: str) -> GatewayKey:
     except ConnectorsError as e:
         raise GatewayError(
             f"GAIA couldn't move the saved gateway key to its new place in the OS "
-            f"credential store: {e}. Unlock the store and try again, or enter the "
-            f"key again in Settings › Model or with `gaia gateway auth`."
+            f"credential store: {e}. Unlock the store and try again. "
+            f"{TUI_GATEWAY_KEY_HINT}"
         ) from e
     log.info(f"Moved the saved gateway key, bound to {_host_of(bound_url)}.")
     return GatewayKey(record.key, bound_url)
