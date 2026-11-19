@@ -60,11 +60,11 @@ describeNative('/dev/connectors scenes', () => {
         expect(screen.getByText('The keyring is locked.')).toBeTruthy();
     });
 
-    it('personalizeMcp shows the PC-only line and the connector name, no button', async () => {
+    it('personalizeMcp shows the Personalize button and the connector name, no PC-only line', async () => {
         await mount('personalizeMcp');
-        expect(await screen.findByTestId('personalize-pc-only-linear')).toBeTruthy();
+        expect(await screen.findByTestId('personalize-linear')).toBeTruthy();
         expect(screen.getAllByText(/Linear/).length).toBeGreaterThan(0);
-        expect(screen.queryByTestId('personalize-linear')).toBeNull();
+        expect(screen.queryByTestId('personalize-pc-only-linear')).toBeNull();
     });
 
     it.each([

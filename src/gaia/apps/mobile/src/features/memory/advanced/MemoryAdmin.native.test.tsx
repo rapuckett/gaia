@@ -48,7 +48,7 @@ describeNative('MemoryAdmin', () => {
         queryClient.clear();
     });
 
-    it('on a paired phone, locks discovery-on and Reset (the scan is PC-only) but still lets consent be turned off', async () => {
+    it('on a paired phone, Reset and discovery-on are available and Reset reinitializes once confirmed', async () => {
         useConnectionStore.setState({ connection: { baseUrl: 'https://pc.local:4443', pcId: 'pc-1', pinned: true } });
         try {
             const off = { memory_enabled: true, mcp_memory_enabled: false, system_discovery_consent: false };
@@ -65,15 +65,17 @@ describeNative('MemoryAdmin', () => {
                     </GaiaClientProvider>
                 </QueryClientProvider>
             );
-            const view = await render(<MemoryAdmin settings={off} notify={jest.fn()} />, { wrapper: wrap });
-            expect(screen.getByTestId('memory-discovery-pc-only')).toBeTruthy();
-            expect(screen.getByTestId('memory-reinit-pc-only')).toBeTruthy();
-            expect(screen.getByTestId('memory-switch-discovery')).toBeDisabled();
-            expect(screen.getByTestId('memory-reinit')).toBeDisabled();
-
-            await view.rerender(<MemoryAdmin settings={{ ...off, system_discovery_consent: true }} notify={jest.fn()} />);
+            await render(<MemoryAdmin settings={off} notify={jest.fn()} />, { wrapper: wrap });
             expect(screen.queryByTestId('memory-discovery-pc-only')).toBeNull();
+            expect(screen.queryByTestId('memory-reinit-pc-only')).toBeNull();
             expect(screen.getByTestId('memory-switch-discovery')).toBeEnabled();
+            expect(screen.getByTestId('memory-reinit')).toBeEnabled();
+
+            fireEvent.press(screen.getByTestId('memory-reinit'));
+            await screen.findByText('Are you sure?');
+            expect(client.memoryWipes.reinitializes).toBe(0);
+            fireEvent.press(screen.getByTestId('memory-wipe-confirm'));
+            await waitFor(() => expect(client.memoryWipes.reinitializes).toBe(1));
             queryClient.clear();
         } finally {
             useConnectionStore.setState({ connection: null });
