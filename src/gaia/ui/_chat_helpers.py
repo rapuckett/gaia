@@ -6205,6 +6205,7 @@ async def _stream_chat_response(db: ChatDatabase, session: dict, request: ChatRe
     run keeps going in the background.
     """
     from gaia.ui.run_manager import DONE, run_manager
+    from gaia.ui.shutdown import SHUTDOWN, get_or_shutdown, stream_closed, stream_opened
 
     session_id = request.session_id
     run = run_manager.get(session_id)
@@ -6214,13 +6215,15 @@ async def _stream_chat_response(db: ChatDatabase, session: dict, request: ChatRe
             lambda r: _run_chat_lifecycle(r, db, session, request),
         )
     q = run.subscribe()
+    stream_opened()
     try:
         while True:
-            item = await q.get()
-            if item is DONE:
+            item = await get_or_shutdown(q)
+            if item is DONE or item is SHUTDOWN:
                 break
             yield item
     finally:
+        stream_closed()
         run.unsubscribe(q)
 
 
@@ -6233,18 +6236,21 @@ async def _attach_chat_stream(session_id: str):
     when no run is active.
     """
     from gaia.ui.run_manager import DONE, run_manager
+    from gaia.ui.shutdown import SHUTDOWN, get_or_shutdown, stream_closed, stream_opened
 
     run = run_manager.get(session_id)
     if run is None:
         return
     q = run.subscribe()
+    stream_opened()
     try:
         while True:
-            item = await q.get()
-            if item is DONE:
+            item = await get_or_shutdown(q)
+            if item is DONE or item is SHUTDOWN:
                 break
             yield item
     finally:
+        stream_closed()
         run.unsubscribe(q)
 
 

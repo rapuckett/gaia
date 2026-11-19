@@ -58,6 +58,7 @@ from ..models import (
 )
 from ..run_manager import run_manager
 from ..security import allowed_device, flagship_only, is_local_pc
+from ..shutdown import SHUTDOWN, get_or_shutdown, stream_closed, stream_opened
 from ..utils import UPLOAD_LINK_RE, message_to_response, session_to_response
 from .memory import _get_store as get_memory_store
 
@@ -415,11 +416,14 @@ async def session_events(request: Request):
 
     async def generate():
         q = await _system_emitter.subscribe()
+        stream_opened()
         try:
             yield ": keepalive\n\n"
             while True:
                 try:
-                    event = await asyncio.wait_for(q.get(), timeout=30.0)
+                    event = await get_or_shutdown(q, timeout=30.0)
+                    if event is SHUTDOWN:
+                        return
                     if event.get(_PC_ONLY) and not at_the_pc:
                         continue
                     if _FOR_DEVICE in event:
@@ -431,6 +435,7 @@ async def session_events(request: Request):
                 except asyncio.TimeoutError:
                     yield ": keepalive\n\n"  # prevent proxy timeout
         finally:
+            stream_closed()
             await _system_emitter.unsubscribe(q)
 
     return StreamingResponse(generate(), media_type="text/event-stream")

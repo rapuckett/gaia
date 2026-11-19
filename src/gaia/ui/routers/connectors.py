@@ -102,6 +102,7 @@ from gaia.connectors.store import (
     peek_provider_credentials,
     retry_keyring,
 )
+from gaia.ui.shutdown import SHUTDOWN, get_or_shutdown, stream_closed, stream_opened
 
 from ..devices.changes import record_device_change
 from ..devices.prompts import DevicePromptTimeout, limit_device_rate, watch_key_store
@@ -901,11 +902,15 @@ async def connector_events() -> StreamingResponse:
     queue = await _emitter.subscribe()
 
     async def gen() -> AsyncIterator[bytes]:
+        stream_opened()
         try:
             while True:
-                envelope = await queue.get()
+                envelope = await get_or_shutdown(queue)
+                if envelope is SHUTDOWN:
+                    return
                 yield f"data: {json.dumps(envelope)}\n\n".encode("utf-8")
         finally:
+            stream_closed()
             await _emitter.unsubscribe(queue)
 
     return StreamingResponse(

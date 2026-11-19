@@ -85,7 +85,7 @@ def test_launch_agent_ui_starts_the_owner_only_for_a_local_server(
         patch.object(gaia_cli, "_ensure_webui_built"),
         patch("gaia.ui.server.create_app"),
         patch("gaia.ui.server.start_model_server_owner") as owner,
-        patch("uvicorn.run"),
+        patch("gaia.ui.shutdown.serve"),
     ):
         gaia_cli._launch_agent_ui(port=0, base_url=base_url, log=MagicMock())
     assert owner.call_count == expected
@@ -111,7 +111,7 @@ def test_standalone_runner_starts_the_owner_only_for_a_local_server(
     with (
         patch("gaia.ui.server.create_app"),
         patch("gaia.ui.server.start_model_server_owner") as owner,
-        patch("uvicorn.run"),
+        patch("gaia.ui.shutdown.serve"),
     ):
         server.main()
     assert owner.call_count == expected
@@ -128,7 +128,7 @@ def test_both_runners_disable_proxy_headers(monkeypatch):
         patch.object(gaia_cli, "_ensure_webui_built"),
         patch("gaia.ui.server.create_app"),
         patch("gaia.ui.server.start_model_server_owner"),
-        patch("uvicorn.run", side_effect=lambda app, **kw: runs.append(kw)),
+        patch("gaia.ui.shutdown.serve", side_effect=lambda app, **kw: runs.append(kw)),
     ):
         gaia_cli._launch_agent_ui(port=0, log=MagicMock())
         server.main()
