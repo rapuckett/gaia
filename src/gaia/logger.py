@@ -78,6 +78,25 @@ def configure_console_encoding():
             )
 
 
+class _StderrStreamHandler(logging.StreamHandler):
+    """Writes to ``sys.stderr`` as it is at each record, like ``logging.lastResort``.
+
+    A bound stream goes stale when stderr is swapped and closed
+    (``redirect_stderr``, a test's capture). Setting ``stream`` to anything
+    other than the current ``sys.stderr`` pins it, as on a plain StreamHandler.
+    """
+
+    _pinned = None
+
+    @property
+    def stream(self):
+        return sys.stderr if self._pinned is None else self._pinned
+
+    @stream.setter
+    def stream(self, value):
+        self._pinned = None if value is sys.stderr else value
+
+
 class GaiaLogger:
     def __init__(self, log_file=None):
         # Configure console encoding for Unicode support first
@@ -140,7 +159,7 @@ class GaiaLogger:
         )
 
         # stderr: stdout carries command output and stdio protocols (MCP, JSON).
-        console_handler = logging.StreamHandler(sys.stderr)
+        console_handler = _StderrStreamHandler()
         console_handler.setFormatter(console_formatter)
 
         # Size-capped and safe to share across GAIA processes; see gaia.log_rotation.
