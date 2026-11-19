@@ -38,7 +38,7 @@ export function DevicePromptBanner() {
                 const device = devices.find((d) => d.id === p.deviceId);
                 if (!device) return null;
                 let text: string;
-                if (p.kind === 'key_store') {
+                if (p.kind === 'keyStore') {
                     text = t('devices.promptBanner.keyStore', { device: device.name });
                 } else {
                     const action = actionRef(p.action);

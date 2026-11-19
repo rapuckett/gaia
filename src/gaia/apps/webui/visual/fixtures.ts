@@ -542,7 +542,7 @@ export const IPAD_CHANGES = {
 };
 
 /** A system prompt the iPad raised on this PC, waiting for someone to answer it. */
-export async function withDevicePrompt(page: Page, kind: 'key_store' | 'admin', action: string): Promise<void> {
+export async function withDevicePrompt(page: Page, kind: 'keyStore' | 'admin', action: string): Promise<void> {
     const event = { type: 'device_prompt', device_id: IPAD.id, kind, action, state: 'waiting' };
     await page.route('**/api/sessions/events', (route) => route.fulfill({ status: 200, contentType: 'text/event-stream', body: `data: ${JSON.stringify(event)}\n\n` }));
 }
