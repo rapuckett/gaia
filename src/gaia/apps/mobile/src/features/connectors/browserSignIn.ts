@@ -28,6 +28,8 @@ export interface BrowserSignInDeps {
     dismissAuthSession(): void;
     /** Counts this phone as paired whatever the connection says; the gallery sets it, having no PC to pair with. */
     paired?: boolean;
+    /** Where every Connect's sign-in starts; the gallery seeds an ended one so a still shot shows it. */
+    initial?: BrowserSignIn;
 }
 
 /** Overrides the platform's deps (`platformBrowserSignInDeps`) for tests and the gallery. */
@@ -156,6 +158,7 @@ class SignInSlot {
     constructor(deps: BrowserSignInDeps, connectorId: string) {
         this.deps = deps;
         this.connectorId = connectorId;
+        this.signIn = deps.initial ?? this.signIn;
     }
 
     readonly subscribe = (onChange: () => void) => {
