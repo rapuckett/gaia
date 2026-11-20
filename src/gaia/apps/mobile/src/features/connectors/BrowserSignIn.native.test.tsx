@@ -118,7 +118,7 @@ describeNative('Connect Google from a paired phone', () => {
         ['declined at Google', { outcome: 'error', error: 'access_denied' }, {}, /You didn't allow GAIA at Google/, undefined, true],
         ['the 15 minutes ran out', { outcome: 'timeout' }, {}, /within 15 minutes/, undefined, true],
         ['the phone took the port away', { outcome: 'lost' }, {}, /stopped listening for the sign-in/, undefined, true],
-        ['the browser ended the listener without a sign-in', { outcome: 'cancelled' }, {}, /Sign-in was cancelled/, undefined, true],
+        ['the browser ended the listener without a sign-in', { outcome: 'cancelled' }, {}, /Sign-in was canceled/, undefined, true],
         ['the PC no longer has the flow (404)', 'code', { browserCompleteError: new GaiaApiError(404, 'No sign-in is waiting.') }, /no longer has this sign-in/, 'No sign-in is waiting.', false],
         ['the PC ended it on a state mismatch (400)', 'code', { browserCompleteError: new GaiaApiError(400, 'The state did not match.') }, /didn't match the one it started/, 'The state did not match.', false],
         [

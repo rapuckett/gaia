@@ -56,7 +56,10 @@ class _DummyAgent(Agent):
     def _create_console(self):
         from gaia.agents.base.console import AgentConsole
 
-        return AgentConsole()
+        console = AgentConsole()
+        # No terminal to clear here; every step would wait 0.15 s for it.
+        console.progress_clear_s = 0.0
+        return console
 
 
 @pytest.fixture

@@ -3330,7 +3330,7 @@ const messages: Messages = {
     'settings.key.paste': 'الصق مفتاح API',
     'settings.key.pasteNew': 'الصق مفتاحك الجديد',
     'settings.key.save': 'حفظ المفتاح',
-    'settings.key.connect': 'اتصال',
+    'settings.key.connect': 'ربط',
     'settings.key.cancel': 'إلغاء',
     'settings.key.checkAgain': 'تحقق مرة أخرى',
     'settings.key.sessionOnly': 'متصل لهذه الجلسة فقط — تعذّر الاحتفاظ بالمفتاح: {reason}',
