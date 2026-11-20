@@ -21,7 +21,8 @@ jest.mock('@/api/constants', () => ({ ...jest.requireActual('@/api/constants'), 
 
 const describeNative = Platform.OS === 'web' ? describe.skip : describe;
 
-const LOCKED = "The OS key store is locked, so GAIA can't read your saved key.";
+const LOCKED = "Your PC's key store is locked, so GAIA can't read some of your connected accounts. They can't be used until it's unlocked.";
+const HELD_BACK = 'Not available until the key store is unlocked';
 const WAITING = 'Your PC is asking to unlock its key store. Approve it there to continue.';
 
 const google = {
@@ -79,13 +80,14 @@ describeNative('ConnectorsScreen key store', () => {
         queryClient.clear();
     });
 
-    it('shows a tile the key store held back with no status and no actions', async () => {
+    it('shows a tile the key store held back with its one line, no status and no actions', async () => {
         // An account whose unconnected tile would offer Connect.
         const microsoft = { ...google, id: 'microsoft', display_name: 'Microsoft', description: 'Mail and calendar.' } as ConnectorRow;
         const { queryClient, wrap } = setup('locked', [], microsoft);
         await render(<ConnectorsScreen />, { wrapper: wrap });
         fireEvent.press(await screen.findByLabelText('Microsoft'));
         expect(await screen.findByText('Mail and calendar.')).toBeTruthy();
+        expect(screen.getAllByText(HELD_BACK)).toHaveLength(1);
         expect(screen.queryByText('Connect')).toBeNull();
         expect(screen.queryByText('Disconnect')).toBeNull();
         expect(screen.queryByText('OAuth')).toBeNull();
@@ -125,6 +127,7 @@ describeNative('ConnectorsScreen key store', () => {
         await render(<ConnectorsScreen />, { wrapper: wrap });
         expect(await screen.findByText(WAITING)).toBeTruthy();
         expect(screen.getAllByTestId('connectors-key-store-waiting')).toHaveLength(1);
+        expect(screen.getByText(HELD_BACK)).toBeTruthy();
         expect(screen.queryByText('Try again')).toBeNull();
         expect(screen.queryByText(/Restart GAIA/)).toBeNull();
         queryClient.clear();

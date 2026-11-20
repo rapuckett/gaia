@@ -235,7 +235,7 @@ export function ConnectorsBody({ initialExpanded, initialJustConnected, initialS
                             'accounts',
                             t('settings.connectors.accounts'),
                             groups.accounts.length,
-                            groups.nothingConnected,
+                            groups.nothingConnected || groups.accounts.some((c) => !!c.key_store),
                             t('settings.connectors.accountsHint'),
                             tiles(groups.accounts),
                         )}
@@ -392,7 +392,6 @@ function KeyStoreNotice({ state, onSettled }: { state: ConnectorKeyStore; onSett
             <Notice
                 tone="info"
                 role="status"
-                busy
                 title={t('mobileApp.approveOnPc.title')}
                 message={t('mobileApp.approveOnPc.keyStore')}
                 testID="connectors-key-store-waiting"
@@ -403,7 +402,7 @@ function KeyStoreNotice({ state, onSettled }: { state: ConnectorKeyStore; onSett
         <Stack gap="sm">
             <Notice
                 tone="warning"
-                message={t('settings.key.storeLocked')}
+                message={t('mobileApp.connectors.keyStore.locked')}
                 action={retryRefused || retry.isPending || storePrompt.hideAction ? undefined : { label: t('settings.key.unlockAgain'), onPress: onRetryStore }}
                 testID="connectors-key-store-locked"
             />
@@ -442,6 +441,8 @@ function StatusText({ connector, check, t }: { connector: ConnectorRow; check?: 
             return <Pill label={t('settings.connectors.paused')} />;
         case 'setupRequired':
             return <Text role="label" tone="muted">{t('settings.connectors.setupRequired')}</Text>;
+        case 'heldBack':
+            return <Text role="label" tone="muted" testID={`connector-held-back-${connector.id}`}>{t('settings.connectors.tile.heldBack')}</Text>;
         default:
             return null;
     }
