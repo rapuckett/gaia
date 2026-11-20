@@ -14,8 +14,17 @@ manifests and lockfiles, ``util/`` scripts, test helpers and fixtures,
 a missing or stale map, this script and the workflow that runs it. Tests load
 such files by path
 (``spec_from_file_location``, ``runpy``, ``open``), and neither imports nor
-coverage can follow what those scripts import or read. A selection over
-``FULL_FRACTION`` of the suite also runs everything, since the saving is gone.
+coverage can follow what those scripts import or read.
+
+A read-only file runs the tests that can read it: code naming it, tests and
+scripts naming a folder above it, every directory listing that can return it
+(by its glob pattern and the folders its root spells out; a listing of a
+variable, by a folder name the file spells), and the tests that load a script
+that does. Shipped code naming a bare file name that other files share, from
+the Python package the changed file sits in, runs everything.
+
+A selection over ``FULL_FRACTION`` of the suite runs everything, since the
+saving is gone.
 
 For a change that passes the allowlist, two sources say which tests it reaches:
 
@@ -87,6 +96,7 @@ from __future__ import annotations
 
 import argparse
 import ast
+import fnmatch
 import json
 import os
 import re
@@ -113,6 +123,9 @@ MAX_BASENAME_FANOUT = 25
 _IGNORED_BASENAMES = {"__init__.py", "README.md", "LICENSE", ".gitignore"}
 _PATH_JOINERS = {"join", "joinpath", "Path", "PurePath", "PurePosixPath"}
 _SCANNER_RE = re.compile(r"\.rglob\(|\.glob\(|os\.walk\(|\.iterdir\(|os\.listdir\(")
+# A scan rooted here lists a throwaway directory, never the repo.
+_TMP_ROOT_RE = re.compile(r"tmp|temp", re.IGNORECASE)
+_GIT_LISTING_RE = re.compile(r"ls-files|\bgit\b[^\n]{0,40}\bgrep\b")
 _DOTTED_RE = re.compile(r"^[A-Za-z_]\w*(\.[A-Za-z_]\w*)+(:[A-Za-z_]\w*)?$")
 _PATH_SPLIT_RE = re.compile(r"[\\/]")
 _ISOLATION_RE = re.compile(r"isolate|guard|restore|block|forbid")
@@ -258,6 +271,13 @@ class Graph:
     # Folders a test names by path and reads a file from by a computed name
     # (`LOCALES / f"{locale}.ts"`): any non-Python file under one reaches it.
     folder_reads: Dict[str, Set[str]] = field(default_factory=_edges)
+    # Each directory listing in a non-shipped file.
+    scans: Dict[str, List["Scan"]] = field(default_factory=dict)
+    # Multi-part path strings in non-shipped files ("tui/internal/lemonade"):
+    # a directory named so is read through names the selector can't see.
+    dir_refs: Dict[str, Set[str]] = field(default_factory=_edges)
+    # Bare non-.py names shipped code reads that too many files share to link.
+    vague_names: Dict[str, Set[str]] = field(default_factory=_edges)
     # Modules a test runs in a child process (`python -m gaia.cli`): coverage
     # can't see inside it, so their function-level imports always count.
     subprocess_targets: Dict[str, Set[str]] = field(default_factory=_edges)
@@ -268,6 +288,18 @@ class Graph:
     sources: Dict[str, str] = field(default_factory=dict)
     # Files the top-level conftests import, at module level or in any fixture.
     conftest_imports: Set[str] = field(default_factory=set)
+
+
+@dataclass(frozen=True)
+class Scan:
+    """One directory listing: None in a field means it could be anything."""
+
+    pattern: Optional[str] = None
+    # Folder names spelled out in the listed path ("hub", "skills").
+    root: Tuple[str, ...] = ()
+    temporary: bool = False
+    # The path starts at the repo or the file itself, not at a variable.
+    anchored: bool = False
 
 
 @dataclass
@@ -463,8 +495,8 @@ class _Imports(ast.NodeVisitor):
             parts: List[ast.AST] = []
             current: ast.AST = node
             while isinstance(current, ast.BinOp) and isinstance(current.op, ast.Div):
-                parts.insert(0, current.right)
                 self._chained.add(id(current))
+                parts.insert(0, current.right)
                 current = current.left
             if _joins_a_path(current):
                 parts = list(current.args) + parts
@@ -725,13 +757,23 @@ def build_graph(repo: Path = REPO_ROOT, files: Optional[List[str]] = None) -> Gr
             if not pieces:
                 continue
             tokens.update(p for p in pieces if "\n" not in p and len(p) < 80)
+            multi = len(pieces) > 1 and "\n" not in value and len(value) < 200
+            if multi and not package_code:
+                graph.dir_refs[path].add("/".join(pieces))
             targets = read_targets(pieces, package_code)
             graph.read_deps[path].update(t for t in targets if t != path)
             if not package_code and not targets:
                 graph.folder_reads[path].update(folder_targets(pieces))
+            name = pieces[-1]
+            if package_code and not targets and not name.endswith(".py"):
+                if len(basenames.get(name, ())) > 1:
+                    graph.vague_names[path].add(name)
         # Shipped code that lists a directory is linked by the names it reads.
         if not package_code and _SCANNER_RE.search(source):
             graph.scanner_tokens[path] = tokens
+            graph.scans[path] = _scan_calls(tree)
+        if not package_code and _GIT_LISTING_RE.search(source):
+            graph.scans.setdefault(path, []).append(Scan(anchored=True))
 
     # A conftest's fixtures reach every file below it. The top-level ones mostly
     # stub shared services, so there a test depends on the fixtures it asks for
@@ -770,6 +812,81 @@ def build_graph(repo: Path = REPO_ROOT, files: Optional[List[str]] = None) -> Gr
                 for node in fixtures[name]:
                     link_import(path, node, package, graph.deps)
     return graph
+
+
+def _root_pieces(
+    node: Optional[ast.AST], assigned: Dict[str, ast.AST], depth: int = 0
+) -> Tuple[List[str], bool]:
+    """The folder names a path expression spells out, through module names,
+    and whether it starts at a constant or ``__file__`` rather than a variable."""
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        names = [
+            p for p in _PATH_SPLIT_RE.split(node.value) if p not in ("", ".", "..")
+        ]
+        return names, True
+    if isinstance(node, ast.Name):
+        if node.id == "__file__":
+            return [], True
+        if node.id in assigned and depth < 3:
+            return _root_pieces(assigned[node.id], assigned, depth + 1)
+        return [], False
+    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Div):
+        left, anchored = _root_pieces(node.left, assigned, depth)
+        return left + _root_pieces(node.right, assigned, depth)[0], anchored
+    if isinstance(node, ast.Call):
+        if _joins_a_path(node):
+            base = getattr(node.func, "value", None)
+            parts = ([base] if base is not None else []) + list(node.args)
+            if not parts:
+                return [], False
+            pieces, anchored = _root_pieces(parts[0], assigned, depth)
+            for arg in parts[1:]:
+                pieces = pieces + _root_pieces(arg, assigned, depth)[0]
+            return pieces, anchored
+        if isinstance(node.func, ast.Attribute):
+            return _root_pieces(node.func.value, assigned, depth)
+        if getattr(node.func, "id", None) in ("str", "fspath") and node.args:
+            return _root_pieces(node.args[0], assigned, depth)
+    if isinstance(node, (ast.Attribute, ast.Subscript)):
+        return _root_pieces(node.value, assigned, depth)
+    return [], False
+
+
+def _scan_calls(tree: ast.Module) -> List[Scan]:
+    """Every directory listing in a file."""
+    assigned: Dict[str, ast.AST] = {}
+    for stmt in tree.body:
+        if isinstance(stmt, (ast.Assign, ast.AnnAssign)) and stmt.value is not None:
+            targets = stmt.targets if isinstance(stmt, ast.Assign) else [stmt.target]
+            for target in targets:
+                if isinstance(target, ast.Name):
+                    assigned[target.id] = stmt.value
+    found: List[Scan] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        func = ast.unparse(node.func)
+        attr = getattr(node.func, "attr", None)
+        if func in ("os.walk", "os.listdir", "os.scandir", "glob.glob", "glob.iglob"):
+            root = node.args[0] if node.args else None
+        elif attr in ("rglob", "glob", "iterdir") and isinstance(
+            node.func, ast.Attribute
+        ):
+            root = node.func.value
+        else:
+            continue
+        pattern = None
+        if attr in ("rglob", "glob") and node.args:
+            arg = node.args[0]
+            if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
+                pattern = arg.value
+        if root is None:
+            found.append(Scan(pattern, anchored=True))
+            continue
+        temporary = bool(_TMP_ROOT_RE.search(ast.unparse(root)))
+        pieces, anchored = _root_pieces(root, assigned)
+        found.append(Scan(pattern, tuple(pieces), temporary, anchored))
+    return found
 
 
 def _fixture_imports(
@@ -908,6 +1025,60 @@ def build_map(coverage_file: Path, repo: Path = REPO_ROOT) -> dict:
     }
 
 
+def _lists(scan: Scan, path: str, tokens: Set[str]) -> bool:
+    """Whether a directory listing can return the file, or a folder above it.
+
+    A listing of a variable whose folders the file never spells out is linked
+    as the other scanner rule links it: by a folder name the file names."""
+    if scan.temporary:
+        return False
+    parts = path.split("/")
+    if not scan.anchored and not scan.root and tokens.isdisjoint(parts[:-1]):
+        return False
+    if scan.root:
+        folders, k = parts[:-1], len(scan.root)
+        if not any(
+            tuple(folders[i : i + k]) == scan.root for i in range(len(folders) - k + 1)
+        ):
+            return False
+    if scan.pattern is None:
+        return True
+    last = scan.pattern.rsplit("/", 1)[-1].lower()
+    return any(fnmatch.fnmatch(part.lower(), last) for part in parts)
+
+
+def data_readers(
+    graph: Graph, path: str, rev_read: Optional[Dict[str, Set[str]]] = None
+) -> Set[str]:
+    """Files that can read a non-.py file: those naming it or a folder above
+    it, every listing that can return it, and whatever loads a script that
+    does, by path."""
+    rev_read = _reverse(graph.read_deps) if rev_read is None else rev_read
+    parts = PurePosixPath(path).parts
+    folders = {
+        "/".join(parts[start:end])
+        for end in range(2, len(parts))
+        for start in range(end - 1)
+    }
+    readers = set(rev_read.get(path, ()))
+    readers.update(f for f, refs in graph.dir_refs.items() if refs & folders)
+    readers.update(
+        f
+        for f, scans in graph.scans.items()
+        if any(_lists(s, path, graph.scanner_tokens.get(f, set())) for s in scans)
+    )
+    roots = _module_roots(graph.files)
+    stack = [r for r in readers if r.endswith(".py") and not is_package_code(r, roots)]
+    while stack:
+        for loader in rev_read.get(stack.pop(), ()):
+            if loader not in readers:
+                readers.add(loader)
+                if loader.endswith(".py") and not is_package_code(loader, roots):
+                    stack.append(loader)
+    readers.discard(path)
+    return readers
+
+
 def affected_files(
     graph: Graph,
     changed: Iterable[str],
@@ -919,6 +1090,8 @@ def affected_files(
     rev_init = _reverse(graph.init_deps)
     for path in changed:
         affected.update(rev_read.get(path, ()))
+        if not path.endswith(".py"):
+            affected.update(data_readers(graph, path, rev_read))
         if path.endswith("__init__.py"):
             affected.update(rev_init.get(path, ()))
         # Python reaches its readers through imports; a folder read is how a
@@ -1018,6 +1191,8 @@ def full_run_reason(
     helpers and fixtures, eval/, configs, workflows) can be loaded by path or
     read by a script, which neither imports nor coverage can follow, so it runs
     everything.
+    A read-only file narrows to its readers (``data_readers``), unless shipped
+    code names its bare file name, which too many files share to link.
     """
     if coverage is None:
         return "no coverage map"
@@ -1036,9 +1211,31 @@ def full_run_reason(
         # Read by path, never imported: the tests that name the file or scan
         # its folder are the ones it reaches (affected_files follows read_deps).
         if read_only_class(path):
+            vague = _vague_reader(graph, path)
+            if vague:
+                return vague
             continue
         if not is_measured(path, coverage):
             return f"{path} is outside the code the coverage map measures"
+    return None
+
+
+def _vague_reader(graph: Graph, path: str) -> Optional[str]:
+    """Why shipped code beside a file may read it by a name shared too widely."""
+    name = PurePosixPath(path).name
+    for reader in sorted(graph.vague_names):
+        if name not in graph.vague_names[reader]:
+            continue
+        here = PurePosixPath(reader).parent.as_posix()
+        folder = PurePosixPath(path).parent.as_posix()
+        # Shipped code reads its own package's data by bare name, never files
+        # outside a Python package (a web app's index.ts).
+        inside = folder == here or f"{folder}/__init__.py" in graph.files
+        if inside and (folder + "/").startswith(here + "/"):
+            return (
+                f"{path}: {reader} reads a file named {name!r}, which too many "
+                "files share to say which"
+            )
     return None
 
 
@@ -1218,6 +1415,8 @@ def select(
         tests = [p for p in tests if is_platform_sensitive(graph, p)]
     detail = reason or f"{len(changed)} changed file(s)"
     if reason is None and coverage is not None:
+        detail += _data_file_report(graph, changed, coverage, set(all_tests))
+    if reason is None and coverage is not None:
         unmapped = [
             p
             for p in changed
@@ -1233,6 +1432,30 @@ def select(
         tests=tests,
         total=len(all_tests),
     )
+
+
+def _data_file_report(
+    graph: Graph, changed: List[str], coverage: Dict[str, Set[str]], tests: Set[str]
+) -> str:
+    """How many tests each changed non-.py file reaches, for the landing log."""
+    read: List[str] = []
+    unread: List[str] = []
+    for path in changed:
+        if path.endswith(".py"):
+            continue
+        hit = len(affected_files(graph, [path], coverage) & tests)
+        if hit:
+            read.append(f"{path} ({hit} test file{'s' if hit > 1 else ''})")
+        else:
+            unread.append(path)
+    out = ""
+    if read:
+        out += "; read by tests: " + ", ".join(read)
+    if unread:
+        shown = ", ".join(unread[:5])
+        more = f" and {len(unread) - 5} more" if len(unread) > 5 else ""
+        out += f"; no test reads: {shown}{more}"
+    return out
 
 
 def changed_since(base: str, repo: Path = REPO_ROOT) -> List[str]:

@@ -109,6 +109,9 @@ _ENSURE_TIMEOUT = (5.0, 900.0)
 # gaiainit.CheckTimeout in the TUI above this plus daemon start (60s).
 _LEMONADE_ENSURE_TIMEOUT = (5.0, 80.0)
 
+# How long a killed daemon may take to release its GAIA home lock.
+_RECLAIM_SETTLE_S = 5.0
+
 # How long `gaia daemon stop` waits before tree-killing. Shutdown now stops
 # GAIA's Lemonade Server, so this must outlast that teardown or a
 # routine stop kills the daemon before its custody store closes.
@@ -345,6 +348,10 @@ def start_or_attach(
             )
             terminate_instance(inst)
             _clear_busy(None)
+            # Its lock frees once the OS has reaped it, a moment after the kill.
+            _refuse_spawn_beside_another_daemon(wait=_RECLAIM_SETTLE_S)
+        else:
+            _refuse_spawn_beside_another_daemon()
         missing = missing_daemon_deps()
         if missing:
             raise DaemonStartError(
@@ -354,6 +361,30 @@ def start_or_attach(
                 "(or uv pip install), then retry."
             )
         return _spawn_and_wait(timeout, on_progress, drop_env)
+
+
+def _refuse_spawn_beside_another_daemon(wait: float = 0.0) -> None:
+    """Raise when a daemon already manages this GAIA home.
+
+    A missing instance.json, or one that read as gone, does not mean no daemon
+    runs: starting another would take over its Lemonade Server. *wait* gives a
+    daemon just killed that long to let go of the lock.
+    """
+    from gaia.daemon import singleton
+
+    deadline = time.monotonic() + wait
+    while singleton.held_elsewhere() and time.monotonic() < deadline:
+        time.sleep(0.1)
+    if singleton.held_elsewhere():
+        raise DaemonBusyError(
+            "not starting a second GAIA daemon: one is already running for "
+            f"{singleton.managed_home()} but did not answer, so it may be busy. "
+            "Retry in a moment, or run `gaia daemon restart` to replace it. "
+            f"Where to look: `gaia daemon logs` ({paths.log_path()})."
+        )
+    problem = singleton.registered_elsewhere()
+    if problem is not None:
+        raise DaemonStartError(f"not starting a second GAIA daemon: {problem}")
 
 
 _JOBS_AT_WORK_SQL = (

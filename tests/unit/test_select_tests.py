@@ -198,6 +198,28 @@ FILES = {
         "import subprocess, sys\n"
         "def test_c():\n    subprocess.run([sys.executable, '-m', 'gaia.cli'])\n"
     ),
+    # Other languages' files, and the Python tests that read them.
+    "tui/internal/catalog/guard_test.go": "package catalog\n",
+    "tui/internal/lemonade/recommended_models.json": "[]",
+    "src/gaia/apps/webui/src/App.tsx": "export {}\n",
+    "tests/unit/test_models_drift.py": (
+        "SPEC = ROOT / 'tui' / 'internal' / 'lemonade' / 'recommended_models.json'\n"
+    ),
+    "tests/unit/test_webui_strings.py": (
+        "import os\n"
+        "WEBUI = ROOT / 'src' / 'gaia' / 'apps' / 'webui'\n"
+        "def test_w():\n    for _ in os.walk(WEBUI / 'src'):\n        pass\n"
+    ),
+    # Lists a folder it never names: linked only to files under names it spells.
+    "tests/unit/test_param_listing.py": (
+        "def test_l(root):\n    list(root.iterdir())\n"
+    ),
+    "tests/unit/test_tmp_walk.py": (
+        "import os\ndef test_t(tmp_path):\n    list(os.walk(tmp_path))\n"
+    ),
+    # Shipped code reading a generic name beside it, unlinkable to one file.
+    "src/gaia/tools/notes.py": "NOTES = 'README.md'\n",
+    "src/gaia/tools/README.md": "tools",
 }
 
 
@@ -541,9 +563,7 @@ def test_a_data_file_named_by_its_path_selects_its_reader(graph, changed, reader
 @pytest.mark.parametrize(
     "changed",
     [
-        # The verifier's cases: each reaches a test only through a script that
-        # a test loads with spec_from_file_location.
-        "eval/ci_lanes.json",
+        # Scripts a test loads with spec_from_file_location.
         "util/eval_lane_matrix.py",
         "util/eval_gaia_home.py",
         "tests/fixtures/email/phishing_fixture.json",
@@ -570,20 +590,34 @@ def test_a_change_outside_the_allowlist_runs_the_full_suite(graph, changed):
     _full(graph, changed)
 
 
-def test_the_verifiers_cases_reach_their_tests_only_through_the_full_suite(graph):
-    # Static reading misses these tests: proof the allowlist, not a path
-    # rule, is what keeps them.
-    assert "tests/unit/eval/test_run_eval_lane.py" not in _reach(
-        graph, "eval/ci_lanes.json"
+def test_a_go_file_no_test_reads_adds_nothing(graph):
+    code = "src/gaia/core/base.py"
+    go = "tui/internal/catalog/guard_test.go"
+    assert _selected(graph, code, go) == _selected(graph, code)
+    assert "no test reads: " + go in st.select(graph, [code, go], FULL_MAP).reason
+
+
+def test_a_json_file_a_drift_test_names_selects_that_test(graph):
+    spec = "tui/internal/lemonade/recommended_models.json"
+    assert _selected(graph, spec) == {"tests/unit/test_models_drift.py"}
+    reason = st.select(graph, [spec], FULL_MAP).reason
+    assert spec + " (1 test file)" in reason
+
+
+def test_a_file_under_a_listed_folder_selects_the_lister(graph):
+    hit = _selected(graph, "src/gaia/apps/webui/src/App.tsx")
+    assert "tests/unit/test_webui_strings.py" in hit
+    assert "tests/unit/test_tmp_walk.py" not in hit
+    # A glob for other files, or a listing of another folder, can't return it.
+    assert hit.isdisjoint(
+        {"tests/unit/test_docs_tool.py", "tests/unit/test_scenarios.py"}
     )
-    for changed, test in [
-        ("eval/ci_lanes.json", "tests/unit/eval/test_run_eval_lane.py"),
-        (
-            "tests/fixtures/email/phishing_fixture.json",
-            "tests/unit/agents/tools/test_email_eval_fixture.py",
-        ),
-    ]:
-        assert test in st.select(graph, [changed], FULL_MAP).tests
+
+
+def test_a_generic_name_shipped_code_reads_beside_it_runs_everything(graph):
+    assert "src/gaia/tools/README.md" in _full(graph, "src/gaia/tools/README.md")
+    # The same name elsewhere in the repo is not that code's to read.
+    assert not st.select(graph, ["docs/README.md"], FULL_MAP).full
 
 
 def test_one_change_outside_the_allowlist_runs_everything(graph):
@@ -729,7 +763,7 @@ def test_a_group_that_runs_keeps_every_file_it_changed(graph):
     changed = ["eval/scenarios/rag/basic.yaml", "src/gaia/core/base.py"]
     group = st.select(graph, changed, FULL_MAP, trigger_paths=triggers)
     on_its_pr = st.select(graph, changed, FULL_MAP)
-    assert group.triggered and group.full
+    assert group.triggered and "tests/unit/test_chat_doc.py" in group.tests
     assert (group.full, group.tests) == (on_its_pr.full, on_its_pr.tests)
 
 

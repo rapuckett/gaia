@@ -252,7 +252,7 @@ def _build_deregister(
         # finishing a model call, and pulling the server out from under it
         # would turn a clean shutdown into a wave of connection errors in the
         # logs. The supervisor reaps only a system server THIS daemon started;
-        # GAIA's own embedded server is stopped whoever started it.
+        # GAIA's own embedded server is stopped unless another live daemon owns it.
         lemonade.shutdown()
         install_supervisor(None)
         try:
@@ -285,6 +285,15 @@ def run(host: str = HOST) -> None:
     from gaia.logger import configure
 
     configure()
+    from gaia.daemon.singleton import hold_daemon_home
+
+    # First, before anything is touched: a second daemon for this GAIA home
+    # would take over the first one's Lemonade Server and stop it on exit.
+    try:
+        home_lock = hold_daemon_home()
+    except DaemonStartError as e:
+        logger.error("daemon: %s", e)
+        raise
     import uvicorn
 
     from gaia.env import expose_shipped_gaia
@@ -489,7 +498,10 @@ def run(host: str = HOST) -> None:
     app.state.server = server
 
     logger.info("daemon: starting on http://%s:%s (pid=%s)", host, port, pid)
-    server.run()
+    try:
+        server.run()
+    finally:
+        home_lock.release()
 
 
 if __name__ == "__main__":  # pragma: no cover - exercised via `python -m gaia.daemon`
