@@ -26,6 +26,25 @@ function textOf(content: string, role: Message['role'] = 'assistant'): string {
     return container.querySelector('.md-content')?.textContent ?? '';
 }
 
+/** Best-of-three render time, so a busy machine's slow run doesn't count. */
+function bestMs(content: string, role: Message['role']): number {
+    let best = Infinity;
+    for (let i = 0; i < 3; i++) {
+        const started = performance.now();
+        textOf(content, role);
+        best = Math.min(best, performance.now() - started);
+    }
+    return best;
+}
+
+/** Cost for 8x the input stays far under the ~64x a backtracking regex would take. */
+function expectLinearCost(build: (n: number) => string, role: Message['role']): void {
+    textOf(build(100), role);
+    const small = bestMs(build(500), role);
+    const large = bestMs(build(4000), role);
+    expect(large / Math.max(small, 1)).toBeLessThan(40);
+}
+
 describe('Windows paths in prose keep their backslashes', () => {
     it('keeps the backslash before a dot-folder', () => {
         expect(textOf('The details are in this log folder: C:\\Users\\me\\.gaia\\logs')).toBe(
@@ -95,14 +114,12 @@ describe('Windows paths in prose keep their backslashes', () => {
     });
 
     it.each([
-        ['folders with spaces', `C:\\${'a b - c\\'.repeat(2000)}_x`],
-        ['words with no backslash', `C:\\${'OneDrive - AMD '.repeat(2000)}\\_x`],
-        ['unclosed brackets', `C:\\${'a (b '.repeat(2000)}\\_x`],
-        ['repeated drive letters', `${'C:\\a b '.repeat(2000)}\\_x`],
-    ])('handles 2,000 %s quickly', (_label, content) => {
-        const started = performance.now();
-        textOf(content);
-        expect(performance.now() - started).toBeLessThan(2000);
+        ['folders with spaces', (n: number) => `C:\\${'a b - c\\'.repeat(n)}_x`],
+        ['words with no backslash', (n: number) => `C:\\${'OneDrive - AMD '.repeat(n)}\\_x`],
+        ['unclosed brackets', (n: number) => `C:\\${'a (b '.repeat(n)}\\_x`],
+        ['repeated drive letters', (n: number) => `${'C:\\a b '.repeat(n)}\\_x`],
+    ])('handles long runs of %s in linear time', (_label, build) => {
+        expectLinearCost(build, 'assistant');
     });
 
     it('ends a path at a space when the next word has no backslash', () => {
@@ -227,13 +244,11 @@ describe('a Windows path is one chip with its exact text', () => {
     });
 
     it.each([
-        ['quoted folders with double spaces', `"C:\\${'a  b  -  c\\'.repeat(2000)}_x"`],
-        ['unclosed quotes', `${'"C:\\a  b '.repeat(2000)}\\_x`],
-        ['double-spaced words with no backslash', `C:\\${'OneDrive  -  AMD  '.repeat(2000)}\\_x`],
-        ['double-spaced folders', `C:\\${'a  b  -  c\\'.repeat(2000)}_x`],
-    ])('handles 2,000 %s quickly', (_label, content) => {
-        const started = performance.now();
-        textOf(content, 'user');
-        expect(performance.now() - started).toBeLessThan(2000);
+        ['quoted folders with double spaces', (n: number) => `"C:\\${'a  b  -  c\\'.repeat(n)}_x"`],
+        ['unclosed quotes', (n: number) => `${'"C:\\a  b '.repeat(n)}\\_x`],
+        ['double-spaced words with no backslash', (n: number) => `C:\\${'OneDrive  -  AMD  '.repeat(n)}\\_x`],
+        ['double-spaced folders', (n: number) => `C:\\${'a  b  -  c\\'.repeat(n)}_x`],
+    ])('handles long runs of %s in linear time', (_label, build) => {
+        expectLinearCost(build, 'user');
     });
 });
