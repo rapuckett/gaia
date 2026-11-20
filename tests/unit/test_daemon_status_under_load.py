@@ -238,6 +238,13 @@ def test_probe_state_classifies_a_read_timeout_as_busy(monkeypatch):
     monkeypatch.setattr(requests, "get", _slow)
     assert probe_state(inst)[0] == "busy"
 
+    def _slow_accept(*a, **k):
+        # A loaded machine can be slow to accept; nothing listening refuses at once.
+        raise requests.exceptions.ConnectTimeout("slow accept")
+
+    monkeypatch.setattr(requests, "get", _slow_accept)
+    assert probe_state(inst)[0] == "busy"
+
     def _refused(*a, **k):
         raise requests.exceptions.ConnectionError("refused")
 
