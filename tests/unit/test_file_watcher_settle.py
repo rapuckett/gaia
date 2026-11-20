@@ -305,11 +305,9 @@ def test_real_watcher_reports_a_copied_file_once_complete(tmp_path, clock):
         handler = watcher._handler
 
         def doc_pending():
+            # Its own events may be lost under load; the folder rescan finds it.
             with handler._cond:
-                if any(Path(p).name == "doc.txt" for p in handler._pending):
-                    return True
-            os.utime(target)  # under load FSEvents can drop the writes' events
-            return False
+                return any(Path(p).name == "doc.txt" for p in handler._pending)
 
         _wait_until(doc_pending, "doc.txt to be pending in the watcher")
 
