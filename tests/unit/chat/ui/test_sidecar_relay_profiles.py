@@ -112,7 +112,8 @@ def _registered_tool_names() -> set:
                     _is_tool_decorator(d) for d in node.decorator_list
                 ):
                     names.add(node.name)
-    # A bundled skill's tools register as ``<skill>/<tool>`` once it loads.
+    # A bundled skill's tools register as ``<skill>/<tool>`` once it loads, and
+    # importing its tools.py also puts the bare ``@tool`` name in the registry.
     for path in (REPO_ROOT / "hub" / "skills").glob("*/tools.py"):
         tree = ast.parse(path.read_text(errors="replace"))
         for node in tree.body:
@@ -120,6 +121,7 @@ def _registered_tool_names() -> set:
                 _is_tool_decorator(d) for d in node.decorator_list
             ):
                 names.add(f"{path.parent.name}/{node.name}")
+                names.add(node.name)
     return names | _PROGRAMMATIC_TOOLS
 
 

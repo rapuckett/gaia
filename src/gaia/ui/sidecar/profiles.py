@@ -280,6 +280,9 @@ _GAIA_TOOL_LABELS: Dict[str, str] = {
     "rag_status": "Checking the document index",
     "evaluate_retrieval": "Checking retrieval quality",
     "analyze_data_file": "Analyzing data file",
+    "verify_document": "Checking document",
+    "verify_workbook": "Checking workbook",
+    "triage_logs": "Triaging logs",
     # Files
     "read_file": "Reading file",
     "write_file": "Writing file",
