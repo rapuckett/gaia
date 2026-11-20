@@ -96,6 +96,8 @@ interface ConnectorsBodyProps {
     /** The connector whose setup sheet starts open. */
     initialSheet?: string;
     initialChecks?: Record<string, ConnectorCheck>;
+    /** Whether the screen is focused; the list is re-read during a key store prompt only then. */
+    focused?: boolean;
 }
 
 export function ConnectorsScreen(props: ConnectorsBodyProps) {
@@ -108,9 +110,9 @@ export function ConnectorsScreen(props: ConnectorsBodyProps) {
 }
 
 /** The connector list, for the screen and for the Settings pane. */
-export function ConnectorsBody({ initialExpanded, initialJustConnected, initialSheet, initialChecks }: ConnectorsBodyProps) {
+export function ConnectorsBody({ initialExpanded, initialJustConnected, initialSheet, initialChecks, focused = true }: ConnectorsBodyProps) {
     const t = useT();
-    const connectors = useConnectors();
+    const connectors = useConnectors(focused);
     const agentMcps = useAgentMcps();
     const checks = useConnectorChecks(initialChecks);
     const [sheetFor, setSheetFor] = useState<string | null>(initialSheet ?? null);

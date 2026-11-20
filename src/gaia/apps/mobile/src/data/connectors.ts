@@ -22,14 +22,18 @@ import { beginDevicePrompt, reportDevicePromptError, settleDevicePrompt } from '
 import { useGaiaClient } from './GaiaClientProvider';
 import { queryKeys, requireClient } from './queries';
 
-/** Every connector this PC knows, including those whose live state GAIA couldn't read; re-read while the PC's key store prompt is open. */
-export function useConnectors() {
+/**
+ * Every connector this PC knows, including those whose live state GAIA couldn't read. With `pollWhileWaiting`
+ * (the Connectors screen while it is focused), re-read while the PC's key store prompt is open; the poll also
+ * stops while the app is in the background (focusManager follows AppState).
+ */
+export function useConnectors(pollWhileWaiting = false) {
     const client = useGaiaClient();
     return useQuery<ConnectorList>({
         queryKey: queryKeys.connectors,
         enabled: client !== null,
         queryFn: ({ signal }) => requireClient(client).listConnectors({ signal }),
-        refetchInterval: (query) => (query.state.data?.key_store === 'waiting' ? CONNECTOR_KEY_STORE_POLL_MS : false),
+        refetchInterval: (query) => (pollWhileWaiting && query.state.data?.key_store === 'waiting' ? CONNECTOR_KEY_STORE_POLL_MS : false),
     });
 }
 

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import type { ReactNode } from 'react';
 import { Platform } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -17,6 +17,7 @@ import { ConnectorsScreen } from './ConnectorsScreen';
 
 jest.mock('@/features/nav/ScreenHeader', () => ({ ScreenHeader: () => null }));
 jest.mock('expo-router', () => ({ useRouter: () => ({ push: jest.fn(), back: jest.fn() }) }));
+jest.mock('@/api/constants', () => ({ ...jest.requireActual('@/api/constants'), CONNECTOR_KEY_STORE_POLL_MS: 50 }));
 
 const describeNative = Platform.OS === 'web' ? describe.skip : describe;
 
@@ -103,6 +104,19 @@ describeNative('ConnectorsScreen key store', () => {
         await waitFor(() => expect(client.keyStoreRetries).toBe(1));
         expect(await screen.findByText(/me@example.com/)).toBeTruthy();
         expect(screen.queryByText(LOCKED)).toBeNull();
+        queryClient.clear();
+    });
+
+    it('re-reads the list while the PC asks only while the screen is focused', async () => {
+        const { client, queryClient, wrap } = setup('waiting');
+        const list = jest.spyOn(client, 'listConnectors');
+        const view = await render(<ConnectorsScreen focused />, { wrapper: wrap });
+        await waitFor(() => expect(list.mock.calls.length).toBeGreaterThanOrEqual(3));
+
+        await view.rerender(<ConnectorsScreen focused={false} />);
+        const atBlur = list.mock.calls.length;
+        await act(() => new Promise((resolve) => setTimeout(resolve, 300)));
+        expect(list.mock.calls.length).toBe(atBlur);
         queryClient.clear();
     });
 
