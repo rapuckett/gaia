@@ -15,7 +15,7 @@ import { LanguageSwitchHost, SeedLanguageSwitch } from '@/features/language/Lang
 import { SeedSkillsAdd } from '@/features/skills';
 import { SeedConfirmFullAccess } from '@/features/settings/panes/Permissions';
 import { SeedAutomationRemove } from '@/features/settings/panes/Automations';
-import { SeedJustPaired } from '@/features/settings/panes/Messaging';
+import { SeedDiscord, SeedJustPaired } from '@/features/settings/panes/Messaging';
 import { SeedCheckPending, SeedCustomReport } from '@/features/settings/panes/model/AddCustomModel';
 import { SeedAddedModel, SeedModelSearch } from '@/features/settings/panes/model/ModelList';
 import { SeedOpenDetails } from '@/features/settings/panes/model/ModelRow';
@@ -61,6 +61,7 @@ function SettingsView({ found }: { found: SettingsScene }) {
                                     <SeedModelSearch.Provider value={found.search ?? ''}>
                                         <SeedOpenDetails.Provider value={found.openDetails ?? null}>
                                             <SeedJustPaired.Provider value={!!found.justPaired}>
+                                            <SeedDiscord.Provider value={found.discord ?? null}>
                                                 <SeedCheckPending.Provider value={found.checkPending ?? null}>
                                                 <SeedCustomReport.Provider value={found.customReport ?? null}>
                                                     <SeedAutomationRemove.Provider value={found.confirmRemove ?? null}>
@@ -78,6 +79,7 @@ function SettingsView({ found }: { found: SettingsScene }) {
                                                     </SeedAutomationRemove.Provider>
                                                 </SeedCustomReport.Provider>
                                                 </SeedCheckPending.Provider>
+                                            </SeedDiscord.Provider>
                                             </SeedJustPaired.Provider>
                                         </SeedOpenDetails.Provider>
                                     </SeedModelSearch.Provider>
