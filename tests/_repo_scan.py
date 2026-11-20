@@ -28,7 +28,8 @@ def _tree() -> tuple:
     def walk(directory: str) -> None:
         try:
             entries = list(os.scandir(directory))
-        except OSError:
+        except PermissionError:
+            # rglob skips an unreadable directory the same way; anything else raises.
             return
         for entry in entries:
             if entry.is_dir(follow_symlinks=False):
