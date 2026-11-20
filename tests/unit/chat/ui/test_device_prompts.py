@@ -117,6 +117,48 @@ def test_a_phones_retry_hears_waiting_then_how_the_pc_answered(
     assert _prompts(events) == []
 
 
+@pytest.mark.parametrize(
+    "error,closed,status,outcome",
+    [
+        (None, False, 200, "approved"),
+        ("locked", True, 503, "denied"),
+        ("refused", True, 503, "denied"),
+    ],
+)
+def test_a_phones_connector_test_hears_how_the_pc_answered(
+    paired, monkeypatch, error, closed, status, outcome
+):
+    import asyncio
+
+    from gaia.connectors import store
+    from gaia.connectors.credential_wait import CredentialStoreLocked
+    from gaia.ui.routers import connectors
+
+    _, clients, phone, events = paired
+    monkeypatch.setattr(prompts, "KEY_STORE_PROMPT_AFTER_SECONDS", 0.01)
+    monkeypatch.setattr(store, "keyring_refusal", lambda: "closed" if closed else None)
+
+    async def check(connector_id):
+        await asyncio.sleep(0.2)
+        if error == "locked":
+            raise CredentialStoreLocked("The unlock prompt was closed.")
+        if error == "refused":
+            raise store.KeyringRefused("The unlock prompt was closed.")
+        return {"ok": True, "detail": "fine"}
+
+    monkeypatch.setattr(connectors, "health_check", check)
+
+    resp = clients["phone"].post("/api/connectors/mcp-brave-search/test", headers=UI)
+    assert resp.status_code == status, resp.text
+    if error:
+        assert resp.json()["detail"]["error"] == "key_store_locked"
+        assert "key store" in resp.json()["detail"]["message"]
+    assert _prompts(events) == [
+        (phone, "keyStore", "connectorTest", "waiting"),
+        (phone, "keyStore", "connectorTest", outcome),
+    ]
+
+
 def test_a_phone_may_start_a_key_store_action_once_per_10_seconds(paired, monkeypatch):
     from gaia.ui.routers import providers
 
