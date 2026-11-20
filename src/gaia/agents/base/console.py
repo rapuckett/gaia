@@ -1134,6 +1134,9 @@ class AgentConsole(TerminalConfirmationMixin, OutputHandler):
     are denied otherwise (#2210) — see ``confirm_tool_execution``.
     """
 
+    #: Seconds a stopped spinner gets to clear its transient line before printing.
+    progress_clear_s: float = 0.15
+
     def __init__(self, auto_approve_gated_tools: bool = False):
         """Initialize the AgentConsole with appropriate display capabilities.
 
@@ -2029,7 +2032,7 @@ class AgentConsole(TerminalConfirmationMixin, OutputHandler):
         """Stop the spinner but keep _last_progress_message so resume_progress can restart it."""
         self.progress.stop()
         if self.rich_available:
-            time.sleep(0.15)
+            time.sleep(self.progress_clear_s)
             print()
 
     def resume_progress(self) -> None:
@@ -2072,7 +2075,7 @@ class AgentConsole(TerminalConfirmationMixin, OutputHandler):
         # Ensure clean line separation after progress stops
         if self.rich_available:
             # Longer delay to ensure the transient display is FULLY cleared
-            time.sleep(0.15)
+            time.sleep(self.progress_clear_s)
             # Explicitly move to a new line
             print()  # Use print() instead of console.print() to avoid Live display conflicts
 

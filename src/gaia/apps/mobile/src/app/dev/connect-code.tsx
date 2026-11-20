@@ -12,7 +12,7 @@ import { ConnectAccountCard } from '@/features/chat/cards/ConnectAccountCard';
 import { EmailConnect } from '@/features/chat/EmailConnect';
 import { GrantNote } from '@/features/chat/GrantNote';
 import { BrowserSignInDepsContext } from '@/features/connectors/browserSignIn';
-import { galleryDeps } from '@/features/connectors/ConnectorsGallery';
+import { CANCELLED, galleryDeps } from '@/features/connectors/ConnectorsGallery';
 import { DeviceCodeBlock } from '@/features/connectors/DeviceCodeSignIn';
 import { devGalleryEnabled } from '@/features/dev/devGallery';
 import { Screen, Stack, Text, UIProvider } from '@/ui';
@@ -39,8 +39,8 @@ const account = (id: string, display_name: string, over: Partial<ConnectorRow> =
 
 // One each for the screen: the sign-in they show is kept per deps, and a new one each render would start over.
 const GOOGLE_DEPS = galleryDeps(null);
-// The browser ends without a sign-in as soon as it opens.
-const GOOGLE_CANCELLED_DEPS = galleryDeps({ outcome: 'cancelled' });
+// Opens on a sign-in whose browser closed unfinished; Connect starts another that ends the same way.
+const GOOGLE_CANCELLED_DEPS = galleryDeps({ outcome: 'cancelled' }, CANCELLED);
 
 const MAILBOXES = [account('google', 'Google'), account('microsoft', 'Microsoft Personal'), account('microsoft_work', 'Microsoft Work or School')];
 
@@ -63,7 +63,7 @@ function Scene({ title, children }: { title: string; children: ReactNode }) {
     );
 }
 
-/** `?state=googleCancelled#tap=connect-google`: the chat card alone, after Google's sign-in closed unfinished. */
+/** `?state=googleCancelled`: the chat card alone, after Google's sign-in closed unfinished. */
 export default function ConnectCodeGalleryRoute() {
     const { state } = useLocalSearchParams<{ state?: string }>();
     if (!devGalleryEnabled()) return <Redirect href="/" />;
