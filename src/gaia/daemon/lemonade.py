@@ -11,11 +11,12 @@ to the version this GAIA targets. A ``LEMONADE_BASE_URL``, or the saved
 the daemon leaves Lemonade alone -- and :meth:`EmbeddedLemonadeOwner.reconfigure`
 stops GAIA's own when the user switches to theirs.
 
-The daemon owns every instance of GAIA's own server, whoever started it. One
-that ``gaia init`` or ``gaia lemonade embedded start`` brought up is claimed the
-first time the daemon finds it healthy, and stops with the daemon. One a
-crashed daemon left behind is adopted while it still answers on the right
-version, and reaped otherwise. Nothing is signalled until
+The daemon owns every instance of GAIA's own server that no other running
+daemon owns. One that ``gaia init`` or ``gaia lemonade embedded start`` brought
+up is claimed the first time the daemon finds it healthy, and stops with the
+daemon. One a crashed daemon left behind is adopted while it still answers on
+the right version, and reaped otherwise. One a live daemon owns is used, never
+claimed or stopped. Nothing is signalled until
 :meth:`~gaia.llm.lemonade_embedded.EmbeddedLemonade.stop` has confirmed the pid
 is GAIA's lemond, so a user's Lemonade or a recycled pid is never touched.
 
@@ -178,11 +179,17 @@ class EmbeddedLemonadeOwner:
             and not self._owner_alive(owner, current.owner_started)
         )
 
+    def _owned_elsewhere(self, current) -> bool:
+        """Whether *current* belongs to another daemon that still runs."""
+        owner = current.owner_pid
+        return owner not in (None, self._owner_pid) and not self._orphaned(current)
+
     def ensure(self) -> EnsuredLemonade:
         """Return the running embedded server, starting it if it is stopped.
 
-        A healthy server someone else started is claimed, so this daemon stops
-        it later. One a crashed daemon left that is not answering, or runs
+        A healthy server nobody owns, or whose owner has exited, is claimed, so
+        this daemon stops it later; one another running daemon owns is used
+        as it is. One a crashed daemon left that is not answering, or runs
         another version, is reaped and replaced. One on a mismatched version, or
         an install of another version, is repaired to the version this GAIA targets.
 
@@ -240,6 +247,17 @@ class EmbeddedLemonadeOwner:
                     f"restart it. Its log is {embedded.log_path}."
                 )
             if current.running and current.version == embedded.version:
+                if self._owned_elsewhere(current):
+                    # Never claimed, so this daemon's stop() leaves it running.
+                    logger.warning(
+                        "daemon: embedded Lemonade (pid %s, port %s) belongs to "
+                        "daemon pid %s, which still runs; using it without "
+                        "taking it over",
+                        current.pid,
+                        current.port,
+                        current.owner_pid,
+                    )
+                    return self._ensured(current)
                 return self._claim(embedded, current)
             if (
                 current.running
@@ -314,6 +332,10 @@ class EmbeddedLemonadeOwner:
                     else "gaia init or the CLI"
                 ),
             )
+        return self._ensured(current)
+
+    @staticmethod
+    def _ensured(current) -> EnsuredLemonade:
         return EnsuredLemonade(
             base_url=current.base_url,
             port=current.port,
@@ -427,7 +449,7 @@ class EmbeddedLemonadeOwner:
         reason: str = "the daemon is shutting down",
         still_wanted: Callable[[], bool] = lambda: True,
     ) -> bool:
-        """Stop GAIA's embedded server, whoever started it.
+        """Stop GAIA's embedded server, unless another running daemon owns it.
 
         Bounded so the daemon's shutdown fits `gaia daemon stop`'s wait: a
         start still in flight is left to finish, and `gaia daemon stop` stops
@@ -457,6 +479,14 @@ class EmbeddedLemonadeOwner:
             embedded = self._factory()
             current = embedded.status()
             if not (current.running or current.unresponsive_pid):
+                return False
+            if self._owned_elsewhere(current):
+                logger.info(
+                    "daemon: leaving embedded Lemonade (pid %s) running; daemon "
+                    "pid %s owns it",
+                    current.pid or current.unresponsive_pid,
+                    current.owner_pid,
+                )
                 return False
             # Last, right before the signal, so a request that just landed wins.
             if not still_wanted():
