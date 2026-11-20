@@ -17,13 +17,6 @@ from collections import OrderedDict
 from dataclasses import dataclass
 from typing import Any, Dict, Iterator, List, Optional, Tuple, Union
 
-# The factory imports this module only when the claude provider is requested,
-# so the guarded import never taxes the Lemonade-only path.
-try:
-    import anthropic
-except ImportError:
-    anthropic = None  # type: ignore[assignment]
-
 from ..base_client import LLMClient
 from ..lemonade_client import is_provider_context_overflow
 from ..local_only import assert_provider_permitted
@@ -31,6 +24,20 @@ from ..surface_hints import TUI_MODEL_SWITCH_HINT
 from .lemonade import _NATIVE_TC_KEY, LemonadeContextOverflowError
 
 logger = logging.getLogger(__name__)
+
+
+def __getattr__(name: str):
+    # The Anthropic SDK costs ~0.9 s to import; load it on first use.
+    if name == "anthropic":
+        try:
+            import anthropic
+        except ImportError as e:
+            raise AttributeError(
+                f"module {__name__!r}: anthropic is not installed"
+            ) from e
+        return anthropic
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
 
 DEFAULT_CLAUDE_MODEL = "claude-sonnet-5"
 
@@ -251,13 +258,21 @@ def _check_empty_reply(stop_reason: str, api_blocks: List[dict]) -> None:
 
 
 def _require_anthropic():
-    if anthropic is None:
+    # A name in globals is a test double (None simulates a missing SDK).
+    if "anthropic" in globals():
+        sdk = globals()["anthropic"]
+    else:
+        try:
+            import anthropic as sdk
+        except ImportError:
+            sdk = None
+    if sdk is None:
         raise ImportError(
             "The 'anthropic' package is required for --use-claude. "
             "Install it with: uv pip install anthropic "
             '(or the eval extras: uv pip install -e ".[eval]")'
         )
-    return anthropic
+    return sdk
 
 
 #: Usage counters read off every response. ``input_tokens`` is the uncached
