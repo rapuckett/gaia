@@ -299,3 +299,73 @@ def test_a_status_read_resets_a_pairing_by_a_device_no_longer_allowed(cleared):
     _linked(pairing_device_id="phone")
     assert cli.unlink_stale_devices(["phone"]) is None
     assert state.load_config().owner_id == "111"
+
+
+class _FakeTransport:
+    def __init__(self):
+        self.stopped = False
+
+    def stop(self):
+        self.stopped = True
+
+
+def test_the_running_bridge_stops_for_an_expired_linked_device(monkeypatch):
+    from gaia.messaging.discord import cli
+
+    _linked(pairing_device_id="expired", token_device_id="phone")
+    monkeypatch.setattr("gaia.ui.devices.store.allowed_device_ids", lambda: ["phone"])
+    transport = _FakeTransport()
+    watch = cli._LinkWatch(transport)
+    assert watch.tick() is True
+    assert transport.stopped and watch.stale == {"expired"}
+
+
+def test_the_link_check_leaves_live_devices_alone(monkeypatch):
+    from gaia.messaging.discord import cli
+
+    _linked(pairing_device_id="phone", token_device_id="phone")
+    monkeypatch.setattr("gaia.ui.devices.store.allowed_device_ids", lambda: ["phone"])
+    transport = _FakeTransport()
+    watch = cli._LinkWatch(transport)
+    assert watch.tick() is False
+    assert not transport.stopped and not watch.stale
+
+
+def test_an_unreadable_device_store_warns_and_keeps_the_bridge_running(
+    monkeypatch, caplog
+):
+    import sqlite3
+
+    from gaia.messaging.discord import cli
+
+    _linked(pairing_device_id="phone")
+
+    def broken():
+        raise sqlite3.OperationalError("database is locked")
+
+    monkeypatch.setattr("gaia.ui.devices.store.allowed_device_ids", broken)
+    transport = _FakeTransport()
+    with caplog.at_level("WARNING"):
+        assert cli._LinkWatch(transport).tick() is False
+    assert not transport.stopped
+    assert "database is locked" in caplog.text
+
+
+def test_after_exit_an_expired_token_device_is_disconnected(cleared):
+    from gaia.messaging.discord import cli
+
+    _linked(token_device_id="expired")
+    cli._finish_stale_links({"expired"}, lambda _line: None)
+    assert not state.load_config().connected and "clear" in cleared
+
+
+def test_after_exit_an_expired_pairing_device_is_reset_and_the_bridge_restarts(
+    cleared, monkeypatch
+):
+    from gaia.messaging.discord import cli
+
+    _linked(pairing_device_id="expired")
+    started = []
+    monkeypatch.setattr(cli, "start_detached", lambda **kw: started.append(1) or 0)
+    cli._finish_stale_links({"expired"}, lambda _line: None)
+    assert state.load_config().owner_id == "" and started
