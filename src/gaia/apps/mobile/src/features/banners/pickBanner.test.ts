@@ -40,6 +40,8 @@ describe('pickBanner', () => {
         expect(banner?.id).toBe('download');
         expect(banner?.progress?.value).toBe(0.5);
         expect(banner?.progress?.label).toBe('50% · 5.00 / 10.00 GB');
+        expect(banner?.message).toBe(t('banner.download.file', { index: 1, total: 2 }));
+        expect(banner?.detail).toBe('\u2066a.gguf\u2069');
         expect(id(withStatus({ download_progress: { ...download, state: 'error' } }))).toBe('download');
     });
 
