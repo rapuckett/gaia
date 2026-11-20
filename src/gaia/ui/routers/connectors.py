@@ -58,7 +58,10 @@ from gaia.connectors.activations import (
 from gaia.connectors.api import activate as activate_connector_for_agent
 from gaia.connectors.api import deactivate as deactivate_connector_for_agent
 from gaia.connectors.api import resolve_declared_scopes
-from gaia.connectors.credential_wait import CredentialStoreWaiting
+from gaia.connectors.credential_wait import (
+    CredentialStoreLocked,
+    CredentialStoreWaiting,
+)
 from gaia.connectors.errors import (
     AuthRequiredError,
     ConfigurationError,
@@ -594,14 +597,13 @@ def _http_error_for(request: Request, exc: ConnectorsError) -> HTTPException:
 
 
 def _key_store_locked_error(request: Request, exc: Exception) -> HTTPException:
-    """503 for a key store the PC's prompt left locked; the OS text stays on the PC."""
+    """423 for a locked key store, 409 while its prompt is unanswered; OS text stays on the PC."""
     logger.warning(
         "connectors: key store stayed locked for %s: %s", principal(request), exc
     )
-    message = str(exc) if is_local_pc(request) else DEVICE_KEY_STORE_LOCKED
-    return HTTPException(
-        status_code=503, detail={"error": "key_store_locked", "message": message}
-    )
+    locked = isinstance(exc, (CredentialStoreLocked, KeyringRefused))
+    detail = str(exc) if is_local_pc(request) else DEVICE_KEY_STORE_LOCKED
+    return HTTPException(status_code=423 if locked else 409, detail=detail)
 
 
 def _shareable_check(result: Dict[str, Any]) -> Dict[str, Any]:

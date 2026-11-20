@@ -121,8 +121,8 @@ def test_a_phones_retry_hears_waiting_then_how_the_pc_answered(
     "error,closed,status,outcome",
     [
         (None, False, 200, "approved"),
-        ("locked", True, 503, "denied"),
-        ("refused", True, 503, "denied"),
+        ("locked", True, 423, "denied"),
+        ("refused", True, 423, "denied"),
     ],
 )
 def test_a_phones_connector_test_hears_how_the_pc_answered(
@@ -151,8 +151,7 @@ def test_a_phones_connector_test_hears_how_the_pc_answered(
     resp = clients["phone"].post("/api/connectors/mcp-brave-search/test", headers=UI)
     assert resp.status_code == status, resp.text
     if error:
-        assert resp.json()["detail"]["error"] == "key_store_locked"
-        assert "key store" in resp.json()["detail"]["message"]
+        assert "key store" in resp.json()["detail"]
     assert _prompts(events) == [
         (phone, "keyStore", "connectorTest", "waiting"),
         (phone, "keyStore", "connectorTest", outcome),
