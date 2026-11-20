@@ -10,6 +10,7 @@ import type { Automation, AutomationList, LinkAddResult, LinkPreview, LinkSkill,
 import { PC_ONLY_REFUSAL } from '@/api/constants';
 import { GaiaApiError, GaiaNetworkError } from '@/api/errors';
 import type { DevicePromptKind, DevicePromptNote, DevicePromptState } from '@/features/devices/devicePrompts';
+import type { OwnServerSeed } from '@/features/settings/panes/advanced/LemonadeTarget';
 import { COMMON, GPU, RUN } from '@/features/setup/devScenes';
 
 import type { SectionId } from './sections';
@@ -30,6 +31,8 @@ export interface SettingsScene {
     prompt?: { kind: DevicePromptKind; action: string; state: DevicePromptState; note?: DevicePromptNote };
     /** Opens the cloud key field (with Replace already pressed when `replacing`), with `typed` in it and Connect pressed when `submit`. */
     keyEntry?: { replacing?: boolean; typed?: string; submit?: boolean; gateway?: GatewayFields };
+    /** Opens Use my own server with this typed (the key masked), and its confirm sheet up when `confirming`. */
+    ownServer?: OwnServerSeed;
     /** Opens the models search field with this text typed in. */
     search?: string;
     /** Opens this model's Details section expanded. */
@@ -40,6 +43,8 @@ export interface SettingsScene {
     customReport?: CustomModelReport;
     /** Opens the Messaging status with the just-paired line showing. */
     justPaired?: boolean;
+    /** Messaging: fixture text typed as the bot token (Connect pressed when `submit`), the public-bot tip, the disconnect question up, or the PC having refused this phone's buttons. */
+    discord?: { typed?: string; submit?: boolean; botPublic?: boolean; confirmDisconnect?: boolean; refused?: boolean };
     /** An action that never finishes, so its in-flight state stays on screen: tap its button (`#tap=model-download-<id>` or `#tap=model-use-<id>`). */
     hang?: 'download' | 'select';
     /** Client calls the scene answers itself (a hang or a PC refusal), over the fake's. */
@@ -214,6 +219,7 @@ const discord = (extra: Partial<DiscordStatus>): DiscordStatus => ({
     discord_installed: false, should_offer_setup: false, ...extra,
 });
 const NO_TOKEN = { connected: false, bot_name: '', bot_profile_url: '', invite_url: '' };
+const FIXTURE_TOKEN = 'fixture-bot-token-not-real';
 const NEXT_AT = Date.UTC(2026, 10, 17, 9, 0) / 1000;
 const automation = (id: string, name: string, extra: Partial<Automation>): Automation => ({
     id, name, kind: 'reminder', heartbeat: false, paused: false, every_seconds: 0, next_at: NEXT_AT, last_run_at: 0, runs: 0,
@@ -249,6 +255,10 @@ const server = (info: Partial<ModelServerInfo>, target: Partial<LemonadeTarget> 
     section: 'advanced', target: 'model-server', gpuMemory: GPU, ...scene,
     data: { modelServer: { ...SERVER, ...info }, lemonadeTarget: { ...TARGET, ...target }, ...scene.data },
 });
+const OWN_URL = 'http://192.168.1.20:13305';
+const PROBE_ERROR = "GAIA couldn't use a Lemonade Server at that address. Check the address and key, and that the PC running GAIA can reach the server.";
+const YOURS_INFO: Partial<ModelServerInfo> = { owner: 'user', base_url: 'http://192.168.1.20:13305' };
+const YOURS: Partial<LemonadeTarget> = { mode: 'external', base_url: 'http://192.168.1.20:13305', saved_base_url: 'http://192.168.1.20:13305' };
 const SETTINGS: Settings = {
     custom_model: null, model_status: null, context_size: null, dynamic_tools: false, dynamic_tools_locked: false,
     agent_mode: 'manual', network_policy: 'cloud_allowed',
@@ -473,6 +483,13 @@ export const SETTINGS_SCENES: Record<string, SettingsScene> = {
     'msg-pc-refused': msg(new GaiaApiError(403, PC_ONLY_REFUSAL)),
     // SET-MSG-01, 08: no bot yet (steps 1 and 2), and a token Discord or GAIA can't use.
     'msg-needs-token': msg(discord({ ...NO_TOKEN, running: false })),
+    // SET-MSG-04: a token typed (masked), Connect pressed and still checking ("Connecting…" and the hint), and the PC refusing it (its words on the detail line, the token masked).
+    'msg-token-typed': msg(discord({ ...NO_TOKEN, running: false }), { discord: { typed: FIXTURE_TOKEN } }),
+    'msg-connecting': msg(discord({ ...NO_TOKEN, running: false }), { discord: { typed: FIXTURE_TOKEN, submit: true }, override: { connectDiscord: never } }),
+    'msg-connect-failed': msg(discord({ ...NO_TOKEN, running: false }), {
+        discord: { typed: FIXTURE_TOKEN, submit: true },
+        override: { connectDiscord: () => Promise.reject(new GaiaApiError(400, `Discord did not accept the token ${FIXTURE_TOKEN}: 401 Unauthorized.`)) },
+    }),
     'msg-token-invalid': msg(discord({ state: 'token_invalid' })),
     'msg-conflict': msg(discord({ ...NO_TOKEN, state: 'conflict', running: false })),
     'msg-credentials': msg(discord({ state: 'credentials_unavailable', detail: 'The OS key store refused the request.' })),
@@ -485,10 +502,18 @@ export const SETTINGS_SCENES: Record<string, SettingsScene> = {
     // SET-MSG-05, 06: steps 3 and 4 with the pairing code (`#tap=messaging-copy-code` shows Copied); the same with no code yet.
     'msg-pairing': msg(discord({ state: 'pairing', pairing_code: 'DUMY2345', pairing_expires_at: 1900000000 })),
     'msg-pairing-waiting': msg(discord({ state: 'pairing' })),
+    // SET-MSG-07: a public bot's tip with "Open the bot page", as a connect from this phone shows it.
+    'msg-public-tip': msg(discord({ state: 'pairing', pairing_code: 'DUMY2345', pairing_expires_at: 1900000000 }), { discord: { botPublic: true } }),
+    // SET-MSG-10: connected with no account paired: "Show a pairing code".
+    'msg-show-code': msg(discord({ state: 'connected', paired: false }), { data: { discordStatus: discord({ state: 'connected', paired: false }), discordPairingCode: 'DUMY2345' } }),
     // SET-MSG-11: the line shown just after pairing, seeded so it needs no wait.
     'msg-paired-now': msg(discord({ state: 'connected', paired: true, owner_name: 'Alex', model: CHAT_MODEL }), { justPaired: true }),
     // SET-MSG-11, 13: paired and answering, with the Disconnect button (`#tap=messaging-disconnect` explains it is the PC's to press).
     'msg-paired': msg(discord({ state: 'connected', paired: true, owner_name: 'Alex', model: CHAT_MODEL, always_allowed: ['Run shell commands'] })),
+    // SET-MSG-13: the Disconnect question up over the paired card.
+    'msg-disconnect-confirm': msg(discord({ state: 'connected', paired: true, owner_name: 'Alex', model: CHAT_MODEL, always_allowed: ['Run shell commands'] }), { discord: { confirmDisconnect: true } }),
+    // SET-MSG-12, 13, 14: a PC that refuses this phone's buttons (403): each keeps the PC-only pattern.
+    'msg-buttons-refused': msg(discord({ state: 'connected', paired: true, owner_name: 'Alex', model: CHAT_MODEL, always_allowed: ['Run shell commands'] }), { discord: { refused: true } }),
 
     // SET-ADV-13, 14, 15, 16, 17: the model server section (opens on load): GAIA's own server with the chat, embedding and each other kind of loaded model (`#tap=advanced-reload` shows the reloading notice).
     'adv-server-loaded': server({}),
@@ -503,10 +528,23 @@ export const SETTINGS_SCENES: Record<string, SettingsScene> = {
     'adv-server-backend-switch': server({ preferred_backend: 'cpu' }),
     // SET-ADV-17: which server GAIA uses: its own, yours, set by LEMONADE_BASE_URL, an ignored env address, and a failed read.
     'adv-target-own': server({}),
-    'adv-target-yours': server({ owner: 'user', base_url: 'http://192.168.1.20:13305' }, { mode: 'external', base_url: 'http://192.168.1.20:13305', saved_base_url: 'http://192.168.1.20:13305' }),
+    'adv-target-yours': server(YOURS_INFO, YOURS),
     'adv-target-env': server({ owner: 'user', base_url: 'http://10.0.0.5:13305' }, { mode: 'external', source: 'env', base_url: 'http://10.0.0.5:13305' }),
     'adv-target-env-ignored': server({}, { env_url_ignored: 'http://10.0.0.5:13305' }),
     'adv-target-error': server({}, {}, { override: { getLemonadeTarget: () => Promise.reject(new GaiaApiError(500, 'Target unreadable')) } }),
+    // SET-ADV-19: Use GAIA's own from your server (`#tap=advanced-use-own`): switching, refused by the PC, and failed with the PC's reason behind Details.
+    'adv-target-use-own-switching': server(YOURS_INFO, YOURS, { override: { setLemonadeTarget: never } }),
+    'adv-target-use-own-refused': server(YOURS_INFO, YOURS, { override: { setLemonadeTarget: refused } }),
+    'adv-target-use-own-failed': server(YOURS_INFO, YOURS, { override: { setLemonadeTarget: () => Promise.reject(new GaiaApiError(502, "GAIA couldn't switch servers on the PC. Open Settings › Advanced on the PC to see why.")) } }),
+    // SET-ADV-18: Use my own server: empty, typed (key masked), the confirm sheet, then after `#tap=own-server-confirm` the one
+    // failure sentence for any failed check, the wait after a second try within 10 s, and the PC's refusal. Active is adv-target-yours.
+    'adv-own-server-form': server({}),
+    'adv-own-server-filled': server({}, {}, { ownServer: { url: OWN_URL, key: 'lemonade-key-7b3d' } }),
+    'adv-own-server-confirm': server({}, {}, { ownServer: { url: OWN_URL, key: 'lemonade-key-7b3d', confirming: true } }),
+    'adv-own-server-probe-failed': server({}, {}, { ownServer: { url: OWN_URL, confirming: true }, override: { setLemonadeTarget: () => Promise.reject(new GaiaApiError(422, PROBE_ERROR)) } }),
+    'adv-own-server-too-soon': server({}, {}, { ownServer: { url: OWN_URL, confirming: true }, override: { setLemonadeTarget: () => Promise.reject(new GaiaApiError(429, 'This was just tried. Wait 7 s, then try again.')) } }),
+    'adv-own-server-refused': server({}, {}, { ownServer: { url: OWN_URL, confirming: true }, override: { setLemonadeTarget: refused } }),
+    'adv-own-server-saved-key': server({}, { api_key_stored: true, saved_base_url: OWN_URL }),
     // SET-ADV-20: the Custom model ID card is closed until tapped (`#tap=advanced-custom-toggle`): empty, a saved ID the server lists, one it doesn't, one it couldn't check, and refused.
     'adv-custom-empty': advanced({}),
     'adv-custom-saved': advanced({ custom_model: 'Qwen3-4B-Instruct-2507-GGUF', model_status: { checked: true, found: true, downloaded: true, loaded: false } }),

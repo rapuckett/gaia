@@ -69,6 +69,7 @@ import type {
     FollowUpOutcome,
     FollowUpResult,
     DeleteSessionResult,
+    DiscordConnectResult,
     DiscordStatus,
     FeaturedLibraries,
     GaiaClient,
@@ -618,6 +619,34 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
 
         getDiscordStatus(options) {
             return getJson<DiscordStatus>(ENDPOINTS.messagingDiscord, options?.signal);
+        },
+
+        connectDiscord(token, options) {
+            return postJson<DiscordConnectResult>(ENDPOINTS.messagingDiscordConnect, { token }, options?.signal);
+        },
+
+        startDiscord(takeOver, options) {
+            return postJson<DiscordStatus>(ENDPOINTS.messagingDiscordStart, { take_over: takeOver }, options?.signal);
+        },
+
+        stopDiscord(options) {
+            return postJson<DiscordStatus>(ENDPOINTS.messagingDiscordStop, undefined, options?.signal);
+        },
+
+        restartDiscord(options) {
+            return postJson<DiscordStatus>(ENDPOINTS.messagingDiscordRestart, undefined, options?.signal);
+        },
+
+        forgetDiscordAlways(options) {
+            return postJson<DiscordStatus>(ENDPOINTS.messagingDiscordForgetAlways, undefined, options?.signal);
+        },
+
+        pairDiscord(options) {
+            return postJson<DiscordStatus>(ENDPOINTS.messagingDiscordPair, undefined, options?.signal);
+        },
+
+        disconnectDiscord(options) {
+            return postJson<DiscordStatus>(ENDPOINTS.messagingDiscordDisconnect, undefined, options?.signal);
         },
 
         getUndoSettings(options) {
