@@ -440,8 +440,8 @@ function ConnectorTile({
     const paused = connector.enabled === false;
     const form = setupForm(connector);
     const checkPrompt = useDevicePrompt({ kind: 'keyStore', action: CHECK_PROMPT_ACTION });
-    // The prompt's state is shared by every Check; only the tile whose check raised it hides its button.
-    const checkOnPc = checkPrompt.hideAction && (check?.state === 'checking' || check?.state === 'prompt');
+    // The prompt's state is shared by every Check; only the tile whose check raised it hides its button, as a locked store's Try again does.
+    const checkOnPc = (checkPrompt.hideAction && (check?.state === 'checking' || check?.state === 'prompt')) || check?.state === 'locked';
 
     // A result shown inside the tile opens it, so a menu pick is never silent.
     function show(next: { tone: 'info' | 'danger'; text: string; detail?: string }) {
@@ -707,6 +707,16 @@ function CheckStatus({ connector, check, onCheck }: { connector: ConnectorRow; c
                         </Disclosure>
                     ) : null}
                 </Stack>
+            );
+        case 'locked':
+            return (
+                <Notice
+                    tone="warning"
+                    message={t('settings.key.storeLocked')}
+                    detail={check.detail}
+                    action={{ label: t('settings.key.unlockAgain'), onPress: onCheck }}
+                    testID={`connector-check-status-${connector.id}`}
+                />
             );
         case 'error': {
             if (isPcRefusal(check.error)) return <PcOnlyNotice testID={`connector-check-status-${connector.id}`} />;

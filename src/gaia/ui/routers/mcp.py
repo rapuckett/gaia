@@ -142,7 +142,8 @@ async def list_mcp_servers(request: Request):
     response_model=MCPServerTools,
     response_model_exclude_unset=True,
 )
-async def list_mcp_server_tools(name: str):
+# Sync: runs on a worker thread; connecting reads the key store and starts a process.
+def list_mcp_server_tools(name: str):
     """List tools provided by an MCP server (requires a transient connection)."""
     config = _load_config()
     if not config.server_exists(name):

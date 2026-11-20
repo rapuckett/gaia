@@ -15,7 +15,7 @@ import type {
     DisconnectOutcome,
     GaiaClient,
 } from '@/api/client.types';
-
+import { GaiaApiError } from '@/api/errors';
 import { beginDevicePrompt, reportDevicePromptError, settleDevicePrompt } from '@/features/devices/devicePrompts';
 
 import { useGaiaClient } from './GaiaClientProvider';
@@ -147,7 +147,9 @@ export type ConnectorCheck =
     | { state: 'failed'; detail: string; slow: boolean }
     | { state: 'error'; error: Error }
     /** The PC's key-store prompt for this check is what the screen shows: `ApproveOnPcNotice` follows how it ends. */
-    | { state: 'prompt' };
+    | { state: 'prompt' }
+    /** The PC's key store is locked (a 423) with no prompt of this check's up; `detail` is the PC's own words. */
+    | { state: 'locked'; detail?: string };
 
 /**
  * Each MCP server's latest Check, held above the tiles so a tile that moves to another group keeps it.
@@ -178,7 +180,9 @@ export function useConnectorChecks(initial: Record<string, ConnectorCheck> = {})
             } catch (error) {
                 next = reportDevicePromptError('keyStore', CHECK_PROMPT_ACTION, error)
                     ? { state: 'prompt' }
-                    : { state: 'error', error: error instanceof Error ? error : new Error(String(error)) };
+                    : error instanceof GaiaApiError && error.status === 423
+                      ? { state: 'locked', detail: error.detail || undefined }
+                      : { state: 'error', error: error instanceof Error ? error : new Error(String(error)) };
             }
             if (runs.current[id] === mine) setChecks((prev) => ({ ...prev, [id]: next }));
         },

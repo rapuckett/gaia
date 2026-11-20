@@ -26,7 +26,7 @@ jest.mock('@/api/routeAccess', () => ({
 // The web project's renderer can't mount react-native-web's DOM.
 const describeNative = Platform.OS === 'web' ? describe.skip : describe;
 
-async function mount(data: FakeClientData) {
+async function mount(data: FakeClientData, notify: (n: { tone: string; text: string }) => void = () => undefined) {
     const client = createFakeClient(data);
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const wrap = ({ children }: { children: ReactNode }) => (
@@ -40,7 +40,7 @@ async function mount(data: FakeClientData) {
             </GaiaClientProvider>
         </QueryClientProvider>
     );
-    await render(<ProfilePane notify={() => undefined} memoryEnabled onOpenAdvanced={() => undefined} />, { wrapper: wrap });
+    await render(<ProfilePane notify={notify} memoryEnabled onOpenAdvanced={() => undefined} />, { wrapper: wrap });
     return client;
 }
 
@@ -160,7 +160,8 @@ describeNative('ProfilePane', () => {
         useLocaleStore.getState().setLocale('ar');
         const announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility').mockImplementation(() => undefined);
         try {
-            const client = await mount({ memorySettings: settings(true), profileStreams: { discovery: { events: deviceScan() } } });
+            const notify = jest.fn();
+            const client = await mount({ memorySettings: settings(true), profileStreams: { discovery: { events: deviceScan() } } }, notify);
             fireEvent.press(await screen.findByTestId('profile-discovery-run'));
             const save = await screen.findByTestId('profile-discovery-save');
             announce.mockClear();
@@ -170,6 +171,7 @@ describeNative('ProfilePane', () => {
             expect(saved).toHaveTextContent(/حُفظ في الذاكرة/);
             expect(screen.queryByTestId('profile-discovery-save')).toBeNull();
             expect(client.profileCommits[0]!.items).toHaveLength(21);
+            expect(notify).not.toHaveBeenCalledWith(expect.objectContaining({ tone: 'success' }));
             const heard = announce.mock.calls.map(([text]) => text);
             expect(heard).toEqual(Platform.OS === 'ios' ? [expect.stringMatching(/حُفظ في الذاكرة/)] : []);
             if (Platform.OS === 'ios') expect(saved).toHaveTextContent(heard[0]!);
