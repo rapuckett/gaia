@@ -32,6 +32,13 @@ export const useDevicePromptStore = create<DevicePromptsState>(() => ({ states: 
 /** The 409 detail while the PC already waits on this action: `ALREADY_WAITING` in gaia/ui/devices/prompts.py. Other 409s are ordinary errors. */
 export const ALREADY_WAITING_DETAIL = 'GAIA is already waiting on the PC for this. Answer the prompt on the PC, then try again.';
 
+/**
+ * A device's connector Check while the PC's key store is locked: `DEVICE_KEY_STORE_LOCKED` in gaia/ui/routers/connectors.py.
+ * It comes with a 423 when the store is locked or its prompt was closed, and a 409 while the prompt is still unanswered.
+ */
+export const KEY_STORE_LOCKED_DETAIL =
+    "The PC's key store is locked or its prompt was closed. Approve the prompt on the PC, or choose Try again in Settings \u203a Model.";
+
 const keyOf = (kind: DevicePromptEvent['kind'], action: string) => `${kind}\u0000${action}`;
 
 function set(kind: DevicePromptEvent['kind'], action: string, state: DevicePromptState, note?: DevicePromptNote): void {
@@ -146,6 +153,17 @@ export function reportDevicePromptError(kind: DevicePromptKind, action: string, 
         return true;
     }
     const now = useDevicePromptStore.getState().states[keyOf(kind, action)];
+    // The PC still waits on its prompt; its events say how it ends.
+    if (kind === 'keyStore' && err instanceof GaiaApiError && err.status === 409 && err.detail === KEY_STORE_LOCKED_DETAIL) {
+        if (now === undefined || now === 'idle') set(kind, action, 'waiting');
+        return true;
+    }
+    // A prompt that was up and is now locked was closed on the PC.
+    if (now === 'waiting' && err instanceof GaiaApiError && err.status === 423) {
+        set(kind, action, 'denied');
+        deviceHaptics.denied();
+        return true;
+    }
     if (now === 'timeout' || now === 'denied' || now === 'cancelled') return true;
     if (now !== 'waiting' && now !== 'failed') return false;
     // The connection to the PC dropped while its prompt is up: the PC's events still say how it ends.
