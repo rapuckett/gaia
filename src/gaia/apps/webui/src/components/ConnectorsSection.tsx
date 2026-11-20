@@ -31,6 +31,7 @@ import { connectorDescription, connectorDescriptionBare, fieldHelp, fieldLabel, 
 import { personalizeSourceKind, requestPersonalize } from '../utils/connectorPersonalize';
 import { connectScopes, scopeLabel } from '../utils/connectorScopes';
 import { ConnectorTileMenu } from './ConnectorTileMenu';
+import { DOWNLOAD_POLL_MS } from './settings/ModelSettings';
 import { SettingsDisclosure } from './settings/SettingsDisclosure';
 import { ltrIn } from './setup/format';
 import './ConnectorsSection.css';
@@ -219,6 +220,13 @@ export function ConnectorsSection() {
     }, []);
 
     useEffect(() => { void load(); }, [load]);
+
+    // Ask again while the OS prompt is open, so answering it is enough.
+    useEffect(() => {
+        if (keyStore !== 'waiting') return;
+        const timer = setInterval(() => { void load(); }, DOWNLOAD_POLL_MS);
+        return () => clearInterval(timer);
+    }, [keyStore, load]);
 
     // The tile left the group it was in; keep it in view, and keep focus on it if it went with the tile.
     useEffect(() => {

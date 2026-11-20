@@ -3,11 +3,12 @@
 
 // GET /api/connectors sends key_store when the OS key store holds back a connector's secret.
 
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as api from '../../services/api';
 import type { ConnectorRow } from '../../types';
 import { ConnectorsSection } from '../ConnectorsSection';
+import { DOWNLOAD_POLL_MS } from '../settings/ModelSettings';
 
 vi.mock('../../services/api');
 vi.mock('../../hooks/useConnectorsSSE', () => ({ useConnectorsSSE: () => {} }));
@@ -55,5 +56,22 @@ describe('ConnectorsSection while the OS key store holds connectors back', () =>
         expect(await screen.findByText('Waiting for the OS to allow reading your connected accounts.')).toBeInTheDocument();
         expect(screen.queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument();
         expect(screen.queryByText(LOCKED)).not.toBeInTheDocument();
+    });
+
+    it('asks again while waiting and drops the notice once the prompt is answered', async () => {
+        vi.useFakeTimers();
+        try {
+            mocked.listConnectors.mockResolvedValueOnce({ connectors: [held('waiting')], key_store: 'waiting' });
+            mocked.listConnectors.mockResolvedValue({ connectors: [row('Google')] });
+            render(<ConnectorsSection />);
+            await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+            expect(screen.getByText('Waiting for the OS to allow reading your connected accounts.')).toBeInTheDocument();
+            expect(mocked.listConnectors).toHaveBeenCalledTimes(1);
+            await act(async () => { await vi.advanceTimersByTimeAsync(DOWNLOAD_POLL_MS); });
+            expect(mocked.listConnectors).toHaveBeenCalledTimes(2);
+            expect(screen.queryByText('Waiting for the OS to allow reading your connected accounts.')).not.toBeInTheDocument();
+        } finally {
+            vi.useRealTimers();
+        }
     });
 });
