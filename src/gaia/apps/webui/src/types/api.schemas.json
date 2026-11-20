@@ -2351,7 +2351,7 @@
   },
   "ConnectorListResponse": {
     "additionalProperties": true,
-    "description": "Result of ``GET /api/connectors``.",
+    "description": "Result of ``GET /api/connectors``; ``key_store`` is set when any row's is.",
     "properties": {
       "connectors": {
         "items": {
@@ -2366,6 +2366,21 @@
         },
         "title": "Connectors",
         "type": "array"
+      },
+      "key_store": {
+        "anyOf": [
+          {
+            "enum": [
+              "waiting",
+              "locked"
+            ],
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Key Store"
       }
     },
     "required": [
@@ -2419,7 +2434,7 @@
   },
   "ConnectorSummary": {
     "additionalProperties": true,
-    "description": "A catalog connector merged with its live state.",
+    "description": "A catalog connector merged with its live state.\n\nWith ``key_store`` set, the OS key store would not give up this connector's\nsecret, so ``configured`` is null: its connection is unknown, not absent.",
     "properties": {
       "account_id": {
         "anyOf": [
@@ -2473,8 +2488,15 @@
         "type": "boolean"
       },
       "configured": {
-        "title": "Configured",
-        "type": "boolean"
+        "anyOf": [
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Configured"
       },
       "default_scopes": {
         "items": {
@@ -2513,6 +2535,21 @@
       "id": {
         "title": "Id",
         "type": "string"
+      },
+      "key_store": {
+        "anyOf": [
+          {
+            "enum": [
+              "waiting",
+              "locked"
+            ],
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Key Store"
       },
       "mcp_env_keys": {
         "items": {

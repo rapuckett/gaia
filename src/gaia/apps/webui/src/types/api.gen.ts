@@ -1033,14 +1033,18 @@ export interface ConnectorGrantsResponse {
   [k: string]: unknown | undefined;
 }
 /**
- * Result of ``GET /api/connectors``.
+ * Result of ``GET /api/connectors``; ``key_store`` is set when any row's is.
  */
 export interface ConnectorListResponse {
   connectors: (ConnectorSummary | ConnectorUnavailable)[];
+  key_store?: ("waiting" | "locked") | null;
   [k: string]: unknown | undefined;
 }
 /**
  * A catalog connector merged with its live state.
+ *
+ * With ``key_store`` set, the OS key store would not give up this connector's
+ * secret, so ``configured`` is null: its connection is unknown, not absent.
  */
 export interface ConnectorSummary {
   account_id: string | null;
@@ -1052,7 +1056,7 @@ export interface ConnectorSummary {
   config_error: string | null;
   config_fields: ConnectorFieldSummary[];
   configurable: boolean;
-  configured: boolean;
+  configured: boolean | null;
   default_scopes: string[];
   description: string;
   display_name: string;
@@ -1060,6 +1064,7 @@ export interface ConnectorSummary {
   enabled: boolean;
   icon: string;
   id: string;
+  key_store?: ("waiting" | "locked") | null;
   mcp_env_keys: string[];
   oauth_client: ConnectorOAuthClient | null;
   oauth_setup_fields: ConnectorFieldSummary[];
