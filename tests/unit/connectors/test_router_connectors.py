@@ -1374,6 +1374,70 @@ class TestEnableDisableHappyPath:
         assert resp.json()["enabled"] is True
 
 
+class TestKeyStorePromptLeavesServerAnswering:
+    """A blocked key-store read must not stall the loop a paired phone shares."""
+
+    @staticmethod
+    def _answers_health_while_blocked(client, router, monkeypatch, attr, call):
+        import threading
+
+        real = getattr(router, attr)
+        entered, answered = threading.Event(), threading.Event()
+
+        def blocked(*args, **kwargs):
+            entered.set()
+            answered.wait(10)
+            return real(*args, **kwargs)
+
+        monkeypatch.setattr(router, attr, blocked)
+        results, health = [], []
+        worker = threading.Thread(target=lambda: results.append(call().status_code))
+        worker.start()
+        try:
+            assert entered.wait(5)
+            other = threading.Thread(
+                target=lambda: health.append(client.get("/api/health").status_code)
+            )
+            other.start()
+            other.join(5)
+            assert health == [200]
+        finally:
+            answered.set()
+            worker.join(10)
+        return results
+
+    def test_disable_waits_off_the_event_loop(
+        self, ui_api_client, configured_mcp, monkeypatch
+    ):
+        from gaia.ui.routers import connectors as router
+
+        results = self._answers_health_while_blocked(
+            ui_api_client,
+            router,
+            monkeypatch,
+            "_connector_summary",
+            lambda: ui_api_client.post(
+                "/api/connectors/mcp-github/disable", headers=UI_HEADER
+            ),
+        )
+        assert results == [200]
+
+    def test_listing_forwarded_connections_waits_off_the_event_loop(
+        self, ui_api_client, monkeypatch
+    ):
+        from gaia.ui.routers import connectors as router
+
+        monkeypatch.setattr(router.connections, "list_connections", lambda: [])
+        results = self._answers_health_while_blocked(
+            ui_api_client,
+            router.connections,
+            monkeypatch,
+            "list_connections",
+            lambda: ui_api_client.get("/v1/connections"),
+        )
+        assert results == [200]
+
+
 class TestEnableDisableSseEvents:
     def test_disable_emits_sse_event(self, ui_api_client, configured_mcp):
         from gaia.ui.routers.connectors import _emitter
