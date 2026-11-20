@@ -48,6 +48,7 @@ markers = [
     "distributed_seams: marks the consolidated daemon<->sidecar seam contract suite (V2-19 / #2180); deterministic, runs in normal CI, skips seams not yet merged",
     "network: marks tests that hit a live external endpoint (runs in CI; auto-skips when unreachable or GAIA_SKIP_NETWORK_TESTS=1)",
     "real_sinks: marks tests that exercise the real schedule output sinks instead of the unit-suite notification stub",
+    "real_keychain: marks tests that deliberately use the real OS keychain (skipped unless GAIA_TEST_REAL_KEYCHAIN=1; the keychain guard allows only these)",
 ]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
