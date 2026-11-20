@@ -25,13 +25,13 @@ import { ConnectorsScreen } from './ConnectorsScreen';
  * CON-02: `many` (8 connectors, so the search field shows). CON-11: `disconnected` and `revoked` open Microsoft Personal;
  * `#tap=connector-disconnect-microsoft,connector-disconnect-confirm`: `disconnected` answers that the provider has no revoke API, `revoked`
  * that the provider did not confirm the revoke (reason on the notice). CON-09: `oauthSetup` opens Google's first-time setup sheet. CON-10: `oauthClient`
- * opens a connected account's OAuth client sheet. CON-12: `mcpConfigure` opens Slack's key sheet. CON-13: `checkRunning`, `checkOk`, `checkSlow` and
- * `checkFailed` show a Linear server's Check line (`#tap=connector-check-linear` runs it again). CON-07: on a paired phone, `googleReady` shows Google's
+ * opens a connected account's OAuth client sheet. CON-12: `mcpConfigure` opens Slack's key sheet. CON-13: `checkRunning`, `checkOk`, `checkSlow`,
+ * `checkFailed` and `checkLocked` (the PC's key store is locked) show a Linear server's Check line (`#tap=connector-check-linear` runs it again). CON-07: on a paired phone, `googleReady` shows Google's
  * Connect, and with `#tap=connector-connect-google`: `googleBrowser` waits on the browser, `googleFinishing` waits on the PC, `googleDone` ends
  * connected, `googleDenied` (declined at Google), `googleTimeout`, `googleExpired` (PC answers 404), `googleStateMismatch` (400), `googleRefused`
  * (403 at the start), `googleFailed` (the PC's generic 500) and `googleSuperseded` (a sign-in started on the PC replaced it) each end on their notice. CON-18: every scene ends with the Extend with MCP link. CON-16: `personalize` opens a just-connected Gmail tile with the after-connect Personalize GAIA offer, `personalizeTile` the plain per-tile offer, and `personalizeFailed` a just-connected server whose offer fails (`#tap=personalize-linear`: the sentence plus the PC's reason), `personalizeMcp` a just-connected server on a paired phone (the same Personalize button as on the PC).
  */
-export const CONNECTOR_SCENES = ['serverOn', 'serverOff', 'grants', 'loading', 'error', 'none', 'groups', 'menu', 'code', 'codeFailed', 'many', 'disconnected', 'revoked', 'personalize', 'personalizeTile', 'personalizeFailed', 'personalizeMcp', 'oauthSetup', 'oauthClient', 'mcpConfigure', 'checkRunning', 'checkOk', 'checkSlow', 'checkFailed', 'googleReady', 'googleBrowser', 'googleFinishing', 'googleDone', 'googleDenied', 'googleTimeout', 'googleExpired', 'googleStateMismatch', 'googleRefused', 'googleFailed', 'googleSuperseded'] as const;
+export const CONNECTOR_SCENES = ['serverOn', 'serverOff', 'grants', 'loading', 'error', 'none', 'groups', 'menu', 'code', 'codeFailed', 'many', 'disconnected', 'revoked', 'personalize', 'personalizeTile', 'personalizeFailed', 'personalizeMcp', 'oauthSetup', 'oauthClient', 'mcpConfigure', 'checkRunning', 'checkOk', 'checkSlow', 'checkFailed', 'checkLocked', 'googleReady', 'googleBrowser', 'googleFinishing', 'googleDone', 'googleDenied', 'googleTimeout', 'googleExpired', 'googleStateMismatch', 'googleRefused', 'googleFailed', 'googleSuperseded'] as const;
 export type ConnectorScene = (typeof CONNECTOR_SCENES)[number];
 
 const server = (over: Partial<ConnectorRow> = {}) =>
@@ -79,6 +79,7 @@ const CHECKS: Partial<Record<ConnectorScene, ConnectorCheck>> = {
     checkOk: { state: 'ok' },
     checkSlow: { state: 'failed', slow: true, detail: 'Timed out after 30 s waiting for the server to start.' },
     checkFailed: { state: 'failed', slow: false, detail: 'Error: 401 Unauthorized (the key was rejected)' },
+    checkLocked: { state: 'locked', detail: 'The OS keyring is locked.' },
 };
 
 /** What the phone's loopback listener hands back in each Google scene; null waits on the browser. */
@@ -151,6 +152,7 @@ const LIST_SCENES: Partial<Record<ConnectorScene, { data: FakeClientData; expand
     checkOk: { data: { connectors: [LINEAR_KEYED] }, expanded: 'linear' },
     checkSlow: { data: { connectors: [LINEAR_KEYED], connectorTest: { ok: false, reason: 'timeout', detail: 'Timed out after 30 s waiting for the server to start.' } }, expanded: 'linear' },
     checkFailed: { data: { connectors: [LINEAR_KEYED], connectorTest: { ok: false, detail: 'Error: 401 Unauthorized (the key was rejected)' } }, expanded: 'linear' },
+    checkLocked: { data: { connectors: [LINEAR_KEYED] }, expanded: 'linear', override: { testConnector: () => Promise.reject(new GaiaApiError(423, 'The OS keyring is locked.')) } },
     googleReady: { data: { connectors: [GOOGLE_READY] }, expanded: 'google' },
     googleBrowser: { data: { connectors: [GOOGLE_READY] }, expanded: 'google' },
     googleFinishing: { data: { connectors: [GOOGLE_READY] }, expanded: 'google', override: { completeConnectorBrowserSignIn: () => new Promise<never>(() => undefined) } },
