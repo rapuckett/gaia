@@ -372,6 +372,11 @@ func (c *Client) Configure(ctx context.Context, p Provider, key string) error {
 		}
 		target = &Client{BaseURL: base, HTTP: c.HTTP}
 	}
+	if p.Name == "amd" {
+		if err := target.dropKeyOnMove(ctx, p); err != nil {
+			return err
+		}
+	}
 	data := map[string]any{"backend": "cloud", "provider": p.Name, "base_url": p.BaseURL, "auth_header_name": p.Header, "auth_header_prefix": p.Prefix, "wire_format": "openai"}
 	if err := target.request(ctx, "POST", "/install", data, nil); err != nil {
 		return err
@@ -380,6 +385,31 @@ func (c *Client) Configure(ctx context.Context, p Provider, key string) error {
 		return target.request(ctx, "POST", "/cloud/auth", map[string]string{"provider": p.Name, "api_key": key}, nil)
 	}
 	return nil
+}
+
+// dropKeyOnMove clears the key Lemonade holds for p when p is registered at
+// another address: Lemonade keeps a key across an install, and would send the
+// old gateway's key to the new one.
+func (c *Client) dropKeyOnMove(ctx context.Context, p Provider) error {
+	providers, err := c.Providers(ctx)
+	if err != nil {
+		return err
+	}
+	for _, have := range providers {
+		if have.Name != p.Name || !have.RuntimeKey || sameBaseURL(have.BaseURL, p.BaseURL) {
+			continue
+		}
+		err := c.request(ctx, "DELETE", "/cloud/auth/"+p.Name, nil, nil)
+		if errors.Is(err, errProviderNotInstalled) {
+			return nil
+		}
+		return err
+	}
+	return nil
+}
+
+func sameBaseURL(a, b string) bool {
+	return strings.EqualFold(strings.TrimRight(a, "/"), strings.TrimRight(b, "/"))
 }
 
 // useRegistered is Configure on the user's own server: GAIA registers nothing
@@ -399,7 +429,7 @@ func (c *Client) useRegistered(ctx context.Context, p Provider, key string) erro
 			continue
 		}
 		// Header and prefix count only when the server reports them.
-		same := strings.EqualFold(strings.TrimRight(have.BaseURL, "/"), strings.TrimRight(p.BaseURL, "/")) &&
+		same := sameBaseURL(have.BaseURL, p.BaseURL) &&
 			(have.Header == "" || (strings.EqualFold(have.Header, p.Header) && have.Prefix == p.Prefix))
 		if same {
 			return nil

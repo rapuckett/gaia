@@ -51,11 +51,20 @@ def build_provider_key_router(token: str) -> APIRouter:
     def remember(provider: str, body: RememberKeyRequest) -> dict:
         """Keep the key in the OS credential store."""
         from gaia.llm.cloud_keys import CloudKeyError, remember_key
+        from gaia.llm.gateway import (
+            GATEWAY_PROVIDER,
+            GatewayError,
+            configured_gateway_url,
+        )
 
         _known(provider)
         try:
-            remember_key(provider, body.key)
-        except CloudKeyError as e:
+            # The gateway's key is bound to the gateway the TUI just gave it to.
+            base_url = (
+                configured_gateway_url() if provider == GATEWAY_PROVIDER else None
+            )
+            remember_key(provider, body.key, base_url=base_url)
+        except (CloudKeyError, GatewayError) as e:
             # 503: the TUI says the key works for this session only.
             raise HTTPException(status_code=503, detail=str(e)) from e
         log.info(f"{provider} key stored in the OS credential store.")

@@ -194,6 +194,7 @@ func TestAMDGatewayCustomHeaderAndRuntimeKey(t *testing.T) {
 			return
 		case "/api/v1/cloud/auth/amd":
 			cleared = r.Method == http.MethodDelete
+		case "/api/v1/system-info":
 		default:
 			t.Errorf("unexpected path: %s", r.URL.Path)
 		}
@@ -213,6 +214,38 @@ func TestAMDGatewayCustomHeaderAndRuntimeKey(t *testing.T) {
 	}
 	if !installed || !authenticated || !cleared {
 		t.Fatal("gateway configuration or key lifecycle failed")
+	}
+}
+
+// Lemonade keeps a key across an install, so a new gateway address must drop
+// the key it holds for the old one first, or that key goes to the new host.
+func TestConfiguringANewGatewayAddressDropsTheOldKeyFirst(t *testing.T) {
+	for _, moved := range []bool{true, false} {
+		var calls []string
+		s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			calls = append(calls, r.Method+" "+strings.TrimPrefix(r.URL.Path, "/api/v1"))
+			if r.URL.Path == "/api/v1/system-info" {
+				fmt.Fprint(w, `{"cloud":{"providers":[{"name":"amd","base_url":"https://old.example/v1/","runtime_key_set":true}]}}`)
+				return
+			}
+			fmt.Fprint(w, `{}`)
+		}))
+		url := "https://old.example/v1"
+		if moved {
+			url = "https://new.example/v1"
+		}
+		err := New(s.URL).Configure(context.Background(), Provider{Name: "amd", BaseURL: url, Header: "api-key"}, "")
+		s.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := "GET /system-info,POST /install"
+		if moved {
+			want = "GET /system-info,DELETE /cloud/auth/amd,POST /install"
+		}
+		if got := strings.Join(calls, ","); got != want {
+			t.Errorf("moved=%v: calls %s, want %s", moved, got, want)
+		}
 	}
 }
 

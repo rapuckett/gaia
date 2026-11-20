@@ -58,6 +58,10 @@ from gaia.connectors.activations import (
 from gaia.connectors.api import activate as activate_connector_for_agent
 from gaia.connectors.api import deactivate as deactivate_connector_for_agent
 from gaia.connectors.api import resolve_declared_scopes
+from gaia.connectors.credential_wait import (
+    CredentialStoreLocked,
+    CredentialStoreWaiting,
+)
 from gaia.connectors.errors import (
     AuthRequiredError,
     ConfigurationError,
@@ -98,6 +102,7 @@ from gaia.connectors.mcp_server import (
 from gaia.connectors.registry import REGISTRY
 from gaia.connectors.spec import _VALID_KINDS, ConfigField, ConnectorType
 from gaia.connectors.store import (
+    KeyringRefused,
     peek_connection,
     peek_provider_credentials,
     retry_keyring,
@@ -567,6 +572,10 @@ DEVICE_CONNECTOR_ERROR = (
     "GAIA couldn't finish this on the PC. "
     "Open Settings \u203a Connectors on the PC to see why."
 )
+DEVICE_KEY_STORE_LOCKED = (
+    "The PC's key store is locked or its prompt was closed. "
+    "Approve the prompt on the PC, or choose Try again in Settings \u203a Model."
+)
 DEVICE_CHECK_FAILED = (
     "The check didn't pass. Run it again in Settings \u203a Connectors on the PC "
     "to see why."
@@ -585,6 +594,16 @@ def _http_error_for(request: Request, exc: ConnectorsError) -> HTTPException:
     return HTTPException(
         status_code=http.status_code, detail=detail, headers=http.headers
     )
+
+
+def _key_store_locked_error(request: Request, exc: Exception) -> HTTPException:
+    """423 for a locked key store, 409 while its prompt is unanswered; OS text stays on the PC."""
+    logger.warning(
+        "connectors: key store stayed locked for %s: %s", principal(request), exc
+    )
+    locked = isinstance(exc, (CredentialStoreLocked, KeyringRefused))
+    detail = str(exc) if is_local_pc(request) else DEVICE_KEY_STORE_LOCKED
+    return HTTPException(status_code=423 if locked else 409, detail=detail)
 
 
 def _shareable_check(result: Dict[str, Any]) -> Dict[str, Any]:
@@ -1276,6 +1295,8 @@ async def test_connector(request: Request, connector_id: str) -> Dict[str, Any]:
         raise HTTPException(
             status_code=404, detail=f"Unknown connector: {connector_id!r}"
         )
+    except (CredentialStoreWaiting, KeyringRefused) as e:
+        raise _key_store_locked_error(request, e) from e
     except ConnectorsError as e:
         raise _http_error_for(request, e) from e
 

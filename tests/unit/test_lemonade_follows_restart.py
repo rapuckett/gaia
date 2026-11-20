@@ -27,6 +27,13 @@ NEW_PORT, NEW_KEY = 41002, "key-after-restart"
 MODEL = "Gemma-4-E4B-it-GGUF"
 
 
+def _bound_key(token):
+    """*token* stored bound to the gateway GAIA has registered."""
+    from gaia.llm import gateway
+
+    return gateway.GatewayKey(token, gateway.GatewayState.load().base_url)
+
+
 class _Response:
     status_code = 200
 
@@ -327,6 +334,10 @@ class _Gateway:
         self.calls = []
         self.holds_key = False
         monkeypatch.setattr("gaia.llm.gateway.recall_token", lambda: "kept-key")
+        monkeypatch.setattr(
+            "gaia.llm.gateway.recall_stored_key",
+            lambda: _bound_key("kept-key"),
+        )
         monkeypatch.setattr("gaia.llm.gateway.requests.request", self.request)
 
     def request(self, method, url, json=None, headers=None, timeout=None, **_):
@@ -364,7 +375,9 @@ def test_a_restarted_server_gets_the_cloud_key_back_before_the_turn(
     chat.chat([{"role": "user", "content": "second"}])
 
     new = f"http://localhost:{NEW_PORT}/api/v1"
+    # Read again once the key is in hand, outside the lock.
     assert gateway.calls == [
+        ("GET", f"{new}/system-info", f"Bearer {NEW_KEY}"),
         ("GET", f"{new}/system-info", f"Bearer {NEW_KEY}"),
         ("POST", f"{new}/cloud/auth", f"Bearer {NEW_KEY}"),
     ]
@@ -388,6 +401,7 @@ def test_a_server_the_daemon_restarts_mid_chat_gets_the_cloud_key_back(
     chat.chat([{"role": "user", "content": "after the crash"}])
 
     assert [call[:2] for call in gateway.calls] == [
+        ("GET", f"http://localhost:{NEW_PORT}/api/v1/system-info"),
         ("GET", f"http://localhost:{NEW_PORT}/api/v1/system-info"),
         ("POST", f"http://localhost:{NEW_PORT}/api/v1/cloud/auth"),
     ]
@@ -438,6 +452,10 @@ class _CloudLemonade:
     def __init__(self, monkeypatch):
         self.calls = []
         monkeypatch.setattr("gaia.llm.gateway.recall_token", lambda: "kept-amd-key")
+        monkeypatch.setattr(
+            "gaia.llm.gateway.recall_stored_key",
+            lambda: _bound_key("kept-amd-key"),
+        )
         monkeypatch.setattr(
             "gaia.llm.cloud_keys.recall_key", lambda provider: f"kept-{provider}-key"
         )

@@ -26,10 +26,13 @@ from fastapi import (
     Request,
     Response,
 )
+from fastapi.responses import JSONResponse
 from starlette.background import BackgroundTask
 
 from gaia.config import GaiaConfig, GaiaConfigError
 from gaia.logger import get_logger
+from gaia.messaging.discord.cli import PairingKept
+from gaia.messaging.discord.state import BridgeStateError
 
 from ..devices import (
     DEVICE_CHANGES_KEPT,
@@ -123,6 +126,29 @@ DEVICE_ACCESS_ERROR = (
 def _access(request: Request) -> DeviceAccess:
     access: DeviceAccess = request.app.state.devices
     return access
+
+
+#: Unpairing worked, but the Discord pairing the device set up could not be reset.
+_DISCORD_KEPT = (PairingKept, BridgeStateError)
+
+
+def _discord_kept(request: Request, e: Exception, end_device: str = "") -> JSONResponse:
+    """A 500 saying so; *end_device*'s other requests end once it is sent."""
+    logger.error("A removed device's Discord pairing was kept: %s", e)
+    reason = str(e) if is_local_pc(request) else "Open Settings › Messaging on the PC."
+    return JSONResponse(
+        status_code=500,
+        content={
+            "detail": "The device was unpaired, but the Discord bot or pairing it set "
+            f"up was not reset. {reason} Then set up Discord again."
+        },
+        headers={"Cache-Control": "no-store"},
+        background=(
+            BackgroundTask(_access(request).requests.end, end_device)
+            if end_device
+            else None
+        ),
+    )
 
 
 def _refused(code: str, message: str) -> HTTPException:
@@ -245,6 +271,8 @@ async def reset_pairing(request: Request) -> Dict[str, Any]:
     access = _access(request)
     try:
         await access.reset()
+    except _DISCORD_KEPT as e:
+        return _discord_kept(request, e)
     except UnsafeDeviceFolderError as e:
         raise _refused("unsafe_folder", str(e)) from e
     except DeviceCertificateError as e:
@@ -314,7 +342,10 @@ def unpair_this_device(
 ) -> Response:
     """A device unpairs itself with its own token, pending or allowed."""
     access = _access(request)
-    access.revoke(device_id, end_requests=False)
+    try:
+        access.revoke(device_id, end_requests=False)
+    except _DISCORD_KEPT as e:
+        return _discord_kept(request, e, end_device=device_id)
     # Its other streams end once this answer is sent.
     return Response(
         status_code=204,
@@ -351,10 +382,14 @@ def unpair_device(
     access = _access(request)
     caller = allowed_device(request)
     itself = caller is not None and caller.device_id == device_id
+    kept = None
     with _folder_checked(request):
         removed = access.describe_id(device_id)
         # A device unpairing itself keeps this request; its others end after.
-        gone = access.revoke(device_id, end_requests=not itself)
+        try:
+            gone = access.revoke(device_id, end_requests=not itself)
+        except _DISCORD_KEPT as e:
+            gone, kept = True, e
     if not gone:
         raise HTTPException(status_code=404, detail="No paired device has that id.")
     if caller is not None:
@@ -366,6 +401,8 @@ def unpair_device(
             device_id=device_id,
             **({"device": name} if name else {}),
         )
+    if kept is not None:
+        return _discord_kept(request, kept, end_device=device_id if itself else "")
     if itself:
         background.add_task(access.requests.end, device_id)
     return {"changes_count": request.app.state.db.device_change_count(device_id)}
