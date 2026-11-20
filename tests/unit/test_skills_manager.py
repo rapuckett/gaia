@@ -10,6 +10,7 @@ Every test runs from a cold state: roots live under ``tmp_path`` and the real
 
 from __future__ import annotations
 
+import threading
 from pathlib import Path
 from unittest.mock import patch
 
@@ -834,23 +835,15 @@ def test_hot_reload_invalidates_the_cache_on_change(roots):
     manager = make_manager(roots)
     assert manager.list_skills() == []
 
-    watched = manager.start_watching()
+    changed = threading.Event()
+    watched = manager.start_watching(on_change=changed.set)
     try:
         assert watched == 3
         assert manager.is_watching
         copy_fixture("bare-standard", roots["user"])
-        _wait_for(lambda: [s.name for s in manager.list_skills()] == ["bare-standard"])
+        # FSEvents plus the watcher's debounce can lag a long time under load.
+        assert changed.wait(timeout=60), "watcher never reported the change"
+        assert [s.name for s in manager.list_skills()] == ["bare-standard"]
     finally:
         manager.stop_watching()
     assert not manager.is_watching
-
-
-def _wait_for(predicate, timeout: float = 10.0) -> None:
-    import time
-
-    deadline = time.time() + timeout
-    while time.time() < deadline:
-        if predicate():
-            return
-        time.sleep(0.1)
-    raise AssertionError("Condition not met before the timeout")
