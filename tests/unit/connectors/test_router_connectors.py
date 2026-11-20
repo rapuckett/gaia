@@ -151,10 +151,10 @@ class TestListConnectors:
 
         real = router._connector_summary
 
-        def summary(connector_id):
+        def summary(connector_id, **kwargs):
             if connector_id == "google":
                 raise RuntimeError("keyring locked")
-            return real(connector_id)
+            return real(connector_id, **kwargs)
 
         monkeypatch.setattr(router, "_connector_summary", summary)
         resp = ui_api_client.get("/api/connectors")
@@ -179,10 +179,10 @@ class TestListConnectors:
         real = router._connector_summary
         entered, answered = threading.Event(), threading.Event()
 
-        def summary(connector_id):
+        def summary(connector_id, **kwargs):
             entered.set()
             answered.wait(10)
-            return real(connector_id)
+            return real(connector_id, **kwargs)
 
         monkeypatch.setattr(router, "_connector_summary", summary)
         listed, health = [], []
