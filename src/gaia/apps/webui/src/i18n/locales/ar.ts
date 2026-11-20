@@ -4245,6 +4245,8 @@ const messages: Messages = {
     'mobileApp.setup.models.fit.unknown': 'تعذّر على GAIA قراءة ذاكرة الكمبيوتر لديك، لذا لا يستطيع معرفة ما إذا كان هذا النموذج مناسبًا.',
     'mobileApp.setup.models.loading': 'جارٍ قراءة النماذج على الكمبيوتر لديك…',
     'mobileApp.setup.check.title': 'فحص الكمبيوتر لديك',
+    'mobileApp.setup.key.foundEnv': 'وُجد مفتاح {name} في متغيرات البيئة على الكمبيوتر لديك: {variable}. اختر «اختبار واتصال» لاستخدامه.',
+    'mobileApp.setup.key.foundEnvUnnamed': 'وُجد مفتاح {name} في متغيرات البيئة على الكمبيوتر لديك. اختر «اختبار واتصال» لاستخدامه.',
     'mobileApp.setup.lostContactNoReason': 'انقطع الاتصال بـ GAIA.',
     'mobileApp.setup.pc.step': 'الكمبيوتر لديك',
     'mobileApp.setup.redownload.body': 'نُزّل {name} لكنه لم يُحمَّل. يحذف GAIA النسخة الموجودة على الكمبيوتر لديك وينزّله من جديد {size}.',
