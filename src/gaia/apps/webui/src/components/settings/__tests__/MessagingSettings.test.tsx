@@ -100,9 +100,10 @@ describe('MessagingSettings', () => {
         vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText } });
         serve({ 'GET /messaging/discord': ok(PAIRING) });
         render(<MessagingSettings />);
-        fireEvent.click(await screen.findByRole('button', { name: 'Copy code' }));
+        const copy = await screen.findByRole('button', { name: 'Copy code' });
+        await act(async () => { fireEvent.click(copy); });
         expect(writeText).toHaveBeenCalledWith('ABCD2345');
-        expect(await screen.findByRole('button', { name: 'Copied' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Copied' })).toBeInTheDocument();
     });
 
     it('pairing: watches the bridge and shows success once the code is sent', async () => {
