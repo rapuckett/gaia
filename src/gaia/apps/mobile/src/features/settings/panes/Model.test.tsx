@@ -9,12 +9,21 @@ import type { ActiveModel, ProviderModel, ProviderSummary, ProviderSummaryList }
 import { GaiaApiError } from '@/api/errors';
 import { createFakeClient, type FakeClientData } from '@/api/fake';
 import { GaiaClientProvider } from '@/data/GaiaClientProvider';
+import { usePickLoadStore } from '@/state/pickLoad';
 
 import Model from './Model';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const selects: Record<string, { onChange: (v: string) => void }> = {};
+const roots: ReturnType<typeof createRoot>[] = [];
+
+// A pane left mounted keeps refetching after its switch and re-registers its own Switch model select over the next test's.
+afterEach(() => {
+    act(() => roots.splice(0).forEach((r) => r.unmount()));
+    usePickLoadStore.getState().clear();
+    for (const label of Object.keys(selects)) delete selects[label];
+});
 
 jest.mock('@/ui', () => {
     const { Text: RNText } = jest.requireActual('react-native');
@@ -63,6 +72,7 @@ const active: ActiveModel = { provider: 'local', model: 'Gemma-4-E4B-it-GGUF', d
 async function render(data: FakeClientData) {
     const client = createFakeClient(data);
     const r = createRoot({ textComponentTypes: ['Text', 'RCTText'] });
+    roots.push(r);
     await act(async () => {
         r.render(
             <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })}>
@@ -76,8 +86,17 @@ async function render(data: FakeClientData) {
     return JSON.stringify(r.container.toJSON());
 }
 
+// react-query hands a settled mutation to the screen on a 0 ms timer, which act() doesn't wait for.
+async function tick() {
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+}
+
+async function until(what: string, done: () => boolean) {
+    for (let i = 0; i < 50 && !done(); i++) await tick();
+    if (!done()) throw new Error(`The Model pane never got to: ${what}`);
+}
+
 async function switchTo(failWith?: GaiaApiError) {
-    delete selects['Switch model'];
     const client = createFakeClient({
         providers,
         activeModel: active,
@@ -87,20 +106,23 @@ async function switchTo(failWith?: GaiaApiError) {
         contexts: {},
         selectError: failWith,
     });
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
     const r = createRoot({ textComponentTypes: ['Text', 'RCTText'] });
+    roots.push(r);
     await act(async () => {
         r.render(
-            <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })}>
+            <QueryClientProvider client={queryClient}>
                 <GaiaClientProvider client={client}>
                     <Model />
                 </GaiaClientProvider>
             </QueryClientProvider>,
         );
     });
-    for (let i = 0; i < 6 && !selects['Switch model']; i++) {
-        await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
-    }
+    await until('the Switch model picker, every read answered', () => !!selects['Switch model'] && queryClient.isFetching() === 0);
     await act(async () => selects['Switch model']!.onChange('Qwen3.6-35B-A3B-GGUF'));
+    await until('the switch settled', () => queryClient.isMutating() === 0);
+    // The outcome's timer was queued as the switch settled, so it runs before this one.
+    await tick();
     return { client, shown: JSON.stringify(r.container.toJSON()) };
 }
 
