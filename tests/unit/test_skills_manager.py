@@ -10,7 +10,9 @@ Every test runs from a cold state: roots live under ``tmp_path`` and the real
 
 from __future__ import annotations
 
+import os
 import threading
+import time
 from pathlib import Path
 from unittest.mock import patch
 
@@ -831,18 +833,58 @@ def test_agent_without_skills_adds_nothing_to_the_prompt():
 # ----------------------------------------------------------------------
 
 
-def test_hot_reload_invalidates_the_cache_on_change(roots):
+def test_hot_reload_invalidates_the_cache_on_change(roots, monkeypatch):
     manager = make_manager(roots)
     assert manager.list_skills() == []
+
+    reported: list[str] = []
+    reported_cond = threading.Condition()
+    handle_change = manager._handle_change
+
+    def spy(path: str) -> None:
+        # Record only after the cache is dropped, so a waiter never sees it stale.
+        handle_change(path)
+        with reported_cond:
+            reported.append(os.path.realpath(path))
+            reported_cond.notify_all()
+
+    def wait_for_report_under(folder: Path, timeout: float) -> bool:
+        prefix = os.path.realpath(folder) + os.sep
+        with reported_cond:
+            return reported_cond.wait_for(
+                lambda: any(p.startswith(prefix) for p in reported), timeout
+            )
+
+    monkeypatch.setattr(manager, "_handle_change", spy)
+    # No SKILL.md here, so discovery skips the probe folder.
+    probe_dir = roots["user"] / "watch-probe"
+    probe_dir.mkdir()
 
     changed = threading.Event()
     watched = manager.start_watching(on_change=changed.set)
     try:
         assert watched == 3
         assert manager.is_watching
-        copy_fixture("bare-standard", roots["user"])
-        # FSEvents plus the watcher's debounce can lag a long time under load.
-        assert changed.wait(timeout=60), "watcher never reported the change"
+
+        # FSEvents arms after start() returns; a change made before then is lost.
+        armed_by = time.monotonic() + 60
+        touches = 0
+        while True:
+            # A fresh name each time: re-touching one file restarts its debounce.
+            (probe_dir / f"probe-{touches}.md").write_text("probe", encoding="utf-8")
+            touches += 1
+            if wait_for_report_under(probe_dir, timeout=1.0):
+                break
+            assert time.monotonic() < armed_by, (
+                f"watcher never armed: {touches} probe writes in {probe_dir} "
+                "went unreported for 60 s"
+            )
+
+        fixture_dir = copy_fixture("bare-standard", roots["user"])
+        assert wait_for_report_under(
+            fixture_dir, timeout=60
+        ), f"armed watcher never reported the new skill at {fixture_dir}"
+        assert changed.is_set()
         assert [s.name for s in manager.list_skills()] == ["bare-standard"]
     finally:
         manager.stop_watching()
