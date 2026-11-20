@@ -1,8 +1,8 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { useState } from 'react';
-import { View } from 'react-native';
+import { useRef, useState, type ComponentRef } from 'react';
+import { View, type ScrollView } from 'react-native';
 
 import { ENDPOINTS } from '@/api/constants';
 import { useDeviceRefused } from '@/api/routeAccess';
@@ -13,6 +13,7 @@ import { Ellipsis, RefreshCw } from '@/ui/icons';
 
 import { failureNotice, MAINTENANCE_ACTIONS, MAINTENANCE_LABELS, outcomeNotice } from './maintenance';
 import { MemoryTabs } from './MemoryTabs';
+import { MemoryScrollContext } from './revealNotice';
 import { MEMORY_TABS, type MemoryTabKey } from './tabs';
 import { useMemoryNotice } from './useMemoryNotice';
 
@@ -27,6 +28,7 @@ export interface MemoryScreenProps {
 export function MemoryScreen({ onBack, onOpenChat, initialTab = 'about' }: MemoryScreenProps) {
     const t = useT();
     const [tab, setTab] = useState<MemoryTabKey>(initialTab);
+    const scrollRef = useRef<ComponentRef<typeof ScrollView>>(null);
     const [menuOpen, setMenuOpen] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
     const { notice, notify, dismiss } = useMemoryNotice();
@@ -96,9 +98,11 @@ export function MemoryScreen({ onBack, onOpenChat, initialTab = 'about' }: Memor
     );
 
     return (
-        <Screen scroll refreshing={refreshing} onRefresh={() => void pullToRefresh()} header={header}>
+        <Screen scroll scrollRef={scrollRef} refreshing={refreshing} onRefresh={() => void pullToRefresh()} header={header}>
             <ActionSheet open={menuOpen} onClose={() => setMenuOpen(false)} title={t('mem.maint.label')} actions={actions} />
-            <Pane notify={notify} memoryEnabled={settings.data?.memory_enabled} onOpenAdvanced={() => setTab('advanced')} onOpenChat={onOpenChat} />
+            <MemoryScrollContext.Provider value={scrollRef}>
+                <Pane notify={notify} memoryEnabled={settings.data?.memory_enabled} onOpenAdvanced={() => setTab('advanced')} onOpenChat={onOpenChat} />
+            </MemoryScrollContext.Provider>
         </Screen>
     );
 }

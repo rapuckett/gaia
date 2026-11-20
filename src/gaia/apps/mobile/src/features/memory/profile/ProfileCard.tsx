@@ -1,7 +1,8 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { createContext, useContext, useEffect, useRef, useState } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, type ComponentRef } from 'react';
+import { View } from 'react-native';
 
 import { isolate } from '@webui/i18n/registry';
 
@@ -12,6 +13,7 @@ import { Button, Card, ChoiceList, Disclosure, Icon, Ltr, Notice, Row, ScrollBox
 import { CircleCheck, Cpu, Sparkles, Square } from '@/ui/icons';
 
 import { PcOnlyNotice } from '../../settings/PcOnlyNotice';
+import { useRevealOnMount } from '../revealNotice';
 import type { MemoryPaneProps } from '../tabs';
 import { useProfileRun, type LogLine, type ProfileKind } from './useProfileRun';
 
@@ -53,6 +55,8 @@ export function ProfileCard({ kind, notify }: { kind: ProfileKind; notify: Memor
     const auto = useRef(dev?.kind === kind);
     const autoSaved = useRef(false);
     const { begin, save } = run;
+    const savedRef = useRef<ComponentRef<typeof View>>(null);
+    useRevealOnMount(savedRef, phase === 'done' && savedCount !== null);
     useEffect(() => {
         if (!auto.current) return;
         auto.current = false;
@@ -149,7 +153,9 @@ export function ProfileCard({ kind, notify }: { kind: ProfileKind; notify: Memor
                         </Row>
                         {/* Once saved, the notice replaces Save, so it shows where the person tapped. */}
                         {phase === 'done' && savedCount !== null ? (
-                            <Notice tone="success" message={t(copy.saved, { n: savedCount })} testID={`profile-${kind}-saved`} />
+                            <View ref={savedRef} collapsable={false}>
+                                <Notice tone="success" message={t(copy.saved, { n: savedCount })} testID={`profile-${kind}-saved`} />
+                            </View>
                         ) : (
                             <Button
                                 label={t.bare(phase === 'saving' ? 'mem.saving' : 'mem.review.saveSelected', { n: kept })}

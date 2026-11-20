@@ -164,8 +164,7 @@ export function useProfileRun(kind: ProfileKind, notify: (notice: MemoryNotice) 
             setSavedCount(result.stored);
             setPhase('done');
             const saved = t(kind === 'discovery' ? 'mem.disc.saved' : 'mem.inf.saved', { n: result.stored });
-            notify({ tone: 'success', text: saved });
-            // The saved notice replaces the focused Save button; Android's live region reads it, VoiceOver needs telling.
+            // The inline saved notice replaces Save; Android's live region reads it, VoiceOver needs telling.
             if (Platform.OS === 'ios') AccessibilityInfo.announceForAccessibility(saved);
         } catch (err) {
             setPhase('review');
