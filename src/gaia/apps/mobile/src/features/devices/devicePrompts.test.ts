@@ -5,7 +5,7 @@ import { act, renderHook } from '@testing-library/react-native';
 
 import { GaiaApiError, GaiaNetworkError } from '@/api/errors';
 
-import { ALREADY_WAITING_DETAIL, applyDevicePromptEvent, deviceHaptics, useDevicePrompt, useDevicePromptStore } from './devicePrompts';
+import { ALREADY_WAITING_CODE, ALREADY_WAITING_DETAIL, applyDevicePromptEvent, deviceHaptics, useDevicePrompt, useDevicePromptStore } from './devicePrompts';
 
 const denied = jest.spyOn(deviceHaptics, 'denied').mockImplementation(() => undefined);
 
@@ -85,7 +85,7 @@ describe('useDevicePrompt', () => {
     describe('report', () => {
         const hook = () => renderHook(() => useDevicePrompt({ kind: 'admin', action: 'gpuMemoryApply' }));
 
-        it('a 409 with the PC\'s busy sentence is busy and leaves the button; any other 409 is left to the caller', async () => {
+        it('a 409 prompt_already_waiting is busy and leaves the button; any other 409 is left to the caller', async () => {
             const { result } = await hook();
             let consumed = true;
             await act(async () => {
@@ -93,11 +93,25 @@ describe('useDevicePrompt', () => {
             });
             expect(consumed).toBe(false);
             await act(async () => {
-                consumed = result.current.report(new GaiaApiError(409, ALREADY_WAITING_DETAIL));
+                consumed = result.current.report(new GaiaApiError(409, 'msg', undefined, undefined, { code: ALREADY_WAITING_CODE, message: 'msg' }));
             });
             expect(consumed).toBe(true);
             expect(result.current.state).toBe('busy');
             expect(result.current.hideAction).toBe(false);
+        });
+
+        it('a PC from before the code is busy by its sentence alone, and only when it sends no code', async () => {
+            const { result } = await hook();
+            let consumed = true;
+            await act(async () => {
+                consumed = result.current.report(new GaiaApiError(409, ALREADY_WAITING_DETAIL, undefined, undefined, { code: 'other', message: ALREADY_WAITING_DETAIL }));
+            });
+            expect(consumed).toBe(false);
+            await act(async () => {
+                consumed = result.current.report(new GaiaApiError(409, ALREADY_WAITING_DETAIL));
+            });
+            expect(consumed).toBe(true);
+            expect(result.current.state).toBe('busy');
         });
 
         it('a 429 is tooSoon, leaves the button, and clears itself after Retry-After (10 s when absent)', async () => {

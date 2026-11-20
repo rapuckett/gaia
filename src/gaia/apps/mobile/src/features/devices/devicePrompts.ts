@@ -31,8 +31,18 @@ interface DevicePromptsState {
 
 export const useDevicePromptStore = create<DevicePromptsState>(() => ({ states: {}, notes: {} }));
 
-/** The 409 detail while the PC already waits on this action: `ALREADY_WAITING` in gaia/ui/devices/prompts.py. Other 409s are ordinary errors. */
+/** The 409 detail's `code` while the PC already waits on this action: `ALREADY_WAITING_CODE` in gaia/ui/devices/prompts.py. Other 409s are ordinary errors. */
+export const ALREADY_WAITING_CODE = 'prompt_already_waiting';
+/** That 409's message (`ALREADY_WAITING`), as plain text from a PC that sends no code. */
 export const ALREADY_WAITING_DETAIL = 'GAIA is already waiting on the PC for this. Answer the prompt on the PC, then try again.';
+
+function isAlreadyWaiting(err: GaiaApiError): boolean {
+    if (err.status !== 409) return false;
+    const code = err.body?.code;
+    if (code === ALREADY_WAITING_CODE) return true;
+    // A PC from before the code sends the plain text: the versioned contract's fallback, read only with no code.
+    return typeof code !== 'string' && err.detail === ALREADY_WAITING_DETAIL;
+}
 
 const keyOf = (kind: DevicePromptEvent['kind'], action: string) => `${kind}\u0000${action}`;
 
@@ -98,7 +108,7 @@ export interface DevicePrompt {
     /** Call when the action's request succeeds: a prompt still shown as waiting (its event was missed) is over. */
     settle: () => void;
     /**
-     * Gives the notice the action's HTTP failure: a 409 `busy`, a 429 `tooSoon`, a key-store `code` (`key_store_locked`
+     * Gives the notice the action's HTTP failure: a 409 `prompt_already_waiting` is `busy`, a 429 `tooSoon`, a key-store `code` (`key_store_locked`
      * is `denied`, `key_store_waiting` is `waiting`), and while the PC's prompt is up or has just failed, the failure
      * itself (its detail line; a 504 is the timeout). True when the notice now shows it, so the caller shows no error
      * of its own; false for any other failure.
@@ -129,7 +139,7 @@ export function settleDevicePrompt(kind: DevicePromptKind, action: string): void
 
 /** See `DevicePrompt.report`. */
 export function reportDevicePromptError(kind: DevicePromptKind, action: string, err: unknown): boolean {
-    if (err instanceof GaiaApiError && err.status === 409 && err.detail === ALREADY_WAITING_DETAIL) {
+    if (err instanceof GaiaApiError && isAlreadyWaiting(err)) {
         set(kind, action, 'busy');
         return true;
     }

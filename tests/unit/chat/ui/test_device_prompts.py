@@ -350,7 +350,10 @@ def test_one_admin_step_of_a_kind_waits_at_a_time(
         for caller in ("pc", "phone"):
             resp = clients[caller].post(url, json=body, headers=UI)
             assert resp.status_code == 409, resp.text
-            assert "already waiting on the PC" in resp.json()["detail"]
+            assert resp.json()["detail"] == {
+                "code": "prompt_already_waiting",
+                "message": prompts.ALREADY_WAITING,
+            }
     assert ran == [] and _prompts(events) == []
 
 
@@ -362,6 +365,10 @@ def test_a_phone_runs_one_key_store_read_at_a_time(paired, monkeypatch):
     app.state.device_reads_running = {(phone, "keyStoreRetry")}
     resp = clients["phone"].post("/api/providers/key-store/retry", headers=UI)
     assert resp.status_code == 409
+    assert resp.json()["detail"] == {
+        "code": "prompt_already_waiting",
+        "message": prompts.ALREADY_WAITING,
+    }
     app.state.device_reads_running.clear()
     app.state.device_action_times = {}
     resp = clients["phone"].post("/api/providers/key-store/retry", headers=UI)
