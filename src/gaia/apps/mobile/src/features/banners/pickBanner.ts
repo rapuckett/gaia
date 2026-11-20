@@ -6,6 +6,7 @@ import type { SystemStatus } from '@/api/client.types';
 import { isStarting } from '@/data';
 import { technicalDetail, type Translate } from '@/i18n/useT';
 import type { NoticeTone } from '@/ui';
+import { isolate } from '@webui/i18n/registry';
 import { GB_UNIT, MIN_CONTEXT_SIZE } from '@webui/utils/constants';
 import { shortModelName, type PickLoad } from '@webui/utils/modelList.core';
 
@@ -14,6 +15,8 @@ export interface Banner {
     tone: NoticeTone;
     title: string;
     message?: string;
+    /** Raw server text (a filename), kept out of the translated message; shown on its own LTR line. */
+    detail?: string;
     /** The raw cause, for a Details disclosure; never part of the sentence. */
     details?: string;
     /** The web lets these go: a failed download, a stopped or hung model server, a too-small context window. */
@@ -58,12 +61,12 @@ export function pickBanner(
             return { id: 'download', tone: 'danger', title: t('banner.download.failed', { name }), message: progress.message ?? undefined, dismissible: true, downloadRetry: name };
         }
         const knownSize = progress.total_bytes ? `${gb(progress.total_bytes, 1)} ${GB_UNIT}` : null;
-        const file = progress.file ? `${t('banner.download.file', { index: progress.file_index, total: progress.total_files })} ${progress.file}` : undefined;
+        const file = progress.file ? t('banner.download.file', { index: progress.file_index, total: progress.total_files }) : undefined;
         const bar =
             progress.state === 'downloading' && progress.total_bytes > 0
                 ? { value: progress.percent / 100, label: `${progress.percent}% · ${gb(progress.downloaded_bytes, 2)} / ${gb(progress.total_bytes, 2)} ${GB_UNIT}` }
                 : { label: progress.state === 'starting' ? (progress.message ?? t('update.picker.starting')) : t('banner.download.progress') };
-        return { id: 'download', tone: 'info', title: t.compose((say) => say('banner.download.running', { name, size: knownSize ?? say('banner.download.sizeUnknown') })), message: file, progress: bar };
+        return { id: 'download', tone: 'info', title: t.compose((say) => say('banner.download.running', { name, size: knownSize ?? say('banner.download.sizeUnknown') })), message: file, detail: progress.file ? isolate(progress.file, 'ltr') : undefined, progress: bar };
     }
 
     // A model picked from the list is loading, or its load failed; the web shows it right after a download.

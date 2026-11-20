@@ -57,7 +57,11 @@ export function MessagesGallery({ state }: { state: MessagesGalleryState }) {
             <MessageListView
                 messages={fixture.messages}
                 loading={state === 'loading'}
-                live={tail ? <TurnTail tail={tail} line={null} onTryAgain={noop} onContinue={noop} /> : state === 'policy' || state === 'policy-receipt' ? <TailIssues tail={policyTail} local={false} /> : fixture.live ? <AssistantBubble message={fixture.live} streaming /> : fixture.events ? <RecordingProgress events={fixture.events} /> : undefined}
+                live={tail ? <TurnTail tail={tail} line={null} onTryAgain={noop} onContinue={noop} /> : state === 'policy' || state === 'policy-receipt' ? <TailIssues tail={policyTail} local={false} /> : fixture.live ? <AssistantBubble message={fixture.live} streaming /> : fixture.events ? (
+                          <Stack paddingX="gutter">
+                              <RecordingProgress events={fixture.events} />
+                          </Stack>
+                      ) : undefined}
             />
         </Screen>
     );
