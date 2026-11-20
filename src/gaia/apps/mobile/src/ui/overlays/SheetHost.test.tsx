@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import { act, type ReactElement } from 'react';
-import { BackHandler, Text as RNText } from 'react-native';
+import { BackHandler, Dimensions, Text as RNText } from 'react-native';
 import { createRoot } from 'test-renderer';
 import { Sheet } from './Sheet';
 import { backFromSheet, SheetHost } from './SheetHost';
@@ -24,8 +24,10 @@ jest.mock('react-native-gesture-handler', () => ({
     GestureDetector: ({ children }: { children: ReactElement }) => children,
     usePanGesture: () => ({}),
 }));
+let mockKeyboard = { isVisible: false, height: 0 };
 jest.mock('react-native-keyboard-controller', () => ({
     KeyboardAvoidingView: ({ children }: { children: ReactElement }) => children,
+    useKeyboardState: (select: (s: { isVisible: boolean; height: number }) => number) => select(mockKeyboard),
 }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0, start: 0, end: 0 }) }));
 jest.mock('@/i18n/useT', () => ({ useT: () => (key: string) => key, useDirection: () => 'ltr' }));
@@ -95,6 +97,25 @@ describe('SheetHost', () => {
         expect(shown(r)).toContain('second');
         expect(shown(r)).not.toContain('first');
         // The first render transforms React Native's lazy components on a cold cache (about 1.6 s measured, 25 ms warm), which a loaded machine stretches past 5 s.
+    }, 20_000);
+
+    it('keeps the panel below the top of the screen while the keyboard is up', async () => {
+        const { height } = Dimensions.get('window');
+        const maxHeightOf = (r: ReturnType<typeof createRoot>) => Number(/"maxHeight":([\d.]+)/.exec(shown(r))?.[1]);
+        const r = createRoot({ textComponentTypes: ['Text', 'RCTText'] });
+        await act(async () => {
+            r.render(<Screen a b={false} onCloseA={jest.fn()} onCloseB={jest.fn()} />);
+        });
+        expect(maxHeightOf(r)).toBeCloseTo(height * 0.9);
+        mockKeyboard = { isVisible: true, height: height * 0.5 };
+        await act(async () => {
+            r.render(<Screen a b={false} onCloseA={jest.fn()} onCloseB={jest.fn()} />);
+        });
+        mockKeyboard = { isVisible: false, height: 0 };
+        expect(maxHeightOf(r)).toBeLessThanOrEqual(height * 0.5);
+        await act(async () => {
+            r.unmount();
+        });
     }, 20_000);
 
     it('caps a sheet at the 560 point sheet width', async () => {

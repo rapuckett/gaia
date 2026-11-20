@@ -58,6 +58,7 @@ const CHANGE_KINDS = {
     localOnlyOff: ['settings.devices.change.localOnlyOff', []],
     localOnlyOn: ['settings.devices.change.localOnlyOn', []],
     agentInstalled: ['settings.devices.change.agentInstalled', []],
+    npuMemlockFixed: ['settings.devices.change.npuMemlockFixed', []],
     skillAdded: ['settings.devices.change.skillAdded', ['name']],
     skillAddedCode: ['settings.devices.change.skillAddedCode', ['name']],
     connectorSetup: ['settings.devices.change.connectorSetup', ['connector']],
@@ -72,12 +73,20 @@ const CHANGES_PAGE = 20;
 const CHANGES_ALL = 200;
 const warnedKinds = new Set<string>();
 
+const GPU_MEMORY_ACTIONS = {
+    gpuMemoryApply: 'settings.devices.change.gpuMemoryApply',
+    gpuMemoryRevert: 'settings.devices.change.gpuMemoryRevert',
+} as const;
+
 const DISCORD_ACTIONS = {
     start: 'settings.devices.change.discord.start',
     takeOver: 'settings.devices.change.discord.takeOver',
     stop: 'settings.devices.change.discord.stop',
     restart: 'settings.devices.change.discord.restart',
     forgetAlways: 'settings.devices.change.discord.forgetAlways',
+    connect: 'settings.devices.change.discord.connect',
+    pair: 'settings.devices.change.discord.pair',
+    disconnect: 'settings.devices.change.discord.disconnect',
 } as const;
 
 /** True the first time an id is seen, so each unknown kind logs once. */
@@ -119,6 +128,15 @@ function changeWhat(c: DeviceChange): { what: MessageRef; unknownKind?: string }
                 ? DISCORD_ACTIONS[p.action as keyof typeof DISCORD_ACTIONS] : undefined;
             if (!key) {
                 if (firstSight(`discordControl:${String(p.action)}`)) log.ui.warn(`A Discord device change with an action this app has no label for: ${String(p.action)}`);
+                return generic;
+            }
+            return { what: ref(key) };
+        }
+        case 'gpuMemoryChanged': {
+            const key = typeof p.action === 'string' && Object.prototype.hasOwnProperty.call(GPU_MEMORY_ACTIONS, p.action)
+                ? GPU_MEMORY_ACTIONS[p.action as keyof typeof GPU_MEMORY_ACTIONS] : undefined;
+            if (!key) {
+                if (firstSight(`gpuMemoryChanged:${String(p.action)}`)) log.ui.warn(`A GPU memory change with an action this app has no label for: ${String(p.action)}`);
                 return generic;
             }
             return { what: ref(key) };

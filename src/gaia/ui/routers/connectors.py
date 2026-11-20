@@ -47,6 +47,7 @@ import keyring.errors
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
+from starlette.concurrency import run_in_threadpool
 
 import gaia.connectors as connections
 import gaia.connectors.catalog  # noqa: F401  # pylint: disable=unused-import
@@ -58,6 +59,10 @@ from gaia.connectors.activations import (
 from gaia.connectors.api import activate as activate_connector_for_agent
 from gaia.connectors.api import deactivate as deactivate_connector_for_agent
 from gaia.connectors.api import resolve_declared_scopes
+from gaia.connectors.credential_wait import (
+    CredentialStoreLocked,
+    CredentialStoreWaiting,
+)
 from gaia.connectors.errors import (
     AuthRequiredError,
     ConfigurationError,
@@ -98,6 +103,7 @@ from gaia.connectors.mcp_server import (
 from gaia.connectors.registry import REGISTRY
 from gaia.connectors.spec import _VALID_KINDS, ConfigField, ConnectorType
 from gaia.connectors.store import (
+    KeyringRefused,
     peek_connection,
     peek_provider_credentials,
     retry_keyring,
@@ -567,6 +573,10 @@ DEVICE_CONNECTOR_ERROR = (
     "GAIA couldn't finish this on the PC. "
     "Open Settings \u203a Connectors on the PC to see why."
 )
+DEVICE_KEY_STORE_LOCKED = (
+    "The PC's key store is locked or its prompt was closed. "
+    "Approve the prompt on the PC, or choose Try again in Settings \u203a Model."
+)
 DEVICE_CHECK_FAILED = (
     "The check didn't pass. Run it again in Settings \u203a Connectors on the PC "
     "to see why."
@@ -585,6 +595,16 @@ def _http_error_for(request: Request, exc: ConnectorsError) -> HTTPException:
     return HTTPException(
         status_code=http.status_code, detail=detail, headers=http.headers
     )
+
+
+def _key_store_locked_error(request: Request, exc: Exception) -> HTTPException:
+    """423 for a locked key store, 409 while its prompt is unanswered; OS text stays on the PC."""
+    logger.warning(
+        "connectors: key store stayed locked for %s: %s", principal(request), exc
+    )
+    locked = isinstance(exc, (CredentialStoreLocked, KeyringRefused))
+    detail = str(exc) if is_local_pc(request) else DEVICE_KEY_STORE_LOCKED
+    return HTTPException(status_code=423 if locked else 409, detail=detail)
 
 
 def _shareable_check(result: Dict[str, Any]) -> Dict[str, Any]:
@@ -866,7 +886,8 @@ def _field_summary(f: ConfigField) -> Dict[str, Any]:
 @router.get(
     "/", response_model=ConnectorListResponse, response_model_exclude_unset=True
 )
-async def list_connectors() -> Dict[str, Any]:
+# Sync: runs on a worker thread, so a blocked key-store read can't stall the server.
+def list_connectors() -> Dict[str, Any]:
     """Return catalog specs merged with live state for all connectors."""
     specs = REGISTRY.all()
     # Every summary reads the same ledger; a corrupt one is fixed by deleting it, so name it.
@@ -935,7 +956,8 @@ async def connector_events() -> StreamingResponse:
 
 
 @router.get("/_debug", dependencies=[Depends(require_local_pc)])
-async def debug_state() -> Dict[str, Any]:
+# Sync: runs on a worker thread, so a blocked key-store read can't stall the server.
+def debug_state() -> Dict[str, Any]:
     """Diagnostics endpoint, gated by ``GAIA_DEBUG=1``."""
     if os.environ.get("GAIA_DEBUG") != "1":
         raise HTTPException(status_code=404, detail="Not Found")
@@ -1115,7 +1137,8 @@ async def get_activations(connector_id: str) -> Dict[str, Any]:
     response_model=ConnectorSummary,
     response_model_exclude_unset=True,
 )
-async def get_connector(connector_id: str) -> Dict[str, Any]:
+# Sync: runs on a worker thread, so a blocked key-store read can't stall the server.
+def get_connector(connector_id: str) -> Dict[str, Any]:
     try:
         return _connector_summary(connector_id)
     except HTTPException:
@@ -1276,6 +1299,8 @@ async def test_connector(request: Request, connector_id: str) -> Dict[str, Any]:
         raise HTTPException(
             status_code=404, detail=f"Unknown connector: {connector_id!r}"
         )
+    except (CredentialStoreWaiting, KeyringRefused) as e:
+        raise _key_store_locked_error(request, e) from e
     except ConnectorsError as e:
         raise _http_error_for(request, e) from e
 
@@ -1367,7 +1392,7 @@ async def _set_connector_enabled(
 
     event_name = "connector.enabled" if enabled else "connector.disabled"
     await _emitter.emit(event_name, {"connector_id": connector_id})
-    return _connector_summary(connector_id)
+    return await run_in_threadpool(_connector_summary, connector_id)
 
 
 @router.post(
@@ -1511,7 +1536,7 @@ async def complete_flow(
         )
         raise HTTPException(status_code=502, detail=DEVICE_CONNECTOR_ERROR) from e
     audit_approval(request, f"sign-in finished for {state['provider']}")
-    return _connector_summary(state["provider"])
+    return await run_in_threadpool(_connector_summary, state["provider"])
 
 
 # Keeps background device-poll tasks referenced so they aren't garbage
@@ -1898,13 +1923,15 @@ async def forward_connection(
 
 @forwarded_router.get("")
 @forwarded_router.get("/")
-async def list_forwarded_connections() -> Dict[str, Any]:
+# Sync: runs on a worker thread, so a blocked key-store read can't stall the server.
+def list_forwarded_connections() -> Dict[str, Any]:
     """List persisted connections — metadata only, secrets omitted (AC4)."""
     return {"connections": connections.list_connections()}
 
 
 @forwarded_router.get("/{provider}")
-async def get_forwarded_connection(provider: str) -> Dict[str, Any]:
+# Sync: runs on a worker thread, so a blocked key-store read can't stall the server.
+def get_forwarded_connection(provider: str) -> Dict[str, Any]:
     """Return one connection's metadata, or 404 — secrets omitted (AC4)."""
     entry = connections.get_connection(provider)
     if entry is None:
@@ -1930,7 +1957,7 @@ async def revoke_forwarded_connection(provider: str) -> Response:
     # event loop, and ``revoke_connection``'s sync wrapper would raise
     # rather than let a nested loop deadlock.
     revoke_result = await connections.revoke_connection_async(provider)
-    clear_provider_credentials(provider)
+    await run_in_threadpool(clear_provider_credentials, provider)
     revoke_all_grants_for(provider)
     _provider_registry.pop(provider, None)
     for key in [k for k in _token_cache if k[0] == provider]:
