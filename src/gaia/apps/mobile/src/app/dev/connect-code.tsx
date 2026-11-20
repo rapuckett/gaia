@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { Redirect } from 'expo-router';
+import { Redirect, useLocalSearchParams } from 'expo-router';
 import { useState, type ReactNode } from 'react';
 
 import type { ConnectorRow } from '@/api/client.types';
@@ -37,6 +37,11 @@ const account = (id: string, display_name: string, over: Partial<ConnectorRow> =
         ...over,
     }) as unknown as ConnectorRow;
 
+// One each for the screen: the sign-in they show is kept per deps, and a new one each render would start over.
+const GOOGLE_DEPS = galleryDeps(null);
+// The browser ends without a sign-in as soon as it opens.
+const GOOGLE_CANCELLED_DEPS = galleryDeps({ outcome: 'cancelled' });
+
 const MAILBOXES = [account('google', 'Google'), account('microsoft', 'Microsoft Personal'), account('microsoft_work', 'Microsoft Work or School')];
 
 function Faked({ data, children }: { data: FakeClientData; children: ReactNode }) {
@@ -58,9 +63,26 @@ function Scene({ title, children }: { title: string; children: ReactNode }) {
     );
 }
 
+/** `?state=googleCancelled#tap=connect-google`: the chat card alone, after Google's sign-in closed unfinished. */
 export default function ConnectCodeGalleryRoute() {
+    const { state } = useLocalSearchParams<{ state?: string }>();
     if (!devGalleryEnabled()) return <Redirect href="/" />;
     const card = { kind: 'connect_account', providers: ['microsoft', 'google'], agent_id: 'builtin:gaia', scopes: { microsoft: ['Mail.Read'] } };
+    if (state === 'googleCancelled') {
+        return (
+            <UIProvider>
+                <Screen scroll>
+                    <Stack gap="xl" padding="lg">
+                        <Faked data={{ connectors: MAILBOXES, browserSignInState: 'gallery-state-0123456789abcdefghijklmnopqrstuv' }}>
+                            <BrowserSignInDepsContext.Provider value={GOOGLE_CANCELLED_DEPS}>
+                                <ConnectAccountCard data={{ kind: 'connect_account', providers: ['google'] }} />
+                            </BrowserSignInDepsContext.Provider>
+                        </Faked>
+                    </Stack>
+                </Screen>
+            </UIProvider>
+        );
+    }
     return (
         <UIProvider>
             <Screen scroll>
@@ -82,7 +104,7 @@ export default function ConnectCodeGalleryRoute() {
                     </Scene>
                     <Scene title={'Connect card: Google on a paired phone signs in with the phone browser'}>
                         <Faked data={{ connectors: MAILBOXES, browserSignInState: 'gallery-state-0123456789abcdefghijklmnopqrstuv' }}>
-                            <BrowserSignInDepsContext.Provider value={galleryDeps(null)}>
+                            <BrowserSignInDepsContext.Provider value={GOOGLE_DEPS}>
                                 <ConnectAccountCard data={{ kind: 'connect_account', providers: ['google'] }} />
                             </BrowserSignInDepsContext.Provider>
                         </Faked>

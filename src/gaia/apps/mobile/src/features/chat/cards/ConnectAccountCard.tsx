@@ -12,6 +12,7 @@ import { cardSignInScopes } from '@/features/connectors/connectorAccess';
 import { ProviderConnect } from '@/features/connectors/ProviderConnect';
 import { openSettings } from '@/features/settings/openSettings';
 import { describeHttpFailure, useT } from '@/i18n/useT';
+import { useAnnounce } from '@/platform/useAnnounce';
 import { Button, Icon, Notice, Row, Spinner, Stack, Surface, Text } from '@/ui';
 import { CircleCheck, Link2, Settings } from '@/ui/icons';
 
@@ -27,6 +28,7 @@ export function ConnectAccountCard({ data }: { data: unknown }) {
     const [ended, setEnded] = useState<'cancelled' | 'failed' | null>(null);
     const onEnded = useCallback((why: 'cancelled' | 'failed') => setEnded(why), []);
     const onStarted = useCallback(() => setEnded(null), []);
+    useAnnounce(ended === 'cancelled' ? t('connectCard.cancelled') : null);
     if (!isConnectAccountPayload(data)) return <UnsupportedCard variant="invalid" render="connect_account" data={data} />;
 
     const rows = (connectors.data?.connectors ?? []).filter((c): c is ConnectorRow => !('error' in c));
@@ -39,8 +41,11 @@ export function ConnectAccountCard({ data }: { data: unknown }) {
                 <Stack gap="md">
                     <Row gap="sm" align="start">
                         <Icon icon={Link2} size="sm" tone="secondary" />
-                        <View style={{ flex: 1 }} role={ended ? 'alert' : undefined}>
-                            <Text role="label">{prompt}</Text>
+                        {/* An unfinished sign-in is news, not an error: Android reads the change politely, iOS hears useAnnounce. The region is always there, so Android sees the change. */}
+                        <View style={{ flex: 1 }} role={ended === 'failed' ? 'alert' : undefined} accessibilityLiveRegion="polite">
+                            <Text role="label" tone={ended === 'cancelled' ? 'muted' : undefined} testID={ended === 'cancelled' ? 'connect-card-cancelled' : undefined}>
+                                {prompt}
+                            </Text>
                         </View>
                     </Row>
                     {connectors.error ? <Notice tone="danger" message={describeHttpFailure(connectors.error, t).text} detail={describeHttpFailure(connectors.error, t).detail} /> : null}
