@@ -2573,6 +2573,51 @@ def test_a_pc_gateway_connect_waits_for_another_processs_move(
     assert lemonade.calls == []
 
 
+def test_a_pc_gateway_is_checked_before_the_lock_is_taken(
+    client, lemonade, bound_gateway, monkeypatch
+):
+    """A slow check of the PC's gateway never holds up another process's replay."""
+    monkeypatch.setattr(gateway, "GATEWAY_KEY_LOCK_TIMEOUT", 0.2)
+    monkeypatch.setattr(providers, "_gateway_check_applies", lambda: True)
+    lemonade.answers[("POST", "cloud/auth")] = None
+    took, checked = [], []
+
+    def slow_check(base_url=None):
+        def replay():
+            try:
+                with providers._gateway_move_lock:
+                    took.append(True)
+            except gateway.GatewayBusy:
+                took.append(False)
+
+        checked.append(base_url)
+        other = threading.Thread(target=replay)
+        other.start()
+        other.join(timeout=5)
+
+    monkeypatch.setattr(providers, "check_gateway_reachable", slow_check)
+    resp = _move(client)
+    assert took == [True]
+    assert checked == [NEW_URL]
+    assert resp.status_code == 200, resp.text
+    assert lemonade.cloud["amd"]["base_url"] == NEW_URL
+
+
+def test_a_pc_gateway_moved_during_its_check_is_refused(
+    client, lemonade, bound_gateway, monkeypatch
+):
+    monkeypatch.setattr(providers, "_gateway_check_applies", lambda: True)
+
+    def moved_meanwhile(base_url=None):
+        lemonade.cloud["amd"]["base_url"] = NEW_URL
+
+    monkeypatch.setattr(providers, "check_gateway_reachable", moved_meanwhile)
+    resp = client.post("/api/providers/amd/connect", json={})
+    assert resp.status_code == 409
+    assert "changed while GAIA checked it" in resp.json()["detail"]
+    assert not any(c["method"] in ("POST", "DELETE") for c in lemonade.calls)
+
+
 def test_a_keyless_pc_move_drops_lemonades_key_before_the_address_changes(
     client, lemonade, bound_gateway
 ):

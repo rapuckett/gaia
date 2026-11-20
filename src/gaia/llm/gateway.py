@@ -151,6 +151,9 @@ _PROBE_TIMEOUT = 12
 # One reachability check: long enough for a slow link, short enough that an
 # offline network answers before the user gives up on the list.
 REACH_TIMEOUT = 4.0
+#: How many of the host's addresses one check dials, so a host with many dead
+#: ones answers within ``REACH_DIAL_LIMIT * REACH_TIMEOUT``.
+REACH_DIAL_LIMIT = 3
 
 
 class GatewayUnreachable(Exception):
@@ -165,16 +168,29 @@ class GatewayUnreachable(Exception):
 def check_reachable(base_url: Optional[str] = None) -> None:
     """Raise :class:`GatewayUnreachable` unless ``base_url``'s host answers.
 
-    ``None`` checks :data:`DEFAULT_GATEWAY_BASE_URL`.
+    ``None`` checks :data:`DEFAULT_GATEWAY_BASE_URL`. One lookup, then a plain
+    connect to each of its first :data:`REACH_DIAL_LIMIT` addresses until one
+    answers.
     """
     url = urlparse(base_url or DEFAULT_GATEWAY_BASE_URL)
     if not url.hostname:
         raise ValueError(f"gateway URL {base_url!r} has no host to check")
     port = url.port or (80 if url.scheme == "http" else 443)
     try:
-        socket.create_connection((url.hostname, port), timeout=REACH_TIMEOUT).close()
+        infos = socket.getaddrinfo(
+            url.hostname, port, type=socket.SOCK_STREAM, proto=socket.IPPROTO_TCP
+        )
     except OSError as e:
         raise GatewayUnreachable(url.hostname, str(e)) from e
+    addresses = list(dict.fromkeys(info[4][:2] for info in infos))
+    failure: Optional[OSError] = None
+    for address in addresses[:REACH_DIAL_LIMIT]:
+        try:
+            socket.create_connection(address, timeout=REACH_TIMEOUT).close()
+            return
+        except OSError as e:
+            failure = e
+    raise GatewayUnreachable(url.hostname, str(failure or "no addresses")) from failure
 
 
 class GatewayError(Exception):
