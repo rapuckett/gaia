@@ -157,6 +157,7 @@ describe('DevicesSettings', () => {
         ['connectorGrant', { agent_id: 'gaia', connector: 'Gmail', granted: true }, /^Let .*gaia.* use .*Gmail.* · 5m ago$/],
         ['connectorActivation', { agent: 'GAIA', connector: 'Gmail', active: false }, /^Turned off .*Gmail.* for .*GAIA.* · 5m ago$/],
         ['discordControl', { action: 'stop' }, /^Stopped the Discord bot · 5m ago$/],
+        ['discordControl', { action: 'disconnect' }, /^Disconnected the Discord bot · 5m ago$/],
         ['memoryCommit', { source: 'discovery', count: 1 }, /^Saved 1 item from scanning this PC to memory · 5m ago$/],
         ['memoryCommit', { source: 'discovery', count: 3 }, /^Saved .*3.* items from scanning this PC to memory · 5m ago$/],
         ['serverTarget', { mode: 'gaia' }, /^Switched GAIA back to its own model server · 5m ago$/],

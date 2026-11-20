@@ -84,6 +84,9 @@ const DISCORD_ACTIONS = {
     stop: 'settings.devices.change.discord.stop',
     restart: 'settings.devices.change.discord.restart',
     forgetAlways: 'settings.devices.change.discord.forgetAlways',
+    connect: 'settings.devices.change.discord.connect',
+    pair: 'settings.devices.change.discord.pair',
+    disconnect: 'settings.devices.change.discord.disconnect',
 } as const;
 
 /** True the first time an id is seen, so each unknown kind logs once. */
