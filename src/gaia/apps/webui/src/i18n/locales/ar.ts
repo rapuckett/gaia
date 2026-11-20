@@ -1945,7 +1945,7 @@ const messages: Messages = {
     'setup.key.gatewayHelp': 'كيفية الحصول على مفتاح AMD LLM Gateway',
     'setup.key.where': 'يبقى مفتاحك على هذا الجهاز، في التخزين الآمن لنظامك.',
     'setup.key.usersServer': 'يستخدم GAIA هذا المزود كما هو مضبوط في خادم النماذج لديك. ولا يرسل مفتاحًا إلى خادمك ولا يغيّر إعداده.',
-    'setup.key.placeholder': 'الصق مفتاح API (اتركه فارغًا لاستخدام مفتاح حفظته من قبل)',
+    'setup.key.placeholder': 'اتركه فارغًا لاستخدام مفتاحك المحفوظ',
     'setup.key.placeholderNew': 'الصق مفتاح API',
     'setup.key.foundEnv': 'وُجد مفتاح ⁦{name}⁩ في متغيرات البيئة (ينتهي بـ ⁦…{hint}⁩). اختر «اختبار واتصال» لاستخدامه.',
     'setup.key.labelFor': 'مفتاح API لـ {provider}',

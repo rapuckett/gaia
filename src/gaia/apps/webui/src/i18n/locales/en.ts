@@ -1945,7 +1945,7 @@ export const enMessages = {
     'setup.key.gatewayHelp': 'How to get an AMD LLM Gateway key',
     'setup.key.where': "Your key stays on this PC, in your system's secure storage.",
     'setup.key.usersServer': "GAIA uses this provider as your model server already has it set up. It doesn't send your server a key or change its setup.",
-    'setup.key.placeholder': 'Paste your API key (leave blank to use one you saved before)',
+    'setup.key.placeholder': 'Leave blank to use your saved key',
     'setup.key.placeholderNew': 'Paste your API key',
     'setup.key.labelFor': '{provider} API key',
     'setup.key.show': 'Show key',
