@@ -505,10 +505,14 @@ export const ATTACH_HEADER_TIMEOUT_MS = 30_000;
 export const SETUP_CHECK_HEADER_TIMEOUT_MS = 20_000;
 /** How often to re-read the PC's connectors while a reply waits on an account being connected (webui's ConnectorRetryBanner). */
 export const CONNECTOR_POLL_MS = 4_000;
+/** How often to re-read the PC's connectors while its key store's unlock prompt is open; each re-read joins the PC's one pending read. */
+export const CONNECTOR_KEY_STORE_POLL_MS = 3_000;
 /** How long a browser sign-in from the phone may take: the PC's own sign-in window (flow.py's _FLOW_TIMEOUT_SECONDS). */
 export const BROWSER_SIGN_IN_TIMEOUT_MS = 15 * 60_000;
 /** How long, once the browser closes, the phone still waits for its loopback listener to hand over the redirect. */
 export const BROWSER_RETURN_GRACE_MS = 3_000;
+/** How long a browser sign-in no Connect shows any more waits for one to show it again (the chat's card remounts as its turn is saved) before it ends. */
+export const BROWSER_SIGN_IN_HANDOFF_MS = 1_000;
 
 /** How many past runs a schedule's history shows; the web UI asks for the same 20. */
 export const SCHEDULE_RESULTS_LIMIT = 20;

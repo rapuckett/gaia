@@ -47,6 +47,8 @@ from typing import Dict, Iterable, List, Optional, Set, Tuple
 
 import pytest
 
+from tests._repo_scan import files_under, read_text
+
 _REPO = Path(__file__).resolve().parents[2]
 _ALLOWLIST = Path(__file__).with_name("process_safety_allowlist.txt")
 _SKIP_PARTS = {
@@ -87,7 +89,7 @@ def _scanned_files() -> List[Path]:
     ]
     files = []
     for root in roots:
-        for path in root.rglob("*.py"):
+        for path in files_under(root, ".py"):
             rel = path.relative_to(_REPO)
             if _SKIP_PARTS.intersection(rel.parts) or path.name.startswith("test_"):
                 continue
@@ -235,7 +237,7 @@ def scan() -> Tuple[Counter, Dict[Site, List[int]]]:
     for path in _scanned_files():
         rel = path.relative_to(_REPO).as_posix()
         try:
-            source = path.read_text(encoding="utf-8")
+            source = read_text(path)
             found = sites_in_source(source, str(path))
         except (SyntaxError, UnicodeDecodeError) as exc:
             raise AssertionError(

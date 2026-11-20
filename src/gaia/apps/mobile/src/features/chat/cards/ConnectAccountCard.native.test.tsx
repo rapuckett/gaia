@@ -2,15 +2,18 @@
 // SPDX-License-Identifier: MIT
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import type { ReactNode } from 'react';
-import { Platform } from 'react-native';
+import { AppState, Platform, type AppStateStatus } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { createFakeClient, type FakeClientData } from '@/api/fake';
 import type { ConnectorRow } from '@/api/client.types';
 import { GaiaClientProvider } from '@/data';
+import { BROWSER_RETURN_GRACE_MS, BROWSER_SIGN_IN_HANDOFF_MS } from '@/api/constants';
 import { BrowserSignInDepsContext, type BrowserSignInDeps } from '@/features/connectors/browserSignIn';
+
+import type { LoopbackOutcome } from '../../../../modules/gaia-oauth-loopback';
 import { ThemeProvider } from '@/ui';
 
 import { EmailConnect } from '../EmailConnect';
@@ -89,7 +92,7 @@ describeNative('ConnectAccountCard', () => {
         expect(mockPush).toHaveBeenCalledWith('/connectors');
 
         await fireEvent.press(screen.getByText('Connect Microsoft'));
-        expect(await screen.findByText('Sign-in was cancelled. Press Connect to try again.')).toBeTruthy();
+        expect(await screen.findByText('Sign-in was canceled. Press Connect to try again.')).toBeTruthy();
     });
 });
 
@@ -139,6 +142,135 @@ describeNative('Google in the chat on a paired phone', () => {
         expect(await screen.findByText(/Connect your account on your PC/)).toBeTruthy();
         expect(client.browserSignIns).toHaveLength(0);
     });
+});
+
+const PROMPT = 'GAIA needs you to connect an account for this.';
+const CANCELLED = 'Sign-in was canceled. Press Connect to try again.';
+const GOOGLE_CARD = { kind: 'connect_account', providers: ['google'] };
+const pause = (ms: number) => act(() => new Promise<void>((resolve) => setTimeout(resolve, ms)));
+
+/** As Android does it: the browser ends when the app is back in front, and a cancel ends the listener's wait. */
+function phoneDeps() {
+    let wake: ((outcome: LoopbackOutcome) => void) | null = null;
+    let closeBrowser: ((result: { type: string }) => void) | null = null;
+    const loopback = {
+        start: jest.fn(async () => ({ port: 50123 })),
+        waitForRedirect: jest.fn(() => new Promise<LoopbackOutcome>((resolve) => (wake = resolve))),
+        cancel: jest.fn(() => wake?.({ outcome: 'cancelled' })),
+    };
+    const deps: BrowserSignInDeps = {
+        ...loopbackDeps(loopback),
+        openAuthSession: jest.fn(() => new Promise<{ type: string }>((resolve) => (closeBrowser = resolve))),
+    };
+    return { deps, loopback, closeBrowser: () => act(() => closeBrowser?.({ type: 'dismiss' })) };
+}
+
+describeNative('Google sign-in from a chat card that remounts', () => {
+    const state = 'pc-state-0123456789abcdefghijklmnopqrstuvwx';
+    const appState = Object.getOwnPropertyDescriptor(AppState, 'currentState')!;
+    let onChange: ((next: AppStateStatus) => void)[] = [];
+    const goTo = (next: AppStateStatus) =>
+        act(() => {
+            Object.defineProperty(AppState, 'currentState', { value: next, configurable: true });
+            for (const handler of onChange) handler(next);
+        });
+
+    beforeEach(() => {
+        onChange = [];
+        jest.spyOn(AppState, 'addEventListener').mockImplementation(((_type: string, handler: (next: AppStateStatus) => void) => {
+            onChange.push(handler);
+            return { remove: () => (onChange = onChange.filter((h) => h !== handler)) };
+        }) as unknown as typeof AppState.addEventListener);
+    });
+    afterEach(() => {
+        jest.restoreAllMocks();
+        Object.defineProperty(AppState, 'currentState', appState);
+    });
+
+    // The turn's card is drawn by the live tail, then by the saved reply: a new card each time.
+    const Card = ({ at }: { at: string }) => <ConnectAccountCard key={at} data={GOOGLE_CARD} />;
+
+    it('keeps waiting when the turn is saved while the browser is in front, and across the return', async () => {
+        const { deps, loopback } = phoneDeps();
+        const { client, wrapper } = setup({ connectors: [google], browserSignInState: state }, deps);
+        const view = await render(<Card at="tail" />, { wrapper });
+        await fireEvent.press(await screen.findByText('Connect Google'));
+        expect(await screen.findByTestId('browser-sign-in-block')).toBeTruthy();
+
+        await goTo('background');
+        await view.rerender(<Card at="saved" />);
+        await pause(BROWSER_SIGN_IN_HANDOFF_MS + 200);
+        expect(screen.getByTestId('browser-sign-in-block')).toBeTruthy();
+
+        await goTo('active');
+        await pause(BROWSER_SIGN_IN_HANDOFF_MS + 200);
+        expect(screen.getByTestId('browser-sign-in-block')).toBeTruthy();
+        expect(screen.queryByText('Connect Google')).toBeNull();
+        expect(loopback.cancel).not.toHaveBeenCalled();
+        expect(client.flowCancels).toEqual([]);
+        expect(client.browserSignIns).toHaveLength(1);
+    }, 10_000);
+
+    it('says the sign-in was cancelled when the browser closes after the card remounted, and keeps saying so', async () => {
+        const { deps, loopback, closeBrowser } = phoneDeps();
+        const { client, wrapper } = setup({ connectors: [google], browserSignInState: state }, deps);
+        const view = await render(<Card at="tail" />, { wrapper });
+        await fireEvent.press(await screen.findByText('Connect Google'));
+        expect(await screen.findByTestId('browser-sign-in-block')).toBeTruthy();
+
+        await goTo('background');
+        await view.rerender(<Card at="saved" />);
+        await goTo('active');
+        await closeBrowser();
+        expect(await screen.findByText(CANCELLED, {}, { timeout: BROWSER_RETURN_GRACE_MS + 1_000 })).toBeTruthy();
+        expect(screen.getByText('Connect Google')).toBeTruthy();
+        expect(screen.queryByText(PROMPT)).toBeNull();
+        expect(loopback.cancel).toHaveBeenCalledTimes(1);
+        expect(client.flowCancels).toEqual(['flow-1']);
+
+        await view.rerender(<Card at="again" />);
+        expect(await screen.findByText(CANCELLED)).toBeTruthy();
+        expect(screen.queryByText(PROMPT)).toBeNull();
+    }, 10_000);
+
+    it("says cancelled when the browser ends the listener, but goes quietly back to Connect on GAIA's own Cancel", async () => {
+        const { deps, loopback } = phoneDeps();
+        const { client, wrapper } = setup({ connectors: [google], browserSignInState: state }, deps);
+        await render(<Card at="tail" />, { wrapper });
+        await fireEvent.press(await screen.findByText('Connect Google'));
+        expect(await screen.findByTestId('browser-sign-in-block')).toBeTruthy();
+
+        // Android ends the Custom Tab, and with it the listener's wait.
+        await act(async () => loopback.cancel());
+        expect(await screen.findByTestId('connect-card-cancelled')).toBeTruthy();
+        expect(screen.getByText(CANCELLED)).toBeTruthy();
+        expect(client.flowCancels).toEqual(['flow-1']);
+
+        await fireEvent.press(screen.getByText('Connect Google'));
+        expect(await screen.findByTestId('browser-sign-in-block')).toBeTruthy();
+        expect(screen.getByText(PROMPT)).toBeTruthy();
+        expect(client.browserSignIns).toHaveLength(2);
+        await fireEvent.press(screen.getByTestId('browser-sign-in-cancel'));
+        expect(await screen.findByText('Connect Google')).toBeTruthy();
+        expect(screen.getByText(PROMPT)).toBeTruthy();
+        expect(screen.queryByText(CANCELLED)).toBeNull();
+        expect(client.flowCancels).toEqual(['flow-1', 'flow-2']);
+    });
+
+    it('ends the sign-in once no card shows it any more', async () => {
+        const { deps, loopback } = phoneDeps();
+        const { client, wrapper } = setup({ connectors: [google], browserSignInState: state }, deps);
+        const view = await render(<Card at="tail" />, { wrapper });
+        await fireEvent.press(await screen.findByText('Connect Google'));
+        expect(await screen.findByTestId('browser-sign-in-block')).toBeTruthy();
+
+        await view.rerender(<></>);
+        await pause(BROWSER_SIGN_IN_HANDOFF_MS + 200);
+        expect(loopback.cancel).toHaveBeenCalledTimes(1);
+        expect(client.flowCancels).toEqual(['flow-1']);
+        await view.rerender(<Card at="later" />);
+        expect(await screen.findByText(PROMPT)).toBeTruthy();
+    }, 10_000);
 });
 
 describeNative('EmailConnect', () => {

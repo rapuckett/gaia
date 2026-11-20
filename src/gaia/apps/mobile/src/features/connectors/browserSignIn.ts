@@ -1,12 +1,13 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { useQueryClient } from '@tanstack/react-query';
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { useQueryClient, type QueryClient } from '@tanstack/react-query';
+import { createContext, useCallback, useContext, useSyncExternalStore } from 'react';
+import { AppState } from 'react-native';
 
-import type { ConnectorList, ConnectorRow } from '@/api/client.types';
+import type { ConnectorList, ConnectorRow, GaiaClient } from '@/api/client.types';
 import { usePinned } from '@/api/routeAccess';
-import { BROWSER_RETURN_GRACE_MS, BROWSER_SIGN_IN_TIMEOUT_MS } from '@/api/constants';
+import { BROWSER_RETURN_GRACE_MS, BROWSER_SIGN_IN_HANDOFF_MS, BROWSER_SIGN_IN_TIMEOUT_MS } from '@/api/constants';
 import { GaiaApiError } from '@/api/errors';
 import { deviceSignInScopes, queryKeys, useGaiaClient } from '@/data';
 
@@ -27,6 +28,8 @@ export interface BrowserSignInDeps {
     dismissAuthSession(): void;
     /** Counts this phone as paired whatever the connection says; the gallery sets it, having no PC to pair with. */
     paired?: boolean;
+    /** Where every Connect's sign-in starts; the gallery seeds an ended one so a still shot shows it. */
+    initial?: BrowserSignIn;
 }
 
 /** Overrides the platform's deps (`platformBrowserSignInDeps`) for tests and the gallery. */
@@ -131,56 +134,71 @@ function delay(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+
+/** What a running sign-in holds: the PC's flow, the PC client that started it and the watch on it. */
+interface Active {
+    flowId: string | null;
+    watch: AbortController;
+    client: GaiaClient;
+}
+
 /**
- * Connects a browser-sign-in connector (Google) from the phone: this phone's loopback listener catches the
- * provider's redirect, and the PC, which holds the PKCE verifier, exchanges the code and keeps the account.
- * The code lives only inside one run of `start`; closing the tile cancels the listener and the PC's flow.
+ * One connector's browser sign-in, shared by every Connect for it. The chat's card remounts when its turn is saved,
+ * often while the browser is in front, so the sign-in lives here and not in the card. One per connector, as the phone has one listener.
  */
-export function useBrowserSignIn(connector: ConnectorRow, scopes: string[] = deviceSignInScopes(connector)) {
-    const client = useGaiaClient();
-    const queryClient = useQueryClient();
-    const deps = useBrowserSignInDeps();
-    const [signIn, setSignIn] = useState<BrowserSignIn>({ state: 'idle' });
-    const run = useRef(0);
-    const active = useRef<{ id: number; flowId: string | null; watch: AbortController } | null>(null);
-    const scopeKey = scopes.join(' ');
+class SignInSlot {
+    private signIn: BrowserSignIn = { state: 'idle' };
+    private run = 0;
+    private active: Active | null = null;
+    private readonly listeners = new Set<() => void>();
+    private stopLetGo: (() => void) | null = null;
+    private readonly deps: BrowserSignInDeps;
+    private readonly connectorId: string;
 
-    // Ends the active run's listener, browser and PC flow; a finished run has nothing left to drop.
-    const abandon = useCallback(
-        (dropFlow: boolean) => {
-            const current = active.current;
-            active.current = null;
-            if (!current) return;
-            current.watch.abort();
-            deps.loopback?.cancel();
-            deps.dismissAuthSession();
-            if (dropFlow && current.flowId && client) {
-                client.cancelConnectorFlow(current.flowId).catch((error: unknown) => {
-                    console.error(`Dropping the ${connector.id} sign-in on the PC failed`, error instanceof GaiaApiError ? error.status : error);
-                });
-            }
-        },
-        [client, connector.id, deps],
-    );
+    constructor(deps: BrowserSignInDeps, connectorId: string) {
+        this.deps = deps;
+        this.connectorId = connectorId;
+        this.signIn = deps.initial ?? this.signIn;
+    }
 
-    const start = useCallback(async () => {
-        abandon(true);
-        const mine = ++run.current;
-        const live = () => run.current === mine;
+    readonly subscribe = (onChange: () => void) => {
+        this.listeners.add(onChange);
+        this.stopLetGo?.();
+        // A finished sign-in is news only to the Connects that watched it; one shown later offers Connect again.
+        if (this.signIn.state === 'done') this.publish({ state: 'idle' });
+        return () => {
+            this.listeners.delete(onChange);
+            this.scheduleLetGo();
+        };
+    };
+
+    readonly snapshot = () => this.signIn;
+
+    readonly cancel = () => {
+        this.run++;
+        this.abandon(true);
+        this.publish({ state: 'idle' });
+    };
+
+    async start(client: GaiaClient | null, queryClient: QueryClient, scopeKey: string): Promise<void> {
+        this.abandon(true);
+        const mine = ++this.run;
+        const live = () => this.run === mine;
+        const { deps, connectorId } = this;
         const loopback = deps.loopback;
         const returnUrl = loopback ? deps.returnUrl() : null;
         if (!loopback || !returnUrl || !client) {
-            setSignIn(failure('unavailable'));
+            this.publish(failure('unavailable'));
             return;
         }
-        const current = { id: mine, flowId: null as string | null, watch: new AbortController() };
-        active.current = current;
+        const current: Active = { flowId: null, watch: new AbortController(), client };
+        this.active = current;
         const finish = (next: BrowserSignIn, dropFlow: boolean) => {
             if (!live()) return;
-            if (active.current === current) abandon(dropFlow);
-            setSignIn(next);
+            if (this.active === current) this.abandon(dropFlow);
+            this.publish(next);
         };
-        setSignIn({ state: 'starting' });
+        this.publish({ state: 'starting' });
 
         let port: number;
         try {
@@ -191,37 +209,37 @@ export function useBrowserSignIn(connector: ConnectorRow, scopes: string[] = dev
         }
         if (!live()) {
             // Cancelled while the port was opening; a newer run's start has already replaced this listener.
-            if (active.current === null) loopback.cancel();
+            if (this.active === null) loopback.cancel();
             return;
         }
 
         let flow: { flow_id: string; authorization_url: string };
         try {
-            flow = await client.startConnectorBrowserSignIn(connector.id, port, scopeKey ? scopeKey.split(' ') : [], { signal: current.watch.signal });
+            flow = await client.startConnectorBrowserSignIn(connectorId, port, scopeKey ? scopeKey.split(' ') : [], { signal: current.watch.signal });
         } catch (error) {
             finish(pcFailure(error, 'start'), false);
             return;
         }
         current.flowId = flow.flow_id;
         if (!live()) {
-            client.cancelConnectorFlow(flow.flow_id).catch((error: unknown) => console.error(`Dropping the ${connector.id} sign-in on the PC failed`, error));
+            client.cancelConnectorFlow(flow.flow_id).catch((error: unknown) => console.error(`Dropping the ${connectorId} sign-in on the PC failed`, error));
             return;
         }
 
         const url = flow.authorization_url;
         if (!/^https:\/\//i.test(url)) return finish(failure('notHttps'), true);
         const state = queryParam(url, 'state');
-        const host = SIGN_IN_HOSTS[connector.id];
+        const host = SIGN_IN_HOSTS[connectorId];
         // A PC that took its own path would send the browser to its own listener, which this phone never hears.
         if (!state || state.length < MIN_STATE_LENGTH || queryParam(url, 'redirect_uri') !== loopbackRedirectUri(port) || (host && urlHost(url) !== host)) {
             return finish(failure('mismatch'), true);
         }
 
-        setSignIn({ state: 'browser' });
+        this.publish({ state: 'browser' });
         const redirect = loopback.waitForRedirect(state, BROWSER_SIGN_IN_TIMEOUT_MS).then((outcome): Step => ({ kind: 'redirect', outcome }));
         const browser = deps.openAuthSession(url, returnUrl).then((result): Step => ({ kind: 'browser', type: result.type }));
         const pc = client
-            .watchConnectorSignIn(connector.id, { signal: current.watch.signal, flowId: flow.flow_id })
+            .watchConnectorSignIn(connectorId, { signal: current.watch.signal, flowId: flow.flow_id })
             .then((end): Step | Promise<never> => {
                 if (!end) return new Promise<never>(() => undefined);
                 return end.outcome === 'completed' ? { kind: 'pc', completed: true } : { kind: 'pc', completed: false, error: end.error, reason: end.reason };
@@ -252,11 +270,12 @@ export function useBrowserSignIn(connector: ConnectorRow, scopes: string[] = dev
         }
         const outcome = step.outcome;
         if (outcome.outcome === 'timeout') return finish(failure('timeout'), true);
-        if (outcome.outcome === 'cancelled') return finish({ state: 'idle' }, true);
+        // Our own Cancel has already ended this run; a listener ended by anything else is a browser that closed unfinished.
+        if (outcome.outcome === 'cancelled') return finish(failure('closed'), true);
         if (outcome.outcome === 'lost') return finish(failure('listenerLost'), true);
         if (outcome.outcome === 'error') return finish(outcome.error === 'access_denied' ? failure('denied') : failure('rejected', outcome.error), true);
 
-        setSignIn({ state: 'finishing' });
+        this.publish({ state: 'finishing' });
         // From here the flow is the PC's to finish: it takes the flow out of its list before exchanging the code.
         current.flowId = null;
         let row: ConnectorRow;
@@ -270,22 +289,92 @@ export function useBrowserSignIn(connector: ConnectorRow, scopes: string[] = dev
         );
         await queryClient.invalidateQueries({ queryKey: queryKeys.connectors });
         finish({ state: 'done' }, false);
-    }, [abandon, client, connector.id, deps, queryClient, scopeKey]);
+    }
 
-    const cancel = useCallback(() => {
-        run.current++;
-        abandon(true);
-        setSignIn({ state: 'idle' });
-    }, [abandon]);
+    private publish(next: BrowserSignIn) {
+        this.signIn = next;
+        for (const onChange of this.listeners) onChange();
+        this.scheduleLetGo();
+    }
 
-    // Closing the tile or the screen ends the listener and the PC's flow.
-    useEffect(
-        () => () => {
-            run.current++;
-            abandon(true);
-        },
-        [abandon],
-    );
+    // Ends the active run's listener, browser and PC flow; a finished run has nothing left to drop.
+    private abandon(dropFlow: boolean) {
+        const current = this.active;
+        this.active = null;
+        if (!current) return;
+        current.watch.abort();
+        this.deps.loopback?.cancel();
+        this.deps.dismissAuthSession();
+        if (dropFlow && current.flowId) {
+            current.client.cancelConnectorFlow(current.flowId).catch((error: unknown) => {
+                console.error(`Dropping the ${this.connectorId} sign-in on the PC failed`, error instanceof GaiaApiError ? error.status : error);
+            });
+        }
+    }
 
-    return { signIn, start: () => void start(), cancel };
+    /**
+     * Once no Connect shows the sign-in, a remount gets BROWSER_SIGN_IN_HANDOFF_MS to pick it up before it ends. That wait
+     * starts only with the app in front: while it is away the browser is, and nothing on screen can have been closed.
+     */
+    private scheduleLetGo() {
+        if (this.listeners.size > 0 || this.stopLetGo || this.signIn.state === 'idle') return;
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        let away: { remove(): void } | undefined;
+        const stop = () => {
+            clearTimeout(timer);
+            away?.remove();
+            this.stopLetGo = null;
+        };
+        const wait = () => {
+            timer = setTimeout(() => {
+                stop();
+                this.letGo();
+            }, BROWSER_SIGN_IN_HANDOFF_MS);
+        };
+        this.stopLetGo = stop;
+        if (AppState.currentState !== 'background' && AppState.currentState !== 'inactive') return wait();
+        away = AppState.addEventListener('change', (state) => {
+            if (state !== 'active') return;
+            away?.remove();
+            away = undefined;
+            wait();
+        });
+    }
+
+    private letGo() {
+        if (this.listeners.size > 0) return;
+        // The PC is exchanging the code; its end is let go once it lands.
+        if (this.signIn.state === 'finishing') return;
+        if (this.signIn.state === 'starting' || this.signIn.state === 'browser') {
+            this.run++;
+            this.abandon(true);
+        }
+        this.signIn = { state: 'idle' };
+    }
+}
+
+const slots = new WeakMap<BrowserSignInDeps, Map<string, SignInSlot>>();
+
+function slotFor(deps: BrowserSignInDeps, connectorId: string): SignInSlot {
+    let byConnector = slots.get(deps);
+    if (!byConnector) slots.set(deps, (byConnector = new Map()));
+    let slot = byConnector.get(connectorId);
+    if (!slot) byConnector.set(connectorId, (slot = new SignInSlot(deps, connectorId)));
+    return slot;
+}
+
+/**
+ * Connects a browser-sign-in connector (Google) from the phone: this phone's loopback listener catches the
+ * provider's redirect, and the PC, which holds the PKCE verifier, exchanges the code and keeps the account.
+ * The code lives only inside one run of `start`. Every Connect for the connector shows the same sign-in; once none
+ * shows it any more (the tile or screen closed), the listener and the PC's flow end.
+ */
+export function useBrowserSignIn(connector: ConnectorRow, scopes: string[] = deviceSignInScopes(connector)) {
+    const client = useGaiaClient();
+    const queryClient = useQueryClient();
+    const slot = slotFor(useBrowserSignInDeps(), connector.id);
+    const signIn = useSyncExternalStore(slot.subscribe, slot.snapshot);
+    const scopeKey = scopes.join(' ');
+    const start = useCallback(() => void slot.start(client, queryClient, scopeKey), [slot, client, queryClient, scopeKey]);
+    return { signIn, start, cancel: slot.cancel };
 }

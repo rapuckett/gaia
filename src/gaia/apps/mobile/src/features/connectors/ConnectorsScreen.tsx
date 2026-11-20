@@ -7,7 +7,7 @@ import { useRouter } from 'expo-router';
 import { useMemo, useState, type ReactNode } from 'react';
 import { useWindowDimensions, View } from 'react-native';
 
-import type { AgentMcpServer, ConnectorRow, UnavailableConnectorRow } from '@/api/client.types';
+import type { AgentMcpServer, ConnectorKeyStore, ConnectorRow, UnavailableConnectorRow } from '@/api/client.types';
 import { ENDPOINTS } from '@/api/constants';
 import { useDeviceRefused } from '@/api/routeAccess';
 import {
@@ -21,6 +21,7 @@ import {
     useConnectorGrants,
     useConnectors,
     useConnectorServerAction,
+    useRetryKeyStore,
     type ConnectorCheck,
 } from '@/data';
 import { ApproveOnPcNotice } from '@/features/devices/ApproveOnPcNotice';
@@ -53,6 +54,7 @@ import {
     TextField,
     Ltr,
     useTheme,
+    PRESSABLE_MIN_SIZE,
 } from '@/ui';
 import { lineHeightOf } from '@/ui/text/Text';
 import { ChevronDown, ChevronRight, CircleCheck, Ellipsis, ExternalLink, Pause, Play, Trash2 } from '@/ui/icons';
@@ -95,6 +97,8 @@ interface ConnectorsBodyProps {
     /** The connector whose setup sheet starts open. */
     initialSheet?: string;
     initialChecks?: Record<string, ConnectorCheck>;
+    /** Whether the screen is focused; the list is re-read during a key store prompt only then. */
+    focused?: boolean;
 }
 
 export function ConnectorsScreen(props: ConnectorsBodyProps) {
@@ -107,9 +111,9 @@ export function ConnectorsScreen(props: ConnectorsBodyProps) {
 }
 
 /** The connector list, for the screen and for the Settings pane. */
-export function ConnectorsBody({ initialExpanded, initialJustConnected, initialSheet, initialChecks }: ConnectorsBodyProps) {
+export function ConnectorsBody({ initialExpanded, initialJustConnected, initialSheet, initialChecks, focused = true }: ConnectorsBodyProps) {
     const t = useT();
-    const connectors = useConnectors();
+    const connectors = useConnectors(focused);
     const agentMcps = useAgentMcps();
     const checks = useConnectorChecks(initialChecks);
     const [sheetFor, setSheetFor] = useState<string | null>(initialSheet ?? null);
@@ -119,7 +123,7 @@ export function ConnectorsBody({ initialExpanded, initialJustConnected, initialS
     const [notice, setNotice] = useState<string | null>(null);
     const [justConnected, setJustConnected] = useState<string | null>(initialJustConnected ?? null);
     const [seen, setSeen] = useState<unknown>(null);
-    const [seenConfigured, setSeenConfigured] = useState<Map<string, boolean> | null>(null);
+    const [seenConfigured, setSeenConfigured] = useState<Map<string, boolean | null> | null>(null);
 
     const rows = connectors.data?.connectors ?? [];
     const servers = agentMcps.data?.agent_mcps ?? [];
@@ -131,7 +135,7 @@ export function ConnectorsBody({ initialExpanded, initialJustConnected, initialS
     // A connector that turns connected while the list is open gets the one Personalize offer, and its tile opens unless another is being read.
     if (connectors.data && connectors.data !== seen) {
         const before = seenConfigured;
-        const now = new Map<string, boolean>();
+        const now = new Map<string, boolean | null>();
         for (const c of connectors.data.connectors) if ('configured' in c) now.set(c.id, c.configured);
         setSeen(connectors.data);
         setSeenConfigured(now);
@@ -144,6 +148,13 @@ export function ConnectorsBody({ initialExpanded, initialJustConnected, initialS
                 setJustConnected((prev) => (prev === c.id ? null : prev));
             }
         }
+    }
+
+    // Accounts opens once per visit for a held-back account; folding it then sticks through refetches.
+    const [heldOpened, setHeldOpened] = useState(false);
+    if (!heldOpened && groups.accounts.some((c) => !!c.key_store)) {
+        setHeldOpened(true);
+        setOpenGroups((prev) => ({ ...prev, accounts: true }));
     }
 
     const failure = connectors.error ?? agentMcps.error;
@@ -206,6 +217,9 @@ export function ConnectorsBody({ initialExpanded, initialJustConnected, initialS
                     <ListSkeleton rows={6} />
                 ) : (
                     <>
+                        {connectors.data?.key_store ? (
+                            <KeyStoreNotice state={connectors.data.key_store} onSettled={() => void connectors.refetch()} />
+                        ) : null}
                         {rows.length > SEARCH_ABOVE ? (
                             <TextField
                                 value={query}
@@ -304,10 +318,14 @@ function Tile({ header, open, children, overlays }: { header: ReactNode; open?: 
     );
 }
 
-function TileHeader({ name, trailing, onPress, open, menu }: { name: string; trailing?: ReactNode; onPress?: () => void; open?: boolean; menu?: ReactNode }) {
+/** `plain`: a header that stands in for a pressable one, read as one piece of text and kept at the pressable's height. */
+function TileHeader({ name, trailing, onPress, open, menu, plain }: { name: string; trailing?: ReactNode; onPress?: () => void; open?: boolean; menu?: ReactNode; plain?: boolean }) {
     const { space } = useTheme();
     const body = (
-        <View style={{ paddingHorizontal: space.lg, paddingVertical: space.md }}>
+        <View
+            accessible={plain || undefined}
+            style={[{ paddingHorizontal: space.lg, paddingVertical: space.md }, plain ? { minHeight: PRESSABLE_MIN_SIZE, justifyContent: 'center' } : null]}
+        >
             <Row gap="sm" justify="between" align="start">
                 <Row gap="sm" wrap flex={1}>
                     <Text role="ui" weight="semibold" dir="auto">{name}</Text>
@@ -357,6 +375,55 @@ function UnavailableTile({ connector }: { connector: UnavailableConnectorRow }) 
     return <Tile header={<TileHeader name={connector.display_name} trailing={<Pill label={t('settings.connectors.unavailableStatus')} />} />} />;
 }
 
+/**
+ * The one notice for connectors the PC's key store held back: its prompt still open, or refused with Try again,
+ * as Settings → Model's key notice offers. The list is read again once Try again settles.
+ */
+function KeyStoreNotice({ state, onSettled }: { state: ConnectorKeyStore; onSettled: () => void }) {
+    const t = useT();
+    const retry = useRetryKeyStore();
+    const storePrompt = useDevicePrompt({ kind: 'keyStore', action: 'keyStoreRetry' });
+    const retryRefused = useDeviceRefused('POST', ENDPOINTS.providersKeyStoreRetry);
+    const [failed, setFailed] = useState<{ text: string; detail?: string } | null>(null);
+
+    // The request stays open while the PC's unlock prompt waits; the notice follows the PC's events meanwhile.
+    const onRetryStore = () => {
+        setFailed(null);
+        storePrompt.begin();
+        retry.mutate(undefined, {
+            onSuccess: () => storePrompt.settle(),
+            onError: (err) => {
+                if (!storePrompt.report(err)) setFailed(describeHttpFailure(err, t));
+            },
+            onSettled,
+        });
+    };
+
+    if (state === 'waiting') {
+        return (
+            <Notice
+                tone="info"
+                role="status"
+                title={t('mobileApp.approveOnPc.title')}
+                message={t('mobileApp.approveOnPc.keyStore')}
+                testID="connectors-key-store-waiting"
+            />
+        );
+    }
+    return (
+        <Stack gap="sm">
+            <Notice
+                tone="warning"
+                message={t('mobileApp.connectors.keyStore.locked')}
+                action={retryRefused || retry.isPending || storePrompt.hideAction ? undefined : { label: t('settings.key.unlockAgain'), onPress: onRetryStore }}
+                testID="connectors-key-store-locked"
+            />
+            {!retryRefused ? <ApproveOnPcNotice kind="keyStore" action="keyStoreRetry" onRetry={onRetryStore} /> : null}
+            {failed ? <Notice tone="danger" message={failed.text} detail={failed.detail} testID="connectors-key-store-failed" /> : null}
+        </Stack>
+    );
+}
+
 function StatusText({ connector, check, t }: { connector: ConnectorRow; check?: ConnectorCheck; t: Translator }) {
     const status = tileStatus(connector);
     // A server that won't start is not working, whatever was saved for it.
@@ -386,6 +453,8 @@ function StatusText({ connector, check, t }: { connector: ConnectorRow; check?: 
             return <Pill label={t('settings.connectors.paused')} />;
         case 'setupRequired':
             return <Text role="label" tone="muted">{t('settings.connectors.setupRequired')}</Text>;
+        case 'heldBack':
+            return <Text role="label" tone="muted" testID={`connector-held-back-${connector.id}`}>{t('settings.connectors.tile.heldBack')}</Text>;
         default:
             return null;
     }
@@ -398,7 +467,7 @@ function Chevron({ open }: { open: boolean }) {
     const rtl = useDirection() === 'rtl';
     const line = lineHeightOf(type.ui, 'ui', rtl) * fontScale;
     return (
-        <View style={{ minHeight: line, justifyContent: 'center' }}>
+        <View style={{ minHeight: line, justifyContent: 'center' }} testID="tile-chevron">
             <Icon icon={open ? ChevronDown : ChevronRight} size="sm" tone="muted" />
         </View>
     );
@@ -439,6 +508,8 @@ function ConnectorTile({
     const server = connector.type === 'mcp_server';
     const paused = connector.enabled === false;
     const form = setupForm(connector);
+    // Held back by the PC's key store: neither connected nor not, so no status and no actions until it is read.
+    const unread = !!connector.key_store;
     const checkPrompt = useDevicePrompt({ kind: 'keyStore', action: CHECK_PROMPT_ACTION });
     // The prompt's state is shared by every Check; only the tile whose check raised it hides its button, as a locked store's Try again does.
     const checkOnPc = (checkPrompt.hideAction && (check?.state === 'checking' || check?.state === 'prompt')) || check?.state === 'locked';
@@ -501,11 +572,12 @@ function ConnectorTile({
 
     return (
         <Tile
-            open={expanded}
+            open={expanded && !unread}
             header={
                 <TileHeader
                     name={connector.display_name}
-                    onPress={onToggle}
+                    onPress={unread ? undefined : onToggle}
+                    plain={unread}
                     open={expanded}
                     menu={
                         server && connector.configured ? (
@@ -555,7 +627,7 @@ function ConnectorTile({
         >
             <Stack gap="sm">
                 <Text role="label" tone="secondary">{connectorDescription(t, connector)}</Text>
-                {!connector.configured ? (
+                {unread ? null : !connector.configured ? (
                     form === 'oauthSetup' ? (
                         setupButton
                     ) : google ? (
