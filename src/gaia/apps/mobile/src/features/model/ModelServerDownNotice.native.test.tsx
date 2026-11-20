@@ -18,6 +18,8 @@ import { ModelServerDownNotice } from './ModelServerDownNotice';
 
 const t = translator('en');
 
+const describeNative = Platform.OS === 'web' ? describe.skip : describe;
+
 async function mount(data: FakeClientData) {
     const client = createFakeClient(data);
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -34,10 +36,11 @@ async function mount(data: FakeClientData) {
     return client;
 }
 
-const scene = (name: string) => MODEL_SCENES[name].data!;
+// A copy: the fake client replaces the target on a switch, and scenes are shared.
+const scene = (name: string): FakeClientData => ({ ...MODEL_SCENES[name].data });
 const CHECK = t('settings.key.checkAgain');
 
-describe('ModelServerDownNotice offers', () => {
+describeNative('ModelServerDownNotice offers', () => {
     it("Start for GAIA's own server, with Check again", async () => {
         await mount(scene('down-ours'));
         expect(await screen.findByText(t('serverDown.start'))).toBeTruthy();
@@ -63,7 +66,7 @@ describe('ModelServerDownNotice offers', () => {
     });
 });
 
-describe('ModelServerDownNotice switching', () => {
+describeNative('ModelServerDownNotice switching', () => {
     it('sends gaia only, then shows the success notice and announces it once on iOS', async () => {
         const announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility').mockImplementation(() => undefined);
         const os = Platform.OS;

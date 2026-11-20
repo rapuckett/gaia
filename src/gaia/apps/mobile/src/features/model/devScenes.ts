@@ -117,7 +117,7 @@ export const MODEL_SCENES: Record<string, ModelScene> = {
 };
 
 export function modelSceneClient(scene: ModelScene): GaiaClient {
-    const client = createFakeClient(scene.data ?? {});
+    const client = createFakeClient({ ...scene.data });
     const pending = () => new Promise<never>(() => undefined);
     return {
         ...client,
