@@ -272,8 +272,11 @@ def _no_leaked_log_handlers(request):
     """
     import logging
 
+    from gaia import logger as gaia_logger
+
     loggers = (logging.getLogger(), logging.getLogger("gaia"))
     before = [list(lg.handlers) for lg in loggers]
+    manager = gaia_logger.log_manager
     yield
     leaked = []
     for lg, kept in zip(loggers, before):
@@ -282,6 +285,9 @@ def _no_leaked_log_handlers(request):
                 lg.removeHandler(handler)
                 leaked.append((lg.name, handler))
     if leaked:
+        # configure() is a no-op while a manager is set; without this a later
+        # test would find a manager whose handlers were just removed.
+        gaia_logger.log_manager = manager
         found = ", ".join(
             f"{name}: {type(h).__name__}(stream={getattr(h, 'stream', None)!r})"
             for name, h in leaked
