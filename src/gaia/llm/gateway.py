@@ -1506,6 +1506,7 @@ class GatewayManager:
             return usable
         record = (recall or recall_stored_key)()
         with GATEWAY_KEY_LOCK:
+            # Status again: the hand-off takes no address, so this says where it goes.
             return self._ensure_authenticated(record)
 
     def _ensure_authenticated(self, record: Any) -> Any:
