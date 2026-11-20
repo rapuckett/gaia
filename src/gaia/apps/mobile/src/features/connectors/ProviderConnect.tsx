@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import type { ConnectorRow } from '@/api/client.types';
 import { useDeviceSignIn } from '@/data';
 import { describeHttpFailure, useT } from '@/i18n/useT';
+import { useAnnounce } from '@/platform/useAnnounce';
 import { Button, Notice, Stack } from '@/ui';
 import { ExternalLink } from '@/ui/icons';
 
@@ -92,6 +93,8 @@ function BrowserConnect({ connectorId, row, label, againLabel, scopes, onEnded, 
     useEffect(() => {
         if (closed) onEnded?.('cancelled');
     }, [closed, onEnded]);
+    // With onEnded the caller shows and speaks the line.
+    useAnnounce(closed && !onEnded ? t('connectCard.cancelled') : null);
 
     if (signIn.state === 'done') return null;
     if (signIn.state === 'browser' || signIn.state === 'finishing') return <BrowserSignInWaiting state={signIn.state} name={row.display_name} onCancel={cancel} />;

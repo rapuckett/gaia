@@ -8,6 +8,7 @@ import { Platform } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import type { ConnectorRow } from '@/api/client.types';
+import { BROWSER_SIGN_IN_HANDOFF_MS } from '@/api/constants';
 import { GaiaApiError } from '@/api/errors';
 import { createFakeClient, type FakeClientData } from '@/api/fake';
 import { GaiaClientProvider } from '@/data';
@@ -117,6 +118,7 @@ describeNative('Connect Google from a paired phone', () => {
         ['declined at Google', { outcome: 'error', error: 'access_denied' }, {}, /You didn't allow GAIA at Google/, undefined, true],
         ['the 15 minutes ran out', { outcome: 'timeout' }, {}, /within 15 minutes/, undefined, true],
         ['the phone took the port away', { outcome: 'lost' }, {}, /stopped listening for the sign-in/, undefined, true],
+        ['the browser ended the listener without a sign-in', { outcome: 'cancelled' }, {}, /Sign-in was cancelled/, undefined, true],
         ['the PC no longer has the flow (404)', 'code', { browserCompleteError: new GaiaApiError(404, 'No sign-in is waiting.') }, /no longer has this sign-in/, 'No sign-in is waiting.', false],
         ['the PC ended it on a state mismatch (400)', 'code', { browserCompleteError: new GaiaApiError(400, 'The state did not match.') }, /didn't match the one it started/, 'The state did not match.', false],
         [
@@ -224,7 +226,8 @@ describeNative('Connect Google from a paired phone', () => {
         fireEvent.press(await screen.findByTestId('connector-connect-google'));
         expect(await screen.findByText('Finish signing in to Google in the browser.')).toBeTruthy();
         await view.unmount();
-        await waitFor(() => expect(client.flowCancels).toEqual(['flow-1', 'flow-2']));
+        // A moment later: a Connect that remounts in that time keeps the sign-in.
+        await waitFor(() => expect(client.flowCancels).toEqual(['flow-1', 'flow-2']), { timeout: BROWSER_SIGN_IN_HANDOFF_MS + 1_000 });
         expect(loopback.cancel).toHaveBeenCalledTimes(2);
         queryClient.clear();
     });

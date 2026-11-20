@@ -6,6 +6,7 @@ import { View } from 'react-native';
 import type { ConnectorRow } from '@/api/client.types';
 import { ChipButton } from '@/features/schedules/ChipButton';
 import { describeHttpFailure, useT } from '@/i18n/useT';
+import { useAnnounce } from '@/platform/useAnnounce';
 import { Button, Notice, Row, Spinner, Stack, Surface, Text } from '@/ui';
 
 import { useBrowserSignIn, type BrowserSignIn } from './browserSignIn';
@@ -83,6 +84,8 @@ export function BrowserSignInBlock({ connector }: { connector: ConnectorRow }) {
     const t = useT();
     const { signIn, start, cancel } = useBrowserSignIn(connector);
     const name = connector.display_name;
+    // The info notice is a polite live region on Android; iOS needs it spoken.
+    useAnnounce(signIn.state === 'failed' && signIn.reason === 'closed' ? t('connectCard.cancelled') : null);
 
     if (signIn.state === 'done') return null;
     if (signIn.state === 'browser' || signIn.state === 'finishing') return <BrowserSignInWaiting state={signIn.state} name={name} onCancel={cancel} />;
