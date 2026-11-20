@@ -164,12 +164,12 @@ export interface ConnectorRow {
      */
     docs_url: string | null;
     /**
-     * ``null`` only off the PC, with ``key_store`` set: the PC's OS key store
+     * ``null`` only with ``key_store`` set: the PC's OS key store
      * held back the read, so whether it is connected is unknown.
      */
     configured: boolean | null;
     /**
-     * Set off the PC when the OS key store held back this connector's read:
+     * Set when the OS key store held back this connector's read:
      * ``waiting`` while its unlock prompt is open, ``locked`` once it was
      * refused or closed. Absent once the read finished.
      */
