@@ -81,6 +81,7 @@ export function ConnectionBanner() {
                         tone={banner.tone}
                         title={banner.title}
                         message={banner.message}
+                        detail={banner.detail}
                         onDismiss={banner.dismissible ? () => (banner.id === 'pickLoad' ? usePickLoadStore.getState().clear() : dismiss(banner.id)) : undefined}
                         action={
                             banner.downloadRetry
