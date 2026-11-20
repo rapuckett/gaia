@@ -167,6 +167,44 @@ class TestListConnectors:
         }
         assert rows["mcp-test"]["display_name"] == "MCP Test"
 
+    @pytest.mark.parametrize("path", ["/api/connectors", "/api/connectors/mcp-test"])
+    def test_a_key_store_prompt_during_a_read_leaves_the_server_answering(
+        self, ui_api_client, monkeypatch, path
+    ):
+        """The read waits on the PC's key-store prompt; a paired phone's requests still get through."""
+        import threading
+
+        from gaia.ui.routers import connectors as router
+
+        real = router._connector_summary
+        entered, answered = threading.Event(), threading.Event()
+
+        def summary(connector_id):
+            entered.set()
+            answered.wait(10)
+            return real(connector_id)
+
+        monkeypatch.setattr(router, "_connector_summary", summary)
+        listed, health = [], []
+        read = threading.Thread(
+            target=lambda: listed.append(ui_api_client.get(path).status_code)
+        )
+        read.start()
+        try:
+            assert entered.wait(5)
+            other = threading.Thread(
+                target=lambda: health.append(
+                    ui_api_client.get("/api/health").status_code
+                )
+            )
+            other.start()
+            other.join(5)
+            assert health == [200]
+        finally:
+            answered.set()
+            read.join(10)
+        assert listed == [200]
+
     def test_a_corrupt_activations_file_is_named_on_every_unavailable_row(
         self, ui_api_client
     ):
