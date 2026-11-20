@@ -167,7 +167,7 @@ describeNative('Connector Check from a paired phone, over HTTP, while the PC ask
 
         await fireEvent.press(screen.getByTestId(CHECK));
         await act(async () => pc.answer(jsonResponse({ detail: KEY_STORE_LOCKED_DETAIL }, 423)));
-        expect(await screen.findByText("The OS key store is locked, so GAIA can't read your saved key.")).toBeTruthy();
+        expect(await screen.findByText("Your PC's key store is locked, so GAIA can't read your saved key.")).toBeTruthy();
         expect(screen.getByText(KEY_STORE_LOCKED_DETAIL)).toBeTruthy();
         expect(screen.queryByText(CANT_REACH)).toBeNull();
         expect(screen.queryByTestId(CHECK)).toBeNull();

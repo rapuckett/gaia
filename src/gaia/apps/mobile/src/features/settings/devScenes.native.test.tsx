@@ -68,7 +68,7 @@ describeNative('/dev/settings', () => {
         ['model-key-replace', 'Save key'],
         ['model-key-env', /From your environment on your PC: .*FIREWORKS_API_KEY/],
         ['model-key-error', /Your PC got an error from/],
-        ['model-key-store-locked', "The OS key store is locked, so GAIA can't read your saved key."],
+        ['model-key-store-locked', "Your PC's key store is locked, so GAIA can't read your saved key."],
         ['model-key-saved-disconnected', /has your key but is not connected yet/],
         ['model-search-empty', 'No models match.'],
         ['model-hf-checking', /Needs 64 GB/],
