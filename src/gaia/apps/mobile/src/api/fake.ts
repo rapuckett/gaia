@@ -16,6 +16,7 @@ import type {
     ChatPerformance,
     ConnectorDeviceAuthResponse,
     DeviceChange,
+    ConnectorKeyStore,
     ConnectorListEntry,
     ConnectorRow,
     ConnectorSignInEnd,
@@ -161,6 +162,8 @@ export interface FakeClientData {
     /** What attachToRun replays, by chat; a chat not listed has no turn running. */
     running?: Record<string, StreamEvent[]>;
     connectors?: ConnectorListEntry[];
+    /** The list's top-level `key_store`; rows carry their own. */
+    connectorsKeyStore?: ConnectorKeyStore;
     agents?: AgentInfo[];
     /** Grants by connector id, then namespaced agent id. */
     grants?: Record<string, Record<string, string[]>>;
@@ -1086,7 +1089,8 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             yield* (data.sessionEvents ?? []) as StreamEvent[];
         },
         async listConnectors() {
-            return { connectors: [...(data.connectors ?? [])] };
+            const connectors = [...(data.connectors ?? [])];
+            return data.connectorsKeyStore ? { connectors, key_store: data.connectorsKeyStore } : { connectors };
         },
         async startConnectorDeviceSignIn(connectorId) {
             const row = (data.connectors ?? []).find((c) => c.id === connectorId);

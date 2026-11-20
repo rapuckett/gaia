@@ -162,7 +162,9 @@ export type TileStatus =
     | { kind: 'setupRequired' }
     | { kind: 'none' };
 
+/** A connector the PC's key store held back shows no status: whether it is connected is unknown. */
 export function tileStatus(c: ConnectorRow): TileStatus {
+    if (c.key_store) return { kind: 'none' };
     if (!c.configured) return c.configurable === false ? { kind: 'setupRequired' } : { kind: 'none' };
     if (c.type === 'mcp_server' && c.enabled === false) return { kind: 'paused' };
     return { kind: 'connected', accountId: c.account_id };
