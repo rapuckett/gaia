@@ -4,7 +4,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
 import type { ReactNode } from 'react';
-import { Platform } from 'react-native';
+import { AccessibilityInfo, Platform } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import type { DiscoveryFinding, ProfileStreamEvent } from '@/api/client.types';
@@ -160,11 +160,15 @@ describeNative('ProfilePane', () => {
         ['before any finding', 1, 0],
     ])('says the connection failed, with the detail, when the stream breaks %s', async (_, upTo, kept) => {
         const events = deviceScan().slice(0, upTo);
+        const announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility').mockImplementation(() => undefined);
         await mount({ memorySettings: settings(true), profileStreams: { discovery: { events, error: new GaiaStreamError('mobileApp.error.streamClosed') } } });
         fireEvent.press(await screen.findByTestId('profile-discovery-run'));
         expect(await screen.findByText(/^Connection error\. Is the GAIA server running\?/)).toBeTruthy();
         expect(screen.getByText(/Technical details/)).toBeTruthy();
         expect(screen.queryAllByRole('checkbox')).toHaveLength(kept);
+        expect(announce).toHaveBeenCalledTimes(1);
+        expect(announce).toHaveBeenCalledWith('Connection error. Is the GAIA server running?');
+        announce.mockRestore();
     });
 
     it('shows one muted line, and no notice, at rest with consent off', async () => {

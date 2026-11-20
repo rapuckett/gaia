@@ -26,9 +26,9 @@ const LOG_MAX_HEIGHT = 200;
 /** The dev gallery starts a run, and can save its result, without a tap. */
 export const ProfileDevContext = createContext<{ kind: ProfileKind; save?: boolean } | null>(null);
 
-export function Log({ lines }: { lines: LogLine[] }) {
+export function Log({ lines, running }: { lines: LogLine[]; running: boolean }) {
     return (
-        <ScrollBox maxHeight={LOG_MAX_HEIGHT} hint stickToEnd testID="profile-log">
+        <ScrollBox maxHeight={LOG_MAX_HEIGHT} hint stickToEnd settleKey={running ? undefined : 'ended'} testID="profile-log">
             <Stack gap="xs">
                 {lines.map((line, i) => (
                     <Text key={i} role="caption" tone={line.kind === 'error' ? 'danger' : line.kind === 'finding' ? 'primary' : 'muted'} dir={line.server ? 'ltr' : undefined}>
@@ -107,7 +107,7 @@ export function ProfileCard({ kind, notify }: { kind: ProfileKind; notify: Memor
                 )}
 
                 {consentOff ? <Notice tone="info" message={t('mobileApp.mem.log.noConsent')} testID={`profile-${kind}-consent-off`} /> : null}
-                {logs.length > 0 ? <Log lines={logs} /> : null}
+                {logs.length > 0 ? <Log lines={logs} running={phase === 'running'} /> : null}
                 {detail ? (
                     <Disclosure title={t('prompt.technicalDetails')} open={detailOpen} onToggle={() => setDetailOpen((open) => !open)}>
                         <Ltr>{detail}</Ltr>

@@ -3,6 +3,7 @@
 
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { AccessibilityInfo } from 'react-native';
 
 import { isolate } from '@webui/i18n/registry';
 import type { Translate } from '@webui/i18n/translator';
@@ -110,7 +111,10 @@ export function useProfileRun(kind: ProfileKind, notify: (notice: MemoryNotice) 
                     setPhase('idle');
                     return;
                 }
-                addLog({ text: t(connection), kind: 'error' });
+                const failed = t(connection);
+                addLog({ text: failed, kind: 'error' });
+                // The line may sit below the log box's fold; a screen reader hears it without scrolling.
+                AccessibilityInfo.announceForAccessibility(failed);
                 setDetail(technicalDetail(err));
                 setPhase(found.current > 0 ? 'review' : 'idle');
             }

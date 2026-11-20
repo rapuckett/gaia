@@ -1,7 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { useRef, useState, type ComponentRef, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ComponentRef, type ReactNode } from 'react';
 import { ScrollView, View } from 'react-native';
 import { Icon } from '../controls/Icon';
 import { ChevronDown } from '../icons';
@@ -21,10 +21,12 @@ export interface ScrollBoxProps {
     hint?: boolean;
     /** Follows new content to the end, except while the person has scrolled up; back at the bottom, it follows again. */
     stickToEnd?: boolean;
+    /** Each new value scrolls to the end once, even when scrolled up; with `stickToEnd` it follows from there (a run that just ended). */
+    settleKey?: string | number;
 }
 
 /** A bounded region that scrolls vertically (a tool step's output); never sideways, so long lines wrap unless the child is an `HScroll`. */
-export function ScrollBox({ maxHeight, children, testID, hint = false, stickToEnd = false }: ScrollBoxProps) {
+export function ScrollBox({ maxHeight, children, testID, hint = false, stickToEnd = false, settleKey }: ScrollBoxProps) {
     const { colors, radius, space } = useTheme();
     const [box, setBox] = useState({ view: 0, content: 0 });
     const [offset, setOffset] = useState(0);
@@ -33,6 +35,11 @@ export function ScrollBox({ maxHeight, children, testID, hint = false, stickToEn
     const follow = () => {
         if (stickToEnd && atEnd.current) scroller.current?.scrollToEnd({ animated: false });
     };
+    useEffect(() => {
+        if (settleKey === undefined) return;
+        atEnd.current = true;
+        scroller.current?.scrollToEnd({ animated: false });
+    }, [settleKey]);
     // Past maxHeight (less the 1 pt border each side) the box reserves a hint strip, so the chevron never covers text.
     const overflows = hint && box.content > maxHeight - 2;
     const more = overflows && box.content > box.view + 1 && offset < box.content - box.view - 1;

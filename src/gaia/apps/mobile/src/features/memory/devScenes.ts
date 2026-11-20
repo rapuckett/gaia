@@ -5,7 +5,7 @@ import { createFakeClient, type ProfileScript } from '@/api/fake';
 import type { GaiaClient, Goal, MemoryActivityDay, MemoryConversation, MemoryKnowledgeEntry, MemoryKnowledgeItem, MemoryStats, MemoryToolStat, MemoryTurn, MemoryUpcomingItem, ProfileStreamEvent } from '@/api/client.types';
 import { GaiaApiError, GaiaNetworkError } from '@/api/errors';
 
-export type MemoryScene = 'on' | 'off' | 'loading' | 'failed' | 'actionFails' | 'statsEmpty' | 'statsManyTools' | 'aboutEmpty' | 'aboutFailed' | 'aboutMany' | 'aboutShowMore' | 'goalsEmpty' | 'goalsFailed' | 'goalsStoreError' | 'goalsStoreDamaged' | 'knowledgeRich' | 'knowledgeEmpty' | 'knowledgeFailed' | 'knowledgeMany' | 'profileIdle' | 'profileScanning' | 'profileReview' | 'profileScanningFull' | 'profileReviewFull' | 'profileSaved' | 'profileInferring' | 'profileInferenceReview' | 'profileFailed' | 'profileOff' | 'discoveryOff' | 'profilePaired' | 'profileConsentRest' | 'profileConsentConfirm' | 'profileConsentRace';
+export type MemoryScene = 'on' | 'off' | 'loading' | 'failed' | 'actionFails' | 'statsEmpty' | 'statsManyTools' | 'aboutEmpty' | 'aboutFailed' | 'aboutMany' | 'aboutShowMore' | 'goalsEmpty' | 'goalsFailed' | 'goalsStoreError' | 'goalsStoreDamaged' | 'knowledgeRich' | 'knowledgeEmpty' | 'knowledgeFailed' | 'knowledgeMany' | 'profileIdle' | 'profileScanning' | 'profileReview' | 'profileScanningFull' | 'profileReviewFull' | 'profileFailedFull' | 'profileSaved' | 'profileInferring' | 'profileInferenceReview' | 'profileFailed' | 'profileOff' | 'discoveryOff' | 'profilePaired' | 'profileConsentRest' | 'profileConsentConfirm' | 'profileConsentRace';
 
 export const SAMPLE_MEMORY_STATS: MemoryStats = {
     knowledge: {
@@ -222,6 +222,7 @@ const PROFILE_SCRIPTS: Partial<Record<MemoryScene, { discovery?: ProfileScript; 
     profileScanning: { discovery: { events: DISCOVERY_SO_FAR, hang: true } },
     profileReview: { discovery: DISCOVERY_DONE },
     profileScanningFull: { discovery: { events: FULL_SCAN.slice(0, 24), hang: true } },
+    profileFailedFull: { discovery: { events: FULL_SCAN.slice(0, 30), error: new GaiaNetworkError('http://192.168.1.20:4200/api/memory/stream-discovery', new Error('Network request failed')) } },
     profileReviewFull: { discovery: { events: [...FULL_SCAN, { type: 'done', total: FULL_SCAN.filter((e) => e.type === 'finding').length }] } },
     profilePaired: { discovery: DISCOVERY_DONE },
     profileConsentRace: { discovery: { events: [{ type: 'error', source: 'consent', message: 'System discovery is off, so GAIA read nothing on this PC. Turn it on in Memory > Advanced > System discovery, then run the scan again.' }, { type: 'done', total: 0 }] } },
@@ -233,7 +234,7 @@ const PROFILE_SCRIPTS: Partial<Record<MemoryScene, { discovery?: ProfileScript; 
 
 /** The Profile setup state a scene starts in: which card runs on its own, and whether the result is saved. */
 export function profileSceneStart(scene: MemoryScene): { kind: 'discovery' | 'inference'; save?: boolean } | null {
-    if (scene === 'profileScanning' || scene === 'profileReview' || scene === 'profileScanningFull' || scene === 'profileReviewFull' || scene === 'profileFailed' || scene === 'profilePaired' || scene === 'profileConsentConfirm' || scene === 'profileConsentRace') return { kind: 'discovery' };
+    if (scene === 'profileScanning' || scene === 'profileReview' || scene === 'profileScanningFull' || scene === 'profileReviewFull' || scene === 'profileFailedFull' || scene === 'profileFailed' || scene === 'profilePaired' || scene === 'profileConsentConfirm' || scene === 'profileConsentRace') return { kind: 'discovery' };
     if (scene === 'profileSaved') return { kind: 'discovery', save: true };
     if (scene === 'profileInferring' || scene === 'profileInferenceReview') return { kind: 'inference' };
     return null;
