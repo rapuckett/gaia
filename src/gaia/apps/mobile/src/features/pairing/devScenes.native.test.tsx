@@ -1,7 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { render, screen } from '@testing-library/react-native';
+import { act, render, screen } from '@testing-library/react-native';
 import { Platform } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
@@ -39,6 +39,14 @@ const EXPECTED: Record<string, string> = {
     'changes-unknown-kind': 'cameraEnabled',
 };
 
+const hidden = { includeHiddenElements: true };
+
+// The paired PC, its changes and the rows each arrive on their own timers, which act() doesn't wait for.
+async function until(what: string, done: () => boolean) {
+    for (let i = 0; i < 400 && !done(); i++) await act(async () => new Promise((resolve) => setTimeout(resolve, 10)));
+    if (!done()) throw new Error(`The scene never got to: ${what}`);
+}
+
 describeNative('pairing dev scenes', () => {
     afterEach(() => setPairingService(null));
     it.each(Object.keys(PAIRING_SCENES))('renders %s', async (name) => {
@@ -47,6 +55,7 @@ describeNative('pairing dev scenes', () => {
                 <PairingSceneView scene={PAIRING_SCENES[name]} />
             </SafeAreaProvider>,
         );
-        expect((await screen.findAllByText(EXPECTED[name], { includeHiddenElements: true })).length).toBeGreaterThan(0);
+        await until(`showing "${EXPECTED[name]}"`, () => screen.queryAllByText(EXPECTED[name]!, hidden).length > 0);
+        expect(screen.getAllByText(EXPECTED[name]!, hidden).length).toBeGreaterThan(0);
     });
 });
