@@ -7,7 +7,7 @@ describe('isDeviceRefused', () => {
     it('matches plain paths and the method in any case', () => {
         expect(isDeviceRefused('GET', '/api/providers')).toBe(true);
         expect(isDeviceRefused('get', '/api/providers')).toBe(true);
-        expect(isDeviceRefused('POST', '/api/messaging/discord/connect')).toBe(true);
+        expect(isDeviceRefused('POST', '/api/devices/pairing')).toBe(true);
         expect(isDeviceRefused('POST', '/api/messaging/discord/start')).toBe(false);
         expect(isDeviceRefused('POST', '/api/providers/key-store/retry')).toBe(false);
         expect(isDeviceRefused('GET', '/api/settings')).toBe(false);
