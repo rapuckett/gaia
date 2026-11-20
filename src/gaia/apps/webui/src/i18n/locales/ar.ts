@@ -2439,7 +2439,7 @@ const messages: Messages = {
     'setup.models.change': 'تغيير النماذج',
     'setup.models.resetRecommended': 'تحديد النماذج الموصى بها فقط',
     'setup.models.neverDeletes': 'إلغاء التحديد لا يحذف أي نموذج أبدًا.',
-    'setup.models.more': 'نماذج أخرى يمكن لـ GAIA تنزيلها: {n}',
+    'setup.models.more': 'نماذج أخرى يمكن لـ GAIA تنزيلها ({n})',
     'setup.models.moreLabel': 'نماذج أخرى يمكن لـ GAIA تنزيلها',
     'setup.models.installed': 'نماذج أخرى لديك بالفعل ({n})',
     'setup.models.installedLabel': 'نماذج أخرى لديك بالفعل',
