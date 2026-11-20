@@ -27,6 +27,7 @@ import pytest
 
 from gaia.installer.lemonade_installer import LemonadeAssetError, LemonadeInstaller
 from gaia.mcp.client.transports.http import HTTPTransport
+from tests._repo_scan import files_under, read_text
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCANNED_DIRS = ("src", "util", "tests", "hub")
@@ -148,9 +149,12 @@ def _name_of(node: ast.AST) -> str:
 def _unguarded_sites():
     sites = []
     for directory in SCANNED_DIRS:
-        for path in sorted((REPO_ROOT / directory).rglob("*.py")):
+        for path in files_under(REPO_ROOT / directory, ".py"):
             try:
-                tree = ast.parse(path.read_text(encoding="utf-8"))
+                text = read_text(path)
+                if "URLError" not in text:
+                    continue
+                tree = ast.parse(text)
             except (SyntaxError, UnicodeDecodeError):
                 continue
             for node in ast.walk(tree):

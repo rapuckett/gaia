@@ -75,6 +75,16 @@ describeNative('/dev/connectors scenes', () => {
     });
 
     it.each([
+        ['keyStoreLocked', 'connectors-key-store-locked'],
+        ['keyStoreWaiting', 'connectors-key-store-waiting'],
+        ['keyStoreHeldBack', 'connectors-key-store-locked'],
+    ] as const)('%s shows one key-store notice and the held-back line', async (state, notice) => {
+        await mount(state);
+        expect(await screen.findAllByTestId(notice)).toHaveLength(1);
+        expect(screen.getByTestId('connector-held-back-microsoft')).toBeTruthy();
+    });
+
+    it.each([
         ['disconnected', /This provider has no API to revoke access remotely/],
         ['revoked', /did not confirm the revoke/],
     ] as const)('%s shows its notice after Disconnect is confirmed', async (state, text) => {

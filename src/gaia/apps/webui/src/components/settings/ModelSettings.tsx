@@ -27,7 +27,7 @@ import { SpendingLimit } from './SpendingLimit';
 import './CloudSpending.css';
 import type { ProviderId, ProviderInfo, ProviderModel } from '../../types';
 
-const DOWNLOAD_POLL_MS = 2000;
+export const DOWNLOAD_POLL_MS = 2000;
 
 function maskedKey(p: ProviderInfo, t: Translate): string {
     if (p.key_source === 'environment') return t('settings.key.setIn', { name: isolate(p.env_var ?? '', 'ltr') });
