@@ -4194,6 +4194,7 @@ const messages: Messages = {
     'mobileApp.env.removeConfirm': 'إزالة {name} من هذه المحادثة؟ يُمنع GAIA من الوصول إليه حتى تضيفه مجددًا من الكمبيوتر.',
     'mobileApp.env.yourPc': 'الكمبيوتر',
     'mobileApp.serverDown.title': 'خادم النماذج على الكمبيوتر لا يستجيب',
+    'mobileApp.serverDown.notOurs': 'لا يشغّل GAIA هذا الخادم، لذلك لا يمكنه تشغيله. شغّله على الكمبيوتر بالطريقة المعتادة، ثم أرسل رسالتك مجددًا.',
     'mobileApp.skills.yoursEmpty': 'لا شيء بعد. أضف مجلدًا فيه ملف SKILL.md إلى {path} على الكمبيوتر وسيظهر هنا.',
     'mobileApp.skills.pcTitle': 'أضِف هذه من الكمبيوتر',
     'mobileApp.skills.linkHint': 'مستودع أو مجلد على {github}، أو {repo}، أو صفحة {skills}، أو ملف {zip} عبر رابط {https}. المكتبة تضيف كل مهارة فيها.',

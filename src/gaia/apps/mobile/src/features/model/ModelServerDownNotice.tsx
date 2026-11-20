@@ -1,33 +1,71 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { GaiaApiError } from '@/api/errors';
-import { useLocalModelStatus, useRestartLocalModel } from '@/data';
-import { describeError, useT } from '@/i18n/useT';
+import { useLemonadeTarget, useLocalModelStatus, useRestartLocalModel, useSetLemonadeTarget } from '@/data';
+import { describeError, describeHttpFailure, useT } from '@/i18n/useT';
 import { ChipButton } from '@/features/schedules/ChipButton';
+import { isPcRefusal } from '@/features/settings/PcOnlyNotice';
+import { useAnnounce } from '@/platform/useAnnounce';
 import { Icon, Notice, Row, Text, useTheme } from '@/ui';
 import { TriangleAlert } from '@/ui/icons';
 import { View } from 'react-native';
 
+import { serverDownOffer } from './serverDownOffer';
+
 /**
  * Under a turn that failed because the model server took no connection: start GAIA's own
- * server, or look again. Switching to GAIA's own server is PC-only, so it is not offered here.
+ * server, switch the PC back to it when it points at another one, or look again. What is
+ * offered follows the PC's notice (`serverDownOffer`).
  */
-export function ModelServerDownNotice({ initialAsked = false }: { /** Dev gallery only: opens after "Check again" was pressed. */ initialAsked?: boolean } = {}) {
+export function ModelServerDownNotice({
+    initialAsked = false,
+    initialSwitched = false,
+    autoSwitch = false,
+}: {
+    /** Dev gallery only: opens after "Check again" was pressed. */
+    initialAsked?: boolean;
+    /** Dev gallery only: opens after a successful switch. */
+    initialSwitched?: boolean;
+    /** Dev gallery only: presses "Use GAIA's own server" on mount. */
+    autoSwitch?: boolean;
+} = {}) {
     const t = useT();
     const status = useLocalModelStatus(true);
+    const target = useLemonadeTarget();
     const restart = useRestartLocalModel();
+    const switchOwn = useSetLemonadeTarget();
     const { colors, radius, space } = useTheme();
     const [asked, setAsked] = useState(initialAsked);
+    const [switched, setSwitched] = useState(initialSwitched);
 
     const s = status.data;
+    const switching = switchOwn.isPending;
     const starting = restart.isPending || !!s?.restarting;
-    const ours = s?.owner === 'gaia';
+    const busy = starting || switching;
+    const { start, useOwn, notOurs } = serverDownOffer(s, target.data);
     const down = !s || s.state === 'stopped';
 
-    if (asked && s && !down && !starting) {
+    const switchToOwn = () => {
+        switchOwn.mutate(
+            { mode: 'gaia' },
+            {
+                onSuccess: () => {
+                    setSwitched(true);
+                    void status.refetch();
+                },
+            },
+        );
+    };
+    useEffect(() => {
+        if (autoSwitch) switchToOwn();
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- once, on mount
+    }, []);
+    useAnnounce(switched ? t('serverDown.back') : null);
+
+    if (switched || (asked && s && !down && !busy)) {
         return <Notice tone="success" message={t('serverDown.back')} testID="server-down-back" />;
     }
     const raw = restart.error
@@ -35,7 +73,8 @@ export function ModelServerDownNotice({ initialAsked = false }: { /** Dev galler
             ? restart.error.detail
             : describeError(restart.error, t)
         : s?.restart_error;
-    const stillDown = asked && !starting && !status.isFetching && down && !raw;
+    const switchError = switchOwn.error && !isPcRefusal(switchOwn.error) ? describeHttpFailure(switchOwn.error, t) : null;
+    const stillDown = asked && !busy && !status.isFetching && down && !raw;
     return (
         <View
             testID="server-down-notice"
@@ -54,15 +93,17 @@ export function ModelServerDownNotice({ initialAsked = false }: { /** Dev galler
                 <Text role="ui" weight="semibold">{t('mobileApp.serverDown.title')}</Text>
             </Row>
             <Text role="ui">{t('serverDown.body')}</Text>
-            {s && !ours ? <Text role="ui">{t('serverDown.notOurs')}</Text> : null}
+            {notOurs ? <Text role="ui">{t('mobileApp.serverDown.notOurs')}</Text> : null}
             {stillDown ? <Text role="ui">{t('serverDown.stillDown')}</Text> : null}
             {raw ? <Text role="label" tone="secondary" mono dir="ltr">{raw}</Text> : null}
+            {switchOwn.error && isPcRefusal(switchOwn.error) ? <Notice tone="info" message={t('mobileApp.settings.pcOnly')} testID="server-down-pc-only" /> : null}
+            {switchError ? <Notice tone="danger" message={switchError.text} detail={switchError.detail} testID="server-down-switch-error" /> : null}
             <Row gap="xs" wrap>
-                {ours ? (
+                {start ? (
                     <ChipButton
                         variant="primary"
                         label={starting ? t('serverDown.starting') : t('serverDown.start')}
-                        disabled={starting}
+                        disabled={busy}
                         testID="server-down-start"
                         onPress={() => {
                             setAsked(true);
@@ -70,10 +111,19 @@ export function ModelServerDownNotice({ initialAsked = false }: { /** Dev galler
                         }}
                     />
                 ) : null}
+                {useOwn ? (
+                    <ChipButton
+                        variant="primary"
+                        label={switching ? t('serverDown.switching') : t('serverDown.useOwn')}
+                        disabled={busy}
+                        testID="server-down-use-own"
+                        onPress={switchToOwn}
+                    />
+                ) : null}
                 <ChipButton
                     variant="plain"
                     label={t('settings.key.checkAgain')}
-                    disabled={starting}
+                    disabled={busy}
                     testID="server-down-check"
                     onPress={() => {
                         setAsked(true);
