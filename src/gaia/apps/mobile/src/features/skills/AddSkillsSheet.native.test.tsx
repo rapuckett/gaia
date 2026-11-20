@@ -104,7 +104,7 @@ describeNative('AddSkillsSheet', () => {
         await readLink(PREVIEW.link);
         await screen.findByText('docs-lookup');
 
-        fireEvent.press(screen.getByTestId('skills-link-allow-code'));
+        fireEvent.press(screen.getByTestId('skills-link-include-code'));
         await waitFor(() => expect(screen.getByTestId('skills-link-pick-docs-lookup').props.accessibilityState?.disabled).toBe(false));
         fireEvent.press(screen.getByTestId('skills-link-pick-docs-lookup'));
         fireEvent.press(await screen.findByText('Add 1'));
@@ -121,7 +121,7 @@ describeNative('AddSkillsSheet', () => {
         await render(<AddSkillsSheet open onClose={() => {}} />, { wrapper: wrapper(client) });
         await readLink(PREVIEW.link);
         await screen.findByText('docs-lookup');
-        fireEvent.press(screen.getByTestId('skills-link-allow-code'));
+        fireEvent.press(screen.getByTestId('skills-link-include-code'));
         await waitFor(() => expect(screen.getByTestId('skills-link-pick-docs-lookup').props.accessibilityState?.disabled).toBe(false));
         fireEvent.press(screen.getByTestId('skills-link-pick-docs-lookup'));
         fireEvent.press(await screen.findByText('Add 1'));
@@ -129,6 +129,30 @@ describeNative('AddSkillsSheet', () => {
         fireEvent.press(screen.getByTestId('confirm-cancel'));
         await waitFor(() => expect(screen.queryByText('Add with code')).toBeNull());
         expect(adds).toEqual([]);
+    });
+
+    it('offers a skill installed from this same link again as an update, and leaves one installed elsewhere alone', async () => {
+        const base = PREVIEW.skills[0] as object;
+        const preview = {
+            ...PREVIEW,
+            skills: [
+                { ...base, name: 'same-link', path: 'same-link', has_code: false, verdict: 'ALLOW', installed: true, update: true },
+                { ...base, name: 'elsewhere', path: 'elsewhere', has_code: false, verdict: 'ALLOW', installed: true, update: false },
+            ] as unknown as LinkPreview['skills'],
+        };
+        const client = createFakeClient({ linkPreview: () => preview });
+        await render(<AddSkillsSheet open onClose={() => {}} />, { wrapper: wrapper(client) });
+        await readLink(PREVIEW.link);
+        await screen.findByText('same-link');
+        expect(screen.getByText('Add 1')).toBeTruthy();
+        expect(screen.getByTestId('skills-link-pick-same-link').props.accessibilityState?.disabled).toBeFalsy();
+        expect(screen.getByTestId('skills-link-pick-elsewhere').props.accessibilityState?.disabled).toBe(true);
+    });
+
+    it('gives the sheet body a stable test id', async () => {
+        const client = createFakeClient({ linkPreview: () => PREVIEW });
+        await render(<AddSkillsSheet open onClose={() => {}} />, { wrapper: wrapper(client) });
+        expect(await screen.findByTestId('add-skills-scroll')).toBeTruthy();
     });
 
     it('turns to the PC when it refuses the add', async () => {
