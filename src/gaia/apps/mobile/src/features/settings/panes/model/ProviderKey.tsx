@@ -6,7 +6,7 @@ import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { isolate, isolateUnit } from '@webui/i18n/registry';
 import { providerName } from '@webui/utils/providerText';
 
-import type { ProviderConnected } from '@/api/client.types';
+import type { GatewayFields, ProviderConnected } from '@/api/client.types';
 import { ENDPOINTS } from '@/api/constants';
 import { GaiaApiError } from '@/api/errors';
 import { useDeviceRefused } from '@/api/routeAccess';
@@ -33,8 +33,16 @@ function connectedOutcome(r: ProviderConnected, name: string, t: Translate): Out
 // The desktop's masked saved key: 20 bullets, then the PC's last-four hint.
 const SAVED_MASK = '•'.repeat(20);
 
-/** Dev scenes: the key field opened by Replace, fixture text typed into it, and Connect pressed on arrival. */
-export const SeedProviderKey = createContext<{ replacing?: boolean; typed?: string; submit?: boolean } | null>(null);
+/** Dev scenes: the key field opened by Replace, fixture text typed into it (and the AMD gateway's fields), and Connect pressed on arrival. */
+export const SeedProviderKey = createContext<{ replacing?: boolean; typed?: string; submit?: boolean; gateway?: GatewayFields } | null>(null);
+
+const NO_GATEWAY = { base_url: '', auth_header_name: '' };
+
+/** The gateway fields the person typed; an empty one keeps the PC's own, so it isn't sent. */
+function typedGateway(fields: typeof NO_GATEWAY): GatewayFields | undefined {
+    const out = Object.fromEntries(Object.entries(fields).map(([k, v]) => [k, v.trim()]).filter(([, v]) => v !== ''));
+    return Object.keys(out).length ? out : undefined;
+}
 
 /**
  * A cloud provider's API key: Connect with a key typed here, or Reconnect with the one the PC holds, and
@@ -43,10 +51,13 @@ export const SeedProviderKey = createContext<{ replacing?: boolean; typed?: stri
  * on the PC"; Remove and the key store's Try again show only where the phone's routes allow them.
  * Where the key comes from, its hint and the key store's state are the PC's list (`key_*`); the list never reads
  * the PC's key store, so `unknown` means GAIA there hasn't read it since it started.
+ * The AMD gateway adds its address and auth header under the key field, sent only with a typed key; the list never
+ * says the PC's current ones, so an empty field keeps them.
  */
 export function ProviderKey({ provider, connected }: { provider: ProviderRow; connected: boolean }) {
     const t = useT();
     const name = providerName(t, provider);
+    const isGateway = provider.id === 'amd';
     const seed = useContext(SeedProviderKey);
     const reconnect = useReconnectProvider();
     const sendKey = useSendProviderKey();
@@ -58,7 +69,10 @@ export function ProviderKey({ provider, connected }: { provider: ProviderRow; co
     const { ask, sheet } = useConfirmSheet();
     const [key, setKey] = useState(seed?.typed ?? '');
     const [replacing, setReplacing] = useState(!!seed?.replacing);
+    const [gateway, setGateway] = useState({ ...NO_GATEWAY, ...seed?.gateway });
     const [refused, setRefused] = useState(false);
+    // The PC's own words when it refused a gateway move from this phone.
+    const [refusedDetail, setRefusedDetail] = useState<string | undefined>(undefined);
     const [outcome, setOutcome] = useState<Outcome | null>(null);
 
     // Model mounts one per provider, so leaving the screen or picking another provider both unmount.
@@ -72,10 +86,12 @@ export function ProviderKey({ provider, connected }: { provider: ProviderRow; co
     const movedOn = () => !mounted.current;
 
     // The PC's own words go on the detail line, under our sentence; a typed key never reaches them.
-    const failed = (err: unknown) => {
+    // A gateway move fails with one message for every cause, and a 409 is the PC busy or refusing the move.
+    const report = (err: unknown, moved: boolean) => {
         if (movedOn()) return;
         if (isPcRefusal(err)) {
             setRefused(true);
+            if (moved && err instanceof GaiaApiError) setRefusedDetail(err.detail || undefined);
             return;
         }
         if (err instanceof GaiaApiError && err.status === 423) {
@@ -86,6 +102,10 @@ export function ProviderKey({ provider, connected }: { provider: ProviderRow; co
             setOutcome({ tone: 'danger', text: t('settings.key.gatewayInsecureHttp', { scheme: ltr('https://') }), detail: err.detail || undefined });
             return;
         }
+        if (moved && err instanceof GaiaApiError && (err.status === 409 || err.status === 422)) {
+            setOutcome({ tone: err.status === 409 ? 'warning' : 'danger', text: t('mobileApp.settings.modelActionFailed'), detail: err.detail || undefined });
+            return;
+        }
         if (err instanceof GaiaApiError && err.status === 422) {
             setOutcome({ tone: 'danger', text: t('mobileApp.settings.key.rejected', { name: ltr(name) }), detail: err.detail || undefined });
             return;
@@ -93,6 +113,7 @@ export function ProviderKey({ provider, connected }: { provider: ProviderRow; co
         const f = describeHttpFailure(err, t);
         setOutcome({ tone: 'danger', text: f.text, detail: f.detail });
     };
+    const failed = (err: unknown) => report(err, false);
 
     const waiting = (detail: string) => !movedOn() && setOutcome({ tone: 'info', text: t('settings.key.waitingOs'), detail: detail || undefined });
 
@@ -136,15 +157,17 @@ export function ProviderKey({ provider, connected }: { provider: ProviderRow; co
         setKey('');
         if (!typed) return;
         setOutcome(null);
+        const moving = isGateway ? typedGateway(gateway) : undefined;
         sendKey
-            .send(provider.id, typed, { onWaiting: waiting, stopped: movedOn })
+            .send(provider.id, typed, { onWaiting: waiting, stopped: movedOn, ...(moving ? { gateway: moving } : null) })
             .then(
                 (r) => {
                     if (movedOn()) return;
                     setReplacing(false);
+                    setGateway(NO_GATEWAY);
                     setOutcome(connectedOutcome(r, name, t));
                 },
-                failed,
+                (err: unknown) => report(err, !!moving),
             );
     };
 
@@ -229,6 +252,28 @@ export function ProviderKey({ provider, connected }: { provider: ProviderRow; co
                         onSubmitEditing={() => (key.trim() && !busy ? onSubmit() : undefined)}
                         testID="provider-key-field"
                     />
+                    {isGateway ? (
+                        <>
+                            <TextField
+                                value={gateway.base_url}
+                                onChangeText={(base_url) => setGateway((g) => ({ ...g, base_url }))}
+                                label={t('settings.key.gatewayUrl')}
+                                placeholder={t.bare('settings.key.gatewayPlaceholder')}
+                                literal
+                                disabled={busy}
+                                testID="provider-key-gateway-url"
+                            />
+                            <TextField
+                                value={gateway.auth_header_name}
+                                onChangeText={(auth_header_name) => setGateway((g) => ({ ...g, auth_header_name }))}
+                                label={t('settings.key.headerName')}
+                                placeholder={t.bare('settings.key.headerPlaceholder')}
+                                literal
+                                disabled={busy}
+                                testID="provider-key-gateway-header"
+                            />
+                        </>
+                    ) : null}
                     <Button
                         variant="primary"
                         full
@@ -246,6 +291,7 @@ export function ProviderKey({ provider, connected }: { provider: ProviderRow; co
                             disabled={busy}
                             onPress={() => {
                                 setKey('');
+                                setGateway(NO_GATEWAY);
                                 setReplacing(false);
                             }}
                             testID="provider-key-cancel"
@@ -311,7 +357,11 @@ export function ProviderKey({ provider, connected }: { provider: ProviderRow; co
                     testID="provider-key-error"
                 />
             ) : null}
-            {refused ? <PcOnlyNotice testID="provider-key-pc-only" /> : null}
+            {refused && refusedDetail ? (
+                <Notice tone="info" message={t('mobileApp.settings.pcOnly')} detail={refusedDetail} testID="provider-key-pc-only" />
+            ) : refused ? (
+                <PcOnlyNotice testID="provider-key-pc-only" />
+            ) : null}
             {locked ? (
                 <Notice
                     tone="warning"

@@ -6,7 +6,7 @@ import type { SystemStatus } from '@webui/types';
 import { tEn } from '@webui/i18n/translator';
 
 import type { SkillsAddSeed } from '@/features/skills';
-import type { Automation, AutomationList, LinkAddResult, LinkPreview, LinkSkill, ContextChoice, Session, SkillInfo, DiscordStatus, GaiaClient, CustomModelReport, GpuMemoryStatus, LemonadeTarget, MCPServerStatus, ModelServerInfo, ProviderModel, ProviderSummary, Settings, SpendingReport } from '@/api/client.types';
+import type { Automation, AutomationList, LinkAddResult, LinkPreview, LinkSkill, ContextChoice, Session, SkillInfo, DiscordStatus, GaiaClient, GatewayFields, CustomModelReport, GpuMemoryStatus, LemonadeTarget, MCPServerStatus, ModelServerInfo, ProviderModel, ProviderSummary, Settings, SpendingReport } from '@/api/client.types';
 import { PC_ONLY_REFUSAL } from '@/api/constants';
 import { GaiaApiError, GaiaNetworkError } from '@/api/errors';
 import type { DevicePromptKind, DevicePromptNote, DevicePromptState } from '@/features/devices/devicePrompts';
@@ -29,7 +29,7 @@ export interface SettingsScene {
     /** Puts a device prompt in this state before the pane shows, as the PC's events or a refused request would. */
     prompt?: { kind: DevicePromptKind; action: string; state: DevicePromptState; note?: DevicePromptNote };
     /** Opens the cloud key field (with Replace already pressed when `replacing`), with `typed` in it and Connect pressed when `submit`. */
-    keyEntry?: { replacing?: boolean; typed?: string; submit?: boolean };
+    keyEntry?: { replacing?: boolean; typed?: string; submit?: boolean; gateway?: GatewayFields };
     /** Opens the models search field with this text typed in. */
     search?: string;
     /** Opens this model's Details section expanded. */
@@ -186,6 +186,27 @@ const keyFields = (fireworks: Partial<ProviderSummary>): SettingsScene => {
     });
 };
 
+// The AMD gateway as the PC's list reports its key, opened on its key card.
+const gatewayScene = (amd: Partial<ProviderSummary>, scene: Partial<SettingsScene> = {}): SettingsScene => {
+    const list = providers(false);
+    const fields = { key_source: null, key_state: 'read', key_hint: null, known_models: false, ...amd } as const;
+    return keyScene({
+        provider: 'amd',
+        data: {
+            providers: { ...list, providers: list.providers.map((p) => (p.id === 'amd' ? { ...p, ...fields } : p)) },
+            providerModels: { amd: { provider: 'amd', models: [] } },
+        },
+        ...scene,
+    });
+};
+const GATEWAY_TYPED: GatewayFields = { base_url: 'https://gateway.example.com/v1', auth_header_name: 'X-Api-Key' };
+const GATEWAY_KEY = 'gw-demo-key-0000';
+// The PC's answers to a paired phone's gateway move, as the providers router words them.
+const gatewayRefused = () => Promise.reject(new GaiaApiError(422, "GAIA couldn't use that gateway, so it kept the previous one. Use a public https:// address that the PC running GAIA can reach and a key that gateway accepts, or set the gateway up on the PC."));
+const gatewayBusy = () => Promise.reject(new GaiaApiError(409, "Another GAIA window or process has been changing the AMD LLM Gateway for over 60 s, so GAIA didn't hand Lemonade a key meanwhile. Try again in a minute; if it keeps happening, quit GAIA's other windows and `gaia` commands, or restart the PC."));
+const gatewayNeedsKey = () => Promise.reject(new GaiaApiError(403, 'Change the gateway address or key header on the PC running GAIA, or from a paired device the PC allowed together with a new key. Reconnect without them to keep the saved ones.'));
+const gatewaySend = { typed: GATEWAY_KEY, submit: true, gateway: GATEWAY_TYPED };
+
 const discord = (extra: Partial<DiscordStatus>): DiscordStatus => ({
     connected: true, paired: false, running: true, state: 'stopped', detail: '', bot_name: 'GAIA Helper', owner_name: '', autostart: false,
     always_allowed: [], model: '', portal_url: 'https://discord.com/developers/applications', bot_page_url: 'https://discord.com/developers/applications/1/bot',
@@ -327,6 +348,18 @@ export const SETTINGS_SCENES: Record<string, SettingsScene> = {
     'model-key-remove': keyScene({ data: cloud([]) }),
     // SET-MODEL-13: a connected provider with Replace pressed: "Paste your new key", Save key, Cancel.
     'model-key-replace': keyScene({ keyEntry: { replacing: true }, data: cloud([]) }),
+    // SET-MODEL-16, 17: the AMD gateway with no key: the key, Gateway URL and Auth header name fields, Connect.
+    'model-gateway-entry': gatewayScene({}),
+    // SET-MODEL-16, 17: a saved gateway key with Replace pressed and a new key, address and header typed: Save key, Cancel.
+    'model-gateway-replacing': gatewayScene({ configured: true, key_source: 'stored', key_hint: '4f2a' }, { keyEntry: { replacing: true, typed: GATEWAY_KEY, gateway: GATEWAY_TYPED } }),
+    // SET-MODEL-16, 17: the PC couldn't use the new gateway (422): our sentence, the PC's one message on the detail line, the fields kept.
+    'model-gateway-failed': gatewayScene({}, { keyEntry: gatewaySend, override: { connectProvider: gatewayRefused } }),
+    // SET-MODEL-16, 17: another GAIA process is moving the gateway (409): the same, as a warning, and not retried.
+    'model-gateway-busy': gatewayScene({}, { keyEntry: gatewaySend, override: { connectProvider: gatewayBusy } }),
+    // SET-MODEL-16, 17: the PC won't move the gateway for this phone (403): "Change this on the PC" with its words under it.
+    'model-gateway-pc-only': gatewayScene({}, { keyEntry: gatewaySend, override: { connectProvider: gatewayNeedsKey } }),
+    // SET-MODEL-18: the gateway's card while the PC's key store is locked: the fields, the warning and Try again.
+    'model-gateway-store-locked': gatewayScene({ key_state: 'store_locked' }),
     // SET-MODEL-11: a saved key on the PC: 20 bullets and its last four, with Replace and Remove.
     'model-key-stored': keyFields({ configured: true, key_source: 'stored', key_hint: '4f2a' }),
     // SET-MODEL-10: a saved key that isn't connected: "has your key but is not connected yet" and Reconnect.

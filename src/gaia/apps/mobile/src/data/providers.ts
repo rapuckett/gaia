@@ -4,7 +4,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 
-import type { CloudPriceList, ContextChoice, ProviderConnected, ProviderId, ProviderSummary, ProviderSummaryList } from '@/api/client.types';
+import type { CloudPriceList, ContextChoice, GatewayFields, ProviderConnected, ProviderId, ProviderSummary, ProviderSummaryList } from '@/api/client.types';
 import { CONNECT_RETRY_MS } from '@/api/constants';
 import { GaiaApiError, GaiaError } from '@/api/errors';
 
@@ -139,6 +139,7 @@ export function secretFreeError(err: unknown, secret: string): unknown {
 /**
  * Sends a key typed on this phone to the PC, waiting out the PC's OS key-store prompt (409) as Reconnect does.
  * Not a mutation, so the key is never a mutation variable or cache entry; nothing it returns or throws carries it.
+ * `gateway` (AMD) goes in the same request as the key; a gateway move's 409 is the PC busy or refusing, so it is thrown, not waited out.
  */
 export function useSendProviderKey() {
     const client = useGaiaClient();
@@ -147,17 +148,18 @@ export function useSendProviderKey() {
     const send = async (
         provider: string,
         apiKey: string,
-        { onWaiting, stopped }: { onWaiting: (detail: string) => void; stopped: () => boolean },
+        { onWaiting, stopped, gateway }: { onWaiting: (detail: string) => void; stopped: () => boolean; gateway?: GatewayFields },
     ): Promise<ProviderConnected> => {
         const api = requireClient(client);
+        const moves = !!gateway && Object.keys(gateway).length > 0;
         setPending(true);
         try {
             for (;;) {
                 try {
-                    const r = await api.connectProvider(provider, { apiKey });
+                    const r = await api.connectProvider(provider, moves ? { apiKey, gateway } : { apiKey });
                     return r.remember_error ? { ...r, remember_error: withoutSecret(r.remember_error, apiKey) } : r;
                 } catch (err) {
-                    if (!(err instanceof GaiaApiError) || err.status !== 409 || stopped()) throw err;
+                    if (moves || !(err instanceof GaiaApiError) || err.status !== 409 || stopped()) throw err;
                     onWaiting(withoutSecret(err.detail, apiKey));
                     await new Promise((resolve) => setTimeout(resolve, CONNECT_RETRY_MS));
                 }

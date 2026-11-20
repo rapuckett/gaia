@@ -250,6 +250,12 @@ export interface ScheduleList {
 }
 
 /** POST /api/providers/{id}/connect's answer, as the web's Model settings reads it. */
+/** Where, and with which header, the PC sends the AMD gateway's key; a field left out keeps the PC's. */
+export interface GatewayFields {
+    base_url?: string;
+    auth_header_name?: string;
+}
+
 export interface ProviderConnected {
     remembered: boolean;
     remember_error?: string | null;
@@ -829,8 +835,11 @@ export interface GaiaClient {
     getMcpStatus(options?: RequestOptions): Promise<{ servers: MCPServerStatus[] }>;
     /** A model server the PC already runs; `unchecked` lists addresses that took the connection but didn't answer. */
     detectLemonade(options?: RequestOptions): Promise<{ found: LemonadeFound | null; unchecked?: string[] }>;
-    /** Registers the provider; `apiKey` is a key typed on this phone, sent only in the body. Without one the PC keeps the key it holds. The PC answers 403 to a typed key it won't take from a phone. */
-    connectProvider(provider: string, options?: RequestOptions & { apiKey?: string }): Promise<ProviderConnected>;
+    /**
+     * Registers the provider; `apiKey` is a key typed on this phone, sent only in the body. Without one the PC keeps the key it holds. The PC answers 403 to a typed key it won't take from a phone.
+     * `gateway` (AMD only) moves the gateway, and goes only with `apiKey`: the PC never sends its saved key to an address a phone chose.
+     */
+    connectProvider(provider: string, options?: RequestOptions & { apiKey?: string; gateway?: GatewayFields }): Promise<ProviderConnected>;
     /** Clears the provider's saved key from GAIA and the PC's OS credential store. */
     forgetProviderKey(provider: string, options?: RequestOptions): Promise<{ removed: boolean }>;
     /** After the PC's OS key-store unlock prompt was closed: lets GAIA ask once more, on the PC. */

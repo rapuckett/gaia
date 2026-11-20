@@ -1368,8 +1368,8 @@ export function createHttpClient(config: HttpClientConfig): GaiaClient {
         },
 
         connectProvider(provider, options) {
-            // A blank body keeps the key the PC already holds.
-            const body = options?.apiKey ? { api_key: options.apiKey } : {};
+            // A blank body keeps the key the PC already holds; the gateway's address and header only ever travel with a new key.
+            const body = options?.apiKey ? { api_key: options.apiKey, ...options.gateway } : {};
             return postJson<ProviderConnected>(providerConnectPath(provider), body, options?.signal);
         },
 

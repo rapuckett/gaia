@@ -34,6 +34,7 @@ import type {
     DocumentResponse,
     DocumentStatus,
     GaiaClient,
+    GatewayFields,
     GpuMemoryStatus,
     HealthResponse,
     IndexFolderResponse,
@@ -445,6 +446,8 @@ export interface FakeGaiaClient extends GaiaClient {
     readonly flowCancels: string[];
     /** The providers connectProvider was sent a typed key for, in order (never the key). */
     readonly keyedConnects: string[];
+    /** The gateway fields each keyed connect carried, in order. */
+    readonly gatewayConnects: { provider: string; gateway: GatewayFields }[];
     /** The providers whose saved key forgetProviderKey cleared, in order. */
     readonly keyRemovals: string[];
     /** The GPU memory changes asked for, in order: an apply with its size, or a revert. */
@@ -570,6 +573,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
     const flowCancels: string[] = [];
     const browserFlows = new Map<string, string>();
     const keyedConnects: string[] = [];
+    const gatewayConnects: FakeGaiaClient['gatewayConnects'] = [];
     const keyRemovals: string[] = [];
     const gpuMemoryChanges: ({ action: 'apply'; settingGb: number } | { action: 'revert' })[] = [];
     let npuMemlockFixes = 0;
@@ -695,6 +699,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         browserCompletions,
         flowCancels,
         keyedConnects,
+        gatewayConnects,
         keyRemovals,
         gpuMemoryChanges,
         get npuMemlockFixes() {
@@ -1809,6 +1814,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         async connectProvider(provider, options) {
             connects.push(provider);
             if (options?.apiKey) keyedConnects.push(provider);
+            if (options?.apiKey && options.gateway) gatewayConnects.push({ provider, gateway: { ...options.gateway } });
             return { remembered: true };
         },
         async forgetProviderKey(provider) {
