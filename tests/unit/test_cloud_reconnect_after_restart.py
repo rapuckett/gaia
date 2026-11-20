@@ -31,6 +31,13 @@ MODEL = "fireworks.deepseek-v4p1-flash"
 SAVED_KEY = "fw_test_000"
 
 
+def _bound_key(token):
+    """*token* stored bound to the gateway GAIA has registered."""
+    from gaia.llm import gateway
+
+    return gateway.GatewayKey(token, gateway.GatewayState.load().base_url)
+
+
 class _Reply:
     content = b"{}"
 
@@ -330,6 +337,10 @@ def test_a_lemonade_gaia_does_not_run_is_never_registered(lemond, monkeypatch):
 def test_a_lost_gateway_is_not_blamed_on_its_key(lemond, monkeypatch):
     lemond.restart()
     monkeypatch.setattr("gaia.llm.gateway.recall_token", lambda: "kept-amd-key")
+    monkeypatch.setattr(
+        "gaia.llm.gateway.recall_stored_key",
+        lambda: _bound_key("kept-amd-key"),
+    )
     chat = LemonadeProvider(
         model="amd.DeepSeek-V4.1-Flash", base_url=lc.resolve_lemonade_base_url()
     )

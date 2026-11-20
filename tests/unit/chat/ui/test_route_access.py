@@ -9,8 +9,9 @@ fails for a route nobody has decided about:
 * ``pc``: the PC running GAIA only (``require_local_pc``).
 * ``pc_or_device``: first-run setup, connector sign-in, setup, checks, grants
   and activations, Automations, schedules and goals, the device list, the
-  Discord bridge's controls, memory rebuilds and profile saves, switching
-  back to GAIA's own Lemonade, the logs and the troubleshooting report; the
+  Discord bridge's controls, connection and pairing, memory rebuilds and
+  profile saves, choosing the Lemonade Server, the logs and the
+  troubleshooting report; the
   PC or an allowed paired device, never mobile access (``require_pc_or_device``,
   ``require_pc_or_allowed_device``).
 * ``not_on_listener``: a read with side effects on the PC; the PC and mobile
@@ -40,6 +41,7 @@ from starlette.requests import Request
 from starlette.routing import Mount
 
 from gaia.config import GaiaConfig
+from gaia.llm.gateway import GatewayKey
 from gaia.ui import security
 from gaia.ui.devices.access import DeviceAccess
 from gaia.ui.devices.listener import DeviceGate
@@ -72,9 +74,6 @@ PC_ONLY = {
     "POST /api/files/open",
     "POST /api/memory/admin/clear",
     "POST /api/memory/admin/seed",
-    "POST /api/messaging/discord/connect",
-    "POST /api/messaging/discord/disconnect",
-    "POST /api/messaging/discord/pair",
     "POST /api/tunnel/start",
     "POST /api/tunnel/stop",
     "POST /v1/connections/{provider}",
@@ -117,7 +116,10 @@ PC_OR_DEVICE = {
     "POST /api/memory/commit-inference",
     "POST /api/memory/refresh-system-context",
     "POST /api/memory/reinitialize",
+    "POST /api/messaging/discord/connect",
+    "POST /api/messaging/discord/disconnect",
     "POST /api/messaging/discord/forget-always",
+    "POST /api/messaging/discord/pair",
     "POST /api/messaging/discord/restart",
     "POST /api/messaging/discord/start",
     "POST /api/messaging/discord/stop",
@@ -170,8 +172,8 @@ WEB = {
     "HEAD /redoc",
 }
 
-# Some check fields inside the handler: a provider key (the PC or an allowed
-# device) and its gateway fields (the PC only) in
+# Some check fields inside the handler: a provider key and its gateway fields
+# (the PC, or an allowed device with a new key) in
 # ``POST /api/providers/{provider}/connect``, and in ``PUT /api/settings``
 # ``network_policy`` (the PC or an allowed device) and the fields a device
 # may not change.
@@ -483,6 +485,19 @@ def _request_path(key):
     return method, re.sub(r"\{[^}]+\}", "x", path)
 
 
+@pytest.fixture(autouse=True)
+def vault(monkeypatch):
+    """GAIA's credential store over a dict, so no test here reads the OS keychain."""
+    from gaia.connectors import store
+
+    secrets = {}
+    monkeypatch.setattr(store, "verify_keyring_backend", lambda: None)
+    monkeypatch.setattr(store, "save_secret", secrets.__setitem__)
+    monkeypatch.setattr(store, "peek_secret", secrets.get)
+    monkeypatch.setattr(store, "delete_secret", lambda n: secrets.pop(n, None))
+    return secrets
+
+
 @pytest.fixture(scope="module")
 def setup(tmp_path_factory):
     app = create_app(db_path=":memory:")
@@ -616,7 +631,7 @@ def test_an_allowed_device_may_enter_a_provider_key(setup, monkeypatch):
     monkeypatch.setattr(providers, "_known_models_active", lambda *a: False)
     monkeypatch.setattr(providers, "_lemonade", lemonade)
     monkeypatch.setattr(providers, "_cloud_entry", lambda p: entry)
-    monkeypatch.setattr(cloud_keys, "remember_key", lambda *a: None)
+    monkeypatch.setattr(cloud_keys, "remember_key", lambda *a, **k: None)
 
     class _Capture(logging.Handler):
         def emit(self, record):
@@ -665,6 +680,262 @@ def test_provider_key_routing_refused_away_from_the_pc(setup, monkeypatch):
             resp = clients[caller].post("/api/providers/amd/connect", json=fields)
             assert resp.status_code == 403, (caller, fields)
     assert handed == []
+
+
+_GATEWAY_KEY = "amd-gateway-key-0123456789abcdef"
+_SAVED_GATEWAY_KEY = "saved-pc-gateway-key-fedcba9876543210"
+_PREVIOUS_GATEWAY = {
+    "name": "amd",
+    "base_url": "https://llm-api.amd.com/v1",
+    "auth_header_name": "Ocp-Apim-Subscription-Key",
+    "auth_header_prefix": "",
+    "runtime_key_set": True,
+    "models_discovered": True,
+}
+
+
+def _gateway_stubs(monkeypatch, *, addresses=("93.184.215.14",), discovered=True):
+    """The providers router against a fake Lemonade; returns what it was sent."""
+    import socket
+
+    from gaia.llm import cloud_keys
+    from gaia.ui.routers import providers
+
+    calls = []
+    entry = dict(_PREVIOUS_GATEWAY)
+
+    def lemonade(method, path, payload=None):
+        calls.append((method, path, payload))
+        if path == "cloud/auth" and method == "POST":
+            entry["runtime_key_set"] = True
+            if payload["api_key"] == _SAVED_GATEWAY_KEY:
+                return 200, {"models_discovered": True}
+            return 200, {"models_discovered": discovered}
+        if method == "DELETE":
+            entry["runtime_key_set"] = False
+        return 200, {}
+
+    def install(provider, registration):
+        calls.append(("install", provider, registration))
+        entry.update(registration)
+
+    def resolve(host, port, proto=0):
+        calls.append(("resolve", host, port))
+        if isinstance(addresses, Exception):
+            raise addresses
+        return [
+            (socket.AF_INET, socket.SOCK_STREAM, 6, "", (a, port)) for a in addresses
+        ]
+
+    monkeypatch.setattr(providers, "_uses_users_server", lambda: False)
+    monkeypatch.setattr(providers, "_require_loopback", lambda *a: None)
+    monkeypatch.setattr(providers, "_base_url", lambda: "http://127.0.0.1:13305/api/v1")
+    monkeypatch.setattr(providers, "_gateway_check_applies", lambda: False)
+    monkeypatch.setattr(providers, "_lemonade", lemonade)
+    monkeypatch.setattr(providers, "_cloud_entry", lambda p: dict(entry))
+    monkeypatch.setattr(providers, "_install", install)
+    monkeypatch.setattr(
+        providers, "_uninstall", lambda p: calls.append(("uninstall", p))
+    )
+    monkeypatch.setattr(providers.socket, "getaddrinfo", resolve)
+    monkeypatch.setattr(
+        cloud_keys, "forget_key", lambda p: calls.append(("forget", p)) or True
+    )
+    monkeypatch.setattr(
+        cloud_keys,
+        "remember_key",
+        lambda p, k, base_url=None: calls.append(("remember", p, k, base_url)),
+    )
+    monkeypatch.setattr(
+        cloud_keys,
+        "recall_gateway_key",
+        lambda: GatewayKey(_SAVED_GATEWAY_KEY, _PREVIOUS_GATEWAY["base_url"]),
+    )
+    return calls
+
+
+def test_gateway_fields_from_a_device_need_a_new_key(setup, monkeypatch):
+    app, clients, _ = setup
+    calls = _gateway_stubs(monkeypatch)
+    moved = {"base_url": "https://gw.example.com/v1"}
+    for caller, body in (
+        ("device", moved),
+        ("device", {"auth_header_name": "X-Key"}),
+        ("tunnel", {**moved, "api_key": _GATEWAY_KEY}),
+        ("pending", {**moved, "api_key": _GATEWAY_KEY}),
+    ):
+        resp = clients[caller].post("/api/providers/amd/connect", json=body, headers=UI)
+        assert resp.status_code == 403, (caller, body, resp.text)
+        assert _GATEWAY_KEY not in resp.text
+    resp = clients["device"].post(
+        "/api/providers/fireworks/connect",
+        json={**moved, "api_key": _GATEWAY_KEY},
+        headers=UI,
+    )
+    assert resp.status_code == 403
+    assert "together with a new key" in resp.json()["detail"]
+    assert calls == []
+
+
+def test_a_device_moves_the_gateway_with_a_new_key(setup, monkeypatch):
+    """Lemonade drops the old key before the address changes, only the
+    device's key is handed to the new one, and it is saved bound to it."""
+    app, clients, device = setup
+    app.state.device_action_times = {}
+    calls = _gateway_stubs(monkeypatch)
+    body = {
+        "api_key": _GATEWAY_KEY,
+        "base_url": "https://gw.example.com/v1",
+        "auth_header_name": "X-Key",
+    }
+    with _Audit() as audit:
+        resp = clients["device"].post(
+            "/api/providers/amd/connect", json=body, headers=UI
+        )
+    assert resp.status_code == 200, resp.text
+    assert _GATEWAY_KEY not in resp.text
+    assert calls == [
+        ("resolve", "gw.example.com", 443),
+        ("DELETE", "cloud/auth/amd", None),
+        (
+            "install",
+            "amd",
+            {
+                "base_url": "https://gw.example.com/v1",
+                "auth_header_name": "X-Key",
+                "auth_header_prefix": "",
+            },
+        ),
+        ("POST", "cloud/auth", {"provider": "amd", "api_key": _GATEWAY_KEY}),
+        ("remember", "amd", _GATEWAY_KEY, "https://gw.example.com/v1"),
+    ]
+    by = f"by {security.DEVICE_PRINCIPAL_PREFIX}{device.device_id}"
+    assert [line.split(" | ")[1] for line in audit.lines] == [
+        "AMD LLM Gateway gateway change submitted",
+        "AMD LLM Gateway gateway address or key header changed",
+    ]
+    assert all(by in line and _GATEWAY_KEY not in line for line in audit.lines)
+    assert _newest_changes(app, device, 1) == [
+        ("gatewayChanged", {"provider": "AMD LLM Gateway", "provider_id": "amd"})
+    ]
+
+
+@pytest.mark.parametrize(
+    "failure",
+    ["private", "unresolvable", "unreachable", "no_models"],
+)
+def test_a_failed_device_gateway_says_nothing_about_the_host(
+    setup, monkeypatch, failure
+):
+    """Same text for every failure; the previous gateway is back with its key."""
+    import socket
+
+    from gaia.ui.routers import providers
+
+    app, clients, _ = setup
+    app.state.device_action_times = {}
+    addresses = {
+        "private": ("10.1.2.3",),
+        "unresolvable": socket.gaierror(8, "nodename nor servname"),
+    }.get(failure, ("93.184.215.14",))
+    calls = _gateway_stubs(
+        monkeypatch, addresses=addresses, discovered=failure != "no_models"
+    )
+    if failure == "unreachable":
+
+        def unreachable(host, port, addresses):
+            raise OSError("connection refused")
+
+        monkeypatch.setattr(providers, "_gateway_check_applies", lambda: True)
+        monkeypatch.setattr(providers, "_dial_checked_addresses", unreachable)
+    resp = clients["device"].post(
+        "/api/providers/amd/connect",
+        json={"api_key": _GATEWAY_KEY, "base_url": "https://gw.example.com:8443/v1"},
+        headers=UI,
+    )
+    assert resp.status_code == 422, resp.text
+    assert resp.json() == {"detail": providers.DEVICE_GATEWAY_DETAIL}
+    assert not any(c[0] in ("remember", "forget") for c in calls)
+    installs = [c for c in calls if c[0] == "install"]
+    if failure != "no_models":
+        assert installs == [] and not any(c[0] == "POST" for c in calls)
+        return
+    assert installs[-1][2]["base_url"] == _PREVIOUS_GATEWAY["base_url"]
+    assert calls[-1] == (
+        "POST",
+        "cloud/auth",
+        {"provider": "amd", "api_key": _SAVED_GATEWAY_KEY},
+    )
+
+
+def test_a_device_gateway_is_dialed_at_the_address_that_was_checked(setup, monkeypatch):
+    """One lookup: a second answer (DNS rebinding) can't move the dial, and
+    TLS still checks the certificate against the name the device gave."""
+    import socket
+    import ssl
+
+    from gaia.ui.routers import providers
+
+    app, clients, _ = setup
+    app.state.device_action_times = {}
+    calls = _gateway_stubs(monkeypatch)
+    monkeypatch.setattr(providers, "_gateway_check_applies", lambda: True)
+    monkeypatch.setattr(
+        providers,
+        "check_gateway_reachable",
+        lambda *a: pytest.fail("dialed by name, which resolves again"),
+    )
+    dialed, handshakes = [], []
+
+    class _Raw:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+    class _Context:
+        def wrap_socket(self, raw, server_hostname):
+            handshakes.append(server_hostname)
+            return _Raw()
+
+    monkeypatch.setattr(
+        socket,
+        "create_connection",
+        lambda address, timeout: dialed.append(address) or _Raw(),
+    )
+    monkeypatch.setattr(ssl, "create_default_context", lambda: _Context())
+    resp = clients["device"].post(
+        "/api/providers/amd/connect",
+        json={"api_key": _GATEWAY_KEY, "base_url": "https://gw.example.com:8443/v1"},
+        headers=UI,
+    )
+    assert resp.status_code == 200, resp.text
+    assert [c for c in calls if c[0] == "resolve"] == [
+        ("resolve", "gw.example.com", 8443)
+    ]
+    assert dialed == [("93.184.215.14", 8443)] and handshakes == ["gw.example.com"]
+
+
+@pytest.mark.parametrize(
+    "url",
+    ["http://gw.example.com/v1", "https://localhost/v1", "https://192.168.1.5/v1"],
+)
+def test_a_device_gateway_address_is_checked_before_the_key_goes(
+    setup, monkeypatch, url
+):
+    from gaia.ui.routers import providers
+
+    app, clients, _ = setup
+    calls = _gateway_stubs(monkeypatch)
+    resp = clients["device"].post(
+        "/api/providers/amd/connect",
+        json={"api_key": _GATEWAY_KEY, "base_url": url},
+        headers=UI,
+    )
+    assert resp.status_code == 422
+    assert resp.json()["detail"] == providers._DEVICE_GATEWAY_PUBLIC
+    assert calls == []
 
 
 def test_a_paired_device_may_read_provider_summaries(setup, monkeypatch):
@@ -1398,14 +1669,14 @@ def test_a_paired_device_may_set_up_connectors(
 ):
     """A phone saves an OAuth client or an MCP server's key, never signs in, sees no secret."""
     from gaia.connectors import handler as connector_handler
-    from gaia.connectors import mcp_server
+    from gaia.connectors import store
     from gaia.ui.routers import connectors
 
     _, clients, device = setup
     monkeypatch.setenv("GAIA_HOME", str(tmp_path))
     stored = {}
     monkeypatch.setattr(
-        mcp_server.keyring,
+        store.keyring,
         "set_password",
         lambda service, user, value: stored.__setitem__(user, value),
     )
@@ -1610,12 +1881,12 @@ def test_schedules_and_goals_are_read_only_over_mobile_access(setup, monkeypatch
 
 def _mcp_setup(setup, monkeypatch, tmp_path):
     from gaia.connectors import handler as connector_handler
-    from gaia.connectors import mcp_server
+    from gaia.connectors import store
     from gaia.ui.routers import connectors
 
     _, clients, _ = setup
     monkeypatch.setenv("GAIA_HOME", str(tmp_path))
-    monkeypatch.setattr(mcp_server.keyring, "set_password", lambda *a: None)
+    monkeypatch.setattr(store.keyring, "set_password", lambda *a: None)
     monkeypatch.setattr(
         connector_handler._HANDLER_REGISTRY["mcp_server"], "_reload", None
     )
@@ -1987,6 +2258,7 @@ class _Bridge:
 
     def __init__(self, state="pairing", detail="DM the code to the bot."):
         self.state, self.detail, self.started = state, detail, []
+        self.connected, self.disconnected = [], False
 
     def status(self, detect=True):
         return {
@@ -2019,6 +2291,25 @@ class _Bridge:
     def stop_failed_hint(self):
         return ""
 
+    def connect(self, token, started_by=""):
+        self.connected.append((token, started_by))
+        return {
+            "connected": True,
+            "bot_name": "GAIA",
+            "application_id": "1",
+            "invite_url": "",
+            "bot_page_url": "",
+            "bot_public": False,
+        }
+
+    def reset_pairing(self, started_by=""):
+        from gaia.messaging.discord import cli
+
+        cli.reset_pairing(started_by=started_by)
+
+    def disconnect(self):
+        self.disconnected = True
+
 
 def test_a_device_runs_the_discord_bridge_but_never_sees_its_code(setup, monkeypatch):
     from gaia.messaging.discord import state as bridge_state
@@ -2046,11 +2337,6 @@ def test_a_device_runs_the_discord_bridge_but_never_sees_its_code(setup, monkeyp
         "/api/messaging/discord/start", json={"take_over": True}, headers=UI
     )
     assert bridge.started[-1] is True
-    for action in ("connect", "pair", "disconnect"):
-        resp = clients["device"].post(
-            f"/api/messaging/discord/{action}", json={"token": "t"}, headers=UI
-        )
-        assert resp.status_code == 403, action
     by = f"device:{device.device_id}"
     assert audited == [
         (by, "Discord bridge started"),
@@ -2063,6 +2349,231 @@ def test_a_device_runs_the_discord_bridge_but_never_sees_its_code(setup, monkeyp
     bridge.state, bridge.detail = "error", "Its log is at /Users/someone/.gaia/d.log"
     assert "/Users/someone" not in clients["device"].get("/api/messaging/discord").text
     assert "/Users/someone" in clients["pc"].get("/api/messaging/discord").text
+
+
+_DISCORD_TOKEN = "MTIz.discord-bot-token-never-shown"
+
+
+def _bridge_for(monkeypatch):
+    from gaia.messaging.discord import state as bridge_state
+    from gaia.ui.routers import messaging
+
+    bridge = _Bridge()
+    monkeypatch.setattr(messaging, "_cli", lambda: bridge)
+    monkeypatch.setattr(bridge_state, "is_running", lambda: False)
+    monkeypatch.setattr(bridge_state, "forget_always", lambda: None)
+    bridge_state.clear_config()
+    return bridge
+
+
+def test_a_device_connects_pairs_and_disconnects_discord(setup, monkeypatch, caplog):
+    """Audited and listed as the device's changes; the token never comes back
+    or reaches a log, and only the device that started a pairing sees its code."""
+    import logging
+
+    from gaia.messaging.discord import state as bridge_state
+
+    app, clients, device = setup
+    bridge = _bridge_for(monkeypatch)
+    for action in ("connect", "pair", "disconnect"):
+        _refused_away(
+            clients, "POST", f"/api/messaging/discord/{action}", {"token": "t"}
+        )
+    assert bridge.connected == [] and not bridge.disconnected
+
+    with _Audit() as audit, caplog.at_level(logging.DEBUG):
+        resp = clients["device"].post(
+            "/api/messaging/discord/connect",
+            json={"token": _DISCORD_TOKEN},
+            headers=UI,
+        )
+        assert resp.status_code == 200, resp.text
+        assert bridge.connected == [(_DISCORD_TOKEN, device.device_id)]
+        paired = clients["device"].post("/api/messaging/discord/pair", headers=UI)
+        assert paired.status_code == 200, paired.text
+        gone = clients["device"].post("/api/messaging/discord/disconnect", headers=UI)
+        assert gone.status_code == 200 and bridge.disconnected
+    for text in (resp.text, paired.text, gone.text, caplog.text, *audit.lines):
+        assert _DISCORD_TOKEN not in text
+    by = f"by {security.DEVICE_PRINCIPAL_PREFIX}{device.device_id}"
+    assert [line.split(" | ")[1] for line in audit.lines] == [
+        "Discord bridge bot token connected",
+        "Discord bridge pairing started for a new account",
+        "Discord bridge disconnected",
+    ]
+    assert all(by in line for line in audit.lines)
+    assert _newest_changes(app, device, 3) == [
+        ("discordControl", {"action": "connect"}),
+        ("discordControl", {"action": "pair"}),
+        ("discordControl", {"action": "disconnect"}),
+    ]
+    # The pairing this device started shows it the code; no other device sees it.
+    assert bridge_state.load_config().pairing_device_id == device.device_id
+    assert paired.json()["pairing_code"] == "PAIR-4242"
+    _, _, other = _device_client(app, allow=True)
+    assert other.get("/api/messaging/discord").json()["pairing_code"] == ""
+    assert clients["pc"].get("/api/messaging/discord").json()["pairing_code"]
+
+
+def test_a_device_never_gets_the_token_back_in_a_failure(setup, monkeypatch, caplog):
+    import logging
+
+    from gaia.ui.routers import messaging
+
+    _, clients, _ = setup
+    bridge = _bridge_for(monkeypatch)
+
+    def unreachable(token, started_by=""):
+        raise RuntimeError(f"Discord could not be reached with {token}")
+
+    monkeypatch.setattr(bridge, "connect", unreachable)
+    with caplog.at_level(logging.DEBUG):
+        resp = clients["device"].post(
+            "/api/messaging/discord/connect",
+            json={"token": _DISCORD_TOKEN},
+            headers=UI,
+        )
+    assert resp.status_code == 502
+    assert resp.json()["detail"] == messaging.DEVICE_BRIDGE_ERROR
+    assert _DISCORD_TOKEN not in caplog.text
+
+
+def test_a_failed_device_connect_brings_the_bridge_back_or_says_so(setup, monkeypatch):
+    from gaia.messaging.discord import state as bridge_state
+    from gaia.ui.routers import messaging
+
+    _, clients, _ = setup
+    bridge = _bridge_for(monkeypatch)
+    monkeypatch.setattr(bridge_state, "is_running", lambda: True)
+
+    def broken(token, started_by=""):
+        raise OSError(f"disk full writing {token}")
+
+    monkeypatch.setattr(bridge, "connect", broken)
+    path, body = "/api/messaging/discord/connect", {"token": _DISCORD_TOKEN}
+    resp = clients["device"].post(path, json=body, headers=UI)
+    assert resp.status_code == 502 and bridge.started == [False]
+    assert resp.json()["detail"] == messaging.DEVICE_BRIDGE_ERROR
+
+    monkeypatch.setattr(bridge, "start_detached", lambda **_: 1)
+    resp = clients["device"].post(path, json=body, headers=UI)
+    assert resp.status_code == 502
+    assert resp.json()["detail"].endswith(messaging.BRIDGE_NOT_RESTARTED)
+    assert _DISCORD_TOKEN not in resp.text
+
+
+def test_pc_pairing_is_unchanged_and_never_marked(setup, monkeypatch):
+    from gaia.messaging.discord import state as bridge_state
+
+    _, clients, _ = setup
+    _bridge_for(monkeypatch)
+    resp = clients["pc"].post("/api/messaging/discord/pair", headers=UI)
+    assert resp.status_code == 200 and resp.json()["pairing_code"] == "PAIR-4242"
+    assert bridge_state.load_config().pairing_device_id == ""
+
+
+def _paired_by(device_id):
+    from gaia.messaging.discord import state as bridge_state
+
+    config = bridge_state.load_config()
+    config.bot_id = "bot"
+    config.owner_id, config.owner_name = "42", "approver"
+    config.pairing_device_id = device_id
+    bridge_state.save_config(config)
+
+
+def test_unpairing_the_device_that_set_the_approver_resets_it(setup, monkeypatch):
+    from gaia.messaging.discord import state as bridge_state
+
+    app, clients, device = setup
+    GaiaConfig.save_key("device_pairing", True)
+    _bridge_for(monkeypatch)
+    spare_id, _, spare = _device_client(app, allow=True)
+    assert spare.post("/api/messaging/discord/pair", headers=UI).status_code == 200
+    # The account that DMs the code becomes the approver.
+    _paired_by(spare_id)
+
+    other_id, _, _ = _device_client(app, allow=True)
+    assert clients["device"].delete(f"/api/devices/{other_id}").status_code == 200
+    assert bridge_state.load_config().owner_id == "42"
+
+    assert clients["device"].delete(f"/api/devices/{spare_id}").status_code == 200
+    config = bridge_state.load_config()
+    assert (config.owner_id, config.pairing_device_id) == ("", "")
+    assert config.bot_id == "bot"
+
+
+def test_a_device_unpairing_itself_resets_its_approver(setup, monkeypatch):
+    from gaia.messaging.discord import state as bridge_state
+
+    app, _, _ = setup
+    GaiaConfig.save_key("device_pairing", True)
+    _bridge_for(monkeypatch)
+    self_id, _, self_client = _device_client(app, allow=True)
+    _paired_by(self_id)
+    assert self_client.delete("/api/devices/me").status_code == 204
+    assert bridge_state.load_config().owner_id == ""
+
+
+def test_an_approver_kept_by_a_stuck_bridge_is_reported(setup, monkeypatch):
+    from gaia.messaging.discord import cli
+    from gaia.messaging.discord import state as bridge_state
+
+    app, clients, _ = setup
+    GaiaConfig.save_key("device_pairing", True)
+    _bridge_for(monkeypatch)
+    spare_id, _, _ = _device_client(app, allow=True)
+    _paired_by(spare_id)
+    monkeypatch.setattr(bridge_state, "is_running", lambda: True)
+    monkeypatch.setattr(cli, "stop", lambda **_: False)
+    resp = clients["device"].delete(f"/api/devices/{spare_id}")
+    assert resp.status_code == 500
+    assert "not reset" in resp.json()["detail"]
+    assert not app.state.devices.still_paired(spare_id)
+    assert bridge_state.load_config().owner_id == "42"
+
+
+def test_unpairing_the_device_that_connected_the_bot_disconnects_it(setup, monkeypatch):
+    """Its owner holds the token, so a pair press elsewhere doesn't keep it."""
+    from gaia.messaging.discord import credentials
+    from gaia.messaging.discord import state as bridge_state
+
+    app, clients, _ = setup
+    GaiaConfig.save_key("device_pairing", True)
+    _bridge_for(monkeypatch)
+    cleared = []
+    monkeypatch.setattr(credentials, "clear", lambda: cleared.append(True))
+    token_id, _, _ = _device_client(app, allow=True)
+    _paired_by("")
+    config = bridge_state.load_config()
+    config.token_device_id = token_id
+    bridge_state.save_config(config)
+    assert clients["device"].post("/api/messaging/discord/pair", headers=UI).is_success
+    assert bridge_state.load_config().token_device_id == token_id
+
+    assert clients["device"].delete(f"/api/devices/{token_id}").status_code == 200
+    config = bridge_state.load_config()
+    assert not config.connected and config.owner_id == "" and cleared == [True]
+
+
+def test_an_expired_devices_approver_is_reset_on_the_next_status_read(
+    setup, monkeypatch
+):
+    from gaia.messaging.discord import state as bridge_state
+
+    app, clients, _ = setup
+    _bridge_for(monkeypatch)
+    expired_id, _, _ = _device_client(app, allow=True)
+    _paired_by(expired_id)
+    store = app.state.devices._store
+    with store._conn:
+        store._conn.execute(
+            "UPDATE paired_devices SET created_at = 1, last_seen_at = 1 WHERE id = ?",
+            (expired_id,),
+        )
+    assert clients["pc"].get("/api/messaging/discord").is_success
+    config = bridge_state.load_config()
+    assert (config.owner_id, config.pairing_device_id) == ("", "")
 
 
 def test_a_device_grants_and_turns_on_connectors(setup, monkeypatch, tmp_path):
@@ -2182,22 +2693,14 @@ def test_a_device_rebuilds_memory_and_saves_the_profile(setup, monkeypatch):
     assert "/Users/someone" in clients["pc"].post(path, headers=UI).text
 
 
-def test_a_device_may_only_switch_back_to_gaias_own_lemonade(setup, monkeypatch):
+def _lemonade_target_stubs(monkeypatch):
     from gaia.llm import lemonade_choice
     from gaia.ui.routers import lemonade
 
-    _, clients, device = setup
-    audited = _audit_into(monkeypatch, lemonade)
-    switched = []
     monkeypatch.setattr(lemonade_choice, "saved_mode", lambda: "external")
     monkeypatch.setattr(lemonade_choice, "configured_source", lambda: "config")
-    monkeypatch.setattr(lemonade_choice, "set_mode", switched.append)
-    monkeypatch.setattr(
-        lemonade_choice,
-        "use_external",
-        lambda *a: pytest.fail("a device chose an external server"),
-    )
     monkeypatch.setattr(lemonade_choice, "apply_gaia_switch", lambda previous: None)
+    monkeypatch.setattr(lemonade_choice, "apply_to_daemon", lambda: None)
     monkeypatch.setattr(lemonade, "_drop_cached_agents", lambda: None)
     monkeypatch.setattr(
         lemonade,
@@ -2216,22 +2719,143 @@ def test_a_device_may_only_switch_back_to_gaias_own_lemonade(setup, monkeypatch)
             "what_gaia_does": lemonade.WHAT_GAIA_DOES,
         },
     )
-    path = "/api/lemonade/target"
-    external = {"mode": "external", "base_url": "http://10.0.0.5:13305", "api_key": "k"}
-    assert clients["device"].post(path, json=external, headers=UI).status_code == 403
-    # Only the exact mode is GAIA's own; anything else is the user's server.
-    assert (
-        clients["device"].post(path, json={"mode": "GAIA"}, headers=UI).status_code
-        == 403
+
+
+_LEMONADE_KEY = "lemonade-key-never-shown"
+
+
+def test_a_device_chooses_the_lemonade_server(setup, monkeypatch):
+    """GAIA's own, or the user's own behind a confirmation; audited either way."""
+    from gaia.llm import lemonade_choice
+    from gaia.ui.routers import lemonade
+
+    app, clients, device = setup
+    app.state.device_action_times = {}
+    audited = _audit_into(monkeypatch, lemonade)
+    switched, used = [], []
+    _lemonade_target_stubs(monkeypatch)
+    monkeypatch.setattr(lemonade_choice, "set_mode", switched.append)
+    monkeypatch.setattr(
+        lemonade_choice, "use_external", lambda url, key: used.append((url, key))
     )
-    _refused_away(clients, "POST", path, {"mode": "gaia"})
-    assert switched == [] and audited == []
+    path = "/api/lemonade/target"
+    external = {
+        "mode": "external",
+        "base_url": "http://10.0.0.5:13305",
+        "api_key": _LEMONADE_KEY,
+    }
+    for body in ({"mode": "gaia"}, {**external, "confirm": True}):
+        _refused_away(clients, "POST", path, body)
+    assert switched == [] and used == [] and audited == []
+
+    unconfirmed = clients["device"].post(path, json=external, headers=UI)
+    assert unconfirmed.status_code == 409
+    assert unconfirmed.json()["detail"] == lemonade.DEVICE_CONFIRM_REQUIRED
+    assert used == []
+    resp = clients["device"].post(path, json={**external, "confirm": True}, headers=UI)
+    assert resp.status_code == 200, resp.text
+    assert used == [("http://10.0.0.5:13305", _LEMONADE_KEY)]
+    assert _LEMONADE_KEY not in resp.text
     resp = clients["device"].post(path, json={"mode": "gaia"}, headers=UI)
     assert resp.status_code == 200, resp.text
     assert switched == ["gaia"]
+    by = f"device:{device.device_id}"
     assert audited == [
-        (f"device:{device.device_id}", "Lemonade Server switched to GAIA's own")
+        (by, "Lemonade Server switched to the user's own"),
+        (by, "Lemonade Server switched to GAIA's own"),
     ]
+    assert _newest_changes(app, device, 2) == [
+        ("serverTarget", {"mode": "external"}),
+        ("serverTarget", {"mode": "gaia"}),
+    ]
+
+
+def _failing_probe(kind):
+    """``requests.get`` as it fails for an unreachable, closed, bad-TLS or wrong host."""
+    import socket
+
+    import requests
+
+    def get(url, **_):
+        if kind == "unreachable":
+            error = requests.exceptions.ConnectionError("resolve")
+            error.__cause__ = socket.gaierror(8, "nodename nor servname")
+            raise error
+        if kind == "closed":
+            error = requests.exceptions.ConnectionError("refused")
+            error.__cause__ = ConnectionRefusedError(61, "Connection refused")
+            raise error
+        if kind == "tls":
+            raise requests.exceptions.SSLError("certificate verify failed")
+        response = requests.Response()
+        response.status_code = 200
+        response.headers["content-type"] = "text/html"
+        response._content = b"<html></html>"
+        return response
+
+    return get
+
+
+def test_a_device_probe_failure_never_says_why(setup, monkeypatch):
+    """One message for every failure, so a phone can't map hosts or ports; the
+    PC keeps the detailed reason."""
+    import requests
+
+    from gaia.ui.routers import lemonade
+
+    app, clients, _ = setup
+    _lemonade_target_stubs(monkeypatch)
+    path = "/api/lemonade/target"
+    body = {
+        "mode": "external",
+        "base_url": "https://10.0.0.9:8443",
+        "api_key": _LEMONADE_KEY,
+        "confirm": True,
+    }
+    on_device, on_pc = set(), set()
+    for kind in ("unreachable", "closed", "tls", "not_lemonade"):
+        monkeypatch.setattr(requests, "get", _failing_probe(kind))
+        app.state.device_action_times = {}
+        resp = clients["device"].post(path, json=body, headers=UI)
+        assert resp.status_code == 422, (kind, resp.text)
+        on_device.add(resp.text)
+        resp = clients["pc"].post(path, json=body, headers=UI)
+        assert resp.status_code == 422, (kind, resp.text)
+        on_pc.add(resp.json()["detail"]["message"])
+    assert on_device == {
+        json.dumps(
+            {"detail": {"message": lemonade.DEVICE_PROBE_ERROR, "status": None}},
+            separators=(",", ":"),
+        )
+    }
+    assert len(on_pc) == 4
+    assert any("nothing is listening on that port" in m for m in on_pc)
+    assert all(_LEMONADE_KEY not in m for m in on_pc | on_device)
+    # A second try inside the limit is refused before anything is dialed.
+    assert clients["device"].post(path, json=body, headers=UI).status_code == 429
+
+
+def test_a_device_probe_failure_without_a_status_reads_the_same(setup, monkeypatch):
+    from gaia.llm import lemonade_choice
+    from gaia.ui.routers import lemonade
+
+    app, clients, _ = setup
+    _lemonade_target_stubs(monkeypatch)
+    app.state.device_action_times = {}
+
+    def unsaved(url, key):
+        raise lemonade_choice.LemonadeChoiceError("10.0.0.9 refused on 8443", None)
+
+    monkeypatch.setattr(lemonade_choice, "use_external", unsaved)
+    resp = clients["device"].post(
+        "/api/lemonade/target",
+        json={"mode": "external", "base_url": "https://10.0.0.9:8443", "confirm": True},
+        headers=UI,
+    )
+    assert resp.status_code == 422
+    assert resp.json() == {
+        "detail": {"message": lemonade.DEVICE_PROBE_ERROR, "status": None}
+    }
 
 
 def _audit_lines(run):

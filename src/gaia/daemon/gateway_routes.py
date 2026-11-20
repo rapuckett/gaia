@@ -54,10 +54,15 @@ def build_gateway_router(token: str) -> APIRouter:
     @router.post("/token")
     def remember(body: RememberTokenRequest) -> dict:
         """Persist the token in the OS credential store."""
-        from gaia.llm.gateway import GatewayError, remember_token
+        from gaia.llm.gateway import (
+            GatewayError,
+            configured_gateway_url,
+            remember_token,
+        )
 
         try:
-            remember_token(body.token)
+            # Bound to the gateway the TUI just handed the token to.
+            remember_token(body.token, configured_gateway_url())
         except GatewayError as e:
             # The store is unavailable (headless Linux, locked keychain, a null
             # backend). Report it so the TUI can say the token works for this

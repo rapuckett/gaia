@@ -7,7 +7,7 @@ import { formatSize, ltrIn } from '@webui/components/setup/format';
 
 import { useActiveModel, useGpuMemory } from '@/data';
 import { useLocaleCode, useT } from '@/i18n/useT';
-import { ChoiceList, Disclosure, Notice, Stack, Text } from '@/ui';
+import { ChoiceList, Disclosure, Notice, Row, Stack, Text } from '@/ui';
 
 import { defaultTarget } from '../../../setup/steps/gpu';
 import { SettingsAnchor } from '../../targets';
@@ -46,9 +46,11 @@ export function GpuMemory() {
                         <>
                             <Text role="caption" tone="secondary">{t('mobileApp.gpu.body', { total: gb(status.total_gb), gpu: gb(status.gpu_gb) })}</Text>
                             {status.cpu_gb != null ? (
-                                <Text role="caption" tone="muted">
-                                    {`${t('gpu.split.gpu', { gb: gb(status.gpu_gb) })} · ${t('gpu.split.cpu', { gb: gb(status.cpu_gb) })}`}
-                                </Text>
+                                <Row gap="sm" wrap testID="gpu-memory-split">
+                                    <Text role="caption" tone="muted">{t('gpu.split.gpu', { gb: gb(status.gpu_gb) })}</Text>
+                                    <Text role="caption" tone="muted">·</Text>
+                                    <Text role="caption" tone="muted">{t('gpu.split.cpu', { gb: gb(status.cpu_gb) })}</Text>
+                                </Row>
                             ) : null}
                             {status.method === 'apply' || status.revert?.available ? (
                                 <>

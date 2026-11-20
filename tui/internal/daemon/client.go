@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/amd/gaia/tui/internal/gaiainit"
+	"github.com/amd/gaia/tui/internal/netguard"
 )
 
 // Timeouts mirror src/gaia/daemon/{instance,client}.py.
@@ -965,7 +966,7 @@ func ErrorDetail(resp *http.Response) string {
 func StreamHTTPClient(connectTimeout, headerTimeout time.Duration) *http.Client {
 	return &http.Client{
 		Transport: &http.Transport{
-			DialContext:           (&net.Dialer{Timeout: connectTimeout}).DialContext,
+			DialContext:           netguard.DialContext(&net.Dialer{Timeout: connectTimeout}),
 			TLSHandshakeTimeout:   connectTimeout,
 			ResponseHeaderTimeout: headerTimeout,
 			// Loopback only, one stream at a time — no pooling benefit, and a
