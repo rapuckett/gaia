@@ -293,7 +293,7 @@ function PaneMenu({ api, tab }: { api: GaiaBrowserPaneAPI; tab: TabState }) {
 export const DEVICE_PRESETS: { name: string; width: number; height: number; mobile: boolean; label?: MessageKey }[] = [
     { name: 'iPhone SE', width: 375, height: 667, mobile: true },
     { name: 'iPhone 15', width: 393, height: 852, mobile: true },
-    { name: 'Pixel 8', width: 412, height: 915, mobile: true },
+    { name: 'Pixel 8', width: 412, height: 915, mobile: true }, // english: a device model name, the same in every language
     { name: 'iPad mini', width: 768, height: 1024, mobile: true },
     { name: 'iPad Air', width: 820, height: 1180, mobile: true },
     { name: 'Laptop', width: 1280, height: 800, mobile: false, label: 'browserPane.laptop' },

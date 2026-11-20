@@ -15,7 +15,7 @@ export function namesSetupCommand(text: string | null | undefined): boolean {
 }
 
 /** The backend's sentence for a model server GAIA doesn't run (`OTHER_SERVER_START_HINT`). */
-const OTHER_SERVER_START_HINT = "GAIA doesn't run this model server, so it can't start it. Start it the way you usually do.";
+const OTHER_SERVER_START_HINT = "GAIA doesn't run this model server, so it can't start it. Start it the way you usually do."; // english: matched against the backend's text
 
 /** The backend's English start instruction in the app's language; one with a command or path in it shows as written. */
 export function startInstructionText(t: Translate, text: string | null | undefined): string | null {

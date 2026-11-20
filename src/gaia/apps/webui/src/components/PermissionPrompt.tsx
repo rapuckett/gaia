@@ -34,7 +34,7 @@ import './PermissionPrompt.css';
 
 // The header lines `render_preview` in outgoing.py writes, longest label first so the regex picks it.
 const MAIL_FIELDS: ReadonlyArray<[string, MessageKey]> = [
-    ['Attachments left out, not sent', 'permission.mail.leftOut'],
+    ['Attachments left out, not sent', 'permission.mail.leftOut'], // english: matched against the backend's header line
     ['Attachments', 'permission.mail.attachments'],
     ['Subject', 'permission.mail.subject'],
     ['Format', 'permission.mail.format'],

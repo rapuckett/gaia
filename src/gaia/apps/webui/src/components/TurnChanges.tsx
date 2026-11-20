@@ -96,15 +96,20 @@ export function TurnChanges({ sessionId, messageId }: { sessionId: string; messa
                                 {groups.map((g) => (
                                     <li key={g.kind}>
                                         {g.entries.length === 1 ? (
-                                            <span title={g.entries[0].detail || undefined}>{g.title}</span>
+                                            <span title={g.entries[0].detail || undefined}>
+                                                {g.heading}
+                                                {g.entries[0].label && <> <bdi dir="ltr" className="turn-changes-detail">{g.entries[0].label}</bdi></>}
+                                            </span>
                                         ) : (
                                             <details>
                                                 <summary>{g.title}</summary>
                                                 <ul>
                                                     {g.entries.map((e) => (
                                                         <li key={e.detail} title={e.detail || undefined}>
-                                                            {e.label ? <bdi dir="ltr">{e.label}</bdi> : t('untracked.noDescription')}
-                                                            {e.count > 1 && <bdi dir="ltr">{` ×${e.count}`}</bdi>}
+                                                            {e.label
+                                                                ? <bdi dir="ltr">{e.count > 1 ? `${e.label} ×${e.count}` : e.label}</bdi>
+                                                                : t('untracked.noDescription')}
+                                                            {!e.label && e.count > 1 && ` ×${e.count}`}
                                                         </li>
                                                     ))}
                                                 </ul>

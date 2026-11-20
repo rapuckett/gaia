@@ -3,10 +3,11 @@
 
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+// Before api: api reaches chatStore through useT, so loading api first leaves the store the real one.
+import { useChatStore } from '../../stores/chatStore';
 import * as api from '../../services/api';
 import { ConnectionBanner } from '../ConnectionBanner';
 import { ErrorNotice } from '../settings/ErrorNotice';
-import { useChatStore } from '../../stores/chatStore';
 import { useModelStore } from '../../stores/modelStore';
 import type { SystemStatus } from '../../types';
 

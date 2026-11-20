@@ -46,6 +46,8 @@ export interface UntrackedGroup {
     kind: string;
     /** "Python snippets ×7", or "Python: counts errors by hour" for one entry. */
     title: string;
+    /** The title without the entry's own text, for a caller that isolates that text itself. */
+    heading: string;
     count: number;
     /** Distinct entries, identical ones counted once. */
     entries: UntrackedEntry[];
@@ -55,6 +57,13 @@ export interface UntrackedGroup {
 function countOf(kind: string, n: number, t: Translate): string {
     const keys = KINDS[kind];
     return keys ? t.plural(keys.count, n) : `${n} ${kind}`;
+}
+
+function headingOf(kind: string, count: number, entries: UntrackedEntry[], t: Translate): string {
+    const keys = KINDS[kind];
+    if (entries.length !== 1) return `${keys ? t(keys.many) : kind} ×${count}`;
+    const name = keys ? t(keys.bare) : kind;
+    return entries[0].count > 1 ? `${name} ×${entries[0].count}` : name;
 }
 
 function titleOf(kind: string, count: number, entries: UntrackedEntry[], t: Translate): string {
@@ -84,7 +93,7 @@ export function groupUntracked(list: UntrackedWork[], t: Translate = tEn): Untra
     }
     return [...groups.values()].map(({ kind, count, entries }) => {
         const distinct = [...entries.values()];
-        return { kind, title: titleOf(kind, count, distinct, t), count, entries: distinct };
+        return { kind, title: titleOf(kind, count, distinct, t), heading: headingOf(kind, count, distinct, t), count, entries: distinct };
     });
 }
 

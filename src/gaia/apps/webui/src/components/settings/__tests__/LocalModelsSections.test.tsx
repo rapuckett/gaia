@@ -3,8 +3,9 @@
 
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import * as api from '../../../services/api';
+// Before api: api reaches chatStore through useT, so loading api first leaves the store the real one.
 import { useChatStore } from '../../../stores/chatStore';
+import * as api from '../../../services/api';
 import { useModelStore } from '../../../stores/modelStore';
 import { resetSetupDownloads, scopedStatus, useSetupDownloads } from '../../../stores/setupDownloadsStore';
 import { NO_GPU_SPLIT } from '../../../test/setupApiMocks';

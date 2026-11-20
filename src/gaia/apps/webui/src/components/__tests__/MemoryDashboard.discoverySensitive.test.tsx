@@ -7,7 +7,7 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryDashboard } from '../MemoryDashboard';
 import * as memoryApi from '../../services/memoryApi';
 import { useChatStore } from '../../stores/chatStore';
@@ -41,7 +41,7 @@ beforeEach(() => {
     mockedApi.listGoals.mockResolvedValue({ goals: [], total: 0 } as never);
     mockedApi.getGoalStats.mockResolvedValue({ goals: {}, tasks: {} });
     mockedApi.getMemorySettings.mockResolvedValue({
-        memory_enabled: true, mcp_memory_enabled: false, system_discovery_consent: false,
+        memory_enabled: true, mcp_memory_enabled: false, system_discovery_consent: true,
     } as never);
 });
 
@@ -51,6 +51,8 @@ describe('Profile setup discovery review', () => {
         mockedApi.openDiscoveryStream.mockReturnValue(es as never);
         render(<MemoryDashboard />);
         fireEvent.click(screen.getByRole('tab', { name: /Profile Setup/i }));
+        // The scan asks for consent first; the saved consent loads after the tab opens.
+        await waitFor(() => expect(document.querySelector('.mem-profile-consent')).toBeNull());
         fireEvent.click(screen.getByRole('button', { name: /Start Scan/i }));
         act(() => {
             es.onmessage!({ data: JSON.stringify({ type: 'finding', item: { content: 'Uses VS Code', category: 'fact', context: 'global', confidence: 0.9 } }) });
