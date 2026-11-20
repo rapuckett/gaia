@@ -1669,14 +1669,14 @@ def test_a_paired_device_may_set_up_connectors(
 ):
     """A phone saves an OAuth client or an MCP server's key, never signs in, sees no secret."""
     from gaia.connectors import handler as connector_handler
-    from gaia.connectors import mcp_server
+    from gaia.connectors import store
     from gaia.ui.routers import connectors
 
     _, clients, device = setup
     monkeypatch.setenv("GAIA_HOME", str(tmp_path))
     stored = {}
     monkeypatch.setattr(
-        mcp_server.keyring,
+        store.keyring,
         "set_password",
         lambda service, user, value: stored.__setitem__(user, value),
     )
@@ -1881,12 +1881,12 @@ def test_schedules_and_goals_are_read_only_over_mobile_access(setup, monkeypatch
 
 def _mcp_setup(setup, monkeypatch, tmp_path):
     from gaia.connectors import handler as connector_handler
-    from gaia.connectors import mcp_server
+    from gaia.connectors import store
     from gaia.ui.routers import connectors
 
     _, clients, _ = setup
     monkeypatch.setenv("GAIA_HOME", str(tmp_path))
-    monkeypatch.setattr(mcp_server.keyring, "set_password", lambda *a: None)
+    monkeypatch.setattr(store.keyring, "set_password", lambda *a: None)
     monkeypatch.setattr(
         connector_handler._HANDLER_REGISTRY["mcp_server"], "_reload", None
     )
