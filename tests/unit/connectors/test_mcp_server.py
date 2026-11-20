@@ -160,7 +160,7 @@ class TestGetCredential:
         handler = McpServerHandler()
 
         with patch(
-            "gaia.connectors.mcp_server.keyring.get_password",
+            "gaia.connectors.store.keyring.get_password",
             return_value="ghp_resolved",
         ):
             result = await handler.get_credential(spec)
@@ -175,7 +175,7 @@ class TestGetCredential:
         handler = McpServerHandler()
 
         with patch(
-            "gaia.connectors.mcp_server.keyring.get_password",
+            "gaia.connectors.store.keyring.get_password",
             return_value=None,
         ):
             with pytest.raises(ConnectorsError, match="missing keyring entries"):
@@ -203,7 +203,7 @@ class TestDisconnect:
         # Pre-populate mcp_servers.json
         _write_mcp_servers_json({"mcp-github": {"command": "npx"}})
 
-        with patch("gaia.connectors.mcp_server.keyring.delete_password"):
+        with patch("gaia.connectors.store.keyring.delete_password"):
             await handler.disconnect(spec)
 
         servers = _read_mcp_servers_json()
@@ -219,7 +219,7 @@ class TestDisconnect:
             deleted.append((service, username))
 
         with patch(
-            "gaia.connectors.mcp_server.keyring.delete_password",
+            "gaia.connectors.store.keyring.delete_password",
             side_effect=fake_delete,
         ):
             await handler.disconnect(spec)
@@ -234,7 +234,7 @@ class TestDisconnect:
         import keyring.errors
 
         with patch(
-            "gaia.connectors.mcp_server.keyring.delete_password",
+            "gaia.connectors.store.keyring.delete_password",
             side_effect=keyring.errors.PasswordDeleteError("not found"),
         ):
             await handler.disconnect(spec)  # must not raise
@@ -245,7 +245,7 @@ class TestDisconnect:
         reload_calls = []
         handler = McpServerHandler(reload_callback=lambda: reload_calls.append(1))
 
-        with patch("gaia.connectors.mcp_server.keyring.delete_password"):
+        with patch("gaia.connectors.store.keyring.delete_password"):
             await handler.disconnect(spec)
 
         assert len(reload_calls) == 1
@@ -346,7 +346,7 @@ class TestHealthCheck:
         handler = McpServerHandler()
 
         with patch(
-            "gaia.connectors.mcp_server.keyring.get_password",
+            "gaia.connectors.store.keyring.get_password",
             return_value=None,
         ):
             result = await handler.test(spec)
@@ -591,3 +591,24 @@ class TestIsMcpServerConfigured:
         path.write_text("{not json")
         with pytest.raises(ConnectorsError):
             is_mcp_server_configured("mcp-github")
+
+
+# ---------------------------------------------------------------------------
+# A locked key store is a refusal, not a raw keyring error
+# ---------------------------------------------------------------------------
+
+
+def test_a_locked_key_store_refuses_an_mcp_secret_read():
+    from gaia.connectors import mcp_server, store
+
+    store.retry_keyring()
+    try:
+        with patch(
+            "gaia.connectors.store.keyring.get_password",
+            side_effect=keyring.errors.KeyringLocked("prompt dismissed"),
+        ):
+            with pytest.raises(store.KeyringRefused):
+                mcp_server._saved_secret(_make_spec(), "GITHUB_TOKEN")
+        assert store.keyring_refusal()
+    finally:
+        store.retry_keyring()
