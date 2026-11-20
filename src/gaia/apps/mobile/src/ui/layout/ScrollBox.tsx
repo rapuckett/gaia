@@ -32,8 +32,13 @@ export function ScrollBox({ maxHeight, children, testID, hint = false, stickToEn
     const [offset, setOffset] = useState(0);
     const scroller = useRef<ComponentRef<typeof ScrollView>>(null);
     const atEnd = useRef(true);
+    const lastY = useRef(0);
+    const toEnd = () => {
+        scroller.current?.scrollToEnd({ animated: false });
+        if (hint) setOffset(Infinity);
+    };
     const follow = () => {
-        if (stickToEnd && atEnd.current) scroller.current?.scrollToEnd({ animated: false });
+        if (stickToEnd && atEnd.current) toEnd();
     };
     useEffect(() => {
         if (settleKey === undefined) return;
@@ -69,8 +74,13 @@ export function ScrollBox({ maxHeight, children, testID, hint = false, stickToEn
                 }}
                 onScroll={(e) => {
                     const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
-                    if (hint) setOffset(contentOffset.y);
-                    if (stickToEnd) atEnd.current = contentOffset.y + layoutMeasurement.height >= contentSize.height - END_SLOP;
+                    if (stickToEnd) {
+                        // Only a move up pauses following: our scrolls go down, and their events may arrive stale or not at all.
+                        if (contentOffset.y < lastY.current - 1) atEnd.current = false;
+                        else if (contentOffset.y + layoutMeasurement.height >= contentSize.height - END_SLOP) atEnd.current = true;
+                        lastY.current = contentOffset.y;
+                    }
+                    if (hint) setOffset(stickToEnd && atEnd.current ? Infinity : contentOffset.y);
                 }}
                 scrollEventThrottle={64}
                 testID={testID}

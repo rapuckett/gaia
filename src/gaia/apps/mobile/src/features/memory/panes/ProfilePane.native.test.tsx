@@ -12,6 +12,7 @@ import { GaiaStreamError } from '@/api/errors';
 import { createFakeClient, type FakeClientData } from '@/api/fake';
 import { GaiaClientProvider } from '@/data';
 import { useConnectionStore } from '@/state/connection';
+import { useLocaleStore } from '@/state/locale';
 import { SheetScope, ThemeProvider } from '@/ui';
 
 import { ProfilePane } from './ProfilePane';
@@ -153,6 +154,22 @@ describeNative('ProfilePane', () => {
         expect(log.getByText(/Scanning Git identity/)).toBeTruthy();
         expect(log.getAllByText(/^Found: /)).toHaveLength(21);
         expect(log.getByText('Done. 21 items discovered.')).toBeTruthy();
+    });
+
+    it('in Arabic, shows the saved notice in place of Save once the findings are saved', async () => {
+        useLocaleStore.getState().setLocale('ar');
+        try {
+            const client = await mount({ memorySettings: settings(true), profileStreams: { discovery: { events: deviceScan() } } });
+            fireEvent.press(await screen.findByTestId('profile-discovery-run'));
+            fireEvent.press(await screen.findByTestId('profile-discovery-save'));
+            const saved = await screen.findByTestId('profile-discovery-saved');
+            expect(within(screen.getByTestId('profile-discovery-review')).getByTestId('profile-discovery-saved')).toBe(saved);
+            expect(saved).toHaveTextContent(/حُفظ في الذاكرة/);
+            expect(screen.queryByTestId('profile-discovery-save')).toBeNull();
+            expect(client.profileCommits[0]!.items).toHaveLength(21);
+        } finally {
+            useLocaleStore.getState().setLocale(null);
+        }
     });
 
     it.each([

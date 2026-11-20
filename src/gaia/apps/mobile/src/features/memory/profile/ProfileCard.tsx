@@ -147,22 +147,24 @@ export function ProfileCard({ kind, notify }: { kind: ProfileKind; notify: Memor
                             />
                             <Button label={t.bare('mem.review.none')} accessibilityLabel={t('mem.review.none')} variant="ghost" size="sm" disabled={locked} onPress={() => run.setChecked('none')} />
                         </Row>
-                        <Button
-                            label={t.bare(phase === 'saving' ? 'mem.saving' : 'mem.review.saveSelected', { n: kept })}
-                            accessibilityLabel={t(phase === 'saving' ? 'mem.saving' : 'mem.review.saveSelected', { n: kept })}
-                            variant="primary"
-                            full
-                            busy={phase === 'saving'}
-                            disabled={locked || kept === 0}
-                            onPress={() => void run.save()}
-                            testID={`profile-${kind}-save`}
-                        />
+                        {/* Once saved, the notice replaces Save, so it shows where the person tapped. */}
+                        {phase === 'done' && savedCount !== null ? (
+                            <Notice tone="success" message={t(copy.saved, { n: savedCount })} testID={`profile-${kind}-saved`} />
+                        ) : (
+                            <Button
+                                label={t.bare(phase === 'saving' ? 'mem.saving' : 'mem.review.saveSelected', { n: kept })}
+                                accessibilityLabel={t(phase === 'saving' ? 'mem.saving' : 'mem.review.saveSelected', { n: kept })}
+                                variant="primary"
+                                full
+                                busy={phase === 'saving'}
+                                disabled={locked || kept === 0}
+                                onPress={() => void run.save()}
+                                testID={`profile-${kind}-save`}
+                            />
+                        )}
                     </Stack>
                 ) : null}
 
-                {phase === 'done' && savedCount !== null ? (
-                    <Notice tone="success" message={t(copy.saved, { n: savedCount })} testID={`profile-${kind}-saved`} />
-                ) : null}
                 {phase === 'review' && items.length === 0 ? (
                     <Row gap="sm" testID={`profile-${kind}-empty`}>
                         <Icon icon={CircleCheck} size="sm" tone="muted" />

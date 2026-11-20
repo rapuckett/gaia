@@ -36,6 +36,7 @@ describeNative('ScrollBox stickToEnd', () => {
         await act(async () => fireEvent(box, 'contentSizeChange', 300, 260));
         expect(scrollToEnd).toHaveBeenCalledTimes(1);
 
+        await act(async () => fireEvent.scroll(box, scrolled(160, 260)));
         await act(async () => fireEvent.scroll(box, scrolled(40, 260)));
         await act(async () => fireEvent(box, 'contentSizeChange', 300, 300));
         expect(scrollToEnd).toHaveBeenCalledTimes(1);
@@ -43,6 +44,21 @@ describeNative('ScrollBox stickToEnd', () => {
         await act(async () => fireEvent.scroll(box, scrolled(195, 300)));
         await act(async () => fireEvent(box, 'contentSizeChange', 300, 340));
         expect(scrollToEnd).toHaveBeenCalledTimes(2);
+    });
+
+    it('keeps following when its own scroll reports a stale offset after the content grew', async () => {
+        await render(
+            <ScrollBox maxHeight={100} hint stickToEnd testID="box">
+                <Text>Line</Text>
+            </ScrollBox>,
+            { wrapper: wrap },
+        );
+        const box = screen.getByTestId('box');
+        await act(async () => fireEvent(box, 'contentSizeChange', 300, 260));
+        await act(async () => fireEvent.scroll(box, scrolled(160, 400)));
+        await act(async () => fireEvent(box, 'contentSizeChange', 300, 400));
+        expect(scrollToEnd).toHaveBeenCalledTimes(2);
+        expect(screen.queryByTestId('box-more')).toBeNull();
     });
 
     it('never scrolls a box without it', async () => {

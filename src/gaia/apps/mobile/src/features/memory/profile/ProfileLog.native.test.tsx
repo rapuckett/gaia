@@ -33,17 +33,21 @@ describeNative('Scan log', () => {
     it('settles at the last line when the run ends, even after the person scrolled up mid-run', async () => {
         const scrollToEnd = jest.spyOn(ScrollView.prototype, 'scrollToEnd');
         try {
-            const lines = [{ kind: 'log', text: 'Scanning Git identity...' }] as LogLine[];
-            const { rerender } = await render(<Log lines={lines} running />, { wrapper: wrap });
+            const first = [{ kind: 'log', text: 'Scanning Git identity...' }] as LogLine[];
+            const { rerender } = await render(<Log lines={first} running />, { wrapper: wrap });
             const box = screen.getByTestId('profile-log');
-            const up = { contentOffset: { x: 0, y: 0 }, contentSize: { width: 300, height: 600 }, layoutMeasurement: { width: 300, height: 200 } };
-            await act(async () => fireEvent.scroll(box, { nativeEvent: up }));
+            const at = (y: number) => ({ nativeEvent: { contentOffset: { x: 0, y }, contentSize: { width: 300, height: 600 }, layoutMeasurement: { width: 300, height: 200 } } });
+            await act(async () => fireEvent.scroll(box, at(400)));
+            await act(async () => fireEvent.scroll(box, at(100)));
             scrollToEnd.mockClear();
-            const ended = [...lines, { kind: 'error', text: 'Connection error. Is the GAIA server running?' }] as LogLine[];
-            await act(async () => rerender(<Log lines={ended} running />));
             await act(async () => fireEvent(box, 'contentSizeChange', 300, 640));
             expect(scrollToEnd).not.toHaveBeenCalled();
-            await act(async () => rerender(<Log lines={ended} running={false} />));
+
+            // The rest of the scan and its end land in one update; the final height is measured after.
+            const all = [...first, ...Array.from({ length: 48 }, (_, i) => ({ kind: 'log', text: `Line ${i + 2}` })), { kind: 'log', text: 'Done. 21 items discovered.' }] as LogLine[];
+            await act(async () => rerender(<Log lines={all} running={false} />));
+            scrollToEnd.mockClear();
+            await act(async () => fireEvent(box, 'contentSizeChange', 300, 2000));
             expect(scrollToEnd).toHaveBeenCalledTimes(1);
         } finally {
             scrollToEnd.mockRestore();
