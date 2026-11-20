@@ -89,7 +89,7 @@ describeNative('ConnectAccountCard', () => {
         expect(mockPush).toHaveBeenCalledWith('/connectors');
 
         await fireEvent.press(screen.getByText('Connect Microsoft'));
-        expect(await screen.findByText('Sign-in was cancelled. Press Connect to try again.')).toBeTruthy();
+        expect(await screen.findByText('Sign-in was canceled. Press Connect to try again.')).toBeTruthy();
     });
 });
 
