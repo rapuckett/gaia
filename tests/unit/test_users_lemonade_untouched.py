@@ -333,7 +333,7 @@ class TestChatStart:
             remember_key,
         )
 
-        remember_key(provider, "kept")
+        remember_key(provider, "kept", base_url="https://gw.example/v1")
         users_server.providers = [_provider(provider, key=False, models=0)]
         with pytest.raises(CloudKeyError, match="does not change your server's setup"):
             ensure_authenticated(provider)
@@ -353,7 +353,7 @@ class TestChatStart:
     ):
         from gaia.llm.gateway import GatewayError, GatewayManager, remember_token
 
-        remember_token("kept")
+        remember_token("kept", "https://gw.example/v1")
         users_server.providers = [_provider("amd", key=False, models=0)]
         with pytest.raises(GatewayError, match="does not change your server's setup"):
             GatewayManager().ensure_authenticated()

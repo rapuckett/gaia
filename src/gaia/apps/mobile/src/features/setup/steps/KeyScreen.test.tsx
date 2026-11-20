@@ -93,6 +93,30 @@ describe('KeyScreen', () => {
         expect(client.setupStarts).toMatchObject([{ skipChatModel: true }]);
     });
 
+    it('says an environment key was found, with the variable name left to right, until a key is typed', async () => {
+        await mount([provider({ configured: true, key_source: 'environment', key_hint: '9c1e', env_var: 'FIREWORKS_API_KEY' })]);
+        const line = await screen.findByTestId('key-env-found');
+        expect(line.props.children).toContain('Found a');
+        expect(line.props.children).toContain('\u2066FIREWORKS_API_KEY\u2069');
+        await fireEvent.changeText(screen.getByTestId('key-field'), 'fw-typed');
+        expect(screen.queryByTestId('key-env-found')).toBeNull();
+    });
+
+    it('does not say it for a stored key', async () => {
+        await mount([provider({ configured: true, key_source: 'stored', key_hint: '4f2a' })]);
+        await screen.findByText('Kimi · Default', { exact: false });
+        expect(screen.queryByTestId('key-env-found')).toBeNull();
+    });
+
+    it('connects an environment key without sending a key', async () => {
+        const { client, ctx } = await mount([provider({ configured: true, key_source: 'environment', env_var: 'FIREWORKS_API_KEY' })]);
+        await screen.findByTestId('key-env-found');
+        const connect = jest.spyOn(client, 'connectProvider');
+        fireEvent.press(screen.getByLabelText('Test and connect'));
+        await waitFor(() => expect(ctx.startedRun).toHaveBeenCalled());
+        expect(connect.mock.calls).toEqual([['fireworks']]);
+    });
+
     it('run again with a cloud model in use keeps that model and connects it, not the top-ranked one', async () => {
         const { client, ctx } = await mount([provider({ configured: true })], {
             activeModel: { provider: 'fireworks', model: 'fireworks.glm', remote: true } as never,

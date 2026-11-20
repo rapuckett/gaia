@@ -189,3 +189,113 @@ def test_setup_with_an_empty_token_is_refused_not_connected(monkeypatch):
     assert code == 1
     assert lines[-1].startswith("\n❌")
     assert started == []
+
+
+def _linked(**links):
+    config = state.BridgeConfig(bot_id="9", owner_id="111", dm_channel_id="5", **links)
+    state.save_config(config)
+
+
+@pytest.fixture
+def cleared(monkeypatch):
+    """The keyring token's deletions, recorded instead of made."""
+    from gaia.messaging.discord import credentials
+
+    calls = []
+    monkeypatch.setattr(credentials, "clear", lambda: calls.append("clear"))
+    monkeypatch.setattr(state, "forget_always", lambda: calls.append("always") or 0)
+    return calls
+
+
+def test_a_connect_from_a_device_links_the_token_to_it(monkeypatch):
+    from gaia.messaging.discord import cli, credentials, transport
+
+    identity = {
+        "bot_id": "9",
+        "bot_name": "GAIA",
+        "application_id": "1",
+        "bot_public": False,
+    }
+    monkeypatch.setattr(transport, "verify_token", lambda token: identity)
+    monkeypatch.setattr(cli, "_connector_bot_id", lambda: None)
+    monkeypatch.setattr(credentials, "save", lambda token: None)
+    cli.connect("tok", started_by="phone")
+    assert state.load_config().token_device_id == "phone"
+    cli.reset_pairing(started_by="tablet")
+    config = state.load_config()
+    assert (config.pairing_device_id, config.token_device_id) == ("tablet", "phone")
+    cli.connect("tok")
+    assert state.load_config().token_device_id == ""
+
+
+def test_unlinking_the_tokens_device_disconnects_the_bridge(cleared):
+    from gaia.messaging.discord import cli
+
+    _linked(token_device_id="phone", pairing_device_id="tablet")
+    assert cli.unlink_devices(["tablet-2"]) is None
+    assert cli.unlink_devices(["phone"]) == "disconnected"
+    config = state.load_config()
+    assert (config.bot_id, config.owner_id, config.token_device_id) == ("", "", "")
+    assert cleared == ["clear", "always"]
+
+
+def test_a_device_that_only_paired_resets_the_pairing_and_keeps_the_token(cleared):
+    from gaia.messaging.discord import cli
+
+    _linked(pairing_device_id="tablet")
+    assert cli.unlink_devices(["tablet"]) == "reset"
+    config = state.load_config()
+    assert (config.bot_id, config.owner_id) == ("9", "")
+    assert cleared == ["always"]
+
+
+def test_a_stuck_bridge_keeps_the_token_and_says_so(monkeypatch, cleared):
+    from gaia.messaging.discord import cli
+
+    _linked(token_device_id="phone")
+    monkeypatch.setattr(cli, "stop", lambda **_: False)
+    with pytest.raises(cli.PairingKept, match="stayed connected"):
+        cli.unlink_devices(["phone"])
+    assert state.load_config().token_device_id == "phone" and cleared == []
+
+
+def test_a_keyring_that_wont_forget_the_token_keeps_the_link(monkeypatch):
+    import keyring.errors
+
+    from gaia.messaging.discord import cli, credentials
+
+    _linked(token_device_id="phone")
+
+    def locked():
+        raise keyring.errors.KeyringLocked("locked")
+
+    monkeypatch.setattr(credentials, "clear", locked)
+    with pytest.raises(cli.PairingKept, match="couldn't remove its token"):
+        cli.unlink_devices(["phone"])
+    assert state.load_config().token_device_id == "phone"
+
+
+def test_a_start_disconnects_a_token_whose_device_is_gone(monkeypatch, cleared):
+    """No device table means no device is paired, so the link is stale."""
+    from gaia.messaging.discord import cli
+
+    _linked(token_device_id="expired-phone")
+    monkeypatch.setattr(
+        cli, "start_detached", lambda **_: pytest.fail("started the bridge")
+    )
+    config = state.load_config()
+    config.autostart = True
+    state.save_config(config)
+    assert cli.ensure_started() is None
+    assert not state.load_config().connected and cleared == ["clear", "always"]
+
+
+def test_a_status_read_resets_a_pairing_by_a_device_no_longer_allowed(cleared):
+    from gaia.messaging.discord import cli
+
+    _linked(pairing_device_id="pending-tablet")
+    assert cli.unlink_stale_devices(["phone"]) == "reset"
+    assert state.load_config().owner_id == ""
+    _linked(pairing_device_id="phone")
+    assert cli.unlink_stale_devices(["phone"]) is None
+    assert state.load_config().owner_id == "111"

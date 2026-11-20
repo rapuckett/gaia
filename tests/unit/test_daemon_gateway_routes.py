@@ -36,6 +36,16 @@ def auth() -> dict:
     return {"Authorization": f"Bearer {TOKEN}"}
 
 
+GATEWAY_URL = "https://gw.example/v1"
+
+
+@pytest.fixture(autouse=True)
+def _registered_gateway(monkeypatch):
+    monkeypatch.setattr(
+        "gaia.llm.gateway.configured_gateway_url", lambda *a: GATEWAY_URL
+    )
+
+
 def test_token_route_requires_the_daemon_client_token(client):
     resp = client.post("/daemon/v1/gateway/token", json={"token": SECRET})
     assert resp.status_code == 401
@@ -43,19 +53,21 @@ def test_token_route_requires_the_daemon_client_token(client):
 
 def test_remember_stores_the_token_and_never_returns_it(client, auth, monkeypatch):
     stored = []
-    monkeypatch.setattr("gaia.llm.gateway.remember_token", lambda t: stored.append(t))
+    monkeypatch.setattr(
+        "gaia.llm.gateway.remember_token", lambda t, u: stored.append((t, u))
+    )
 
     resp = client.post("/daemon/v1/gateway/token", json={"token": SECRET}, headers=auth)
 
     assert resp.status_code == 200
-    assert stored == [SECRET]
+    assert stored == [(SECRET, GATEWAY_URL)]
     assert SECRET not in resp.text
 
 
 def test_empty_token_is_rejected_before_it_reaches_the_store(client, auth, monkeypatch):
     monkeypatch.setattr(
         "gaia.llm.gateway.remember_token",
-        lambda t: pytest.fail("an empty token must not reach the store"),
+        lambda t, u: pytest.fail("an empty token must not reach the store"),
     )
 
     assert (
@@ -68,7 +80,7 @@ def test_unavailable_store_is_a_503_carrying_the_remedy(client, auth, monkeypatc
 
     remedy = "No usable credential store. Set LEMONADE_AMD_API_KEY instead."
 
-    def boom(_):
+    def boom(_token, _url):
         raise GatewayError(remedy)
 
     monkeypatch.setattr("gaia.llm.gateway.remember_token", boom)
@@ -81,7 +93,7 @@ def test_unavailable_store_is_a_503_carrying_the_remedy(client, auth, monkeypatc
 
 
 def test_the_token_is_never_logged(client, auth, monkeypatch, caplog):
-    monkeypatch.setattr("gaia.llm.gateway.remember_token", lambda t: None)
+    monkeypatch.setattr("gaia.llm.gateway.remember_token", lambda t, u: None)
 
     with caplog.at_level("DEBUG"):
         client.post("/daemon/v1/gateway/token", json={"token": SECRET}, headers=auth)

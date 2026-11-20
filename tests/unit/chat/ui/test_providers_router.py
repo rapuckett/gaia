@@ -26,7 +26,7 @@ from gaia.connectors import credential_wait
 from gaia.connectors.errors import ConnectorsError
 from gaia.llm import cloud_keys
 from gaia.llm import custom_models as cm
-from gaia.llm import lemonade_client, npu_linux
+from gaia.llm import gateway, lemonade_client, npu_linux
 from gaia.llm.cloud_keys import CloudKeyError
 from gaia.llm.gateway import (
     DEFAULT_AUTH_HEADER_NAME,
@@ -127,16 +127,33 @@ def lemonade(monkeypatch):
 @pytest.fixture
 def keys(monkeypatch):
     """The OS credential store and the stored-key replay, faked."""
-    state = {"stored": {}, "remembered": [], "ensure": [], "ensure_result": True}
+    state = {
+        "stored": {},
+        "bound": {},
+        "remembered": [],
+        "ensure": [],
+        "ensure_result": True,
+    }
 
-    def remember_key(provider, key):
+    def remember_key(provider, key, base_url=None):
         if state.get("remember_error"):
             raise CloudKeyError(state["remember_error"])
         state["remembered"].append((provider, key))
         state["stored"][provider] = key
+        if provider == "amd":
+            assert base_url, "the gateway's key must be saved with its address"
+            state["bound"][provider] = base_url
 
     def recall_key(provider):
         return state["stored"].get(provider)
+
+    def recall_gateway_key():
+        key = state["stored"].get("amd")
+        return gateway.GatewayKey(key, state["bound"].get("amd")) if key else None
+
+    def remember_token(token, base_url):
+        state["stored"]["amd"] = token
+        state["bound"]["amd"] = base_url
 
     def forget_key(provider):
         if state.get("forget_error"):
@@ -153,6 +170,8 @@ def keys(monkeypatch):
 
     monkeypatch.setattr(cloud_keys, "remember_key", remember_key)
     monkeypatch.setattr(cloud_keys, "recall_key", recall_key)
+    monkeypatch.setattr(cloud_keys, "recall_gateway_key", recall_gateway_key)
+    monkeypatch.setattr(gateway, "remember_token", remember_token)
     monkeypatch.setattr(cloud_keys, "forget_key", forget_key)
     monkeypatch.setattr(cloud_keys, "ensure_authenticated", ensure_authenticated)
     return state
@@ -1272,7 +1291,8 @@ def test_provider_summaries_read_only_and_carry_no_secret(client, lemonade, keys
                 "privacy_notice": providers._PRIVACY["amd"],
                 "configured": True,
                 "blocked": False,
-                "network": {"reachable": True},
+                # Only the PC learns whether the gateway answers.
+                "network": {"reachable": None},
                 # Lemonade holds a key the user entered; the hint needs a store read.
                 "key_source": "lemonade",
                 "key_state": "read",
@@ -1295,13 +1315,28 @@ def test_provider_summaries_say_an_unreachable_gateway_without_its_address(
 ):
     lemonade.cloud["amd"] = dict(_CUSTOM_GATEWAY)
     reach["error"] = _offline()
-    resp = client.get("/api/providers/list", headers={"X-Forwarded-For": "203.0.113.9"})
+    resp = client.get("/api/providers/list")
     assert resp.status_code == 200, resp.text
     by_id = {p["id"]: p for p in resp.json()["providers"]}
     assert by_id["amd"]["network"] == {"reachable": False}
     assert by_id["local"]["network"] is None
     assert by_id["fireworks"]["network"] is None
     assert "llm-api.amd.com" not in resp.text and "gw.example" not in resp.text
+
+
+@pytest.mark.parametrize("route", ["/api/providers/list", "/api/providers"])
+def test_only_the_pc_learns_whether_the_gateway_answers(
+    client, lemonade, keys, reach, route
+):
+    """A host rebound to a LAN address would turn the answer into a port scan."""
+    lemonade.cloud["amd"] = dict(_CUSTOM_GATEWAY)
+    reach["error"] = _offline()
+    resp = client.get(route, headers={"X-Forwarded-For": "203.0.113.9"})
+    assert resp.status_code == 200, resp.text
+    amd = {p["id"]: p for p in resp.json()["providers"]}["amd"]
+    assert amd["network"]["reachable"] is None
+    assert amd["network"].get("detail") is None
+    assert reach["asked"] == []
 
 
 def test_connect_reports_a_key_the_store_did_not_keep(client, lemonade, keys):
@@ -2154,14 +2189,415 @@ def test_a_new_key_replaces_the_hint_a_device_sees_at_once(
     assert (seen["key_source"], seen["key_hint"]) == ("stored", KEY[-4:])
 
 
-def test_a_device_still_cannot_move_the_gateway(device_client, lemonade, keys):
-    lemonade.cloud["amd"] = dict(_CUSTOM_GATEWAY)
-    resp = device_client.post(
-        "/api/providers/amd/connect",
-        json={"api_key": KEY, "base_url": "https://gw.example.com/v1"},
+OLD_URL = "https://old.example/v1"
+NEW_URL = "https://new.example/v1"
+OLD_KEY = "old-gateway-key-0123456789abcdef"
+NEW_KEY = "new-gateway-key-fedcba9876543210"
+_OLD_GATEWAY = {
+    "name": "amd",
+    "base_url": OLD_URL,
+    "auth_header_name": DEFAULT_AUTH_HEADER_NAME,
+    "auth_header_prefix": DEFAULT_AUTH_HEADER_PREFIX,
+    "runtime_key_set": True,
+    "models_discovered": True,
+}
+
+
+@pytest.fixture
+def bound_gateway(lemonade, monkeypatch, tmp_path):
+    """A working gateway at OLD_URL whose key is stored bound to it.
+
+    The real key store code runs over an in-memory vault, and the real
+    GatewayManager replays into the fake Lemonade, which accepts only OLD_KEY
+    and notes where its gateway pointed at every call.
+    """
+    import socket
+
+    from gaia.connectors import store
+    from gaia.llm import lemonade_choice
+
+    vault = {}
+    monkeypatch.setattr(store, "verify_keyring_backend", lambda: None)
+    monkeypatch.setattr(store, "save_secret", vault.__setitem__)
+    monkeypatch.setattr(store, "peek_secret", vault.get)
+    monkeypatch.setattr(store, "delete_secret", lambda n: vault.pop(n, None))
+    monkeypatch.setattr(gateway, "GATEWAY_STATE_FILE", tmp_path / "gateway.json")
+    monkeypatch.setattr(
+        lemonade_client.LemonadeClient, "credential_base_url", lambda self: BASE
     )
-    assert resp.status_code == 403
-    assert lemonade.calls == [] and keys["remembered"] == []
+    monkeypatch.setattr(lemonade_choice, "is_users_server", lambda *a: False)
+    monkeypatch.setattr(providers, "_gateway_check_applies", lambda: False)
+    monkeypatch.setattr(
+        providers.socket,
+        "getaddrinfo",
+        lambda host, port, proto=0: [
+            (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.215.14", port))
+        ],
+    )
+    lemonade.cloud["amd"] = dict(_OLD_GATEWAY)
+
+    def auth(body):
+        ok = body["api_key"] == OLD_KEY
+        lemonade.cloud["amd"].update(runtime_key_set=True, models_discovered=ok)
+        return 200, {"models_discovered": ok}
+
+    def drop_key(body):
+        lemonade.cloud["amd"].update(runtime_key_set=False, models_discovered=False)
+        return 200, {}
+
+    lemonade.answers[("POST", "cloud/auth")] = auth
+    lemonade.answers[("DELETE", "cloud/auth/amd")] = drop_key
+    recorded = lemonade.request
+
+    def request(method, url, json=None, **kwargs):
+        at = (lemonade.cloud.get("amd") or {}).get("base_url")
+        try:
+            return recorded(method, url, json=json, **kwargs)
+        finally:
+            lemonade.calls[-1]["gateway"] = at
+
+    monkeypatch.setattr(providers.requests, "request", request)
+    gateway.remember_token(OLD_KEY, OLD_URL)
+    return vault
+
+
+def _stored(vault):
+    assert gateway.GATEWAY_SECRET_NAME not in vault
+    return json.loads(vault[gateway.GATEWAY_KEY_SLOT])
+
+
+def _keys_went_only_home(lemonade):
+    """Every key Lemonade was handed went to the gateway it belongs to."""
+    home = {OLD_KEY: OLD_URL, NEW_KEY: NEW_URL}
+    sent = [c for c in lemonade.calls if (c["json"] or {}).get("api_key")]
+    assert sent
+    for call in sent:
+        assert call["path"] == "cloud/auth", call["path"]
+        assert call["json"]["provider"] == "amd"
+        assert call["gateway"] == home[call["json"]["api_key"]], call
+    return sent
+
+
+def _move(device_client):
+    return device_client.post(
+        "/api/providers/amd/connect", json={"api_key": NEW_KEY, "base_url": NEW_URL}
+    )
+
+
+def test_a_device_move_sends_only_the_new_key_to_the_new_url(
+    device_client, lemonade, bound_gateway
+):
+    lemonade.answers[("POST", "cloud/auth")] = None
+    without_key = device_client.post(
+        "/api/providers/amd/connect", json={"base_url": NEW_URL}
+    )
+    assert without_key.status_code == 403 and lemonade.calls == []
+
+    resp = _move(device_client)
+    assert resp.status_code == 200, resp.text
+    assert NEW_KEY not in resp.text and OLD_KEY not in resp.text
+    assert [(c["method"], c["path"], c["json"]) for c in lemonade.calls] == [
+        ("GET", "system-info", None),
+        ("DELETE", "cloud/auth/amd", None),
+        (
+            "POST",
+            "install",
+            {
+                "backend": "cloud",
+                "provider": "amd",
+                "wire_format": "openai",
+                "base_url": NEW_URL,
+                "auth_header_name": DEFAULT_AUTH_HEADER_NAME,
+                "auth_header_prefix": DEFAULT_AUTH_HEADER_PREFIX,
+            },
+        ),
+        ("POST", "cloud/auth", {"provider": "amd", "api_key": NEW_KEY}),
+        ("GET", "system-info", None),
+        ("GET", "system-info", None),
+    ]
+    assert [c["json"]["api_key"] for c in _keys_went_only_home(lemonade)] == [NEW_KEY]
+    assert _stored(bound_gateway) == {"key": NEW_KEY, "base_url": NEW_URL}
+
+
+def test_a_replay_after_a_failed_move_never_hands_the_old_key_to_the_new_url(
+    client, device_client, lemonade, bound_gateway, monkeypatch
+):
+    from gaia.llm import fireworks_known_models, lemonade_embedded
+
+    installed = lemonade.answers.get(("POST", "install"))
+
+    def install_new_only(body):
+        if body["base_url"] == OLD_URL:
+            return 500, {"error": {"message": "busy"}}
+        lemonade.cloud["amd"]["base_url"] = body["base_url"]
+        return 200, {"status": "ok"}
+
+    assert installed is None
+    lemonade.answers[("POST", "install")] = install_new_only
+    resp = _move(device_client)
+    assert resp.status_code == 502, resp.text
+    assert lemonade.cloud["amd"]["base_url"] == NEW_URL
+    lemonade.answers.pop(("POST", "install"))
+    mismatch = (
+        "The saved AMD Gateway key belongs to old.example; enter a new key for "
+        "new.example."
+    )
+
+    with pytest.raises(CloudKeyError, match=re.escape(mismatch)):
+        cloud_keys.reconnect_provider("amd")
+
+    listed = {p["id"]: p for p in client.get("/api/providers").json()["providers"]}
+    assert listed["amd"]["error"] == mismatch
+
+    monkeypatch.setattr(fireworks_known_models, "use_known_models", lambda e: None)
+    monkeypatch.setattr(lemonade_embedded, "EmbeddedLemonade", lambda: object())
+    assert mismatch in providers._restore_known_models("amd")
+
+    providers._restore_key("amd", dict(_OLD_GATEWAY))
+    assert lemonade.cloud["amd"]["base_url"] == OLD_URL
+    assert lemonade.cloud["amd"]["runtime_key_set"] is True
+
+    sent = _keys_went_only_home(lemonade)
+    assert [c["json"]["api_key"] for c in sent] == [NEW_KEY, OLD_KEY]
+    assert _stored(bound_gateway) == {"key": OLD_KEY, "base_url": OLD_URL}
+
+
+@pytest.mark.parametrize("legacy", [False, True])
+def test_a_failed_move_puts_the_old_gateway_back_with_its_key(
+    device_client, lemonade, bound_gateway, legacy
+):
+    if legacy:
+        # Saved before bindings: moved to the v2 slot bound to OLD_URL first.
+        del bound_gateway[gateway.GATEWAY_KEY_SLOT]
+        bound_gateway[gateway.GATEWAY_SECRET_NAME] = OLD_KEY
+    resp = _move(device_client)
+    assert resp.status_code == 422, resp.text
+    assert resp.json() == {"detail": providers.DEVICE_GATEWAY_DETAIL}
+    entry = lemonade.cloud["amd"]
+    assert entry["base_url"] == OLD_URL and entry["runtime_key_set"] is True
+    assert [c["json"]["api_key"] for c in _keys_went_only_home(lemonade)] == [
+        NEW_KEY,
+        OLD_KEY,
+    ]
+    assert [
+        c["json"]["base_url"] for c in lemonade.calls if c["path"] == "install"
+    ] == [
+        NEW_URL,
+        OLD_URL,
+    ]
+    # Read back after handing the old key back.
+    assert [(c["method"], c["path"]) for c in lemonade.calls[-2:]] == [
+        ("POST", "cloud/auth"),
+        ("GET", "system-info"),
+    ]
+    assert _stored(bound_gateway) == {"key": OLD_KEY, "base_url": OLD_URL}
+
+
+def test_a_failed_restore_is_a_502_that_names_no_key(
+    device_client, lemonade, bound_gateway, caplog
+):
+    def install_new_only(body):
+        if body["base_url"] == OLD_URL:
+            return 500, {"error": {"message": "busy"}}
+        lemonade.cloud["amd"]["base_url"] = body["base_url"]
+        return 200, {"status": "ok"}
+
+    lemonade.answers[("POST", "install")] = install_new_only
+    with caplog.at_level(logging.DEBUG):
+        resp = _move(device_client)
+    assert resp.status_code == 502
+    assert resp.json() == {
+        "detail": "AMD LLM Gateway didn't accept the new address, and GAIA "
+        "couldn't restore the old one. Enter a working address and key in "
+        "Settings › Model."
+    }
+    assert "restore the previous AMD LLM Gateway gateway" in caplog.text
+    for key in (OLD_KEY, NEW_KEY):
+        assert key not in resp.text and key not in caplog.text
+    _keys_went_only_home(lemonade)
+    assert _stored(bound_gateway) == {"key": OLD_KEY, "base_url": OLD_URL}
+
+
+def test_the_gateway_key_read_never_gets_the_bare_key_reads_answer(monkeypatch):
+    """The key hint's read and the gateway's bound read run at once; each gets its own."""
+    bare_key = "bare-gateway-key-0123456789"
+    in_flight = threading.Event()
+
+    def slow_bare_key(provider):
+        in_flight.set()
+        time.sleep(0.3)
+        return bare_key
+
+    monkeypatch.setattr(cloud_keys, "recall_key", slow_bare_key)
+    monkeypatch.setattr(
+        cloud_keys, "recall_gateway_key", lambda: gateway.GatewayKey(OLD_KEY, OLD_URL)
+    )
+    got = {}
+    hint = threading.Thread(
+        target=lambda: got.update(bare=providers._bounded_recall(providers.AMD))
+    )
+    hint.start()
+    assert in_flight.wait(5)
+    got["record"] = providers._bounded_gateway_key()
+    hint.join(5)
+    assert got == {"bare": bare_key, "record": gateway.GatewayKey(OLD_KEY, OLD_URL)}
+
+    stuck = threading.Event()
+    monkeypatch.setattr(credential_wait, "WAIT_SECONDS", 0.05)
+    monkeypatch.setattr(cloud_keys, "recall_key", lambda p: stuck.wait(5))
+    monkeypatch.setattr(cloud_keys, "recall_gateway_key", lambda: stuck.wait(5))
+    with pytest.raises(credential_wait.CredentialStoreWaiting):
+        providers._bounded_recall(providers.AMD)
+    with pytest.raises(credential_wait.CredentialStoreWaiting):
+        providers._bounded_gateway_key()
+    assert credential_wait.in_flight_count() == 2
+    providers._discard_key_reads(providers.AMD)
+    assert credential_wait.in_flight_count() == 0
+    stuck.set()
+
+
+def test_a_restore_whose_key_read_breaks_still_puts_the_address_back(
+    client, lemonade, bound_gateway, monkeypatch, caplog
+):
+    """An unexpected answer from the key read is a loud 502 with the reason,
+    never a 500 that leaves the gateway half moved."""
+    real_read = cloud_keys.recall_gateway_key
+    rejected = []
+
+    def recall_gateway_key():
+        return "a-bare-key-not-a-record" if rejected else real_read()
+
+    def reject_the_new_key(body):
+        rejected.append(body["api_key"] == NEW_KEY)
+        return 401, {"error": {"message": "unauthorized"}}
+
+    def drop_key(body):
+        # A fresh entry, so the snapshot taken before the move keeps its key.
+        lemonade.cloud["amd"] = {
+            **lemonade.cloud["amd"],
+            "runtime_key_set": False,
+            "models_discovered": False,
+        }
+        return 200, {}
+
+    monkeypatch.setattr(cloud_keys, "recall_gateway_key", recall_gateway_key)
+    lemonade.answers[("POST", "cloud/auth")] = reject_the_new_key
+    lemonade.answers[("DELETE", "cloud/auth/amd")] = drop_key
+    with caplog.at_level(logging.ERROR):
+        resp = client.post(
+            "/api/providers/amd/connect",
+            json={"api_key": NEW_KEY, "base_url": NEW_URL},
+        )
+    assert rejected == [True]
+    assert resp.status_code == 502, resp.text
+    assert "couldn't restore the old one" in resp.json()["detail"]
+    assert lemonade.cloud["amd"]["base_url"] == OLD_URL
+    assert "reading the saved key failed" in caplog.text
+    assert "returned a str" in caplog.text
+    for key in (OLD_KEY, NEW_KEY):
+        assert key not in resp.text and key not in caplog.text
+
+
+def test_device_gateway_moves_wait_for_each_other(
+    device_client, lemonade, bound_gateway, monkeypatch
+):
+    from gaia.ui.devices import prompts
+
+    assert providers._gateway_move_lock is gateway.GATEWAY_KEY_LOCK
+    monkeypatch.setattr(prompts, "limit_device_rate", lambda *a: None)
+    lemonade.answers[("POST", "cloud/auth")] = None
+    results = []
+    with providers._gateway_move_lock:
+        mover = threading.Thread(target=lambda: results.append(_move(device_client)))
+        mover.start()
+        mover.join(timeout=0.5)
+        assert mover.is_alive() and lemonade.calls == []
+    mover.join(timeout=10)
+    assert results[0].status_code == 200, results[0].text
+    assert lemonade.cloud["amd"]["base_url"] == NEW_URL
+
+
+def test_a_device_gateway_is_dialed_before_the_lock_is_taken(
+    device_client, lemonade, bound_gateway, monkeypatch
+):
+    """A slow dial of the new gateway never holds up another process's replay."""
+    monkeypatch.setattr(gateway, "GATEWAY_KEY_LOCK_TIMEOUT", 0.2)
+    monkeypatch.setattr(providers, "_gateway_check_applies", lambda: True)
+    lemonade.answers[("POST", "cloud/auth")] = None
+    took = []
+
+    def slow_dial(host, port, addresses):
+        def replay():
+            try:
+                with providers._gateway_move_lock:
+                    took.append(True)
+            except gateway.GatewayBusy:
+                took.append(False)
+
+        other = threading.Thread(target=replay)
+        other.start()
+        other.join(timeout=5)
+
+    monkeypatch.setattr(providers, "_dial_checked_addresses", slow_dial)
+    resp = _move(device_client)
+    assert took == [True]
+    assert resp.status_code == 200, resp.text
+    assert lemonade.cloud["amd"]["base_url"] == NEW_URL
+
+
+def test_a_gateway_check_dials_at_most_three_addresses(monkeypatch):
+    dialed = []
+
+    def refuse(address, timeout):
+        dialed.append(address[0])
+        raise OSError("connection refused")
+
+    monkeypatch.setattr(providers.socket, "create_connection", refuse)
+    addresses = [f"93.184.215.{n}" for n in range(1, 16)]
+    with pytest.raises(OSError, match="did not complete a TLS handshake"):
+        providers._dial_checked_addresses("gw.example.com", 443, addresses)
+    assert dialed == addresses[:3]
+
+
+def test_a_pc_gateway_connect_waits_for_another_processs_move(
+    client, lemonade, bound_gateway, monkeypatch
+):
+    monkeypatch.setattr(gateway, "GATEWAY_KEY_LOCK_TIMEOUT", 0.3)
+    with providers._gateway_move_lock:
+        results = []
+        other = threading.Thread(target=lambda: results.append(_move(client)))
+        other.start()
+        other.join(timeout=10)
+    assert results[0].status_code == 409
+    assert results[0].json()["detail"] == gateway._busy_message()
+    assert lemonade.calls == []
+
+
+def test_a_keyless_pc_move_drops_lemonades_key_before_the_address_changes(
+    client, lemonade, bound_gateway
+):
+    del bound_gateway[gateway.GATEWAY_KEY_SLOT]
+    client.post("/api/providers/amd/connect", json={"base_url": NEW_URL})
+    sent = [(c["method"], c["path"]) for c in lemonade.calls]
+    assert sent.index(("DELETE", "cloud/auth/amd")) < sent.index(("POST", "install"))
+    installed = [c for c in lemonade.calls if c["path"] == "install"]
+    assert installed[0]["json"]["base_url"] == NEW_URL
+    assert installed[0]["gateway"] == OLD_URL
+    assert not any(
+        c["path"] == "cloud/auth" and c["method"] == "POST" for c in lemonade.calls
+    )
+
+
+def test_a_key_saved_before_bindings_is_bound_to_the_current_gateway(
+    client, lemonade, bound_gateway
+):
+    del bound_gateway[gateway.GATEWAY_KEY_SLOT]
+    bound_gateway[gateway.GATEWAY_SECRET_NAME] = OLD_KEY
+    lemonade.cloud["amd"].update(runtime_key_set=False, models_discovered=False)
+    listed = {p["id"]: p for p in client.get("/api/providers").json()["providers"]}
+    assert listed["amd"].get("error") is None
+    assert _stored(bound_gateway) == {"key": OLD_KEY, "base_url": OLD_URL}
+    assert [c["json"]["api_key"] for c in _keys_went_only_home(lemonade)] == [OLD_KEY]
 
 
 def test_a_paired_device_may_enter_and_remove_a_key(
@@ -2214,7 +2650,7 @@ def test_a_device_key_change_is_recorded_without_the_key(
 def test_a_paired_device_sees_no_key_or_pc_internals_on_failure(
     client, device_client, lemonade, keys, monkeypatch, caplog
 ):
-    def remember_key(provider, key):
+    def remember_key(provider, key, base_url=None):
         try:
             raise ConnectorsError(f"Keyring set_password failed: {PC_PATH} {key}")
         except ConnectorsError as e:
