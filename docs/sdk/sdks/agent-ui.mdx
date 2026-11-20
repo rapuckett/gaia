@@ -3480,8 +3480,10 @@ store answered. A request a key-store wait holds up answers **409** and one the
 locked store refuses answers **423**, both with the detail
 `{"code": "key_store_waiting" | "key_store_locked", "message": "..."}`; any
 other 409 keeps a plain-text detail. Read the code, never the message. The
-older `key_state` field (`waiting_for_os_permission`, `store_locked`) is
-still sent beside `key_store` but is deprecated and goes in the next release.
+older `key_state` field is still sent beside `key_store` and keeps its `read`
+and `unknown` values; only its two key-store values (`waiting_for_os_permission`
+and `store_locked`) are deprecated in favor of `key_store` and go in the next
+release.
 
 <AccordionGroup>
   <Accordion title="GET /api/providers">
@@ -3509,7 +3511,7 @@ still sent beside `key_store` but is deprecated and goes in the next release.
     providers also carry `key_source` (`stored`, `environment`, `lemonade` or
     `null`), `key_store` (`locked` while the store is held after a closed
     prompt, else `null`; never `waiting`, since this route doesn't read the
-    store), the deprecated `key_state` (`read`, `store_locked`, or `unknown`
+    store), `key_state` (`read`, `store_locked`, which is deprecated in favor of `key_store`, or `unknown`
     until GAIA has read the credential store once since it started), `key_hint` (the key's
     last four characters, as the PC shows them; always `null` over mobile
     access) and `known_models`, plus `error` (the error line the PC's last

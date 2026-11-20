@@ -1217,7 +1217,7 @@ class ProviderView(WireModel):
     blocked_reason: Optional[str] = None
     key_source: Optional[Literal["stored", "environment", "lemonade"]] = None
     key_hint: Optional[str] = None
-    #: Deprecated alias of ``key_store`` (plus ``read``); removed in the next release.
+    #: ``read`` stays; its two key-store values are deprecated in favor of ``key_store``.
     key_state: Optional[Literal["read", KEY_WAITING, KEY_LOCKED]] = None
     #: ``waiting`` while the OS key store's prompt is open, ``locked`` once it
     #: was refused or closed; null when the store answered.
@@ -1677,7 +1677,7 @@ class ProviderSummary(BaseModel):
     #: is known, including while ``key_state`` is not ``read``.
     key_source: Optional[Literal["stored", "environment", "lemonade"]] = None
     #: ``unknown`` until GAIA has read the credential store once since it started.
-    #: Deprecated alias of ``key_store`` for ``store_locked``; removed in the next release.
+    #: ``read`` and ``unknown`` stay; ``store_locked`` is deprecated in favor of ``key_store``.
     key_state: Optional[Literal["read", KEY_LOCKED, KEY_UNKNOWN]] = None
     #: ``locked`` while the OS key store is held after its prompt was refused or
     #: closed; never ``waiting``, since this route never reads the store.
