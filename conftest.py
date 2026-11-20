@@ -253,6 +253,12 @@ def _isolate_user_home() -> None:
     else:
         cache = Path(os.environ.get("XDG_CACHE_HOME") or _REAL_USER_HOME / ".cache")
     (cache / "gaia-test-homes").mkdir(parents=True, exist_ok=True)
+    # matplotlib rebuilds its ~15-30 s font cache in a fresh HOME; a persistent
+    # one beside the homes (never inside one) survives the atexit rmtree.
+    if not os.environ.get("MPLCONFIGDIR"):
+        mpl_cache = cache / "gaia-test-matplotlib"
+        mpl_cache.mkdir(parents=True, exist_ok=True)
+        os.environ["MPLCONFIGDIR"] = str(mpl_cache)
     home = Path(
         _REALPATH(tempfile.mkdtemp(prefix="home-", dir=cache / "gaia-test-homes"))
     )
