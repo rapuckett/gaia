@@ -51,11 +51,11 @@ async function openGoals(status: 'queued' | 'cancelled') {
 describe('Goal row status label', () => {
     it('says cancelled on a cancelled goal', async () => {
         const title = await openGoals('cancelled');
-        expect(within(title.closest('.mem-goal-card') as HTMLElement).getByText('cancelled')).toBeInTheDocument();
+        expect(within(title.closest('.mem-goal-card') as HTMLElement).getByText('canceled')).toBeInTheDocument();
     });
 
     it('adds no label to a goal that is still queued', async () => {
         const title = await openGoals('queued');
-        expect(within(title.closest('.mem-goal-card') as HTMLElement).queryByText('cancelled')).not.toBeInTheDocument();
+        expect(within(title.closest('.mem-goal-card') as HTMLElement).queryByText('canceled')).not.toBeInTheDocument();
     });
 });
