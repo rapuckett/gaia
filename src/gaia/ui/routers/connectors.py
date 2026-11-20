@@ -866,7 +866,8 @@ def _field_summary(f: ConfigField) -> Dict[str, Any]:
 @router.get(
     "/", response_model=ConnectorListResponse, response_model_exclude_unset=True
 )
-async def list_connectors() -> Dict[str, Any]:
+# Sync: runs on a worker thread, so a blocked key-store read can't stall the server.
+def list_connectors() -> Dict[str, Any]:
     """Return catalog specs merged with live state for all connectors."""
     specs = REGISTRY.all()
     # Every summary reads the same ledger; a corrupt one is fixed by deleting it, so name it.
@@ -1115,7 +1116,8 @@ async def get_activations(connector_id: str) -> Dict[str, Any]:
     response_model=ConnectorSummary,
     response_model_exclude_unset=True,
 )
-async def get_connector(connector_id: str) -> Dict[str, Any]:
+# Sync: runs on a worker thread, so a blocked key-store read can't stall the server.
+def get_connector(connector_id: str) -> Dict[str, Any]:
     try:
         return _connector_summary(connector_id)
     except HTTPException:
