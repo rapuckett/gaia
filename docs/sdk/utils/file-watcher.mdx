@@ -59,7 +59,7 @@ Use `FileChangeHandler` directly when you need more control:
 
 ```python
 from gaia import FileChangeHandler
-from watchdog.observers import Observer
+from gaia.utils.file_watcher import start_observer
 
 handler = FileChangeHandler(
     on_created=process_file,
@@ -69,10 +69,13 @@ handler = FileChangeHandler(
     debounce_seconds=2.0,
 )
 
-observer = Observer()
-observer.schedule(handler, "./data", recursive=True)
-observer.start()
+observer = start_observer(handler, "./data", recursive=True)
+# ... later: observer.stop(); observer.join(); handler.close()
 ```
+
+`start_observer` records what the folder holds before it starts watching, so the
+handler can catch a file whose own events were lost (see below). A handler scheduled
+on a plain watchdog `Observer` still works, but misses those files.
 
 ## Integration with Agents
 
@@ -227,6 +230,16 @@ watcher = FileWatcher(
     debounce_seconds=2.0,
 )
 ```
+
+### Files Whose Own Events Were Lost
+
+Under load, macOS drops or merges a file's own events and reports only that its
+folder changed, or that the folder must be rescanned. The watcher treats any folder
+event as "rescan this folder": it lists the folder, compares each matching file with
+what it last saw, and reports a new file as created and a changed one as modified,
+after the same settle wait. A new subfolder is looked into as well. A file found this
+way is reported once, even if its own event arrives later. `FileWatcher` and
+`start_observer` set this up; deletes whose events were lost are not recovered.
 
 ### Handle Errors in Callbacks
 

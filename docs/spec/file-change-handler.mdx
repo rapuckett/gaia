@@ -495,6 +495,22 @@ never pauses (a log written constantly) is not reported until it does.
 `close()` stops the dispatcher, dropping (and logging) what it had not yet
 reported.
 
+### Folder Rescans
+
+Under load FSEvents drops per-file events and reports only a folder change, or
+sets `kFSEventStreamEventFlagMustScanSubDirs` (or a dropped-events flag), which
+watchdog ignores. `start_observer()` (used by `FileWatcher`) first calls
+`watch_root()`, which records the `(size, mtime_ns)` of every matching file
+under the root, and on macOS uses an FSEvents emitter that reports those flags
+as folder events. On the dispatch thread, a folder event under a recorded root
+lists that folder (and any subfolder not seen before, or everything below it
+for a created or moved folder and for a must-rescan) and puts each new or
+changed file in `_pending` as `created` or `modified`, so it settles like any
+other. A file already pending is skipped, and a settled file whose signature
+matches its last successful report is dropped, so a file is reported once
+whether its own event, the rescan, or both arrive. Folder events outside every
+recorded root are ignored, and lost deletes are not recovered.
+
 ### Extension Filtering
 
 ```python
