@@ -2,14 +2,13 @@
 // SPDX-License-Identifier: MIT
 
 import { createContext, useContext, useEffect, useRef, useState } from 'react';
-import { View } from 'react-native';
 
 import { isolate } from '@webui/i18n/registry';
 
 import { ENDPOINTS } from '@/api/constants';
 import { useDeviceRefused } from '@/api/routeAccess';
 import { useT } from '@/i18n/useT';
-import { Button, Card, ChoiceList, Disclosure, Icon, Ltr, Notice, Row, Stack, Surface, Switch, Text } from '@/ui';
+import { Button, Card, ChoiceList, Disclosure, Icon, Ltr, Notice, Row, ScrollBox, Stack, Switch, Text } from '@/ui';
 import { CircleCheck, Cpu, Sparkles, Square } from '@/ui/icons';
 
 import { PcOnlyNotice } from '../../settings/PcOnlyNotice';
@@ -21,28 +20,23 @@ const COPY = {
     inference: { title: 'mem.inf.title', desc: 'mobileApp.mem.inf.desc', run: 'mem.inf.run', saved: 'mem.inf.saved', empty: 'mem.inf.empty', icon: Sparkles },
 } as const;
 
-const LIVE_LINES = 8;
-const LOG_MAX_HEIGHT = 220;
+// The PC's scan log box is 200 px tall.
+const LOG_MAX_HEIGHT = 200;
 
 /** The dev gallery starts a run, and can save its result, without a tap. */
 export const ProfileDevContext = createContext<{ kind: ProfileKind; save?: boolean } | null>(null);
 
 export function Log({ lines, running }: { lines: LogLine[]; running: boolean }) {
-    const body = (running ? lines.slice(-LIVE_LINES) : lines).map((line, i) => (
-        <Text key={i} role="caption" tone={line.kind === 'error' ? 'danger' : line.kind === 'finding' ? 'primary' : 'muted'} dir={line.server ? 'ltr' : undefined}>
-            {line.server ? isolate(line.text, 'ltr') : line.text}
-        </Text>
-    ));
-    return running ? (
-        <View style={{ maxHeight: LOG_MAX_HEIGHT, overflow: 'hidden' }} testID="profile-log">
-            <Surface tone="recessed" radius="md" padding="md" border>
-                <Stack gap="xs">{body}</Stack>
-            </Surface>
-        </View>
-    ) : (
-        <Surface tone="recessed" radius="md" padding="md" border testID="profile-log">
-            <Stack gap="xs">{body}</Stack>
-        </Surface>
+    return (
+        <ScrollBox maxHeight={LOG_MAX_HEIGHT} hint stickToEnd settleKey={running ? undefined : 'ended'} testID="profile-log">
+            <Stack gap="xs">
+                {lines.map((line, i) => (
+                    <Text key={i} role="caption" tone={line.kind === 'error' ? 'danger' : line.kind === 'finding' ? 'primary' : 'muted'} dir={line.server ? 'ltr' : undefined}>
+                        {line.server ? isolate(line.text, 'ltr') : line.text}
+                    </Text>
+                ))}
+            </Stack>
+        </ScrollBox>
     );
 }
 
@@ -153,22 +147,24 @@ export function ProfileCard({ kind, notify }: { kind: ProfileKind; notify: Memor
                             />
                             <Button label={t.bare('mem.review.none')} accessibilityLabel={t('mem.review.none')} variant="ghost" size="sm" disabled={locked} onPress={() => run.setChecked('none')} />
                         </Row>
-                        <Button
-                            label={t.bare(phase === 'saving' ? 'mem.saving' : 'mem.review.saveSelected', { n: kept })}
-                            accessibilityLabel={t(phase === 'saving' ? 'mem.saving' : 'mem.review.saveSelected', { n: kept })}
-                            variant="primary"
-                            full
-                            busy={phase === 'saving'}
-                            disabled={locked || kept === 0}
-                            onPress={() => void run.save()}
-                            testID={`profile-${kind}-save`}
-                        />
+                        {/* Once saved, the notice replaces Save, so it shows where the person tapped. */}
+                        {phase === 'done' && savedCount !== null ? (
+                            <Notice tone="success" message={t(copy.saved, { n: savedCount })} testID={`profile-${kind}-saved`} />
+                        ) : (
+                            <Button
+                                label={t.bare(phase === 'saving' ? 'mem.saving' : 'mem.review.saveSelected', { n: kept })}
+                                accessibilityLabel={t(phase === 'saving' ? 'mem.saving' : 'mem.review.saveSelected', { n: kept })}
+                                variant="primary"
+                                full
+                                busy={phase === 'saving'}
+                                disabled={locked || kept === 0}
+                                onPress={() => void run.save()}
+                                testID={`profile-${kind}-save`}
+                            />
+                        )}
                     </Stack>
                 ) : null}
 
-                {phase === 'done' && savedCount !== null ? (
-                    <Notice tone="success" message={t(copy.saved, { n: savedCount })} testID={`profile-${kind}-saved`} />
-                ) : null}
                 {phase === 'review' && items.length === 0 ? (
                     <Row gap="sm" testID={`profile-${kind}-empty`}>
                         <Icon icon={CircleCheck} size="sm" tone="muted" />

@@ -16,7 +16,7 @@ import { ProfileDevContext } from '@/features/memory/profile/ProfileCard';
 import { memoryScene, profileSceneStart, sceneDefaultTab, sceneIsPaired, type MemoryScene } from '@/features/memory/devScenes';
 import { ScreenBannerProvider, UIProvider } from '@/ui';
 
-const SCENES: readonly MemoryScene[] = ['on', 'off', 'loading', 'failed', 'actionFails', 'statsEmpty', 'statsManyTools', 'aboutEmpty', 'aboutFailed', 'aboutMany', 'aboutShowMore', 'goalsEmpty', 'goalsFailed', 'goalsStoreError', 'goalsStoreDamaged', 'knowledgeRich', 'knowledgeEmpty', 'knowledgeFailed', 'knowledgeMany', 'profileIdle', 'profileScanning', 'profileReview', 'profileSaved', 'profileInferring', 'profileInferenceReview', 'profileFailed', 'profileOff', 'discoveryOff', 'profilePaired', 'profileConsentRest', 'profileConsentConfirm', 'profileConsentRace'];
+const SCENES: readonly MemoryScene[] = ['on', 'off', 'loading', 'failed', 'actionFails', 'statsEmpty', 'statsManyTools', 'aboutEmpty', 'aboutFailed', 'aboutMany', 'aboutShowMore', 'goalsEmpty', 'goalsFailed', 'goalsStoreError', 'goalsStoreDamaged', 'knowledgeRich', 'knowledgeEmpty', 'knowledgeFailed', 'knowledgeMany', 'profileIdle', 'profileScanning', 'profileReview', 'profileScanningFull', 'profileReviewFull', 'profileFailedFull', 'profileSaved', 'profileInferring', 'profileInferenceReview', 'profileFailed', 'profileOff', 'discoveryOff', 'profilePaired', 'profileConsentRest', 'profileConsentConfirm', 'profileConsentRace'];
 
 function MemoryView({ picked, tab }: { picked: MemoryScene; tab?: string }) {
     const router = useRouter();
@@ -42,7 +42,7 @@ function MemoryView({ picked, tab }: { picked: MemoryScene; tab?: string }) {
     );
 }
 
-/** The Memory screen on a fake PC; `?scene=on|off|loading|failed|actionFails|statsEmpty|statsManyTools|aboutEmpty|aboutFailed|aboutMany|aboutShowMore|goalsEmpty|goalsFailed|goalsStoreError|goalsStoreDamaged|knowledgeRich|knowledgeEmpty|knowledgeFailed|knowledgeMany|profileIdle|profileScanning|profileReview|profileSaved|profileInferring|profileInferenceReview|profileFailed|profileOff|discoveryOff|profilePaired|profileConsentRest|profileConsentConfirm|profileConsentRace`, and `&tab=about|goals|profile|advanced`. */
+/** The Memory screen on a fake PC; `?scene=on|off|loading|failed|actionFails|statsEmpty|statsManyTools|aboutEmpty|aboutFailed|aboutMany|aboutShowMore|goalsEmpty|goalsFailed|goalsStoreError|goalsStoreDamaged|knowledgeRich|knowledgeEmpty|knowledgeFailed|knowledgeMany|profileIdle|profileScanning|profileReview|profileScanningFull|profileReviewFull|profileFailedFull|profileSaved|profileInferring|profileInferenceReview|profileFailed|profileOff|discoveryOff|profilePaired|profileConsentRest|profileConsentConfirm|profileConsentRace`, and `&tab=about|goals|profile|advanced`. */
 export default function MemoryGalleryRoute() {
     const { scene, tab } = useLocalSearchParams<{ scene?: string; tab?: string }>();
     if (!devGalleryEnabled()) return <Redirect href="/" />;

@@ -3,6 +3,7 @@
 
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { AccessibilityInfo, Platform } from 'react-native';
 
 import { isolate } from '@webui/i18n/registry';
 import type { Translate } from '@webui/i18n/translator';
@@ -110,7 +111,10 @@ export function useProfileRun(kind: ProfileKind, notify: (notice: MemoryNotice) 
                     setPhase('idle');
                     return;
                 }
-                addLog({ text: t(connection), kind: 'error' });
+                const failed = t(connection);
+                addLog({ text: failed, kind: 'error' });
+                // The line may sit below the log box's fold; a screen reader hears it without scrolling.
+                AccessibilityInfo.announceForAccessibility(failed);
                 setDetail(technicalDetail(err));
                 setPhase(found.current > 0 ? 'review' : 'idle');
             }
@@ -159,7 +163,10 @@ export function useProfileRun(kind: ProfileKind, notify: (notice: MemoryNotice) 
                     : await commit.mutateAsync({ kind, items: kept.map((item) => item.raw as InferenceInsight) });
             setSavedCount(result.stored);
             setPhase('done');
-            notify({ tone: 'success', text: t(kind === 'discovery' ? 'mem.disc.saved' : 'mem.inf.saved', { n: result.stored }) });
+            const saved = t(kind === 'discovery' ? 'mem.disc.saved' : 'mem.inf.saved', { n: result.stored });
+            notify({ tone: 'success', text: saved });
+            // The saved notice replaces the focused Save button; Android's live region reads it, VoiceOver needs telling.
+            if (Platform.OS === 'ios') AccessibilityInfo.announceForAccessibility(saved);
         } catch (err) {
             setPhase('review');
             if (err instanceof GaiaApiError && err.status === 403) return pcOnly();

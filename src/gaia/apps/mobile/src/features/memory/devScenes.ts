@@ -5,7 +5,7 @@ import { createFakeClient, type ProfileScript } from '@/api/fake';
 import type { GaiaClient, Goal, MemoryActivityDay, MemoryConversation, MemoryKnowledgeEntry, MemoryKnowledgeItem, MemoryStats, MemoryToolStat, MemoryTurn, MemoryUpcomingItem, ProfileStreamEvent } from '@/api/client.types';
 import { GaiaApiError, GaiaNetworkError } from '@/api/errors';
 
-export type MemoryScene = 'on' | 'off' | 'loading' | 'failed' | 'actionFails' | 'statsEmpty' | 'statsManyTools' | 'aboutEmpty' | 'aboutFailed' | 'aboutMany' | 'aboutShowMore' | 'goalsEmpty' | 'goalsFailed' | 'goalsStoreError' | 'goalsStoreDamaged' | 'knowledgeRich' | 'knowledgeEmpty' | 'knowledgeFailed' | 'knowledgeMany' | 'profileIdle' | 'profileScanning' | 'profileReview' | 'profileSaved' | 'profileInferring' | 'profileInferenceReview' | 'profileFailed' | 'profileOff' | 'discoveryOff' | 'profilePaired' | 'profileConsentRest' | 'profileConsentConfirm' | 'profileConsentRace';
+export type MemoryScene = 'on' | 'off' | 'loading' | 'failed' | 'actionFails' | 'statsEmpty' | 'statsManyTools' | 'aboutEmpty' | 'aboutFailed' | 'aboutMany' | 'aboutShowMore' | 'goalsEmpty' | 'goalsFailed' | 'goalsStoreError' | 'goalsStoreDamaged' | 'knowledgeRich' | 'knowledgeEmpty' | 'knowledgeFailed' | 'knowledgeMany' | 'profileIdle' | 'profileScanning' | 'profileReview' | 'profileScanningFull' | 'profileReviewFull' | 'profileFailedFull' | 'profileSaved' | 'profileInferring' | 'profileInferenceReview' | 'profileFailed' | 'profileOff' | 'discoveryOff' | 'profilePaired' | 'profileConsentRest' | 'profileConsentConfirm' | 'profileConsentRace';
 
 export const SAMPLE_MEMORY_STATS: MemoryStats = {
     knowledge: {
@@ -182,6 +182,33 @@ const DISCOVERY_DONE: ProfileScript = {
     ],
 };
 
+/** A full scan as a paired phone gets it: about 50 lines, findings without their PC paths. */
+const FULL_SCAN_SOURCES: readonly [string, string, readonly string[]][] = [
+    ['git_identity', 'Git identity', ["User's name is Dana Reyes", "User's email is dana@example.com", 'User likely works at Example (inferred from email domain example.com)']],
+    ['installed_apps', 'Installed applications', ['Visual Studio Code [IDE]', 'Signal [Communication]', 'Spotify [Other]', 'Blender [Creative]', 'Firefox [Browser]', 'Obsidian [Notes]', 'Docker Desktop [Developer]'].map((app) => `Installed app: ${app}`)],
+    ['macos_app_usage', 'App usage', []],
+    ['recent_file_types', 'Recent file types', ['Often works with Python files', 'Often works with Markdown notes']],
+    ['home_structure', 'Home folders', ['Keeps a Projects folder in the home folder', 'Keeps a Photos folder with yearly subfolders']],
+    ['project_manifests', 'Project manifests', ['Has Python projects using pyproject.toml', 'Has Node.js projects using package.json']],
+    ['shell_config', 'Shell settings', ['Uses zsh with a custom prompt']],
+    ['file_system', 'File system', ['Most recent work is in source code folders', 'Stores design files next to code']],
+    ['git_repos', 'Git repositories', ['Contributes to 6 Git repositories', 'Most active repository: gaia-notes']],
+    ['personal_files', 'Personal files', []],
+    ['browser_bookmarks', 'Browser bookmarks', []],
+    ['browser_history', 'Browser history', []],
+    ['ssh_config', 'SSH settings', []],
+];
+
+const FULL_SCAN: ProfileStreamEvent[] = [
+    ...FULL_SCAN_SOURCES.flatMap(([source, label, found]): ProfileStreamEvent[] => [
+        { type: 'log', message: `Scanning ${label}...` },
+        ...found.map((content) => finding(source, content, 0.7)),
+        { type: 'log', message: found.length ? `  Found ${found.length} item(s)` : '  Nothing found' },
+    ]),
+    { type: 'log', message: '  Windows usage: needs Windows' },
+    { type: 'log', message: '  Gaming and media: needs Windows' },
+];
+
 const INSIGHTS_DONE: ProfileScript = {
     events: [
         { type: 'log', message: 'Calling local LLM (Gemma-4-E4B-it-GGUF) for insights (this may take ~30s)...' },
@@ -194,6 +221,9 @@ const INSIGHTS_DONE: ProfileScript = {
 const PROFILE_SCRIPTS: Partial<Record<MemoryScene, { discovery?: ProfileScript; inference?: ProfileScript }>> = {
     profileScanning: { discovery: { events: DISCOVERY_SO_FAR, hang: true } },
     profileReview: { discovery: DISCOVERY_DONE },
+    profileScanningFull: { discovery: { events: FULL_SCAN.slice(0, 24), hang: true } },
+    profileFailedFull: { discovery: { events: FULL_SCAN.slice(0, 30), error: new GaiaNetworkError('http://192.168.1.20:4200/api/memory/stream-discovery', new Error('Network request failed')) } },
+    profileReviewFull: { discovery: { events: [...FULL_SCAN, { type: 'done', total: FULL_SCAN.filter((e) => e.type === 'finding').length }] } },
     profilePaired: { discovery: DISCOVERY_DONE },
     profileConsentRace: { discovery: { events: [{ type: 'error', source: 'consent', message: 'System discovery is off, so GAIA read nothing on this PC. Turn it on in Memory > Advanced > System discovery, then run the scan again.' }, { type: 'done', total: 0 }] } },
     profileSaved: { discovery: DISCOVERY_DONE },
@@ -204,7 +234,7 @@ const PROFILE_SCRIPTS: Partial<Record<MemoryScene, { discovery?: ProfileScript; 
 
 /** The Profile setup state a scene starts in: which card runs on its own, and whether the result is saved. */
 export function profileSceneStart(scene: MemoryScene): { kind: 'discovery' | 'inference'; save?: boolean } | null {
-    if (scene === 'profileScanning' || scene === 'profileReview' || scene === 'profileFailed' || scene === 'profilePaired' || scene === 'profileConsentConfirm' || scene === 'profileConsentRace') return { kind: 'discovery' };
+    if (scene === 'profileScanning' || scene === 'profileReview' || scene === 'profileScanningFull' || scene === 'profileReviewFull' || scene === 'profileFailedFull' || scene === 'profileFailed' || scene === 'profilePaired' || scene === 'profileConsentConfirm' || scene === 'profileConsentRace') return { kind: 'discovery' };
     if (scene === 'profileSaved') return { kind: 'discovery', save: true };
     if (scene === 'profileInferring' || scene === 'profileInferenceReview') return { kind: 'inference' };
     return null;
