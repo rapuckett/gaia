@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -34,9 +35,7 @@ func TestColdStartThroughTheRealGaiaDaemonStart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	home := t.TempDir()
-	t.Setenv(daemon.EnvHome, home)
-	env := append(os.Environ(), "PYTHONPATH="+src, daemon.EnvHome+"="+home)
+	env := isolatedDaemonEnv(t, src)
 
 	probe := exec.Command(python, "-c", "import gaia.cli, gaia.daemon.server")
 	probe.Env = env
@@ -45,9 +44,7 @@ func TestColdStartThroughTheRealGaiaDaemonStart(t *testing.T) {
 	}
 
 	gaia := func(ctx context.Context, args ...string) *exec.Cmd {
-		cmd := exec.CommandContext(ctx, python, append([]string{"-m", "gaia.cli", "daemon"}, args...)...)
-		cmd.Env = env
-		return cmd
+		return daemonCommand(ctx, python, env, args...)
 	}
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -83,5 +80,69 @@ func TestColdStartThroughTheRealGaiaDaemonStart(t *testing.T) {
 	}
 	if insts[0].PID != insts[1].PID {
 		t.Errorf("concurrent callers started two daemons: pid %d and pid %d", insts[0].PID, insts[1].PID)
+	}
+}
+
+// isolatedDaemonEnv moves the whole GAIA home, not just the daemon's files: a
+// daemon with only GAIA_DAEMON_HOME moved still runs the user's Lemonade, log
+// and stores, and its `gaia daemon stop` stops the user's Lemonade.
+func isolatedDaemonEnv(t *testing.T, src string) []string {
+	t.Helper()
+	root := t.TempDir()
+	gaiaHome := filepath.Join(root, ".gaia")
+	isolated := map[string]string{
+		"HOME":              root,
+		"GAIA_HOME":         gaiaHome,
+		daemon.EnvHome:      filepath.Join(gaiaHome, "host"),
+		"GAIA_LOG_FILE":     filepath.Join(gaiaHome, "gaia.log"),
+		"LEMONADE_BASE_URL": "http://127.0.0.1:9",
+	}
+	env := append(os.Environ(), "PYTHONPATH="+src)
+	for k, v := range isolated {
+		t.Setenv(k, v)
+		env = append(env, k+"="+v)
+	}
+	return env
+}
+
+func daemonCommand(ctx context.Context, python string, env []string, args ...string) *exec.Cmd {
+	cmd := exec.CommandContext(ctx, python, append([]string{"-m", "gaia.cli", "daemon"}, args...)...)
+	cmd.Env = env
+	return cmd
+}
+
+// lastEnv is what a child process sees: exec keeps the last value of a repeated key.
+func lastEnv(env []string, key string) string {
+	val := ""
+	for _, kv := range env {
+		if k, v, ok := strings.Cut(kv, "="); ok && k == key {
+			val = v
+		}
+	}
+	return val
+}
+
+// The e2e above is never run to prove its own isolation; this checks, without
+// spawning anything, that its start and stop commands see only a temp home.
+func TestColdStartDaemonCommandsUseATempHome(t *testing.T) {
+	realHome, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	env := isolatedDaemonEnv(t, "/src")
+	for _, args := range [][]string{{"start"}, {"stop"}} {
+		cmd := daemonCommand(context.Background(), "python3", env, args...)
+		home, gaiaHome := lastEnv(cmd.Env, "HOME"), lastEnv(cmd.Env, "GAIA_HOME")
+		if home == "" || home == realHome || !strings.HasPrefix(gaiaHome, home+string(filepath.Separator)) {
+			t.Fatalf("daemon %s gets HOME=%q GAIA_HOME=%q; want both in one temp dir, not %q", args[0], home, gaiaHome, realHome)
+		}
+		for _, key := range []string{daemon.EnvHome, "GAIA_LOG_FILE"} {
+			if v := lastEnv(cmd.Env, key); !strings.HasPrefix(v, gaiaHome+string(filepath.Separator)) {
+				t.Errorf("daemon %s gets %s=%q, outside its GAIA_HOME %q", args[0], key, v, gaiaHome)
+			}
+		}
+		if v := lastEnv(cmd.Env, "LEMONADE_BASE_URL"); v != "http://127.0.0.1:9" {
+			t.Errorf("daemon %s gets LEMONADE_BASE_URL=%q; it must not reach a real Lemonade", args[0], v)
+		}
 	}
 }
