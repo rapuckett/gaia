@@ -237,7 +237,8 @@ Under load, macOS drops or merges a file's own events and reports only that its
 folder changed, or that the folder must be rescanned. The watcher treats any folder
 event as "rescan this folder": it lists the folder, compares each matching file with
 what it last saw, and reports a new file as created and a changed one as modified,
-after the same settle wait. A new subfolder is looked into as well. A file found this
+after the same settle wait. A new subfolder is looked into as well, and looked at
+again until it stops changing, so files copied into it are not missed. A file found this
 way is reported once, even if its own event arrives later. `FileWatcher` and
 `start_observer` set this up; deletes whose events were lost are not recovered.
 

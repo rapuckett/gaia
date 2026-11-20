@@ -317,11 +317,14 @@ class FileChangeHandler(FileSystemEventHandler):
         # Settle tracking: path -> [kind, due time, (size, mtime_ns) or None].
         # Guarded by _cond, which also wakes the dispatch thread.
         self._pending: Dict[str, list] = {}
-        # Folders to rescan (path -> _RESCAN_* depth), the roots that may be
-        # rescanned (real path -> recursive), and the real paths of the
-        # subfolders seen. By _key(): each file's signature when last seen or
-        # reported, and when last reported successfully. Guarded by _cond.
+        # Folders to rescan (path -> _RESCAN_* depth); new folders to rescan
+        # again until their listing holds still (path -> [due time or None
+        # while running, depth, listing]); the roots that may be rescanned
+        # (real path -> recursive); and the real paths of the subfolders seen.
+        # By _key(): each file's signature when last seen or reported, and
+        # when last reported successfully. Guarded by _cond.
         self._rescans: Dict[str, int] = {}
+        self._rechecks: Dict[str, list] = {}
         self._roots: Dict[str, bool] = {}
         self._dirs: Set[str] = set()
         self._known: Dict[str, tuple] = {}
@@ -470,6 +473,10 @@ class FileChangeHandler(FileSystemEventHandler):
 
     def _rescan(self, directory: str, depth: int) -> None:
         """Report each file in ``directory`` that changed since it was last seen."""
+        if not os.path.isdir(directory):
+            with self._cond:
+                self._rechecks.pop(directory, None)
+            return  # removed since its event; the deletes report that
         with self._cond:
             known_dirs = set(self._dirs)
         found, dirs = self._list_files(directory, depth, known_dirs)
@@ -477,7 +484,20 @@ class FileChangeHandler(FileSystemEventHandler):
             if self._closed:
                 return
             self._dirs.update(dirs)
-            due = time.monotonic() + self._debounce_seconds
+            now = time.monotonic()
+            due = now + self._debounce_seconds
+            # A new folder may still be filling, and the events for what lands
+            # in it later can be lost too, so look again once it holds still.
+            listing = (frozenset((k, v[1]) for k, v in found.items()), frozenset(dirs))
+            recheck = self._rechecks.get(directory)
+            if recheck is not None and recheck[0] is None and recheck[2] == listing:
+                del self._rechecks[directory]
+            elif recheck is not None or depth == _RESCAN_ALL or dirs - known_dirs:
+                self._rechecks[directory] = [
+                    now + max(self._debounce_seconds, _MIN_RECHECK_SECONDS),
+                    max(depth, recheck[1]) if recheck else depth,
+                    listing,
+                ]
             for key, (path, signature) in found.items():
                 if path in self._pending:
                     continue  # its own event got through
@@ -575,6 +595,12 @@ class FileChangeHandler(FileSystemEventHandler):
                     return False
                 now = time.monotonic()
                 due = [(p, e) for p, e in self._pending.items() if e[1] <= now]
+                for folder, recheck in self._rechecks.items():
+                    if recheck[0] is not None and recheck[0] <= now:
+                        recheck[0] = None
+                        self._rescans[folder] = max(
+                            recheck[1], self._rescans.get(folder, 0)
+                        )
                 if self._ready or due or self._rescans:
                     items = list(self._ready)
                     self._ready.clear()
@@ -582,9 +608,11 @@ class FileChangeHandler(FileSystemEventHandler):
                     self._rescans.clear()
                     self._busy = True
                     break
-                if self._pending:
-                    next_due = min(e[1] for e in self._pending.values())
-                    self._cond.wait(max(0.0, next_due - now))
+                dues = [e[1] for e in self._pending.values()] + [
+                    r[0] for r in self._rechecks.values() if r[0] is not None
+                ]
+                if dues:
+                    self._cond.wait(max(0.0, min(dues) - now))
                 else:
                     self._cond.wait()
         try:
@@ -693,7 +721,13 @@ class FileChangeHandler(FileSystemEventHandler):
         """
         deadline = None if timeout is None else time.monotonic() + timeout
         with self._cond:
-            while self._pending or self._ready or self._rescans or self._busy:
+            while (
+                self._pending
+                or self._ready
+                or self._rescans
+                or self._rechecks
+                or self._busy
+            ):
                 remaining = None if deadline is None else deadline - time.monotonic()
                 if remaining is not None and remaining <= 0:
                     return False
@@ -713,6 +747,7 @@ class FileChangeHandler(FileSystemEventHandler):
             self._pending.clear()
             self._ready.clear()
             self._rescans.clear()
+            self._rechecks.clear()
             self._cond.notify_all()
             dispatcher = self._dispatcher
         if dropped:

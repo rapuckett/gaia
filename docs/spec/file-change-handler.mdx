@@ -506,7 +506,10 @@ as folder events. On the dispatch thread, a folder event under a recorded root
 lists that folder (and any subfolder not seen before, or everything below it
 for a created or moved folder and for a must-rescan) and puts each new or
 changed file in `_pending` as `created` or `modified`, so it settles like any
-other. A file already pending is skipped, and a settled file whose signature
+other. A folder that is new, or that holds a subfolder not seen before, is
+rescanned again one window later, until its listing holds still, since the
+events for files written into it after the first look can be lost too. A file
+already pending is skipped, and a settled file whose signature
 matches its last successful report is dropped, so a file is reported once
 whether its own event, the rescan, or both arrive. Folder events outside every
 recorded root are ignored, and lost deletes are not recovered.

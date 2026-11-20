@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import os
 import sys
+import time
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -92,6 +93,28 @@ def test_a_new_subfolder_seen_only_through_its_parent_is_looked_into(tmp_path):
         handler.on_modified(_dir_event(tmp_path))
         assert handler.wait_idle(10)
         assert [Path(p).name for p in seen] == ["guide.md"]
+    finally:
+        handler.close()
+
+
+def test_a_file_landing_in_a_new_folder_after_its_rescan_is_still_found(tmp_path):
+    """The folder's own event can be handled before its files are written."""
+    seen = []
+    handler = FileChangeHandler(
+        on_created=seen.append, extensions=[".md"], debounce_seconds=WINDOW
+    )
+    handler.watch_root(tmp_path, recursive=True)
+    try:
+        skill = tmp_path / "new-skill"
+        skill.mkdir()
+        handler.on_created(_dir_event(skill))
+        deadline = time.monotonic() + 10
+        while str(skill) not in handler._rechecks:
+            assert time.monotonic() < deadline, "the new folder was never rescanned"
+            time.sleep(0.01)
+        (skill / "SKILL.md").write_text("written after the rescan, no event")
+        assert handler.wait_idle(10)
+        assert [Path(p).name for p in seen] == ["SKILL.md"]
     finally:
         handler.close()
 
