@@ -283,9 +283,19 @@ def test_a_sample_with_no_data_is_skipped_and_logged_once_quietly(caplog):
 
 
 def test_a_counter_that_keeps_returning_no_data_is_reported(caplog):
-    probe = MissingProbe(lambda call: call > 1)
+    first_read = threading.Event()
+
+    def missing(call):
+        # Hold the misses until the first snapshot returned, or under load
+        # the sampler can fail before that read and raise outside the check.
+        if call > 1:
+            assert first_read.wait(5)
+        return call > 1
+
+    probe = MissingProbe(missing)
     sampler = rm.ResourceSampler(lambda: probe, interval_s=0.001)
     sampler.snapshot()
+    first_read.set()
     assert probe.closed.wait(5)
     assert probe.calls == 1 + rm.MAX_MISSED_SAMPLES
     # The next read tries again and reports it, as any other failed sample.

@@ -22,6 +22,7 @@ from gaia.daemon.sidecars import ledger
 
 @pytest.fixture(autouse=True)
 def _isolated(tmp_path, monkeypatch):
+    monkeypatch.setenv("GAIA_HOME", str(tmp_path))
     monkeypatch.setenv("GAIA_DAEMON_HOME", str(tmp_path / "host"))
     monkeypatch.setenv("LEMONADE_BASE_URL", "http://127.0.0.1:1")
 

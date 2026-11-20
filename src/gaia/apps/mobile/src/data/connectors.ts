@@ -15,19 +15,25 @@ import type {
     DisconnectOutcome,
     GaiaClient,
 } from '@/api/client.types';
-
+import { CONNECTOR_KEY_STORE_POLL_MS } from '@/api/constants';
+import { GaiaApiError } from '@/api/errors';
 import { beginDevicePrompt, reportDevicePromptError, settleDevicePrompt } from '@/features/devices/devicePrompts';
 
 import { useGaiaClient } from './GaiaClientProvider';
 import { queryKeys, requireClient } from './queries';
 
-/** Every connector this PC knows, including those whose live state GAIA couldn't read. */
-export function useConnectors() {
+/**
+ * Every connector this PC knows, including those whose live state GAIA couldn't read. With `pollWhileWaiting`
+ * (the Connectors screen while it is focused), re-read while the PC's key store prompt is open; the poll also
+ * stops while the app is in the background (focusManager follows AppState).
+ */
+export function useConnectors(pollWhileWaiting = false) {
     const client = useGaiaClient();
     return useQuery<ConnectorList>({
         queryKey: queryKeys.connectors,
         enabled: client !== null,
         queryFn: ({ signal }) => requireClient(client).listConnectors({ signal }),
+        refetchInterval: (query) => (pollWhileWaiting && query.state.data?.key_store === 'waiting' ? CONNECTOR_KEY_STORE_POLL_MS : false),
     });
 }
 
@@ -147,7 +153,9 @@ export type ConnectorCheck =
     | { state: 'failed'; detail: string; slow: boolean }
     | { state: 'error'; error: Error }
     /** The PC's key-store prompt for this check is what the screen shows: `ApproveOnPcNotice` follows how it ends. */
-    | { state: 'prompt' };
+    | { state: 'prompt' }
+    /** The PC's key store is locked (a 423) with no prompt of this check's up; `detail` is the PC's own words. */
+    | { state: 'locked'; detail?: string };
 
 /**
  * Each MCP server's latest Check, held above the tiles so a tile that moves to another group keeps it.
@@ -178,7 +186,9 @@ export function useConnectorChecks(initial: Record<string, ConnectorCheck> = {})
             } catch (error) {
                 next = reportDevicePromptError('keyStore', CHECK_PROMPT_ACTION, error)
                     ? { state: 'prompt' }
-                    : { state: 'error', error: error instanceof Error ? error : new Error(String(error)) };
+                    : error instanceof GaiaApiError && error.status === 423
+                      ? { state: 'locked', detail: error.detail || undefined }
+                      : { state: 'error', error: error instanceof Error ? error : new Error(String(error)) };
             }
             if (runs.current[id] === mine) setChecks((prev) => ({ ...prev, [id]: next }));
         },
@@ -224,7 +234,7 @@ export function useDeviceSignIn(connector: ConnectorRow, scopes: string[] = devi
             return;
         }
         c.startConnectorDeviceSignIn(connector.id, scopeKey ? scopeKey.split(' ') : []).then(
-            (code) => setSignIn({ state: 'waiting', code, expiresAt: Date.now() + code.expires_in * 1000, wasConnected: configured }),
+            (code) => setSignIn({ state: 'waiting', code, expiresAt: Date.now() + code.expires_in * 1000, wasConnected: configured === true }),
             (error: Error) => setSignIn({ state: 'failed', error }),
         );
     }, [client, connector.id, scopeKey, configured]);

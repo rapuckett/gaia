@@ -160,9 +160,12 @@ export type TileStatus =
     | { kind: 'connected'; accountId: string | null }
     | { kind: 'paused' }
     | { kind: 'setupRequired' }
+    /** The PC's key store held back its read: neither connected nor not. */
+    | { kind: 'heldBack' }
     | { kind: 'none' };
 
 export function tileStatus(c: ConnectorRow): TileStatus {
+    if (c.key_store) return { kind: 'heldBack' };
     if (!c.configured) return c.configurable === false ? { kind: 'setupRequired' } : { kind: 'none' };
     if (c.type === 'mcp_server' && c.enabled === false) return { kind: 'paused' };
     return { kind: 'connected', accountId: c.account_id };

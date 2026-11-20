@@ -273,8 +273,8 @@ def test_real_watcher_reports_a_copied_file_once_complete(tmp_path, clock):
         return Path(path).name == "doc.txt"
 
     def mark(name):
-        # One watch delivers its events in order: once this marker's event is
-        # in, every earlier write's event is too.
+        # Only proves the watch is live: FSEvents may coalesce and delay an
+        # earlier path's event past this marker's, so ordering is not assumed.
         marker = tmp_path / name
 
         def marker_arrived():
@@ -302,8 +302,23 @@ def test_real_watcher_reports_a_copied_file_once_complete(tmp_path, clock):
         mark("done.txt")
         assert seen == []
 
-        clock.advance(watcher._handler, HOUR)
-        assert watcher._handler.wait_idle(10)
+        handler = watcher._handler
+
+        def doc_pending():
+            with handler._cond:
+                if any(Path(p).name == "doc.txt" for p in handler._pending):
+                    return True
+            os.utime(target)  # under load FSEvents can drop the writes' events
+            return False
+
+        _wait_until(doc_pending, "doc.txt to be pending in the watcher")
+
+        def settled():
+            # A coalesced event can arrive late and re-arm the window.
+            clock.advance(handler, HOUR)
+            return handler.wait_idle(0.5)
+
+        _wait_until(settled, "the copy to settle")
     assert seen == ["".join(f"line {i}\n" for i in range(5))]
 
 

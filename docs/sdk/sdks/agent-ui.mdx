@@ -2615,6 +2615,33 @@ OAuth and MCP-server connections for the Settings page and per-agent grants
 <AccordionGroup>
   <Accordion title="GET /api/connectors">
     Catalog specs merged with live state for every connector.
+
+    An OAuth connector's state lives in the PC's OS key store. On the PC the
+    list waits for that read, including any unlock prompt. Anywhere else (a
+    paired device, mobile access), each read waits up to 2 seconds. When the
+    store holds the read back, the connector is listed with `key_store` set and
+    `configured: null`, because its connection is unknown, not absent:
+
+    - `"waiting"`: the PC's unlock prompt is still open. A later list picks up
+      the answer, and a list opens at most one prompt; connectors after the
+      first one that waits report `waiting` without being read.
+    - `"locked"`: the prompt was refused or closed. `POST
+      /api/providers/key-store/retry` asks again.
+
+    Every other connector is listed as usual, and the response carries a
+    top-level `key_store` (`"locked"` when any connector is locked, else
+    `"waiting"`). Both are omitted when every read finished.
+
+    ```json
+    {
+      "key_store": "waiting",
+      "connectors": [
+        {"id": "google", "type": "oauth_pkce", "configured": null,
+         "account_id": null, "scopes": [], "key_store": "waiting", "...": "..."},
+        {"id": "mcp-github", "type": "mcp_server", "configured": true, "...": "..."}
+      ]
+    }
+    ```
   </Accordion>
 
   <Accordion title="GET /api/connectors/events">
@@ -2647,6 +2674,7 @@ OAuth and MCP-server connections for the Settings page and per-agent grants
 
   <Accordion title="GET /api/connectors/{connector_id}">
     Summary for one connector (type, configured/enabled state, account info).
+    Off the PC it carries `key_store` as `GET /api/connectors` does.
   </Accordion>
 
   <Accordion title="GET /api/connectors/{connector_id}/grants">
