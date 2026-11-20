@@ -16,6 +16,7 @@ import { SeedSkillsAdd } from '@/features/skills';
 import { SeedConfirmFullAccess } from '@/features/settings/panes/Permissions';
 import { SeedAutomationRemove } from '@/features/settings/panes/Automations';
 import { SeedJustPaired } from '@/features/settings/panes/Messaging';
+import { SeedOwnServer } from '@/features/settings/panes/advanced/LemonadeTarget';
 import { SeedCheckPending, SeedCustomReport } from '@/features/settings/panes/model/AddCustomModel';
 import { SeedAddedModel, SeedModelSearch } from '@/features/settings/panes/model/ModelList';
 import { SeedOpenDetails } from '@/features/settings/panes/model/ModelRow';
@@ -57,6 +58,7 @@ function SettingsView({ found }: { found: SettingsScene }) {
                         <Screen scroll scrollRef={scrollRef} header={found.from ? <BackToSection from={found.from} /> : undefined}>
                             <SettingsTargets section={found.section} target={found.target} scrollRef={scrollRef}>
                                 <SeedProviderKey.Provider value={found.keyEntry ?? null}>
+                                <SeedOwnServer.Provider value={found.ownServer ?? null}>
                                 <SeedAddedModel.Provider value={found.addedModel ?? null}>
                                     <SeedModelSearch.Provider value={found.search ?? ''}>
                                         <SeedOpenDetails.Provider value={found.openDetails ?? null}>
@@ -82,6 +84,7 @@ function SettingsView({ found }: { found: SettingsScene }) {
                                         </SeedOpenDetails.Provider>
                                     </SeedModelSearch.Provider>
                                 </SeedAddedModel.Provider>
+                                </SeedOwnServer.Provider>
                                 </SeedProviderKey.Provider>
                             </SettingsTargets>
                         </Screen>

@@ -54,7 +54,8 @@ export function useSetLemonadeTarget() {
 }
 
 /**
- * Points GAIA on the PC at the model server at `baseUrl`, confirmed, with `apiKey` only in the request body. Not a
+ * Points GAIA on the PC at the model server at `baseUrl`, confirmed, with `apiKey` only in the request body. Call it
+ * only from the press that confirms the switch (the PC refuses a phone's unconfirmed one), never from a retry. Not a
  * mutation, so the key is never a mutation variable or cache entry; nothing it returns or throws carries it.
  */
 export function useSwitchToYourServer() {

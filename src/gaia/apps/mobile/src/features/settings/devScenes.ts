@@ -10,6 +10,7 @@ import type { Automation, AutomationList, LinkAddResult, LinkPreview, LinkSkill,
 import { PC_ONLY_REFUSAL } from '@/api/constants';
 import { GaiaApiError, GaiaNetworkError } from '@/api/errors';
 import type { DevicePromptKind, DevicePromptNote, DevicePromptState } from '@/features/devices/devicePrompts';
+import type { OwnServerSeed } from '@/features/settings/panes/advanced/LemonadeTarget';
 import { COMMON, GPU, RUN } from '@/features/setup/devScenes';
 
 import type { SectionId } from './sections';
@@ -30,6 +31,8 @@ export interface SettingsScene {
     prompt?: { kind: DevicePromptKind; action: string; state: DevicePromptState; note?: DevicePromptNote };
     /** Opens the cloud key field (with Replace already pressed when `replacing`), with `typed` in it and Connect pressed when `submit`. */
     keyEntry?: { replacing?: boolean; typed?: string; submit?: boolean };
+    /** Opens Use my own server with this typed (the key masked), and its confirm sheet up when `confirming`. */
+    ownServer?: OwnServerSeed;
     /** Opens the models search field with this text typed in. */
     search?: string;
     /** Opens this model's Details section expanded. */
@@ -228,6 +231,8 @@ const server = (info: Partial<ModelServerInfo>, target: Partial<LemonadeTarget> 
     section: 'advanced', target: 'model-server', gpuMemory: GPU, ...scene,
     data: { modelServer: { ...SERVER, ...info }, lemonadeTarget: { ...TARGET, ...target }, ...scene.data },
 });
+const OWN_URL = 'http://192.168.1.20:13305';
+const PROBE_ERROR = "GAIA couldn't use a Lemonade Server at that address. Check the address and key, and that the PC running GAIA can reach the server.";
 const YOURS_INFO: Partial<ModelServerInfo> = { owner: 'user', base_url: 'http://192.168.1.20:13305' };
 const YOURS: Partial<LemonadeTarget> = { mode: 'external', base_url: 'http://192.168.1.20:13305', saved_base_url: 'http://192.168.1.20:13305' };
 const SETTINGS: Settings = {
@@ -480,6 +485,15 @@ export const SETTINGS_SCENES: Record<string, SettingsScene> = {
     'adv-target-use-own-switching': server(YOURS_INFO, YOURS, { override: { setLemonadeTarget: never } }),
     'adv-target-use-own-refused': server(YOURS_INFO, YOURS, { override: { setLemonadeTarget: refused } }),
     'adv-target-use-own-failed': server(YOURS_INFO, YOURS, { override: { setLemonadeTarget: () => Promise.reject(new GaiaApiError(502, "GAIA couldn't switch servers on the PC. Open Settings › Advanced on the PC to see why.")) } }),
+    // SET-ADV-18: Use my own server: empty, typed (key masked), the confirm sheet, then after `#tap=own-server-confirm` the one
+    // failure sentence for any failed check, the wait after a second try within 10 s, and the PC's refusal. Active is adv-target-yours.
+    'adv-own-server-form': server({}),
+    'adv-own-server-filled': server({}, {}, { ownServer: { url: OWN_URL, key: 'lemonade-key-7b3d' } }),
+    'adv-own-server-confirm': server({}, {}, { ownServer: { url: OWN_URL, key: 'lemonade-key-7b3d', confirming: true } }),
+    'adv-own-server-probe-failed': server({}, {}, { ownServer: { url: OWN_URL, confirming: true }, override: { setLemonadeTarget: () => Promise.reject(new GaiaApiError(422, PROBE_ERROR)) } }),
+    'adv-own-server-too-soon': server({}, {}, { ownServer: { url: OWN_URL, confirming: true }, override: { setLemonadeTarget: () => Promise.reject(new GaiaApiError(429, 'This was just tried. Wait 7 s, then try again.')) } }),
+    'adv-own-server-refused': server({}, {}, { ownServer: { url: OWN_URL, confirming: true }, override: { setLemonadeTarget: refused } }),
+    'adv-own-server-saved-key': server({}, { api_key_stored: true, saved_base_url: OWN_URL }),
     // SET-ADV-20: the Custom model ID card is closed until tapped (`#tap=advanced-custom-toggle`): empty, a saved ID the server lists, one it doesn't, one it couldn't check, and refused.
     'adv-custom-empty': advanced({}),
     'adv-custom-saved': advanced({ custom_model: 'Qwen3-4B-Instruct-2507-GGUF', model_status: { checked: true, found: true, downloaded: true, loaded: false } }),
