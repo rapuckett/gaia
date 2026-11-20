@@ -143,17 +143,21 @@ func TestExternalModeRefusesEveryRawSetupRequest(t *testing.T) {
 }
 
 // The guard is about the user's own server only: GAIA's server, or one named by
-// LEMONADE_BASE_URL, is configured as before.
+// LEMONADE_BASE_URL, is configured as before, the gateway through the daemon.
 func TestOnlyExternalModeIsGuarded(t *testing.T) {
 	srv := newUsersServer(t, `[]`)
 	useConfig(t, map[string]any{"lemonade_mode": "gaia"})
 	t.Setenv("LEMONADE_BASE_URL", srv.base())
+	calls := stubDaemonCalls(t, func(daemonCall) ([]byte, error) { return []byte(`{"configured":true}`), nil })
 
 	if err := New("").Configure(context.Background(), amdProvider(AMDGatewayURL), ""); err != nil {
 		t.Fatal(err)
 	}
-	if got := srv.setupChanges(); len(got) != 1 || got[0] != "POST /install" {
-		t.Fatalf("want the one registration, got %v", got)
+	if len(*calls) != 1 || (*calls)[0].path != gatewayConfigurePath {
+		t.Fatalf("want the one registration through the daemon, got %+v", *calls)
+	}
+	if got := srv.setupChanges(); len(got) != 0 {
+		t.Fatalf("the gateway change reached Lemonade directly: %v", got)
 	}
 }
 

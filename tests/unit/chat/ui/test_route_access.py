@@ -593,6 +593,19 @@ def test_every_route_is_classified(setup):
     assert sent > 500 and guarded > 40, (sent, guarded)
 
 
+def test_the_daemons_gateway_change_is_not_on_the_agent_ui(setup):
+    """Only the daemon serves it, behind its client token on loopback; no caller
+    of the Agent UI, a device or the tunnel least of all, reaches it here."""
+    app, clients, _ = setup
+    assert not [key for key in _routes(app) if " /daemon/" in key]
+    for caller, client in clients.items():
+        status = client.post(
+            "/daemon/v1/gateway/configure",
+            json={"base_url": "https://gw.example/v1", "auth_header_name": "api-key"},
+        ).status_code
+        assert status in (401, 403, 404, 405), (caller, status)
+
+
 def test_provider_key_refused_over_mobile_access(setup, monkeypatch):
     """A key is checked field by field inside a route mobile access may call."""
     from gaia.ui.routers import providers

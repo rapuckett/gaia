@@ -71,9 +71,27 @@ func TestMain(m *testing.M) {
 	lemonade.StubEnsureEmbeddedForTest(func(context.Context) error {
 		return errors.New("test: no daemon")
 	})
+	lemonade.StubDaemonForTest(stubGatewayDaemon)
 	code := m.Run()
 	os.RemoveAll(home)
 	os.Exit(code)
+}
+
+// gatewayChanges records the gateway changes the panel sent the daemon.
+var gatewayChanges []map[string]string
+
+// stubGatewayDaemon is the daemon for lemonade's calls: it accepts a gateway
+// change and refuses anything else.
+func stubGatewayDaemon(_ context.Context, method, path string, body []byte, _ bool, _, _ string) ([]byte, error) {
+	if method != http.MethodPost || path != daemon.APIPrefix+"/gateway/configure" {
+		return nil, errors.New("a test reached the daemon")
+	}
+	var change map[string]string
+	if err := json.Unmarshal(body, &change); err != nil {
+		return nil, err
+	}
+	gatewayChanges = append(gatewayChanges, change)
+	return []byte(`{"configured":true}`), nil
 }
 
 // A saved key lives in a credential store only the daemon can read, so
@@ -153,7 +171,7 @@ func TestAnOutdatedServiceIsOneLineWithDetailsBehindD(t *testing.T) {
 	}
 }
 
-func resetStore() { store = keyStoreCalls{} }
+func resetStore() { store, gatewayChanges = keyStoreCalls{}, nil }
 
 // A key that connected and discovered models is kept for later sessions.
 func TestAWorkingKeyIsKept(t *testing.T) {
@@ -289,9 +307,12 @@ func TestOpeningAnUnregisteredGatewayRegistersItAndRestoresTheKey(t *testing.T) 
 	next, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	drain(cmd)
 
-	if len(installs) != 1 || !strings.Contains(installs[0], lemonade.AMDGatewayURL) ||
-		!strings.Contains(installs[0], lemonade.AMDGatewayAuthHeader) {
-		t.Fatalf("registered %v, want the AMD gateway with its own header", installs)
+	if len(installs) != 0 {
+		t.Fatalf("the gateway was registered with Lemonade directly: %v", installs)
+	}
+	if len(gatewayChanges) != 1 || gatewayChanges[0]["base_url"] != lemonade.AMDGatewayURL ||
+		gatewayChanges[0]["auth_header_name"] != lemonade.AMDGatewayAuthHeader || gatewayChanges[0]["api_key"] != "" {
+		t.Fatalf("registered %v, want the AMD gateway with its own header and no key", gatewayChanges)
 	}
 	if strings.Join(store.restored, ",") != "amd" {
 		t.Fatalf("restored %v after registering, want amd", store.restored)

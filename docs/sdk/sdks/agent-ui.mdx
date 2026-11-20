@@ -3550,7 +3550,8 @@ credential store (the slot the TUI uses). A key is never echoed back or logged.
     Any change of the `amd` address, with a key or without, first drops the key
     Lemonade holds for the old address. Only one replay or move of the gateway
     key runs at a time across every GAIA process (the Agent UI, the daemon, the
-    CLI and agents); a connect that waits over 60 s for another one gets a
+    CLI, agents, and the terminal app, which changes the gateway through the
+    daemon); a connect that waits over 60 s for another one gets a
     **409** saying so. The saved key lives in the credential store's
     `gateway:amd:v2` slot, which older GAIA versions don't read; a key in the
     old `gateway:amd` slot moves there, bound to the gateway it serves, the

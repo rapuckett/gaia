@@ -1338,6 +1338,35 @@ class GatewayManager:
         state.save()
         return result
 
+    def configure(
+        self,
+        base_url: str,
+        *,
+        auth_header_name: str,
+        auth_header_prefix: str,
+        api_key: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Register the gateway and, given *api_key*, hand Lemonade that key.
+
+        Both happen under one hold of :data:`GATEWAY_KEY_LOCK`, after a new
+        address drops Lemonade's key for the old one. Unlike :meth:`install`,
+        a key that discovers nothing is returned, not raised, so the caller can
+        put a kept key back. Returns Lemonade's last answer.
+        """
+        if api_key and cloud_blocked():
+            raise GatewayBlockedError(local_only_key_message("AMD LLM Gateway"))
+        with GATEWAY_KEY_LOCK:
+            result = self._install(
+                base_url,
+                api_key=None,
+                auth_header_name=auth_header_name,
+                auth_header_prefix=auth_header_prefix,
+                allow_insecure_http=False,
+            )
+            if api_key:
+                result = self._set_token(api_key)
+            return result
+
     def _refuse_an_unsupported_server(self) -> None:
         """Refuse a Lemonade GAIA does not support before registering with it.
 

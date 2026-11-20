@@ -16,6 +16,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/amd/gaia/tui/internal/daemon"
 )
 
 const FireworksURL = "https://api.fireworks.ai/inference/v1"
@@ -363,6 +365,9 @@ func (c *Client) Configure(ctx context.Context, p Provider, key string) error {
 	if ExternalModeActive() {
 		return c.useRegistered(ctx, p, key)
 	}
+	if p.Name == "amd" {
+		return configureGateway(ctx, p, key)
+	}
 	target := c
 	if key != "" {
 		// Registration and key must land on the same server, and only one a key may reach.
@@ -371,11 +376,6 @@ func (c *Client) Configure(ctx context.Context, p Provider, key string) error {
 			return err
 		}
 		target = &Client{BaseURL: base, HTTP: c.HTTP}
-	}
-	if p.Name == "amd" {
-		if err := target.dropKeyOnMove(ctx, p); err != nil {
-			return err
-		}
 	}
 	data := map[string]any{"backend": "cloud", "provider": p.Name, "base_url": p.BaseURL, "auth_header_name": p.Header, "auth_header_prefix": p.Prefix, "wire_format": "openai"}
 	if err := target.request(ctx, "POST", "/install", data, nil); err != nil {
@@ -387,25 +387,51 @@ func (c *Client) Configure(ctx context.Context, p Provider, key string) error {
 	return nil
 }
 
-// dropKeyOnMove clears the key Lemonade holds for p when p is registered at
-// another address: Lemonade keeps a key across an install, and would send the
-// old gateway's key to the new one.
-func (c *Client) dropKeyOnMove(ctx context.Context, p Provider) error {
-	providers, err := c.Providers(ctx)
+// gatewayConfigurePath is where the daemon changes the AMD gateway while it
+// holds the machine-wide gateway key lock, so no other GAIA process replays a
+// key between the old key's removal and the new address.
+const gatewayConfigurePath = daemon.APIPrefix + "/gateway/configure"
+
+// GatewayServiceError is a gateway change that never reached the daemon. Its
+// text names no command: the remedy is the app itself.
+type GatewayServiceError struct {
+	Err      error
+	Outdated bool
+}
+
+func (e *GatewayServiceError) Error() string {
+	if e.Outdated {
+		return "GAIA's background service is out of date, so the AMD LLM Gateway wasn't changed. Update GAIA, then try again"
+	}
+	return "GAIA's background service didn't answer, so the AMD LLM Gateway wasn't changed. Restart GAIA, then try again"
+}
+
+// Brief implements daemon.Briefer, so no wrapped error's remedy shows instead.
+func (e *GatewayServiceError) Brief() string { return e.Error() + "." }
+
+func (e *GatewayServiceError) Unwrap() error { return e.Err }
+
+// configureGateway registers the AMD gateway, and hands Lemonade key when one
+// is given, through the daemon. Lemonade is never called directly here.
+func configureGateway(ctx context.Context, p Provider, key string) error {
+	body, err := json.Marshal(map[string]string{
+		"base_url": p.BaseURL, "auth_header_name": p.Header, "auth_header_prefix": p.Prefix, "api_key": key,
+	})
 	if err != nil {
-		return err
+		return fmt.Errorf("Could not encode provider settings")
 	}
-	for _, have := range providers {
-		if have.Name != p.Name || !have.RuntimeKey || sameBaseURL(have.BaseURL, p.BaseURL) {
-			continue
-		}
-		err := c.request(ctx, "DELETE", "/cloud/auth/"+p.Name, nil, nil)
-		if errors.Is(err, errProviderNotInstalled) {
-			return nil
-		}
-		return err
+	_, err = callDaemon(ctx, http.MethodPost, gatewayConfigurePath, body, true, "change the AMD LLM Gateway", "")
+	var refused *daemon.StatusError
+	var missing *daemon.RouteMissingError
+	switch {
+	case err == nil:
+		return nil
+	case errors.As(err, &missing):
+		return &GatewayServiceError{Err: err, Outdated: true}
+	case errors.As(err, &refused):
+		return fmt.Errorf("The AMD LLM Gateway wasn't changed: %s", refused.Detail)
 	}
-	return nil
+	return &GatewayServiceError{Err: err}
 }
 
 func sameBaseURL(a, b string) bool {

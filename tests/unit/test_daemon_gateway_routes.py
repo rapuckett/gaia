@@ -161,3 +161,169 @@ def test_forget_on_an_unusable_store_is_a_503_not_a_500(client, auth, monkeypatc
 
     assert resp.status_code == 503
     assert "keyring" in resp.json()["detail"]
+
+
+# ── /configure: the TUI's gateway change, under the gateway key lock ─────────
+
+OLD_GATEWAY = "https://old.example/v1"
+NEW_GATEWAY = "https://new.example/v1"
+CONFIGURE = "/daemon/v1/gateway/configure"
+
+
+@pytest.fixture()
+def lemonade(monkeypatch, tmp_path):
+    """Lemonade holding a key for OLD_GATEWAY; records each call and whether
+    another GAIA process could have taken the gateway key lock then."""
+    import threading
+    from unittest.mock import MagicMock
+
+    from gaia.llm import gateway
+    from gaia.version import LEMONADE_VERSION
+
+    monkeypatch.setenv("GAIA_HOME", str(tmp_path))
+    monkeypatch.setattr(gateway, "GATEWAY_STATE_FILE", tmp_path / "gateway.json")
+    monkeypatch.setattr(gateway, "GATEWAY_KEY_LOCK_TIMEOUT", 0.1)
+    monkeypatch.setattr(gateway, "resolve_lemonade_api_key", lambda **k: None)
+    client = MagicMock()
+    client.credential_base_url.return_value = "http://localhost:13305/api/v1"
+    client.health_check.return_value = {"status": "ok", "version": LEMONADE_VERSION}
+    real = gateway.GatewayManager
+    monkeypatch.setattr(gateway, "GatewayManager", lambda: real(client=client))
+    calls = []
+
+    def lock_free() -> bool:
+        took = []
+
+        def other():
+            try:
+                with gateway.GATEWAY_KEY_LOCK:
+                    took.append(True)
+            except gateway.GatewayBusy:
+                took.append(False)
+
+        thread = threading.Thread(target=other)
+        thread.start()
+        thread.join(timeout=5)
+        return took[0]
+
+    def request(method, url, json=None, **kwargs):
+        path = url.split("/api/v1/", 1)[1]
+        calls.append((method, path, json, lock_free()))
+        resp = MagicMock(status_code=200)
+        body = {}
+        if path == "system-info":
+            entry = {"name": "amd", "base_url": OLD_GATEWAY, "runtime_key_set": True}
+            body = {"cloud": {"providers": [entry]}}
+        elif path == "cloud/auth":
+            body = {"models_discovered": 2}
+        resp.json.return_value = body
+        resp.content = b"{}"
+        return resp
+
+    monkeypatch.setattr(gateway.requests, "request", request)
+    return calls
+
+
+def test_configure_drops_the_old_key_then_installs_under_the_lock(
+    client, auth, lemonade, caplog
+):
+    with caplog.at_level("DEBUG"):
+        resp = client.post(
+            CONFIGURE,
+            json={
+                "base_url": NEW_GATEWAY,
+                "auth_header_name": "api-key",
+                "auth_header_prefix": "",
+                "api_key": SECRET,
+            },
+            headers=auth,
+        )
+    assert resp.status_code == 200, resp.text
+    assert resp.json() == {"configured": True, "models_discovered": True}
+    assert [(m, p) for m, p, _, _ in lemonade] == [
+        ("GET", "system-info"),
+        ("DELETE", "cloud/auth/amd"),
+        ("POST", "install"),
+        ("POST", "cloud/auth"),
+    ]
+    assert not any(free for *_, free in lemonade), "a call ran outside the lock"
+    install = lemonade[2][2]
+    assert install["base_url"] == NEW_GATEWAY and "api_key" not in install
+    assert (install["auth_header_name"], install["auth_header_prefix"]) == (
+        "api-key",
+        "",
+    )
+    assert lemonade[3][2] == {"provider": "amd", "api_key": SECRET}
+    assert SECRET not in resp.text and SECRET not in caplog.text
+
+
+def test_configure_without_a_key_sends_none(client, auth, lemonade):
+    resp = client.post(
+        CONFIGURE,
+        json={"base_url": OLD_GATEWAY, "auth_header_name": "api-key"},
+        headers=auth,
+    )
+    assert resp.status_code == 200, resp.text
+    assert [(m, p) for m, p, _, _ in lemonade] == [
+        ("GET", "system-info"),
+        ("POST", "install"),
+    ]
+
+
+@pytest.mark.parametrize(
+    "headers",
+    [{}, {"Authorization": "Bearer not-the-daemon-token"}, {"Authorization": TOKEN}],
+)
+def test_configure_refuses_a_caller_without_the_daemon_token(client, lemonade, headers):
+    resp = client.post(
+        CONFIGURE,
+        json={
+            "base_url": NEW_GATEWAY,
+            "auth_header_name": "api-key",
+            "api_key": SECRET,
+        },
+        headers=headers,
+    )
+    assert resp.status_code == 401
+    assert lemonade == []
+
+
+@pytest.mark.parametrize(
+    "base_url",
+    ["http://new.example/v1", "https://user:pw@new.example/v1", "https:///v1"],
+)
+def test_configure_refuses_anything_but_a_plain_https_gateway(
+    client, auth, lemonade, base_url
+):
+    resp = client.post(
+        CONFIGURE,
+        json={"base_url": base_url, "auth_header_name": "api-key", "api_key": SECRET},
+        headers=auth,
+    )
+    assert resp.status_code == 422
+    assert lemonade == []
+
+
+def test_configure_waiting_on_another_processs_move_is_a_409(
+    client, auth, lemonade, monkeypatch
+):
+    from gaia.llm import gateway
+
+    with gateway.GATEWAY_KEY_LOCK:
+        import threading
+
+        results = []
+        other = threading.Thread(
+            target=lambda: results.append(
+                client.post(
+                    CONFIGURE,
+                    json={"base_url": NEW_GATEWAY, "auth_header_name": "api-key"},
+                    headers=auth,
+                )
+            )
+        )
+        other.start()
+        other.join(timeout=10)
+    assert results[0].status_code == 409
+    assert results[0].json()["detail"] == gateway._busy_message()
+    assert lemonade == []

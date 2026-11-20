@@ -1,6 +1,7 @@
 # Copyright(C) 2025-2026 Advanced Micro Devices, Inc. All rights reserved.
 # SPDX-License-Identifier: MIT
-"""``/daemon/v1/gateway/token`` — persist an LLM-gateway token for the TUI.
+"""``/daemon/v1/gateway/*`` — persist an LLM-gateway token for the TUI, and
+change the gateway under the machine-wide gateway key lock.
 
 The credential store is Python-only, so the Go TUI cannot write to it. The two
 keyring libraries do not interoperate either: verified on Windows, a value
@@ -22,6 +23,9 @@ file.
 
 from __future__ import annotations
 
+from typing import Optional
+from urllib.parse import urlparse
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
@@ -34,6 +38,35 @@ class RememberTokenRequest(BaseModel):
     """The token to persist. Never logged, never returned."""
 
     token: str = Field(min_length=1)
+
+
+class ConfigureRequest(BaseModel):
+    """Where the TUI registers the gateway, and an optional key. The key is
+    never logged, never returned."""
+
+    base_url: str = Field(min_length=1)
+    auth_header_name: str = Field(min_length=1)
+    auth_header_prefix: str = ""
+    api_key: Optional[str] = None
+
+
+def _https_gateway(base_url: str) -> str:
+    """*base_url* when it is a plain ``https://`` address; 422 otherwise."""
+    url = urlparse(base_url.strip())
+    if (
+        url.scheme != "https"
+        or not url.hostname
+        or url.username
+        or url.password
+        or url.query
+        or url.fragment
+    ):
+        raise HTTPException(
+            status_code=422,
+            detail="Enter an https:// gateway address without credentials, "
+            "query parameters or fragments.",
+        )
+    return base_url.strip()
 
 
 def build_gateway_router(token: str) -> APIRouter:
@@ -93,6 +126,36 @@ def build_gateway_router(token: str) -> APIRouter:
             raise HTTPException(status_code=409, detail=str(e)) from e
         except GatewayError as e:
             raise HTTPException(status_code=503, detail=str(e)) from e
+
+    @router.post("/configure")
+    def configure(body: ConfigureRequest) -> dict:
+        """Register the gateway in Lemonade and hand it the key, if one came.
+
+        Holds the machine-wide gateway key lock throughout, so no other GAIA
+        process replays a key between the address change and the new key.
+        """
+        from gaia.llm.gateway import GatewayBusy, GatewayError, GatewayManager
+        from gaia.llm.local_only import CloudDisabledError
+
+        base_url = _https_gateway(body.base_url)
+        key = (body.api_key or "").strip() or None
+        try:
+            result = GatewayManager().configure(
+                base_url,
+                auth_header_name=body.auth_header_name.strip(),
+                auth_header_prefix=body.auth_header_prefix,
+                api_key=key,
+            )
+        except (CloudDisabledError, GatewayBusy) as e:
+            raise HTTPException(status_code=409, detail=str(e)) from e
+        except GatewayError as e:
+            raise HTTPException(status_code=503, detail=str(e)) from e
+        finally:
+            del key
+        return {
+            "configured": True,
+            "models_discovered": bool(result.get("models_discovered")),
+        }
 
     @router.delete("/token")
     def forget() -> dict:
