@@ -191,9 +191,13 @@ def run(
                 for k, v in route.as_record().items()
             }
             if record["is_error"] and record.get("error"):
-                record["error"] = _cli(
+                record["error"] = (
                     _explain_routed(settings, route, record["error"]) or record["error"]
                 )
+        if record["is_error"]:
+            for key in ("result", "error"):
+                if record.get(key):
+                    record[key] = _cli(record[key])
     except KeyboardInterrupt:
         return _emit_failure(output_format, "interrupted", code=130)
     except Exception as exc:  # noqa: BLE001 - CLI boundary: report, never a traceback
