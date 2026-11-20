@@ -142,7 +142,8 @@ def start_env(config_dir: Path) -> Dict[str, str]:
 
 def _restart(embedded, change) -> None:
     status = embedded.status()
-    embedded.stop()
+    # Handed straight back to the same owner below.
+    embedded.stop(allow_live_owner=True)
     change(embedded.config_dir)
     embedded.start(
         port=status.port,
