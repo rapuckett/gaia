@@ -39,6 +39,8 @@ DETACH_WAIT_SECONDS = 90.0
 STOP_WAIT_SECONDS = 15.0
 # How often a running bridge re-checks that its linked devices are still allowed.
 DEVICE_LINK_CHECK_SECONDS = 60.0
+# Consecutive unreadable device-store checks after which the bridge stops.
+DEVICE_LINK_MAX_FAILURES = 3
 
 _DISCORD_ENTITY = "app:discord"
 _DISCORD_CONTENT = offer.installed_content_pattern("discord")
@@ -390,6 +392,7 @@ class _LinkWatch:
     def __init__(self, transport: Any) -> None:
         self.transport = transport
         self.stale: set = set()
+        self.failures = 0
 
     def tick(self) -> bool:
         """One check. True when a linked device is stale and the bridge was stopped."""
@@ -400,12 +403,27 @@ class _LinkWatch:
         try:
             stale = stale_device_links()
         except (UnsafeDeviceFolderError, sqlite3.Error) as e:
-            log.warning(
-                "Discord bridge could not check its linked devices (%s); "
-                "it keeps running and checks again",
-                e,
+            self.failures += 1
+            if self.failures < DEVICE_LINK_MAX_FAILURES:
+                log.warning(
+                    "Discord bridge could not check its linked devices (%s), "
+                    "failure %d of %d; it keeps running and checks again",
+                    e,
+                    self.failures,
+                    DEVICE_LINK_MAX_FAILURES,
+                )
+                return False
+            detail = (
+                "The Discord bridge stopped: the device store couldn't be read "
+                f"{self.failures} times in a row ({e}), so it stopped instead of "
+                "running with unchecked approvers. Start it again once the "
+                "device store is readable."
             )
-            return False
+            log.error(detail)
+            state.write_status(state.STATE_ERROR, detail)
+            self.transport.stop()
+            return True
+        self.failures = 0
         if not stale:
             return False
         self.stale = stale

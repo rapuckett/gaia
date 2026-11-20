@@ -331,24 +331,62 @@ def test_the_link_check_leaves_live_devices_alone(monkeypatch):
     assert not transport.stopped and not watch.stale
 
 
-def test_an_unreadable_device_store_warns_and_keeps_the_bridge_running(
-    monkeypatch, caplog
-):
+def _broken_store(monkeypatch):
     import sqlite3
-
-    from gaia.messaging.discord import cli
-
-    _linked(pairing_device_id="phone")
 
     def broken():
         raise sqlite3.OperationalError("database is locked")
 
     monkeypatch.setattr("gaia.ui.devices.store.allowed_device_ids", broken)
+
+
+def test_an_unreadable_device_store_warns_and_keeps_the_bridge_running(
+    monkeypatch, caplog
+):
+    from gaia.messaging.discord import cli
+
+    _linked(pairing_device_id="phone")
+    _broken_store(monkeypatch)
     transport = _FakeTransport()
+    watch = cli._LinkWatch(transport)
     with caplog.at_level("WARNING"):
-        assert cli._LinkWatch(transport).tick() is False
+        assert watch.tick() is False
+        assert watch.tick() is False
     assert not transport.stopped
     assert "database is locked" in caplog.text
+
+
+def test_the_third_unreadable_check_in_a_row_stops_the_bridge(monkeypatch):
+    from gaia.messaging.discord import cli
+
+    _linked(pairing_device_id="phone")
+    _broken_store(monkeypatch)
+    transport = _FakeTransport()
+    watch = cli._LinkWatch(transport)
+    assert [watch.tick() for _ in range(cli.DEVICE_LINK_MAX_FAILURES)] == [
+        False,
+        False,
+        True,
+    ]
+    assert transport.stopped
+    info = state.read_status()
+    assert info.state == state.STATE_ERROR
+    assert "device store couldn't be read" in info.detail
+
+
+def test_a_good_read_resets_the_failure_count(monkeypatch):
+    from gaia.messaging.discord import cli
+
+    _linked(pairing_device_id="phone")
+    transport = _FakeTransport()
+    watch = cli._LinkWatch(transport)
+    _broken_store(monkeypatch)
+    assert not watch.tick() and not watch.tick()
+    monkeypatch.setattr("gaia.ui.devices.store.allowed_device_ids", lambda: ["phone"])
+    assert not watch.tick()
+    _broken_store(monkeypatch)
+    assert not watch.tick() and not watch.tick()
+    assert not transport.stopped
 
 
 def test_after_exit_an_expired_token_device_is_disconnected(cleared):
