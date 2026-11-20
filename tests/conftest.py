@@ -191,6 +191,76 @@ def _fixed_machine_memory(request, monkeypatch):
     )
 
 
+# Log handlers installed while a test module is imported, by module. The
+# per-test guard below cannot see these: they exist before any test starts.
+_collection_handler_baseline = None
+_collection_leaks = []
+
+
+def _gaia_log_handlers():
+    import logging
+
+    return [
+        h
+        for name in (None, "gaia")
+        for h in logging.getLogger(name).handlers
+        if not type(h).__module__.startswith("_pytest")
+    ]
+
+
+def pytest_collectstart(collector):
+    global _collection_handler_baseline
+    if _collection_handler_baseline is None:
+        _collection_handler_baseline = _gaia_log_handlers()
+
+
+def pytest_collectreport(report):
+    if _collection_handler_baseline is None or not report.nodeid.endswith(".py"):
+        return
+    for handler in _gaia_log_handlers():
+        if not any(handler is h for h in _collection_handler_baseline):
+            _collection_handler_baseline.append(handler)
+            _collection_leaks.append((report.nodeid, handler))
+
+
+def pytest_collection_finish(session):
+    if not _collection_leaks:
+        return
+    found = "; ".join(
+        f"{nodeid}: {type(h).__name__}(stream={getattr(h, 'stream', None)!r})"
+        for nodeid, h in _collection_leaks
+    )
+    pytest.exit(
+        "log handler installed at import or collection time by: "
+        f"{found}. It outlives the module and prints into later tests' "
+        "capsys/capfd; install logging in a fixture and remove it afterward "
+        "(see tests/unit/test_gaia_home_isolation.py).",
+        returncode=pytest.ExitCode.INTERNAL_ERROR,
+    )
+
+
+@pytest.fixture
+def restore_gaia_logging():
+    """Undo ``gaia.logger.configure()`` after a test that runs a CLI entry point.
+
+    Entry points install GAIA's stderr and file handlers on the root logger;
+    left in place they print into later tests' capsys/capfd captures.
+    """
+    import logging
+
+    from gaia import logger as gaia_logger
+
+    root = logging.getLogger()
+    handlers = list(root.handlers)
+    manager = gaia_logger.log_manager
+    yield
+    for handler in list(root.handlers):
+        if not any(handler is h for h in handlers):
+            root.removeHandler(handler)
+            handler.close()
+    gaia_logger.log_manager = manager
+
+
 @pytest.fixture(autouse=True)
 def _no_leaked_log_handlers(request):
     """Fail a test that leaves a log handler on the root or ``gaia`` logger.
