@@ -47,6 +47,7 @@ import keyring.errors
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
+from starlette.concurrency import run_in_threadpool
 
 import gaia.connectors as connections
 import gaia.connectors.catalog  # noqa: F401  # pylint: disable=unused-import
@@ -955,7 +956,8 @@ async def connector_events() -> StreamingResponse:
 
 
 @router.get("/_debug", dependencies=[Depends(require_local_pc)])
-async def debug_state() -> Dict[str, Any]:
+# Sync: runs on a worker thread, so a blocked key-store read can't stall the server.
+def debug_state() -> Dict[str, Any]:
     """Diagnostics endpoint, gated by ``GAIA_DEBUG=1``."""
     if os.environ.get("GAIA_DEBUG") != "1":
         raise HTTPException(status_code=404, detail="Not Found")
@@ -1390,7 +1392,7 @@ async def _set_connector_enabled(
 
     event_name = "connector.enabled" if enabled else "connector.disabled"
     await _emitter.emit(event_name, {"connector_id": connector_id})
-    return _connector_summary(connector_id)
+    return await run_in_threadpool(_connector_summary, connector_id)
 
 
 @router.post(
@@ -1534,7 +1536,7 @@ async def complete_flow(
         )
         raise HTTPException(status_code=502, detail=DEVICE_CONNECTOR_ERROR) from e
     audit_approval(request, f"sign-in finished for {state['provider']}")
-    return _connector_summary(state["provider"])
+    return await run_in_threadpool(_connector_summary, state["provider"])
 
 
 # Keeps background device-poll tasks referenced so they aren't garbage
@@ -1921,13 +1923,15 @@ async def forward_connection(
 
 @forwarded_router.get("")
 @forwarded_router.get("/")
-async def list_forwarded_connections() -> Dict[str, Any]:
+# Sync: runs on a worker thread, so a blocked key-store read can't stall the server.
+def list_forwarded_connections() -> Dict[str, Any]:
     """List persisted connections — metadata only, secrets omitted (AC4)."""
     return {"connections": connections.list_connections()}
 
 
 @forwarded_router.get("/{provider}")
-async def get_forwarded_connection(provider: str) -> Dict[str, Any]:
+# Sync: runs on a worker thread, so a blocked key-store read can't stall the server.
+def get_forwarded_connection(provider: str) -> Dict[str, Any]:
     """Return one connection's metadata, or 404 — secrets omitted (AC4)."""
     entry = connections.get_connection(provider)
     if entry is None:
@@ -1953,7 +1957,7 @@ async def revoke_forwarded_connection(provider: str) -> Response:
     # event loop, and ``revoke_connection``'s sync wrapper would raise
     # rather than let a nested loop deadlock.
     revoke_result = await connections.revoke_connection_async(provider)
-    clear_provider_credentials(provider)
+    await run_in_threadpool(clear_provider_credentials, provider)
     revoke_all_grants_for(provider)
     _provider_registry.pop(provider, None)
     for key in [k for k in _token_cache if k[0] == provider]:
