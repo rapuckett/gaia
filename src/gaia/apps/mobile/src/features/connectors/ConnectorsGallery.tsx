@@ -29,9 +29,9 @@ import { ConnectorsScreen } from './ConnectorsScreen';
  * `checkFailed` show a Linear server's Check line (`#tap=connector-check-linear` runs it again). CON-07: on a paired phone, `googleReady` shows Google's
  * Connect, and with `#tap=connector-connect-google`: `googleBrowser` waits on the browser, `googleFinishing` waits on the PC, `googleDone` ends
  * connected, `googleDenied` (declined at Google), `googleTimeout`, `googleExpired` (PC answers 404), `googleStateMismatch` (400), `googleRefused`
- * (403 at the start), `googleFailed` (the PC's generic 500) and `googleSuperseded` (a sign-in started on the PC replaced it) each end on their notice. CON-18: every scene ends with the Extend with MCP link. CON-16: `personalize` opens a just-connected Gmail tile with the after-connect Personalize GAIA offer, `personalizeTile` the plain per-tile offer, and `personalizeFailed` a just-connected server whose offer fails (`#tap=personalize-linear`: the sentence plus the PC's reason), `personalizeMcp` a just-connected server on a paired phone (the same Personalize button as on the PC).
+ * (403 at the start), `googleFailed` (the PC's generic 500), `googleSuperseded` (a sign-in started on the PC replaced it) and `googleCancelled` (the browser ended without a sign-in) each end on their notice. CON-18: every scene ends with the Extend with MCP link. CON-16: `personalize` opens a just-connected Gmail tile with the after-connect Personalize GAIA offer, `personalizeTile` the plain per-tile offer, and `personalizeFailed` a just-connected server whose offer fails (`#tap=personalize-linear`: the sentence plus the PC's reason), `personalizeMcp` a just-connected server on a paired phone (the same Personalize button as on the PC).
  */
-export const CONNECTOR_SCENES = ['serverOn', 'serverOff', 'grants', 'loading', 'error', 'none', 'groups', 'menu', 'code', 'codeFailed', 'many', 'disconnected', 'revoked', 'personalize', 'personalizeTile', 'personalizeFailed', 'personalizeMcp', 'oauthSetup', 'oauthClient', 'mcpConfigure', 'checkRunning', 'checkOk', 'checkSlow', 'checkFailed', 'googleReady', 'googleBrowser', 'googleFinishing', 'googleDone', 'googleDenied', 'googleTimeout', 'googleExpired', 'googleStateMismatch', 'googleRefused', 'googleFailed', 'googleSuperseded'] as const;
+export const CONNECTOR_SCENES = ['serverOn', 'serverOff', 'grants', 'loading', 'error', 'none', 'groups', 'menu', 'code', 'codeFailed', 'many', 'disconnected', 'revoked', 'personalize', 'personalizeTile', 'personalizeFailed', 'personalizeMcp', 'oauthSetup', 'oauthClient', 'mcpConfigure', 'checkRunning', 'checkOk', 'checkSlow', 'checkFailed', 'googleReady', 'googleBrowser', 'googleFinishing', 'googleDone', 'googleDenied', 'googleTimeout', 'googleExpired', 'googleStateMismatch', 'googleRefused', 'googleFailed', 'googleSuperseded', 'googleCancelled'] as const;
 export type ConnectorScene = (typeof CONNECTOR_SCENES)[number];
 
 const server = (over: Partial<ConnectorRow> = {}) =>
@@ -94,6 +94,7 @@ const GOOGLE_REDIRECTS: Partial<Record<ConnectorScene, LoopbackOutcome | null>> 
     googleRefused: null,
     googleFailed: { outcome: 'code', code: 'gallery-code', state: '' },
     googleSuperseded: null,
+    googleCancelled: { outcome: 'cancelled' },
 };
 
 /** A listener that answers at once, as if the browser came straight back; the browser itself never closes. */
@@ -174,6 +175,7 @@ const LIST_SCENES: Partial<Record<ConnectorScene, { data: FakeClientData; expand
         expanded: 'google',
     },
     googleSuperseded: { data: { connectors: [GOOGLE_READY], browserSuperseded: true }, expanded: 'google' },
+    googleCancelled: { data: { connectors: [GOOGLE_READY] }, expanded: 'google' },
 };
 const SHEET_SCENES: Partial<Record<ConnectorScene, string>> = { oauthSetup: 'google', oauthClient: 'google', mcpConfigure: 'mcp-slack' };
 
