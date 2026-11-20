@@ -72,7 +72,7 @@ export const MODEL_SCENES: Record<string, ModelScene> = {
     'agent-no-build': { view: 'agent', data: { ...NO_FLAGSHIP, setupChecks: [{ ready: false, no_agent_build: true, steps: [] } as SetupCheck] } },
     'down-back': { view: 'down', data: model({ ...STOPPED, state: 'idle', error: null, error_cause: null }), downAsked: true },
     'down-switch': { view: 'down', data: other() },
-    'down-switch-done': { view: 'down', data: other(), downSwitch: 'done' },
+    'down-switch-done': { view: 'down', data: other({ ...model({ ...STOPPED, state: 'idle', error: null, error_cause: null }), lemonadeTarget: { ...EXTERNAL, mode: 'gaia', source: 'gaia' } }), downSwitch: 'done' },
     'down-switch-env': { view: 'down', data: other({ lemonadeTarget: { ...EXTERNAL, source: 'env' } }) },
     'down-switch-failed': { view: 'down', data: other(), downSwitch: 'press', switchError: new GaiaApiError(500, 'Lemonade refused to start: port 13305 is in use.') },
     'down-switch-pc-only': { view: 'down', data: other({ serverChangeError: new GaiaApiError(403, 'Forbidden') }), downSwitch: 'press' },

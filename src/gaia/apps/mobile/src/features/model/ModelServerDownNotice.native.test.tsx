@@ -2,12 +2,13 @@
 // SPDX-License-Identifier: MIT
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import type { ReactNode } from 'react';
 import { AccessibilityInfo, Platform } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { GaiaApiError } from '@/api/errors';
+import type { SystemStatus } from '@/api/client.types';
 import { createFakeClient, type FakeClientData } from '@/api/fake';
 import { GaiaClientProvider } from '@/data';
 import { translator } from '@/i18n/useT';
@@ -20,8 +21,14 @@ const t = translator('en');
 
 const describeNative = Platform.OS === 'web' ? describe.skip : describe;
 
+const RUNNING = { lemonade_running: true } as SystemStatus;
+const NEEDS_SETUP = { lemonade_running: false, start_command: 'gaia init' } as SystemStatus;
+
+/** The fake's model status never changes by itself: after a switch it reads as up, as the PC's would. */
 async function mount(data: FakeClientData) {
-    const client = createFakeClient(data);
+    const client = createFakeClient({ status: RUNNING, ...data });
+    const stopped = client.getLocalModelStatus;
+    client.getLocalModelStatus = async (o) => ({ ...(await stopped(o)), ...(client.targetSets.length ? { state: 'idle' as const, owner: 'gaia' } : {}) });
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const wrap = ({ children }: { children: ReactNode }) => (
         <QueryClientProvider client={queryClient}>
@@ -83,6 +90,15 @@ describeNative('ModelServerDownNotice switching', () => {
             Platform.OS = os;
             announce.mockRestore();
         }
+    });
+
+    it("shows no 'back' notice while GAIA's own server still needs setting up on the PC", async () => {
+        const client = await mount({ ...scene('down-switch'), status: NEEDS_SETUP });
+        fireEvent.press(await screen.findByText(t('serverDown.useOwn')));
+        await waitFor(() => expect(client.targetSets).toEqual([{ mode: 'gaia' }]));
+        await waitFor(() => expect(screen.queryByTestId('server-down-notice')).toBeNull());
+        expect(screen.queryByTestId('server-down-back')).toBeNull();
+        expect(screen.queryByText(t('serverDown.back'))).toBeNull();
     });
 
     it("a 403 reads as the PC-only notice, not an error", async () => {

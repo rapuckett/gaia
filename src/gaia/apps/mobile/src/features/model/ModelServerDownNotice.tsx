@@ -4,9 +4,10 @@
 import { useEffect, useState } from 'react';
 
 import { GaiaApiError } from '@/api/errors';
-import { useLemonadeTarget, useLocalModelStatus, useRestartLocalModel, useSetLemonadeTarget } from '@/data';
+import { useLemonadeTarget, useLocalModelStatus, useRestartLocalModel, useSetLemonadeTarget, useSystemStatus } from '@/data';
 import { describeError, describeHttpFailure, useT } from '@/i18n/useT';
 import { ChipButton } from '@/features/schedules/ChipButton';
+import { needsLocalSetup } from '@/features/settings/panes/advanced/statusText';
 import { isPcRefusal } from '@/features/settings/PcOnlyNotice';
 import { useAnnounce } from '@/platform/useAnnounce';
 import { Icon, Notice, Row, Text, useTheme } from '@/ui';
@@ -35,6 +36,7 @@ export function ModelServerDownNotice({
     const t = useT();
     const status = useLocalModelStatus(true);
     const target = useLemonadeTarget();
+    const system = useSystemStatus();
     const restart = useRestartLocalModel();
     const switchOwn = useSetLemonadeTarget();
     const { colors, radius, space } = useTheme();
@@ -63,9 +65,13 @@ export function ModelServerDownNotice({
         if (autoSwitch) switchToOwn();
         // eslint-disable-next-line react-hooks/exhaustive-deps -- once, on mount
     }, []);
-    useAnnounce(switched ? t('serverDown.back') : null);
+    // GAIA's own server may not be set up yet: the ambient setup banner carries that, so no "back" here.
+    const setupNeeded = !!system.data && needsLocalSetup(system.data);
+    const backNow = (switched || (asked && !busy)) && !!s && !down && !setupNeeded;
+    useAnnounce(backNow && switched ? t('serverDown.back') : null);
 
-    if (switched || (asked && s && !down && !busy)) {
+    if (switched && setupNeeded) return null;
+    if (backNow) {
         return <Notice tone="success" message={t('serverDown.back')} testID="server-down-back" />;
     }
     const raw = restart.error
