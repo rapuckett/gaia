@@ -39,7 +39,7 @@ import type {
     IndexFolderResponse,
     LemonadeFound,
     LemonadeTarget,
-    LemonadeTargetBody,
+    LemonadeTargetRequest,
     LocalModelStatus,
     KnowledgeCreateBody,
     KnowledgeUpdateBody,
@@ -432,7 +432,7 @@ export interface FakeGaiaClient extends GaiaClient {
     readonly backendSets: string[];
     /** The text each speak call was given, in order. */
     readonly spoken: string[];
-    readonly targetSets: LemonadeTargetBody[];
+    readonly targetSets: LemonadeTargetRequest[];
     /** The setup model choices saved, in order. */
     readonly setupChoices: { kind: 'chat' | 'vision' | 'skip'; modelId: string | null; flag?: boolean }[];
     /** The providers connectProvider was asked for, in order. */
@@ -562,7 +562,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
     const setupStarts: FakeGaiaClient['setupStarts'] = [];
     const backendSets: string[] = [];
     const spoken: string[] = [];
-    const targetSets: LemonadeTargetBody[] = [];
+    const targetSets: LemonadeTargetRequest[] = [];
     const setupChoices: FakeGaiaClient['setupChoices'] = [];
     const connects: string[] = [];
     const browserSignIns: FakeGaiaClient['browserSignIns'] = [];

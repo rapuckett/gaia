@@ -250,6 +250,9 @@ export interface ScheduleList {
 }
 
 /** POST /api/providers/{id}/connect's answer, as the web's Model settings reads it. */
+/** `POST /api/lemonade/target`: a paired device's switch to its own server must send `confirm: true` (409 without it). */
+export type LemonadeTargetRequest = LemonadeTargetBody & { confirm?: boolean };
+
 export interface ProviderConnected {
     remembered: boolean;
     remember_error?: string | null;
@@ -823,8 +826,11 @@ export interface GaiaClient {
     setModelServerBackend(backend: string, options?: RequestOptions): Promise<ModelServerInfo>;
     /** Which model server GAIA uses, and whether the PC still has to choose one. */
     getLemonadeTarget(options?: RequestOptions): Promise<LemonadeTarget>;
-    /** Switches GAIA to its own model server or to the one at `base_url`; PC-only (403 from a phone). A 422 body carries `status` (`needs_key`, `bad_key`, ...). */
-    setLemonadeTarget(body: LemonadeTargetBody, options?: RequestOptions): Promise<LemonadeTarget & { daemon: unknown }>;
+    /**
+     * Switches GAIA to its own model server or to the one at `base_url`. From an allowed paired phone: 403 over mobile
+     * access or before the PC allows it, 429 for a second try within 10 s, and one generic 422 for any failed check.
+     */
+    setLemonadeTarget(body: LemonadeTargetRequest, options?: RequestOptions): Promise<LemonadeTarget & { daemon: unknown }>;
     /** Each MCP server GAIA runs: whether it connected and how many tools it offers. */
     getMcpStatus(options?: RequestOptions): Promise<{ servers: MCPServerStatus[] }>;
     /** A model server the PC already runs; `unchecked` lists addresses that took the connection but didn't answer. */

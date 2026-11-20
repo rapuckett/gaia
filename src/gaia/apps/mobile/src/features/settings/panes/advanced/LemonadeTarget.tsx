@@ -1,12 +1,14 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
+import { router } from 'expo-router';
 import { isolate } from '@webui/i18n/registry';
 
 import { ENDPOINTS } from '@/api/constants';
 import { GaiaApiError } from '@/api/errors';
 import { useDeviceRefused } from '@/api/routeAccess';
 import { useLemonadeTarget, useSetLemonadeTarget } from '@/data';
+import { reopenSetup } from '@/features/setup/SetupGate';
 import { technicalDetail, useT } from '@/i18n/useT';
 import { Button, Notice, Spinner, Stack, Text, TextField } from '@/ui';
 
@@ -81,7 +83,19 @@ export function LemonadeTarget() {
                     full
                     busy={save.isPending}
                     disabled={save.isPending}
-                    onPress={() => save.mutate({ mode: 'gaia' })}
+                    onPress={() =>
+                        save.mutate(
+                            { mode: 'gaia' },
+                            {
+                                // Saved, but GAIA's own isn't installed yet: setup installs it.
+                                onSuccess: (next) => {
+                                    if (next.mode !== 'gaia' || next.gaia_installed) return;
+                                    router.replace('/');
+                                    reopenSetup();
+                                },
+                            },
+                        )
+                    }
                     testID="advanced-use-own"
                 />
             ) : null}
