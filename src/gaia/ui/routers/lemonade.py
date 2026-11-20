@@ -144,6 +144,19 @@ DEVICE_SWITCH_ERROR = (
     "to see why."
 )
 
+#: Every failed check of a device's server reads the same, so no answer says
+#: whether a host exists, a port is open, TLS failed or something else answered.
+DEVICE_PROBE_ERROR = (
+    "GAIA couldn't use a Lemonade Server at that address. Check the address and "
+    "key, and that the PC running GAIA can reach the server."
+)
+
+#: Asked of a device before it points GAIA at another server.
+DEVICE_CONFIRM_REQUIRED = (
+    "This points GAIA on the PC at your own Lemonade Server, and GAIA's own "
+    "server stops. Confirm to go ahead."
+)
+
 
 def _switch_failed(request: Request, status: int, detail: Any) -> HTTPException:
     if is_local_pc(request):
@@ -153,11 +166,41 @@ def _switch_failed(request: Request, status: int, detail: Any) -> HTTPException:
 
 
 class TargetRequest(BaseModel):
-    """``mode`` "gaia" or "external"; the URL and key only for "external"."""
+    """``mode`` "gaia" or "external"; the URL and key only for "external".
+
+    ``confirm`` must be true for a paired device's switch to "external".
+    """
 
     mode: str
     base_url: Optional[str] = None
     api_key: Optional[str] = None
+    confirm: bool = False
+
+
+def _use_external_from_device(request: Request, body: TargetRequest) -> None:
+    """``use_external`` for a device: every probe failure reads the same."""
+    from gaia.llm import lemonade_choice as choice
+
+    from ..devices.prompts import limit_device_rate
+
+    if not body.confirm:
+        raise HTTPException(status_code=409, detail=DEVICE_CONFIRM_REQUIRED)
+    # Each try dials a host the device chose; the limit keeps it from sweeping a network.
+    limit_device_rate(request, "lemonadeExternal")
+    # Checks only the text the device sent, so its own wording is safe to show.
+    choice.normalize_external_url(body.base_url)
+    try:
+        choice.use_external(body.base_url, body.api_key)
+    except choice.LemonadeChoiceError as e:
+        logger.warning(
+            "Lemonade server from %s refused (%s): %s",
+            principal(request),
+            e.status or "not saved",
+            e,
+        )
+        raise HTTPException(
+            status_code=422, detail={"message": DEVICE_PROBE_ERROR, "status": None}
+        ) from e
 
 
 @router.post(
@@ -169,18 +212,14 @@ class TargetRequest(BaseModel):
 def set_target(request: Request, body: TargetRequest) -> Dict[str, Any]:
     """Switch servers. Nothing is saved unless the user's server checks out.
 
-    A paired device may only switch back to GAIA's own server.
+    A paired device's switch to "external" needs ``confirm``, and any failed
+    check of its server answers one generic message.
     """
     from gaia.config import GaiaConfigError
     from gaia.daemon.errors import DaemonError
     from gaia.llm import lemonade_choice as choice
 
-    if body.mode != choice.MODE_GAIA and not is_local_pc(request):
-        raise HTTPException(
-            status_code=403,
-            detail="Switch to your own Lemonade Server on the PC running GAIA. "
-            "A paired device can only switch back to GAIA's own server.",
-        )
+    on_pc = is_local_pc(request)
     try:
         previous_mode = choice.saved_mode()
         over_env = body.mode == choice.MODE_GAIA and choice.configured_source() == "env"
@@ -190,7 +229,10 @@ def set_target(request: Request, body: TargetRequest) -> Dict[str, Any]:
                     "Enter your Lemonade Server's address, e.g. "
                     "http://localhost:13305."
                 )
-            choice.use_external(body.base_url, body.api_key)
+            if on_pc:
+                choice.use_external(body.base_url, body.api_key)
+            else:
+                _use_external_from_device(request, body)
         elif not over_env:
             # Over LEMONADE_BASE_URL it is saved with the switch, so a failed start undoes both.
             choice.set_mode(body.mode)
@@ -214,9 +256,8 @@ def set_target(request: Request, body: TargetRequest) -> Dict[str, Any]:
         raise _switch_failed(request, 409, str(e)) from e
     except DaemonError as e:
         if body.mode != choice.MODE_GAIA:
-            raise HTTPException(
-                status_code=502,
-                detail=f"Saved, but the GAIA daemon did not switch: {e}",
+            raise _switch_failed(
+                request, 502, f"Saved, but the GAIA daemon did not switch: {e}"
             ) from e
         # The previous mode is back: never report "GAIA's own" unless it runs.
         _drop_cached_agents()
@@ -226,9 +267,12 @@ def set_target(request: Request, body: TargetRequest) -> Dict[str, Any]:
             f"GAIA could not switch to its own Lemonade Server: {e} "
             "Nothing was changed.",
         ) from e
-    if not is_local_pc(request):
-        audit_approval(request, "Lemonade Server switched to GAIA's own")
-        record_device_change(request, "serverTarget", mode=MODE_GAIA)
+    if not on_pc:
+        if body.mode == MODE_GAIA:
+            audit_approval(request, "Lemonade Server switched to GAIA's own")
+        else:
+            audit_approval(request, "Lemonade Server switched to the user's own")
+        record_device_change(request, "serverTarget", mode=body.mode)
     return {**_target(), "daemon": applied}
 
 

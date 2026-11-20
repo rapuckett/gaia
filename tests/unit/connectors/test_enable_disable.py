@@ -93,7 +93,7 @@ async def configured_handler(tmp_path):
         stored[(service, username)] = value
 
     with patch(
-        "gaia.connectors.mcp_server.keyring.set_password",
+        "gaia.connectors.store.keyring.set_password",
         side_effect=fake_set_password,
     ):
         await handler.configure(spec, {"GITHUB_TOKEN": "ghp_secret"})
@@ -244,7 +244,7 @@ class TestReloadCallback:
         spec = _make_mcp_spec()
         handler = McpServerHandler()  # no callback
 
-        with patch("gaia.connectors.mcp_server.keyring.set_password"):
+        with patch("gaia.connectors.store.keyring.set_password"):
             await handler.configure(spec, {"GITHUB_TOKEN": "tok"})
 
         # No callback means no exception when disabling — just a warning.
@@ -263,7 +263,7 @@ class TestReloadCallback:
         # after both the handler singleton and the manager are initialized.
         handler.set_reload_callback(lambda: reload_calls.append(1))
 
-        with patch("gaia.connectors.mcp_server.keyring.set_password"):
+        with patch("gaia.connectors.store.keyring.set_password"):
             await handler.configure(spec, {"GITHUB_TOKEN": "tok"})
 
         await handler.set_enabled(spec.id, False)

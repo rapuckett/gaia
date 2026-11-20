@@ -20,16 +20,30 @@ a key). The calls mirror ``tui/internal/lemonade/cloud.go`` and
 from __future__ import annotations
 
 import asyncio
+import ipaddress
 import os
+import socket
 import threading
 import time
-from typing import Any, Callable, Dict, List, Literal, NoReturn, Optional, Tuple, Union
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Dict,
+    List,
+    Literal,
+    NoReturn,
+    Optional,
+    Tuple,
+    Union,
+)
 from urllib.parse import urlparse
 
 import requests
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
+from gaia.llm.gateway import GATEWAY_KEY_LOCK
 from gaia.llm.hybrid import HybridConfigError, is_hybrid_model
 from gaia.llm.local_only import (
     blocked_reason,
@@ -60,6 +74,9 @@ from ..security import (
     require_ui_header,
 )
 from .spending import PriceCard
+
+if TYPE_CHECKING:
+    from gaia.llm.gateway import GatewayKey
 
 logger = get_logger(__name__)
 
@@ -333,6 +350,19 @@ def _key_slot(provider: str) -> str:
     return f"cloud-key:{provider}"
 
 
+#: The gateway's bound-key read; never ``_key_slot(AMD)``, whose readers get a ``str``.
+_GATEWAY_RECORD_SLOT = f"{_key_slot(AMD)}:v2"
+
+
+def _discard_key_reads(provider: str) -> None:
+    """Forget every in-flight read of *provider*'s stored key."""
+    from gaia.connectors.credential_wait import discard
+
+    discard(_key_slot(provider))
+    if provider == AMD:
+        discard(_GATEWAY_RECORD_SLOT)
+
+
 #: What the last stored-key read found, per provider: None when nothing is
 #: stored, else the key's hint ("" when too short to show). Never the key.
 _STORED_KEY_SEEN: Dict[str, Optional[str]] = {}
@@ -415,12 +445,46 @@ def _env_key(provider: str) -> Optional[Tuple[str, str]]:
 _HANDED_ENV_KEYS: Dict[str, str] = {}
 
 
+def _bounded_gateway_key() -> Optional["GatewayKey"]:
+    """The stored gateway key with its bound address; raises like ``_bounded_recall``."""
+    from gaia.connectors.credential_wait import read_within
+    from gaia.llm import cloud_keys
+    from gaia.llm.gateway import GatewayError, GatewayKey
+
+    record = read_within(
+        _GATEWAY_RECORD_SLOT,
+        cloud_keys.recall_gateway_key,
+        f"your saved {_NAMES[AMD]} key",
+    )
+    if record is not None and not isinstance(record, GatewayKey):
+        raise GatewayError(
+            f"Reading the saved {_NAMES[AMD]} key returned a "
+            f"{type(record).__name__}, not the key with its address."
+        )
+    _note_stored_key(AMD, record.key if record else None)
+    return record
+
+
+def _recall(provider: str) -> Callable[[], Any]:
+    """The stored-key read ``ensure_authenticated`` replays from.
+
+    The gateway's carries the address the key was saved with, so it is never
+    handed to another one.
+    """
+    if provider == AMD:
+        return _bounded_gateway_key
+    return lambda: _usable_key(provider)
+
+
 def _usable_key(provider: str) -> Optional[str]:
     """Return a saved key first, otherwise use GAIA's environment key.
 
     A key entered in Settings must continue to win after Lemonade restarts;
     the environment key is only the fallback when no saved key exists.
+    The gateway's key is read with :func:`_bounded_gateway_key` instead.
     """
+    if provider == AMD:
+        raise ValueError("the gateway key is replayed through _bounded_gateway_key")
     saved = _bounded_recall(provider)
     if saved:
         return saved
@@ -592,6 +656,10 @@ def _gateway_network(base_url: Optional[str]) -> Dict[str, Any]:
     except (GatewayUnreachable, ValueError) as e:
         return {"reachable": False, "detail": str(e)}
     return {"reachable": True, "detail": None}
+
+
+#: The network field off the PC: a dial's answer would map the PC's network.
+_UNCHECKED_NETWORK = {"reachable": None, "detail": None}
 
 
 def _with_network(view: Dict[str, Any]) -> Dict[str, Any]:
@@ -1000,7 +1068,7 @@ def _check_model_available(model_id: str) -> Optional[str]:
                 provider, entry, _key_source(entry, provider)
             ):
                 _register_on_gaias_server(provider, base_url)
-            if not ensure_authenticated(provider, recall=lambda: _usable_key(provider)):
+            if not ensure_authenticated(provider, recall=_recall(provider)):
                 if _key_still_settling(provider):
                     raise _ServerNotReady(
                         f"{_NAMES[provider]} hasn't listed its models yet; "
@@ -1500,7 +1568,9 @@ def _known(provider: str) -> None:
     response_model=ProviderListResponse,
     response_model_exclude_unset=True,
 )
-def list_providers(db: ChatDatabase = Depends(get_db)) -> Dict[str, Any]:
+def list_providers(
+    request: Request, db: ChatDatabase = Depends(get_db)
+) -> Dict[str, Any]:
     """Every provider with its connection state, and the active model."""
     from gaia.connectors.credential_wait import (
         CredentialStoreLocked,
@@ -1522,9 +1592,7 @@ def list_providers(db: ChatDatabase = Depends(get_db)) -> Dict[str, Any]:
                     _require_loopback(base_url)
                     if entry is None:
                         _register_on_gaias_server(provider, base_url)
-                    found = ensure_authenticated(
-                        provider, recall=lambda p=provider: _usable_key(p)
-                    )
+                    found = ensure_authenticated(provider, recall=_recall(provider))
                     view = _provider_view(provider, _cloud_entry(provider))
                     if not found:
                         view["error"] = _no_models_message(provider, view)
@@ -1546,7 +1614,15 @@ def list_providers(db: ChatDatabase = Depends(get_db)) -> Dict[str, Any]:
         providers += [
             _provider_view(p, None) for p in (FIREWORKS, AMD) if p not in listed
         ]
-    providers = [_with_network(v) if v["id"] == AMD else v for v in providers]
+    on_pc = is_local_pc(request)
+    providers = [
+        (
+            (_with_network(v) if on_pc else {**v, "network": _UNCHECKED_NETWORK})
+            if v["id"] == AMD
+            else v
+        )
+        for v in providers
+    ]
     return {
         "providers": providers,
         "active": _active_view(db),
@@ -1628,8 +1704,9 @@ def list_provider_summaries(request: Request) -> Dict[str, Any]:
     except ProviderError as e:
         lemonade_error = str(e)
     blocked = cloud_blocked()
+    on_pc = is_local_pc(request)
     # Mobile access can't enter or remove a key, so it gets no hint either.
-    hide_hint = not is_local_pc(request) and allowed_device(request) is None
+    hide_hint = not on_pc and allowed_device(request) is None
     summaries = []
     for provider in PROVIDER_IDS:
         entry = entries.get(provider)
@@ -1644,9 +1721,14 @@ def list_provider_summaries(request: Request) -> Dict[str, Any]:
                 "blocked": provider != LOCAL and blocked,
                 "network": (
                     {
-                        "reachable": _gateway_network(
-                            entry.get("base_url") if entry else None
-                        )["reachable"]
+                        # A device-chosen host could be rebound to probe the LAN.
+                        "reachable": (
+                            _gateway_network(entry.get("base_url") if entry else None)[
+                                "reachable"
+                            ]
+                            if on_pc
+                            else None
+                        )
                     }
                     if provider == AMD
                     else None
@@ -1816,6 +1898,13 @@ def _restore_key(
         CredentialStoreWaiting,
     )
 
+    if provider == AMD and not known_models:
+        _restore_gateway(
+            before,
+            failed=f"{_NAMES[AMD]} didn't accept the new key, and GAIA couldn't "
+            "restore the old one. Enter a working key in Settings › Model.",
+        )
+        return
     reason = None
     old = None
     try:
@@ -1875,7 +1964,7 @@ def _restore_known_models(provider: str) -> Optional[str]:
         status, _ = _lemonade("DELETE", f"cloud/auth/{provider}")
         if status >= 400 and status != 404:
             return f"clearing the new key answered HTTP {status}"
-        old = _usable_key(provider)
+        old = _recall(provider)()
         if not old:
             return "GAIA holds no copy of the old key"
         # The start reads the kept key itself; a POST would drop the entries.
@@ -1993,6 +2082,390 @@ class ConnectRequest(BaseModel):
 #: Fields that change where, or with which header, Lemonade sends the saved key.
 _KEY_ROUTING_FIELDS = ("base_url", "auth_header_name", "auth_header_prefix")
 
+#: Every failed move of the gateway from a device, so none says whether a host
+#: resolves, a port is open or something answered there.
+DEVICE_GATEWAY_DETAIL = (
+    "GAIA couldn't use that gateway, so it kept the previous one. Use a public "
+    "https:// address that the PC running GAIA can reach and a key that gateway "
+    "accepts, or set the gateway up on the PC."
+)
+_DEVICE_GATEWAY_PUBLIC = (
+    "A gateway set from a paired device must be a public https:// address."
+)
+#: A move whose restore failed too; the gateway may be left without a key.
+GATEWAY_RESTORE_FAILED_DETAIL = (
+    f"{_NAMES[AMD]} didn't accept the new address, and GAIA couldn't restore the "
+    "old one. Enter a working address and key in Settings › Model."
+)
+
+#: Held while the gateway moves or takes a key; every GAIA process's replays
+#: take it too.
+_gateway_move_lock = GATEWAY_KEY_LOCK
+#: ``_restore_gateway``'s default: read the stored key when restoring.
+_READ_SAVED_KEY = object()
+
+
+def _is_public_address(address: str) -> bool:
+    ip = ipaddress.ip_address(address.split("%", 1)[0])
+    if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped:
+        ip = ip.ipv4_mapped
+    return ip.is_global and not ip.is_multicast
+
+
+def _device_gateway_host(base_url: str) -> Tuple[str, int]:
+    """The host and port of a device's gateway, checked from its text alone."""
+    url = urlparse(base_url.strip())
+    if url.scheme != "https":
+        raise HTTPException(status_code=422, detail=_DEVICE_GATEWAY_PUBLIC)
+    try:
+        host = (url.hostname or "").rstrip(".").lower()
+        port = url.port or 443
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=_DEVICE_GATEWAY_PUBLIC) from e
+    if not host or host == "localhost" or host.endswith((".local", ".localhost")):
+        raise HTTPException(status_code=422, detail=_DEVICE_GATEWAY_PUBLIC)
+    try:
+        literal = ipaddress.ip_address(host)
+    except ValueError:
+        return host, port
+    if not _is_public_address(literal.compressed):
+        raise HTTPException(status_code=422, detail=_DEVICE_GATEWAY_PUBLIC)
+    return host, port
+
+
+def _public_addresses(host: str, port: int) -> List[str]:
+    """*host*'s addresses from one lookup; raises unless every one is public."""
+    infos = socket.getaddrinfo(host, port, proto=socket.IPPROTO_TCP)
+    addresses = list(dict.fromkeys(info[4][0] for info in infos))
+    if not addresses or not all(_is_public_address(a) for a in addresses):
+        raise ValueError(f"{host} resolves to an address that is not public")
+    return addresses
+
+
+#: How many of a gateway's addresses a device's check dials, each up to ``REACH_TIMEOUT``.
+_GATEWAY_DIAL_LIMIT = 3
+
+
+def _dial_checked_addresses(host: str, port: int, addresses: List[str]) -> None:
+    """A TLS handshake as *host* with one of *addresses*, already checked public.
+
+    Dials the addresses themselves, so a second lookup of *host* (DNS
+    rebinding) can't point the check at another one; SNI and the certificate
+    check still use *host*. Tries the first :data:`_GATEWAY_DIAL_LIMIT`, and
+    raises ``OSError`` when none completes.
+    """
+    import ssl
+
+    from gaia.llm.gateway import REACH_TIMEOUT
+
+    context = ssl.create_default_context()
+    failure: Optional[OSError] = None
+    for address in addresses[:_GATEWAY_DIAL_LIMIT]:
+        try:
+            with socket.create_connection(
+                (address, port), timeout=REACH_TIMEOUT
+            ) as raw:
+                with context.wrap_socket(raw, server_hostname=host):
+                    return
+        except OSError as e:
+            failure = e
+    raise OSError(f"{host}:{port} did not complete a TLS handshake: {failure}")
+
+
+def _put_back_gateway(
+    previous: Optional[Dict[str, Any]], saved: Optional["GatewayKey"]
+) -> Optional[str]:
+    """Register *previous* again with its own saved key; why not, if it couldn't.
+
+    The key goes back only once Lemonade reports *previous*'s address, and only
+    when *saved* is bound to it. Read back like key cleanup: the address
+    Lemonade reports and, when *previous* held one, a key.
+    """
+    from gaia.llm.gateway import GatewayError, same_gateway_url, use_stored_key
+
+    def clear_new_key() -> Optional[str]:
+        status, _ = _lemonade("DELETE", f"cloud/auth/{AMD}")
+        if status >= 400 and status != 404:
+            return f"clearing the new key answered HTTP {status}"
+        return None
+
+    key = None
+    try:
+        if previous is None:
+            reason = clear_new_key()
+            if reason:
+                return reason
+            _uninstall(AMD)
+            return None if _cloud_entry(AMD) is None else "the gateway is still listed"
+        old_url = previous.get("base_url")
+        entry = _cloud_entry(AMD) or {}
+        if not same_gateway_url(entry.get("base_url"), old_url):
+            reason = clear_new_key()
+            if reason:
+                return reason
+            _install(AMD, _registration(AMD, ConnectRequest(), previous))
+            entry = _cloud_entry(AMD) or {}
+            if not same_gateway_url(entry.get("base_url"), old_url):
+                return "Lemonade reports another address afterwards"
+        if not _holds_key(previous):
+            return clear_new_key()
+        if previous.get("env_var_set"):
+            # Dropping the new key lets Lemonade read its environment again.
+            reason = clear_new_key()
+            if reason:
+                return reason
+        else:
+            if saved is None:
+                return "GAIA holds no copy of the old key"
+            key = use_stored_key(saved, entry["base_url"], old_url)
+            status, _ = _lemonade(
+                "POST", "cloud/auth", {"provider": AMD, "api_key": key}
+            )
+            if status >= 400:
+                return f"handing back the old key answered HTTP {status}"
+        entry = _cloud_entry(AMD) or {}
+        if not same_gateway_url(entry.get("base_url"), old_url):
+            return "Lemonade reports another address afterwards"
+        if not _holds_key(entry):
+            return "Lemonade reports no key afterwards"
+    except (ProviderError, GatewayError) as e:
+        return str(e)
+    finally:
+        del key
+    return None
+
+
+def _restore_gateway(
+    previous: Optional[Dict[str, Any]],
+    saved: Any = _READ_SAVED_KEY,
+    failed: str = GATEWAY_RESTORE_FAILED_DETAIL,
+) -> None:
+    """:func:`_put_back_gateway`, raising the 502 *failed* when it couldn't.
+
+    *saved* left out reads the stored key now, bound to *previous*'s address if
+    it predates bindings. A read that fails still puts the old address back,
+    and the 502 says why when the old key was needed.
+    """
+    from gaia.connectors.credential_wait import (
+        CredentialStoreLocked,
+        CredentialStoreWaiting,
+    )
+    from gaia.llm.gateway import GatewayError
+
+    unread = None
+    try:
+        if saved is _READ_SAVED_KEY:
+            try:
+                saved = _bounded_gateway_key()
+            except (CredentialStoreLocked, CredentialStoreWaiting, GatewayError) as e:
+                unread, saved = e, None
+        reason = _put_back_gateway(previous, saved)
+    finally:
+        saved = None
+    if reason is not None and unread is not None:
+        reason = f"reading the saved key failed ({unread}); {reason}"
+    if reason is None:
+        return
+    logger.error(
+        "Could not restore the previous %s gateway after a failed change: %s",
+        _NAMES[AMD],
+        reason,
+    )
+    raise ProviderError(failed, 502)
+
+
+def _gateway_url(entry: Optional[Dict[str, Any]]) -> str:
+    """The address the gateway serves from now: Lemonade's, else GAIA's record."""
+    from gaia.llm.gateway import GatewayState
+
+    if entry and entry.get("base_url"):
+        return entry["base_url"]
+    return GatewayState.load().base_url
+
+
+def _bound_saved_key(current_url: str) -> Optional["GatewayKey"]:
+    """The stored gateway key, a legacy one moved to the v2 slot and bound to
+    *current_url* first.
+
+    Called before the gateway moves, so a key saved before bindings existed is
+    bound to the address it served, never to the new one.
+    """
+    from gaia.connectors.credential_wait import (
+        CredentialStoreLocked,
+        CredentialStoreWaiting,
+    )
+    from gaia.llm.gateway import GatewayError, migrate_legacy_key
+
+    try:
+        record = _bounded_gateway_key()
+        return migrate_legacy_key(record, current_url) if record else None
+    except CredentialStoreLocked as e:
+        raise ProviderError(str(e), 423) from e
+    except CredentialStoreWaiting as e:
+        raise ProviderError(str(e), 409) from e
+    except GatewayError as e:
+        raise ProviderError(str(e), 503) from e
+
+
+def _prepare_gateway_move(
+    before: Optional[Dict[str, Any]], registration: Dict[str, Any], new_key: bool
+) -> bool:
+    """Ready the PC's change of the gateway address; True when it took Lemonade's
+    copy of the old key back, so a failure must put the old gateway back.
+
+    A legacy saved key is bound to the address it serves first. Without a new
+    key, a move the saved key isn't bound to is refused before anything
+    changes, rather than replaying that key to the new address. With a key or
+    without, Lemonade's copy of the old one goes before the address changes.
+    """
+    from gaia.llm.gateway import GatewayKeyMismatch, same_gateway_url
+
+    old_url = _gateway_url(before)
+    new_url = registration["base_url"]
+    if same_gateway_url(old_url, new_url):
+        return False
+    saved = _bound_saved_key(old_url)
+    try:
+        if not new_key and saved and not same_gateway_url(saved.base_url, new_url):
+            raise ProviderError(str(GatewayKeyMismatch(saved.base_url, new_url)), 409)
+    finally:
+        saved = None
+    if not _holds_key(before) or before.get("env_var_set"):
+        return False
+    status, result = _lemonade("DELETE", f"cloud/auth/{AMD}")
+    if status >= 400 and status != 404:
+        raise _cloud_error(AMD, status, result, echo_body=False)
+    return True
+
+
+def _connect_device_gateway(
+    body: "ConnectRequest", key: str, request: Request
+) -> Dict[str, Any]:
+    """A device moves the AMD gateway, always with a new key.
+
+    The saved key stays bound to the address it was saved with, so no replay
+    sends it to the new one, and a failed move puts that gateway back with it.
+    Every failure reads :data:`DEVICE_GATEWAY_DETAIL`.
+    """
+    from gaia.connectors.store import retry_keyring
+    from gaia.llm.cloud_keys import CloudKeyError, remember_key
+    from gaia.llm.gateway import GatewayUnreachable, same_gateway_url
+
+    from ..devices.prompts import limit_device_rate
+
+    target = _device_gateway_host(body.base_url) if body.base_url is not None else None
+    # Each try dials a host the device chose; the limit keeps it from sweeping a network.
+    limit_device_rate(request, "gatewayMove")
+    if _uses_users_server():
+        raise HTTPException(
+            status_code=409,
+            detail=f"GAIA uses your own Lemonade Server, so it doesn't change its "
+            f"{_NAMES[AMD]} gateway. Change it on that server.",
+        )
+    retry_keyring()
+    _discard_key_reads(AMD)
+    audit_approval(request, f"{_NAMES[AMD]} gateway change submitted")
+    # Dialing takes seconds per address, so it runs before the lock is taken.
+    unchanged_url = None
+    try:
+        if target is not None:
+            addresses = _public_addresses(*target)
+            if _gateway_check_applies():
+                _dial_checked_addresses(*target, addresses)
+        elif _gateway_check_applies():
+            try:
+                current = _cloud_entry(AMD)
+            except ProviderError as e:
+                _raise(e, request, key)
+            unchanged_url = _registration(AMD, body, current)["base_url"]
+            check_gateway_reachable(unchanged_url)
+    except (GatewayUnreachable, OSError, ValueError) as e:
+        logger.warning("A paired device's %s gateway was refused: %s", _NAMES[AMD], e)
+        raise HTTPException(status_code=422, detail=DEVICE_GATEWAY_DETAIL) from e
+    with _gateway_move_lock:
+        try:
+            _require_loopback(_base_url())
+            current = _cloud_entry(AMD)
+            if current and current.get("env_var_set"):
+                raise ProviderError(
+                    f"The model server on the PC has its own {_NAMES[AMD]} key in "
+                    "its environment, which would go to the new address. Change "
+                    "the gateway on the PC running GAIA.",
+                    409,
+                )
+            previous = dict(current) if current else None
+            registration = _registration(AMD, body, previous)
+            if unchanged_url is not None and not same_gateway_url(
+                registration["base_url"], unchanged_url
+            ):
+                raise ProviderError(
+                    f"The {_NAMES[AMD]} gateway's address changed on the PC while "
+                    "GAIA checked it. Try again.",
+                    409,
+                )
+            old_url = _gateway_url(previous)
+            saved = _bound_saved_key(old_url)
+            if _holds_key(previous) and not (
+                saved and same_gateway_url(saved.base_url, old_url)
+            ):
+                raise ProviderError(
+                    f"GAIA has no saved key for the current {_NAMES[AMD]} gateway, "
+                    "so it couldn't put it back if the new address failed. "
+                    "Change the gateway on the PC running GAIA.",
+                    409,
+                )
+        except ProviderError as e:
+            _raise(e, request, key)
+        try:
+            # Lemonade's copy of the old key goes before the address changes.
+            status, result = _lemonade("DELETE", f"cloud/auth/{AMD}")
+            if status >= 400 and status != 404:
+                raise _cloud_error(AMD, status, result, echo_body=False)
+            _install(AMD, registration)
+            status, result = _lemonade(
+                "POST", "cloud/auth", {"provider": AMD, "api_key": key}
+            )
+            if status >= 400:
+                raise _cloud_error(AMD, status, result, echo_body=False)
+            entry = _cloud_entry(AMD) or {}
+            if not same_gateway_url(entry.get("base_url"), registration["base_url"]):
+                raise ProviderError("Lemonade reports another gateway address", 502)
+            if not result.get("models_discovered"):
+                raise ProviderError("the gateway discovered no models", 422)
+        except ProviderError as e:
+            logger.warning(
+                "A paired device's %s gateway was refused: %s", _NAMES[AMD], e
+            )
+            try:
+                _restore_gateway(previous, saved)
+            except ProviderError as restore:
+                _raise(restore, request, key)
+            raise HTTPException(status_code=422, detail=DEVICE_GATEWAY_DETAIL) from e
+        finally:
+            saved = None
+        remembered, remember_error = False, None
+        try:
+            remember_key(AMD, key, base_url=registration["base_url"])
+            _note_stored_key(AMD, key)
+            remembered = True
+        except CloudKeyError as e:
+            remember_error = _caller_detail(e, str(e), request, key)
+        finally:
+            del key
+    audit_approval(request, f"{_NAMES[AMD]} gateway address or key header changed")
+    record_device_change(
+        request, "gatewayChanged", provider=_NAMES[AMD], provider_id=AMD
+    )
+    try:
+        entry = _cloud_entry(AMD)
+    except ProviderError as e:
+        _raise(e, request)
+    return {
+        **_provider_view(AMD, entry),
+        "remembered": remembered,
+        "remember_error": remember_error,
+    }
+
 
 @router.post(
     "/api/providers/{provider}/connect",
@@ -2002,10 +2475,27 @@ _KEY_ROUTING_FIELDS = ("base_url", "auth_header_name", "auth_header_prefix")
 def connect_provider(
     provider: str, body: ConnectRequest, request: Request
 ) -> Dict[str, Any]:
-    """Register the provider and hand Lemonade the key; keep a key that works."""
+    """Register the provider and hand Lemonade the key; keep a key that works.
+
+    The gateway's connect holds the machine-wide gateway key lock while it
+    changes Lemonade, so no other process replays a key while its address or
+    key changes. A device's check of a new gateway's network runs before it.
+    """
+    if provider != AMD:
+        return _connect_provider(provider, body, request)
+    from gaia.llm.gateway import GatewayBusy
+
+    try:
+        return _connect_provider(provider, body, request)
+    except GatewayBusy as e:
+        raise HTTPException(status_code=409, detail=str(e)) from e
+
+
+def _connect_provider(
+    provider: str, body: ConnectRequest, request: Request
+) -> Dict[str, Any]:
     # A new key gets its own settle window.
     _key_settle_started.pop(provider, None)
-    from gaia.llm.cloud_keys import CloudKeyError, ensure_authenticated, remember_key
 
     _known(provider)
     if provider == LOCAL:
@@ -2028,21 +2518,33 @@ def connect_provider(
     if not on_pc and any(
         getattr(body, field) is not None for field in _KEY_ROUTING_FIELDS
     ):
-        raise HTTPException(
-            status_code=403,
-            detail="Change the gateway address or key header on the PC running "
-            "GAIA, not over mobile access or from a paired device. Reconnect "
-            "without them to keep the saved ones.",
-        )
+        # The saved key must never follow an address a device chose.
+        if provider != AMD or not key or allowed_device(request) is None:
+            raise HTTPException(
+                status_code=403,
+                detail="Change the gateway address or key header on the PC running "
+                "GAIA, or from a paired device the PC allowed together with a new "
+                "key. Reconnect without them to keep the saved ones.",
+            )
+        return _connect_device_gateway(body, key, request)
+    if provider != AMD:
+        return _connect_here(provider, body, request, key, on_pc)
+    with _gateway_move_lock:
+        return _connect_here(provider, body, request, key, on_pc)
+
+
+def _connect_here(
+    provider: str, body: ConnectRequest, request: Request, key: str, on_pc: bool
+) -> Dict[str, Any]:
+    """:func:`_connect_provider` for a connect that isn't a device's gateway move."""
     from gaia.connectors.store import retry_keyring
+    from gaia.llm.cloud_keys import CloudKeyError, ensure_authenticated, remember_key
 
     # Connecting needs the key store, so it may ask the OS again.
     retry_keyring()
     if key:
-        from gaia.connectors.credential_wait import discard
-
         # A read from before this key was pasted must not be served after it.
-        discard(_key_slot(provider))
+        _discard_key_reads(provider)
         if not on_pc:
             audit_approval(request, f"{_NAMES[provider]} API key submitted")
     try:
@@ -2074,7 +2576,15 @@ def connect_provider(
             _leave_known_models()
         try:
             before = _cloud_entry(provider)
-            _install(provider, registration)
+            moving = provider == AMD and _prepare_gateway_move(
+                before, registration, bool(key)
+            )
+            try:
+                _install(provider, registration)
+            except ProviderError:
+                if moving:
+                    _restore_gateway(before)
+                raise
         except ProviderError as e:
             if known_before:
                 _back_to_known_models(provider, e)
@@ -2113,7 +2623,7 @@ def connect_provider(
                 remembered = True
             else:
                 try:
-                    remember_key(provider, key)
+                    remember_key(provider, key, base_url=registration["base_url"])
                     _note_stored_key(provider, key)
                     remembered = True
                 except CloudKeyError as e:
@@ -2133,7 +2643,7 @@ def connect_provider(
             )
 
             try:
-                ensure_authenticated(provider, recall=lambda: _usable_key(provider))
+                ensure_authenticated(provider, recall=_recall(provider))
             except CredentialStoreLocked as e:
                 # Not 409: the screen would ask again, reopening the prompt.
                 raise ProviderError(str(e), 423) from e
@@ -2328,7 +2838,6 @@ def _connect_on_users_server(provider: str) -> Dict[str, Any]:
 )
 def forget_provider_key(provider: str, request: Request) -> Dict[str, Any]:
     """Clear the key from Lemonade and from the OS credential store."""
-    from gaia.connectors.credential_wait import discard
     from gaia.connectors.errors import ConnectorsError
     from gaia.llm.cloud_keys import forget_key
 
@@ -2349,7 +2858,7 @@ def forget_provider_key(provider: str, request: Request) -> Dict[str, Any]:
             if leftover:
                 _uninstall(provider)
         removed = forget_key(provider) or leftover
-        discard(_key_slot(provider))
+        _discard_key_reads(provider)
         _note_stored_key(provider, None)
     except ProviderError as e:
         _raise(e, request)

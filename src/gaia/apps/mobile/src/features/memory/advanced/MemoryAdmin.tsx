@@ -14,6 +14,7 @@ import { describeFailureWith, useT } from '@/i18n/useT';
 import { Badge, Button, Card, Row, Sheet, Stack, Switch, Text } from '@/ui';
 import { Shield } from '@/ui/icons';
 
+import { DISCOVERY_CONFIRM } from '../discoveryConfirm';
 import type { MemoryNotice } from '../useMemoryNotice';
 import { SectionTitle } from './SectionTitle';
 
@@ -36,9 +37,7 @@ const BETA: Record<Beta, { title: MessageKey; description: MessageKey; bullets: 
         setting: 'mcp_memory_enabled',
     },
     discovery: {
-        title: 'mem.beta.discovery.title',
-        description: 'mem.beta.discovery.desc',
-        bullets: ['mem.beta.discovery.collects', 'mem.beta.discovery.scans', 'mobileApp.mem.beta.discovery.local'],
+        ...DISCOVERY_CONFIRM,
         confirm: 'mem.beta.discovery.confirm',
         setting: 'system_discovery_consent',
     },

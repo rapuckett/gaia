@@ -3,6 +3,7 @@
 
 import { ltrIn } from '@webui/components/setup/format';
 import { FIREWORKS_KEYS_URL, GATEWAY_GUIDE_URL } from '@webui/components/setup/keyLinks';
+import { isolate, isolateUnit } from '@webui/i18n/registry';
 import type { CloudPriceList } from '@webui/types';
 import { useEffect, useRef, useState } from 'react';
 
@@ -140,6 +141,9 @@ export const KeyScreen: PlanScreen = ({ ctx, close }) => {
     const canConnect = (connected || usersServer || !!key.trim()) && !unavailable(choice);
     const inUse = active?.provider === choice ? active.model : null;
     const shownPick = picked ?? inUse;
+    // Same rule as the desktop's "Found a key in your environment" line.
+    const envKey = info?.key_source === 'environment' && !usersServer && !key ? info : undefined;
+    const choiceName = PROVIDERS.find((p) => p.id === choice)?.title ?? '';
 
     const options: ChoiceOption[] = PROVIDERS.filter((p) => p.id !== 'amd' || gatewayShown).map((p) => ({
         value: p.id,
@@ -216,6 +220,13 @@ export const KeyScreen: PlanScreen = ({ ctx, close }) => {
                 </Stack>
             )}
             <Text role="caption" tone="secondary">{usersServer ? t('setup.key.usersServer') : t('setup.key.where')}</Text>
+            {envKey ? (
+                <Text role="caption" tone="secondary" testID="key-env-found">
+                    {envKey.env_var
+                        ? t('mobileApp.setup.key.foundEnv', { name: isolateUnit(choiceName), variable: isolate(envKey.env_var, 'ltr') })
+                        : t('mobileApp.setup.key.foundEnvUnnamed', { name: isolateUnit(choiceName) })}
+                </Text>
+            ) : null}
             {busy ? <Text role="caption" tone="secondary">{t('setup.key.testing')}</Text> : null}
             {keyError ? <ConnectError error={keyError} t={t} /> : connect.error ? <ConnectError error={connect.error} t={t} /> : null}
             <SetupFooter>

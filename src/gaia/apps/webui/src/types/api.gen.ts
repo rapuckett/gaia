@@ -4235,10 +4235,13 @@ export interface WarmUpStatus {
 }
 /**
  * ``mode`` "gaia" or "external"; the URL and key only for "external".
+ *
+ * ``confirm`` must be true for a paired device's switch to "external".
  */
 export interface TargetRequest {
   api_key?: string | null;
   base_url?: string | null;
+  confirm?: boolean;
   mode: string;
 }
 export interface TaskCreate {

@@ -264,6 +264,25 @@ class DeviceStore:
         self.set_setting(_PC_ID, pc_id)
 
 
+def allowed_device_ids(path: Optional[Path] = None) -> List[str]:
+    """The live, allowed devices in the table at *path* (default: GAIA's own).
+
+    Never creates the table: none was ever made means no device is paired.
+    """
+    from gaia.home import devices_dir
+
+    from .storage import TABLE_NAME
+
+    path = path or devices_dir() / TABLE_NAME
+    if not os.path.lexists(path):
+        return []
+    store = DeviceStore(path)
+    try:
+        return [d.id for d in store.devices() if d.allowed]
+    finally:
+        store.close()
+
+
 def read_pc_id(path: Path) -> Optional[str]:
     """The pc_id an old table holds, read without the permission check.
 
