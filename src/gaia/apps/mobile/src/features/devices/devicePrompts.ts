@@ -174,8 +174,8 @@ export function reportDevicePromptError(kind: DevicePromptKind, action: string, 
         return true;
     }
     if (store === 'waiting') {
-        // The PC still waits on its prompt; its events say how it ends.
-        set(kind, action, 'waiting');
+        // A late reply never undoes an answer the PC's event already gave for this press.
+        if (now === undefined || now === 'idle' || now === 'waiting') set(kind, action, 'waiting');
         return true;
     }
     // A PC from before the code sends this text while its prompt is still up: the versioned fallback.

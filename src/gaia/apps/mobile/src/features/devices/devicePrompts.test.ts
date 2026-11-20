@@ -158,6 +158,7 @@ describe('useDevicePrompt', () => {
             });
             expect(consumed).toBe(true);
             expect(result.current.state).toBe('denied');
+            await act(async () => result.current.begin());
             await act(async () => void result.current.report(coded(409, 'key_store_waiting')));
             expect(result.current.state).toBe('waiting');
             await act(async () => result.current.dismiss());
@@ -166,6 +167,13 @@ describe('useDevicePrompt', () => {
             });
             expect(consumed).toBe(false);
             expect(result.current.state).toBe('idle');
+        });
+
+        it('a late coded waiting reply never undoes the answer the PC already sent for this press', async () => {
+            const { result } = await renderHook(() => useDevicePrompt({ kind: 'keyStore', action: 'connectorTest' }));
+            await act(async () => applyDevicePromptEvent(event('denied', 'keyStore', 'connectorTest')));
+            await act(async () => void result.current.report(new GaiaApiError(409, 'msg', undefined, undefined, { code: 'key_store_waiting', message: 'msg' })));
+            expect(result.current.state).toBe('denied');
         });
 
         it('with no prompt up, an error is the caller\'s to show; settle ends a waiting the PC never closed', async () => {
