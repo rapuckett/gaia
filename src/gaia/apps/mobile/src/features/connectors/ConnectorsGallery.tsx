@@ -31,7 +31,7 @@ import { ConnectorsScreen } from './ConnectorsScreen';
  * connected, `googleDenied` (declined at Google), `googleTimeout`, `googleExpired` (PC answers 404), `googleStateMismatch` (400), `googleRefused`
  * (403 at the start), `googleFailed` (the PC's generic 500) and `googleSuperseded` (a sign-in started on the PC replaced it) each end on their notice. CON-18: every scene ends with the Extend with MCP link. CON-16: `personalize` opens a just-connected Gmail tile with the after-connect Personalize GAIA offer, `personalizeTile` the plain per-tile offer, and `personalizeFailed` a just-connected server whose offer fails (`#tap=personalize-linear`: the sentence plus the PC's reason), `personalizeMcp` a just-connected server on a paired phone (the same Personalize button as on the PC).
  * CON-19: the PC's key store held back an account: `keyStoreLocked` (the locked notice with Try again), `keyStoreWaiting` (its prompt still open), and
- * `keyStoreHeldBack` (the held-back tile open, under the locked notice).
+ * `keyStoreHeldBack` (a held-back account alone, as plain text with its line).
  */
 export const CONNECTOR_SCENES = ['serverOn', 'serverOff', 'grants', 'loading', 'error', 'none', 'groups', 'menu', 'code', 'codeFailed', 'many', 'disconnected', 'revoked', 'personalize', 'personalizeTile', 'personalizeFailed', 'personalizeMcp', 'oauthSetup', 'oauthClient', 'mcpConfigure', 'checkRunning', 'checkOk', 'checkSlow', 'checkFailed', 'googleReady', 'googleBrowser', 'googleFinishing', 'googleDone', 'googleDenied', 'googleTimeout', 'googleExpired', 'googleStateMismatch', 'googleRefused', 'googleFailed', 'googleSuperseded', 'keyStoreLocked', 'keyStoreWaiting', 'keyStoreHeldBack'] as const;
 export type ConnectorScene = (typeof CONNECTOR_SCENES)[number];
@@ -179,7 +179,7 @@ const LIST_SCENES: Partial<Record<ConnectorScene, { data: FakeClientData; expand
     googleSuperseded: { data: { connectors: [GOOGLE_READY], browserSuperseded: true }, expanded: 'google' },
     keyStoreLocked: { data: { connectors: [heldBack('locked'), server({ id: 'slack', display_name: 'Slack' })], connectorsKeyStore: 'locked' } },
     keyStoreWaiting: { data: { connectors: [heldBack('waiting'), server({ id: 'slack', display_name: 'Slack' })], connectorsKeyStore: 'waiting' } },
-    keyStoreHeldBack: { data: { connectors: [heldBack('locked')], connectorsKeyStore: 'locked' }, expanded: 'microsoft' },
+    keyStoreHeldBack: { data: { connectors: [heldBack('locked')], connectorsKeyStore: 'locked' } },
 };
 const SHEET_SCENES: Partial<Record<ConnectorScene, string>> = { oauthSetup: 'google', oauthClient: 'google', mcpConfigure: 'mcp-slack' };
 

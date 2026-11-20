@@ -54,6 +54,7 @@ import {
     TextField,
     Ltr,
     useTheme,
+    PRESSABLE_MIN_SIZE,
 } from '@/ui';
 import { lineHeightOf } from '@/ui/text/Text';
 import { ChevronDown, ChevronRight, CircleCheck, Ellipsis, ExternalLink, Pause, Play, Trash2 } from '@/ui/icons';
@@ -149,6 +150,13 @@ export function ConnectorsBody({ initialExpanded, initialJustConnected, initialS
         }
     }
 
+    // Accounts opens once per visit for a held-back account; folding it then sticks through refetches.
+    const [heldOpened, setHeldOpened] = useState(false);
+    if (!heldOpened && groups.accounts.some((c) => !!c.key_store)) {
+        setHeldOpened(true);
+        setOpenGroups((prev) => ({ ...prev, accounts: true }));
+    }
+
     const failure = connectors.error ?? agentMcps.error;
     const loading = connectors.isPending || agentMcps.isPending;
     const toggle = (id: string) => setExpanded((prev) => (prev === id ? null : id));
@@ -235,7 +243,7 @@ export function ConnectorsBody({ initialExpanded, initialJustConnected, initialS
                             'accounts',
                             t('settings.connectors.accounts'),
                             groups.accounts.length,
-                            groups.nothingConnected || groups.accounts.some((c) => !!c.key_store),
+                            groups.nothingConnected,
                             t('settings.connectors.accountsHint'),
                             tiles(groups.accounts),
                         )}
@@ -310,10 +318,14 @@ function Tile({ header, open, children, overlays }: { header: ReactNode; open?: 
     );
 }
 
-function TileHeader({ name, trailing, onPress, open, menu }: { name: string; trailing?: ReactNode; onPress?: () => void; open?: boolean; menu?: ReactNode }) {
+/** `plain`: a header that stands in for a pressable one, read as one piece of text and kept at the pressable's height. */
+function TileHeader({ name, trailing, onPress, open, menu, plain }: { name: string; trailing?: ReactNode; onPress?: () => void; open?: boolean; menu?: ReactNode; plain?: boolean }) {
     const { space } = useTheme();
     const body = (
-        <View style={{ paddingHorizontal: space.lg, paddingVertical: space.md }}>
+        <View
+            accessible={plain || undefined}
+            style={[{ paddingHorizontal: space.lg, paddingVertical: space.md }, plain ? { minHeight: PRESSABLE_MIN_SIZE, justifyContent: 'center' } : null]}
+        >
             <Row gap="sm" justify="between" align="start">
                 <Row gap="sm" wrap flex={1}>
                     <Text role="ui" weight="semibold" dir="auto">{name}</Text>
@@ -455,7 +467,7 @@ function Chevron({ open }: { open: boolean }) {
     const rtl = useDirection() === 'rtl';
     const line = lineHeightOf(type.ui, 'ui', rtl) * fontScale;
     return (
-        <View style={{ minHeight: line, justifyContent: 'center' }}>
+        <View style={{ minHeight: line, justifyContent: 'center' }} testID="tile-chevron">
             <Icon icon={open ? ChevronDown : ChevronRight} size="sm" tone="muted" />
         </View>
     );
@@ -560,11 +572,12 @@ function ConnectorTile({
 
     return (
         <Tile
-            open={expanded}
+            open={expanded && !unread}
             header={
                 <TileHeader
                     name={connector.display_name}
-                    onPress={onToggle}
+                    onPress={unread ? undefined : onToggle}
+                    plain={unread}
                     open={expanded}
                     menu={
                         server && connector.configured ? (

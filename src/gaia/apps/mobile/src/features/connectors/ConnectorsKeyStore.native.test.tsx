@@ -38,6 +38,20 @@ const google = {
     activations: {},
 } as unknown as ConnectorRow;
 
+// An account whose unconnected tile offers Connect.
+const MICROSOFT = {
+    id: 'microsoft',
+    display_name: 'Microsoft',
+    type: 'oauth_pkce',
+    description: 'Mail and calendar.',
+    configured: false,
+    configurable: true,
+    oauth_setup_fields: [],
+    account_id: null,
+    scopes: [],
+    activations: {},
+} as unknown as ConnectorRow;
+
 const slack = {
     id: 'slack',
     display_name: 'Slack',
@@ -80,18 +94,37 @@ describeNative('ConnectorsScreen key store', () => {
         queryClient.clear();
     });
 
-    it('shows a tile the key store held back with its one line, no status and no actions', async () => {
-        // An account whose unconnected tile would offer Connect.
-        const microsoft = { ...google, id: 'microsoft', display_name: 'Microsoft', description: 'Mail and calendar.' } as ConnectorRow;
-        const { queryClient, wrap } = setup('locked', [], microsoft);
+    it('shows a held-back tile as plain text, and makes it expandable again once the store unlocks', async () => {
+        const { data, queryClient, wrap } = setup('locked', [], MICROSOFT);
         await render(<ConnectorsScreen />, { wrapper: wrap });
-        fireEvent.press(await screen.findByLabelText('Microsoft'));
-        expect(await screen.findByText('Mail and calendar.')).toBeTruthy();
-        expect(screen.getAllByText(HELD_BACK)).toHaveLength(1);
-        expect(screen.queryByText('Connect')).toBeNull();
-        expect(screen.queryByText('Disconnect')).toBeNull();
+        expect(await screen.findByText(HELD_BACK)).toBeTruthy();
+        expect(screen.queryByRole('button', { name: 'Microsoft' })).toBeNull();
+        expect(screen.queryByTestId('tile-chevron')).toBeNull();
         expect(screen.queryByText('OAuth')).toBeNull();
         expect(screen.queryByText('Connected')).toBeNull();
+
+        data.connectors = [MICROSOFT];
+        delete data.connectorsKeyStore;
+        await act(() => queryClient.invalidateQueries());
+        expect(await screen.findByTestId('tile-chevron')).toBeTruthy();
+        expect(screen.queryByText(HELD_BACK)).toBeNull();
+        await fireEvent.press(screen.getByRole('button', { name: 'Microsoft' }));
+        expect(await screen.findByText('Connect')).toBeTruthy();
+        queryClient.clear();
+    });
+
+    it('opens Accounts once for a held-back account, and a fold sticks through refetches', async () => {
+        const { data, queryClient, wrap } = setup('locked', [slack], MICROSOFT);
+        await render(<ConnectorsScreen />, { wrapper: wrap });
+        expect(await screen.findByText(HELD_BACK)).toBeTruthy();
+        await fireEvent.press(screen.getByTestId('connectors-group-accounts'));
+        await waitFor(() => expect(screen.queryByText(HELD_BACK)).toBeNull());
+
+        data.connectors = [{ ...MICROSOFT, key_store: 'waiting' } as ConnectorRow, slack];
+        data.connectorsKeyStore = 'waiting';
+        await act(() => queryClient.invalidateQueries());
+        expect(await screen.findByText(WAITING)).toBeTruthy();
+        expect(screen.queryByText(HELD_BACK)).toBeNull();
         queryClient.clear();
     });
 
