@@ -1064,6 +1064,52 @@ class TestAuthorizeDeviceEndpoint:
         # The device_code is a bearer-equivalent for polling — never returned.
         assert "device_code" not in body
 
+    def test_a_key_store_prompt_while_starting_leaves_the_server_answering(
+        self, ui_api_client, monkeypatch
+    ):
+        """Loading the provider's client reads the key store; a phone's other requests still get through."""
+        import threading
+
+        from gaia.connectors import flow
+
+        entered, answered = threading.Event(), threading.Event()
+
+        class _Provider:
+            default_scopes = ["https://graph.microsoft.com/Mail.ReadWrite"]
+            device_code_url = None
+
+        def blocked_get_provider(provider_id):
+            entered.set()
+            answered.wait(10)
+            return _Provider()
+
+        monkeypatch.setattr(flow, "get_provider", blocked_get_provider)
+        statuses, health = [], []
+        start = threading.Thread(
+            target=lambda: statuses.append(
+                ui_api_client.post(
+                    "/api/connectors/microsoft/authorize-device",
+                    json={"scopes": []},
+                    headers=UI_HEADER,
+                ).status_code
+            )
+        )
+        start.start()
+        try:
+            assert entered.wait(5)
+            other = threading.Thread(
+                target=lambda: health.append(
+                    ui_api_client.get("/api/health").status_code
+                )
+            )
+            other.start()
+            other.join(5)
+            assert health == [200]
+        finally:
+            answered.set()
+            start.join(10)
+        assert len(statuses) == 1
+
     def test_without_header_is_403(self, ui_api_client):
         resp = ui_api_client.post(
             "/api/connectors/microsoft/authorize-device",
