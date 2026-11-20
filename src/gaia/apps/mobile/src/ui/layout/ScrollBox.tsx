@@ -76,6 +76,7 @@ export function ScrollBox({ maxHeight, children, testID, hint = false, stickToEn
                     const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
                     if (stickToEnd) {
                         // Only a move up pauses following: our scrolls go down, and their events may arrive stale or not at all.
+                        // Content that shrinks gets its offset clamped up, which also pauses; a scan log only grows.
                         if (contentOffset.y < lastY.current - 1) atEnd.current = false;
                         else if (contentOffset.y + layoutMeasurement.height >= contentSize.height - END_SLOP) atEnd.current = true;
                         lastY.current = contentOffset.y;

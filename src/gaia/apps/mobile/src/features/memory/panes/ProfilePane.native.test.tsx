@@ -158,16 +158,23 @@ describeNative('ProfilePane', () => {
 
     it('in Arabic, shows the saved notice in place of Save once the findings are saved', async () => {
         useLocaleStore.getState().setLocale('ar');
+        const announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility').mockImplementation(() => undefined);
         try {
             const client = await mount({ memorySettings: settings(true), profileStreams: { discovery: { events: deviceScan() } } });
             fireEvent.press(await screen.findByTestId('profile-discovery-run'));
-            fireEvent.press(await screen.findByTestId('profile-discovery-save'));
+            const save = await screen.findByTestId('profile-discovery-save');
+            announce.mockClear();
+            fireEvent.press(save);
             const saved = await screen.findByTestId('profile-discovery-saved');
             expect(within(screen.getByTestId('profile-discovery-review')).getByTestId('profile-discovery-saved')).toBe(saved);
             expect(saved).toHaveTextContent(/حُفظ في الذاكرة/);
             expect(screen.queryByTestId('profile-discovery-save')).toBeNull();
             expect(client.profileCommits[0]!.items).toHaveLength(21);
+            const heard = announce.mock.calls.map(([text]) => text);
+            expect(heard).toEqual(Platform.OS === 'ios' ? [expect.stringMatching(/حُفظ في الذاكرة/)] : []);
+            if (Platform.OS === 'ios') expect(saved).toHaveTextContent(heard[0]!);
         } finally {
+            announce.mockRestore();
             useLocaleStore.getState().setLocale(null);
         }
     });
