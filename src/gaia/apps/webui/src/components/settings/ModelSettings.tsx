@@ -10,6 +10,7 @@ import { isolate } from '../../i18n/registry';
 import { useModelStore, displayModelName, distinctModelLabels, sameModelId, syncModelAfterSettingChange } from '../../stores/modelStore';
 import { useChatStore } from '../../stores/chatStore';
 import { useT, type Translate } from '../../i18n/useT';
+import { keyStoreOf } from '../../utils/keyStore';
 import { providerName, providerNotice } from '../../utils/providerText';
 import { AddCustomModel } from './AddCustomModel';
 import { ErrorNotice, isServerDown } from './ErrorNotice';
@@ -117,7 +118,7 @@ export function ModelSettings() {
 
     useEffect(() => { void loadProviders(); }, [loadProviders]);
     // Ask again while the OS keychain dialog is open, so answering it is enough.
-    const awaitingPermission = !!providers?.some((p) => p.key_state === 'waiting_for_os_permission');
+    const awaitingPermission = !!providers?.some((p) => keyStoreOf(p) === 'waiting');
     useEffect(() => {
         if (!awaitingPermission) return;
         const timer = setInterval(() => { void loadProviders(); }, DOWNLOAD_POLL_MS);
@@ -386,7 +387,7 @@ export function ModelSettings() {
                                     </span>
                                 )}
                             </div>
-                            {!provider.key_source && provider.key_state === 'store_locked' && (
+                            {!provider.key_source && keyStoreOf(provider) === 'locked' && (
                                 <span className="settings-hint" role="status">
                                     {t('settings.key.storeLocked')}{' '}
                                     <button type="button" className="link-btn" onClick={() => void retryKeyStore()}>
@@ -394,9 +395,9 @@ export function ModelSettings() {
                                     </button>
                                 </span>
                             )}
-                            {!provider.key_source && provider.key_state !== 'store_locked' && (
+                            {!provider.key_source && keyStoreOf(provider) !== 'locked' && (
                                 <span className="settings-hint">
-                                    {provider.key_state === 'waiting_for_os_permission'
+                                    {keyStoreOf(provider) === 'waiting'
                                         ? provider.key_message ?? t('settings.key.waitingOs')
                                         : t('settings.key.none')}
                                 </span>

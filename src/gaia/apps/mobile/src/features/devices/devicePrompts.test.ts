@@ -135,6 +135,25 @@ describe('useDevicePrompt', () => {
             expect(result.current.state).toBe('timeout');
         });
 
+        it('a key-store code is the outcome: locked is denied, waiting is waiting; a PC without codes is the caller\'s 423', async () => {
+            const { result } = await renderHook(() => useDevicePrompt({ kind: 'keyStore', action: 'connectorTest' }));
+            const coded = (status: number, code: string) => new GaiaApiError(status, 'msg', undefined, undefined, { code, message: 'msg' });
+            let consumed = false;
+            await act(async () => {
+                consumed = result.current.report(coded(423, 'key_store_locked'));
+            });
+            expect(consumed).toBe(true);
+            expect(result.current.state).toBe('denied');
+            await act(async () => void result.current.report(coded(409, 'key_store_waiting')));
+            expect(result.current.state).toBe('waiting');
+            await act(async () => result.current.dismiss());
+            await act(async () => {
+                consumed = result.current.report(new GaiaApiError(423, 'The OS credential store is locked.'));
+            });
+            expect(consumed).toBe(false);
+            expect(result.current.state).toBe('idle');
+        });
+
         it('with no prompt up, an error is the caller\'s to show; settle ends a waiting the PC never closed', async () => {
             const { result } = await hook();
             let consumed = true;

@@ -943,9 +943,12 @@ export interface ProviderInfo {
      * user's permission (a macOS keychain dialog): `key_source` is then unknown,
      * not absent, and `key_message` says what to do. `store_locked` once the
      * user closed the store's unlock prompt: GAIA holds off asking for five
-     * minutes, or until Try again.
+     * minutes, or until Try again. Deprecated: read `key_store` (via
+     * `keyStoreOf`); `key_state` goes in the next release.
      */
     key_state?: 'read' | 'waiting_for_os_permission' | 'store_locked';
+    /** `waiting` while the OS key store's prompt is open, `locked` once it was refused or closed; null when it answered. */
+    key_store?: 'waiting' | 'locked' | null;
     key_message?: string | null;
     models_discovered?: boolean;
     /** The provider's model list is down, so GAIA offers models it already knows. */

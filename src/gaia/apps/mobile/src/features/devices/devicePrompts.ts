@@ -3,6 +3,8 @@
 
 import { create } from 'zustand';
 
+import { keyStoreErrorOf } from '@webui/utils/keyStore';
+
 import type { DevicePromptEvent } from '@/api/client.types';
 import { GaiaApiError, GaiaNetworkError } from '@/api/errors';
 
@@ -96,9 +98,10 @@ export interface DevicePrompt {
     /** Call when the action's request succeeds: a prompt still shown as waiting (its event was missed) is over. */
     settle: () => void;
     /**
-     * Gives the notice the action's HTTP failure: a 409 `busy`, a 429 `tooSoon`, and while the PC's prompt is up or
-     * has just failed, the failure itself (its detail line; a 504 is the timeout). True when the notice now shows it,
-     * so the caller shows no error of its own; false for any other failure.
+     * Gives the notice the action's HTTP failure: a 409 `busy`, a 429 `tooSoon`, a key-store `code` (`key_store_locked`
+     * is `denied`, `key_store_waiting` is `waiting`), and while the PC's prompt is up or has just failed, the failure
+     * itself (its detail line; a 504 is the timeout). True when the notice now shows it, so the caller shows no error
+     * of its own; false for any other failure.
      */
     report: (err: unknown) => boolean;
     /** Stops waiting on the phone; the PC's prompt may still be up. */
@@ -143,6 +146,12 @@ export function reportDevicePromptError(kind: DevicePromptKind, action: string, 
                 if (useDevicePromptStore.getState().states[key] === 'tooSoon') set(kind, action, 'idle');
             }, seconds * 1000),
         );
+        return true;
+    }
+    // The PC names a key-store outcome by its code: a closed or refused prompt, or one still open.
+    const store = kind === 'keyStore' && err instanceof GaiaApiError ? keyStoreErrorOf(err.body) : null;
+    if (store) {
+        set(kind, action, store === 'locked' ? 'denied' : 'waiting');
         return true;
     }
     const now = useDevicePromptStore.getState().states[keyOf(kind, action)];
