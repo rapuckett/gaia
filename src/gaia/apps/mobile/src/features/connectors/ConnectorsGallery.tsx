@@ -4,7 +4,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useState } from 'react';
 
-import type { AgentInfo, AgentMcpServer, ConnectorListEntry, ConnectorRow, GaiaClient } from '@/api/client.types';
+import type { AgentInfo, AgentMcpServer, ConnectorKeyStore, ConnectorListEntry, ConnectorRow, GaiaClient } from '@/api/client.types';
 import type { ConnectorCheck } from '@/data';
 import { createFakeClient, type FakeClientData } from '@/api/fake';
 import { GaiaApiError } from '@/api/errors';
@@ -30,8 +30,10 @@ import { ConnectorsScreen } from './ConnectorsScreen';
  * Connect, and with `#tap=connector-connect-google`: `googleBrowser` waits on the browser, `googleFinishing` waits on the PC, `googleDone` ends
  * connected, `googleDenied` (declined at Google), `googleTimeout`, `googleExpired` (PC answers 404), `googleStateMismatch` (400), `googleRefused`
  * (403 at the start), `googleFailed` (the PC's generic 500) and `googleSuperseded` (a sign-in started on the PC replaced it) each end on their notice. CON-18: every scene ends with the Extend with MCP link. CON-16: `personalize` opens a just-connected Gmail tile with the after-connect Personalize GAIA offer, `personalizeTile` the plain per-tile offer, and `personalizeFailed` a just-connected server whose offer fails (`#tap=personalize-linear`: the sentence plus the PC's reason), `personalizeMcp` a just-connected server on a paired phone (the same Personalize button as on the PC).
+ * CON-19: the PC's key store held back an account: `keyStoreLocked` (the locked notice with Try again), `keyStoreWaiting` (its prompt still open), and
+ * `keyStoreHeldBack` (a held-back account alone, as plain text with its line).
  */
-export const CONNECTOR_SCENES = ['serverOn', 'serverOff', 'grants', 'loading', 'error', 'none', 'groups', 'menu', 'code', 'codeFailed', 'many', 'disconnected', 'revoked', 'personalize', 'personalizeTile', 'personalizeFailed', 'personalizeMcp', 'oauthSetup', 'oauthClient', 'mcpConfigure', 'checkRunning', 'checkOk', 'checkSlow', 'checkFailed', 'checkLocked', 'googleReady', 'googleBrowser', 'googleFinishing', 'googleDone', 'googleDenied', 'googleTimeout', 'googleExpired', 'googleStateMismatch', 'googleRefused', 'googleFailed', 'googleSuperseded'] as const;
+export const CONNECTOR_SCENES = ['serverOn', 'serverOff', 'grants', 'loading', 'error', 'none', 'groups', 'menu', 'code', 'codeFailed', 'many', 'disconnected', 'revoked', 'personalize', 'personalizeTile', 'personalizeFailed', 'personalizeMcp', 'oauthSetup', 'oauthClient', 'mcpConfigure', 'checkRunning', 'checkOk', 'checkSlow', 'checkFailed', 'checkLocked', 'googleReady', 'googleBrowser', 'googleFinishing', 'googleDone', 'googleDenied', 'googleTimeout', 'googleExpired', 'googleStateMismatch', 'googleRefused', 'googleFailed', 'googleSuperseded', 'keyStoreLocked', 'keyStoreWaiting', 'keyStoreHeldBack'] as const;
 export type ConnectorScene = (typeof CONNECTOR_SCENES)[number];
 
 const server = (over: Partial<ConnectorRow> = {}) =>
@@ -44,6 +46,7 @@ const account = (id: string, display_name: string, over: Partial<ConnectorRow> =
     server({ id, display_name, type: 'oauth_pkce', configured: false, supports_device_code: true, oauth_setup_fields: [], ...over } as Partial<ConnectorRow>);
 const signedIn = () => account('microsoft', 'Microsoft Personal', { configured: true, account_id: 'avery@example.com' });
 const unavailable = (): ConnectorListEntry => ({ id: 'jira', display_name: 'Jira', error: 'unavailable' });
+const heldBack = (state: ConnectorKeyStore) => account('microsoft', 'Microsoft Personal', { configured: null, key_store: state });
 
 const AGENT_MCP: AgentMcpServer = {
     agent_id: 'research', agent_name: 'Research', config_path: '/home/you/.gaia/agents/research/mcp.json', server_name: 'filesystem', command: 'npx', args: ['-y', 'server-filesystem'], disabled: false,
@@ -176,6 +179,9 @@ const LIST_SCENES: Partial<Record<ConnectorScene, { data: FakeClientData; expand
         expanded: 'google',
     },
     googleSuperseded: { data: { connectors: [GOOGLE_READY], browserSuperseded: true }, expanded: 'google' },
+    keyStoreLocked: { data: { connectors: [heldBack('locked'), server({ id: 'slack', display_name: 'Slack' })], connectorsKeyStore: 'locked' } },
+    keyStoreWaiting: { data: { connectors: [heldBack('waiting'), server({ id: 'slack', display_name: 'Slack' })], connectorsKeyStore: 'waiting' } },
+    keyStoreHeldBack: { data: { connectors: [heldBack('locked')], connectorsKeyStore: 'locked' } },
 };
 const SHEET_SCENES: Partial<Record<ConnectorScene, string>> = { oauthSetup: 'google', oauthClient: 'google', mcpConfigure: 'mcp-slack' };
 
