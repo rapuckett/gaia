@@ -17412,7 +17412,7 @@
     "type": "object"
   },
   "TargetRequest": {
-    "description": "``mode`` \"gaia\" or \"external\"; the URL and key only for \"external\".",
+    "description": "``mode`` \"gaia\" or \"external\"; the URL and key only for \"external\".\n\n``confirm`` must be true for a paired device's switch to \"external\".",
     "properties": {
       "api_key": {
         "anyOf": [
@@ -17435,6 +17435,11 @@
           }
         ],
         "title": "Base Url"
+      },
+      "confirm": {
+        "default": false,
+        "title": "Confirm",
+        "type": "boolean"
       },
       "mode": {
         "title": "Mode",
