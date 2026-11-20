@@ -5,6 +5,7 @@
 // daemon or real Lemonade. Every package with tests blank-imports it from a
 // guard_test.go; TestEveryTestPackageImportsGuard keeps new packages honest.
 // It imports nothing from this module so in-package tests can use it freely.
+// It guards TCP loopback only: the TUI reaches the daemon and Lemonade over TCP, never a unix socket.
 package testguard
 
 import (
