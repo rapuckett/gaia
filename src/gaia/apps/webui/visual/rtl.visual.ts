@@ -12,7 +12,7 @@
 
 import { expect, test, type Locator, type Page } from '@playwright/test';
 
-import { ANSWER_SESSION, AUTOMATIONS, DEVICE_STATES, DISCORD_STATES, MESSAGES, MODEL_LIST, NOW, RESOURCES, SESSIONS, SYSTEM_STATUS, TOOL_STATUS, holdOnToolStatus, mockApi, shownText, useLocale, useTheme, withAutomations, withConnectors, withCrashedBackend, withDesktopBridges, withDevicePrompt, withDevices, withDiscord, withMemory, withModelPage, withSettingsPanes, withoutFlagship, type MemoryState } from './fixtures';
+import { ANSWER_SESSION, AUTOMATIONS, CONNECTORS, DEVICE_STATES, DISCORD_STATES, MESSAGES, MODEL_LIST, NOW, RESOURCES, SESSIONS, SYSTEM_STATUS, TOOL_STATUS, holdOnToolStatus, mockApi, shownText, useLocale, useTheme, withAutomations, withConnectors, withCrashedBackend, withDesktopBridges, withDevicePrompt, withDevices, withDiscord, withMemory, withModelPage, withSettingsPanes, withoutFlagship, type MemoryState } from './fixtures';
 import { NARROW_SCENES, SETUP_SCENES, scene, withSetup } from './setup-scenes';
 
 test.use({ viewport: { width: 1400, height: 900 } });
@@ -2955,6 +2955,16 @@ for (const locale of ['ar', 'en']) {
             await shot(page, `connectors-${locale}-check-slow`);
             expect(await audit(page)).toEqual([]);
             if (locale === 'ar') expect(await untranslated(page, '.settings-scroll', 'bdi, pre, .mcp-key-label')).toEqual([]);
+        });
+
+        test('key store locked: one notice, held-back tile', async ({ page }) => {
+            const rows = (CONNECTORS as Array<Record<string, unknown>>).map((c) =>
+                c.id === 'google' ? { ...c, configured: null, account_id: null, key_store: 'locked' } : c);
+            await openConnectors(page, rows, { 'GET /connectors': { connectors: rows, key_store: 'locked' } });
+            await expect(page.locator('.connectors-keystore')).toBeVisible();
+            await expect(page.locator('.connector-tile--held')).toHaveCount(1);
+            await shot(page, `connectors-${locale}-key-store-locked`);
+            expect(await audit(page)).toEqual([]);
         });
 
         test('phone width: a long account stays on screen', async ({ page }) => {
