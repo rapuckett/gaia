@@ -4266,7 +4266,7 @@ const messages: Messages = {
     'mobileApp.settings.modelActionFailed': 'لم تنجح العملية. التفاصيل أدناه.',
     'mobileApp.settings.serverBackendHint': 'الواجهات الخلفية التي اختبرها GAIA على الكمبيوتر. يُطبَّق عند تحميل نموذج المحادثة في المرة القادمة، ويحتفظ نموذج التضمين بواجهته الخلفية. تعمل نماذج NPU على FastFlowLM: اختر واحدًا من تغيير النموذج.',
     'mobileApp.settings.serverNoBackends': 'Vulkan، الواجهة الخلفية للرسوميات التي اختبرها GAIA، غير متاحة من Lemonade هذا على الكمبيوتر، فلا يوجد ما يمكن اختياره.',
-    'mobileApp.settings.serverProbeFailed': 'تعذّر على GAIA استخدام خادم Lemonade على هذا العنوان. تحقّق من العنوان والمفتاح، ومن أن الكمبيوتر لديك يستطيع الوصول إلى الخادم.',
+    'mobileApp.settings.serverProbeFailed': 'تعذّر على GAIA استخدام خادم Lemonade في هذا العنوان. تحقّق من العنوان والمفتاح، ومن أن الكمبيوتر يستطيع الوصول إلى الخادم.',
     'mobileApp.server.confirm.title': 'استخدام هذا الخادم للمحادثات؟',
     'mobileApp.server.confirm.body': 'ستُرسَل المحادثات والمستندات إلى هذا الخادم بدلًا من خادم النماذج الخاص بـ GAIA. ويُدرج الكمبيوتر هذا التبديل ضمن التغييرات من هذا الهاتف.',
     'mobileApp.server.confirm.cancel': 'إلغاء',
