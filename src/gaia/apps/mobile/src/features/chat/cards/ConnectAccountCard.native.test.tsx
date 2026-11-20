@@ -145,7 +145,7 @@ describeNative('Google in the chat on a paired phone', () => {
 });
 
 const PROMPT = 'GAIA needs you to connect an account for this.';
-const CANCELLED = 'Sign-in was cancelled. Press Connect to try again.';
+const CANCELLED = 'Sign-in was canceled. Press Connect to try again.';
 const GOOGLE_CARD = { kind: 'connect_account', providers: ['google'] };
 const pause = (ms: number) => act(() => new Promise<void>((resolve) => setTimeout(resolve, ms)));
 
