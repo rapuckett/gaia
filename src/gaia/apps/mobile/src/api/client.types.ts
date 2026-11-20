@@ -180,8 +180,13 @@ export interface DisconnectOutcome {
 /** How a sign-in the PC is finishing ended, from its `connector.oauth.*` events; `error` is the PC's own message, `reason` its code (such as `superseded`). */
 export type ConnectorSignInEnd = { outcome: 'completed' } | { outcome: 'cancelled' | 'failed'; error?: string; reason?: string };
 
+/** How the PC's OS key store held back a connector's read: `waiting` while its unlock prompt is open, `locked` once it was refused or closed. */
+export type ConnectorKeyStore = NonNullable<ConnectorRow['key_store']>;
+
+/** `key_store` is set when any connector's is: `locked` when one is locked, else `waiting`. */
 export interface ConnectorList {
     connectors: ConnectorListEntry[];
+    key_store?: ConnectorKeyStore | null;
 }
 
 export interface AgentList {

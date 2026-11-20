@@ -35,6 +35,9 @@ LOCK_NAME = "daemon.lock"
 #: an instant, and a daemon being replaced may still be exiting.
 HOLD_WAIT_SECONDS = 5.0
 
+#: The lock this process holds, so its own checks don't see it as another's.
+_held: Optional["DaemonHomeLock"] = None
+
 
 def managed_home() -> Path:
     """The GAIA home a daemon started here manages: its Lemonade root."""
@@ -43,8 +46,8 @@ def managed_home() -> Path:
     return gaia_home()
 
 
-def lock_path() -> Path:
-    return managed_home() / LOCK_NAME
+def lock_path(home: Optional[Path] = None) -> Path:
+    return (home or managed_home()) / LOCK_NAME
 
 
 def _is_gaia_daemon(pid: int) -> bool:
@@ -58,10 +61,14 @@ def _is_gaia_daemon(pid: int) -> bool:
         return True
 
 
-def held_elsewhere() -> bool:
-    """Whether another process holds this GAIA home's daemon lock."""
+def held_elsewhere(home: Optional[Path] = None) -> bool:
+    """Whether another process holds the daemon lock of *home* (default: the
+    GAIA home this process manages)."""
+    path = lock_path(home)
+    if _held is not None and _same_dir(_held.path, path):
+        return False
     try:
-        fd = os.open(str(lock_path()), os.O_RDWR)
+        fd = os.open(str(path), os.O_RDWR)
     except FileNotFoundError:
         return False
     try:
@@ -112,6 +119,7 @@ class DaemonHomeLock:
         self.path = path
 
     def release(self) -> None:
+        global _held
         if self._fd is None:
             return
         try:
@@ -119,6 +127,8 @@ class DaemonHomeLock:
         finally:
             os.close(self._fd)
             self._fd = None
+            if _held is self:
+                _held = None
 
 
 def hold_daemon_home(wait: float = HOLD_WAIT_SECONDS) -> DaemonHomeLock:
@@ -127,6 +137,7 @@ def hold_daemon_home(wait: float = HOLD_WAIT_SECONDS) -> DaemonHomeLock:
     Raises:
         DaemonStartError: Another daemon manages this GAIA home.
     """
+    global _held
     path = lock_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     fd = os.open(str(path), os.O_RDWR | os.O_CREAT, 0o600)
@@ -141,8 +152,93 @@ def hold_daemon_home(wait: float = HOLD_WAIT_SECONDS) -> DaemonHomeLock:
             )
         time.sleep(0.05)
     lock = DaemonHomeLock(fd, path)
+    _held = lock
     problem = registered_elsewhere()
     if problem is not None:
         lock.release()
         raise DaemonStartError(f"not starting: {problem}")
     return lock
+
+
+def owner_alive(pid: int, started: Optional[float]) -> bool:
+    """Whether the daemon recorded as *pid* (started at *started*) still runs.
+
+    A process GAIA may not inspect counts as alive: an orphan is only reaped on
+    proof its owner is gone. A record without a start time can only be checked
+    by pid.
+    """
+    import psutil
+
+    try:
+        actual = psutil.Process(pid).create_time()
+    except psutil.NoSuchProcess:
+        return False
+    except psutil.AccessDenied:
+        return True
+    return started is None or abs(actual - started) < 1.0
+
+
+def _homes_in_use(home: Path) -> str:
+    gaia_home = os.environ.get("GAIA_HOME", "").strip() or "unset"
+    daemon_home = os.environ.get(paths.HOME_ENV_VAR, "").strip() or "unset"
+    return (
+        f"This process manages {home} (GAIA_HOME is {gaia_home}, "
+        f"GAIA_DAEMON_HOME is {daemon_home})."
+    )
+
+
+def stop_refusal(
+    home: Path,
+    server_pid: Optional[int],
+    owner_pid: Optional[int],
+    owner_started: Optional[float],
+) -> Optional[str]:
+    """Why this process must not stop the Lemonade Server under *home*; None
+    when it may.
+
+    It may not while another live daemon is its recorded owner, or holds
+    *home*'s daemon lock: that daemon is serving with it.
+    """
+    me = os.getpid()
+    what = f"GAIA's Lemonade Server (pid {server_pid}) in {home}"
+    remedy = (
+        "Stop it through that daemon: run `gaia daemon stop` with the same "
+        "GAIA_HOME and GAIA_DAEMON_HOME it was started with. A test's cleanup "
+        "must set both to its own temporary folders."
+    )
+    if owner_pid and owner_pid != me and owner_alive(owner_pid, owner_started):
+        return (
+            f"{what} belongs to GAIA daemon pid {owner_pid}, which is still "
+            f"running, so pid {me} left it running. {_homes_in_use(home)} "
+            f"{remedy}"
+        )
+    if held_elsewhere(home):
+        return (
+            f"{what} is managed by a running GAIA daemon that holds "
+            f"{lock_path(home)}, so pid {me} left it running. "
+            f"{_homes_in_use(home)} {remedy}"
+        )
+    return None
+
+
+def split_home_problem() -> Optional[str]:
+    """Why a daemon command run here would act on another GAIA home than its
+    host dir belongs to; None when the two agree.
+
+    ``GAIA_DAEMON_HOME`` alone moves only the daemon's own files: its Lemonade
+    Server stays in the default GAIA home, the user's.
+    """
+    override = os.environ.get(paths.HOME_ENV_VAR, "").strip()
+    if not override or os.environ.get("GAIA_HOME", "").strip():
+        return None
+    home = managed_home()
+    if _same_dir(Path(override), home / "host"):
+        return None
+    return (
+        f"GAIA_DAEMON_HOME is {override} but GAIA_HOME is unset, so this "
+        f"would look for the daemon in {override} and then act on the "
+        f"Lemonade Server in the default GAIA home, {home}, which belongs to "
+        "whatever daemon runs there. Set GAIA_HOME to the GAIA home that "
+        "daemon manages (for a test, its own temporary folder), or unset "
+        "GAIA_DAEMON_HOME."
+    )

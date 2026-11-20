@@ -101,7 +101,12 @@ from gaia.connectors.mcp_server import (
     is_mcp_server_configured,
 )
 from gaia.connectors.registry import REGISTRY
-from gaia.connectors.spec import _VALID_KINDS, ConfigField, ConnectorType
+from gaia.connectors.spec import (
+    _VALID_KINDS,
+    ConfigField,
+    ConnectorSpec,
+    ConnectorType,
+)
 from gaia.connectors.store import (
     KeyringRefused,
     peek_connection,
@@ -310,8 +315,19 @@ class ConnectorOAuthClient(WireModel):
     has_secret: bool
 
 
+#: ``key_store`` while the OS store's unlock prompt is still open on the PC.
+KEY_STORE_WAITING = "waiting"
+#: ``key_store`` once that prompt was refused or closed; GAIA holds off asking.
+KEY_STORE_LOCKED = "locked"
+KeyStoreState = Literal["waiting", "locked"]
+
+
 class ConnectorSummary(WireModel):
-    """A catalog connector merged with its live state."""
+    """A catalog connector merged with its live state.
+
+    With ``key_store`` set, the OS key store would not give up this connector's
+    secret, so ``configured`` is null: its connection is unknown, not absent.
+    """
 
     id: str
     display_name: str
@@ -323,7 +339,7 @@ class ConnectorSummary(WireModel):
     product_url: Optional[str]
     docs_url: Optional[str]
     setup_url: Optional[str]
-    configured: bool
+    configured: Optional[bool]
     configurable: bool
     config_error: Optional[str]
     oauth_client: Optional[ConnectorOAuthClient]
@@ -337,6 +353,7 @@ class ConnectorSummary(WireModel):
     supports_device_code: bool
     oauth_setup_fields: List[ConnectorFieldSummary]
     config_fields: List[ConnectorFieldSummary]
+    key_store: Optional[KeyStoreState] = None
 
 
 class ConnectorUnavailable(WireModel):
@@ -350,9 +367,10 @@ class ConnectorUnavailable(WireModel):
 
 
 class ConnectorListResponse(WireModel):
-    """Result of ``GET /api/connectors``."""
+    """Result of ``GET /api/connectors``; ``key_store`` is set when any row's is."""
 
     connectors: List[Union[ConnectorSummary, ConnectorUnavailable]]
+    key_store: Optional[KeyStoreState] = None
 
 
 class ConnectorGrantsResponse(WireModel):
@@ -718,7 +736,121 @@ def _log_unconfigured(provider_ref: str, error: Exception) -> None:
     logger.debug("connectors: provider %s not configured: %s", provider_ref, error)
 
 
-def _connector_summary(connector_id: str) -> Dict[str, Any]:
+def _oauth_state(provider_ref: str) -> Dict[str, Any]:
+    """An ``oauth_pkce`` connector's live state, read from the OS key store.
+
+    Every read here can block on the store's unlock prompt; callers that must
+    not wait for it go through :func:`_bounded_oauth_state`.
+    """
+    # Lazy import to avoid pulling provider modules at router import time.
+    from gaia.connectors.providers import get as get_provider
+
+    configurable = True
+    config_error: Optional[str] = None
+    try:
+        get_provider(provider_ref)
+    except ConfigurationError as e:
+        configurable = False
+        _log_unconfigured(provider_ref, e)
+        _pref = provider_ref.upper()
+        config_error = (
+            f"OAuth credentials for {provider_ref!r} are not configured. "
+            f"Set GAIA_{_pref}_CLIENT_ID and GAIA_{_pref}_CLIENT_SECRET, "
+            "or use Settings → Connectors to configure them."
+        )
+    except KeyError:
+        configurable = False
+        config_error = (
+            f"OAuth provider {provider_ref!r} is not registered. "
+            "This is a catalog/code mismatch; please file a bug."
+        )
+
+    # Derive configured/account/scopes from the keyring blob — that
+    # IS the source of truth. peek_connection is read-only and never
+    # raises on missing entries.
+    configured = False
+    account_id: Optional[str] = None
+    scopes: list = []
+    blob = peek_connection(provider_ref)
+    if blob is not None:
+        configured = True
+        account_id = blob.get("account_email")
+        scopes = list(blob.get("scopes", []))
+
+    # OAuth *client* status (#2104): which client the provider would
+    # resolve, so Settings can render/rotate it. client_id is not a
+    # secret (it ships inside desktop apps); the secret itself is
+    # NEVER included — only whether one is stored.
+    _env_prefix = f"GAIA_{provider_ref.upper()}"
+    stored_creds = peek_provider_credentials(provider_ref) or {}
+    if stored_creds.get("client_id"):
+        oauth_client = {
+            "source": "keyring",
+            "client_id": stored_creds["client_id"],
+            "has_secret": bool(stored_creds.get("client_secret")),
+        }
+    elif os.environ.get(f"{_env_prefix}_CLIENT_ID"):
+        oauth_client = {
+            "source": "env",
+            "client_id": os.environ[f"{_env_prefix}_CLIENT_ID"],
+            "has_secret": bool(os.environ.get(f"{_env_prefix}_CLIENT_SECRET")),
+        }
+    else:
+        oauth_client = {"source": None, "client_id": None, "has_secret": False}
+
+    return {
+        "configured": configured,
+        "account_id": account_id,
+        "scopes": scopes,
+        "configurable": configurable,
+        "config_error": config_error,
+        "oauth_client": oauth_client,
+    }
+
+
+def _key_store_unread(state: str) -> Dict[str, Any]:
+    """An ``oauth_pkce`` connector's state when the key store would not be read."""
+    return {
+        "configured": None,
+        "account_id": None,
+        "scopes": [],
+        "configurable": True,
+        "config_error": None,
+        "oauth_client": None,
+        "key_store": state,
+    }
+
+
+def _bounded_oauth_state(spec: ConnectorSpec) -> Dict[str, Any]:
+    """:func:`_oauth_state`, or ``key_store`` waiting/locked instead of blocking.
+
+    Waits as long as ``read_within`` does (``WAIT_SECONDS``), as the providers
+    routes do; a later call joins the same read once the user answers.
+    """
+    from gaia.connectors.credential_wait import (
+        CredentialStoreLocked,
+        CredentialStoreWaiting,
+        read_within,
+    )
+    from gaia.connectors.store import KeyringRefused
+
+    provider_ref = spec.oauth_provider_ref or spec.id
+    try:
+        return read_within(
+            f"connector:{provider_ref}",
+            lambda: _oauth_state(provider_ref),
+            f"your {spec.display_name} connection",
+        )
+    except (CredentialStoreLocked, KeyringRefused) as e:
+        logger.info("connectors: %s unread, key store locked: %s", spec.id, e)
+        return _key_store_unread(KEY_STORE_LOCKED)
+    except CredentialStoreWaiting:
+        return _key_store_unread(KEY_STORE_WAITING)
+
+
+def _connector_summary(
+    connector_id: str, bounded: bool = False, store_waiting: bool = False
+) -> Dict[str, Any]:
     """Build a summary dict for one connector: spec fields + live state.
 
     No state cache: ``configured`` / ``account_id`` / ``scopes`` are
@@ -733,6 +865,11 @@ def _connector_summary(connector_id: str) -> Dict[str, Any]:
     is unset), surface ``configurable=False`` + ``config_error="..."``
     so the AgentUI renders a friendly "needs setup" tile rather than
     letting the user click Connect and hit a 503.
+
+    *bounded* reads the key store through ``read_within``: a read the OS
+    holds for its prompt, or one it refused, sets ``key_store`` instead.
+    *store_waiting* skips the read and reports ``waiting``, so a list opens
+    one prompt at a time.
     """
     try:
         spec = REGISTRY.get(connector_id)
@@ -741,69 +878,26 @@ def _connector_summary(connector_id: str) -> Dict[str, Any]:
             status_code=404, detail=f"Unknown connector: {connector_id!r}"
         )
 
-    configured = False
-    account_id: Optional[str] = None
-    scopes: list = []
-    configurable = True
-    config_error: Optional[str] = None
-    oauth_client: Optional[Dict[str, Any]] = None
+    state: Dict[str, Any] = {
+        "configured": False,
+        "account_id": None,
+        "scopes": [],
+        "configurable": True,
+        "config_error": None,
+        "oauth_client": None,
+    }
 
     # TODO: when a 3rd connector type lands, push this if/elif into a
     # Handler.summary(spec) method so this becomes a single polymorphic
     # call. The same dispatch lives in cli.py:_handle_list — refactor
     # both together.
     if spec.type == "oauth_pkce":
-        # Lazy import to avoid pulling provider modules at router import time.
-        from gaia.connectors.providers import get as get_provider
-
-        provider_ref = spec.oauth_provider_ref or spec.id
-        try:
-            get_provider(provider_ref)
-        except ConfigurationError as e:
-            configurable = False
-            _log_unconfigured(provider_ref, e)
-            _pref = provider_ref.upper()
-            config_error = (
-                f"OAuth credentials for {provider_ref!r} are not configured. "
-                f"Set GAIA_{_pref}_CLIENT_ID and GAIA_{_pref}_CLIENT_SECRET, "
-                "or use Settings → Connectors to configure them."
-            )
-        except KeyError:
-            configurable = False
-            config_error = (
-                f"OAuth provider {provider_ref!r} is not registered. "
-                "This is a catalog/code mismatch; please file a bug."
-            )
-
-        # Derive configured/account/scopes from the keyring blob — that
-        # IS the source of truth. peek_connection is read-only and never
-        # raises on missing entries.
-        blob = peek_connection(provider_ref)
-        if blob is not None:
-            configured = True
-            account_id = blob.get("account_email")
-            scopes = list(blob.get("scopes", []))
-
-        # OAuth *client* status (#2104): which client the provider would
-        # resolve, so Settings can render/rotate it. client_id is not a
-        # secret (it ships inside desktop apps); the secret itself is
-        # NEVER included — only whether one is stored.
-        _env_prefix = f"GAIA_{provider_ref.upper()}"
-        stored_creds = peek_provider_credentials(provider_ref) or {}
-        if stored_creds.get("client_id"):
-            oauth_client = {
-                "source": "keyring",
-                "client_id": stored_creds["client_id"],
-                "has_secret": bool(stored_creds.get("client_secret")),
-            }
-        elif os.environ.get(f"{_env_prefix}_CLIENT_ID"):
-            oauth_client = {
-                "source": "env",
-                "client_id": os.environ[f"{_env_prefix}_CLIENT_ID"],
-                "has_secret": bool(os.environ.get(f"{_env_prefix}_CLIENT_SECRET")),
-            }
+        if store_waiting:
+            state = _key_store_unread(KEY_STORE_WAITING)
+        elif bounded:
+            state = _bounded_oauth_state(spec)
         else:
-            oauth_client = {"source": None, "client_id": None, "has_secret": False}
+            state = _oauth_state(spec.oauth_provider_ref or spec.id)
 
     # ``enabled`` is meaningful only for ``mcp_server`` connectors. We
     # default to ``True`` for both not-configured connectors AND OAuth so
@@ -812,8 +906,8 @@ def _connector_summary(connector_id: str) -> Dict[str, Any]:
     enabled = True
 
     if spec.type == "mcp_server":
-        configured = is_mcp_server_configured(spec.id)
-        if configured:
+        state["configured"] = is_mcp_server_configured(spec.id)
+        if state["configured"]:
             try:
                 entry = _read_mcp_servers_json().get(spec.id, {})
                 enabled = not entry.get("disabled", False)
@@ -847,12 +941,7 @@ def _connector_summary(connector_id: str) -> Dict[str, Any]:
         "product_url": spec.product_url,
         "docs_url": spec.docs_url,
         "setup_url": spec.setup_url,
-        "configured": configured,
-        "configurable": configurable,
-        "config_error": config_error,
-        "oauth_client": oauth_client,
-        "account_id": account_id,
-        "scopes": scopes,
+        **state,
         "enabled": enabled,
         "activations": activations,
         "mcp_env_keys": list(spec.mcp_env_keys),
@@ -891,8 +980,16 @@ def _field_summary(f: ConfigField) -> Dict[str, Any]:
     "/", response_model=ConnectorListResponse, response_model_exclude_unset=True
 )
 # Sync: runs on a worker thread, so a blocked key-store read can't stall the server.
-def list_connectors() -> Dict[str, Any]:
-    """Return catalog specs merged with live state for all connectors."""
+def list_connectors(request: Request) -> Dict[str, Any]:
+    """Return catalog specs merged with live state for all connectors.
+
+    Off the PC, a connector whose secret the key store holds back is listed
+    with ``key_store`` instead of blocking the list; the PC waits on its own
+    prompt. Once one read is waiting, later ones wait too, so a list never
+    opens a second prompt.
+    """
+    bounded = not is_local_pc(request)
+    key_store: Optional[str] = None
     specs = REGISTRY.all()
     # Every summary reads the same ledger; a corrupt one is fixed by deleting it, so name it.
     ledger_cause: Dict[str, Any] = {}
@@ -907,7 +1004,12 @@ def list_connectors() -> Dict[str, Any]:
     summaries: List[Dict[str, Any]] = []
     for s in specs:
         try:
-            summaries.append(_connector_summary(s.id))
+            summary = _connector_summary(
+                s.id, bounded=bounded, store_waiting=key_store == KEY_STORE_WAITING
+            )
+            if summary.get("key_store") and key_store != KEY_STORE_LOCKED:
+                key_store = summary["key_store"]
+            summaries.append(summary)
         except Exception as exc:
             logger.warning(
                 "connectors-list: summary failed for %s (%s)", s.id, type(exc).__name__
@@ -920,6 +1022,8 @@ def list_connectors() -> Dict[str, Any]:
                     **ledger_cause,
                 }
             )
+    if key_store:
+        return {"connectors": summaries, "key_store": key_store}
     return {"connectors": summaries}
 
 
@@ -1142,9 +1246,10 @@ async def get_activations(connector_id: str) -> Dict[str, Any]:
     response_model_exclude_unset=True,
 )
 # Sync: runs on a worker thread, so a blocked key-store read can't stall the server.
-def get_connector(connector_id: str) -> Dict[str, Any]:
+def get_connector(request: Request, connector_id: str) -> Dict[str, Any]:
+    """One connector's summary; off the PC, ``key_store`` as the list sets it."""
     try:
-        return _connector_summary(connector_id)
+        return _connector_summary(connector_id, bounded=not is_local_pc(request))
     except HTTPException:
         raise
     except KeyError:
