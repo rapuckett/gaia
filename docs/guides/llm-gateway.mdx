@@ -30,8 +30,10 @@ and restores it from the credential store, or from `LEMONADE_AMD_API_KEY` /
 `GAIA_GATEWAY_TOKEN` in GAIA's environment when the gateway is AMD's, which is why you
 are not asked again.
 `gaia gateway install` restores it too. Installing with a different `--base-url` deletes
-the remembered token instead, so a token for one gateway is never sent to another; run
-`gaia gateway auth` for the new one.
+the remembered token instead, and first clears the token Lemonade holds for the old
+address, so a token for one gateway is never sent to another; run
+`gaia gateway auth` for the new one. The remembered token is stored together with the
+gateway address it was entered for, and GAIA only ever hands it to that address.
 
 ```bash
 gaia gateway auth --no-remember    # do not store it; ask me every restart

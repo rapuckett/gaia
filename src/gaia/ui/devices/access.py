@@ -23,6 +23,8 @@ from typing import Callable, List, Optional, Tuple
 
 from gaia.config import GaiaConfig, GaiaConfigError, devices_dir
 from gaia.logger import get_logger
+from gaia.messaging.discord.cli import PairingKept
+from gaia.messaging.discord.state import BridgeStateError
 
 from . import (
     DEVICE_IDLE_DAYS,
@@ -399,6 +401,12 @@ class DeviceAccess:
             for device_id in expired:
                 logger.info("Device %s expired and was unpaired", device_id)
                 self.requests.end(device_id)
+            if expired:
+                try:
+                    await asyncio.to_thread(_reset_discord_pairing, expired)
+                except (PairingKept, BridgeStateError) as e:
+                    # The next status read or bridge start tries again.
+                    logger.error("An expired device's Discord setup was kept: %s", e)
 
     # ── What the PC sees ──────────────────────────────────────────────────
 
@@ -544,7 +552,12 @@ class DeviceAccess:
 
     def revoke(self, device_id: str, *, end_requests: bool = True) -> bool:
         """Unpair a device; its open requests end too unless *end_requests* is
-        False, for a device unpairing itself, whose own request must finish."""
+        False, for a device unpairing itself, whose own request must finish.
+
+        Raises:
+            PairingKept: the device is unpaired, but the Discord pairing it set
+                up stayed because the bridge did not stop.
+        """
         store = self._existing_store()
         gone = bool(store and store.revoke(device_id))
         if gone:
@@ -552,6 +565,7 @@ class DeviceAccess:
             self._retire([device_id])
             if end_requests:
                 self.requests.end(device_id)
+            _reset_discord_pairing([device_id])
         return gone
 
     async def reset(self) -> None:
@@ -562,7 +576,18 @@ class DeviceAccess:
         Raises:
             UnsafeDeviceFolderError: The folder isn't a plain folder of this user's.
             ListenerError: The listener was on and doesn't start again.
+            PairingKept: A device's Discord pairing stayed (the bridge didn't stop).
         """
+        # Stopping the bridge waits on its process, so not on the event loop.
+        try:
+            await self._reset_locked()
+        except ListenerError:
+            # Every device was unpaired before the listener failed to start.
+            await asyncio.to_thread(_reset_discord_pairing, None)
+            raise
+        await asyncio.to_thread(_reset_discord_pairing, None)
+
+    async def _reset_locked(self) -> None:
         async with self._lock:
             was_listening = self.listening
             was_waiting = self.waiting
@@ -592,3 +617,10 @@ class DeviceAccess:
                 if not was_waiting or e.code != "no_home_network":
                     raise
                 self._wait_for_home()
+
+
+def _reset_discord_pairing(device_ids: Optional[List[str]]) -> None:
+    """Undo the Discord bot or pairing an unpaired device set up (None: any device)."""
+    from gaia.messaging.discord.cli import unlink_devices
+
+    unlink_devices(device_ids)

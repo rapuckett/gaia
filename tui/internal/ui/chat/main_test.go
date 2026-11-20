@@ -6,6 +6,8 @@ package chat
 import (
 	"context"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -28,7 +30,11 @@ func TestMain(m *testing.M) {
 	os.Setenv("GAIA_HOME", home)
 	// A developer's own Local only must not change what these tests send.
 	os.Setenv("GAIA_POLICY_FILE", home+"/policy.json")
-	os.Setenv("LEMONADE_BASE_URL", "")
+	// A closed local port: model-server probes fail fast instead of reaching
+	// the developer's Lemonade on 13305.
+	down := httptest.NewServer(http.NotFoundHandler())
+	down.Close()
+	os.Setenv("LEMONADE_BASE_URL", down.URL+"/api/v1")
 	// Nor attach to, or start, the developer's own daemon.
 	os.Setenv(daemon.EnvHome, filepath.Join(home, "daemon"))
 	daemon.StubDefaultStartForTest(func(context.Context) (*exec.Cmd, error) {

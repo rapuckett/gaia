@@ -2082,6 +2082,11 @@ removed.
     or a paired device the PC allowed, whose change is written to the audit log
     and its list of changes; **403** from mobile access, a pending device or
     another computer. Opening pairing and allowing a device stay PC-only.
+    Unpairing the device that connected the Discord bot token disconnects the
+    bridge (its token, approver and "Always allow" answers are forgotten), and
+    unpairing the one that started the pairing resets that pairing; so do
+    `DELETE /api/devices/me`, a pairing reset and a device expiring. **500**
+    when the Discord bridge does not stop, with the device already unpaired.
   </Accordion>
 
   <Accordion title="GET /api/devices/{device_id}/changes">
@@ -2880,13 +2885,17 @@ OAuth and MCP-server connections for the Settings page and per-agent grants
 
 Settings → Messaging: connect, pair and run the Discord bridge
 ([Discord guide](/guides/discord)). The routes call the same functions as
-`gaia discord`. The status, `start`, `stop`, `restart` and `forget-always`
-answer the PC or a paired device the PC allowed, and a device's change is
-written to the audit log and its list of changes. `connect`, `pair` and `disconnect` are PC-only, and a
-device never sees the pairing code (whoever DMs it becomes the bot's only
-approver) or a failure's PC-side text. Mobile access, a pending device or
-another computer gets a 403. Mutating routes also require the `X-Gaia-UI: 1`
-header.
+`gaia discord`. Every route answers the PC or a paired device the PC allowed,
+and a device's change is written to the audit log and its list of changes.
+Whoever DMs the pairing code becomes the bot's only approver, so a device sees
+the code only for a pairing it started itself. The device that connected the
+bot token holds that token, so unpairing it disconnects the bridge; unpairing
+the device that started the pairing resets the pairing. An expired or no longer
+allowed device counts as unpaired at the next status read or bridge start. A
+pair press never clears the token's device. A device never sees the bot token
+or a failure's PC-side text.
+Mobile access, a pending device or another computer gets a 403. Mutating routes
+also require the `X-Gaia-UI: 1` header.
 
 <AccordionGroup>
   <Accordion title="GET /api/messaging/discord">
@@ -2894,14 +2903,18 @@ header.
     `connected`, `paired`, `running`, `state`, `detail`, `bot_name`,
     `owner_name`, `autostart`, `always_allowed`, `pairing_code`, `portal_url`,
     `invite_url`,
-    `bot_profile_url` and more. `pairing_code` is empty for a device.
+    `bot_profile_url` and more. `pairing_code` is empty for a device, except
+    the one that started the current pairing.
   </Accordion>
 
   <Accordion title="POST /api/messaging/discord/connect">
     Body `{token, model?}`. Checks the bot token with Discord, stores it in the
     OS keyring, and starts the bridge in pairing mode. 400 when Discord refuses
     the token or it belongs to the Discord connector's bot; 502 when Discord
-    can't be reached.
+    can't be reached. From a device a running bridge is stopped first (500 when
+    it does not stop) and started again after any failure, the failure's
+    `detail` saying so when it did not start; the token is never returned or
+    logged.
   </Accordion>
 
   <Accordion title="POST /api/messaging/discord/start">
@@ -2926,8 +2939,9 @@ header.
   </Accordion>
 
   <Accordion title="POST /api/messaging/discord/pair">
-    Forgets the paired account and starts over with a new code. 500, keeping
-    the pairing, when the bridge does not stop.
+    Forgets the paired account and starts over with a new code, which the
+    device that asked sees. 500, keeping the pairing, when the bridge does not
+    stop.
   </Accordion>
 
   <Accordion title="POST /api/messaging/discord/disconnect">
@@ -3500,7 +3514,8 @@ All three routes need the `X-Gaia-UI: 1` header (**403** without it).
 
   <Accordion title="POST /api/lemonade/target">
     Switch servers. Body: `{"mode": "gaia" | "external", "base_url": "...",
-    "api_key": "..."}`; the URL and key are only for `external`. Nothing is
+    "api_key": "...", "confirm": false}`; the URL and key are only for
+    `external`. Nothing is
     saved unless the user's server checks out. A running daemon is told to
     stop (or start) GAIA's own server, and cached agents are dropped. When
     `LEMONADE_BASE_URL` picks the server, `gaia` also saves that value as
@@ -3512,9 +3527,13 @@ All three routes need the `X-Gaia-UI: 1` header (**403** without it).
     when switching from the user's server to GAIA's own before it is
     installed; nothing is saved. **409** for an unreadable config, **403** from
     mobile access, a pending device or another computer, **502** when the daemon did not switch.
-    A paired device the PC allowed may switch to `gaia` only (`external` is a
-    **403**); its switch is written to the audit log and its list of changes, and it sees a pointer to
-    the PC in place of a failure's text. A failed switch to
+    A paired device the PC allowed may switch either way; `external` needs
+    `"confirm": true` (**409** without it) and one try per device every 10 s
+    (**429**). Every failed check of a device's server is the same **422**
+    message with `status: null`, whatever went wrong, so a device can't map
+    hosts or ports. Its switch is written to the audit log and its list of
+    changes, and it sees a pointer to the PC in place of any other failure's
+    text. A failed switch to
     GAIA's own puts the previous mode back; a failed switch to the user's
     server stays saved.
   </Accordion>
@@ -3572,7 +3591,9 @@ credential store (the slot the TUI uses). A key is never echoed back or logged.
     Every provider with its state — `registered`, `key_source` (`environment`,
     `lemonade`, `stored`, or `null`), `models_discovered` — and the active
     model. A stored key is handed back to a Lemonade that lost it.
-    `lemonade_error` is set when Lemonade could not be reached. Requires
+    `lemonade_error` is set when Lemonade could not be reached. The `amd`
+    entry's `network` is checked for the PC only; over mobile access it is
+    `{"reachable": null, "detail": null}`. Requires
     `X-Gaia-UI: 1` (**403** without it). Because it can register a provider
     and hand Lemonade a key, a paired device is refused (**403**).
   </Accordion>
@@ -3583,7 +3604,10 @@ credential store (the slot the TUI uses). A key is never echoed back or logged.
     has it and it lists models; always `true` for `local`) and `blocked` (Local
     only is on), and for `amd` a `network` with `reachable` (`true`, `false`, or
     `null` when the check doesn't apply to this PC; never the reason or the
-    address), plus `lemonade_error` when Lemonade could not be read. Cloud
+    address). Only the PC gets `true` or `false`: for a device or mobile access
+    it is always `null` and nothing is dialed, so a gateway host rebound to a
+    home-network address can't be used to probe the PC's network. Plus
+    `lemonade_error` when Lemonade could not be read. Cloud
     providers also carry `key_source` (`stored`, `environment`, `lemonade` or
     `null`), `key_state` (`read`, `store_locked`, or `unknown` until GAIA has
     read the credential store once since it started), `key_hint` (the key's
@@ -3594,7 +3618,7 @@ credential store (the slot the TUI uses). A key is never echoed back or logged.
     environment variable's name, never its value, when `key_source` is
     `environment`) and `key_from_gaia_env` (`true` when that key is GAIA's own
     environment rather than Lemonade's); all seven are `null` for `local`. Each call
-    dials the gateway. It only reads: it registers nothing, hands no key over,
+    from the PC dials the gateway. It only reads: it registers nothing, hands no key over,
     never reads the OS credential store (so it can't raise a key-store
     prompt), and never carries a key or a gateway address. Requires `X-Gaia-UI: 1` (**403** without it).
   </Accordion>
@@ -3622,8 +3646,29 @@ credential store (the slot the TUI uses). A key is never echoed back or logged.
     "auth_header_prefix"}`; the last three apply to `amd` only. A blank
     `api_key` keeps the current key, and a gateway field left out keeps the
     one `amd` is registered with. The PC and an allowed paired device may
-    send a key; only the PC may send a gateway field, since it decides where
-    the saved key goes.
+    send a key. A device may send a gateway field for `amd` only together with
+    a new key, to a public `https://` address. The saved key is bound to the
+    address it was saved with and is never sent to another one: a replay that
+    finds the gateway at a different address fails with "The saved AMD Gateway
+    key belongs to {old host}; enter a new key for {new host}." Every failed
+    move is one **422** message, with the previous gateway and its key put
+    back; when that restore fails too, a **502** asks for a working address and
+    key. A move is refused (**409**) when GAIA holds no saved key for the
+    current gateway to put back. A device's host is looked up once, every
+    address must be public, and GAIA's check dials the first three of those
+    addresses with TLS for the name given, so a second lookup can't point it
+    elsewhere. The check runs before the move takes the gateway key lock, so a
+    slow host doesn't hold up other replays. One try per device every 10 s
+    (**429**).
+
+    Any change of the `amd` address, with a key or without, first drops the key
+    Lemonade holds for the old address. Only one replay or move of the gateway
+    key runs at a time across every GAIA process (the Agent UI, the daemon, the
+    CLI and agents); a connect that waits over 60 s for another one gets a
+    **409** saying so. The saved key lives in the credential store's
+    `gateway:amd:v2` slot, which older GAIA versions don't read; a key in the
+    old `gateway:amd` slot moves there, bound to the gateway it serves, the
+    next time GAIA hands it to Lemonade or before the gateway moves.
 
     While GAIA uses the user's own Lemonade (`lemonade_mode` `external`) it
     sends that server nothing: it succeeds only when the server already has
@@ -3632,7 +3677,8 @@ credential store (the slot the TUI uses). A key is never echoed back or logged.
     **Errors:** **422** when the provider rejects the key or discovers no
     models (a key that discovers nothing is removed from Lemonade again);
     **403** when a key comes from mobile access or another computer, or a
-    gateway field comes from anywhere but the PC, a paired device included; **409** when an
+    gateway field comes from anywhere but the PC or an allowed device sending a
+    new key; **409** when an
     environment key takes precedence, Lemonade is not on this PC, or the
     user's own server has no working provider. A paired device gets the same
     statuses without PC file paths or credential-store details, and its key
@@ -3983,6 +4029,8 @@ Every route is in one class, pinned by `tests/unit/chat/ui/test_route_access.py`
 |---|---|---|
 | PC-only | `pc` | `DELETE /api/agents/{agent_id}`, `DELETE /api/devices/listener`, `DELETE /api/devices/routes/{kind}`, `GET /api/connectors/_debug`, `GET /api/connectors/eval-mailbox`, `POST /api/connectors/eval-mailbox`, `POST /api/devices/listener`, `POST /api/devices/pairing`, `POST /api/devices/pairing/reset`, `POST /api/devices/routes/{kind}`, `POST /api/devices/{device_id}/allow`, `POST /api/eval/scripted-user`, `POST /api/files/open`, `POST /api/memory/admin/clear`, `POST /api/memory/admin/seed`, `POST /api/messaging/discord/connect`, `POST /api/messaging/discord/disconnect`, `POST /api/messaging/discord/pair`, `POST /api/tunnel/start`, `POST /api/tunnel/stop`, `POST /v1/connections/{provider}` |
 | Setup | `pc`, or an allowed device | `DELETE /api/automations/{ref}`, `DELETE /api/connectors/_flows/{flow_id}`, `DELETE /api/connectors/{connector_id}/activations/{agent_id:path}`, `DELETE /api/devices/pairing`, `DELETE /api/devices/{device_id}`, `DELETE /api/goals/{goal_id}`, `DELETE /api/providers/{provider}/key`, `DELETE /api/schedules/{name:path}`, `GET /api/automations`, `GET /api/devices`, `GET /api/devices/status`, `GET /api/devices/{device_id}/changes`, `GET /api/logs`, `GET /api/logs/{source}`, `GET /api/memory/stream-discovery`, `GET /api/memory/stream-inference`, `GET /api/messaging/discord`, `GET /api/setup/report/{name}`, `PATCH /api/schedules/{name:path}`, `POST /api/agents/install`, `POST /api/automations/{ref}/{action}`, `POST /api/connectors/flows/{flow_id}/complete`, `POST /api/connectors/{connector_id}/authorize`, `POST /api/connectors/{connector_id}/authorize-device`, `POST /api/connectors/{connector_id}/configure`, `POST /api/connectors/{connector_id}/enable`, `POST /api/connectors/{connector_id}/test`, `POST /api/goals`, `POST /api/goals/store/reset`, `POST /api/goals/{goal_id}/tasks`, `POST /api/gpu-memory/apply`, `POST /api/gpu-memory/revert`, `POST /api/lemonade/target`, `POST /api/memory/commit-discovery`, `POST /api/memory/commit-inference`, `POST /api/memory/refresh-system-context`, `POST /api/memory/reinitialize`, `POST /api/messaging/discord/forget-always`, `POST /api/messaging/discord/restart`, `POST /api/messaging/discord/start`, `POST /api/messaging/discord/stop`, `POST /api/providers/key-store/retry`, `POST /api/schedules`, `POST /api/schedules/{name:path}/run`, `POST /api/setup/cancel`, `POST /api/setup/chat-model`, `POST /api/setup/models/download`, `POST /api/setup/models/remove`, `POST /api/setup/models/skip`, `POST /api/setup/npu/memlock-fix`, `POST /api/setup/npu/recheck`, `POST /api/setup/report`, `POST /api/setup/run`, `POST /api/setup/vision-model`, `POST /api/skills/link/add`, `POST /api/system/download-model`, `PUT /api/chat/permissions`, `PUT /api/connectors/{connector_id}/activations/{agent_id:path}`, `PUT /api/connectors/{connector_id}/grants/{agent_id:path}`, `PUT /api/goals/{goal_id}/approve`, `PUT /api/goals/{goal_id}/cancel`, `PUT /api/goals/{goal_id}/reject`, `PUT /api/goals/{goal_id}/status`, `PUT /api/goals/{goal_id}/tasks/{task_id}`, `PUT /api/schedules/{name:path}`, `PUT /api/system/model-server/backend` |
+| PC-only | `pc` | `DELETE /api/agents/{agent_id}`, `DELETE /api/devices/listener`, `DELETE /api/devices/routes/{kind}`, `GET /api/connectors/_debug`, `GET /api/connectors/eval-mailbox`, `POST /api/connectors/eval-mailbox`, `POST /api/devices/listener`, `POST /api/devices/pairing`, `POST /api/devices/pairing/reset`, `POST /api/devices/routes/{kind}`, `POST /api/devices/{device_id}/allow`, `POST /api/eval/scripted-user`, `POST /api/files/open`, `POST /api/memory/admin/clear`, `POST /api/memory/admin/seed`, `POST /api/tunnel/start`, `POST /api/tunnel/stop`, `POST /v1/connections/{provider}` |
+| Setup | `pc`, or an allowed device | `DELETE /api/automations/{ref}`, `DELETE /api/connectors/_flows/{flow_id}`, `DELETE /api/connectors/{connector_id}/activations/{agent_id:path}`, `DELETE /api/devices/pairing`, `DELETE /api/devices/{device_id}`, `DELETE /api/goals/{goal_id}`, `DELETE /api/providers/{provider}/key`, `DELETE /api/schedules/{name:path}`, `GET /api/automations`, `GET /api/devices`, `GET /api/devices/status`, `GET /api/devices/{device_id}/changes`, `GET /api/logs`, `GET /api/logs/{source}`, `GET /api/memory/stream-discovery`, `GET /api/memory/stream-inference`, `GET /api/messaging/discord`, `GET /api/setup/report/{name}`, `POST /api/agents/install`, `POST /api/automations/{ref}/{action}`, `POST /api/connectors/flows/{flow_id}/complete`, `POST /api/connectors/{connector_id}/authorize`, `POST /api/connectors/{connector_id}/authorize-device`, `POST /api/connectors/{connector_id}/configure`, `POST /api/connectors/{connector_id}/enable`, `POST /api/connectors/{connector_id}/test`, `POST /api/goals`, `POST /api/goals/store/reset`, `POST /api/goals/{goal_id}/tasks`, `POST /api/gpu-memory/apply`, `POST /api/gpu-memory/revert`, `POST /api/lemonade/target`, `POST /api/memory/commit-discovery`, `POST /api/memory/commit-inference`, `POST /api/memory/refresh-system-context`, `POST /api/memory/reinitialize`, `POST /api/messaging/discord/connect`, `POST /api/messaging/discord/disconnect`, `POST /api/messaging/discord/forget-always`, `POST /api/messaging/discord/pair`, `POST /api/messaging/discord/restart`, `POST /api/messaging/discord/start`, `POST /api/messaging/discord/stop`, `POST /api/providers/key-store/retry`, `POST /api/schedules`, `POST /api/schedules/{name:path}/run`, `POST /api/setup/cancel`, `POST /api/setup/chat-model`, `POST /api/setup/models/download`, `POST /api/setup/models/remove`, `POST /api/setup/models/skip`, `POST /api/setup/npu/memlock-fix`, `POST /api/setup/npu/recheck`, `POST /api/setup/report`, `POST /api/setup/run`, `POST /api/setup/vision-model`, `POST /api/skills/link/add`, `POST /api/system/download-model`, `PUT /api/chat/permissions`, `PUT /api/connectors/{connector_id}/activations/{agent_id:path}`, `PUT /api/connectors/{connector_id}/grants/{agent_id:path}`, `PUT /api/goals/{goal_id}/approve`, `PUT /api/goals/{goal_id}/cancel`, `PUT /api/goals/{goal_id}/reject`, `PUT /api/goals/{goal_id}/status`, `PUT /api/goals/{goal_id}/tasks/{task_id}`, `PUT /api/schedules/{name:path}`, `PUT /api/system/model-server/backend` |
 | Not from a device | `pc`, `tunnel` | `GET /api/providers` |
 | Pairing | a device on the listener, with no token | `POST /api/devices/pair` |
 | Its own routes | an allowed device | `GET /api/devices/me/routes` |

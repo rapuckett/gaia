@@ -96,6 +96,11 @@ const CHECK_COLD = fromScene('check/running');
 
 const blockedPc = (): FakeClientData => ({ preflight: fromScene('check/blocked').preflight });
 
+const withProviders = (changes: Record<string, object>): NonNullable<FakeClientData['providers']> => ({
+    ...COMMON.providers!,
+    providers: COMMON.providers!.providers.map((p) => ({ ...p, ...changes[p.id] })),
+});
+
 /** Setup states the first-run rows in batch B need: the blocked PC, GPU steps and results, logs, server install, gateway key and Ready notes. */
 export const SETUP_SCENES_B: Record<string, SetupScene> = {
     'check/installing': { stage: 'check', data: { ...CHECK_COLD, setupStatus: SERVER_INSTALLING } },
@@ -109,6 +114,28 @@ export const SETUP_SCENES_B: Record<string, SetupScene> = {
         data: {
             lemonadeTarget: { ...COMMON.lemonadeTarget!, source: 'gaia' },
             activeModel: { ...COMMON.activeModel!, provider: 'amd', model: 'gateway-model', display_name: 'Gateway model', label: 'Gateway model', remote: true, is_default: false },
+        },
+    },
+    'key/gateway-down': {
+        stage: 'plan', screen: 'key',
+        data: {
+            lemonadeTarget: { ...COMMON.lemonadeTarget!, source: 'gaia' },
+            activeModel: { ...COMMON.activeModel!, provider: 'amd', model: 'gateway-model', display_name: 'Gateway model', label: 'Gateway model', remote: true, is_default: false },
+            providers: withProviders({ amd: { network: { reachable: false } } }),
+        },
+    },
+    'key/env': {
+        stage: 'plan', screen: 'key',
+        data: {
+            lemonadeTarget: { ...COMMON.lemonadeTarget!, source: 'gaia' },
+            providers: withProviders({ fireworks: { configured: true, key_source: 'environment', key_hint: '9c1e', env_var: 'FIREWORKS_API_KEY' } }),
+        },
+    },
+    'key/env-unnamed': {
+        stage: 'plan', screen: 'key',
+        data: {
+            lemonadeTarget: { ...COMMON.lemonadeTarget!, source: 'gaia' },
+            providers: withProviders({ fireworks: { configured: true, key_source: 'environment', key_hint: '9c1e', env_var: null } }),
         },
     },
     'plan/blocked': { stage: 'plan', data: blockedPc() },

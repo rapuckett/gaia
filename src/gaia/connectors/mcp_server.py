@@ -31,11 +31,16 @@ from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Optional
 
 from gaia.config import mcp_servers_path
-from gaia.connectors._keyring import keyring  # actionable error if missing (#1621)
 from gaia.connectors.errors import ConnectorsError, InvalidConfigValueError
 from gaia.connectors.handler import register_handler
 from gaia.connectors.spec import ConnectorSpec
-from gaia.connectors.store import SERVICE_NAME, verify_keyring_backend
+from gaia.connectors.store import (
+    SERVICE_NAME,
+    _kr_raw_delete,
+    _kr_raw_get,
+    _kr_raw_set,
+    verify_keyring_backend,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -190,7 +195,7 @@ def rederive_catalog_entries(servers: Dict[str, Any]) -> Dict[str, Any]:
 def _saved_secret(spec: ConnectorSpec, env_key: str) -> Optional[str]:
     """Return *env_key*'s secret; a renamed key reads the slot it was saved under."""
     verify_keyring_backend()
-    value = keyring.get_password(SERVICE_NAME, f"{spec.id}:{env_key}")
+    value = _kr_raw_get(f"{spec.id}:{env_key}")
     if value is not None:
         return value
     entry = _read_mcp_servers_json().get(spec.id)
@@ -199,17 +204,14 @@ def _saved_secret(spec: ConnectorSpec, env_key: str) -> Optional[str]:
     _, _, username = _rederived_env(spec, entry)[env_key]["$keyring"].partition(":")
     if username == f"{spec.id}:{env_key}":
         return None
-    return keyring.get_password(SERVICE_NAME, username)
+    return _kr_raw_get(username)
 
 
 def _delete_keyring_slots(usernames: Iterable[str]) -> None:
     """Delete each ``gaia.connections`` keyring slot; absent slots are already gone."""
     verify_keyring_backend()
     for username in sorted(usernames):
-        try:
-            keyring.delete_password(SERVICE_NAME, username)
-        except keyring.errors.PasswordDeleteError:
-            pass
+        _kr_raw_delete(username)
 
 
 def is_mcp_server_configured(connector_id: str) -> bool:
@@ -330,7 +332,7 @@ class McpServerHandler:
         for env_key in spec.mcp_env_keys:
             value = values[env_key]
             username = f"{spec.id}:{env_key}"
-            keyring.set_password(SERVICE_NAME, username, str(value))
+            _kr_raw_set(username, str(value))
             env_block[env_key] = {"$keyring": _keyring_ref(spec.id, env_key)}
 
         # Read, update, and atomically write mcp_servers.json.

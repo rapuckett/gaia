@@ -617,6 +617,19 @@ def test_run_exits_1_on_a_non_success_status(stub_env, capsys, fmt):
         assert record["status"] == "failed"
 
 
+@pytest.mark.parametrize("fmt", ["text", "json"])
+def test_a_failed_turn_gives_a_terminal_user_terminal_advice(stub_env, capsys, fmt):
+    from gaia.llm.providers.lemonade import LemonadeUpstreamTimeoutError
+
+    advice = LemonadeUpstreamTimeoutError().user_message
+    _StubAgent.result = {"status": "failed", "result": advice, "error": advice}
+    assert print_mode.run("q", model="m", output_format=fmt) == 1
+    captured = capsys.readouterr()
+    shown = captured.out + captured.err
+    assert "close GAIA" not in shown
+    assert "gaia kill" in captured.err
+
+
 def test_run_exits_1_when_the_agent_returns_none(stub_env, capsys):
     _StubAgent.result = None
     assert print_mode.run("q", model="m", output_format="json") == 1

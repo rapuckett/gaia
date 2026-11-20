@@ -5,6 +5,8 @@ package cli
 
 import (
 	"bytes"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -31,6 +33,10 @@ func TestStatusNamesAnUnreadableInstallWithTheServiceDown(t *testing.T) {
 		t.Setenv("USERPROFILE", home)
 	}
 	t.Setenv("GAIA_HOME", filepath.Join(home, ".gaia"))
+	// Status also probes the model server: point it at a closed port, not the developer's Lemonade.
+	down := httptest.NewServer(http.NotFoundHandler())
+	down.Close()
+	t.Setenv("LEMONADE_BASE_URL", down.URL+"/api/v1")
 
 	var out bytes.Buffer
 	if err := printStatus(&out); err == nil {

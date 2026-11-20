@@ -7341,10 +7341,12 @@ def handle_gateway_command(args):
         GatewayError,
         GatewayManager,
         GatewayState,
+        configured_gateway_url,
         describe_unavailable,
         forget_token,
         gateway_claude_upstream_id,
         lemonade_token_with_source,
+        recall_stored_key,
         recall_token,
         remember_token,
     )
@@ -7429,16 +7431,15 @@ def handle_gateway_command(args):
             restored = False
             remembered = None
             restored_from = None
-            # The stored token was issued for the previously registered URL and
-            # is not bound to it, so a new URL must drop it: every later
-            # ensure_authenticated() would otherwise hand it to the new gateway.
+            # The stored token was issued for the previously registered URL, so a
+            # new URL drops it rather than leave a token no replay may use.
             url_changed = base_url.rstrip("/").lower() != (
                 (state.base_url or "").rstrip("/").lower()
             )
             dropped = url_changed and recall_token() is not None and forget_token()
             needs_token = not (auth.get("env_var_set") or auth.get("runtime_key_set"))
             if needs_token and not url_changed:
-                remembered = recall_token()
+                remembered = recall_stored_key()
                 if remembered:
                     # A fresh install must also restore a token saved by `gateway auth`.
                     restored = manager.ensure_authenticated(recall=lambda: remembered)
@@ -7517,7 +7518,7 @@ def handle_gateway_command(args):
                 sys.exit(1)
             if not getattr(args, "no_remember", False):
                 try:
-                    remember_token(token_for_store)
+                    remember_token(token_for_store, configured_gateway_url(manager))
                     print(
                         "✅ Token accepted and remembered in your OS credential "
                         f"store ({discovered} models).\n"

@@ -581,6 +581,116 @@ def in_memory_keyring():
         keyring.set_keyring(previous)
 
 
+_REAL_KEYCHAIN_ENV = "GAIA_TEST_REAL_KEYCHAIN"
+_real_keychain_allowed = False
+_current_test = ["<no test running>"]
+
+
+def _keychain_refusal(what: str) -> AssertionError:
+    return AssertionError(
+        f"{_current_test[0]} reached the real OS keychain ({what}). Use the "
+        "in-memory keyring (tests/conftest.py) or fake GAIA's credential store. "
+        "A test that truly needs the real store takes @pytest.mark.real_keychain "
+        f"and runs with {_REAL_KEYCHAIN_ENV}=1."
+    )
+
+
+def _install_keychain_guards():
+    """Make every real OS keyring backend and the macOS `security` CLI raise."""
+    import subprocess
+
+    patched = []
+    for mod_name, cls_name in (
+        ("keyring.backends.macOS", "Keyring"),
+        ("keyring.backends.SecretService", "Keyring"),
+        ("keyring.backends.Windows", "WinVaultKeyring"),
+        ("keyring.backends.kwallet", "DBusKeyring"),
+        ("keyring.backends.kwallet", "DBusKeyringKWallet4"),
+    ):
+        try:
+            cls = getattr(importlib.import_module(mod_name), cls_name, None)
+        except (
+            Exception
+        ):  # pylint: disable=broad-except  # backend needs an OS lib this host lacks
+            continue
+        if cls is None:
+            continue
+        for meth in ("get_password", "set_password", "delete_password"):
+            original = cls.__dict__.get(meth)
+            if original is None:
+                continue
+
+            def _make(orig, label):
+                def _guarded(self, *args, **kwargs):
+                    if _real_keychain_allowed:
+                        return orig(self, *args, **kwargs)
+                    raise _keychain_refusal(label)
+
+                return _guarded
+
+            setattr(cls, meth, _make(original, f"{mod_name}.{cls_name}.{meth}"))
+            patched.append((cls, meth, original))
+
+    real_popen_init = subprocess.Popen.__init__
+
+    def _guarded_popen_init(self, args, *a, **kw):
+        argv = args if isinstance(args, (list, tuple)) else [args]
+        if (
+            not _real_keychain_allowed
+            and argv
+            and os.path.basename(str(argv[0])) == "security"
+            and any(
+                "generic-password" in str(x) or "internet-password" in str(x)
+                for x in argv
+            )
+        ):
+            raise _keychain_refusal("the macOS `security` CLI")
+        return real_popen_init(self, args, *a, **kw)
+
+    subprocess.Popen.__init__ = _guarded_popen_init
+
+    def _undo():
+        subprocess.Popen.__init__ = real_popen_init
+        for cls, meth, original in patched:
+            setattr(cls, meth, original)
+
+    return _undo
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _keychain_guard_session(in_memory_keyring):
+    """Install the in-memory keyring for the whole run and refuse any real OS store."""
+    import keyring
+
+    keyring.set_keyring(in_memory_keyring)
+    undo = _install_keychain_guards()
+    try:
+        yield
+    finally:
+        undo()
+
+
+@pytest.fixture(autouse=True)
+def _keychain_guard_per_test(request, in_memory_keyring, _keychain_guard_session):
+    """Start each test with the in-memory keyring installed and empty."""
+    import keyring
+
+    global _real_keychain_allowed  # pylint: disable=global-statement
+    marked = request.node.get_closest_marker("real_keychain") is not None
+    if marked and os.environ.get(_REAL_KEYCHAIN_ENV) != "1":
+        pytest.skip(f"real_keychain test: set {_REAL_KEYCHAIN_ENV}=1 to run")
+    _current_test[0] = request.node.nodeid
+    _real_keychain_allowed = marked
+    if not marked:
+        keyring.set_keyring(in_memory_keyring)
+    in_memory_keyring._store.clear()
+    try:
+        yield
+    finally:
+        _real_keychain_allowed = False
+        in_memory_keyring._store.clear()
+
+
 @pytest.fixture(scope="session", autouse=True)
 def _testclient_sends_ui_header():
     """Make every ``TestClient`` carry ``X-Gaia-UI``, as real clients do.
