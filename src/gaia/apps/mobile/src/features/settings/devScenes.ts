@@ -43,6 +43,8 @@ export interface SettingsScene {
     customReport?: CustomModelReport;
     /** Opens the Messaging status with the just-paired line showing. */
     justPaired?: boolean;
+    /** Messaging: fixture text typed as the bot token (Connect pressed when `submit`), the public-bot tip, the disconnect question up, or the PC having refused this phone's buttons. */
+    discord?: { typed?: string; submit?: boolean; botPublic?: boolean; confirmDisconnect?: boolean; refused?: boolean };
     /** An action that never finishes, so its in-flight state stays on screen: tap its button (`#tap=model-download-<id>` or `#tap=model-use-<id>`). */
     hang?: 'download' | 'select';
     /** Client calls the scene answers itself (a hang or a PC refusal), over the fake's. */
@@ -196,6 +198,7 @@ const discord = (extra: Partial<DiscordStatus>): DiscordStatus => ({
     discord_installed: false, should_offer_setup: false, ...extra,
 });
 const NO_TOKEN = { connected: false, bot_name: '', bot_profile_url: '', invite_url: '' };
+const FIXTURE_TOKEN = 'fixture-bot-token-not-real';
 const NEXT_AT = Date.UTC(2026, 10, 17, 9, 0) / 1000;
 const automation = (id: string, name: string, extra: Partial<Automation>): Automation => ({
     id, name, kind: 'reminder', heartbeat: false, paused: false, every_seconds: 0, next_at: NEXT_AT, last_run_at: 0, runs: 0,
@@ -447,6 +450,13 @@ export const SETTINGS_SCENES: Record<string, SettingsScene> = {
     'msg-pc-refused': msg(new GaiaApiError(403, PC_ONLY_REFUSAL)),
     // SET-MSG-01, 08: no bot yet (steps 1 and 2), and a token Discord or GAIA can't use.
     'msg-needs-token': msg(discord({ ...NO_TOKEN, running: false })),
+    // SET-MSG-04: a token typed (masked), Connect pressed and still checking ("Connecting…" and the hint), and the PC refusing it (its words on the detail line, the token masked).
+    'msg-token-typed': msg(discord({ ...NO_TOKEN, running: false }), { discord: { typed: FIXTURE_TOKEN } }),
+    'msg-connecting': msg(discord({ ...NO_TOKEN, running: false }), { discord: { typed: FIXTURE_TOKEN, submit: true }, override: { connectDiscord: never } }),
+    'msg-connect-failed': msg(discord({ ...NO_TOKEN, running: false }), {
+        discord: { typed: FIXTURE_TOKEN, submit: true },
+        override: { connectDiscord: () => Promise.reject(new GaiaApiError(400, `Discord did not accept the token ${FIXTURE_TOKEN}: 401 Unauthorized.`)) },
+    }),
     'msg-token-invalid': msg(discord({ state: 'token_invalid' })),
     'msg-conflict': msg(discord({ ...NO_TOKEN, state: 'conflict', running: false })),
     'msg-credentials': msg(discord({ state: 'credentials_unavailable', detail: 'The OS key store refused the request.' })),
@@ -459,10 +469,18 @@ export const SETTINGS_SCENES: Record<string, SettingsScene> = {
     // SET-MSG-05, 06: steps 3 and 4 with the pairing code (`#tap=messaging-copy-code` shows Copied); the same with no code yet.
     'msg-pairing': msg(discord({ state: 'pairing', pairing_code: 'DUMY2345', pairing_expires_at: 1900000000 })),
     'msg-pairing-waiting': msg(discord({ state: 'pairing' })),
+    // SET-MSG-07: a public bot's tip with "Open the bot page", as a connect from this phone shows it.
+    'msg-public-tip': msg(discord({ state: 'pairing', pairing_code: 'DUMY2345', pairing_expires_at: 1900000000 }), { discord: { botPublic: true } }),
+    // SET-MSG-10: connected with no account paired: "Show a pairing code".
+    'msg-show-code': msg(discord({ state: 'connected', paired: false }), { data: { discordStatus: discord({ state: 'connected', paired: false }), discordPairingCode: 'DUMY2345' } }),
     // SET-MSG-11: the line shown just after pairing, seeded so it needs no wait.
     'msg-paired-now': msg(discord({ state: 'connected', paired: true, owner_name: 'Alex', model: CHAT_MODEL }), { justPaired: true }),
     // SET-MSG-11, 13: paired and answering, with the Disconnect button (`#tap=messaging-disconnect` explains it is the PC's to press).
     'msg-paired': msg(discord({ state: 'connected', paired: true, owner_name: 'Alex', model: CHAT_MODEL, always_allowed: ['Run shell commands'] })),
+    // SET-MSG-13: the Disconnect question up over the paired card.
+    'msg-disconnect-confirm': msg(discord({ state: 'connected', paired: true, owner_name: 'Alex', model: CHAT_MODEL, always_allowed: ['Run shell commands'] }), { discord: { confirmDisconnect: true } }),
+    // SET-MSG-12, 13, 14: a PC that refuses this phone's buttons (403): each keeps the PC-only pattern.
+    'msg-buttons-refused': msg(discord({ state: 'connected', paired: true, owner_name: 'Alex', model: CHAT_MODEL, always_allowed: ['Run shell commands'] }), { discord: { refused: true } }),
 
     // SET-ADV-13, 14, 15, 16, 17: the model server section (opens on load): GAIA's own server with the chat, embedding and each other kind of loaded model (`#tap=advanced-reload` shows the reloading notice).
     'adv-server-loaded': server({}),

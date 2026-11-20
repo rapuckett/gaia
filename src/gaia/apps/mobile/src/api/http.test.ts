@@ -250,6 +250,10 @@ describe('createHttpClient requests', () => {
         ['applyGpuMemory, confirmed', (c) => c.applyGpuMemory(96), 'POST', '/api/gpu-memory/apply', JSON_HEADERS, { setting_gb: 96, confirm: true }],
         ['revertGpuMemory, confirmed', (c) => c.revertGpuMemory(), 'POST', '/api/gpu-memory/revert', JSON_HEADERS, { confirm: true }],
         ['fixSetupNpuMemlock, with no body', (c) => c.fixSetupNpuMemlock(), 'POST', '/api/setup/npu/memlock-fix', UI_HEADERS, undefined],
+        ['connectDiscord, the token only in the body', (c) => c.connectDiscord('bot-token-1'), 'POST', '/api/messaging/discord/connect', JSON_HEADERS, { token: 'bot-token-1' }],
+        ['startDiscord, taking over', (c) => c.startDiscord(true), 'POST', '/api/messaging/discord/start', JSON_HEADERS, { take_over: true }],
+        ['pairDiscord, with no body', (c) => c.pairDiscord(), 'POST', '/api/messaging/discord/pair', UI_HEADERS, undefined],
+        ['disconnectDiscord, with no body', (c) => c.disconnectDiscord(), 'POST', '/api/messaging/discord/disconnect', UI_HEADERS, undefined],
     ])('%s: %s', async (_name, call, method, path, headers, body) => {
         const { fetch, calls } = createRecordingFetch(() => jsonResponse({ status: 'ok' }));
         await call(createHttpClient({ baseUrl: BASE, fetch }));
