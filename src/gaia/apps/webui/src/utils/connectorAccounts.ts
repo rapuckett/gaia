@@ -68,7 +68,7 @@ export function signInFixed(
 ): boolean {
     if (!row || 'error' in row) return false;
     // A connector that predates per-account state says only whether it is set up.
-    if (!row.accounts) return row.configured;
+    if (!row.accounts) return row.configured === true;
     const then = accountsOf(before);
     const known = new Set(then.map(accountRef));
     const working = row.accounts.filter(isOk);

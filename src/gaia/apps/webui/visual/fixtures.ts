@@ -445,7 +445,7 @@ const connector = (id: string, display_name: string, type: string, over: Record<
     default_scopes: [], available_scopes: [], mcp_env_keys: [], oauth_setup_fields: [], supports_device_code: false, ...over,
 });
 
-const CONNECTORS = [
+export const CONNECTORS = [
     connector('google', 'Google', 'oauth_pkce', {
         configured: true, account_id: 'someone.with.a.long.address@example.com',
         description: 'Connect GAIA to your Google account for Gmail, Calendar, Drive, and more.',
@@ -472,8 +472,8 @@ export async function withConnectors(
     extra: Record<string, unknown> = {},
 ): Promise<void> {
     const answers: Record<string, unknown> = {
-        ...extra,
         'GET /connectors': { connectors },
+        ...extra,
         'GET /connectors/agent-mcps': {
             agent_mcps: [{ agent_id: 'reports', agent_name: 'Reports', server_name: 'warehouse', command: 'uvx', args: ['warehouse-mcp', '--read-only'], disabled: false, config_path: 'C:\\Users\\you\\.gaia\\agents\\reports\\mcp_servers.json' }],
         },

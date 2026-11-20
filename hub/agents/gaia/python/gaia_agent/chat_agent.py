@@ -167,6 +167,7 @@ from gaia.security import (
     narrow_allowed_paths,
     release_scratch_dir,
 )
+from gaia.utils import file_watcher as _file_watcher
 from gaia.utils.file_lock import held_by_another_program
 from gaia.utils.file_watcher import FileChangeHandler, check_watchdog_available
 from gaia.utils.user_folders import documents_dir
@@ -4316,9 +4317,15 @@ A library document not named in the `[Indexed documents: ...]` line is not yet i
                 on_moved=self._handle_file_move,
                 filter_func=self._should_watch_file,
             )
-            observer = Observer()
-            observer.schedule(event_handler, directory, recursive=True)
-            observer.start()
+            # A core without start_observer cannot rescan a folder whose file
+            # events macOS dropped; it watches as before.
+            start_observer = getattr(_file_watcher, "start_observer", None)
+            if start_observer is not None:
+                observer = start_observer(event_handler, directory, recursive=True)
+            else:
+                observer = Observer()
+                observer.schedule(event_handler, directory, recursive=True)
+                observer.start()
             self.observers.append(observer)
             self.file_handlers.append(event_handler)
             logger.info(f"Started watching: {directory}")

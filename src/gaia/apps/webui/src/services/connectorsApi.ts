@@ -10,7 +10,7 @@ import { apiFetch, UI_HEADER } from './api';
 
 // New framework endpoints (T-8b) — /api/connectors
 
-export async function listConnectors(): Promise<{ connectors: ConnectorListEntry[] }> {
+export async function listConnectors(): Promise<{ connectors: ConnectorListEntry[]; key_store?: 'waiting' | 'locked' | null }> {
     return apiFetch('GET', '/connectors');
 }
 

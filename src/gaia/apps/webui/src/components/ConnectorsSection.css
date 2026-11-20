@@ -83,6 +83,15 @@
     cursor: default;
 }
 
+.connector-tile--held .connector-tile-header {
+    flex-wrap: wrap;
+}
+.connector-tile-held {
+    flex-basis: 100%;
+    font-size: var(--fs-caption);
+    color: var(--text-muted);
+}
+
 .connector-tile-name {
     font-size: 13px;
     font-weight: 500;

@@ -1399,7 +1399,7 @@ describe('SetupScreen: cloud', () => {
         } as unknown as Awaited<ReturnType<typeof api.listProviders>>);
         await open();
         await toKey();
-        await waitFor(() => expect(screen.getByLabelText('Fireworks AI API key')).toHaveAttribute('placeholder', 'Paste your API key (leave blank to use one you saved before)'));
+        await waitFor(() => expect(screen.getByLabelText('Fireworks AI API key')).toHaveAttribute('placeholder', 'Leave blank to use your saved key'));
     });
 
     it('lists the models as a choice with the default picked, and connects the one picked', async () => {
