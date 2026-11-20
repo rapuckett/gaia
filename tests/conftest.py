@@ -192,6 +192,38 @@ def _fixed_machine_memory(request, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _no_leaked_log_handlers(request):
+    """Fail a test that leaves a log handler on the root or ``gaia`` logger.
+
+    GAIA's console handler writes to whatever ``sys.stderr`` is at each record,
+    so one that outlives its test prints into the next test's capsys/capfd
+    capture. Handlers are compared by identity against the pre-test snapshot;
+    a leftover is removed so the next test starts clean.
+    """
+    import logging
+
+    loggers = (logging.getLogger(), logging.getLogger("gaia"))
+    before = [list(lg.handlers) for lg in loggers]
+    yield
+    leaked = []
+    for lg, kept in zip(loggers, before):
+        for handler in list(lg.handlers):
+            if not any(handler is h for h in kept):
+                lg.removeHandler(handler)
+                leaked.append((lg.name, handler))
+    if leaked:
+        found = ", ".join(
+            f"{name}: {type(h).__name__}(stream={getattr(h, 'stream', None)!r})"
+            for name, h in leaked
+        )
+        pytest.fail(
+            f"{request.node.nodeid} leaked log handler(s): {found}. Remove them "
+            "in the test or its fixture so later tests' capsys/capfd stay clean.",
+            pytrace=False,
+        )
+
+
+@pytest.fixture(autouse=True)
 def _reset_model_broker_state():
     """Isolate the model-slot broker's process-global state between tests (#2248).
 
