@@ -14,7 +14,7 @@ import { ScreenBannerProvider, UIProvider } from '@/ui';
 
 import type { LoopbackOutcome, OAuthLoopbackNative } from '../../../modules/gaia-oauth-loopback';
 
-import { BrowserSignInDepsContext, type BrowserSignInDeps } from './browserSignIn';
+import { BrowserSignInDepsContext, type BrowserSignIn, type BrowserSignInDeps } from './browserSignIn';
 import { ConnectorsScreen } from './ConnectorsScreen';
 
 /**
@@ -29,7 +29,7 @@ import { ConnectorsScreen } from './ConnectorsScreen';
  * `checkFailed` show a Linear server's Check line (`#tap=connector-check-linear` runs it again). CON-07: on a paired phone, `googleReady` shows Google's
  * Connect, and with `#tap=connector-connect-google`: `googleBrowser` waits on the browser, `googleFinishing` waits on the PC, `googleDone` ends
  * connected, `googleDenied` (declined at Google), `googleTimeout`, `googleExpired` (PC answers 404), `googleStateMismatch` (400), `googleRefused`
- * (403 at the start), `googleFailed` (the PC's generic 500), `googleSuperseded` (a sign-in started on the PC replaced it) and `googleCancelled` (the browser ended without a sign-in) each end on their notice. CON-18: every scene ends with the Extend with MCP link. CON-16: `personalize` opens a just-connected Gmail tile with the after-connect Personalize GAIA offer, `personalizeTile` the plain per-tile offer, and `personalizeFailed` a just-connected server whose offer fails (`#tap=personalize-linear`: the sentence plus the PC's reason), `personalizeMcp` a just-connected server on a paired phone (the same Personalize button as on the PC).
+ * (403 at the start), `googleFailed` (the PC's generic 500) and `googleSuperseded` (a sign-in started on the PC replaced it) each end on their notice; `googleCancelled` opens on the cancelled notice, no tap needed. CON-18: every scene ends with the Extend with MCP link. CON-16: `personalize` opens a just-connected Gmail tile with the after-connect Personalize GAIA offer, `personalizeTile` the plain per-tile offer, and `personalizeFailed` a just-connected server whose offer fails (`#tap=personalize-linear`: the sentence plus the PC's reason), `personalizeMcp` a just-connected server on a paired phone (the same Personalize button as on the PC).
  * CON-19: the PC's key store held back an account: `keyStoreLocked` (the locked notice with Try again), `keyStoreWaiting` (its prompt still open), and
  * `keyStoreHeldBack` (a held-back account alone, as plain text with its line).
  */
@@ -84,6 +84,9 @@ const CHECKS: Partial<Record<ConnectorScene, ConnectorCheck>> = {
     checkFailed: { state: 'failed', slow: false, detail: 'Error: 401 Unauthorized (the key was rejected)' },
 };
 
+/** `googleCancelled` opens on the end of a sign-in whose browser closed unfinished; Connect starts another that ends the same way. */
+export const CANCELLED: BrowserSignIn = { state: 'failed', reason: 'closed' };
+
 /** What the phone's loopback listener hands back in each Google scene; null waits on the browser. */
 const GOOGLE_REDIRECTS: Partial<Record<ConnectorScene, LoopbackOutcome | null>> = {
     googleReady: null,
@@ -100,8 +103,8 @@ const GOOGLE_REDIRECTS: Partial<Record<ConnectorScene, LoopbackOutcome | null>> 
     googleCancelled: { outcome: 'cancelled' },
 };
 
-/** A listener that answers at once, as if the browser came straight back; the browser itself never closes. */
-export function galleryDeps(redirect: LoopbackOutcome | null): BrowserSignInDeps {
+/** A listener that answers at once, as if the browser came straight back; the browser itself never closes. `initial` seeds where the sign-in starts. */
+export function galleryDeps(redirect: LoopbackOutcome | null, initial?: BrowserSignIn): BrowserSignInDeps {
     const loopback: OAuthLoopbackNative = {
         start: async () => ({ port: 49152 }),
         waitForRedirect: (state) =>
@@ -115,6 +118,7 @@ export function galleryDeps(redirect: LoopbackOutcome | null): BrowserSignInDeps
         openAuthSession: () => new Promise<never>(() => undefined),
         dismissAuthSession: () => undefined,
         paired: true,
+        ...(initial ? { initial } : {}),
     };
 }
 
@@ -205,7 +209,7 @@ export function ConnectorsGallery({ state }: { state: ConnectorScene }) {
                   activations: { linear: { gaia: true } },
               }),
     );
-    const [deps] = useState(() => (state in GOOGLE_REDIRECTS ? galleryDeps(GOOGLE_REDIRECTS[state] ?? null) : null));
+    const [deps] = useState(() => (state in GOOGLE_REDIRECTS ? galleryDeps(GOOGLE_REDIRECTS[state] ?? null, state === 'googleCancelled' ? CANCELLED : undefined) : null));
     return (
         <QueryClientProvider client={queryClient}>
             <GaiaClientProvider client={client}>
