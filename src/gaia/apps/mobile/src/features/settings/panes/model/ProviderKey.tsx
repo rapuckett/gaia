@@ -258,7 +258,7 @@ export function ProviderKey({ provider, connected }: { provider: ProviderRow; co
                                 value={gateway.base_url}
                                 onChangeText={(base_url) => setGateway((g) => ({ ...g, base_url }))}
                                 label={t('settings.key.gatewayUrl')}
-                                placeholder={t.bare('settings.key.gatewayPlaceholder')}
+                                placeholder={t.bare('mobileApp.settings.key.blankDefault')}
                                 literal
                                 disabled={busy}
                                 testID="provider-key-gateway-url"
@@ -267,7 +267,7 @@ export function ProviderKey({ provider, connected }: { provider: ProviderRow; co
                                 value={gateway.auth_header_name}
                                 onChangeText={(auth_header_name) => setGateway((g) => ({ ...g, auth_header_name }))}
                                 label={t('settings.key.headerName')}
-                                placeholder={t.bare('settings.key.headerPlaceholder')}
+                                placeholder={t.bare('mobileApp.settings.key.blankDefault')}
                                 literal
                                 disabled={busy}
                                 testID="provider-key-gateway-header"
