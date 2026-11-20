@@ -168,6 +168,7 @@ def test_forget_on_an_unusable_store_is_a_503_not_a_500(client, auth, monkeypatc
 OLD_GATEWAY = "https://old.example/v1"
 NEW_GATEWAY = "https://new.example/v1"
 CONFIGURE = "/daemon/v1/gateway/configure"
+SERVED = "http://localhost:13305/api/v1"
 
 
 @pytest.fixture()
@@ -185,7 +186,7 @@ def lemonade(monkeypatch, tmp_path):
     monkeypatch.setattr(gateway, "GATEWAY_KEY_LOCK_TIMEOUT", 0.1)
     monkeypatch.setattr(gateway, "resolve_lemonade_api_key", lambda **k: None)
     client = MagicMock()
-    client.credential_base_url.return_value = "http://localhost:13305/api/v1"
+    client.credential_base_url.return_value = SERVED
     client.health_check.return_value = {"status": "ok", "version": LEMONADE_VERSION}
     real = gateway.GatewayManager
     monkeypatch.setattr(gateway, "GatewayManager", lambda: real(client=client))
@@ -233,6 +234,7 @@ def test_configure_drops_the_old_key_then_installs_under_the_lock(
             json={
                 "base_url": NEW_GATEWAY,
                 "auth_header_name": "api-key",
+                "lemonade_url": SERVED,
                 "auth_header_prefix": "",
                 "api_key": SECRET,
             },
@@ -260,7 +262,11 @@ def test_configure_drops_the_old_key_then_installs_under_the_lock(
 def test_configure_without_a_key_sends_none(client, auth, lemonade):
     resp = client.post(
         CONFIGURE,
-        json={"base_url": OLD_GATEWAY, "auth_header_name": "api-key"},
+        json={
+            "base_url": OLD_GATEWAY,
+            "auth_header_name": "api-key",
+            "lemonade_url": SERVED,
+        },
         headers=auth,
     )
     assert resp.status_code == 200, resp.text
@@ -280,6 +286,7 @@ def test_configure_refuses_a_caller_without_the_daemon_token(client, lemonade, h
         json={
             "base_url": NEW_GATEWAY,
             "auth_header_name": "api-key",
+            "lemonade_url": SERVED,
             "api_key": SECRET,
         },
         headers=headers,
@@ -297,7 +304,12 @@ def test_configure_refuses_anything_but_a_plain_https_gateway(
 ):
     resp = client.post(
         CONFIGURE,
-        json={"base_url": base_url, "auth_header_name": "api-key", "api_key": SECRET},
+        json={
+            "base_url": base_url,
+            "auth_header_name": "api-key",
+            "lemonade_url": SERVED,
+            "api_key": SECRET,
+        },
         headers=auth,
     )
     assert resp.status_code == 422
@@ -317,7 +329,11 @@ def test_configure_waiting_on_another_processs_move_is_a_409(
             target=lambda: results.append(
                 client.post(
                     CONFIGURE,
-                    json={"base_url": NEW_GATEWAY, "auth_header_name": "api-key"},
+                    json={
+                        "base_url": NEW_GATEWAY,
+                        "auth_header_name": "api-key",
+                        "lemonade_url": SERVED,
+                    },
                     headers=auth,
                 )
             )
@@ -326,4 +342,39 @@ def test_configure_waiting_on_another_processs_move_is_a_409(
         other.join(timeout=10)
     assert results[0].status_code == 409
     assert results[0].json()["detail"] == gateway._busy_message()
+    assert lemonade == []
+
+
+@pytest.mark.parametrize("theirs", ["http://127.0.0.1:13305/api/v1/", SERVED])
+def test_configure_accepts_the_lemonade_it_serves_in_any_loopback_spelling(
+    client, auth, lemonade, theirs
+):
+    resp = client.post(
+        CONFIGURE,
+        json={
+            "base_url": OLD_GATEWAY,
+            "auth_header_name": "api-key",
+            "lemonade_url": theirs,
+        },
+        headers=auth,
+    )
+    assert resp.status_code == 200, resp.text
+
+
+def test_configure_refuses_a_tui_on_another_lemonade(client, auth, lemonade):
+    """A window reading another server must not change the daemon's."""
+    resp = client.post(
+        CONFIGURE,
+        json={
+            "base_url": NEW_GATEWAY,
+            "auth_header_name": "api-key",
+            "api_key": SECRET,
+            "lemonade_url": "http://localhost:13306/api/v1",
+        },
+        headers=auth,
+    )
+    assert resp.status_code == 409
+    detail = resp.json()["detail"]
+    assert "different model server" in detail and "Restart GAIA" in detail
+    assert "`" not in detail and "gaia " not in detail
     assert lemonade == []

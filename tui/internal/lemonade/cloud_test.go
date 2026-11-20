@@ -211,7 +211,7 @@ func TestAMDGatewayConfigureGoesThroughTheDaemon(t *testing.T) {
 	if err := json.Unmarshal(call.body, &body); err != nil {
 		t.Fatal(err)
 	}
-	want := map[string]string{"base_url": "https://gateway.example/v1", "auth_header_name": "api-key", "auth_header_prefix": "", "api_key": "test-key"}
+	want := map[string]string{"base_url": "https://gateway.example/v1", "auth_header_name": "api-key", "auth_header_prefix": "", "api_key": "test-key", "lemonade_url": c.BaseURL}
 	if fmt.Sprint(body) != fmt.Sprint(want) {
 		t.Fatalf("daemon body = %v, want %v", body, want)
 	}
@@ -221,6 +221,32 @@ func TestAMDGatewayConfigureGoesThroughTheDaemon(t *testing.T) {
 	}
 	if err := c.Clear(context.Background(), "amd"); err != nil || !cleared {
 		t.Fatalf("clearing the key failed: %v", err)
+	}
+}
+
+// A window reading another Lemonade than the daemon's is refused by the daemon,
+// and says so with the app's remedy.
+func TestAMDGatewayConfigureOnAnotherLemonadeIsRefused(t *testing.T) {
+	const served = "http://localhost:13305/api/v1"
+	stubDaemonCalls(t, func(call daemonCall) ([]byte, error) {
+		var body map[string]string
+		if err := json.Unmarshal(call.body, &body); err != nil {
+			return nil, err
+		}
+		if body["lemonade_url"] == served {
+			return []byte(`{"configured":true}`), nil
+		}
+		return nil, &daemon.StatusError{Status: 409, Detail: "This window talks to a different model server (" +
+			body["lemonade_url"] + ") than GAIA's background service (" + served + "). Restart GAIA, then try again."}
+	})
+	amd := Provider{Name: "amd", BaseURL: "https://gateway.example/v1", Header: "api-key"}
+	if err := New(served).Configure(context.Background(), amd, ""); err != nil {
+		t.Fatalf("the daemon's own Lemonade was refused: %v", err)
+	}
+	err := New("http://localhost:13306/api/v1").Configure(context.Background(), amd, "test-key")
+	if err == nil || !strings.Contains(err.Error(), "localhost:13306") || !strings.Contains(err.Error(), "Restart GAIA") ||
+		strings.Contains(err.Error(), "`") || strings.Contains(err.Error(), "gaia ") {
+		t.Fatalf("err = %v, want the mismatch named with the app's remedy and no command", err)
 	}
 }
 

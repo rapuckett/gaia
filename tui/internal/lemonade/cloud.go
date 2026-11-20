@@ -366,7 +366,7 @@ func (c *Client) Configure(ctx context.Context, p Provider, key string) error {
 		return c.useRegistered(ctx, p, key)
 	}
 	if p.Name == "amd" {
-		return configureGateway(ctx, p, key)
+		return configureGateway(ctx, c.current(), p, key)
 	}
 	target := c
 	if key != "" {
@@ -412,10 +412,12 @@ func (e *GatewayServiceError) Brief() string { return e.Error() + "." }
 func (e *GatewayServiceError) Unwrap() error { return e.Err }
 
 // configureGateway registers the AMD gateway, and hands Lemonade key when one
-// is given, through the daemon. Lemonade is never called directly here.
-func configureGateway(ctx context.Context, p Provider, key string) error {
+// is given, through the daemon. Lemonade is never called directly here. The
+// daemon refuses when lemonadeURL, the server this window reads, isn't its own.
+func configureGateway(ctx context.Context, lemonadeURL string, p Provider, key string) error {
 	body, err := json.Marshal(map[string]string{
 		"base_url": p.BaseURL, "auth_header_name": p.Header, "auth_header_prefix": p.Prefix, "api_key": key,
+		"lemonade_url": lemonadeURL,
 	})
 	if err != nil {
 		return fmt.Errorf("Could not encode provider settings")

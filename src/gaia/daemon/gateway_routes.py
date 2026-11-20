@@ -48,6 +48,28 @@ class ConfigureRequest(BaseModel):
     auth_header_name: str = Field(min_length=1)
     auth_header_prefix: str = ""
     api_key: Optional[str] = None
+    #: The Lemonade the TUI reads, which must be the one this daemon changes.
+    lemonade_url: str = Field(min_length=1)
+
+
+_LOOPBACK = {"localhost", "127.0.0.1", "::1"}
+
+
+def _same_lemonade(a: str, b: str) -> bool:
+    def key(raw: str):
+        url = urlparse(raw.strip())
+        host = (url.hostname or "").lower()
+        return (
+            url.scheme.lower(),
+            "loopback" if host in _LOOPBACK else host,
+            url.port,
+            url.path.rstrip("/"),
+        )
+
+    try:
+        return key(a) == key(b)
+    except ValueError:
+        return False
 
 
 def _https_gateway(base_url: str) -> str:
@@ -140,7 +162,16 @@ def build_gateway_router(token: str) -> APIRouter:
         base_url = _https_gateway(body.base_url)
         key = (body.api_key or "").strip() or None
         try:
-            result = GatewayManager().configure(
+            manager = GatewayManager()
+            served = manager.base_url
+            if not _same_lemonade(body.lemonade_url, served):
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"This window talks to a different model server "
+                    f"({body.lemonade_url.strip()}) than GAIA's background service "
+                    f"({served}). Restart GAIA, then try again.",
+                )
+            result = manager.configure(
                 base_url,
                 auth_header_name=body.auth_header_name.strip(),
                 auth_header_prefix=body.auth_header_prefix,
