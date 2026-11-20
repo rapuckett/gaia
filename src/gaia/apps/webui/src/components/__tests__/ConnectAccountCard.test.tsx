@@ -266,7 +266,7 @@ describe('ConnectAccountCard', () => {
         expect(await screen.findByText(/A browser tab opened for sign-in/)).toBeTruthy();
         deliver({ reason: 'oauth_error', connectorId: 'google', payload: { reason: 'cancelled' } });
         expect((await screen.findByRole('alert')).textContent).toBe(
-            'Sign-in was cancelled. Press Connect to try again.',
+            'Sign-in was canceled. Press Connect to try again.',
         );
         expect(shown()).not.toContain('A browser tab opened');
         fireEvent.click(screen.getByRole('button', { name: 'Connect Google' }));
