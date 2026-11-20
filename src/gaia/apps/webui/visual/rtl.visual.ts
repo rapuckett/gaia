@@ -610,8 +610,10 @@ const SKILL_LIST = [
 
 for (const locale of ['en', 'ar']) {
     test(`typing / lists the skills above the message box (${locale})`, async ({ page }) => {
-        await open(page, '', locale, (p) => p.route((url) => url.pathname === '/api/skills', (route) =>
-            route.fulfill({ json: { skills: SKILL_LIST, invalid: {} } })));
+        await open(page, '', locale, async (p) => {
+            await p.route((url) => url.pathname === '/api/skills', (route) =>
+                route.fulfill({ json: { skills: SKILL_LIST, invalid: {} } }));
+        });
         const box = page.locator('.new-chat textarea').first();
         await box.fill('/');
         const menu = page.locator('.skill-menu');
@@ -6328,8 +6330,8 @@ for (const locale of ['en', 'ar']) {
     test(`an email being approved names its sending account on its own row (${locale})`, async ({ page }) => {
         const text = 'From: jane.work@example.com\nTo: priya@example.com\nSubject: The deck\n\nHi Priya, the deck is attached.';
         const event = { type: 'permission_request', tool: 'send_now', args: { _exact_text: text }, confirm_id: 'c1' };
-        await open(page, `#${ANSWER_SESSION}`, locale, (p) =>
-            p.addInitScript((line) => {
+        await open(page, `#${ANSWER_SESSION}`, locale, async (p) => {
+            await p.addInitScript((line) => {
                 const realFetch = window.fetch;
                 window.fetch = (input, init) =>
                     String(input).endsWith('/chat/send')
@@ -6337,8 +6339,8 @@ for (const locale of ['en', 'ar']) {
                             start: (controller) => controller.enqueue(new TextEncoder().encode(line)),
                         }), { headers: { 'Content-Type': 'text/event-stream' } }))
                         : realFetch(input, init);
-            }, `data: ${JSON.stringify(event)}\n\n`),
-        );
+            }, `data: ${JSON.stringify(event)}\n\n`);
+        });
         await page.locator('textarea').last().fill('send it');
         await page.keyboard.press('Enter');
         const header = page.getByTestId('perm-mail-header');
