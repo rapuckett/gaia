@@ -173,7 +173,7 @@ def test_restart_changes_the_file_only_while_the_server_is_stopped(tmp_path):
         def status(self):
             return type("S", (), {"port": 1234, "owner_pid": 7, "owner_started": 8.0})()
 
-        def stop(self):
+        def stop(self, **kwargs):
             order.append(("stop", known.is_active(tmp_path)))
 
         def start(self, **kwargs):

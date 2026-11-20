@@ -15,6 +15,8 @@ import ast
 import re
 from pathlib import Path
 
+from tests._repo_scan import files_under, read_text
+
 _REPO = Path(__file__).resolve().parents[2]
 _SCAN_ROOTS = ("src/gaia", "hub", "tui")
 _SCAN_EXTENSIONS = {
@@ -81,10 +83,8 @@ def _docstring_lines(text: str) -> set:
 
 def _runtime_files():
     for root in _SCAN_ROOTS:
-        for path in sorted((_REPO / root).rglob("*")):
+        for path in files_under(_REPO / root, skip_dirs=_SKIP_DIRS):
             if not path.is_file() or path.suffix not in _SCAN_EXTENSIONS:
-                continue
-            if any(part in _SKIP_DIRS for part in path.relative_to(_REPO).parts):
                 continue
             # Changelogs record history, including what older releases said.
             if _is_test_file(path) or path.name == "CHANGELOG.md":
@@ -99,8 +99,10 @@ def test_no_runtime_string_names_the_removed_lemonade_cli():
         if rel in _ALLOWED:
             continue
         try:
-            text = path.read_text(encoding="utf-8")
+            text = read_text(path)
         except UnicodeDecodeError:
+            continue
+        if not _REMOVED_CLI.search(text):
             continue
         skip = _docstring_lines(text) if path.suffix == ".py" else set()
         for lineno, line in enumerate(text.splitlines(), start=1):
