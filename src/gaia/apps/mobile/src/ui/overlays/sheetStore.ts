@@ -11,6 +11,8 @@ export interface SheetEntry {
     children?: ReactNode;
     footer?: ReactNode;
     dismissible: boolean;
+    /** testID of the scrollable body, for device tests. */
+    scrollTestID?: string;
     /** The SheetScope that hosts it; unset for the app's own host. */
     scope?: string;
     /** The sheet whose content opened it; such a sheet shows over that one instead of waiting. */

@@ -253,7 +253,8 @@ async def get_or_refresh(provider_id: str, *, slot: str = DEFAULT_ACCOUNT) -> st
     second check inside the locked block prevents N+1 refreshes when 10
     callers race.
     """
-    get_provider(provider_id)  # an unknown or unconfigured provider fails now
+    # An unknown or unconfigured provider fails now.
+    await asyncio.to_thread(get_provider, provider_id)
     budget_ends = time.monotonic() + _REFRESH_BUDGET_SECONDS
 
     key = _cache_key(provider_id, slot)

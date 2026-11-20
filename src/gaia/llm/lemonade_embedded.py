@@ -185,6 +185,10 @@ class EmbeddedLemonadeNotAnswering(EmbeddedLemonadeError):
     or stopped, so asking again later may find it back."""
 
 
+class EmbeddedLemonadeOwnedElsewhere(EmbeddedLemonadeError):
+    """Another running GAIA daemon owns the server, so it was left running."""
+
+
 class _PortTaken(Exception):
     """lemond exited because another program holds the port it was given."""
 
@@ -2273,28 +2277,35 @@ class EmbeddedLemonade:
         if recorded is None or recorded.get("pid") == process.pid:
             self._clear_state()
 
-    def stop(self, timeout: float = _STOP_TIMEOUT) -> bool:
+    def stop(
+        self, timeout: float = _STOP_TIMEOUT, allow_live_owner: bool = False
+    ) -> bool:
         """Stop the recorded instance and its inference backends.
 
         Reaches a daemon that has stopped answering as well as a healthy one,
         so a stalled server can still be cleaned up. The pid is only signalled
         after :meth:`_identify` confirms it is GAIA's lemond, so a recycled
-        pid -- or a user's own Lemonade -- is never killed by mistake.
+        pid -- or a user's own Lemonade -- is never killed by mistake. Nor is
+        one another running GAIA daemon owns, or one in a GAIA home whose
+        daemon lock another process holds.
 
         Args:
             timeout: Seconds to wait for the daemon to exit.
+            allow_live_owner: Stop it even while its owner daemon runs; only
+                for a restart that hands it straight back to that owner.
 
         Returns:
             True if an instance was stopped, False if none was running.
 
         Raises:
+            EmbeddedLemonadeOwnedElsewhere: Another running daemon owns it.
             EmbeddedLemonadeError: The process would not terminate, or the
                 recorded pid could not be confirmed as GAIA's server.
         """
         with self._instance_lock():
-            return self._stop_locked(timeout)
+            return self._stop_locked(timeout, allow_live_owner)
 
-    def _stop_locked(self, timeout: float) -> bool:
+    def _stop_locked(self, timeout: float, allow_live_owner: bool = False) -> bool:
         current = self.status()
         state = self._read_state()
         if state is None or not (current.running or current.unresponsive_pid):
@@ -2302,6 +2313,15 @@ class EmbeddedLemonade:
             return False
 
         pid = int(state["pid"])
+        if not allow_live_owner:
+            from gaia.daemon.singleton import stop_refusal
+
+            refusal = stop_refusal(
+                self.root.parent, pid, current.owner_pid, current.owner_started
+            )
+            if refusal is not None:
+                log.warning("Not stopping embedded Lemonade: %s", refusal)
+                raise EmbeddedLemonadeOwnedElsewhere(refusal)
         port = int(state["port"])
         api_key = state["api_key"]
         identity = self._identify(pid, port, api_key)

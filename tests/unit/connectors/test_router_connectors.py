@@ -166,6 +166,44 @@ class TestListConnectors:
         }
         assert rows["mcp-test"]["display_name"] == "MCP Test"
 
+    @pytest.mark.parametrize("path", ["/api/connectors", "/api/connectors/mcp-test"])
+    def test_a_key_store_prompt_during_a_read_leaves_the_server_answering(
+        self, ui_api_client, monkeypatch, path
+    ):
+        """The read waits on the PC's key-store prompt; a paired phone's requests still get through."""
+        import threading
+
+        from gaia.ui.routers import connectors as router
+
+        real = router._connector_summary
+        entered, answered = threading.Event(), threading.Event()
+
+        def summary(connector_id):
+            entered.set()
+            answered.wait(10)
+            return real(connector_id)
+
+        monkeypatch.setattr(router, "_connector_summary", summary)
+        listed, health = [], []
+        read = threading.Thread(
+            target=lambda: listed.append(ui_api_client.get(path).status_code)
+        )
+        read.start()
+        try:
+            assert entered.wait(5)
+            other = threading.Thread(
+                target=lambda: health.append(
+                    ui_api_client.get("/api/health").status_code
+                )
+            )
+            other.start()
+            other.join(5)
+            assert health == [200]
+        finally:
+            answered.set()
+            read.join(10)
+        assert listed == [200]
+
     def test_a_corrupt_activations_file_is_named_on_every_unavailable_row(
         self, ui_api_client
     ):
@@ -1079,6 +1117,52 @@ class TestAuthorizeDeviceEndpoint:
         # The device_code is a bearer-equivalent for polling — never returned.
         assert "device_code" not in body
 
+    def test_a_key_store_prompt_while_starting_leaves_the_server_answering(
+        self, ui_api_client, monkeypatch
+    ):
+        """Loading the provider's client reads the key store; a phone's other requests still get through."""
+        import threading
+
+        from gaia.connectors import flow
+
+        entered, answered = threading.Event(), threading.Event()
+
+        class _Provider:
+            default_scopes = ["https://graph.microsoft.com/Mail.ReadWrite"]
+            device_code_url = None
+
+        def blocked_get_provider(provider_id):
+            entered.set()
+            answered.wait(10)
+            return _Provider()
+
+        monkeypatch.setattr(flow, "get_provider", blocked_get_provider)
+        statuses, health = [], []
+        start = threading.Thread(
+            target=lambda: statuses.append(
+                ui_api_client.post(
+                    "/api/connectors/microsoft/authorize-device",
+                    json={"scopes": []},
+                    headers=UI_HEADER,
+                ).status_code
+            )
+        )
+        start.start()
+        try:
+            assert entered.wait(5)
+            other = threading.Thread(
+                target=lambda: health.append(
+                    ui_api_client.get("/api/health").status_code
+                )
+            )
+            other.start()
+            other.join(5)
+            assert health == [200]
+        finally:
+            answered.set()
+            start.join(10)
+        assert len(statuses) == 1
+
     def test_without_header_is_403(self, ui_api_client):
         resp = ui_api_client.post(
             "/api/connectors/microsoft/authorize-device",
@@ -1387,6 +1471,70 @@ class TestEnableDisableHappyPath:
         ui_api_client.post("/api/connectors/mcp-github/enable", headers=UI_HEADER)
         resp = ui_api_client.get("/api/connectors/mcp-github")
         assert resp.json()["enabled"] is True
+
+
+class TestKeyStorePromptLeavesServerAnswering:
+    """A blocked key-store read must not stall the loop a paired phone shares."""
+
+    @staticmethod
+    def _answers_health_while_blocked(client, router, monkeypatch, attr, call):
+        import threading
+
+        real = getattr(router, attr)
+        entered, answered = threading.Event(), threading.Event()
+
+        def blocked(*args, **kwargs):
+            entered.set()
+            answered.wait(10)
+            return real(*args, **kwargs)
+
+        monkeypatch.setattr(router, attr, blocked)
+        results, health = [], []
+        worker = threading.Thread(target=lambda: results.append(call().status_code))
+        worker.start()
+        try:
+            assert entered.wait(5)
+            other = threading.Thread(
+                target=lambda: health.append(client.get("/api/health").status_code)
+            )
+            other.start()
+            other.join(5)
+            assert health == [200]
+        finally:
+            answered.set()
+            worker.join(10)
+        return results
+
+    def test_disable_waits_off_the_event_loop(
+        self, ui_api_client, configured_mcp, monkeypatch
+    ):
+        from gaia.ui.routers import connectors as router
+
+        results = self._answers_health_while_blocked(
+            ui_api_client,
+            router,
+            monkeypatch,
+            "_connector_summary",
+            lambda: ui_api_client.post(
+                "/api/connectors/mcp-github/disable", headers=UI_HEADER
+            ),
+        )
+        assert results == [200]
+
+    def test_listing_forwarded_connections_waits_off_the_event_loop(
+        self, ui_api_client, monkeypatch
+    ):
+        from gaia.ui.routers import connectors as router
+
+        monkeypatch.setattr(router.connections, "list_connections", lambda: [])
+        results = self._answers_health_while_blocked(
+            ui_api_client,
+            router.connections,
+            monkeypatch,
+            "list_connections",
+            lambda: ui_api_client.get("/v1/connections"),
+        )
+        assert results == [200]
 
 
 class TestEnableDisableSseEvents:

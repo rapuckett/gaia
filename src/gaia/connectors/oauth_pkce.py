@@ -17,6 +17,7 @@ it before calling any handler method.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any, Dict, List, Optional
 
@@ -180,14 +181,16 @@ class OAuthPkceHandler:
                         f"setting one on {spec.id!r} would silently narrow "
                         "which accounts can sign in."
                     )
-                save_provider_credentials(
+                await asyncio.to_thread(
+                    save_provider_credentials,
                     provider_id,
                     client_id=client_id,
                     client_secret=client_secret,
                     tenant=tenant_id,
                 )
             else:
-                save_provider_credentials(
+                await asyncio.to_thread(
+                    save_provider_credentials,
                     provider_id,
                     client_id=client_id,
                     client_secret=client_secret,
@@ -211,8 +214,11 @@ class OAuthPkceHandler:
 
         from gaia.connectors.prior_state import resolve_or_reject_empty_scopes
 
-        scopes = resolve_or_reject_empty_scopes(
-            provider_id, config.get("scopes") or [], spec.default_scopes
+        scopes = await asyncio.to_thread(
+            resolve_or_reject_empty_scopes,
+            provider_id,
+            config.get("scopes") or [],
+            spec.default_scopes,
         )
 
         # Validate that a client_secret is available before starting the
@@ -220,7 +226,7 @@ class OAuthPkceHandler:
         # AC5): a "connected" entry without a secret will 401 on every
         # token refresh, which is confusing and hard to debug at that point.
         # Fail loudly here with an actionable message instead.
-        _validate_provider_secret(provider_id)
+        await asyncio.to_thread(_validate_provider_secret, provider_id)
 
         # Per-agent grants to commit on OAuth success (#2117). The UI router
         # resolves the {agent_id: scopes} map from the granted agents'

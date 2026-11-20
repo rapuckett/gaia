@@ -367,6 +367,14 @@ class TestRenewal:
         assert client.register_lemonade_client.call_count == 1
 
 
+@pytest.fixture
+def one_gaia_home(tmp_path, monkeypatch):
+    """`gaia daemon stop` refuses a GAIA_DAEMON_HOME apart from GAIA_HOME."""
+    monkeypatch.setenv("GAIA_HOME", str(tmp_path))
+    monkeypatch.setenv("GAIA_DAEMON_HOME", str(tmp_path / "host"))
+
+
+@pytest.mark.usefixtures("one_gaia_home")
 class TestDaemonStop:
     """`gaia daemon stop` must stop the server `gaia init` started on first
     launch, which no daemon ever owned."""
@@ -408,6 +416,7 @@ class TestDaemonStop:
         assert "killed nothing" in out
 
 
+@pytest.mark.usefixtures("one_gaia_home")
 class TestDaemonRestart:
     def test_a_lemonade_that_will_not_stop_does_not_block_the_restart(
         self, monkeypatch, capsys

@@ -2454,7 +2454,9 @@ directory, including those downloaded backends.
 
 An instance you start here is still GAIA's: a running daemon takes it over,
 stops it with `gaia daemon stop`, and stops it after the idle timeout like any
-other — see [GAIA's Lemonade Server](#gaias-lemonade-server).
+other — see [GAIA's Lemonade Server](#gaias-lemonade-server). Once a daemon
+runs, `gaia lemonade embedded stop` refuses and names it; stop it with
+`gaia daemon stop`.
 
 After a Lemonade version bump, stop the old instance before starting the new one —
 `start` refuses rather than silently leaving the previous version serving:
@@ -3847,6 +3849,10 @@ server's memory when GAIA is not in use:
 - **`gaia daemon stop` stops the server, whoever started it,** including the one
   first-time setup starts. If the daemon is not running, it still stops GAIA's
   server.
+- **Nothing stops a running daemon's server but that daemon.** `gaia lemonade
+  embedded stop`, `gaia kill --lemonade` and a second GAIA leave it running, and
+  say which daemon owns it. `gaia daemon stop` with `GAIA_DAEMON_HOME` set but
+  `GAIA_HOME` unset stops nothing: set both, or neither.
 - **A server a crashed daemon left behind** is taken over by the next daemon
   while it still answers, and stopped and replaced when it does not.
 

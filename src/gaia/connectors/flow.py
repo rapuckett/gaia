@@ -494,9 +494,9 @@ async def start_authorization(
                 },
             )
 
-    provider = get_provider(provider_id)
-    scopes_list = resolve_or_reject_empty_scopes(
-        provider_id, scopes, provider.default_scopes
+    provider = await asyncio.to_thread(get_provider, provider_id)
+    scopes_list = await asyncio.to_thread(
+        resolve_or_reject_empty_scopes, provider_id, scopes, provider.default_scopes
     )
     # Both CLI and Agent UI browser flows converge here.
     _reject_scopes_outside_catalog(provider_id, scopes_list)
@@ -827,7 +827,7 @@ async def revoke_provider_token(
     (the caller deletes the keyring entry regardless); only the remote call
     is skipped.
     """
-    blob = peek_connection(provider_id, slot=slot)
+    blob = await asyncio.to_thread(peek_connection, provider_id, slot=slot)
     if blob and blob.get("forwarded"):
         return {
             "revoke_supported": False,
@@ -842,7 +842,7 @@ async def revoke_provider_token(
         }
 
     try:
-        provider = get_provider(provider_id)
+        provider = await asyncio.to_thread(get_provider, provider_id)
     except (ConnectorsError, KeyError) as exc:
         # Unresolvable/unconfigured provider (e.g. a test double id, or a
         # connector whose client credentials were never set up) — this is
@@ -1165,7 +1165,7 @@ def _structured_oauth_error(
 
 async def _exchange_code_for_tokens(flow: _PendingFlow, code: str) -> Dict[str, Any]:
     """Run the token-exchange step and persist the connection."""
-    provider = get_provider(flow.provider_id)
+    provider = await asyncio.to_thread(get_provider, flow.provider_id)
     body = provider.token_request_body(
         code=code, verifier=flow.code_verifier, redirect_uri=flow.redirect_uri
     )
@@ -1297,7 +1297,7 @@ async def start_device_flow(
     or sign-in hint, so they only decide where the sign-in is saved.
     """
     intent, _target = _sign_in_intent(provider_id, add_account, account)
-    provider = get_provider(provider_id)
+    provider = await asyncio.to_thread(get_provider, provider_id)
     device_code_url = getattr(provider, "device_code_url", None)
     if not device_code_url:
         raise ConnectorsError(
@@ -1305,8 +1305,8 @@ async def start_device_flow(
             "Use start_authorization (browser loopback) instead. See "
             "docs/security/connections.mdx."
         )
-    scopes_list = resolve_or_reject_empty_scopes(
-        provider_id, scopes, provider.default_scopes
+    scopes_list = await asyncio.to_thread(
+        resolve_or_reject_empty_scopes, provider_id, scopes, provider.default_scopes
     )
     _reject_scopes_outside_catalog(provider_id, scopes_list)
     body = provider.device_code_request_body(scopes_list)
@@ -1392,9 +1392,9 @@ async def poll_device_flow(
     """
     import time as _time
 
-    provider = get_provider(provider_id)
-    scopes_list = resolve_or_reject_empty_scopes(
-        provider_id, scopes, provider.default_scopes
+    provider = await asyncio.to_thread(get_provider, provider_id)
+    scopes_list = await asyncio.to_thread(
+        resolve_or_reject_empty_scopes, provider_id, scopes, provider.default_scopes
     )
     # An SDK caller can reach poll_ without going through start_, and these
     # scopes are what save_connection records.

@@ -30,6 +30,7 @@ import threading
 from dataclasses import asdict, dataclass
 from typing import Callable, Optional, Tuple
 
+from gaia.daemon.singleton import owner_alive as _owner_alive
 from gaia.logger import get_logger
 from gaia.version import parse_version
 
@@ -111,24 +112,6 @@ def _process_started(pid: int) -> Optional[float]:
         return psutil.Process(pid).create_time()
     except psutil.Error:
         return None
-
-
-def _owner_alive(pid: int, started: Optional[float]) -> bool:
-    """Whether the daemon recorded as *pid* (started at *started*) still runs.
-
-    A process GAIA may not inspect counts as alive: an orphan is only reaped on
-    proof its owner is gone. A record without a start time can only be checked
-    by pid.
-    """
-    import psutil
-
-    try:
-        actual = psutil.Process(pid).create_time()
-    except psutil.NoSuchProcess:
-        return False
-    except psutil.AccessDenied:
-        return True
-    return started is None or abs(actual - started) < 1.0
 
 
 class EmbeddedLemonadeOwner:

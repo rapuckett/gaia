@@ -282,7 +282,7 @@ class McpServerHandler:
         env: Dict[str, str] = {}
         missing: List[str] = []
         for env_key in spec.mcp_env_keys:
-            value = _saved_secret(spec, env_key)
+            value = await asyncio.to_thread(_saved_secret, spec, env_key)
             if value is None:
                 missing.append(_keyring_ref(spec.id, env_key))
             else:
@@ -332,7 +332,7 @@ class McpServerHandler:
         for env_key in spec.mcp_env_keys:
             value = values[env_key]
             username = f"{spec.id}:{env_key}"
-            _kr_raw_set(username, str(value))
+            await asyncio.to_thread(_kr_raw_set, username, str(value))
             env_block[env_key] = {"$keyring": _keyring_ref(spec.id, env_key)}
 
         # Read, update, and atomically write mcp_servers.json.
@@ -347,7 +347,7 @@ class McpServerHandler:
             "disabled": config.get("disabled", False),
         }
         _write_mcp_servers_json(servers)
-        _delete_keyring_slots(stale)
+        await asyncio.to_thread(_delete_keyring_slots, stale)
 
         logger.info(
             "mcp_server: configured connector_id=%s command=%s",
@@ -383,7 +383,7 @@ class McpServerHandler:
             del servers[spec.id]
             _write_mcp_servers_json(servers)
 
-        _delete_keyring_slots(usernames)
+        await asyncio.to_thread(_delete_keyring_slots, usernames)
 
         # Wipe per-agent grants AND activations. If the same connector_id is
         # re-added later the new connector must NOT inherit the previous user's
@@ -448,7 +448,9 @@ class McpServerHandler:
         ``reason`` is ``"timeout"`` when it was too slow to tell (a first
         ``npx`` download), so callers don't blame the token.
         """
-        missing = [k for k in spec.mcp_env_keys if _saved_secret(spec, k) is None]
+        missing = await asyncio.to_thread(
+            lambda: [k for k in spec.mcp_env_keys if _saved_secret(spec, k) is None]
+        )
         if missing:
             return {"ok": False, "detail": f"missing keyring entries: {missing!r}"}
 
