@@ -10756,6 +10756,21 @@
         ],
         "title": "Key State"
       },
+      "key_store": {
+        "anyOf": [
+          {
+            "enum": [
+              "waiting",
+              "locked"
+            ],
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Key Store"
+      },
       "known_models": {
         "anyOf": [
           {
@@ -11497,6 +11512,21 @@
         ],
         "title": "Key State"
       },
+      "key_store": {
+        "anyOf": [
+          {
+            "enum": [
+              "waiting",
+              "locked"
+            ],
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Key Store"
+      },
       "known_models": {
         "anyOf": [
           {
@@ -11722,6 +11752,21 @@
           }
         ],
         "title": "Key State"
+      },
+      "key_store": {
+        "anyOf": [
+          {
+            "enum": [
+              "waiting",
+              "locked"
+            ],
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Key Store"
       },
       "known_models": {
         "anyOf": [
