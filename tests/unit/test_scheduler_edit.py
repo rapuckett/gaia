@@ -28,7 +28,7 @@ def setup():
     app = FastAPI()
     app.include_router(router)
     app.dependency_overrides[get_scheduler] = lambda: scheduler
-    yield TestClient(app), scheduler, db
+    yield TestClient(app, client=("127.0.0.1", 50000)), scheduler, db
     loop.run_until_complete(scheduler.shutdown())
     loop.close()
     db.close()

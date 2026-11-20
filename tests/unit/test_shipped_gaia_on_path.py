@@ -264,6 +264,8 @@ def test_backend_and_daemon_startup_expose_gaia_after_the_login_path(monkeypatch
     monkeypatch.setattr(cli, "expose_shipped_gaia", exposed)
 
     class Parser:
+        _actions = []
+
         def parse_args(self):
             return types.SimpleNamespace(action="chat")
 
