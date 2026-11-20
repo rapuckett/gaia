@@ -32,6 +32,8 @@ from collections import Counter
 from pathlib import Path
 from typing import Dict, List, Tuple
 
+from tests._repo_scan import files_under, read_text
+
 _REPO = Path(__file__).resolve().parents[2]
 _ALLOWLIST = Path(__file__).with_name("gaia_home_allowlist.txt")
 _EXEMPT = {"src/gaia/config.py", "src/gaia/home.py"}
@@ -57,7 +59,7 @@ def _scanned_files() -> List[Path]:
     ]
     files = []
     for root in roots:
-        for path in root.rglob("*.py"):
+        for path in files_under(root, ".py"):
             rel = path.relative_to(_REPO)
             if _SKIP_PARTS.intersection(rel.parts) or rel.as_posix() in _EXEMPT:
                 continue
@@ -100,7 +102,7 @@ def _docstring_nodes(tree: ast.AST) -> set:
 def _sites_in(path: Path) -> List[Tuple[str, int]]:
     """``(rule, line)`` for every hard-coded GAIA-home site in *path*."""
     try:
-        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        tree = ast.parse(read_text(path), filename=str(path))
     except (SyntaxError, UnicodeDecodeError) as exc:
         raise AssertionError(
             f"{path}: cannot be parsed, so the GAIA_HOME ratchet cannot vouch "
