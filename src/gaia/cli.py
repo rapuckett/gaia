@@ -10495,7 +10495,7 @@ def _handle_daemon_stop_agent(args):
 
 
 def _handle_daemon_stop(exit_on_lemonade_error: bool = True):
-    from gaia.daemon import client
+    from gaia.daemon import client, singleton
     from gaia.daemon.errors import DaemonError
     from gaia.daemon.instance import (
         pid_alive,
@@ -10504,6 +10504,10 @@ def _handle_daemon_stop(exit_on_lemonade_error: bool = True):
         terminate_instance,
     )
 
+    problem = singleton.split_home_problem()
+    if problem is not None:
+        print(f"❌ Not stopping anything: {problem}")
+        sys.exit(1)
     inst = read_instance()
     if inst is None:
         print("GAIA daemon: not running")
