@@ -2,6 +2,7 @@ package preflight
 
 import (
 	"context"
+	"os"
 	"testing"
 	"time"
 
@@ -12,14 +13,18 @@ import (
 )
 
 // TestLiveReadiness runs the real gate against whatever this machine actually
-// has, through the real daemon client. It SKIPS when no daemon is attachable,
-// so it is a no-op in CI and a real end-to-end check on a developer box.
+// has, through the real daemon client. It runs only with GAIA_TEST_REAL_SERVICES=1
+// (it would otherwise dial the developer's own daemon), and SKIPS when no
+// daemon is attachable.
 //
 // It asserts contract shape, never readiness: a machine with no mailbox
 // connected is a perfectly valid state for this test to observe. What it proves
 // is that the paths, headers, and JSON shapes this package sends are the ones
 // the daemon and the sidecar actually accept — which no fake can prove.
 func TestLiveReadiness(t *testing.T) {
+	if os.Getenv("GAIA_TEST_REAL_SERVICES") != "1" {
+		t.Skip("dials the real GAIA daemon: set GAIA_TEST_REAL_SERVICES=1 to run it")
+	}
 	tr := NewDaemonTransport(daemon.New(daemon.Options{
 		Logf: func(format string, args ...any) { t.Logf(format, args...) },
 	}))
