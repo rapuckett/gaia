@@ -151,6 +151,9 @@ _PROBE_TIMEOUT = 12
 # One reachability check: long enough for a slow link, short enough that an
 # offline network answers before the user gives up on the list.
 REACH_TIMEOUT = 4.0
+#: How many of the host's addresses one check dials, so a host with many dead
+#: ones answers within ``REACH_DIAL_LIMIT * REACH_TIMEOUT``.
+REACH_DIAL_LIMIT = 3
 
 
 class GatewayUnreachable(Exception):
@@ -165,16 +168,29 @@ class GatewayUnreachable(Exception):
 def check_reachable(base_url: Optional[str] = None) -> None:
     """Raise :class:`GatewayUnreachable` unless ``base_url``'s host answers.
 
-    ``None`` checks :data:`DEFAULT_GATEWAY_BASE_URL`.
+    ``None`` checks :data:`DEFAULT_GATEWAY_BASE_URL`. One lookup, then a plain
+    connect to each of its first :data:`REACH_DIAL_LIMIT` addresses until one
+    answers.
     """
     url = urlparse(base_url or DEFAULT_GATEWAY_BASE_URL)
     if not url.hostname:
         raise ValueError(f"gateway URL {base_url!r} has no host to check")
     port = url.port or (80 if url.scheme == "http" else 443)
     try:
-        socket.create_connection((url.hostname, port), timeout=REACH_TIMEOUT).close()
+        infos = socket.getaddrinfo(
+            url.hostname, port, type=socket.SOCK_STREAM, proto=socket.IPPROTO_TCP
+        )
     except OSError as e:
         raise GatewayUnreachable(url.hostname, str(e)) from e
+    addresses = list(dict.fromkeys(info[4][:2] for info in infos))
+    failure: Optional[OSError] = None
+    for address in addresses[:REACH_DIAL_LIMIT]:
+        try:
+            socket.create_connection(address, timeout=REACH_TIMEOUT).close()
+            return
+        except OSError as e:
+            failure = e
+    raise GatewayUnreachable(url.hostname, str(failure or "no addresses")) from failure
 
 
 class GatewayError(Exception):
@@ -1322,6 +1338,35 @@ class GatewayManager:
         state.save()
         return result
 
+    def configure(
+        self,
+        base_url: str,
+        *,
+        auth_header_name: str,
+        auth_header_prefix: str,
+        api_key: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Register the gateway and, given *api_key*, hand Lemonade that key.
+
+        Both happen under one hold of :data:`GATEWAY_KEY_LOCK`, after a new
+        address drops Lemonade's key for the old one. Unlike :meth:`install`,
+        a key that discovers nothing is returned, not raised, so the caller can
+        put a kept key back. Returns Lemonade's last answer.
+        """
+        if api_key and cloud_blocked():
+            raise GatewayBlockedError(local_only_key_message("AMD LLM Gateway"))
+        with GATEWAY_KEY_LOCK:
+            result = self._install(
+                base_url,
+                api_key=None,
+                auth_header_name=auth_header_name,
+                auth_header_prefix=auth_header_prefix,
+                allow_insecure_http=False,
+            )
+            if api_key:
+                result = self._set_token(api_key)
+            return result
+
     def _refuse_an_unsupported_server(self) -> None:
         """Refuse a Lemonade GAIA does not support before registering with it.
 
@@ -1461,6 +1506,7 @@ class GatewayManager:
             return usable
         record = (recall or recall_stored_key)()
         with GATEWAY_KEY_LOCK:
+            # Status again: the hand-off takes no address, so this says where it goes.
             return self._ensure_authenticated(record)
 
     def _ensure_authenticated(self, record: Any) -> Any:

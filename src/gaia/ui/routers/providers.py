@@ -2479,7 +2479,7 @@ def connect_provider(
 
     The gateway's connect holds the machine-wide gateway key lock while it
     changes Lemonade, so no other process replays a key while its address or
-    key changes. A device's check of a new gateway's network runs before it.
+    key changes. The check of the gateway's network runs before it.
     """
     if provider != AMD:
         return _connect_provider(provider, body, request)
@@ -2527,18 +2527,7 @@ def _connect_provider(
                 "key. Reconnect without them to keep the saved ones.",
             )
         return _connect_device_gateway(body, key, request)
-    if provider != AMD:
-        return _connect_here(provider, body, request, key, on_pc)
-    with _gateway_move_lock:
-        return _connect_here(provider, body, request, key, on_pc)
-
-
-def _connect_here(
-    provider: str, body: ConnectRequest, request: Request, key: str, on_pc: bool
-) -> Dict[str, Any]:
-    """:func:`_connect_provider` for a connect that isn't a device's gateway move."""
     from gaia.connectors.store import retry_keyring
-    from gaia.llm.cloud_keys import CloudKeyError, ensure_authenticated, remember_key
 
     # Connecting needs the key store, so it may ask the OS again.
     retry_keyring()
@@ -2547,6 +2536,58 @@ def _connect_here(
         _discard_key_reads(provider)
         if not on_pc:
             audit_approval(request, f"{_NAMES[provider]} API key submitted")
+    if provider != AMD:
+        return _connect_here(provider, body, request, key, on_pc)
+    # Dialing takes seconds per address, so it runs before the lock is taken.
+    checked_url = _check_pc_gateway(body, request, key)
+    with _gateway_move_lock:
+        return _connect_here(provider, body, request, key, on_pc, checked_url)
+
+
+def _check_pc_gateway(
+    body: ConnectRequest, request: Request, key: str
+) -> Optional[str]:
+    """The gateway address the PC's connect checked, or ``None`` when unchecked.
+
+    Raises 503 when it doesn't answer, with the host and what to connect to.
+    """
+    from gaia.llm.gateway import GatewayUnreachable
+
+    if not _gateway_check_applies():
+        return None
+    try:
+        # A key-less reconnect must keep a custom gateway, not reset it.
+        base_url = _registration(AMD, body, _cloud_entry(AMD))["base_url"]
+    except ProviderError as e:
+        _raise(e, request, key)
+    try:
+        check_gateway_reachable(base_url)
+    except GatewayUnreachable as e:
+        raise HTTPException(
+            status_code=503,
+            detail=f"{e}. Connect to it, then try again.",
+        ) from e
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+    return base_url
+
+
+def _connect_here(
+    provider: str,
+    body: ConnectRequest,
+    request: Request,
+    key: str,
+    on_pc: bool,
+    checked_url: Optional[str] = None,
+) -> Dict[str, Any]:
+    """:func:`_connect_provider` for a connect that isn't a device's gateway move.
+
+    *checked_url* is the gateway address checked before the lock; one that
+    moved since is refused with 409.
+    """
+    from gaia.llm.cloud_keys import CloudKeyError, ensure_authenticated, remember_key
+    from gaia.llm.gateway import same_gateway_url
+
     try:
         # A key-less reconnect must keep a custom gateway, not reset it.
         registration = _registration(
@@ -2554,18 +2595,14 @@ def _connect_here(
         )
     except ProviderError as e:
         _raise(e, request, key)
-    if provider == AMD and _gateway_check_applies():
-        from gaia.llm.gateway import GatewayUnreachable
-
-        try:
-            check_gateway_reachable(registration["base_url"])
-        except GatewayUnreachable as e:
-            raise HTTPException(
-                status_code=503,
-                detail=f"{e}. Connect to it, then try again.",
-            ) from e
-        except ValueError as e:
-            raise HTTPException(status_code=422, detail=str(e)) from e
+    if checked_url is not None and not same_gateway_url(
+        registration["base_url"], checked_url
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail=f"The {_NAMES[AMD]} gateway's address changed while GAIA "
+            "checked it. Try again.",
+        )
     if _uses_users_server():
         return _connect_on_users_server(provider)
     try:
