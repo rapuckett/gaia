@@ -17,6 +17,7 @@ import { useQueuedModels } from './optionalModels';
 import { SetupFooterBar, SetupFooterProvider } from './SetupFooter';
 import { SetupScreen, type SetupStepContext } from './SetupScreen';
 import { SETUP_STEPS } from './steps';
+import { SeedOffer } from './steps/CheckOffer';
 import { usePlanScreenRequest } from './steps/planScreenRequest';
 
 const noop = () => undefined;
@@ -83,7 +84,9 @@ export function SetupSceneView({ found }: { found: SetupScene }) {
                                 <Screen width="flow" scroll footer={<SetupFooterBar />}>
                                     <Stack gap="lg" padding="lg">
                                         {found.chip ? <DownloadChip onPress={noop} /> : null}
-                                        <SceneStep stage={found.stage} />
+                                        <SeedOffer.Provider value={found.offer ?? null}>
+                                            <SceneStep stage={found.stage} />
+                                        </SeedOffer.Provider>
                                         {found.confirm ? <ConfirmOpen kind={found.confirm} /> : null}
                                     </Stack>
                                 </Screen>

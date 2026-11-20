@@ -2,12 +2,14 @@
 // SPDX-License-Identifier: MIT
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useState } from 'react';
 
-import type { LemonadeTarget, LemonadeTargetBody, MCPServerStatus, Settings } from '@/api/client.types';
+import type { LemonadeTarget, MCPServerStatus, Settings } from '@/api/client.types';
 import type { ModelServerInfo } from '@webui/types/api.gen';
 
 import { useGaiaClient } from './GaiaClientProvider';
 import { privacyKeys } from './privacy';
+import { secretFreeError } from './providers';
 import { queryKeys, requireClient } from './queries';
 
 export const modelServerKeys = {
@@ -37,11 +39,11 @@ export function useSetModelServerBackend() {
     });
 }
 
-/** Switches GAIA to its own model server or one the PC runs; the status and model lists re-read. */
+/** Switches GAIA back to its own model server: `mutate({ mode: 'gaia' })`; the status and model lists re-read. */
 export function useSetLemonadeTarget() {
     const client = useGaiaClient();
     const queryClient = useQueryClient();
-    return useMutation<LemonadeTarget, Error, LemonadeTargetBody>({
+    return useMutation<LemonadeTarget, Error, { mode: 'gaia' }>({
         mutationFn: (body) => requireClient(client).setLemonadeTarget(body),
         onSuccess: (saved) => queryClient.setQueryData(modelServerKeys.target, saved),
         onSettled: () => {
@@ -49,6 +51,34 @@ export function useSetLemonadeTarget() {
             void queryClient.invalidateQueries({ queryKey: queryKeys.systemStatus });
         },
     });
+}
+
+/**
+ * Points GAIA on the PC at the model server at `baseUrl`, confirmed, with `apiKey` only in the request body. Call it
+ * only from the press that confirms the switch (the PC refuses a phone's unconfirmed one), never from a retry. Not a
+ * mutation, so the key is never a mutation variable or cache entry; nothing it returns or throws carries it.
+ */
+export function useSwitchToYourServer() {
+    const client = useGaiaClient();
+    const queryClient = useQueryClient();
+    const [isPending, setPending] = useState(false);
+    const send = async (baseUrl: string, apiKey: string): Promise<LemonadeTarget> => {
+        const api = requireClient(client);
+        setPending(true);
+        try {
+            const key = apiKey.trim();
+            const saved = await api.setLemonadeTarget({ mode: 'external', base_url: baseUrl.trim(), ...(key ? { api_key: key } : {}), confirm: true });
+            queryClient.setQueryData(modelServerKeys.target, saved);
+            return saved;
+        } catch (err) {
+            throw secretFreeError(err, apiKey);
+        } finally {
+            setPending(false);
+            void queryClient.invalidateQueries({ queryKey: modelServerKeys.info });
+            void queryClient.invalidateQueries({ queryKey: queryKeys.systemStatus });
+        }
+    };
+    return { send, isPending };
 }
 
 /** Saves the custom model ID or the dynamic-tools switch. */

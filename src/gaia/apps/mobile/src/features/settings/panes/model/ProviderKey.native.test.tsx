@@ -329,6 +329,111 @@ describeNative('Provider key', () => {
         queryClient.clear();
     });
 
+    describe('the AMD gateway', () => {
+        const amd: ProviderRow = { id: 'amd', name: 'AMD LLM Gateway', remote: true, privacy_notice: '', configured: false, blocked: false, key_source: null, key_state: 'read' };
+        const amdStored: ProviderRow = { ...amd, configured: true, key_source: 'stored', key_hint: '4f2a' };
+        const GW_KEY = 'gw-typed-test-key-4242';
+        const URL = 'https://gw.example.com/v1';
+
+        it('the address and header are literal fields under the secret key, and go only with a typed key, only when filled', async () => {
+            const { client, queryClient, wrap } = setup(amd);
+            const send = jest.spyOn(client, 'connectProvider');
+            const r = await render(<ProviderKey provider={amd} connected={false} />, { wrapper: wrap });
+
+            const url = screen.getByTestId('provider-key-gateway-url');
+            const header = screen.getByTestId('provider-key-gateway-header');
+            for (const f of [url, header]) {
+                expect(f.props).toMatchObject({ autoCorrect: false, autoCapitalize: 'none' });
+                expect(f.props.secureTextEntry).toBeFalsy();
+                expect(f.props.style).toMatchObject({ writingDirection: 'ltr' });
+            }
+            expect(url.props.accessibilityLabel).toBe('Gateway URL');
+            expect(header.props.accessibilityLabel).toBe('Auth header name');
+            expect(screen.getByTestId('provider-key-field').props).toMatchObject({ secureTextEntry: true });
+
+            // An address with no key can't be sent.
+            await fireEvent.changeText(url, ` ${URL} `);
+            expect(screen.getByTestId('provider-key-connect')).toBeDisabled();
+
+            await fireEvent.changeText(screen.getByTestId('provider-key-field'), GW_KEY);
+            await fireEvent.press(screen.getByTestId('provider-key-connect'));
+            await screen.findByText('Connected. The key is kept for next time.');
+
+            // The empty header keeps the PC's, so only the address goes, in the key's request.
+            expect(send).toHaveBeenCalledTimes(1);
+            expect(send).toHaveBeenCalledWith('amd', { apiKey: GW_KEY, gateway: { base_url: URL } });
+            expect(screen.getByTestId('provider-key-field').props.value).toBe('');
+            expect(screen.getByTestId('provider-key-gateway-url').props.value).toBe('');
+            expect(heldAnywhere(r.container, queryClient)).not.toContain(GW_KEY);
+            queryClient.clear();
+        });
+
+        it('a key alone sends no gateway fields, and Reconnect never does', async () => {
+            const { client, queryClient, wrap } = setup(amd);
+            const send = jest.spyOn(client, 'connectProvider');
+            await render(<ProviderKey provider={amd} connected={false} />, { wrapper: wrap });
+
+            await fireEvent.changeText(screen.getByTestId('provider-key-field'), GW_KEY);
+            await fireEvent.press(screen.getByTestId('provider-key-connect'));
+            await screen.findByText('Connected. The key is kept for next time.');
+            expect(send).toHaveBeenCalledWith('amd', { apiKey: GW_KEY });
+            expect(client.gatewayConnects).toEqual([]);
+            queryClient.clear();
+        });
+
+        it('Replace shows the fields with the new key, and Cancel empties them', async () => {
+            const { client, queryClient, wrap } = setup(amdStored);
+            await render(<ProviderKey provider={amdStored} connected />, { wrapper: wrap });
+
+            expect(screen.queryByTestId('provider-key-gateway-url')).toBeNull();
+            await fireEvent.press(screen.getByTestId('provider-key-replace'));
+            await fireEvent.changeText(screen.getByTestId('provider-key-gateway-header'), 'X-Api-Key');
+            await fireEvent.press(screen.getByTestId('provider-key-cancel'));
+            await fireEvent.press(screen.getByTestId('provider-key-replace'));
+            expect(screen.getByTestId('provider-key-gateway-header').props.value).toBe('');
+            expect(client.connects).toEqual([]);
+            queryClient.clear();
+        });
+
+        it.each([
+            [422, "GAIA couldn't use that gateway, so it kept the previous one."],
+            [409, 'Another GAIA window or process has been changing the AMD LLM Gateway for over 60 s.'],
+        ])('a %i on a move shows our sentence with the PC\'s words under it, once, with the key cleared', async (status, detail) => {
+            const { client, queryClient, wrap } = setup(amd);
+            const send = jest.spyOn(client, 'connectProvider').mockRejectedValue(new GaiaApiError(status, detail));
+            const r = await render(<ProviderKey provider={amd} connected={false} />, { wrapper: wrap });
+
+            await fireEvent.changeText(screen.getByTestId('provider-key-gateway-url'), URL);
+            await fireEvent.changeText(screen.getByTestId('provider-key-field'), GW_KEY);
+            await fireEvent.press(screen.getByTestId('provider-key-connect'));
+
+            expect(await screen.findByText('That didn’t work. The details are below.')).toBeTruthy();
+            expect(screen.getByText(detail)).toBeTruthy();
+            expect(screen.queryByText(/didn't accept that key|Waiting for the OS/)).toBeNull();
+            expect(send).toHaveBeenCalledTimes(1);
+            expect(screen.getByTestId('provider-key-field').props.value).toBe('');
+            expect(screen.getByTestId('provider-key-gateway-url').props.value).toBe(URL);
+            expect(heldAnywhere(r.container, queryClient)).not.toContain(GW_KEY);
+            queryClient.clear();
+        });
+
+        it('a 403 on a move gives way to "Change this on the PC" with the PC\'s words under it', async () => {
+            const { client, queryClient, wrap } = setup(amd);
+            const detail = 'Change the gateway address or key header on the PC running GAIA, or from a paired device the PC allowed together with a new key.';
+            jest.spyOn(client, 'connectProvider').mockRejectedValue(new GaiaApiError(403, detail));
+            await render(<ProviderKey provider={amd} connected={false} />, { wrapper: wrap });
+
+            await fireEvent.changeText(screen.getByTestId('provider-key-gateway-url'), URL);
+            await fireEvent.changeText(screen.getByTestId('provider-key-field'), GW_KEY);
+            await fireEvent.press(screen.getByTestId('provider-key-connect'));
+
+            expect(await screen.findByText('Change this on the PC running GAIA.')).toBeTruthy();
+            expect(screen.getByText(detail)).toBeTruthy();
+            expect(screen.queryByTestId('provider-key-field')).toBeNull();
+            queryClient.clear();
+        });
+    });
+
     it('after a new key is saved, the card reads the PC\'s list again and shows the new hint', async () => {
         const { client, queryClient, wrap } = setup(stored);
         let hint = '4f2a';
