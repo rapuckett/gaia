@@ -241,7 +241,12 @@ def test_watch_exits_once_when_the_state_file_disappears(registered, caplog):
         finally:
             watch.stop()
     assert len(calls) == 1 and "instance.json" in calls[0]
-    warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+    # Only this module's records: another test's leftover thread may log too.
+    warnings = [
+        r
+        for r in caplog.records
+        if r.levelno == logging.WARNING and r.name == "gaia.daemon.lifetime"
+    ]
     assert len(warnings) == 1
     assert str(registered) in warnings[0].getMessage()
 

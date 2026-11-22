@@ -63,6 +63,9 @@ const IGNORED = new Map([
     ['--titlebar-controls-w', 'desktop window chrome'],
     ['--sidebar-toggle-clearance', "the web's hamburger offset"],
     ['--ease-step', 'cursor blink, not used on phones'],
+    ['--browser-pane-inset', "the desktop's browser pane, which phones don't have"],
+    ['--chat-min-w', "the desktop's chat and browser-pane split"],
+    ['--pane-min-w', "the desktop's chat and browser-pane split"],
 ]);
 
 const index = stripComments(readFileSync(resolve(stylesDir, 'index.css'), 'utf8'));

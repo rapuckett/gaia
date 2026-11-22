@@ -67,4 +67,27 @@ describe('session mutations', () => {
         await act(async () => open.result.current.mutate('a'));
         await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/'));
     });
+
+    it('a confirmed delete leaves the list at once, while the re-sync is still pending; a failed delete keeps the chat', async () => {
+        const { client, queryClient, wrapper } = setup();
+        const list = await renderHook(() => useSessions(), { wrapper });
+        await waitFor(() => expect(list.result.current.data?.sessions).toHaveLength(2));
+        const stale = await client.listSessions();
+        const ids = () => queryClient.getQueryData<{ sessions: Session[] }>(queryKeys.sessions)?.sessions.map((s) => s.id);
+        client.listSessions = () => new Promise(() => undefined);
+        const del = await renderHook(() => useDeleteSession(), { wrapper });
+
+        void queryClient.invalidateQueries({ queryKey: queryKeys.sessions });
+        await act(async () => del.result.current.mutate('b'));
+        await waitFor(() => expect(del.result.current.isSuccess).toBe(true));
+        expect(stale.sessions.map((s) => s.id)).toEqual(['a', 'b']);
+        expect(ids()).toEqual(['a']);
+
+        client.deleteSession = async () => {
+            throw new Error('nope');
+        };
+        await act(async () => del.result.current.mutate('a'));
+        await waitFor(() => expect(del.result.current.isError).toBe(true));
+        expect(queryClient.getQueryData<{ sessions: Session[] }>(queryKeys.sessions)?.sessions.map((s) => s.id)).toEqual(['a']);
+    });
 });

@@ -1978,7 +1978,12 @@ def test_report_route_bundles_setups_record(client, gaia_home, monkeypatch):
     run = sr.SetupRun(skip_chat_model=False)
     runner._run = run
     runner._consume(run, "something went wrong")
-    monkeypatch.setattr(setup_router, "build_plan", lambda: {"profile": "gaia"})
+    asked = []
+    monkeypatch.setattr(
+        setup_router,
+        "build_plan",
+        lambda **k: asked.append(k) or {"profile": "gaia"},
+    )
     written = {}
 
     def fake_diagnostics(argv, **_kw):
@@ -1995,6 +2000,8 @@ def test_report_route_bundles_setups_record(client, gaia_home, monkeypatch):
     assert sr.REPORT_NAME_RE.fullmatch(body["name"])
     assert written["record"]["logs"]["download"] == ["something went wrong"]
     assert written["record"]["plan"] == {"profile": "gaia"}
+    # The report records what setup downloads, even while chat runs on a cloud model.
+    assert asked == [{"skip_chat_model": False}]
 
     got = http.get(f"/api/setup/report/{body['name']}")
     assert got.status_code == 200
@@ -2011,7 +2018,7 @@ def test_report_route_serves_nothing_but_a_report(client, gaia_home, name):
 
 def test_report_route_names_a_failed_bundle(client, monkeypatch):
     http, _ = client
-    monkeypatch.setattr(setup_router, "build_plan", lambda: {})
+    monkeypatch.setattr(setup_router, "build_plan", lambda **_: {})
     monkeypatch.setattr(
         sr.subprocess,
         "run",

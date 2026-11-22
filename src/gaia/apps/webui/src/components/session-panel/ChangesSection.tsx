@@ -23,6 +23,7 @@ import { undoneText } from '../../utils/undoneText';
 import { untrackedWarning } from '../../utils/untrackedWork';
 import { DiffCard } from '../render/DiffCard';
 import { PanelSection } from './PanelSection';
+import { useSessionPanelStore } from '../../stores/sessionPanelStore';
 import type { ChatFileChange, GitRepo, SessionChanges, SessionGit } from '../../types/sessionPanel';
 import { isolate, ref, type MessageKey, type Param } from '../../i18n/registry';
 import { tEn, useT, type Translate } from '../../i18n/useT';
@@ -67,7 +68,9 @@ export function ChangesSection({ sessionId, busy, onJumpToMessage }: ChangesSect
         Promise.resolve()
             .then(() => api.getSessionChanges(sessionId))
             .then((res) => {
-                setChanges(expectShape(res, (r) => Array.isArray(r.files), "list of this chat's changes"));
+                const loaded = expectShape(res, (r) => Array.isArray(r.files), "list of this chat's changes");
+                setChanges(loaded);
+                useSessionPanelStore.getState().setSignals(sessionId, { changedFiles: loaded.files.length });
                 setError(null);
             })
             .catch((err) => {
@@ -182,7 +185,7 @@ function ChangesBody({ sessionId, busy, changes, onChanged, onUndone, onJumpToMe
             </ul>
             {changes.incomplete && (
                 <p className="sp-warn-text" role="note">
-                    <AlertTriangle size={11} aria-hidden="true" /> {untrackedWarning(changes.untracked, t, { inChat: true, undo: 'chg.undoAll' })}
+                    <AlertTriangle size={11} aria-hidden="true" /> {untrackedWarning(changes.untracked, { inChat: true }, t)}
                 </p>
             )}
             <div className="sp-actions-row">
