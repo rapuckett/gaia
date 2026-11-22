@@ -44,6 +44,7 @@ from ..database import (
 )
 from ..dependencies import get_db
 from ..devices import DEVICE_PROMPT_EVENT, DEVICE_PROMPT_STATES
+from ..devices.changes import record_folder_added
 from ..email_sidecar.profiles import profile_for
 from ..models import (
     AttachDocumentRequest,
@@ -371,6 +372,9 @@ async def create_session(
         session_permissions.seed_new_session(session["id"], start_mode)
         for folder in request.folders:
             session_environment.grant_folder(db, session["id"], folder)
+        # Only once every folder is granted: a refused one rolls the chat back.
+        for folder in request.folders:
+            record_folder_added(http_request, folder)
         return await _session_response(db, session)
     except Exception as e:
         if session is not None:

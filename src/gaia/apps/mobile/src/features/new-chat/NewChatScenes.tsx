@@ -8,6 +8,7 @@ import type { StartScreen, SystemStatus } from '@webui/types';
 import { GaiaApiError, GaiaNetworkError } from '@/api/errors';
 import { createFakeClient } from '@/api/fake';
 import { GaiaClientProvider } from '@/data';
+import { useNextChatFolder } from '@/features/composer';
 import { useNextChatDocs } from '@/features/documents';
 import { useT } from '@/i18n/useT';
 import { UIProvider } from '@/ui';
@@ -22,8 +23,10 @@ import { NewChatScreen } from './NewChatScreen';
  * DOC-23 `new-chat-doc-brief`: the library has documents and the PC offers the "Ask about your documents" card (`document-brief-card`).
  * APP-20 `create-failed`: a draft in the box and a PC that can't be reached; `#tap=composer-send` shows the failure notice.
  * APP-21 `skill-prompt`: a skill's Try it prompt arriving under an unsent draft, as the Skills screen sends it.
+ * NC-07, a folder for the new chat: `new-chat-folder-add` (Add a folder), `new-chat-folder-picker` (the picker open, folders only),
+ * `new-chat-folder-picked` (the picked folder, its path and a clear), `new-chat-folder-refused` (the PC refused it as the chat was made).
  */
-export const NEW_CHAT_SCENES = ['new-chat-setup-failed', 'new-chat-library', 'new-chat-warmup', 'new-chat-send-error', 'new-chat-assistant', 'new-chat-doc-brief', 'create-failed', 'skill-prompt'] as const;
+export const NEW_CHAT_SCENES = ['new-chat-setup-failed', 'new-chat-library', 'new-chat-warmup', 'new-chat-send-error', 'new-chat-assistant', 'new-chat-doc-brief', 'create-failed', 'skill-prompt', 'new-chat-folder-add', 'new-chat-folder-picker', 'new-chat-folder-picked', 'new-chat-folder-refused'] as const;
 export type NewChatScene = (typeof NEW_CHAT_SCENES)[number];
 
 const READY = {
@@ -32,6 +35,17 @@ const READY = {
 } as unknown as SystemStatus;
 
 const START: StartScreen = { cards: [], working_folder: { path: '/Users/avery/Documents', name: 'Documents', gaia_folder: false, choosable: false } };
+
+const FOLDER_SCENES: readonly NewChatScene[] = ['new-chat-folder-add', 'new-chat-folder-picker', 'new-chat-folder-picked', 'new-chat-folder-refused'];
+const PICKED = '/Users/Shared/Projects/site-redesign';
+const CHOOSABLE: StartScreen = { cards: [], working_folder: { path: '/Users/Shared/GAIA/documents', name: 'documents', gaia_folder: true, choosable: true } };
+const entry = (name: string, type: 'folder' | 'file') => ({ name, path: `/Users/Shared/Projects/${name}`, type });
+const PROJECTS = {
+    current_path: '/Users/Shared/Projects',
+    parent_path: '/Users/Shared',
+    entries: [entry('.cache', 'folder'), entry('quarterly-report', 'folder'), entry('site-redesign', 'folder'), entry('budget.xlsx', 'file'), entry('notes.txt', 'file')],
+    quick_links: [{ name: 'Home', path: '/Users/Shared', icon: 'home' }, { name: 'Documents', path: '/Users/Shared/Documents', icon: 'documents' }],
+};
 
 const DOC = (n: number, name: string) => ({
     id: `d${n}`, filename: name, filepath: `/Users/avery/Documents/${name}`, file_size: 20_000, chunk_count: 5,
@@ -54,6 +68,11 @@ function clientFor(state: NewChatScene) {
     if (state === 'new-chat-warmup') {
         return createFakeClient({ ...base, status: { ...READY, warm_up: { state: 'warming', elapsed_seconds: 12, model: 'Gemma-4-E4B-it-GGUF', device: 'gpu' } } as unknown as SystemStatus });
     }
+    if (FOLDER_SCENES.includes(state)) {
+        const fake = createFakeClient({ ...base, start: CHOOSABLE, fileFolders: { '': PROJECTS } });
+        if (state !== 'new-chat-folder-refused') return fake;
+        return { ...fake, createSession: () => Promise.reject(new GaiaApiError(400, `${PICKED} is not a folder on this PC.`)) };
+    }
     if (state === 'new-chat-assistant') {
         return createFakeClient({ ...base, start: { ...START, skills_error: 'Could not list skills: agent process exited with code 1' } });
     }
@@ -74,6 +93,11 @@ export function NewChatScenes({ state }: { state: NewChatScene }) {
         useNextChatDocs.getState().add(['d1', 'd2']);
         return () => useNextChatDocs.getState().clear();
     }, [state]);
+    useEffect(() => {
+        if (state !== 'new-chat-folder-picked' && state !== 'new-chat-folder-refused') return undefined;
+        useNextChatFolder.getState().set(PICKED);
+        return () => useNextChatFolder.getState().set(null);
+    }, [state]);
     return (
         <QueryClientProvider client={queryClient}>
             <GaiaClientProvider client={client}>
@@ -81,7 +105,8 @@ export function NewChatScenes({ state }: { state: NewChatScene }) {
                     <NewChatScreen
                         onOpen={noop}
                         onChooseDocuments={noop}
-                        initialHeld={state === 'new-chat-send-error' ? 'Summarize the board notes for me' : undefined}
+                        initialHeld={state === 'new-chat-send-error' ? 'Summarize the board notes for me' : state === 'new-chat-folder-refused' ? 'Review the site copy for typos' : undefined}
+                        initialPicking={state === 'new-chat-folder-picker'}
                         initialText={state === 'create-failed' ? 'Draft a status update for the team' : state === 'skill-prompt' ? 'Compare these two quotes' : undefined}
                         prompt={state === 'skill-prompt' ? { id: 'skill:summarize', text: t('settings.skills.tryPrompt', { name: 'summarize' }) } : undefined}
                     />

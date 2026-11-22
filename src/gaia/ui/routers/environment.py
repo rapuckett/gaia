@@ -21,6 +21,7 @@ from .. import session_environment as env
 from .. import session_outputs
 from ..database import ChatDatabase
 from ..dependencies import get_db
+from ..devices.changes import record_folder_added
 from ..models import WireModel
 from ..security import allowed_device, audit_approval
 from ..utils import is_within_document_roots
@@ -181,6 +182,7 @@ async def add_folder(
     except env.EnvironmentChangeError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     audit_approval(http_request, f"folder {body.path} given to chat {session_id}")
+    record_folder_added(http_request, body.path)
     return await _describe(db, session)
 
 

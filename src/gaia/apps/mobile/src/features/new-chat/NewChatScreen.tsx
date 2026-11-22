@@ -9,7 +9,7 @@ import type { PermissionMode } from '@/api/client.types';
 import { useCreateSession, useDocuments, useGaiaClient, useMemorySettings, useStartScreen, useSystemStatus } from '@/data';
 import { FlagshipAgentBanner } from '@/features/banners/FlagshipAgentBanner';
 import { ModelRestoreNotice } from '@/features/model/ModelRestoreNotice';
-import { Composer, FolderChip, ModelChip, PermissionChip, PrivateChip, useAttachments, useComposerQueue } from '@/features/composer';
+import { Composer, FolderChip, ModelChip, PermissionChip, PrivateChip, useAttachments, useComposerQueue, useNextChatFolder } from '@/features/composer';
 import { useNextChatDocs } from '@/features/documents';
 import { QueuedMessages } from '@/features/composer/QueuedMessages';
 import { ScreenHeader } from '@/features/nav/ScreenHeader';
@@ -42,9 +42,11 @@ export interface NewChatScreenProps {
     prompt?: { id: string; text: string };
     /** Starts with this opening message held until GAIA has started (developer gallery). */
     initialHeld?: string;
+    /** Starts with the folder picker open (developer gallery). */
+    initialPicking?: boolean;
 }
 
-export function NewChatScreen({ onOpen, onChooseDocuments, initialText = '', prompt, initialHeld }: NewChatScreenProps) {
+export function NewChatScreen({ onOpen, onChooseDocuments, initialText = '', prompt, initialHeld, initialPicking }: NewChatScreenProps) {
     const t = useT();
     const status = useSystemStatus().data;
     const createSession = useCreateSession();
@@ -63,8 +65,10 @@ export function NewChatScreen({ onOpen, onChooseDocuments, initialText = '', pro
     const { state, setText, submit } = useFirstSend(
         {
             createSession: async () => {
-                const session = await createSession.mutateAsync({ document_ids: useNextChatDocs.getState().ids, private: isPrivate });
+                const folder = useNextChatFolder.getState().path;
+                const session = await createSession.mutateAsync({ document_ids: useNextChatDocs.getState().ids, private: isPrivate, folders: folder ? [folder] : [] });
                 useNextChatDocs.getState().clear();
+                useNextChatFolder.getState().set(null);
                 if (mode !== 'ask') await client?.setPermissionMode(session.id, mode);
                 return session;
             },
@@ -268,7 +272,7 @@ export function NewChatScreen({ onOpen, onChooseDocuments, initialText = '', pro
                         detail={failedSetup}
                     />
                 )}
-                {!state.sending && <FolderChip folder={startScreen?.working_folder} />}
+                {!state.sending && <FolderChip folder={startScreen?.working_folder} initialPicking={initialPicking} />}
                 {documents && !state.sending && (
                     <LibraryDocuments
                         documents={documents}

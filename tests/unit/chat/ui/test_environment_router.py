@@ -430,6 +430,65 @@ def test_a_refused_folder_leaves_no_chat_behind(client, tmp_path, bad):
     assert _chat_count(client) == 0
 
 
+@pytest.fixture
+def phone(client, tmp_path):
+    """The same app, reached by the allowed paired device ``phone-1``."""
+    from gaia.ui.devices.access import DeviceAccess
+    from gaia.ui.security import (
+        DEVICE_AUTH_SCOPE_KEY,
+        DEVICE_SCOPE_KEY,
+        LAN_LISTENER,
+        LISTENER_SCOPE_KEY,
+        DevicePrincipal,
+    )
+
+    app = client.app
+    app.state.devices = DeviceAccess(app, folder=tmp_path / "devices")
+
+    async def on_listener(scope, receive, send):
+        scope[LISTENER_SCOPE_KEY] = LAN_LISTENER
+        scope[DEVICE_SCOPE_KEY] = DevicePrincipal("phone-1", True)
+        scope[DEVICE_AUTH_SCOPE_KEY] = True
+        await app(scope, receive, send)
+
+    return TestClient(on_listener, client=("127.0.0.1", 50000))
+
+
+def _phone_changes(client):
+    changes, _ = client.app.state.db.device_changes("phone-1", 20)
+    return [(c["kind"], c["params"]) for c in changes]
+
+
+def test_a_folder_a_phone_gives_a_chat_is_in_its_changes(client, phone, folder):
+    assert (
+        client.post("/api/sessions", json={"folders": [str(folder)]}).status_code == 200
+    )
+    assert _phone_changes(client) == []
+
+    created = phone.post("/api/sessions", json={"folders": [str(folder)]})
+    assert created.status_code == 200, created.text
+    other = folder.parent / "taxes"
+    other.mkdir()
+    added = phone.post(
+        f"/api/sessions/{created.json()['id']}/environment/folders",
+        json={"path": str(other)},
+    )
+    assert added.status_code == 200, added.text
+
+    assert _phone_changes(client) == [
+        ("folderAdded", {"folder": "taxes"}),
+        ("folderAdded", {"folder": "project"}),
+    ]
+
+
+def test_a_folder_refused_at_create_leaves_no_change(client, phone, folder, tmp_path):
+    refused = phone.post(
+        "/api/sessions", json={"folders": [str(folder), str(tmp_path / "nope")]}
+    )
+    assert refused.status_code == 400
+    assert _phone_changes(client) == []
+
+
 def test_a_relayed_agent_that_takes_folders_can_start_with_one(
     client, folder, relayed_gaia
 ):
