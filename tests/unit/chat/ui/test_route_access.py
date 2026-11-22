@@ -157,10 +157,10 @@ NOT_ON_LISTENER = {
 PAIR = {"POST /api/devices/pair"}
 
 DEVICE = {
-    "DELETE /api/devices/self/push",
+    "DELETE /api/devices/me/push",
     "GET /api/devices/me/routes",
-    "GET /api/devices/self/push",
-    "PUT /api/devices/self/push",
+    "GET /api/devices/me/push",
+    "PUT /api/devices/me/push",
 }
 
 DEVICE_SELF = {"DELETE /api/devices/me"}
@@ -577,7 +577,7 @@ def test_every_route_is_classified(setup):
         access_class = actual[key]
         method, path = _request_path(key)
         refusals = {404} if access_class in ("web", "pair") else {401, 403}
-        if path.startswith("/api/devices") and path != "/api/devices/self/push":
+        if path.startswith("/api/devices") and path != "/api/devices/me/push":
             # Reads are GETs; everything that changes state is POST or DELETE.
             assert method in ("GET", "POST", "DELETE"), key
         for caller in CALLERS:

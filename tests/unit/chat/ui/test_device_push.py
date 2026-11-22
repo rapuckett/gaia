@@ -48,7 +48,7 @@ PC = ("127.0.0.1", 50000)
 UI = {"X-Gaia-UI": "1"}
 PUBLIC = "93.184.215.14"
 RELAY = "https://relay.example.com/base"
-ROUTE = "/api/devices/self/push"
+ROUTE = "/api/devices/me/push"
 
 
 def b64(data: bytes) -> str:
