@@ -92,7 +92,7 @@ export default function Model({ provider: requested }: { provider?: string }) {
 
     return (
         <Stack gap="lg" paddingX="lg" paddingY="md">
-            {serverDown ? <ModelServerDownNotice detail={serverDetail} /> : null}
+            {serverDown ? <ModelServerDownNotice detail={serverDetail} inPane /> : null}
             <ModelInUse
                 active={active}
                 readFailed={!!activeQuery.error}

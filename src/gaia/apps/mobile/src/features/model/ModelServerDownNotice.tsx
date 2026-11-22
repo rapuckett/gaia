@@ -26,9 +26,12 @@ export function ModelServerDownNotice({
     initialSwitched = false,
     autoSwitch = false,
     detail,
+    inPane = false,
 }: {
     /** The server's own words for why it isn't answering, on a muted line of its own; never part of a translated sentence. */
     detail?: string | null;
+    /** On the Settings › Model pane, where no reply is waiting: says GAIA can't reply until the server is back. */
+    inPane?: boolean;
     /** Dev gallery only: opens after "Check again" was pressed. */
     initialAsked?: boolean;
     /** Dev gallery only: opens after a successful switch. */
@@ -103,7 +106,7 @@ export function ModelServerDownNotice({
                 <Icon icon={TriangleAlert} size="sm" tone="warning" />
                 <Text role="ui" weight="semibold">{t('mobileApp.serverDown.title')}</Text>
             </Row>
-            <Text role="ui">{t('serverDown.body')}</Text>
+            <Text role="ui">{t(inPane ? 'mobileApp.serverDown.paneBody' : 'serverDown.body')}</Text>
             {notOurs ? <Text role="ui">{t('mobileApp.serverDown.notOurs')}</Text> : null}
             {targetFailure ? <Notice tone="danger" message={targetFailure.text} detail={targetFailure.detail} testID="server-down-target-failed" /> : null}
             {stillDown ? <Text role="ui">{t('serverDown.stillDown')}</Text> : null}

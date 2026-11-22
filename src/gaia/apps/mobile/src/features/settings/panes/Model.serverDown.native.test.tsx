@@ -42,6 +42,8 @@ describeNative('Settings > Model with the model server down', () => {
         await mount(settingsSceneClient(scene) as never, tab);
         expect(await screen.findByTestId('server-down-notice')).toBeTruthy();
         expect(screen.getAllByTestId('server-down-notice')).toHaveLength(1);
+        expect(screen.getByText(t('mobileApp.serverDown.paneBody'))).toBeTruthy();
+        expect(screen.queryByText(t('serverDown.body'))).toBeNull();
         expect(await screen.findByTestId('server-down-detail')).toHaveTextContent('connect ECONNREFUSED 192.168.1.20:13305');
         expect(screen.getAllByText('connect ECONNREFUSED 192.168.1.20:13305')).toHaveLength(1);
         expect(screen.getAllByText(t('settings.key.checkAgain'))).toHaveLength(1);

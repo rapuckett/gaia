@@ -28,7 +28,9 @@ export function ServerDownCard({
     const t = useT();
     const { colors, radius, space } = useTheme();
     const largeText = useLargeText();
-    const detail = banner.detail ?? banner.command;
+    // A start or restart command is code; the PC's own instruction (no hint sentence before it) stays a muted line.
+    const asCode = !!banner.command && !!banner.message && !banner.detail;
+    const detail = banner.detail ?? (asCode ? undefined : banner.command);
     return (
         <View
             accessibilityRole="alert"
@@ -39,10 +41,11 @@ export function ServerDownCard({
                 <View style={{ flex: 1, minWidth: 0, gap: space.xs }}>
                     <Text role="ui" weight="semibold">{banner.title}</Text>
                     {banner.message ? <Text role="label" tone="secondary">{banner.message}</Text> : null}
+                    {asCode ? <Text role="caption" code dir="ltr">{banner.command}</Text> : null}
                     {detail ? <Text role="caption" tone="muted" dir="ltr">{detail}</Text> : null}
                     <Row gap="sm" wrap>
+                        {onOpenSetup ? <Button variant="primary" label={t('setup.serverDown.setup')} onPress={onOpenSetup} full={largeText} shrink={false} testID="server-down-banner-setup" /> : null}
                         <Button variant="secondary" label={t('settings.key.checkAgain')} onPress={onCheckAgain} full={largeText} shrink={false} testID="server-down-banner-check" />
-                        {onOpenSetup ? <Button variant="ghost" label={t('setup.serverDown.setup')} onPress={onOpenSetup} full={largeText} shrink={false} testID="server-down-banner-setup" /> : null}
                     </Row>
                 </View>
                 <IconButton icon={X} size="sm" label={t('banner.dismiss')} onPress={onDismiss} />
