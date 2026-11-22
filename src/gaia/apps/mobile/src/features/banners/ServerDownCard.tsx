@@ -41,7 +41,7 @@ export function ServerDownCard({
                 <View style={{ flex: 1, minWidth: 0, gap: space.xs }}>
                     <Text role="ui" weight="semibold">{banner.title}</Text>
                     {banner.message ? <Text role="label" tone="secondary">{banner.message}</Text> : null}
-                    {asCode ? <Text role="caption" code dir="ltr">{banner.command}</Text> : null}
+                    {asCode ? <Text role="caption" code dir="ltr" align="ltr">{banner.command}</Text> : null}
                     {detail ? <Text role="caption" tone="muted" dir="ltr">{detail}</Text> : null}
                     <Row gap="sm" wrap>
                         {onOpenSetup ? <Button variant="primary" label={t('setup.serverDown.setup')} onPress={onOpenSetup} full={largeText} shrink={false} testID="server-down-banner-setup" /> : null}
