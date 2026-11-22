@@ -44,7 +44,7 @@ from ..models import (
     IndexFolderResponse,
     WireModel,
 )
-from ..security import is_local_pc
+from ..security import allowed_device, is_local_pc
 from ..utils import (
     ALLOWED_EXTENSIONS,
     FOLDER_INDEX_EXTENSIONS,
@@ -65,11 +65,21 @@ from .files import (
     _refuse_remote_secret,
     _remote_read_roots,
     _within_roots,
+    device_withholds,
 )
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["documents"])
+
+_DEVICE_WITHHELD = (
+    "GAIA doesn't show this away from the PC: it holds credentials or keys."
+)
+
+
+def _withheld_from_device(request: Request, path: Path) -> bool:
+    """Whether *request* is from a paired device kept out of *path*."""
+    return allowed_device(request) is not None and device_withholds(path)
 
 
 class IndexProgressResponse(WireModel):
@@ -273,9 +283,10 @@ async def upload_by_path(
     if "\x00" in request.filepath:
         raise HTTPException(status_code=400, detail="Invalid file path")
 
-    _refuse_remote_read(
-        Path(os.path.realpath(os.path.expanduser(request.filepath))), roots
-    )
+    real = Path(os.path.realpath(os.path.expanduser(request.filepath)))
+    _refuse_remote_read(real, roots)
+    if _withheld_from_device(http_request, real):
+        raise _device_refusal("credentials_withheld", _DEVICE_WITHHELD)
 
     # Resolve once — used for both the lock key and safe_open validation
     resolved = Path(request.filepath).resolve()
@@ -283,7 +294,9 @@ async def upload_by_path(
 
     async with lock:
         # Atomic open with O_NOFOLLOW + fstat validation (no TOCTOU window)
-        with safe_open_document(request.filepath) as (fd, file_stat, safe_filepath):
+        with safe_open_document(
+            request.filepath, away=not is_local_pc(http_request)
+        ) as (fd, file_stat, safe_filepath):
             file_size = file_stat.st_size
             file_mtime = file_stat.st_mtime
             file_hash = compute_file_hash_from_fd(fd)
@@ -707,16 +720,18 @@ async def get_document_file(
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
     path = Path(doc.get("filepath") or "")
-    real = Path(ensure_document_path_allowed(path))
+    away = not is_local_pc(request)
+    real = Path(ensure_document_path_allowed(path, away=away))
     # Judged at read time, so rows recorded before the policy are covered too.
-    if not is_local_pc(request):
+    if away:
         _refuse_remote_secret(real)
     if path.is_symlink():
         raise HTTPException(status_code=403, detail="Symbolic links are not served")
     if not real.is_file():
+        where = "" if away else f" at {path}"
         raise HTTPException(
             status_code=404,
-            detail=f"{doc.get('filename') or doc_id} is no longer on disk at {path}",
+            detail=f"{doc.get('filename') or doc_id} is no longer on disk{where}",
         )
     # FileResponse opens the file only once headers are out, cutting the reply.
     try:
@@ -924,8 +939,12 @@ async def index_folder(
 
     # Same check as upload-path, and before any filesystem access
     # (is_symlink/exists/is_dir can throw PermissionError on protected paths).
-    resolved = Path(ensure_document_path_allowed(raw_folder))
+    resolved = Path(
+        ensure_document_path_allowed(raw_folder, away=not is_local_pc(http_request))
+    )
     _refuse_remote_read(resolved, roots)
+    if _withheld_from_device(http_request, resolved):
+        raise _device_refusal("credentials_withheld", _DEVICE_WITHHELD)
 
     # Check symlink after home restriction
     try:
@@ -951,10 +970,13 @@ async def index_folder(
         for item in pattern_iter:
             if item.is_symlink() or not item.is_file():
                 continue
-            if roots is not None and (
-                secret_read_refusal(item)
-                or not _within_roots(Path(os.path.realpath(item)), roots)
-            ):
+            if (
+                roots is not None
+                and (
+                    secret_read_refusal(item)
+                    or not _within_roots(Path(os.path.realpath(item)), roots)
+                )
+            ) or _withheld_from_device(http_request, item):
                 skipped += 1
             elif item.suffix.lower() in FOLDER_INDEX_EXTENSIONS:
                 candidate_files.append(item)
