@@ -816,11 +816,24 @@ def safe_open_document(
     except FileNotFoundError:
         raise HTTPException(
             status_code=404,
-            detail=f"File not found: there is no file at {raw}. Check the path "
-            "for typos.",
+            detail=(
+                "File not found: there is no file at that path. Check the path "
+                "for typos."
+                if away
+                else f"File not found: there is no file at {raw}. Check the path "
+                "for typos."
+            ),
         )
     except OSError as exc:
-        raise HTTPException(status_code=400, detail=f"Cannot stat file: {exc}")
+        logger.warning("safe_open_document: cannot stat %s: %s", raw, exc)
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Cannot read that file. Check it is still on the PC."
+                if away
+                else f"Cannot stat file: {exc}"
+            ),
+        )
 
     # 3b. A folder gets its own answer so the caller can offer folder indexing.
     if stat.S_ISDIR(lst.st_mode):
@@ -828,8 +841,13 @@ def safe_open_document(
             status_code=400,
             detail={
                 "status": "is_folder",
-                "message": f"{raw} is a folder, not a file. Index it as a folder "
-                "to add the documents inside it.",
+                "message": (
+                    "That path is a folder, not a file. Index it as a folder "
+                    "to add the documents inside it."
+                    if away
+                    else f"{raw} is a folder, not a file. Index it as a folder "
+                    "to add the documents inside it."
+                ),
             },
         )
 
@@ -852,7 +870,14 @@ def safe_open_document(
     try:
         fd = os.open(str(resolved), flags)
     except FileNotFoundError:
-        raise HTTPException(status_code=404, detail=f"File not found: {resolved}")
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                "File not found: there is no file at that path."
+                if away
+                else f"File not found: {resolved}"
+            ),
+        )
     except OSError as exc:
         import errno
 
@@ -861,7 +886,15 @@ def safe_open_document(
                 status_code=400,
                 detail="Symlink documents are not allowed for security reasons",
             )
-        raise HTTPException(status_code=400, detail=f"Cannot open file: {exc}")
+        logger.warning("safe_open_document: cannot open %s: %s", resolved, exc)
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Cannot open that file. Check it is still on the PC."
+                if away
+                else f"Cannot open file: {exc}"
+            ),
+        )
 
     try:
         st = os.fstat(fd)

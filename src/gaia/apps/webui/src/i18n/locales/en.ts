@@ -2210,6 +2210,7 @@ export const enMessages = {
     'settings.devices.change.gpuMemoryRevert': 'Undid the GPU memory change',
     'settings.devices.change.npuMemlockFixed': 'Raised the NPU locked-memory limit',
     'settings.devices.change.folderAdded': 'Gave a chat the folder {folder}',
+    'settings.devices.change.folderRemoved': 'Took the folder {folder} from a chat',
     'settings.devices.change.chatPermissionsAsk': 'Set a chat to ask before acting',
     'settings.devices.change.chatPermissionsFull': 'Gave a chat full access',
     'settings.devices.change.connectorRemoved': 'Removed {connector}',

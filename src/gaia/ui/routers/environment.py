@@ -19,7 +19,7 @@ from .. import session_environment as env
 from .. import session_outputs
 from ..database import ChatDatabase
 from ..dependencies import get_db
-from ..devices.changes import record_folder_added
+from ..devices.changes import record_folder_added, record_folder_removed
 from ..models import WireModel
 from ..security import allowed_device, audit_approval, detail_for
 from .files import device_pick_refusal
@@ -221,6 +221,8 @@ async def remove_folder(
         raise HTTPException(
             status_code=409, detail=detail_for(http_request, str(e))
         ) from e
+    audit_approval(http_request, f"folder {body.path} taken from chat {session_id}")
+    record_folder_removed(http_request, body.path)
     return await _describe(db, session)
 
 

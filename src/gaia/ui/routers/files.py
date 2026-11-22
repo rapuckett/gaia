@@ -120,6 +120,10 @@ OUTSIDE_HOME_REFUSAL = (
     "PC's own folder picker does."
 )
 
+CREDENTIALS_WITHHELD_REFUSAL = (
+    "GAIA doesn't show this away from the PC: it holds credentials or keys."
+)
+
 router = APIRouter(tags=["files"])
 
 
@@ -165,7 +169,7 @@ def _refuse_remote_secret(resolved: Path) -> None:
     if secret_read_refusal(resolved):
         raise _device_refusal(
             "credentials_withheld",
-            "GAIA doesn't show this away from the PC: it holds credentials or keys.",
+            CREDENTIALS_WITHHELD_REFUSAL,
         )
 
 
@@ -338,7 +342,7 @@ def _refuse_picker_read(resolved: Path, scope: _ReadScope) -> None:
     if device_withholds(resolved):
         raise _device_refusal(
             "credentials_withheld",
-            "GAIA doesn't show this away from the PC: it holds credentials or keys.",
+            CREDENTIALS_WITHHELD_REFUSAL,
         )
 
 

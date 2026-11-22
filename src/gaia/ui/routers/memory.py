@@ -1387,7 +1387,16 @@ def clear_all_memory(request: Request) -> Dict:
         cleared = _get_store().clear_all()
     except MemoryScrubError as exc:
         logger.error("[memory router] clear_all scrub failed: %s", exc)
-        raise HTTPException(500, str(exc)) from exc
+        raise HTTPException(
+            500,
+            (
+                str(exc)
+                if is_local_pc(request)
+                else "Memory was erased, but the deleted text could not be "
+                "scrubbed from the file on the PC. Close other GAIA windows on "
+                "the PC and erase again."
+            ),
+        ) from exc
     except Exception as exc:
         logger.error("[memory router] clear_all failed: %s", exc)
         raise HTTPException(500, f"Clear failed: {type(exc).__name__}")

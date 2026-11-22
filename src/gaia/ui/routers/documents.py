@@ -60,6 +60,7 @@ from ..utils import (
 )
 from .files import (
     _AWAY_FROM_PC,
+    CREDENTIALS_WITHHELD_REFUSAL,
     _device_refusal,
     _refuse_remote_read,
     _refuse_remote_secret,
@@ -71,10 +72,6 @@ from .files import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["documents"])
-
-_DEVICE_WITHHELD = (
-    "GAIA doesn't show this away from the PC: it holds credentials or keys."
-)
 
 
 def _withheld_from_device(request: Request, path: Path) -> bool:
@@ -286,7 +283,7 @@ async def upload_by_path(
     real = Path(os.path.realpath(os.path.expanduser(request.filepath)))
     _refuse_remote_read(real, roots)
     if _withheld_from_device(http_request, real):
-        raise _device_refusal("credentials_withheld", _DEVICE_WITHHELD)
+        raise _device_refusal("credentials_withheld", CREDENTIALS_WITHHELD_REFUSAL)
 
     # Resolve once — used for both the lock key and safe_open validation
     resolved = Path(request.filepath).resolve()
@@ -944,7 +941,7 @@ async def index_folder(
     )
     _refuse_remote_read(resolved, roots)
     if _withheld_from_device(http_request, resolved):
-        raise _device_refusal("credentials_withheld", _DEVICE_WITHHELD)
+        raise _device_refusal("credentials_withheld", CREDENTIALS_WITHHELD_REFUSAL)
 
     # Check symlink after home restriction
     try:
@@ -1038,7 +1035,12 @@ async def index_folder(
                 )
                 indexed_docs.append(doc_to_response(doc))
             except Exception as e:
-                error_msg = f"{filepath.name}: {e}"
+                error_msg = (
+                    f"{filepath.name}: {e}"
+                    if is_local_pc(http_request)
+                    else f"{filepath.name}: could not be indexed; see the PC's "
+                    "server logs"
+                )
                 logger.warning("Failed to index %s: %s", filepath, e)
                 errors.append(error_msg)
                 # Unhashable means unreadable: no content key to file a row under.
@@ -1053,7 +1055,11 @@ async def index_folder(
                             record_err,
                             exc_info=True,
                         )
-                        errors[-1] += f" (no library row: {record_err})"
+                        errors[-1] += (
+                            f" (no library row: {record_err})"
+                            if is_local_pc(http_request)
+                            else " (no library row)"
+                        )
 
     logger.info(
         "Folder indexing complete: %d indexed, %d failed",
