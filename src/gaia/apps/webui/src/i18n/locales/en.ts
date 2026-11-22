@@ -4144,6 +4144,8 @@ export const enMessages = {
     'mobileApp.files.refused.notInChatFolders': "A paired phone can open files only from the folders its chat was given. {name} isn't in this chat's folders: add its folder to the chat on your PC, or open it on your PC.",
     'mobileApp.files.refused.outsideHome': "A paired phone can browse only your home folder on the PC, as the PC's own folder picker does.",
     'mobileApp.files.refused.sessionRequired': "A paired phone can open files only from the folders its chat was given. Open the file from a chat.",
+    'mobileApp.folder.refused.outsideHome': 'GAIA can only use folders inside your home folder on the PC from a phone. Pick a folder there.',
+    'mobileApp.folder.refused.withheld': "GAIA can't use this folder from a phone because it holds passwords or keys. Pick another folder.",
     'mobileApp.nav.back': 'Back',
     'mobileApp.nav.closeDrawer': 'Close menu',
     'mobileApp.nav.up': 'Navigate up',

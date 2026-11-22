@@ -22,7 +22,7 @@ from ..dependencies import get_db
 from ..devices.changes import record_folder_added
 from ..models import WireModel
 from ..security import allowed_device, audit_approval
-from .files import device_pick_refusal
+from .files import DevicePickCode, device_pick_refusal
 
 logger = get_logger(__name__)
 
@@ -70,6 +70,10 @@ class FolderCheckResponse(WireModel):
     """Why a chat can't be given the folder, or null when it can."""
 
     refusal: Optional[str]
+    code: Optional[DevicePickCode] = Field(
+        default=None,
+        description="Set only on a paired device's refusal, for the phone to word it.",
+    )
 
 
 class OutputItem(WireModel):
@@ -168,7 +172,7 @@ async def add_folder(
     if allowed_device(http_request) is not None:
         refusal = await asyncio.to_thread(device_pick_refusal, body.path)
         if refusal:
-            raise HTTPException(status_code=403, detail=refusal)
+            raise refusal.http_error()
     try:
         await asyncio.to_thread(env.add_folder, db, session_id, body.path)
     except env.EnvironmentChangeError as e:
@@ -192,7 +196,7 @@ async def check_folder(body: FolderRequest, http_request: Request) -> dict:
     if allowed_device(http_request) is not None:
         refusal = await asyncio.to_thread(device_pick_refusal, body.path)
         if refusal:
-            return {"refusal": refusal}
+            return {"refusal": refusal.message, "code": refusal.code}
     try:
         await asyncio.to_thread(env.check_folder, body.path)
     except env.EnvironmentChangeError as e:
