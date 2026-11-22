@@ -18,8 +18,8 @@ import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 
 /**
- * Takes the relay's data-only messages: opens each with the paired PCs' keys and posts the chat's own notification,
- * worded from the generated gaia_push_* strings (which follow the app's language). One it can't open shows the generic alert.
+ * Takes the relay's data-only messages and posts the chat's own notification, worded from the generated gaia_push_*
+ * strings (which follow the app's language). A push that doesn't open, or is a replay, shows nothing.
  * The app re-sends its token to the relay on every start, so a new token needs nothing here.
  */
 class GaiaMessagingService : FirebaseMessagingService() {
@@ -27,39 +27,16 @@ class GaiaMessagingService : FirebaseMessagingService() {
     val sealed = message.data["c"] ?: return
     val nonce = message.data["n"] ?: return
     val vault = PushVault(this)
-    val opened = try {
-      PushCrypto.open(sealed, nonce, vault.all())
+    val action = try {
+      PushInbox.decide(sealed, nonce, vault.all(), vault::accept, ::say, ::find)
     } catch (e: PushException) {
-      Log.e(TAG, "Couldn't read this phone's push keys (${e.code}); showing the generic alert.")
-      null
+      PushAction.Dropped("this phone's push keys can't be read (${e.code})")
     }
-    val payload = opened?.let { PushPayload.parse(it.second) }
-    if (opened != null && payload != null) {
-      val fresh = try {
-        vault.accept(opened.first, payload.seq)
-      } catch (e: PushException) {
-        Log.e(TAG, "Couldn't record a push as seen (${e.code}); not showing it.")
-        false
-      }
-      // A replayed push shows nothing.
-      if (!fresh) {
-        Log.w(TAG, "Dropped a push whose seq isn't newer than the last one from its PC.")
-        return
-      }
+    when (action) {
+      is PushAction.Dropped -> Log.w(TAG, "Showing nothing for a push: ${action.reason}.")
+      PushAction.ClearAll -> NotificationManagerCompat.from(this).cancelAll()
+      is PushAction.Post -> post(action.channel, action.tag, action.title, action.body, action.route, action.badge)
     }
-    if (payload == null) {
-      Log.w(TAG, "A push didn't open with any paired PC's key; showing the generic alert.")
-      post(NEEDS_YOU, GENERIC_TAG, say("mobileApp.push.generic.title"), say("mobileApp.push.generic.body"), "/", null)
-      return
-    }
-    if (payload.kind == "badge") {
-      // The launcher's dot follows the notifications on show; nothing left to count means none should stay.
-      if (payload.badge == 0) NotificationManagerCompat.from(this).cancelAll()
-      return
-    }
-    val text = PushText.compose(payload, ::say, ::find) ?: return
-    val channel = if (payload.kind == "approval" || payload.kind == "needs_you") NEEDS_YOU else CHATS
-    post(channel, payload.sessionId?.let { "chat:$it" } ?: GENERIC_TAG, text.first, text.second, payload.route, payload.badge)
   }
 
   private fun post(channel: String, tag: String, title: String, body: String, route: String, badge: Int?) {
@@ -75,7 +52,7 @@ class GaiaMessagingService : FirebaseMessagingService() {
       .setAutoCancel(true)
       .setGroup(tag)
       .setContentIntent(openIntent(route, tag))
-      .setPriority(if (channel == NEEDS_YOU) NotificationCompat.PRIORITY_HIGH else NotificationCompat.PRIORITY_DEFAULT)
+      .setPriority(if (channel == PushInbox.NEEDS_YOU) NotificationCompat.PRIORITY_HIGH else NotificationCompat.PRIORITY_DEFAULT)
     if (badge != null) builder.setNumber(badge)
     try {
       // One notification per chat: a newer event for it replaces the older.
@@ -98,8 +75,8 @@ class GaiaMessagingService : FirebaseMessagingService() {
   private fun ensureChannels() {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
     val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-    manager.createNotificationChannel(NotificationChannel(NEEDS_YOU, say("mobileApp.push.channel.needsYou"), NotificationManager.IMPORTANCE_HIGH))
-    manager.createNotificationChannel(NotificationChannel(CHATS, say("mobileApp.push.channel.chats"), NotificationManager.IMPORTANCE_DEFAULT))
+    manager.createNotificationChannel(NotificationChannel(PushInbox.NEEDS_YOU, say("mobileApp.push.channel.needsYou"), NotificationManager.IMPORTANCE_HIGH))
+    manager.createNotificationChannel(NotificationChannel(PushInbox.CHATS, say("mobileApp.push.channel.chats"), NotificationManager.IMPORTANCE_DEFAULT))
   }
 
   /** A resource plugins/push/withPushAndroid.js writes in every build with push; a missing one is a build error made loud. */
@@ -122,9 +99,6 @@ class GaiaMessagingService : FirebaseMessagingService() {
   private companion object {
     const val TAG = "GaiaPush"
     const val SCHEME_KEY = "ai.amd.gaia.push.SCHEME"
-    const val NEEDS_YOU = "gaia.needs_you"
-    const val CHATS = "gaia.chats"
-    const val GENERIC_TAG = "gaia"
     const val NOTIFICATION_ID = 1
   }
 }

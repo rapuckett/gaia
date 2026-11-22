@@ -1,6 +1,7 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
+import CryptoKit
 import Foundation
 import Security
 
@@ -12,11 +13,9 @@ enum PushKeychainError: Error {
 /// The push items in the Keychain group the app shares with its notification extension. Each paired PC's
 /// handle and key sit there; the relay credentials, which only the app needs, stay in the app's own group.
 enum PushKeychain {
-  /// `lastSeq` is the newest payload `seq` accepted under this key; nil for a key that has opened none yet.
   struct Key: Codable {
     let handle: String
     let key: String
-    var lastSeq: Int64?
   }
 
   /// The relay handle with its secret (token rotation, delete) and the send token the PC was given; kept after the key is dropped, until the relay deletes the handle.
@@ -27,6 +26,7 @@ enum PushKeychain {
   }
 
   private static let keyService = "ai.amd.gaia.push.key"
+  private static let seqService = "ai.amd.gaia.push.seq"
   private static let secretService = "ai.amd.gaia.push.secret"
   private static let settingsService = "ai.amd.gaia.push.settings"
   private static let languageAccount = "language"
@@ -38,12 +38,16 @@ enum PushKeychain {
     return value
   }
 
+  // Only the app writes keys and credentials; the extension and the silent-push handler write only seq items.
+
+  /// A new key starts with no seq item, so it accepts any first `seq`.
   static func saveKey(_ pcId: String, _ key: Key) throws {
-    try put(shared(keyService, pcId), JSONEncoder().encode(key))
+    try clearSeqs(pcId)
+    try upsert(shared(keyService, pcId), JSONEncoder().encode(key))
   }
 
   static func saveCredentials(_ pcId: String, _ credentials: Credentials) throws {
-    try put(own(secretService, pcId), JSONEncoder().encode(credentials))
+    try upsert(own(secretService, pcId), JSONEncoder().encode(credentials))
   }
 
   static func key(_ pcId: String) throws -> Key? {
@@ -74,38 +78,71 @@ enum PushKeychain {
   /// Stops this phone opening that PC's pushes, keeping the relay credentials until the handle is deleted there.
   static func deleteKey(_ pcId: String) throws {
     try remove(shared(keyService, pcId))
+    try clearSeqs(pcId)
   }
 
-  /// Takes a payload's `seq` for a PC if it's newer than the last one accepted under its key, and records it. False for a replay.
-  static func accept(_ pcId: String, _ key: Key, seq: Int64) throws -> Bool {
-    if let last = key.lastSeq, seq <= last { return false }
-    var next = key
-    next.lastSeq = seq
-    try saveKey(pcId, next)
-    return true
+  /// Takes a payload's `seq` if it's above the last one accepted under this PC's current key, and records the larger. False for a replay.
+  static func accept(_ pcId: String, key: String, seq: Int64) throws -> Bool {
+    let query = try shared(seqService, seqAccount(pcId, key))
+    guard let last = try readSeq(query) else {
+      let status = SecItemAdd(item(query, seqData(seq)) as CFDictionary, nil)
+      if status == errSecSuccess { return true }
+      guard status == errSecDuplicateItem else { throw PushKeychainError.status("save", status) }
+      // Another process wrote it first: fall through to compare with its value.
+      return try accept(pcId, key: key, seq: seq)
+    }
+    if seq <= last { return false }
+    // Re-read just before writing and keep the larger, so a racing writer can't move it back.
+    let latest = try readSeq(query) ?? last
+    let status = SecItemUpdate(query as CFDictionary, [kSecValueData as String: seqData(max(seq, latest))] as CFDictionary)
+    guard status == errSecSuccess else { throw PushKeychainError.status("save", status) }
+    return seq > latest
   }
 
   static func delete(_ pcId: String) throws {
     try remove(shared(keyService, pcId))
+    try clearSeqs(pcId)
     try remove(own(secretService, pcId))
   }
 
   static func deleteAll() throws {
-    var keys = try base(keyService)
-    keys.removeValue(forKey: kSecAttrAccount as String)
-    try remove(keys)
+    for service in [keyService, seqService] {
+      var query = try base(service)
+      query.removeValue(forKey: kSecAttrAccount as String)
+      try remove(query)
+    }
     try remove([kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: secretService])
   }
 
   /// The app's own language (`en`, `ar`), or nil to follow the phone; the extension can't read the app's per-app language.
   static func saveLanguage(_ code: String?) throws {
     let query = try shared(settingsService, languageAccount)
-    if let code { try put(query, Data(code.utf8)) } else { try remove(query) }
+    if let code { try upsert(query, Data(code.utf8)) } else { try remove(query) }
   }
 
   static func language() -> String? {
     guard let query = try? shared(settingsService, languageAccount), let data = try? get(query) else { return nil }
     return String(data: data, encoding: .utf8)
+  }
+
+  /// One seq item per PC and key: the PC id and the first 8 bytes of SHA-256 of the key, in hex.
+  private static func seqAccount(_ pcId: String, _ key: String) -> String {
+    let digest = SHA256.hash(data: Data(key.utf8)).prefix(8).map { String(format: "%02x", $0) }.joined()
+    return "\(pcId)|\(digest)"
+  }
+
+  private static func seqData(_ seq: Int64) -> Data { Data(String(seq).utf8) }
+
+  private static func readSeq(_ query: [String: Any]) throws -> Int64? {
+    guard let data = try get(query) else { return nil }
+    guard let text = String(data: data, encoding: .utf8), let seq = Int64(text) else { throw PushKeychainError.status("read", errSecDecode) }
+    return seq
+  }
+
+  private static func clearSeqs(_ pcId: String) throws {
+    for item in try all(try base(seqService)) where item.account.hasPrefix("\(pcId)|") {
+      try remove(try shared(seqService, item.account))
+    }
   }
 
   private static func base(_ service: String) throws -> [String: Any] {
@@ -127,14 +164,21 @@ enum PushKeychain {
     [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service, kSecAttrAccount as String: account]
   }
 
-  private static func put(_ query: [String: Any], _ data: Data) throws {
-    try remove(query)
+  private static func item(_ query: [String: Any], _ data: Data) -> [String: Any] {
     var item = query
     item[kSecValueData as String] = data
     // The extension runs while the phone is locked, so after first unlock; never synced or restored to another phone.
     item[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
-    let status = SecItemAdd(item as CFDictionary, nil)
-    guard status == errSecSuccess else { throw PushKeychainError.status("save", status) }
+    return item
+  }
+
+  /// Updates the item in place, or adds it when missing: never a delete-then-add that a crash could leave empty.
+  private static func upsert(_ query: [String: Any], _ data: Data) throws {
+    let status = SecItemUpdate(query as CFDictionary, [kSecValueData as String: data] as CFDictionary)
+    if status == errSecSuccess { return }
+    guard status == errSecItemNotFound else { throw PushKeychainError.status("save", status) }
+    let added = SecItemAdd(item(query, data) as CFDictionary, nil)
+    guard added == errSecSuccess else { throw PushKeychainError.status("save", added) }
   }
 
   private static func get(_ query: [String: Any]) throws -> Data? {

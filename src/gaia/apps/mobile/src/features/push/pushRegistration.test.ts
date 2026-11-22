@@ -5,7 +5,7 @@ import { GaiaApiError } from '@/api/errors';
 
 import type { PushSecrets } from '../../../modules/gaia-push';
 import type { PcPushClient, PcPushRecord, PcPushStatus } from './pcPushClient';
-import { syncAll, syncPc, unregisterPc, type PushDeps } from './pushRegistration';
+import { sweepStale, syncAll, syncPc, unregisterAll, unregisterPc, type PushDeps } from './pushRegistration';
 import { RelayRequestError, RelayUnauthorizedError, RelayUnreachableError, type RelayClient, type RelayRegistration } from './relayClient';
 
 const CONFIG = { relayUrl: 'https://relay.example', platform: 'apns', appId: 'com.example.gaia', environment: 'sandbox' } as const;
@@ -76,6 +76,7 @@ function world() {
                 if (s) vault.set(id, { ...s, key: '' });
             },
             remove: async (id) => void vault.delete(id),
+            removeAll: async () => vault.clear(),
             pcIds: async () => [...vault.keys()],
         },
         newKey: () => `key-${++k}`,
@@ -231,6 +232,31 @@ describe('push registration, one handle per paired PC', () => {
         await syncPc('pc-a', 'tok-1', w.deps);
         expect(w.log.slice(0, 2)).toEqual(['relay delete handle-1-aaaaaaaaaaaa', expect.stringMatching(/^relay register /)]);
         expect(w.vault.get('pc-a')).toMatchObject({ handle: 'handle-2-aaaaaaaaaaaa', key: 'key-2' });
+    });
+
+    it('sweeps stale handles on its own, without a token or the permission', async () => {
+        const w = world();
+        await syncAll(['pc-a', 'pc-b'], 'tok-1', w.deps);
+        w.log.length = 0;
+        await sweepStale(['pc-b'], w.deps);
+        expect(w.log).toEqual(['relay delete handle-1-aaaaaaaaaaaa']);
+        expect([...w.vault.keys()]).toEqual(['pc-b']);
+    });
+
+    it('turning push off removes it at every PC and the relay, then every secret, even ones still queued', async () => {
+        const w = world();
+        await syncAll(['pc-a', 'pc-b'], 'tok-1', w.deps);
+        w.dead.add('handle-2-aaaaaaaaaaaa');
+        w.log.length = 0;
+        await expect(unregisterAll(w.deps, { pcKnowsPhone: true })).resolves.toBe(0);
+        expect(w.log).toEqual(['pc pc-a delete', 'relay delete handle-1-aaaaaaaaaaaa', 'pc pc-b delete', 'relay delete handle-2-aaaaaaaaaaaa']);
+        expect(w.vault.size).toBe(0);
+
+        await syncAll(['pc-a'], 'tok-1', w.deps);
+        w.setDeleteDown(true);
+        await expect(unregisterAll(w.deps, { pcKnowsPhone: false })).resolves.toBe(1);
+        expect(w.vault.size).toBe(0);
+        expect(consoleOut.join('\n')).toMatch(/1 push relay handle\(s\) couldn't be deleted/);
     });
 
     it('unpairing deletes push on the PC and at the relay, then drops the secrets', async () => {

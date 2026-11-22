@@ -41,15 +41,38 @@ struct PushPayload {
       return s
     }
     self.kind = kind
-    chatTitle = text(params["chat_title"])
-    summary = text(params["summary"])
-    label = text(params["label"])
+    chatTitle = PushPayload.clean(params["chat_title"], max: 80)
+    summary = PushPayload.clean(params["summary"], max: 300)
+    label = PushPayload.clean(params["label"], max: 300)
     tool = text(params["tool"]).flatMap { $0.range(of: "^[a-z0-9_]{1,64}$", options: .regularExpression) != nil ? $0 : nil }
     ask = text(params["ask"])
     sessionId = text(root["session_id"])
     approvalId = text(root["approval_id"])
     route = PushPayload.safeRoute(root["route"] as? String, sessionId: sessionId)
     if let n = root["badge"] as? Int, (0...9999).contains(n) { badge = n } else { badge = nil }
+  }
+
+  /// The PC's text made safe to show: control and bidi-override characters dropped, whitespace and line breaks collapsed to
+  /// one space, and at most `max` characters (an ellipsis marks a cut). Nil when nothing is left.
+  static func clean(_ value: Any?, max: Int) -> String? {
+    guard let raw = value as? String else { return nil }
+    var out = String.UnicodeScalarView()
+    var pendingSpace = false
+    for scalar in raw.unicodeScalars {
+      let v = scalar.value
+      if (0x202A...0x202E).contains(v) || (0x2066...0x2069).contains(v) { continue }
+      if v < 0x20 || (0x7F...0x9F).contains(v) || CharacterSet.whitespacesAndNewlines.contains(scalar) {
+        pendingSpace = !out.isEmpty
+        continue
+      }
+      if pendingSpace { out.append(" ") }
+      pendingSpace = false
+      out.append(scalar)
+    }
+    var text = String(out)
+    if text.isEmpty { return nil }
+    if text.count > max { text = String(text.prefix(max - 1)) + "…" }
+    return text
   }
 
   /// A non-negative whole JSON number as 64 bits; nil for anything else (a fraction, a bool, a string).

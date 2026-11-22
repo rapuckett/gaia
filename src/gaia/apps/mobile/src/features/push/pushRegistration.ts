@@ -5,6 +5,7 @@ import { GaiaApiError } from '@/api/errors';
 
 import type { PushSecrets } from '../../../modules/gaia-push';
 import type { PcPushClient } from './pcPushClient';
+import { cleanPcText } from './pcText';
 import { RelayRequestError, RelayUnauthorizedError, RelayUnreachableError, type RelayClient } from './relayClient';
 
 /** What this build registers with: from app.config.ts's `extra.push` for this platform. */
@@ -23,6 +24,7 @@ export interface PushVault {
     /** Stops pushes from that PC opening on this phone, keeping what deleting its handle at the relay needs. */
     dropKey(pcId: string): Promise<void>;
     remove(pcId: string): Promise<void>;
+    removeAll(): Promise<void>;
     pcIds(): Promise<string[]>;
 }
 
@@ -153,7 +155,7 @@ export async function syncPc(pcId: string, token: string, deps: PushDeps, paired
             // 401 and 403 are pairing's to handle (unpaired, pending, a tunnel); any other 4xx is this request refused.
             if (cause instanceof GaiaApiError && cause.status >= 400 && cause.status < 500 && cause.status !== 401 && cause.status !== 403) {
                 console.error(`The paired PC ${pcId} refused this phone's push registration (${cause.status}). It is tried again when the app next opens.`);
-                return { outcome: 'pc_refused', detail: cause.detail };
+                return { outcome: 'pc_refused', detail: cleanPcText(cause.detail, 300) };
             }
             console.warn(`${error.message} It is tried again when the app next opens.`, cause);
             return { outcome: 'pc_unreachable' };
@@ -197,12 +199,45 @@ export interface PushSyncResult {
     refused: { pcId: string; detail: string }[];
 }
 
-/** Every paired PC synced, and the handles of PCs no longer paired (a missed unpair, a queued delete, a reinstall) deleted. */
-export async function syncAll(pairedIds: readonly string[], token: string, deps: PushDeps): Promise<PushSyncResult> {
+/** Deletes the handles of PCs no longer paired (a missed unpair, a queued delete, a reinstall); runs whatever the notification permission. */
+export async function sweepStale(pairedIds: readonly string[], deps: PushDeps): Promise<void> {
     const paired = new Set(pairedIds);
     for (const stale of (await deps.vault.pcIds()).filter((id) => !paired.has(id))) {
         await unregisterPc(stale, deps, { pcKnowsPhone: false });
     }
+}
+
+/**
+ * Push off everywhere (notifications turned off, or a reinstall): each PC's push turned off, each handle deleted at the
+ * relay, then every stored secret removed, so turning notifications on again registers from scratch. Returns how many
+ * relay handles couldn't be deleted (they expire there unused); each is logged.
+ */
+export async function unregisterAll(deps: PushDeps, { pcKnowsPhone }: { pcKnowsPhone: boolean }): Promise<number> {
+    let left = 0;
+    let ids: string[] = [];
+    try {
+        ids = await deps.vault.pcIds();
+    } catch (error) {
+        console.error("Couldn't read this phone's push registrations; removing them all.", error);
+    }
+    for (const pcId of ids) {
+        try {
+            await unregisterPc(pcId, deps, { pcKnowsPhone });
+            if (await deps.vault.load(pcId)) left += 1;
+        } catch (error) {
+            left += 1;
+            console.error(`Couldn't remove this phone's push registration for ${pcId}.`, error);
+        }
+    }
+    if (left > 0) console.error(`${left} push relay handle(s) couldn't be deleted and are dropped here; the relay deletes them once unused.`);
+    await deps.vault.removeAll();
+    return left;
+}
+
+/** Every paired PC synced, and the handles of PCs no longer paired (a missed unpair, a queued delete, a reinstall) deleted. */
+export async function syncAll(pairedIds: readonly string[], token: string, deps: PushDeps): Promise<PushSyncResult> {
+    const paired = new Set(pairedIds);
+    await sweepStale(pairedIds, deps);
     let relay: RelayState = 'ok';
     const refused: PushSyncResult['refused'] = [];
     for (const pcId of pairedIds) {

@@ -48,9 +48,9 @@ internal data class PushPayload(
       val seq = whole(root, "seq") ?: return null
       return PushPayload(
         kind,
-        text(params, "chat_title"),
-        text(params, "summary"),
-        text(params, "label"),
+        clean(params, "chat_title", 80),
+        clean(params, "summary", 300),
+        clean(params, "label", 300),
         text(params, "tool")?.takeIf { TOOL.matches(it) },
         text(params, "ask"),
         safeRoute(root.optString("route").ifEmpty { null }, sessionId),
@@ -74,6 +74,33 @@ internal data class PushPayload(
       CHAT.matches(route) -> route
       APPROVAL.matches(route) && sessionId != null && SESSION.matches(sessionId) -> "/chat/$sessionId"
       else -> "/"
+    }
+
+    /**
+     * The PC's text made safe to show: control and bidi-override characters dropped, whitespace and line breaks
+     * collapsed to one space, and at most `max` characters (an ellipsis marks a cut). Null when nothing is left.
+     */
+    fun clean(obj: JSONObject, name: String, max: Int): String? {
+      val raw = (if (obj.isNull(name)) null else obj.opt(name)) as? String ?: return null
+      val out = StringBuilder()
+      var pendingSpace = false
+      var i = 0
+      while (i < raw.length) {
+        val cp = raw.codePointAt(i)
+        i += Character.charCount(cp)
+        if (cp in 0x202A..0x202E || cp in 0x2066..0x2069) continue
+        if (cp < 0x20 || cp in 0x7F..0x9F || Character.isWhitespace(cp) || Character.isSpaceChar(cp)) {
+          pendingSpace = out.isNotEmpty()
+          continue
+        }
+        if (pendingSpace) out.append(' ')
+        pendingSpace = false
+        out.appendCodePoint(cp)
+      }
+      if (out.isEmpty()) return null
+      val count = out.codePointCount(0, out.length)
+      if (count <= max) return out.toString()
+      return out.substring(0, out.offsetByCodePoints(0, max - 1)) + "…"
     }
 
     private fun text(obj: JSONObject, name: String): String? =

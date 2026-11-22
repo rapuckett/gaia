@@ -48,7 +48,7 @@ enum PushCrypto {
   static func openFresh(ciphertext: String, nonce: String) throws -> PushPayload {
     let opened = try open(ciphertext: ciphertext, nonce: nonce, keys: try PushKeychain.allKeys())
     let payload = try PushPayload(json: opened.plain)
-    guard try PushKeychain.accept(opened.pcId, opened.key, seq: payload.seq) else { throw PushCryptoError.replay }
+    guard try PushKeychain.accept(opened.pcId, key: opened.key.key, seq: payload.seq) else { throw PushCryptoError.replay }
     return payload
   }
 

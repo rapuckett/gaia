@@ -5,7 +5,7 @@ import * as Crypto from 'expo-crypto';
 import * as Notifications from 'expo-notifications';
 
 import { getPairingService } from '@/features/pairing/registry';
-import { onUnpair } from '@/features/pairing/unpairListeners';
+import { onUnpair, onWipeAll } from '@/features/pairing/unpairListeners';
 import type { FetchLike } from '@/platform/fetch.types';
 import { pinnedFetch } from '@/platform/pinnedFetch';
 
@@ -13,7 +13,7 @@ import { gaiaPush } from '../../../modules/gaia-push';
 import { createPcPushClient } from './pcPushClient';
 import { pushAvailable, pushBuildConfig } from './pushConfig';
 import { newPushKey } from './pushCrypto';
-import { syncAll, unregisterPc, type PushDeps } from './pushRegistration';
+import { sweepStale, syncAll, unregisterAll, unregisterPc, type PushDeps } from './pushRegistration';
 import { usePushStore, type PushPermission } from './pushStore';
 import { createRelayClient } from './relayClient';
 
@@ -38,6 +38,7 @@ async function buildDeps(): Promise<{ deps: PushDeps; pairedIds: string[] } | nu
             save: (pcId, s) => vault.save(pcId, s.handle, s.secret, s.sendToken, s.key),
             dropKey: (pcId) => vault.dropKey(pcId),
             remove: (pcId) => vault.remove(pcId),
+            removeAll: () => vault.removeAll(),
             pcIds: () => vault.pcIds(),
         },
         newKey: () => newPushKey((n) => Crypto.getRandomBytes(n)),
@@ -58,28 +59,55 @@ export async function refreshPermission(): Promise<PushPermission> {
     return permission;
 }
 
-// One sync at a time: app start, a foreground and a new pairing can all ask at once.
-let syncing: Promise<void> = Promise.resolve();
+// One push job at a time: app start, a foreground, a new pairing and an unpair can all ask at once, and an unpair
+// must not run while a registration for the same PC is still saving.
+let queue: Promise<void> = Promise.resolve();
 
-/** Registers every paired PC with this phone's current token (see syncAll); a no-op until notifications are allowed. Never rejects: a failure is logged and shown as unreachable, and the next start tries again. */
+function enqueue(job: () => Promise<void>, onError: (error: unknown) => void): Promise<void> {
+    const run = queue.then(job).catch(onError);
+    queue = run;
+    return run;
+}
+
+/**
+ * Deletes handles of PCs no longer paired (including queued deletes the relay missed) whatever the permission, then
+ * registers every paired PC once notifications are allowed (see syncAll). Never rejects: a failure is logged and shown
+ * as unreachable, and the next start tries again.
+ */
 export function syncPush(): Promise<void> {
-    const run = syncing
-        .then(async () => {
-            if ((await refreshPermission()) !== 'granted') return;
+    return enqueue(
+        async () => {
+            const permission = await refreshPermission();
             const built = await buildDeps();
             if (!built) return;
+            if (permission !== 'granted') {
+                await sweepStale(built.pairedIds, built.deps);
+                return;
+            }
             const { data: token } = await Notifications.getDevicePushTokenAsync();
             if (typeof token !== 'string' || !token) throw new Error('The phone gave GAIA no push token. Turn notifications off and on again in Settings.');
             const result = await syncAll(built.pairedIds, token, built.deps);
             usePushStore.getState().setRelay(result.relay);
             usePushStore.getState().setRefusal(result.refused[0]?.detail ?? null);
-        })
-        .catch((error: unknown) => {
+        },
+        (error) => {
             console.error('Registering this phone for push notifications failed', error);
             usePushStore.getState().setRelay('unreachable');
-        });
-    syncing = run;
-    return run;
+        },
+    );
+}
+
+/** Notifications turned off for GAIA: push off at every PC and the relay, and every secret removed, so turning them on registers afresh. */
+export function resetPush(): Promise<void> {
+    return enqueue(
+        async () => {
+            const built = await buildDeps();
+            if (built) await unregisterAll(built.deps, { pcKnowsPhone: true });
+            usePushStore.getState().setRelay('ok');
+            usePushStore.getState().setRefusal(null);
+        },
+        (error) => console.error('Turning push off on this phone failed', error),
+    );
 }
 
 /** The OS prompt, after the explainer's "Turn on"; registers right away when allowed. */
@@ -100,8 +128,25 @@ export function installPush(): void {
     Notifications.setNotificationHandler({
         handleNotification: async () => ({ shouldShowBanner: false, shouldShowList: true, shouldPlaySound: false, shouldSetBadge: true }),
     });
-    onUnpair(async (pcId, pcKnowsPhone) => {
-        const built = await buildDeps();
-        if (built) await unregisterPc(pcId, built.deps, { pcKnowsPhone });
-    });
+    // Queued behind any registration in flight, so it can't save again after the unpair. Unregistering deletes the
+    // handle at the relay now, whatever the permission, and an offline delete is retried on every start (sweepStale).
+    onUnpair((pcId, pcKnowsPhone) =>
+        enqueue(
+            async () => {
+                const built = await buildDeps();
+                if (built) await unregisterPc(pcId, built.deps, { pcKnowsPhone });
+            },
+            (error) => console.error(`Turning push off for the unpaired PC ${pcId} failed; it is retried when the app next opens`, error),
+        ),
+    );
+    // A reinstall: delete each old handle at the relay with its stored secret, then every push secret.
+    onWipeAll(() =>
+        enqueue(
+            async () => {
+                const built = await buildDeps();
+                if (built) await unregisterAll(built.deps, { pcKnowsPhone: false });
+            },
+            (error) => console.error('Removing the previous install\'s push registrations failed', error),
+        ),
+    );
 }

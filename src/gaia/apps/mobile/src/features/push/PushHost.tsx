@@ -18,7 +18,7 @@ import { INITIAL_OFFER_STATE, offerStep, type OfferEvent } from './offerTrigger'
 import { PushExplainer } from './PushExplainer';
 import { notificationRoute } from './pushRoutes';
 import { pushAvailable } from './pushConfig';
-import { refreshPermission, requestPushPermission, syncPush } from './pushService';
+import { refreshPermission, requestPushPermission, resetPush, syncPush } from './pushService';
 import { usePushStore } from './pushStore';
 
 /** Offers push at Design's moment: the first return after a run finished or an approval waited while away. */
@@ -89,7 +89,7 @@ function ActivePush() {
         void syncPush();
     }, [pcId]);
 
-    // Coming back from the phone's Settings may have changed the permission.
+    // Coming back from the phone's Settings may have changed the permission: off resets push everywhere, on registers afresh.
     useEffect(() => {
         const sub = AppState.addEventListener('change', (state) => {
             if (state !== 'active') return;
@@ -97,6 +97,7 @@ function ActivePush() {
             refreshPermission()
                 .then((now) => {
                     if (now === 'granted' && before !== 'granted') void syncPush();
+                    else if (now !== 'granted' && before === 'granted') void resetPush();
                 })
                 .catch((error: unknown) => console.error('Could not read the notification permission', error));
         });

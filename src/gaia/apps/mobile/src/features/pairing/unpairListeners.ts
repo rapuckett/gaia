@@ -21,3 +21,24 @@ export async function notifyUnpair(pcId: string, pcKnowsPhone: boolean): Promise
         }
     }
 }
+
+/** Hears a reinstall wiping every paired PC's secrets, before they go: what was kept for them must go too. */
+export type WipeListener = () => Promise<void>;
+
+const wipeListeners = new Set<WipeListener>();
+
+export function onWipeAll(listener: WipeListener): () => void {
+    wipeListeners.add(listener);
+    return () => wipeListeners.delete(listener);
+}
+
+/** The wipe goes ahead whatever a listener does; one that fails is logged. */
+export async function notifyWipeAll(): Promise<void> {
+    for (const listener of wipeListeners) {
+        try {
+            await listener();
+        } catch (error) {
+            console.error('Cleaning up after a reinstall failed', error);
+        }
+    }
+}

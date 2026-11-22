@@ -6,6 +6,7 @@ package ai.amd.gaia.push
 import android.content.Context
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
+import android.util.Log
 import java.io.File
 import java.io.IOException
 import java.security.GeneralSecurityException
@@ -27,12 +28,54 @@ internal data class PushRecord(val pcId: String, val handle: String, val secret:
 /**
  * One sealed file per paired PC in noBackupFilesDir, under an Android Keystore key that never leaves this phone.
  * The file is a format byte, the 12-byte IV, then AES-256-GCM ciphertext and tag; the PC id is the AAD.
+ * Every instance shares one process-wide lock: the module and the messaging service each make their own.
  */
 internal class PushVault(context: Context) {
   private val dir = File(context.noBackupFilesDir, "gaia-push")
 
-  @Synchronized
-  fun save(record: PushRecord) = guard("save") {
+  fun save(record: PushRecord) = synchronized(LOCK) { write(record) }
+
+  fun load(pcId: String): PushRecord? = synchronized(LOCK) {
+    val file = fileFor(pcId)
+    if (file.exists()) guard("read") { open(file, pcId) } else null
+  }
+
+  /** Every record this app can read. A file it can't (torn, or sealed by another install) skips only that PC, logged. */
+  fun all(): List<PushRecord> = synchronized(LOCK) {
+    (dir.listFiles { f -> f.name.endsWith(SUFFIX) } ?: emptyArray()).mapNotNull { file ->
+      try {
+        guard("read") { open(file, idOf(file)) }
+      } catch (e: PushException) {
+        Log.e(TAG, "Skipping an unreadable push key file (${file.name}): ${e.message}")
+        null
+      }
+    }
+  }
+
+  /** Takes a payload's `seq` if it's newer than the last accepted under that PC's current key, and records it. False for a replay. */
+  fun accept(record: PushRecord, seq: Long): Boolean {
+    synchronized(LOCK) {
+      val current = load(record.pcId) ?: return false
+      if (current.key != record.key) return false
+      if (current.lastSeq != null && seq <= current.lastSeq) return false
+      write(current.copy(lastSeq = seq))
+      return true
+    }
+  }
+
+  /** Stops this phone opening that PC's pushes, keeping the relay credentials until the handle is deleted there. */
+  fun dropKey(pcId: String) {
+    synchronized(LOCK) {
+      val record = load(pcId) ?: return
+      write(record.copy(key = "", lastSeq = null))
+    }
+  }
+
+  fun remove(pcId: String) = synchronized(LOCK) { guard("delete") { delete(fileFor(pcId)) } }
+
+  fun removeAll() = synchronized(LOCK) { guard("delete") { dir.listFiles()?.forEach(::delete) } }
+
+  private fun write(record: PushRecord) = guard("save") {
     if (!dir.isDirectory && !dir.mkdirs()) throw IOException("couldn't create ${dir.name}")
     val json = JSONObject().put("handle", record.handle).put("secret", record.secret).put("send_token", record.sendToken).put("key", record.key)
     if (record.lastSeq != null) json.put("last_seq", record.lastSeq)
@@ -41,48 +84,15 @@ internal class PushVault(context: Context) {
     cipher.updateAAD(aad(record.pcId))
     val sealed = byteArrayOf(FORMAT) + cipher.iv + cipher.doFinal(json.toString().toByteArray(Charsets.UTF_8))
     val target = fileFor(record.pcId)
-    val partial = File(dir, "${target.name}.partial")
-    partial.writeBytes(sealed)
-    if (!partial.renameTo(target)) {
+    // A temp file of its own per write, so a write in another process can't tear this one.
+    val partial = File.createTempFile("${target.name}.", ".partial", dir)
+    try {
+      partial.writeBytes(sealed)
+      if (!partial.renameTo(target)) throw IOException("couldn't replace ${target.name}")
+    } finally {
       partial.delete()
-      throw IOException("couldn't replace ${target.name}")
     }
   }
-
-  @Synchronized
-  fun load(pcId: String): PushRecord? = guard("read") {
-    val file = fileFor(pcId)
-    if (file.exists()) open(file, pcId) else null
-  }
-
-  /** Every record this app holds; a file this install can't open fails the read rather than being skipped. */
-  @Synchronized
-  fun all(): List<PushRecord> = guard("read") {
-    (dir.listFiles { f -> f.name.endsWith(SUFFIX) } ?: emptyArray()).map { open(it, idOf(it)) }
-  }
-
-  /** Takes a payload's `seq` if it's newer than the last accepted under that PC's current key, and records it. False for a replay. */
-  @Synchronized
-  fun accept(record: PushRecord, seq: Long): Boolean {
-    val current = load(record.pcId) ?: return false
-    if (current.key != record.key) return false
-    if (current.lastSeq != null && seq <= current.lastSeq) return false
-    save(current.copy(lastSeq = seq))
-    return true
-  }
-
-  /** Stops this phone opening that PC's pushes, keeping the relay credentials until the handle is deleted there. */
-  @Synchronized
-  fun dropKey(pcId: String) {
-    val record = load(pcId) ?: return
-    save(record.copy(key = "", lastSeq = null))
-  }
-
-  @Synchronized
-  fun remove(pcId: String) = guard("delete") { delete(fileFor(pcId)) }
-
-  @Synchronized
-  fun removeAll() = guard("delete") { dir.listFiles()?.forEach(::delete) }
 
   private fun open(file: File, pcId: String): PushRecord {
     val bytes = file.readBytes()
@@ -128,18 +138,28 @@ internal class PushVault(context: Context) {
   )
 
   private companion object {
+    const val TAG = "GaiaPush"
     const val ALIAS = "ai.amd.gaia.push"
     const val TRANSFORMATION = "AES/GCM/NoPadding"
     const val FORMAT: Byte = 1
     const val IV_BYTES = 12
     const val TAG_BITS = 128
     const val SUFFIX = ".push"
+    val LOCK = Any()
 
-    @Synchronized
     fun keystoreKey(): SecretKey {
+      synchronized(LOCK) {
+        return existingKey() ?: newKey()
+      }
+    }
+
+    private fun existingKey(): SecretKey? {
       val store = KeyStore.getInstance("AndroidKeyStore")
       store.load(null)
-      (store.getKey(ALIAS, null) as? SecretKey)?.let { return it }
+      return store.getKey(ALIAS, null) as? SecretKey
+    }
+
+    private fun newKey(): SecretKey {
       val generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore")
       generator.init(
         KeyGenParameterSpec.Builder(ALIAS, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)

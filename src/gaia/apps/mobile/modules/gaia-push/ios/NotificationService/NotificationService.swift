@@ -5,26 +5,36 @@ import Foundation
 import UserNotifications
 import os
 
-/// Turns the relay's generic alert into the chat's own, in the app's language. Any failure leaves the generic alert as it came.
+/// Turns the relay's alert into the chat's own, in the app's language. Every path builds fresh content, so nothing the
+/// relay sent (subtitle, sound, category, target) reaches the screen. A push that can't be opened, or is a replay, shows
+/// the phone's own generic alert: iOS must show something for an alert push, and hiding it would need Apple's
+/// notification filtering entitlement (com.apple.developer.usernotifications.filtering), which this app doesn't have.
 final class NotificationService: UNNotificationServiceExtension {
   private static let log = Logger(subsystem: "ai.amd.gaia.push", category: "extension")
   private var deliver: ((UNNotificationContent) -> Void)?
-  private var original: UNNotificationContent?
 
   override func didReceive(_ request: UNNotificationRequest, withContentHandler contentHandler: @escaping (UNNotificationContent) -> Void) {
     deliver = contentHandler
-    original = request.content
-    contentHandler(rewrite(request.content) ?? request.content)
+    let strings = Strings(language: PushKeychain.language())
+    contentHandler(rewrite(request.content.userInfo, strings) ?? Self.generic(strings))
     deliver = nil
   }
 
   override func serviceExtensionTimeWillExpire() {
-    if let deliver, let original { deliver(original) }
+    deliver?(Self.generic(Strings(language: PushKeychain.language())))
     deliver = nil
   }
 
-  private func rewrite(_ content: UNNotificationContent) -> UNNotificationContent? {
-    let info = content.userInfo
+  private static func generic(_ strings: Strings) -> UNNotificationContent {
+    let content = UNMutableNotificationContent()
+    content.title = strings.say("mobileApp.push.generic.title")
+    content.body = strings.say("mobileApp.push.generic.body")
+    content.sound = .default
+    content.userInfo = ["body": ["route": "/"]]
+    return content
+  }
+
+  private func rewrite(_ info: [AnyHashable: Any], _ strings: Strings) -> UNNotificationContent? {
     guard let sealed = info["c"] as? String, let nonce = info["n"] as? String else {
       Self.log.error("A push arrived without its sealed payload; showing the generic alert.")
       return nil
@@ -34,24 +44,19 @@ final class NotificationService: UNNotificationServiceExtension {
       payload = try PushCrypto.openFresh(ciphertext: sealed, nonce: nonce)
     } catch {
       // Never log the payload: only which step failed.
-      Self.log.error("Couldn't open a push (\(String(describing: type(of: error)), privacy: .public)); showing the generic alert.")
+      Self.log.error("Couldn't open a push (\(String(describing: error), privacy: .public)); showing the generic alert.")
       return nil
     }
-    guard let next = content.mutableCopy() as? UNMutableNotificationContent else { return nil }
-    if let badge = payload.badge { next.badge = NSNumber(value: badge) }
-    let strings = Strings(language: PushKeychain.language())
-    if let text = PushText.compose(payload, strings.say, strings.find) {
-      next.title = text.title
-      next.body = text.body
-    }
-    next.threadIdentifier = payload.threadId
-    var userInfo = info
-    userInfo.removeValue(forKey: "c")
-    userInfo.removeValue(forKey: "n")
+    guard let text = PushText.compose(payload, strings.say, strings.find) else { return nil }
+    let content = UNMutableNotificationContent()
+    content.title = text.title
+    content.body = text.body
+    content.sound = .default
+    if let badge = payload.badge { content.badge = NSNumber(value: badge) }
+    content.threadIdentifier = payload.threadId
     // expo-notifications reads a remote notification's data from "body".
-    userInfo["body"] = ["route": payload.route]
-    next.userInfo = userInfo
-    return next
+    content.userInfo = ["body": ["route": payload.route]]
+    return content
   }
 }
 
