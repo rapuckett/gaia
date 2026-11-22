@@ -62,7 +62,7 @@ function Body({ scene }: { scene: NotificationScene }) {
     );
     if (scene.view === 'gate') {
         return (
-            <ScreenBannerProvider banner={null}>
+            <ScreenBannerProvider banner={scene.ambient ? <ConnectionBanner /> : null}>
                 <SetupGate>
                     <Screen>{placeholder}</Screen>
                 </SetupGate>
