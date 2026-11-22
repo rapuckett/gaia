@@ -47,6 +47,8 @@ from .store import Device, PushRecord
 logger = get_logger(__name__)
 
 #: The relay send body's field that picks a visible alert or a silent update.
+#: A stream with no successful write for this long no longer counts as watching.
+STREAM_IDLE_SECONDS = 30
 PUSH_DELIVERY_FIELD = "delivery"
 DELIVERY_ALERT = "alert"
 DELIVERY_SILENT = "silent"
@@ -432,6 +434,7 @@ class PushNotifier:
         self._lock = threading.Lock()
         self._thread: Optional[threading.Thread] = None
         self._streams: Dict[str, int] = {}
+        self._stream_wrote: Dict[str, float] = {}
         self._state: Dict[str, _DeviceState] = {}
         self._senders: Optional[ThreadPoolExecutor] = None
         self._waiting = 0
@@ -441,6 +444,7 @@ class PushNotifier:
     def stream_opened(self, device_id: str) -> None:
         with self._lock:
             self._streams[device_id] = self._streams.get(device_id, 0) + 1
+            self._stream_wrote[device_id] = self._clock()
 
     def stream_closed(self, device_id: str) -> None:
         with self._lock:
@@ -449,14 +453,27 @@ class PushNotifier:
                 self._streams[device_id] = left
             else:
                 self._streams.pop(device_id, None)
+                self._stream_wrote.pop(device_id, None)
                 # The phone set its own badge while it watched; resync on the next change.
                 state = self._state.get(device_id)
                 if state is not None:
                     state.badge_sent = None
 
-    def watching(self, device_id: str) -> bool:
+    def stream_wrote(self, device_id: str) -> None:
+        """A frame, keepalives included, reached the device's open stream."""
         with self._lock:
-            return device_id in self._streams
+            if device_id in self._streams:
+                self._stream_wrote[device_id] = self._clock()
+
+    def watching(self, device_id: str) -> bool:
+        """Open stream with a recent write; a half-open one stops counting."""
+        with self._lock:
+            wrote = self._stream_wrote.get(device_id)
+            return (
+                device_id in self._streams
+                and wrote is not None
+                and self._clock() - wrote <= STREAM_IDLE_SECONDS
+            )
 
     def approval(
         self,
@@ -1031,6 +1048,11 @@ def stream_opened(device_id: str) -> None:
 def stream_closed(device_id: str) -> None:
     if _notifier is not None:
         _notifier.stream_closed(device_id)
+
+
+def stream_wrote(device_id: str) -> None:
+    if _notifier is not None:
+        _notifier.stream_wrote(device_id)
 
 
 __all__: Sequence[str] = (

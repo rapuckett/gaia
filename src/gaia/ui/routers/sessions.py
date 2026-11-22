@@ -434,6 +434,8 @@ async def session_events(request: Request):
             push.stream_opened(device_id)
         try:
             yield ": keepalive\n\n"
+            if device_id:
+                push.stream_wrote(device_id)
             while True:
                 try:
                     event = await get_or_shutdown(q, timeout=30.0)
@@ -449,6 +451,8 @@ async def session_events(request: Request):
                     yield f"data: {json.dumps(event)}\n\n"
                 except asyncio.TimeoutError:
                     yield ": keepalive\n\n"  # prevent proxy timeout
+                if device_id:
+                    push.stream_wrote(device_id)
         finally:
             stream_closed()
             if device_id:

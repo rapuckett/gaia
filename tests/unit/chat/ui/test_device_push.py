@@ -33,6 +33,7 @@ from gaia.ui.devices.push import (
     PUSH_DELIVERY_FIELD,
     PUSH_PAD_BUCKETS,
     PUSH_SILENT_PER_DAY,
+    STREAM_IDLE_SECONDS,
     PushNotifier,
     RelayAnswer,
     collapse_id,
@@ -478,6 +479,20 @@ def test_the_event_stream_marks_the_phone_as_watching(sender):
     assert notifier.watching(sender.phone.device_id)
     push.stream_closed(sender.phone.device_id)
     assert not notifier.watching(sender.phone.device_id)
+
+
+def test_a_stream_that_went_quiet_stops_suppressing_pushes(sender):
+    phone = sender.phone.device_id
+    sender.notifier.stream_opened(phone)
+    sender.clock.now += STREAM_IDLE_SECONDS + 1
+    assert not sender.notifier.watching(phone)
+    sender.notifier.approval(sender.session_id, "conf-1", "approval")
+    assert len(sender.relay.calls) == 1
+
+    sender.notifier.stream_wrote(phone)
+    assert sender.notifier.watching(phone)
+    sender.notifier.approval(sender.session_id, "conf-2", "approval")
+    assert len(sender.relay.calls) == 1
 
 
 def test_at_most_thirty_alerts_an_hour(sender, caplog):
