@@ -145,6 +145,7 @@ export function TextField({
             ) : null}
             <Pressable
                 accessible={false}
+                importantForAccessibility="no"
                 disabled={disabled}
                 onPress={() => inner.current?.focus()}
                 testID={testID ? `${testID}-box` : undefined}

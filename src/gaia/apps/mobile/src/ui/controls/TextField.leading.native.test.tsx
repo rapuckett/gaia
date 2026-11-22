@@ -79,4 +79,23 @@ describeNative.each([
         await act(async () => fireEvent.press(screen.getByTestId('f-box')));
         expect(focus).toHaveBeenCalled();
     });
+
+    it('leaves the input as the accessible element, with the label and hint, and the box out of the tree', async () => {
+        await render(<TextField testID="f" value="" onChangeText={jest.fn()} label="Name" accessibilityHint="Type a name" />, { wrapper: wrap });
+        const box = screen.getByTestId('f-box');
+        expect(box.props.accessible).toBe(false);
+        expect(box.props.importantForAccessibility).toBe('no');
+        expect(box.props.accessibilityRole).toBeUndefined();
+        expect(box.props.accessibilityLabel).toBeUndefined();
+        const input = screen.getByTestId('f');
+        expect(input.props.accessibilityLabel).toBe('Name');
+        expect(input.props.accessibilityHint).toBe('Type a name');
+    });
+
+    it('hands callers the input itself, not the box', async () => {
+        let node: unknown = null;
+        await render(<TextField testID="f" value="" onChangeText={jest.fn()} inputRef={(n) => { node = n; }} />, { wrapper: wrap });
+        expect(node).not.toBe(screen.getByTestId('f-box'));
+        expect(typeof (node as { focus?: unknown }).focus).toBe('function');
+    });
 });
