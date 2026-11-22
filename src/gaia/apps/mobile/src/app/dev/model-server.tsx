@@ -35,7 +35,11 @@ function Body({ scene }: { scene: ModelScene }) {
         case 'down':
             return (
                 <Stack padding="lg">
-                    <ModelServerDownNotice initialAsked={scene.downAsked} />
+                    <ModelServerDownNotice
+                        initialAsked={scene.downAsked}
+                        initialSwitched={scene.downSwitch === 'done'}
+                        autoSwitch={scene.downSwitch === 'press' || scene.downSwitch === 'never'}
+                    />
                 </Stack>
             );
         case 'resources':

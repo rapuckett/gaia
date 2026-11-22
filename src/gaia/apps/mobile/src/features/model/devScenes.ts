@@ -1,8 +1,9 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import type { ActiveModel, AgentInfo, LocalModelStatus, ModelNeed, ResourceUsage, SetupCheck } from '@webui/types';
+import type { ActiveModel, AgentInfo, LemonadeTarget, LocalModelStatus, ModelNeed, ResourceUsage, SetupCheck } from '@webui/types';
 
+import { GaiaApiError } from '@/api/errors';
 import { createFakeClient, type FakeClientData } from '@/api/fake';
 import type { GaiaClient } from '@/api/client.types';
 import type { FlagshipInstallState } from '@/data';
@@ -17,8 +18,12 @@ export interface ModelScene {
     need?: ModelNeed;
     needInitial?: NeedPromptInitial;
     downAsked?: boolean;
+    /** `press` taps "Use GAIA's own server" on open; `done` opens after a switch worked; `never` leaves the switch unanswered. */
+    downSwitch?: 'press' | 'done' | 'never';
     agentState?: FlagshipInstallState;
     errorVariant?: 'window' | 'fill' | 'compact';
+    /** What the switch to GAIA's own server throws. */
+    switchError?: Error;
     /** The first status read never answers. */
     pending?: boolean;
 }
@@ -34,6 +39,12 @@ const model = (patch: Partial<LocalModelStatus>): FakeClientData => ({ localMode
 const STOPPED: Partial<LocalModelStatus> = {
     state: 'stopped', active_model: null, active_display_name: null, placement: null, ctx_size: null, memory: null, error: 'The model server is not answering.', error_cause: 'model_server_down',
 };
+
+const EXTERNAL: LemonadeTarget = {
+    mode: 'external', saved_mode: 'external', source: 'config', base_url: 'http://192.168.1.20:13305/api/v1', saved_base_url: 'http://192.168.1.20:13305/api/v1',
+    api_key_stored: false, gaia_installed: true, offer: false, what_gaia_does: '',
+};
+const other = (patch: Partial<FakeClientData> = {}): FakeClientData => ({ ...model({ ...STOPPED, owner: 'user' }), lemonadeTarget: EXTERNAL, ...patch });
 
 const NEED_CHAT: ModelNeed = { job: 'chat', needed: true, model: { id: 'Gemma-4-E4B-it-GGUF', name: 'Gemma 4 E4B', size_gb: 5.97, source: 'huggingface.co/amd' }, disk_free_gb: 120 };
 
@@ -60,6 +71,12 @@ export const MODEL_SCENES: Record<string, ModelScene> = {
     'agent-missing': { view: 'agent', data: NO_FLAGSHIP },
     'agent-no-build': { view: 'agent', data: { ...NO_FLAGSHIP, setupChecks: [{ ready: false, no_agent_build: true, steps: [] } as SetupCheck] } },
     'down-back': { view: 'down', data: model({ ...STOPPED, state: 'idle', error: null, error_cause: null }), downAsked: true },
+    'down-switch': { view: 'down', data: other() },
+    'down-switch-done': { view: 'down', data: other({ ...model({ ...STOPPED, state: 'idle', error: null, error_cause: null }), lemonadeTarget: { ...EXTERNAL, mode: 'gaia', source: 'gaia' } }), downSwitch: 'done' },
+    'down-switch-env': { view: 'down', data: other({ lemonadeTarget: { ...EXTERNAL, source: 'env' } }) },
+    'down-switch-failed': { view: 'down', data: other(), downSwitch: 'press', switchError: new GaiaApiError(500, 'Lemonade refused to start: port 13305 is in use.') },
+    'down-switch-pc-only': { view: 'down', data: other({ serverChangeError: new GaiaApiError(403, 'Forbidden') }), downSwitch: 'press' },
+    'down-switching': { view: 'down', data: other(), downSwitch: 'never' },
     'down-not-ours': { view: 'down', data: model({ ...STOPPED, owner: 'user' }) },
     'down-ours': { view: 'down', data: model(STOPPED) },
     'down-restart-error': { view: 'down', data: model({ ...STOPPED, restart_error: 'lemond exited with code 1: port 13305 is in use.' }) },
@@ -100,7 +117,12 @@ export const MODEL_SCENES: Record<string, ModelScene> = {
 };
 
 export function modelSceneClient(scene: ModelScene): GaiaClient {
-    const client = createFakeClient(scene.data ?? {});
-    if (!scene.pending) return client;
-    return { ...client, getLocalModelStatus: () => new Promise<never>(() => undefined) };
+    const client = createFakeClient({ ...scene.data });
+    const pending = () => new Promise<never>(() => undefined);
+    return {
+        ...client,
+        ...(scene.pending ? { getLocalModelStatus: pending } : {}),
+        ...(scene.downSwitch === 'never' ? { setLemonadeTarget: pending } : {}),
+        ...(scene.switchError ? { setLemonadeTarget: () => Promise.reject(scene.switchError) } : {}),
+    };
 }
