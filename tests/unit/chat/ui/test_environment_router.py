@@ -16,6 +16,7 @@ from fastapi.testclient import TestClient
 from gaia.security import PathValidator
 from gaia.ui import session_environment
 from gaia.ui.database import ChatDatabase
+from gaia.ui.routers.files import OUTSIDE_HOME_REFUSAL
 from gaia.ui.server import create_app
 
 
@@ -527,8 +528,10 @@ def test_a_device_is_refused_a_credentials_folder_that_the_pc_may_add(
 ):
     refused = phone.post("/api/sessions", json={"folders": [str(credentials)]})
     assert refused.status_code == 403
-    assert "credentials" in refused.json()["detail"]
-    assert str(Path.home()) not in refused.json()["detail"]
+    detail = refused.json()["detail"]
+    assert detail["code"] == "device_folder_withheld"
+    assert "credentials" in detail["message"]
+    assert str(Path.home()) not in refused.text
     assert _chat_count(client) == 0
 
     session_id = phone.post("/api/sessions", json={}).json()["id"]
@@ -537,9 +540,17 @@ def test_a_device_is_refused_a_credentials_folder_that_the_pc_may_add(
         json={"path": str(credentials)},
     )
     assert added.status_code == 403
-    assert added.json()["detail"] == refused.json()["detail"]
+    assert added.json()["detail"] == detail
     assert str(credentials.resolve()) not in _granted(client, session_id)
     assert _phone_changes(client) == []
+
+    check = phone.post(
+        "/api/environment/folders/check", json={"path": str(credentials)}
+    )
+    assert check.json() == {
+        "refusal": detail["message"],
+        "code": "device_folder_withheld",
+    }
 
     pc = client.post(
         f"/api/sessions/{session_id}/environment/folders",
@@ -556,7 +567,12 @@ def test_a_device_is_refused_a_folder_outside_the_home_folder(
     assert not outside.resolve().is_relative_to(Path.home().resolve())
     refused = phone.post("/api/sessions", json={"folders": [str(outside)]})
     assert refused.status_code == 403
-    assert "home folder" in refused.json()["detail"]
+    detail = refused.json()["detail"]
+    assert detail == {
+        "code": "device_folder_outside_home",
+        "message": OUTSIDE_HOME_REFUSAL,
+    }
+    assert str(outside) not in refused.text
     assert _chat_count(client) == 0
 
     session_id = phone.post("/api/sessions", json={}).json()["id"]
@@ -565,7 +581,14 @@ def test_a_device_is_refused_a_folder_outside_the_home_folder(
         json={"path": str(outside)},
     )
     assert added.status_code == 403
+    assert added.json()["detail"] == detail
     assert _phone_changes(client) == []
+
+    check = phone.post("/api/environment/folders/check", json={"path": str(outside)})
+    assert check.json() == {
+        "refusal": OUTSIDE_HOME_REFUSAL,
+        "code": "device_folder_outside_home",
+    }
 
 
 def test_a_relayed_agent_that_takes_folders_can_start_with_one(

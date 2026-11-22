@@ -4351,6 +4351,8 @@ const messages: Messages = {
     'mobileApp.files.refused.notInChatFolders': "يستطيع الهاتف المقترن فتح الملفات من المجلدات التي مُنحت لمحادثته فقط. الملف {name} ليس في مجلدات هذه المحادثة: أضف مجلده إلى المحادثة من الكمبيوتر، أو افتحه على الكمبيوتر.",
     'mobileApp.files.refused.outsideHome': "يستطيع الهاتف المقترن تصفح مجلدك الرئيسي على الكمبيوتر فقط، كما يفعل منتقي المجلدات على الكمبيوتر.",
     'mobileApp.files.refused.sessionRequired': "يستطيع الهاتف المقترن فتح الملفات من المجلدات التي مُنحت لمحادثته فقط. افتح الملف من داخل محادثة.",
+    'mobileApp.folder.refused.outsideHome': 'لا يستطيع GAIA من الهاتف استخدام مجلدات خارج المجلد الرئيسي على الكمبيوتر. اختر مجلدًا داخله.',
+    'mobileApp.folder.refused.withheld': 'لا يستطيع GAIA استخدام هذا المجلد من الهاتف لأنه يحتوي على كلمات مرور أو مفاتيح. اختر مجلدًا آخر.',
     'mobileApp.nav.back': 'رجوع',
     'mobileApp.nav.closeDrawer': 'إغلاق القائمة',
     'mobileApp.nav.up': 'التنقل إلى أعلى',

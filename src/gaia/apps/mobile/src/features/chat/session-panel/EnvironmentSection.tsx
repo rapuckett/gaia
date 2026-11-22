@@ -7,6 +7,7 @@ import type { ActiveModel, LocalModelStatus, PermissionMode, ScopeEntry, Session
 import { sessionEnvironmentPath } from '@/api/constants';
 import { useDeviceRefused } from '@/api/routeAccess';
 import { useActiveModel, useEnvironmentActions, useLocalModelStatus, usePermissionMode, useSession, useSessionEnvironment } from '@/data';
+import { isFolderRefusal } from '@/features/files/folderRefusal';
 import { isPcRefusal, PcOnlyNotice } from '@/features/settings/PcOnlyNotice';
 import { useT, type Translate } from '@/i18n/useT';
 import { Button, Icon, IconButton, Notice, Row, SegmentedControl, Stack, Switch, Text } from '@/ui';
@@ -140,7 +141,7 @@ function Folders({ sessionId, env, error }: { sessionId: string; env: SessionEnv
                         <FolderPicker
                             sessionId={sessionId}
                             busy={addFolder.isPending}
-                            error={isPcRefusal(addFolder.error) ? undefined : addFolder.error}
+                            error={isPcRefusal(addFolder.error) && !isFolderRefusal(addFolder.error) ? undefined : addFolder.error}
                             onClose={() => setPicking(false)}
                             onPick={(path) => addFolder.mutate(path, { onSuccess: () => setPicking(false) })}
                         />
@@ -159,7 +160,7 @@ function Folders({ sessionId, env, error }: { sessionId: string; env: SessionEnv
                     ) : null}
                 </>
             ) : null}
-            {isPcRefusal(addFolder.error) ? <PcOnlyNotice testID="environment-add-pc-only" /> : null}
+            {isPcRefusal(addFolder.error) && !isFolderRefusal(addFolder.error) ? <PcOnlyNotice testID="environment-add-pc-only" /> : null}
             {removeFolder.error ? (
                 isPcRefusal(removeFolder.error) ? <PcOnlyNotice testID="environment-remove-pc-only" /> : <Notice tone="danger" {...failureNoticeProps(removeFolder.error, t, { withReason: 'mobileApp.env.removeFolderFailed', noReason: 'mobileApp.env.removeFolderFailedShort' })} testID="environment-remove-error" />
             ) : null}

@@ -14,6 +14,7 @@ import { GaiaClientProvider } from '@/data';
 import { ThemeProvider } from '@/ui';
 
 import { EnvironmentSection } from './EnvironmentSection';
+import { useSessionPanelStore } from './panelStore';
 
 jest.mock('expo-constants', () => ({ __esModule: true, default: { expoConfig: { version: 'test' } } }));
 
@@ -77,6 +78,40 @@ describeNative('Environment: removing a folder', () => {
         await fireEvent.press(screen.getByTestId('folder-picker-use'));
         expect(await screen.findByTestId('environment-add-folder')).toBeTruthy();
         expect(client.environmentChanges).toEqual([{ sessionId: 's1', add: '/Users/me/Taxes' }]);
+    });
+});
+
+describeNative('Environment: a folder the PC won\'t give this phone', () => {
+    const refuse = (client: ReturnType<typeof createFakeClient>, body: Record<string, unknown> | null) => {
+        client.addEnvironmentFolder = async () => {
+            throw new GaiaApiError(403, 'The PC refused it.', undefined, undefined, body);
+        };
+    };
+    const pick = async (client: ReturnType<typeof createFakeClient>) => {
+        await render(<EnvironmentSection sessionId="s1" live={false} />, { wrapper: wrapper(client) });
+        await fireEvent.press(await screen.findByTestId('environment-add-folder'));
+        await screen.findByDisplayValue('/Users/me/.ssh');
+        await fireEvent.press(screen.getByTestId('folder-picker-use'));
+    };
+    const listing = { current_path: '/Users/me/.ssh', parent_path: null, entries: [], quick_links: [], folder_refusal: null };
+    afterEach(() => useSessionPanelStore.getState().setEnvPicking(false));
+
+    it('words a coded refusal in the picker, with the PC\'s reason on its own line', async () => {
+        const client = createFakeClient({ environments: { s1: ENV }, fileFolders: { '': listing } });
+        refuse(client, { code: 'device_folder_withheld', message: 'The PC refused it.' });
+        await pick(client);
+        const notice = await screen.findByTestId('folder-picker-error');
+        expect(within(notice).getByText(/GAIA can't use this folder from a phone because it holds passwords or keys/)).toBeTruthy();
+        expect(within(notice).getByText('The PC refused it.')).toBeTruthy();
+        expect(screen.queryByTestId('environment-add-pc-only')).toBeNull();
+    });
+
+    it('keeps "change this on your PC" for a 403 with no folder code', async () => {
+        const client = createFakeClient({ environments: { s1: ENV }, fileFolders: { '': listing } });
+        refuse(client, null);
+        await pick(client);
+        expect(await screen.findByTestId('environment-add-pc-only')).toBeTruthy();
+        expect(screen.queryByTestId('folder-picker-error')).toBeNull();
     });
 });
 

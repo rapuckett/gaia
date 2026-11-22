@@ -350,7 +350,7 @@ async def create_session(
         for folder in request.folders:
             refusal = await asyncio.to_thread(device_pick_refusal, folder)
             if refusal:
-                raise HTTPException(status_code=403, detail=refusal)
+                raise refusal.http_error()
     try:
         # Off the loop: a relayed agent is asked over the daemon.
         await asyncio.to_thread(
