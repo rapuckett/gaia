@@ -906,6 +906,13 @@ Every other path serves the Agent UI page, except paths under `/api`: an unknown
     and no chat is created. An agent that runs as its own process can be given
     folders when its contract is 2.18 or later; an older one or one that fails
     to start is refused.
+    folders when its contract is 2.18 or later; an older one, the email agent,
+    or one that fails to start is refused. From an allowed paired device, a
+    folder outside the home folder or one holding credentials is a **403**
+    and no chat is created, as for
+    `POST /api/sessions/{session_id}/environment/folders`. Each folder a chat
+    starts with is audited, and one a paired device gives is listed in the
+    device's changes (`folderAdded`).
 
     From the Agent UI (`X-Gaia-Client: agent-ui`) a chat is always the GAIA
     agent: an omitted `agent_type` becomes `gaia` and any other value is a
@@ -1763,7 +1770,11 @@ agent at once, so they take effect on its next step.
     **Request:** `{"path": "C:\\work\\project"}`. Let the chat read and
     write the folder. **400** for a path that isn't a folder, for a filesystem
     root, the home folder or a protected folder, and for a folder inside one
-    the user removed.
+    the user removed. An allowed paired device gets a **403** for a folder
+    outside the home folder or one holding credentials, with the same reason
+    `POST /api/environment/folders/check` gives and no path in it. A folder a
+    paired device adds is listed in the device's changes (`folderAdded`, by
+    the folder's name).
   </Accordion>
 
   <Accordion title="POST /api/environment/folders/check">

@@ -43,6 +43,7 @@ from ..database import (
 )
 from ..dependencies import get_db
 from ..devices import DEVICE_PROMPT_EVENT, DEVICE_PROMPT_STATES
+from ..devices.changes import record_folder_added
 from ..models import (
     AttachDocumentRequest,
     CreateSessionRequest,
@@ -55,9 +56,10 @@ from ..models import (
     WireModel,
 )
 from ..run_manager import run_manager
-from ..security import allowed_device, flagship_only, is_local_pc
+from ..security import allowed_device, audit_approval, flagship_only, is_local_pc
 from ..shutdown import SHUTDOWN, get_or_shutdown, stream_closed, stream_opened
 from ..utils import UPLOAD_LINK_RE, message_to_response, session_to_response
+from .files import device_pick_refusal
 from .memory import _get_store as get_memory_store
 
 logger = logging.getLogger(__name__)
@@ -344,6 +346,11 @@ async def create_session(
     """Create a new chat session."""
     request.agent_type = flagship_only(http_request, request.agent_type)
     _reject_unknown_agent_type(request.agent_type)
+    if allowed_device(http_request) is not None:
+        for folder in request.folders:
+            refusal = await asyncio.to_thread(device_pick_refusal, folder)
+            if refusal:
+                raise HTTPException(status_code=403, detail=refusal)
     try:
         # Off the loop: a relayed agent is asked over the daemon.
         await asyncio.to_thread(
@@ -370,6 +377,12 @@ async def create_session(
         session_permissions.seed_new_session(session["id"], start_mode)
         for folder in request.folders:
             session_environment.grant_folder(db, session["id"], folder)
+        # Only once every folder is granted: a refused one rolls the chat back.
+        for folder in request.folders:
+            audit_approval(
+                http_request, f"folder {folder} given to chat {session['id']}"
+            )
+            record_folder_added(http_request, folder)
         return await _session_response(db, session)
     except Exception as e:
         if session is not None:

@@ -13,7 +13,8 @@ import { isolate } from '@webui/i18n/registry';
 import { failureNoticeProps } from '../header/failureText';
 
 interface FolderPickerProps {
-    sessionId: string;
+    /** Null for a new chat, which holds the pick until it is made. */
+    sessionId: string | null;
     onPick(path: string): void;
     onClose(): void;
     /** Why adding the chosen folder failed, shown under the list. */
