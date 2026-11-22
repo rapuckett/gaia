@@ -26,7 +26,7 @@ import { NewChatScreen } from './NewChatScreen';
  * NC-07, the new chat's folder, as the desktop's: GAIA's own folder or a project folder, fixed (`new-chat-folder-own-fixed`,
  * `new-chat-folder-project-fixed`) or with Add a folder (`new-chat-folder-own-add`, `new-chat-folder-project-add`);
  * `new-chat-folder-picker` (the picker open, folders only), `new-chat-folder-picked` (the picked folder, its path and a clear),
- * `new-chat-folder-refused` (the PC refused it as the chat was made).
+ * `new-chat-folder-refused` (the PC refused a credentials folder as the chat was made, with its reason).
  */
 export const NEW_CHAT_SCENES = ['new-chat-setup-failed', 'new-chat-library', 'new-chat-warmup', 'new-chat-send-error', 'new-chat-assistant', 'new-chat-doc-brief', 'create-failed', 'skill-prompt', 'new-chat-folder-own-fixed', 'new-chat-folder-own-add', 'new-chat-folder-project-fixed', 'new-chat-folder-project-add', 'new-chat-folder-picker', 'new-chat-folder-picked', 'new-chat-folder-refused'] as const;
 export type NewChatScene = (typeof NEW_CHAT_SCENES)[number];
@@ -39,6 +39,7 @@ const READY = {
 const START: StartScreen = { cards: [], working_folder: { path: '/Users/avery/Documents', name: 'Documents', gaia_folder: false, choosable: false } };
 
 const PICKED = '/Users/Shared/Projects/site-redesign';
+const CREDENTIALS = '/Users/Shared/.password-store/work';
 const OWN = { path: '/Users/Shared/GAIA/documents', name: 'documents', gaia_folder: true, choosable: true };
 const PROJECT = { path: '/Users/Shared/demo-project', name: 'demo-project', gaia_folder: false, choosable: true };
 const FOLDERS: Partial<Record<NewChatScene, StartScreen['working_folder']>> = {
@@ -83,7 +84,7 @@ function clientFor(state: NewChatScene) {
     if (folder) {
         const fake = createFakeClient({ ...base, start: { cards: [], working_folder: folder }, fileFolders: { '': PROJECTS } });
         if (state !== 'new-chat-folder-refused') return fake;
-        return { ...fake, createSession: () => Promise.reject(new GaiaApiError(400, `${PICKED} is not a folder on this PC.`)) };
+        return { ...fake, createSession: () => Promise.reject(new GaiaApiError(403, "GAIA doesn't give a paired device this folder: it holds credentials or keys.")) };
     }
     if (state === 'new-chat-assistant') {
         return createFakeClient({ ...base, start: { ...START, skills_error: 'Could not list skills: agent process exited with code 1' } });
@@ -107,7 +108,7 @@ export function NewChatScenes({ state }: { state: NewChatScene }) {
     }, [state]);
     useEffect(() => {
         if (state !== 'new-chat-folder-picked' && state !== 'new-chat-folder-refused') return undefined;
-        useNextChatFolder.getState().set(PICKED);
+        useNextChatFolder.getState().set(state === 'new-chat-folder-refused' ? CREDENTIALS : PICKED);
         return () => useNextChatFolder.getState().set(null);
     }, [state]);
     return (

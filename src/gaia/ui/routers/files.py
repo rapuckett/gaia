@@ -14,6 +14,7 @@ import asyncio
 import concurrent.futures
 import datetime
 import logging
+import os
 import platform
 import shutil
 import threading
@@ -286,6 +287,19 @@ def _device_private(path: Path) -> bool:
 def device_withholds(path: Path) -> bool:
     """Whether a home-wide paired device is kept out of *path*."""
     return bool(secret_read_refusal(path)) or _device_private(path)
+
+
+def device_pick_refusal(path: str) -> Optional[str]:
+    """Why a paired device can't pick *path*, or None; never names a PC path."""
+    resolved = Path(os.path.expanduser(path)).resolve()
+    if not is_within_document_roots(resolved):
+        return OUTSIDE_HOME_REFUSAL
+    if device_withholds(resolved):
+        return (
+            "GAIA doesn't give a paired device this folder: it holds "
+            "credentials or keys."
+        )
+    return None
 
 
 def _withheld_entry(item: Path, scope: _ReadScope) -> bool:
@@ -775,7 +789,6 @@ async def open_file_or_folder(request: OpenFileRequest):
 
 def _launch_file(resolved: Path) -> dict:
     """Open *resolved* in its default app, if that cannot run code."""
-    import os
     import subprocess
 
     if not resolved.is_file():

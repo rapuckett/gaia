@@ -62,7 +62,7 @@ describeNative('/dev/composer new-chat scenes', () => {
 
     it('new-chat-folder-refused keeps the picked folder and the message when the PC refuses it', async () => {
         await mount('new-chat-folder-refused');
-        expect((await screen.findAllByText(/is not a folder on this PC/)).length).toBeGreaterThan(0);
+        expect((await screen.findAllByText(/holds credentials or keys/)).length).toBeGreaterThan(0);
         expect(screen.getByTestId('folder-picked')).toBeTruthy();
         expect(screen.getByDisplayValue('Review the site copy for typos')).toBeTruthy();
     });

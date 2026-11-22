@@ -6,6 +6,7 @@ Changes persist, show up in the listing, and reach the chat's live agent at
 once, so the next step is checked against them without a restart.
 """
 
+import tempfile
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -454,12 +455,21 @@ def phone(client, tmp_path):
     return TestClient(on_listener, client=("127.0.0.1", 50000))
 
 
+@pytest.fixture
+def home_folder():
+    """A folder in the test's home, where a paired device may pick."""
+    path = Path(tempfile.mkdtemp(dir=Path.home())) / "project"
+    path.mkdir()
+    return path
+
+
 def _phone_changes(client):
     changes, _ = client.app.state.db.device_changes("phone-1", 20)
     return [(c["kind"], c["params"]) for c in changes]
 
 
-def test_a_folder_a_phone_gives_a_chat_is_in_its_changes(client, phone, folder):
+def test_a_folder_a_phone_gives_a_chat_is_in_its_changes(client, phone, home_folder):
+    folder = home_folder
     assert (
         client.post("/api/sessions", json={"folders": [str(folder)]}).status_code == 200
     )
@@ -481,11 +491,70 @@ def test_a_folder_a_phone_gives_a_chat_is_in_its_changes(client, phone, folder):
     ]
 
 
-def test_a_folder_refused_at_create_leaves_no_change(client, phone, folder, tmp_path):
+def test_a_folder_refused_at_create_leaves_no_change(client, phone, home_folder):
+    missing = home_folder.parent / "nope"
     refused = phone.post(
-        "/api/sessions", json={"folders": [str(folder), str(tmp_path / "nope")]}
+        "/api/sessions", json={"folders": [str(home_folder), str(missing)]}
     )
     assert refused.status_code == 400
+    assert _phone_changes(client) == []
+
+
+@pytest.fixture
+def credentials():
+    """A credential folder in the test's home, which a paired device never gets."""
+    path = Path.home() / ".password-store" / "work"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def _granted(client, session_id):
+    return _paths(client.get(f"/api/sessions/{session_id}/environment").json())
+
+
+def test_a_device_is_refused_a_credentials_folder_that_the_pc_may_add(
+    client, phone, credentials
+):
+    refused = phone.post("/api/sessions", json={"folders": [str(credentials)]})
+    assert refused.status_code == 403
+    assert "credentials" in refused.json()["detail"]
+    assert str(Path.home()) not in refused.json()["detail"]
+    assert _chat_count(client) == 0
+
+    session_id = phone.post("/api/sessions", json={}).json()["id"]
+    added = phone.post(
+        f"/api/sessions/{session_id}/environment/folders",
+        json={"path": str(credentials)},
+    )
+    assert added.status_code == 403
+    assert added.json()["detail"] == refused.json()["detail"]
+    assert str(credentials.resolve()) not in _granted(client, session_id)
+    assert _phone_changes(client) == []
+
+    pc = client.post(
+        f"/api/sessions/{session_id}/environment/folders",
+        json={"path": str(credentials)},
+    )
+    assert pc.status_code == 200, pc.text
+    assert str(credentials.resolve()) in _granted(client, session_id)
+
+
+def test_a_device_is_refused_a_folder_outside_the_home_folder(
+    client, phone, tmp_path_factory
+):
+    outside = tmp_path_factory.mktemp("outside-home")
+    assert not outside.resolve().is_relative_to(Path.home().resolve())
+    refused = phone.post("/api/sessions", json={"folders": [str(outside)]})
+    assert refused.status_code == 403
+    assert "home folder" in refused.json()["detail"]
+    assert _chat_count(client) == 0
+
+    session_id = phone.post("/api/sessions", json={}).json()["id"]
+    added = phone.post(
+        f"/api/sessions/{session_id}/environment/folders",
+        json={"path": str(outside)},
+    )
+    assert added.status_code == 403
     assert _phone_changes(client) == []
 
 
