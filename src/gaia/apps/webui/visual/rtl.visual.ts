@@ -7110,7 +7110,7 @@ test('the setup Checks log reads each line in its own direction, with no glossed
         await p.route('**/api/setup/check*', (route) => route.fulfill({ json: { ready: false, stage: 'server', initialized: false, steps: [] } }));
         await p.route('**/api/onboarding/preflight', (route) => route.fulfill({ json: hardware }));
         await p.route('**/api/lemonade/detect', (route) => route.fulfill({ json: { found: { url: 'http://localhost:13305', version: '10.2.1', status: 'ok', message: null }, unchecked: [] } }));
-        await p.route('**/api/setup/plan', (route) => route.fulfill({ status: 500, json: { detail: 'Lemonade answered but could not list its models: 500' } }));
+        await p.route('**/api/setup/plan*', (route) => route.fulfill({ status: 500, json: { detail: 'Lemonade answered but could not list its models: 500' } }));
     });
     // The failed plan opens "Having trouble?" by itself; wait for it so the click doesn't close it.
     await expect(page.getByRole('alert')).toBeVisible();

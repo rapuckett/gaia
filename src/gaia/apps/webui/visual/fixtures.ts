@@ -639,7 +639,7 @@ export async function withDesktopBridges(
             }),
             gaiaUpdater: {
                 getStatus: readError ? async () => { throw new Error(readError); } : same, check: same, onStatusChange: () => () => {}, listReleases: async () => [], installVersion: same,
-                resumeUpdates: same, setAutoUpdate: same, setIncludePrereleases: same, downloadUpdate: same, restart: same,
+                resumeUpdates: same, markSetupWorked: same, setAutoUpdate: same, setIncludePrereleases: same, downloadUpdate: same, restart: same,
             },
         });
     }, { state: update, host, running: BACKEND_RUNNING, readError: statusReadError ?? null });
