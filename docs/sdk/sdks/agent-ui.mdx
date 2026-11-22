@@ -3707,6 +3707,7 @@ wrong token is a **401** with `"code": "ui_token_required"`.
 | Browser (`gaia chat --ui`) | Open the link it prints, `http://127.0.0.1:4200/?launch=<code>`. The code works once, for 10 minutes, and sets an HttpOnly, `SameSite=Strict` cookie so the browser stays signed in across restarts |
 | Scripts, MCP server, eval harness | Read the file; in Python, `gaia.ui.api_token.auth_headers()` |
 | Phone over mobile access | The tunnel's own token, from the QR code; it stops working when mobile access is off |
+| Paired phone or tablet | None. On the device listener ([what a paired device may call](#what-a-paired-device-may-call)) it sends its own device token, which device auth checks instead; the install's token means nothing there, and a device token sent to the main port is a **401** |
 
 Only `GET /api/health` and CORS preflights need no token; health returns no
 user data. `GAIA_UI_TOKEN_FILE` points the backend and its clients at another

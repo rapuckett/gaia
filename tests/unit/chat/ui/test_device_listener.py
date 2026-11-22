@@ -27,12 +27,13 @@ import pytest
 from fastapi.testclient import TestClient
 
 from gaia.config import GaiaConfig
+from gaia.ui import api_token
 from gaia.ui.devices import listener as listener_module
 from gaia.ui.devices.access import DeviceAccess
 from gaia.ui.devices.listener import DeviceGate, ListenerError
 from gaia.ui.devices.store import token_hash
 from gaia.ui.routers import sessions as sessions_router
-from gaia.ui.security import ListenerScopeMiddleware
+from gaia.ui.security import DEVICE_AUTH_SCOPE_KEY, ListenerScopeMiddleware
 from gaia.ui.server import create_app
 
 from .pinned_client import PinMismatch, PinnedConnection, call
@@ -191,6 +192,9 @@ async def _through_gate(app, scope, allow_loopback=False):
         "websocket-without-token",
         "listener-stack-without-the-gate",
         "device-token-over-plain-http",
+        "ui-token",
+        "ui-cookie",
+        "device-auth-stamp-off-the-listener",
     ],
 )
 def test_listener_refuses(served, case):
@@ -255,6 +259,25 @@ def test_listener_refuses(served, case):
             "/api/sessions", headers={"Authorization": f"Bearer {device['token']}"}
         )
         assert resp.status_code == 401 and "plain http" in resp.json()["detail"]
+    elif case == "ui-token":
+        # The PC's own token is no device token: it never stands in for device auth.
+        assert get("/api/sessions", token=served.app.state.ui_api_token)[0] == 401
+    elif case == "ui-cookie":
+        cookie = f"{api_token.COOKIE_NAME}={served.app.state.ui_api_token}"
+        assert get("/api/sessions", headers={"Cookie": cookie})[0] == 401
+    elif case == "device-auth-stamp-off-the-listener":
+        bare = TestClient(_stamped(served.app), client=PC)
+        bare.headers.pop("authorization", None)
+        assert bare.get("/api/sessions").status_code == 401
+
+
+def _stamped(app):
+    """*app* handed device auth's stamp, but not the listener's."""
+
+    async def stamped(scope, receive, send):
+        await app({**scope, DEVICE_AUTH_SCOPE_KEY: True}, receive, send)
+
+    return stamped
 
 
 def _pc(served, method, path, **kwargs):
@@ -266,7 +289,13 @@ def _pc(served, method, path, **kwargs):
             transport=transport, base_url="http://127.0.0.1:4200"
         ) as client:
             return await client.request(
-                method, path, headers={"X-Gaia-UI": "1"}, **kwargs
+                method,
+                path,
+                headers={
+                    "X-Gaia-UI": "1",
+                    "Authorization": f"Bearer {served.app.state.ui_api_token}",
+                },
+                **kwargs,
             )
 
     return served.run(go())

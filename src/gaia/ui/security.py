@@ -5,7 +5,8 @@
 
 Every ``/api`` and ``/v1`` request must present the Agent UI API token
 (:class:`ApiTokenMiddleware`, :mod:`gaia.ui.api_token`), local callers
-included: binding loopback is not access control. Three more layers stop a
+included: binding loopback is not access control. A request on the
+paired-device listener passes device auth instead. Three more layers stop a
 web page the user visits from driving the backend through the user's own
 browser, all applied in middleware so a route added tomorrow is covered
 without its author remembering anything:
@@ -46,6 +47,7 @@ from starlette.requests import cookie_parser
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from gaia.ui import api_token
+from gaia.ui.devices import DEVICE_TOKEN_PREFIX
 
 logger = logging.getLogger(__name__)
 
@@ -472,22 +474,56 @@ class ApiTokenMiddleware:
     the install's token; :func:`require_local_pc` still refuses such requests.
     ``OPTIONS`` passes so CORS can answer preflights, which carry no
     credentials.
+
+    On the paired-device listener this token means nothing: a request passes
+    only once the listener's device auth has checked it
+    (``DEVICE_AUTH_SCOPE_KEY``), whatever the path, and one that skipped it is
+    a 401. On the main listener, which is plain http, a device's ``gaiad_``
+    token is a 401.
     """
 
     def __init__(self, app: ASGIApp) -> None:
         self.app = app
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        if scope["type"] != "http":
+        kind = scope["type"]
+        if kind in ("http", "websocket") and scope.get(LISTENER_SCOPE_KEY) is not None:
+            if scope.get(DEVICE_AUTH_SCOPE_KEY) is True:
+                await self.app(scope, receive, send)
+                return
+            logger.error(
+                "Device listener served %s %s without device auth; refused",
+                scope.get("method", "WEBSOCKET"),
+                scope.get("path", ""),
+            )
+            if kind == "websocket":
+                await send({"type": "websocket.close", "code": 1008})
+            else:
+                await _send_rejection(send, 401, "This request skipped device auth.")
+            return
+        if kind != "http":
             await self.app(scope, receive, send)
             return
         path = scope.get("path", "")
         method = scope.get("method", "")
-        if (
-            not path.startswith(GUARDED_PREFIXES)
-            or path in TOKEN_EXEMPT_PATHS
-            or method == "OPTIONS"
-        ):
+        if not path.startswith(GUARDED_PREFIXES):
+            await self.app(scope, receive, send)
+            return
+
+        headers = Headers(scope=scope)
+        presented = api_token.bearer(headers.get("authorization", ""))
+        if presented and presented.startswith(DEVICE_TOKEN_PREFIX):
+            logger.warning(
+                "Refused %s %s: a paired device's token over plain http", method, path
+            )
+            await _send_rejection(
+                send,
+                401,
+                "A paired device's token works only on GAIA's TLS listener for "
+                "devices, never over plain http.",
+            )
+            return
+        if path in TOKEN_EXEMPT_PATHS or method == "OPTIONS":
             await self.app(scope, receive, send)
             return
 
@@ -498,9 +534,7 @@ class ApiTokenMiddleware:
                 "ApiTokenMiddleware is installed but app.state.ui_api_token is "
                 "unset; build the app with gaia.ui.server.create_app()."
             )
-        headers = Headers(scope=scope)
         cookies = cookie_parser(headers.get("cookie", ""))
-        presented = api_token.bearer(headers.get("authorization", ""))
         if api_token.token_matches(expected, presented) or api_token.token_matches(
             expected, cookies.get(api_token.COOKIE_NAME)
         ):
