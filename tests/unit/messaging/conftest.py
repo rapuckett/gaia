@@ -24,3 +24,38 @@ def own_gaia_home(tmp_path, monkeypatch):
     write the developer's real Discord state, bridge lock included."""
     monkeypatch.delenv("GAIA_HOME", raising=False)
     monkeypatch.setenv("GAIA_CONFIG_DIR", str(tmp_path))
+
+
+@pytest.fixture(autouse=True)
+def close_discord_adapters(monkeypatch, request):
+    """Close every adapter a test builds, then fail on an approval timer left
+    armed. An open prompt's 600 s timer would otherwise fire inside a later
+    test and log into that test's temp GAIA home while it is cleaned up."""
+    import threading
+
+    from gaia.messaging.discord import adapter as da
+
+    built = []
+    real_init = da.DiscordAdapter.__init__
+
+    def tracking_init(self, *args, **kwargs):
+        real_init(self, *args, **kwargs)
+        built.append(self)
+
+    monkeypatch.setattr(da.DiscordAdapter, "__init__", tracking_init)
+    yield
+    for adapter in built:
+        adapter.close()
+    leaked = [
+        t
+        for t in threading.enumerate()
+        if isinstance(t, threading.Timer)
+        and getattr(t.function, "__func__", None) is da.DiscordAdapter._expire
+        and not t.finished.is_set()
+    ]
+    for t in leaked:
+        t.cancel()
+    assert not leaked, (
+        f"{request.node.nodeid} left {len(leaked)} Discord approval timer(s) "
+        "armed; close the adapter or decide the prompt"
+    )
