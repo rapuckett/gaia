@@ -40,6 +40,7 @@ from urllib.parse import quote, urlsplit
 
 from gaia.logger import get_logger
 
+from ..database import AUTOMATED_SESSION_KINDS
 from ..public_address import public_addresses, public_https_host
 from .store import Device, PushRecord
 
@@ -910,8 +911,15 @@ class PushNotifier:
             if handler is not None and handler.waiting_on():
                 waiting.add(session_id)
         db = self._db()
+        if db is not None:
+            waiting = {s for s in waiting if not _is_automated(db, s)}
         unread = set(db.unread_ended_session_ids()) if db is not None else set()
         return len(waiting | unread)
+
+
+def _is_automated(db, session_id: str) -> bool:
+    session = db.get_session(session_id)
+    return session is not None and session.get("kind") in AUTOMATED_SESSION_KINDS
 
 
 def _log_device_failure(device_id: str, record: PushRecord, e: Exception) -> None:

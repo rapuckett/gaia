@@ -584,6 +584,9 @@ def test_nothing_secret_reaches_the_logs(sender, monkeypatch, caplog):
 
 def test_a_badge_change_goes_silent_and_at_most_once_a_minute(sender):
     sender.db.finish_session_run(sender.session_id, "done")
+    for kind in ("eval", "scheduled"):
+        automated = sender.db.create_session(title=kind, kind=kind)["id"]
+        sender.db.finish_session_run(automated, "done")
     sender.notifier.badge_changed()
     sender.notifier._send_due_badges()
     (call,) = sender.relay.calls

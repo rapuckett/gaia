@@ -850,11 +850,15 @@ class ChatDatabase:
         return cur.rowcount > 0
 
     def unread_ended_session_ids(self) -> List[str]:
-        """Chats whose last turn finished or failed and that nobody opened since."""
+        """Chats whose last turn finished or failed and that nobody opened since.
+
+        Eval and scheduled runs are left out, as in the phone's own count.
+        """
         with self._lock:
             rows = self._conn.execute(
                 "SELECT id FROM sessions WHERE unread = 1 "
-                "AND last_run_status IN ('done', 'failed')"
+                "AND last_run_status IN ('done', 'failed') AND kind NOT IN (?, ?)",
+                AUTOMATED_SESSION_KINDS,
             ).fetchall()
         return [row["id"] for row in rows]
 
