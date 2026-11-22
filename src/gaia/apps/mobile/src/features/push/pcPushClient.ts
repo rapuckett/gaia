@@ -6,7 +6,7 @@ import { GaiaApiError, parseErrorDetail } from '@/api/errors';
 import type { FetchLike } from '@/platform/fetch.types';
 
 /** This device's own push record on a paired PC (Parity's `device_self` route, §2 of the push API). */
-export const PUSH_SELF_ROUTE = '/api/devices/self/push';
+export const PUSH_SELF_ROUTE = '/api/devices/me/push';
 
 /** What the PC keeps to push to this phone: the send-only relay credential, never the phone's relay secret. */
 export interface PcPushRecord {

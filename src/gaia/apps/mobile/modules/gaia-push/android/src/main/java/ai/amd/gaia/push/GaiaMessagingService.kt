@@ -67,7 +67,8 @@ class GaiaMessagingService : FirebaseMessagingService() {
     if (!manager.areNotificationsEnabled()) return
     ensureChannels()
     val builder = NotificationCompat.Builder(this, channel)
-      .setSmallIcon(applicationInfo.icon)
+      .setSmallIcon(resource("ic_stat_gaia", "drawable"))
+      .setColor(getColor(resource("gaia_push_accent", "color")))
       .setContentTitle(title)
       .setContentText(body)
       .setStyle(NotificationCompat.BigTextStyle().bigText(body))
@@ -99,6 +100,13 @@ class GaiaMessagingService : FirebaseMessagingService() {
     val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
     manager.createNotificationChannel(NotificationChannel(NEEDS_YOU, say("mobileApp.push.channel.needsYou"), NotificationManager.IMPORTANCE_HIGH))
     manager.createNotificationChannel(NotificationChannel(CHATS, say("mobileApp.push.channel.chats"), NotificationManager.IMPORTANCE_DEFAULT))
+  }
+
+  /** A resource plugins/push/withPushAndroid.js writes in every build with push; a missing one is a build error made loud. */
+  private fun resource(name: String, type: String): Int {
+    val id = resources.getIdentifier(name, type, packageName)
+    if (id == 0) throw IllegalStateException("The $type $name is missing; plugins/push/withPushAndroid.js writes it in every build with push.")
+    return id
   }
 
   /** A catalog key's text from the strings plugins/push/withPushAndroid.js generates; a missing one is a build error made loud. */

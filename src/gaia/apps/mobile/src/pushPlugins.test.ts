@@ -4,7 +4,9 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import { getLocale } from '@webui/i18n/registry';
 
-const { PUSH_LOC_KEY, STRING_KEYS, STRING_LANGUAGES, TOOL_LABEL_KEY, androidResourceName } = require('../plugins/push/constants');
+import { colors } from '@/ui/tokens/generated';
+
+const { NOTIFICATION_ACCENT, PUSH_LOC_KEY, STRING_KEYS, STRING_LANGUAGES, TOOL_LABEL_KEY, androidResourceName } = require('../plugins/push/constants');
 const { androidStringsXml, iosStringsFile, pushStrings } = require('../plugins/push/strings');
 
 describe('the notification strings generated at prebuild', () => {
@@ -26,6 +28,10 @@ describe('the notification strings generated at prebuild', () => {
         const file = iosStringsFile(pushStrings('ar')) as string;
         expect(file).toContain(`"${PUSH_LOC_KEY}" = "${getLocale('ar').messages['mobileApp.push.generic.body']}";`);
         expect(file).toContain('"mobileApp.push.body.approve" = "في «{chat}». اضغط للمراجعة.";');
+    });
+
+    it("color notifications with the default palette's solid accent", () => {
+        expect(NOTIFICATION_ACCENT).toBe(colors.light.accentSolid);
     });
 
     it('escape Android resource text', () => {

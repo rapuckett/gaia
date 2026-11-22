@@ -32,9 +32,13 @@ const STRING_KEYS = [
     'mobileApp.push.body.problem',
     'mobileApp.push.body.problemNoChat',
     'mobileApp.push.body.needsYou',
+    'mobileApp.push.body.needsYouNoChat',
     'mobileApp.push.channel.needsYou',
     'mobileApp.push.channel.chats',
 ];
+
+/** The notification color: the default palette's accentSolid (light) in src/ui/tokens/generated.ts, which plugins can't import; src/pushPlugins.test.ts checks the copy. */
+const NOTIFICATION_ACCENT = '#B08D57';
 
 /** The approval card's tool labels (`tool.<id>.active`), which an approval's body names its tool with. */
 const TOOL_LABEL_KEY = /^tool\.[a-z0-9_]+\.active$/;
@@ -56,5 +60,6 @@ module.exports = {
     STRING_KEYS,
     STRING_LANGUAGES,
     TOOL_LABEL_KEY,
+    NOTIFICATION_ACCENT,
     androidResourceName,
 };

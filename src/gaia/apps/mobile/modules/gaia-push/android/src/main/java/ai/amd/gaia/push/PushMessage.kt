@@ -104,7 +104,7 @@ internal object PushText {
       }
       p.kind == "finished" -> { title = say("chatAlert.finished"); tap = "read"; detail = p.summary?.let(::isolate) }
       p.kind == "failed" -> { title = say("chatAlert.failed"); tap = "problem"; detail = p.summary?.let(::isolate) }
-      p.kind == "needs_you" -> return say("mobileApp.push.title.needsYou") to (p.label?.let(::isolate) ?: say("mobileApp.push.body.needsYou"))
+      p.kind == "needs_you" -> { title = say("mobileApp.push.title.needsYou"); tap = "needsYou"; detail = p.label?.let(::isolate) }
       else -> return null
     }
     val chat = p.chatTitle ?: return title to (detail ?: say("mobileApp.push.body.${tap}NoChat"))

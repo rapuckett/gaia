@@ -106,7 +106,9 @@ enum PushText {
       tap = "problem"
       detail = p.summary.map(isolate)
     case "needs_you":
-      return (say("mobileApp.push.title.needsYou"), p.label.map(isolate) ?? say("mobileApp.push.body.needsYou"))
+      title = say("mobileApp.push.title.needsYou")
+      tap = "needsYou"
+      detail = p.label.map(isolate)
     default:
       return nil
     }

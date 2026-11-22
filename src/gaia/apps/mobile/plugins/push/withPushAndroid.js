@@ -1,12 +1,14 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
+/* global __dirname */
+
 const fs = require('fs');
 const path = require('path');
 
 const { AndroidConfig, withAndroidManifest, withDangerousMod } = require('expo/config-plugins');
 
-const { STRING_LANGUAGES } = require('./constants');
+const { NOTIFICATION_ACCENT, STRING_LANGUAGES } = require('./constants');
 const { androidStringsXml, pushStrings } = require('./strings');
 
 const SERVICE = 'ai.amd.gaia.push.GaiaMessagingService';
@@ -16,6 +18,10 @@ const POST_NOTIFICATIONS = 'android.permission.POST_NOTIFICATIONS';
 // The link a tapped notification opens, read by GaiaMessagingService; pairing links use the same scheme.
 const SCHEME_KEY = 'ai.amd.gaia.push.SCHEME';
 const STRINGS_FILE = 'gaia_push_strings.xml';
+// The status-bar icon: the GAIA mark's monochrome template from the desktop tray (32 px), the only silhouette of it in
+// the repo; at hdpi it shows near the 24 dp the status bar asks for.
+const ICON_SOURCE = path.resolve(__dirname, '../../../webui/assets/tray-iconTemplate@2x.png');
+const ICON_FILE = 'ic_stat_gaia.png';
 
 function ensureTools(manifest) {
     manifest.manifest.$ = { ...manifest.manifest.$, 'xmlns:tools': 'http://schemas.android.com/tools' };
@@ -43,6 +49,13 @@ function withPushAndroid(config, { scheme }) {
         'android',
         (mod) => {
             const res = path.join(mod.modRequest.platformProjectRoot, 'app/src/main/res');
+            fs.mkdirSync(path.join(res, 'drawable-hdpi'), { recursive: true });
+            fs.mkdirSync(path.join(res, 'values'), { recursive: true });
+            fs.copyFileSync(ICON_SOURCE, path.join(res, 'drawable-hdpi', ICON_FILE));
+            fs.writeFileSync(
+                path.join(res, 'values', 'gaia_push_colors.xml'),
+                `<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <color name="gaia_push_accent">${NOTIFICATION_ACCENT}</color>\n</resources>\n`,
+            );
             for (const lang of STRING_LANGUAGES) {
                 const dir = path.join(res, lang === 'en' ? 'values' : `values-${lang}`);
                 fs.mkdirSync(dir, { recursive: true });
