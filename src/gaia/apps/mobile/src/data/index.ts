@@ -16,6 +16,7 @@ export * from './files';
 export * from './GaiaClientProvider';
 export * from './goals';
 export * from './memory';
+export * from './logs';
 export * from './messaging';
 export * from './modelActions';
 export * from './modelList';
