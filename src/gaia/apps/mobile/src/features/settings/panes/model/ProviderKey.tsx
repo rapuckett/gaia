@@ -206,6 +206,15 @@ export function ProviderKey({ provider, connected }: { provider: ProviderRow; co
                     />
                 ) : null}
             </Row>
+            {locked ? (
+                <Notice
+                    tone="warning"
+                    message={t('settings.key.storeLocked')}
+                    detail={lockedDetail}
+                    action={retryRefused || busy || storePrompt.hideAction ? undefined : { label: t('settings.key.unlockAgain'), onPress: onRetryStore }}
+                    testID="provider-key-locked"
+                />
+            ) : null}
             {!hasKey && state === 'unknown' ? (
                 <Text role="caption" tone="muted" testID="provider-key-waiting">{t('settings.key.waitingOs')}</Text>
             ) : !hasKey && state === 'read' ? (
@@ -362,15 +371,6 @@ export function ProviderKey({ provider, connected }: { provider: ProviderRow; co
                 <Notice tone="info" message={t('mobileApp.settings.pcOnly')} detail={refusedDetail} testID="provider-key-pc-only" />
             ) : refused ? (
                 <PcOnlyNotice testID="provider-key-pc-only" />
-            ) : null}
-            {locked ? (
-                <Notice
-                    tone="warning"
-                    message={t('settings.key.storeLocked')}
-                    detail={lockedDetail}
-                    action={retryRefused || busy || storePrompt.hideAction ? undefined : { label: t('settings.key.unlockAgain'), onPress: onRetryStore }}
-                    testID="provider-key-locked"
-                />
             ) : null}
             {!retryRefused ? <ApproveOnPcNotice kind="keyStore" action="keyStoreRetry" onRetry={onRetryStore} /> : null}
             {outcome && outcome.tone !== 'locked' ? (
