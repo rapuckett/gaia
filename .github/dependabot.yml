@@ -77,6 +77,7 @@ updates:
       - "/workers/agent-hub"
       - "/workers/admin"
       - "/workers/website-router"
+      - "/workers/push-relay"
       - "/src/vscode/gaia"
       - "/src/gaia/apps/mobile"
     schedule:
