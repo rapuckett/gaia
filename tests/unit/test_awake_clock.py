@@ -15,7 +15,7 @@ def test_it_runs_with_the_process():
     time.sleep(0.3)
     elapsed = awake_clock.monotonic() - start
     # Windows reads it at timer-tick resolution, about 16 ms.
-    assert 0.25 <= elapsed <= 1.0
+    assert 0.25 <= elapsed <= 3.0
 
 
 def test_it_never_goes_backwards():

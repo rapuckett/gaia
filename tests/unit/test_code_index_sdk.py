@@ -11,10 +11,35 @@ are mocked so tests run without any hardware or network.
 """
 
 import json
+import threading
+import time
+from contextlib import contextmanager
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+
+
+@contextmanager
+def own_thread_sleeps():
+    """Record time.sleep calls made on this thread; other threads sleep for real.
+
+    The SDK's `time` is the global module, so a plain patch also swallows
+    (and counts) sleeps from threads other tests left running.
+    """
+    real_sleep = time.sleep
+    me = threading.get_ident()
+    calls = []
+
+    def fake_sleep(seconds):
+        if threading.get_ident() == me:
+            calls.append(seconds)
+        else:
+            real_sleep(seconds)
+
+    with patch("gaia.code_index.sdk.time.sleep", fake_sleep):
+        yield calls
+
 
 try:
     from gaia.code_index.sdk import (
@@ -435,7 +460,7 @@ class TestEmbeddingBatchSync:
 
         with (
             patch.object(sdk, "_load_embedder"),
-            patch("gaia.code_index.sdk.time.sleep") as sleep,
+            own_thread_sleeps() as sleeps,
         ):
             with pytest.raises(RuntimeError, match="returned 1/2 vectors"):
                 sdk._encode_texts_with_sync(texts, chunks)
@@ -444,7 +469,7 @@ class TestEmbeddingBatchSync:
         assert all(
             len(call.args[0]) == 2 for call in mock_enc.embeddings.call_args_list
         )
-        sleep.assert_not_called()
+        assert sleeps == []
 
     def test_an_empty_vector_in_a_full_batch_raises(self, tmp_path):
         """A chunk whose vector comes back empty fails the batch, not just itself."""
@@ -727,13 +752,13 @@ class TestBatchEmbeddingRace:
 
         with (
             patch.object(sdk, "_load_embedder"),
-            patch("gaia.code_index.sdk.time.sleep") as sleep,
+            own_thread_sleeps() as sleeps,
         ):
             with pytest.raises(RuntimeError, match="returned 0/1 vectors"):
                 sdk._encode_texts_with_sync(texts, chunks)
 
         assert mock_enc.embeddings.call_count == _EMBED_WARMUP_ATTEMPTS
-        assert sleep.call_count == _EMBED_WARMUP_ATTEMPTS - 1
+        assert len(sleeps) == _EMBED_WARMUP_ATTEMPTS - 1
 
     def test_a_dead_backend_fails_indexing_on_its_first_call(self, tmp_path):
         """With Lemonade down, indexing says so at once.
@@ -759,7 +784,7 @@ class TestBatchEmbeddingRace:
 
         with (
             patch.object(sdk, "_load_embedder"),
-            patch("gaia.code_index.sdk.time.sleep") as sleep,
+            own_thread_sleeps() as sleeps,
         ):
             with pytest.raises(RuntimeError, match="connection refused") as exc:
                 sdk.index_repository()
@@ -767,7 +792,7 @@ class TestBatchEmbeddingRace:
         assert sdk.config.embedding_model in str(exc.value)
         assert ".." not in str(exc.value)
         assert mock_enc.embeddings.call_count == 1
-        sleep.assert_not_called()
+        assert sleeps == []
 
 
 # ---------------------------------------------------------------------------
