@@ -4627,6 +4627,8 @@ const messages: Messages = {
     'mobileApp.yourPc.settings.connectors.firstSetup': 'الإعداد الأول — أدخل بيانات عميل OAuth أدناه. تُخزَّن مشفرة في سلسلة مفاتيح الكمبيوتر لديك ويُعاد استخدامها للاتصالات القادمة.',
     'mobileApp.yourPc.settings.errors.notInstalledTitle': 'لم تُعدّ النماذج على الكمبيوتر لديك بعد',
     'mobileApp.yourPc.settings.key.setIn': 'من متغيرات البيئة على الكمبيوتر لديك: {name}',
+    'mobileApp.yourPc.settings.key.storeLocked': 'مخزن المفاتيح على الكمبيوتر مقفل، لذلك لا يستطيع GAIA قراءة مفتاحك المحفوظ.',
+    'mobileApp.yourPc.settings.key.waitingOs': 'في انتظار سماح الكمبيوتر بقراءة المفتاح المحفوظ.',
     'mobileApp.yourPc.settings.messaging.takeOver': 'الرد من الكمبيوتر لديك',
     'mobileApp.yourPc.settings.skills.link.codeHint': 'يمكن لسكربتاتها أن تعمل على الكمبيوتر لديك بصلاحياتك.',
     'mobileApp.yourPc.setup.backend.hintNoNpu': 'تعمل الدردشة على رسومات الكمبيوتر لديك (GPU).',
