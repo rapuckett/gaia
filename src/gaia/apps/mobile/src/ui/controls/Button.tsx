@@ -52,7 +52,7 @@ export function Button({
     const { colors, radius } = useTheme();
     const largeText = useLargeText();
     const look: Record<NonNullable<ButtonProps['variant']>, { bg: string; border: string; tone: Tone }> = {
-        primary: { bg: colors.accentFill, border: 'transparent', tone: 'onAccent' },
+        primary: { bg: colors.accentFill, border: colors.accentSolid, tone: 'onAccent' },
         secondary: { bg: colors.bgTertiary, border: size === 'sm' ? colors.border : colors.borderLight, tone: 'primary' },
         ghost: { bg: 'transparent', border: colors.border, tone: 'accent' },
         danger: { bg: colors.dangerDim, border: 'transparent', tone: 'danger' },

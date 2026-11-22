@@ -25,7 +25,13 @@ export function ModelServerDownNotice({
     initialAsked = false,
     initialSwitched = false,
     autoSwitch = false,
+    detail,
+    inPane = false,
 }: {
+    /** The server's own words for why it isn't answering, on a muted line of its own; never part of a translated sentence. */
+    detail?: string | null;
+    /** On the Settings › Model pane, where no reply is waiting: says GAIA can't reply until the server is back. */
+    inPane?: boolean;
     /** Dev gallery only: opens after "Check again" was pressed. */
     initialAsked?: boolean;
     /** Dev gallery only: opens after a successful switch. */
@@ -47,7 +53,8 @@ export function ModelServerDownNotice({
     const switching = switchOwn.isPending;
     const starting = restart.isPending || !!s?.restarting;
     const busy = starting || switching;
-    const { start, useOwn, notOurs } = serverDownOffer(s, target.data);
+    const targetRead = target.isError ? 'failed' : target.data ? 'read' : 'loading';
+    const { start, useOwn, notOurs } = serverDownOffer(s, target.data, targetRead);
     const down = !s || s.state === 'stopped';
 
     const switchToOwn = () => {
@@ -80,6 +87,7 @@ export function ModelServerDownNotice({
             : describeError(restart.error, t)
         : s?.restart_error;
     const switchError = switchOwn.error && !isPcRefusal(switchOwn.error) ? describeHttpFailure(switchOwn.error, t) : null;
+    const targetFailure = target.isError ? describeHttpFailure(target.error, t) : null;
     const stillDown = asked && !busy && !status.isFetching && down && !raw;
     return (
         <View
@@ -98,10 +106,12 @@ export function ModelServerDownNotice({
                 <Icon icon={TriangleAlert} size="sm" tone="warning" />
                 <Text role="ui" weight="semibold">{t('mobileApp.serverDown.title')}</Text>
             </Row>
-            <Text role="ui">{t('serverDown.body')}</Text>
+            <Text role="ui">{t(inPane ? 'mobileApp.serverDown.paneBody' : 'serverDown.body')}</Text>
             {notOurs ? <Text role="ui">{t('mobileApp.serverDown.notOurs')}</Text> : null}
+            {targetFailure ? <Notice tone="danger" message={targetFailure.text} detail={targetFailure.detail} testID="server-down-target-failed" /> : null}
             {stillDown ? <Text role="ui">{t('serverDown.stillDown')}</Text> : null}
             {raw ? <Text role="label" tone="secondary" mono dir="ltr">{raw}</Text> : null}
+            {detail ? <Text role="caption" tone="muted" dir="ltr" testID="server-down-detail">{detail}</Text> : null}
             {switchOwn.error && isPcRefusal(switchOwn.error) ? <Notice tone="info" message={t('mobileApp.settings.pcOnly')} testID="server-down-pc-only" /> : null}
             {switchError ? <Notice tone="danger" message={switchError.text} detail={switchError.detail} testID="server-down-switch-error" /> : null}
             <Row gap="xs" wrap>
@@ -134,6 +144,7 @@ export function ModelServerDownNotice({
                     onPress={() => {
                         setAsked(true);
                         void status.refetch();
+                        void target.refetch();
                     }}
                 />
             </Row>

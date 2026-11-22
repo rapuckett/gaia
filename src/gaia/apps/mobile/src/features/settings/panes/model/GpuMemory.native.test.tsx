@@ -7,6 +7,7 @@ import { Platform } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { createFakeClient } from '@/api/fake';
+import { GaiaApiError } from '@/api/errors';
 import { GaiaClientProvider } from '@/data';
 import { GPU } from '@/features/setup/devScenes';
 import { ThemeProvider } from '@/ui';
@@ -33,6 +34,24 @@ describeNative('GpuMemory', () => {
         expect(within(row).getByText(/^GPU .*16.*$/)).toBeTruthy();
         expect(within(row).getByText(/^CPU .*112.*$/)).toBeTruthy();
         expect(within(row).getByText('·')).toBeTruthy();
+        queryClient.clear();
+    });
+
+    it('keeps the PC\'s raw exception on a detail line, not inside the sentence', async () => {
+        const raw = "HTTPConnectionPool(host='127.0.0.1', port=9): Max retries exceeded.";
+        const client = createFakeClient({ gpuMemory: new GaiaApiError(500, raw) });
+        const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+        await render(
+            <QueryClientProvider client={queryClient}>
+                <GaiaClientProvider client={client}>
+                    <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 800 }, insets: { top: 0, left: 0, right: 0, bottom: 0 } }}>
+                        <ThemeProvider><GpuMemory /></ThemeProvider>
+                    </SafeAreaProvider>
+                </GaiaClientProvider>
+            </QueryClientProvider>,
+        );
+        expect(await screen.findByText(/^GAIA answered with an error/)).toBeTruthy();
+        expect(screen.getByText(raw)).toBeTruthy();
         queryClient.clear();
     });
 });

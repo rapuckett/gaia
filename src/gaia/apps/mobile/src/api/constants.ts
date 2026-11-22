@@ -42,6 +42,7 @@ export const ENDPOINTS = {
     localModelRestart: '/api/providers/local/restart',
     localModelStatus: '/api/providers/local/status',
     logs: '/api/logs',
+    logRead: '/api/logs/{source}',
     mcpStatus: '/api/mcp/status',
     media: '/api/media/{kind}/{name}',
     memoryActivity: '/api/memory/activity',
@@ -197,6 +198,14 @@ export const ENDPOINTS = {
     onboardingPreflight: '/api/onboarding/preflight',
     onboardingStart: '/api/onboarding/start',
 } as const;
+
+export function logReadPath(source: string, params: { file?: string | null; after?: string | null } = {}): string {
+    const query = new URLSearchParams();
+    if (params.file) query.set('file', params.file);
+    if (params.after) query.set('after', params.after);
+    const qs = query.toString();
+    return ENDPOINTS.logRead.replace('{source}', encodeURIComponent(source)) + (qs ? `?${qs}` : '');
+}
 
 export function agentInstallStatusPath(agentId: string): string {
     return ENDPOINTS.agentInstallStatus.replace('{agent_id}', encodeURIComponent(agentId));
@@ -606,3 +615,10 @@ export function documentUploadPathPath(sessionId: string): string {
 export function documentIndexFolderPath(sessionId: string): string {
     return `${ENDPOINTS.documentIndexFolder}?session_id=${encodeURIComponent(sessionId)}`;
 }
+
+/** How often the log viewer asks the PC for new lines while Follow is on. */
+export const LOG_FOLLOW_MS = 2_000;
+/** Lines the log viewer keeps; older ones scroll off. */
+export const LOG_KEEP_LINES = 5_000;
+/** How long a log's text stays in memory after its screen closes. */
+export const LOG_GC_MS = 5_000;

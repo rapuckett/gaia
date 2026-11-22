@@ -12,9 +12,13 @@ export interface ServerDownOffer {
     notOurs: boolean;
 }
 
-/** What the PC's own notice offers, from the same two reads. */
-export function serverDownOffer(status: LocalModelStatus | undefined, target: LemonadeTarget | undefined): ServerDownOffer {
+/** Whether the PC's choice of model server has been read: it can't be judged while loading or after a failed read. */
+export type TargetRead = 'loading' | 'failed' | 'read';
+
+/** What the PC's own notice offers, from the same two reads; nothing about the target's owner is claimed until it is read. */
+export function serverDownOffer(status: LocalModelStatus | undefined, target: LemonadeTarget | undefined, read: TargetRead = 'read'): ServerDownOffer {
     const start = status?.owner === 'gaia';
-    const useOwn = !start && target?.mode === 'external' && target.source !== 'env';
-    return { start, useOwn, notOurs: !!status && !start && !useOwn };
+    const known = read === 'read' && !!target;
+    const useOwn = known && !start && target.mode === 'external' && target.source !== 'env';
+    return { start, useOwn, notOurs: known && !!status && !start && !useOwn };
 }

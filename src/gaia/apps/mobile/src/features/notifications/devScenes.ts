@@ -25,6 +25,8 @@ export interface NotificationScene {
     chatAlert?: ChatAlertSpec;
     /** The status request fails like a PC that doesn't answer. */
     unreachable?: boolean;
+    /** The gate scene also mounts the app's connection banner above its screen, as the root layout does. */
+    ambient?: boolean;
     /** The status request answers a gateway 504, the phone's only "slow to answer" signal. */
     slow?: boolean;
     data?: FakeClientData;
@@ -126,6 +128,11 @@ export const NOTIFICATION_SCENES: Record<string, NotificationScene> = {
     // NTF-15: the embedded server's update stopped (`Try again`); the restore-model notices are `/dev/model-server?state=restore-failed` and `restore-ok`.
     'setup-upgrading-failed': { view: 'gate', data: { setupChecks: [{ ready: false, stage: 'upgrade', steps: [] } as unknown as SetupCheck], setupStatus: { state: 'failed', error: 'The download was interrupted.' } as never } },
     'setup-server-down': { view: 'gate', data: check({ stage: 'server', initialized: true } as Partial<SetupCheck>) },
+    // SD: the gate's server-down state with the app banner mounted: one card, never the gate's notice beside it.
+    'setup-server-down-banner-own': { view: 'gate', ambient: true, data: { ...check({ stage: 'server', initialized: true } as Partial<SetupCheck>), ...status({ lemonade_running: false, start_command: null, start_instruction: null }) } },
+    'setup-server-down-banner-hung': { view: 'gate', ambient: true, data: { ...check({ stage: 'server', initialized: true } as Partial<SetupCheck>), ...status({ lemonade_running: false, lemonade_error: 'The model server timed out.', start_command: START_COMMAND }) } },
+    'setup-server-down-banner-setup': { view: 'gate', ambient: true, data: { ...check({ stage: 'server', initialized: true } as Partial<SetupCheck>), ...status({ lemonade_running: false, start_command: null, start_instruction: 'Run gaia init to install the model server.' }) } },
+    'setup-server-down-banner-stopped': { view: 'gate', ambient: true, data: { ...check({ stage: 'server', initialized: true } as Partial<SetupCheck>), ...status({ lemonade_running: false, start_command: START_COMMAND }) } },
     'setup-server-down-list-unread': { view: 'gate', data: check({ stage: 'server', initialized: true, model_list_unread: true } as Partial<SetupCheck>) },
 };
 

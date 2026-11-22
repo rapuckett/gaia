@@ -92,6 +92,8 @@ import type {
     SetupCheck,
     SetupPlan,
     SetupRunStatus,
+    LogReadResponse,
+    LogSourcesResponse,
     Settings,
     SkillList,
     SpeechModel,
@@ -339,6 +341,10 @@ export interface FakeClientData {
     turnDiffs?: Record<string, FileDiff[]>;
     /** Answers undoTurn with this unless forced, as the PC does for a file changed since. */
     undoConflict?: GaiaApiError;
+    /** What getLogSources answers; an Error is thrown. */
+    logSources?: LogSourcesResponse | Error;
+    /** What readLog answers, by source: a read, an Error to throw, or a function of the read's `after` and `file`. */
+    logReads?: Record<string, LogReadResponse | Error | ((params: { file?: string | null; after?: string | null }) => LogReadResponse)>;
     /** What getUndoSettings answers; updateUndoSettings changes it. */
     undoSettings?: UndoSettings;
     /** What listAutomations answers; an Error is thrown. Pause, resume and remove change it. */
@@ -1425,6 +1431,17 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         },
         async disconnectDiscord() {
             return discordWrite('disconnect', { connected: false, paired: false, running: false, state: 'stopped', bot_name: '', owner_name: '', autostart: false, always_allowed: [], pairing_code: '' });
+        },
+        async getLogSources() {
+            if (!data.logSources) throw new GaiaApiError(503, 'This fake client was given no log sources.');
+            if (data.logSources instanceof Error) throw data.logSources;
+            return data.logSources;
+        },
+        async readLog(source, params = {}) {
+            const read = data.logReads?.[source];
+            if (!read) throw new GaiaApiError(404, `This fake client was given no log "${source}".`);
+            if (read instanceof Error) throw read;
+            return typeof read === 'function' ? read(params) : read;
         },
         async getUndoSettings() {
             if (!data.undoSettings) throw new GaiaApiError(503, 'This fake client was given no undo settings.');

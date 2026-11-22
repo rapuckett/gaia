@@ -7,7 +7,7 @@ import type { SystemStatus } from '@/api/client.types';
 import { createStatusHealth } from '@/data/statusHealth';
 import { translator } from '@/i18n/useT';
 
-import { pickBanner } from './pickBanner';
+import { isServerDownBanner, pickBanner } from './pickBanner';
 
 const t = translator('en');
 const OK = {
@@ -21,6 +21,13 @@ const withStatus = (patch: Partial<SystemStatus>) => ({ ...OK, ...patch }) as Sy
 const id = (status: SystemStatus | undefined, error: unknown = null) => pickBanner(status, error, t)?.id ?? null;
 
 describe('pickBanner', () => {
+    it('names every server-down cause so each replaces the setup gate\'s generic notice', () => {
+        expect(isServerDownBanner(pickBanner(withStatus({ lemonade_running: false }), null, t))).toBe(true);
+        expect(isServerDownBanner(pickBanner(withStatus({ lemonade_running: false, lemonade_error: 'timed out' }), null, t))).toBe(true);
+        expect(isServerDownBanner(pickBanner(withStatus({}), null, t))).toBe(false);
+        expect(isServerDownBanner(null)).toBe(false);
+    });
+
     it('shows the web banner for each state, in the web order', () => {
         expect(id(OK)).toBeNull();
         expect(id(undefined)).toBeNull();
@@ -61,9 +68,14 @@ describe('pickBanner', () => {
         const setup = down({ start_instruction: 'Run gaia init to install the model server.' });
         expect(setup?.message).toBe(t('banner.finishSetup'));
         expect(setup?.command).toBeUndefined();
+        // Open setup goes inside that one card, and only while setup isn't done.
+        expect(setup?.setup).toBe(true);
+        expect(own?.setup).toBeUndefined();
+        expect(down({ start_command: cmd })?.setup).toBeUndefined();
         const hungSetup = down({ lemonade_error: 'timed out', start_command: 'gaia init' });
         expect(hungSetup?.message).toBeUndefined();
         expect(hungSetup?.command).toBeUndefined();
+        expect(hungSetup?.setup).toBeUndefined();
     });
 
     it('shows a picked model loading, or failing, ahead of connection trouble and after a download', () => {
