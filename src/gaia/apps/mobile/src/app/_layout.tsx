@@ -17,6 +17,7 @@ import { AppPolls } from '@/features/notifications/AppPolls';
 import { NotificationFeed } from '@/features/notifications';
 import { AppNavigator } from '@/features/nav/AppNavigator';
 import { RoutingEffects } from '@/features/nav/RoutingEffects';
+import { useQuickActionItems } from '@/features/nav/quickActions';
 import { INITIAL_ROUTE } from '@/features/nav/navigation';
 import { sweepTempFiles } from '@/features/files/shareTemp';
 import { installPinnedPairing, PairingGate } from '@/features/pairing';
@@ -68,6 +69,7 @@ export default function RootLayout() {
 
     const localeLoaded = useLocaleStore((s) => s.hydrated);
     const picked = useLocaleStore((s) => s.locale !== null);
+    useQuickActionItems(localeLoaded ? lang : null);
 
     // Before the saved pick loads, dir is the phone's and would overwrite the pick's flags.
     useEffect(() => {
