@@ -20,8 +20,8 @@ export function PushExplainer({ open, onAllow, onLater }: PushExplainerProps) {
             title={t('mobileApp.push.ask.title')}
             footer={
                 <Stack gap="sm">
-                    <Button variant="primary" label={t('mobileApp.push.ask.allow')} onPress={onAllow} testID="push-ask-allow" />
-                    <Button variant="ghost" label={t('mobileApp.push.ask.later')} onPress={onLater} testID="push-ask-later" />
+                    <Button variant="primary" full label={t('mobileApp.push.ask.allow')} onPress={onAllow} testID="push-ask-allow" />
+                    <Button variant="secondary" full label={t('mobileApp.push.ask.later')} onPress={onLater} testID="push-ask-later" />
                 </Stack>
             }
         >
