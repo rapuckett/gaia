@@ -18,6 +18,8 @@ import pytest
 from gaia.eval.integrity_gate import main
 from gaia.eval.scorecard import build_scorecard
 
+pytestmark = pytest.mark.usefixtures("restore_gaia_logging")
+
 
 @pytest.fixture(autouse=True)
 def _isolate_job_summary(monkeypatch):

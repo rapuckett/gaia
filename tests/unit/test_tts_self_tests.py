@@ -17,6 +17,8 @@ import pytest
 from gaia import cli
 from gaia.audio.kokoro_tts import KokoroTTS
 
+pytestmark = pytest.mark.usefixtures("restore_gaia_logging")
+
 STATS = {"processing_time": 0.1, "audio_duration": 0.1, "realtime_ratio": 1.0}
 
 

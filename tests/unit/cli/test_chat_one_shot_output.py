@@ -12,10 +12,6 @@ import pytest
 
 from gaia.logger import AGENT_LOG_ENV, configure
 
-# The chat path under test reconfigures handlers installed by an owning
-# process; `gaia.cli:main` does via configure(), so the tests do too.
-log_manager = configure()
-
 ANSWER = "🧠 gaia: 391"
 
 
@@ -66,24 +62,12 @@ def stub_agent(monkeypatch):
 
 
 @pytest.fixture
-def console_logging():
-    """Restore the global console and file handlers the chat path reconfigures."""
-    handler = log_manager.console_handler
-    saved = (handler.stream, handler.level, log_manager.file_handler)
-    saved_log_file = log_manager.log_file
-    root = logging.getLogger()
-    saved_root_handlers = list(root.handlers)
-    yield
-    if log_manager.file_handler is not saved[2]:
-        log_manager.file_handler.close()
-    handler.stream = saved[0]
-    handler.setLevel(saved[1])
-    log_manager.file_handler = saved[2]
-    log_manager.log_file = saved_log_file
-    root.handlers = saved_root_handlers
+def console_logging(restore_gaia_logging):
+    """Install logging as `gaia.cli:main` does; the chat path then reconfigures it."""
+    return configure()
 
 
-def _run_one_shot(**kwargs):
+def _run_one_shot(log_manager, **kwargs):
     from gaia.cli import async_main
 
     # As in a real run: the console handler starts on stdout at INFO. Set here,
@@ -108,7 +92,7 @@ def test_one_shot_stdout_is_only_the_answer(
     log_file = tmp_path / "agent.log"
     monkeypatch.setenv(AGENT_LOG_ENV, str(log_file))
 
-    assert _run_one_shot() == 0
+    assert _run_one_shot(console_logging) == 0
 
     captured = capsys.readouterr()
     assert captured.out == ANSWER + "\n"
@@ -123,7 +107,7 @@ def test_debug_shows_diagnostics_on_stderr_not_stdout(
 ):
     monkeypatch.delenv(AGENT_LOG_ENV, raising=False)
 
-    assert _run_one_shot(debug=True) == 0
+    assert _run_one_shot(console_logging, debug=True) == 0
 
     captured = capsys.readouterr()
     assert captured.out == ANSWER + "\n"

@@ -24,6 +24,8 @@ from gaia.mcp.servers import agent_ui_mcp, tui_mcp
 from gaia.mcp.servers.agent_ui_mcp import create_agent_ui_mcp
 from gaia.mcp.servers.tui_mcp import create_tui_mcp
 
+pytestmark = pytest.mark.usefixtures("restore_gaia_logging")
+
 
 class _EchoAgent(MCPAgent):
     """Minimal agent that does not need a model or external service."""

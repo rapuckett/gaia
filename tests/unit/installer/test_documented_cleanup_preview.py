@@ -9,6 +9,9 @@ import pytest
 
 from gaia.cli import main
 
+pytestmark = pytest.mark.usefixtures("restore_gaia_logging")
+
+
 ROOT = Path(__file__).resolve().parents[3]
 
 

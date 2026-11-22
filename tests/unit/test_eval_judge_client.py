@@ -27,6 +27,8 @@ from gaia.eval.judge_client import (
     probe_judge_credential,
 )
 
+pytestmark = pytest.mark.usefixtures("restore_gaia_logging")
+
 ENV_KEY = "sk-ant-api03-ENVSECRET"
 DOTENV_KEY = "sk-ant-api03-DOTENVSECRET"
 OAUTH = "sk-ant-oat01-OAUTHSECRET"

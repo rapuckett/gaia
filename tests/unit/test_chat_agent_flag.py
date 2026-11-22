@@ -17,6 +17,8 @@ from pathlib import Path
 
 import pytest
 
+pytestmark = pytest.mark.usefixtures("restore_gaia_logging")
+
 _AGENT_SRC = textwrap.dedent("""
     import json
     import os

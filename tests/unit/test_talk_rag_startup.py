@@ -11,7 +11,10 @@ import pytest
 from gaia.talk.sdk import TalkConfig, TalkSDK
 
 # asyncio uses a local socketpair for its Windows event-loop wakeup.
-pytestmark = pytest.mark.allow_network
+pytestmark = [
+    pytest.mark.allow_network,
+    pytest.mark.usefixtures("restore_gaia_logging"),
+]
 
 
 @pytest.fixture
