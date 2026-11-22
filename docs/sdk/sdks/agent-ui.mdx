@@ -857,7 +857,7 @@ Every other path serves the Agent UI page, except paths under `/api`: an unknown
     folders when its contract is 2.18 or later; an older one, the email agent,
     or one that fails to start is refused. From an allowed paired device, a
     folder outside the home folder or one holding credentials is a **403**
-    and no chat is created, as for
+    and no chat is created, with the same `detail` as
     `POST /api/sessions/{session_id}/environment/folders`. Each folder a chat
     starts with is audited, and one a paired device gives is listed in the
     device's changes (`folderAdded`).
@@ -1719,10 +1719,12 @@ agent at once, so they take effect on its next step.
     write the folder. **400** for a path that isn't a folder, for a filesystem
     root, the home folder or a protected folder, and for a folder inside one
     the user removed. An allowed paired device gets a **403** for a folder
-    outside the home folder or one holding credentials, with the same reason
-    `POST /api/environment/folders/check` gives and no path in it. A folder a
-    paired device adds is listed in the device's changes (`folderAdded`, by
-    the folder's name).
+    outside the home folder or one holding credentials, with `detail`
+    `{"code", "message"}`: code `device_folder_outside_home` or
+    `device_folder_withheld`, and the same English reason
+    `POST /api/environment/folders/check` gives, with no path in it. Read the
+    code, never the message. A folder a paired device adds is listed in the
+    device's changes (`folderAdded`, by the folder's name).
   </Accordion>
 
   <Accordion title="POST /api/environment/folders/check">
@@ -1733,7 +1735,8 @@ agent at once, so they take effect on its next step.
     and is refused when added. The desktop app asks this as soon as a folder is
     picked in the system dialog. For an allowed paired device a folder outside
     the home folder, or one holding credentials, is refused too, without its
-    path.
+    path, and the response adds its `code` (`device_folder_outside_home` or
+    `device_folder_withheld`); the PC's own refusals carry no code.
   </Accordion>
 
   <Accordion title="POST /api/sessions/{session_id}/environment/folders/remove">
