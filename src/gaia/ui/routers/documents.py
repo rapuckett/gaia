@@ -48,6 +48,7 @@ from ..security import allowed_device, is_local_pc
 from ..utils import (
     ALLOWED_EXTENSIONS,
     FOLDER_INDEX_EXTENSIONS,
+    INDEX_FAILURE_AWAY,
     LARGE_FILE_THRESHOLD,
     compute_file_hash,
     compute_file_hash_from_fd,
@@ -234,14 +235,16 @@ def _sanitize_stem(stem: str, max_length: int = 80) -> str:
 
 
 @router.get("/api/documents", response_model=DocumentListResponse)
-async def list_documents(db: ChatDatabase = Depends(get_db)):
+async def list_documents(http_request: Request, db: ChatDatabase = Depends(get_db)):
     """List all documents in the library."""
     docs = db.list_documents()
     total_size = sum(d.get("file_size", 0) for d in docs)
     total_chunks = sum(d.get("chunk_count", 0) for d in docs)
 
     return DocumentListResponse(
-        documents=[doc_to_response(d) for d in docs],
+        documents=[
+            doc_to_response(d, away=not is_local_pc(http_request)) for d in docs
+        ],
         total=len(docs),
         total_size_bytes=total_size,
         total_chunks=total_chunks,
@@ -342,7 +345,7 @@ async def upload_by_path(
                     doc["indexing_status"] = "failed"
                     doc["last_error"] = error_text
                     doc["error_kind"] = error_kind
-                    return doc_to_response(doc)
+                    return doc_to_response(doc, away=not is_local_pc(http_request))
 
                 doc = db.add_document(
                     filename=safe_filepath.name,
@@ -352,7 +355,7 @@ async def upload_by_path(
                     chunk_count=chunk_count,
                     file_mtime=file_mtime,
                 )
-                return doc_to_response(doc)
+                return doc_to_response(doc, away=not is_local_pc(http_request))
 
             # Large file: create placeholder and index in background
             doc = db.add_document(
@@ -428,7 +431,7 @@ async def upload_by_path(
             )
             indexing_tasks[doc_id] = task
             doc["indexing_status"] = "indexing"
-            return doc_to_response(doc)
+            return doc_to_response(doc, away=not is_local_pc(http_request))
 
         finally:
             if temp_path is not None:
@@ -443,6 +446,7 @@ async def upload_by_path(
 
 @router.post("/api/documents/upload", response_model=DocumentResponse)
 async def upload_document_blob(
+    http_request: Request,
     file: UploadFile = File(...),
     db: ChatDatabase = Depends(get_db),
 ):
@@ -543,7 +547,7 @@ async def upload_document_blob(
                 display_name,
                 existing.get("id"),
             )
-            return doc_to_response(existing)
+            return doc_to_response(existing, away=not is_local_pc(http_request))
 
         # 6. Promote partial -> final (atomic rename) under the sanitized
         # original name, so the agent reads and quotes the name the person
@@ -640,7 +644,7 @@ async def upload_document_blob(
         bytes_written,
         doc.get("chunk_count", 0),
     )
-    return doc_to_response(doc)
+    return doc_to_response(doc, away=not is_local_pc(http_request))
 
 
 @router.get(
@@ -778,6 +782,7 @@ async def cancel_indexing(
 @router.post("/api/documents/{doc_id}/reindex", response_model=DocumentResponse)
 async def reindex_document(
     doc_id: str,
+    http_request: Request,
     db: ChatDatabase = Depends(get_db),
 ):
     """Re-run the RAG indexing pipeline for a document.
@@ -838,7 +843,7 @@ async def reindex_document(
         raise HTTPException(
             status_code=404, detail="Document was deleted during reindex"
         )
-    return doc_to_response(updated)
+    return doc_to_response(updated, away=not is_local_pc(http_request))
 
 
 @router.delete(
@@ -1033,13 +1038,14 @@ async def index_folder(
                     chunk_count=chunk_count,
                     file_mtime=file_mtime,
                 )
-                indexed_docs.append(doc_to_response(doc))
+                indexed_docs.append(
+                    doc_to_response(doc, away=not is_local_pc(http_request))
+                )
             except Exception as e:
                 error_msg = (
                     f"{filepath.name}: {e}"
                     if is_local_pc(http_request)
-                    else f"{filepath.name}: could not be indexed; see the PC's "
-                    "server logs"
+                    else f"{filepath.name}: {INDEX_FAILURE_AWAY}"
                 )
                 logger.warning("Failed to index %s: %s", filepath, e)
                 errors.append(error_msg)

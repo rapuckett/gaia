@@ -284,8 +284,18 @@ def message_to_response(msg: dict) -> MessageResponse:
     )
 
 
-def doc_to_response(doc: dict) -> DocumentResponse:
-    """Convert database document dict to response model."""
+INDEX_FAILURE_AWAY = "could not be indexed; see the PC's server logs"
+
+
+def doc_to_response(doc: dict, *, away: bool = False) -> DocumentResponse:
+    """Convert database document dict to response model.
+
+    *away* is a caller away from the PC: the stored failure text can hold PC
+    paths and raw exception text, so it gets a fixed sentence instead.
+    """
+    last_error = doc.get("last_error")
+    if away and last_error:
+        last_error = INDEX_FAILURE_AWAY
     return DocumentResponse(
         id=doc["id"],
         filename=doc["filename"],
@@ -296,7 +306,7 @@ def doc_to_response(doc: dict) -> DocumentResponse:
         last_accessed_at=doc.get("last_accessed_at"),
         sessions_using=doc.get("sessions_using", 0),
         indexing_status=doc.get("indexing_status", "complete"),
-        last_error=doc.get("last_error"),
+        last_error=last_error,
         error_kind=doc.get("error_kind"),
     )
 

@@ -447,3 +447,23 @@ def test_removing_a_chat_folder_is_audited_and_listed_for_a_device_only(
         f"APPROVAL | folder {folder} taken from chat {session_id} | by device:{phone}"
     ]
     assert _kinds(clients, phone) == [("folderRemoved", {"folder": "taxes"})]
+
+
+def test_library_listing_hides_a_failed_row_reason_from_a_device(paired):
+    app, _, clients, _, _ = paired
+    raw = "cannot read /Users/someone/Documents/taxes.pdf: boom"
+    doc = app.state.db.add_document(
+        filename="taxes.pdf",
+        filepath="/Users/someone/Documents/taxes.pdf",
+        file_hash="h1",
+        file_size=1,
+        chunk_count=0,
+    )
+    app.state.db.update_document_status(doc["id"], "failed", last_error=raw)
+
+    on_pc = clients["pc"].get("/api/documents")
+    on_phone = clients["phone"].get("/api/documents")
+    assert on_pc.status_code == on_phone.status_code == 200
+    assert on_pc.json()["documents"][0]["last_error"] == raw
+    shown = on_phone.json()["documents"][0]["last_error"]
+    assert shown == "could not be indexed; see the PC's server logs"
