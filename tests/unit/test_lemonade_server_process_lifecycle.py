@@ -148,6 +148,7 @@ def _assert_names_the_foreign_holder(error, port, pid, program):
 
 
 @posix_only
+@pytest.mark.real_port_listeners
 @pytest.mark.skipif(shutil.which("nc") is None, reason="needs nc for a listener")
 def test_launch_server_leaves_a_non_gaia_listener_running():
     port = _free_port()

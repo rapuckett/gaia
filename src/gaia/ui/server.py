@@ -401,7 +401,17 @@ def _run_scheduled_prompt(
     agent._cancel_event = cancel_event
     if console is not None:
         agent.console = console
-    result = agent.process_query(prompt)
+    try:
+        result = agent.process_query(prompt)
+    finally:
+        from gaia.agents.base.memory import drain_memory_extraction
+
+        # Save the run's memories now: a queued save would keep the agent alive.
+        drain_memory_extraction(agent)
+        try:
+            agent.close()
+        except Exception as exc:  # noqa: BLE001 — logged; the run's own result stands
+            logger.warning("Scheduled run: closing its agent failed: %s", exc)
     if isinstance(result, dict):
         val = result.get("result")
         answer = val if val is not None else result.get("answer", "")
@@ -1060,23 +1070,6 @@ def create_app(db_path: str = None, webui_dist: str = None) -> FastAPI:
     app.include_router(connectors_router_mod.router)
     # Issue #1292 — forwarded pre-authenticated connections (/v1/connections).
     app.include_router(connectors_router_mod.forwarded_router)
-    # Email REST surface (/v1/email/*) — out-of-process sidecar ONLY (#1767
-    # cutover / design decision 4). The core backend never imports the email
-    # wheel: it stays lightweight, crash-isolated, and dogfoods the exact binary
-    # we ship. Since #2142 the GAIA daemon supervises the sidecar; each request
-    # acquires a handle via gaia.ui.email_sidecar.daemon_client (lazy — users
-    # who never use email never pay for a daemon or sidecar). The sidecar is
-    # the SOLE /v1/email surface — there is no in-process fallback (a missing/
-    # unpublished binary fails loudly with a remedy, never silently re-mounts
-    # the wheel).
-    from gaia.ui.email_sidecar.router import router as email_sidecar_router
-
-    app.include_router(email_sidecar_router)
-    logger.info(
-        "Email REST surface served by the daemon-supervised sidecar "
-        "(GAIA_EMAIL_AGENT_MODE=%s).",
-        os.environ.get("GAIA_EMAIL_AGENT_MODE", "user"),
-    )
 
     # ── Serve Uploaded Files ─────────────────────────────────────────────
     # Mount the uploads directory so uploaded files can be served by URL.

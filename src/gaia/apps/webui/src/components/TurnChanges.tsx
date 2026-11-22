@@ -90,23 +90,26 @@ export function TurnChanges({ sessionId, messageId }: { sessionId: string; messa
                 <div className="turn-changes-warning" role="note">
                     <AlertTriangle size={12} aria-hidden="true" />
                     <span>
-                        {untrackedWarning(turn.untracked, t, { also: count > 0 })}
+                        {untrackedWarning(turn.untracked, { also: count > 0 }, t)}
                         {groups.length > 0 && (
                             <ul>
                                 {groups.map((g) => (
                                     <li key={g.kind}>
                                         {g.entries.length === 1 ? (
-                                            <>
-                                                {g.title}
-                                                {g.entries[0].label && <> <bdi dir="ltr" className="turn-changes-detail" title={g.entries[0].detail}>{g.entries[0].label}</bdi></>}
-                                            </>
+                                            <span title={g.entries[0].detail || undefined}>
+                                                {g.heading}
+                                                {g.entries[0].label && <> <bdi dir="ltr" className="turn-changes-detail">{g.entries[0].label}</bdi></>}
+                                            </span>
                                         ) : (
                                             <details>
                                                 <summary>{g.title}</summary>
                                                 <ul>
-                                                    {g.entries.filter((e) => e.label).map((e) => (
-                                                        <li key={e.detail} title={e.detail}>
-                                                            <bdi dir="ltr">{e.count > 1 ? `${e.label} ×${e.count}` : e.label}</bdi>
+                                                    {g.entries.map((e) => (
+                                                        <li key={e.detail} title={e.detail || undefined}>
+                                                            {e.label
+                                                                ? <bdi dir="ltr">{e.count > 1 ? `${e.label} ×${e.count}` : e.label}</bdi>
+                                                                : t('untracked.noDescription')}
+                                                            {!e.label && e.count > 1 && ` ×${e.count}`}
                                                         </li>
                                                     ))}
                                                 </ul>

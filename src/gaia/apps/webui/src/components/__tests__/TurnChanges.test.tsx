@@ -111,7 +111,7 @@ describe('TurnChanges', () => {
         });
         render(<TurnChanges sessionId="s1" messageId={7} />);
         expect(await screen.findByRole('note')).toHaveTextContent(
-            "GAIA also ran 1 command it can't track. If it changed any files, Undo won't restore them.",
+            "GAIA also ran 1 command. Undo only restores files GAIA edited itself, so anything it changed or installed stays.",
         );
         expect(screen.getByText('npm run build')).toHaveAttribute('dir', 'ltr');
     });
@@ -123,7 +123,7 @@ describe('TurnChanges', () => {
         });
         render(<TurnChanges sessionId="s1" messageId={7} />);
         expect(await screen.findByRole('note')).toHaveTextContent(
-            "GAIA ran 7 Python snippets it can't track. If they changed any files, Undo won't restore them.",
+            "GAIA ran 7 Python snippets. Undo only restores files GAIA edited itself, so anything they changed or installed stays.",
         );
         expect(screen.getAllByRole('listitem')).toHaveLength(1);
         expect(screen.getByText('reads incident logs, counts errors by hour')).toHaveAttribute('dir', 'ltr');
