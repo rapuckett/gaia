@@ -6,7 +6,7 @@ import type { SystemStatus } from '@webui/types';
 import { tEn } from '@webui/i18n/translator';
 
 import type { SkillsAddSeed } from '@/features/skills';
-import type { Automation, AutomationList, LinkAddResult, LinkPreview, LinkSkill, ContextChoice, Session, SkillInfo, DiscordStatus, GaiaClient, GatewayFields, CustomModelReport, GpuMemoryStatus, LemonadeTarget, MCPServerStatus, ModelServerInfo, ProviderModel, ProviderSummary, Settings, SpendingReport } from '@/api/client.types';
+import type { Automation, AutomationList, LinkAddResult, LinkPreview, LinkSkill, ContextChoice, Session, SkillInfo, DiscordStatus, GaiaClient, GatewayFields, CustomModelReport, LocalModelStatus, GpuMemoryStatus, LemonadeTarget, MCPServerStatus, ModelServerInfo, ProviderModel, ProviderSummary, Settings, SpendingReport } from '@/api/client.types';
 import { PC_ONLY_REFUSAL } from '@/api/constants';
 import { GaiaApiError, GaiaNetworkError } from '@/api/errors';
 import type { DevicePromptKind, DevicePromptNote, DevicePromptState } from '@/features/devices/devicePrompts';
@@ -326,8 +326,32 @@ const PERM_CHATS: FakeClientData = {
     },
     defaultPermissionMode: 'ask',
 };
+// SD: the model server isn't answering; the Model pane carries it as one notice at its top, with the server's own words on a muted line.
+const DOWN_STATUS = { ...RUNNING, lemonade_running: false, lemonade_error: null, model_loaded: null, start_command: null, start_instruction: null } as unknown as SystemStatus;
+const DOWN_LOCAL: LocalModelStatus = {
+    state: 'stopped', active_model: null, active_display_name: null, active_remote: false, model: null, display_name: null, placement: null, ctx_size: null,
+    memory: null, memory_error: null, error: 'The model server is not answering.', error_cause: 'model_server_down', base_url: 'http://192.168.1.20:13305/api/v1',
+    owner: 'gaia', busy: false, busy_reason: null, restarting: false, restart_error: null,
+} as LocalModelStatus;
+const DOWN_YOURS_TARGET: LemonadeTarget = { ...TARGET, mode: 'external', saved_mode: 'external', source: 'config', base_url: 'http://192.168.1.20:13305/api/v1', saved_base_url: 'http://192.168.1.20:13305/api/v1' };
+const downScene = (own: boolean, provider: string): SettingsScene => {
+    const list = providers(false);
+    return {
+        section: 'model', gpuMemory: GPU, provider,
+        status: DOWN_STATUS,
+        data: {
+            providers: { ...list, lemonade_error: 'connect ECONNREFUSED 192.168.1.20:13305' },
+            providerModels: { local: { provider: 'local', models: [] }, amd: { provider: 'amd', models: [] } },
+            localModel: own ? DOWN_LOCAL : { ...DOWN_LOCAL, owner: 'user' },
+            lemonadeTarget: own ? { ...TARGET, mode: 'gaia', saved_mode: 'gaia', source: 'gaia' } : DOWN_YOURS_TARGET,
+        },
+    };
+};
 export const SETTINGS_SCENES: Record<string, SettingsScene> = {
     'advanced-not-installed': { section: 'advanced', gpuMemory: GPU, status: NOT_INSTALLED },
+    'model-server-down-own': downScene(true, 'local'),
+    'model-server-down-yours-local': downScene(false, 'local'),
+    'model-server-down-yours-gateway': downScene(false, 'amd'),
     'gpu-adjustable': { section: 'model', target: 'gpu-memory', gpuMemory: GPU },
     'gpu-adjustable-setup': { section: 'setup', gpuMemory: GPU },
     // Linux, where GAIA writes the size itself: the sizes, Apply (asks first), and Undo once GAIA has changed it.

@@ -25,7 +25,10 @@ export function ModelServerDownNotice({
     initialAsked = false,
     initialSwitched = false,
     autoSwitch = false,
+    detail,
 }: {
+    /** The server's own words for why it isn't answering, on a muted line of its own; never part of a translated sentence. */
+    detail?: string | null;
     /** Dev gallery only: opens after "Check again" was pressed. */
     initialAsked?: boolean;
     /** Dev gallery only: opens after a successful switch. */
@@ -105,6 +108,7 @@ export function ModelServerDownNotice({
             {targetFailure ? <Notice tone="danger" message={targetFailure.text} detail={targetFailure.detail} testID="server-down-target-failed" /> : null}
             {stillDown ? <Text role="ui">{t('serverDown.stillDown')}</Text> : null}
             {raw ? <Text role="label" tone="secondary" mono dir="ltr">{raw}</Text> : null}
+            {detail ? <Text role="caption" tone="muted" dir="ltr" testID="server-down-detail">{detail}</Text> : null}
             {switchOwn.error && isPcRefusal(switchOwn.error) ? <Notice tone="info" message={t('mobileApp.settings.pcOnly')} testID="server-down-pc-only" /> : null}
             {switchError ? <Notice tone="danger" message={switchError.text} detail={switchError.detail} testID="server-down-switch-error" /> : null}
             <Row gap="xs" wrap>

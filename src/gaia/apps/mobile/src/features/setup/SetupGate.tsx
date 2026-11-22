@@ -12,17 +12,17 @@ import { describeErrorWith, serverText, technicalDetail, useT } from '@/i18n/use
 import { useConnectionStore } from '@/state/connection';
 import { Button, Disclosure, Ltr, Notice, ScreenBannerProvider, Stack, useScreenBanner } from '@/ui';
 
+import { isServerDownBanner } from '@/features/banners/pickBanner';
+import { isSettingsRoute } from '@/features/banners/settingsRoute';
+import { useBannerPick } from '@/features/banners/useBannerPick';
+
+import { registerReopenSetup } from './reopenSetup';
+import { GateRecheckProvider } from './gateRecheck';
 import { GateUnreachableProvider } from './gateUnreachable';
 import { SetupScreen, type SetupScreenProps } from './SetupScreen';
 import { StartupScreen } from './StartupScreen';
 
-let reopen: (() => void) | null = null;
-
-/** Reopens setup in re-run mode from outside the gate (Settings > Setup > Run setup again). */
-export function reopenSetup(): void {
-    if (!reopen) throw new Error('Setup cannot reopen: the setup gate is not mounted.');
-    reopen();
-}
+export { reopenSetup } from './reopenSetup';
 
 /**
  * The first-run gate around the app: "Starting GAIA…" until the check answers, the setup screen in
@@ -45,18 +45,16 @@ export function SetupGate({
     const pairAgain = usePairAgain();
     const connection = useConnectionStore((s) => s.connection);
     const ambientBanner = useScreenBanner();
+    const serverBanner = isServerDownBanner(useBannerPick().picked);
 
-    useEffect(() => {
-        reopen = open;
-        return () => {
-            if (reopen === open) reopen = null;
-        };
-    }, [open]);
+    useEffect(() => registerReopenSetup(open), [open]);
 
     // Same provider stack as the notice path below, so the navigator never remounts when the gate changes state.
     const passThrough = (
         <GateUnreachableProvider value={false}>
-            <ScreenBannerProvider banner={ambientBanner}>{children}</ScreenBannerProvider>
+            <GateRecheckProvider value={null}>
+                <ScreenBannerProvider banner={ambientBanner}>{children}</ScreenBannerProvider>
+            </GateRecheckProvider>
         </GateUnreachableProvider>
     );
     if (!client || (route?.startsWith('/dev/') && devGalleryEnabled())) return passThrough;
@@ -72,7 +70,9 @@ export function SetupGate({
     }
     const unreachable = gate.state === 'unknown' && !gate.upgradeFailed && gate.error instanceof GaiaNetworkError;
 
-    const notice = unreachable ? (
+    // One cause, one message: the server card in the app banner says it on chat and home, the Model pane on Settings.
+    const serverDownSaid = gate.state === 'serverDown' && !gate.modelListUnread && (serverBanner || isSettingsRoute(route));
+    const notice = serverDownSaid ? null : unreachable ? (
         <Notice
             tone="warning"
             title={t('mobileApp.pairing.off.title')}
@@ -108,12 +108,13 @@ export function SetupGate({
     // The notice rides the ambient banner slot, so each main-pane screen shows it above its own header and the sidebar (banner={null}) never does.
     return (
         <GateUnreachableProvider value={unreachable}>
+        <GateRecheckProvider value={gate.state === 'serverDown' ? () => recheck({ quiet: true }) : null}>
         <ScreenBannerProvider
             banner={
                 <Stack gap="md">
                     {notice}
                     {gate.state === 'unknown' && !unreachable ? <ErrorDetails error={gate.error} /> : null}
-                    {gate.state === 'serverDown' && !gate.modelListUnread ? (
+                    {gate.state === 'serverDown' && !gate.modelListUnread && !serverDownSaid ? (
                         <Button variant="secondary" label={t('setup.serverDown.setup')} onPress={open} />
                     ) : null}
                     {/* An unreachable PC is already said by the notice; the connection banner would repeat it. */}
@@ -123,6 +124,7 @@ export function SetupGate({
         >
             {children}
         </ScreenBannerProvider>
+        </GateRecheckProvider>
         </GateUnreachableProvider>
     );
 }

@@ -20,6 +20,8 @@ jest.mock('@/data', () => ({
     useGaiaClient: () => ({}),
     useSetupGate: () => ({ gate: mockGate, recheck: jest.fn(), finish: jest.fn(), open: mockOpen }),
 }));
+let mockPicked: { id: string } | null = null;
+jest.mock('@/features/banners/useBannerPick', () => ({ useBannerPick: () => ({ picked: mockPicked, refetch: jest.fn(), status: {} }) }));
 jest.mock('@/features/pairing', () => ({ PinMismatchScreen: () => null, usePairAgain: () => ({ mutate: jest.fn(), isPending: false }) }));
 jest.mock('./SetupScreen', () => ({ SetupScreen: () => null }));
 jest.mock('./StartupScreen', () => ({ StartupScreen: () => null }));
@@ -130,6 +132,27 @@ describe('app under a notice', () => {
         const retry = screen.getByText(translator('en')('setup.serverDown.setup'));
         expect(inside(retry, 'pane-banner')).toBe(true);
         expect(screen.queryByTestId('setup-gate-notice')).toBeNull();
+        mockGate = { state: 'ready' };
+    });
+
+    it('says a down model server once: the server banner replaces the gate notice and its loose Open setup button', async () => {
+        const wrapper = ({ children }: { children: ReactNode }) => (
+            <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 800 }, insets: { top: 0, left: 0, right: 0, bottom: 0 } }}>
+                <ThemeProvider>{children}</ThemeProvider>
+            </SafeAreaProvider>
+        );
+        const en = translator('en');
+        mockGate = { state: 'serverDown' };
+        mockPicked = { id: 'serverStopped' };
+        const view = await render(<SetupGate><Pane /></SetupGate>, { wrapper });
+        expect(screen.queryByText(en('setup.serverDown.notice'))).toBeNull();
+        expect(screen.queryByText(en('setup.serverDown.setup'))).toBeNull();
+        mockPicked = null;
+        await view.rerender(<SetupGate route="/settings/model"><Pane /></SetupGate>);
+        expect(screen.queryByText(en('setup.serverDown.notice'))).toBeNull();
+        expect(screen.queryByText(en('setup.serverDown.setup'))).toBeNull();
+        await view.rerender(<SetupGate route="/"><Pane /></SetupGate>);
+        expect(screen.getByText(en('setup.serverDown.notice'))).toBeTruthy();
         mockGate = { state: 'ready' };
     });
 

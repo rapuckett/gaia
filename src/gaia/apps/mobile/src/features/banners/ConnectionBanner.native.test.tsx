@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
 import type { ReactNode } from 'react';
 import { Platform } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -109,5 +109,34 @@ describeNative('ConnectionBanner', () => {
         await render(<ConnectionBanner />, { wrapper: wrap });
         fireEvent.press(await screen.findByText(t('docs.retry')));
         await waitFor(() => expect(client.modelDownloads).toEqual([{ modelName: 'Gemma-4-E4B-it-GGUF', force: false, loadAfter: true }]));
+    });
+
+    describe('when the model server is down', () => {
+        const down = (patch: Partial<SystemStatus>) => ({ lemonade_running: false, context_size_sufficient: true, init_state: 'ready', download_progress: null, ...patch }) as unknown as SystemStatus;
+        const mount = async (status: SystemStatus, ui = <ConnectionBanner />) => {
+            const client = createFakeClient({ status });
+            await render(ui, { wrapper: wrapper(client, new QueryClient({ defaultOptions: { queries: { retry: false } } })) });
+        };
+
+        it('is one card with one Check again and no Open setup once setup is done', async () => {
+            await mount(down({ start_command: null, start_instruction: null }));
+            expect(await screen.findByTestId('banner-serverStopped')).toBeTruthy();
+            expect(screen.getAllByText(t('settings.key.checkAgain'))).toHaveLength(1);
+            expect(screen.queryByText(t('setup.serverDown.setup'))).toBeNull();
+        });
+
+        it('puts Open setup inside the same card while setup is not done', async () => {
+            await mount(down({ start_command: null, start_instruction: 'Run gaia init to install the model server.' }));
+            const card = await screen.findByTestId('banner-serverStopped');
+            expect(within(card).getByText(t('setup.serverDown.setup'))).toBeTruthy();
+            expect(within(card).getAllByText(t('settings.key.checkAgain'))).toHaveLength(1);
+        });
+
+        it('shows nothing above a Settings screen', async () => {
+            await mount(down({ start_command: null, start_instruction: null }), <ConnectionBanner hideServerDown />);
+            await act(async () => undefined);
+            expect(screen.queryByTestId('banner-serverStopped')).toBeNull();
+            expect(screen.queryByText(t('banner.serverStopped'))).toBeNull();
+        });
     });
 });
