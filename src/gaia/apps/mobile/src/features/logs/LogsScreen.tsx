@@ -3,14 +3,15 @@
 
 import { useState } from 'react';
 
-import { LOG_SOURCES, useLogSources, type LogSource } from '@/data';
+import { useLogSources, type LogSource } from '@/data';
 import { formatSize } from '@webui/utils/format';
 import { serverText, useT } from '@/i18n/useT';
-import { Divider, Notice, PillTabs, Screen, Select, Stack, Text } from '@/ui';
+import { Divider, Notice, Screen, Select, Stack, Text } from '@/ui';
 import { Archive, FileText } from '@/ui/icons';
 
 import { SettingsHeader } from '../settings/SettingsHeader';
-import { LogView, SOURCE_LABELS } from './LogView';
+import { LogTabs } from './LogTabs';
+import { LogView } from './LogView';
 import { PcOnlyAction } from './PcOnlyAction';
 
 /** The PC's logs on the phone: a tab per group, a file picker when a group has several, and the followed log under them. */
@@ -30,14 +31,8 @@ export function LogsScreen({ onBack, active = true, initialSource = 'model_serve
     const file = picked?.source === source ? picked.file : (files[0]?.name ?? null);
     return (
         <Screen scroll header={<SettingsHeader title={t('logs.title')} backLabel={t('setup.back')} onBack={onBack} />}>
+            <LogTabs value={source} onChange={setSource} />
             <Stack gap="lg" paddingX="lg" paddingY="md">
-                <PillTabs
-                    accessibilityLabel={t('logs.title')}
-                    value={source}
-                    onChange={(value) => setSource(value as LogSource)}
-                    tabs={LOG_SOURCES.map((id) => ({ value: id, label: t(SOURCE_LABELS[id]) }))}
-                    testID="log-tabs"
-                />
                 {sources.isError ? (
                     <Notice tone="warning" message={t('mobileApp.logs.filesFailed')} detail={serverText(sources.error)} testID="log-files-failed" />
                 ) : null}

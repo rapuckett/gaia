@@ -37,6 +37,7 @@ describeNative('LogsScreen', () => {
         await render(<LogsScreen onBack={() => {}} initialSource={scene.source} initialFollow={false} />, { wrapper: wrapFor('errors') });
         expect(await screen.findByText(/free memory is low/)).toBeTruthy();
         expect(screen.getByText(/turn started/)).toBeTruthy();
+        expect(screen.queryByText('Read from')).toBeNull();
         await fireEvent.press(screen.getByTestId('log-problems-only'));
         expect(screen.queryByText(/turn started/)).toBeNull();
         expect(screen.getByText(/permission denied/)).toBeTruthy();

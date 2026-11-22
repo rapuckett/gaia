@@ -79,16 +79,16 @@ export function LogView({ source, file, active, initialFollow = true, initialPro
         return <ErrorState title={t('mobileApp.logs.readFailed')} detail={serverText(log.error)} onRetry={() => void log.refresh()} />;
     }
 
+    // The line earns its place only when it adds to the picked file name, as a full path does.
+    const showPath = read?.source === 'file' && !!read.log_path && read.log_path !== file && !(file === null && !/[\\/]/.test(read.log_path));
     const reason = !read?.available && read?.reason
         ? t(source !== 'model_server' && read.reason === 'no_file' ? 'logs.reason.notWritten' : (REASONS[read.reason] ?? 'mobileApp.logs.readFailed'))
         : undefined;
     return (
         <Stack gap="md">
             <Text role="caption" tone="muted">{t(SOURCE_HINTS[source])}</Text>
-            {read?.source === 'file' && read.log_path ? (
-                <Text role="caption" tone="secondary">{t('logs.fromFile')}</Text>
-            ) : null}
-            {read?.source === 'file' && read.log_path ? <Text role="caption" mono dir="ltr" align="ltr" selectable>{read.log_path}</Text> : null}
+            {showPath ? <Text role="caption" tone="secondary">{t('logs.fromFile')}</Text> : null}
+            {showPath ? <Text role="caption" mono dir="ltr" align="ltr" selectable>{read?.log_path}</Text> : null}
             {read?.source === 'stream' ? <Text role="caption" tone="secondary">{t('logs.fromStream')}</Text> : null}
             {read?.source === 'stream' && read.base_url ? <Text role="caption" mono dir="ltr" align="ltr" selectable>{read.base_url}</Text> : null}
             {source === 'model_server' && read?.source === 'file' && read.server_answering === false ? (
