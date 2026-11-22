@@ -841,9 +841,7 @@ def _redirect_default_databases():
 
             for name in ("resolved_db_path", "resolved_memory_db_path"):
                 mp.setattr(
-                    EmailAgentConfig,
-                    name,
-                    redirect_path(getattr(EmailAgentConfig, name)),
+                    EmailAgentConfig, name, redirect_path(getattr(EmailAgentConfig, name))
                 )
         yield
 
