@@ -8,18 +8,23 @@ import { gaiaPush } from '../../../modules/gaia-push';
 import type { PushBuildConfig } from './pushRegistration';
 
 interface ExtraPush {
-    relayUrl: string;
-    ios: { appId: string; environment: 'sandbox' | 'production' } | null;
-    android: { appId: string } | null;
+    relayUrl?: unknown;
+    ios?: { appId?: unknown; environment?: unknown };
+    android?: { appId?: unknown };
 }
+
+const isText = (v: unknown): v is string => typeof v === 'string' && v !== '';
 
 /** This platform's push settings from the build (app.config.ts `extra.push`); null in a build without push. */
 export function pushBuildConfig(): PushBuildConfig | null {
-    const push = (Constants.expoConfig?.extra as { push?: ExtraPush | null } | undefined)?.push;
-    if (!push) return null;
-    if (Platform.OS === 'ios' && push.ios) return { relayUrl: push.relayUrl, platform: 'apns', appId: push.ios.appId, environment: push.ios.environment };
+    const push = (Constants.expoConfig?.extra as { push?: ExtraPush } | undefined)?.push;
+    if (!push || !isText(push.relayUrl)) return null;
+    const { ios, android } = push;
+    if (Platform.OS === 'ios' && isText(ios?.appId) && (ios.environment === 'sandbox' || ios.environment === 'production')) {
+        return { relayUrl: push.relayUrl, platform: 'apns', appId: ios.appId, environment: ios.environment };
+    }
     // FCM has one environment; the relay ignores it.
-    if (Platform.OS === 'android' && push.android) return { relayUrl: push.relayUrl, platform: 'fcm', appId: push.android.appId, environment: 'production' };
+    if (Platform.OS === 'android' && isText(android?.appId)) return { relayUrl: push.relayUrl, platform: 'fcm', appId: android.appId, environment: 'production' };
     return null;
 }
 

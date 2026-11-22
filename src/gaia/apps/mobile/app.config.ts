@@ -222,6 +222,9 @@ export default function appConfig(): ExpoConfig {
             './plugins/withWorkManagerKeep',
             ['./plugins/withPush', { ios: push?.ios ? { bundleId: iosId } : null, android: push?.android ? { scheme: id } : null }],
         ],
-        extra: { push: push ? { relayUrl: push.relayUrl, ios: push.ios, android: push.android && { appId: push.android.appId } } : null },
+        // Expo's config turns a null in `extra` into {}, so a platform without push is left out instead.
+        extra: push
+            ? { push: { relayUrl: push.relayUrl, ...(push.ios ? { ios: push.ios } : {}), ...(push.android ? { android: { appId: push.android.appId } } : {}) } }
+            : {},
     };
 }

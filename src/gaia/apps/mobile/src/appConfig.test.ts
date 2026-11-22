@@ -54,7 +54,7 @@ describe('app config', () => {
         expect(readPushConfig('production', ids, {})).toBeNull();
         expect(readPushConfig('production', ids, { GAIA_PUSH_RELAY_URL: '' })).toBeNull();
         const config = configFor('production');
-        expect(config.extra?.push ?? null).toBeNull();
+        expect(config.extra?.push).toBeUndefined();
         expect(pluginOptions(config, 'expo-notifications')).toEqual({ enableRemoteNotifications: false });
         expect(pluginOptions(config, './plugins/withPush')).toEqual({ ios: null, android: null });
     });
