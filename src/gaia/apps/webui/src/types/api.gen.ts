@@ -3130,6 +3130,7 @@ export interface ProviderConnectResponse {
   key_message?: string | null;
   key_source?: ("stored" | "environment" | "lemonade") | null;
   key_state?: ("read" | "waiting_for_os_permission" | "store_locked") | null;
+  key_store?: ("waiting" | "locked") | null;
   known_models?: boolean | null;
   models_discovered?: boolean | null;
   name: string;
@@ -3187,6 +3188,7 @@ export interface ProviderView {
   key_message?: string | null;
   key_source?: ("stored" | "environment" | "lemonade") | null;
   key_state?: ("read" | "waiting_for_os_permission" | "store_locked") | null;
+  key_store?: ("waiting" | "locked") | null;
   known_models?: boolean | null;
   models_discovered?: boolean | null;
   name: string;
@@ -3266,6 +3268,7 @@ export interface ProviderSummary {
   key_hint?: string | null;
   key_source?: ("stored" | "environment" | "lemonade") | null;
   key_state?: ("read" | "store_locked" | "unknown") | null;
+  key_store?: ("waiting" | "locked") | null;
   known_models?: boolean | null;
   name: string;
   network?: ProviderSummaryNetwork | null;
