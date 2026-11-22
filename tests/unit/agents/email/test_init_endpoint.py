@@ -42,6 +42,8 @@ from gaia_agent_email.version import MIN_LEMONADE_VERSION  # noqa: E402
 
 from gaia.llm.lemonade_client import DEFAULT_MODEL_NAME  # noqa: E402
 
+pytestmark = pytest.mark.usefixtures("restore_gaia_logging")
+
 # The short pre-flight timeout pair (#1677) — every probe must use it so an
 # unreachable server fails fast instead of blocking on the OS SYN timeout.
 _EXPECTED_TIMEOUT = (

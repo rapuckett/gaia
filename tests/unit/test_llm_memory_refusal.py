@@ -16,6 +16,8 @@ from gaia.llm.lemonade_client import InsufficientMemoryError, LemonadeStatus
 from gaia.llm.lemonade_manager import LemonadeManager
 from gaia.version import LEMONADE_VERSION
 
+pytestmark = pytest.mark.usefixtures("restore_gaia_logging")
+
 REFUSAL = (
     "Not enough free memory to load Gemma-4-E4B-it-GGUF at 32,768 tokens: it "
     "needs about 9.1 GB and only 6.0 GB is free. Close other applications, or "

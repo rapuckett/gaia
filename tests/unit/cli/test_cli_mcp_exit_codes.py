@@ -18,6 +18,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import pytest
 
 from gaia import cli
+from gaia import logger as gaia_logger
 
 # Reserved and never listening, so connecting to it is refused.
 CLOSED_PORT = "1"
@@ -186,6 +187,8 @@ class TestFailuresExitOne:
     def test_stop_that_fails(self, monkeypatch, capsys, in_tmp):
         pid_file = in_tmp / "gaia.mcp.pid"
         pid_file.write_text("4242", encoding="utf-8")
+        # main() configures logging; a win32 platform would reach msvcrt locking.
+        gaia_logger.configure()
         monkeypatch.setattr(cli.sys, "platform", "win32")
 
         def run(cmd, **_kwargs):

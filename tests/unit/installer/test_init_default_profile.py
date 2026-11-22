@@ -36,6 +36,8 @@ from gaia.installer.init_command import (
     InitCommand,
 )
 
+pytestmark = pytest.mark.usefixtures("restore_gaia_logging")
+
 REPO_ROOT = Path(__file__).resolve().parents[3]
 GAIAINIT_GO = REPO_ROOT / "tui" / "internal" / "gaiainit" / "gaiainit.go"
 VERIFY_GO = GAIAINIT_GO.with_name("verify.go")

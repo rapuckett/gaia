@@ -10,7 +10,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GaiaApiError } from '@/api/errors';
 import { createFakeClient } from '@/api/fake';
 import { GaiaClientProvider, useProviders, type ProviderRow } from '@/data';
-import { ALREADY_WAITING_DETAIL, applyDevicePromptEvent, useDevicePromptStore } from '@/features/devices/devicePrompts';
+import { ALREADY_WAITING_CODE, ALREADY_WAITING_DETAIL, applyDevicePromptEvent, useDevicePromptStore } from '@/features/devices/devicePrompts';
 import { ThemeProvider } from '@/ui';
 import { SheetHost } from '@/ui/overlays/SheetHost';
 import { sheetStore } from '@/ui/overlays/sheetStore';
@@ -205,7 +205,7 @@ describeNative('Provider key', () => {
             expect(await screen.findByText('You asked for this a moment ago. Wait a few seconds, then try again.')).toBeTruthy();
             expect(screen.getByText('Try again')).toBeTruthy();
 
-            retry.mockRejectedValueOnce(new GaiaApiError(409, ALREADY_WAITING_DETAIL));
+            retry.mockRejectedValueOnce(new GaiaApiError(409, ALREADY_WAITING_DETAIL, undefined, undefined, { code: ALREADY_WAITING_CODE, message: ALREADY_WAITING_DETAIL }));
             await fireEvent.press(screen.getByText('Try again'));
             expect(await screen.findByText('Your PC is already waiting for an answer to another request. Answer that one first.')).toBeTruthy();
             expect(screen.queryByText(/You asked for this a moment ago/)).toBeNull();

@@ -14,6 +14,8 @@ import pytest
 from gaia.agents.base.agent import Agent
 from gaia.cli import build_parser, run_cli
 
+pytestmark = pytest.mark.usefixtures("restore_gaia_logging")
+
 
 class _StubChatAgent:
     """Stands in for the gaia-agent-gaia wheel's GaiaAgent.

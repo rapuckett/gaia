@@ -17,6 +17,8 @@ from gaia import cli
 from gaia.daemon import paths, strays
 from gaia.daemon.strays import DaemonProcess
 
+pytestmark = pytest.mark.usefixtures("restore_gaia_logging")
+
 OLD = time.time() - 3 * 86400
 
 

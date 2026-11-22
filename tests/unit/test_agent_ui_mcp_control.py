@@ -25,7 +25,10 @@ from gaia.mcp.servers.agent_ui_control import (
 )
 
 # The fake backend is a loopback HTTP server.
-pytestmark = pytest.mark.allow_network
+pytestmark = [
+    pytest.mark.allow_network,
+    pytest.mark.usefixtures("restore_gaia_logging"),
+]
 
 UI = {"X-Gaia-UI": "1"}
 SCOPE = "writing files in C:/work"

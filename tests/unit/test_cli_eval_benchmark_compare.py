@@ -17,6 +17,8 @@ scorecard.json; it has no ctx_size awareness at all.
 
 import pytest
 
+pytestmark = pytest.mark.usefixtures("restore_gaia_logging")
+
 
 def test_benchmark_compare_ctx_mismatch_hard_error():
     from gaia.cli import _compare_benchmark_ctx  # noqa: PLC0415

@@ -13,6 +13,8 @@ from unittest.mock import patch
 
 import pytest
 
+pytestmark = pytest.mark.usefixtures("restore_gaia_logging")
+
 
 class TestDispatch:
     """Dispatch tests for the thin-client ``gaia email`` path (#2191).

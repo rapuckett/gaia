@@ -151,7 +151,10 @@ def test_a_phones_connector_test_hears_how_the_pc_answered(
     resp = clients["phone"].post("/api/connectors/mcp-brave-search/test", headers=UI)
     assert resp.status_code == status, resp.text
     if error:
-        assert "key store" in resp.json()["detail"]
+        assert resp.json()["detail"] == {
+            "code": "key_store_locked",
+            "message": connectors.DEVICE_KEY_STORE_LOCKED,
+        }
     assert _prompts(events) == [
         (phone, "keyStore", "connectorTest", "waiting"),
         (phone, "keyStore", "connectorTest", outcome),
@@ -179,7 +182,8 @@ def test_a_phones_mcp_connector_test_hears_423_when_the_key_store_stays_locked(
             "/api/connectors/mcp-brave-search/test", headers=UI
         )
         assert resp.status_code == 423, resp.text
-        assert "key store" in resp.json()["detail"]
+        assert resp.json()["detail"]["code"] == "key_store_locked"
+        assert "key store" in resp.json()["detail"]["message"]
         assert _prompts(events)[-1] == (phone, "keyStore", "connectorTest", "denied")
     finally:
         store.retry_keyring()
@@ -346,7 +350,10 @@ def test_one_admin_step_of_a_kind_waits_at_a_time(
         for caller in ("pc", "phone"):
             resp = clients[caller].post(url, json=body, headers=UI)
             assert resp.status_code == 409, resp.text
-            assert "already waiting on the PC" in resp.json()["detail"]
+            assert resp.json()["detail"] == {
+                "code": "prompt_already_waiting",
+                "message": prompts.ALREADY_WAITING,
+            }
     assert ran == [] and _prompts(events) == []
 
 
@@ -358,6 +365,10 @@ def test_a_phone_runs_one_key_store_read_at_a_time(paired, monkeypatch):
     app.state.device_reads_running = {(phone, "keyStoreRetry")}
     resp = clients["phone"].post("/api/providers/key-store/retry", headers=UI)
     assert resp.status_code == 409
+    assert resp.json()["detail"] == {
+        "code": "prompt_already_waiting",
+        "message": prompts.ALREADY_WAITING,
+    }
     app.state.device_reads_running.clear()
     app.state.device_action_times = {}
     resp = clients["phone"].post("/api/providers/key-store/retry", headers=UI)

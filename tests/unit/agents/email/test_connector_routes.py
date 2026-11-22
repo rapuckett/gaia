@@ -22,6 +22,8 @@ pytest.importorskip("gaia_agent_email")
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+pytestmark = pytest.mark.usefixtures("restore_gaia_logging")
+
 
 @pytest.fixture
 def client() -> TestClient:

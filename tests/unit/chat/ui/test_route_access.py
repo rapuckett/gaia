@@ -985,6 +985,7 @@ def test_a_paired_device_may_read_provider_summaries(setup, monkeypatch):
             "network",
             "key_source",
             "key_state",
+            "key_store",
             "key_hint",
             "known_models",
             "error",
