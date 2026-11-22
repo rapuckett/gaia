@@ -27,6 +27,8 @@ from gaia.eval.runner import (
 )
 from gaia.eval.scorecard import build_scorecard
 
+pytestmark = pytest.mark.usefixtures("restore_gaia_logging")
+
 # What rc2's `claude -p` printed once the quota was gone, cut at the runner's
 # 500-character limit exactly as the scorecards kept it.
 RC2_QUOTA_STDOUT = (

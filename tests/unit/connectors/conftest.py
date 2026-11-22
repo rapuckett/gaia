@@ -13,6 +13,11 @@ from __future__ import annotations
 import pytest
 
 
+@pytest.fixture(autouse=True)
+def _restore_gaia_logging(restore_gaia_logging):
+    """``gaia.connectors.cli.main`` calls ``configure()``; undo it per test."""
+
+
 def make_fake_agent_registry(nsid: str, connector_id: str, scopes: list[str]):
     """Minimal ``AgentRegistry`` stand-in exposing only what the shared scope
     resolver (``gaia.connectors.api.resolve_declared_scopes``) and the

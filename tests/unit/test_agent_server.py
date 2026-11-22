@@ -20,6 +20,8 @@ from gaia.agents.base.server import (
 )
 from gaia.hub.manifest import AgentManifest
 
+pytestmark = pytest.mark.usefixtures("restore_gaia_logging")
+
 
 class FakeAgent(Agent):
     """Minimal Agent that skips the heavy LLM/Lemonade ``__init__``.

@@ -15,6 +15,8 @@ import sys
 
 import pytest
 
+pytestmark = pytest.mark.usefixtures("restore_gaia_logging")
+
 # ── GaiaConfig.default_model + generic accessors ──────────────────────────
 
 

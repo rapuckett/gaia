@@ -18,7 +18,10 @@ from gaia.llm.providers.claude import DEFAULT_CLAUDE_MODEL
 from gaia.talk.sdk import TalkSDK
 
 # asyncio uses a local socketpair for its Windows event-loop wakeup.
-pytestmark = pytest.mark.allow_network
+pytestmark = [
+    pytest.mark.allow_network,
+    pytest.mark.usefixtures("restore_gaia_logging"),
+]
 
 BASE_URL = "http://10.0.0.5:13305/api/v1"
 

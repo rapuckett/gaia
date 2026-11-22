@@ -22,6 +22,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
+pytestmark = pytest.mark.usefixtures("restore_gaia_logging")
+
 
 @pytest.fixture
 def chat_agent_stubs(monkeypatch):

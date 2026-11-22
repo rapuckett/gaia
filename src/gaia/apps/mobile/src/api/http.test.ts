@@ -245,11 +245,17 @@ describe('createHttpClient requests', () => {
         ['cancelConnectorFlow', (c) => c.cancelConnectorFlow('f1'), 'DELETE', '/api/connectors/_flows/f1', UI_HEADERS, undefined],
         ['connectProvider, keeping the PC\'s key', (c) => c.connectProvider('fireworks'), 'POST', '/api/providers/fireworks/connect', JSON_HEADERS, {}],
         ['connectProvider, with a typed key', (c) => c.connectProvider('fireworks', { apiKey: 'fw-k-1' }), 'POST', '/api/providers/fireworks/connect', JSON_HEADERS, { api_key: 'fw-k-1' }],
+        ['connectProvider, moving the gateway with a new key', (c) => c.connectProvider('amd', { apiKey: 'gw-k-1', gateway: { base_url: 'https://gw.example.com/v1', auth_header_name: 'X-Api-Key' } }), 'POST', '/api/providers/amd/connect', JSON_HEADERS, { api_key: 'gw-k-1', base_url: 'https://gw.example.com/v1', auth_header_name: 'X-Api-Key' }],
+        ['connectProvider, never the gateway without a key', (c) => c.connectProvider('amd', { gateway: { base_url: 'https://gw.example.com/v1' } }), 'POST', '/api/providers/amd/connect', JSON_HEADERS, {}],
         ['forgetProviderKey', (c) => c.forgetProviderKey('fireworks'), 'DELETE', '/api/providers/fireworks/key', UI_HEADERS, undefined],
         ['retryKeyStore, with the UI header the PC requires', (c) => c.retryKeyStore(), 'POST', '/api/providers/key-store/retry', UI_HEADERS, undefined],
         ['applyGpuMemory, confirmed', (c) => c.applyGpuMemory(96), 'POST', '/api/gpu-memory/apply', JSON_HEADERS, { setting_gb: 96, confirm: true }],
         ['revertGpuMemory, confirmed', (c) => c.revertGpuMemory(), 'POST', '/api/gpu-memory/revert', JSON_HEADERS, { confirm: true }],
         ['fixSetupNpuMemlock, with no body', (c) => c.fixSetupNpuMemlock(), 'POST', '/api/setup/npu/memlock-fix', UI_HEADERS, undefined],
+        ['connectDiscord, the token only in the body', (c) => c.connectDiscord('bot-token-1'), 'POST', '/api/messaging/discord/connect', JSON_HEADERS, { token: 'bot-token-1' }],
+        ['startDiscord, taking over', (c) => c.startDiscord(true), 'POST', '/api/messaging/discord/start', JSON_HEADERS, { take_over: true }],
+        ['pairDiscord, with no body', (c) => c.pairDiscord(), 'POST', '/api/messaging/discord/pair', UI_HEADERS, undefined],
+        ['disconnectDiscord, with no body', (c) => c.disconnectDiscord(), 'POST', '/api/messaging/discord/disconnect', UI_HEADERS, undefined],
     ])('%s: %s', async (_name, call, method, path, headers, body) => {
         const { fetch, calls } = createRecordingFetch(() => jsonResponse({ status: 'ok' }));
         await call(createHttpClient({ baseUrl: BASE, fetch }));

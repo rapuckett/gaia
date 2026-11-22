@@ -21,6 +21,8 @@ from gaia.skills.binaries import resolve_binary_policies
 from gaia.skills.errors import SkillPermissionError
 from gaia.skills.format import parse_skill_file
 
+pytestmark = pytest.mark.usefixtures("restore_gaia_logging")
+
 AUTOMATIONS = (
     Path(__file__).resolve().parents[2] / "hub" / "skills" / "automations" / "SKILL.md"
 )

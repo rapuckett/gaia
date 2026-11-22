@@ -25,6 +25,14 @@ const clientsPath = daemon.APIPrefix + "/lemonade/clients"
 // callDaemon is the daemon call, a variable so tests stand in for the daemon.
 var callDaemon = daemon.CallContext
 
+// StubDaemonForTest stands in for the daemon in another package's tests, so
+// none reaches a real one. It returns the restore.
+func StubDaemonForTest(fn func(ctx context.Context, method, path string, body []byte, start bool, op, alternative string) ([]byte, error)) (restore func()) {
+	old := callDaemon
+	callDaemon = fn
+	return func() { callDaemon = old }
+}
+
 // registerTimeout covers a cold daemon start, which the registration may cause.
 const registerTimeout = 90 * time.Second
 

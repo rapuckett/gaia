@@ -8,6 +8,7 @@ import type { LogReadResponse, LogSourcesResponse, ModelServerInfo, SessionSearc
 import type { FileDiff, TurnChanges, UndoResult, UndoSettings } from '../types/changes';
 import type { PageElementWire } from '../../services/browser-pane/contract';
 import { getApiBase } from '../utils/apiBase';
+import { isKeyStoreWait } from '../utils/keyStore';
 import { log } from '../utils/logger';
 import { chatDraftKey, clearSavedDraft } from '../utils/savedDraft';
 import { getT, type Translate } from '../i18n/useT';
@@ -291,8 +292,8 @@ export async function connectProvider(
 export const CONNECT_RETRY_MS = 2000;
 
 /**
- * Connect, waiting out an OS credential-store prompt: a 409 means the OS is
- * still asking the user, so say so and ask again until they answer.
+ * Connect, waiting out an OS credential-store prompt: a 409 `key_store_waiting`
+ * means the OS is still asking the user, so say so and ask again until they answer.
  */
 export async function connectProviderWaitingForOs(
     provider: string,
@@ -304,7 +305,7 @@ export async function connectProviderWaitingForOs(
         try {
             return await connectProvider(provider, body);
         } catch (err) {
-            if (!(err instanceof ApiError) || err.httpStatus !== 409 || stopped()) throw err;
+            if (!(err instanceof ApiError) || !isKeyStoreWait(err.httpStatus, err.body) || stopped()) throw err;
             onWaiting(err.detail);
             await new Promise((resolve) => setTimeout(resolve, CONNECT_RETRY_MS));
         }

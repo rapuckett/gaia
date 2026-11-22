@@ -37,10 +37,31 @@ def _loaded_sdks(statement: str) -> str:
 
 @pytest.mark.parametrize(
     "module",
-    ["gaia", "gaia.llm.lemonade_client", "gaia.daemon.server", "gaia.ui.server"],
+    [
+        "gaia",
+        "gaia.llm.lemonade_client",
+        "gaia.llm.providers.claude",
+        "gaia.eval.claude",
+        "gaia.daemon.server",
+        "gaia.ui.server",
+    ],
 )
 def test_importing_gaia_does_not_load_the_sdks(module):
     assert _loaded_sdks(f"import {module}") == ""
+
+
+def test_gaia_help_does_not_load_the_sdks():
+    loaded = _loaded_sdks(
+        "import contextlib, io\n"
+        "from gaia.cli import main\n"
+        "sys.argv = ['gaia', '-h']\n"
+        "try:\n"
+        "    with contextlib.redirect_stdout(io.StringIO()):\n"
+        "        main()\n"
+        "except SystemExit as e:\n"
+        "    assert e.code in (0, None), e.code"
+    )
+    assert loaded == ""
 
 
 def test_the_sdk_loads_when_a_client_is_built():

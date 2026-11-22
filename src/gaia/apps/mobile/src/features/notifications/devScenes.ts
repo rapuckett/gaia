@@ -87,6 +87,8 @@ const DOWNLOAD = {
     downloaded_bytes: 2.5e9, total_bytes: 5.97e9, message: null,
 } as const;
 
+const START_COMMAND = 'C:\\Program Files\\Lemonade\\lemond.exe';
+
 const check = (patch: Partial<SetupCheck>) => ({ setupChecks: [{ ready: false, steps: [], ...patch } as SetupCheck] });
 
 export const NOTIFICATION_SCENES: Record<string, NotificationScene> = {
@@ -101,8 +103,12 @@ export const NOTIFICATION_SCENES: Record<string, NotificationScene> = {
     'banner-download': { view: 'banner', data: status({ download_progress: DOWNLOAD }) },
     'banner-download-failed': { view: 'banner', data: status({ download_progress: { ...DOWNLOAD, state: 'error', message: 'Not enough disk space on C:.' } }) },
     'banner-download-starting': { view: 'banner', data: status({ download_progress: { ...DOWNLOAD, state: 'starting', percent: 0, total_bytes: 0, message: null } }) },
-    'banner-server-hung': { view: 'banner', data: status({ lemonade_running: false, lemonade_error: 'The model server timed out.' }) },
-    'banner-server-stopped': { view: 'banner', data: status({ lemonade_running: false }) },
+    // The model server isn't answering: GAIA's own (it starts by itself, so the title stands alone), your own server
+    // busy or stopped with the PC's start command on its own line, and a PC with no model server set up yet.
+    'banner-own-server-down': { view: 'banner', data: status({ lemonade_running: false, start_command: null, start_instruction: null }) },
+    'banner-server-hung': { view: 'banner', data: status({ lemonade_running: false, lemonade_error: 'The model server timed out.', start_command: START_COMMAND }) },
+    'banner-server-setup': { view: 'banner', data: status({ lemonade_running: false, start_command: null, start_instruction: 'Run gaia init to install the model server.' }) },
+    'banner-server-stopped': { view: 'banner', data: status({ lemonade_running: false, start_command: START_COMMAND }) },
     'banner-slow': { view: 'banner', slow: true },
     'banner-starting': { view: 'banner', data: status({ init_state: 'initializing', init_tasks: [{ name: 'Loading the model', status: 'running' }] } as Partial<SystemStatus>) },
     'banner-unreachable': { view: 'banner', unreachable: true },

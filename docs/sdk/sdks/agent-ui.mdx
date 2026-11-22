@@ -1967,7 +1967,11 @@ One more reaches the PC and the one device it names, and no other caller:
   the device started; `state` is `waiting`, `approved`, `cancelled`, `denied`,
   `timeout` (no answer within 5 minutes for the key store, up to 15 minutes for
   an administrator prompt) or `failed` (the step ran and failed for another
-  reason).
+  reason). A request for an action the PC is already waiting on (the same
+  device's earlier key-store read, or another administrator step of the same
+  kind) answers **409** with the detail
+  `{"code": "prompt_already_waiting", "message": "..."}`. Read the code, never
+  the message; a PC from before the code sent the message alone.
 
 GAIA records each change an allowed device makes on the PC (a provider key set
 or removed, a connector set up, and the like) with its `kind`, a few labels in
@@ -2788,9 +2792,11 @@ OAuth and MCP-server connections for the Settings page and per-agent grants
     the `device_prompt` event (kind `keyStore`, action `connectorTest`) on
     `/api/sessions/events`: `waiting`, then `approved`, `denied`, `failed` or
     `timeout`; after five minutes unanswered the request answers **504**. A
-    device may run a check once every 10 seconds (**429** with `Retry-After`),
-    and one at a time (**409** while its earlier check still runs). Mobile
-    access and other computers get a **403**.
+    check the key store holds up answers **409** `key_store_waiting`, and one it
+    refuses **423** `key_store_locked` (a device gets a sentence pointing it at
+    the PC as the message). A device may run a check once every 10 seconds (**429** with `Retry-After`),
+    and one at a time (**409** `prompt_already_waiting` while its earlier check
+    still runs). Mobile access and other computers get a **403**.
   </Accordion>
 
   <Accordion title="DELETE /api/connectors/{connector_id}">
@@ -3289,8 +3295,8 @@ shows on the PC. The troubleshooting report is PC-only.
     `approved`, `denied`, `timeout` or `failed`, and the change is audited and
     listed in the device's changes (`npuMemlockFixed`). Waits up to 15
     minutes for the prompt's answer. One fix runs at a time, from the PC or a
-    device: another request while one waits gets **409** ("already waiting on
-    the PC"). A device may start it once every 10 seconds (**429** with
+    device: another request while one waits gets **409**
+    `prompt_already_waiting`. A device may start it once every 10 seconds (**429** with
     `Retry-After`). **403** from mobile access, a pending device or another
     computer; **409** with `detail` `{"code", "message"}` when the prompt was closed (`cancelled`), not answered
     (`timeout`) or couldn't be shown (`not_authorized`); **422** on a PC that
@@ -3482,7 +3488,7 @@ for a target and `guided_value` as the value to enter, not a preset's
     output reaches the device as a fixed sentence. Waits up to 15 minutes for
     the prompt's answer. One GPU memory change (apply or revert) runs at a
     time, from the PC or a device: another request while one waits gets
-    **409** ("already waiting on the PC"). A device may start it once every 10
+    **409** `prompt_already_waiting`. A device may start it once every 10
     seconds (**429** with `Retry-After`). **400** without `confirm`;
     **403** from mobile access, a pending device or another computer, or when
     permission isn't given; **409** when the method
@@ -3614,11 +3620,27 @@ Gateway**, all served through the local Lemonade — the TUI's `/provider`.
 Keys go to the local Lemonade only and, once they discover models, into the OS
 credential store (the slot the TUI uses). A key is never echoed back or logged.
 
+The OS key store's state is machine-readable. A cloud provider's `key_store`
+is `waiting` while the store's unlock prompt is still open on the PC (the key
+is unknown, not absent), `locked` once the prompt was refused or closed (GAIA
+holds off asking for five minutes, or until Try again), and `null` when the
+store answered. A request a key-store wait holds up answers **409** and one the
+locked store refuses answers **423**, both with the detail
+`{"code": "key_store_waiting" | "key_store_locked", "message": "..."}`. A
+device's request the PC is already waiting on answers **409**
+`prompt_already_waiting` in the same shape (see `device_prompt` under
+[Paired devices](#paired-devices)); any other 409 keeps a plain-text detail.
+Read the code, never the message. The older `key_state` field is still sent beside `key_store` and keeps its `read`
+and `unknown` values; only its two key-store values (`waiting_for_os_permission`
+and `store_locked`) are deprecated in favor of `key_store` and go in the next
+release.
+
 <AccordionGroup>
   <Accordion title="GET /api/providers">
     Every provider with its state — `registered`, `key_source` (`environment`,
-    `lemonade`, `stored`, or `null`), `models_discovered` — and the active
-    model. A stored key is handed back to a Lemonade that lost it.
+    `lemonade`, `stored`, or `null`), `key_store` (`waiting`, `locked` or
+    `null`) with `key_message` saying what to do, `models_discovered` — and the
+    active model. A stored key is handed back to a Lemonade that lost it.
     `lemonade_error` is set when Lemonade could not be reached. The `amd`
     entry's `network` is checked for the PC only; over mobile access it is
     `{"reachable": null, "detail": null}`. Requires
@@ -3637,15 +3659,17 @@ credential store (the slot the TUI uses). A key is never echoed back or logged.
     home-network address can't be used to probe the PC's network. Plus
     `lemonade_error` when Lemonade could not be read. Cloud
     providers also carry `key_source` (`stored`, `environment`, `lemonade` or
-    `null`), `key_state` (`read`, `store_locked`, or `unknown` until GAIA has
-    read the credential store once since it started), `key_hint` (the key's
+    `null`), `key_store` (`locked` while the store is held after a closed
+    prompt, else `null`; never `waiting`, since this route doesn't read the
+    store), `key_state` (`read`, `store_locked`, which is deprecated in favor of `key_store`, or `unknown`
+    until GAIA has read the credential store once since it started), `key_hint` (the key's
     last four characters, as the PC shows them; always `null` over mobile
     access) and `known_models`, plus `error` (the error line the PC's last
     provider list showed, with PC paths and key-store text removed for a device;
     `null` when there is none and always over mobile access), `env_var` (the
     environment variable's name, never its value, when `key_source` is
     `environment`) and `key_from_gaia_env` (`true` when that key is GAIA's own
-    environment rather than Lemonade's); all seven are `null` for `local`. Each call
+    environment rather than Lemonade's); all eight are `null` for `local`. Each call
     from the PC dials the gateway. It only reads: it registers nothing, hands no key over,
     never reads the OS credential store (so it can't raise a key-store
     prompt), and never carries a key or a gateway address. Requires `X-Gaia-UI: 1` (**403** without it).
@@ -3685,14 +3709,17 @@ credential store (the slot the TUI uses). A key is never echoed back or logged.
     current gateway to put back. A device's host is looked up once, every
     address must be public, and GAIA's check dials the first three of those
     addresses with TLS for the name given, so a second lookup can't point it
-    elsewhere. The check runs before the move takes the gateway key lock, so a
-    slow host doesn't hold up other replays. One try per device every 10 s
-    (**429**).
+    elsewhere. One try per device every 10 s (**429**). The PC's own connect
+    checks its gateway with a plain connect to the first three addresses.
+    Either check runs before the gateway key lock is taken, so a slow host
+    doesn't hold up other replays; when the address it checked is no longer
+    the one the connect would use, the connect gets a **409**.
 
     Any change of the `amd` address, with a key or without, first drops the key
     Lemonade holds for the old address. Only one replay or move of the gateway
     key runs at a time across every GAIA process (the Agent UI, the daemon, the
-    CLI and agents); a connect that waits over 60 s for another one gets a
+    CLI, agents, and the terminal app, which changes the gateway through the
+    daemon); a connect that waits over 60 s for another one gets a
     **409** saying so. The saved key lives in the credential store's
     `gateway:amd:v2` slot, which older GAIA versions don't read; a key in the
     old `gateway:amd` slot moves there, bound to the gateway it serves, the
@@ -3706,7 +3733,10 @@ credential store (the slot the TUI uses). A key is never echoed back or logged.
     models (a key that discovers nothing is removed from Lemonade again);
     **403** when a key comes from mobile access or another computer, or a
     gateway field comes from anywhere but the PC or an allowed device sending a
-    new key; **409** when an
+    new key; **409** `key_store_waiting` while the key store's prompt holds the
+    saved key's read (ask again; this includes a gateway move), and **423**
+    `key_store_locked` once that prompt was closed (don't ask again on a timer);
+    a plain **409** when an
     environment key takes precedence, Lemonade is not on this PC, or the
     user's own server has no working provider. A paired device gets the same
     statuses without PC file paths or credential-store details, and its key
@@ -3723,7 +3753,7 @@ credential store (the slot the TUI uses). A key is never echoed back or logged.
   <Accordion title="POST /api/providers/key-store/retry">
     Let the next key read ask the OS to unlock the credential store again. After
     a dismissed or refused unlock prompt GAIA stops reading the store for five
-    minutes, and providers report `key_state: "store_locked"`; the Try again
+    minutes, and providers report `key_store: "locked"`; the Try again
     button calls this. Returns `{"retrying": true}`. The PC or an allowed
     paired device; the unlock prompt it allows shows on the PC. From a device
     the stored keys are read before it answers, so the device hears the
@@ -3731,7 +3761,7 @@ credential store (the slot the TUI uses). A key is never echoed back or logged.
     `/api/sessions/events` while the prompt is up: `waiting`, then `approved`,
     `denied`, `failed` or, after five minutes, `timeout`. A device may retry
     once every 10 seconds (**429** with `Retry-After`), and one at a time
-    (**409** while its earlier read still runs).
+    (**409** `prompt_already_waiting` while its earlier read still runs).
   </Accordion>
 
   <Accordion title="GET /api/providers/{provider}/models">
@@ -3837,7 +3867,9 @@ credential store (the slot the TUI uses). A key is never echoed back or logged.
     Make a model the one new turns run and remember it as `last_model` /
     `last_provider` in `~/.gaia/config.json` (other keys are kept). Body:
     `{"model": "fireworks.glm-5p3-flash"}`. **409** when the model cannot run
-    now; **503** while the local model server is still starting. A successful
+    now, or `key_store_waiting` while the key store's prompt holds its key;
+    **423** `key_store_locked` once that prompt was closed; **503** while the
+    local model server is still starting. A successful
     pick clears this run's restore notice. Picking a local model also starts a
     fresh warm-up (see `POST /api/system/warm-up`), so the model loads before
     the next message; follow it with `GET /api/system/warm-up`.

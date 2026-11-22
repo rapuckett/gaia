@@ -7,11 +7,6 @@ import os
 from pathlib import Path
 
 try:
-    import anthropic
-except ImportError:
-    anthropic = None
-
-try:
     from bs4 import BeautifulSoup
 except ImportError:
     BeautifulSoup = None
@@ -24,6 +19,30 @@ from gaia.llm.local_only import assert_provider_permitted
 from gaia.logger import get_logger
 
 load_env()
+
+
+def __getattr__(name: str):
+    # The Anthropic SDK costs ~0.9 s to import; load it on first use.
+    if name == "anthropic":
+        try:
+            import anthropic
+        except ImportError as e:
+            raise AttributeError(
+                f"module {__name__!r}: anthropic is not installed"
+            ) from e
+        return anthropic
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
+def _anthropic_sdk():
+    """The SDK, a test double in this namespace, or None when not installed."""
+    if "anthropic" in globals():
+        return globals()["anthropic"]
+    try:
+        import anthropic
+    except ImportError:
+        return None
+    return anthropic
 
 
 def first_text_block(blocks, model):
@@ -75,7 +94,8 @@ class ClaudeClient:
                 with a 400, so pinning a value fails the call outright.
         """
         # Check for required dependencies
-        if anthropic is None:
+        sdk = _anthropic_sdk()
+        if sdk is None:
             error_msg = (
                 "\n❌ Error: Missing required package 'anthropic'\n\n"
                 "Please install the eval dependencies:\n"
@@ -116,7 +136,7 @@ class ClaudeClient:
         # Initialize Anthropic client with retry support
         # The SDK handles exponential backoff automatically
         assert_provider_permitted("Anthropic Claude")
-        self.client = anthropic.Anthropic(
+        self.client = sdk.Anthropic(
             api_key=self.api_key,
             max_retries=max_retries,
             timeout=300.0,  # 5 minute timeout for large documents

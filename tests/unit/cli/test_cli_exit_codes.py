@@ -9,7 +9,6 @@ next-step after a failure, with a stray ``1`` on stdout. These drive the real
 ``gaia.cli.main`` entry point because the exit code is the thing under test.
 """
 
-import logging
 import sys
 import types
 
@@ -17,10 +16,6 @@ import pytest
 
 from gaia import cli
 from gaia.logger import AGENT_LOG_ENV, configure
-
-# The chat path under test reconfigures handlers installed by an owning
-# process; `gaia.cli:main` does via configure(), so the tests do too.
-log_manager = configure()
 
 
 class _StubConfig:
@@ -49,21 +44,9 @@ def _stub_agent_class(outcome):
 
 
 @pytest.fixture
-def console_logging():
-    """Restore the global console and file handlers the chat path reconfigures."""
-    handler = log_manager.console_handler
-    saved = (handler.stream, handler.level, log_manager.file_handler)
-    saved_log_file = log_manager.log_file
-    root = logging.getLogger()
-    saved_root_handlers = list(root.handlers)
-    yield
-    if log_manager.file_handler is not saved[2]:
-        log_manager.file_handler.close()
-    handler.stream = saved[0]
-    handler.setLevel(saved[1])
-    log_manager.file_handler = saved[2]
-    log_manager.log_file = saved_log_file
-    root.handlers = saved_root_handlers
+def console_logging(restore_gaia_logging):
+    """Install logging as `gaia.cli:main` does; the chat path then reconfigures it."""
+    return configure()
 
 
 @pytest.fixture

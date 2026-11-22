@@ -13,6 +13,8 @@ sys.path.insert(0, os.path.abspath("src"))
 from gaia.messaging import telegram
 from gaia.messaging.telegram_api import TelegramBotAPI
 
+pytestmark = pytest.mark.usefixtures("restore_gaia_logging")
+
 
 def test_background_writes_pid(mock_home, monkeypatch):
     # GAIA_TEST_MODE stops the adapter from starting a real polling loop.

@@ -35,12 +35,13 @@ import type {
     DocumentResponse,
     DocumentStatus,
     GaiaClient,
+    GatewayFields,
     GpuMemoryStatus,
     HealthResponse,
     IndexFolderResponse,
     LemonadeFound,
     LemonadeTarget,
-    LemonadeTargetBody,
+    LemonadeTargetRequest,
     LocalModelStatus,
     KnowledgeCreateBody,
     KnowledgeUpdateBody,
@@ -342,8 +343,12 @@ export interface FakeClientData {
     undoSettings?: UndoSettings;
     /** What listAutomations answers; an Error is thrown. Pause, resume and remove change it. */
     automations?: AutomationList | Error;
-    /** What getDiscordStatus answers; an Error is thrown (a phone gets the PC's 403). */
+    /** What getDiscordStatus answers; an Error is thrown (a phone gets the PC's 403). Connect, pair, start, stop and disconnect change it. */
     discordStatus?: DiscordStatus | Error;
+    /** The pairing code a connect or pair answers with; none when unset, as for a device that didn't start the pairing. */
+    discordPairingCode?: string;
+    /** Whether a connected bot is public (the connect answer's `bot_public`). */
+    discordBotPublic?: boolean;
     /** Thrown by deleteSession for these chat ids. */
     deleteSessionErrors?: Record<string, Error>;
     /** Thrown by updateMemorySettings. */
@@ -435,7 +440,7 @@ export interface FakeGaiaClient extends GaiaClient {
     readonly backendSets: string[];
     /** The text each speak call was given, in order. */
     readonly spoken: string[];
-    readonly targetSets: LemonadeTargetBody[];
+    readonly targetSets: LemonadeTargetRequest[];
     /** The setup model choices saved, in order. */
     readonly setupChoices: { kind: 'chat' | 'vision' | 'skip'; modelId: string | null; flag?: boolean }[];
     /** The providers connectProvider was asked for, in order. */
@@ -448,8 +453,12 @@ export interface FakeGaiaClient extends GaiaClient {
     readonly flowCancels: string[];
     /** The providers connectProvider was sent a typed key for, in order (never the key). */
     readonly keyedConnects: string[];
+    /** The gateway fields each keyed connect carried, in order. */
+    readonly gatewayConnects: { provider: string; gateway: GatewayFields }[];
     /** The providers whose saved key forgetProviderKey cleared, in order. */
     readonly keyRemovals: string[];
+    /** Every Discord write, in order; a connect is recorded without its token. */
+    readonly discordActions: ('connect' | 'start' | 'takeOver' | 'stop' | 'restart' | 'forgetAlways' | 'pair' | 'disconnect')[];
     /** The GPU memory changes asked for, in order: an apply with its size, or a revert. */
     readonly gpuMemoryChanges: ({ action: 'apply'; settingGb: number } | { action: 'revert' })[];
     /** How many times fixSetupNpuMemlock was asked. */
@@ -565,7 +574,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
     const setupStarts: FakeGaiaClient['setupStarts'] = [];
     const backendSets: string[] = [];
     const spoken: string[] = [];
-    const targetSets: LemonadeTargetBody[] = [];
+    const targetSets: LemonadeTargetRequest[] = [];
     const setupChoices: FakeGaiaClient['setupChoices'] = [];
     const connects: string[] = [];
     const browserSignIns: FakeGaiaClient['browserSignIns'] = [];
@@ -573,7 +582,19 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
     const flowCancels: string[] = [];
     const browserFlows = new Map<string, string>();
     const keyedConnects: string[] = [];
+    const gatewayConnects: FakeGaiaClient['gatewayConnects'] = [];
     const keyRemovals: string[] = [];
+    const discordActions: FakeGaiaClient['discordActions'] = [];
+    const discordNow = (): DiscordStatus => {
+        if (!data.discordStatus) throw new GaiaApiError(503, 'This fake client was given no Discord status.');
+        if (data.discordStatus instanceof Error) throw data.discordStatus;
+        return data.discordStatus;
+    };
+    const discordWrite = (action: FakeGaiaClient['discordActions'][number], change: Partial<DiscordStatus>): DiscordStatus => {
+        discordActions.push(action);
+        data.discordStatus = { ...discordNow(), ...change };
+        return data.discordStatus;
+    };
     const gpuMemoryChanges: ({ action: 'apply'; settingGb: number } | { action: 'revert' })[] = [];
     let npuMemlockFixes = 0;
     let npuRechecks = 0;
@@ -698,7 +719,9 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         browserCompletions,
         flowCancels,
         keyedConnects,
+        gatewayConnects,
         keyRemovals,
+        discordActions,
         gpuMemoryChanges,
         get npuMemlockFixes() {
             return npuMemlockFixes;
@@ -1378,9 +1401,30 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
             return { ...gone };
         },
         async getDiscordStatus() {
-            if (!data.discordStatus) throw new GaiaApiError(503, 'This fake client was given no Discord status.');
-            if (data.discordStatus instanceof Error) throw data.discordStatus;
-            return data.discordStatus;
+            return discordNow();
+        },
+        async connectDiscord() {
+            const status = discordWrite('connect', { connected: true, paired: false, running: true, state: 'pairing', owner_name: '', pairing_code: data.discordPairingCode ?? '' });
+            const { bot_name, invite_url, bot_page_url } = status;
+            return { connect: { connected: true, bot_name, application_id: '1', invite_url, bot_page_url, bot_public: !!data.discordBotPublic }, status };
+        },
+        async startDiscord(takeOver) {
+            return discordWrite(takeOver ? 'takeOver' : 'start', { running: true, state: 'connected', autostart: true });
+        },
+        async stopDiscord() {
+            return discordWrite('stop', { running: false, state: 'stopped', autostart: false });
+        },
+        async restartDiscord() {
+            return discordWrite('restart', { running: true, state: 'connected' });
+        },
+        async forgetDiscordAlways() {
+            return discordWrite('forgetAlways', { always_allowed: [] });
+        },
+        async pairDiscord() {
+            return discordWrite('pair', { paired: false, owner_name: '', running: true, state: 'pairing', pairing_code: data.discordPairingCode ?? '' });
+        },
+        async disconnectDiscord() {
+            return discordWrite('disconnect', { connected: false, paired: false, running: false, state: 'stopped', bot_name: '', owner_name: '', autostart: false, always_allowed: [], pairing_code: '' });
         },
         async getUndoSettings() {
             if (!data.undoSettings) throw new GaiaApiError(503, 'This fake client was given no undo settings.');
@@ -1813,6 +1857,7 @@ export function createFakeClient(data: FakeClientData = {}): FakeGaiaClient {
         async connectProvider(provider, options) {
             connects.push(provider);
             if (options?.apiKey) keyedConnects.push(provider);
+            if (options?.apiKey && options.gateway) gatewayConnects.push({ provider, gateway: { ...options.gateway } });
             return { remembered: true };
         },
         async forgetProviderKey(provider) {

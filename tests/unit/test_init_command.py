@@ -13,6 +13,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from gaia.installer.lemonade_installer import (
     InstallResult,
     LemonadeInfo,
@@ -20,6 +22,8 @@ from gaia.installer.lemonade_installer import (
 )
 from gaia.ui.build import WebuiBuildResult, WebuiBuildStatus
 from gaia.version import LEMONADE_VERSION
+
+pytestmark = pytest.mark.usefixtures("restore_gaia_logging")
 
 # Lemonade /system-info for a PC too small for the large default (16 GB Mac), so
 # `gaia init` keeps choosing Gemma 4 E4B as these tests assume.

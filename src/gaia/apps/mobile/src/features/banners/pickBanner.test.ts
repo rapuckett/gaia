@@ -43,6 +43,29 @@ describe('pickBanner', () => {
         expect(id(withStatus({ download_progress: { ...download, state: 'error' } }))).toBe('download');
     });
 
+    it('says how to start a model server that is down the way the desktop does, with the PC’s command on its own line', () => {
+        const cmd = 'C:\\Program Files\\Lemonade\\lemond.exe';
+        const down = (patch: Partial<SystemStatus>) => pickBanner(withStatus({ lemonade_running: false, start_command: null, start_instruction: null, ...patch }), null, t);
+
+        // GAIA's own server starts by itself: the PC sends no command, and the title stands alone.
+        const own = down({});
+        expect(own).toMatchObject({ id: 'serverStopped', title: t('banner.serverStopped'), retry: true, dismissible: true });
+        expect(own?.message).toBeUndefined();
+        expect(own?.command).toBeUndefined();
+
+        expect(down({ start_command: cmd })).toMatchObject({ id: 'serverStopped', message: t('banner.startHint'), command: cmd });
+        expect(down({ lemonade_error: 'timed out', start_command: cmd })).toMatchObject({ id: 'serverHung', title: t('banner.serverHung'), message: t('banner.restartHint'), command: cmd });
+        expect(down({ start_instruction: 'Start Lemonade from the Start menu.' })).toMatchObject({ command: 'Start Lemonade from the Start menu.' });
+
+        // No model server set up yet: setup fixes it, and a hung server is never told to run setup.
+        const setup = down({ start_instruction: 'Run gaia init to install the model server.' });
+        expect(setup?.message).toBe(t('banner.finishSetup'));
+        expect(setup?.command).toBeUndefined();
+        const hungSetup = down({ lemonade_error: 'timed out', start_command: 'gaia init' });
+        expect(hungSetup?.message).toBeUndefined();
+        expect(hungSetup?.command).toBeUndefined();
+    });
+
     it('shows a picked model loading, or failing, ahead of connection trouble and after a download', () => {
         const load = { model: 'Qwen3-4B-Instruct-GGUF', seconds: 12, error: null };
         const loading = pickBanner(OK, new GaiaApiError(503, 'busy'), t, null, { load });

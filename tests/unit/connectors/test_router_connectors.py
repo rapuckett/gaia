@@ -1207,6 +1207,35 @@ class TestTestEndpoint:
         assert resp.status_code == 200
         assert resp.json()["ok"] is True
 
+    @pytest.mark.parametrize(
+        "error, status, code",
+        [
+            ("waiting", 409, "key_store_waiting"),
+            ("locked", 423, "key_store_locked"),
+            ("refused", 423, "key_store_locked"),
+        ],
+    )
+    def test_a_key_store_wait_or_lock_answers_with_its_code(
+        self, ui_api_client, monkeypatch, error, status, code
+    ):
+        from gaia.connectors import store
+        from gaia.connectors.credential_wait import (
+            CredentialStoreLocked,
+            CredentialStoreWaiting,
+        )
+
+        exc = {
+            "waiting": CredentialStoreWaiting("Look for a system dialog."),
+            "locked": CredentialStoreLocked("The unlock prompt was closed."),
+            "refused": store.KeyringRefused("The unlock prompt was closed."),
+        }[error]
+        monkeypatch.setattr(
+            "gaia.ui.routers.connectors.health_check", AsyncMock(side_effect=exc)
+        )
+        resp = ui_api_client.post("/api/connectors/google/test", headers=UI_HEADER)
+        assert resp.status_code == status, resp.text
+        assert resp.json()["detail"] == {"code": code, "message": str(exc)}
+
 
 class TestConnectorActionsLiftTheKeyringHold:
     """A connectors-screen action may ask the OS to unlock the store again."""

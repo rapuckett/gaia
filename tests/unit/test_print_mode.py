@@ -18,6 +18,8 @@ import pytest
 from gaia import print_mode
 from gaia.cli import build_parser
 
+pytestmark = pytest.mark.usefixtures("restore_gaia_logging")
+
 # ---------------------------------------------------------------------------
 # Argparse wiring
 # ---------------------------------------------------------------------------

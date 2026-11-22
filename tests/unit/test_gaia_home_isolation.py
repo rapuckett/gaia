@@ -3,22 +3,40 @@
 
 """Unit tests never write the developer's real ``~/.gaia`` (see tests/unit/conftest.py)."""
 
+import logging
 import os
 import sqlite3
 from pathlib import Path
 
 import pytest
 
+from gaia import logger as gaia_logger
 from gaia import security
 from gaia.config import gaia_home
-from gaia.logger import LOG_FILE_ENV, configure
-
-# The owning process (the CLI) installs logging; under these unit tests this
-# module does the equivalent so the log-file location can be asserted.
-log_manager = configure()
+from gaia.logger import LOG_FILE_ENV
 
 # The root conftest points HOME at a tmp dir and records the real one here.
 _REAL_GAIA_HOME = Path(os.environ.get("_GAIA_TEST_REAL_HOME") or Path.home()) / ".gaia"
+
+
+@pytest.fixture(scope="module")
+def log_manager():
+    """Install logging as the CLI does, and take it out again afterward.
+
+    A module-level ``configure()`` left GAIA's stderr handler on the root
+    logger for the whole session, printing into later tests' captures.
+    """
+    root = logging.getLogger()
+    handlers = list(root.handlers)
+    installed_here = gaia_logger.log_manager is None
+    manager = gaia_logger.configure()
+    yield manager
+    for handler in list(root.handlers):
+        if not any(handler is h for h in handlers):
+            root.removeHandler(handler)
+            handler.close()
+    if installed_here:
+        gaia_logger.log_manager = None
 
 
 def _under(path: Path, root: Path) -> bool:
@@ -55,7 +73,7 @@ def test_a_moved_home_still_gets_its_own_dot_gaia(monkeypatch, tmp_path):
     assert gaia_home() == tmp_path / ".gaia"
 
 
-def test_the_log_file_is_not_the_real_one():
+def test_the_log_file_is_not_the_real_one(log_manager):
     assert os.environ.get(LOG_FILE_ENV)
     assert not _under(log_manager.log_file, _REAL_GAIA_HOME)
 

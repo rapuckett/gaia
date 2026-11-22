@@ -32,6 +32,7 @@ be automatically available to all test files.
 
 import importlib
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -135,6 +136,114 @@ def _fixed_machine_memory(request, monkeypatch):
     monkeypatch.setattr(
         lemonade_client, "_free_memory_snapshot", lambda url: (None, {})
     )
+
+
+# Log handlers installed while a test module is imported, by module. The
+# per-test guard below cannot see these: they exist before any test starts.
+_collection_handler_baseline = None
+_collection_leaks = []
+
+
+def _gaia_log_handlers():
+    import logging
+
+    return [
+        h
+        for name in (None, "gaia")
+        for h in logging.getLogger(name).handlers
+        if not type(h).__module__.startswith("_pytest")
+    ]
+
+
+def pytest_collectstart(collector):
+    global _collection_handler_baseline
+    if _collection_handler_baseline is None:
+        _collection_handler_baseline = _gaia_log_handlers()
+
+
+def pytest_collectreport(report):
+    if _collection_handler_baseline is None or not report.nodeid.endswith(".py"):
+        return
+    for handler in _gaia_log_handlers():
+        if not any(handler is h for h in _collection_handler_baseline):
+            _collection_handler_baseline.append(handler)
+            _collection_leaks.append((report.nodeid, handler))
+
+
+def pytest_collection_finish(session):
+    if not _collection_leaks:
+        return
+    found = "; ".join(
+        f"{nodeid}: {type(h).__name__}(stream={getattr(h, 'stream', None)!r})"
+        for nodeid, h in _collection_leaks
+    )
+    pytest.exit(
+        "log handler installed at import or collection time by: "
+        f"{found}. It outlives the module and prints into later tests' "
+        "capsys/capfd; install logging in a fixture and remove it afterward "
+        "(see tests/unit/test_gaia_home_isolation.py).",
+        returncode=pytest.ExitCode.INTERNAL_ERROR,
+    )
+
+
+@pytest.fixture
+def restore_gaia_logging():
+    """Undo ``gaia.logger.configure()`` after a test that runs a CLI entry point.
+
+    Entry points install GAIA's stderr and file handlers on the root logger;
+    left in place they print into later tests' capsys/capfd captures.
+    """
+    import logging
+
+    from gaia import logger as gaia_logger
+
+    root = logging.getLogger()
+    handlers = list(root.handlers)
+    manager = gaia_logger.log_manager
+    yield
+    for handler in list(root.handlers):
+        if not any(handler is h for h in handlers):
+            root.removeHandler(handler)
+            handler.close()
+    gaia_logger.log_manager = manager
+
+
+@pytest.fixture(autouse=True)
+def _no_leaked_log_handlers(request):
+    """Fail a test that leaves a log handler on the root or ``gaia`` logger.
+
+    GAIA's console handler writes to whatever ``sys.stderr`` is at each record,
+    so one that outlives its test prints into the next test's capsys/capfd
+    capture. Handlers are compared by identity against the pre-test snapshot;
+    a leftover is removed so the next test starts clean.
+    """
+    import logging
+
+    from gaia import logger as gaia_logger
+
+    loggers = (logging.getLogger(), logging.getLogger("gaia"))
+    before = [list(lg.handlers) for lg in loggers]
+    manager = gaia_logger.log_manager
+    yield
+    leaked = []
+    for lg, kept in zip(loggers, before):
+        for handler in list(lg.handlers):
+            if not any(handler is h for h in kept):
+                lg.removeHandler(handler)
+                leaked.append((lg.name, handler))
+    if leaked:
+        # configure() is a no-op while a manager is set; without this a later
+        # test would find a manager whose handlers were just removed.
+        gaia_logger.log_manager = manager
+        found = ", ".join(
+            f"{name}: {type(h).__name__}(stream={getattr(h, 'stream', None)!r})"
+            for name, h in leaked
+        )
+        pytest.fail(
+            f"{request.node.nodeid} leaked log handler(s): {found}. Remove them "
+            "in the test or its fixture so later tests' capsys/capfd stay clean.",
+            pytrace=False,
+        )
 
 
 @pytest.fixture(autouse=True)
@@ -595,6 +704,46 @@ def _keychain_refusal(what: str) -> AssertionError:
     )
 
 
+_KEYCHAIN_SUBCOMMAND = re.compile(r"\b(generic|internet)-password\b")
+_SECURITY_THEN_PASSWORD = re.compile(r"\bsecurity\b.*-password\b", re.DOTALL)
+
+
+def _is_security_keychain_call(args, shell) -> bool:
+    """True when Popen args run the macOS `security` password subcommands."""
+    import shlex
+
+    if isinstance(args, (bytes, bytearray)):
+        args = args.decode(errors="replace")
+    if isinstance(args, str):
+        raw = [args]
+    elif isinstance(args, (list, tuple)):
+        raw = [
+            os.fsdecode(x) if isinstance(x, (bytes, os.PathLike)) else str(x)
+            for x in args
+        ]
+    else:
+        raw = [os.fsdecode(args)] if isinstance(args, os.PathLike) else []
+    if not raw:
+        return False
+    try:
+        if isinstance(args, str) or shell:
+            tokens = shlex.split(raw[0]) + raw[1:]
+        else:
+            tokens = raw
+    except ValueError:
+        return bool(_SECURITY_THEN_PASSWORD.search(" ".join(raw)))
+    i = 0
+    while i < len(tokens) and (
+        os.path.basename(tokens[i]) == "env"
+        or tokens[i].startswith("-")
+        or re.match(r"[A-Za-z_][A-Za-z0-9_]*=", tokens[i])
+    ):
+        i += 1
+    if i >= len(tokens) or os.path.basename(tokens[i]) != "security":
+        return False
+    return any(_KEYCHAIN_SUBCOMMAND.search(t) for t in tokens[i + 1 :])
+
+
 def _install_keychain_guards():
     """Make every real OS keyring backend and the macOS `security` CLI raise."""
     import subprocess
@@ -634,15 +783,8 @@ def _install_keychain_guards():
     real_popen_init = subprocess.Popen.__init__
 
     def _guarded_popen_init(self, args, *a, **kw):
-        argv = args if isinstance(args, (list, tuple)) else [args]
-        if (
-            not _real_keychain_allowed
-            and argv
-            and os.path.basename(str(argv[0])) == "security"
-            and any(
-                "generic-password" in str(x) or "internet-password" in str(x)
-                for x in argv
-            )
+        if not _real_keychain_allowed and _is_security_keychain_call(
+            args, kw.get("shell", False)
         ):
             raise _keychain_refusal("the macOS `security` CLI")
         return real_popen_init(self, args, *a, **kw)

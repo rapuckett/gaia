@@ -23,7 +23,10 @@ from gaia.llm import lemonade_service
 from gaia.ui import _chat_helpers as helpers
 from gaia.ui import server
 
-pytestmark = pytest.mark.allow_network
+pytestmark = [
+    pytest.mark.allow_network,
+    pytest.mark.usefixtures("restore_gaia_logging"),
+]
 
 
 def test_start_model_server_owner_runs_the_daemon_start_in_a_daemon_thread(

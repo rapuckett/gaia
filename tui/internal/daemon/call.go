@@ -60,7 +60,22 @@ func CallContext(ctx context.Context, method, path string, body []byte, start bo
 		if IsRouteMissing(path, resp.StatusCode, bare) {
 			return nil, &RouteMissingError{Op: op, Path: path, Alternative: alternative}
 		}
-		return nil, fmt.Errorf("%s", full)
+		return nil, &StatusError{Status: resp.StatusCode, Detail: bare, full: full}
 	}
 	return io.ReadAll(io.LimitReader(resp.Body, 1<<16))
+}
+
+// StatusError is the route's own non-2xx answer, so a caller can tell it from
+// a daemon it could not reach. Error() is "HTTP <status>: <detail>".
+type StatusError struct {
+	Status int
+	Detail string
+	full   string
+}
+
+func (e *StatusError) Error() string {
+	if e.full == "" {
+		return fmt.Sprintf("HTTP %d: %s", e.Status, e.Detail)
+	}
+	return e.full
 }

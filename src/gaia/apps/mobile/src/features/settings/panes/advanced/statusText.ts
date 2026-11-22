@@ -7,7 +7,7 @@ import type { SystemStatus } from '@webui/types';
 import { formatGb } from '@webui/utils/modelLabels';
 
 /** The web's Advanced pane reads these from its error notice, which can't load on a phone. */
-const namesSetupCommand = (text: string | null | undefined) => /gaia init/i.test(text ?? '');
+export const namesSetupCommand = (text: string | null | undefined) => /gaia init/i.test(text ?? '');
 
 export function needsLocalSetup(status: SystemStatus): boolean {
     return !status.lemonade_running && (namesSetupCommand(status.start_command) || namesSetupCommand(status.start_instruction));

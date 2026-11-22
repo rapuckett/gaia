@@ -37,6 +37,21 @@ export function ActionError({ error, title }: { error: unknown; title?: string }
     );
 }
 
+/**
+ * A failed switch to your own server. The PC answers a phone one generic message for every failed check of the
+ * server, so the sentence is ours and no probe detail shows; a second try within 10 s is refused (429).
+ */
+export function SwitchError({ error }: { error: unknown }) {
+    const t = useT();
+    if (error instanceof GaiaApiError && error.status === 429) {
+        return <Notice tone="warning" message={t('mobileApp.approveOnPc.tooSoon')} testID="advanced-server-too-soon" />;
+    }
+    if (error instanceof GaiaApiError && error.status === 422) {
+        return <Notice tone="danger" title={t('settings.server.notSwitched')} message={t('mobileApp.settings.serverProbeFailed')} testID="advanced-server-probe-failed" />;
+    }
+    return <ActionError error={error} title={t('settings.server.notSwitched')} />;
+}
+
 /** Asks before a load that competes with chats that are answering; "Load anyway" sends it forced. */
 export function LoadAnywaySheet({ open, name, onClose, onConfirm }: { open: boolean; name: string; onClose: () => void; onConfirm: () => void }) {
     const t = useT();
