@@ -9,7 +9,7 @@ import { APNS_TOKEN, APP_ID, call, FCM_TOKEN, makeEnv, register } from "./helper
 
 const CIPHERTEXT = base64urlEncode(new Uint8Array(48).fill(7));
 const NONCE = base64urlEncode(new Uint8Array(12).fill(1));
-const ALERT = { mode: "alert", ciphertext: CIPHERTEXT, nonce: NONCE };
+const ALERT = { delivery: "alert", ciphertext: CIPHERTEXT, nonce: NONCE };
 
 function toPem(der: ArrayBuffer): string {
   return `-----BEGIN PRIVATE KEY-----\n${Buffer.from(der).toString("base64").replace(/.{64}/g, "$&\n")}\n-----END PRIVATE KEY-----\n`;
@@ -94,7 +94,7 @@ describe("APNs", () => {
     expect(req.headers.get("apns-priority")).toBe("10");
     expect(req.headers.get("apns-collapse-id")).toBe("Zm9vYmFyYmF6cXV4cXV1eA");
     expect(JSON.parse(req.body)).toEqual({
-      aps: { alert: { "loc-key": "PUSH_ALERT" }, "mutable-content": 1 },
+      aps: { alert: { "loc-key": "PUSH_GENERIC" }, "mutable-content": 1 },
       c: CIPHERTEXT,
       n: NONCE,
     });
@@ -111,7 +111,7 @@ describe("APNs", () => {
   it("sends a silent push as a priority-5 background push to the production host", async () => {
     const { env } = apnsEnv();
     const h = await register(env, { environment: "production" });
-    expect((await send(env, h, { ...ALERT, mode: "silent" })).status).toBe(202);
+    expect((await send(env, h, { ...ALERT, delivery: "silent" })).status).toBe(202);
 
     const [req] = seen;
     expect(req.url).toBe(`https://api.push.apple.com/3/device/${APNS_TOKEN}`);
@@ -226,7 +226,7 @@ describe("FCM", () => {
     const h = await register(env, { platform: "fcm", token: FCM_TOKEN });
     reply = oauthReply;
     await send(env, h);
-    await send(env, h, { ...ALERT, mode: "silent" });
+    await send(env, h, { ...ALERT, delivery: "silent" });
     expect(seen.map((s) => new URL(s.url).host)).toEqual(["oauth2.googleapis.com", "fcm.googleapis.com", "fcm.googleapis.com"]);
     expect(JSON.parse(seen[2].body).message).toEqual({
       token: FCM_TOKEN,
@@ -236,7 +236,7 @@ describe("FCM", () => {
   });
 
   it.each([
-    [404, { error: { status: "NOT_FOUND" } }],
+    [404, { error: { status: "NOT_FOUND", details: [{ errorCode: "UNREGISTERED" }] } }],
     [400, { error: { status: "INVALID_ARGUMENT", details: [{ errorCode: "UNREGISTERED" }] } }],
   ])("deletes the handle and gives 410 when FCM answers %i %j", async (status, body) => {
     const { env, t } = fcmEnv();
@@ -244,6 +244,18 @@ describe("FCM", () => {
     reply = (url) => (url.includes("oauth2") ? oauthReply(url) : Response.json(body, { status }));
     expect((await send(env, h)).status).toBe(410);
     expect(t.query("SELECT id FROM handles")).toEqual([]);
+  });
+
+  it("keeps the handle and gives 502 naming the reason for a 404 that is not UNREGISTERED", async () => {
+    const { env, t } = fcmEnv();
+    const h = await register(env, { platform: "fcm", token: FCM_TOKEN });
+    reply = (url) => (url.includes("oauth2") ? oauthReply(url) : Response.json({ error: { status: "NOT_FOUND" } }, { status: 404 }));
+    const res = await send(env, h);
+    expect(res.status).toBe(502);
+    const body = (await res.json()) as any;
+    expect(body.error).toBe("upstream_rejected");
+    expect(body.message).toContain("NOT_FOUND");
+    expect(t.query("SELECT id FROM handles")).toHaveLength(1);
   });
 
   it("gives 502 for FCM UNAVAILABLE without retrying", async () => {
@@ -269,8 +281,8 @@ describe("FCM", () => {
 
 describe("send validation and limits", () => {
   it.each([
-    [{ ...ALERT, mode: undefined }, "invalid_mode"],
-    [{ ...ALERT, mode: "loud" }, "invalid_mode"],
+    [{ ...ALERT, delivery: undefined }, "invalid_delivery"],
+    [{ ...ALERT, delivery: "loud" }, "invalid_delivery"],
     [{ ...ALERT, kind: "approval" }, "unknown_field"],
     [{ ...ALERT, badge: 3 }, "unknown_field"],
     [{ ...ALERT, ciphertext: "A".repeat(3001) }, "invalid_ciphertext"],
@@ -313,7 +325,7 @@ describe("send validation and limits", () => {
     vi.setSystemTime(Date.UTC(2026, 10, 22, 12, 0, 20));
     const { env } = apnsEnv({ SEND_PER_MINUTE: "2", SILENT_PER_MINUTE: "1" });
     const h = await register(env);
-    const silent = { ...ALERT, mode: "silent" };
+    const silent = { ...ALERT, delivery: "silent" };
 
     expect((await send(env, h)).status).toBe(202);
     expect((await send(env, h, silent)).status).toBe(202);

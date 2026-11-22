@@ -6,7 +6,7 @@
 import { requireSecrets } from "./config";
 import { HttpError } from "./http";
 import { importPrivateKey, signJwt } from "./jwt";
-import type { Delivery, Env, HandleRow, SendOutcome } from "./types";
+import type { Env, HandleRow, Message, SendOutcome } from "./types";
 import { post, retryAfterSeconds, safeReason } from "./upstream";
 
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
@@ -83,9 +83,9 @@ async function accessToken(sa: ServiceAccount): Promise<string> {
   return body.access_token;
 }
 
-export function fcmMessage(row: HandleRow, d: Delivery): Record<string, unknown> {
+export function fcmMessage(row: HandleRow, d: Message): Record<string, unknown> {
   const android: Record<string, string> = {
-    priority: d.mode === "alert" ? "HIGH" : "NORMAL",
+    priority: d.delivery === "alert" ? "HIGH" : "NORMAL",
     restricted_package_name: row.app_id,
   };
   if (d.collapseId) android.collapse_key = d.collapseId;
@@ -97,7 +97,7 @@ interface FcmError {
 }
 
 /** Resolves and parses the secret up front, so a bad one fails before any quota is spent. */
-export function fcmSender(env: Env): (row: HandleRow, d: Delivery) => Promise<SendOutcome> {
+export function fcmSender(env: Env): (row: HandleRow, d: Message) => Promise<SendOutcome> {
   const sa = parseServiceAccount(requireSecrets(env, "FCM_SERVICE_ACCOUNT_JSON").FCM_SERVICE_ACCOUNT_JSON);
   return async (row, d) => {
     const res = await post(`https://fcm.googleapis.com/v1/projects/${encodeURIComponent(sa.project_id)}/messages:send`, {
@@ -109,7 +109,7 @@ export function fcmSender(env: Env): (row: HandleRow, d: Delivery) => Promise<Se
 
     const err = ((await res.json().catch(() => ({}))) as FcmError).error ?? {};
     const code = err.details?.find((x) => x.errorCode)?.errorCode ?? err.status;
-    if (res.status === 404 || code === "UNREGISTERED") return { kind: "dead_token" };
+    if (code === "UNREGISTERED") return { kind: "dead_token" };
     if (res.status === 429 || res.status >= 500 || code === "UNAVAILABLE") {
       return { kind: "unavailable", status: res.status, retryAfter: retryAfterSeconds(res) };
     }

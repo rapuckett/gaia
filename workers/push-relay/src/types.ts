@@ -24,7 +24,7 @@ export interface Env {
 
 export type Platform = "apns" | "fcm";
 export type Environment = "sandbox" | "production";
-export type Mode = "alert" | "silent";
+export type DeliveryKind = "alert" | "silent";
 
 /** A row of the `handles` table. */
 export interface HandleRow {
@@ -39,8 +39,8 @@ export interface HandleRow {
 }
 
 /** What a provider needs to deliver one message. */
-export interface Delivery {
-  mode: Mode;
+export interface Message {
+  delivery: DeliveryKind;
   ciphertext: string;
   nonce: string;
   collapseId?: string;

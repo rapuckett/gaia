@@ -30,7 +30,7 @@ All bodies are JSON. Errors are `{error, message?}`.
 | `POST /v1/handles` | none, limited per client IP | `{platform: "apns"\|"fcm", token, app_id, environment: "sandbox"\|"production"}` | `201 {handle, secret}` |
 | `PUT /v1/handles/{handle}` | `Bearer <secret>` | `{token}` | `204` |
 | `DELETE /v1/handles/{handle}` | `Bearer <secret>` | none | `204` |
-| `POST /v1/handles/{handle}/send` | `Bearer <secret>` | `{mode: "alert"\|"silent", ciphertext, nonce, collapse_id?}` | `202` |
+| `POST /v1/handles/{handle}/send` | `Bearer <secret>` | `{delivery: "alert"\|"silent", ciphertext, nonce, collapse_id?}` | `202` |
 | `GET /v1/health` | none | none | `200 {ok: true}` |
 
 **Handles**
@@ -53,13 +53,13 @@ All bodies are JSON. Errors are `{error, message?}`.
 - `ciphertext` is base64url, at most 3,000 characters. `nonce` is exactly 12
   bytes, base64url. `collapse_id` is opaque, 1 to 64 printable ASCII characters.
   It is passed through as `apns-collapse-id` or FCM's `collapse_key`.
-- `mode: "alert"`:
+- `delivery: "alert"`:
   - APNs gets `apns-push-type: alert`, priority 10, and
-    `{aps: {alert: {"loc-key": "PUSH_ALERT"}, "mutable-content": 1}, c, n}`.
-    The app's `Localizable.strings` holds the generic `PUSH_ALERT` text, so a
+    `{aps: {alert: {"loc-key": "PUSH_GENERIC"}, "mutable-content": 1}, c, n}`.
+    The app's `Localizable.strings` holds the generic `PUSH_GENERIC` text, so a
     phone that cannot decrypt still shows a localized notice.
   - FCM gets a data-only message `{c, n}` at priority `HIGH`.
-- `mode: "silent"`:
+- `delivery: "silent"`:
   - APNs gets `apns-push-type: background`, priority 5, and
     `{aps: {"content-available": 1}, c, n}`.
   - FCM gets the same data-only message at priority `NORMAL`.
@@ -69,9 +69,9 @@ All bodies are JSON. Errors are `{error, message?}`.
 
 | Status | When |
 |---|---|
-| `400` | A malformed body, an unknown field, a bad `mode`, a size limit broken, or an app id that is not allowed |
+| `400` | A malformed body, an unknown field, a bad `delivery`, a size limit broken, or an app id that is not allowed |
 | `401 {error: "unauthorized"}` | An unknown handle, a wrong secret and a missing `Authorization` header all look the same |
-| `410 {error: "gone"}` | The token is dead (APNs 410 or 400 `BadDeviceToken`; FCM 404 or `UNREGISTERED`). The handle is deleted, and the caller should drop it. This status is sent only to a caller with the right secret. |
+| `410 {error: "gone"}` | The token is dead (APNs 410 or 400 `BadDeviceToken`; FCM `UNREGISTERED`). The handle is deleted, and the caller should drop it. This status is sent only to a caller with the right secret. |
 | `413` | The body is over `MAX_BODY_BYTES`, by Content-Length or by bytes read |
 | `429 {error: "rate_limited", retry_after}` | A rate limit is hit. The `Retry-After` header is set. |
 | `500 {error: "missing_config" \| "invalid_config", message}` | A secret needed for the call is unset or malformed. The message names the variable. |
