@@ -16,6 +16,9 @@ import { Icon } from './Icon';
 import { Row } from '../layout/layout';
 import { metrics } from '../tokens/generated';
 
+/** Room an icon at the field's start takes: 12 in, a 16 icon, and the gap to the text. */
+export const LEADING_INSET = 40;
+
 export interface TextFieldProps {
     value: string;
     onChangeText: (text: string) => void;
@@ -168,8 +171,9 @@ export function TextField({
                     ...(multiline
                         ? { maxHeight, textAlignVertical: 'top' as const }
                         : null),
-                    paddingStart: leading ? 40 : bare ? 4 : 12,
-                    paddingEnd: end ? 48 : bare ? 4 : 12,
+                    // Physical sides from the UI direction: Android resolves an input's own paddingStart from its text direction, which flips with the typed text and drops the icon's room.
+                    [uiRtl ? 'paddingRight' : 'paddingLeft']: leading ? LEADING_INSET : bare ? 4 : 12,
+                    [uiRtl ? 'paddingLeft' : 'paddingRight']: end ? 48 : bare ? 4 : 12,
                     paddingVertical: paddingV,
                     borderRadius: radius.md,
                     borderWidth: bare ? 0 : 1,
