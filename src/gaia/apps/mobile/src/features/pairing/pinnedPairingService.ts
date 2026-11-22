@@ -17,6 +17,7 @@ import { routeOrigin, type RouteOrigin } from './homeNetwork';
 import { probeOrigin, startRouteKeeper } from './routeKeeper';
 import { setPairingService } from './registry';
 import type { PairedPc, PairingService, PairingStatus, RedeemResult } from './service';
+import { notifyUnpair } from './unpairListeners';
 
 // Only what isn't secret; each PC's token and pin live in the Keychain, under its id.
 const STORAGE_KEY = 'gaia:paired-pcs';
@@ -256,6 +257,7 @@ export function createPinnedPairingService(onAllowed?: (pcId: string) => void): 
             const state = await load();
             const pc = state.pcs.find((p) => p.id === pcId);
             if (!pc) return;
+            await notifyUnpair(pcId, false);
             await GaiaTransport.drop(pcId);
             await save({ ...state, pcs: state.pcs.filter((p) => p.id !== pcId), currentId: state.currentId === pcId ? null : state.currentId });
             const connection = useConnectionStore.getState();
@@ -324,6 +326,8 @@ export function createPinnedPairingService(onAllowed?: (pcId: string) => void): 
             const state = await load();
             const pc = state.pcs.find((p) => p.id === pcId);
             if (!pc) throw new Error(`This phone isn't paired with a PC whose id is ${pcId}.`);
+            // While the PC still accepts this phone's token, so push can be turned off there too.
+            await notifyUnpair(pcId, true);
             try {
                 await unpairOnPc(pc);
             } catch (err) {
