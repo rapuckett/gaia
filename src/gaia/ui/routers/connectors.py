@@ -62,6 +62,7 @@ from gaia.connectors.api import resolve_declared_scopes
 from gaia.connectors.credential_wait import (
     CredentialStoreLocked,
     CredentialStoreWaiting,
+    read_within,
 )
 from gaia.connectors.errors import (
     AuthRequiredError,
@@ -825,13 +826,6 @@ def _bounded_oauth_state(spec: ConnectorSpec) -> Dict[str, Any]:
     Waits as long as ``read_within`` does (``WAIT_SECONDS``), as the providers
     routes do; a later call joins the same read once the user answers.
     """
-    from gaia.connectors.credential_wait import (
-        CredentialStoreLocked,
-        CredentialStoreWaiting,
-        read_within,
-    )
-    from gaia.connectors.store import KeyringRefused
-
     provider_ref = spec.oauth_provider_ref or spec.id
     try:
         return read_within(
@@ -978,7 +972,7 @@ def _field_summary(f: ConfigField) -> Dict[str, Any]:
     "/", response_model=ConnectorListResponse, response_model_exclude_unset=True
 )
 # Sync: runs on a worker thread, so a blocked key-store read can't stall the server.
-def list_connectors(request: Request) -> Dict[str, Any]:
+def list_connectors() -> Dict[str, Any]:
     """Return catalog specs merged with live state for all connectors.
 
     A connector whose secret the key store holds back is listed with
