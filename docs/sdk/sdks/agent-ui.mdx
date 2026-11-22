@@ -3787,6 +3787,9 @@ serve a device, such as `GET /api/sessions/search` next to
 `GET /api/sessions/{session_id}`, is refused. A refused request is a **403** with `code: pc_only` that says to do it
 on the PC.
 
+A device may start a chat, but a `POST /api/sessions` that names `folders` is
+also a **403** with `code: pc_only`: folders are given to a chat on the PC.
+
 ### Flagship only
 
 The Agent UI frontend sends `X-Gaia-Client: agent-ui` and runs the GAIA agent

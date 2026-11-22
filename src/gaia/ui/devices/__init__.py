@@ -26,6 +26,9 @@ DEVICE_LISTENER_HOST = "0.0.0.0"
 PAIR_ROUTE = "/api/devices/pair"
 SELF_ROUTE = "/api/devices/me"
 
+#: ``code`` of a 403 for something only the PC may do.
+PC_ONLY_CODE = "pc_only"
+
 #: Peers the listener answers, and the subset a pairing code offers.
 HOME_NETWORKS = ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "169.254.0.0/16")
 OFFERED_NETWORKS = ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16")
