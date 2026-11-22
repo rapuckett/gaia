@@ -1,30 +1,82 @@
 # Copyright(C) 2025-2026 Advanced Micro Devices, Inc. All rights reserved.
 # SPDX-License-Identifier: MIT
-"""`import gaia` must not pay for the Anthropic and OpenAI SDKs (~1.3 s)."""
+"""The OpenAI and Anthropic SDKs load on first use, not when GAIA is imported."""
 
 import os
 import subprocess
 import sys
 from pathlib import Path
 
-SRC = Path(__file__).resolve().parents[2] / "src"
+import pytest
+
+REPO = Path(__file__).resolve().parents[2]
+SDKS = ("openai", "anthropic")
 
 
-def test_import_gaia_does_not_load_sdks():
-    env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
-    env["PYTHONPATH"] = str(SRC)
-    code = (
-        "import sys, gaia; import gaia.llm.providers.claude, "
-        "gaia.llm.lemonade_client, gaia.eval.claude; "
-        "print('anthropic' in sys.modules, 'openai' in sys.modules)"
+def _loaded_sdks(statement: str) -> str:
+    """Run *statement* in a fresh interpreter; return the SDKs it left loaded."""
+    env = dict(os.environ)
+    env["PYTHONPATH"] = os.pathsep.join(
+        [str(REPO / "src"), str(REPO / "hub" / "agents" / "gaia" / "python")]
     )
-    result = subprocess.run(
+    code = (
+        f"import sys\n{statement}\n"
+        f"print(','.join(m for m in {SDKS!r} if m in sys.modules))"
+    )
+    run = subprocess.run(
         [sys.executable, "-c", code],
         env=env,
         capture_output=True,
         text=True,
-        timeout=120,
+        timeout=180,
         check=False,
     )
-    assert result.returncode == 0, result.stderr
-    assert result.stdout.strip() == "False False"
+    assert run.returncode == 0, run.stderr[-2000:]
+    return run.stdout.strip().splitlines()[-1] if run.stdout.strip() else ""
+
+
+@pytest.mark.parametrize(
+    "module",
+    [
+        "gaia",
+        "gaia.llm.lemonade_client",
+        "gaia.llm.providers.claude",
+        "gaia.eval.claude",
+        "gaia.daemon.server",
+        "gaia.ui.server",
+    ],
+)
+def test_importing_gaia_does_not_load_the_sdks(module):
+    assert _loaded_sdks(f"import {module}") == ""
+
+
+def test_gaia_help_does_not_load_the_sdks():
+    loaded = _loaded_sdks(
+        "import contextlib, io\n"
+        "from gaia.cli import main\n"
+        "sys.argv = ['gaia', '-h']\n"
+        "try:\n"
+        "    with contextlib.redirect_stdout(io.StringIO()):\n"
+        "        main()\n"
+        "except SystemExit as e:\n"
+        "    assert e.code in (0, None), e.code"
+    )
+    assert loaded == ""
+
+
+def test_the_sdk_loads_when_a_client_is_built():
+    loaded = _loaded_sdks(
+        "from gaia.llm.lazy_openai import OpenAI\n"
+        "OpenAI(base_url='http://127.0.0.1:1/v1', api_key='x')"
+    )
+    assert loaded == "openai"
+
+
+def test_error_classes_are_empty_until_the_sdk_is_loaded():
+    out = _loaded_sdks(
+        "from gaia.llm.lazy_openai import loaded_openai_errors as e, openai\n"
+        "before = e('APIError')\n"
+        "cls = openai.APIError\n"
+        "assert before == () and e('APIError') == (cls,), (before, e('APIError'))"
+    )
+    assert out == "openai"

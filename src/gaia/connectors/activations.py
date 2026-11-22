@@ -84,6 +84,11 @@ class ActivationsLedgerCorrupt(ConnectorsError):
         self.path = path
 
 
+def activations_path() -> Path:
+    """Where the activation ledger lives, resolved now."""
+    return _activations_path()
+
+
 def _activations_path() -> Path:
     """Resolve the activations path on each call so a late ``GAIA_HOME`` applies."""
     return gaia_home() / "connectors" / "activations.json"
@@ -302,6 +307,7 @@ async def deactivate_agent_async(connector_id: str, agent_id: str) -> None:
 __all__ = [
     "SCHEMA_VERSION",
     "activate_agent",
+    "activations_path",
     "activate_agent_async",
     "deactivate_agent",
     "deactivate_agent_async",

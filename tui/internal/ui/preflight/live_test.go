@@ -17,8 +17,8 @@ import (
 // (it would otherwise dial the developer's own daemon), and SKIPS when no
 // daemon is attachable.
 //
-// It asserts contract shape, never readiness: a machine with no mailbox
-// connected is a perfectly valid state for this test to observe. What it proves
+// It asserts contract shape, never readiness: a machine with no model
+// downloaded is a perfectly valid state for this test to observe. What it proves
 // is that the paths, headers, and JSON shapes this package sends are the ones
 // the daemon and the sidecar actually accept — which no fake can prove.
 func TestLiveReadiness(t *testing.T) {
@@ -36,11 +36,11 @@ func TestLiveReadiness(t *testing.T) {
 		t.Skipf("no attachable GAIA daemon on this machine: %v", err)
 	}
 
-	rep := Check(ctx, tr, EmailConfig())
+	rep := Check(ctx, tr, testConfig())
 	t.Logf("\n%s", rep)
 
-	if len(rep.Rows) != 5 {
-		t.Fatalf("expected 5 rows, got %d", len(rep.Rows))
+	if len(rep.Rows) != 4 {
+		t.Fatalf("expected 4 rows, got %d", len(rep.Rows))
 	}
 	for _, row := range rep.Rows {
 		if row.State == StateFailed {
@@ -51,7 +51,7 @@ func TestLiveReadiness(t *testing.T) {
 		}
 	}
 
-	m := New(tr, EmailConfig(), Options{ManualProceed: true})
+	m := New(tr, testConfig(), Options{ManualProceed: true})
 	updated, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	updated, _ = updated.(Model).Update(reportMsg{rep: rep})
 	screen := ansi.Strip(updated.(Model).View())
@@ -72,11 +72,11 @@ func TestColdMachineThroughTheRealClient(t *testing.T) {
 	tr := NewDaemonTransport(daemon.New(daemon.Options{
 		Logf: func(format string, args ...any) { t.Logf(format, args...) },
 	}))
-	rep := Check(context.Background(), tr, EmailConfig())
+	rep := Check(context.Background(), tr, testConfig())
 	t.Logf("\n%s", rep)
 
-	if len(rep.Rows) != 5 {
-		t.Fatalf("cold machine produced %d rows, want 5", len(rep.Rows))
+	if len(rep.Rows) != 4 {
+		t.Fatalf("cold machine produced %d rows, want 4", len(rep.Rows))
 	}
 	row, _ := rep.Find(KeyDaemon)
 	if row.State != StateFailed {
