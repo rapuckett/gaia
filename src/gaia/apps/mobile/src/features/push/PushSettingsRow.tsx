@@ -11,12 +11,14 @@ import { pushRowState, usePushStore, type PushRowState } from './pushStore';
 
 export interface PushSettingsRowViewProps {
     state: PushRowState;
+    /** A paired PC's own words for refusing this phone's registration; shown as is, under our sentence. */
+    refusal?: string | null;
     onTurnOn: () => void;
     onOpenSettings: () => void;
 }
 
 /** "Notifications on this phone", in its four states, plus a build that has no push. */
-export function PushSettingsRowView({ state, onTurnOn, onOpenSettings }: PushSettingsRowViewProps) {
+export function PushSettingsRowView({ state, refusal, onTurnOn, onOpenSettings }: PushSettingsRowViewProps) {
     const t = useT();
     return (
         <Card testID={`push-row-${state}`}>
@@ -39,6 +41,9 @@ export function PushSettingsRowView({ state, onTurnOn, onOpenSettings }: PushSet
                         )}
                     </Text>
                 )}
+                {state === 'on' && refusal != null ? (
+                    <Notice tone="danger" message={t('mobileApp.push.row.pcRefused')} detail={refusal || undefined} testID="push-row-pc-refused" />
+                ) : null}
                 {state === 'not_asked' ? (
                     <Button variant="primary" label={t('mobileApp.push.ask.allow')} onPress={onTurnOn} testID="push-row-turn-on" />
                 ) : null}
@@ -53,10 +58,12 @@ export function PushSettingsRowView({ state, onTurnOn, onOpenSettings }: PushSet
 export function PushSettingsRow() {
     const permission = usePushStore((s) => s.permission);
     const relay = usePushStore((s) => s.relay);
+    const refusal = usePushStore((s) => s.refusal);
     const openExplainer = usePushStore((s) => s.openExplainer);
     return (
         <PushSettingsRowView
             state={pushRowState(pushAvailable(), permission, relay)}
+            refusal={refusal}
             onTurnOn={() => openExplainer(false)}
             onOpenSettings={() => {
                 Linking.openSettings().catch((error: unknown) => console.error("Couldn't open this app's page in the phone's Settings", error));

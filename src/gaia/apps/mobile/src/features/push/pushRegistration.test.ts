@@ -1,6 +1,8 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
+import { GaiaApiError } from '@/api/errors';
+
 import type { PushSecrets } from '../../../modules/gaia-push';
 import type { PcPushClient, PcPushRecord, PcPushStatus } from './pcPushClient';
 import { syncAll, syncPc, unregisterPc, type PushDeps } from './pushRegistration';
@@ -14,6 +16,7 @@ function world() {
     const pcRecords = new Map<string, PcPushRecord | null>();
     const pcOff = new Set<string>();
     const pcDown = new Set<string>();
+    const pcRefuses = new Map<string, string>();
     const dead = new Set<string>();
     let n = 0;
     let relayDown = false;
@@ -44,6 +47,8 @@ function world() {
     const pc = (pcId: string): PcPushClient => ({
         async put(record) {
             if (pcDown.has(pcId)) throw new Error('PC away');
+            const refusal = pcRefuses.get(pcId);
+            if (refusal) throw new GaiaApiError(422, refusal);
             log.push(`pc ${pcId} put ${JSON.stringify(record)}`);
             pcRecords.set(pcId, record);
             pcOff.delete(pcId);
@@ -82,6 +87,7 @@ function world() {
         pcRecords,
         pcOff,
         pcDown,
+        pcRefuses,
         dead,
         relayHandles,
         setRelayDown: (down: boolean) => (relayDown = down),
@@ -106,7 +112,7 @@ afterEach(() => {
 describe('push registration, one handle per paired PC', () => {
     it('registers a new PC, confirms the handle with a token PUT, and gives the PC the send token, never the secret', async () => {
         const w = world();
-        await expect(syncPc('pc-a', 'tok-1', w.deps)).resolves.toBe('on');
+        await expect(syncPc('pc-a', 'tok-1', w.deps)).resolves.toEqual({ outcome: 'on' });
         expect(w.log[0]).toBe(`relay register ${JSON.stringify({ platform: 'apns', token: 'tok-1', app_id: 'com.example.gaia', environment: 'sandbox' })}`);
         expect(w.log[1]).toBe('relay put handle-1-aaaaaaaaaaaa tok-1');
         expect(w.log[2]).toMatch(/^pc pc-a put /);
@@ -126,7 +132,7 @@ describe('push registration, one handle per paired PC', () => {
         const w = world();
         await syncPc('pc-a', 'tok-1', w.deps);
         w.log.length = 0;
-        await expect(syncPc('pc-a', 'tok-2', w.deps)).resolves.toBe('on');
+        await expect(syncPc('pc-a', 'tok-2', w.deps)).resolves.toEqual({ outcome: 'on' });
         expect(w.log).toEqual(['relay put handle-1-aaaaaaaaaaaa tok-2', 'pc pc-a get']);
     });
 
@@ -135,7 +141,7 @@ describe('push registration, one handle per paired PC', () => {
         await syncPc('pc-a', 'tok-1', w.deps);
         w.dead.add('handle-1-aaaaaaaaaaaa');
         w.log.length = 0;
-        await expect(syncPc('pc-a', 'tok-1', w.deps)).resolves.toBe('on');
+        await expect(syncPc('pc-a', 'tok-1', w.deps)).resolves.toEqual({ outcome: 'on' });
         expect(w.log[0]).toBe('relay put handle-1-aaaaaaaaaaaa tok-1');
         expect(w.log[1]).toMatch(/^relay register /);
         expect(w.log[2]).toBe('relay put handle-2-aaaaaaaaaaaa tok-1');
@@ -156,7 +162,7 @@ describe('push registration, one handle per paired PC', () => {
     it('keeps the registration for a PC that is away, and replaces it next start without leaving the old handle', async () => {
         const w = world();
         w.pcDown.add('pc-a');
-        await expect(syncPc('pc-a', 'tok-1', w.deps)).resolves.toBe('pc_unreachable');
+        await expect(syncPc('pc-a', 'tok-1', w.deps)).resolves.toEqual({ outcome: 'pc_unreachable' });
         expect(w.vault.get('pc-a')?.handle).toBe('handle-1-aaaaaaaaaaaa');
         w.pcDown.delete('pc-a');
         w.log.length = 0;
@@ -165,10 +171,20 @@ describe('push registration, one handle per paired PC', () => {
         expect(w.pcRecords.get('pc-a')?.handle).toBe('handle-2-aaaaaaaaaaaa');
     });
 
+    it("reports a PC's 422 as refused, with the PC's own words", async () => {
+        const w = world();
+        w.pcRefuses.set('pc-a', 'send_token: must be 32 bytes, base64url');
+        await expect(syncAll(['pc-a', 'pc-b'], 'tok-1', w.deps)).resolves.toEqual({
+            relay: 'ok',
+            refused: [{ pcId: 'pc-a', detail: 'send_token: must be 32 bytes, base64url' }],
+        });
+        expect(w.pcRecords.has('pc-b')).toBe(true);
+    });
+
     it('reports an unreachable relay', async () => {
         const w = world();
         w.setRelayDown(true);
-        await expect(syncAll(['pc-a'], 'tok-1', w.deps)).resolves.toBe('unreachable');
+        await expect(syncAll(['pc-a'], 'tok-1', w.deps)).resolves.toEqual({ relay: 'unreachable', refused: [] });
         expect(w.vault.size).toBe(0);
     });
 
@@ -180,7 +196,7 @@ describe('push registration, one handle per paired PC', () => {
         w.setDeleteDown(false);
         w.setMaxHandles(2);
         w.log.length = 0;
-        await expect(syncPc('pc-c', 'tok-1', w.deps, new Set(['pc-b', 'pc-c']))).resolves.toBe('on');
+        await expect(syncPc('pc-c', 'tok-1', w.deps, new Set(['pc-b', 'pc-c']))).resolves.toEqual({ outcome: 'on' });
         expect(w.log).toContain('relay delete handle-1-aaaaaaaaaaaa');
         expect([...w.vault.keys()].sort()).toEqual(['pc-b', 'pc-c']);
     });
@@ -188,7 +204,7 @@ describe('push registration, one handle per paired PC', () => {
     it("refuses loudly when the relay is full of handles it can't free", async () => {
         const w = world();
         w.setMaxHandles(0);
-        await expect(syncPc('pc-a', 'tok-1', w.deps)).resolves.toBe('relay_refused');
+        await expect(syncPc('pc-a', 'tok-1', w.deps)).resolves.toEqual({ outcome: 'relay_refused' });
         expect(consoleOut.join('\n')).toMatch(/refused this phone's registration for the PC pc-a/);
     });
 

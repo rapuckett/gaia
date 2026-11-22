@@ -36,6 +36,9 @@ const STRING_KEYS = [
     'mobileApp.push.channel.chats',
 ];
 
+/** The approval card's tool labels (`tool.<id>.active`), which an approval's body names its tool with. */
+const TOOL_LABEL_KEY = /^tool\.[a-z0-9_]+\.active$/;
+
 /** The languages the native strings are written in: webui's LOCALES codes. */
 const STRING_LANGUAGES = ['en', 'ar'];
 
@@ -52,5 +55,6 @@ module.exports = {
     KEYCHAIN_GROUP_PLIST_KEY,
     STRING_KEYS,
     STRING_LANGUAGES,
+    TOOL_LABEL_KEY,
     androidResourceName,
 };

@@ -1,6 +1,8 @@
 // Copyright(C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
+import { GaiaApiError } from '@/api/errors';
+
 import type { PushSecrets } from '../../../modules/gaia-push';
 import type { PcPushClient } from './pcPushClient';
 import { RelayRequestError, RelayUnauthorizedError, RelayUnreachableError, type RelayClient } from './relayClient';
@@ -35,9 +37,16 @@ export interface PushDeps {
 
 /**
  * How one PC's registration went: on; the relay unreachable; the relay refusing it (logged; a contract or quota
- * problem the app can't fix by itself); or the PC unreachable. Each is tried again on the next start.
+ * problem the app can't fix by itself); the PC unreachable; or the PC refusing it (a 4xx such as a 422 naming the
+ * bad fields, whose text is `detail`). Each is tried again on the next start.
  */
-export type PcPushOutcome = 'on' | 'relay_unreachable' | 'relay_refused' | 'pc_unreachable';
+export type PcPushOutcome = 'on' | 'relay_unreachable' | 'relay_refused' | 'pc_unreachable' | 'pc_refused';
+
+export interface PcPushResult {
+    outcome: PcPushOutcome;
+    /** The PC's own words, for a `pc_refused`; server text, shown as is. */
+    detail?: string;
+}
 
 class PcCallError extends Error {
     constructor(readonly pcId: string, cause: unknown) {
@@ -115,33 +124,39 @@ async function register(pcId: string, token: string, deps: PushDeps, old: PushSe
  * re-sends the token to the relay otherwise (re-registering on a 401), and re-registers when the PC says push is off.
  * `paired` is every PC this phone is paired with, so a full relay can be freed of unpaired PCs' handles.
  */
-export async function syncPc(pcId: string, token: string, deps: PushDeps, paired: ReadonlySet<string> = new Set([pcId])): Promise<PcPushOutcome> {
+export async function syncPc(pcId: string, token: string, deps: PushDeps, paired: ReadonlySet<string> = new Set([pcId])): Promise<PcPushResult> {
     try {
         const saved = await deps.vault.load(pcId);
         // An empty key is a PC unpaired and paired again before its old handle was deleted.
         if (!saved || !saved.key) {
             await register(pcId, token, deps, saved, paired);
-            return 'on';
+            return { outcome: 'on' };
         }
         try {
             await deps.relay.updateToken(saved, token);
         } catch (error) {
             if (!(error instanceof RelayUnauthorizedError)) throw error;
             await register(pcId, token, deps, null, paired);
-            return 'on';
+            return { outcome: 'on' };
         }
         const status = await onPc(pcId, () => deps.pc(pcId).get());
         if (!status.enabled) await register(pcId, token, deps, saved, paired);
-        return 'on';
+        return { outcome: 'on' };
     } catch (error) {
-        if (error instanceof RelayUnreachableError) return 'relay_unreachable';
+        if (error instanceof RelayUnreachableError) return { outcome: 'relay_unreachable' };
         if (error instanceof RelayRequestError) {
             console.error(`The push relay refused this phone's registration for the PC ${pcId}. It is tried again when the app next opens.`, error);
-            return 'relay_refused';
+            return { outcome: 'relay_refused' };
         }
         if (error instanceof PcCallError) {
-            console.warn(`${error.message} It is tried again when the app next opens.`, error.cause);
-            return 'pc_unreachable';
+            const cause = error.cause;
+            // 401 and 403 are pairing's to handle (unpaired, pending, a tunnel); any other 4xx is this request refused.
+            if (cause instanceof GaiaApiError && cause.status >= 400 && cause.status < 500 && cause.status !== 401 && cause.status !== 403) {
+                console.error(`The paired PC ${pcId} refused this phone's push registration (${cause.status}). It is tried again when the app next opens.`);
+                return { outcome: 'pc_refused', detail: cause.detail };
+            }
+            console.warn(`${error.message} It is tried again when the app next opens.`, cause);
+            return { outcome: 'pc_unreachable' };
         }
         throw error;
     }
@@ -176,17 +191,25 @@ export async function unregisterPc(pcId: string, deps: PushDeps, { pcKnowsPhone 
 
 export type RelayState = 'ok' | 'unreachable';
 
+export interface PushSyncResult {
+    relay: RelayState;
+    /** PCs that refused this phone's registration, with their own words. */
+    refused: { pcId: string; detail: string }[];
+}
+
 /** Every paired PC synced, and the handles of PCs no longer paired (a missed unpair, a queued delete, a reinstall) deleted. */
-export async function syncAll(pairedIds: readonly string[], token: string, deps: PushDeps): Promise<RelayState> {
+export async function syncAll(pairedIds: readonly string[], token: string, deps: PushDeps): Promise<PushSyncResult> {
     const paired = new Set(pairedIds);
     for (const stale of (await deps.vault.pcIds()).filter((id) => !paired.has(id))) {
         await unregisterPc(stale, deps, { pcKnowsPhone: false });
     }
     let relay: RelayState = 'ok';
+    const refused: PushSyncResult['refused'] = [];
     for (const pcId of pairedIds) {
-        const outcome = await syncPc(pcId, token, deps, paired);
+        const { outcome, detail } = await syncPc(pcId, token, deps, paired);
         // A PC that's away isn't the relay's problem; the row shows only what stops push reaching this phone.
         if (outcome === 'relay_unreachable' || outcome === 'relay_refused') relay = 'unreachable';
+        if (outcome === 'pc_refused') refused.push({ pcId, detail: detail ?? '' });
     }
-    return relay;
+    return { relay, refused };
 }

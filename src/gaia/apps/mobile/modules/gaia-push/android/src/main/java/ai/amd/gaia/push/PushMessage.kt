@@ -12,6 +12,8 @@ internal data class PushPayload(
   val chatTitle: String?,
   val summary: String?,
   val label: String?,
+  /** The tool id an approval is for, when the PC sends it; only `[a-z0-9_]` ids are kept, to look up its label. */
+  val tool: String?,
   val ask: String?,
   val route: String,
   val sessionId: String?,
@@ -27,6 +29,7 @@ internal data class PushPayload(
     private val CHAT = Regex("^/chat/$ID$")
     private val APPROVAL = Regex("^/approvals/$ID$")
     private val SESSION = Regex("^$ID$")
+    private val TOOL = Regex("^[a-z0-9_]{1,64}$")
 
     /** Null for anything that isn't a version-1 payload of a known kind. */
     fun parse(bytes: ByteArray): PushPayload? {
@@ -48,6 +51,7 @@ internal data class PushPayload(
         text(params, "chat_title"),
         text(params, "summary"),
         text(params, "label"),
+        text(params, "tool")?.takeIf { TOOL.matches(it) },
         text(params, "ask"),
         safeRoute(root.optString("route").ifEmpty { null }, sessionId),
         sessionId,
@@ -77,32 +81,34 @@ internal data class PushPayload(
   }
 }
 
-/** The title and body a notification shows, worded through `say` (catalog key to text); null for a badge-only payload. */
+/**
+ * The title and body a notification shows, worded through `say` (catalog key to text) and `find` (the same, or null
+ * when the strings lack the key); null for a badge-only payload.
+ */
 internal object PushText {
   /** First-strong isolate: server text keeps its own direction inside either language's sentence. */
-  fun isolate(text: String) = "⁨$text⁩"
+  fun isolate(text: String) = "\u2068$text\u2069"
 
-  fun compose(p: PushPayload, say: (String) -> String): Pair<String, String>? {
+  fun compose(p: PushPayload, say: (String) -> String, find: (String) -> String?): Pair<String, String>? {
     val title: String
     val tap: String
-    when (p.kind) {
-      "approval" -> {
-        val question = p.ask == "question"
-        title = say(if (question) "chatAlert.question" else "chatAlert.needsApproval")
-        tap = if (question) "answer" else "approve"
+    // The detail line: our own words for the tool, else the PC's words as sent (isolated).
+    val detail: String?
+    when {
+      p.kind == "approval" && p.ask == "question" -> {
+        title = say("chatAlert.question"); tap = "answer"; detail = p.summary?.let(::isolate)
       }
-      "finished" -> { title = say("chatAlert.finished"); tap = "read" }
-      "failed" -> { title = say("chatAlert.failed"); tap = "problem" }
-      "needs_you" -> return say("mobileApp.push.title.needsYou") to (p.label?.let(::isolate) ?: say("mobileApp.push.body.needsYou"))
+      p.kind == "approval" -> {
+        title = say("chatAlert.needsApproval"); tap = "approve"
+        detail = p.tool?.let { find("tool.$it.active") } ?: p.label?.let(::isolate)
+      }
+      p.kind == "finished" -> { title = say("chatAlert.finished"); tap = "read"; detail = p.summary?.let(::isolate) }
+      p.kind == "failed" -> { title = say("chatAlert.failed"); tap = "problem"; detail = p.summary?.let(::isolate) }
+      p.kind == "needs_you" -> return say("mobileApp.push.title.needsYou") to (p.label?.let(::isolate) ?: say("mobileApp.push.body.needsYou"))
       else -> return null
     }
-    val inChat = { key: String -> say(key).replace("{chat}", isolate(p.chatTitle ?: "")) }
-    val body = when {
-      p.chatTitle != null && p.summary != null -> "${inChat("mobileApp.push.body.inChat")}\n${isolate(p.summary)}"
-      p.chatTitle != null -> inChat("mobileApp.push.body.$tap")
-      p.summary != null -> isolate(p.summary)
-      else -> say("mobileApp.push.body.${tap}NoChat")
-    }
-    return title to body
+    val chat = p.chatTitle ?: return title to (detail ?: say("mobileApp.push.body.${tap}NoChat"))
+    val inChat = { key: String -> say(key).replace("{chat}", isolate(chat)) }
+    return title to if (detail != null) "${inChat("mobileApp.push.body.inChat")}\n$detail" else inChat("mobileApp.push.body.$tap")
   }
 }

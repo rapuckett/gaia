@@ -4066,6 +4066,7 @@ const messages: Messages = {
     'mobileApp.push.row.blocked': 'الإشعارات متوقفة لـ GAIA في إعدادات هذا الهاتف.',
     'mobileApp.push.row.openSettings': 'فتح الإعدادات',
     'mobileApp.push.row.unreachable': 'لا تستطيع الإشعارات الوصول إلى هذا الهاتف الآن. سيواصل GAIA المحاولة.',
+    'mobileApp.push.row.pcRefused': 'لم يقبل الكمبيوتر لديك إعدادات الإشعارات لهذا الهاتف. سيحاول GAIA مجددًا.',
     'mobileApp.push.row.unavailable': 'لا يستطيع هذا الإصدار من تطبيق GAIA تلقي الإشعارات.',
     'mobileApp.push.generic.title': 'GAIA',
     'mobileApp.push.generic.body': 'هناك جديد من GAIA على الكمبيوتر لديك.',

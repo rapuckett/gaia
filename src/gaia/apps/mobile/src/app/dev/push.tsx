@@ -12,18 +12,27 @@ import { Screen, Stack, Text, UIProvider } from '@/ui';
 
 const STATES: PushRowState[] = ['not_asked', 'on', 'blocked', 'unreachable', 'unavailable'];
 
-/** Push's phone screens on no PC: `?only=explainer` opens the explainer sheet, `?only=<row state>` shows one Settings row, none shows every row state. */
+/** Push's phone screens on no PC: `?only=explainer` opens the explainer sheet, `?only=<row state>` (or `refused`) shows one Settings row, none shows every row state. */
 export default function PushGalleryRoute() {
     const { only } = useLocalSearchParams<{ only?: string }>();
     const [last, setLast] = useState('none');
     if (!devGalleryEnabled()) return <Redirect href="/" />;
     const shown = STATES.filter((s) => !only || s === only);
+    const refused = only === 'refused';
     return (
         <UIProvider>
             <Screen scroll>
                 <Stack gap="lg" padding="lg">
                     <Text role="caption" tone="muted">{`Last tap: ${last}`}</Text>
-                    {only === 'explainer'
+                    {refused ? (
+                        <PushSettingsRowView
+                            state="on"
+                            refusal="send_token: must be 32 bytes of base64url"
+                            onTurnOn={() => setLast('turn on')}
+                            onOpenSettings={() => setLast('open settings')}
+                        />
+                    ) : null}
+                    {only === 'explainer' || refused
                         ? null
                         : shown.map((state) => (
                               <Stack key={state} gap="xs">

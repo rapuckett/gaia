@@ -17,11 +17,14 @@ interface PushState {
     permission: PushPermission | null;
     /** The last registration's answer from the relay; null before one. */
     relay: RelayState | null;
+    /** A paired PC's own words for refusing this phone's registration (a 422 naming bad fields); null when none did. */
+    refusal: string | null;
     /** Whether the explainer has shown on its own; null until read. */
     offered: boolean | null;
     explainerOpen: boolean;
     setPermission(permission: PushPermission): void;
     setRelay(relay: RelayState): void;
+    setRefusal(refusal: string | null): void;
     loadOffered(): Promise<void>;
     /** Shows the explainer; `automatic` marks the one automatic showing as used. */
     openExplainer(automatic: boolean): void;
@@ -31,10 +34,12 @@ interface PushState {
 export const usePushStore = create<PushState>((set) => ({
     permission: null,
     relay: null,
+    refusal: null,
     offered: null,
     explainerOpen: false,
     setPermission: (permission) => set({ permission }),
     setRelay: (relay) => set({ relay }),
+    setRefusal: (refusal) => set({ refusal }),
     loadOffered: async () => set({ offered: (await AsyncStorage.getItem(OFFERED_KEY)) === '1' }),
     openExplainer: (automatic) => {
         set(automatic ? { explainerOpen: true, offered: true } : { explainerOpen: true });

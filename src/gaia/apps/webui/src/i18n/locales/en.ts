@@ -4067,6 +4067,7 @@ export const enMessages = {
     'mobileApp.push.row.blocked': "Notifications are off for GAIA in this phone's settings.",
     'mobileApp.push.row.openSettings': 'Open Settings',
     'mobileApp.push.row.unreachable': "Notifications can't reach this phone right now. GAIA will keep trying.",
+    'mobileApp.push.row.pcRefused': "Your PC didn't accept this phone's notification settings. GAIA will try again.",
     'mobileApp.push.row.unavailable': "This build of the GAIA app can't receive notifications.",
     'mobileApp.push.generic.title': 'GAIA',
     'mobileApp.push.generic.body': "There's something new from GAIA on your PC.",

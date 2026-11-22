@@ -70,7 +70,9 @@ export function syncPush(): Promise<void> {
             if (!built) return;
             const { data: token } = await Notifications.getDevicePushTokenAsync();
             if (typeof token !== 'string' || !token) throw new Error('The phone gave GAIA no push token. Turn notifications off and on again in Settings.');
-            usePushStore.getState().setRelay(await syncAll(built.pairedIds, token, built.deps));
+            const result = await syncAll(built.pairedIds, token, built.deps);
+            usePushStore.getState().setRelay(result.relay);
+            usePushStore.getState().setRefusal(result.refused[0]?.detail ?? null);
         })
         .catch((error: unknown) => {
             console.error('Registering this phone for push notifications failed', error);

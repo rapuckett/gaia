@@ -4,7 +4,7 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import { getLocale } from '@webui/i18n/registry';
 
-const { PUSH_LOC_KEY, STRING_KEYS, STRING_LANGUAGES, androidResourceName } = require('../plugins/push/constants');
+const { PUSH_LOC_KEY, STRING_KEYS, STRING_LANGUAGES, TOOL_LABEL_KEY, androidResourceName } = require('../plugins/push/constants');
 const { androidStringsXml, iosStringsFile, pushStrings } = require('../plugins/push/strings');
 
 describe('the notification strings generated at prebuild', () => {
@@ -12,8 +12,12 @@ describe('the notification strings generated at prebuild', () => {
         for (const lang of STRING_LANGUAGES as string[]) {
             const messages = getLocale(lang).messages as Record<string, string>;
             const strings = pushStrings(lang) as Record<string, string>;
-            expect(Object.keys(strings)).toEqual(STRING_KEYS);
-            for (const key of STRING_KEYS as string[]) expect(strings[key]).toBe(messages[key]);
+            const keys = Object.keys(strings);
+            expect(keys.slice(0, STRING_KEYS.length)).toEqual(STRING_KEYS);
+            const tools = keys.slice(STRING_KEYS.length);
+            expect(tools.every((k) => TOOL_LABEL_KEY.test(k))).toBe(true);
+            expect(tools).toContain('tool.write_file.active');
+            for (const key of keys) expect(strings[key]).toBe(messages[key]);
         }
     });
 

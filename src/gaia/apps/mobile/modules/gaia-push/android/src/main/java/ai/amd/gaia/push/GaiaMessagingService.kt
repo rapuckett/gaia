@@ -57,7 +57,7 @@ class GaiaMessagingService : FirebaseMessagingService() {
       if (payload.badge == 0) NotificationManagerCompat.from(this).cancelAll()
       return
     }
-    val text = PushText.compose(payload, ::say) ?: return
+    val text = PushText.compose(payload, ::say, ::find) ?: return
     val channel = if (payload.kind == "approval" || payload.kind == "needs_you") NEEDS_YOU else CHATS
     post(channel, payload.sessionId?.let { "chat:$it" } ?: GENERIC_TAG, text.first, text.second, payload.route, payload.badge)
   }
@@ -102,11 +102,13 @@ class GaiaMessagingService : FirebaseMessagingService() {
   }
 
   /** A catalog key's text from the strings plugins/push/withPushAndroid.js generates; a missing one is a build error made loud. */
-  private fun say(key: String): String {
-    val name = "gaia_push_" + key.replace('.', '_')
-    val id = resources.getIdentifier(name, "string", packageName)
-    if (id == 0) throw IllegalStateException("The string $name is missing; plugins/push/withPushAndroid.js generates it from the webui catalogs.")
-    return getString(id)
+  private fun say(key: String): String =
+    find(key) ?: throw IllegalStateException("The string for $key is missing; plugins/push/withPushAndroid.js generates it from the webui catalogs.")
+
+  /** The key's text, or null when this build has no string for it (a tool newer than the build). */
+  private fun find(key: String): String? {
+    val id = resources.getIdentifier("gaia_push_" + key.replace('.', '_'), "string", packageName)
+    return if (id == 0) null else getString(id)
   }
 
   private companion object {

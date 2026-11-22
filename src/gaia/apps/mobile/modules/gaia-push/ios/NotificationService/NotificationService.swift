@@ -40,7 +40,7 @@ final class NotificationService: UNNotificationServiceExtension {
     guard let next = content.mutableCopy() as? UNMutableNotificationContent else { return nil }
     if let badge = payload.badge { next.badge = NSNumber(value: badge) }
     let strings = Strings(language: PushKeychain.language())
-    if let text = PushText.compose(payload, strings.say) {
+    if let text = PushText.compose(payload, strings.say, strings.find) {
       next.title = text.title
       next.body = text.body
     }
@@ -69,5 +69,12 @@ private struct Strings {
 
   func say(_ key: String) -> String {
     bundle.localizedString(forKey: key, value: nil, table: nil)
+  }
+
+  /// The key's text, or nil when the strings don't have it (a tool newer than this build).
+  func find(_ key: String) -> String? {
+    let missing = "\u{0}"
+    let text = bundle.localizedString(forKey: key, value: missing, table: nil)
+    return text == missing ? nil : text
   }
 }

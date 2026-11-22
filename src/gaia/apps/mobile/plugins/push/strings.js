@@ -7,7 +7,7 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 
-const { PUSH_LOC_KEY, STRING_KEYS, androidResourceName } = require('./constants');
+const { PUSH_LOC_KEY, STRING_KEYS, TOOL_LABEL_KEY, androidResourceName } = require('./constants');
 
 const LOCALES_DIR = path.resolve(__dirname, '../../../webui/src/i18n/locales');
 
@@ -31,11 +31,13 @@ function loadCatalog(lang) {
     return locale.messages;
 }
 
-/** The notification strings in `lang`, by catalog key; a key missing from the catalog fails the build. */
+/** The notification strings in `lang`, by catalog key, then every tool label; a key missing from the catalog fails the build. */
 function pushStrings(lang) {
     const messages = loadCatalog(lang);
+    // The English catalog names the tool labels, so a label missing from another language fails too.
+    const toolKeys = Object.keys(lang === 'en' ? messages : loadCatalog('en')).filter((k) => TOOL_LABEL_KEY.test(k)).sort();
     const out = {};
-    for (const key of STRING_KEYS) {
+    for (const key of [...STRING_KEYS, ...toolKeys]) {
         const value = messages[key];
         if (typeof value !== 'string' || value === '') throw new Error(`withPush: the ${lang} catalog has no "${key}", which the notification code needs.`);
         out[key] = value;

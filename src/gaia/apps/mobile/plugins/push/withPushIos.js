@@ -134,6 +134,9 @@ function addExtensionTarget(project, { bundleId, appTarget, version, buildNumber
     objects.PBXVariantGroup = objects.PBXVariantGroup ?? {};
 
     const appSettings = buildSettingsOf(project, appTarget);
+    if (!appSettings.IPHONEOS_DEPLOYMENT_TARGET) {
+        throw new Error(`withPush: the app target "${appTarget}" has no IPHONEOS_DEPLOYMENT_TARGET for the notification extension to match.`);
+    }
     const target = project.addTarget(NSE_TARGET, 'app_extension', NSE_TARGET, `${bundleId}${NSE_BUNDLE_SUFFIX}`);
     const sources = project.addBuildPhase([], 'PBXSourcesBuildPhase', 'Sources', target.uuid).buildPhase;
     const resources = project.addBuildPhase([], 'PBXResourcesBuildPhase', 'Resources', target.uuid).buildPhase;
@@ -183,7 +186,7 @@ function addExtensionTarget(project, { bundleId, appTarget, version, buildNumber
             SWIFT_VERSION: '5.0',
             CLANG_ENABLE_MODULES: 'YES',
             TARGETED_DEVICE_FAMILY: '"1,2"',
-            IPHONEOS_DEPLOYMENT_TARGET: appSettings.IPHONEOS_DEPLOYMENT_TARGET ?? '16.4',
+            IPHONEOS_DEPLOYMENT_TARGET: appSettings.IPHONEOS_DEPLOYMENT_TARGET,
             MARKETING_VERSION: version,
             CURRENT_PROJECT_VERSION: buildNumber,
             CODE_SIGN_STYLE: appSettings.CODE_SIGN_STYLE ?? 'Automatic',

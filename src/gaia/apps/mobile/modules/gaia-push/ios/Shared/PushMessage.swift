@@ -10,6 +10,8 @@ struct PushPayload {
   let chatTitle: String?
   let summary: String?
   let label: String?
+  /// The tool id an approval is for, when the PC sends it; only `[a-z0-9_]` ids are kept, to look up its label.
+  let tool: String?
   let ask: String?
   let route: String
   let sessionId: String?
@@ -42,6 +44,7 @@ struct PushPayload {
     chatTitle = text(params["chat_title"])
     summary = text(params["summary"])
     label = text(params["label"])
+    tool = text(params["tool"]).flatMap { $0.range(of: "^[a-z0-9_]{1,64}$", options: .regularExpression) != nil ? $0 : nil }
     ask = text(params["ask"])
     sessionId = text(root["session_id"])
     approvalId = text(root["approval_id"])
@@ -75,35 +78,41 @@ struct PushPayload {
 }
 
 /// The title and body a notification shows for a payload, in one language; nil for a badge-only payload.
+/// `say` gives a catalog key's text; `find` gives it only when the strings have that key.
 enum PushText {
   /// First-strong isolate: server text keeps its own direction inside either language's sentence.
   static func isolate(_ text: String) -> String { "\u{2068}\(text)\u{2069}" }
 
-  static func compose(_ p: PushPayload, _ say: (String) -> String) -> (title: String, body: String)? {
+  static func compose(_ p: PushPayload, _ say: (String) -> String, _ find: (String) -> String?) -> (title: String, body: String)? {
     let title: String
     let tap: String
+    // The detail line: our own words for the tool, else the PC's words as sent (isolated).
+    let detail: String?
     switch p.kind {
+    case "approval" where p.ask == "question":
+      title = say("chatAlert.question")
+      tap = "answer"
+      detail = p.summary.map(isolate)
     case "approval":
-      let question = p.ask == "question"
-      title = say(question ? "chatAlert.question" : "chatAlert.needsApproval")
-      tap = question ? "answer" : "approve"
+      title = say("chatAlert.needsApproval")
+      tap = "approve"
+      detail = p.tool.flatMap { find("tool.\($0).active") } ?? p.label.map(isolate)
     case "finished":
       title = say("chatAlert.finished")
       tap = "read"
+      detail = p.summary.map(isolate)
     case "failed":
       title = say("chatAlert.failed")
       tap = "problem"
+      detail = p.summary.map(isolate)
     case "needs_you":
       return (say("mobileApp.push.title.needsYou"), p.label.map(isolate) ?? say("mobileApp.push.body.needsYou"))
     default:
       return nil
     }
-    let inChat = { (key: String) in say(key).replacingOccurrences(of: "{chat}", with: isolate(p.chatTitle ?? "")) }
-    switch (p.chatTitle, p.summary) {
-    case (.some, .some(let summary)): return (title, "\(inChat("mobileApp.push.body.inChat"))\n\(isolate(summary))")
-    case (.some, .none): return (title, inChat("mobileApp.push.body.\(tap)"))
-    case (.none, .some(let summary)): return (title, isolate(summary))
-    case (.none, .none): return (title, say("mobileApp.push.body.\(tap)NoChat"))
-    }
+    guard let chat = p.chatTitle else { return (title, detail ?? say("mobileApp.push.body.\(tap)NoChat")) }
+    func inChat(_ key: String) -> String { say(key).replacingOccurrences(of: "{chat}", with: isolate(chat)) }
+    if let detail { return (title, "\(inChat("mobileApp.push.body.inChat"))\n\(detail)") }
+    return (title, inChat("mobileApp.push.body.\(tap)"))
   }
 }
