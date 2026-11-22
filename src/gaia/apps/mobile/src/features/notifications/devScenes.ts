@@ -131,7 +131,7 @@ export const NOTIFICATION_SCENES: Record<string, NotificationScene> = {
     // SD: the gate's server-down state with the app banner mounted: one card, never the gate's notice beside it.
     'setup-server-down-banner-own': { view: 'gate', ambient: true, data: { ...check({ stage: 'server', initialized: true } as Partial<SetupCheck>), ...status({ lemonade_running: false, start_command: null, start_instruction: null }) } },
     'setup-server-down-banner-hung': { view: 'gate', ambient: true, data: { ...check({ stage: 'server', initialized: true } as Partial<SetupCheck>), ...status({ lemonade_running: false, lemonade_error: 'The model server timed out.', start_command: START_COMMAND }) } },
-    'setup-server-down-banner-setup': { view: 'gate', ambient: true, data: { ...check({ stage: 'server', initialized: false } as Partial<SetupCheck>), ...status({ lemonade_running: false, start_command: null, start_instruction: 'Run gaia init to install the model server.' }) } },
+    'setup-server-down-banner-setup': { view: 'gate', ambient: true, data: { ...check({ stage: 'server', initialized: true } as Partial<SetupCheck>), ...status({ lemonade_running: false, start_command: null, start_instruction: 'Run gaia init to install the model server.' }) } },
     'setup-server-down-banner-stopped': { view: 'gate', ambient: true, data: { ...check({ stage: 'server', initialized: true } as Partial<SetupCheck>), ...status({ lemonade_running: false, start_command: START_COMMAND }) } },
     'setup-server-down-list-unread': { view: 'gate', data: check({ stage: 'server', initialized: true, model_list_unread: true } as Partial<SetupCheck>) },
 };

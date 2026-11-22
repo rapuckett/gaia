@@ -6,13 +6,12 @@ import { useState } from 'react';
 import { formatSize, ltrIn } from '@webui/components/setup/format';
 
 import { useActiveModel, useGpuMemory } from '@/data';
-import { useLocaleCode, useT } from '@/i18n/useT';
+import { describeHttpFailure, useLocaleCode, useT } from '@/i18n/useT';
 import { ChoiceList, Disclosure, Notice, Row, Stack, Text } from '@/ui';
 
 import { defaultTarget } from '../../../setup/steps/gpu';
 import { SettingsAnchor } from '../../targets';
 import { GpuChange } from './GpuChange';
-import { errorText } from './modelText';
 
 const KEEP = 'keep';
 
@@ -26,6 +25,7 @@ export function GpuMemory() {
     const chatInCloud = !!useActiveModel().data?.remote;
     const status = read.data;
     const failed = read.error;
+    const failureText = failed ? describeHttpFailure(failed, t) : null;
 
     if (!status?.applies && !failed) return null;
     const open = picked ?? (!!status?.pending || !!failed);
@@ -41,7 +41,7 @@ export function GpuMemory() {
         <SettingsAnchor name="gpu-memory" onTarget={() => setPicked(true)}>
             <Disclosure title={t('gpu.settingsTitle')} open={open} onToggle={() => setPicked(!open)} headerTestID="gpu-memory-toggle" testID="gpu-memory">
                 <Stack gap="sm">
-                    {failed ? <Notice tone="danger" message={errorText(failed, t)} /> : null}
+                    {failureText ? <Notice tone="danger" message={failureText.text} detail={failureText.detail} testID="gpu-memory-error" /> : null}
                     {status?.applies && status.total_gb != null && status.gpu_gb != null ? (
                         <>
                             <Text role="caption" tone="secondary">{t('mobileApp.gpu.body', { total: gb(status.total_gb), gpu: gb(status.gpu_gb) })}</Text>

@@ -365,6 +365,8 @@ export const SETTINGS_SCENES: Record<string, SettingsScene> = {
     },
     'gpu-pending': { section: 'model', target: 'gpu-memory', gpuMemory: PENDING },
     'gpu-read-error': { section: 'model', target: 'gpu-memory', gpuMemory: READ_ERROR },
+    // The PC's raw exception text goes on a muted detail line under a translated sentence.
+    'gpu-read-error-raw': { section: 'model', target: 'gpu-memory', gpuMemory: new GaiaApiError(500, "HTTPConnectionPool(host='127.0.0.1', port=9): Max retries exceeded with url: /api/v1/system-info. Finish installing it in setup, then try again.") },
     'gpu-read-error-setup': { section: 'setup', gpuMemory: READ_ERROR },
     // SET-MODEL-12: a cloud provider with no connected key shows Reconnect.
     'model-key-disconnected': keyFields({ configured: false, key_source: 'stored', key_hint: '4f2a' }),
