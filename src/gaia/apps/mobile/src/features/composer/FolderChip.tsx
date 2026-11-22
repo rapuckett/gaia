@@ -9,8 +9,8 @@ import type { StartScreen } from '@webui/types';
 import { useSessionEnvironment } from '@/data';
 import { FolderPicker } from '@/features/chat/session-panel/FolderPicker';
 import { useT } from '@/i18n/useT';
-import { Icon, IconButton, Ltr, Row, Sheet, Stack, Surface, Text, useTheme } from '@/ui';
-import { Folder, FolderPlus, X } from '@/ui/icons';
+import { Chip, Icon, Ltr, Pressable, Row, Sheet, Stack, Text, useTheme } from '@/ui';
+import { Folder, Plus, X } from '@/ui/icons';
 
 import { ChipMeasure, useChipCollapsed } from './ChipFitContext';
 import { ControlChip } from './ControlChip';
@@ -22,7 +22,7 @@ import { useNextChatFolder } from './nextChatFolder';
  */
 export function FolderChip({ folder, initialPicking = false }: { folder: StartScreen['working_folder'] | undefined; initialPicking?: boolean }) {
     const t = useT();
-    const { space } = useTheme();
+    const { colors, radius, space } = useTheme();
     const iconOnly = useChipCollapsed('folder');
     const picked = useNextChatFolder((s) => s.path);
     const setPicked = useNextChatFolder((s) => s.set);
@@ -55,26 +55,35 @@ export function FolderChip({ folder, initialPicking = false }: { folder: StartSc
             <Row gap="sm" wrap>
                 {named ? chip : null}
                 {picked ? (
-                    <Surface tone="accent" border="accent" radius="full" testID="folder-picked">
-                        <View style={{ paddingStart: space.sm, flexDirection: 'row', alignItems: 'center', gap: space.xs }}>
+                    <Pressable onPress={() => setPicked(null)} accessibilityLabel={t('folderChip.remove', { name: pickedName })} testID="folder-picked-clear">
+                        <View
+                            testID="folder-picked"
+                            style={{
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                alignSelf: 'flex-start',
+                                maxWidth: '100%',
+                                minHeight: 32,
+                                gap: space.xs,
+                                paddingStart: 12,
+                                paddingEnd: 8,
+                                borderRadius: radius.full,
+                                borderWidth: 1,
+                                borderColor: colors.accentSolid,
+                                backgroundColor: colors.accentDim,
+                            }}
+                        >
                             <Icon icon={Folder} size="sm" tone="accent" />
                             <View style={{ flexShrink: 1 }}>
                                 <Text role="label" numberOfLines={1} compact dir="auto">
                                     {pickedName}
                                 </Text>
                             </View>
-                            <IconButton icon={X} size="sm" label={t('folderChip.remove', { name: pickedName })} onPress={() => setPicked(null)} testID="folder-picked-clear" />
+                            <Icon icon={X} size="sm" tone="muted" />
                         </View>
-                    </Surface>
+                    </Pressable>
                 ) : (
-                    <ControlChip
-                        label={t('folderChip.add')}
-                        icon={FolderPlus}
-                        chip="folder"
-                        onPress={() => setPicking(true)}
-                        accessibilityHint={t('folderChip.addHint')}
-                        testID="folder-add"
-                    />
+                    <Chip label={t('folderChip.add')} icon={Plus} onPress={() => setPicking(true)} testID="folder-add" />
                 )}
             </Row>
             {picked ? (
