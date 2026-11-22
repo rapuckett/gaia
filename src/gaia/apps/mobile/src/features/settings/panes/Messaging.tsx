@@ -507,7 +507,7 @@ function StatusView({ s }: { s: DiscordStatus }) {
                         id="disconnect"
                         label={t('settings.messaging.disconnect')}
                         icon={Trash2}
-                        note={`${t('settings.messaging.disconnectTitle')} ${t('settings.messaging.disconnectBody')}`}
+                        note={t('settings.messaging.disconnectBody')}
                     />
                 ) : (
                     <Stack gap="md">
