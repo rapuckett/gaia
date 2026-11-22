@@ -4,17 +4,37 @@
 /**
  * GAIA push relay.
  *
+ *   POST   /v1/handles                register a device token, returns {handle, secret}
+ *   PUT    /v1/handles/{handle}       rotate the token                (Bearer secret)
+ *   DELETE /v1/handles/{handle}       delete the handle               (Bearer secret)
  *   GET    /v1/health                 liveness, no auth
+ *
+ * A daily cron drops idle handles and ended rate windows.
  */
 
+import { cleanup, deleteHandle, registerHandle, rotateToken } from "./handles";
 import { errorResponse, HttpError, json } from "./http";
 import type { Env } from "./types";
 
-async function route(request: Request, _env: Env): Promise<Response> {
+const methodNotAllowed = () => new HttpError(405, "method_not_allowed");
+
+async function route(request: Request, env: Env): Promise<Response> {
   const { pathname } = new URL(request.url);
+  const { method } = request;
+
   if (pathname === "/v1/health") {
-    if (request.method !== "GET") throw new HttpError(405, "method_not_allowed");
+    if (method !== "GET") throw methodNotAllowed();
     return json({ ok: true });
+  }
+  if (pathname === "/v1/handles") {
+    if (method !== "POST") throw methodNotAllowed();
+    return registerHandle(request, env);
+  }
+  const m = /^\/v1\/handles\/([^/]+)$/.exec(pathname);
+  if (m) {
+    if (method === "PUT") return rotateToken(request, env, m[1]);
+    if (method === "DELETE") return deleteHandle(request, env, m[1]);
+    throw methodNotAllowed();
   }
   throw new HttpError(404, "not_found");
 }
@@ -28,5 +48,10 @@ export default {
       console.error("unhandled", err instanceof Error ? err.name : typeof err);
       return json({ error: "internal" }, 500);
     }
+  },
+
+  async scheduled(controller: ScheduledController, env: Env): Promise<void> {
+    const removed = await cleanup(env, controller.scheduledTime);
+    console.log(`cleanup handles=${removed.handles} counters=${removed.counters}`);
   },
 } satisfies ExportedHandler<Env>;
