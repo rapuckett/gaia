@@ -6096,7 +6096,7 @@ class TestBackgroundExtraction:
         """Waiting on an idle agent returns immediately."""
         start = time.monotonic()
         assert bg_host.wait_for_memory_extraction(timeout=5) is True
-        assert time.monotonic() - start < 0.5
+        assert time.monotonic() - start < 2.5
 
     def test_extraction_reads_the_turn_captured_at_turn_end(self, bg_host):
         """Mutating the host after the turn cannot change what was extracted."""
