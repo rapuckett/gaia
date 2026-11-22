@@ -35,6 +35,9 @@ func TestMain(m *testing.M) {
 	ensureEmbedded = func(context.Context) error {
 		return errors.New("test: no daemon")
 	}
+	callDaemon = func(context.Context, string, string, []byte, bool, string, string) ([]byte, error) {
+		return nil, errors.New("test: a test reached the daemon")
+	}
 	code := m.Run()
 	os.RemoveAll(home)
 	os.Exit(code)

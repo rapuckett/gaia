@@ -5,11 +5,14 @@ package lemonade
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/amd/gaia/tui/internal/daemon"
 )
 
 func TestConfigureKeepsKeyOutOfInstallAndDiscoversModels(t *testing.T) {
@@ -173,79 +176,114 @@ func TestLocalCatalogExcludesCloudAndNonChat(t *testing.T) {
 	}
 }
 
-func TestAMDGatewayCustomHeaderAndRuntimeKey(t *testing.T) {
-	var installed, authenticated, cleared bool
+// The gateway's address and key change inside the daemon, under the
+// machine-wide gateway key lock, never by the TUI calling Lemonade itself.
+func TestAMDGatewayConfigureGoesThroughTheDaemon(t *testing.T) {
+	var cleared bool
 	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var body map[string]any
-		if r.Method == http.MethodPost {
-			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-				t.Error(err)
-				w.WriteHeader(http.StatusBadRequest)
-				return
-			}
-		}
-		switch r.URL.Path {
-		case "/api/v1/install":
-			installed = body["provider"] == "amd" && body["base_url"] == "https://gateway.example/v1" && body["auth_header_name"] == "api-key" && body["auth_header_prefix"] == "" && body["wire_format"] == "openai" && body["api_key"] == nil
-		case "/api/v1/cloud/auth":
-			authenticated = body["provider"] == "amd" && body["api_key"] == "test-key"
-		case "/api/v1/models":
+		switch r.Method + " " + r.URL.Path {
+		case "GET /api/v1/models":
 			fmt.Fprint(w, `{"data":[{"id":"amd.gemma","recipe":"cloud","cloud_provider":"amd"},{"id":"fireworks.gemma","recipe":"cloud","cloud_provider":"fireworks"}]}`)
 			return
-		case "/api/v1/cloud/auth/amd":
-			cleared = r.Method == http.MethodDelete
-		case "/api/v1/system-info":
+		case "DELETE /api/v1/cloud/auth/amd":
+			cleared = true
 		default:
-			t.Errorf("unexpected path: %s", r.URL.Path)
+			t.Errorf("the gateway change reached Lemonade directly: %s %s", r.Method, r.URL.Path)
 		}
 		fmt.Fprint(w, `{}`)
 	}))
 	defer s.Close()
+	calls := stubDaemonCalls(t, func(daemonCall) ([]byte, error) {
+		return []byte(`{"configured":true,"models_discovered":true}`), nil
+	})
 	c := New(s.URL)
 	if err := c.Configure(context.Background(), Provider{Name: "amd", BaseURL: "https://gateway.example/v1", Header: "api-key"}, "test-key"); err != nil {
 		t.Fatal(err)
+	}
+	if len(*calls) != 1 {
+		t.Fatalf("daemon calls = %+v, want one", *calls)
+	}
+	call := (*calls)[0]
+	if call.method != http.MethodPost || call.path != daemon.APIPrefix+"/gateway/configure" || !call.start {
+		t.Fatalf("daemon call = %s %s start=%v", call.method, call.path, call.start)
+	}
+	var body map[string]string
+	if err := json.Unmarshal(call.body, &body); err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]string{"base_url": "https://gateway.example/v1", "auth_header_name": "api-key", "auth_header_prefix": "", "api_key": "test-key", "lemonade_url": c.BaseURL}
+	if fmt.Sprint(body) != fmt.Sprint(want) {
+		t.Fatalf("daemon body = %v, want %v", body, want)
 	}
 	models, err := c.Models(context.Background(), "amd")
 	if err != nil || len(models) != 1 || models[0].ID != "amd.gemma" {
 		t.Fatalf("AMD discovery failed: %v", err)
 	}
-	if err := c.Clear(context.Background(), "amd"); err != nil {
-		t.Fatal(err)
-	}
-	if !installed || !authenticated || !cleared {
-		t.Fatal("gateway configuration or key lifecycle failed")
+	if err := c.Clear(context.Background(), "amd"); err != nil || !cleared {
+		t.Fatalf("clearing the key failed: %v", err)
 	}
 }
 
-// Lemonade keeps a key across an install, so a new gateway address must drop
-// the key it holds for the old one first, or that key goes to the new host.
-func TestConfiguringANewGatewayAddressDropsTheOldKeyFirst(t *testing.T) {
-	for _, moved := range []bool{true, false} {
-		var calls []string
-		s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			calls = append(calls, r.Method+" "+strings.TrimPrefix(r.URL.Path, "/api/v1"))
-			if r.URL.Path == "/api/v1/system-info" {
-				fmt.Fprint(w, `{"cloud":{"providers":[{"name":"amd","base_url":"https://old.example/v1/","runtime_key_set":true}]}}`)
-				return
+// A window reading another Lemonade than the daemon's is refused by the daemon,
+// and says so with the app's remedy.
+func TestAMDGatewayConfigureOnAnotherLemonadeIsRefused(t *testing.T) {
+	const served = "http://localhost:13305/api/v1"
+	stubDaemonCalls(t, func(call daemonCall) ([]byte, error) {
+		var body map[string]string
+		if err := json.Unmarshal(call.body, &body); err != nil {
+			return nil, err
+		}
+		if body["lemonade_url"] == served {
+			return []byte(`{"configured":true}`), nil
+		}
+		return nil, &daemon.StatusError{Status: 409, Detail: "This window talks to a different model server (" +
+			body["lemonade_url"] + ") than GAIA's background service (" + served + "). Restart GAIA, then try again."}
+	})
+	amd := Provider{Name: "amd", BaseURL: "https://gateway.example/v1", Header: "api-key"}
+	if err := New(served).Configure(context.Background(), amd, ""); err != nil {
+		t.Fatalf("the daemon's own Lemonade was refused: %v", err)
+	}
+	err := New("http://localhost:13306/api/v1").Configure(context.Background(), amd, "test-key")
+	if err == nil || !strings.Contains(err.Error(), "localhost:13306") || !strings.Contains(err.Error(), "Restart GAIA") ||
+		strings.Contains(err.Error(), "`") || strings.Contains(err.Error(), "gaia ") {
+		t.Fatalf("err = %v, want the mismatch named with the app's remedy and no command", err)
+	}
+}
+
+// Without the daemon the gateway is not changed at all, and the message names
+// the app's own remedy, never a command or the wrapped error's remedy.
+func TestAMDGatewayConfigureFailsLoudlyWithoutTheDaemon(t *testing.T) {
+	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Errorf("nothing may reach Lemonade, got %s %s", r.Method, r.URL.Path)
+	}))
+	defer s.Close()
+	amd := Provider{Name: "amd", BaseURL: "https://gateway.example/v1", Header: "api-key"}
+	for _, tc := range []struct {
+		name  string
+		err   error
+		brief string
+	}{
+		{"not running", fmt.Errorf("could not reach the GAIA daemon: %w", &daemon.NotRunningError{Path: "instance.json"}), "didn't answer"},
+		{"too old", &daemon.RouteMissingError{Op: "change the AMD LLM Gateway", Path: "/daemon/v1/gateway/configure"}, "out of date"},
+	} {
+		stubDaemonCalls(t, func(daemonCall) ([]byte, error) { return nil, tc.err })
+		err := New(s.URL).Configure(context.Background(), amd, "test-key")
+		var service *GatewayServiceError
+		if !errors.As(err, &service) || !errors.Is(err, tc.err) {
+			t.Fatalf("%s: err = %v, want a GatewayServiceError wrapping the cause", tc.name, err)
+		}
+		for _, text := range []string{err.Error(), daemon.Brief(err)} {
+			if !strings.Contains(text, tc.brief) || strings.Contains(text, "`") || strings.Contains(text, "gaia ") {
+				t.Errorf("%s: %q must say %q and name no command", tc.name, text, tc.brief)
 			}
-			fmt.Fprint(w, `{}`)
-		}))
-		url := "https://old.example/v1"
-		if moved {
-			url = "https://new.example/v1"
 		}
-		err := New(s.URL).Configure(context.Background(), Provider{Name: "amd", BaseURL: url, Header: "api-key"}, "")
-		s.Close()
-		if err != nil {
-			t.Fatal(err)
-		}
-		want := "GET /system-info,POST /install"
-		if moved {
-			want = "GET /system-info,DELETE /cloud/auth/amd,POST /install"
-		}
-		if got := strings.Join(calls, ","); got != want {
-			t.Errorf("moved=%v: calls %s, want %s", moved, got, want)
-		}
+	}
+	stubDaemonCalls(t, func(daemonCall) ([]byte, error) {
+		return nil, &daemon.StatusError{Status: 409, Detail: "Another GAIA process is changing the gateway key"}
+	})
+	err := New(s.URL).Configure(context.Background(), amd, "test-key")
+	if err == nil || !strings.Contains(err.Error(), "Another GAIA process is changing the gateway key") {
+		t.Fatalf("err = %v, want the daemon's own refusal", err)
 	}
 }
 

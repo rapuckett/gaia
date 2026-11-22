@@ -30,6 +30,7 @@ from enum import Enum
 from pathlib import Path
 from threading import Event, Thread
 from typing import (
+    TYPE_CHECKING,
     Any,
     Callable,
     Dict,
@@ -42,11 +43,7 @@ from typing import (
     Union,
 )
 
-import openai  # For exception types
 import requests
-
-# Import OpenAI client for internal use
-from openai import OpenAI
 
 from gaia.env import child_env, load_env
 from gaia.home import gaia_home
@@ -113,6 +110,33 @@ log = get_logger(__name__)
 
 # Load environment variables from .env file
 load_env()
+
+if TYPE_CHECKING:
+    import openai
+
+
+def __getattr__(name: str):
+    # The OpenAI SDK costs ~0.4 s to import; load it on first use.
+    if name == "openai":
+        import openai
+
+        return openai
+    if name == "OpenAI":
+        from openai import OpenAI
+
+        return OpenAI
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
+def _openai_sdk():
+    """The ``openai`` module, or the one a test put in this module's namespace."""
+    return globals().get("openai") or __getattr__("openai")
+
+
+def _openai_client_class():
+    """The ``OpenAI`` class, or the one a test put in this module's namespace."""
+    return globals().get("OpenAI") or __getattr__("OpenAI")
+
 
 # =========================================================================
 # Server Configuration Defaults
@@ -4195,7 +4219,7 @@ class UsersServerUnchangedError(LemonadeClientError):
     """
 
 
-def _cloud_error_status(error: openai.APIError) -> Optional[int]:
+def _cloud_error_status(error: "openai.APIError") -> Optional[int]:
     """Read numeric status fields; never interpret or display upstream text."""
     status = getattr(error, "status_code", None)
     if (
@@ -5383,7 +5407,7 @@ class LemonadeClient:
         except (
             LemonadeClientError,
             requests.exceptions.RequestException,
-            openai.APIError,
+            _openai_sdk().APIError,
         ) as e:
             if not self._recover_stopped_gaia_lemonade(e, model):
                 raise
@@ -5403,7 +5427,7 @@ class LemonadeClient:
         except (
             LemonadeClientError,
             requests.exceptions.RequestException,
-            openai.APIError,
+            _openai_sdk().APIError,
         ) as e:
             if yielded or not self._recover_stopped_gaia_lemonade(e, model):
                 raise
@@ -7301,7 +7325,7 @@ class LemonadeClient:
             # ``_model_retrier`` (classified, with backoff and a deadline). The
             # SDK's own retries would run inside each of those attempts and
             # multiply them.
-            client = OpenAI(
+            client = _openai_client_class()(
                 base_url=self.base_url,
                 api_key=self.api_key or "lemonade",
                 # A backstop only: the watchdog ends a silent stream first.
@@ -7452,7 +7476,7 @@ class LemonadeClient:
 
         except ModelOutputCorruptedError:
             raise
-        except openai.AuthenticationError as e:
+        except _openai_sdk().AuthenticationError as e:
             if self.cloud_model_provider(model):
                 if _own_key_refused(getattr(e, "body", None)):
                     raise LemonadeAuthError(OWN_KEY_REFUSED) from None
@@ -7468,7 +7492,11 @@ class LemonadeClient:
             message = e.describe(state.attempts)
             self.log.error(message)
             raise attach_retry_state(LemonadeClientError(message), state) from e
-        except (openai.APIError, openai.APIConnectionError, openai.RateLimitError) as e:
+        except (
+            _openai_sdk().APIError,
+            _openai_sdk().APIConnectionError,
+            _openai_sdk().RateLimitError,
+        ) as e:
             down = self._server_down_error(e, model)
             if down is not None:
                 raise down from e
@@ -7727,7 +7755,7 @@ class LemonadeClient:
         self._ensure_model_loaded(model, auto_download)
 
         # max_retries=0: retried by _model_retrier, as in _stream_chat_chunks.
-        client = OpenAI(
+        client = _openai_client_class()(
             base_url=self.base_url,
             api_key=self.api_key or "lemonade",
             timeout=timeout,
@@ -7776,12 +7804,16 @@ class LemonadeClient:
                 f"Completed streaming text completion. Generated {tokens_generated} tokens."
             )
 
-        except openai.AuthenticationError:
+        except _openai_sdk().AuthenticationError:
             raise LemonadeAuthError(
                 "Lemonade rejected the API key (401 Unauthorized) on "
                 "streaming text completions. Verify LEMONADE_API_KEY is correct."
             )
-        except (openai.APIError, openai.APIConnectionError, openai.RateLimitError) as e:
+        except (
+            _openai_sdk().APIError,
+            _openai_sdk().APIConnectionError,
+            _openai_sdk().RateLimitError,
+        ) as e:
             error_type = e.__class__.__name__
             self.log.error(f"OpenAI {error_type}: {str(e)}")
             raise attach_retry_state(

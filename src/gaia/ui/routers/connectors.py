@@ -117,6 +117,7 @@ from gaia.ui.shutdown import SHUTDOWN, get_or_shutdown, stream_closed, stream_op
 
 from ..devices.changes import record_device_change
 from ..devices.prompts import DevicePromptTimeout, limit_device_rate, watch_key_store
+from ..key_store import key_store_detail
 from ..models import WireModel
 from ..security import (
     allowed_device,
@@ -621,8 +622,11 @@ def _key_store_locked_error(request: Request, exc: Exception) -> HTTPException:
         "connectors: key store stayed locked for %s: %s", principal(request), exc
     )
     locked = isinstance(exc, (CredentialStoreLocked, KeyringRefused))
-    detail = str(exc) if is_local_pc(request) else DEVICE_KEY_STORE_LOCKED
-    return HTTPException(status_code=423 if locked else 409, detail=detail)
+    status = 423 if locked else 409
+    message = str(exc) if is_local_pc(request) else DEVICE_KEY_STORE_LOCKED
+    return HTTPException(
+        status_code=status, detail=key_store_detail(exc, status, message)
+    )
 
 
 def _shareable_check(result: Dict[str, Any]) -> Dict[str, Any]:

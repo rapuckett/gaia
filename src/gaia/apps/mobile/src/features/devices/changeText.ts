@@ -35,6 +35,9 @@ const DISCORD_ACTIONS = {
     stop: `${P}discord.stop`,
     restart: `${P}discord.restart`,
     forgetAlways: `${P}discord.forgetAlways`,
+    connect: `${P}discord.connect`,
+    pair: `${P}discord.pair`,
+    disconnect: `${P}discord.disconnect`,
 } as const satisfies Record<string, MessageKey>;
 
 const GPU_MEMORY_ACTIONS = {

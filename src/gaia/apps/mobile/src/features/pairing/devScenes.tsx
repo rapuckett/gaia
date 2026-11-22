@@ -50,6 +50,7 @@ const WAVE1: DeviceChange[] = [
     { id: 'w3', kind: 'connectorEnable', params: { connector: 'GitHub' }, at: ago(14) },
     { id: 'w4', kind: 'connectorDisable', params: { connector: 'GitHub' }, at: ago(20) },
     { id: 'w5', kind: 'discordControl', params: { action: 'takeOver' }, at: ago(30) },
+    { id: 'w5b', kind: 'discordControl', params: { action: 'connect' }, at: ago(32) },
     { id: 'w6', kind: 'memoryCommit', params: { source: 'discovery', count: 12 }, at: ago(45) },
     { id: 'w7', kind: 'memoryCommit', params: { source: 'inference', count: 1 }, at: ago(50) },
     { id: 'w8', kind: 'serverTarget', params: { mode: 'gaia' }, at: ago(70) },

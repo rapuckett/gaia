@@ -48,6 +48,15 @@ ALREADY_WAITING = (
     "GAIA is already waiting on the PC for this. Answer the prompt on the PC, "
     "then try again."
 )
+#: The 409 detail's ``code`` while the PC already waits on this action's prompt.
+ALREADY_WAITING_CODE = "prompt_already_waiting"
+
+
+def _already_waiting() -> HTTPException:
+    return HTTPException(
+        status_code=409,
+        detail={"code": ALREADY_WAITING_CODE, "message": ALREADY_WAITING},
+    )
 
 
 class DevicePromptTimeout(Exception):
@@ -95,7 +104,7 @@ def limit_device_rate(request: Request, action: str) -> None:
 def one_at_a_time(lock: threading.Lock) -> Iterator[None]:
     """Hold *lock* for an administrator step; 409 while another one holds it."""
     if not lock.acquire(blocking=False):
-        raise HTTPException(status_code=409, detail=ALREADY_WAITING)
+        raise _already_waiting()
     try:
         yield
     finally:
@@ -120,7 +129,7 @@ def _claim_read(request: Request, device_id: str, action: str) -> Callable[[], N
         if running is None:
             running = request.app.state.device_reads_running = set()
         if key in running:
-            raise HTTPException(status_code=409, detail=ALREADY_WAITING)
+            raise _already_waiting()
         running.add(key)
 
     def release() -> None:
@@ -211,6 +220,7 @@ class AdminPrompt:
 
 __all__ = [
     "ALREADY_WAITING",
+    "ALREADY_WAITING_CODE",
     "AdminPrompt",
     "DevicePromptTimeout",
     "GPU_MEMORY_ELEVATION",

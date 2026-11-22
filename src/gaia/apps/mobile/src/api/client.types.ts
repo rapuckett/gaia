@@ -55,7 +55,7 @@ import type {
 } from '@webui/types';
 import type { FileDiff, TurnChanges, UndoResult, UndoSettings } from '@webui/types/changes';
 import type { Automation, AutomationList } from '@webui/services/automationsApi';
-import type { DiscordStatus } from '@webui/services/messagingApi';
+import type { DiscordConnectResult, DiscordStatus } from '@webui/services/messagingApi';
 import type { AgentCapabilities, SessionChanges, SessionEnvironment, SessionGit, SessionOutputs, UndoAllResult } from '@webui/types/sessionPanel';
 import type { DiscoveryFinding, Goal, GoalStats, InferenceInsight, KnowledgeCreateBody, KnowledgeListParams, KnowledgeSaveResult, KnowledgeUpdateBody, MemoryCleared, MemoryReinitializeResult, MemorySettings, MemorySettingsUpdateResponse, Priority as GoalPriority } from '@webui/services/memoryApi';
 import type { SpeechModel, SpeechSettings } from '@webui/services/speechApi';
@@ -254,6 +254,15 @@ export interface ScheduleList {
     total: number;
 }
 
+/** Where, and with which header, the PC sends the AMD gateway's key; a field left out keeps the PC's. */
+export interface GatewayFields {
+    base_url?: string;
+    auth_header_name?: string;
+}
+
+/** `POST /api/lemonade/target`: a paired device's switch to its own server must send `confirm: true` (409 without it). */
+export type LemonadeTargetRequest = LemonadeTargetBody & { confirm?: boolean };
+
 /** POST /api/providers/{id}/connect's answer, as the web's Model settings reads it. */
 export interface ProviderConnected {
     remembered: boolean;
@@ -267,7 +276,7 @@ export type { Automation, AutomationKind, AutomationList } from '@webui/services
 /** What `POST /api/automations/{ref}/{action}` takes from a paired phone: the desktop's buttons (ui/routers/automations.py DEVICE_ACTIONS). */
 export type AutomationAction = 'pause' | 'resume';
 /** GET /api/messaging/discord, typed as Settings > Messaging on the web types it. */
-export type { DiscordState, DiscordStatus } from '@webui/services/messagingApi';
+export type { DiscordConnectResult, DiscordState, DiscordStatus } from '@webui/services/messagingApi';
 export type { DiscoveryFinding, InferenceInsight } from '@webui/services/memoryApi';
 
 /** One event of the profile-setup streams (`stream-discovery`, `stream-inference`), as ui/routers/memory.py documents them. */
@@ -662,8 +671,20 @@ export interface GaiaClient {
     /** Memories due within `days` days, plus the overdue ones. */
     getMemoryUpcoming(days: number, options?: RequestOptions): Promise<TemporalItem[]>;
     getMemoryStats(options?: RequestOptions): Promise<MemoryStats>;
-    /** The Discord bridge's state, pairing code and links. The PC answers only itself: a phone gets the 403 PC-only refusal. */
+    /** The Discord bridge's state and links; the pairing code only for the device that started that pairing. A PC that answers only itself gives a phone the 403 PC-only refusal. */
     getDiscordStatus(options?: RequestOptions): Promise<DiscordStatus>;
+    /** Checks a bot token with Discord, stores it on the PC and starts the bridge for pairing; can take up to a minute. The token goes only in the request body and never comes back. */
+    connectDiscord(token: string, options?: RequestOptions): Promise<DiscordConnectResult>;
+    /** Starts the bridge; `takeOver` answers from this PC though another PC holds the bot. */
+    startDiscord(takeOver: boolean, options?: RequestOptions): Promise<DiscordStatus>;
+    stopDiscord(options?: RequestOptions): Promise<DiscordStatus>;
+    restartDiscord(options?: RequestOptions): Promise<DiscordStatus>;
+    /** Forgets every "Always allow" answered in Discord. */
+    forgetDiscordAlways(options?: RequestOptions): Promise<DiscordStatus>;
+    /** Forgets the paired account and starts pairing again; the new code goes only to the device that asked. */
+    pairDiscord(options?: RequestOptions): Promise<DiscordStatus>;
+    /** Stops the bridge and forgets the token, the pairing and the status. */
+    disconnectDiscord(options?: RequestOptions): Promise<DiscordStatus>;
     /** Every goal with its tasks, newest first. */
     listGoals(options?: RequestOptions): Promise<{ goals: Goal[]; total: number }>;
     /** Goal and task counts by status. */
@@ -828,14 +849,20 @@ export interface GaiaClient {
     setModelServerBackend(backend: string, options?: RequestOptions): Promise<ModelServerInfo>;
     /** Which model server GAIA uses, and whether the PC still has to choose one. */
     getLemonadeTarget(options?: RequestOptions): Promise<LemonadeTarget>;
-    /** Switches GAIA to its own model server or to the one at `base_url`; PC-only (403 from a phone). A 422 body carries `status` (`needs_key`, `bad_key`, ...). */
-    setLemonadeTarget(body: LemonadeTargetBody, options?: RequestOptions): Promise<LemonadeTarget & { daemon: unknown }>;
+    /**
+     * Switches GAIA to its own model server or to the one at `base_url`. From an allowed paired phone: 403 over mobile
+     * access or before the PC allows it, 429 for a second try within 10 s, and one generic 422 for any failed check.
+     */
+    setLemonadeTarget(body: LemonadeTargetRequest, options?: RequestOptions): Promise<LemonadeTarget & { daemon: unknown }>;
     /** Each MCP server GAIA runs: whether it connected and how many tools it offers. */
     getMcpStatus(options?: RequestOptions): Promise<{ servers: MCPServerStatus[] }>;
     /** A model server the PC already runs; `unchecked` lists addresses that took the connection but didn't answer. */
     detectLemonade(options?: RequestOptions): Promise<{ found: LemonadeFound | null; unchecked?: string[] }>;
-    /** Registers the provider; `apiKey` is a key typed on this phone, sent only in the body. Without one the PC keeps the key it holds. The PC answers 403 to a typed key it won't take from a phone. */
-    connectProvider(provider: string, options?: RequestOptions & { apiKey?: string }): Promise<ProviderConnected>;
+    /**
+     * Registers the provider; `apiKey` is a key typed on this phone, sent only in the body. Without one the PC keeps the key it holds. The PC answers 403 to a typed key it won't take from a phone.
+     * `gateway` (AMD only) moves the gateway, and goes only with `apiKey`: the PC never sends its saved key to an address a phone chose.
+     */
+    connectProvider(provider: string, options?: RequestOptions & { apiKey?: string; gateway?: GatewayFields }): Promise<ProviderConnected>;
     /** Clears the provider's saved key from GAIA and the PC's OS credential store. */
     forgetProviderKey(provider: string, options?: RequestOptions): Promise<{ removed: boolean }>;
     /** After the PC's OS key-store unlock prompt was closed: lets GAIA ask once more, on the PC. */

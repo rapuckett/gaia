@@ -32,6 +32,7 @@ be automatically available to all test files.
 
 import importlib
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -757,6 +758,46 @@ def _keychain_refusal(what: str) -> AssertionError:
     )
 
 
+_KEYCHAIN_SUBCOMMAND = re.compile(r"\b(generic|internet)-password\b")
+_SECURITY_THEN_PASSWORD = re.compile(r"\bsecurity\b.*-password\b", re.DOTALL)
+
+
+def _is_security_keychain_call(args, shell) -> bool:
+    """True when Popen args run the macOS `security` password subcommands."""
+    import shlex
+
+    if isinstance(args, (bytes, bytearray)):
+        args = args.decode(errors="replace")
+    if isinstance(args, str):
+        raw = [args]
+    elif isinstance(args, (list, tuple)):
+        raw = [
+            os.fsdecode(x) if isinstance(x, (bytes, os.PathLike)) else str(x)
+            for x in args
+        ]
+    else:
+        raw = [os.fsdecode(args)] if isinstance(args, os.PathLike) else []
+    if not raw:
+        return False
+    try:
+        if isinstance(args, str) or shell:
+            tokens = shlex.split(raw[0]) + raw[1:]
+        else:
+            tokens = raw
+    except ValueError:
+        return bool(_SECURITY_THEN_PASSWORD.search(" ".join(raw)))
+    i = 0
+    while i < len(tokens) and (
+        os.path.basename(tokens[i]) == "env"
+        or tokens[i].startswith("-")
+        or re.match(r"[A-Za-z_][A-Za-z0-9_]*=", tokens[i])
+    ):
+        i += 1
+    if i >= len(tokens) or os.path.basename(tokens[i]) != "security":
+        return False
+    return any(_KEYCHAIN_SUBCOMMAND.search(t) for t in tokens[i + 1 :])
+
+
 def _install_keychain_guards():
     """Make every real OS keyring backend and the macOS `security` CLI raise."""
     import subprocess
@@ -796,15 +837,8 @@ def _install_keychain_guards():
     real_popen_init = subprocess.Popen.__init__
 
     def _guarded_popen_init(self, args, *a, **kw):
-        argv = args if isinstance(args, (list, tuple)) else [args]
-        if (
-            not _real_keychain_allowed
-            and argv
-            and os.path.basename(str(argv[0])) == "security"
-            and any(
-                "generic-password" in str(x) or "internet-password" in str(x)
-                for x in argv
-            )
+        if not _real_keychain_allowed and _is_security_keychain_call(
+            args, kw.get("shell", False)
         ):
             raise _keychain_refusal("the macOS `security` CLI")
         return real_popen_init(self, args, *a, **kw)

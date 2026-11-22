@@ -11,7 +11,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GaiaApiError } from '@/api/errors';
 import { createFakeClient } from '@/api/fake';
 import { GaiaClientProvider } from '@/data';
-import { ALREADY_WAITING_DETAIL, applyDevicePromptEvent, useDevicePromptStore } from '@/features/devices/devicePrompts';
+import { ALREADY_WAITING_CODE, ALREADY_WAITING_DETAIL, applyDevicePromptEvent, useDevicePromptStore } from '@/features/devices/devicePrompts';
 import { GPU } from '@/features/setup/devScenes';
 import { ThemeProvider } from '@/ui';
 import { SheetHost } from '@/ui/overlays/SheetHost';
@@ -105,7 +105,7 @@ describeNative('GpuChange', () => {
 
     it('a busy 409 shows the busy notice and leaves Apply; another 409 is an ordinary error', async () => {
         const { client, queryClient } = await mount(LINUX);
-        const apply = jest.spyOn(client, 'applyGpuMemory').mockRejectedValueOnce(new GaiaApiError(409, ALREADY_WAITING_DETAIL));
+        const apply = jest.spyOn(client, 'applyGpuMemory').mockRejectedValueOnce(new GaiaApiError(409, ALREADY_WAITING_DETAIL, undefined, undefined, { code: ALREADY_WAITING_CODE, message: ALREADY_WAITING_DETAIL }));
         await fireEvent.press(screen.getByTestId('gpu-apply'));
         await fireEvent.press(await screen.findByTestId('confirm-ok'));
         expect(await screen.findByText('Your PC is already waiting for an answer to another request. Answer that one first.')).toBeTruthy();

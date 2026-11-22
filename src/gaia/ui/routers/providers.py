@@ -63,6 +63,12 @@ from gaia.logger import get_logger
 from ..database import ChatDatabase
 from ..dependencies import get_db
 from ..devices.changes import record_device_change
+from ..key_store import (
+    KEY_STORE_LOCKED,
+    KEY_STORE_WAITING,
+    KeyStoreState,
+    key_store_detail,
+)
 from ..local_models import DOWNLOADED, LOADED, NOT_DOWNLOADED
 from ..models import DownloadProgress, WireModel
 from ..security import (
@@ -344,6 +350,7 @@ _MIN_KEY_LENGTH_FOR_HINT = 16
 KEY_WAITING = "waiting_for_os_permission"
 #: ``key_state`` once the user closed the store's unlock prompt; GAIA holds off asking.
 KEY_LOCKED = "store_locked"
+_KEY_STORE_OF = {KEY_WAITING: KEY_STORE_WAITING, KEY_LOCKED: KEY_STORE_LOCKED}
 
 
 def _key_slot(provider: str) -> str:
@@ -612,6 +619,7 @@ def _provider_view(provider: str, entry: Optional[Dict[str, Any]]) -> Dict[str, 
             "key_source": key_source,
             "key_hint": _key_hint(provider, key_source, lemond_env),
             "key_state": key_state,
+            "key_store": _KEY_STORE_OF.get(key_state),
             "key_message": key_message,
             "models_discovered": bool(entry and entry.get("models_discovered")),
             "known_models": known_models,
@@ -1209,7 +1217,11 @@ class ProviderView(WireModel):
     blocked_reason: Optional[str] = None
     key_source: Optional[Literal["stored", "environment", "lemonade"]] = None
     key_hint: Optional[str] = None
+    #: ``read`` stays; its two key-store values are deprecated in favor of ``key_store``.
     key_state: Optional[Literal["read", KEY_WAITING, KEY_LOCKED]] = None
+    #: ``waiting`` while the OS key store's prompt is open, ``locked`` once it
+    #: was refused or closed; null when the store answered.
+    key_store: Optional[KeyStoreState] = None
     key_message: Optional[str] = None
     models_discovered: Optional[bool] = None
     known_models: Optional[bool] = None
@@ -1549,7 +1561,9 @@ def _raise(
         ) from e
     detail = surface_wording(str(e), "agent_ui")
     detail = _caller_detail(e, detail, request, key)
-    raise HTTPException(status_code=e.status, detail=detail) from e
+    raise HTTPException(
+        status_code=e.status, detail=key_store_detail(e, e.status, detail)
+    ) from e
 
 
 def _known(provider: str) -> None:
@@ -1601,6 +1615,7 @@ def list_providers(
                     view.update(
                         key_source=None,
                         key_state=KEY_LOCKED if locked else KEY_WAITING,
+                        key_store=KEY_STORE_LOCKED if locked else KEY_STORE_WAITING,
                         key_message=str(e),
                     )
                 except (ProviderError, CloudKeyError, requests.RequestException) as e:
@@ -1662,7 +1677,11 @@ class ProviderSummary(BaseModel):
     #: is known, including while ``key_state`` is not ``read``.
     key_source: Optional[Literal["stored", "environment", "lemonade"]] = None
     #: ``unknown`` until GAIA has read the credential store once since it started.
+    #: ``read`` and ``unknown`` stay; ``store_locked`` is deprecated in favor of ``key_store``.
     key_state: Optional[Literal["read", KEY_LOCKED, KEY_UNKNOWN]] = None
+    #: ``locked`` while the OS key store is held after its prompt was refused or
+    #: closed; never ``waiting``, since this route never reads the store.
+    key_store: Optional[KeyStoreState] = None
     #: The key's last characters, as the PC shows; null over mobile access.
     key_hint: Optional[str] = None
     #: GAIA's server is serving known models through a list outage (Fireworks).
@@ -1777,6 +1796,7 @@ def _summary_key_fields(
     return {
         "key_source": key_source,
         "key_state": key_state,
+        "key_store": _KEY_STORE_OF.get(key_state),
         "key_hint": (
             None if hide_hint else _seen_key_hint(provider, key_source, lemond_env)
         ),
@@ -2479,7 +2499,7 @@ def connect_provider(
 
     The gateway's connect holds the machine-wide gateway key lock while it
     changes Lemonade, so no other process replays a key while its address or
-    key changes. A device's check of a new gateway's network runs before it.
+    key changes. The check of the gateway's network runs before it.
     """
     if provider != AMD:
         return _connect_provider(provider, body, request)
@@ -2527,18 +2547,7 @@ def _connect_provider(
                 "key. Reconnect without them to keep the saved ones.",
             )
         return _connect_device_gateway(body, key, request)
-    if provider != AMD:
-        return _connect_here(provider, body, request, key, on_pc)
-    with _gateway_move_lock:
-        return _connect_here(provider, body, request, key, on_pc)
-
-
-def _connect_here(
-    provider: str, body: ConnectRequest, request: Request, key: str, on_pc: bool
-) -> Dict[str, Any]:
-    """:func:`_connect_provider` for a connect that isn't a device's gateway move."""
     from gaia.connectors.store import retry_keyring
-    from gaia.llm.cloud_keys import CloudKeyError, ensure_authenticated, remember_key
 
     # Connecting needs the key store, so it may ask the OS again.
     retry_keyring()
@@ -2547,6 +2556,58 @@ def _connect_here(
         _discard_key_reads(provider)
         if not on_pc:
             audit_approval(request, f"{_NAMES[provider]} API key submitted")
+    if provider != AMD:
+        return _connect_here(provider, body, request, key, on_pc)
+    # Dialing takes seconds per address, so it runs before the lock is taken.
+    checked_url = _check_pc_gateway(body, request, key)
+    with _gateway_move_lock:
+        return _connect_here(provider, body, request, key, on_pc, checked_url)
+
+
+def _check_pc_gateway(
+    body: ConnectRequest, request: Request, key: str
+) -> Optional[str]:
+    """The gateway address the PC's connect checked, or ``None`` when unchecked.
+
+    Raises 503 when it doesn't answer, with the host and what to connect to.
+    """
+    from gaia.llm.gateway import GatewayUnreachable
+
+    if not _gateway_check_applies():
+        return None
+    try:
+        # A key-less reconnect must keep a custom gateway, not reset it.
+        base_url = _registration(AMD, body, _cloud_entry(AMD))["base_url"]
+    except ProviderError as e:
+        _raise(e, request, key)
+    try:
+        check_gateway_reachable(base_url)
+    except GatewayUnreachable as e:
+        raise HTTPException(
+            status_code=503,
+            detail=f"{e}. Connect to it, then try again.",
+        ) from e
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+    return base_url
+
+
+def _connect_here(
+    provider: str,
+    body: ConnectRequest,
+    request: Request,
+    key: str,
+    on_pc: bool,
+    checked_url: Optional[str] = None,
+) -> Dict[str, Any]:
+    """:func:`_connect_provider` for a connect that isn't a device's gateway move.
+
+    *checked_url* is the gateway address checked before the lock; one that
+    moved since is refused with 409.
+    """
+    from gaia.llm.cloud_keys import CloudKeyError, ensure_authenticated, remember_key
+    from gaia.llm.gateway import same_gateway_url
+
     try:
         # A key-less reconnect must keep a custom gateway, not reset it.
         registration = _registration(
@@ -2554,18 +2615,14 @@ def _connect_here(
         )
     except ProviderError as e:
         _raise(e, request, key)
-    if provider == AMD and _gateway_check_applies():
-        from gaia.llm.gateway import GatewayUnreachable
-
-        try:
-            check_gateway_reachable(registration["base_url"])
-        except GatewayUnreachable as e:
-            raise HTTPException(
-                status_code=503,
-                detail=f"{e}. Connect to it, then try again.",
-            ) from e
-        except ValueError as e:
-            raise HTTPException(status_code=422, detail=str(e)) from e
+    if checked_url is not None and not same_gateway_url(
+        registration["base_url"], checked_url
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail=f"The {_NAMES[AMD]} gateway's address changed while GAIA "
+            "checked it. Try again.",
+        )
     if _uses_users_server():
         return _connect_on_users_server(provider)
     try:
@@ -3113,9 +3170,13 @@ def select_model(
     except _ServerNotReady as e:
         raise HTTPException(status_code=503, detail=str(e)) from e
     except CredentialStoreLocked as e:
-        raise HTTPException(status_code=423, detail=str(e)) from e
+        raise HTTPException(
+            status_code=423, detail=key_store_detail(e, 423, str(e))
+        ) from e
     except CredentialStoreWaiting as e:
-        raise HTTPException(status_code=409, detail=str(e)) from e
+        raise HTTPException(
+            status_code=409, detail=key_store_detail(e, 409, str(e))
+        ) from e
     except GaiaConfigError as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
     if reason is not None:
