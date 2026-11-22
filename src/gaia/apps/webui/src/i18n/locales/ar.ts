@@ -4045,7 +4045,7 @@ const messages: Messages = {
     'mobileApp.error.badEvent': 'أرسل GAIA حدثًا في الرد لا يستطيع هذا الهاتف قراءته: {preview}',
     'mobileApp.error.photosDenied': 'لا يستطيع GAIA فتح صورك. اسمح لـ GAIA بالوصول إلى الصور من إعدادات هاتفك، ثم حاول مجددًا.',
     'mobileApp.error.noConnection': 'لا يوجد كمبيوتر متصل. اقرن هذا الهاتف بالكمبيوتر أولًا.',
-    'mobileApp.pcOnly.logs': 'اقرأ سجلات GAIA على الكمبيوتر الذي يشغّل GAIA. لا يمكن قراءتها من الهاتف.',
+    'mobileApp.logs.seeLogs': 'ابحث في سجلات GAIA عن السبب. افتح الإعدادات ← متقدم ← السجلات.',
     'mobileApp.pcOnly.refusal': 'نفّذ هذا على الكمبيوتر لديك. لا يسمح GAIA بذلك من هاتف مقترن.',
     'mobileApp.pcOnly.report': 'حفظ GAIA تقريرًا عن هذه المشكلة على الكمبيوتر. أنشئ تقرير استكشاف الأخطاء هناك لإرفاقه ببلاغ عن خطأ.',
     'mobileApp.connectCard.onPc': 'اربط حسابك على جهاز الكمبيوتر لديك، من «الموصلات» في الإعدادات. ثم اسأل مرة أخرى هنا.',
