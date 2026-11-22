@@ -1673,6 +1673,10 @@ export interface FileUploadResponse {
  * Why a chat can't be given the folder, or null when it can.
  */
 export interface FolderCheckResponse {
+  /**
+   * Set only on a paired device's refusal, for the phone to word it.
+   */
+  code?: ("device_folder_outside_home" | "device_folder_withheld") | null;
   refusal: string | null;
   [k: string]: unknown | undefined;
 }

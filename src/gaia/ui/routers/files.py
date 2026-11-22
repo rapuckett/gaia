@@ -303,15 +303,30 @@ def _holds_device_private(folder: Path) -> bool:
     return any(session_environment.within(str(p), target) for p in private)
 
 
-def device_pick_refusal(path: str) -> Optional[str]:
+DevicePickCode = Literal["device_folder_outside_home", "device_folder_withheld"]
+
+
+@dataclass(frozen=True)
+class DevicePickRefusal:
+    """Why a paired device can't pick a folder: a stable code and the PC's sentence."""
+
+    code: DevicePickCode
+    message: str
+
+    def http_error(self) -> HTTPException:
+        return _device_refusal(self.code, self.message)
+
+
+def device_pick_refusal(path: str) -> Optional[DevicePickRefusal]:
     """Why a paired device can't pick *path*, or None; never names a PC path."""
     resolved = Path(os.path.expanduser(path)).resolve()
     if not is_within_document_roots(resolved):
-        return OUTSIDE_HOME_REFUSAL
+        return DevicePickRefusal("device_folder_outside_home", OUTSIDE_HOME_REFUSAL)
     if device_withholds(resolved) or _holds_device_private(resolved):
-        return (
+        return DevicePickRefusal(
+            "device_folder_withheld",
             "GAIA doesn't give a paired device this folder: it holds "
-            "credentials or keys."
+            "credentials or keys.",
         )
     return None
 
